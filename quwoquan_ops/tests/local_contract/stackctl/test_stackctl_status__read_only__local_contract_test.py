@@ -7,6 +7,8 @@ from __future__ import annotations
 import argparse
 import json
 
+import pytest
+
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib import read_only_user_availability
 
@@ -45,9 +47,24 @@ def _availability_report(*, first_blocker_class: str) -> dict[str, object]:
     }
 
 
+@pytest.fixture(autouse=True)
+def _isolate_runtime_reads(monkeypatch):
+    monkeypatch.setattr(stackctl, "active_deployment_candidate_snapshot", lambda *_args: None)
+    monkeypatch.setattr(stackctl, "read_startup_attempt", lambda *_args: None)
+    monkeypatch.setattr(stackctl, "local_runtime_lock_holders", lambda: [])
+
+    def forbidden_probe(*_args, **_kwargs):
+        raise AssertionError("status contract must not access a real runtime or stateful probes")
+
+    monkeypatch.setattr(stackctl, "fetch_url", forbidden_probe)
+    monkeypatch.setattr(stackctl, "_script_probes_for_target", forbidden_probe)
+
+
+@pytest.mark.parametrize("skipped", [False, True], ids=["empty", "all-skipped"])
 def test_status__does_not_execute_stateful_script_probes__local_contract(
     monkeypatch,
     tmp_path,
+    skipped,
 ) -> None:
     report_dir = tmp_path / "status"
     topology = {"targets": {"gamma-local": {"env": "gamma"}}}
@@ -60,10 +77,15 @@ def test_status__does_not_execute_stateful_script_probes__local_contract(
     )
     monkeypatch.setattr(stackctl, "resolve_report_dir", lambda *_args: report_dir)
     monkeypatch.setattr(stackctl, "_current_runtime_health_scope", lambda _target: "full")
+    checks = (
+        [{"name": "skipped", "scope": "edge", "url": "", "skip": True}]
+        if skipped
+        else []
+    )
     monkeypatch.setattr(
         stackctl,
         "_health_checks_for_target",
-        lambda *_args, **_kwargs: [],
+        lambda *_args, **_kwargs: checks,
     )
     monkeypatch.setattr(stackctl, "_script_probe_plan_for_target", lambda *_args: [])
     monkeypatch.setattr(
@@ -112,12 +134,21 @@ def test_status__does_not_execute_stateful_script_probes__local_contract(
     assert "build_ready unavailable" in result["details"][0]
     report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
     assert report["readOnly"] is True
-    assert report["checks"] == []
+    assert len(report["checks"]) == len(checks)
+    assert all(item["skipped"] for item in report["checks"])
     assert report["candidateWorkspace"]["status"] == "drifted"
     assert report["firstBlockerClass"] == "release"
     assert [item["name"] for item in report["userAvailability"]] == list(_LAYERS)
     assert result["candidateWorkspace"]["drifted"] is True
     assert result["firstBlockerClass"] == "release"
+    assert result["firstBlocker"] == report["firstBlocker"] == "build_ready unavailable"
+    empty_evidence = "health probe evidence is empty: no non-skipped runtime probe was observed"
+    assert empty_evidence in result["details"]
+    assert empty_evidence in report["findings"]
+    probes = report["runtimeDiagnostics"]["httpProbes"]
+    assert probes["status"] == "failed"
+    assert probes["observedCount"] == 0
+    assert probes["issues"] == [empty_evidence]
     assert result["localRuntimeLocks"] == [runtime_holder]
     assert any(
         "worktree=/tmp/integration lane=dev1.0" in detail
@@ -276,7 +307,10 @@ def test_status__reports_unsafe_active_candidate_without_traceback__local_contra
         }
     ]
     assert report["candidateWorkspace"]["status"] == "unavailable"
-    assert report["firstBlockerClass"] == "startup_identity"
+    assert report["firstBlockerClass"] == result["firstBlockerClass"] == "startup_identity"
+    assert report["firstBlocker"] == result["firstBlocker"] == "build_ready unavailable"
+    assert report["runtimeDiagnostics"]["httpProbes"]["observedCount"] == 0
+    assert any("probe evidence is empty" in detail for detail in result["details"])
 
 
 def test_status__reports_stale_provider_runtime_identity_without_traceback__local_contract(
@@ -323,9 +357,11 @@ def test_status__reports_stale_provider_runtime_identity_without_traceback__loca
 
     assert result["exitCode"] == 1
     assert result["details"] == [
+        "user availability/build_ready failed: build_ready unavailable",
         "config/active-candidate failed: ERR candidate://beta-local: "
         "health check resolution blocked: GATE_BLOCK: beta-local startup Provider "
-        "runtime identity is not current"
+        "runtime identity is not current",
+        "health probe evidence is empty: no non-skipped runtime probe was observed",
     ]
     report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
     assert report["readOnly"] is True

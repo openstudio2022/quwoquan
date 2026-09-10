@@ -148,7 +148,7 @@ def test_post_promotion_gate_rejects_exact_video_before_transaction_apply(
         )
 
 
-def test_same_execution_target_is_idempotent_but_another_target_is_not(
+def test_same_execution_target_is_idempotent_but_asset_alias_is_not(
     tmp_path: Path,
 ) -> None:
     publish = tmp_path / "publish"
@@ -162,13 +162,28 @@ def test_same_execution_target_is_idempotent_but_another_target_is_not(
         manifest=manifest,
         excluded_manifest_path=relative,
     )
-    # 同 assetId 是稳定资产复用；另一 execution 的不同 assetId 复用同一字节才是冲突。
+    # 同 assetId 是稳定资产复用；不同 assetId 复用同一字节才是冲突。
+    alias = json.loads(json.dumps(manifest))
+    alias["assets"][0]["assetId"] = "another-video-identity"
     with pytest.raises(ObjectTransactionError, match="content sha256"):
         assert_canonical_video_unique(
             publish_root=publish,
-            manifest=_manifest("execution-other", content="same", poster="same-poster"),
+            manifest=alias,
             excluded_manifest_path="posts/video/体验/另一个对象/1/manifest.json",
         )
+
+
+@pytest.mark.parametrize("execution_id", ["execution-original", "execution-other"])
+def test_stable_video_and_poster_reference_reuse_is_independent_positive(tmp_path: Path, execution_id: str) -> None:
+    # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-009
+    publish = tmp_path / "publish"
+    manifest = _manifest("execution-original", content="same", poster="same-poster")
+    _write_manifest(publish, "posts/video/体验/原对象/1/manifest.json", manifest)
+    load_or_bootstrap_inventory(publish)
+    assert_canonical_video_unique(
+        publish_root=publish, manifest={**manifest, "executionId": execution_id},
+        excluded_manifest_path="posts/video/体验/另一个引用/1/manifest.json",
+    )
 
 
 def test_duplicate_increment_rolls_back_inventory_and_both_indexes(

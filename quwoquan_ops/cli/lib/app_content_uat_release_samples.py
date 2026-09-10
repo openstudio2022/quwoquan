@@ -18,7 +18,6 @@ _SOURCE_READBACKS = {
     "image": "feedQueries.typed_image", "video": "feedQueries.typed_video",
 }
 
-
 def document_digest(document: Mapping[str, Any]) -> str:
     encoded = json.dumps(dict(document), ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
@@ -115,7 +114,7 @@ def resolve_release_sample_requests(*, readiness_path: Path, app_uat_plan: Mappi
             homepage_ids[identity] = homepage_id
     import_path, _ = _resolve_data_prepared_import(readiness, evidence_root=root)
     import_report, import_ref = _load_regular_json(import_path, root=root, label="App content UAT content import report")
-    expected = {"schema": "quwoquan.content_import_report", "environment": readiness.get("environment"), "releaseId": release_id, "status": "imported", "manifestDigest": readiness.get("manifestDigest")}
+    expected = {"schema": "quwoquan.content_import_report", "environment": readiness.get("environment"), "releaseId": release_id, "status": "staged", "manifestDigest": readiness.get("manifestDigest")}
     if any(import_report.get(k) != v for k, v in expected.items()):
         raise ValueError("App content UAT content import report is not release-bound")
     raw_bindings = import_report.get("postBindings")

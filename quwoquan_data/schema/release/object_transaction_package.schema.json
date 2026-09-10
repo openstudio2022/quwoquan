@@ -50,6 +50,7 @@
         "layoutSchema",
         "objectKind",
         "objectRef",
+        "objectPath",
         "objectSchema",
         "packageObjectRef"
       ],
@@ -68,6 +69,11 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "objectPath": {
+          "type": "string",
+          "description": "仓内物理 locator（含 kind 前缀）；objectRef 始终是逻辑身份。",
+          "pattern": "^(entities|posts|creators)/(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
         },
         "objectSchema": {
           "enum": [
@@ -89,8 +95,7 @@
       "required": [
         "creatorRefs",
         "tagRefs",
-        "sourceCatalogRef",
-        "rightsRef",
+        "sourceRefs",
         "casRefs"
       ],
       "properties": {
@@ -110,13 +115,11 @@
             "minLength": 1
           }
         },
-        "sourceCatalogRef": {
-          "type": "string",
-          "minLength": 1
-        },
-        "rightsRef": {
-          "type": "string",
-          "minLength": 1
+        "sourceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^sources/[A-Za-z0-9_-]+/source\\.json$"}
         },
         "casRefs": {
           "type": "array",

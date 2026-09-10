@@ -1,3 +1,8 @@
+"""Release 只消费随体对象，来源权限与原始证据不得被投影改写。
+
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-009
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -11,8 +16,8 @@ from core.schema import assert_valid
 from core.media_asset_url import materialize_release_media
 from core.release_media_binding import bind_release_object_media_assets
 from content.release.canonical.build_lookup_indexes import build_publish_lookup_indexes
-from content.release.environment.consistency import scan_release_contract
-from support.media_fixture import admit_media_body
+from content.release.canonical.release_consistency import scan_release_contract
+from support.media_fixture import tiny_png_bytes
 from quwoquan_data.tests.local_contract.release.test_release_header__typed_identity__contract__local_contract_test import _header
 
 
@@ -34,56 +39,66 @@ def _tree_bytes(root: Path) -> dict[str, bytes]:
     }
 
 
-def _fixture(tmp_path: Path) -> tuple[Path, Path]:
+def _fixture(
+    tmp_path: Path, *, partitioned: bool = False, materialize: bool = True,
+) -> tuple[Path, Path]:
     canonical = tmp_path / "publish"
     release = tmp_path / "release/release-a"
-    payload = b"asset"
+    payload = tiny_png_bytes()
     digest = hashlib.sha256(payload).hexdigest()
-    key = f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}.jpg"
-    admit_media_body(payload)
-    post = canonical / "posts/article/攻略/甲/1"
+    source_evidence = b"Fixture source: test author; rights unknown; no authorization granted.\n"
+    source_ref = "sources/s001/source.json"
+    post = canonical / (
+        "posts/article/攻略/p0001/甲/1" if partitioned else "posts/article/攻略/甲/1"
+    )
     _write(
         post / "manifest.json",
         {
             "schema": "quwoquan_data.post_object",
+            "objectRef": "article/攻略/甲/1",
+            "contentId": "post-a",
+            "version": 1,
             "contentType": "article",
             "finalContentRef": "article.md",
-            "sourceCatalogRef": "evidence/source_catalog.json",
-            "rightsRef": "evidence/rights.json",
-            "creatorRefsRef": "creator.refs.json",
-            "tagRefsRef": "tag.refs.json",
-            "assetRefsRef": "asset.refs.json",
+            "sourceRefs": [source_ref],
+            "creatorProfileId": "creator-a",
+            "tagRefs": ["Topic/旅行"],
+            "assets": [{
+                "assetId": "asset-a", "kind": "image", "mimeType": "image/png",
+                "path": "media/asset-a.png", "sha256": f"sha256:{digest}",
+                "bytes": len(payload), "sourceRefs": [source_ref],
+            }],
         },
     )
     _write(post / "article.md", "# 甲")
-    _write(post / "evidence/source_catalog.json", {"sources": [{"url": "https://example.com"}]})
-    _write(post / "evidence/rights.json", {"rights": {"mode": "licensed"}})
-    _write(post / "creator.refs.json", {"creatorRefs": ["creator-a"]})
-    _write(post / "tag.refs.json", {"tagRefs": ["Topic/旅行"]})
-    _write(
-        post / "asset.refs.json",
-        {
-            "assets": [
-                {
-                    "assetId": "asset-a",
-                    "kind": "image",
-                    "mimeType": "image/jpeg",
-                    "objectKey": key,
-                    "sha256": f"sha256:{digest}",
-                }
-            ]
+    _write(post / "media/asset-a.png", payload)
+    _write(post / "sources/s001/evidence.txt", source_evidence)
+    source = {
+        "schema": "quwoquan_data.publish_source",
+        "sourceId": "s001",
+        "sourceUrl": "https://example.com/source-a",
+        "sourceUseMode": "factual_reference_only",
+        "fetchedAt": "2026-09-09T00:00:00Z",
+        "metadata": {
+            "author": "Fixture Author",
+            "license": "unknown",
+            "accessPolicy": "tos_restricted",
         },
-    )
-    _write(
-        post / "rights_snapshots/asset-a.json",
-        {
+        "assets": [{
             "assetId": "asset-a",
-            "manifestAsset": {
-                "assetId": "asset-a",
-                "sha256": f"sha256:{digest}",
-            },
-        },
-    )
+            "sha256": f"sha256:{digest}",
+            "rightsStatus": "unknown",
+            "authorizationRequired": True,
+        }],
+        "evidence": [{
+            "path": "evidence.txt",
+            "sha256": "sha256:" + hashlib.sha256(source_evidence).hexdigest(),
+            "bytes": len(source_evidence),
+            "kind": "source_excerpt",
+        }],
+    }
+    assert_valid(source, "publish", "source", label="release-first source fixture")
+    _write(post / source_ref, source)
     creator_header = {
         "schema": "quwoquan_data.creator_object",
         "creatorId": "creator-a",
@@ -94,7 +109,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         "entityRefs": [],
     }
     _write(canonical / "creators/creator-a/_creator.json", creator_header)
-    _write(canonical / "creators/creator-a/profile.json", {"userId": "creator-a"})
+    _write(canonical / "creators/creator-a/profile.json", {"userId": "creator-a", "assets": []})
     _write(canonical / "creators/creator-a/assets.refs.json", {"assets": []})
     _write(canonical / "creators/creator-a/works.refs.ndjson", "")
     tag_snapshot = {
@@ -135,6 +150,8 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         canonical / "tags/Topic/旅行",
         release / "payload/objects/tags/Topic/旅行",
     )
+    if not materialize:
+        return canonical, release
     media_manifest = materialize_release_media(
         release_id="release-a",
         post_refs=["posts/article/攻略/甲/1"],
@@ -142,28 +159,159 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         publish_root=canonical,
         release_root=tmp_path / "release",
     )
+    assert media_manifest["issues"] == []
+    release_source = release / "payload/objects/posts/article/攻略/甲/1/sources/s001"
+    source_files = (release_source / "source.json", release_source / "evidence.txt")
+    for path in source_files:
+        path.chmod(0o444)
+    source_before = {path: (path.read_bytes(), path.stat().st_mode) for path in source_files}
     bind_release_object_media_assets(
         objects_root=release / "payload/objects",
         manifest=media_manifest,
     )
+    assert {path: (path.read_bytes(), path.stat().st_mode) for path in source_files} == source_before
     return canonical, release
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-022
+@pytest.mark.parametrize("canonical_available", [True, False])
+def test_partitioned_materialize_uses_logical_carried_sources(
+    tmp_path: Path, canonical_available: bool,
+) -> None:
+    canonical, release = _fixture(tmp_path, partitioned=True, materialize=False)
+    canonical_before = _tree_bytes(canonical)
+    if not canonical_available:
+        canonical.rename(tmp_path / "unavailable-publish")
+    kwargs = dict(
+        release_id="release-a", post_refs=["posts/article/攻略/甲/1"],
+        entity_refs=[], publish_root=canonical, release_root=release.parent,
+    )
+    manifest = materialize_release_media(**kwargs)
+    assert manifest["issues"] == []
+    asset = manifest["assets"][0]
+    assert asset["ownerRefs"] == ["posts/article/攻略/甲/1"]
+    assert asset["rightsSnapshotRefs"] == [
+        "objects/posts/article/攻略/甲/1/sources/s001/source.json"
+    ]
+    assert (release / "payload" / asset["publicSliceKey"]).read_bytes() == tiny_png_bytes()
+    before = _tree_bytes(release)
+    assert materialize_release_media(**kwargs) == manifest
+    assert _tree_bytes(release) == before
+    source = canonical if canonical_available else tmp_path / "unavailable-publish"
+    assert _tree_bytes(source) == canonical_before
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-041
+@pytest.mark.parametrize("partitioned", [False, True])
+def test_full_aggregate_build_and_replay_preserve_logical_media_owners(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, partitioned: bool,
+) -> None:
+    from types import SimpleNamespace
+
+    from content.release.canonical import aggregate_release_builder as builder
+    from content.release.canonical.aggregate_release_selection import (
+        ExplicitCohortSelection, PoolCandidate,
+    )
+    from content.release.canonical.object_source_identity import source_identity_set
+    from core.source_digest import SourceDefinitionSnapshot
+
+    canonical, _ = _fixture(tmp_path, partitioned=partitioned, materialize=False)
+    logical_ref = "article/攻略/甲/1"
+    physical_ref = "article/攻略/p0001/甲/1" if partitioned else logical_ref
+    post = canonical / "posts" / physical_ref
+    document = json.loads((post / "manifest.json").read_bytes())
+    document["assets"][0]["role"] = "cover"
+    _write(post / "manifest.json", document)
+    source_path = post / "sources/s001/source.json"
+    source = json.loads(source_path.read_bytes())
+    source["assets"][0].update(
+        bytes=len(tiny_png_bytes()), sourceUrl=source["sourceUrl"],
+        fetchedAt=source["fetchedAt"], rightsIssues=["authorization unknown"],
+    )
+    _write(source_path, source)
+    _write(post / "content_review.json", {
+        "schema": "quwoquan_data.content_review", "decision": "approved",
+        "draft": {"digest": "sha256:" + "9" * 64},
+    })
+    _write(post / "records/0001.json", {"originalFact": "preserve exact bytes"})
+    original = _tree_bytes(canonical)
+    selection = ExplicitCohortSelection(
+        candidates=(PoolCandidate(
+            post_ref=logical_ref, content_id="post-a", version=1,
+            content_type="article", author_id="creator-a", variant_purpose="original",
+            usage_scope="production", selection_identity_digest="sha256:" + "1" * 64,
+            canonical_object_digest="sha256:" + "2" * 64,
+            content_library_binding_digest="sha256:" + "3" * 64,
+        ),),
+        pool_digest="sha256:" + "4" * 64, eligible_count=1,
+        counts={"homepage": 0, "article": 1, "image": 0, "video": 0, "total": 1},
+    )
+    header = _header(release_id="aggregate-logical")
+    identities, identity_digest = source_identity_set([{
+        "executionId": header["executionIds"][0],
+        **{key: header[key] for key in ("sourceRevision", "sourceDigest", "entityCatalogDigest")},
+    }])
+    desired = {
+        "posts": [logical_ref], "entities": [],
+        "creators": ["creator-a"], "tags": ["Topic/旅行"],
+    }
+    # 只冻结池选择输入；复制、媒体绑定/物化、准入、schema、闭包和 existing 校验均走真实实现。
+    preparation = SimpleNamespace(
+        excluded=(), cohort_selection=selection, execution_ids=header["executionIds"],
+        source_digests=(SourceDefinitionSnapshot(header["sourceDigest"]),),
+        source_identities=tuple(identities), source_identity_set_digest=identity_digest,
+        entity_catalog_digest=None, source_revision=None, desired=desired,
+    )
+    monkeypatch.setattr(builder, "prepare_pool_release", lambda **_kwargs: preparation)
+    monkeypatch.setattr(builder, "build_release_authors", lambda *_args, **_kwargs: [
+        {"authorId": "creator-a", "creatorRef": "creator-a", "version": 1},
+    ])
+    kwargs = dict(
+        publish_root=canonical, release_root=tmp_path / "aggregate-releases",
+        release_id="aggregate-logical", cohort={"objectRefs": ["posts/" + logical_ref]},
+    )
+    first = builder._build_aggregate_release.__wrapped__(**kwargs)
+    assert first["idempotent"] is False
+    release = Path(first["releaseRoot"])
+    manifest = json.loads((release / "payload/media_manifest.json").read_bytes())
+    asset = manifest["assets"][0]
+    assert asset["ownerRefs"] == ["posts/" + logical_ref]
+    assert asset["rightsSnapshotRefs"] == [
+        "objects/posts/" + logical_ref + "/sources/s001/source.json"
+    ]
+    assert (release / "payload" / asset["publicSliceKey"]).read_bytes() == tiny_png_bytes()
+    assert _tree_bytes(release / "payload/objects/posts" / logical_ref) == _tree_bytes(post)
+    assert _tree_bytes(canonical) == original
+    before = _tree_bytes(release)
+    replay = builder._build_aggregate_release.__wrapped__(**kwargs)
+    assert replay["idempotent"] is True
+    assert replay["manifestDigest"] == first["manifestDigest"]
+    assert replay["canonicalMerkle"] == first["canonicalMerkle"]
+    assert _tree_bytes(release) == before
+    assert _tree_bytes(canonical) == original
 
 
 def test_release_first_consumer_closure_and_deterministic_index(tmp_path: Path) -> None:
     canonical, release = _fixture(tmp_path)
-    # Nothing to strip: canonical publish never held the body in the first place.
+    # 媒体只在所选对象包随体携带，不需要全局 CAS 或原库。
+    assert (canonical / "posts/article/攻略/甲/1/media/asset-a.png").read_bytes() == tiny_png_bytes()
     assert not (canonical / "media").exists()
+    source_ref = "posts/article/攻略/甲/1/sources/s001/source.json"
+    source_before = (canonical / source_ref).read_bytes()
+    assert (release / "payload/objects" / source_ref).read_bytes() == source_before
     desired = json.loads((release / "payload" / "desired_state.json").read_text(encoding="utf-8"))
     report = scan_release_contract(
         desired,
         publish_root=canonical,
         release_root=release,
     )
-    assert report["status"] == "passed"
+    assert report["status"] == "passed", report["blockingIssues"]
     unrelated = canonical / "posts/article/攻略/无关/1"
     _write(
         unrelated / "manifest.json",
         {
+            "objectRef": "article/攻略/无关/1",
+            "version": 1,
             "contentType": "article",
             "publishTitle": "不属于 release",
             "tagRefs": ["Topic/旅行"],
@@ -205,6 +353,45 @@ def test_release_first_consumer_closure_and_deterministic_index(tmp_path: Path) 
     assert "cdnUrl" not in json.dumps(media)
     assert "objectKey" not in json.dumps(media)
     assert media["assets"][0]["publicSliceKey"].startswith("media/image/s/asset/")
+
+
+@pytest.mark.parametrize("corruption", ["missing_source", "evidence_drift", "asset_identity_drift", "legacy_rights_ref"])
+def test_release_consumer_rejects_invalid_carried_source(tmp_path: Path, corruption: str) -> None:
+    canonical, release = _fixture(tmp_path)
+    source_root = release / "payload/objects/posts/article/攻略/甲/1/sources/s001"
+    source_path = source_root / "source.json"
+    if corruption == "missing_source":
+        source_path.unlink()
+    elif corruption == "evidence_drift":
+        evidence = source_root / "evidence.txt"
+        evidence.chmod(0o644)
+        evidence.write_bytes(b"changed source evidence")
+    elif corruption == "asset_identity_drift":
+        source = json.loads(source_path.read_text(encoding="utf-8"))
+        source["assets"][0]["sha256"] = "sha256:" + "0" * 64
+        source_path.chmod(0o644)
+        _write(source_path, source)
+    else:
+        media_path = release / "payload/media_manifest.json"
+        media = json.loads(media_path.read_text(encoding="utf-8"))
+        media["assets"][0]["rightsSnapshotRefs"] = ["objects/posts/article/攻略/甲/1/rights_snapshots/asset-a.json"]
+        _write(media_path, media)
+    before = _tree_bytes(release)
+    report = scan_release_contract(
+        json.loads((release / "payload/desired_state.json").read_text(encoding="utf-8")),
+        publish_root=canonical,
+        release_root=release,
+    )
+    assert report["status"] == "failed"
+    codes = {issue["code"] for issue in report["blockingIssues"]}
+    expected = {
+        "missing_source": "object_evidence_missing",
+        "evidence_drift": "release_media_rights_snapshot_invalid",
+        "asset_identity_drift": "release_media_rights_identity_mismatch",
+        "legacy_rights_ref": "release_media_rights_refs_invalid",
+    }
+    assert expected[corruption] in codes
+    assert _tree_bytes(release) == before
 
 
 def test_release_consumer_rejects_noncanonical_schema_and_create_once_drift(tmp_path: Path) -> None:
@@ -374,7 +561,7 @@ def test_release_consumer_rejects_public_slice_identity_drift(tmp_path: Path) ->
 
 def test_release_consumer_rejects_private_cas_in_object_snapshot(tmp_path: Path) -> None:
     canonical, release = _fixture(tmp_path)
-    asset_refs_path = release / "payload/objects/posts/article/攻略/甲/1/asset.refs.json"
+    asset_refs_path = release / "payload/objects/posts/article/攻略/甲/1/manifest.json"
     asset_refs = json.loads(asset_refs_path.read_text(encoding="utf-8"))
     asset_refs["assets"][0]["objectKey"] = (
         "media/objects/sha256/aa/bb/" + "a" * 64 + ".jpg"

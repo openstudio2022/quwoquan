@@ -61,7 +61,9 @@
         "required": [
           "carrier",
           "entityType",
-          "name"
+          "name",
+          "entityRef",
+          "entityId"
         ],
         "properties": {
           "carrier": {
@@ -71,6 +73,12 @@
               "image",
               "video"
             ]
+          },
+          "entityRef": {
+            "$ref": "target_set.schema.json#/$defs/entityRef"
+          },
+          "entityId": {
+            "$ref": "target_set.schema.json#/$defs/entityId"
           },
           "entityType": {
             "type": "string",

@@ -106,6 +106,8 @@ def _assembled_commands(tmp_path: Path) -> list[tuple[list[str], Path]]:
             media_video_base_url="https://cdn.example.invalid",
             dry_run=True,
             creator_candidate_receipt=run / "creator-import.json",
+            homepage_import_report=run / "homepage-import.json",
+            homepage_candidate_receipt=None,
         )
         importers.run_homepage_importer(
             release=release,
@@ -149,6 +151,16 @@ def test_every_assembled_importer_command_passes_the_real_flag_surface(
                 "importer flag surface drifted between quwoquan_data and "
                 f"quwoquan_service: {' '.join(command[:3])} -> {output[-800:]}"
             )
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-042
+@pytest.mark.api_integration
+def test_content_homepage_candidate_flag_reaches_business_validation(tmp_path: Path) -> None:
+    command, cwd = _assembled_commands(tmp_path)[2]
+    command.remove("--dry-run")
+    output = _execute([*command, "--homepage-candidate-receipt", str(tmp_path / "candidate.json")], cwd)
+    assert not any(token in output for token in GO_FLAG_ERROR_TOKENS), output[-800:]
+    assert "load release desired state" in output
 
 
 @pytest.mark.api_integration

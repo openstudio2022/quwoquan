@@ -49,7 +49,10 @@ def verify(plan_path: Path, *, expected_source_sha: str, expected_tree_digest: s
         blob = _candidate_blob(expected_source_sha, changed_path)
         if blob is None:
             continue
-        if _has_secret_material(blob):
+        if _has_secret_material(
+            blob, path=changed_path,
+            read_blob=lambda path: _candidate_blob(expected_source_sha, path),
+        ):
             raise LocalReadinessError(
                 f"changed candidate secret material detected: {changed_path}"
             )

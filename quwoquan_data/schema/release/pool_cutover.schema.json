@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/pool_cutover.schema.json",
+  "title": "Explicit finite full-pool cutover plan (not publish authority)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "cutoverId", "publishRoot", "stagingRoot", "beforeDigest", "afterDigest", "objects", "protected"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.pool_cutover.v1"},
+    "cutoverId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,95}$"},
+    "publishRoot": {"$ref": "#/$defs/absolutePath"},
+    "stagingRoot": {"$ref": "#/$defs/absolutePath"},
+    "beforeDigest": {"$ref": "#/$defs/digest"},
+    "afterDigest": {"$ref": "#/$defs/digest"},
+    "objects": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/action"}},
+    "protected": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/protected"}},
+    "activation": {
+      "description": "显式激活上下文；auditRoot 必须为空且不属于池/历史证据/媒体 holder。保护 authority 由 caller 提供，不由 cutover 签发。",
+      "type": "object", "additionalProperties": false,
+      "required": ["auditRoot", "protectionAuthority"],
+      "properties": {
+        "auditRoot": {"$ref": "#/$defs/absolutePath"},
+        "protectionAuthority": {"$ref": "#/$defs/binding"}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/", "minLength": 2},
+    "objectRef": {"type": "string", "pattern": "^(creators|entities|posts)/[^/].*$"},
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["objectId", "contentVersion"],
+      "properties": {
+        "objectId": {"type": ["string", "null"], "minLength": 1},
+        "contentVersion": {"type": ["integer", "null"], "minimum": 1}
+      }
+    },
+    "snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["objectRef", "treeDigest", "identity", "recordIdentities", "dependencyRefs", "sourceDigest"],
+      "properties": {
+        "objectRef": {"$ref": "#/$defs/objectRef"},
+        "treeDigest": {"$ref": "#/$defs/digest"},
+        "identity": {"$ref": "#/$defs/identity"},
+        "recordIdentities": {
+          "type": "array", "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["objectId", "contentVersion", "objectRef", "recordSequence"],
+            "properties": {
+              "objectId": {"type": ["string", "null"]},
+              "contentVersion": {"type": ["integer", "null"]},
+              "objectRef": {"type": ["string", "null"]},
+              "recordSequence": {"type": ["integer", "null"]}
+            }
+          }
+        },
+        "dependencyRefs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/objectRef"}},
+        "sourceDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ref", "digest"],
+      "properties": {"ref": {"$ref": "#/$defs/absolutePath"}, "digest": {"$ref": "#/$defs/digest"}}
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ref", "digest", "kind", "role"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/absolutePath"}, "digest": {"$ref": "#/$defs/digest"},
+        "kind": {"enum": ["file", "tree"]},
+        "role": {"enum": ["execution", "package", "source", "review", "decision", "author_authority"]}
+      }
+    },
+    "action": {
+      "type": "object", "additionalProperties": false,
+      "required": ["before", "action", "after", "evidence"],
+      "properties": {
+        "before": {"$ref": "#/$defs/snapshot"},
+        "action": {"enum": ["migrate", "delete"]},
+        "after": {"anyOf": [{"$ref": "#/$defs/snapshot"}, {"type": "null"}]},
+        "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/evidence"}}
+      },
+      "allOf": [
+        {"if": {"properties": {"action": {"const": "delete"}}}, "then": {"properties": {"after": {"type": "null"}}}},
+        {"if": {"properties": {"action": {"const": "migrate"}}}, "then": {"properties": {"after": {"$ref": "#/$defs/snapshot"}}}}
+      ]
+    },
+    "protected": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ref", "digest", "kind", "category"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/absolutePath"}, "digest": {"$ref": "#/$defs/digest"},
+        "kind": {"enum": ["file", "tree"]},
+        "category": {"enum": ["media_library", "golden_media", "release", "receipt", "rollback", "environment_binding"]}
+      }
+    },
+    "protectionAuthority": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "cutoverId", "beforeDigest", "afterDigest", "protectedDigest", "scope", "issuer"],
+      "properties": {
+        "schema": {"const": "quwoquan_data.pool_cutover_protection.v1"},
+        "cutoverId": {"type": "string", "minLength": 1},
+        "beforeDigest": {"$ref": "#/$defs/digest"},
+        "afterDigest": {"$ref": "#/$defs/digest"},
+        "protectedDigest": {"$ref": "#/$defs/digest"},
+        "scope": {"const": "complete_release_rollback_environment_media_closure"},
+        "issuer": {"type": "string", "minLength": 1}
+      }
+    },
+    "intent": {
+      "description": "交换前 durable create-once intent；恢复只按 exact before/after digest+inode 判定，不把 JSON status 当事实。",
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "planDigest", "publishRoot", "stagingRoot", "auditRoot", "beforeDigest", "afterDigest", "beforeIdentity", "afterIdentity", "archive", "authorization", "dryRunEvidence"],
+      "properties": {
+        "schema": {"const": "quwoquan_data.pool_cutover_intent.v1"},
+        "planDigest": {"$ref": "#/$defs/digest"},
+        "publishRoot": {"$ref": "#/$defs/absolutePath"},
+        "stagingRoot": {"$ref": "#/$defs/absolutePath"},
+        "auditRoot": {"$ref": "#/$defs/absolutePath"},
+        "beforeDigest": {"$ref": "#/$defs/digest"},
+        "afterDigest": {"$ref": "#/$defs/digest"},
+        "beforeIdentity": {"$ref": "#/$defs/nodeIdentity"},
+        "afterIdentity": {"$ref": "#/$defs/nodeIdentity"},
+        "archive": {"$ref": "#/$defs/binding"},
+        "authorization": {"$ref": "#/$defs/binding"},
+        "dryRunEvidence": {"$ref": "#/$defs/binding"}
+      }
+    },
+    "nodeIdentity": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0}},
+    "cleanupAuthorization": {
+      "description": "只允许删除 intent 点名的交换后旧树；离线 tar 审计原件始终保留。",
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "planDigest", "intentDigest", "archiveDigest", "beforeDigest", "operation"],
+      "properties": {
+        "schema": {"const": "quwoquan_data.pool_cutover_cleanup.v1"},
+        "planDigest": {"$ref": "#/$defs/digest"},
+        "intentDigest": {"$ref": "#/$defs/digest"},
+        "archiveDigest": {"$ref": "#/$defs/digest"},
+        "beforeDigest": {"$ref": "#/$defs/digest"},
+        "operation": {"const": "remove_exact_retired_tree"}
+      }
+    },
+    "authorization": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "planDigest", "operations", "deleteObjectRefs"],
+      "properties": {
+        "schema": {"const": "quwoquan_data.pool_cutover_authorization.v1"},
+        "planDigest": {"$ref": "#/$defs/digest"},
+        "operations": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["dry_run", "activate"]}},
+        "deleteObjectRefs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/objectRef"}}
+      }
+    }
+  }
+}

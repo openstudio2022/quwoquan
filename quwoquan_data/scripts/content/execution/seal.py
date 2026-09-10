@@ -16,6 +16,13 @@ from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterator
 
+from content.execution.author_bindings import (
+    AuthorBindingError,
+    homepage_primary_source,
+    image_asset_bindings,
+    parse_frontmatter,
+    resolve_asset_ref,
+)
 from content.execution.identity import validate_execution_id
 from core import paths
 from core.control_types import (
@@ -171,22 +178,6 @@ def _author_artifact_ref(target_ref: str) -> str:
     return f"{target_ref}/4.draft/{AUTHOR_ARTIFACT_BY_CARRIER[carrier_of_target_ref(target_ref)]}"
 
 
-_FRONTMATTER_TAGS = re.compile(r"^tagRefs:\s*\[(.*?)\]\s*$", re.M)
-
-
-def _declared_tag_refs(path: Path, document: dict[str, Any] | None) -> list[str]:
-    if document is not None:
-        return [str(value) for value in document.get("tagRefs") or []]
-    text = path.read_text(encoding="utf-8")
-    if not text.startswith("---\n"):
-        return []
-    header = text.split("\n---\n", 1)[0]
-    match = _FRONTMATTER_TAGS.search(header)
-    if not match:
-        return []
-    return [item.strip().strip("'\"") for item in match.group(1).split(",") if item.strip()]
-
-
 def _assert_tag_refs_resolve(tag_refs: list[str], *, label: str) -> None:
     """tagRefs 必须是 taxonomy 现有叶子；这是 publish 会拒绝的硬事实，提前在 author seal 报出。"""
 
@@ -195,19 +186,6 @@ def _assert_tag_refs_resolve(tag_refs: list[str], *, label: str) -> None:
         safe = _safe_ref(ref, label=f"{label} tagRef")
         if not (taxonomy_root / safe / "_definition.json").is_file():
             raise SealError(f"tagRef 不在 taxonomy 中：{ref}（{label}）")
-
-
-_FRONTMATTER_CREATOR = re.compile(r"^creatorProfileId:\s*(\S+)\s*$", re.M)
-
-
-def _declared_creator(path: Path, document: dict[str, Any] | None) -> str:
-    if document is not None:
-        return str(document.get("creatorProfileId") or "").strip()
-    text = path.read_text(encoding="utf-8")
-    if not text.startswith("---\n"):
-        return ""
-    match = _FRONTMATTER_CREATOR.search(text.split("\n---\n", 1)[0])
-    return match.group(1).strip().strip("'\"") if match else ""
 
 
 def _assert_creator_resolves(creator_profile_id: str, *, label: str) -> None:
@@ -221,12 +199,18 @@ def _assert_creator_resolves(creator_profile_id: str, *, label: str) -> None:
         raise SealError(f"creatorProfileId 不在 creator 注册表中：{creator_profile_id}（{label}）")
 
 
-def _assert_homepage_has_encyclopedia_source(root: Path, target_ref: str) -> None:
-    """homepage 的 _entity.json 要求百科主源；缺失在 author seal 即判否，不留到 publish。"""
+def _assert_homepage_has_encyclopedia_source(root: Path, target_ref: str, metadata: dict[str, Any]) -> None:
+    """显式主源校验成员与百科资格；未声明仍保留旧 author 输入的百科存在判据。"""
 
     if carrier_of_target_ref(target_ref) != "homepage":
         return
     refs_doc = _read_json(root / f"{target_ref}/1.download/source_refs.json", label="source_refs")
+    try:
+        primary = homepage_primary_source(metadata, refs_doc.get("sources") or [])
+    except ValueError as exc:
+        raise SealError(str(exc)) from exc
+    if primary is not None:
+        return
     for row in refs_doc.get("sources") or []:
         identity = f"{row.get('sourceId') or ''} {row.get('sourceClass') or ''}".lower()
         if "wikipedia" in identity or "baike" in identity or "encyclopedia" in identity:
@@ -253,14 +237,18 @@ def _validate_author_artifact(root: Path, execution_id: str, target_ref: str) ->
         }
         try:
             assert_valid(completed, "content", schema_name, label=artifact_ref)
+            if schema_name == "image_work":
+                image_asset_bindings(completed, _object_source_assets(root, target_ref))
         except ValueError as exc:
             raise SealError(str(exc)) from exc
         if completed != document:
             _write_create_or_same(path, canonical_bytes(completed), allow_rewrite=True)
         document = completed
-    _assert_tag_refs_resolve(_declared_tag_refs(path, document), label=artifact_ref)
-    _assert_creator_resolves(_declared_creator(path, document), label=artifact_ref)
-    _assert_homepage_has_encyclopedia_source(root, target_ref)
+    metadata = document if document is not None else parse_frontmatter(path.read_text(encoding="utf-8"))
+    _assert_homepage_has_encyclopedia_source(root, target_ref, metadata)
+    tag_refs = metadata.get("tagRefs")
+    _assert_tag_refs_resolve([str(value) for value in tag_refs] if isinstance(tag_refs, list) else [], label=artifact_ref)
+    _assert_creator_resolves(str(metadata.get("creatorProfileId") or "").strip(), label=artifact_ref)
     return _frozen(root, artifact_ref)
 
 
@@ -326,14 +314,10 @@ def _object_source_assets(root: Path, target_ref: str) -> dict[str, dict[str, An
 def _normalize_asset_ref(raw: str, assets: dict[str, dict[str, Any]]) -> str:
     """接受 AI 写的 fileName / assets/<fileName> / 完整 sources 路径，归一为 execution 相对路径。"""
 
-    value = str(raw or "").strip().strip("/")
-    if value in assets:
-        return value
-    tail = value.removeprefix("assets/")
-    matches = [ref for ref in assets if ref.endswith(f"/assets/{tail}")]
-    if len(matches) != 1:
-        raise SealError(f"assetRef 无法唯一解析到对象资产：{raw!r}")
-    return matches[0]
+    try:
+        return resolve_asset_ref(raw, assets, label="author/review")
+    except AuthorBindingError as exc:
+        raise SealError(str(exc)) from exc
 
 
 _MARKDOWN_IMAGE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")

@@ -10,6 +10,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -428,6 +429,56 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
                 for detail in raised.exception.details
             )
         )
+
+
+class ManagedPublicReadbackTest(unittest.TestCase):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-044"""
+
+    def test_active_identity_is_read_anonymously_from_public_feed(self) -> None:
+        with (
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch("quwoquan_ops.cli.lib.environment_topology.resolve_environment_target_base", return_value=SimpleNamespace(api_base="https://api.alpha.quwoquan.com")),
+            mock.patch("quwoquan_ops.cli.lib.local_environment_auth.http_transport.request_local_environment_public_json", return_value={
+                "releaseId": "production-a", "manifestDigest": _DIGEST,
+                "outcome": "content", "items": [{"postId": "post-a"}],
+            }) as request,
+        ):
+            result = stackctl._managed_active_release_readback(
+                environment="alpha", startup_attempt_id="attempt-a"
+            )
+        self.assertEqual(result, {"releaseId": "production-a", "manifestDigest": _DIGEST})
+        self.assertEqual(request.call_args.kwargs, {
+            "path": "/content/feed?identity=work&limit=1", "method": "GET",
+            "headers": {"X-Client-Page-Id": "content.feed.list", "X-Client-Session-Id": "attempt-a"},
+        })
+
+    def test_empty_or_missing_public_identity_is_a_typed_blocker(self) -> None:
+        with (
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch("quwoquan_ops.cli.lib.environment_topology.resolve_environment_target_base", return_value=SimpleNamespace(api_base="https://api.alpha.quwoquan.com")),
+            mock.patch("quwoquan_ops.cli.lib.local_environment_auth.http_transport.request_local_environment_public_json", return_value={
+                "releaseId": "", "manifestDigest": "",
+                "outcome": "empty", "items": [], "emptyReason": "no_active_release",
+            }),
+        ):
+            with self.assertRaises(stackctl.ManagedPreparationBlocked) as raised:
+                stackctl._managed_content_binding(
+                    environment="alpha", target="alpha-local", startup_attempt_id="attempt-a"
+                )
+        self.assertIn("release", " ".join(raised.exception.details))
+
+    def test_multiple_readiness_candidates_never_select_latest(self) -> None:
+        with (
+            mock.patch.object(stackctl, "_managed_active_release_readback", return_value={"releaseId": "production-a", "manifestDigest": _DIGEST}),
+            mock.patch.object(stackctl, "_managed_readiness_candidates", return_value=[{"verifyRunId": "verify-a"}, {"verifyRunId": "verify-z"}]),
+            mock.patch.object(stackctl, "create_test_live_content_binding") as create,
+        ):
+            with self.assertRaises(stackctl.ManagedPreparationBlocked) as raised:
+                stackctl._managed_content_binding(
+                    environment="alpha", target="alpha-local", startup_attempt_id="attempt-a"
+                )
+        self.assertIn("found 2 candidates", " ".join(raised.exception.details))
+        create.assert_not_called()
 
 
 if __name__ == "__main__":

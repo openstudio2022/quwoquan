@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from copy import deepcopy
 from typing import Any
 
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
+    _safe_rel,
 )
 
 
@@ -54,4 +57,32 @@ def freeze_canonical_video_poster_identities(
         asset["posterSha256"] = poster_sha256
 
 
-__all__ = ["freeze_canonical_video_poster_identities"]
+def project_canonical_post_asset_paths(
+    assets: list[dict[str, Any]], *, destination_paths: Mapping[str, str],
+) -> list[dict[str, Any]]:
+    """先按原路径验证封面绑定，再只在包投影中按稳定资产身份重命名。"""
+    projected = deepcopy(assets)
+    # 原声明必须先与原封面身份吻合，不能删除旧 claim 后用新路径掩盖漂移。
+    freeze_canonical_video_poster_identities(projected)
+    asset_ids = {str(asset["assetId"]).strip() for asset in projected}
+    if set(destination_paths) != asset_ids:
+        raise ObjectTransactionError("post canonical asset destination mapping identity 不完整")
+    destinations = {
+        asset_id: _safe_rel(path, label="canonical asset destination").as_posix()
+        for asset_id, path in destination_paths.items()
+    }
+    if len(set(destinations.values())) != len(destinations):
+        raise ObjectTransactionError("post canonical asset destination mapping 路径重复")
+    for asset in projected:
+        destination = destinations[str(asset["assetId"]).strip()]
+        asset.update(path=destination, fileName=destination)
+        kind = str(asset.get("kind") or "").strip()
+        mime = str(asset.get("mimeType") or "").strip().lower()
+        if kind == "video" or mime.startswith("video/"):
+            poster_id = str(asset["posterAssetId"]).strip()
+            asset["posterFileName"] = destinations[poster_id]
+    freeze_canonical_video_poster_identities(projected)
+    return projected
+
+
+__all__ = ["freeze_canonical_video_poster_identities", "project_canonical_post_asset_paths"]

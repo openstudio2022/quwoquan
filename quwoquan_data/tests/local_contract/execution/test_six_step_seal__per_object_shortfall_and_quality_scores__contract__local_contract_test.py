@@ -104,9 +104,9 @@ def execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "targetCount": 3,
         "targetRefs": TARGETS,
         "targets": [
-            {"name": "西湖", "entityType": "地点/景区", "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1},
-            {"name": "灵隐寺", "entityType": "地点/景区", "publishAngle": "导览", "publishTitle": "灵隐寺速览", "publishSeq": 1},
-            {"name": "六和塔", "entityType": "地点/景区", "publishAngle": "导览", "publishTitle": "六和塔速览", "publishSeq": 1},
+            {"name": "西湖", "entityType": "地点/景区", "entityRef": "/entity/hangzhou-west-lake", "entityId": "entity:hangzhou-west-lake", "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1},
+            {"name": "灵隐寺", "entityType": "地点/景区", "entityRef": "/entity/lingyin-temple", "entityId": "entity:lingyin-temple", "publishAngle": "导览", "publishTitle": "灵隐寺速览", "publishSeq": 1},
+            {"name": "六和塔", "entityType": "地点/景区", "entityRef": "/entity/liuhe-tower", "entityId": "entity:liuhe-tower", "publishAngle": "导览", "publishTitle": "六和塔速览", "publishSeq": 1},
         ],
     }
     _write(root / "0.plan/target_set.json", _canonical(target_set))

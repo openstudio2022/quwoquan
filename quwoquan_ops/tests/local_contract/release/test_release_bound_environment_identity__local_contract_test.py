@@ -412,7 +412,7 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             "releaseId": RELEASE_ID, "releaseKind": "content", "sourceOwner": "qwq_data",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {"verified": 3, "unverified": 0, "restricted": 0, "unknown": 0},
-            "authorizationRequiredAssetIds": [], "researchAcceptedCount": 0, "commercialAcceptedCount": 3,
+            "authorizationRequiredAssetIds": [], "acceptedCount": 3,
             "guestActorHash": DIGEST_A,
             "guestLogin": {**operation, "path": "/auth/login/anonymous", "pageId": "user.login.anonymous"},
             **source, "manifestDigest": RELEASE_DIGEST, "mediaManifestDigest": DIGEST_A,

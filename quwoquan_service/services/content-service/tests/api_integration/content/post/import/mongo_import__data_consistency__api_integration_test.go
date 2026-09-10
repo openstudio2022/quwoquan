@@ -56,7 +56,7 @@ func publishTreeFixture(t *testing.T) string {
 		"publishedAt":"2026-04-02T00:00:00Z"
 	}`)
 	writeImportFixtureFile(t, filepath.Join(root, "posts/article/攻略/色达攻略/1/article.md"), "# 色达攻略\n")
-	writeImportFixtureFile(t, filepath.Join(root, "entities/地点/景区/色达/_entity.json"), `{
+	writeImportFixtureFile(t, filepath.Join(root, "entities/地点/景区/色达/manifest.json"), `{
 		"label":"色达",
 		"domain":"地点",
 		"type":"景区",

@@ -129,7 +129,7 @@ from quwoquan_ops.cli.lib.local_environment_auth import (
     load_local_environment_auth, mint_local_filter_catalog_service_token,
     mint_local_product_ops_operator_token, open_local_phone_acceptance_session,
     open_test_data_acceptance_session, prepare_local_environment_auth,
-    request_local_environment_json,
+    request_local_environment_json, request_local_environment_public_json,
 )
 from quwoquan_ops.cli.lib.premium_pool_release import (
     PremiumPoolReleaseError, execute_premium_pool_readback, execute_premium_pool_upsert,

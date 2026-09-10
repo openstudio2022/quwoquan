@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"array","items":{"allOf":[{"$ref":"https://quwoquan.local/content-production/common#/$defs/candidate"},{"properties":{"kind":{"const":"image"}}}]}}

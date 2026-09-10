@@ -545,8 +545,7 @@ class Fixture:
                         "unknown": 0,
                     },
                     "authorizationRequiredAssetIds": [],
-                    "researchAcceptedCount": 0,
-                    "commercialAcceptedCount": 3,
+                    "acceptedCount": 3,
                     "guestActorHash": DIGEST_A,
                     "guestLogin": _operation_evidence(
                         "/auth/login/anonymous", "user.login.anonymous", "guest-login"

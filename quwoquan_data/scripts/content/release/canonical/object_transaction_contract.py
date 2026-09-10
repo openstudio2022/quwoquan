@@ -42,7 +42,7 @@ RELEASE_SCHEMA = "quwoquan_data.release"
 REQUIRED_SOURCE_POLICY = SourcePolicyRevision.ENCYCLOPEDIA_PRIMARY.value
 EXECUTION_CONTENT_REVIEW_REF = "5.review/content_review.json"
 CANONICAL_CONTENT_REVIEW_REF = "content_review.json"
-CANONICAL_TRANSACTION_LAYOUT_REVISION = "content-review-v1"
+CANONICAL_TRANSACTION_LAYOUT_REVISION = "self-contained-v2"
 ALLOWED_OBJECT_KINDS = {"creators", "entities", "posts"}
 # Canonical publish holds the documents that describe a work, never the bytes it
 # shows: media bodies are owned once by the content library and reached by the
@@ -203,10 +203,8 @@ def canonical_destination(value: str, *, label: str) -> Path:
     relative = _safe_rel(value, label=label)
     if relative.parts[0] not in ALLOWED_CANONICAL_ROOTS:
         raise ObjectTransactionError(f"{label} is outside canonical roots: {value}")
-    if not is_canonical_document(relative):
-        raise ObjectTransactionError(
-            f"{label} is a media body, which canonical publish never owns: {value}"
-        )
+    if not is_canonical_document(relative) and not ({"media", "sources"} & set(relative.parts[1:])):
+        raise ObjectTransactionError(f"{label} is outside carried media/source closure: {value}")
     return relative
 
 
@@ -346,8 +344,9 @@ def refresh_canonical_tag_snapshots(canonical_root: Path) -> list[str]:
 
 def _object_json_keys(root: Path) -> set[str]:
     result: set[str] = set()
-    for path in _files(root):
-        if path.suffix == ".json":
+    for name in ("manifest.json", "profile.json"):
+        path = root / name
+        if path.is_file():
             result.update(collect_object_keys(_read_json(path)))
     return result
 
@@ -542,10 +541,7 @@ def _closure_digest(
                     "tagRefs": sorted(
                         str(item) for item in closure.get("tagRefs") or []
                     ),
-                    "sourceCatalogRef": str(
-                        closure.get("sourceCatalogRef") or ""
-                    ),
-                    "rightsRef": str(closure.get("rightsRef") or ""),
+                    "sourceRefs": sorted(str(ref) for ref in closure.get("sourceRefs") or []),
                     "creatorObjects": sorted(
                         (
                             {

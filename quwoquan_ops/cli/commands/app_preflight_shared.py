@@ -140,15 +140,8 @@ def _validate_data_activation_envelope(
         "importReportRef": import_ref,
         "importReportDigest": import_digest,
     }
-    if "sourceIdentities" in receipt or "sourceIdentitySetDigest" in receipt:
-        expected["sourceIdentities"] = receipt.get("sourceIdentities")
-        expected["sourceIdentitySetDigest"] = receipt.get(
-            "sourceIdentitySetDigest"
-        )
-    else:
-        expected["sourceRevision"] = receipt.get("sourceRevision")
-        expected["sourceDigest"] = receipt.get("sourceDigest")
-        expected["entityCatalogDigest"] = receipt.get("entityCatalogDigest")
+    expected["sourceIdentities"] = receipt.get("sourceIdentities")
+    expected["sourceIdentitySetDigest"] = receipt.get("sourceIdentitySetDigest")
     for field in ("milestone", "previousEnvironmentActivation"):
         if field in receipt:
             expected[field] = receipt.get(field)

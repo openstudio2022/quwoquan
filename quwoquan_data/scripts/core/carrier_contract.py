@@ -114,7 +114,7 @@ CARRIER_LANES: dict[str, CarrierLane] = {
 }
 
 
-def research_plan_files() -> dict[str, str]:
+def source_plan_files() -> dict[str, str]:
     """download 段来源计划文件映射（lane → 文件名）。"""
     return {
         lane.lane.value: lane.source_plan_file

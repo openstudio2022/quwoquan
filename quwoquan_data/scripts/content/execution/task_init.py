@@ -183,13 +183,23 @@ def _region_tag_exists(region: str) -> bool:
     return (taxonomy_root / "Topic" / "地理" / "行政区" / region / "_definition.json").is_file()
 
 
-def _target_ref(target: Mapping[str, Any], *, carrier: str) -> str:
+def execution_target_ref(target: Mapping[str, Any], *, carrier: str) -> str:
+    """从 schema 合法的冻结 target 生成 execution 相对过程路径，不生成逻辑身份。
+
+    homepage 叶子只取显式 entityRef 的摘要；post 需要完整的 publishAngle/Title/Seq。
+    不读取地域目录或 publish 树，输入非法时抛 TaskInitError；调用方不得另写路径算法。
+    """
     name = str(target.get("name") or "").strip()
     entity_type = str(target.get("entityType") or "").strip().strip("/")
     if not name or len(entity_type.split("/")) != 2:
         raise TaskInitError(f"候选 target 非法：{entity_type}/{name}")
     if carrier == "homepage":
-        return f"entities/{entity_type}/{name}"
+        entity_ref = target.get("entityRef")
+        if not isinstance(entity_ref, str) or not entity_ref.startswith("/entity/"):
+            raise TaskInitError("DATA.EXECUTION.TARGET_IDENTITY_REQUIRED: entityRef")
+        # 只生成 execution 物理叶子，不生成业务 ID，也不读取当前 publish locator。
+        token = hashlib.sha256(entity_ref.encode("utf-8")).hexdigest()
+        return f"entities/{entity_type}/entity-{token}"
     angle = str(target.get("publishAngle") or "").strip()
     title = str(target.get("publishTitle") or "").strip()
     sequence = target.get("publishSeq")
@@ -219,13 +229,32 @@ def _normalized_targets(value: object, *, carrier: str) -> tuple[list[dict[str, 
             target["publishAngle"] = str(target.get("publishAngle") or "").strip()
             target["publishTitle"] = str(target.get("publishTitle") or "").strip()
             target.setdefault("publishSeq", 1)
-        ref = _target_ref(target, carrier=carrier)
+        ref = execution_target_ref(target, carrier=carrier)
         if ref in seen:
             raise TaskInitError(f"targetRef 重复：{ref}")
         seen.add(ref)
         pairs.append((ref, target))
     pairs.sort(key=lambda pair: pair[0])
-    return [target for _, target in pairs], [ref for ref, _ in pairs]
+    targets = [target for _, target in pairs]
+    _validate_entity_bindings(targets)
+    return targets, [ref for ref, _ in pairs]
+
+
+def _validate_entity_bindings(targets: list[dict[str, Any]]) -> None:
+    """同一显式 ref/ID 必须一一绑定；分类与已声明地域不能在同一输入里相互矛盾。"""
+    by_ref: dict[str, dict[str, Any]] = {}
+    by_id: dict[str, str] = {}
+    for target in targets:
+        entity_ref, entity_id = target["entityRef"], target["entityId"]
+        previous = by_ref.setdefault(entity_ref, {})
+        if by_id.setdefault(entity_id, entity_ref) != entity_ref:
+            raise TaskInitError(f"DATA.EXECUTION.TARGET_IDENTITY_CONFLICT: entityId={entity_id}")
+        for field in ("entityId", "entityType", "region"):
+            value = target.get(field)
+            if field != "entityId" and isinstance(value, str):
+                value = value.strip()
+            if value and previous.setdefault(field, value) != value:
+                raise TaskInitError(f"DATA.EXECUTION.TARGET_IDENTITY_CONFLICT: {entity_ref}/{field}")
 
 
 def _assert_regular_bytes(path: Path, *, label: str) -> bytes:
@@ -380,7 +409,7 @@ def _normalized_inputs(
 
 
 _CARRIERS = ("homepage", "article", "image", "video")
-_TARGET_IDENTITY_FIELDS = ("entityType", "name", "region", "publishAngle", "publishTitle", "publishSeq")
+_TARGET_IDENTITY_FIELDS = ("entityRef", "entityId", "entityType", "name", "region", "publishAngle", "publishTitle", "publishSeq")
 
 
 def _round_documents(round_spec: dict[str, Any]) -> list[tuple[dict[str, Any], dict[str, Any]]]:
@@ -388,6 +417,7 @@ def _round_documents(round_spec: dict[str, Any]) -> list[tuple[dict[str, Any], d
 
     familyRef 固定为 `content/travel/<carrier>/<carrier>`；只为实际有 target 的 carrier 建 execution。
     """
+    _validate_entity_bindings(round_spec["targets"])
     executions = round_spec["executions"]
     retry_of = round_spec.get("retryOf") or {}
     by_carrier: dict[str, list[dict[str, Any]]] = {}
@@ -446,6 +476,8 @@ def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path)
 
 
 def initialize_execution(*, submitted_demand: dict[str, Any], submitted_bindings: dict[str, Any]) -> dict[str, Any]:
+    assert_valid(submitted_demand, "execution", "carrier_demand", label="task init carrier demand")
+    assert_valid(submitted_bindings, "execution", "immutable_candidate_bindings", label="task init candidate bindings")
     execution_id = validate_execution_id(str(submitted_demand["executionId"]))
     carrier = parse_execution_id(execution_id).content_type.value
     if submitted_demand["carrier"] != carrier or submitted_bindings["carrier"] != carrier:
@@ -580,4 +612,4 @@ def initialize_execution(*, submitted_demand: dict[str, Any], submitted_bindings
     return {"executionId": execution_id, "status": "created", "artifacts": list(documents)}
 
 
-__all__ = ["TaskInitConflict", "TaskInitError", "initialize_execution", "initialize_round", "initialize_task"]
+__all__ = ["TaskInitConflict", "TaskInitError", "execution_target_ref", "initialize_execution", "initialize_round", "initialize_task"]

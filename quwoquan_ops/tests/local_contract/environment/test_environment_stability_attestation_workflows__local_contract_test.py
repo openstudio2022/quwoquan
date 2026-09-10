@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 from pathlib import Path
 
+import pytest
 import yaml
 
 from quwoquan_ops.ci import release_qualification
+from quwoquan_ops.ci import render_environment_stability_attested_receipt as receipt_renderer
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance import (
     GITHUB_ATTESTED_WORKFLOW_BY_KIND,
     RETIRED_GITHUB_ATTESTED_EVIDENCE_KINDS,
@@ -28,6 +32,64 @@ MINIMUM_ATTESTATION_PERMISSIONS = {
     "id-token": "write",
     "attestations": "write",
 }
+
+
+def _bound_release_fixture(tmp_path: Path, **overrides: object) -> dict:
+    from quwoquan_ops.tests.support.deployment_candidate_manifest_test_support import release_attestation_payload
+
+    attestation = {
+        **release_attestation_payload("pilot-003", "sha256:" + "a" * 64),
+        **overrides,
+    }
+    path = tmp_path / "release.json"
+    path.write_text(json.dumps(attestation), encoding="utf-8")
+    digest = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    return {"environmentReceipts": {
+        env: {"evidence": {"release": {"path": "release.json", "digest": digest}}}
+        for env in ("alpha", "beta", "gamma", "prod")
+    }}
+
+
+@pytest.mark.parametrize("rights", [
+    {},
+    {"containsUnverifiedAssets": False, "authorizationRequiredAssetIds": []},
+    {"containsUnverifiedAssets": True, "authorizationRequiredAssetIds": ["asset-needs-rights"]},
+])
+def test_bound_release_does_not_reintroduce_commercial_rights_admission(
+    tmp_path: Path, rights: dict,
+) -> None:
+    manifest = _bound_release_fixture(tmp_path, **rights)
+    result = receipt_renderer._bound_release(tmp_path, manifest)
+    assert result["releaseId"] == "pilot-003"
+    assert result["releaseDigest"] == "sha256:" + "a" * 64
+    assert not hasattr(receipt_renderer, "_bound_commercial_release")
+
+
+@pytest.mark.parametrize("field", ["releaseClass", "productLifecycleState"])
+@pytest.mark.parametrize("retired", ["research", "commercial"])
+def test_bound_release_rejects_retired_lifecycle(
+    tmp_path: Path, field: str, retired: str,
+) -> None:
+    manifest = _bound_release_fixture(tmp_path, **{field: retired})
+    with pytest.raises(ValueError, match="Additional properties are not allowed"):
+        receipt_renderer._bound_release(tmp_path, manifest)
+
+
+@pytest.mark.parametrize("defect", ["digest", "missing_environment", "missing_binding", "wrong_schema"])
+def test_bound_release_keeps_four_environment_and_exact_byte_validation(
+    tmp_path: Path, defect: str,
+) -> None:
+    manifest = _bound_release_fixture(tmp_path)
+    if defect == "digest":
+        (tmp_path / "release.json").write_text("{}", encoding="utf-8")
+    elif defect == "missing_environment":
+        del manifest["environmentReceipts"]["prod"]
+    elif defect == "missing_binding":
+        manifest["environmentReceipts"]["alpha"]["evidence"] = {}
+    else:
+        manifest = _bound_release_fixture(tmp_path, schema="not-an-attestation")
+    with pytest.raises(ValueError):
+        receipt_renderer._bound_release(tmp_path, manifest)
 
 
 def _workflow(path: Path) -> dict[str, object]:

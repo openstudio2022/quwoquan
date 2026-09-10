@@ -1,6 +1,7 @@
 """记录资产真实权利事实；取得媒体不代表商用授权。
 
 `DistributionDecision` 是 canonical 字节中的逐资产记录，不选择 release 类别。
+保持冻结的 research/commercial 权利词汇；取得成功不等于授权，合法限制不阻断发布。
 """
 from __future__ import annotations
 
@@ -63,7 +64,7 @@ class ContentDistributionPolicy:
 
     def __post_init__(self) -> None:
         if not self.image_provider_priority or self.image_provider_priority[0] != "pinterest":
-            raise ValueError("research image provider priority must start with pinterest")
+            raise ValueError("source image provider priority must start with pinterest")
         if self.image_generation_allowed or self.video_generation_allowed:
             raise ValueError("governed image/video generation must remain disabled")
         if (
@@ -141,10 +142,10 @@ def load_content_distribution_policy(
     if any(bool(value) for value in acquisition.values()):
         raise ValueError("content acquisition bypass controls must remain disabled")
     media_generation = raw["mediaGeneration"]
-    research_discovery = raw["researchDiscovery"]
+    source_discovery = raw["sourceDiscovery"]
     article_media = raw["articleMedia"]
     scale_milestones = raw["scaleMilestones"]
-    video_popularity = research_discovery["videoPopularity"]
+    video_popularity = source_discovery["videoPopularity"]
     return ContentDistributionPolicy(
         policy_id=str(raw["policyId"]),
         image_generation_allowed=bool(media_generation["imageAllowed"]),
@@ -181,7 +182,7 @@ def load_content_distribution_policy(
             scale_milestones["milestoneAttainmentRequired"]
         ),
         attainment_counting_mode=str(scale_milestones["attainmentCountingMode"]),
-        image_provider_priority=tuple(research_discovery["imageProviderPriority"]),
+        image_provider_priority=tuple(source_discovery["imageProviderPriority"]),
         video_popularity_signals=tuple(video_popularity["signals"]),
         video_popularity_statistical=bool(video_popularity["statistical"]),
         video_popularity_non_blocking=bool(video_popularity["nonBlocking"]),
@@ -199,6 +200,7 @@ def distribution_decision(
 ) -> DistributionDecision:
     if acquisition_status is not AcquisitionStatus.ACQUIRED:
         return DistributionDecision.BLOCKED
+    # 保留原对象权利记录语义；下游发布不以此记录选择类别或拒绝对象。
     if rights_status is RightsStatus.RESTRICTED:
         return DistributionDecision.BLOCKED
     if rights_status is RightsStatus.VERIFIED and authorization_proof.strip():
@@ -214,7 +216,7 @@ def image_distribution_decision(
     usage_scope: str,
     model_release_status: str,
 ) -> DistributionDecision:
-    """Cap image distribution at the exact frozen usage and model-release scope."""
+    """按实际使用范围保守记录权利，不决定 release 准入。"""
 
     base = distribution_decision(
         acquisition_status=acquisition_status,
@@ -227,9 +229,9 @@ def image_distribution_decision(
     normalized_release = model_release_status.strip()
     if normalized_scope not in {"internal_reference", "app_publish", "editorial"}:
         return DistributionDecision.BLOCKED
-    if normalized_release not in {"not_required", "obtained", "editorial_only"}:
+    if normalized_release not in {"not_required", "obtained", "editorial_only", "verified", "unverified"}:
         return DistributionDecision.BLOCKED
-    if normalized_scope != "app_publish" or normalized_release == "editorial_only":
+    if normalized_scope != "app_publish" or normalized_release in {"editorial_only", "unverified"}:
         return DistributionDecision.RESEARCH_ALLOWED
     return base
 
@@ -252,10 +254,7 @@ def asset_contract_missing_fields(asset: Mapping[str, Any]) -> list[str]:
         missing.append("acquisitionStatus")
     if rights_status not in {status.value for status in RightsStatus}:
         missing.append("rightsStatus")
-    if decision not in {
-        DistributionDecision.RESEARCH_ALLOWED.value,
-        DistributionDecision.COMMERCIAL_ALLOWED.value,
-    }:
+    if decision not in {item.value for item in DistributionDecision}:
         missing.append("distributionDecision")
     if not str(asset.get("sourceUrl") or "").startswith("https://"):
         missing.append("sourceUrl")
@@ -287,6 +286,10 @@ def project_asset_admission(
     *,
     object_ref: str,
 ) -> dict[str, Any]:
+    if "distributionDecision" in asset:
+        declared = str(asset["distributionDecision"])
+        if declared not in {item.value for item in DistributionDecision}:
+            raise ValueError(f"{object_ref}: invalid distributionDecision: {declared!r}")
     raw_rights_status = str(
         asset.get("rightsStatus") or asset.get("rightsAuditStatus") or "unknown"
     ).strip()
@@ -324,6 +327,8 @@ def project_asset_admission(
             authorization_proof=authorization_proof,
         )
     )
+    if "distributionDecision" in asset:
+        decision = DistributionDecision(str(asset["distributionDecision"]))
     source_url = str(
         asset.get("sourceUrl")
         or asset.get("originalAssetUrl")

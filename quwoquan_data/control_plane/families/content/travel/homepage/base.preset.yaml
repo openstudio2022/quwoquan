@@ -13,8 +13,8 @@ defaults:
     - 通用
     carriers:
     - homepage
-    modalityContract: separated_research
-    research:
+    modalityContract: separated_carriers
+    sourceDiscovery:
       # 冷启动阶段逐素材保留来源、匹配和权利审计；许可状态不作为发布过滤条件。
       imageAssetStrategy: attribution_audited_publish
       imageCountPolicy: score_bonus

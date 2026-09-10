@@ -1,3 +1,8 @@
+"""Creator 投影与 canonical scanner 的身份闭包契约。
+
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-001
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -18,7 +23,7 @@ from content.release.canonical.object_transaction import (
     _project_entity_creator_closure,
 )
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
-from content.release.environment.consistency import scan_release_contract
+from content.release.canonical.release_consistency import scan_release_contract
 from support.media_fixture import (
     admit_media_body,
     seed_system_creator_avatar_holding,
@@ -103,23 +108,38 @@ def test_release_preflight_rejects_entity_creator_profile_outside_refs(
         entity / "manifest.json",
         {
             "schema": "quwoquan_data.entity_object",
+            "entityRef": "/entity/地点/景区/测试实体",
+            "version": 1,
             "finalContentRef": "page.md",
-            "sourceCatalogRef": "source.json",
-            "rightsRef": "rights.json",
-            "creatorRefsRef": "creator.refs.json",
-            "tagRefsRef": "tag.refs.json",
-            "assetRefsRef": "asset.refs.json",
+            "sourceRefs": ["sources/s001/source.json"],
+            "tagRefs": [],
+            "assets": [],
         },
     )
     _write_json(
         entity / "_entity.json",
         {"creatorProfileId": "qwq_creator_geo_editor_001"},
     )
-    _write_json(entity / "creator.refs.json", {"creatorRefs": []})
-    _write_json(entity / "tag.refs.json", {"tagRefs": []})
-    _write_json(entity / "asset.refs.json", {"assets": []})
-    _write_json(entity / "source.json", {"sources": []})
-    _write_json(entity / "rights.json", {"assets": []})
+    evidence = "测试实体来源摘录\n".encode("utf-8")
+    _write_json(
+        entity / "sources/s001/source.json",
+        {
+            "schema": "quwoquan_data.publish_source",
+            "sourceId": "s001",
+            "sourceUrl": "https://zh.wikipedia.org/wiki/测试实体",
+            "sourceUseMode": "factual_reference_only",
+            "fetchedAt": "2026-09-09T00:00:00Z",
+            "metadata": {},
+            "assets": [],
+            "evidence": [{
+                "path": "evidence.txt",
+                "sha256": "sha256:" + hashlib.sha256(evidence).hexdigest(),
+                "bytes": len(evidence),
+                "kind": "source_excerpt",
+            }],
+        },
+    )
+    (entity / "sources/s001/evidence.txt").write_bytes(evidence)
     (entity / "page.md").write_text("# 测试实体\n", encoding="utf-8")
 
     report = scan_release_contract(
@@ -136,7 +156,7 @@ def test_release_preflight_rejects_entity_creator_profile_outside_refs(
         publish_root=tmp_path,
     )
 
-    assert "entity_creator_closure_missing" in {issue["code"] for issue in report["blockingIssues"]}
+    assert "object_creator_missing" in {issue["code"] for issue in report["blockingIssues"]}
 
 
 def test_creator_avatar_projects_only_from_traceable_cas(
@@ -196,7 +216,7 @@ def test_creator_avatar_projects_only_from_traceable_cas(
     profile_path.write_text(yaml.safe_dump(profile, allow_unicode=True), encoding="utf-8")
     monkeypatch.setattr(creator_projection, "CONTROL_PLANE_CREATOR_POOL_ROOT", pool)
 
-    target = tmp_path / "creator"
+    target = tmp_path / "publish/creators/creator_test"
     creator_projection.project_creator_object("creator_test", target)
 
     public_profile = json.loads((target / "profile.json").read_text(encoding="utf-8"))
@@ -211,8 +231,15 @@ def test_creator_avatar_projects_only_from_traceable_cas(
     assert "usageScope" not in public_profile["admission"]
     assert "avatarUrl" not in public_profile
     assets = json.loads((target / "assets.refs.json").read_text(encoding="utf-8"))
-    assert assets["assets"][0]["objectKey"] == object_key
-    assert (target / "rights_snapshots/avatar-quality.json").is_file()
+    assert "objectKey" not in assets["assets"][0]
+    assert (target / assets["assets"][0]["path"]).read_bytes() == avatar
+    assert assets["assets"] == public_profile["assets"]
+    assert not (target / "rights_snapshots").exists()
+    assert (target / "sources/avatar/evidence.json").read_bytes() == (pool / evidence_ref).read_bytes()
+    from content.release.canonical.post_transaction_sources import read_object_sources
+    assert read_object_sources(target, public_profile)[0]["assets"][0]["sha256"] == digest
+    from content.release.canonical.creator_avatar_quality import creator_avatar_quality_issues
+    assert creator_avatar_quality_issues(target.parents[1], creator_refs=[target.name]) == []
 
 
 def test_creator_avatar_rejects_untraceable_identity(

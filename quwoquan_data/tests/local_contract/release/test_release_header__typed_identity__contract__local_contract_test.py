@@ -34,8 +34,7 @@ def _header(*, release_id: str, release_kind: str = "content") -> dict[str, obje
             "unknown": 0,
         },
         "authorizationRequiredAssetIds": [],
-        "researchAcceptedCount": 0,
-        "commercialAcceptedCount": 0,
+        "acceptedCount": 0,
         "canonicalMerkle": "sha256:" + "2" * 64,
         "executionIds": ["20260805--travel-article--china--scale-001"],
         "sourceDigests": [source.to_document()],
@@ -54,6 +53,14 @@ def _header(*, release_id: str, release_kind: str = "content") -> dict[str, obje
     else:
         document["executionIds"] = []
     return document
+
+
+@pytest.mark.parametrize("field", ["researchAcceptedCount", "commercialAcceptedCount"])
+def test_typed_header_rejects_retired_count_even_beside_new_count(field: str) -> None:
+    document = _header(release_id="retired-count-001")
+    document[field] = 0
+    with pytest.raises(ReleaseHeaderError):
+        validate_release_header(document)
 
 
 def test_typed_header_rejects_baseline_with_content_source_identity() -> None:

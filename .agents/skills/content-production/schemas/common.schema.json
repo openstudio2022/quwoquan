@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/content-production/common",
+  "$defs": {
+    "text": {"type": "string", "minLength": 1},
+    "asset": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {"$ref": "#/$defs/text"}, "directUrl": {"type": "string", "pattern": "^https://"},
+        "previewUrl": {"type": "string", "pattern": "^https://"}, "description": {"type": "string"},
+        "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1},
+        "bytes": {"type": "integer", "minimum": 0}, "duration": {"type": "number", "minimum": 0},
+        "mime": {"type": "string"}, "license": {"type": "string"}, "licenseUrl": {"type": "string"}, "creator": {"type": "string"}
+      }
+    },
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "source", "sourceUrl", "title"],
+      "properties": {
+        "id": {"$ref": "#/$defs/text"}, "kind": {"enum": ["page", "image", "video"]},
+        "source": {"$ref": "#/$defs/text"}, "sourceUrl": {"type": "string", "pattern": "^https://"},
+        "title": {"type": "string"}, "creator": {"type": "string"}, "creatorUrl": {"type": "string"},
+        "uploader": {"type": "string"}, "uploaderUrl": {"type": "string"},
+        "license": {"type": "string"}, "licenseUrl": {"type": "string"},
+        "accessPolicy": {"enum": ["open", "robots_disallowed", "tos_restricted"]},
+        "publishedAt": {"type": ["string", "number"]}, "revision": {"type": ["string", "integer"]},
+        "summary": {"type": "string"}, "disambiguation": {"type": "boolean"},
+        "discoverySignals": {"type": "object", "additionalProperties": {"type": "number"}},
+        "sourceMarkdownPath": {"$ref": "#/$defs/text"},
+        "sourceMarkdownSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "evidence": {"type": "object", "additionalProperties": false, "required": ["responsePath", "responseSha256", "request"], "properties": {"responsePath": {"$ref": "#/$defs/text"}, "responseSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "request": {"type": "object"}}},
+        "assets": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/asset"}}
+      },
+      "allOf": [{"if": {"properties": {"kind": {"const": "page"}}}, "then": {"required": ["sourceMarkdownPath"]}}]
+    },
+    "factEvidence": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "creator": {"$ref": "#/$defs/factRef"}, "license": {"$ref": "#/$defs/factRef"}, "licenseUrl": {"$ref": "#/$defs/factRef"}
+      }
+    },
+    "factRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["responsePath", "responseSha256", "quote", "sourceUrl"],
+      "properties": {
+        "responsePath": {"$ref": "#/$defs/text"}, "responseSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "quote": {"$ref": "#/$defs/text"}, "sourceUrl": {"type": "string", "pattern": "^https://"}
+      }
+    },
+    "assetSelection": {
+      "type": "object", "additionalProperties": false, "required": ["id", "watermarkStatus", "watermarkKind"],
+      "properties": {
+        "id": {"$ref": "#/$defs/text"}, "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
+        "watermarkKind": {"enum": ["none", "author_signature", "platform_logo", "stock_agency", "other", "unknown"]},
+        "watermarkNote": {"type": "string"}, "hasAudio": {"type": "boolean"},
+        "commercialAuthorizationStatus": {"$ref": "https://quwoquan.local/content-production/ingest#/$defs/mediaSource/properties/commercialAuthorizationStatus"},
+        "authorizationProof": {"$ref": "https://quwoquan.local/content-production/ingest#/$defs/mediaSource/properties/authorizationProof"},
+        "audioRightsStatus": {"$ref": "https://quwoquan.local/content-production/ingest#/$defs/mediaSource/properties/audioRightsStatus"},
+        "usageScope": {"$ref": "https://quwoquan.local/content-production/ingest#/$defs/mediaSource/properties/usageScope"},
+        "modelReleaseStatus": {"$ref": "https://quwoquan.local/content-production/ingest#/$defs/mediaSource/properties/modelReleaseStatus"},
+        "propertyReleaseStatus": {"$ref": "https://quwoquan.local/content-production/ingest#/$defs/mediaSource/properties/propertyReleaseStatus"},
+        "creator": {"$ref": "#/$defs/text"}, "license": {"$ref": "#/$defs/text"}, "licenseUrl": {"$ref": "#/$defs/text"},
+        "factEvidence": {"$ref": "#/$defs/factEvidence"}
+      }
+    },
+    "sourceSelection": {
+      "type": "object", "additionalProperties": false, "required": ["candidateId", "relevance"],
+      "properties": {
+        "candidateId": {"$ref": "#/$defs/text"}, "relevance": {"$ref": "#/$defs/text"},
+        "role": {"enum": ["primary", "supplement", "media"]},
+        "factEvidence": {"$ref": "#/$defs/factEvidence"},
+        "license": {"type": "string"}, "licenseUrl": {"type": "string"}, "creator": {"type": "string"},
+        "accessPolicy": {"enum": ["open", "robots_disallowed", "tos_restricted"]},
+        "discoverySignals": {"type": "object", "additionalProperties": {"type": "number"}},
+        "assets": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/assetSelection"}}
+      }
+    },
+    "target": {"$ref": "https://quwoquan.local/content-production/round_spec.schema.json#/properties/targets/items"},
+    "selection": {
+      "type": "object", "additionalProperties": false, "required": ["carrier", "executionId", "targets"],
+      "properties": {
+        "carrier": {"enum": ["homepage", "article", "image", "video"]}, "executionId": {"$ref": "#/$defs/text"}, "retryOf": {"$ref": "#/$defs/text"},
+        "targets": {"type": "array", "minItems": 1, "items": {
+          "type": "object", "additionalProperties": false, "required": ["target", "sources"],
+          "properties": {"target": {"$ref": "#/$defs/target"}, "sources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sourceSelection"}}}
+        }}
+      }
+    },
+    "acquiredSelection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["executionId", "targets"],
+      "properties": {
+        "executionId": {"$ref": "#/$defs/text"},
+        "targets": {"type": "array", "minItems": 1, "items": {
+          "type": "object", "additionalProperties": false, "required": ["objectRef", "assetRefs"],
+          "properties": {
+            "objectRef": {"$ref": "#/$defs/text"},
+            "assetRefs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/text"}}
+          }
+        }}
+      }
+    },
+    "downloads": {
+      "type": "object", "additionalProperties": {
+        "type": "object", "additionalProperties": false, "required": ["path", "sha256", "bytes"],
+        "anyOf": [{"required": ["directUrl"]}, {"required": ["acquisition", "sourceUrl", "metadataPath", "metadataSha256"]}],
+        "properties": {
+          "directUrl": {"type": "string", "pattern": "^https://"}, "path": {"$ref": "#/$defs/text"},
+          "acquisition": {"const": "ytdlp_local"}, "sourceUrl": {"type": "string", "pattern": "^https://"},
+          "metadataPath": {"$ref": "#/$defs/text"}, "metadataSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "bytes": {"type": "integer", "minimum": 1},
+          "width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  }
+}

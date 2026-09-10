@@ -125,10 +125,14 @@ def _matches_walk_glob(
 
 
 def enumerate_python_files(root: Path, scope: str) -> list[Path]:
+    roots = [root / PYTHON_SCOPE_ROOTS[scope]]
+    if scope == "ops":
+        roots.append(root / ".agents/skills")
     return [
         path
+        for scope_root in roots
         for path in ripgrep_files(
-            root / PYTHON_SCOPE_ROOTS[scope],
+            scope_root,
             include_globs=("*.py",),
             no_ignore=True,
         )
@@ -177,6 +181,14 @@ def python_boundary(
     return "unknown"
 
 
+def _owned_python_boundary(root: Path, scope: str, path: Path, managed: set[Path]) -> str:
+    skill_root = root / ".agents/skills"
+    if scope == "ops" and path.is_relative_to(skill_root):
+        owner = skill_root / path.relative_to(skill_root).parts[0] / "SKILL.md"
+        return "production_module" if owner.is_file() and not owner.is_symlink() else "unknown"
+    return python_boundary(root, scope, path, managed)
+
+
 def python_file_records(
     root: Path,
     scopes: Sequence[str],
@@ -194,7 +206,7 @@ def python_file_records(
                 PythonFileRecord(
                     path=relative_path(root, path),
                     scope=scope,
-                    boundary=python_boundary(root, scope, path.resolve(), managed),
+                    boundary=_owned_python_boundary(root, scope, path.resolve(), managed),
                 )
             )
     return records

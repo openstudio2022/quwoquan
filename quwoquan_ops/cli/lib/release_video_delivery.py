@@ -224,7 +224,7 @@ def load_release_content_identity(
     if any(
         (
             import_report.get("schema") != "quwoquan.content_import_report",
-            import_report.get("status") != "imported",
+            import_report.get("status") != "staged",
             import_report.get("environment") != expected_environment,
             import_report.get("releaseId") != release_id,
             import_report.get("sourceOwner") != "qwq_data",
@@ -322,7 +322,7 @@ def load_release_content_identity(
     payload_root = media_path.parent.resolve()
     for binding in post_bindings:
         post_ref = str(binding["postRef"]).strip().strip("/")
-        tag_path = (payload_root / "objects" / "posts" / post_ref / "tag.refs.json").resolve()
+        tag_path = (payload_root / "objects" / "posts" / post_ref / "manifest.json").resolve()
         try:
             tag_path.relative_to(payload_root)
         except ValueError as exc:

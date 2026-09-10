@@ -131,6 +131,9 @@ def test_ios_policy_seals_source_policy_files_modes_and_raw_symlink_targets(
         "quwoquan_app/.flutter-plugins-dependencies",
         b'{"plugins":[]}\n',
     )
+    # 显式建立权限基线，避免受限 umask 已创建 0600 使后续 chmod 成为 no-op。
+    plugin_state.chmod(0o644)
+    assert plugin_state.stat().st_mode & 0o777 == 0o644
     _write(projection, "quwoquan_app/.dart_tool/package_config.json")
     pod_manifest = _write(projection, "quwoquan_app/ios/Pods/Manifest.lock")
     plugin_link = projection / "quwoquan_app/ios/.symlinks/plugins/manifest"
@@ -156,6 +159,7 @@ def test_ios_policy_seals_source_policy_files_modes_and_raw_symlink_targets(
     assert first.derived_output_digest.startswith("sha256:")
     assert first.derived_output_policy_digest.startswith("sha256:")
     plugin_state.chmod(0o600)
+    assert plugin_state.stat().st_mode & 0o777 == 0o600
     changed = seal_projection_build(
         manifest_path,
         projection,
@@ -163,6 +167,35 @@ def test_ios_policy_seals_source_policy_files_modes_and_raw_symlink_targets(
     )
     assert changed.derived_output_digest != first.derived_output_digest
     assert changed.build_projection_digest != first.build_projection_digest
+    with pytest.raises(ValueError, match="build projection digest mismatch"):
+        seal_projection_build(
+            manifest_path,
+            projection,
+            policy_id=FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+            expected_build_projection_digest=first.build_projection_digest,
+        )
+
+    # 指向同一文件的原始 link 文本变化也必须改变身份，不能先 resolve 再散列。
+    plugin_state.chmod(0o644)
+    assert seal_projection_build(
+        manifest_path,
+        projection,
+        policy_id=FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+        expected_build_projection_digest=first.build_projection_digest,
+    ) == first
+    original_target = os.readlink(plugin_link)
+    plugin_link.unlink()
+    plugin_link.symlink_to(os.path.relpath(pod_manifest, plugin_link.parent))
+    assert os.readlink(plugin_link) != original_target
+    assert plugin_link.resolve() == pod_manifest.resolve()
+    retargeted = seal_projection_build(
+        manifest_path,
+        projection,
+        policy_id=FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+    )
+    assert retargeted.source_projection_digest == first.source_projection_digest
+    assert retargeted.derived_output_digest != first.derived_output_digest
+    assert retargeted.build_projection_digest != first.build_projection_digest
     with pytest.raises(ValueError, match="build projection digest mismatch"):
         seal_projection_build(
             manifest_path,
@@ -289,17 +322,25 @@ def test_source_manifest_wins_even_inside_an_allowed_derived_subtree(
         )
 
 
+@pytest.mark.parametrize("mutation", ["content", "mode"])
 def test_policy_is_manifest_owned_candidate_source_not_live_workspace(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
 ) -> None:
     manifest_path, projection = _source_projection(tmp_path, monkeypatch)
     projected_policy = (
         projection / "quwoquan_ops/policies/app_build_projection_policy.json"
     )
-    projected_policy.write_text('{"schema":"injected"}\n', encoding="utf-8")
+    if mutation == "mode":
+        assert projected_policy.stat().st_mode & 0o777 == 0o644
+        projected_policy.chmod(0o600)
+        expected_error = "source projection file mode drifted"
+    else:
+        projected_policy.write_text('{"schema":"injected"}\n', encoding="utf-8")
+        expected_error = "source projection entry CAS mismatch"
 
-    with pytest.raises(ValueError, match="source projection entry CAS mismatch"):
+    with pytest.raises(ValueError, match=expected_error):
         seal_projection_build(manifest_path, projection, policy_id="none")
 
 

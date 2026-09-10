@@ -116,12 +116,7 @@ def _delivery_issue(
         return "DATA.POOL.OBJECT_NOT_ADMITTED"
     if not effective_source_attribution_ready(admission):
         return "DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE"
-    creator_refs_path = root / "creator.refs.json"
-    raw_creator_refs = (
-        _read_json(creator_refs_path).get("creatorRefs")
-        if creator_refs_path.is_file()
-        else [candidate.author_id]
-    )
+    raw_creator_refs = [manifest.get("creatorProfileId")]
     if not isinstance(raw_creator_refs, list) or not raw_creator_refs:
         return "DATA.POOL.AUTHOR_NOT_ADMITTED"
     for raw_ref in raw_creator_refs:

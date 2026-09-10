@@ -46,8 +46,7 @@ def _attestation(path: Path, release_id: str, digest: str, *, baseline: bool) ->
             "unknown": 0,
         },
         "authorizationRequiredAssetIds": [],
-        "researchAcceptedCount": 0 if baseline else 1,
-        "commercialAcceptedCount": 0,
+        "acceptedCount": 0 if baseline else 1,
     }
     source_identity = (
         {}

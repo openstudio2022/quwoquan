@@ -1,8 +1,10 @@
 package runtimemedia
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,7 +19,7 @@ const (
 
 var releaseMediaSHA256Pattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
-// ReleaseMediaAsset 保留 immutable Data 媒体身份、公开 slice 和真实权利引用。
+// ReleaseMediaAsset 保留 immutable Data 媒体身份、公开 slice 和真实来源权利引用。
 // 普通原图签名权限不属于 release 交付类别。
 type ReleaseMediaAsset struct {
 	AssetID            string   `json:"assetId"`
@@ -65,17 +67,14 @@ func LoadReleaseMediaAssets(
 	releaseRoot string,
 	expectedReleaseID string,
 ) (map[string]ReleaseMediaAsset, error) {
-	path := filepath.Join(releaseRoot, "payload", "media_manifest.json")
-	file, err := os.Open(path)
+	file, err := openReleaseMediaFile(releaseRoot, "media_manifest.json")
 	if err != nil {
 		return nil, fmt.Errorf("read release media manifest: %w", err)
 	}
 	defer file.Close()
 
-	decoder := json.NewDecoder(file)
-	decoder.DisallowUnknownFields()
 	var manifest releaseMediaManifest
-	if err := decoder.Decode(&manifest); err != nil {
+	if err := decodeReleaseMediaDocument(file, &manifest, true); err != nil {
 		return nil, fmt.Errorf("decode release media manifest: %w", err)
 	}
 	expectedReleaseID = strings.TrimSpace(expectedReleaseID)
@@ -175,6 +174,10 @@ func ResolveReleaseMediaAsset(
 			assetID,
 			expectedOwnerRef,
 		)
+	}
+	expectedSlice := BuildContentMediaPublicSliceKey(asset.Kind, asset.AssetID, asset.Version, asset.ContentType)
+	if expectedSlice == "" || asset.PublicSliceKey != expectedSlice {
+		return ResolvedReleaseMediaAsset{}, fmt.Errorf("MediaAsset %q public slice is invalid", assetID)
 	}
 	base := bases.forKind(asset.Kind)
 	if base == "" {
@@ -312,39 +315,26 @@ func canonicalReleaseMediaOwnerRef(ref string) bool {
 }
 
 func canonicalReleaseRightsRef(ref string) bool {
-	if ref == "" ||
-		strings.Contains(ref, `\`) ||
-		path.IsAbs(ref) ||
-		path.Clean(ref) != ref ||
-		!strings.HasPrefix(ref, "objects/") {
-		return false
-	}
 	owner := releaseRightsOwner(ref)
-	if !canonicalReleaseMediaOwnerRef(owner) {
-		return false
-	}
-	suffix := strings.TrimPrefix(
-		ref,
-		"objects/"+owner+"/rights_snapshots/",
-	)
-	return suffix != "" &&
-		!strings.Contains(suffix, "/") &&
-		suffix != "." &&
-		suffix != ".." &&
-		strings.HasSuffix(suffix, ".json")
+	return canonicalReleaseMediaOwnerRef(owner) &&
+		canonicalReleaseSourceRef(strings.TrimPrefix(ref, "objects/"+owner+"/"))
+}
+
+var releaseSourceRefPattern = regexp.MustCompile(`^sources/[A-Za-z0-9_-]+/source\.json$`)
+var releaseSourceEvidencePattern = regexp.MustCompile(`^evidence(?:-[1-9][0-9]*)?\.[A-Za-z0-9]+$`)
+
+func canonicalReleaseSourceRef(ref string) bool {
+	return releaseSourceRefPattern.MatchString(ref)
 }
 
 func releaseRightsOwner(ref string) string {
-	const marker = "/rights_snapshots/"
-	if !strings.HasPrefix(ref, "objects/") {
+	// 从末尾固定三段解析，owner 自身可含名为 sources 的路径段。
+	parts := strings.Split(ref, "/")
+	if len(parts) < 6 || parts[0] != "objects" ||
+		!canonicalReleaseSourceRef(strings.Join(parts[len(parts)-3:], "/")) {
 		return ""
 	}
-	value := strings.TrimPrefix(ref, "objects/")
-	index := strings.Index(value, marker)
-	if index <= 0 {
-		return ""
-	}
-	return value[:index]
+	return strings.Join(parts[1:len(parts)-3], "/")
 }
 
 func validateReleaseRightsBinding(
@@ -353,32 +343,186 @@ func validateReleaseRightsBinding(
 	expectedAssetID string,
 	expectedSHA256 string,
 ) error {
-	filePath := filepath.Join(
-		releaseRoot,
-		"payload",
-		filepath.FromSlash(ref),
-	)
-	raw, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("read rights snapshot %q: %w", ref, err)
+	if !canonicalReleaseRightsRef(ref) {
+		return fmt.Errorf("source ref %q is invalid", ref)
+	}
+	owner := releaseRightsOwner(ref)
+	ownerPath := "objects/" + owner + "/"
+	name := "manifest.json"
+	if strings.HasPrefix(owner, "creators/") {
+		name = "profile.json"
 	}
 	var document struct {
-		AssetID       string `json:"assetId"`
-		ManifestAsset struct {
-			AssetID string `json:"assetId"`
-			SHA256  string `json:"sha256"`
-		} `json:"manifestAsset"`
+		Assets []struct {
+			AssetID    string   `json:"assetId"`
+			Path       string   `json:"path"`
+			SHA256     string   `json:"sha256"`
+			Bytes      int64    `json:"bytes"`
+			SourceRefs []string `json:"sourceRefs"`
+		} `json:"assets"`
 	}
-	if err := json.Unmarshal(raw, &document); err != nil {
-		return fmt.Errorf("decode rights snapshot %q: %w", ref, err)
+	// owner 的其他字段由其 importer 的完整对象合同校验；这里不复制领域 schema。
+	if err := readReleaseMediaDocument(releaseRoot, ownerPath+name, &document, false); err != nil {
+		return err
 	}
-	if strings.TrimSpace(document.AssetID) != expectedAssetID ||
-		strings.TrimSpace(document.ManifestAsset.AssetID) != expectedAssetID ||
-		strings.TrimSpace(document.ManifestAsset.SHA256) != expectedSHA256 {
-		return fmt.Errorf(
-			"rights snapshot %q does not bind MediaAsset identity",
-			ref,
-		)
+	bound := 0
+	for _, asset := range document.Assets {
+		if asset.AssetID != expectedAssetID {
+			continue
+		}
+		if asset.SHA256 != expectedSHA256 || asset.Bytes <= 0 ||
+			!canonicalReleasePayloadRef(asset.Path) || !strings.HasPrefix(asset.Path, "assets/") {
+			return fmt.Errorf("owner %q does not bind MediaAsset identity", owner)
+		}
+		seen := make(map[string]bool, len(asset.SourceRefs))
+		for _, sourceRef := range asset.SourceRefs {
+			if !canonicalReleaseSourceRef(sourceRef) || seen[sourceRef] {
+				return fmt.Errorf("owner %q contains invalid asset sourceRefs", owner)
+			}
+			seen[sourceRef] = true
+		}
+		if !seen[strings.TrimPrefix(ref, ownerPath)] {
+			return fmt.Errorf("source %q is not referenced by MediaAsset %q", ref, expectedAssetID)
+		}
+		bound++
+	}
+	if bound != 1 {
+		return fmt.Errorf("owner %q must uniquely bind MediaAsset %q", owner, expectedAssetID)
+	}
+	return validateReleaseSource(releaseRoot, ref)
+}
+
+type releaseSourceEvidence struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+	Bytes  int64  `json:"bytes"`
+	Kind   string `json:"kind"`
+}
+
+func validateReleaseSource(releaseRoot, ref string) error {
+	var source struct {
+		Schema            string                  `json:"schema"`
+		SourceID          string                  `json:"sourceId"`
+		SourceURL         string                  `json:"sourceUrl"`
+		SourceUseMode     string                  `json:"sourceUseMode"`
+		FetchedAt         string                  `json:"fetchedAt"`
+		Metadata          map[string]any          `json:"metadata"`
+		SourceAttribution map[string]any          `json:"sourceAttribution,omitempty"`
+		Assets            []map[string]any        `json:"assets"`
+		Evidence          []releaseSourceEvidence `json:"evidence"`
+	}
+	if err := readReleaseMediaDocument(releaseRoot, ref, &source, true); err != nil {
+		return err
+	}
+	if source.Schema != "quwoquan_data.publish_source" ||
+		source.SourceID != path.Base(path.Dir(ref)) ||
+		!strings.HasPrefix(source.SourceURL, "https://") || strings.TrimSpace(source.FetchedAt) == "" ||
+		source.Metadata == nil || source.Assets == nil || len(source.Evidence) == 0 {
+		return fmt.Errorf("source %q contract is invalid", ref)
+	}
+	switch source.SourceUseMode {
+	case "licensed_adaptation", "factual_reference_only", "rights_audit_only":
+	default:
+		return fmt.Errorf("source %q sourceUseMode is invalid", ref)
+	}
+	// assets 保留原始权利事实，不把来源存在、访问政策或审计状态推导成新发布许可。
+	// 本绑定只证明 owner 的采用关系，不按权利状态创建 release 类别或公开读取门槛。
+	for _, asset := range source.Assets {
+		if asset == nil {
+			return fmt.Errorf("source %q assets must contain objects", ref)
+		}
+	}
+	return validateReleaseSourceEvidenceClosure(releaseRoot, ref, source.Evidence)
+}
+
+func validateReleaseSourceEvidenceClosure(releaseRoot, ref string, entries []releaseSourceEvidence) error {
+	seen := make(map[string]bool, len(entries))
+	for _, evidence := range entries {
+		if !releaseSourceEvidencePattern.MatchString(evidence.Path) || seen[evidence.Path] ||
+			!releaseMediaSHA256Pattern.MatchString(evidence.SHA256) || evidence.Bytes <= 0 {
+			return fmt.Errorf("source %q evidence binding is invalid", ref)
+		}
+		seen[evidence.Path] = true
+		switch evidence.Kind {
+		case "source_snapshot", "source_excerpt", "license_response", "acquisition_receipt":
+		default:
+			return fmt.Errorf("source %q evidence kind is invalid", ref)
+		}
+		if err := validateReleaseSourceEvidence(releaseRoot, path.Dir(ref)+"/"+evidence.Path, evidence); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateReleaseSourceEvidence(releaseRoot, ref string, evidence releaseSourceEvidence) error {
+	file, err := openReleaseMediaFile(releaseRoot, ref)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	digest := sha256.New()
+	count, err := io.Copy(digest, file)
+	if err != nil || count != evidence.Bytes || fmt.Sprintf("sha256:%x", digest.Sum(nil)) != evidence.SHA256 {
+		return fmt.Errorf("source evidence %q bytes or sha256 mismatch", ref)
+	}
+	return nil
+}
+
+func canonicalReleasePayloadRef(ref string) bool {
+	return ref != "" && ref != "." && ref != ".." &&
+		!strings.HasPrefix(ref, "../") && !strings.Contains(ref, `\`) &&
+		!path.IsAbs(ref) && path.Clean(ref) == ref
+}
+
+func openReleaseMediaFile(releaseRoot, ref string) (*os.File, error) {
+	if !canonicalReleasePayloadRef(ref) {
+		return nil, fmt.Errorf("release payload ref %q is invalid", ref)
+	}
+	current := releaseRoot
+	parts := append([]string{"payload"}, strings.Split(ref, "/")...)
+	for index, part := range parts {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if err != nil {
+			return nil, fmt.Errorf("read release payload %q: %w", ref, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 ||
+			(index < len(parts)-1 && !info.IsDir()) ||
+			(index == len(parts)-1 && !info.Mode().IsRegular()) {
+			return nil, fmt.Errorf("release payload %q must be a regular file without symlinks", ref)
+		}
+	}
+	root, err := os.OpenRoot(filepath.Join(releaseRoot, "payload"))
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	return root.Open(filepath.FromSlash(ref))
+}
+
+func readReleaseMediaDocument(releaseRoot, ref string, document any, strict bool) error {
+	file, err := openReleaseMediaFile(releaseRoot, ref)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if err := decodeReleaseMediaDocument(file, document, strict); err != nil {
+		return fmt.Errorf("decode release document %q: %w", ref, err)
+	}
+	return nil
+}
+
+func decodeReleaseMediaDocument(reader io.Reader, document any, strict bool) error {
+	decoder := json.NewDecoder(reader)
+	if strict {
+		decoder.DisallowUnknownFields()
+	}
+	if err := decoder.Decode(document); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return fmt.Errorf("release document must contain exactly one JSON value")
 	}
 	return nil
 }
@@ -393,9 +537,12 @@ func containsReleaseRef(refs []string, expected string) bool {
 }
 
 func rightsAuthorizeReleaseOwner(refs []string, ownerRef string) bool {
-	prefix := "objects/" + strings.Trim(ownerRef, "/") + "/rights_snapshots/"
-	for _, ref := range refs {
-		if strings.HasPrefix(strings.TrimSpace(ref), prefix) {
+	if !canonicalReleaseMediaOwnerRef(ownerRef) {
+		return false
+	}
+	for _, raw := range refs {
+		ref := strings.TrimSpace(raw)
+		if canonicalReleaseRightsRef(ref) && releaseRightsOwner(ref) == ownerRef {
 			return true
 		}
 	}

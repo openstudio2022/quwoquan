@@ -32,9 +32,13 @@ def _manifest(
     # 同 assetId 是被允许的稳定资产复用；跨对象重复必须用不同 assetId 才构成冲突。
     return {
         "contentType": "image",
+        "contentId": "stable-logical-work",
+        "version": 1,
         "assets": [
             {
                 "assetId": asset_id,
+                "sourceUrl": "https://example.test/works/image-1",
+                "originalAssetUrl": "https://example.test/assets/image-1.jpg",
                 "kind": "image",
                 "sha256": digest,
                 "perceptualHash": perceptual_hash,
@@ -93,9 +97,12 @@ def test_cross_execution_exact_image_identity_is_rejected(
         )
 
 
+@pytest.mark.parametrize("asset_id, error", [("image-1", "IMAGE_BINDING_DRIFT"), ("image-2", "duplicated by perceptualHash")])
 def test_cross_execution_perceptual_duplicate_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    asset_id: str,
+    error: str,
 ) -> None:
     publish = tmp_path / "publish"
     package = tmp_path / "package"
@@ -106,16 +113,43 @@ def test_cross_execution_perceptual_duplicate_is_rejected(
     write_json(
         package / "object/manifest.json",
         _manifest(
-            digest="sha256:" + "b" * 64, perceptual_hash="0" * 15 + "3", asset_id="image-2"
+            digest="sha256:" + "b" * 64, perceptual_hash="0" * 15 + "3", asset_id=asset_id,
         ),
     )
     monkeypatch.setattr(subject, "PUBLISH_ROOT", publish)
 
-    with pytest.raises(ObjectTransactionError, match="duplicated by perceptualHash"):
+    with pytest.raises(ObjectTransactionError, match=error):
         subject._assert_cross_publish_image_unique(
             package_root=package,
             canonical_post=publish / "posts/image/摄影/新图片/1",
         )
+
+
+@pytest.mark.parametrize("carrier", ["article", "homepage"])
+def test_cross_execution_stable_binding_reference_reuse_is_allowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, carrier: str,
+) -> None:
+    publish = tmp_path / "publish"
+    package = tmp_path / "package"
+    existing = _manifest(digest="sha256:" + "a" * 64, perceptual_hash="0" * 16)
+    write_json(publish / "posts/image/摄影/原作品/1/manifest.json", existing)
+    candidate = {**existing, "contentType": carrier, "contentId": "independent-reference"}
+    write_json(package / "object/manifest.json", candidate)
+    monkeypatch.setattr(subject, "PUBLISH_ROOT", publish)
+    canonical = publish / ("entities/地点/景区/新主页" if carrier == "homepage" else "posts/article/摄影/新文章/1")
+    subject._assert_cross_publish_image_unique(package_root=package, canonical_post=canonical)
+
+
+def test_cross_execution_explicit_logical_version_is_allowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    publish = tmp_path / "publish"
+    package = tmp_path / "package"
+    existing = _manifest(digest="sha256:" + "a" * 64, perceptual_hash="0" * 16)
+    write_json(publish / "posts/image/摄影/同作品/1/manifest.json", existing)
+    write_json(package / "object/manifest.json", {**existing, "version": 2})
+    monkeypatch.setattr(subject, "PUBLISH_ROOT", publish)
+    subject._assert_cross_publish_image_unique(package_root=package, canonical_post=publish / "posts/image/摄影/同作品/2")
 
 
 def test_commercial_image_requires_perceptual_identity(

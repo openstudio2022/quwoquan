@@ -14,11 +14,9 @@ derives either of them:
     closure equality comparable across releases.
 
 ``media_holdings_digest``
-    The media holdings the release references: the addresses of the media bodies
-    it claims, not the bodies themselves.  Media bodies are owned once by the
-    content library and referenced into ``payload/media``, so this digest binds
-    the holdings while ``verify_release_holdings`` proves each one is still
-    reachable in the library at the address the release recorded.
+    release 随体媒体的路径与摘要。``verify_release_holdings`` 从 media manifest
+    校验实际包内字节，不再要求原作者机器的 content library 可达。
+    该完整性校验不创建缓存、不补库，也不把 URL 可解析冒充网络可访问。
 
     Deliberately not named ``mediaClosureDigest``: that name already belongs to
     ``content/execution/closure/pool_delivery.py``, where it digests a delivery
@@ -28,9 +26,10 @@ derives either of them:
 """
 from __future__ import annotations
 
-from pathlib import Path
+import json
+from pathlib import Path, PurePosixPath
 
-from core.content_library import MediaHoldingError, resolve_media_holding
+from core.content_library import file_sha256
 from core.tree_integrity import (
     holdings_merkle,
     tree_integrity_entries,
@@ -107,20 +106,47 @@ def media_holdings_digest(release_root: Path) -> str:
 
 
 def verify_release_holdings(release_root: Path) -> tuple[str, ...]:
-    """Return one issue per holding that the content library cannot honour.
-
-    This is the immutable check for referenced media: the release is intact when
-    every holding it declares is reachable in the library at the digest it
-    recorded, which is strictly stronger than the payload bytes being present,
-    because a reference and its library entry are the same bytes.
-    """
+    """逐项核实 manifest 声明的随包字节；不访问作者机器的 library，也不隐式修复。"""
+    manifest = payload_file(release_root, MEDIA_MANIFEST)
+    if any(path.is_symlink() for path in (manifest, *manifest.parents)):
+        return ("DATA.RELEASE.MEDIA_SYMLINK: media_manifest.json",)
+    try:
+        document = json.loads(manifest.read_bytes())
+    except (OSError, ValueError):
+        return ("DATA.RELEASE.MEDIA_MANIFEST_MISSING_OR_INVALID",)
+    if not isinstance(document, dict) or not isinstance(document.get("assets"), list):
+        return ("DATA.RELEASE.MEDIA_MANIFEST_INVALID",)
     issues: list[str] = []
-    for path, digest, size in release_holdings(release_root):
-        try:
-            resolve_media_holding(digest, expected_bytes=size)
-        except MediaHoldingError as exc:
-            issues.append(f"{exc}: {path}")
+    seen: set[str] = set()
+    for row in document["assets"]:
+        issue = _verify_media_row(release_root, row, seen)
+        if issue:
+            issues.append(issue)
     return tuple(issues)
+
+
+def _verify_media_row(release_root: Path, row: object, seen: set[str]) -> str:
+    if not isinstance(row, dict):
+        return "DATA.RELEASE.MEDIA_MANIFEST_INVALID"
+    key = row.get("publicSliceKey")
+    if (not isinstance(key, str) or not key.startswith("media/") or "\\\\" in key
+            or any(part in {"", ".", ".."} for part in key.split("/"))
+            or PurePosixPath(key).is_absolute() or key in seen):
+        return "DATA.RELEASE.MEDIA_REF_INVALID"
+    seen.add(key)
+    media = payload_file(release_root, key)
+    if any(part.is_symlink() for part in (media, *media.parents)):
+        return f"DATA.RELEASE.MEDIA_SYMLINK: {key}"
+    if not media.is_file():
+        return f"DATA.RELEASE.MEDIA_MISSING: {key}"
+    try:
+        size = row.get("bytes")
+        if (type(size) is not int or size <= 0 or media.stat().st_size != size
+                or "sha256:" + file_sha256(media) != row.get("sha256")):
+            return f"DATA.RELEASE.MEDIA_DRIFT: {key}"
+    except OSError:
+        return f"DATA.RELEASE.MEDIA_UNREADABLE: {key}"
+    return ""
 
 
 def required_payload_paths(release_root: Path) -> tuple[Path, ...]:

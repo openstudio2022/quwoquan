@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/source/ingest_manifest.schema.json",
-  "description": "task acquire 的唯一输入：一个 execution 内逐 target 的本地来源文件与 AI 申报的来源事实。脚本零网络——只从本地字节派生 sha256/CAS/mime/probe/poster，按申报 sha1 交叉校验，按申报 license 派生 rightsStatus。任何脚本能算出来的字段（rightsStatus、sha256、mime、尺寸）都不允许申报。",
+  "description": "task acquire 的唯一输入：一个 execution 内逐 target 的本地来源文件与 AI 申报的来源事实。脚本零网络——只从本地字节派生 sha256/CAS/mime/probe/poster，按申报 sha1 交叉校验，按申报 license 派生 rightsStatus。sha256、mime、尺寸只从字节派生；真实授权状态、证明、音轨和使用范围可显式申报并原样保留，不从 production admission 推断授权。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -201,6 +201,16 @@
         },
         "relevance": {
           "$ref": "#/$defs/nonEmpty"
+        },
+        "rightsStatus": {"enum": ["verified", "unverified", "restricted", "unknown"]},
+        "rightsIssues": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "authorizationProof": {"type": ["string", "null"]},
+        "commercialAuthorizationStatus": {"enum": ["verified", "unverified"]},
+        "usageScope": {"enum": ["internal_reference", "app_publish", "editorial"]},
+        "modelReleaseStatus": {"enum": ["not_required", "obtained", "editorial_only", "verified", "unverified"]},
+        "propertyReleaseStatus": {"$ref": "#/$defs/nonEmpty"},
+        "audioRightsStatus": {
+          "enum": ["licensed", "original_authorized", "replaced_with_licensed_track", "no_audio", "unverified"]
         },
         "hasAudio": {
           "description": "video 必填：是否含音轨。",

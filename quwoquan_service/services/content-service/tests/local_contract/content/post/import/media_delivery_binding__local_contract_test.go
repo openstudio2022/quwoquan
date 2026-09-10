@@ -10,8 +10,32 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
 )
+
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-043
+func TestImportedImageCaptionsReachQueryDTOWithoutReordering(t *testing.T) {
+	media := ImportedMediaFields([]AssetManifestItem{
+		{AssetID: "b", Kind: "image", CDNURL: "https://img.example/b.jpg", Caption: "先展示的图", AccessMode: "public"},
+		{AssetID: "a", Kind: "image", CDNURL: "https://img.example/a.jpg", AccessMode: "public"},
+	}, "public")
+	raw, err := bson.Marshal(bson.M{"mediaItems": media.MediaItems})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var query postports.PostDetailSlice
+	if err := bson.Unmarshal(raw, &query); err != nil {
+		t.Fatal(err)
+	}
+	if len(query.MediaItems) != 2 || query.MediaItems[0].MediaAssetID != "b" || query.MediaItems[1].MediaAssetID != "a" ||
+		query.MediaItems[0].Caption != "先展示的图" || query.MediaItems[1].Caption != "" || query.MediaItems[0].AccessMode != "public" {
+		t.Fatalf("importer -> query DTO lost order or caption: %#v", query.MediaItems)
+	}
+	if _, exists := media.MediaItems[1]["caption"]; exists {
+		t.Fatal("missing caption must not be fabricated")
+	}
+}
 
 func videoWithPosterAssets() []AssetManifestItem {
 	return []AssetManifestItem{

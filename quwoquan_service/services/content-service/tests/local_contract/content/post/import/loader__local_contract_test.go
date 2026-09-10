@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -19,7 +20,7 @@ func writeFile(t *testing.T, path, content string) {
 		strings.Contains(content, `"contentType"`) {
 		// Canonical release fixtures always carry admitted content identity and
 		// pool fields. Negative tests write bytes directly and bypass this helper.
-		prefix := `{"contentId":"fixture-` + fmt.Sprintf("%x", len(path)) + `","version":1,"sourceType":"data","variantPurpose":"original","admission":{"processResult":"completed","qualityResult":"passed","usageScope":"research","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:` + strings.Repeat("a", 64) + `"},"status":"active","contentIdentity":"work",`
+		prefix := `{"contentId":"fixture-` + fmt.Sprintf("%x", len(path)) + `","version":1,"sourceType":"data","variantPurpose":"original","admission":{"processResult":"completed","qualityResult":"passed","usageScope":"production","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:` + strings.Repeat("a", 64) + `"},"status":"active","contentIdentity":"work",`
 		content = strings.Replace(content, "{", prefix, 1)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -61,7 +62,7 @@ func TestLoadPostsRejectsMissingContentIdentity(t *testing.T) {
 		"version":1,
 		"sourceType":"data",
 		"variantPurpose":"original",
-		"admission":{"processResult":"completed","qualityResult":"passed","usageScope":"research","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		"admission":{"processResult":"completed","qualityResult":"passed","usageScope":"production","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 		"status":"active",
 		"contentType":"article",
 		"entityRefs":[],
@@ -91,12 +92,10 @@ func fixturePublish(t *testing.T) string {
 		`{"contentType":"article","entityRefs":["地点/景区/色达"],"tagRefs":[],"publishTitle":"色达攻略","publishAngle":"攻略","publishSeq":1,"createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z","publishedAt":"2026-04-02T00:00:00Z"}`)
 	writeFile(t, filepath.Join(root, "posts/article/攻略/色达攻略/1/article.md"), "# 色达攻略\n")
 	// 实体（一个有 page.md，一个没有）
-	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/_entity.json"),
-		`{"label":"甲居藏寨","domain":"地点","type":"景区","tagRefs":["Entity/地点/景区"],"conditionProfile":{"regions":["高原","山地"],"seasons":["夏","秋"],"altitudeMeters":3500},"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾"}`)
 	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/page.md"), "# 甲居藏寨\n")
-	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/asset.refs.json"),
-		`{"assets":[{"assetId":"甲居藏寨_homepage_detail","cdnUrl":"https://img.example.com/media/homepage.png","sha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}`)
-	writeFile(t, filepath.Join(root, "entities/地点/景区/色达/_entity.json"),
+	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/manifest.json"),
+		`{"label":"甲居藏寨","domain":"地点","type":"景区","tagRefs":["Entity/地点/景区"],"conditionProfile":{"regions":["高原","山地"],"seasons":["夏","秋"],"altitudeMeters":3500},"assets":[{"assetId":"甲居藏寨_homepage_detail","cdnUrl":"https://img.example.com/media/homepage.png","sha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}`)
+	writeFile(t, filepath.Join(root, "entities/地点/景区/色达/manifest.json"),
 		`{"label":"色达","domain":"地点","type":"景区","tagRefs":[]}`)
 	return root
 }
@@ -221,9 +220,20 @@ func TestLoadVideoPreservesSourceAttribution(t *testing.T) {
 				"originalCreatorName":"Liuxingy",
 				"platform":"Wikimedia Commons",
 				"sourcePostUrl":"https://commons.wikimedia.org/wiki/File:west-lake.webm",
+				"originalAssetUrl":"https://upload.wikimedia.org/west-lake.webm",
+				"commercialAuthorizationStatus":"verified",
+				"watermarkStatus":"present",
+				"audioRightsStatus":"no_audio",
+				"modelReleaseStatus":"not_required",
+				"propertyReleaseStatus":"not_required",
+				"collectedAt":"2026-07-28T05:39:06Z",
+				"takedownPolicy":"notice_and_takedown",
 				"attributionText":"Liuxingy — CC BY-SA 4.0",
 				"rightsBasis":"CC BY-SA 4.0",
-				"publicationAdmission":"commercial_release"
+				"publicationAdmission":"production_release",
+				"derivedModifications":["resize", "format_conversion"],
+				"watermarkKind":"author_signature",
+				"watermarkNote":"保留原作者签名"
 			}
 		}`,
 	)
@@ -237,7 +247,9 @@ func TestLoadVideoPreservesSourceAttribution(t *testing.T) {
 	}
 	attribution := posts[0].SourceAttribution
 	if attribution.OriginalCreatorName != "Liuxingy" ||
-		attribution.PublicationAdmission != "commercial_release" {
+		attribution.PublicationAdmission != "production_release" ||
+		strings.Join(attribution.DerivedModifications, ",") != "resize,format_conversion" ||
+		attribution.WatermarkKind != "author_signature" || attribution.WatermarkNote != "保留原作者签名" {
 		t.Fatalf("sourceAttribution drifted: %#v", attribution)
 	}
 }
@@ -301,6 +313,46 @@ func TestLoadPostsFilteredBySampleBundle(t *testing.T) {
 	}
 	if len(posts) != 1 || posts[0].Title != "色达攻略" || posts[0].PostRef != "posts/article/攻略/色达攻略/1" {
 		t.Fatalf("sample filter failed: %+v", posts)
+	}
+}
+
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-043
+func TestLoadPostsRejectsSidecarsAsSemanticInputs(t *testing.T) {
+	for _, sidecar := range []string{"asset.refs.json", "creator.refs.json", "tag.refs.json"} {
+		t.Run(sidecar, func(t *testing.T) {
+			root := fixturePublish(t)
+			ref := "article/攻略/色达攻略/1"
+			path := filepath.Join(root, "posts", filepath.FromSlash(ref), sidecar)
+			before, err := LoadPosts(root, ToSet([]string{ref}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, path, `invalid retired semantic sidecar`)
+			after, err := LoadPosts(root, ToSet([]string{ref}))
+			if err != nil || !reflect.DeepEqual(before, after) {
+				t.Fatalf("sidecar influenced manifest projection: %v", err)
+			}
+			if err := os.Remove(filepath.Join(filepath.Dir(path), "manifest.json")); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadPosts(root, ToSet([]string{ref})); err == nil || !strings.Contains(err.Error(), "desired posts missing") {
+				t.Fatalf("sidecar-only object must not replace manifest: %v", err)
+			}
+		})
+	}
+}
+
+func TestLoadEntitiesIgnoresRedundantAssetSidecar(t *testing.T) {
+	root := fixturePublish(t)
+	for _, sidecar := range []string{"_entity.json", "asset.refs.json", "rights.json", "source_catalog.json"} {
+		writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨", sidecar), `not a semantic manifest`)
+	}
+	entities, err := LoadEntities(root, map[string]bool{"地点/景区/甲居藏寨": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entities) != 1 || entities[0].AssetManifest == nil || entities[0].AssetManifest.Assets[0].AssetID != "甲居藏寨_homepage_detail" {
+		t.Fatalf("canonical manifest must own assets: %#v", entities)
 	}
 }
 
@@ -685,7 +737,7 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 			SHA256:             "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 			Bytes:              1,
 			OwnerRefs:          []string{"posts/video/旅行/雪山视频/1"},
-			RightsSnapshotRefs: []string{"objects/posts/video/旅行/雪山视频/1/rights_snapshots/video.json"},
+			RightsSnapshotRefs: []string{"objects/posts/video/旅行/雪山视频/1/sources/video/source.json"},
 		},
 		"poster": {
 			AssetID: "poster", Kind: "image", Version: 1, ContentType: "image/webp",
@@ -695,7 +747,7 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 			SHA256:             "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 			Bytes:              1,
 			OwnerRefs:          []string{"posts/video/旅行/雪山视频/1"},
-			RightsSnapshotRefs: []string{"objects/posts/video/旅行/雪山视频/1/rights_snapshots/poster.json"},
+			RightsSnapshotRefs: []string{"objects/posts/video/旅行/雪山视频/1/sources/poster/source.json"},
 		},
 	}
 	if err := BindPostAssetURLs(
@@ -854,20 +906,18 @@ func TestBindPostAssetURLsRejectsIdentityOwnerAndRightsDrift(t *testing.T) {
 func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t *testing.T) {
 	releaseRoot := t.TempDir()
 	path := filepath.Join(releaseRoot, "payload/media_manifest.json")
-	writeFile(
-		t,
-		filepath.Join(
-			releaseRoot,
-			"payload/objects/posts/image/画报/杭州西湖/1/rights_snapshots/a.json",
-		),
-		`{
-			"assetId":"杭州西湖_cover_三潭印月石塔_28_36eb11bd",
-			"manifestAsset":{
-				"assetId":"杭州西湖_cover_三潭印月石塔_28_36eb11bd",
-				"sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-			}
-		}`,
-	)
+	owner := filepath.Join(releaseRoot, "payload/objects/posts/image/画报/杭州西湖/1")
+	writeFile(t, filepath.Join(owner, "manifest.json"), `{"assets":[{
+		"assetId":"杭州西湖_cover_三潭印月石塔_28_36eb11bd",
+		"sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"bytes":12,"path":"assets/source.jpg","sourceRefs":["sources/a/source.json"]
+	}]}`)
+	writeFile(t, filepath.Join(owner, "sources/a/source.json"), `{
+		"schema":"quwoquan_data.publish_source","sourceId":"a","sourceUrl":"https://example.com/source",
+		"sourceUseMode":"licensed_adaptation","fetchedAt":"2026-09-09T00:00:00Z","metadata":{},"assets":[],
+		"evidence":[{"path":"evidence.txt","bytes":3,"sha256":"sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","kind":"source_excerpt"}]
+	}`)
+	writeFile(t, filepath.Join(owner, "sources/a/evidence.txt"), "abc")
 	validDocument := `{
 		"schema":"quwoquan_data.release_media_manifest",
 		"releaseId":"release-a",
@@ -883,7 +933,7 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 			"sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			"bytes":12,
 			"ownerRefs":["posts/image/画报/杭州西湖/1"],
-			"rightsSnapshotRefs":["objects/posts/image/画报/杭州西湖/1/rights_snapshots/a.json"]
+			"rightsSnapshotRefs":["objects/posts/image/画报/杭州西湖/1/sources/a/source.json"]
 		}],
 		"issues":[],
 		"counts":{"assets":1,"issues":0}
@@ -1140,7 +1190,7 @@ func TestImportedMediaFields(t *testing.T) {
 	if media.MediaItems[0]["caption"] != "晨雾" || media.MediaItems[0]["width"] != int64(1600) {
 		t.Fatalf("media item = %#v", media.MediaItems[0])
 	}
-	// research readback closure 从 posts.mediaAssetIds 收集媒体身份，
+	// 正常媒体授权从 posts.mediaAssetIds 收集媒体身份，
 	// data release importer 必须与 UGC 路径同字段落库。
 	if len(media.MediaAssetIDs) != 1 || media.MediaAssetIDs[0] != "image_1" {
 		t.Fatalf("mediaAssetIds = %#v", media.MediaAssetIDs)

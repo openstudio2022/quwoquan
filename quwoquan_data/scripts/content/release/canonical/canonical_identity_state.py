@@ -138,21 +138,18 @@ def _payload_rebuild_evidence_is_current(
     ):
         return False
     rights_ref = str(manifest.get("rightsRef") or "").strip()
-    creator_refs_ref = str(manifest.get("creatorRefsRef") or "").strip()
+    creator_ref = str(manifest.get("creatorProfileId") or "").strip()
     try:
         rights = object_root / _safe_rel(
             rights_ref, label="canonicalIdentity.rightsRef"
         )
-        creators = object_root / _safe_rel(
-            creator_refs_ref, label="canonicalIdentity.creatorRefsRef"
-        )
+        _safe_rel(creator_ref, label="canonicalIdentity.creatorProfileId")
     except ObjectTransactionError:
         return False
     return bool(
         rights.is_file()
         and not rights.is_symlink()
-        and creators.is_file()
-        and not creators.is_symlink()
+        and bool(creator_ref)
     )
 
 

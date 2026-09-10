@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 499ceae3a98155e22150eb6b9a344b4edb46413dbf8e57fb41b1d17b9518c3ac
+// ContractGraph SHA256: d48c3052838635693e456568acad0bb46a2b9a37e9e11bcd3b3baf758a5647e1
 
 library;
 
@@ -528,6 +528,53 @@ enum ReportTargetType {
       "circle" => ReportTargetType.circle,
       "gathering" => ReportTargetType.gathering,
       "message" => ReportTargetType.message,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum SourceDerivedModification {
+  videoFrameExtraction("video_frame_extraction"),
+  crop("crop"),
+  resize("resize"),
+  formatConversion("format_conversion");
+
+  const SourceDerivedModification(this.wireName);
+
+  final String wireName;
+
+  static SourceDerivedModification fromWire(Object? value, String path) {
+    return switch (value) {
+      "video_frame_extraction" =>
+        SourceDerivedModification.videoFrameExtraction,
+      "crop" => SourceDerivedModification.crop,
+      "resize" => SourceDerivedModification.resize,
+      "format_conversion" => SourceDerivedModification.formatConversion,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum SourceWatermarkKind {
+  none("none"),
+  authorSignature("author_signature"),
+  platformLogo("platform_logo"),
+  stockAgency("stock_agency"),
+  other("other"),
+  unknown("unknown");
+
+  const SourceWatermarkKind(this.wireName);
+
+  final String wireName;
+
+  static SourceWatermarkKind fromWire(Object? value, String path) {
+    return switch (value) {
+      "none" => SourceWatermarkKind.none,
+      "author_signature" => SourceWatermarkKind.authorSignature,
+      "platform_logo" => SourceWatermarkKind.platformLogo,
+      "stock_agency" => SourceWatermarkKind.stockAgency,
+      "other" => SourceWatermarkKind.other,
+      "unknown" => SourceWatermarkKind.unknown,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -5420,6 +5467,7 @@ final class PostMediaItem {
     this.hlsCmafMasterManifestUrl,
     this.hlsCmafDescriptorVersion,
     this.title,
+    this.caption,
     this.coverStrategy,
     this.coverFrameTimeMs,
   });
@@ -5440,6 +5488,7 @@ final class PostMediaItem {
   final String? hlsCmafMasterManifestUrl;
   final int? hlsCmafDescriptorVersion;
   final String? title;
+  final String? caption;
   final String? coverStrategy;
   final int? coverFrameTimeMs;
 
@@ -5464,6 +5513,7 @@ final class PostMediaItem {
       "hlsCmafMasterManifestUrl",
       "hlsCmafDescriptorVersion",
       "title",
+      "caption",
       "coverStrategy",
       "coverFrameTimeMs",
     }, path);
@@ -5527,6 +5577,9 @@ final class PostMediaItem {
       title: map["title"] == null
           ? null
           : _requiredString(map["title"], '$path.title'),
+      caption: map["caption"] == null
+          ? null
+          : _requiredString(map["caption"], '$path.caption'),
       coverStrategy: map["coverStrategy"] == null
           ? null
           : _requiredString(map["coverStrategy"], '$path.coverStrategy'),
@@ -5557,6 +5610,7 @@ final class PostMediaItem {
     if (hlsCmafDescriptorVersion != null)
       "hlsCmafDescriptorVersion": hlsCmafDescriptorVersion!,
     if (title != null) "title": title!,
+    if (caption != null) "caption": caption!,
     if (coverStrategy != null) "coverStrategy": coverStrategy!,
     if (coverFrameTimeMs != null) "coverFrameTimeMs": coverFrameTimeMs!,
   };
@@ -6337,7 +6391,9 @@ final class SourceAttribution {
     required this.publicationAdmission,
     this.authorizationProofUrl,
     this.termsUrl,
-    this.riskAcceptanceId,
+    required this.derivedModifications,
+    this.watermarkKind,
+    this.watermarkNote,
     required this.watermarkStatus,
     required this.audioRightsStatus,
     required this.modelReleaseStatus,
@@ -6359,7 +6415,9 @@ final class SourceAttribution {
   final String publicationAdmission;
   final String? authorizationProofUrl;
   final String? termsUrl;
-  final String? riskAcceptanceId;
+  final List<SourceDerivedModification> derivedModifications;
+  final SourceWatermarkKind? watermarkKind;
+  final String? watermarkNote;
   final String watermarkStatus;
   final String audioRightsStatus;
   final String modelReleaseStatus;
@@ -6385,7 +6443,9 @@ final class SourceAttribution {
       "publicationAdmission",
       "authorizationProofUrl",
       "termsUrl",
-      "riskAcceptanceId",
+      "derivedModifications",
+      "watermarkKind",
+      "watermarkNote",
       "watermarkStatus",
       "audioRightsStatus",
       "modelReleaseStatus",
@@ -6442,9 +6502,26 @@ final class SourceAttribution {
       termsUrl: map["termsUrl"] == null
           ? null
           : _requiredString(map["termsUrl"], '$path.termsUrl'),
-      riskAcceptanceId: map["riskAcceptanceId"] == null
+      derivedModifications: List<SourceDerivedModification>.unmodifiable(
+        _requiredList(
+          map["derivedModifications"],
+          '$path.derivedModifications',
+        ).asMap().entries.map(
+          (entry) => SourceDerivedModification.fromWire(
+            entry.value,
+            '$path.derivedModifications' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      watermarkKind: map["watermarkKind"] == null
           ? null
-          : _requiredString(map["riskAcceptanceId"], '$path.riskAcceptanceId'),
+          : SourceWatermarkKind.fromWire(
+              map["watermarkKind"],
+              '$path.watermarkKind',
+            ),
+      watermarkNote: map["watermarkNote"] == null
+          ? null
+          : _requiredString(map["watermarkNote"], '$path.watermarkNote'),
       watermarkStatus: _requiredString(
         map["watermarkStatus"],
         '$path.watermarkStatus',
@@ -6485,7 +6562,11 @@ final class SourceAttribution {
     if (authorizationProofUrl != null)
       "authorizationProofUrl": authorizationProofUrl!,
     if (termsUrl != null) "termsUrl": termsUrl!,
-    if (riskAcceptanceId != null) "riskAcceptanceId": riskAcceptanceId!,
+    "derivedModifications": derivedModifications
+        .map((value) => value.wireName)
+        .toList(growable: false),
+    if (watermarkKind != null) "watermarkKind": watermarkKind!.wireName,
+    if (watermarkNote != null) "watermarkNote": watermarkNote!,
     "watermarkStatus": watermarkStatus,
     "audioRightsStatus": audioRightsStatus,
     "modelReleaseStatus": modelReleaseStatus,

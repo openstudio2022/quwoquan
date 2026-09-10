@@ -39,8 +39,7 @@
 - Feature spec/design/contracts 拥有功能行为、设计约束与验收；Review role 只拥有职责和盲区，checklist 只拥有分级判定并引用命名 evidence。
 - `.cursor/commands` 只是一行式显式入口；`.cursor/agents` 与 `.codex/agents` 只允许 Reviewer projection。宿主专属目录不得承载 Workflow Skill stub、发现副本或规范正文。
 - 每层上下文各有独立字节预算，不得互相挤占：根 `AGENTS.md` ≤ 6 KiB，L1 子树 `AGENTS.md` ≤ 5 KiB，更深子树 ≤ 2 KiB，单个 Workflow Skill 文件 ≤ 4 KiB，单条 description ≤ 300 字符；根加祖先链 16 KiB 与 description 合计 8000 字符的总量上限继续成立。子树 `AGENTS.md` 不复述已有 spec/design/contract owner 的解释性知识，只以一句指向替代；Skill body 不复述根 `AGENTS.md`、canonical contract 或其他 Skill 已唯一拥有的规则（角色交互 binding、owner manifest 前置、零 Reviewer 派审形态、六类 handoff 触发），只保留本 Skill 独有的输入、步骤、证据与停止条件。存量超限文件只登记于 `quwoquan_ops/policies/gates/agent_context_budget_baseline.yaml`，条目字节只减不增，回落到预算内即须同批删除条目。
-- Workflow Skill 只有在业务语义明确要求独立 actor 时才可派发子 Agent；主会话必须直接拥有流程推进与机械命令，派发前读取 canonical artifact/receipt 判断该工作单元尚未完成，默认同一时刻只启动一个前台语义 actor。被派发 actor 只写边界内语义产物，不得再派发子 Agent、关闭阶段、创建替代 execution 或执行发布；`starting up`、超时或调用失败不得触发自动补发，只有 definitively failed 的 typed blocker 才可由主会话决定人工恢复。
-
+- Workflow Skill 只有在业务语义明确要求独立 actor 时才可派发子 Agent；主会话必须直接拥有流程推进与机械命令，派发前读取 canonical artifact/receipt 判断该工作单元尚未完成，默认同一时刻只启动一个前台语义 actor；content-production 可由主会话以不重叠 execution scope 同时保留至多两个作者任务，评审串行，可复用已完成作者会话评审其未参与创作的另一 execution。该例外不创建仓内调度器或修改独立 actor 判据，provider 不可用时由主会话降级，不能自审自签。被派发 actor 只写边界内语义产物，不得再派发子 Agent、关闭阶段、创建替代 execution 或执行发布；`starting up`、超时或调用失败不得触发自动补发，只有 definitively failed 的 typed blocker 才可由主会话决定人工恢复。
 <a id="req-002"></a>
 ### REQ-002 开发与 Review 共用 PRE owner identity 和 POST candidate predecessor
 
@@ -121,7 +120,7 @@
 - THEN 根加最近子树 AGENTS 不超过 16KiB，单 Reviewer 最终 assembled input 不超过 24KiB，默认 manifest 不超过 8KiB；压缩必须可审计，无法压入时 typed `REVIEW.CONTEXT_BUDGET_EXCEEDED`。
 - AND 根、L1 子树、更深子树 `AGENTS.md`、单个 Workflow Skill 文件与单条 description 各自不超过分层预算；不在册的超限文件、在册但字节增长的条目、以及已回落到预算内却仍在册的条目都判否，HOTL 运行矩阵的 Skill 闭集从 `.agents/skills` 发现派生而不是硬编码。
 - AND 角色 reference、规范性 Cursor rule、共享 completion/interaction 跳转或 harness 规范副本出现时门禁判否并指出唯一迁移层。
-- AND 需要独立语义 actor 的 Workflow Skill 必须声明主会话 owner、canonical artifact 启动去重、单一前台调用、被派发 actor 禁止嵌套派发/阶段推进/发布，以及 `starting up` 或失败不自动补发；缺任一边界时治理合同测试判否。
+- AND 需要独立语义 actor 的 Workflow Skill 必须声明主会话 owner、canonical artifact 启动去重、单一前台调用或 REQ-001 明定的 content-production 有界作者例外与串行评审、被派发 actor 禁止嵌套派发/阶段推进/发布，以及 `starting up` 或失败不自动补发；缺任一边界时治理合同测试判否。
 
 <a id="gwt-002"></a>
 ### GWT-002 Owner manifest 精确且开发与 Review 同源
@@ -236,15 +235,14 @@
 - 依赖：current Code Health named evidence与 Review focused contracts。
 
 <a id="open-004"></a>
-### OPEN-004 content-production 多 actor 派发契约尚未进入规格与治理合同
+### OPEN-004 content-production 多 actor 派发尚缺联合候选准出证据
 
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：data-engineering 在 `7f67384ea` 把 `content-production` Skill 的 actor 契约改写为主会话可派发子 Agent、author 可为独立子 Agent 会话、reviewer 按 execution 并行（同一 execution 至多一个、不同 execution 可并行），并删除了 `human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.content-production` 的绑定引用；但 `REQ-001` 第六条与 `GWT-001.t3` 仍要求单主会话 owner、全局单一前台 reviewer 调用与被派发 actor 禁止嵌套派发，`test_agent_context_budget__gate__local_contract_test` 与 `test_human_agent_delivery__contract_router__governance__local_contract_test` 两条治理合同仍固化该单主会话契约，导致 `04. Lane Gate` 判否。本次仅为通过 04 把 Skill 正文恢复到规格措辞，data lane 想要的多 actor 派发契约尚未在规格、治理合同与 Skill 三处形成一致的 canonical 声明，`references/rounds.md`、`references/recipes.md` 中「每 execution 各派 author 与 reviewer 子 Agent、2+2 错峰」的操作说明也与现行契约存在张力。
-- 目标：由 prd/design 走正规流程裁定是否放开多 actor 派发；若放开，先修改本 spec `REQ-001`/`GWT-001` 与两条治理合同测试，再改 Skill 正文与 references；若不放开，data lane 回收 references 中与单主会话契约相悖的操作说明。任何一方都不得再以先改 Skill 正文的方式绕过合同。
-- 完成判定：`GWT-001.t3` 与 `GWT-005` 对应行为满足：`.agents/skills/content-production/SKILL.md` 声明的 actor 契约、`REQ-001` 第六条、`agent_governance_contract`/`human_agent_delivery_contract` 相关合同测试三者措辞一致且 `04. Lane Gate` 的 ops local_contract shard 全部通过；如裁定放开多 actor 派发，`GWT-001.t3` 的 AND 子句与对应 `spec_ref` 测试须先于 Skill 正文更新，且 Skill 仍保留 `#workflow_interaction_binding.bindings.content-production` 绑定引用。
-- 依赖：`L2 DEC-005` 的 Workflow Skill 有界派发决策；data-engineering lane 对 `content-production` references 的 owner 增量；`quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding`。
+- 影响或价值：多树合并已将两作者上限、execution scope 隔离与串行独立 reviewer 表达在 REQ/Skill；尚缺联合候选的 actor 合同、上下文预算与 hosted required checks 一致性验收回执，不能用任一来源分支通过替代。
+- 完成判定：`GWT-001.t3` 与 `GWT-005` 对应行为满足；当前 candidate 的 Skill、REQ 与治理合同测试一致，`04. Lane Gate` 全部 required shards 通过，重复派发、嵌套派发与自审自签反例仍拒绝。
+- 依赖：`L2 DEC-005`、`references/dispatch.md` 与 `human_agent_delivery_contract.yaml#workflow_interaction_binding` 的现役绑定。
 
 <a id="open-006"></a>
 ### OPEN-006 其他 lane 拥有的上下文文件仍超分层预算

@@ -49,7 +49,7 @@ def register_content_readiness_parser(
     content_readiness_parser.add_argument(
         "--release-id",
         default="",
-        help="内容就绪 绑定的 canonical Data releaseId",
+        help="内容就绪绑定的 canonical Data releaseId",
     )
     content_readiness_parser.add_argument(
         "--verify-run-id",

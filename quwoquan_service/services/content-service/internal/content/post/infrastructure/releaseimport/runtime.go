@@ -43,6 +43,8 @@ func Run() {
 	mediaVideoBaseURL := flag.String("media-video-base-url", "", "environment video media public base URL")
 	mediaAvatarBaseURL := flag.String("media-avatar-base-url", "", "environment avatar media public base URL")
 	creatorReceipt := flag.String("creator-receipt", "", "user-service creator import receipt")
+	homepageReport := flag.String("homepage-report", "", "entity-service homepage import report containing entity mapping")
+	homepageCandidateReceipt := flag.String("homepage-candidate-receipt", "", "exact verified homepage candidate authenticating the mapping")
 	postsDB := flag.String("posts-db", "quwoquan_content", "target db for posts")
 	env := flag.String("env", "", "environment label (for logging)")
 	dryRun := flag.Bool("dry-run", false, "load + report only, do not write mongo")
@@ -198,6 +200,16 @@ func Run() {
 	posts, err := LoadPosts(objectRoot, postFilter)
 	if err != nil {
 		log.Fatalf("load posts: %v", err)
+	}
+	entityMapping, err := LoadHomepageEntityMapping(
+		*homepageReport, *homepageCandidateReceipt, releaseBinding, *env, *dryRun,
+		ToSet(desired.DesiredRefs.Entities),
+	)
+	if err != nil {
+		log.Fatalf("validate homepage entity mapping: %v", err)
+	}
+	if err := BindPostEntityMentions(posts, objectRoot, entityMapping); err != nil {
+		log.Fatalf("bind article entity mentions: %v", err)
 	}
 	if err := ValidatePostAuthors(posts, creatorAuthors); err != nil {
 		log.Fatalf("validate post authors: %v", err)
@@ -714,7 +726,7 @@ func ImportedPostBindings(posts []PostDoc) ([]ImportedPostBinding, error) {
 		}
 		if storagePostRef == "" || postID == "" || contentType == "" || authorID == "" ||
 			strings.TrimSpace(post.ContentID) == "" || post.ContentVersion < 1 ||
-			(post.Admission.UsageScope != "research" && post.Admission.UsageScope != "commercial") {
+			(post.Admission.UsageScope != "research" && post.Admission.UsageScope != "commercial" && post.Admission.UsageScope != "production") {
 			return nil, fmt.Errorf("imported post binding requires admitted content, post and author identities")
 		}
 		if _, exists := seenRefs[reportPostRef]; exists {
@@ -818,7 +830,8 @@ func BuildCanonicalImportedPostDocument(
 		"title": post.Title, "angle": post.Angle, "seq": post.Seq,
 		"entityRefs": runtimeEntityRefs, "tagRefs": post.TagRefs,
 		"intersectionHints": post.IntersectionHints, "semanticMentions": post.SemanticMentions,
-		"authorId": post.AuthorID, "authorDisplayNameSnapshot": post.AuthorDisplayName,
+		"entityMentions": post.EntityMentions,
+		"authorId":       post.AuthorID, "authorDisplayNameSnapshot": post.AuthorDisplayName,
 		"authorAvatarUrlSnapshot": post.AuthorAvatarURL,
 		"creatorProfileId":        post.CreatorProfileID, "creatorArchetype": post.CreatorArchetype,
 		"creatorProfileVersion": post.CreatorProfileVersion,
@@ -1052,8 +1065,7 @@ func ImportPoolCounts(posts []PostDoc, entitiesLoaded int) bson.M {
 	counts["articleLoaded"] = 0
 	counts["imageLoaded"] = 0
 	counts["videoLoaded"] = 0
-	counts["researchLoaded"] = 0
-	counts["commercialLoaded"] = 0
+	counts["acceptedCount"] = len(posts)
 	for _, post := range posts {
 		switch post.ContentType {
 		case "article":
@@ -1062,12 +1074,6 @@ func ImportPoolCounts(posts []PostDoc, entitiesLoaded int) bson.M {
 			counts["imageLoaded"] = counts["imageLoaded"].(int) + 1
 		case "video":
 			counts["videoLoaded"] = counts["videoLoaded"].(int) + 1
-		}
-		switch post.Admission.UsageScope {
-		case "research":
-			counts["researchLoaded"] = counts["researchLoaded"].(int) + 1
-		case "commercial":
-			counts["commercialLoaded"] = counts["commercialLoaded"].(int) + 1
 		}
 	}
 	return counts

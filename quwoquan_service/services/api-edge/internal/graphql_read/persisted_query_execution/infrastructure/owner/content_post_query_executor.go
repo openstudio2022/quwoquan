@@ -40,7 +40,7 @@ type contentBundleBinding struct {
 
 var contentBundleBindings = map[string]contentBundleBinding{
 	"ContentPostDetailBase": newContentBundleBinding(
-		"ContentPostDetailBase", "content.post.GetPost", "3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f",
+		"ContentPostDetailBase", "content.post.GetPost", "7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7",
 		"contentPostDetailBase", []string{"article", "image", "micro", "video"}, baseResponseSpec(),
 	),
 	"ContentPostDetailSemantic": newContentBundleBinding(
@@ -48,7 +48,7 @@ var contentBundleBindings = map[string]contentBundleBinding{
 		"contentPostDetailSemantic", []string{"article", "image", "micro", "video"}, semanticResponseSpec(),
 	),
 	"ContentPostDetailMedia": newContentBundleBinding(
-		"ContentPostDetailMedia", "content.post.GetPostMedia", "2251d9dca6cc14a77ff40eb630223df0b432095a98c7bd3f9f72d2e8d0752c18",
+		"ContentPostDetailMedia", "content.post.GetPostMedia", "9d8916aa9564bd99f990ab00b32d79d70dc860d05108a5e6f30f07df43b2a25f",
 		"contentPostDetailMedia", []string{"image", "video"}, mediaResponseSpec(),
 	),
 	"ContentPostDetailArticleRenderAssets": newContentBundleBinding(

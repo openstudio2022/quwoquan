@@ -1,7 +1,10 @@
 package releaseimport
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -56,6 +59,97 @@ type postManifest struct {
 	PublishedAt           string                             `json:"publishedAt"`
 }
 
+// decodeReleaseSourceAttribution 不让 encoding/json 静默丢弃退休字段或新修改事实。
+func decodeReleaseSourceAttribution(raw []byte, ref string) (postmodel.SourceAttribution, error) {
+	var envelope struct {
+		SourceAttribution json.RawMessage `json:"sourceAttribution"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return postmodel.SourceAttribution{}, err
+	}
+	var attribution postmodel.SourceAttribution
+	if len(envelope.SourceAttribution) == 0 {
+		return attribution, nil
+	}
+	if err := validateReleaseSourceFacts(envelope.SourceAttribution); err != nil {
+		return attribution, fmt.Errorf("%s: sourceAttribution: %w", ref, err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(envelope.SourceAttribution))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&attribution); err != nil {
+		return attribution, fmt.Errorf("%s: sourceAttribution: %w", ref, err)
+	}
+	if attribution.DerivedModifications == nil {
+		return attribution, fmt.Errorf("%s: sourceAttribution requires explicit derivedModifications", ref)
+	}
+	seen := make(map[string]bool)
+	for _, modification := range attribution.DerivedModifications {
+		switch modification {
+		case "video_frame_extraction", "crop", "resize", "format_conversion":
+		default:
+			return attribution, fmt.Errorf("%s: sourceAttribution derivedModifications is invalid", ref)
+		}
+		if seen[modification] {
+			return attribution, fmt.Errorf("%s: sourceAttribution derivedModifications contains duplicates", ref)
+		}
+		seen[modification] = true
+	}
+	switch attribution.WatermarkKind {
+	case "", "none", "author_signature", "platform_logo", "stock_agency", "other", "unknown":
+	default:
+		return attribution, fmt.Errorf("%s: sourceAttribution watermarkKind is invalid", ref)
+	}
+	return attribution, nil
+}
+
+// validateReleaseSourceFacts 对齐 Data post_manifest.schema.json 的 sourceAttribution：
+// Go 零值不能替代必填事实；可选水印事实允许缺席，但显式 null 不合法。
+func validateReleaseSourceFacts(raw []byte) error {
+	var facts map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &facts); err != nil {
+		return err
+	}
+	for _, name := range []string{
+		"isOriginal", "originalCreatorName", "platform", "sourcePostUrl", "originalAssetUrl",
+		"attributionText", "rightsBasis", "commercialAuthorizationStatus", "publicationAdmission",
+		"watermarkStatus", "audioRightsStatus", "modelReleaseStatus", "propertyReleaseStatus",
+		"collectedAt", "takedownPolicy", "derivedModifications",
+	} {
+		value, exists := facts[name]
+		if !exists || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return fmt.Errorf("%s is required and must not be null", name)
+		}
+		if name == "isOriginal" || name == "derivedModifications" {
+			continue
+		}
+		var text string
+		if err := json.Unmarshal(value, &text); err != nil || text == "" {
+			return fmt.Errorf("%s must be a non-empty string", name)
+		}
+	}
+	for _, name := range []string{"watermarkKind", "watermarkNote"} {
+		if value, exists := facts[name]; exists && bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return fmt.Errorf("%s must not be null when present", name)
+		}
+	}
+	for name, allowed := range map[string][]string{
+		"commercialAuthorizationStatus": {"verified", "unverified"},
+		"watermarkStatus":               {"absent", "present", "unknown"},
+		"audioRightsStatus":             {"licensed", "original_authorized", "replaced_with_licensed_track", "no_audio", "unverified"},
+		"watermarkKind":                 {"none", "author_signature", "platform_logo", "stock_agency", "other", "unknown"},
+	} {
+		rawValue, exists := facts[name]
+		if !exists {
+			continue
+		}
+		var value string
+		if err := json.Unmarshal(rawValue, &value); err != nil || !slices.Contains(allowed, value) {
+			return fmt.Errorf("%s is outside the Data source fact enum", name)
+		}
+	}
+	return nil
+}
+
 type ContentAdmission struct {
 	ProcessResult  string `json:"processResult" bson:"processResult"`
 	QualityResult  string `json:"qualityResult" bson:"qualityResult"`
@@ -75,11 +169,8 @@ func normalizeImportedContentPoolRecord(m *postManifest, postRef string) error {
 	if m.VariantPurpose != "original" && m.VariantPurpose != "commercial_variant" {
 		return fmt.Errorf("%s: canonical content variantPurpose is invalid", postRef)
 	}
-	if m.Admission.UsageScope != "research" && m.Admission.UsageScope != "commercial" {
-		return fmt.Errorf("%s: canonical content usageScope is invalid", postRef)
-	}
-	if m.VariantPurpose == "commercial_variant" && m.Admission.UsageScope != "commercial" {
-		return fmt.Errorf("%s: commercial content variant is not commercially admitted", postRef)
+	if !slices.Contains([]string{"research", "commercial", "production"}, m.Admission.UsageScope) {
+		return fmt.Errorf("%s: canonical content usageScope record is invalid", postRef)
 	}
 	return nil
 }

@@ -304,7 +304,7 @@ def _fixture(
         execution / "sources/commons/meta.json",
         {
             "sourceUseMode": "licensed_adaptation",
-            "researchLane": "image",
+            "carrier": "image",
         },
     )
     _write_json(
@@ -376,7 +376,7 @@ def _fixture(
                     "license": "CC BY 4.0",
                     "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
                     "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
-                    "usageScope": "commercial",
+                    "usageScope": "research",
                     "decision": "approved",
                     "issues": [],
                 }

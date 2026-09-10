@@ -87,14 +87,33 @@
     }
   },
   "$defs": {
+    "entityRef": {
+      "description": "调用方显式指定的稳定 opaque 实体引用；homepage 与 post 绑定同一实体时原样使用同值，不按名称、行政区或当前发布目录推导。",
+      "type": "string",
+      "pattern": "^/entity/(?!/)(?!\\.{1,2}(?:/|$))(?!.*?/\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001f\\u007f])\\S(?:.*[^/\\s])?$"
+    },
+    "entityId": {
+      "description": "调用方显式指定的稳定实体业务 ID，init 原样冻结，不由 entityRef、execution 或物理目录重新生成。",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!.*[\\u0000-\\u001f\\u007f])\\S(?:.*\\S)?$"
+    },
     "target": {
       "type": "object",
       "required": [
         "name",
-        "entityType"
+        "entityType",
+        "entityRef",
+        "entityId"
       ],
       "additionalProperties": false,
       "properties": {
+        "entityRef": {
+          "$ref": "#/$defs/entityRef"
+        },
+        "entityId": {
+          "$ref": "#/$defs/entityId"
+        },
         "name": {
           "type": "string",
           "minLength": 1,

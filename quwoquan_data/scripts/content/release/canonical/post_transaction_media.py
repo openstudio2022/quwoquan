@@ -57,31 +57,24 @@ def _copy_post_surface(source: Path, target: Path) -> None:
     files canonical publish ends up owning is decided once, in
     ``build_transaction_delta``, not by what is copied here.
     """
-    for name in ("article.md", "video.md", "provenance.json", "subtitles.vtt"):
+    for name in ("article.md",):
         path = source / name
         if path.is_file():
             shutil.copy2(path, target / name)
-    assets = source / "assets"
-    if assets.is_dir():
-        # 媒体字节已由 content library 持有（execution 内是硬链接）；包内只再挂一个名字，不复制。
-        for path in sorted(assets.rglob("*")):
-            if path.is_file():
-                reference_existing_file(path, target / "assets" / path.relative_to(assets))
-
 
 def _final_content_ref(target: Path, *, holds_media: bool) -> str:
     """Name the document a consumer opens first for one canonical post.
 
     It must name a document, because canonical publish holds no media body: an
-    image post therefore points at its asset reference record, which is the
-    surface that resolves the work's bodies in the content library.
+    image post therefore points at its manifest, which also binds the work's
+    ordered media bodies in the content library.
     """
     if (target / "article.md").is_file():
         return "article.md"
     if (target / "video.md").is_file():
         return "video.md"
     if holds_media:
-        return "asset.refs.json"
+        return "manifest.json"
     raise ObjectTransactionError("post object has no final publishable content")
 
 

@@ -34,6 +34,79 @@ DIGEST_B = "sha256:" + "b" * 64
 VALID_ENVS = frozenset({"alpha"})
 
 
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-042
+def _homepage_mapping_proofs(root: Path) -> tuple[Path, Path, Path]:
+    release = root / "releases/release-a"
+    write_json(release / "payload/desired_state.json", {"desiredRefs": {"entities": ["opaque-a", "opaque-b"]}})
+    digest = payload_digest(release)
+    mapping = {"opaque-a": "hp-entity-owned-a", "opaque-b": "hp-entity-owned-b"}
+    entries = [{"entityRef": ref, "homepageId": mapping[ref]} for ref in sorted(mapping)]
+    mapping_digest = "sha256:" + hashlib.sha256(json.dumps(entries, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+    report = {
+        "schema": "quwoquan_service.homepage_import_report", "releaseId": release.name,
+        "env": "alpha", "dryRun": False, "sourceOwner": "qwq_data", "manifestDigest": digest,
+        "projectionVersion": 7, "closureDigest": DIGEST_B, "expected": 2, "projected": 2,
+        "entityRefToHomepageId": mapping, "entityRefMappingDigest": mapping_digest,
+        "replayed": False, "verifiedAt": "2026-09-09T00:00:00Z", "finishedAt": "2026-09-09T00:00:01Z", "issues": [],
+    }
+    candidate = {
+        "schema": "quwoquan.homepage_release_candidate_receipt", "status": "found",
+        "identity": {"environment": "alpha", "sourceOwner": "qwq_data", "releaseId": release.name, "manifestDigest": digest},
+        "projectionVersion": 7, "closureDigest": DIGEST_B, "verifiedAt": report["verifiedAt"],
+        "counts": {"expected": 2, "projected": 2}, "entityRefMappingDigest": mapping_digest,
+    }
+    report_path, candidate_path = root / "report.json", root / "candidate.json"
+    write_json(report_path, report)
+    write_json(candidate_path, candidate)
+    return release, report_path, candidate_path
+
+
+def test_content_command_consumes_only_candidate_authenticated_homepage_mapping(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    release, report, candidate = _homepage_mapping_proofs(tmp_path)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(importers.subprocess, "run", lambda command, **_kwargs: (commands.append(command) or SimpleNamespace(returncode=0)))
+    original = importers.assert_import_report_contract
+    monkeypatch.setattr(importers, "assert_import_report_contract", lambda path, **kwargs: {} if path.name == "import.json" else original(path, **kwargs))
+    importers.run_content_importer(
+        release=release, env="alpha", run=tmp_path, mongo_uri="mongodb://example.invalid",
+        media_avatar_base_url="", media_image_base_url="", media_video_base_url="", dry_run=False,
+        creator_candidate_receipt=tmp_path / "creator.json", homepage_import_report=report,
+        homepage_candidate_receipt=candidate,
+    )
+    assert len(commands) == 1
+    assert commands[0][commands[0].index("--homepage-report") + 1] == str(report)
+    assert commands[0][commands[0].index("--homepage-candidate-receipt") + 1] == str(candidate)
+
+
+@pytest.mark.parametrize("drift", ["environment", "release", "owner", "manifest", "count", "closure", "version", "mapping", "digest", "dry-run", "candidate-status", "candidate-mapping"])
+def test_content_rejects_homepage_mapping_drift_before_subprocess(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drift: str) -> None:
+    release, report, candidate = _homepage_mapping_proofs(tmp_path)
+    payload = read_json(report)
+    if drift in {"environment", "release", "owner", "manifest"}:
+        field = {"environment": "env", "release": "releaseId", "owner": "sourceOwner", "manifest": "manifestDigest"}[drift]
+        payload[field] = DIGEST_B if drift == "manifest" else "other"
+    elif drift == "count": payload["projected"] = 1
+    elif drift == "closure": payload["closureDigest"] = DIGEST_A
+    elif drift == "version": payload["projectionVersion"] = 8
+    elif drift == "mapping": payload["entityRefToHomepageId"]["opaque-a"] = "hp-tampered"
+    elif drift == "digest": payload["entityRefMappingDigest"] = DIGEST_A
+    elif drift == "dry-run": payload["dryRun"] = True
+    else:
+        proof = read_json(candidate)
+        if drift == "candidate-status": proof = {"schema": proof["schema"], "status": "not_found", "identity": proof["identity"]}
+        else: proof["entityRefMappingDigest"] = DIGEST_A
+        write_json(candidate, proof)
+    write_json(report, payload)
+    monkeypatch.setattr(importers.subprocess, "run", lambda *_args, **_kwargs: pytest.fail("drift reached Content subprocess"))
+    with pytest.raises((RuntimeError, ValueError)):
+        importers.run_content_importer(
+            release=release, env="alpha", run=tmp_path, mongo_uri="mongodb://example.invalid",
+            media_avatar_base_url="", media_image_base_url="", media_video_base_url="", dry_run=False,
+            creator_candidate_receipt=tmp_path / "creator.json", homepage_import_report=report,
+            homepage_candidate_receipt=candidate,
+        )
+
+
 def _write_receipt(path: Path, document: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(document, sort_keys=True) + "\n", encoding="utf-8")

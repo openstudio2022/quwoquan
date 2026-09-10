@@ -93,6 +93,14 @@ sys.exit(17 if service == os.environ["SERVICE_CHECK_FAILURE"] else 0)
         self.assertNotRegex(source, r"(?m)^\s*make gate\b")
         self.assertNotIn("gate_repo.sh --scope", source)
 
+    def test_data_static_gate_does_not_audit_historical_execution_outputs(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002
+        source = COMMIT_GATE.read_text(encoding="utf-8")
+        self.assertIn("data_verify) python3 quwoquan_data/scripts/cli.py verify all --scope source ;;", source)
+        self.assertNotIn("data_verify) python3 quwoquan_data/scripts/cli.py verify all ;;", source)
+        from quwoquan_ops.ci.local_readiness_planner import STATIC_COMMANDS
+        self.assertEqual(STATIC_COMMANDS["data_verify"][0][-3:], ["all", "--scope", "source"])
+
     def test_makefile_gate_does_not_embed_test_local_contract(self) -> None:
         source = MAKEFILE.read_text(encoding="utf-8")
         gate_idx = source.index("\ngate:\n")

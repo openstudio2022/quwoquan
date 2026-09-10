@@ -1,5 +1,5 @@
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001
-"""Data release 准入沿用当前无类别 schema，并要求本工作树持有 exact bytes。"""
+"""lane acceptance 消费当前无类别 Data attestation 与本树 exact release。"""
 from __future__ import annotations
 
 import json
@@ -9,9 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import integration_run as subject
-from quwoquan_ops.tests.support.deployment_candidate_manifest_test_support import (
-    release_attestation_payload,
-)
+from quwoquan_ops.tests.support.deployment_candidate_manifest_test_support import release_attestation_payload
 
 
 def _write_attestation(root: Path, release_id: str, **extra: object) -> Path:
@@ -27,27 +25,28 @@ def _write_attestation(root: Path, release_id: str, **extra: object) -> Path:
 
 
 class IntegrationRunReleaseAdmissionTest(unittest.TestCase):
-    def test_attestation_is_admitted_with_matching_local_release(self) -> None:
+    def test_category_free_attestation_is_admitted_with_exact_local_release(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            attestation = _write_attestation(root, "release-candidate")
+            attestation = _write_attestation(root, "release-m1-candidate")
             with mock.patch.object(subject, "OUTPUT_ROOT", root):
-                self.assertEqual(subject._release_id(attestation), "release-candidate")
+                self.assertEqual(subject._release_id(attestation), "release-m1-candidate")
 
-    def test_all_retired_release_classes_are_rejected(self) -> None:
-        for retired in ("research", "commercial", "production"):
-            with self.subTest(release_class=retired), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
-                attestation = _write_attestation(root, "release-candidate", releaseClass=retired)
-                with mock.patch.object(subject, "OUTPUT_ROOT", root):
-                    with self.assertRaises(subject.IntegrationRunError) as caught:
-                        subject._release_id(attestation)
-                self.assertEqual(caught.exception.code, "INTEGRATION_RUN.INPUT_INVALID")
+    def test_all_retired_release_category_fields_are_rejected(self) -> None:
+        for field in ("releaseClass", "productLifecycleState", "readinessPhase"):
+            for value in ("research", "commercial", "production"):
+                with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    attestation = _write_attestation(root, "release-m1-candidate", **{field: value})
+                    with mock.patch.object(subject, "OUTPUT_ROOT", root):
+                        with self.assertRaises(subject.IntegrationRunError) as caught:
+                            subject._release_id(attestation)
+                    self.assertEqual(caught.exception.code, "INTEGRATION_RUN.INPUT_INVALID")
 
     def test_release_absent_from_worktree_data_root_is_a_typed_blocker(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            attestation = _write_attestation(root, "release-candidate")
+            attestation = _write_attestation(root, "release-m1-candidate")
             with mock.patch.object(subject, "OUTPUT_ROOT", root / "elsewhere"):
                 with self.assertRaises(subject.IntegrationRunError) as caught:
                     subject._release_id(attestation)

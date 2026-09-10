@@ -26,14 +26,12 @@ sys.dont_write_bytecode = True
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from core.content_library import MediaHoldingError, resolve_media_holding
-from core.media_asset_url import is_cas_media_object_key
 from core.object_storage_budget import object_storage_budget_bytes
 from core.paths import PUBLISH_ROOT
+from core.publish_layout import _coordinates, entity_namespace, logical_object_ref, post_namespace
+from core.publish_repository import canonical_files
 
 MEBIBYTE = 1024 * 1024
-_ASSET_REFS_FILENAMES = ("asset.refs.json", "assets.refs.json")
-
 
 @dataclass(frozen=True, slots=True)
 class ObjectClosure:
@@ -80,50 +78,49 @@ def object_carrier(object_kind: str, object_ref: str) -> str:
     return head
 
 
-def _asset_refs_path(object_root: Path) -> Path | None:
-    """Return the object's single asset refs document, or None when it owns no media."""
-    present = [
-        object_root / name
-        for name in _ASSET_REFS_FILENAMES
-        if (object_root / name).is_file()
-    ]
-    if not present:
-        return None
-    if len(present) != 1:
-        raise ValueError(f"object must own exactly one asset refs document: {object_root}")
-    return present[0]
+def _asset_refs_path(object_root: Path) -> Path:
+    """预算枚举仅含 post/entity；直接度量 creator 时仍只读 profile。"""
+    name = "profile.json" if (object_root / "profile.json").exists() and not (object_root / "manifest.json").exists() else "manifest.json"
+    return object_root / name
 
 
 def _referenced_media_bytes(object_root: Path) -> tuple[int, int, list[str]]:
-    """Sum the distinct media bodies one object references, resolved in the library.
+    """度量随体媒体的去重字节；缺失或损坏是未解析闭包，不是免费媒体。
 
-    Publish carries the reference, the library carries the body, so the cost of
-    an object is measured where the bytes actually are. A reference the library
-    cannot honour is an unresolved closure, not zero bytes. The largest single
-    body travels with the total because one oversized asset and too many assets
-    hand the operator two different next steps.
+    最大单体与总量分别保留，以区分单素材过大和对象素材总量超限。
+    验证只读实际包，不要求内容库在场或触发任何恢复。
     """
     refs_path = _asset_refs_path(object_root)
-    if refs_path is None:
-        return 0, 0, []
-    document = json.loads(refs_path.read_text(encoding="utf-8"))
+    if refs_path.is_symlink() or not refs_path.is_file():
+        return 0, 0, [f"asset contract is missing or unsafe: {refs_path}"]
+    try:
+        document = json.loads(refs_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return 0, 0, [f"asset contract is unreadable: {refs_path}"]
     if not isinstance(document, dict):
-        raise TypeError(f"asset refs document must be an object: {refs_path}")
+        return 0, 0, [f"asset contract must be an object: {refs_path}"]
+    rows = document.get("assets")
+    if not isinstance(rows, list):
+        return 0, 0, [f"asset contract assets must be an array: {refs_path}"]
     issues: list[str] = []
     distinct: dict[str, int] = {}
-    for row in document.get("assets") or []:
+    for row in rows:
         if not isinstance(row, dict):
             issues.append(f"asset refs row is not an object: {refs_path}")
             continue
         object_key = str(row.get("objectKey") or "")
         sha256 = str(row.get("sha256") or "")
-        if not is_cas_media_object_key(object_key) or not sha256:
+        if not sha256:
             issues.append(f"asset refs row has no content-addressed identity: {object_key}")
             continue
+        from content.release.canonical.object_transaction_contract import _safe_rel, _digest_file
         try:
-            entry = resolve_media_holding(sha256)
-        except (MediaHoldingError, ValueError):
-            issues.append(f"referenced media entry is missing: {object_key}")
+            relative = _safe_rel(str(row.get("path") or ""), label="asset.path")
+            entry = object_root / relative
+            if relative.parts[0] != "media" or entry.is_symlink() or not entry.is_file() or _digest_file(entry) != sha256 or entry.stat().st_size != row.get("bytes"):
+                raise ValueError("carried bytes mismatch")
+        except (OSError, ValueError, RuntimeError):
+            issues.append(f"referenced carried media entry is missing or corrupt: {object_key}")
             continue
         distinct[sha256] = entry.stat().st_size
     return sum(distinct.values()), max(distinct.values(), default=0), issues
@@ -132,11 +129,8 @@ def _referenced_media_bytes(object_root: Path) -> tuple[int, int, list[str]]:
 def _document_bytes(object_root: Path) -> int:
     total = 0
     for path in object_root.rglob("*"):
-        # Media bodies are measured exactly once through asset refs below.  The
-        # transaction package temporarily carries those bytes under assets/ so
-        # they can enter the content library, but they are not canonical publish
-        # documents and must not be counted a second time here.
-        if path.is_file() and path.suffix.lower() in {".json", ".md", ".ndjson", ".vtt"}:
+        # media/ 的随体字节仅按 manifest 摘要去重计量，不能再次算入文档。
+        if path.is_file() and path.relative_to(object_root).parts[0] != "media":
             total += path.stat().st_size
     return total
 
@@ -188,21 +182,37 @@ def object_closures(
     root = publish_root or PUBLISH_ROOT
     closures: list[ObjectClosure] = []
     issues: list[str] = []
-    for kind, depth in (("posts", 4), ("entities", 3)):
-        kind_root = root / kind
-        if not kind_root.is_dir():
-            continue
-        for object_root in sorted(kind_root.glob("/".join(["*"] * depth))):
-            if not object_root.is_dir():
-                continue
-            relative = object_root.relative_to(kind_root)
+    try:
+        files = canonical_files(root)
+    except (OSError, ValueError) as exc:
+        return [], [f"DATA.PUBLISH.REPOSITORY_INVALID: {exc}"]
+    object_files = [path for path in files if path.relative_to(root).parts[0] in {"posts", "entities"}]
+    manifests = [path for path in object_files if path.name == "manifest.json"
+                 and not {"sources", "records", "media"} & set(path.relative_to(root).parts[1:-1])]
+    for manifest_path in manifests:
+        object_root = manifest_path.parent
+        relative = object_root.relative_to(root)
+        kind = relative.parts[0]
+        try:
+            document = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not isinstance(document, dict) or type(document.get("version")) is not int or document["version"] < 1:
+                raise ValueError("DATA.LAYOUT.IDENTITY_REQUIRED: positive version")
+            logical = logical_object_ref(document, kind)
+            namespace = entity_namespace(document) if kind == "entities" else post_namespace(document)
+            if _coordinates(relative.as_posix(), namespace) is None:
+                raise ValueError("DATA.LAYOUT.COORDINATES_INVALID")
             closure, media_issues = object_closure(
-                object_root,
-                ref=f"{kind}/{relative.as_posix()}",
-                carrier=object_carrier(kind, relative.as_posix()),
+                object_root, ref=f"{kind}/{logical}", carrier=object_carrier(kind, logical),
             )
-            issues.extend(media_issues)
-            closures.append(closure)
+        except (OSError, ValueError) as exc:
+            issues.append(f"DATA.OBJECT.MANIFEST_INVALID: {manifest_path}: {exc}")
+            continue
+        issues.extend(media_issues)
+        closures.append(closure)
+    # 只扫 manifest 会把丢失清单的已有包当成空池；随体文件必须有唯一清单祖先。
+    manifest_roots = {path.parent for path in manifests}
+    missing = {path.parent for path in object_files if not manifest_roots.intersection(path.parents)}
+    issues.extend(f"DATA.OBJECT.MANIFEST_MISSING: {path}" for path in sorted(missing))
     return closures, issues
 
 

@@ -26,6 +26,9 @@ def load_content_source_registry() -> dict[str, Any]:
     data = yaml.safe_load(CONTENT_SOURCE_REGISTRY_PATH.read_text(encoding="utf-8")) or {}
     if data.get("schema") != CONTENT_SOURCE_REGISTRY_SCHEMA:
         raise ValueError(f"{CONTENT_SOURCE_REGISTRY_PATH}: invalid schema")
+    retired = _retired_contract_fields(data)
+    if retired:
+        raise ValueError("; ".join(retired))
     return data
 
 
@@ -257,6 +260,21 @@ def homepage_source_can_seed_base_draft(
     )
 
 
+def _retired_contract_fields(data: Mapping[str, Any]) -> list[str]:
+    """旧键即使与新键同时在场也拒绝，不以忽略未知字段维持双轨。"""
+    locations = [("allowedValues", data.get("allowedValues"))]
+    locations.extend((scope, row) for scope, row in registry_sources(data))
+    lane_policies = data.get("lanePolicies")
+    if isinstance(lane_policies, Mapping):
+        locations.append(("lanePolicies.video", lane_policies.get("video")))
+    return [
+        f"{scope}: retired contract field {field} is not allowed"
+        for scope, row in locations if isinstance(row, Mapping)
+        for field in ("researchAcquisitionPaths", "commercialAdmissionMatrix")
+        if field in row
+    ]
+
+
 def verify_content_source_registry(
     data: Mapping[str, Any] | None = None,
 ) -> list[str]:
@@ -267,7 +285,7 @@ def verify_content_source_registry(
         except Exception as exc:  # noqa: BLE001
             return [f"content source registry invalid: {exc}"]
 
-    issues: list[str] = []
+    issues: list[str] = _retired_contract_fields(data)
     if "version" in data:
         issues.append("content source registry must not declare a parallel version")
     allowed = data.get("allowedValues") if isinstance(data.get("allowedValues"), dict) else {}
@@ -276,7 +294,7 @@ def verify_content_source_registry(
     allowed_fetch_modes = {str(item) for item in _as_list(allowed.get("fetchModes"))}
     allowed_rights = {str(item) for item in _as_list(allowed.get("rightsPolicies"))}
     allowed_acquisition_paths = {
-        str(item) for item in _as_list(allowed.get("researchAcquisitionPaths"))
+        str(item) for item in _as_list(allowed.get("acquisitionPaths"))
     }
     required = {
         "sourceId",
@@ -320,13 +338,13 @@ def verify_content_source_registry(
             issues.append(f"{prefix}: unknown rightsPolicy {rights}")
         acquisition_paths = {
             str(item).strip()
-            for item in _as_list(row.get("researchAcquisitionPaths"))
+            for item in _as_list(row.get("acquisitionPaths"))
             if str(item).strip()
         }
         unknown_acquisition_paths = sorted(acquisition_paths - allowed_acquisition_paths)
         if unknown_acquisition_paths:
             issues.append(
-                f"{prefix}: unknown researchAcquisitionPaths {unknown_acquisition_paths}"
+                f"{prefix}: unknown acquisitionPaths {unknown_acquisition_paths}"
             )
         professional_paths = {
             "pinterest": {"supported_api", "manual_file"},
@@ -334,7 +352,7 @@ def verify_content_source_registry(
         }
         if source_id in professional_paths and acquisition_paths != professional_paths[source_id]:
             issues.append(
-                f"{prefix}: professional research acquisition paths must equal "
+                f"{prefix}: professional acquisition paths must equal "
                 f"{sorted(professional_paths[source_id])}"
             )
         prompt_facts = row.get("promptFacts")
@@ -408,10 +426,10 @@ def verify_content_source_registry(
                     f"sourceTierSignals.bySourceClass: missing explicit mapping for sourceClass {cls!r} (falls back to default)"
                 )
     from core.video_source_admission import (
-        verify_video_commercial_admission,
+        verify_video_publication_admission,
     )
 
-    issues.extend(verify_video_commercial_admission(data))
+    issues.extend(verify_video_publication_admission(data))
     return issues
 
 
@@ -487,9 +505,9 @@ def build_content_source_guidance(vertical: str = "travel") -> dict[str, Any]:
                     "defaultRole": str(row.get("defaultRole") or ""),
                     "fetchMode": str(row.get("fetchMode") or ""),
                     "rightsPolicy": str(row.get("rightsPolicy") or ""),
-                    "researchAcquisitionPaths": [
+                    "acquisitionPaths": [
                         str(item)
-                        for item in _as_list(row.get("researchAcquisitionPaths"))
+                        for item in _as_list(row.get("acquisitionPaths"))
                         if str(item).strip()
                     ],
                     "rateLimit": str(row.get("rateLimit") or ""),
@@ -576,7 +594,7 @@ def render_lane_source_prompt(
                 f"至少形成 {int(per_target_image_works or 1)} 个图片作品容量。"
             )
         lines.append(
-            "Pinterest 与图虫可通过公开直链、平台支持 API 或人工文件进入 research collections；"
+            "Pinterest 与图虫可通过公开直链、平台支持 API 或人工文件进入 source collections；"
             "取得文件不等于商用授权，必须逐图记录作者、来源、rightsStatus、rightsIssues 与撤换标识。"
         )
     elif lane == "video":

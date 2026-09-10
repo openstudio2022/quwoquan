@@ -77,10 +77,7 @@ void main() {
         UserErrorCode.accountSecurityUnavailable,
       );
       expect(UserErrorCode.accountSecurityUnavailable.httpStatus, 503);
-      expect(
-        UserErrorCode.accountSecurityUnavailable.recoveryAction,
-        'retry',
-      );
+      expect(UserErrorCode.accountSecurityUnavailable.recoveryAction, 'retry');
       expect(
         UserErrorCode.accountSecurityUnavailable.recoveryAfterSeconds,
         greaterThan(0),
@@ -88,7 +85,7 @@ void main() {
       expect(UserErrorCode.accountSecurityUnavailable.recoveryAfterSeconds, 3);
     });
 
-    test('退休研究态身份码按未知码返回 null', () {
+    test('退役研究身份错误不再属于当前枚举', () {
       expect(
         UserErrorCode.fromCode('USER.USER.research_identity_invalid'),
         isNull,

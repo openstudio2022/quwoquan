@@ -1,4 +1,4 @@
-"""Strict read-only 4×4 content API consumer for Alpha Research releases.
+"""Strict read-only 4×4 content API consumer for Alpha production releases.
 
 The runner consumes only explicit, exact-byte authorities.  It never selects a
 latest release, accepts a caller-supplied URL/token, mutates runtime state, or
@@ -655,6 +655,7 @@ def run_content_api_consumer(
         "ref": _report_ref(consumer_health_binding_path, output_root=authority_root),
         "digest": _digest_bytes(consumer_health_binding_raw),
     }
+    # 公开 release 消费不签发专属会话。
     observations: list[dict[str, Any]] = []
     raw_results: list[dict[str, str]] = []
     statuses: list[str] = []

@@ -152,13 +152,13 @@ def promote_post_object(
         / transaction_id
         / "apply_report.json"
     )
-    canonical_post = PUBLISH_ROOT / "posts" / normalized_ref
-    build_post_object_transaction_package(
+    package = build_post_object_transaction_package(
         execution_root=root,
         object_ref=normalized_ref,
         transaction_id=transaction_id,
         package_root=package_root,
     )
+    canonical_post = PUBLISH_ROOT / str(package["target"]["objectPath"])
     _assert_cross_publish_video_unique(
         package_root=package_root,
         canonical_post=canonical_post,
@@ -205,6 +205,7 @@ def promote_post_object(
         "transactionId": transaction_id,
         "applyReportRef": apply_report.relative_to(OUTPUT_ROOT).as_posix(),
         "canonicalObjectRef": f"posts/{normalized_ref}",
+        "canonicalObjectPath": str(package["target"]["objectPath"]),
         "canonicalObjectSha256": str(
             tree_integrity_stats(canonical_post)["merkleRoot"]
         ),

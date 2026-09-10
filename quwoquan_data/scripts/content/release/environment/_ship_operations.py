@@ -9,7 +9,7 @@ from pathlib import Path
 from content.release.environment._ship_operation_dependencies import (
     ShipOperationDependencies,
 )
-from content.release.environment.consistency import (
+from content.release.canonical.release_consistency import (
     report_to_text,
     scan_release_contract,
 )
@@ -425,25 +425,6 @@ def apply_release(
                     report_path=run / "creator-candidate-receipt.json",
                     output_root=dependencies.output_root,
                 )
-            failed_stage = "content_candidate_stage"
-            content_receipt = dependencies.run_content_importer(
-                release=release,
-                env=env,
-                run=run,
-                mongo_uri=target.mongo_uri,
-                media_avatar_base_url=target.media_delivery_base_url,
-                media_image_base_url=target.media_delivery_base_url,
-                media_video_base_url=target.media_delivery_base_url,
-                dry_run=bool(args.dry_run),
-                mode=ImportMode.SYNC if full_sync else ImportMode.UPSERT,
-                delete_policy=DeletePolicy.TOMBSTONE
-                if full_sync
-                else DeletePolicy.NONE,
-                creator_candidate_receipt=(creator_candidate.path if creator_candidate else creator_receipt),
-            )
-            refs["contentImportReportRef"] = content_receipt.relative_to(
-                dependencies.output_root
-            ).as_posix()
             failed_stage = "homepage_import"
             homepage_import_report = dependencies.run_homepage_importer(
                 release=release,
@@ -460,6 +441,40 @@ def apply_release(
                 .relative_to(dependencies.output_root)
                 .as_posix()
             )
+            homepage_candidate = None
+            if not args.dry_run:
+                failed_stage = "homepage_candidate_query"
+                homepage_candidate = _required_adapter(
+                    dependencies, "query_homepage_release_candidate"
+                )(
+                    env=env,
+                    mongo_uri=target.mongo_uri,
+                    release_id=release_id,
+                    manifest_digest=admission.manifest_digest,
+                    report_path=run / "homepage-candidate-receipt.json",
+                    output_root=dependencies.output_root,
+                )
+            failed_stage = "content_candidate_stage"
+            content_receipt = dependencies.run_content_importer(
+                release=release,
+                env=env,
+                run=run,
+                mongo_uri=target.mongo_uri,
+                media_avatar_base_url=target.media_delivery_base_url,
+                media_image_base_url=target.media_delivery_base_url,
+                media_video_base_url=target.media_delivery_base_url,
+                dry_run=bool(args.dry_run),
+                mode=ImportMode.SYNC if full_sync else ImportMode.UPSERT,
+                delete_policy=DeletePolicy.TOMBSTONE
+                if full_sync
+                else DeletePolicy.NONE,
+                creator_candidate_receipt=(creator_candidate.path if creator_candidate else creator_receipt),
+                homepage_import_report=run / "homepage-import.json",
+                homepage_candidate_receipt=(homepage_candidate.path if homepage_candidate else None),
+            )
+            refs["contentImportReportRef"] = content_receipt.relative_to(
+                dependencies.output_root
+            ).as_posix()
             if not args.dry_run:
                 failed_stage = "owner_candidate_query"
                 owner_candidates = _query_all_owner_candidates(
@@ -469,7 +484,7 @@ def apply_release(
                     environment=env,
                     release_id=release_id,
                     manifest_digest=admission.manifest_digest,
-                    initial_evidence={"creator": creator_candidate},
+                    initial_evidence={"creator": creator_candidate, "homepage": homepage_candidate},
                 )
                 failed_stage = "owner_local_staging_admission"
                 admitted = _require_owner_local_staging_admission(

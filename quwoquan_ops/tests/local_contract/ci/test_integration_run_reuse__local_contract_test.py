@@ -32,6 +32,30 @@ IMPACT = "sha256:" + "1" * 64
 PROFILE = "integration"
 
 
+def _release_args(store: Path):
+    from quwoquan_ops.tests.support.deployment_candidate_manifest_test_support import release_attestation_payload
+
+    paths = []
+    for role, marker in (("release", "c"), ("rollback", "d")):
+        path = store / f"{role}.json"
+        if not path.exists():
+            path.write_text(json.dumps(release_attestation_payload(role, "sha256:" + marker * 64)), encoding="utf-8")
+        paths.append(path)
+    return SimpleNamespace(release_attestation=paths[0], rollback_release_attestation=paths[1], workload="full",
+                           release_handoff_ref="handoff-ref-v1:sha256:" + "a" * 64 + ":sha256:" + "b" * 64)
+
+
+def _binding(store: Path):
+    inputs = integration_run._acceptance_release_inputs(_release_args(store))
+    refs = {}
+    for field in ("packageManifest", "releaseReadiness"):
+        path = store / f"{field}.json"
+        if not path.exists():
+            path.write_text(json.dumps({"original": field}), encoding="utf-8")
+        refs[field] = {"ref": path.name, "digest": integration_run.exact_file_digest(path)}
+    return {"inputs": inputs, **refs}
+
+
 def _candidate(store: Path, *, candidate_id: str, created_at: str, **overrides: object) -> Path:
     body: dict[str, object] = {
         "schema": integration_run._CANDIDATE_SCHEMA,
@@ -66,6 +90,9 @@ def _acceptance(store: Path, *, candidate_id: str, environment: str, status: str
         body["predecessor"] = {"ref": alpha.relative_to(store).as_posix(), "digest": integration_run.exact_file_digest(alpha)}
     if status == "not_required":
         body["reasonCode"] = integration_run.BETA_OPTIONAL_BY_POLICY
+    runtime = store / f"runtime-{candidate_id.removeprefix('sha256:')}-{environment}.json"
+    runtime.write_text(json.dumps({"source": {"acceptanceBinding": _binding(store)}}), encoding="utf-8")
+    body["runtimeIdentity"] = {"ref": runtime.name, "digest": integration_run.exact_file_digest(runtime)}
     body.update(overrides)
     path = store / "environment-execution/acceptance" / candidate_id.removeprefix("sha256:") / f"{environment}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -84,11 +111,13 @@ def store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         return dict(payload)
 
     monkeypatch.setattr(integration_run, "validate_environment_acceptance_fact", fake_validate)
+    monkeypatch.setattr(integration_run, "OUTPUT_ROOT", tmp_path)
     return tmp_path
 
 
 def _lookup(store: Path, **overrides: object):
-    params: dict[str, object] = {"store": store, "commit": COMMIT, "tree": TREE, "parent": PARENT, "impact_plan_digest": IMPACT, "profile": PROFILE}
+    params: dict[str, object] = {"store": store, "commit": COMMIT, "tree": TREE, "parent": PARENT, "impact_plan_digest": IMPACT, "profile": PROFILE,
+                                 "release_inputs": integration_run._acceptance_release_inputs(_release_args(store))}
     params.update(overrides)
     return integration_run._find_reusable_candidate(**params)
 
@@ -228,8 +257,7 @@ def acceptance_main(store: Path, monkeypatch: pytest.MonkeyPatch):
     plan_path = store / "plan.json"
     plan_path.write_text("{}", encoding="utf-8")
     release, rollback = store / "release.json", store / "rollback.json"
-    for path in (release, rollback):
-        path.write_text("{}", encoding="utf-8")
+    _release_args(store)
     lane = "refs/heads/lane/product-mainline"
     merged_lanes = [{"branch": lane, "commit": COMMIT}, {"branch": "refs/heads/lane/engineering", "commit": PARENT}]
     git_answers = {
@@ -337,6 +365,106 @@ def test_integrate_rejects_acceptance_only_reuse(acceptance_main) -> None:
     assert summary["blocker"]["code"] == "INTEGRATION_RUN.INPUT_INVALID"
     setup.calls["_run_environment"].assert_not_called()
     setup.calls["_local_readiness"].assert_not_called()
+
+
+@pytest.fixture
+def signed_release_case(monkeypatch: pytest.MonkeyPatch):
+    """真正 Ed25519 签发并验签：只隔离输出根和临时证据，不 mock 绑定校验。"""
+    from quwoquan_ops.tests.local_contract.stackctl import test_integration_run_production_release__local_contract_test as support_module
+
+    support = support_module.IntegrationRunProductionReleaseContractTest()
+    support.setUp()
+    monkeypatch.setattr(integration_run, "OUTPUT_ROOT", support.root)
+    issue = support_module.integration_run.issue_environment_acceptance_fact
+
+    def issue_bound(**kwargs):
+        exact = kwargs["runtime_identity"]
+        path = kwargs["store_root"] / exact["ref"]
+        payload = json.loads(path.read_bytes())
+        payload["source"] = {"acceptanceBinding": _binding(support.root)}
+        path.write_bytes(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8") + b"\n")
+        kwargs["runtime_identity"] = {"ref": exact["ref"], "digest": integration_run.exact_file_digest(path)}
+        return issue(**kwargs)
+
+    try:
+        with mock.patch.object(support_module.integration_run, "issue_environment_acceptance_fact", side_effect=issue_bound):
+            bundle, refs, store, signing, args = support._signed_bundle()
+        candidate = json.loads((store / refs["candidate"]["ref"]).read_bytes())
+        lookup = {"store": store, "commit": candidate["commit"], "tree": candidate["tree"],
+                  "parent": candidate["expectedParent"], "impact_plan_digest": candidate["impactPlanDigest"],
+                  "profile": args.profile, "signature_verifier": signing.environment_verifier(),
+                  "expected_signer_identity": args.signer_identity}
+        release_args = _release_args(support.root)
+        yield SimpleNamespace(root=support.root, bundle=bundle, refs=refs, store=store, lookup=lookup, args=release_args)
+    finally:
+        support.doCleanups()
+
+
+@pytest.mark.parametrize("damage", ["none", "release", "rollback", "handoff", "roles", "workload", "missing-binding",
+                                    "package-drift", "activation-drift", "missing-receipt", "tampered-binding"])
+def test_real_signed_reuse_requires_exact_release_inputs(signed_release_case, damage: str) -> None:
+    setup = signed_release_case
+    if damage in {"release", "rollback"}:
+        path = getattr(setup.args, "release_attestation" if damage == "release" else "rollback_release_attestation")
+        payload = json.loads(path.read_bytes())
+        payload["payloadSha256"] = "sha256:" + "e" * 64  # 同 releaseId，不同 exact 内容也必须重跑。
+        path.write_text(json.dumps(payload), encoding="utf-8")
+    elif damage == "handoff":
+        setup.args.release_handoff_ref = "handoff-ref-v1:sha256:" + "e" * 64 + ":sha256:" + "f" * 64
+    elif damage == "roles":
+        setup.args.release_attestation, setup.args.rollback_release_attestation = setup.args.rollback_release_attestation, setup.args.release_attestation
+    elif damage == "workload":
+        setup.args.workload = "content-release"
+    elif damage in {"package-drift", "activation-drift", "missing-receipt"}:
+        path = setup.root / ("packageManifest.json" if damage == "package-drift" else "releaseReadiness.json")
+        if damage == "missing-receipt":
+            path.unlink()
+        else:
+            path.write_bytes(b"{}")
+    elif damage in {"missing-binding", "tampered-binding"}:
+        fact = json.loads((setup.store / setup.refs["alphaFact"]["ref"]).read_bytes())
+        path = setup.store / fact["runtimeIdentity"]["ref"]
+        payload = json.loads(path.read_bytes())
+        payload["source"] = {} if damage == "missing-binding" else {"acceptanceBinding": {"inputs": {}}}
+        path.write_text(json.dumps(payload), encoding="utf-8")
+    found = integration_run._find_reusable_candidate(**setup.lookup, release_inputs=integration_run._acceptance_release_inputs(setup.args))
+    assert (found is not None) is (damage == "none")
+    if found is not None:
+        assert found["alpha"] == setup.refs["alphaFact"] and found["beta"] == setup.refs["betaFact"]
+
+
+def test_bundle_cannot_relabel_signed_old_acceptance(signed_release_case, monkeypatch: pytest.MonkeyPatch) -> None:
+    setup = signed_release_case
+    setup.args.release_handoff_ref = "handoff-ref-v1:sha256:" + "e" * 64 + ":sha256:" + "f" * 64
+    monkeypatch.setattr(integration_run, "_store", lambda: setup.store)
+    destination = setup.root / "relabelled"
+    with pytest.raises(integration_run.IntegrationRunError, match="cannot relabel old acceptance"):
+        integration_run._write_acceptance_bundle(
+            run_dir=destination, candidate_ref=setup.refs["candidate"], source_ref=setup.refs["sourceFact"],
+            alpha_ref=setup.refs["alphaFact"], beta_ref=setup.refs["betaFact"], identity={}, plan_path=setup.bundle / "impact-plan.json",
+            summary={"reused": {"alpha": True}, "dataReleases": ["release", "rollback"],
+                     "dataReleaseHandoffRef": setup.args.release_handoff_ref},
+            beta_status="not_required", beta_reason=integration_run.BETA_OPTIONAL_BY_POLICY,
+            lane_branch="refs/heads/lane/product-mainline", merged_lanes=[], args=setup.args)
+    assert not destination.exists(), "拒绝新标签时不得先落盘 bundle"
+
+
+@pytest.mark.parametrize("damage", ["release", "rollback", "handoff"])
+@pytest.mark.parametrize("opted_in", [False, True])
+def test_changed_inputs_rerun_instead_of_reusing_or_blocking(acceptance_main, damage: str, opted_in: bool) -> None:
+    setup = acceptance_main
+    if damage == "handoff":
+        index = setup.argv.index("--release-handoff-ref") + 1
+        setup.argv[index] = "handoff-ref-v1:sha256:" + "e" * 64 + ":sha256:" + "f" * 64
+    else:
+        path = setup.store / f"{damage}.json"
+        payload = json.loads(path.read_bytes())
+        payload["payloadSha256"] = "sha256:" + "e" * 64
+        path.write_text(json.dumps(payload), encoding="utf-8")
+    assert integration_run.main([*setup.argv, "--reuse", *(["--beta"] if opted_in else [])]) == 0
+    summary = json.loads((setup.store / "runs/policy-reuse/summary.json").read_bytes())
+    assert summary["reused"]["candidate"] is False and summary["reused"]["alpha"] is False
+    assert [call.kwargs["environment"] for call in setup.calls["_run_environment"].call_args_list] == (["alpha", "beta"] if opted_in else ["alpha"])
 
 
 @pytest.mark.parametrize("damage", ["none", "expired", "wrong-key", "evidence-drift"])

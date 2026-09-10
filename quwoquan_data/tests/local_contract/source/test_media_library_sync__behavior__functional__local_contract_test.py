@@ -34,6 +34,21 @@ def _write_public_slice(
 
 
 class TestSyncMediaLibrary:
+    def test_deployed_slice_does_not_depend_on_or_share_library(self, tmp_path: Path, monkeypatch) -> None:
+        # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-041
+        import core.content_library as library
+        root = tmp_path / "no-library"
+        monkeypatch.setattr(library, "LIBRARY_ROOT", root)
+        source, dest = tmp_path / "payload", tmp_path / "environment"
+        key, digest = _write_public_slice(source, "media/image/s/asset/image-a/v1/source.jpg", b"body")
+        result = sync_media_library(source, dest, object_digests={key: digest})
+        assert result["issues"] == []
+        assert result["copied"] == 1
+        assert not root.exists()
+        assert (source / key).stat().st_ino != (dest / key).stat().st_ino
+        (dest / key).write_bytes(b"damaged")
+        assert (source / key).read_bytes() == b"body"
+
     def test_copies_new_objects_and_skips_existing(self, tmp_path: Path) -> None:
         source = tmp_path / "release-payload"
         dest = tmp_path / "media-root"
@@ -145,8 +160,8 @@ class TestSyncMediaLibrary:
         assert (dest / selected_key).is_file()
         assert not (dest / unrelated_key).exists()
 
-    def test_research_cas_delivery_key_is_synced(self, tmp_path: Path) -> None:
-        """DEC-031：research release 以 CAS objectKey 为交付 key，字节须落进环境媒体根。"""
+    def test_retired_cas_delivery_key_is_rejected(self, tmp_path: Path) -> None:
+        """production 只消费公共 slice，旧 CAS 交付不可继续读取。"""
         source = tmp_path / "release-payload"
         dest = tmp_path / "media-root"
         payload = b"private-body"
@@ -162,10 +177,10 @@ class TestSyncMediaLibrary:
             object_digests={cas_key: f"sha256:{digest}"},
         )
 
-        assert report["objects"] == 1
-        assert report["copied"] == 1
-        assert report["issues"] == []
-        assert (dest / cas_key).read_bytes() == payload
+        assert report["objects"] == 0
+        assert report["copied"] == 0
+        assert any("unsafe" in issue for issue in report["issues"])
+        assert not (dest / cas_key).exists()
 
     def test_non_delivery_prefix_key_is_rejected(self, tmp_path: Path) -> None:
         """既非 public slice 也非 CAS objectKey 的 key 不得进入环境媒体根。"""
@@ -191,9 +206,9 @@ class TestSyncMediaLibrary:
         """环境上传媒体共用 CAS 前缀：prune 只回收 public slice，不得删除 CAS 对象。"""
         source = tmp_path / "release-payload"
         dest = tmp_path / "media-root"
-        payload = b"research-cover"
+        payload = b"production-cover"
         digest = hashlib.sha256(payload).hexdigest()
-        cas_key = f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}.webp"
+        cas_key = "media/image/s/release-a/post-a/v1/cover.webp"
         cas_object = source / cas_key
         cas_object.parent.mkdir(parents=True, exist_ok=True)
         cas_object.write_bytes(payload)

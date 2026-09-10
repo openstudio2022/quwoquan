@@ -1094,7 +1094,11 @@ void main() {
           'lib/service/content_service/media/media_asset/presentation/works_immersive_viewer_lifecycle.dart',
         ).readAsStringSync();
 
-    expect(source, contains('isVisible: index == _currentPage'));
+    expect(
+      source,
+      contains('isVisible: widget.isActive && index == _currentPage'),
+      reason: '离屏或非活动宿主均不得抢占视频槽位',
+    );
     expect(source, contains('final shouldPreheat ='));
     expect(source, contains('index == _currentEpisodeIndex + 1'));
     expect(source, contains('initialize: shouldInitialize'));

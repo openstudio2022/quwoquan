@@ -1,4 +1,4 @@
-"""Separate video acquisition, research use and commercial admission policy."""
+"""分别校验视频取得、安全事实与 production 发布契约。"""
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -33,8 +33,6 @@ VIDEO_ACQUISITION_PATHS_BY_FETCH_MODE = {
     "licensed_api": {"supported_api", "manual_file"},
     "platform_reference": {"manual_file"},
 }
-REFERENCE_ONLY_GATE_BLOCK = "GATE_BLOCK DATA.CONTRACT.INVALID"
-
 
 def _video_policy(registry: Mapping[str, Any]) -> Mapping[str, Any]:
     lane_policies = registry.get("lanePolicies")
@@ -72,19 +70,12 @@ def _video_sources(registry: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
     }
 
 
-def _is_reference_only_provider(source: Mapping[str, Any]) -> bool:
-    return (
-        str(source.get("defaultRole") or "").strip() == "reference_only"
-        or str(source.get("fetchMode") or "").strip() == "platform_reference"
-    )
-
-
-def video_commercial_admission(
+def video_publication_admission(
     registry: Mapping[str, Any],
     *,
     source_id: str,
 ) -> Mapping[str, Any]:
-    matrix = _video_policy(registry).get("commercialAdmissionMatrix")
+    matrix = _video_policy(registry).get("publicationAdmissionMatrix")
     for row in matrix if isinstance(matrix, list) else []:
         if (
             isinstance(row, Mapping)
@@ -92,7 +83,7 @@ def video_commercial_admission(
         ):
             return row
     raise ValueError(
-        f"video source is absent from commercial admission matrix: {source_id}"
+        f"video source is absent from publication admission matrix: {source_id}"
     )
 
 
@@ -105,7 +96,7 @@ def _video_source_and_admission(
     source = _video_sources(registry).get(source_id)
     if source is None:
         raise ValueError(f"video source is not registered: {source_id}")
-    row = video_commercial_admission(registry, source_id=source_id)
+    row = video_publication_admission(registry, source_id=source_id)
     if str(row.get("sourceKind") or "") != source_kind:
         raise ValueError(
             f"video sourceKind mismatch for {source_id}: {source_kind}"
@@ -128,7 +119,7 @@ def assert_video_acquisition_path_allowed(
     )
     paths = {
         str(value)
-        for value in source.get("researchAcquisitionPaths") or []
+        for value in source.get("acquisitionPaths") or []
     }
     if acquisition_path not in paths:
         raise ValueError(
@@ -144,31 +135,21 @@ def assert_video_distribution_use_allowed(
     source_kind: str,
     publication_admission: str,
 ) -> None:
-    """Validate distribution without treating rights facts as acquisition facts.
-
-    A protected research release is admitted from per-asset rights and safety
-    evidence.  Source-level publication defaults remain authoritative for
-    commercial and explicitly risk-accepted publication only.
-    """
+    """严格校验唯一发布值；授权状态不作为取得或入池成功证明。"""
     _source, row = _video_source_and_admission(
         registry,
         source_id=source_id,
         source_kind=source_kind,
     )
-    if publication_admission == "research_release":
-        return
     admissions = {
         str(value)
         for value in row.get("publicationAdmissions") or []
     }
-    if publication_admission not in admissions:
-        raise ValueError(
-            f"publication admission {publication_admission} is not allowed "
-            f"for video source {source_id}"
-        )
+    if publication_admission not in PUBLICATION_ADMISSIONS:
+        raise ValueError(f"invalid publication admission record: {publication_admission}")
 
 
-def verify_video_commercial_admission(
+def verify_video_publication_admission(
     registry: Mapping[str, Any],
 ) -> list[str]:
     policy = _video_policy(registry)
@@ -204,7 +185,7 @@ def verify_video_commercial_admission(
         issues.append("lanePolicies.video.invariant is incomplete or unsafe")
 
     sources = _video_sources(registry)
-    matrix = policy.get("commercialAdmissionMatrix")
+    matrix = policy.get("publicationAdmissionMatrix")
     matrix_rows = [
         row
         for row in matrix if isinstance(row, Mapping)
@@ -215,12 +196,12 @@ def verify_video_commercial_admission(
     ]
     if set(matrix_ids) != set(sources):
         issues.append(
-            "lanePolicies.video.commercialAdmissionMatrix sourceIds must "
+            "lanePolicies.video.publicationAdmissionMatrix sourceIds must "
             "exactly match registered video sources"
         )
     if len(matrix_ids) != len(set(matrix_ids)):
         issues.append(
-            "lanePolicies.video.commercialAdmissionMatrix has duplicate sourceId"
+            "lanePolicies.video.publicationAdmissionMatrix has duplicate sourceId"
         )
     for row in matrix_rows:
         source_id = str(row.get("sourceId") or "").strip()
@@ -236,35 +217,20 @@ def verify_video_commercial_admission(
                 f"video matrix {source_id}: invalid publicationAdmissions"
             )
         source = sources.get(source_id) or {}
-        reference_only = _is_reference_only_provider(source)
         acquisition_paths = {
             str(value)
-            for value in source.get("researchAcquisitionPaths") or []
+            for value in source.get("acquisitionPaths") or []
         }
         expected_acquisition_paths = VIDEO_ACQUISITION_PATHS_BY_FETCH_MODE.get(
             str(source.get("fetchMode") or "")
         )
         if acquisition_paths != expected_acquisition_paths:
             issues.append(
-                f"video source {source_id}: research acquisition paths must "
+                f"video source {source_id}: acquisition paths must "
                 f"equal {sorted(expected_acquisition_paths or set())}"
             )
-        if reference_only:
-            if admissions:
-                issues.append(
-                    f"{REFERENCE_ONLY_GATE_BLOCK}: video matrix {source_id} is "
-                    "reference_only/platform_reference but declares release "
-                    "admissions"
-                )
-        else:
-            if not admissions:
-                issues.append(
-                    f"video matrix {source_id}: invalid publicationAdmissions"
-                )
-            if "research_release" not in admissions:
-                issues.append(
-                    f"video matrix {source_id}: research_release admission is required"
-                )
+        if admissions != PUBLICATION_ADMISSIONS:
+            issues.append(f"video matrix {source_id}: publication rights record vocabulary is incomplete")
     return issues
 
 
@@ -273,6 +239,6 @@ __all__ = [
     "VIDEO_SOURCE_KINDS",
     "assert_video_acquisition_path_allowed",
     "assert_video_distribution_use_allowed",
-    "verify_video_commercial_admission",
-    "video_commercial_admission",
+    "verify_video_publication_admission",
+    "video_publication_admission",
 ]

@@ -397,6 +397,34 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+func TestAnonymousIdentityWorkFeedRejectsInvalidActiveBindingOnWire(t *testing.T) {
+	handler, _ := newTestHandlerWithActiveSupply(invalidActiveSupplyReader{})
+	request := httptest.NewRequest(http.MethodGet, "/content/feed?identity=work&sort=recommend&limit=1", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("invalid binding status=%d: %s", recorder.Code, recorder.Body.String())
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"items", "releaseId", "manifestDigest"} {
+		if _, exists := envelope[forbidden]; exists {
+			t.Fatalf("invalid binding must omit %s: %#v", forbidden, envelope)
+		}
+	}
+}
+
+type invalidActiveSupplyReader struct{}
+
+func (invalidActiveSupplyReader) ActiveSupplySnapshot(ctx context.Context) (feedapp.ActiveSupplySnapshot, error) {
+	snapshot, err := (readyFeedActiveSupplyReader{}).ActiveSupplySnapshot(ctx)
+	snapshot.ManifestDigest = "invalid"
+	return snapshot, err
+}
+
 func TestFeedAndPostEndpoints(t *testing.T) {
 	feedReq := httptest.NewRequest("GET", "/content/feed?type=photo&limit=1", nil)
 	feedRec := httptest.NewRecorder()

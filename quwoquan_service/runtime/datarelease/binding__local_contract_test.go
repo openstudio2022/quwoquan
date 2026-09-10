@@ -15,6 +15,20 @@ import (
 	"quwoquan_service/runtime/datarelease"
 )
 
+func TestLoadRejectsRetiredFieldsInClasslessRelease(t *testing.T) {
+	for _, field := range []string{"class", "privateObjectKey"} {
+		for _, file := range []string{datarelease.HeaderPath, datarelease.AttestationPath} {
+			t.Run(file+"/"+field, func(t *testing.T) {
+				root, _ := writeReleaseFixture(t)
+				mutateJSONDocument(t, filepath.Join(root, file), func(document map[string]any) { document[field] = nil })
+				if _, err := datarelease.Load(root); !datarelease.HasCode(err, datarelease.CodeInvalidField) {
+					t.Fatalf("retired field must fail typed validation: %v", err)
+				}
+			})
+		}
+	}
+}
+
 func TestLoadReturnsVerifiedImmutableReleaseTuple(t *testing.T) {
 	root, digest := writeReleaseFixture(t)
 
@@ -65,6 +79,7 @@ func TestLoadRejectsHeaderAttestationIdentityDrift(t *testing.T) {
 		{name: "release id", field: "releaseId", value: "other-release", code: datarelease.CodeIdentityDrift},
 		{name: "source owner", field: "sourceOwner", value: "other-owner", code: datarelease.CodeInvalidField},
 		{name: "release kind", field: "releaseKind", value: "empty_baseline", code: datarelease.CodeIdentityDrift},
+		{name: "retired release class", field: "releaseClass", value: "commercial", code: datarelease.CodeInvalidField},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

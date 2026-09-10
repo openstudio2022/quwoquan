@@ -10,8 +10,8 @@ defaults:
     - 通用
     carriers:
     - image
-    modalityContract: separated_research
-    research:
+    modalityContract: separated_carriers
+    sourceDiscovery:
       imageAssetStrategy: attribution_audited_publish
       allowAiImages: false
       # 图作品批次的图不是加分项而是产出本体；授权完备度由垂类 policy 决定审计或阻断。

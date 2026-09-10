@@ -1,7 +1,7 @@
 """target 级 auth 秘密材料的创建、加载与 runtime 环境投影（逐字搬移）。
 
-``deployment_target_path`` / ``deployment_target_path_in_work_root``
-是测试 patch 锚点或跨模块依赖，
+``deployment_target_path`` / ``deployment_target_path_in_work_root`` 是测试
+patch 锚点或跨模块依赖，
 一律经 ``_pkg.`` 属性访问。
 """
 
@@ -34,11 +34,7 @@ def prepare_local_environment_auth(
         deployment_work_root=deployment_work_root,
     )
     values = _load_or_create_secrets(secret_path)
-    return _local_environment_auth(
-        environment,
-        secret_path,
-        values,
-    )
+    return _local_environment_auth(environment, secret_path, values)
 
 
 def load_local_environment_auth(
@@ -66,11 +62,7 @@ def load_local_environment_auth(
             "GATE_BLOCK: local environment auth secret file is incomplete: "
             + ", ".join(missing)
         )
-    return _local_environment_auth(
-        environment,
-        secret_path,
-        values,
-    )
+    return _local_environment_auth(environment, secret_path, values)
 
 
 def _local_environment_secret_path(
@@ -98,36 +90,30 @@ def _local_environment_auth(
     key_version = f"local-{environment}-k1"
     runtime_environment = {
         "AUTH_JWT_SECRET": values["jwt_secret"],
-            "AUTH_JWT_ISSUER": f"quwoquan.{environment}.local",
-            "AUTH_JWT_AUDIENCE": "quwoquan-app",
-            "AUTH_JWT_TOKEN_VERSION": "1",
-            "AUTH_DEVICE_TICKET_SECRET": values["device_ticket_secret"],
-            "AUTH_DEVICE_TICKET_ISSUER": f"quwoquan.{environment}.local.device",
-            "AUTH_DEVICE_TICKET_AUDIENCE": "quwoquan-app-device",
-            "AUTH_DEVICE_TICKET_TOKEN_VERSION": "1",
-            "OTP_CODE_REF_ACTIVE_KEY_VERSION": key_version,
-            "OTP_CODE_REF_KEYS_JSON": json.dumps(
-                {key_version: values["otp_code_ref_key_b64"]},
-                separators=(",", ":"),
-            ),
-            "QWQ_PUSH_TOKEN_ENCRYPTION_KEY": values[
-                "push_token_encryption_key_b64"
-            ],
-            "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": values[
-                "account_closure_subject_hmac_secret"
-            ],
-            "RTC_MEDIA_API_KEY": values["rtc_media_api_key"],
-            "RTC_MEDIA_API_SECRET": values["rtc_media_api_secret"],
-            "INTEGRATION_SMS_TOKEN": values["sms_substitute_provider_token"],
-            "SMS_SUBSTITUTE_PROVIDER_TOKEN": values[
-                "sms_substitute_provider_token"
-            ],
-            "SMS_SUBSTITUTE_OPERATOR_TOKEN": values[
-                "sms_substitute_operator_token"
-            ],
-            "PROVIDER_SUBSTITUTE_OPERATOR_TOKEN": values[
-                "provider_substitute_operator_token"
-            ],
+        "AUTH_JWT_ISSUER": f"quwoquan.{environment}.local",
+        "AUTH_JWT_AUDIENCE": "quwoquan-app",
+        "AUTH_JWT_TOKEN_VERSION": "1",
+        "AUTH_DEVICE_TICKET_SECRET": values["device_ticket_secret"],
+        "AUTH_DEVICE_TICKET_ISSUER": f"quwoquan.{environment}.local.device",
+        "AUTH_DEVICE_TICKET_AUDIENCE": "quwoquan-app-device",
+        "AUTH_DEVICE_TICKET_TOKEN_VERSION": "1",
+        "OTP_CODE_REF_ACTIVE_KEY_VERSION": key_version,
+        "OTP_CODE_REF_KEYS_JSON": json.dumps(
+            {key_version: values["otp_code_ref_key_b64"]},
+            separators=(",", ":"),
+        ),
+        "QWQ_PUSH_TOKEN_ENCRYPTION_KEY": values["push_token_encryption_key_b64"],
+        "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": values[
+            "account_closure_subject_hmac_secret"
+        ],
+        "RTC_MEDIA_API_KEY": values["rtc_media_api_key"],
+        "RTC_MEDIA_API_SECRET": values["rtc_media_api_secret"],
+        "INTEGRATION_SMS_TOKEN": values["sms_substitute_provider_token"],
+        "SMS_SUBSTITUTE_PROVIDER_TOKEN": values["sms_substitute_provider_token"],
+        "SMS_SUBSTITUTE_OPERATOR_TOKEN": values["sms_substitute_operator_token"],
+        "PROVIDER_SUBSTITUTE_OPERATOR_TOKEN": values[
+            "provider_substitute_operator_token"
+        ],
         "SMS_SUBSTITUTE_CAPTURE_KEY_B64": values[
             "sms_substitute_capture_key_b64"
         ],

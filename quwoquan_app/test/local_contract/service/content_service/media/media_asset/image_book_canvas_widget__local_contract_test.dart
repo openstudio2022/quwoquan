@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-042
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-017
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-017.t4
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-019
@@ -23,8 +24,15 @@ import 'package:quwoquan_app/service/content_service/media/original_access_quota
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/spacing/immersive_media_wait_motion.dart';
+import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_candidate_failure.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_load_failure_cache.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/cdn_image_url_builder.dart';
+
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 
 Widget _host(Widget child) => ProviderScope(
+  overrides: sealedCloudBoundaryOverrides(),
   child: CupertinoApp(home: CupertinoPageScaffold(child: child)),
 );
 
@@ -210,6 +218,95 @@ class _ControlledImageLoader {
 }
 
 void main() {
+  setUp(MediaLoadFailureCache.instance.clear);
+  tearDown(MediaLoadFailureCache.instance.clear);
+
+  testWidgets('图片负缓存命中阻止默认 provider 并保留页位与 TTL', (tester) async {
+    const path = 'media/image/s/fixture/v1/negative-cache.jpg';
+    final identity = CdnImageUrlBuilder.cover(resolveContentMediaUrl(path));
+    final cache = MediaLoadFailureCache.instance;
+    cache.recordTerminalFailure(
+      identity,
+      kind: MediaCandidateFailureKind.http404,
+    );
+    final original = cache.activeFailure(identity)!;
+    final events = <ImageBookMediaLoadEvent>[];
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: ImageBookCanvas(
+            deliveries: _publicPages(const <String>['', path, '']),
+            initialIndex: 1,
+            onImageChanged: (_) {},
+            onMediaLoad: events.add,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final book = tester.widget<MediaPageFlipBook>(
+      find.byType(MediaPageFlipBook),
+    );
+    expect(book.pageCount, 3);
+    expect(book.initialPage, 1);
+    expect(
+      find.byKey(const ValueKey<String>('image-book-failure-overlay')),
+      findsOneWidget,
+    );
+    expect(
+      events.singleWhere((event) => event.result == 'failure').candidatesTried,
+      0,
+    );
+    expect(cache.activeFailure(identity), same(original));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('图片真实失败跨实例缓存，用户重试清 identity，成功清缓存', (tester) async {
+    const path = 'media/image/s/fixture/v1/negative-retry.jpg';
+    final identity = CdnImageUrlBuilder.cover(resolveContentMediaUrl(path));
+    final cache = MediaLoadFailureCache.instance;
+    final loader = _ControlledImageLoader();
+    Widget canvas(int instance) => _host(
+      SizedBox(
+        width: 320,
+        height: 480,
+        child: ImageBookCanvas(
+          key: ValueKey<int>(instance),
+          deliveries: _publicPages(const <String>[path]),
+          imageLoader: loader.call,
+          onImageChanged: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpWidget(canvas(1));
+    await tester.pump();
+    loader.latest(0).completeError(StateError('HTTP status code: 404'));
+    await tester.pump();
+    final original = cache.activeFailure(identity);
+    expect(original?.kind, MediaCandidateFailureKind.http404);
+    await tester.pumpWidget(canvas(2));
+    await tester.pump();
+    expect(loader.attempts[0], hasLength(1));
+    expect(cache.activeFailure(identity), same(original));
+    await tester.tap(find.byKey(const ValueKey<String>('image-book-retry')));
+    await tester.pump();
+    expect(cache.activeFailure(identity), isNull);
+    expect(loader.attempts[0], hasLength(2));
+    expect(loader.candidateAttempts[0]!.last, loader.candidateAttempts[0]!.first);
+    // 在途加载的成功必须清除同身份稍后到达的失败记录。
+    cache.recordTerminalFailure(
+      identity,
+      kind: MediaCandidateFailureKind.http404,
+    );
+    loader.latest(0).complete(await _solidImage(24, 36, const Color(0xFF3182CE)));
+    await tester.pump();
+    expect(cache.activeFailure(identity), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   test('ImageBookPageSurfaceFactory 将不同尺寸 ready 图片统一为双面书页材质', () async {
     const factory = ImageBookPageSurfaceFactory();
     const pageSize = Size(320, 480);

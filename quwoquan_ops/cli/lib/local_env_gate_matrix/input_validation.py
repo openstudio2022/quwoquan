@@ -111,7 +111,6 @@ def _resolve_matrix_inputs(
         system_attestation_ref=rollback_release_system_attestation_ref,
         system_attestation_digest=rollback_release_system_attestation_digest,
     )
-
     request_by_target = dict(test_data_request or {})
     evidence_by_target = dict(test_data_evidence or {})
     handoff_by_target = dict(test_data_handoff or {})

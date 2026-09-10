@@ -154,8 +154,7 @@ def _write_candidate_release_fixture(
         "containsUnverifiedAssets": True,
         "rightsStatusCounts": {"verified": 0, "unverified": 1, "restricted": 0, "unknown": 0},
         "authorizationRequiredAssetIds": ["media-1"],
-        "researchAcceptedCount": 1,
-        "commercialAcceptedCount": 0,
+        "acceptedCount": 1,
         "executionIds": ["execution-1"],
         "sourceDigests": [{"algorithm": "sha256", "digest": "sha256:" + "9" * 64, "inputs": ["quwoquan_data"]}],
         "counts": {"homepage": 1, "article": 1, "image": 1, "video": 1, "total": 4},
@@ -177,7 +176,7 @@ def _write_candidate_release_fixture(
         "payloadSha256": manifest_digest,
         **{key: header[key] for key in (
             "containsUnverifiedAssets", "rightsStatusCounts", "authorizationRequiredAssetIds",
-            "researchAcceptedCount", "commercialAcceptedCount", "executionIds", "sourceDigests",
+            "acceptedCount", "executionIds", "sourceDigests",
             "sourceIdentities", "sourceIdentitySetDigest", "canonicalMerkle",
         )},
         "carrierCounts": {"homepage": 1, "article": 1, "image": 1, "video": 1, "total": 4},

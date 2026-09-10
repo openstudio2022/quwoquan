@@ -1,6 +1,6 @@
 {
   "candidateDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-  "schemaDigest": "sha256:d3cd68a273c1b06e834df380bbca5384d3701df5c58d43dcbbfd5ef017fc9efe",
+  "schemaDigest": "sha256:0574fa46f1ffac1e6a1daa69fc1f083901dfc26881fe3cfb9a5044fcc8a759b9",
   "entries": [
     {
       "sha256Hash": "111b715594655786eba342c5cbebe7ea1338a9cf016ed0f35f54096802583478",
@@ -139,75 +139,7 @@
       }
     },
     {
-      "sha256Hash": "2251d9dca6cc14a77ff40eb630223df0b432095a98c7bd3f9f72d2e8d0752c18",
-      "operationName": "ContentPostDetailMedia",
-      "operationType": "query",
-      "canonicalOperationId": "content.post.GetPostMedia",
-      "objectIds": [
-        "content.post"
-      ],
-      "authorization": {
-        "principal": "public",
-        "scopes": [],
-        "ownershipPolicy": "visibility_filtered"
-      },
-      "costModelVersion": "graphql-cost-v1",
-      "costPlanDigest": "sha256:8e3d4c3e89cf3628dcc2456e238b32235a7919f371d75e016aeaeb73f420eb79",
-      "cost": {
-        "depth": 3,
-        "topLevelFields": 1,
-        "complexity": 316,
-        "variablesMaxBytes": 1024,
-        "pageSizeMax": 20,
-        "maxOwnerCalls": 1,
-        "maxBatchKeys": 1,
-        "maxResponseBytes": 262144,
-        "sloRef": "slo:gateway.graphql_read.detail"
-      },
-      "costPlan": {
-        "baseComplexity": 316,
-        "listMultipliers": [
-          {
-            "variablePath": "mediaFirst",
-            "coefficient": 15,
-            "defaultValue": 20,
-            "maximumValue": 20
-          }
-        ],
-        "maxOwnerCalls": 1,
-        "maxBatchKeys": 1,
-        "maxResponseBytes": 262144
-      },
-      "paginationVariables": [
-        "mediaFirst"
-      ],
-      "executorKey": "content.post.getPost",
-      "appClientBundle": {
-        "bundleId": "content.post.ContentPostDetail",
-        "role": "extension",
-        "requiredForContentTypes": [
-          "image",
-          "video"
-        ],
-        "selectedFields": [
-          "contentType",
-          "coverFrameTimeMs",
-          "coverStrategy",
-          "durationMs",
-          "height",
-          "mediaAssetIds",
-          "mediaItems",
-          "mediaUrls",
-          "postId",
-          "thumbnailUrl",
-          "videoUrl",
-          "width"
-        ],
-        "assemblyMappings": []
-      }
-    },
-    {
-      "sha256Hash": "3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f",
+      "sha256Hash": "7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7",
       "operationName": "ContentPostDetailBase",
       "operationType": "query",
       "canonicalOperationId": "content.post.GetPost",
@@ -220,26 +152,35 @@
         "ownershipPolicy": "visibility_filtered"
       },
       "costModelVersion": "graphql-cost-v1",
-      "costPlanDigest": "sha256:65c81b877d39b7217bae75dc0bd8c4c5e3ded413e32137fbc13dfd9e3cb1095d",
+      "costPlanDigest": "sha256:b1bcc98de39ad03082c0b0725555ffe214884941b1fb643d021b16f13a4fa612",
       "cost": {
         "depth": 3,
         "topLevelFields": 1,
-        "complexity": 60,
+        "complexity": 67,
         "variablesMaxBytes": 1024,
-        "pageSizeMax": 1,
+        "pageSizeMax": 4,
         "maxOwnerCalls": 1,
         "maxBatchKeys": 1,
         "maxResponseBytes": 65536,
         "sloRef": "slo:gateway.graphql_read.detail"
       },
       "costPlan": {
-        "baseComplexity": 60,
-        "listMultipliers": [],
+        "baseComplexity": 67,
+        "listMultipliers": [
+          {
+            "variablePath": "modificationsFirst",
+            "coefficient": 1,
+            "defaultValue": 4,
+            "maximumValue": 4
+          }
+        ],
         "maxOwnerCalls": 1,
         "maxBatchKeys": 1,
         "maxResponseBytes": 65536
       },
-      "paginationVariables": [],
+      "paginationVariables": [
+        "modificationsFirst"
+      ],
       "executorKey": "content.post.getPost",
       "appClientBundle": {
         "bundleId": "content.post.ContentPostDetail",
@@ -284,6 +225,74 @@
           "viewerLiked",
           "visibility",
           "visitedAt"
+        ],
+        "assemblyMappings": []
+      }
+    },
+    {
+      "sha256Hash": "9d8916aa9564bd99f990ab00b32d79d70dc860d05108a5e6f30f07df43b2a25f",
+      "operationName": "ContentPostDetailMedia",
+      "operationType": "query",
+      "canonicalOperationId": "content.post.GetPostMedia",
+      "objectIds": [
+        "content.post"
+      ],
+      "authorization": {
+        "principal": "public",
+        "scopes": [],
+        "ownershipPolicy": "visibility_filtered"
+      },
+      "costModelVersion": "graphql-cost-v1",
+      "costPlanDigest": "sha256:a796ad224df5e6c7600b038ec6114f102f147ef249465d9707b6dbba128a2452",
+      "cost": {
+        "depth": 3,
+        "topLevelFields": 1,
+        "complexity": 376,
+        "variablesMaxBytes": 1024,
+        "pageSizeMax": 20,
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144,
+        "sloRef": "slo:gateway.graphql_read.detail"
+      },
+      "costPlan": {
+        "baseComplexity": 376,
+        "listMultipliers": [
+          {
+            "variablePath": "mediaFirst",
+            "coefficient": 18,
+            "defaultValue": 20,
+            "maximumValue": 20
+          }
+        ],
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144
+      },
+      "paginationVariables": [
+        "mediaFirst"
+      ],
+      "executorKey": "content.post.getPost",
+      "appClientBundle": {
+        "bundleId": "content.post.ContentPostDetail",
+        "role": "extension",
+        "requiredForContentTypes": [
+          "image",
+          "video"
+        ],
+        "selectedFields": [
+          "contentType",
+          "coverFrameTimeMs",
+          "coverStrategy",
+          "durationMs",
+          "height",
+          "mediaAssetIds",
+          "mediaItems",
+          "mediaUrls",
+          "postId",
+          "thumbnailUrl",
+          "videoUrl",
+          "width"
         ],
         "assemblyMappings": []
       }

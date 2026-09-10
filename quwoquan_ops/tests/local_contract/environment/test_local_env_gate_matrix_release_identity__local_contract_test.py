@@ -365,7 +365,6 @@ def test_release_binding_preserves_rights_without_category_projection(
         "attestation": str(attestation),
     }
 
-
 @pytest.mark.parametrize("value", [None, "false", 0, 1])
 def test_release_binding_rejects_invalid_rights_identity(tmp_path: Path, value: object) -> None:
     attestation = tmp_path / "invalid-rights.json"
@@ -640,7 +639,6 @@ def test_cleanup_failure_does_not_replace_first_data_blocker(tmp_path, monkeypat
     assert receipt["failureCategory"] == "data_candidate_verify"
     assert calls[-1]["action"] == "candidate-verify"
     assert receipt["nonPromotable"] is True
-
 
 def test_promotion_device_profile_requires_android_and_ios_physical_bindings(monkeypatch) -> None:
     calls = []

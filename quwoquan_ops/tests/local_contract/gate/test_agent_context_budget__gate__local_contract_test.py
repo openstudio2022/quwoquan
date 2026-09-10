@@ -235,6 +235,20 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         self.assertTrue(any("BOUNDARY:release" in issue for issue in issues), issues)
         self.assertTrue(any("完整固定列头" in issue for issue in issues), issues)
 
+    def test_data_and_portal_real_agents_chains_stay_within_16_kib(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t1
+        self.assertEqual(16384, self.module.AGENTS_CHAIN_BYTE_BUDGET)
+        for leaf in ("quwoquan_data", "quwoquan_ops/portal"):
+            directory = _REPO_ROOT / leaf
+            chain = [directory, *directory.parents]
+            agents = [
+                path / "AGENTS.md" for path in chain
+                if path.is_relative_to(_REPO_ROOT) and (path / "AGENTS.md").is_file()
+            ]
+            with self.subTest(leaf=leaf):
+                size = sum(len(path.read_bytes()) for path in agents)
+                self.assertLessEqual(size, 16384, f"{leaf}: {size} bytes")
+
     def test_detects_agents_chain_over_16_kib(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t1
         self._use_fixture_root()
@@ -378,10 +392,11 @@ class AgentContextBudgetGateTest(unittest.TestCase):
             encoding="utf-8"
         )
         for required in (
-            "直接完成 init、acquire、author、publish、release 与全部机械命令，不把任何步骤委托给通用子 Agent",
-            "全局同一时刻至多一个 reviewer 调用，始终前台",
-            "一次调用负责该 execution 全部对象",
-            "不派发子 Agent、不改产物、不 seal、不 publish",
+            "主会话",
+            "同时最多两个不重叠 author",
+            "review 串行",
+            "不嵌套派发",
+            "不包装 seal/publish",
             "`starting up` 不是进度也不是失败",
             "不得据此补发相同或替代调用",
             "找首个未闭合步骤继续",

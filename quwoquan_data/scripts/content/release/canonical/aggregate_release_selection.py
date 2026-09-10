@@ -101,7 +101,8 @@ def _delivery_issue(
     post_ref: str,
     candidate: PoolCandidate,
 ) -> str | None:
-    root = publish_root / "posts" / post_ref
+    from content.release.canonical.aggregate_release_closure import object_root
+    root = object_root(publish_root, "posts", post_ref)
     manifest = _read_json(root / "manifest.json")
     try:
         admission = resolve_effective_admission(
@@ -116,12 +117,7 @@ def _delivery_issue(
         return "DATA.POOL.OBJECT_NOT_ADMITTED"
     if not effective_source_attribution_ready(admission):
         return "DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE"
-    creator_refs_path = root / "creator.refs.json"
-    raw_creator_refs = (
-        _read_json(creator_refs_path).get("creatorRefs")
-        if creator_refs_path.is_file()
-        else [candidate.author_id]
-    )
+    raw_creator_refs = [manifest.get("creatorProfileId")]
     if not isinstance(raw_creator_refs, list) or not raw_creator_refs:
         return "DATA.POOL.AUTHOR_NOT_ADMITTED"
     for raw_ref in raw_creator_refs:
@@ -145,7 +141,7 @@ def _delivery_issue(
         value = str(raw_ref or "").strip()
         if not value.startswith("/entity/"):
             return "DATA.POOL.REFERENCE_MISSING"
-        entity_root = publish_root / "entities" / value.removeprefix("/entity/")
+        entity_root = object_root(publish_root, "entities", value.removeprefix("/entity/"))
         try:
             entity_manifest = _read_json(entity_root / "manifest.json")
             entity_admission = resolve_effective_admission(

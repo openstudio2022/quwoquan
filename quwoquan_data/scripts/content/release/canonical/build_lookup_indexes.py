@@ -173,10 +173,9 @@ def _scan_entities(
             if manifest_path.is_file()
             else {}
         )
-        tag_refs = document.get("tagRefs") or _string_refs(
-            directory / "tag.refs.json",
-            "tagRefs",
-        )
+        tag_refs = manifest.get("tagRefs")
+        if not isinstance(tag_refs, list):
+            raise ValueError(f"entity manifest tagRefs missing: {ref}")
         geo_refs = document.get("geoTagRefs") or []
         primary_geo_ref = str(document.get("geoTagRef") or "")
         if primary_geo_ref and primary_geo_ref not in geo_refs:
@@ -219,14 +218,9 @@ def _scan_posts(
         if not path.is_file():
             raise FileNotFoundError(f"release post snapshot missing: {path}")
         document = _read_json(path)
-        tag_refs = document.get("tagRefs") or _string_refs(
-            _object_file(
-                directory,
-                document.get("tagRefsRef") or "tag.refs.json",
-                label=f"post snapshot {ref}.tagRefsRef",
-            ),
-            "tagRefs",
-        )
+        tag_refs = document.get("tagRefs")
+        if not isinstance(tag_refs, list):
+            raise ValueError(f"post manifest tagRefs missing: {ref}")
         entity_refs = document.get("entityRefs") or _string_refs(
             _object_file(
                 directory,

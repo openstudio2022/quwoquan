@@ -1,38 +1,22 @@
-"""Strict SourceAttribution completeness checks for pool admission."""
+"""按唯一 SourceAttribution schema 严格校验入池来源归属。"""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
 
-_REQUIRED_FIELDS = (
-    "originalCreatorName",
-    "platform",
-    "sourcePostUrl",
-    "originalAssetUrl",
-    "attributionText",
-    "rightsBasis",
-    "commercialAuthorizationStatus",
-    "publicationAdmission",
-    "watermarkStatus",
-    "audioRightsStatus",
-    "modelReleaseStatus",
-    "propertyReleaseStatus",
-    "collectedAt",
-    "takedownPolicy",
-)
+from core.source_attribution import canonical_source_attribution
 
 
 def source_attribution_complete(document: Mapping[str, Any]) -> bool:
     attribution = document.get("sourceAttribution")
-    return bool(
-        isinstance(attribution, Mapping)
-        and isinstance(attribution.get("isOriginal"), bool)
-        and all(
-            str(attribution.get(field) or "").strip()
-            for field in _REQUIRED_FIELDS
-        )
-    )
+    if not isinstance(attribution, Mapping):
+        return False
+    try:
+        canonical_source_attribution(attribution)
+    except ValueError:
+        return False
+    return True
 
 
 __all__ = ["source_attribution_complete"]

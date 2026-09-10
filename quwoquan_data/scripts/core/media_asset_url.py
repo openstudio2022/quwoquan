@@ -12,7 +12,6 @@ from typing import Any
 import yaml
 
 from core.asset_identity import parse_post_asset_id
-from core.content_library import MediaHoldingError, reference_existing_file, resolve_media_holding
 from core.paths import PUBLISH_ROOT, RELEASE_ROOT, REPO_ROOT
 from core.release_layout import payload_file
 from core.schema import assert_valid
@@ -223,17 +222,10 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _asset_rows(root: Path) -> Iterable[dict[str, Any]]:
-    paths = [
-        path
-        for path in (root / "asset.refs.json", root / "assets.refs.json")
-        if path.is_file()
-    ]
-    if not paths:
-        return
-    if len(paths) != 1:
-        raise ValueError(f"object must own exactly one asset refs document: {root}")
-    path = paths[0]
+def _asset_rows(root: Path, *, object_kind: str) -> Iterable[dict[str, Any]]:
+    path = root / ("profile.json" if object_kind == "creators" else "manifest.json")
+    if not path.is_file():
+        raise ValueError(f"object asset manifest missing: {path}")
     for row in _read_json(path).get("assets") or []:
         if isinstance(row, dict):
             yield row
@@ -245,9 +237,6 @@ def _manifest_asset_rows(root: Path) -> dict[str, dict[str, Any]]:
         return {}
     manifest = _read_json(path)
     candidates: list[object] = list(manifest.get("assets") or [])
-    article_manifest = manifest.get("articleAssetManifest")
-    if isinstance(article_manifest, Mapping):
-        candidates.extend(article_manifest.get("assets") or [])
     result: dict[str, dict[str, Any]] = {}
     for row in candidates:
         if not isinstance(row, dict):
@@ -289,42 +278,35 @@ def _rights_snapshot_refs(
 ) -> tuple[list[str], list[str]]:
     refs: list[str] = []
     issues: list[str] = []
-    snapshots = object_root / "rights_snapshots"
-    if not snapshots.is_dir():
-        return refs, [
-            f"rights snapshots missing: {object_kind}/{object_ref}:{asset_id}"
-        ]
-    for path in sorted(snapshots.glob("*.json")):
-        document = _read_json(path)
-        if str(document.get("assetId") or "").strip() != asset_id:
-            continue
-        manifest_asset = document.get("manifestAsset")
-        if not isinstance(manifest_asset, Mapping):
-            issues.append(f"rights snapshot lacks manifestAsset: {object_kind}/{object_ref}:{path.name}")
-            continue
-        source_asset = document.get("sourceAsset")
-        snapshot_sha256 = str(manifest_asset.get("sha256") or "").strip()
-        if not snapshot_sha256 and isinstance(source_asset, Mapping):
-            snapshot_sha256 = str(source_asset.get("sha256") or "").strip()
-        if (
-            str(manifest_asset.get("assetId") or "").strip() != asset_id
-            or snapshot_sha256 != sha256
-        ):
-            issues.append(f"rights snapshot identity mismatch: {object_kind}/{object_ref}:{path.name}")
-            continue
-        refs.append(
-            f"objects/{object_kind}/{object_ref.removeprefix(f'{object_kind}/')}/"
-            f"rights_snapshots/{path.name}"
-        )
+    filename = "profile.json" if object_kind == "creators" else "manifest.json"
+    owner = f"{object_kind}/{object_ref.removeprefix(f'{object_kind}/')}"
+    document = _read_json(object_root / filename)
+    assets = [row for row in document.get("assets") or [] if row.get("assetId") == asset_id]
+    if len(assets) != 1 or assets[0].get("sha256") != sha256:
+        return [], [f"source asset binding missing: {owner}:{asset_id}"]
+    for source_ref in assets[0].get("sourceRefs") or []:
+        try:
+            source = _carried_path(object_root, str(source_ref))
+            source_document = _read_json(source)
+            assert_valid(source_document, "publish", "source")
+            if not str(source_ref).startswith("sources/") or not str(source_ref).endswith("/source.json"):
+                raise ValueError("source ref is not object-local")
+            for evidence in source_document["evidence"]:
+                body = _carried_path(source.parent, evidence["path"])
+                if body.stat().st_size != evidence["bytes"] or sha256_file(body) != evidence["sha256"]:
+                    raise ValueError("source evidence bytes drift")
+            refs.append(f"objects/{owner}/{source_ref}")
+        except (OSError, ValueError) as exc:
+            issues.append(f"source binding invalid: {owner}:{asset_id}: {exc}")
     if not refs:
-        issues.append(
-            f"rights snapshot binding missing: {object_kind}/{object_ref}:{asset_id}"
-        )
-    return refs, issues
+        issues.append(f"source binding missing: {owner}:{asset_id}")
+    return sorted(set(refs)), issues
 
 
 def _object_root(canonical: Path, kind: str, ref: str) -> Path:
-    return canonical / kind / ref.removeprefix(f"{kind}/")
+    from content.release.canonical.aggregate_release_closure import object_root
+
+    return object_root(canonical, kind, ref.removeprefix(f"{kind}/"))
 
 
 def build_release_media_manifest(
@@ -339,12 +321,9 @@ def build_release_media_manifest(
 ) -> dict[str, Any]:
     """Build the MediaAsset closure for one immutable release.
 
-    A release is an object closure, not a snapshot of the whole canonical media
-    library. Canonical objects name their bodies by digest and the content
-    library owns those bodies, so packaging resolves them there. Every asset
-    is delivered through an anonymous
-    ``publicSliceKey`` (DEC-041); public visibility of rights-flagged content is
-    an operations runtime decision downstream, not a delivery-form fork here.
+    只从所选对象的 manifest/source 与随体字节生成媒体交付闭包，不扫描全库。
+    publicSliceKey 由现有资产身份协议派生，不选择发布类别；真实来源限制和
+    授权记录原样保留，不把取得媒体转换为伪造授权。
     """
     canonical = publish_root or PUBLISH_ROOT
     objects = object_root or canonical
@@ -362,33 +341,28 @@ def build_release_media_manifest(
                 issues.append(f"object missing: {kind}/{ref}")
                 continue
             manifest_assets = _manifest_asset_rows(selected_object)
-            for row in _asset_rows(selected_object):
+            for row in _asset_rows(selected_object, object_kind=kind):
                 asset_id = str(row.get("assetId") or "").strip()
-                object_key = str(row.get("objectKey") or "")
+                object_key = str(row.get("path") or "")
                 expected = str(row.get("sha256") or "")
                 if not asset_id:
                     issues.append(f"assetId missing: {kind}/{ref}")
-                    continue
-                if not is_cas_media_object_key(object_key):
-                    issues.append(f"non-CAS objectKey: {kind}/{ref}:{object_key}")
                     continue
                 sha_match = _SHA256_RE.fullmatch(expected)
                 if sha_match is None:
                     issues.append(f"sha256 invalid: {kind}/{ref}:{asset_id}")
                     continue
                 try:
-                    physical = resolve_media_holding(expected)
-                except (MediaHoldingError, ValueError):
-                    issues.append(f"CAS object missing: {object_key}")
+                    physical = _carried_path(selected_object, object_key)
+                except (OSError, ValueError):
+                    issues.append(f"carried object missing: {kind}/{ref}:{object_key}")
                     continue
                 actual = sha256_file(physical)
-                if expected and actual != expected:
-                    issues.append(
-                        f"CAS hash mismatch: {object_key} expected={expected} actual={actual}"
-                    )
+                if actual != expected or physical.stat().st_size != row.get("bytes"):
+                    issues.append(f"carried media drift: {kind}/{ref}:{object_key}")
                     continue
                 metadata = manifest_assets.get(asset_id, row)
-                metadata_key = str(metadata.get("objectKey") or "").strip()
+                metadata_key = str(metadata.get("path") or "").strip()
                 metadata_sha = str(metadata.get("sha256") or "").strip()
                 if metadata_key and metadata_key != object_key:
                     issues.append(f"asset objectKey drift: {kind}/{ref}:{asset_id}")
@@ -403,10 +377,14 @@ def build_release_media_manifest(
                 )
                 content_type = _asset_content_type(object_key, metadata)
                 delivery_field = "publicSliceKey"
+                version = row.get("version", 1)
+                if type(version) is not int or version < 1:
+                    issues.append(f"asset version invalid: {kind}/{ref}:{asset_id}")
+                    continue
                 delivery_key = build_public_media_slice_key(
                     asset_id=asset_id,
                     kind=asset_kind,
-                    version=1,
+                    version=version,
                     content_type=content_type,
                 )
                 if not delivery_key:
@@ -414,19 +392,21 @@ def build_release_media_manifest(
                         f"public slice unresolved: {kind}/{ref}:{asset_id}"
                     )
                     continue
-                owner_ref = f"{kind}/{ref.removeprefix(f'{kind}/')}"
+                owner_ref = selected_object.relative_to(objects).as_posix()
                 rights_refs, rights_issues = _rights_snapshot_refs(
                     object_kind=kind,
-                    object_ref=ref,
+                    object_ref=owner_ref.removeprefix(f"{kind}/"),
                     object_root=selected_object,
                     asset_id=asset_id,
                     sha256=actual,
                 )
                 issues.extend(rights_issues)
+                if rights_issues:
+                    continue
                 normalized = {
                     "assetId": asset_id,
                     "kind": asset_kind,
-                    "version": 1,
+                    "version": version,
                     "contentType": content_type,
                     delivery_field: delivery_key,
                     "sha256": actual,
@@ -498,12 +478,42 @@ def release_media_delivery_key(row: Mapping[str, Any]) -> str:
     return public_slice_key
 
 
+def _carried_path(root: Path, relative: str) -> Path:
+    if (not relative or relative.startswith("/") or "\\" in relative
+            or any(part in {"", ".", ".."} for part in relative.split("/"))):
+        raise ValueError(f"invalid carried media ref: {relative}")
+    candidate = root / relative
+    if any(path.is_symlink() for path in (candidate, *candidate.parents)):
+        raise ValueError(f"carried media symlink: {relative}")
+    if not candidate.is_file():
+        raise ValueError(f"carried media missing: {relative}")
+    return candidate
+
+
+def _release_carried_source(release_root: Path, asset: Mapping[str, Any]) -> Path:
+    objects = payload_file(release_root, "objects")
+    for owner in asset.get("ownerRefs") or []:
+        if not isinstance(owner, str):
+            raise ValueError("invalid release media owner")
+        filename = "profile.json" if owner.startswith("creators/") else "manifest.json"
+        manifest_path = _carried_path(objects, owner + "/" + filename)
+        document = _read_json(manifest_path)
+        matches = [row for row in document.get("assets") or [] if row.get("assetId") == asset.get("assetId")]
+        if len(matches) != 1:
+            raise ValueError(f"carried media owner binding missing: {owner}")
+        row = matches[0]
+        if row.get("sha256") != asset.get("sha256"):
+            raise ValueError(f"carried media owner digest drift: {owner}")
+        return _carried_path(manifest_path.parent, str(row.get("path") or ""))
+    raise ValueError("release media has no carried owner")
+
+
 def copy_release_media_objects(
     *,
     manifest: Mapping[str, Any],
     release_root: Path,
 ) -> None:
-    """Materialize library-held bodies at their delivery paths in the release."""
+    """从 release 选中对象的实际随体文件物化交付字节，不依赖作者的媒体库。"""
     assets = manifest.get("assets")
     if not isinstance(assets, list):
         raise TypeError("release media manifest assets must be an array")
@@ -512,24 +522,20 @@ def copy_release_media_objects(
             raise TypeError(f"release media manifest assets[{index}] must be an object")
         delivery_key = release_media_delivery_key(row)
         expected = str(row.get("sha256") or "")
-        try:
-            source = resolve_media_holding(expected)
-        except (MediaHoldingError, ValueError) as exc:
-            raise ValueError(
-                f"release media source is missing or corrupt: {expected}"
-            ) from exc
-        if sha256_file(source) != expected:
+        source = _release_carried_source(release_root, row)
+        if sha256_file(source) != expected or source.stat().st_size != row.get("bytes"):
             raise ValueError(f"release media source is missing or corrupt: {expected}")
         target = payload_file(release_root, delivery_key)
+        if any(path.is_symlink() for path in (target, *target.parents)):
+            raise ValueError(f"release media symlink: {delivery_key}")
         if target.is_file():
-            if sha256_file(target) != expected:
+            if sha256_file(target) != expected or target.stat().st_size != row.get("bytes"):
                 raise FileExistsError(f"immutable release media conflict: {target}")
             continue
-        # release payload 只是 library 字节的 distribution materialization：同卷时硬链接，
-        # 不再让 23 个 release 各持一份拷贝；EXDEV 才退回拷贝，字节与摘要仍逐位一致。
+        # release 是可搬运的独立分发包，不以可写硬链接和原对象共享唯一 inode。
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(target.name + ".copy-tmp")
-        reference_existing_file(source, temporary)
+        shutil.copyfile(source, temporary)
         if sha256_file(temporary) != expected:
             temporary.unlink(missing_ok=True)
             raise ValueError(
@@ -556,6 +562,7 @@ def materialize_release_media(
         entity_refs=entity_refs,
         creator_refs=creator_refs,
         publish_root=publish_root,
+        object_root=payload_file(release, "objects"),
         source_owner=source_owner,
     )
     if manifest["issues"]:

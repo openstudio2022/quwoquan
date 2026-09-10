@@ -28,16 +28,19 @@ def write_release_readiness(output_root: Path, *, environment: str = "gamma", re
         path.write_text(json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
         return path
 
-    source = source_identity or {"sourceRevision": "sha256:" + "a" * 64, "sourceDigest": "sha256:" + "b" * 64, "entityCatalogDigest": "sha256:" + "c" * 64}
+    source = source_identity
+    if source is None:
+        identities = [{"sourceRevision": "sha256:" + "a" * 64, "sourceDigest": "sha256:" + "b" * 64, "entityCatalogDigest": "sha256:" + "c" * 64, "executionIds": ["execution-001"]}]
+        source = {"sourceIdentities": identities, "sourceIdentitySetDigest": checksum({"schema": "quwoquan_data.source_identity_set", "sourceIdentities": identities})}
     identity = {"environment": environment, "releaseId": release_id, "manifestDigest": manifest_digest}
-    rights = {"containsUnverifiedAssets": unverified, "authorizationRequiredAssetIds": ["image-asset"] if unverified else [], "rightsStatusCounts": {"verified": 2 if unverified else 3, "unverified": int(unverified), "restricted": 0, "unknown": 0}, "researchAcceptedCount": 3, "commercialAcceptedCount": 2 if unverified else 3}
+    rights = {"containsUnverifiedAssets": unverified, "authorizationRequiredAssetIds": ["image-asset"] if unverified else [], "rightsStatusCounts": {"verified": 2 if unverified else 3, "unverified": int(unverified), "restricted": 0, "unknown": 0}, "acceptedCount": 3}
     prefix = f"env/{environment}/runs/data-release/{release_id}"
     payload = f"data/releases/{release_id}/payload"
     posts = ["post-article", "post-image", "post-video"]
     media = {"schema": "quwoquan_data.release_media_manifest", "releaseId": release_id, "sourceOwner": "qwq_data", "assets": [{"assetId": item} for item in ("article-cover", "image-asset", "video-asset")]}
     media_path = write(f"{payload}/media_manifest.json", media)
     import_ref = f"{prefix}/{prepared_run_id}/import.json"
-    import_path = write(import_ref, {"schema": "quwoquan.content_import_report", **identity, "status": "imported", "counts": {"postsLoaded": 3, "postsUpserted": 3, "outboxEventsReady": 3, "outboxEventsAppended": 3}, "postBindings": [{"contentId": f"content-{carrier}", "postRef": f"{carrier}/item", "contentType": carrier, "postId": f"post-{carrier}", "authorId": "author-1"} for carrier in ("article", "image", "video")]})
+    import_path = write(import_ref, {"schema": "quwoquan.content_import_report", **identity, "status": "staged", "activationMode": "stage-only", "counts": {"postsLoaded": 3, "postsUpserted": 3, "outboxEventsReady": 3, "outboxEventsAppended": 3}, "postBindings": [{"contentId": f"content-{carrier}", "postRef": f"{carrier}/item", "contentType": carrier, "postId": f"post-{carrier}", "authorId": "author-1"} for carrier in ("article", "image", "video")]})
     write(f"{prefix}/{prepared_run_id}/result.json", {"schema": "quwoquan_data.environment_release_result", **identity, "runId": prepared_run_id, "status": "prepared", "contentImportReportRef": import_ref})
     write(f"{prefix}/{import_run_id}/result.json", {"schema": "quwoquan_data.environment_release_result", **identity, "runId": import_run_id, "status": "completed", "importRunId": prepared_run_id})
     queries = [("discovery_work", "identity=work&limit=20", posts), ("typed_article", "identity=work&type=article&limit=20", [posts[0]]), ("typed_image", "identity=work&type=image&limit=20", [posts[1]]), ("typed_video", "identity=work&type=video&limit=20", [posts[2]]), ("homepage_recommend", "sort=recommend&channelId=recommend&limit=20", [posts[2]]), ("premium_stream", "sort=recommend&channelId=premium_stream&limit=20", [posts[2]])]

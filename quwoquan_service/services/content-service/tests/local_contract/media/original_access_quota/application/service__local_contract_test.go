@@ -93,6 +93,79 @@ func TestReserveOriginalImageAccessGrantRejectsAnExhaustedWindow(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+func TestSharedOriginalAccessKeepsVisibilityPolicyAndSignedGrant(t *testing.T) {
+	for _, test := range []struct {
+		name, kind, status, policy, purpose string
+		visible, owner                      bool
+		wantReason                          string
+	}{
+		{"view", "image", "ready", "referenced_post", "view", true, false, "authorized"},
+		{"save", "image", "ready", "referenced_post", "save", true, false, "authorized"},
+		{"owner image", "image", "ready", "owner_only", "save", true, true, "authorized"},
+		{"not visible", "image", "ready", "referenced_post", "view", false, false, "post_visibility"},
+		{"foreign owner", "image", "ready", "owner_only", "view", true, false, "asset_policy"},
+		{"not ready", "image", "pending", "referenced_post", "view", true, false, "asset_not_ready"},
+		{"avatar is not original image", "avatar", "ready", "referenced_post", "view", true, false, "asset_not_ready"},
+		{"video is not original image", "video", "ready", "referenced_post", "view", true, false, "asset_not_ready"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			now := time.Date(2026, 9, 9, 0, 0, 0, 0, time.UTC)
+			asset := mediaassetports.OriginalAccessSlice{AssetID: "private-image", OwnerID: "owner", ObjectKey: "private/image", MediaType: test.kind, MimeType: "image/webp", FileSize: 1024, ProcessingStatus: test.status, AccessPolicy: test.policy}
+			viewer := "viewer"
+			if test.owner {
+				viewer = "owner"
+			}
+			quotas, audits := newMemoryQuotaStore(), &recordingPolicyAuditAppender{}
+			visibility, signer := &recordingPolicyVisibility{visible: test.visible}, &recordingPolicySigner{}
+			service := quotaapp.NewService(quotas, audits, policyAssetReader{asset}, visibility, signer, quotaapp.WithClock(func() time.Time { return now }))
+			result, err := service.Reserve(commandmeta.WithIdempotencyKey(context.Background(), "reserve-key"), quotaapp.Command{AssetID: asset.AssetID, ViewerID: viewer, Purpose: test.purpose})
+			if len(audits.decisions) != 1 || audits.decisions[0].Reason != test.wantReason {
+				t.Fatalf("audit=%+v err=%v", audits.decisions, err)
+			}
+			if test.wantReason == "authorized" {
+				if err != nil || result.Status != "granted" || result.OriginalURL == "" || result.AuditID == "" || !result.ExpiresAt.After(now) || signer.calls != 1 || quotas.consumed(asset.AssetID) != 1 || visibility.calls != 1 {
+					t.Fatalf("grant lost visibility/quota/audit/TTL: %+v err=%v", result, err)
+				}
+			} else if err == nil || signer.calls != 0 || quotas.consumed(asset.AssetID) != 0 {
+				t.Fatalf("denied asset reached signer/quota: %v", err)
+			}
+		})
+	}
+}
+
+type policyAssetReader struct {
+	asset mediaassetports.OriginalAccessSlice
+}
+
+func (r policyAssetReader) FindOriginalAccessAsset(context.Context, string) (mediaassetports.OriginalAccessSlice, bool, error) {
+	return r.asset, true, nil
+}
+
+type recordingPolicyVisibility struct {
+	visible bool
+	calls   int
+}
+
+func (r *recordingPolicyVisibility) CanViewerAccessPublishedMedia(context.Context, string, string) (bool, error) {
+	r.calls++
+	return r.visible, nil
+}
+
+type recordingPolicySigner struct{ calls int }
+
+func (s *recordingPolicySigner) DeliveryURLUntil(_ context.Context, objectKey string, expiresAt time.Time) (string, error) {
+	s.calls++
+	return "https://media.example/" + objectKey + "?t=" + fmt.Sprint(expiresAt.Unix()), nil
+}
+
+type recordingPolicyAuditAppender struct{ decisions []quotaports.AuditDecision }
+
+func (a *recordingPolicyAuditAppender) AppendOriginalAccessAudit(_ context.Context, d quotaports.AuditDecision) (quotaports.AuditRecord, error) {
+	a.decisions = append(a.decisions, d)
+	return quotaports.AuditRecord{AuditID: "audit-policy", Outcome: d.Outcome, ExpiresAt: d.GrantExpiresAt}, nil
+}
+
 type memoryQuotaStore struct {
 	counts       map[string]int
 	reservations map[string]quotamodel.Reservation

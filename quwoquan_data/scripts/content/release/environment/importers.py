@@ -592,6 +592,47 @@ def assert_import_report_contract(
     return payload
 
 
+def _validate_homepage_mapping_input(
+    *, release: Path, environment: str, report_path: Path, candidate_path: Path,
+) -> None:
+    """只认证既有 Entity report；candidate 摘要不能由裸 report 自证。"""
+    import hashlib
+    import json
+
+    manifest_digest = payload_digest(release)
+    candidate = _validate_release_control_receipt(
+        candidate_path, schema="quwoquan.homepage_release_candidate_receipt",
+        environment=environment, release_id=release.name, manifest_digest=manifest_digest,
+    )
+    report = assert_import_report_contract(
+        report_path, expected_release_id=release.name,
+        expected_manifest_digest=manifest_digest,
+    )
+    expected = set(read_json(payload_file(release, "desired_state.json"))["desiredRefs"]["entities"])
+    mapping = report.get("entityRefToHomepageId")
+    if (candidate.get("status") != "found" or report.get("dryRun") is not False
+            or report.get("env") != environment or report.get("issues")
+            or not isinstance(mapping, dict) or set(mapping) != expected
+            or any(not isinstance(value, str) or not value or value != value.strip() for value in mapping.values())
+            or len(set(mapping.values())) != len(mapping)):
+        raise RuntimeError("homepage mapping proof identity/closure mismatch")
+    counts = candidate["counts"]
+    if (counts["expected"] != len(expected) or counts["projected"] != len(expected)
+            or report["expected"] != len(expected) or report["projected"] != len(expected)
+            or report["projectionVersion"] != candidate["projectionVersion"]
+            or report["closureDigest"] != candidate["closureDigest"]):
+        raise RuntimeError("homepage mapping proof candidate projection drift")
+    entries = [{"entityRef": ref, "homepageId": mapping[ref]} for ref in sorted(mapping)]
+    # 匹配 Entity 的 json.Marshal（包括 HTML / U+2028 / U+2029 escape），仅核对映射摘要。
+    encoded = json.dumps(entries, ensure_ascii=False, separators=(",", ":"))
+    for char, escaped in (("&", "\\u0026"), ("<", "\\u003c"), (">", "\\u003e"),
+                          ("\u2028", "\\u2028"), ("\u2029", "\\u2029")):
+        encoded = encoded.replace(char, escaped)
+    digest = "sha256:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    if digest != report["entityRefMappingDigest"] or digest != candidate["entityRefMappingDigest"]:
+        raise RuntimeError("homepage mapping proof mapping digest drift")
+
+
 def run_content_importer(
     *,
     release: Path,
@@ -605,9 +646,21 @@ def run_content_importer(
     mode: ImportMode = ImportMode.UPSERT,
     delete_policy: DeletePolicy = DeletePolicy.NONE,
     creator_candidate_receipt: Path,
+    homepage_import_report: Path,
+    homepage_candidate_receipt: Path | None,
 ) -> Path:
     """Stage exactly one Content candidate; activation uses release-control."""
 
+    if dry_run:
+        if homepage_candidate_receipt is not None:
+            raise RuntimeError("dry-run must not consume a homepage candidate mapping")
+    else:
+        if homepage_candidate_receipt is None:
+            raise RuntimeError("Content stage requires exact homepage candidate proof")
+        _validate_homepage_mapping_input(
+            release=release, environment=env, report_path=homepage_import_report,
+            candidate_path=homepage_candidate_receipt,
+        )
     report_path = run / "import.json"
     creator_proof = creator_candidate_receipt
     command = [
@@ -636,7 +689,11 @@ def run_content_importer(
         str(report_path),
         "--creator-receipt",
         str(creator_proof),
+        "--homepage-report",
+        str(homepage_import_report),
     ]
+    if homepage_candidate_receipt is not None:
+        command.extend(["--homepage-candidate-receipt", str(homepage_candidate_receipt)])
     if dry_run:
         command.append("--dry-run")
     result = subprocess.run(command, cwd=REPO_ROOT / "quwoquan_service", check=False)
@@ -815,7 +872,7 @@ def run_homepage_importer(
     expected = set(desired.get("desiredRefs", {}).get("entities", []))
     imported = set(report.get("entityRefToHomepageId", {}))
     missing = sorted(expected - imported) if not dry_run else []
-    projected_mismatch = int(report.get("projected", -1)) != len(expected)
+    projected_mismatch = not dry_run and int(report.get("projected", -1)) != len(expected)
     if report.get("issues") or report.get("skipped") or missing:
         raise SystemExit(
             "[ship] homepage importer closure failed: "

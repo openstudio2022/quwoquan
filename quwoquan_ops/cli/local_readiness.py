@@ -10,9 +10,12 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 sys.dont_write_bytecode = True
+
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
 sys.path.insert(0, str(ROOT))
@@ -207,26 +210,180 @@ def command_managed_pytest(args: argparse.Namespace) -> int:
 
 _SECRET_PATTERNS = (
     re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-    re.compile(rb"(?i)(?:api[_-]?key|secret|password|access[_-]?token)\s*[:=]\s*['\"]?(?P<value>[A-Za-z0-9/+_.-]{24,})"),
+    re.compile(rb"(?i)(?:api[_-]?key|access[_-]?key[_-]?secret|secret|password|access[_-]?token)\s*[:=]\s*(?P<quote>['\"`]?)(?P<value>[A-Za-z0-9/+_.-]{24,})"),
     re.compile(rb"AKIA[0-9A-Z]{16}"),
 )
-# 凭证键右侧若只是环境变量名（`password: X_REDIS_PASSWORD`）或代码里的点号标识符
-# （`APIKey: cfg.Telemetry.APIKey`），是注入间接层而不是凭证本体，不算 secret material。
-_SECRET_INDIRECTION_VALUES = (
-    re.compile(rb"^[A-Z][A-Z0-9_]*$"),
-    re.compile(rb"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$"),
+# 仅裸字段引用属于代码间接层；带引号的相同文本仍是字面量。
+# 不豁免裸大写字符串：仅靠大写形状无法区分环境变量与真实密钥。
+_SECRET_FIELD_REFERENCE = re.compile(rb"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+")
+
+
+_REQUEST_PAGE_ID_ENTRY = rb"\s*'(?P<operation>[A-Z][A-Za-z0-9]*)':\s*'(?P<page>[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+)',"
+_REQUEST_PAGE_ID_CONSTANT = rb"\s*static const String (?P<name>[a-z][A-Za-z0-9]*)\s*=\s*'(?P<value>[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+)';"
+_REQUEST_PAGE_ID_CLASS = re.compile(
+    rb"\A(?:\s|//[^\n]*\n)*class (?P<class>[A-Z][A-Za-z0-9]*RequestPageIds)\s*\{"
+    rb"\s*const (?P=class)\._\(\);"
+    rb"\s*static const Map<String, String> operationToPageId = <String, String>\{"
+    rb"(?P<entries>(?:" + _REQUEST_PAGE_ID_ENTRY + rb")+)\s*\};"
+    rb"(?P<constants>(?:" + _REQUEST_PAGE_ID_CONSTANT + rb")+)\s*\}\s*\Z"
 )
 
 
-def _has_secret_material(blob: bytes) -> bool:
+def _request_page_id_spans(blob: bytes) -> set[tuple[int, int]]:
+    # 仅完整的 page-ID 声明类：常量必须绑定同类 operation 映射及其规范拼写。
+    # 不凭 camelcase 前缀、带点字符串或单独 static const 放过敏感字面量。
+    declaration = _REQUEST_PAGE_ID_CLASS.fullmatch(blob)
+    if declaration is None:
+        return set()
+    entries = list(re.finditer(_REQUEST_PAGE_ID_ENTRY, declaration.group("entries")))
+    operations = {entry["operation"]: entry["page"] for entry in entries}
+    if len(operations) != len(entries):
+        return set()
+    spans: set[tuple[int, int]] = set()
+    for constant in re.finditer(_REQUEST_PAGE_ID_CONSTANT, declaration.group("constants")):
+        name, value = constant["name"], constant["value"]
+        operation = name[:1].upper() + name[1:]
+        canonical_name = b"".join(value.split(b".")[1:]).replace(b"_", b"")
+        if operations.get(operation) == value and canonical_name == name.lower():
+            offset = declaration.start("constants")
+            spans.add((offset + constant.start("value"), offset + constant.end("value")))
+    return spans
+
+
+class _SecretScanLoader(yaml.SafeLoader):
+    """拒绝覆盖、合并和别名，避免 YAML 解释丢失待扫描的值。"""
+
+    def compose_node(self, parent: Any, index: Any) -> Any:
+        event = self.peek_event()
+        if isinstance(event, yaml.AliasEvent) or getattr(event, "anchor", None):
+            raise ValueError("secret scan YAML must not contain anchors or aliases")
+        return super().compose_node(parent, index)
+
+    def construct_mapping(self, node: Any, deep: bool = False) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if not isinstance(key, str) or key in result:
+                raise ValueError("secret scan YAML requires unique string mapping keys")
+            result[key] = self.construct_object(value_node, deep=deep)
+        return result
+
+
+def _secret_scan_yaml(blob: bytes) -> tuple[dict[str, Any], Any]:
+    loader = _SecretScanLoader(blob)
+    try:
+        node = loader.get_single_node()
+        if not isinstance(node, yaml.MappingNode):
+            raise ValueError("secret scan YAML requires a root mapping")
+        payload = loader.construct_document(node)
+        if not isinstance(payload, dict):
+            raise ValueError("secret scan YAML requires a mapping payload")
+        return payload, node
+    finally:
+        loader.dispose()
+
+
+def _secret_config_schema_path(path: str) -> str | None:
+    """路径仅定位配套 schema，绝不单凭路径豁免文件内容。"""
+    candidate = Path(path)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return None
+    if candidate.name != "config.yaml" or candidate.parent.name not in {"alpha", "beta", "gamma", "prod"}:
+        return None
+    if candidate.parent.parent.name != "environments":
+        return None
+    return (candidate.parent.parent.parent / "config/schema.yaml").as_posix()
+
+
+def _secret_config_definitions(blob: bytes) -> dict[str, dict[str, Any]]:
+    payload, _ = _secret_scan_yaml(blob)
+    entries = payload.get("configs")
+    if not isinstance(entries, list):
+        raise ValueError("secret scan schema requires configs list")
+    definitions: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("key"), str):
+            raise ValueError("secret scan schema requires config keys")
+        key = entry["key"]
+        if key in definitions:
+            raise ValueError("secret scan schema contains duplicate config keys")
+        definitions[key] = entry
+    return definitions
+
+
+def _secret_ref_value_span(
+    text: str, value: Any, node: Any, definition: dict[str, Any],
+) -> tuple[int, int]:
+    from quwoquan_ops.cli.render_runtime_config import SECRET_REF_PATTERN
+
+    if definition.get("sensitive") is not True or definition.get("type") != "string":
+        raise ValueError("secretRef requires a declared sensitive string config")
+    if not isinstance(value, str) or not SECRET_REF_PATTERN.fullmatch(value):
+        raise ValueError("secretRef requires a canonical environment name")
+    # 仅裸的完整 scalar；引号、block scalar、tag、anchor 等不能扩展豁免语法。
+    start, end = node.start_mark.index, node.end_mark.index
+    if node.style is not None or text[start:end] != value:
+        raise ValueError("secretRef must be an unquoted canonical environment name")
+    return len(text[:start].encode("utf-8")), len(text[:end].encode("utf-8"))
+
+
+def _secret_ref_value_spans(
+    blob: bytes, schema_path: str, read_blob: Callable[[str], bytes | None] | None,
+) -> set[tuple[int, int]]:
+    # 对齐 render_runtime_config 与 verify_service_config_layout 的服务自治契约。
+    # env-name 的声明位置就是 secretRefs；schema 声明敏感配置键，不枚举 env 名。
+    payload, node = _secret_scan_yaml(blob)
+    if set(payload) - {"overrides", "secretRefs", "externalBindings"}:
+        raise ValueError("secret scan config contains unknown sections")
+    for section in ("overrides", "secretRefs", "externalBindings"):
+        if section in payload and not isinstance(payload[section], dict):
+            raise ValueError("secret scan config sections must be mappings")
+    refs = payload.get("secretRefs", {})
+    if not refs:
+        return set()
+    schema_blob = read_blob(schema_path) if read_blob else None
+    if schema_blob is None:
+        raise ValueError("secret scan requires schema from the same candidate")
+    definitions = _secret_config_definitions(schema_blob)
+    overrides = payload.get("overrides", {})
+    if set(overrides) & set(refs):
+        raise ValueError("secret scan config key cannot be both override and secretRef")
+    if (set(overrides) | set(refs)) - set(definitions):
+        raise ValueError("secret scan config contains undeclared keys")
+    refs_node = next(value for key, value in node.value if key.value == "secretRefs")
+    text = blob.decode("utf-8")
+    return {
+        _secret_ref_value_span(text, refs[key.value], value, definitions[key.value])
+        for key, value in refs_node.value
+    }
+
+
+def _has_secret_material(
+    blob: bytes, *, path: str = "", read_blob: Callable[[str], bytes | None] | None = None,
+) -> bool:
+    spans: set[tuple[int, int]] = set()
+    schema_path = _secret_config_schema_path(path)
+    if schema_path is not None:
+        try:
+            spans = _secret_ref_value_spans(blob, schema_path, read_blob)
+        except (ValueError, OSError, yaml.YAMLError, RecursionError):
+            # 结构或声明无法证明合法时阻断，不折成空文档后放行。
+            return True
+    page_id_spans = _request_page_id_spans(blob)
     for pattern in _SECRET_PATTERNS:
         for match in pattern.finditer(blob):
             value = match.groupdict().get("value")
             if value is None:
                 return True
-            if not any(shape.fullmatch(value) for shape in _SECRET_INDIRECTION_VALUES):
+            if match.span("value") in page_id_spans:
+                continue
+            if match.group("quote") or (
+                match.span("value") not in spans and not _SECRET_FIELD_REFERENCE.fullmatch(value)
+            ):
                 return True
     return False
+
+
 _PII_PATTERNS = (
     # 手机号两侧排除十六进制字符：sha256/digest 里任意 11 位数字子串（如 "18916601719eac…"）
     # 不是号码；否则 contract_graph.json 这类生成物每次刷新都会被误判为直接 PII。
@@ -347,6 +504,11 @@ def _assert_no_staged_unstaged_overlap(paths: list[str]) -> None:
         )
 
 
+def _staged_blob(path: str) -> bytes | None:
+    blob = subprocess.run(["git", "show", f":{path}"], cwd=ROOT, capture_output=True, check=False)
+    return blob.stdout if blob.returncode == 0 else None
+
+
 def command_staged_boundary(_args: argparse.Namespace) -> int:
     paths = staged_paths(ROOT)
     if not paths:
@@ -368,15 +530,15 @@ def command_staged_boundary(_args: argparse.Namespace) -> int:
     if branch.returncode != 0:
         raise LocalReadinessError("staged branch policy failed")
     for path in paths:
-        blob = subprocess.run(["git", "show", f":{path}"], cwd=ROOT, capture_output=True, check=False)
-        if blob.returncode != 0:  # deleted/rename source has no index blob
+        blob = _staged_blob(path)
+        if blob is None:  # deleted/rename source has no index blob
             continue
-        if _has_secret_material(blob.stdout):
+        if _has_secret_material(blob, path=path, read_blob=_staged_blob):
             raise LocalReadinessError(f"staged secret material detected: {path}")
-        if b"\x00" in blob.stdout[:8192]:
+        if b"\x00" in blob[:8192]:
             # 二进制媒体（图片/视频/字体）里的数字与 @ 只是字节巧合，不是手机号或邮箱。
             continue
-        pii_matches = [match.group(0).decode("utf-8", errors="replace") for pattern in _PII_PATTERNS for match in pattern.finditer(blob.stdout)]
+        pii_matches = [match.group(0).decode("utf-8", errors="replace") for pattern in _PII_PATTERNS for match in pattern.finditer(blob)]
         pii_matches = [value for value in pii_matches if not value.lower().endswith(("@example.invalid", "@example.com", "@example.org"))]
         if pii_matches:
             raise LocalReadinessError(f"staged direct PII detected: {path}")

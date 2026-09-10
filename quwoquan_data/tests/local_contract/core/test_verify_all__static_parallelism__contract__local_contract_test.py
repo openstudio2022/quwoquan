@@ -1,61 +1,65 @@
-"""The aggregate Data verifier is static and deduplicated."""
+"""聚合校验只检查，不在读操作前隐式回填内容库。"""
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-041
 from __future__ import annotations
-
-import sys
-import threading
-from pathlib import Path
 
 import pytest
 
-DATA_ROOT = next(
-    parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data"
-)
-SCRIPTS_ROOT = DATA_ROOT / "scripts"
-if str(SCRIPTS_ROOT) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_ROOT))
-
-from verify import handler as verify_handler  # noqa: E402
+from verify import handler as verify_handler
 
 
-def test_verify_all_rehydrates_before_deduplicated_static_gates(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    observed: list[str] = []
+def test_verify_all_runs_each_gate_once_without_implicit_repair(monkeypatch):
+    observed = []
+    from content.release.canonical import rehydrate_media_holdings
 
-    def admit_carried_media() -> int:
-        observed.append("rehydrate-media-holdings")
-        return 0
+    def forbidden_repair():
+        pytest.fail("verify must not repair or admit library bytes")
 
-    def controlled_gate(name: str, _argv: object = None) -> int:
+    monkeypatch.setattr(rehydrate_media_holdings, "main", forbidden_repair)
+    monkeypatch.setattr(verify_handler, "_run", lambda name, _argv=None: observed.append(name) or 0)
+    assert verify_handler.handle_all() == list(verify_handler._GATES)
+    assert len(observed) == len(set(observed))
+    assert observed.count("publish-closure") == 1
+    assert "active-runtime-preflight" not in observed
+
+
+def test_source_scope_never_loads_runtime_outputs_and_retains_source_failures(monkeypatch):
+    observed = []
+
+    def gate(name, _argv=None):
+        assert name not in verify_handler._RUNTIME_GATES
         observed.append(name)
-        return 0
+        return int(name == "cli-first")
 
-    monkeypatch.setattr(
-        verify_handler, "_admit_carried_media_holdings", admit_carried_media
-    )
-    monkeypatch.setattr(verify_handler, "_run", controlled_gate)
-
-    verify_handler.handle_all()
-
-    assert observed[0] == "rehydrate-media-holdings"
-    observed_names = observed[1:]
-    assert len(observed_names) == len(set(observed_names))
-    assert "active-runtime-preflight" not in observed_names
-    assert "publish-purity" not in observed_names
-    assert observed_names.count("publish-closure") == 1
+    monkeypatch.setattr(verify_handler, "_run", gate)
+    with pytest.raises(SystemExit, match="cli-first"):
+        verify_handler.handle_all(scope="source")
+    assert observed == list(verify_handler._STATIC_GATES)
+    assert {"content-execution-layout", "runtime-input-ownership", "publish-closure"} <= verify_handler._RUNTIME_GATES.keys()
 
 
-def test_verify_all_stops_when_carried_media_cannot_be_admitted(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(verify_handler, "_admit_carried_media_holdings", lambda: 1)
+def test_source_scope_is_explicit_and_invalid_scope_is_rejected(monkeypatch):
+    import argparse
 
-    def unexpected_gate(_name: str, _argv: object = None) -> int:
-        pytest.fail("static gates must not run with unresolved carried media")
+    parser = argparse.ArgumentParser()
+    verify_handler.register_parser(parser.add_subparsers(dest="command", required=True))
+    observed = []
+    monkeypatch.setattr(verify_handler, "_run", lambda name, _argv=None: observed.append(name) or 0)
+    args = parser.parse_args(["verify", "all", "--scope", "source"])
+    args.handler(args)
+    assert observed == list(verify_handler._STATIC_GATES)
+    assert parser.parse_args(["verify", "all"]).scope == "all"
+    with pytest.raises(ValueError, match="invalid verification scope"):
+        verify_handler.handle_all(scope="unknown")
 
-    monkeypatch.setattr(verify_handler, "_run", unexpected_gate)
 
-    with pytest.raises(SystemExit) as failure:
+def test_verify_all_retains_failed_gate_without_repair(monkeypatch):
+    observed = []
+
+    def gate(name, _argv=None):
+        observed.append(name)
+        return int(name == "publish-closure")
+
+    monkeypatch.setattr(verify_handler, "_run", gate)
+    with pytest.raises(SystemExit, match="publish-closure"):
         verify_handler.handle_all()
-
-    assert failure.value.code == 1
+    assert observed == list(verify_handler._GATES)

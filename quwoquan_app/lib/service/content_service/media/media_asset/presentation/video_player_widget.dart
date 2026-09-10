@@ -569,7 +569,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     );
     if (cachedFailure != null) {
       if (mounted && generation == _videoInitGeneration) {
-        _reportPlaybackFailure(
+        _presentPlaybackFailure(
           MediaPlaybackFailure.fromKind(cachedFailure.kind),
         );
       }

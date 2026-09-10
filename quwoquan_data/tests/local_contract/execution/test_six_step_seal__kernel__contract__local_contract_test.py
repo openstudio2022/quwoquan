@@ -63,7 +63,7 @@ def execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "candidateBinding": {"scope": "output", "ref": "data/local/workspace/x.json", "digest": "sha256:" + "1" * 64, "candidateCount": 1},
         "targetCount": 1,
         "targetRefs": [TARGET_REF],
-        "targets": [{"name": "西湖", "entityType": "地点/景区", "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1}],
+        "targets": [{"name": "西湖", "entityType": "地点/景区", "entityRef": "/entity/hangzhou-west-lake", "entityId": "entity:hangzhou-west-lake", "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1}],
     }
     _write(root / "0.plan/target_set.json", _canonical(target_set))
 
@@ -155,7 +155,7 @@ def test_three_seals_form_chain_and_seal_completes_review_fields(execution: Path
     assert rights["assetRef"] == "sources/zh_wikipedia__abc/assets/001_xihu.png"
     assert rights["decision"] == "approved"
     assert rights["issues"] == ["署名建议写全名"]
-    assert rights["usageScope"] == "research"
+    assert rights["usageScope"] == "production"
     assert rights["sourceUrl"] == "https://commons.wikimedia.org/wiki/File:Xihu.png"
     assert rights["license"] == "CC BY-SA 4.0"
     assert rights["termsUrl"].startswith("https://")

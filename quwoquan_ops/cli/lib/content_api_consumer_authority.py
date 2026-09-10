@@ -730,7 +730,7 @@ def _load_import_mappings(
         or import_report.get("schema") != "quwoquan.content_import_report"
         or import_report.get("environment") != "alpha"
         or import_report.get("releaseId") != release_id
-        or import_report.get("status") != "imported"
+        or import_report.get("status") != "staged"
         or import_report.get("manifestDigest") != manifest_digest
     ):
         raise _consumer_error(

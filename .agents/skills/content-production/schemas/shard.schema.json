@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["shardId", "regionScope", "carriers", "targets", "sourceBudget"],
+  "properties": {
+    "shardId": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+    "regionScope": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "carriers": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["homepage", "article", "image", "video"]}},
+    "targets": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "sourceBudget": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "authorizationNote": {"type": "string", "description": "只引用用户授权，不是由本字段签发授权"},
+    "maxRounds": {"type": "integer", "minimum": 1}, "zeroGrowthLimit": {"type": "integer", "minimum": 1}
+  }
+}

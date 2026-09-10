@@ -494,6 +494,47 @@ func readyQueryActiveSupply() postports.ActiveSupplySnapshot {
 	}
 }
 
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+func TestPublicPostQueriesRejectInvalidBindingBeforeAnyReader(t *testing.T) {
+	active := &fakeQueryActiveSupplyReader{snapshot: readyQueryActiveSupply()}
+	active.snapshot.ManifestDigest = "invalid"
+	detail := &fakePostDetailReader{}
+	author := &fakeAuthorPostReader{}
+	gathering := &fakeGatheringPostReaderForQueryFence{}
+	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+		Detail: detail, Author: author, Gathering: gathering, ActiveSupply: active,
+	})
+
+	for name, invoke := range map[string]func() error{
+		"GetPost": func() error {
+			_, err := facade.GetPost(context.Background(), postports.NewPostDetailQuery(
+				postports.NewPostID("research-post"), queryViewer("persona-member"),
+			))
+			return err
+		},
+		"ListUserPosts": func() error {
+			_, err := facade.ListUserPosts(context.Background(), postports.NewAuthorPostPageQuery(
+				postports.NewPersonaID("research-author"), queryViewer("persona-member"),
+				"", "", "", "", 20,
+			))
+			return err
+		},
+		"ListPostsByGathering": func() error {
+			_, err := facade.ListPostsByGathering(context.Background(),
+				postports.NewGatheringPostPageQuery("gathering-research", "", 20),
+			)
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assertPostQueryErrorCode(t, invoke(), contentgenerated.AppErrorFromRequiredDependencyUnavailable(""))
+		})
+	}
+	if detail.calls != 0 || author.calls != 0 || gathering.calls != 0 {
+		t.Fatalf("non-research principal reached content readers: detail=%d author=%d gathering=%d", detail.calls, author.calls, gathering.calls)
+	}
+}
+
 type fakeGatheringPostReaderForQueryFence struct {
 	calls   int
 	request postports.GatheringPostReadRequest
@@ -506,6 +547,45 @@ func (r *fakeGatheringPostReaderForQueryFence) ListGatheringPosts(
 	r.calls++
 	r.request = request
 	return postports.GatheringPostPageSlice{Items: []postports.AuthorPostItemSlice{}}, nil
+}
+
+func TestPublicQueriesUseExactActiveReleaseFence(t *testing.T) {
+	active := &fakeQueryActiveSupplyReader{snapshot: readyQueryActiveSupply()}
+	detail := &fakePostDetailReader{found: true, detail: postports.PostDetailSlice{
+		PostID: "research-post", AuthorPersonaID: "research-author",
+		Status: "published", Visibility: "public", ModerationStatus: "approved",
+	}}
+	author := &fakeAuthorPostReader{page: postports.AuthorPostPageSlice{Items: []postports.AuthorPostItemSlice{}}}
+	gathering := &fakeGatheringPostReaderForQueryFence{}
+	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+		Detail: detail, Author: author, Gathering: gathering, ActiveSupply: active,
+	})
+
+	if _, err := facade.GetPost(context.Background(), postports.NewPostDetailQuery(
+		"research-post", queryViewer("persona-research"),
+	)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := facade.ListUserPosts(context.Background(), postports.NewAuthorPostPageQuery(
+		"research-author", queryViewer("persona-research"), "", "", "", "", 20,
+	)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := facade.ListPostsByGathering(context.Background(),
+		postports.NewGatheringPostPageQuery("gathering-research", "", 20),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, binding := range map[string][2]string{
+		"detail":    {detail.request.ActiveReleaseID(), detail.request.ManifestDigest()},
+		"author":    {author.request.ActiveReleaseID(), author.request.ManifestDigest()},
+		"gathering": {gathering.request.ActiveReleaseID(), gathering.request.ManifestDigest()},
+	} {
+		if binding[0] != "rel-query-active" || binding[1] != queryFenceManifestDigest {
+			t.Fatalf("%s binding=(%q,%q), want exact active identity", name, binding[0], binding[1])
+		}
+	}
 }
 
 func TestPublicPostQueriesFailClosedOnMalformedActiveRelease(t *testing.T) {
@@ -558,4 +638,23 @@ func (lister *fakePublicPostIDLister) ListPublicPostIDs(
 		lister.manifestDigest = activeReleaseBinding[1]
 	}
 	return []string{"post-active"}, nil
+}
+func TestSitemapRejectsInvalidBindingAndUsesExactActiveRelease(t *testing.T) {
+	active := &fakeQueryActiveSupplyReader{snapshot: readyQueryActiveSupply()}
+	active.snapshot.ManifestDigest = "invalid"
+	lister := &fakePublicPostIDLister{}
+	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{ActiveSupply: active})
+	_, err := facade.ListPublicPostIDs(context.Background(), lister, 500)
+	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromRequiredDependencyUnavailable(""))
+	if lister.calls != 0 {
+		t.Fatalf("invalid binding reached lister: calls=%d", lister.calls)
+	}
+	active.snapshot = readyQueryActiveSupply()
+	ids, err := facade.ListPublicPostIDs(context.Background(), lister, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 1 || lister.releaseID != "rel-query-active" || lister.manifestDigest != queryFenceManifestDigest {
+		t.Fatalf("sitemap not exact-release-bound: ids=%v lister=%+v", ids, lister)
+	}
 }

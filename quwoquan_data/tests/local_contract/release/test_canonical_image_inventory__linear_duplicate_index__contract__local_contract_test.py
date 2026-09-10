@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/image-commercial-scale-closure/spec.md#gwt-002
 from __future__ import annotations
 
 import hashlib
@@ -26,6 +27,8 @@ def _manifest(
         "assets": [
             {
                 "assetId": asset_id or f"asset-{index}",
+                "sourceUrl": f"https://example.test/works/{index}",
+                "originalAssetUrl": f"https://example.test/assets/{index}.jpg",
                 "kind": "image",
                 "sha256": "sha256:"
                 + hashlib.sha256(f"asset-{index}".encode()).hexdigest(),
@@ -272,3 +275,44 @@ def test_cold_bootstrap_rejects_preexisting_cross_post_duplicate(
     with pytest.raises(ObjectTransactionError, match="duplicated by sha256"):
         load_or_bootstrap_inventory(publish)
     assert not canonical_inventory_path(publish).exists()
+
+
+def test_replacing_manifest_does_not_erase_old_asset_binding_before_check(tmp_path: Path) -> None:
+    publish = tmp_path / "publish"
+    relative = "posts/image/replace/work/1/manifest.json"
+    destination = publish / relative
+    destination.parent.mkdir(parents=True)
+    manifest = {**_manifest(1), "contentId": "stable-work", "version": 1}
+    before_bytes = json.dumps(manifest).encode()
+    destination.write_bytes(before_bytes)
+    inventory = load_or_bootstrap_inventory(publish)
+    manifest["assets"][0]["sha256"] = "sha256:" + "f" * 64
+    payload = json.dumps(manifest).encode()
+    destination.write_bytes(payload)
+    pending = apply_inventory_delta(inventory, [{"destination": relative, "operation": "replace",
+        "beforeSha256": "sha256:" + hashlib.sha256(before_bytes).hexdigest(), "beforeBytes": len(before_bytes),
+        "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(), "bytes": len(payload)}], publish_root=publish)
+    with pytest.raises(ObjectTransactionError, match="IMAGE_BINDING_DRIFT"):
+        write_inventory(publish, pending)
+    assert load_or_bootstrap_inventory(publish) == inventory
+
+
+def test_retired_index_is_rejected_without_automatic_rewrite(tmp_path: Path) -> None:
+    from content.release.canonical.canonical_image_inventory import readonly_image_inventory
+
+    publish = tmp_path / "publish"
+    destination = publish / "posts/image/migration/work/1/manifest.json"
+    destination.parent.mkdir(parents=True)
+    destination.write_text(json.dumps(_manifest(1)), encoding="utf-8")
+    load_or_bootstrap_inventory(publish)
+    database = canonical_inventory_path(publish)
+    with sqlite3.connect(database) as connection:
+        connection.execute("UPDATE image_index_state SET schema='quwoquan_data.canonical_image_inventory'")
+    before = database.read_bytes()
+    with pytest.raises(ObjectTransactionError, match="inventory state drift"):
+        with readonly_image_inventory(publish):
+            pytest.fail("旧索引不得进入在线读取")
+    assert database.read_bytes() == before
+    with pytest.raises(ObjectTransactionError, match="inventory state drift"):
+        load_or_bootstrap_inventory(publish)
+    assert database.read_bytes() == before

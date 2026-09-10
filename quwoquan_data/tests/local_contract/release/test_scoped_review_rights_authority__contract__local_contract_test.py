@@ -41,7 +41,7 @@ def _rights_row(*, passed: bool = True, issues: list[str] | None = None) -> dict
         "license": "CC BY 4.0",
         "termsUrl": "https://example.test/terms",
         "authorizationProof": "https://example.test/proof",
-        "usageScope": "commercial",
+        "usageScope": "production",
         "decision": "approved" if passed else "rejected",
         "issues": list(issues or []),
     }
@@ -99,7 +99,7 @@ def test_review_authority_requires_exact_unique_asset_set_and_digest(tmp_path: P
         source_assets={ASSET_REF: source_asset},
     )
     assert binding["digest"] == _digest(tmp_path / "5.review/content_review.json")
-    assert binding["usageScope"] == "commercial"
+    assert binding["usageScope"] == "production"
 
     duplicate = _rights_row()
     duplicate_review = {**content_review, "assetRights": [_rights_row(), duplicate]}
@@ -129,7 +129,7 @@ def test_text_only_article_allows_explicit_empty_rights_set(tmp_path: Path) -> N
         object_kind="posts", execution_id=EXECUTION_ID, object_ref=TARGET_REF,
         source_assets={},
     )
-    assert binding["usageScope"] == "research"
+    assert binding["usageScope"] == "production"
 
 
 def _attribution() -> dict[str, object]:
@@ -137,7 +137,7 @@ def _attribution() -> dict[str, object]:
         "isOriginal": False, "originalCreatorName": "Creator", "platform": "Commons",
         "sourcePostUrl": "https://example.test/post", "originalAssetUrl": "https://example.test/asset",
         "attributionText": "Creator / Commons", "rightsBasis": "CC BY 4.0",
-        "commercialAuthorizationStatus": "verified", "publicationAdmission": "commercial_release",
+        "commercialAuthorizationStatus": "verified", "publicationAdmission": "production_release",
         "watermarkStatus": "absent", "audioRightsStatus": "no_audio",
         "modelReleaseStatus": "not_required", "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-09-03T00:00:00Z", "takedownPolicy": "notice_and_takedown",
@@ -150,7 +150,7 @@ def test_content_pool_query_rejects_asset_binding_missing_source_refs(tmp_path: 
     root = tmp_path / "publish/posts/image/missing-source/1"
     digest = "sha256:" + "a" * 64
     object_key = f"media/objects/sha256/aa/aa/{'a' * 64}.jpg"
-    _write(root / "asset.refs.json", {"assets": [{
+    _write(root / "manifest.json", {"assets": [{
         "assetId": "cover", "objectKey": object_key, "sha256": digest,
         "acquisitionReceiptRefs": ["receipts/acquired.json"],
     }]})
@@ -158,7 +158,7 @@ def test_content_pool_query_rejects_asset_binding_missing_source_refs(tmp_path: 
         from content.release.canonical.content_pool_handoff import project_content_library_bindings
 
         project_content_library_bindings(
-            json.loads((root / "asset.refs.json").read_text(encoding="utf-8"))["assets"]
+            json.loads((root / "manifest.json").read_text(encoding="utf-8"))["assets"]
         )
 
 
@@ -206,21 +206,21 @@ def test_content_pool_query_projects_complete_asset_hard_facts(tmp_path: Path) -
         "derivedExtension": ".webp",
     }
     object_key = f"media/objects/sha256/{'a' * 2}/{'a' * 2}/{'a' * 64}.webp"
-    _write(root / "asset.refs.json", {"assets": [{
+    assets = [{
         "assetId": "cover", "objectKey": object_key, "sha256": digest, "bytes": 8,
         "sourceAssetRefs": [ASSET_REF],
         "acquisitionReceiptRefs": ["receipts/acquired.json"],
         "derivativeBinding": derivative,
-    }]})
+    }]
     _write(root / "manifest.json", {
         "contentId": "content-asset-facts", "version": 1,
         "executionId": EXECUTION_ID, "contentType": "image", "generator": "agent",
-        "authorId": "creator", "variantPurpose": "original", "status": "active",
-        "assetRefsRef": "asset.refs.json", "assets": [],
+        "creatorProfileId": "creator", "variantPurpose": "original", "status": "active",
+        "tagRefs": [], "assets": assets,
         "sourceIdentity": {**identity, "identityDigest": source_identity_digest(identity)},
         "sourceAttribution": _attribution(),
         "admission": {
-            "processResult": "completed", "qualityResult": "passed", "usageScope": "commercial",
+            "processResult": "completed", "qualityResult": "passed", "usageScope": "production",
             "rightsResult": "passed", "rightsAuthorityRef": f"posts/image/asset-facts/1/content_review.json",
             "rightsAuthorityDigest": _digest(review), "evidenceRef": "content_review.json",
             "evidenceDigest": _digest(review),
@@ -242,7 +242,9 @@ def test_content_pool_query_projects_complete_asset_hard_facts(tmp_path: Path) -
         "acquisitionReceiptRefs": ["receipts/acquired.json"],
         "derivativeBinding": derivative,
     }]
+    assert content_library["bindingRef"] == query.as_document()["refs"]["manifestRef"]
     assert content_library["bindings"] == expected_bindings
+    assert "bytes" not in content_library["bindings"][0]
     expected_digest = "sha256:" + hashlib.sha256(
         json.dumps(
             expected_bindings,
@@ -311,21 +313,21 @@ def test_pool_record_and_query_project_bound_rights_authority(tmp_path: Path) ->
         "entityCatalogDigest": entity_digest,
     }
     asset_digest = "sha256:" + "a" * 64
-    _write(root / "asset.refs.json", {"assets": [{
+    assets = [{
         "assetId": "cover",
         "objectKey": "media/objects/sha256/aa/aa/" + "a" * 64 + ".jpg",
         "sha256": asset_digest,
         "sourceAssetRefs": [ASSET_REF],
         "acquisitionReceiptRefs": ["receipts/acquired.json"],
-    }]})
+    }]
     manifest = {
         "contentId": "content-rights", "version": 1, "executionId": EXECUTION_ID, "contentType": "image", "generator": "agent",
-        "authorId": "creator", "variantPurpose": "original", "status": "active",
-        "assetRefsRef": "asset.refs.json", "assets": [{"assetId": "cover", "sourceAssetRef": ASSET_REF}],
+        "creatorProfileId": "creator", "variantPurpose": "original", "status": "active",
+        "tagRefs": [], "assets": assets,
         "sourceIdentity": {**identity, "identityDigest": source_identity_digest(identity)},
         "sourceAttribution": _attribution(),
         "admission": {
-            "processResult": "completed", "qualityResult": "passed", "usageScope": "commercial",
+            "processResult": "completed", "qualityResult": "passed", "usageScope": "production",
             "rightsResult": "passed", "rightsAuthorityRef": "posts/image/rights/1/content_review.json",
             "rightsAuthorityDigest": _digest(review_path), "evidenceRef": "content_review.json", "evidenceDigest": _digest(review_path),
         },
@@ -340,3 +342,43 @@ def test_pool_record_and_query_project_bound_rights_authority(tmp_path: Path) ->
 
     bad = dict(record, rightsResult="pending")
     assert not is_pool_record_admitted(bad)
+
+
+def test_binding_projection_preserves_asset_and_source_order() -> None:
+    """spec_ref: multi-carrier-release/GWT-032 — 查询只投影，不重排资产或来源。"""
+    from content.release.canonical.content_pool_handoff import project_content_library_bindings
+
+    digest = "sha256:" + "a" * 64
+    assets = [{
+        "assetId": asset_id,
+        "objectKey": f"media/objects/sha256/aa/aa/{'a' * 64}.jpg",
+        "sha256": digest, "bytes": 8, "caption": "仅展示字段",
+        "sourceAssetRefs": ["sources/z.jpg", "sources/a.jpg"],
+        "acquisitionReceiptRefs": ["receipts/z.json", "receipts/a.json"],
+    } for asset_id in ("z-last-lexically", "a-first-lexically")]
+    rows = [row.as_document() for row in project_content_library_bindings(assets)]
+    assert [row["assetId"] for row in rows] == [row["assetId"] for row in assets]
+    assert rows[0]["sourceAssetRefs"] == assets[0]["sourceAssetRefs"]
+    assert rows[0]["acquisitionReceiptRefs"] == assets[0]["acquisitionReceiptRefs"]
+    assert "caption" not in rows[0]
+    assert "bytes" not in rows[0]
+
+
+def test_query_creator_does_not_fall_back_to_author_id() -> None:
+    """spec_ref: multi-carrier-release/GWT-032 — authorId 不替代显式 creatorProfileId。"""
+    from content.release.canonical.content_pool_handoff import _creator_ref
+
+    with pytest.raises(ObjectTransactionError, match="creatorProfileId missing"):
+        _creator_ref({"authorId": "old-author"})
+    assert _creator_ref({"creatorProfileId": "explicit", "authorId": "other"}) == "explicit"
+
+
+@pytest.mark.parametrize("field", ["assetRefsRef", "creatorRefsRef", "tagRefsRef"])
+def test_query_rejects_retired_pointer_even_with_manifest_assets(tmp_path: Path, field: str) -> None:
+    """spec_ref: multi-carrier-release/GWT-032 — 普通 reader 不接受旧指针。"""
+    from content.release.canonical.content_pool_handoff import _content_library_bindings
+
+    manifest = {"contentType": "article", "publishMediaMode": "text_only", "assets": [], field: "old.json"}
+    _write(tmp_path / "manifest.json", manifest)
+    with pytest.raises(ObjectTransactionError, match="retired sidecar pointer"):
+        _content_library_bindings(tmp_path, manifest)
