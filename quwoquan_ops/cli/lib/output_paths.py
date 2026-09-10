@@ -533,10 +533,10 @@ def target_local_dir(target: str) -> Path:
 
 def target_process_dir(target: str) -> Path:
     if target in {"alpha-local", "beta-local", "gamma-local"} and not os.environ.get("QWQ_OUTPUT_ROOT"):
-        legacy = output_root() / "env" / env_for_target(target) / "local" / target / "process"
-        if any((legacy / name).exists() or (legacy / name).is_symlink()
+        worktree_process = output_root() / "env" / env_for_target(target) / "local" / target / "process"
+        if any((worktree_process / name).exists() or (worktree_process / name).is_symlink()
                for name in ("startup_attempt.json", "test_live_startup_attempt.json")):
-            raise ValueError("OPS.RUNTIME.reconcile_required: legacy worktree startup receipt requires explicit reconciliation")
+            raise ValueError("OPS.RUNTIME.reconcile_required: worktree-local startup receipt requires explicit reconciliation")
     return target_local_dir(target) / "process"
 
 

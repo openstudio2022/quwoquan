@@ -202,7 +202,7 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
 
     if args.target == "prod-sim":
         return {"exitCode": 2, "blockerKind": "unmanaged_runtime_authority",
-                "summary": "prod-sim legacy teardown has no generation authority",
+                "summary": "prod-sim teardown has no generation authority",
                 "details": ["OPS.RUNTIME.unmanaged_target: explicit migration required"]}
     bounded_decision = _stackctl._bounded_workload_down_decision(args)
     if bounded_decision is not None:

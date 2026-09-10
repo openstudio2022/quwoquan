@@ -2,6 +2,7 @@
 
 spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001
 spec_ref: specs/feature-tree/runtime/runtime-config/environment-ops-cli-and-skill/spec.md#gwt-001
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md#gwt-001
 """
 from __future__ import annotations
 
@@ -28,6 +29,11 @@ from quwoquan_ops.tests.support.stackctl_dev_session_test_support import (
 
 
 class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
+    def setUp(self) -> None:
+        super().setUp()
+        # 隔离宿主 fixture 只声明输出根；本组需在其下创建临时 Compose。
+        stackctl.output_root().mkdir(parents=True, exist_ok=True)
+
     def test_dev_session_only_resumes_exact_running_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             run_root = Path(temporary)
@@ -312,23 +318,10 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                     "load_test_live_startup_attempt",
                     return_value=receipt,
                 ),
-                mock.patch.object(
-                    stackctl,
-                    "run",
-                    side_effect=[
-                        subprocess.CompletedProcess(
-                            ["docker", "ps"],
-                            0,
-                            "one\ntwo\nthree\nfour\nfive\n",
-                            "",
-                        ),
-                        subprocess.CompletedProcess(
-                            ["docker", "inspect"], 0, json.dumps(containers), ""
-                        ),
-                    ],
-                ),
+                mock.patch.object(stackctl, "run") as run,
             ):
-                drifted, drift_warnings = (
+                # 不同 identity 必须在任何容器操作前拒绝，不能自动复用旧代际。
+                with self.assertRaisesRegex(ValueError, "OPS.RUNTIME.identity_conflict"):
                     stackctl._dev_session_resume_running_mutable_runtime(
                         environment="alpha",
                         target="alpha-local",
@@ -340,13 +333,8 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                             stackctl._TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
                         ),
                     )
-                )
-            self.assertIsNotNone(drifted)
-            self.assertEqual(
-                drifted["startupAttempt"]["mutableStateDigest"],
-                mutable_digest,
-            )
-            self.assertIn("reusing the exact verified deployed runtime", drift_warnings[0])
+                run.assert_not_called()
+            self.assertEqual(receipt["mutableStateDigest"], mutable_digest)
 
             def assert_rejected(
                 observed: list[dict[str, object]],

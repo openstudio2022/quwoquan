@@ -31,9 +31,9 @@ OCCUPANCY_FREE_STATES = frozenset({"stale", "released"})
 
 
 def consumer_lease_dir(target: str) -> Path:
-    legacy = repo_local_dir("local-runtime-consumers")
-    if legacy.is_dir() and any(legacy.glob("*.json")):
-        raise ValueError("OPS.LEASE.reconcile_required: legacy worktree lease receipts exist")
+    worktree_receipts = repo_local_dir("local-runtime-consumers")
+    if worktree_receipts.is_dir() and any(worktree_receipts.glob("*.json")):
+        raise ValueError("OPS.LEASE.reconcile_required: worktree-local lease receipts require explicit reconciliation")
     if target not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
         raise ValueError("unsupported consumer lease target")
     return deployment_target_path(target, "process", "local-runtime-consumers")

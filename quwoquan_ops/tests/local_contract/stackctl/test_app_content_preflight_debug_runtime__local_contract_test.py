@@ -127,7 +127,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             ):
                 result = stackctl.command_app_content_uat(
                     stackctl.argparse.Namespace(
-                        targets="alpha-local,beta-local,gamma-local",
+                        targets="beta-local,gamma-local",
                         platform="ios-simulator",
                         device_id="SIMULATOR-UDID",
                         dry_run=False,
@@ -138,7 +138,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             self.assertEqual(result["exitCode"], 2)
             self.assertEqual(observed_lock_state, [True])
             acquire.assert_called_once_with(
-                target="alpha-local,beta-local,gamma-local",
+                target="beta-local,gamma-local",
                 purpose="app-content-uat:ios-simulator:SIMULATOR-UDID",
             )
             lock_handle.close.assert_called_once_with()

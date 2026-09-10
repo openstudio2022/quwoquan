@@ -361,9 +361,14 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             "details": [str(exc)],
         }
     try:
-        build_cache_use_lock = _stackctl.acquire_local_runtime_use_lock(
-            target=target_name,
-            purpose="runtime-package-build",
+        # hosted 不占本机 runtime slot，仍由下方 target package 锁串行化物料化。
+        build_cache_use_lock = (
+            contextlib.nullcontext()
+            if target_name == "prod-hosted"
+            else contextlib.closing(_stackctl.acquire_local_runtime_use_lock(
+                target=target_name,
+                purpose="runtime-package-build",
+            ))
         )
     except RuntimeError as exc:
         return {
@@ -372,7 +377,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             "details": [str(exc)],
         }
     with (
-        contextlib.closing(build_cache_use_lock),
+        build_cache_use_lock,
         _stackctl._target_package_lock(target_name),
     ):
         package_input_roots = _stackctl.deployment_input_roots(

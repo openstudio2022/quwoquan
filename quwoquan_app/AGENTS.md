@@ -1,10 +1,10 @@
 # quwoquan_app Agent Guide
 
-本文件只声明 `quwoquan_app/**` 每次变更都成立的 App 不变量，并与根 `AGENTS.md` 同时生效。功能行为、页面几何、手势、BACK 主路径、文案和验收从 `make feature-context TARGET=<path>` 返回的 Feature spec/design/contracts 按需加载，不放在子树全局规则里。
+与根 `AGENTS.md` 同时生效，仅声明 `quwoquan_app/**` 不变量。行为、几何、手势、BACK、文案与验收按 `make feature-context TARGET=<path>` 加载 spec/design/contracts，不在此复制。
 
 ## 归属与真相源
 
-- App 业务实现位于 `lib/service/<service>/<context>/<object>/{domain,application,adapters,presentation}`；对象分层、页面 participant 与依赖方向由 [`system-architecture-and-engineering-guide` DEC-018/019](../specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md#dec-018) 拥有。
+- 业务目录为 `lib/service/<service>/<context>/<object>/{domain,application,adapters,presentation}`；分层、participant 与依赖归 [DEC-018/019](../specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md#dec-018)。
 - `lib/runtime/**`、`lib/design_system/**`、`lib/l10n/**` 是横切边界，不得反向拥有业务对象事实。无法唯一归属的代码先修 Feature owner，不靠目录猜测。
 - Repository、route、surface、operation、字段、枚举、错误码与 decoder context 以服务 contracts/metadata 及 codegen 为真相源；禁止手写第二 DTO/枚举、手改 `.g.dart` 或放宽未知值。
 - 第一方 Dart 跨目录引用使用 `package:quwoquan_app/...`，不用 `../` 相对穿越；路径与标识符按领域语义命名，不绑定产品品牌。generated contract 的业务消费者只读类型化属性，裸 Map key 只允许留在 codegen decoder/factory 边界。
@@ -22,7 +22,7 @@
 ## UI、l10n 与可访问性
 
 - UI 不硬编码颜色、间距、字号、交互热区或用户文案；使用 `AppColors`、`AppSpacing`、`AppTypography`、`UITextConstants`/l10n 与所属 Feature 设计 token。
-- 新页面或页面行为变化必须有加载、空、错误/权限和成功终态，并满足所属 Story 的手势、焦点、Reduce Motion、热区与弱网验收；这些功能约束不在本文件复制。
+- 页面变更必须有加载、空、错误/权限、成功终态，满足所属 Story 的手势、焦点、Reduce Motion、热区及弱网验收。
 - ARB 新 key 使用 `<domain>_lowerCamelCase`；横切文案使用 `runtime_` 或 `design_system_`。`app_zh.arb` 与 `app_en.arb` 同 key、同序更新，`@key` 紧跟该 key；不为存量 key 保留别名或双写。文案 key 按领域归属，不得跨域借用语义不同的既有 key。
 - 搬迁/改名页面后用 `python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py`
   更新 `_shared/page_object_contract.yaml`；不手改其派生路径，不为了让门禁通过而删减多对象 `object_ids`。
@@ -35,7 +35,7 @@
 
 ## 验证入口
 
-- 先执行 manifest 与 Review plan 列出的命名 evidence；同一命令不由 Reviewer 重复执行。
+- 先执行 manifest/Review plan 的命名 evidence；Reviewer 不重复命令。
 - Dart 变更至少跑受影响的 analyzer/test；页面壳层与横向质量执行 `make verify-app-page-horizontal-quality`；具体功能 gate 只从其 Feature 设计/验收加载。
 - `local_contract`、`api_integration`、`user_acceptance` 分层报告。静态门、Widget test 或首帧不替代 Remote/API、真实环境或设备 UAT。
 - 环境、runtime package 或发布验证使用 `environment-ops` 及 `python3 quwoquan_ops/cli/stackctl.py`，不手写第二 URL、端口或拓扑。

@@ -94,10 +94,22 @@ def test_prod_app_packages_block_on_unapproved_legal_identity_without_mutating_s
                     stackctl,
                     "_target_package_lock",
                     return_value=contextlib.nullcontext(),
-                ),
+                ) as package_lock,
+                mock.patch.object(
+                    stackctl,
+                    "acquire_local_runtime_use_lock",
+                    wraps=stackctl.acquire_local_runtime_use_lock,
+                ) as runtime_lock,
             ):
                 result = stackctl.command_package(args)
 
+            package_lock.assert_called_once_with(target)
+            if target == "prod-hosted":
+                runtime_lock.assert_not_called()
+            else:
+                runtime_lock.assert_called_once_with(
+                    target=target, purpose="runtime-package-build"
+                )
             assert result["exitCode"] == 1, result
             assert result["summary"] == "stackctl package failed for legal-static/prod"
             assert "placeholder text" in "\n".join(result["details"])
