@@ -455,13 +455,8 @@ class StackctlTestLiveContentBindingWiringContract(unittest.TestCase):
         self.assertEqual(result["contentBindingState"], "bound")
         self.assertEqual(result["contentBinding"], binding)
 
-    def test_content_binding_refreshes_only_after_runtime_identity_drift(self) -> None:
-        runtime_payload = {
-            "exitCode": 0,
-            "runtime": {"environment": "alpha", "target": "alpha-local"},
-            "startupAttempt": _startup(),
-            "phases": [{"name": "mutable-startup-running", "exitCode": 0}],
-        }
+    def test_content_binding_rejects_runtime_identity_drift_without_replacement(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md#gwt-001
         with tempfile.TemporaryDirectory() as temporary:
             with contextlib.ExitStack() as stack:
                 stack.enter_context(
@@ -482,51 +477,25 @@ class StackctlTestLiveContentBindingWiringContract(unittest.TestCase):
                     mock.patch.object(
                         stackctl,
                         "_dev_session_resume_running_mutable_runtime",
-                        side_effect=[
-                            ValueError(
-                                "running mutable receipt/plan drift: composeDigest"
-                            ),
-                            (runtime_payload, []),
-                        ],
+                        side_effect=ValueError(
+                            "running mutable receipt/plan drift: composeDigest"
+                        ),
                     )
                 )
                 start = stack.enter_context(
-                    mock.patch.object(
-                        stackctl,
-                        "_start_mutable_test_live_runtime",
-                        return_value=runtime_payload,
-                    )
+                    mock.patch.object(stackctl, "_start_mutable_test_live_runtime")
                 )
-                stack.enter_context(
-                    mock.patch.object(
-                        stackctl,
-                        "create_test_live_content_binding",
-                        return_value=_binding(),
-                    )
+                binding = stack.enter_context(
+                    mock.patch.object(stackctl, "create_test_live_content_binding")
                 )
-                stack.enter_context(
-                    mock.patch.object(
-                        stackctl,
-                        "command_app_debug_preflight",
-                        return_value=_content_ready_preflight(),
-                    )
+                preflight = stack.enter_context(
+                    mock.patch.object(stackctl, "command_app_debug_preflight")
                 )
-                stack.enter_context(
-                    mock.patch.object(
-                        stackctl,
-                        "_dev_session_launcher_handoff",
-                        return_value={
-                            "launchPolicy": "test_live",
-                            "contentBindingState": "bound",
-                        },
-                    )
+                handoff = stack.enter_context(
+                    mock.patch.object(stackctl, "_dev_session_launcher_handoff")
                 )
-                stack.enter_context(
-                    mock.patch.object(
-                        stackctl,
-                        "command_health",
-                        return_value={"exitCode": 0, "summary": "healthy"},
-                    )
+                health = stack.enter_context(
+                    mock.patch.object(stackctl, "command_health")
                 )
                 result = stackctl._run_dev_session_target(
                     environment="alpha",
@@ -542,11 +511,18 @@ class StackctlTestLiveContentBindingWiringContract(unittest.TestCase):
                     },
                 )
 
-        self.assertEqual(result["exitCode"], 0)
-        start.assert_called_once()
-        self.assertTrue(
-            any("cannot be reused" in warning for warning in result["warnings"])
+        self.assertEqual(result["exitCode"], 2)
+        self.assertEqual(result["blockerKind"], "runtime_identity_conflict")
+        self.assertEqual(
+            result["details"], ["running mutable receipt/plan drift: composeDigest"]
         )
+        self.assertFalse(result["runtimeReused"])
+        self.assertFalse(result["runtimeCreated"])
+        start.assert_not_called()
+        binding.assert_not_called()
+        preflight.assert_not_called()
+        handoff.assert_not_called()
+        health.assert_not_called()
 
     def test_launcher_handoff_never_carries_content_identity(self) -> None:
         # 内容激活是服务端运行时事实：即使 dev-session 提供 content binding，

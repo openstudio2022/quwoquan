@@ -203,15 +203,18 @@ class OpenSSL3ResolverSecurityContractTest(unittest.TestCase):
             app_launch_manifest_contract,
             "verify_signature",
             side_effect=capability,
-        ):
+        ) as verify:
             package = {
+                "schema": "app-offline-bootstrap-document",
+                "contentSource": "bundled_snapshot",
+                "sourceGitSha": "a" * 40,
+                "sourceTreeDigest": "sha256:" + "b" * 64,
+                "signatureAlgorithm": "ed25519",
                 "environment": "alpha",
                 "target": "alpha-local",
                 "buildProfile": "nonprod",
                 "launchPolicy": "test_live",
                 "runtime": {"appRuntimeEnv": "alpha"},
-                "issuedAt": "2026-08-30T00:00:00Z",
-                "expiresAt": "2026-08-30T00:01:00Z",
                 "payloadDigest": "sha256:" + "0" * 64,
                 "signatureKeyId": "key-1",
                 "signature": base64.b64encode(b"s" * 64).decode("ascii"),
@@ -220,13 +223,29 @@ class OpenSSL3ResolverSecurityContractTest(unittest.TestCase):
                 },
             }
             envelope = {
+                "schema": "app-runtime-config-trust",
+                "signatureAlgorithm": "ed25519",
                 "buildProfile": "nonprod",
                 "trustedPublicKeys": package["trustedPublicKeys"],
             }
-            with self.assertRaises(OpenSSL3CapabilityError):
+            package["trustEnvelopeDigest"] = (
+                app_launch_manifest_contract.runtime_config_trust_envelope_digest(envelope)
+            )
+            package["payloadDigest"] = (
+                app_launch_manifest_contract.runtime_config_payload_digest(package)
+            )
+            with self.assertRaises(OpenSSL3CapabilityError) as raised:
                 app_launch_manifest_contract.validate_runtime_config_package(
                     package, envelope
                 )
+            self.assertIs(raised.exception, capability)
+            verify.assert_called_once()
+            verify.side_effect = None
+            verify.return_value = None
+            self.assertEqual(
+                app_launch_manifest_contract.validate_runtime_config_package(package, envelope),
+                [],
+            )
 
     def test_three_consumers_keep_capability_and_signature_failures_distinct(
         self,

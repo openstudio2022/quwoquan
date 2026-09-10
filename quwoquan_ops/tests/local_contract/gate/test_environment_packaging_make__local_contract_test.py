@@ -510,4 +510,30 @@ def test_app_uat_prod_target_is_rejected_by_stackctl_domain(tmp_path: Path) -> N
     assert result.returncode == 2
     payload = __import__("json").loads(result.stdout)
     assert payload["exitCode"] == 2
+    assert payload["status"] == "gate_block"
+    assert payload["firstBlocker"] == "APP.LAUNCH.receipt_invalid"
     assert "unsupported App content UAT targets: prod-hosted" in payload["details"]
+    assert "Traceback" not in result.stderr
+
+
+def test_app_uat_rejects_prod_before_local_runtime_lock() -> None:
+    from unittest.mock import patch
+
+    from quwoquan_ops.cli import stackctl
+
+    with patch.object(stackctl, "acquire_local_runtime_use_lock") as acquire:
+        payload = stackctl.command_app_content_uat(
+            stackctl.argparse.Namespace(
+                targets="beta-local,prod-hosted",
+                platform="ios-simulator",
+                device_id="simulator-contract",
+                dry_run=False,
+                report_dir="",
+            )
+        )
+
+    assert payload["exitCode"] == 2
+    assert payload["status"] == "gate_block"
+    assert payload["firstBlocker"] == "APP.LAUNCH.receipt_invalid"
+    assert "unsupported App content UAT targets: prod-hosted" in payload["details"]
+    acquire.assert_not_called()

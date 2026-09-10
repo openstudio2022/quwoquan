@@ -17,7 +17,10 @@ def command_app_content_uat(args: argparse.Namespace) -> dict[str, Any]:
     ]
     device_id = str(getattr(args, "device_id", "") or "").strip()
     dry_run = bool(getattr(args, "dry_run", False))
-    if dry_run or not targets or not device_id:
+    from quwoquan_ops.cli.commands.app_preflight_uat_orchestration import APP_CONTENT_UAT_TARGETS
+    # 非法/重复目标交领域入口给出 typed 拒绝，不能先占用任何本地 runtime。
+    if (dry_run or not targets or not device_id or len(targets) != len(set(targets))
+            or not set(targets).issubset(APP_CONTENT_UAT_TARGETS)):
         return _stackctl._command_app_content_uat(args)
     from quwoquan_ops.cli.commands.app_preflight_uat_offline import content_source_for_target
     try:

@@ -20,6 +20,9 @@ from quwoquan_ops.cli.commands.app_preflight_uat_support import (
 )
 
 
+APP_CONTENT_UAT_TARGETS = frozenset({"alpha-local", "beta-local", "gamma-local"})
+
+
 def prepare_app_content_uat_context(
     *,
     args: argparse.Namespace,
@@ -36,7 +39,7 @@ def prepare_app_content_uat_context(
     dict[str, Any],
 ]:
     """Parse target/device inputs once and preserve fail-closed diagnostics."""
-    allowed_targets = {"alpha-local", "beta-local", "gamma-local"}
+    allowed_targets = APP_CONTENT_UAT_TARGETS
     targets = [
         item.strip()
         for item in str(getattr(args, "targets", "")).split(",")
