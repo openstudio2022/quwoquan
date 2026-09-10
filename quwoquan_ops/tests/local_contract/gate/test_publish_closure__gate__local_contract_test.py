@@ -79,7 +79,6 @@ class PublishClosureGateTest(unittest.TestCase):
             "schema": "quwoquan_data.publish_repository.v2",
             "repositoryId": "publish-closure-test",
             "layoutVersion": 2,
-            "producerContractDigest": _digest(b"local-contract-producer"),
         })
         self._isolate_content_library()
         self.gate = _load_module()
