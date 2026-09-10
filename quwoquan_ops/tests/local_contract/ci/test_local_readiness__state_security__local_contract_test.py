@@ -310,6 +310,32 @@ def test_secret_scan_boundaries_consume_their_exact_snapshot(
     assert observed == expected_reads
 
 
+@pytest.mark.parametrize("case", ["binary_digits", "text_digits", "binary_secret"])
+def test_ci_binary_pii_boundary_keeps_secret_scan(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str) -> None:
+    from quwoquan_ops.ci import verify_ci_changed_boundary as ci
+    from quwoquan_ops.ci.impact_planner_core import build_delivery_impact_plan
+    from quwoquan_ops.cli import local_readiness as cli
+
+    source, tree = "b" * 40, "sha1:" + "c" * 40
+    path = "quwoquan_app/assets/content/alpha/media/test.mp4"
+    digits = b"138" + b"12345678"
+    blob = b"\x00\x00\x00\x18ftypmp42 " + digits
+    if case == "text_digits":
+        blob = digits
+    elif case == "binary_secret":
+        blob += b"\n-----BEGIN " + b"PRIVATE KEY-----\n"
+    plan = build_delivery_impact_plan([path], source_sha=source, base_sha="a" * 40, source_tree_digest=tree)
+    plan_path = tmp_path / "impact-plan.json"
+    plan_path.write_text(json.dumps(plan))
+    monkeypatch.setattr(ci, "_candidate_blob", lambda sha, ref: blob if sha == source and ref == path else None)
+    if case == "binary_digits":
+        ci.verify(plan_path, expected_source_sha=source, expected_tree_digest=tree, expected_plan_digest=plan["plan_digest"])
+    else:
+        expected = "secret material" if case == "binary_secret" else "direct PII"
+        with pytest.raises(cli.LocalReadinessError, match=expected):
+            ci.verify(plan_path, expected_source_sha=source, expected_tree_digest=tree, expected_plan_digest=plan["plan_digest"])
+
+
 def _repo() -> tempfile.TemporaryDirectory[str]:
     return tempfile.TemporaryDirectory()
 

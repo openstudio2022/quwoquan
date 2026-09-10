@@ -56,6 +56,9 @@ def verify(plan_path: Path, *, expected_source_sha: str, expected_tree_digest: s
             raise LocalReadinessError(
                 f"changed candidate secret material detected: {changed_path}"
             )
+        # 与 staged boundary 同口径：先验 secret，二进制不作文本 PII 正则匹配。
+        if b"\x00" in blob[:8192]:
+            continue
         pii_matches = [
             match.group(0).decode("utf-8", errors="replace")
             for pattern in _PII_PATTERNS
