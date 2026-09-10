@@ -160,10 +160,6 @@ type ListFeedRequest struct {
 	// FeedRequestID 客户端回显的归因 id：首刷为空，分页/继续加载回显服务端首刷下发的 id。
 	FeedRequestID   string
 	BlockedKeywords []string
-	// ResearchPrincipal 由 HTTP handler 从已验签 principal 的 research role
-	// 派生（DEC-032）：active release 为 research 时，匿名与非 research 认证
-	// 请求在此单点收敛为 no_active_release 语义的缺席结果。
-	ResearchPrincipal bool
 }
 
 const rankedFeedSessionIDMaxBytes = 128
@@ -372,10 +368,8 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	default:
 		terminalClass = rtrec.FeedRequestClassBrowse
 	}
-	// ActiveSupplySnapshot 是全部 feed route 的 release-class authority。即使
-	// identity/type 选择具名 PostReader、following 或 delivery-page replay，也必须
-	// 在任何 viewer/recommendation/Post 查询前完成同一份 readback；否则具名浏览
-	// 会绕过 DEC-032 的 research principal 收敛。
+	// 全部 feed route 先读取同一 active release identity；具名浏览与 replay
+	// 不绕过 release/readback fence，内容可见性继续由普通账号和 Post 权限决定。
 	activeSupply := ActiveSupplySnapshot{}
 	if s.activeSupply == nil {
 		terminalStage = rtrec.FailureStageActiveSupplyMissing
@@ -399,16 +393,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			fmt.Errorf("active release readback binding is inconsistent"),
 		)
 	}
-	if activeSupply.IsResearchRelease() && !req.ResearchPrincipal {
-		terminalOutcome = rtrec.FeedTerminalEmpty
-		return emptyListFeedResponse(
-			feedRequestID,
-			FeedEmptyReasonNoActiveRelease,
-			"",
-			"",
-		), nil
-	}
-
 	blockedPersonaIDs, blockErr := s.resolveViewerBlockedPersonaIDs(
 		ctx,
 		req.ViewerPersonaID,

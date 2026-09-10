@@ -45,12 +45,12 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 		bson.M{
 			"environment": environment, "sourceOwner": "other_owner",
 			"kind": "candidate", "status": "active", "activeReleaseId": "rel_wrong_owner",
-			"manifestDigest": manifestDigest, "releaseClass": "commercial",
+			"manifestDigest": manifestDigest,
 		},
 		bson.M{
 			"environment": environment, "sourceOwner": "qwq_data",
 			"kind": "active_pointer", "status": "active", "activeReleaseId": "rel_empty",
-			"manifestDigest": manifestDigest, "releaseClass": "commercial",
+			"manifestDigest":    manifestDigest,
 			"projectionVersion": int64(11), "revision": int64(1), "activatedAt": activatedAt,
 		},
 	}); err != nil {
@@ -93,53 +93,43 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	}
 	if snapshot.ActiveReleaseID != releaseID || snapshot.SourceOwner != "qwq_data" ||
 		snapshot.Status != "active" || snapshot.ManifestDigest != manifestDigest ||
-		snapshot.ReleaseClass != "commercial" || snapshot.ProjectionVersion != 11 ||
+		snapshot.ProjectionVersion != 11 ||
 		snapshot.Revision != 1 || !snapshot.ActivatedAt.Equal(activatedAt) ||
 		snapshot.ReadbackStatus != "passed" || snapshot.Posts != 1 || snapshot.PlayableVideos != 1 {
 		t.Fatalf("active supply snapshot mismatch: %+v", snapshot)
 	}
 
-	// 同一 release identity 修复 releaseClass 时必须立即切换缓存身份；旧
-	// commercial snapshot 不得在 TTL 内继续放行匿名 research feed。
+	// 同一 release 再激活必须切换缓存身份，旧 revision 不得在 TTL 内重用。
 	if _, err := collection.UpdateOne(ctx,
 		bson.M{"environment": environment, "sourceOwner": "qwq_data"},
-		bson.M{"$set": bson.M{"releaseClass": "research"}},
+		bson.M{"$set": bson.M{"revision": int64(2), "projectionVersion": int64(12)}},
 	); err != nil {
-		t.Fatalf("switch active release class: %v", err)
+		t.Fatal(err)
 	}
 	snapshot, err = reader.ActiveSupplySnapshot(ctx)
-	if err != nil {
-		t.Fatalf("ActiveSupplySnapshot research class: %v", err)
+	if err != nil || !snapshot.Ready() || snapshot.Revision != 2 || snapshot.ProjectionVersion != 12 {
+		t.Fatalf("activation cache identity drifted: snapshot=%+v err=%v", snapshot, err)
 	}
-	if snapshot.ReleaseClass != "research" || !snapshot.IsResearchRelease() {
-		t.Fatalf("releaseClass cache identity drifted: %+v", snapshot)
-	}
-
-	// DEC-041：production 是 Data producer 单一现役类别。importer 落下 production
-	// pointer 后，匿名 feed/详情读面必须把它当作 release-bound、ready 且非 research。
-	if _, err := collection.UpdateOne(ctx,
-		bson.M{"environment": environment, "sourceOwner": "qwq_data"},
-		bson.M{"$set": bson.M{"releaseClass": "production"}},
-	); err != nil {
-		t.Fatalf("switch active release class to production: %v", err)
+	for _, field := range []string{"releaseClass", "productLifecycleState", "readinessPhase"} {
+		if _, err := collection.UpdateOne(ctx,
+			bson.M{"environment": environment, "sourceOwner": "qwq_data"},
+			bson.M{"$set": bson.M{field: "research"}},
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := reader.ActiveSupplySnapshot(ctx); err == nil {
+			t.Fatalf("retired category %s must invalidate cached supply", field)
+		}
+		if _, err := collection.UpdateOne(ctx,
+			bson.M{"environment": environment, "sourceOwner": "qwq_data"},
+			bson.M{"$unset": bson.M{field: ""}},
+		); err != nil {
+			t.Fatal(err)
+		}
 	}
 	snapshot, err = reader.ActiveSupplySnapshot(ctx)
-	if err != nil {
-		t.Fatalf("ActiveSupplySnapshot production class: %v", err)
-	}
-	if snapshot.ReleaseClass != "production" || snapshot.IsResearchRelease() || !snapshot.Ready() {
-		t.Fatalf("production release must be ready and non-research: %+v", snapshot)
-	}
-
-	// 未知类别仍 fail closed，不得被当作 public serving 放行。
-	if _, err := collection.UpdateOne(ctx,
-		bson.M{"environment": environment, "sourceOwner": "qwq_data"},
-		bson.M{"$set": bson.M{"releaseClass": "preview"}},
-	); err != nil {
-		t.Fatalf("switch active release class to unknown: %v", err)
-	}
-	if _, err := reader.ActiveSupplySnapshot(ctx); err == nil {
-		t.Fatal("unknown releaseClass must be rejected as a malformed active binding")
+	if err != nil || !snapshot.Ready() {
+		t.Fatalf("category-free pointer must recover after repair: %+v err=%v", snapshot, err)
 	}
 }
 
@@ -154,8 +144,8 @@ func TestMongoActiveSupplyReaderIgnoresNonPointerActiveDocuments(t *testing.T) {
 		_, _ = posts.DeleteMany(context.Background(), bson.M{"_id": "pointer-only-post"})
 	})
 	if _, err := state.InsertMany(ctx, []any{
-		bson.M{"kind": "active_pointer", "status": "active", "environment": environment, "sourceOwner": "qwq_data", "activeReleaseId": "pointer-current", "manifestDigest": "sha256:" + strings.Repeat("c", 64), "releaseClass": "commercial", "projectionVersion": int64(21), "revision": int64(1), "activatedAt": time.Now().Add(-time.Hour)},
-		bson.M{"kind": "candidate", "status": "active", "environment": environment, "sourceOwner": "qwq_data", "activeReleaseId": "candidate-later", "manifestDigest": "sha256:" + strings.Repeat("d", 64), "releaseClass": "commercial", "projectionVersion": int64(22), "revision": int64(2), "activatedAt": time.Now()},
+		bson.M{"kind": "active_pointer", "status": "active", "environment": environment, "sourceOwner": "qwq_data", "activeReleaseId": "pointer-current", "manifestDigest": "sha256:" + strings.Repeat("c", 64), "projectionVersion": int64(21), "revision": int64(1), "activatedAt": time.Now().Add(-time.Hour)},
+		bson.M{"kind": "candidate", "status": "active", "environment": environment, "sourceOwner": "qwq_data", "activeReleaseId": "candidate-later", "manifestDigest": "sha256:" + strings.Repeat("d", 64), "projectionVersion": int64(22), "revision": int64(2), "activatedAt": time.Now()},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +191,7 @@ func TestMongoActiveReleaseFencePortFoundNotFoundAndMalformed(t *testing.T) {
 	if _, err := state.InsertOne(ctx, bson.M{
 		"kind": "active_pointer", "status": "active", "environment": environment,
 		"sourceOwner": owner, "activeReleaseId": "release-fence-port",
-		"manifestDigest": digest, "releaseClass": "research",
+		"manifestDigest":    digest,
 		"projectionVersion": int64(31), "revision": int64(4), "activatedAt": activatedAt,
 	}); err != nil {
 		t.Fatal(err)
@@ -209,7 +199,7 @@ func TestMongoActiveReleaseFencePortFoundNotFoundAndMalformed(t *testing.T) {
 	found, err := facade.ReadActiveReleaseFence(ctx, query)
 	if err != nil || !found.Found || found.ReleaseID != "release-fence-port" ||
 		found.ManifestDigest != digest || found.Revision != 4 ||
-		found.ReleaseClass != "research" || found.ProjectionVersion != 31 ||
+		found.ProjectionVersion != 31 ||
 		!found.ActivatedAt.Equal(activatedAt) {
 		t.Fatalf("found active fence=%+v err=%v", found, err)
 	}

@@ -86,7 +86,7 @@ func TestReleaseControlReportMappingsAreExact(t *testing.T) {
 		releaseimport.VerifiedImportedPostReleaseCandidate{
 			Found: true, Environment: "alpha", SourceOwner: "qwq_data",
 			ReleaseID: "release-a", ManifestDigest: digest,
-			ReleaseClass: "research", ReleaseKind: "content", Mode: "sync",
+			ReleaseKind: "content", Mode: "sync",
 			DeletePolicy: "tombstone", ProjectionVersion: 7, VerifiedAt: verifiedAt,
 			ClosureDigests: releaseimport.ImportedReleaseCandidateClosureDigests{
 				Posts: closure, Facts: closure, Media: closure,
@@ -105,7 +105,7 @@ func TestReleaseControlReportMappingsAreExact(t *testing.T) {
 
 	active := releaseimport.ActiveReleaseBinding{
 		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
-		ReleaseID: "release-a", ManifestDigest: digest, ReleaseClass: "research",
+		ReleaseID: "release-a", ManifestDigest: digest,
 		ProjectionVersion: 9, Revision: 1, ActivatedAt: verifiedAt,
 	}
 	activeReceipt, err := releaseimport.BuildContentReleaseActiveReceipt(active, generatedAt)
@@ -124,6 +124,17 @@ func TestReleaseControlReportMappingsAreExact(t *testing.T) {
 		activation.ExpectedActive.Revision != 0 || activation.PreviousActive.Found ||
 		activation.Active.Revision != 1 || activation.Counts.PostsMaterialized != 2 {
 		t.Fatalf("activation receipt=%+v err=%v", activation, err)
+	}
+	for _, receipt := range []any{candidate, activeReceipt, activation} {
+		raw, err := json.Marshal(receipt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, retired := range []string{"releaseClass", "productLifecycleState", "readinessPhase"} {
+			if strings.Contains(string(raw), `"`+retired+`"`) {
+				t.Fatalf("current receipt contains retired field %s: %s", retired, raw)
+			}
+		}
 	}
 }
 
@@ -200,7 +211,7 @@ func TestContentFencedReadbackAcceptsActivationVersionDistinctFromCandidate(t *t
 	candidate := releaseimport.VerifiedImportedPostReleaseCandidate{
 		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
 		ReleaseID: "release-a", ManifestDigest: digest,
-		ReleaseClass: "research", ReleaseKind: "content", Mode: "sync",
+		ReleaseKind: "content", Mode: "sync",
 		DeletePolicy: "tombstone", ProjectionVersion: 2, VerifiedAt: verifiedAt,
 		ClosureDigests: releaseimport.ImportedReleaseCandidateClosureDigests{
 			Posts: closure, Facts: closure, Media: closure,
@@ -212,7 +223,7 @@ func TestContentFencedReadbackAcceptsActivationVersionDistinctFromCandidate(t *t
 	}
 	active := releaseimport.ActiveReleaseBinding{
 		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
-		ReleaseID: "release-a", ManifestDigest: digest, ReleaseClass: "research",
+		ReleaseID: "release-a", ManifestDigest: digest,
 		ProjectionVersion: 3, Revision: 1, ActivatedAt: activatedAt,
 	}
 
@@ -222,7 +233,7 @@ func TestContentFencedReadbackAcceptsActivationVersionDistinctFromCandidate(t *t
 	}
 	if receipt.Status != "passed" || receipt.Reason != "" || receipt.Owner != "content" ||
 		receipt.Revision != 1 || receipt.ProjectionVersion != 3 ||
-		receipt.CandidateProjectionVersion != 2 || receipt.ReleaseClass != "research" ||
+		receipt.CandidateProjectionVersion != 2 ||
 		receipt.Counts == nil || receipt.Counts.PostsProjected != 3 ||
 		receipt.ClosureDigests == nil || receipt.VerifiedAt == nil || receipt.ContentActivatedAt == nil {
 		t.Fatalf("fenced readback receipt=%+v", receipt)
@@ -269,14 +280,14 @@ func TestContentFencedReadbackAcceptsActivationVersionDistinctFromCandidate(t *t
 			reason: "Content verified candidate is absent for the fence tuple",
 		},
 		{
-			name:   "release class differs",
+			name:   "candidate digest differs",
 			active: active,
 			candidate: func() releaseimport.VerifiedImportedPostReleaseCandidate {
 				other := candidate
-				other.ReleaseClass = "commercial"
+				other.ManifestDigest = "sha256:" + strings.Repeat("b", 64)
 				return other
 			}(),
-			reason: "Content verified candidate releaseClass disagrees with the active pointer",
+			reason: "Content verified candidate differs from the requested fence",
 		},
 	}
 	for _, failure := range failures {
@@ -318,7 +329,7 @@ func TestReleaseControlReplayReportUsesExpectedPredecessor(t *testing.T) {
 	now := time.Date(2026, 9, 5, 9, 0, 0, 0, time.UTC)
 	active := releaseimport.ActiveReleaseBinding{
 		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
-		ReleaseID: "release-b", ManifestDigest: digestB, ReleaseClass: "research",
+		ReleaseID: "release-b", ManifestDigest: digestB,
 		ProjectionVersion: 11, Revision: 4, ActivatedAt: now,
 	}
 	expected := releaseimport.ExpectedActiveRelease{

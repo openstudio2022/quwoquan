@@ -46,9 +46,11 @@ final class RuntimeConfigEffectiveManifestValidator {
       return false;
     }
 
+    String source = AppLaunchContract.CONTENT_SOURCE_POLICY.get(environment);
+    if (source == null || !source.equals(stringValue(manifest, "contentSource"))) return false;
     Boolean requiresLocalTransport = booleanValue(manifest, "requiresLocalTransport");
-    boolean targetRequiresLocalTransport =
-        AppLaunchContract.LOCAL_TRANSPORT_TARGETS.contains(target);
+    boolean targetRequiresLocalTransport = "remote".equals(source)
+        && AppLaunchContract.LOCAL_TRANSPORT_TARGETS.contains(target);
     if (requiresLocalTransport == null
         || requiresLocalTransport.booleanValue() != targetRequiresLocalTransport) {
       return false;

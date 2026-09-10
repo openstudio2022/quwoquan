@@ -16,7 +16,7 @@ import quwoquan_ops.cli.lib.startup_attempt_receipt as _pkg
 
 from ..environment_topology import require_formal_release_compose_project
 from ..immutable_image_composition import immutable_image_digest
-from ..output_paths import target_process_dir
+from ..output_paths import target_process_dir, env_runs_root
 from .constants import (
     RECEIPT_FIELDS,
     SCHEMA,
@@ -233,7 +233,7 @@ def _canonical_run_root(value: str, *, env: str) -> Path | None:
     if not text:
         return None
     candidate = _absolute_path(Path(text))
-    expected_parent = _absolute_path(_pkg.output_root()) / "env" / env / "runs"
+    expected_parent = _absolute_path(env_runs_root(env))
     try:
         relative = candidate.relative_to(expected_parent)
     except ValueError as exc:

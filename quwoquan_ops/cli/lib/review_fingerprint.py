@@ -14,6 +14,7 @@ from lib.evidence_fingerprint import (
     canonical_digest,
     normalize_repo_relative_path,
     snapshot_path,
+    snapshot_paths,
     workspace_digests,
 )
 
@@ -55,14 +56,18 @@ def build_review_fingerprint(
     changed_paths: list[str], profiles: list[str], contexts: list[dict[str, Any]],
     initial_reviewers: list[dict[str, Any]], evidence: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    assets = [snapshot(REGISTRY_PATH.relative_to(REPO_ROOT).as_posix())]
+    asset_paths = [REGISTRY_PATH.relative_to(REPO_ROOT).as_posix()]
     if GRADING_PATH.is_file():
-        assets.append(snapshot(GRADING_PATH.relative_to(REPO_ROOT).as_posix()))
+        asset_paths.append(GRADING_PATH.relative_to(REPO_ROOT).as_posix())
     for reviewer in initial_reviewers:
-        assets.extend((
-            snapshot(f".agents/skills/review/references/roles/{reviewer['role']}/ROLE.md"),
-            snapshot((REFERENCES_DIR / reviewer["checklist"]).relative_to(REPO_ROOT).as_posix()),
+        asset_paths.extend((
+            f".agents/skills/review/references/roles/{reviewer['role']}/ROLE.md",
+            (REFERENCES_DIR / reviewer["checklist"]).relative_to(REPO_ROOT).as_posix(),
         ))
+    generator_path = "quwoquan_ops/cli/review_dispatch.py"
+    # 每次重算独立批读，恢复原顺序及重复项，保持exact digest语义。
+    by_path = {item["path"]: item for item in snapshot_paths([*asset_paths, generator_path], repo_root=REPO_ROOT)}
+    assets = [by_path[path] for path in asset_paths]
     review_identity = {
         "workflow": workflow, "deliverable": deliverable, "scope": scope,
         "candidate_evidence_identity": candidate_evidence_identity,
@@ -110,7 +115,7 @@ def build_review_fingerprint(
                     for item in initial_reviewers
                 ]),
                 "generator_digest": canonical_digest(
-                    snapshot("quwoquan_ops/cli/review_dispatch.py")
+                    by_path[generator_path]
                 ),
             },
         },

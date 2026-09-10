@@ -746,7 +746,22 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
         )
         self.assertEqual(manifest["environment"], "prod")
         self.assertEqual(manifest["target"], "prod-hosted")
-        self.assertIsNone(manifest["runtimeTopology"])
+        # prod-hosted 不装配本地 Compose 拓扑；其 runtimeTopology 只是 access-isolation
+        # 驱动渲染输入的身份摘要，供 environmentArtifact 复算。
+        topology_ref = manifest["runtimeTopology"]
+        self.assertEqual(
+            topology_ref["ref"], "packages/runtime-shared/runtime-topology/manifest.json"
+        )
+        hosted_topology = json.loads(
+            (package_dir / "runtime-topology/manifest.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(hosted_topology["assembly"], "hosted-render")
+        self.assertEqual(hosted_topology["target"], "prod-hosted")
+        self.assertNotIn("compose", hosted_topology)
+        self.assertEqual(hosted_topology["topologyDigest"], topology_ref["topologyDigest"])
+        self.assertEqual(
+            hosted_topology["dataPlaneBinding"], manifest["dataPlaneBinding"]
+        )
         binding = manifest["dataPlaneBinding"]
         self.assertEqual(
             binding["ref"],

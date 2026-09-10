@@ -10,7 +10,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Mapping
 
-from .agent_governance_contract import validate_required_fields
+from .agent_governance_contract import contract_schema_version, contract_section, validate_required_fields
+from .descriptor_safe_io import read_regular_single_link_at
 from .evidence_fingerprint import canonical_json_bytes
 from .objective_execution import secure_storage
 
@@ -29,6 +30,7 @@ _IDENTITY_FIELDS = (
     "human_decision_projection",
     "owner_identity_ref",
     "candidate_evidence_ref",
+    "candidate_closure",
     "review_plan_ref",
     "evidence_receipt_refs",
     "reviewer_result_refs",
@@ -132,6 +134,8 @@ def validate_ref_bytes(handoff_ref: str, exact_bytes: bytes) -> dict[str, Any]:
     """Validate a portable artifact by explicit ref, without clone inventory."""
 
     identity, byte_digest = _parse_ref(handoff_ref)
+    if len(exact_bytes) > int(contract_section("handoff_manifest")["max_bytes"]):
+        raise HandoffStoreError("handoff 超出有界闭包字节预算")
     if _sha256(exact_bytes) != byte_digest:
         raise HandoffStoreConflict("handoff ref 与 exact bytes 不一致")
     try:
@@ -142,6 +146,13 @@ def validate_ref_bytes(handoff_ref: str, exact_bytes: bytes) -> dict[str, Any]:
         raise HandoffStoreError("published handoff 必须为 JSON object")
     try:
         validate_required_fields(payload, "handoff_manifest")
+        if payload["schema_version"] != contract_schema_version("handoff_manifest"):
+            raise ValueError("IDENTITY.MIGRATION_REQUIRED: handoff schema 已过期")
+        from .candidate_evidence import validate_candidate_closure
+        validate_candidate_closure(
+            payload["candidate_closure"], candidate_ref=payload["candidate_evidence_ref"],
+            owner_identity_ref=payload["owner_identity_ref"],
+        )
     except (TypeError, ValueError) as error:
         raise HandoffStoreError(str(error)) from error
     if canonical_json_bytes(payload) != exact_bytes:
@@ -168,7 +179,10 @@ def _read_existing(root_fd: int, name: str) -> bytes | None:
             return None
         raise
     try:
-        return secure_storage.read_all(descriptor, "published handoff")
+        return read_regular_single_link_at(
+            root_fd, name, display_path="published handoff", require_current_name=True,
+            max_bytes=int(contract_section("handoff_manifest")["max_bytes"]),
+        )
     finally:
         os.close(descriptor)
 
@@ -186,6 +200,7 @@ def publish(payload: Mapping[str, Any], *, repo_root: Path) -> tuple[str, bytes]
         raise HandoffStoreError("handoff identity 尚未正确绑定")
     exact_bytes = canonical_json_bytes(mutable)
     handoff_ref = f"{HANDOFF_REF_VERSION}:{expected_identity}:{_sha256(exact_bytes)}"
+    validate_ref_bytes(handoff_ref, exact_bytes)
     name = _entry_name(expected_identity)
     root_fd: int | None = None
     staging_fd: int | None = None

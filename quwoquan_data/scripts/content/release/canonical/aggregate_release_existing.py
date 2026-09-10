@@ -42,7 +42,6 @@ def reuse_existing_aggregate_release(
     source_digest_documents: list[dict[str, object]],
     source_digests: tuple[SourceDefinitionSnapshot, ...],
     desired: dict[str, list[str]],
-    release_class: str,
     cohort_selection: ExplicitCohortSelection,
     release_contents: list[dict[str, object]] | None,
     release_authors: list[dict[str, object]] | None,
@@ -95,7 +94,6 @@ def reuse_existing_aggregate_release(
             release_id=release_id,
             objects_root=payload_file(final_root, "objects"),
             desired=desired,
-            release_class=release_class,
         )
         assert_valid(
             expected_asset_admission,
@@ -118,8 +116,6 @@ def reuse_existing_aggregate_release(
             source_digest_documents=source_digest_documents,
             asset_admission=asset_admission,
             canonical_merkle=selected_merkle,
-            release_class=release_class,
-            product_lifecycle_state=release_class,
             pool_digest=cohort_selection.pool_digest,
             counts=carrier_counts,
             contents=release_contents,
@@ -152,22 +148,15 @@ def reuse_existing_aggregate_release(
             )
 
         media_manifest = _read_json(payload_file(final_root, "media_manifest.json"))
-        if True:
-            expected_media_manifest = build_release_media_manifest_fn(
-                release_id=release_id,
-                post_refs=desired["posts"],
-                entity_refs=desired["entities"],
-                creator_refs=desired["creators"],
-                publish_root=publish_root,
-                release_class=release_class,
-            )
-            if (
-                expected_media_manifest["issues"]
-                or media_manifest != expected_media_manifest
-            ):
-                raise ObjectTransactionError(
-                    "existing release media manifest drifted"
-                )
+        expected_media_manifest = build_release_media_manifest_fn(
+            release_id=release_id,
+            post_refs=desired["posts"],
+            entity_refs=desired["entities"],
+            creator_refs=desired["creators"],
+            publish_root=publish_root,
+        )
+        if expected_media_manifest["issues"] or media_manifest != expected_media_manifest:
+            raise ObjectTransactionError("existing release media manifest drifted")
         assert_valid(
             media_manifest,
             "release",
@@ -213,7 +202,6 @@ def reuse_existing_aggregate_release(
             tag_count=len(tag_refs),
             payload_sha256=payload_digest(final_root),
             recorded_at=typed_attestation.recorded_at,
-            release_class=release_class,
             source_identities=source_identities,
             source_identity_set_digest=source_identity_set_digest,
         )

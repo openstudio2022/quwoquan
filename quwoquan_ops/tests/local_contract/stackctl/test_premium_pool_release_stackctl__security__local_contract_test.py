@@ -22,6 +22,7 @@ from quwoquan_ops.cli.lib import (
 from quwoquan_ops.tests.support.derivable_release_payload_test_support import (
     write_derivable_release_payload,
 )
+from quwoquan_ops.tests.support.test_data_verification_test_support import _readiness, _with_checksum
 
 
 def _jwt(claims: dict[str, object], *, alg: str = "HS256") -> str:
@@ -35,7 +36,6 @@ def _jwt(claims: dict[str, object], *, alg: str = "HS256") -> str:
 def _test_live_readiness_fixture(
     root: Path,
     *,
-    phase: str = "consumer",
     video_work_id: str = "video-1",
 ) -> tuple[Path, dict[str, object]]:
     receipt_ref = (
@@ -45,17 +45,10 @@ def _test_live_readiness_fixture(
     receipt.parent.mkdir(parents=True)
     # readiness keeps environment verification only; release samples are carried
     # by the exact header-bound ReleaseUatSamplePlan projected into appUatPlan.
-    readiness = {
-        "schema": "quwoquan_data.environment_release_readiness",
-        "environment": "alpha",
-        "readinessPhase": phase,
-        "passed": True,
-        "releaseId": "release-1",
-        "manifestDigest": "sha256:" + "a" * 64,
-        "importRunId": "apply-1",
-        "verifyRunId": "verify-1",
-        "feedQueries": [{"name": "typed_video", "matchedPostIds": [video_work_id]}],
-    }
+    readiness = _readiness(
+        environment="alpha", manifest_digest="sha256:" + "a" * 64,
+        post_ids=("article-1", "image-1", video_work_id), entity_ref="homepage-1",
+    )
     encoded = json.dumps(readiness, sort_keys=True).encode("utf-8")
     receipt.write_bytes(encoded)
     runtime_identity = {
@@ -142,8 +135,9 @@ def _write_candidate_release_fixture(
             "contentId": f"{carrier}-1",
             "version": 1,
             "postRef": f"{carrier}/{carrier}-1/1",
-            "executionId": "execution-1",
-            "sourceIdentityDigest": content_source_identity_digest,
+            "selectionIdentityDigest": content_source_identity_digest,
+            "canonicalObjectDigest": "sha256:" + "7" * 64,
+            "contentLibraryBindingDigest": "sha256:" + "8" * 64,
         }
         for carrier in ("article", "image", "video")
     ]
@@ -153,15 +147,17 @@ def _write_candidate_release_fixture(
         "releaseId": release_id,
         "sourceOwner": "qwq_data",
         "releaseKind": "content",
-        "releaseClass": "research",
-        "productLifecycleState": "research",
         "sourceIdentities": source_identities,
         "sourceIdentitySetDigest": source_identity_set_digest,
         "poolDigest": pool_digest,
         "canonicalMerkle": canonical_merkle,
-        "selectionScope": "target_environment",
-        "targetEnvironment": "alpha",
-        "releaseMode": "research",
+        "containsUnverifiedAssets": True,
+        "rightsStatusCounts": {"verified": 0, "unverified": 1, "restricted": 0, "unknown": 0},
+        "authorizationRequiredAssetIds": ["media-1"],
+        "researchAcceptedCount": 1,
+        "commercialAcceptedCount": 0,
+        "executionIds": ["execution-1"],
+        "sourceDigests": [{"algorithm": "sha256", "digest": "sha256:" + "9" * 64, "inputs": ["quwoquan_data"]}],
         "counts": {"homepage": 1, "article": 1, "image": 1, "video": 1, "total": 4},
         "contents": contents,
         "authors": [],
@@ -178,10 +174,18 @@ def _write_candidate_release_fixture(
         "releaseId": release_id,
         "sourceOwner": "qwq_data",
         "releaseKind": "content",
-        "releaseClass": "research",
-        "productLifecycleState": "research",
         "payloadSha256": manifest_digest,
+        **{key: header[key] for key in (
+            "containsUnverifiedAssets", "rightsStatusCounts", "authorizationRequiredAssetIds",
+            "researchAcceptedCount", "commercialAcceptedCount", "executionIds", "sourceDigests",
+            "sourceIdentities", "sourceIdentitySetDigest", "canonicalMerkle",
+        )},
+        "carrierCounts": {"homepage": 1, "article": 1, "image": 1, "video": 1, "total": 4},
+        "entityCount": 1, "postCount": 3, "creatorCount": 0, "tagCount": 0,
+        "recordedAt": "2026-09-09T00:00:00Z",
     }
+    premium_pool_release._validate_release_document(header, "release_header")
+    premium_pool_release._validate_release_document(attestation, "release_attestation")
     attestation_path = release_root / "attestations/release.json"
     attestation_path.parent.mkdir(parents=True, exist_ok=True)
     attestation_path.write_text(
@@ -275,9 +279,59 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
         self.assertEqual(kind, "managed_local_hs256_operator")
         mint.assert_called_once_with("gamma", "gamma-local")
 
+    def test_attestation_rejects_old_tracks_before_sample_projection(self) -> None:
+        # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            path, _ = _write_candidate_release_fixture(
+                root, release_id="release-1", manifest_digest="sha256:" + "a" * 64
+            )
+            original = json.loads(path.read_bytes())
+            for field in ("releaseClass", "productLifecycleState", "readinessPhase"):
+                for phase in ("production", "default", "research", "commercial", "consumer", "import", "", None):
+                    with self.subTest(field=field, phase=phase):
+                        raw = json.dumps({**original, field: phase}).encode("utf-8")
+                        path.write_bytes(raw)
+                        with self.assertRaisesRegex(
+                            premium_pool_release.PremiumPoolReleaseError,
+                            "release_attestation schema",
+                        ):
+                            premium_pool_release._load_release_sample_plan_documents_from_attestation(
+                                release_id="release-1",
+                                manifest_digest="sha256:" + "a" * 64,
+                                attestation_ref=str(path),
+                                attestation_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+                            )
+
+    def test_release_header_rejects_category_fields_with_current_attestation(self) -> None:
+        # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            path, digest = _write_candidate_release_fixture(
+                root, release_id="release-1", manifest_digest="sha256:" + "a" * 64
+            )
+            header_path = path.parents[1] / "payload/release.json"
+            original = json.loads(header_path.read_bytes())
+            for field in ("releaseClass", "productLifecycleState", "readinessPhase"):
+                for phase in ("production", "default", "research", "commercial", "consumer", "import", "", None):
+                    with self.subTest(field=field, phase=phase):
+                        header_path.write_text(
+                            json.dumps({**original, field: phase}), encoding="utf-8"
+                        )
+                        with self.assertRaisesRegex(
+                            premium_pool_release.PremiumPoolReleaseError,
+                            "release_header schema",
+                        ):
+                            premium_pool_release._load_release_sample_plan_documents_from_attestation(
+                                release_id="release-1",
+                                manifest_digest="sha256:" + "a" * 64,
+                                attestation_ref=str(path),
+                                attestation_digest=digest,
+                            )
+
     def test_candidate_binding_rejects_video_outside_active_release(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             release_id = "release-1"
             manifest_digest = "sha256:" + "a" * 64
             attestation_path, attestation_digest = _write_candidate_release_fixture(
@@ -285,61 +339,13 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                 release_id=release_id,
                 manifest_digest=manifest_digest,
             )
-            receipt = root / "data-release/release/verify/release-readiness.json"
+            receipt = root / "data-release/release-1/verify-1/release-readiness.json"
             receipt.parent.mkdir(parents=True)
-            receipt.write_text(
-                json.dumps(
-                    {
-                        "schema": "quwoquan_data.environment_release_readiness",
-                        "environment": "alpha",
-                        "releaseId": release_id,
-                        "releaseKind": "content",
-                        "sourceOwner": "qwq_data",
-                        "releaseClass": "research",
-                        "productLifecycleState": "research",
-                        "sourceIdentities": [
-                            {
-                                "sourceRevision": "sha256:" + "2" * 64,
-                                "sourceDigest": "sha256:" + "3" * 64,
-                                "entityCatalogDigest": "sha256:" + "4" * 64,
-                                "executionIds": ["execution-1"],
-                            }
-                        ],
-                        "sourceIdentitySetDigest": _checksum(
-                            {
-                                "schema": "quwoquan_data.source_identity_set",
-                                "sourceIdentities": [
-                                    {
-                                        "sourceRevision": "sha256:" + "2" * 64,
-                                        "sourceDigest": "sha256:" + "3" * 64,
-                                        "entityCatalogDigest": "sha256:" + "4" * 64,
-                                        "executionIds": ["execution-1"],
-                                    }
-                                ],
-                            }
-                        ),
-                        "readinessPhase": "consumer",
-                        "manifestDigest": manifest_digest,
-                        "importRunId": "apply-1",
-                        "verifyRunId": "verify-1",
-                        "entityRefs": ["homepage-1"],
-                        "postIds": ["article-1", "image-1", "video-1"],
-                        "feedQueries": [
-                            {
-                                "name": "homepage_recommend",
-                                "matchedPostIds": ["article-1"],
-                            },
-                            {"name": "typed_video", "matchedPostIds": ["video-1"]},
-                            {
-                                "name": "premium_stream",
-                                "matchedPostIds": ["video-1"],
-                            },
-                        ],
-                        "passed": True,
-                    }
-                ),
-                encoding="utf-8",
-            )
+            receipt.write_text(json.dumps(_readiness(
+                environment="alpha", release_id=release_id, manifest_digest=manifest_digest,
+                post_ids=("article-1", "image-1", "video-1"), entity_ref="homepage-1",
+                source_identities=json.loads(attestation_path.read_bytes())["sourceIdentities"],
+            )), encoding="utf-8")
             with (
                 mock.patch.object(
                     premium_pool_release,
@@ -368,28 +374,145 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                     "env_runs_root",
                     return_value=root,
                 ),
-                self.assertRaisesRegex(
+            ):
+                readiness = json.loads(receipt.read_text(encoding="utf-8"))
+                for field in ("readinessPhase", "releaseClass", "productLifecycleState"):
+                    for phase in ("production", "default", "research", "commercial", "consumer", "import", "", None):
+                        with self.subTest(field=field, phase=phase):
+                            receipt.write_text(
+                                json.dumps({**readiness, field: phase}), encoding="utf-8"
+                            )
+                            with self.assertRaisesRegex(
+                                premium_pool_release.PremiumPoolReleaseError,
+                                "environment_release_readiness schema",
+                            ):
+                                premium_pool_release.load_premium_pool_candidate_binding(
+                                    environment="alpha",
+                                    target="alpha-local",
+                                    readiness_receipt=receipt,
+                                    content_id="video-1",
+                                )
+                receipt.write_text(json.dumps(readiness), encoding="utf-8")
+                binding = premium_pool_release.load_premium_pool_candidate_binding(
+                    environment="alpha", target="alpha-local",
+                    readiness_receipt=receipt, content_id="video-1",
+                )
+                self.assertEqual(binding.import_run_id, readiness["importRunId"])
+                plan = premium_pool_release._load_release_sample_plan_from_attestation(
+                    release_id=release_id, manifest_digest=manifest_digest, readiness=readiness,
+                    attestation_ref=attestation_path, attestation_digest=attestation_digest,
+                )
+                self.assertEqual(len(plan["requiredCasePlan"]), 16)
+                self.assertEqual(len(plan["orderedSamples"]), 4)
+                for field in ("readinessPhase", "releaseClass", "productLifecycleState"):
+                    self.assertNotIn(field, plan["releaseIdentity"])
+                self.assertTrue(readiness["containsUnverifiedAssets"])
+                with self.assertRaisesRegex(
                     premium_pool_release.PremiumPoolReleaseError,
                     "ReleaseUatSamplePlan video sample",
-                ),
-            ):
-                premium_pool_release.load_premium_pool_candidate_binding(
-                    environment="alpha",
-                    target="alpha-local",
-                    readiness_receipt=receipt,
-                    content_id="video-other",
-                )
+                ):
+                    premium_pool_release.load_premium_pool_candidate_binding(
+                        environment="alpha",
+                        target="alpha-local",
+                        readiness_receipt=receipt,
+                        content_id="video-other",
+                    )
 
-    def test_test_live_binding_accepts_exact_consumer_and_commercial_video(
+    def test_bootstrap_preserves_prepared_import_and_object_rights_without_category(self) -> None:
+        # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            digest = "sha256:" + "a" * 64
+            attestation, attestation_digest = _write_candidate_release_fixture(
+                root, release_id="release-1", manifest_digest=digest,
+            )
+            report = {
+                "schema": "quwoquan.content_import_report", "environment": "alpha",
+                "releaseId": "release-1", "manifestDigest": digest, "sourceOwner": "qwq_data",
+                "status": "staged", "activationMode": "stage-only", "mode": "upsert", "deletePolicy": "none",
+                "counts": {"postsLoaded": 1, "entitiesLoaded": 1}, "auditEvents": [],
+                "postBindings": [{"postRef": "video/video-1/1", "postId": "post-video-1",
+                                  "contentId": "video-1", "contentVersion": 1, "contentType": "video",
+                                  "usageScope": "research", "authorId": "author-1"}],
+                "stageResult": {"postsExpected": 1, "postsProjected": 1, "mediaExpected": 1,
+                                "mediaProjected": 1, "outboxExpected": 1, "outboxProjected": 1,
+                                "projectionVersion": 1, "replayed": False},
+            }
+            premium_pool_release._validate_release_document(report, "import_report")
+            path = root / "data-release/release-1/apply-1/import.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(report), encoding="utf-8")
+            with (
+                mock.patch.object(premium_pool_release, "env_runs_root", return_value=root),
+                mock.patch.object(premium_pool_release, "active_deployment_candidate", return_value={"baselineId": "sha256:" + "b" * 64}),
+                mock.patch.object(premium_pool_release, "load_candidate_manifest", return_value={
+                    "packageDigest": "sha256:" + "c" * 64, "sourceRevision": "a" * 40,
+                    "release": {"candidate": {"releaseId": "release-1", "releaseDigest": digest,
+                                               "attestationRef": str(attestation), "attestationDigest": attestation_digest}},
+                }),
+            ):
+                binding = premium_pool_release.load_premium_pool_bootstrap_binding(
+                    environment="alpha", target="alpha-local", import_report=path,
+                    content_id="post-video-1", pool_is_empty=True,
+                )
+                self.assertEqual(binding.import_run_id, "apply-1")
+                self.assertEqual(binding.content_id, "post-video-1")
+                self.assertEqual(json.loads(path.read_bytes())["postBindings"][0]["usageScope"], "research")
+                for field in ("readinessPhase", "releaseClass", "productLifecycleState"):
+                    path.write_text(json.dumps({**report, field: "production"}), encoding="utf-8")
+                    with self.subTest(field=field), self.assertRaisesRegex(premium_pool_release.PremiumPoolReleaseError, "import_report schema"):
+                        premium_pool_release.load_premium_pool_bootstrap_binding(
+                            environment="alpha", target="alpha-local", import_report=path,
+                            content_id="post-video-1", pool_is_empty=True,
+                        )
+
+    def test_test_live_rejects_unknown_schema_and_symlink_receipt_ancestors(self) -> None:
+        # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            receipt, binding = _test_live_readiness_fixture(root)
+            source = receipt.read_bytes()
+            with (
+                mock.patch.object(premium_pool_release, "output_root", return_value=root),
+                mock.patch.object(premium_pool_release, "load_test_live_content_binding", return_value=binding),
+            ):
+                for field, value in (("unknownCategory", "default"), ("guestLogin", {}), ("verificationChecksum", "sha256:" + "0" * 64)):
+                    raw = json.dumps({**json.loads(source), field: value}).encode()
+                    receipt.write_bytes(raw)
+                    binding["readinessReceiptDigest"] = "sha256:" + hashlib.sha256(raw).hexdigest()
+                    with self.subTest(field=field), self.assertRaises(premium_pool_release.PremiumPoolReleaseError):
+                        premium_pool_release.load_premium_pool_test_live_binding(
+                            environment="alpha", target="alpha-local", readiness_receipt=receipt, content_id="video-1",
+                        )
+                receipt.write_bytes(source)
+                binding["readinessReceiptDigest"] = "sha256:" + hashlib.sha256(source).hexdigest()
+                real_parent = receipt.parent.with_name("actual-verify")
+                receipt.parent.rename(real_parent)
+                receipt.parent.symlink_to(real_parent, target_is_directory=True)
+                with self.assertRaisesRegex(premium_pool_release.PremiumPoolReleaseError, "non-symlink"):
+                    premium_pool_release.load_premium_pool_test_live_binding(
+                        environment="alpha", target="alpha-local", readiness_receipt=receipt, content_id="video-1",
+                    )
+
+    def test_test_live_binding_accepts_no_category_and_rejects_category_fields(
         self,
     ) -> None:
-        for phase in ("consumer", "commercial"):
-            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                receipt, content_binding = _test_live_readiness_fixture(
-                    root,
-                    phase=phase,
-                )
+        # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+        cases = [(None, None)] + [
+            (field, phase)
+            for field in ("readinessPhase", "releaseClass", "productLifecycleState")
+            for phase in ("production", "default", "consumer", "commercial", "research", "import", "", None)
+        ]
+        for field, phase in cases:
+            with self.subTest(field=field, phase=phase), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                receipt, content_binding = _test_live_readiness_fixture(root)
+                if field is not None:
+                    readiness = json.loads(receipt.read_bytes())
+                    readiness[field] = phase
+                    receipt.write_text(json.dumps(_with_checksum(readiness)), encoding="utf-8")
+                    content_binding["readinessReceiptDigest"] = "sha256:" + hashlib.sha256(receipt.read_bytes()).hexdigest()
+                original_receipt = receipt.read_bytes()
                 with (
                     mock.patch.object(
                         premium_pool_release,
@@ -402,6 +525,18 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                         return_value=content_binding,
                     ),
                 ):
+                    if field is not None:
+                        with self.assertRaisesRegex(
+                            premium_pool_release.PremiumPoolReleaseError,
+                            "environment_release_readiness schema",
+                        ):
+                            premium_pool_release.load_premium_pool_test_live_binding(
+                                environment="alpha",
+                                target="alpha-local",
+                                readiness_receipt=receipt,
+                                content_id="video-1",
+                            )
+                        continue
                     binding = premium_pool_release.load_premium_pool_test_live_binding(
                         environment="alpha",
                         target="alpha-local",
@@ -409,7 +544,9 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                         content_id="video-1",
                     )
 
-                self.assertEqual(binding.readiness_phase, phase)
+                self.assertEqual(receipt.read_bytes(), original_receipt)
+                self.assertTrue(json.loads(original_receipt)["containsUnverifiedAssets"])
+                self.assertFalse(hasattr(binding, "readiness_phase"))
                 self.assertEqual(binding.startup_attempt_id, "attempt-alpha-1")
                 self.assertEqual(binding.content_id, "video-1")
 
@@ -417,13 +554,13 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             receipt, content_binding = _test_live_readiness_fixture(root)
             readiness = json.loads(receipt.read_text(encoding="utf-8"))
-            readiness["feedQueries"] = [
-                {"name": "typed_video", "matchedPostIds": ["video-guessed"]}
-            ]
-            encoded = json.dumps(readiness, sort_keys=True).encode("utf-8")
+            for query in readiness["feedQueries"]:
+                if query["name"] == "typed_video":
+                    query["matchedPostIds"] = ["image-1"]
+            encoded = json.dumps(_with_checksum(readiness), sort_keys=True).encode("utf-8")
             receipt.write_bytes(encoded)
             content_binding["readinessReceiptDigest"] = (
                 "sha256:" + hashlib.sha256(encoded).hexdigest()
@@ -475,7 +612,7 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             receipt, content_binding = _test_live_readiness_fixture(root)
             with (
                 mock.patch.object(
@@ -615,7 +752,6 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
             import_run_id="apply-1",
             verify_run_id="verify-1",
             content_id="video-1",
-            readiness_phase="consumer",
             readiness_receipt_ref="env/alpha/runs/readiness.json",
             readiness_receipt_digest="sha256:" + "e" * 64,
             startup_attempt_id="attempt-alpha-1",
@@ -685,7 +821,6 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
             import_run_id="apply-1",
             verify_run_id="verify-1",
             content_id="video-1",
-            readiness_phase="consumer",
             readiness_receipt_ref="env/alpha/runs/readiness.json",
             readiness_receipt_digest="sha256:" + "b" * 64,
             startup_attempt_id="attempt-alpha-1",

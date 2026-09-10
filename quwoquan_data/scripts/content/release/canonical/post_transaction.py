@@ -192,14 +192,16 @@ def build_post_object_transaction_package(
             related_sources = _asset_sources(raw, source_assets)
             primary_source = related_sources[0] if related_sources else {}
             asset_id = str(raw.get("assetId") or f"asset-{index + 1}").strip()
+            # 来源页优先于许可证页：authorizationProof 只证明授权依据，不是资产来源；
+            # 放在最后仅作无任何来源字段时的 https 兜底，避免 rights 账本把 CC 许可证页当成 sourceUrl。
             source_url = _https(
-                raw.get("authorizationProof"),
                 raw.get("collectionPageUrl"),
                 raw.get("sourceUrl"),
-                primary_source.get("authorizationProof"),
                 primary_source.get("collectionPageUrl"),
                 primary_source.get("url"),
                 *(source_manifest.get("sourceUrls") or []),
+                raw.get("authorizationProof"),
+                primary_source.get("authorizationProof"),
             )
             authorization_proof = _https(
                 raw.get("authorizationProof"),
@@ -336,7 +338,9 @@ def build_post_object_transaction_package(
                 "canonicalFilePage": source_url,
                 "snapshotUrl": source_url,
                 "pageRevision": _digest_file(snapshot_path),
-                "originalAssetUrl": _https(primary_source.get("url"), source_url),
+                "originalAssetUrl": _https(
+                    raw.get("originalAssetUrl"), primary_source.get("url"), source_url
+                ),
                 "author": author,
                 "source": _https(
                     raw.get("collectionPageUrl"),
@@ -380,6 +384,8 @@ def build_post_object_transaction_package(
                 # 水印判定来自看过像素的 AI 申报（经 ingest 转录到资产行）；缺席只能记 unknown。
                 "watermarkStatus": str(raw.get("watermarkStatus") or "unknown"),
                 "watermarkKind": str(raw.get("watermarkKind") or "unknown"),
+                # 访问政策只转录不判否；缺席即缺席，不补 open。
+                **({"accessPolicy": str(raw["accessPolicy"])} if raw.get("accessPolicy") else {}),
             }
             rights_rows.append(rights_row)
             cas_rows.append(

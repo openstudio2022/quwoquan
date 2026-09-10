@@ -33,6 +33,7 @@ from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     is_digest_identity,
     load_launch_manifest_contract,
     runtime_config_package_digest,
+    runtime_document_content_source,
     runtime_config_trust_envelope_digest,
     validate_handoff_against_metadata,
     validate_runtime_config_package,
@@ -267,6 +268,13 @@ def build_handoff(
     )
     if package_issues:
         raise ValueError("; ".join(package_issues))
+    content_source = runtime_document_content_source(runtime_package, contract)
+    requires_local_transport = content_source == "remote" and args.target in local_targets
+    if content_source == "bundled_snapshot" and (
+        args.transport_required or any((args.reverse_expected_ports, args.reverse_actual_ports,
+                                       args.reverse_receipt_digest, args.consumer_lease_id))
+    ):
+        raise ValueError("offline bootstrap cannot carry transport or endpoint authority")
     for field, expected in (
         ("environment", args.env),
         ("buildProfile", build_profile),
@@ -331,7 +339,8 @@ def build_handoff(
         "launchPolicy": args.launch_policy,
         "runtimeConfigPackageDigest": package_digest,
         "runtimeConfigTrustEnvelopeDigest": trust_envelope_digest,
-        "requiresLocalTransport": args.target in local_targets,
+        "contentSource": content_source,
+        "requiresLocalTransport": requires_local_transport,
         "transport": {
             "required": args.transport_required,
             **transport_values,
@@ -367,7 +376,35 @@ def build_handoff(
     return handoff
 
 
+def check_remote_launch_surface(arguments: list[str]) -> int:
+    """只校验现有 launcher 参数，不启动 runtime 或签发 readiness。"""
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--env", action="append", default=[])
+    parser.add_argument("--target", action="append", default=[])
+    args, _ = parser.parse_known_args(arguments)
+    contract = load_launch_manifest_contract()
+    environments = set(args.env)
+    for target in args.target:
+        if target not in contract["target_environment"]:
+            raise ValueError("APP.LAUNCH.launch_surface_unsupported: invalid target")
+        environments.add(contract["target_environment"][target])
+    if not environments:
+        environments.add(os.environ.get("QWQ_ENVIRONMENT", "alpha"))
+    if len(environments) != 1:
+        raise ValueError("APP.LAUNCH.launch_surface_unsupported: conflicting environment selectors")
+    source = contract["content_source_policy"].get(next(iter(environments)))
+    if source != "remote":
+        raise ValueError("APP.LAUNCH.launch_surface_unsupported: offline hermetic/UAT requires device-bound evidence; use direct run.sh for development")
+    return 0
+
+
 def main() -> int:
+    if sys.argv[1:2] == ["--check-remote-launch-surface"]:
+        try:
+            return check_remote_launch_surface(sys.argv[2:])
+        except (LaunchManifestContractError, ValueError) as error:
+            print(f"GATE_BLOCK: {error}", file=sys.stderr)
+            return 2
     try:
         contract = load_launch_manifest_contract()
     except LaunchManifestContractError as exc:

@@ -38,7 +38,7 @@ type AssetManifestItem struct {
 	Kind    string `json:"kind,omitempty" bson:"kind,omitempty"`
 	// AccessMode 是媒体交付访问模式（DEC-033，契约 PostArticleAsset.accessMode，
 	// enum 唯一真相源 contracts/metadata/_shared/types.yaml
-	// MediaDeliveryAccessMode）。由 release header 的 releaseClass 单点映射写入，
+	// MediaDeliveryAccessMode）。由已验证 release authority 写入公开交付，
 	// signed_grant 时 App 必须按 assetId 换取短签。新 immutable release 必须
 	// 显式 public|signed_grant；空串只属于具名 previous-version public migration 边界，
 	// 不得进入本 importer。
@@ -172,7 +172,6 @@ type ReleaseBinding struct {
 	ReleaseID      string
 	SourceOwner    string
 	ReleaseKind    string
-	ReleaseClass   string
 	ManifestDigest string
 }
 
@@ -181,11 +180,10 @@ func LoadReleaseBinding(releaseRoot string) (ReleaseBinding, error) {
 	headerPath := filepath.Join(releaseRoot, "payload", "release.json")
 	attestationPath := filepath.Join(releaseRoot, "attestations", "release.json")
 	var header struct {
-		Schema       string `json:"schema"`
-		ReleaseID    string `json:"releaseId"`
-		SourceOwner  string `json:"sourceOwner"`
-		ReleaseKind  string `json:"releaseKind"`
-		ReleaseClass string `json:"releaseClass"`
+		Schema      string `json:"schema"`
+		ReleaseID   string `json:"releaseId"`
+		SourceOwner string `json:"sourceOwner"`
+		ReleaseKind string `json:"releaseKind"`
 	}
 	if err := loadReleaseJSON(headerPath, &header); err != nil {
 		return empty, fmt.Errorf("load release header: %w", err)
@@ -247,7 +245,6 @@ func LoadReleaseBinding(releaseRoot string) (ReleaseBinding, error) {
 		ReleaseID:      headerReleaseID,
 		SourceOwner:    "qwq_data",
 		ReleaseKind:    headerReleaseKind,
-		ReleaseClass:   strings.TrimSpace(header.ReleaseClass),
 		ManifestDigest: manifestDigest,
 	}, nil
 }
@@ -265,6 +262,15 @@ func loadReleaseJSON(path string, target any) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return fmt.Errorf("decode %s: %w", path, err)
+	}
+	for _, field := range []string{"releaseClass", "productLifecycleState", "readinessPhase"} {
+		if _, exists := fields[field]; exists {
+			return fmt.Errorf("decode %s: retired category field %s is forbidden", path, field)
+		}
 	}
 	if err := json.Unmarshal(raw, target); err != nil {
 		return fmt.Errorf("decode %s: %w", path, err)
@@ -368,8 +374,8 @@ func LoadReleaseDesiredState(releaseRoot string) (*ReleaseDesiredState, error) {
 	return &desired, nil
 }
 
-func LoadReleaseMediaAssets(releaseRoot, expectedReleaseID, releaseClass string) (map[string]ReleaseMediaAsset, error) {
-	return runtimemedia.LoadReleaseMediaAssets(releaseRoot, expectedReleaseID, releaseClass)
+func LoadReleaseMediaAssets(releaseRoot, expectedReleaseID string) (map[string]ReleaseMediaAsset, error) {
+	return runtimemedia.LoadReleaseMediaAssets(releaseRoot, expectedReleaseID)
 }
 
 // LoadCreatorAuthorSnapshots makes the release's public-author closure,
@@ -527,11 +533,8 @@ func missingDesiredRefs(filter map[string]bool, loadedRefs []string) []string {
 }
 
 // LoadPosts 从对象闭包的 posts/ 加载内容；filter 使用相对 posts/ 的对象引用。
-// LoadPosts 校验并装载 release 对象闭包内的 post 文档。releaseClass 是 release
-// header 声明的发布类别（"research"/"commercial"）；空值只保留给 pre-pool
-// fixture 的 rights 校验。新 release 的媒体交付判据在 Bind +
-// ValidateImportedPostMediaBindings 边界显式收敛。
-func LoadPosts(publishRoot string, filter map[string]bool, releaseClass string) ([]PostDoc, error) {
+// 权利状态保留为记录，公开媒体交付在 Bind + ValidateImportedPostMediaBindings 校验。
+func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 	postsRoot := filepath.Join(publishRoot, "posts")
 	var docs []PostDoc
 	var loadedObjectRefs []string
@@ -570,7 +573,7 @@ func LoadPosts(publishRoot string, filter map[string]bool, releaseClass string) 
 			return err
 		}
 		if strings.EqualFold(strings.TrimSpace(m.ContentType), "image") {
-			if err := validateImageAssets(m.Assets, m.SourceCollectionID, postRef, releaseClass); err != nil {
+			if err := validateImageAssets(m.Assets, m.SourceCollectionID, postRef); err != nil {
 				return err
 			}
 		}
@@ -578,7 +581,7 @@ func LoadPosts(publishRoot string, filter map[string]bool, releaseClass string) 
 			if len(m.Assets) == 0 || len(m.Assets) > 20 {
 				return fmt.Errorf("%s: video manifest assets must contain 1..20 items", postRef)
 			}
-			if err := validateVideoAssets(m.Assets, postRef, releaseClass); err != nil {
+			if err := validateVideoAssets(m.Assets, postRef); err != nil {
 				return err
 			}
 		}

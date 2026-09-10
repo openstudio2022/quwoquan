@@ -294,10 +294,25 @@ def main() -> int:
             errors.append(f"prevalidation {plane_name} 服务逃逸 rootless 平面归属")
         if startup & image_only:
             errors.append(f"prevalidation {plane_name} startup/image-only 重叠")
-        ports = [int(item) for item in projection.get("exposedPorts") or []]
-        if not ports or any(port < 1024 or port > 65535 for port in ports):
-            errors.append(f"prevalidation {plane_name} 暴露端口非法")
-        prevalidation_ports.extend(ports)
+        bindings = projection.get("publishedPorts") or []
+        supported = set(plane_spec.get("rootlessSupportComposeServices") or [])
+        if plane_name == "service":
+            supported |= set((prevalidation.get("isolatedData") or {}).get("services") or [])
+        if not isinstance(bindings, list) or not bindings or "exposedPorts" in projection:
+            errors.append(f"prevalidation {plane_name} 必须只声明 publishedPorts 单一来源")
+            continue
+        for binding in bindings:
+            if not isinstance(binding, dict) or set(binding) != {"service", "target", "published"}:
+                errors.append(f"prevalidation {plane_name} 发布口映射结构非法")
+                continue
+            port, target_port = binding.get("published"), binding.get("target")
+            if (type(port) is not int or not 1024 <= port <= 65535
+                    or type(target_port) is not int or not 1 <= target_port <= 65535):
+                errors.append(f"prevalidation {plane_name} 暴露端口非法")
+                continue
+            if binding.get("service") not in (startup | supported) - image_only:
+                errors.append(f"prevalidation {plane_name} 发布口没有实际启动服务归属")
+            prevalidation_ports.append(port)
     if len(prevalidation_ports) != len(set(prevalidation_ports)):
         errors.append("prevalidation service/edge 目标端口必须全局唯一")
     service_projection = prevalidation_planes.get("service") or {}

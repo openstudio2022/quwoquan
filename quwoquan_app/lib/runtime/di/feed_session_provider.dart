@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/di/content_cache_lifecycle_dependencies.dart';
 import 'package:quwoquan_app/runtime/shell/state/feed_attribution_session.dart';
 import 'package:uuid/uuid.dart';
 
@@ -12,6 +13,8 @@ class FeedSessionNotifier extends Notifier<String> {
 
   @override
   String build() {
+    // 在首个 feed 请求前建立监听，不能等远端返回 release 才初始化。
+    ref.read(contentCacheLifecycleCoordinatorProvider);
     return _session.sessionId;
   }
 
@@ -19,6 +22,7 @@ class FeedSessionNotifier extends Notifier<String> {
     final now = DateTime.now();
     if (_session.isExpired(now, timeout: _sessionTimeout)) {
       _session = _newSession(now);
+      _currentFeedRequestId = _uuid.v4();
       state = _session.sessionId;
     } else {
       _session.touch(now);
@@ -50,6 +54,7 @@ class FeedSessionNotifier extends Notifier<String> {
   }
 
   void invalidate() {
+    _currentFeedRequestId = _uuid.v4();
     _session = _newSession();
     state = _session.sessionId;
   }

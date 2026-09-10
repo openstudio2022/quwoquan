@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 from quwoquan_ops.cli.lib.test_data.model import canonical_digest
-from quwoquan_ops.gate.verify_test_data_environment_results import verify
+from quwoquan_ops.gate.verify_test_data_environment_results import _validate_handoff, verify
 
 
 _DIGESTS = {
@@ -42,7 +42,6 @@ def _handoff(environment: str) -> dict[str, object]:
         "candidateBindingDigest": _candidate_digest(environment),
         "releaseId": "release-1",
         "importRunId": "import-1",
-        "readinessPhase": "research",
         "expectedCases": ["case-a", "case-b"],
         "expectedProviderOwners": ["chat_service", "user_service"],
         "expectedProviderCapabilities": ["provider.identity.local_sms"],
@@ -220,6 +219,21 @@ class TestDataEnvironmentResultsContractTest(unittest.TestCase):
             )
 
         self.assertEqual(issues, [])
+
+    def test_handoff_rejects_old_tracks_even_with_valid_digest(self) -> None:
+        # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+        for field in ("readinessPhase", "releaseClass", "productLifecycleState", "unknownCategory"):
+            for value in ("production", "default", "research", "commercial", "consumer", "import", "", None):
+                with self.subTest(field=field, value=value):
+                    handoff = _handoff("alpha")
+                    handoff[field] = value
+                    handoff["handoffDigest"] = canonical_digest(
+                        {key: item for key, item in handoff.items() if key != "handoffDigest"}
+                    )
+                    self.assertEqual(
+                        _validate_handoff(handoff, environment="alpha"),
+                        ["handoff contains unknown or retired fields"],
+                    )
 
     def test_missing_cleanup_receipt_blocks_the_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -227,7 +227,10 @@
           "$ref": "#/$defs/signer"
         },
         "reasonCode": {
-          "const": "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED"
+          "enum": [
+            "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED",
+            "ACCEPTANCE.BETA_OPTIONAL_BY_POLICY"
+          ]
         }
       }
     }

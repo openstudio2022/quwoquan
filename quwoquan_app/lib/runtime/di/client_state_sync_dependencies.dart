@@ -1,6 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_facets.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart';
@@ -33,16 +38,32 @@ final class ClientStateSyncRuntimeDependencies {
 /// object ports below.
 final clientStateSyncRuntimeDependenciesProvider =
     Provider<ClientStateSyncRuntimeDependencies>((ref) {
+      final session = ref.watch(authSessionControllerProvider);
+      final partition = ActorQueuePartition(
+        environment:
+            '${CloudRuntimeConfig.launchTarget}|${CloudRuntimeConfig.appEnvironment}',
+        accountId: session.hasTrustedSession ? session.ownerId : '',
+        personaId: session.hasTrustedSession ? session.activePersonaId : '',
+        deviceId: session.installId,
+      );
+      final storageKey = partition.boxName(_clientStateSyncOutboxStorageKey);
+      final networkAllowed = CloudRuntimeConfig.networkAccessAllowed;
       return ClientStateSyncRuntimeDependencies(
         readConfig: () =>
             ref.read(contentRuntimeConfigProvider).clientStateSync,
-        readPersistedState: () =>
-            readPersistedInteractionMap(_clientStateSyncOutboxStorageKey),
-        writePersistedState: (value) => writePersistedInteractionMap(
-          _clientStateSyncOutboxStorageKey,
-          value,
-        ),
-        executeEntry: (entry) => _executeClientStateSyncEntry(ref, entry),
+        readPersistedState: () => readPersistedInteractionMap(storageKey),
+        writePersistedState: (value) {
+          if (!networkAllowed || !ref.mounted) {
+            throw contentCapabilityUnavailable('client_state_sync');
+          }
+          return writePersistedInteractionMap(storageKey, value);
+        },
+        executeEntry: (entry) {
+          if (!networkAllowed || !ref.mounted) {
+            throw contentCapabilityUnavailable('client_state_sync');
+          }
+          return _executeClientStateSyncEntry(ref, entry);
+        },
       );
     });
 
@@ -132,21 +153,35 @@ final class ClientStateSyncOutboxNotifier
     extends Notifier<ClientStateSyncOutboxState> {
   late ClientStateSyncOutboxEngine _engine;
 
+  bool get _isBundledContent =>
+      CloudRuntimeConfig.isHydrated &&
+      CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot;
+
+  void _requireRemoteWrites() {
+    if (_isBundledContent) {
+      throw contentCapabilityUnavailable('client_state_sync');
+    }
+  }
+
   @override
   ClientStateSyncOutboxState build() {
+    if (_isBundledContent) {
+      return const ClientStateSyncOutboxState();
+    }
     final dependencies = ref.watch(clientStateSyncRuntimeDependenciesProvider);
-    _engine = ClientStateSyncOutboxEngine(
+    var active = true;
+    final engine = ClientStateSyncOutboxEngine(
       readConfig: dependencies.readConfig,
       readPersistedState: dependencies.readPersistedState,
       writePersistedState: dependencies.writePersistedState,
       executeEntry: dependencies.executeEntry,
       onStateChanged: (nextState) {
-        if (ref.mounted) {
+        if (active && ref.mounted) {
           state = nextState;
         }
       },
       onTerminalFailure: (entry) {
-        if (!ref.mounted) {
+        if (!active || !ref.mounted) {
           return;
         }
         _rollbackOptimisticState(entry);
@@ -155,9 +190,13 @@ final class ClientStateSyncOutboxNotifier
             .publish(entry);
       },
     );
-    ref.onDispose(_engine.dispose);
-    unawaited(_engine.hydrate());
-    return _engine.state;
+    _engine = engine;
+    ref.onDispose(() {
+      active = false;
+      engine.dispose();
+    });
+    unawaited(engine.hydrate());
+    return engine.state;
   }
 
   /// 终态失败回滚：乐观布尔态回到已确认值；计数由权威投影下次刷新收敛。
@@ -182,6 +221,7 @@ final class ClientStateSyncOutboxNotifier
     required String sourceSurfaceId,
     bool flushImmediately = false,
   }) {
+    _requireRemoteWrites();
     _engine.enqueueFollow(
       personaId: personaId,
       currentFollowing: currentFollowing,
@@ -197,6 +237,7 @@ final class ClientStateSyncOutboxNotifier
     required bool isLiked,
     bool flushImmediately = false,
   }) {
+    _requireRemoteWrites();
     _engine.enqueuePostLike(
       postId: postId,
       currentLiked: currentLiked,
@@ -205,9 +246,13 @@ final class ClientStateSyncOutboxNotifier
     );
   }
 
-  Future<void> flushNow() => _engine.flushNow();
+  Future<void> flushNow() async {
+    if (_isBundledContent) return;
+    await _engine.flushNow();
+  }
 
   void purgeForTerminalAccountClosure() {
+    if (_isBundledContent) return;
     _engine.purgeForTerminalAccountClosure();
   }
 }

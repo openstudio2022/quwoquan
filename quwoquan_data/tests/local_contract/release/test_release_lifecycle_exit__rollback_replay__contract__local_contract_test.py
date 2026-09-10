@@ -1,4 +1,7 @@
-"""Rollback/replay Exit evidence is create-once and recomputed from run bindings."""
+"""Rollback/replay Exit evidence is create-once and recomputed from run bindings.
+
+spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-004
+"""
 
 from __future__ import annotations
 
@@ -35,8 +38,6 @@ def _write_json(path: Path, document: dict) -> None:
 
 def _attestation(path: Path, release_id: str, digest: str, *, baseline: bool) -> None:
     lifecycle = {
-        "releaseClass": "production",
-        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "rightsStatusCounts": {
             "verified": 0 if baseline else 1,
@@ -101,11 +102,11 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
     _attestation(releases, ORIGINAL, DIGEST, baseline=False)
     _attestation(releases, ROLLBACK, ROLLBACK_DIGEST, baseline=True)
     for release_id, run_id, kind in (
-        (ORIGINAL, "apply-original", "apply"),
+        (ORIGINAL, "activate-original", "activate"),
         (ORIGINAL, "verify-original", "verify"),
         (ROLLBACK, "rollback-baseline", "rollback"),
         (ROLLBACK, "verify-baseline", "verify"),
-        (ORIGINAL, "apply-replay", "apply"),
+        (ORIGINAL, "activate-replay", "activate"),
         (ORIGINAL, "verify-replay", "verify"),
     ):
         _run(output, release_id, run_id, kind)
@@ -119,12 +120,12 @@ def _write(
     return write_lifecycle_exit_receipt(
         environment="gamma",
         original_release_id=ORIGINAL,
-        original_import_run_id="apply-original",
+        original_import_run_id="activate-original",
         original_verify_run_id="verify-original",
         rollback_to_release_id=ROLLBACK,
         rollback_run_id="rollback-baseline",
         rollback_verify_run_id="verify-baseline",
-        replay_import_run_id="apply-replay",
+        replay_import_run_id="activate-replay",
         replay_verify_run_id="verify-replay",
         exit_run_id="exit-001",
         release_root=releases,
@@ -167,9 +168,9 @@ def test_lifecycle_exit__binds_original_rollback_and_same_digest_replay__local_c
         output_root=output,
     ) == []
     assert calls[:3] == [
-        (ORIGINAL, "apply-original", "verify-original", None),
+        (ORIGINAL, "activate-original", "verify-original", None),
         (ROLLBACK, "rollback-baseline", "verify-baseline", ORIGINAL),
-        (ORIGINAL, "apply-replay", "verify-replay", None),
+        (ORIGINAL, "activate-replay", "verify-replay", None),
     ]
 
 
@@ -201,9 +202,44 @@ def test_lifecycle_exit__rejects_replay_digest_drift_and_overwrite__local_contra
         _write(releases, output)
 
 
+@pytest.mark.parametrize("run_id", ["activate-original", "activate-replay"])
+def test_lifecycle_exit__rejects_prepared_apply_as_activation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    run_id: str,
+) -> None:
+    releases, output = _fixture(tmp_path)
+    monkeypatch.setattr(
+        exit_verify, "environment_lifecycle_issues", lambda *_args, **_kwargs: []
+    )
+    _run(output, ORIGINAL, run_id, "apply")
+    with pytest.raises(ReleaseLifecycleExitError, match="run kind must be activate"):
+        _write(releases, output)
+    assert not exit_verify.receipt_path(
+        output_root=output,
+        environment="gamma",
+        original_release_id=ORIGINAL,
+        exit_run_id="exit-001",
+    ).exists()
+
+
+@pytest.mark.parametrize("activation_kind", ["activate", "rollback"])
+@pytest.mark.parametrize(
+    ("predecessor_fault", "expected_issue"),
+    [
+        ("", ""),
+        ("missing", "must bind prepared apply run"),
+        ("kind", "predecessor must be apply"),
+        ("status", "predecessor is not prepared"),
+        ("environment", "environment does not match run"),
+    ],
+)
 def test_environment_lifecycle__activation_uses_prepared_apply_receipts(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    activation_kind: str,
+    predecessor_fault: str,
+    expected_issue: str,
 ) -> None:
     release_id = "release-a"
     output = tmp_path / "output"
@@ -240,28 +276,28 @@ def test_environment_lifecycle__activation_uses_prepared_apply_receipts(
                     "environment": "gamma",
                     "releaseId": release_id,
                     "runId": run_id,
-                    "kind": "activate",
+                    "kind": activation_kind,
                 }
             return {
                 "environment": "gamma",
                 "releaseId": release_id,
                 "runId": run_id,
-                "importRunId": "apply-001",
+                "importRunId": "" if predecessor_fault == "missing" else "apply-001",
                 "status": "completed",
             }
         if run_id == "apply-001":
             if name == "run.json":
                 return {
-                    "environment": "gamma",
+                    "environment": "alpha" if predecessor_fault == "environment" else "gamma",
                     "releaseId": release_id,
                     "runId": run_id,
-                    "kind": "apply",
+                    "kind": "activate" if predecessor_fault == "kind" else "apply",
                 }
             return {
                 "environment": "gamma",
                 "releaseId": release_id,
                 "runId": run_id,
-                "status": "prepared",
+                "status": "completed" if predecessor_fault == "status" else "prepared",
             }
         if name == "run.json":
             return {
@@ -302,6 +338,9 @@ def test_environment_lifecycle__activation_uses_prepared_apply_receipts(
         output_root=output,
     )
 
-    assert issues == []
-    assert Path(captured["run"]).name == "apply-001"
-    assert captured["result"]["status"] == "prepared"
+    if expected_issue:
+        assert any(expected_issue in issue for issue in issues), issues
+    else:
+        assert issues == []
+        assert Path(captured["run"]).name == "apply-001"
+        assert captured["result"]["status"] == "prepared"

@@ -28,7 +28,6 @@ import (
 	appealobservability "quwoquan_service/services/user-service/internal/account/account_appeal_intake/infrastructure/observability"
 	appealpersistence "quwoquan_service/services/user-service/internal/account/account_appeal_intake/infrastructure/persistence"
 	accountsessionadapter "quwoquan_service/services/user-service/internal/account/account_session/adapters/inbound/application"
-	accountsessionhttp "quwoquan_service/services/user-service/internal/account/account_session/adapters/inbound/http"
 	accountsessionapp "quwoquan_service/services/user-service/internal/account/account_session/application"
 	accountsessionpersistence "quwoquan_service/services/user-service/internal/account/account_session/infrastructure/persistence"
 	challengeadapter "quwoquan_service/services/user-service/internal/account/authentication_challenge/adapters/inbound/application"
@@ -177,29 +176,9 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 	if err != nil {
 		return fmt.Errorf("user-service message transport preflight failed: %v", err)
 	}
-	researchAuditTransport, _ := messageTransport.(runtimemessaging.DurableRecordAppender)
-	researchSessionHandler, err := buildResearchSessionHandler(
-		appEnv,
-		*cfg,
-		researchAuditTransport,
-	)
+	managedAcceptanceIdentity, err := application.LoadManagedAcceptanceBinding()
 	if err != nil {
-		return fmt.Errorf("research identity composition failed: %v", err)
-	}
-	researchSessionAttestationHandler, err := buildResearchSessionAttestationHandler(
-		appEnv,
-		*cfg,
-	)
-	if err != nil {
-		return fmt.Errorf("research identity readback composition failed: %v", err)
-	}
-	managedAcceptanceIdentity, err := loadManagedAcceptanceIdentity()
-	if err != nil && cfg.ResearchIdentity.Enabled {
 		return fmt.Errorf("managed acceptance identity composition failed: %v", err)
-	}
-	researchAccountAllowlist, err := resolveResearchAccountAllowlist(appEnv, *cfg)
-	if err != nil {
-		return fmt.Errorf("research account allowlist composition failed: %v", err)
 	}
 
 	shardDirectory, err := application.LoadDefaultShardDirectory()
@@ -716,9 +695,8 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 		application.WithDefaultNicknamePrefix(getenvOrDefault("USER_DEFAULT_NICKNAME_PREFIX", "新同学")),
 		application.WithManagedAcceptanceIdentity(
 			managedAcceptanceIdentity.Phone,
-			managedAcceptanceIdentity.AccountID,
+			managedAcceptanceIdentity.OwnerID,
 		),
-		application.WithResearchAccountAllowlist(researchAccountAllowlist),
 	)
 	federatedLogins, err := newFederatedLoginBindings(authService)
 	if err != nil &&
@@ -925,11 +903,6 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 	)
 	serviceMux := http.NewServeMux()
 	userHandler.RegisterRoutes(serviceMux)
-	accountsessionhttp.RegisterResearchSessionRoutes(serviceMux, researchSessionHandler)
-	accountsessionhttp.RegisterResearchSessionAttestationRoutes(
-		serviceMux,
-		researchSessionAttestationHandler,
-	)
 	personaHostAuthorityHandler.RegisterRoutes(serviceMux)
 	accountAppealHandler.RegisterRoutes(serviceMux)
 	federatedPhoneBindingHandler.RegisterRoutes(serviceMux)

@@ -3,6 +3,7 @@ schema_version: 1
 feature_context_manifest:
   schema_version: 4
   max_bytes: 8192
+  fingerprint_receipt_max_bytes: 16777216
   required_fields:
     - schema_version
     - target
@@ -19,10 +20,18 @@ feature_context_manifest:
   fingerprint_binding_fields: [mode, ref, digest, receipt, receipt_ref]
   fingerprint_binding_modes: [embedded, referenced]
 
+candidate_path_set:
+  schema_version: 1
+  # 单个无损对象的资源边界，不拆分candidate；远高于当前完整路径负载。
+  max_bytes: 16777216
+  required_fields: [schema_version, owner_identity_ref, owner_identity_canonical_bytes_sha256, impacted_owner_groups]
+  directory: .qwq_output/env/repo/runs/feature-tree/by-fingerprint/candidate-paths
+  identity_fields: [ref, canonical_bytes_sha256, byte_count, path_count, owner_count, changed_paths_digest, impacted_owner_groups_digest]
+
 candidate_evidence_manifest:
-  schema_version: 2
+  schema_version: 3
   max_bytes: 65536
-  required_fields: [schema_version, owner_identity_ref, owner_identity_canonical_bytes_sha256, delivery_owner, lead_lane, delivery_policy_digests, target, resolved_owner, impacted_owner_groups, workspace_digests, context_snapshots, impact_plan_identity, evidence_fingerprint]
+  required_fields: [schema_version, owner_identity_ref, owner_identity_canonical_bytes_sha256, delivery_owner, lead_lane, delivery_policy_digests, target, resolved_owner, path_set_identity, workspace_digests, context_snapshots, impact_plan_identity, evidence_fingerprint]
   owner_identity_ref_semantics: primary_delivery_predecessor
   delivery_identity_source: current_branch_validated_by_branch_and_lane_ownership_policies
   owner_chain_fields: [level, node_id, path]
@@ -33,7 +42,7 @@ candidate_evidence_manifest:
   context_snapshot_fields: [path, anchor, kind, exists, content_digest]
   impact_plan_identity_fields: [schema, digest, projection_ref, timeout_policy_ref, timeout_policy_digest]
   impacted_owner_group_order: owner_identity.resolved_owner-bytewise-utf8
-  changed_path_storage: exactly_once_in_impacted_owner_groups
+  changed_path_storage: exactly_once_in_content_addressed_candidate_path_set
   changed_path_order: repository-relative-bytewise-utf8-within-owner-group
   owner_chain_storage: digest_only_per_impacted_owner_identity-rebuilt_with_current_feature_tree_resolver
 
@@ -223,7 +232,10 @@ review_consolidation:
     conflict: reject
 
 handoff_manifest:
-  schema_version: 4
+  schema_version: 5
+  max_bytes: 134217728
+  candidate_closure_fields: [ref, canonical_json]
+  candidate_closure_max_members: 4
   required_fields:
     - schema_version
     - intent
@@ -235,6 +247,7 @@ handoff_manifest:
     - human_decision_projection
     - owner_identity_ref
     - candidate_evidence_ref
+    - candidate_closure
     - review_plan_ref
     - evidence_receipt_refs
     - reviewer_result_refs

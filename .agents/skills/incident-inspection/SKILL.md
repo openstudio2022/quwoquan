@@ -9,7 +9,7 @@ metadata:
 
 ## 触发与输入
 
-用于线上异常、ES 巡检/日报、fingerprint 分组、traceId/requestId 调查与复现资格判断。输入是环境、时间窗或脱敏查询 identity；角色交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.incident-inspection`，可见输出由 canonical projector 生成。
+用于线上异常、ES 巡检/日报、fingerprint 分组、traceId/requestId 调查与复现资格判断。输入是环境、时间窗或脱敏查询 identity。
 
 本轮若将产生或更新 registry 声明的送审交付件 `inspection-report`，每份 report 的全部 fingerprint 必须先由 current canonical correlation/ContractGraph owner facts 解析到同一个 `specRef` 去锚点后的 repository-relative canonical Feature `spec.md` exact target；跨 owner 结果必须拆成多份 report。缺 owner、同一 report 多 target 或无法唯一解析时返回 typed `GATE_BLOCK`，不得送审。随后运行 `make feature-context TARGET=<exact-path>`，保存 stdout 指向的 content-addressed immutable owner manifest exact ref，PRE 后不得重写或替换该 ref。
 
@@ -31,4 +31,4 @@ metadata:
 
 ## 条件性交接
 
-源码/spec mutation 只交 Feature workflow；跨会话、外部阻断或用户显式要求满足 canonical 触发时生成 handoff。送审交付的 handoff 必须携带 PRE owner identity ref 与 POST candidate evidence predecessor；纯只读无送审交付不生成替代 manifest。
+源码/spec mutation 只交 Feature workflow。持久交接语义见 continue Skill；送审交付的 handoff 必须携带 PRE owner identity ref 与 POST candidate evidence predecessor，纯只读无送审交付不生成替代 manifest。

@@ -57,6 +57,7 @@ def test_health_probe_records_unreadable_local_auth_as_gate_block(
     tmp_path: Path,
 ) -> None:
     with (
+        mock.patch.object(stackctl, "root_certificate_path", return_value=tmp_path / "contract-ca.crt"),
         mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
         mock.patch.object(
             stackctl,
@@ -129,9 +130,9 @@ def test_public_release_readback_does_not_require_candidate_identity(
             "_run_script_probe",
             return_value=completed,
         ) as run_probe,
-        mock.patch(
-            "quwoquan_ops.cli.lib.public_domain_tls.root_certificate_path",
-            return_value=Path("/tmp/gamma-local-root.crt"),
+        mock.patch.object(
+            stackctl, "root_certificate_path",
+            return_value=tmp_path / "gamma-local-root.crt",
         ),
     ):
         status, output, findings = stackctl._run_environment_integration_probe(

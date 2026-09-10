@@ -23,8 +23,6 @@ from core.source_digest import (
     SourceDigestError,
     content_source_revision,
 )
-from governance.coverage.distribution import ProductLifecycleState, ReleaseClass
-
 
 class ReleaseHeaderError(ValueError):
     """The public release header violates a cross-field identity invariant."""
@@ -70,16 +68,8 @@ def validate_release_header(
     document = dict(value)
     try:
         release_kind = ReleaseKind(str(document.get("releaseKind") or ""))
-        release_class = ReleaseClass(str(document.get("releaseClass") or ""))
-        lifecycle = ProductLifecycleState(
-            str(document.get("productLifecycleState") or "")
-        )
     except ValueError as exc:
-        raise ReleaseHeaderError(f"{label} lifecycle identity is invalid") from exc
-    if release_class.value != lifecycle.value:
-        raise ReleaseHeaderError(
-            f"{label} releaseClass must equal productLifecycleState"
-        )
+        raise ReleaseHeaderError(f"{label} release kind is invalid") from exc
     pool_digest = document.get("poolDigest")
     pool_fields = ("counts", "contents", "authors", "buildResult")
     if pool_digest is not None:

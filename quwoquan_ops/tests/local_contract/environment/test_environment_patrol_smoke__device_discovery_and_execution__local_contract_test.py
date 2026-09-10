@@ -224,10 +224,14 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         inventory = json.loads(env[flutter_proxy.ANDROID_DEVICE_INVENTORY_ENV])
         self.assertIs(inventory[0]["emulator"], False)
 
+    @mock.patch("quwoquan_ops.cli.lib.startup_attempt_receipt.load_startup_attempt", return_value={"attemptId": "running-1", "status": "running"})
+    @mock.patch("quwoquan_ops.cli.lib.test_live_startup_attempt_receipt.load_test_live_startup_attempt", return_value=None)
     @mock.patch.object(smoke_device_runtime, "acquire_consumer_lease")
     def test_android_patrol_acquires_consumer_lease_for_reversed_ports(
         self,
         acquire_consumer_lease: mock.Mock,
+        _mutable: mock.Mock,
+        _immutable: mock.Mock,
     ) -> None:
         args = self._args()
         command_env: dict[str, str] = {}
@@ -255,7 +259,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self.assertEqual(command_env["QWQ_CONSUMER_LEASE_ACQUIRED"], "1")
         self.assertEqual(command_env["QWQ_ANDROID_LOCAL_PORTS"], "19000,19100")
         acquire_consumer_lease.assert_called_once_with(
-            target="gamma-local",
+            target="gamma-local", instance_generation="running-1",
             device="emulator-5554",
             consumer=lease[2],
             package_name=smoke.android_release_uat_package("gamma", "debug"),
@@ -263,10 +267,14 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             platform="android",
         )
 
+    @mock.patch("quwoquan_ops.cli.lib.startup_attempt_receipt.load_startup_attempt", return_value={"attemptId": "running-1", "status": "running"})
+    @mock.patch("quwoquan_ops.cli.lib.test_live_startup_attempt_receipt.load_test_live_startup_attempt", return_value=None)
     @mock.patch.object(smoke_device_runtime, "acquire_consumer_lease")
     def test_ios_simulator_patrol_acquires_consumer_lease_without_ports(
         self,
         acquire_consumer_lease: mock.Mock,
+        _mutable: mock.Mock,
+        _immutable: mock.Mock,
     ) -> None:
         args = self._args()
         command_env: dict[str, str] = {}
@@ -288,7 +296,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self.assertEqual(command_env["QWQ_CONSUMER_LEASE_ACQUIRED"], "1")
         self.assertNotIn("QWQ_ANDROID_LOCAL_PORTS", command_env)
         acquire_consumer_lease.assert_called_once_with(
-            target="gamma-local",
+            target="gamma-local", instance_generation="running-1",
             device="SIMULATOR-UDID",
             consumer=lease[2],
             package_name=smoke.ios_release_uat_bundle_ids("gamma", "debug")[0],

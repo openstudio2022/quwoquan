@@ -1,6 +1,7 @@
 """local_contract：三环境 release train 与 target package baseline 身份。
 
 spec_ref: runtime/runtime-config/environment-topology-and-packaging/GWT-002
+spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-004
 """
 
 from __future__ import annotations
@@ -32,8 +33,7 @@ def _release_attestation(
     *,
     release_id: str,
     digest_char: str,
-    release_class: str = "commercial",
-    release_kind: str = "standard",
+    release_kind: str = "content",
     contains_unverified_assets: bool = False,
 ) -> dict[str, object]:
     return {
@@ -41,8 +41,6 @@ def _release_attestation(
         "releaseId": release_id,
         "releaseKind": release_kind,
         "payloadSha256": f"sha256:{digest_char * 64}",
-        "releaseClass": release_class,
-        "productLifecycleState": release_class,
         "containsUnverifiedAssets": contains_unverified_assets,
     }
 
@@ -160,21 +158,10 @@ def test_matrix_freezes_all_package_identities_before_any_patrol(
     drift: str,
     failure_category: str,
 ) -> None:
-    candidate = tmp_path / "candidate.json"
-    rollback = tmp_path / "rollback.json"
-    for path, release_id, digest_char in (
-        (candidate, "candidate-release", "1"),
-        (rollback, "rollback-release", "2"),
-    ):
-        path.write_text(
-            json.dumps(
-                _release_attestation(
-                    release_id=release_id,
-                    digest_char=digest_char,
-                )
-            ),
-            encoding="utf-8",
-        )
+    from quwoquan_ops.tests.local_contract.environment.test_local_env_gate_matrix__local_contract_test import _matrix_release_inputs
+
+    inputs = _matrix_release_inputs(tmp_path)
+    monkeypatch.setattr(matrix_mod, "output_root", lambda: tmp_path)
 
     package_targets: list[str] = []
 
@@ -222,8 +209,7 @@ def test_matrix_freezes_all_package_identities_before_any_patrol(
         down_fn=down_runner,
         app_uat_fn=patrol_runner,
         include_l0=False,
-        release_attestation=str(candidate),
-        rollback_release_attestation=str(rollback),
+        **inputs,
         execution_class="contract-simulation",
         matrix_run_id=f"matrix-{drift}",
     )
@@ -233,7 +219,7 @@ def test_matrix_freezes_all_package_identities_before_any_patrol(
     assert receipt["failureCategory"] == failure_category
     assert package_targets == ["alpha-local", "beta-local"]
     runtime_runner.assert_not_called()
-    assert down_runner.call_count == 6
+    down_runner.assert_not_called()
     patrol_runner.assert_not_called()
 
 
@@ -361,78 +347,299 @@ def test_matrix_receipt_rejects_incomplete_target_baseline_map(
     assert receipt["failureCategory"] == "receipt_identity"
 
 
-def test_release_binding_validates_and_returns_lifecycle_identity(
-    tmp_path: Path,
+@pytest.mark.parametrize("contains_unverified_assets", [False, True])
+def test_release_binding_preserves_rights_without_category_projection(
+    tmp_path: Path, contains_unverified_assets: bool,
 ) -> None:
-    attestation = tmp_path / "research.json"
-    attestation.write_text(
-        json.dumps(
-            _release_attestation(
-                release_id="research-release",
-                digest_char="3",
-                release_class="research",
-                contains_unverified_assets=True,
-            )
-        ),
-        encoding="utf-8",
-    )
+    attestation = tmp_path / "release.json"
+    attestation.write_text(json.dumps(_release_attestation(
+        release_id="default-release", digest_char="3",
+        contains_unverified_assets=contains_unverified_assets,
+    )), encoding="utf-8")
 
     binding = matrix_mod._release_binding(str(attestation), label="candidate")
 
-    assert binding["releaseClass"] == "research"
-    assert binding["productLifecycleState"] == "research"
-    assert binding["containsUnverifiedAssets"] is True
+    assert binding == {
+        "releaseId": "default-release", "releaseDigest": f"sha256:{'3' * 64}",
+        "containsUnverifiedAssets": contains_unverified_assets,
+        "attestation": str(attestation),
+    }
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    (
-        ("releaseClass", "preview"),
-        ("productLifecycleState", "preview"),
-        ("containsUnverifiedAssets", "false"),
-    ),
-)
-def test_release_binding_rejects_invalid_lifecycle_identity(
-    tmp_path: Path,
-    field: str,
-    value: object,
-) -> None:
-    attestation = tmp_path / f"invalid-{field}.json"
+@pytest.mark.parametrize("value", [None, "false", 0, 1])
+def test_release_binding_rejects_invalid_rights_identity(tmp_path: Path, value: object) -> None:
+    attestation = tmp_path / "invalid-rights.json"
     payload = _release_attestation(release_id="invalid-release", digest_char="4")
-    payload[field] = value
+    payload["containsUnverifiedAssets"] = value
     attestation.write_text(json.dumps(payload), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="lifecycle identity is invalid"):
+    with pytest.raises(ValueError, match="rights identity is invalid"):
         matrix_mod._release_binding(str(attestation), label="candidate")
 
 
-@pytest.mark.parametrize(
-    ("candidate_class", "rollback_class"),
-    (("research", "research"), ("research", "commercial"),
-     ("commercial", "research"), ("commercial", "commercial")),
-)
-def test_research_and_commercial_branches_are_explicit_and_supported(
-    tmp_path: Path, candidate_class: str, rollback_class: str,
+@pytest.mark.parametrize("prefix", ["candidate", "rollback"])
+@pytest.mark.parametrize("field", ["releaseClass", "productLifecycleState", "readinessPhase"])
+@pytest.mark.parametrize("value", [None, "production", "research"])
+def test_retired_category_fields_block_before_any_environment_action(
+    tmp_path: Path, prefix: str, field: str, value: object,
 ) -> None:
-    candidate = tmp_path / f"{candidate_class}-candidate.json"
-    rollback = tmp_path / f"{candidate_class}-{rollback_class}-rollback.json"
-    candidate.write_text(json.dumps(_release_attestation(
-        release_id=f"{candidate_class}-candidate", digest_char="1", release_class=candidate_class,
-        contains_unverified_assets=candidate_class == "research",
-    )), encoding="utf-8")
-    rollback.write_text(json.dumps(_release_attestation(
-        release_id=f"{rollback_class}-rollback", digest_char="2", release_class=rollback_class,
-        contains_unverified_assets=rollback_class == "research",
-    )), encoding="utf-8")
-    bindings = matrix_mod._resolve_matrix_inputs(
-        release_attestation=str(candidate), rollback_release_attestation=str(rollback),
-        test_data_request=None, test_data_evidence=None, test_data_handoff=None,
-        telemetry_fn=None, provider_fn=None, app_uat_fn=None,
-        ios_simulator_device="", android_emulator_device="", android_physical_device="", ios_physical_device="",
-        device_profile=matrix_mod.DEVICE_PROFILE_EMULATOR_ONLY, execution_class="contract-simulation",
+    paths = {}
+    for label, digest_char in (("candidate", "1"), ("rollback", "2")):
+        payload = _release_attestation(release_id=f"{label}-release", digest_char=digest_char)
+        if label == prefix:
+            payload[field] = value
+        path = tmp_path / f"{label}.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        paths[label] = str(path)
+    effect = mock.Mock(side_effect=AssertionError("environment must not execute"))
+    result = orchestrator._run_local_env_gate_matrix(
+        package_fn=effect, up_fn=effect, health_fn=effect, verify_fn=effect, down_fn=effect,
+        release_attestation=paths["candidate"], rollback_release_attestation=paths["rollback"],
+        execution_class="contract-simulation", matrix_run_id="retired-category",
     )
-    assert bindings.candidate_release["releaseClass"] == candidate_class
-    assert bindings.rollback_release["releaseClass"] == rollback_class
+    assert result["exitCode"] == 2 and result["executed"] == 0
+    assert "retired category fields" in " ".join(result["details"])
+    effect.assert_not_called()
+
+
+@pytest.mark.parametrize("environment", ["alpha", "beta", "gamma", "prod"])
+@pytest.mark.parametrize("kind", ["apply", "activate", "rollback", "verify"])
+def test_actual_data_parser_has_no_release_category_or_readiness_phase(environment, kind):
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_data_args
+
+    argv = ["ship", kind, "--handoff-ref",
+            f"handoff-ref-v1:sha256:{'1' * 64}:sha256:{'2' * 64}",
+            "--env", environment, "--run-id", "parser-contract"]
+    if kind != "apply":
+        argv.extend(("--import-run-id", "exact-predecessor"))
+    if kind == "rollback":
+        argv.extend(("--from-release-id", "current-release", "--from-manifest-digest",
+                     f"sha256:{'3' * 64}", "--from-revision", "7"))
+    args = _parse_data_args(argv)
+    assert args.ship_command == kind and args.env == environment
+    assert not {"readiness_phase", "release_class", "product_lifecycle_state"}.intersection(vars(args))
+    with pytest.raises(SystemExit) as rejected:
+        _parse_data_args([*argv, "--readiness-phase", "production"])
+    assert rejected.value.code == 2
+
+
+@pytest.mark.parametrize("passed", [True, False])
+def test_homepage_evidence_requires_passed_default_readiness(tmp_path, passed):
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _homepage_release_evidence
+
+    path = tmp_path / "release-readiness.json"
+    path.write_text(json.dumps({
+        "schema": "quwoquan_data.environment_release_readiness", "environment": "alpha",
+        "releaseId": "default-release", "passed": passed,
+        "feedQueries": [{"name": "homepage_recommend", "status": 200,
+                         "releaseBound": True, "matchedPostIds": ["post-1"]}],
+    }))
+    result = _homepage_release_evidence(readiness_path=path, environment="alpha", release_id="default-release")
+    assert result["exitCode"] == (0 if passed else 2)
+
+
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-004
+@pytest.mark.parametrize("drift", ["", "prepared-as-activated", "query-release", "query-digest", "query-revision",
+                                   "replay-digest", "rollback-predecessor", "candidate-verify"])
+def test_data_lifecycle_parser_exact_predecessors_and_first_error(tmp_path, monkeypatch, drift):
+    from quwoquan_ops.tests.local_contract.environment.test_local_env_gate_matrix__local_contract_test import (
+        _matrix_data_runner, _matrix_release_inputs,
+    )
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _run_data_lifecycle, _parse_data_args
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import _release_admission_binding
+
+    monkeypatch.setattr(matrix_mod, "output_root", lambda: tmp_path)
+    inputs = _matrix_release_inputs(tmp_path)
+    bindings = []
+    for prefix in ("release", "rollback_release"):
+        binding = matrix_mod._release_binding(inputs[f"{prefix}_attestation"], label=prefix)
+        bindings.append(_release_admission_binding(
+            binding, handoff_ref="", system_attestation_ref=inputs[f"{prefix}_system_attestation_ref"],
+            system_attestation_digest=inputs[f"{prefix}_system_attestation_digest"],
+        ))
+    calls, phases, block = [], [], {}
+    ids = matrix_mod._data_run_ids("contract-matrix", "alpha")
+    exit_code, category = _run_data_lifecycle(
+        phases=phases, block=block, target="alpha-local", environment="alpha",
+        candidate=bindings[0], rollback=bindings[1], data_ids=ids,
+        data_fn=_matrix_data_runner(tmp_path, calls, drift=drift),
+    )
+    args = [_parse_data_args(call["argv"][2:]) for call in calls if call["argv"]]
+    assert args[0].ship_command == "apply"
+    assert args[1].ship_command == "activate"
+    assert args[1].import_run_id == args[0].run_id
+    if not drift:
+        assert (exit_code, category) == (0, "")
+        assert [arg.ship_command for arg in args] == [
+            "apply", "activate", "verify", "apply", "rollback", "verify", "apply", "activate", "verify"]
+        assert all(not hasattr(arg, "readiness_phase") for arg in args)
+        assert all("--readiness-phase" not in call["argv"] for call in calls)
+        assert all(not {"releaseClass", "productLifecycleState", "readinessPhase"}.intersection(
+            item.get("result", {})) for item in block.values())
+        assert args[2].import_run_id == args[1].run_id
+        assert args[4].import_run_id == args[3].run_id
+        assert args[4].from_release_id == bindings[0]["releaseId"]
+        assert args[4].from_manifest_digest == bindings[0]["releaseDigest"]
+        assert args[4].from_revision == 1
+        assert args[5].import_run_id == args[4].run_id
+        assert args[6].system_attestation_ref == args[0].system_attestation_ref
+        assert args[6].system_attestation_digest == args[0].system_attestation_digest
+        assert args[8].import_run_id == args[7].run_id
+    else:
+        assert exit_code != 0 and category
+        expected_last = {"prepared-as-activated": "candidate-activate", "query-release": "rollback-active-query",
+                         "query-digest": "rollback-active-query", "query-revision": "rollback-active-query",
+                         "replay-digest": "replay-activate",
+                         "rollback-predecessor": "rollback-apply", "candidate-verify": "candidate-verify"}
+        assert calls[-1]["action"] == expected_last[drift]
+        if drift == "candidate-verify":
+            assert exit_code == 17
+
+
+@pytest.mark.parametrize("missing", ["none", "both", "pair-ref", "pair-digest", "handoff-with-digest"])
+def test_explicit_admission_is_required_and_exclusive_before_mutation(tmp_path, monkeypatch, missing):
+    from quwoquan_ops.tests.local_contract.environment.test_local_env_gate_matrix__local_contract_test import _matrix_release_inputs
+
+    inputs = _matrix_release_inputs(tmp_path)
+    monkeypatch.setattr(matrix_mod, "output_root", lambda: tmp_path)
+    if missing in {"none", "pair-digest"}:
+        inputs.pop("release_system_attestation_ref")
+    if missing in {"none", "pair-ref", "both"}:
+        inputs.pop("release_system_attestation_digest")
+    if missing in {"both", "handoff-with-digest"}:
+        inputs["release_handoff_ref"] = f"handoff-ref-v1:sha256:{'1' * 64}:sha256:{'2' * 64}"
+    if missing == "handoff-with-digest":
+        inputs.pop("release_system_attestation_ref")
+    effect = mock.Mock(side_effect=AssertionError("environment must not execute"))
+    result = orchestrator._run_local_env_gate_matrix(
+        package_fn=effect, up_fn=effect, health_fn=effect, verify_fn=effect, down_fn=effect,
+        **inputs, execution_class="contract-simulation", matrix_run_id="invalid-admission",
+    )
+    assert result["exitCode"] == 2 and result["executed"] == 0
+    effect.assert_not_called()
+
+
+@pytest.mark.parametrize("field", ["releaseId", "releaseDigest", "attestation"])
+def test_admission_revalidates_current_full_package_identity(tmp_path, monkeypatch, field):
+    from quwoquan_ops.tests.local_contract.environment.test_local_env_gate_matrix__local_contract_test import _matrix_release_inputs
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import _release_admission_binding
+
+    inputs = _matrix_release_inputs(tmp_path)
+    monkeypatch.setattr(matrix_mod, "output_root", lambda: tmp_path)
+    binding = matrix_mod._release_binding(inputs["release_attestation"], label="candidate")
+    if field == "attestation":
+        package = tmp_path / "package.json"
+        payload = json.loads(Path(inputs["release_attestation"]).read_text())
+        payload["recordedAt"] = "2026-09-06T00:00:00Z"
+        package.write_text(json.dumps(payload))
+        binding[field] = str(package)
+    else:
+        binding[field] = "wrong-identity"
+    with pytest.raises(ValueError, match="differs from package attestation identity"):
+        _release_admission_binding(
+            binding, handoff_ref="", system_attestation_ref=inputs["release_system_attestation_ref"],
+            system_attestation_digest=inputs["release_system_attestation_digest"],
+        )
+
+
+def test_handoff_admission_uses_current_data_authority(tmp_path, monkeypatch):
+    from quwoquan_data.scripts import cli  # noqa: F401
+    from quwoquan_data.tests.local_contract.release.test_ship_handoff_admission__contract__local_contract_test import (
+        _release_and_handoff, _authority_ref, _sha,
+    )
+    from content.release.environment import release_runtime
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import _release_admission_binding
+
+    release, handoff, document = _release_and_handoff(tmp_path)
+    monkeypatch.setattr(matrix_mod, "output_root", lambda: tmp_path)
+    validate = mock.Mock(return_value={"artifacts": [str(handoff)]})
+    monkeypatch.setattr(release_runtime.handoff_store, "read", lambda *_a, **_kw: b"authority")
+    monkeypatch.setattr(release_runtime.handoff_consumer, "validate_published_bytes", validate)
+    monkeypatch.setattr(release_runtime.handoff_store, "resolve_unique_artifact", lambda *_a, **_kw: (
+        "data/releases/release-a/producer_release_handoff.json", handoff, handoff.read_bytes(), _sha(handoff)))
+    monkeypatch.setattr(release_runtime, "read_producer_release_handoff", lambda *_a, **_kw: document)
+    attestation = release / "attestations/release.json"
+    attestation.parent.mkdir(parents=True)
+    attestation.write_text(json.dumps({**_release_attestation(release_id="release-a", digest_char="1"),
+                                      "payloadSha256": document["release"]["payloadDigest"]}))
+    binding = matrix_mod._release_binding(str(attestation), label="candidate")
+    admitted = _release_admission_binding(binding, handoff_ref=_authority_ref(),
+                                        system_attestation_ref="", system_attestation_digest="")
+    assert admitted["admissionArgv"] == ["--handoff-ref", _authority_ref()]
+    assert admitted["admissionEnvelope"]["handoffRef"] == _authority_ref()
+    assert validate.call_args.kwargs["validate_current"] is True
+
+
+def test_matrix_parser_delegates_explicit_candidate_and_rollback_admission(monkeypatch):
+    import argparse
+    import sys
+    from types import SimpleNamespace
+    from quwoquan_ops.cli.commands import matrix_domain
+
+    captured = mock.Mock(return_value={"exitCode": 0})
+    facade = SimpleNamespace(
+        PROFILE_LOCAL_ENV_GATE=matrix_mod.PROFILE_LOCAL_ENV_GATE,
+        CANONICAL_LOCAL_GATE_TARGETS=matrix_mod.CANONICAL_TARGETS,
+        LOCAL_GATE_DEVICE_PROFILE_FULL=matrix_mod.DEVICE_PROFILE_FULL,
+        LOCAL_GATE_DEVICE_PROFILES=matrix_mod.DEVICE_PROFILES,
+        run_local_env_gate_matrix=captured,
+    )
+    for name in ("package", "up", "health", "verify", "down", "product_telemetry_log_sink",
+                 "provider_conformance", "app_content_uat", "filter_catalog"):
+        setattr(facade, f"command_{name}", mock.Mock())
+    import quwoquan_ops.cli as ops_cli
+    monkeypatch.setitem(sys.modules, "quwoquan_ops.cli.stackctl", facade)
+    monkeypatch.setattr(ops_cli, "stackctl", facade, raising=False)
+    parser = argparse.ArgumentParser()
+    matrix_domain.register_parser(parser.add_subparsers(dest="command", required=True))
+    root = ["matrix", "--targets", "alpha-local,beta-local,gamma-local",
+            "--release-attestation", "candidate.json", "--rollback-release-attestation", "rollback.json",
+            "--test-data-request", "alpha-local=request.json", "--test-data-handoff", "alpha-local=handoff.json",
+            "--ios-simulator-device", "sim", "--android-emulator-device", "emulator"]
+    handoff = f"handoff-ref-v1:sha256:{'1' * 64}:sha256:{'2' * 64}"
+    explicit = ["--release-handoff-ref", handoff, "--rollback-release-system-attestation-ref",
+                "data/releases/empty/attestations/release.json", "--rollback-release-system-attestation-digest",
+                f"sha256:{'3' * 64}"]
+    for missing in (root, root + explicit[:2]):
+        with pytest.raises(SystemExit):
+            parser.parse_args(missing)
+    with pytest.raises(SystemExit):
+        parser.parse_args(root + explicit + ["--release-system-attestation-ref", "conflict"])
+    args = parser.parse_args(root + explicit)
+    assert matrix_domain.command_matrix(args) == {"exitCode": 0}
+    assert captured.call_args.kwargs["release_handoff_ref"] == handoff
+    assert captured.call_args.kwargs["rollback_release_system_attestation_digest"] == f"sha256:{'3' * 64}"
+    assert captured.call_args.kwargs["targets"] == matrix_mod.CANONICAL_TARGETS
+
+
+def test_cleanup_failure_does_not_replace_first_data_blocker(tmp_path, monkeypatch):
+    from quwoquan_ops.tests.local_contract.environment.test_local_env_gate_matrix__local_contract_test import (
+        _matrix_release_inputs, _matrix_data_runner,
+    )
+    from types import SimpleNamespace
+
+    inputs = _matrix_release_inputs(tmp_path)
+    monkeypatch.setattr(matrix_mod, "output_root", lambda: tmp_path)
+    monkeypatch.setattr(matrix_mod, "active_deployment_candidate_snapshot", _active_candidate_snapshot)
+    monkeypatch.setattr(matrix_mod, "probe_migration_drift", lambda *_: SimpleNamespace(has_drift=False, detail="simulation"))
+    monkeypatch.setattr(orchestrator, "_docker_daemon_ready", lambda: (True, "simulation"))
+    calls = []
+    started = []
+    def up(_args):
+        started.append(True)
+        return {"exitCode": 0}
+    result = orchestrator._run_local_env_gate_matrix(
+        package_fn=lambda args: {"exitCode": 0, **_package_payload(args.target)},
+        up_fn=up, health_fn=lambda *_: {"exitCode": 0}, verify_fn=mock.Mock(),
+        down_fn=lambda *_: {"exitCode": 19 if started else 0},
+        data_fn=_matrix_data_runner(tmp_path, calls, drift="candidate-verify"),
+        **inputs, include_l0=False, execution_class="contract-simulation", matrix_run_id="first-error",
+    )
+    receipt = json.loads((Path(result["reportDir"]) / "matrix.json").read_text())
+    assert result["exitCode"] == 17
+    assert receipt["failureCategory"] == "data_candidate_verify"
+    assert calls[-1]["action"] == "candidate-verify"
+    assert receipt["nonPromotable"] is True
 
 
 def test_promotion_device_profile_requires_android_and_ios_physical_bindings(monkeypatch) -> None:

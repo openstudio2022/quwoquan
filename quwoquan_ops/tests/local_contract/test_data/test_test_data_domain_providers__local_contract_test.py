@@ -61,7 +61,6 @@ def _candidate() -> CandidateBinding:
         release_id="release-provider-contract",
         release_digest="sha256:" + "4" * 64,
         import_run_id="import-provider-contract",
-        readiness_phase="research",
         readiness_receipt_digest="sha256:" + "5" * 64,
         release_posts=(BusinessObjectRef("Post", "post-release-1"),),
         release_creators=(BusinessObjectRef("Creator", "creator-release-1"),),

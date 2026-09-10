@@ -6,6 +6,8 @@ multi-carrier-release/spec.md#gwt-034
 
 from __future__ import annotations
 
+import hashlib
+import inspect
 import json
 from collections.abc import Mapping
 from pathlib import Path
@@ -28,9 +30,6 @@ RELEASE_DIGEST = "sha256:" + "1" * 64
 MANIFEST_DIGEST = "sha256:" + "2" * 64
 SOURCE_SHA = "a" * 40
 SPEC_REF = subject.SPEC_REF
-BEARER_FIXTURE = "research-bearer-fixture-never-persist"
-ATTESTATION = "research-attestation-fixture-never-persist"
-
 
 def _write(root: Path, ref: str, value: Mapping[str, Any]) -> tuple[str, str]:
     path = root / ref
@@ -44,7 +43,7 @@ def _write(root: Path, ref: str, value: Mapping[str, Any]) -> tuple[str, str]:
     return ref, subject._digest_bytes(path.read_bytes())
 
 
-def _authorities(root: Path, *, release_class: str = "research") -> dict[str, str]:
+def _authorities(root: Path) -> dict[str, str]:
     samples = [
         {
             "sampleId": f"baseline-{carrier}-001",
@@ -90,12 +89,13 @@ def _authorities(root: Path, *, release_class: str = "research") -> dict[str, st
         root, f"data/releases/{RELEASE_ID}/payload/uat/sample_plan.json", plan
     )
 
-    import_prefix = f"env/alpha/runs/data-release/{RELEASE_ID}/{IMPORT_RUN_ID}"
+    prepared_run_id = "apply-001"
+    import_prefix = f"env/alpha/runs/data-release/{RELEASE_ID}/{prepared_run_id}"
     cases = {
         "schema": "quwoquan_data.homepage_verification_case_manifest",
         "environment": "alpha",
         "releaseId": RELEASE_ID,
-        "runId": IMPORT_RUN_ID,
+        "runId": prepared_run_id,
         "importerReportRef": f"{import_prefix}/homepage-import.json",
         "generatedAt": "2026-09-03T01:00:00Z",
         "cases": [
@@ -161,25 +161,29 @@ def _authorities(root: Path, *, release_class: str = "research") -> dict[str, st
         root, f"{verify_prefix}/homepage-api-verification.json", homepage
     )
     _write(root, f"{verify_prefix}/post-api-verification.json", {"passed": True})
-    readiness = {
-        "schema": "quwoquan_data.environment_release_readiness",
-        "environment": "alpha",
-        "releaseId": RELEASE_ID,
-        "releaseKind": "content",
-        "releaseClass": release_class,
-        "productLifecycleState": release_class,
-        "sourceOwner": "qwq_data",
-        "readinessPhase": release_class,
-        "manifestDigest": MANIFEST_DIGEST,
-        "importRunId": IMPORT_RUN_ID,
-        "verifyRunId": VERIFY_RUN_ID,
-        "entityRefs": ["/entity/travel/place/dali"],
-        "postIds": [row["postId"] for row in post_bindings],
-        "contentImportReportRef": import_ref,
-        "homepageApiVerificationRef": homepage_ref,
-        "postApiVerificationRef": f"{verify_prefix}/post-api-verification.json",
-        "passed": True,
-    }
+    from quwoquan_ops.tests.support.app_content_preflight_test_support import write_release_readiness
+    from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
+    readiness_path, _ = write_release_readiness(
+        root, environment="alpha", release_id=RELEASE_ID,
+        verify_run_id=VERIFY_RUN_ID, import_run_id=IMPORT_RUN_ID,
+        prepared_run_id=prepared_run_id, manifest_digest=MANIFEST_DIGEST,
+    )
+    readiness = json.loads(readiness_path.read_text())
+    old_posts = readiness["postIds"]
+    readiness["postIds"] = [row["postId"] for row in post_bindings]
+    readiness["entityRefs"] = ["/entity/travel/place/dali"]
+    post_map = dict(zip(old_posts, readiness["postIds"]))
+    for query in readiness["feedQueries"]:
+        query["matchedPostIds"] = [post_map[item] for item in query["matchedPostIds"]]
+    _, import_digest = _write(root, import_ref, import_report)
+    _write(root, homepage_ref, homepage)
+    readiness["activationEnvelope"]["importReportDigest"] = import_digest
+    checksum = lambda value: "sha256:" + hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    readiness["activationEnvelopeDigest"] = checksum(readiness["activationEnvelope"])
+    readiness.pop("verificationChecksum")
+    readiness["verificationChecksum"] = checksum(readiness)
+    _validate_data_schema(readiness, "environment_release_readiness")
     readiness_ref, readiness_digest = _write(
         root, f"{verify_prefix}/release-readiness.json", readiness
     )
@@ -237,17 +241,6 @@ def _authorities(root: Path, *, release_class: str = "research") -> dict[str, st
         "data_readiness_digest": readiness_digest,
         "consumer_health_ref": health_ref,
         "consumer_health_digest": health_digest,
-    }
-
-
-def _credential(ca: Path) -> dict[str, str]:
-    return {
-        "apiBaseUrl": "https://api.alpha.quwoquan.com",
-        "sslCaFile": str(ca),
-        "bearerToken": BEARER_FIXTURE,
-        "attestationToken": ATTESTATION,
-        "subjectHash": "sha256:" + "e" * 64,
-        "expiresAt": "2026-09-03T02:00:00Z",
     }
 
 
@@ -314,12 +307,11 @@ def _run(
     monkeypatch: pytest.MonkeyPatch,
     *,
     http: Any = _http,
-    release_class: str = "research",
-    credential_issuer: Any = None,
+    client_session_id: str | None = None,
 ) -> tuple[dict[str, Any], Path, dict[str, str]]:
     root = tmp_path / "output"
     root.mkdir()
-    refs = _authorities(root, release_class=release_class)
+    refs = _authorities(root)
     ca = tmp_path / "root.crt"
     ca.write_text("test CA", encoding="utf-8")
     monkeypatch.setattr(
@@ -338,52 +330,138 @@ def _run(
         report_dir=report_dir,
         output_root=root,
         http_request=http,
-        credential_issuer=credential_issuer or (lambda **_kwargs: _credential(ca)),
+        client_session_id=client_session_id,
         **refs,
     )
     return result, report_dir, refs
 
 
-def test_production_release_consumes_anonymously_without_research_credential(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+def test_release_consumes_public_api_without_special_credentials(tmp_path, monkeypatch):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002"""
+    calls = []
 
-    production release 是公开 serving：十六格观测以匿名读者身份进行，不签发也
-    不携带 research 凭证；研究凭证 issuer 若被调用即为回归。
-    """
-    seen_tokens: list[tuple[str, str]] = []
-
-    def anonymous_http(**kwargs: Any) -> subject.HttpObservation:
-        seen_tokens.append((kwargs["bearer_token"], kwargs["attestation_token"]))
+    def public_http(**kwargs):
+        inspect.signature(subject._default_http_request).bind(**kwargs)
+        assert not {"bearer_token", "attestation_token"}.intersection(kwargs)
+        calls.append(kwargs)
         return _http(**kwargs)
 
-    result, report_dir, _refs = _run(
-        tmp_path,
-        monkeypatch,
-        http=anonymous_http,
-        release_class="production",
-        credential_issuer=lambda **_kwargs: pytest.fail(
-            "production consumer must not issue a research credential"
-        ),
+    result, report_dir, _ = _run(tmp_path, monkeypatch, http=public_http)
+    assert result["exitCode"] == 0
+    assert len(calls) == 16
+    assert len(list((report_dir / "raw").glob("*/*.json"))) == 16
+    feed_calls = [call for call in calls if call["path"] == "content/feed"]
+    assert len(feed_calls) == 8
+    assert all(call["query"]["limit"] == "20" for call in feed_calls)
+    assert all(
+        call["body"]["limit"] == 50 for call in calls if call["path"] == "search"
+    )
+    assert len({call["client_session_id"] for call in calls}) == 1
+    for call in calls:
+        assert set(call.get("query", {})) <= {"identity", "type", "sort", "channelId", "limit"}
+        assert set(call.get("body", {})) <= {"query", "mode", "objectTypes", "ids", "limit", "contentTypes"}
+
+
+def test_runs_isolate_sessions_without_persisting_them(tmp_path, monkeypatch):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002"""
+    from uuid import UUID
+
+    sessions = []
+    for index in range(2):
+        calls = []
+
+        def capture(**kwargs):
+            inspect.signature(subject._default_http_request).bind(**kwargs)
+            calls.append(kwargs)
+            return _http(**kwargs)
+
+        run_root = tmp_path / str(index)
+        run_root.mkdir()
+        result, report_dir, _ = _run(run_root, monkeypatch, http=capture)
+        assert result["exitCode"] == 0
+        session_ids = {call["client_session_id"] for call in calls}
+        assert len(session_ids) == 1
+        session = session_ids.pop()
+        assert UUID(session).version == 4
+        sessions.append(session)
+        persisted = b"".join(path.read_bytes() for path in report_dir.rglob("*.json"))
+        assert session.encode() not in persisted
+    assert sessions[0] != sessions[1]
+
+
+def test_run_preserves_explicit_session(tmp_path, monkeypatch):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002"""
+    calls = []
+
+    def capture(**kwargs):
+        inspect.signature(subject._default_http_request).bind(**kwargs)
+        calls.append(kwargs)
+        return _http(**kwargs)
+
+    result, _, _ = _run(
+        tmp_path, monkeypatch, http=capture, client_session_id="explicit-run-session"
+    )
+    assert result["exitCode"] == 0
+    assert {call["client_session_id"] for call in calls} == {"explicit-run-session"}
+
+
+def test_feed_probes_consume_canonical_data_page_limit(tmp_path, monkeypatch):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002"""
+    from quwoquan_data.scripts import cli  # noqa: F401：建立 Data canonical import 根
+    from content.release.environment import post_api_feed_verification as feed_contract
+
+    assert feed_contract._post_feed_page_limit() == 20
+    monkeypatch.setattr(feed_contract, "_post_feed_page_limit", lambda: 7)
+    calls = []
+
+    def capture(**kwargs):
+        inspect.signature(subject._default_http_request).bind(**kwargs)
+        calls.append(kwargs)
+        return _http(**kwargs)
+
+    result, _, _ = _run(tmp_path, monkeypatch, http=capture)
+    assert result["exitCode"] == 0
+    assert all(
+        call["query"]["limit"] == "7" for call in calls if call["path"] == "content/feed"
     )
 
-    assert result["exitCode"] == 0
-    assert len(seen_tokens) == 16 and set(seen_tokens) == {("", "")}
-    raw = [
-        json.loads(path.read_text(encoding="utf-8"))
-        for path in (report_dir / "raw").glob("*/*.json")
-    ]
-    assert len(raw) == 16 and {row["status"] for row in raw} == {"passed"}
+
+def test_invalid_run_session_fails_before_requests_or_evidence(tmp_path, monkeypatch):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002"""
+    with pytest.raises(subject.ContentApiConsumerError, match="client_session_id"):
+        _run(
+            tmp_path, monkeypatch, client_session_id="invalid session",
+            http=lambda **kwargs: pytest.fail("HTTP must not run"),
+        )
+    assert not (tmp_path / "output/env/alpha/runs/content-api-consumer/run-001").exists()
 
 
-def test_readiness_release_class_triplet_must_be_lifecycle_bound(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    with pytest.raises(subject.ContentApiConsumerError, match="releaseClass"):
-        _run(tmp_path, monkeypatch, release_class="preview")
+def test_invalid_page_contract_fails_without_hardcoded_fallback(monkeypatch):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002"""
+    from quwoquan_data.scripts import cli  # noqa: F401：建立 Data canonical import 根
+    from content.release.environment import post_api_feed_verification as feed_contract
+
+    def invalid_contract():
+        raise feed_contract.PostApiVerificationError("fixture invalid contract")
+
+    monkeypatch.setattr(feed_contract, "_post_feed_page_limit", invalid_contract)
+    with pytest.raises(subject.ContentApiConsumerError, match="pagination contract"):
+        subject._feed_page_limit()
+
+
+@pytest.mark.parametrize("field", ["releaseClass", "productLifecycleState", "readinessPhase"])
+def test_retired_category_field_is_rejected(tmp_path, field):
+    from quwoquan_ops.cli.lib.content_api_consumer_authority import _load_authority, _validate_data_readiness
+
+    root = tmp_path / "output"
+    refs = _authorities(root)
+    path = root / refs["data_readiness_ref"]
+    value = json.loads(path.read_text())
+    value[field] = "production"
+    ref, digest = _write(root, refs["data_readiness_ref"], value)
+    authority = _load_authority(ref, digest, label="Data readiness", root=root)
+    with pytest.raises(subject.ContentApiConsumerError, match="schema"):
+        _validate_data_readiness(authority, release_id=RELEASE_ID, import_run_id=IMPORT_RUN_ID, verify_run_id=VERIFY_RUN_ID, release_digest=RELEASE_DIGEST, manifest_digest=MANIFEST_DIGEST)
 
 
 def test_matrix_writes_sixteen_observations_and_canonical_raw_without_secret(
@@ -416,8 +494,8 @@ def test_matrix_writes_sixteen_observations_and_canonical_raw_without_secret(
         for row in raw
     )
     persisted = b"".join(path.read_bytes() for path in report_dir.rglob("*.json"))
-    assert BEARER_FIXTURE.encode() not in persisted
-    assert ATTESTATION.encode() not in persisted
+    assert b"attestationToken" not in persisted
+    assert b"bearerToken" not in persisted
     report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
     assert "status" not in report and "verdict" not in report
     assert report["releaseDigest"] == RELEASE_DIGEST
@@ -460,49 +538,6 @@ def test_failed_http_assertion_still_retains_all_raw_results(
     )
     assert failed["status"] == "failed"
     assert failed["reasonCode"] == "SERVICE.CONTENT_API_CONSUMER.failed"
-
-
-def test_credential_failure_retains_sixteen_blocked_raw_without_exception_text(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    root = tmp_path / "output"
-    root.mkdir()
-    refs = _authorities(root)
-    ca = tmp_path / "root.crt"
-    ca.write_text("test CA", encoding="utf-8")
-    monkeypatch.setattr(
-        subject, "_topology_api_base", lambda _target: "https://api.alpha.quwoquan.com"
-    )
-    monkeypatch.setattr(subject, "_tls_ca_file", lambda _target: ca)
-    parent = root / "env/alpha/runs/content-api-consumer"
-    parent.mkdir(parents=True)
-    report_dir = parent / "blocked"
-
-    result = subject.run_content_api_consumer(
-        target="alpha-local",
-        release_id=RELEASE_ID,
-        import_run_id=IMPORT_RUN_ID,
-        verify_run_id=VERIFY_RUN_ID,
-        manifest_digest=MANIFEST_DIGEST,
-        report_dir=report_dir,
-        output_root=root,
-        http_request=lambda **_kwargs: pytest.fail("HTTP must not run"),
-        credential_issuer=lambda **_kwargs: (_ for _ in ()).throw(
-            RuntimeError("credential failed " + BEARER_FIXTURE)
-        ),
-        **refs,
-    )
-
-    assert result["exitCode"] == 2
-    raw = [
-        json.loads(path.read_text(encoding="utf-8"))
-        for path in (report_dir / "raw").glob("*/*.json")
-    ]
-    assert len(raw) == 16 and {row["status"] for row in raw} == {"blocked"}
-    assert BEARER_FIXTURE.encode() not in b"".join(
-        path.read_bytes() for path in report_dir.rglob("*.json")
-    )
 
 
 @pytest.mark.parametrize(
@@ -551,7 +586,6 @@ def test_explicit_authority_digest_and_ref_drift_is_rejected_before_http(
             report_dir=parent / "rejected",
             output_root=root,
             http_request=lambda **_kwargs: pytest.fail("HTTP must not run"),
-            credential_issuer=lambda **_kwargs: _credential(ca),
             **refs,
         )
 
@@ -639,7 +673,6 @@ def test_nonrequired_health_layers_do_not_block_m1(
         report_dir=parent / "nonrequired-blocked",
         output_root=root,
         http_request=_http,
-        credential_issuer=lambda **_kwargs: _credential(ca),
         **refs,
     )
     assert result["exitCode"] == 0
@@ -669,7 +702,6 @@ def test_explicit_manifest_digest_must_match_data_readiness(
             report_dir=parent / "wrong-manifest",
             output_root=root,
             http_request=lambda **_kwargs: pytest.fail("HTTP must not run"),
-            credential_issuer=lambda **_kwargs: _credential(ca),
             **refs,
         )
 

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_request_headers.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
 import 'package:quwoquan_app/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/runtime/observability/generated/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/adapters/content_behavior_outbox_adapter.dart';
@@ -55,9 +56,12 @@ final appTelemetryTransportProvider = Provider<AppTelemetryTransport>((ref) {
   );
 });
 
-/// 产品事件与异常的唯一 production 组合入口。这里不提供运行时 Mock/Remote
-/// 分支；local_contract 通过 Provider override 注入测试 recorder。
+/// 产品事件与异常的唯一组合入口；离线不创建远端 transport 或持久 outbox。
 final appTelemetryReporterProvider = Provider<AppTelemetryRecorder>((ref) {
+  if (CloudRuntimeConfig.isHydrated &&
+      CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot) {
+    return const _UnavailableAppTelemetryRecorder();
+  }
   final sessionStore = ref.watch(appTelemetrySessionStoreProvider);
   final contextProvider = ref.watch(appTelemetryContextProvider);
   if (!sessionStore.isInitialized || !contextProvider.isInitialized) {

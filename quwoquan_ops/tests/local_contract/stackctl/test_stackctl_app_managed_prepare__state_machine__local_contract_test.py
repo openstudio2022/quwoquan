@@ -56,7 +56,6 @@ def _readiness_payload() -> dict[str, Any]:
         "releaseId": "alpha-slice-003",
         "verifyRunId": "verify-20260830T1600Z",
         "manifestDigest": _DIGEST,
-        "readinessPhase": "research",
         "passed": True,
     }
 
@@ -66,7 +65,6 @@ def _binding(readiness_path: Path) -> dict[str, Any]:
         "releaseId": "alpha-slice-003",
         "verifyRunId": "verify-20260830T1600Z",
         "manifestDigest": _DIGEST,
-        "readinessPhase": "research",
         "readinessReceiptRef": str(readiness_path.absolute()),
         "readinessReceiptDigest": "sha256:"
         + hashlib.sha256(readiness_path.read_bytes()).hexdigest(),
@@ -124,7 +122,10 @@ class ManagedConsumerLeaseBindingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             output_root = Path(temporary)
             with mock.patch.dict(
-                "os.environ", {"QWQ_OUTPUT_ROOT": str(output_root)}, clear=False
+                "os.environ", {
+                    "QWQ_OUTPUT_ROOT": str(output_root / "output"),
+                    "QWQ_DEPLOY_WORK_ROOT": str(output_root / "deploy"),
+                }, clear=False
             ):
                 acquired = leases.acquire_consumer_lease(
                     target="alpha-local",
@@ -132,6 +133,7 @@ class ManagedConsumerLeaseBindingTest(unittest.TestCase):
                     consumer=_CONSUMER_ID,
                     package_name="com.quwoquan.alpha.debug",
                     ports=[],
+                    instance_generation="alpha-attempt-1",
                     platform="ios-simulator",
                 )
                 started_at = acquired["startedAt"]
@@ -140,6 +142,7 @@ class ManagedConsumerLeaseBindingTest(unittest.TestCase):
                     device="SIM-1",
                     consumer=_CONSUMER_ID,
                     lease_id=str(acquired["leaseId"]),
+                    instance_generation="alpha-attempt-1",
                     handoff_digest=_DIGEST,
                     release_id="alpha-slice-003",
                     manifest_digest=_DIGEST,
@@ -155,7 +158,10 @@ class ManagedConsumerLeaseBindingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             output_root = Path(temporary)
             with mock.patch.dict(
-                "os.environ", {"QWQ_OUTPUT_ROOT": str(output_root)}, clear=False
+                "os.environ", {
+                    "QWQ_OUTPUT_ROOT": str(output_root / "output"),
+                    "QWQ_DEPLOY_WORK_ROOT": str(output_root / "deploy"),
+                }, clear=False
             ):
                 leases.acquire_consumer_lease(
                     target="alpha-local",
@@ -163,6 +169,7 @@ class ManagedConsumerLeaseBindingTest(unittest.TestCase):
                     consumer=_CONSUMER_ID,
                     package_name="com.quwoquan.alpha.debug",
                     ports=[],
+                    instance_generation="alpha-attempt-1",
                     platform="ios-simulator",
                 )
                 with self.assertRaisesRegex(ValueError, "leaseId mismatch"):
@@ -171,6 +178,7 @@ class ManagedConsumerLeaseBindingTest(unittest.TestCase):
                         device="SIM-1",
                         consumer=_CONSUMER_ID,
                         lease_id="sha256:" + "f" * 64,
+                        instance_generation="alpha-attempt-1",
                         handoff_digest=_DIGEST,
                     )
 
@@ -312,7 +320,7 @@ class ManagedPreparationStateMachineTest(unittest.TestCase):
                 receipt["contentBinding"]["readinessReceiptDigest"],
                 _sha256_file(Path(receipt["contentBinding"]["readinessReceiptRef"])),
             )
-            self.assertEqual(receipt["contentBinding"]["readinessPhase"], "research")
+            self.assertNotIn("readinessPhase", receipt["contentBinding"])
             self.assertEqual(
                 receipt["runtimeIdentity"]["startupAttemptId"], "alpha-attempt-1"
             )
@@ -376,7 +384,6 @@ class ManagedPreparationStateMachineTest(unittest.TestCase):
                 "releaseId",
                 "verifyRunId",
                 "manifestDigest",
-                "readinessPhase",
                 "readinessReceiptDigest",
             ):
                 self.assertEqual(
@@ -452,8 +459,8 @@ class ManagedPreparationStateMachineTest(unittest.TestCase):
                             else None
                         ),
                     ),
-                    "_managed_research_readiness_candidates": mock.patch.object(
-                        stackctl, "_managed_research_readiness_candidates", return_value=candidates or [],
+                    "_managed_readiness_candidates": mock.patch.object(
+                        stackctl, "_managed_readiness_candidates", return_value=candidates or [],
                         side_effect=(
                             AssertionError("failed readback must stop candidate discovery")
                             if candidates is None
@@ -616,6 +623,8 @@ class ManagedPreparationStateMachineTest(unittest.TestCase):
                 target="alpha-local",
                 device="SIM-1",
                 consumer=_CONSUMER_ID,
+                lease_id=_LEASE_ID,
+                instance_generation="alpha-attempt-1",
             )
             release_trust.assert_called_once_with(
                 target="alpha-local",
@@ -657,6 +666,8 @@ class ManagedPreparationStateMachineTest(unittest.TestCase):
                 target="alpha-local",
                 device="SIM-1",
                 consumer=_CONSUMER_ID,
+                lease_id=_LEASE_ID,
+                instance_generation="alpha-attempt-1",
             )
 
     def test_otp_journey_failure_blocks_with_blocked_receipt(self) -> None:

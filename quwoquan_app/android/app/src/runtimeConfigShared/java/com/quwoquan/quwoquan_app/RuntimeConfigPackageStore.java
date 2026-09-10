@@ -342,7 +342,15 @@ final class RuntimeConfigPackageStore {
     }
   }
 
+  boolean networkAccessAllowed() {
+    Map<String, Object> state = readStateEnvelope();
+    Object document = state.get("package");
+    return "present".equals(state.get("state")) && document instanceof Map
+        && "remote".equals(AppLaunchContract.RUNTIME_DOCUMENT_CONTENT_SOURCES.get(((Map<?, ?>) document).get("schema")));
+  }
+
   Map<String, String> readRecoveryRuntimeValues() throws RuntimeConfigException {
+    if (!networkAccessAllowed()) throw new RuntimeConfigException("runtime_config_network_forbidden");
     Map<String, Object> envelope = readFlutterEnvelope();
     Object rawPackage = envelope.get("package");
     if (!(rawPackage instanceof Map)) {
@@ -490,8 +498,11 @@ final class RuntimeConfigPackageStore {
       String expectedPackageDigest,
       boolean allowStaleIdentity)
       throws RuntimeConfigException {
-    if (!exactFields(packageDocument, PACKAGE_FIELDS)
-        || !PACKAGE_SCHEMA.equals(stringValue(packageDocument, "schema"))) {
+    String schema = stringValue(packageDocument, "schema");
+    boolean offline = AppLaunchContract.SCHEMA_VALUES.get("offline_bootstrap_document").equals(schema);
+    if ((!offline && !PACKAGE_SCHEMA.equals(schema))
+        || !exactFields(packageDocument, offline
+            ? AppLaunchContract.OFFLINE_BOOTSTRAP_DOCUMENT_REQUIRED_FIELDS : PACKAGE_FIELDS)) {
       throw new RuntimeConfigException("runtime_config_schema_mismatch");
     }
     if (!SIGNATURE_ALGORITHM.equals(stringValue(packageDocument, "signatureAlgorithm"))) {
@@ -519,16 +530,28 @@ final class RuntimeConfigPackageStore {
       throw new RuntimeConfigException("runtime_config_launch_policy_mismatch");
     }
 
+    String contentSource = AppLaunchContract.RUNTIME_DOCUMENT_CONTENT_SOURCES.get(schema);
+    // 仅显式 activation 的 CAS 前值允许识别退役 Alpha 在线包；绝不用于消费或候选验收。
+    boolean retiredAlphaIdentity = allowStaleIdentity && !offline
+        && "alpha".equals(environment) && "alpha-local".equals(target);
+    if ((!retiredAlphaIdentity && !contentSource.equals(AppLaunchContract.CONTENT_SOURCE_POLICY.get(environment)))
+        || (offline && (!"bundled_snapshot".equals(stringValue(packageDocument, "contentSource"))
+            || !"nonprod".equals(profile) || !"alpha-local".equals(target)
+            || !trust.digest.equals(stringValue(packageDocument, "trustEnvelopeDigest"))))) {
+      throw new RuntimeConfigException("runtime_config_content_source_mismatch");
+    }
+    List<String> runtimeFields = offline
+        ? AppLaunchContract.OFFLINE_BOOTSTRAP_RUNTIME_REQUIRED_FIELDS : RUNTIME_FIELDS;
     JsonElement rawRuntime = packageDocument.get("runtime");
     if (rawRuntime == null || !rawRuntime.isJsonObject()) {
       throw new RuntimeConfigException("runtime_config_runtime_values_invalid");
     }
     JsonObject runtime = rawRuntime.getAsJsonObject();
-    if (!exactFields(runtime, RUNTIME_FIELDS)
+    if (!exactFields(runtime, runtimeFields)
         || !environment.equals(stringValue(runtime, "appRuntimeEnv"))) {
       throw new RuntimeConfigException("runtime_config_runtime_values_invalid");
     }
-    for (String key : RUNTIME_FIELDS) {
+    for (String key : runtimeFields) {
       String value = requiredString(runtime, key, "runtime_config_runtime_values_invalid");
       if (SECRET_KEY_PATTERN.matcher(key).find()) {
         throw new RuntimeConfigException("runtime_config_runtime_values_invalid");
@@ -576,7 +599,7 @@ final class RuntimeConfigPackageStore {
     }
 
     verifySignature(packageDocument, encodedPublicKey);
-    validateFreshness(packageDocument, allowStaleIdentity);
+    if (!offline) validateFreshness(packageDocument, allowStaleIdentity);
     String packageDigest = sha256Identity(canonicalJsonBytes(packageDocument));
     if (expectedPackageDigest != null
         && !MessageDigest.isEqual(

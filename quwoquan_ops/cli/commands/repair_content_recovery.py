@@ -271,9 +271,6 @@ def _repair_active_content_release_outbox(
                     "composeProject": compose_project,
                     "composeFiles": [str(path) for path in compose_files],
                     "runtimeInputs": runtime_inputs["evidence"],
-                    "candidateReleaseInputClassification": candidate_manifest.get(
-                        "releaseInputClassification"
-                    ),
                 }
             )
 
@@ -679,9 +676,6 @@ def _repair_media_processing_dead_letter_indexes(
                     "composeProject": compose_project,
                     "composeFiles": [str(path) for path in compose_files],
                     "runtimeInputs": runtime_inputs["evidence"],
-                    "candidateReleaseInputClassification": candidate_manifest.get(
-                        "releaseInputClassification"
-                    ),
                 }
             )
 

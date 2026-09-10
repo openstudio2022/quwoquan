@@ -285,7 +285,6 @@ def _candidate() -> CandidateBinding:
         release_id="release-1",
         release_digest="sha256:" + "4" * 64,
         import_run_id="import-1",
-        readiness_phase="research",
         readiness_receipt_digest="sha256:" + "5" * 64,
         release_posts=(
             BusinessObjectRef("Post", "post-1"),
@@ -310,6 +309,28 @@ def _plan_for(definition, request, resolved_params):
 
 
 class TestDataControlPlaneContractTest(unittest.TestCase):
+    def test_candidate_and_release_handle_reject_removed_category_argument(self) -> None:
+        # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+        candidate = _candidate()
+        for phase in ("production", "default", "research", "commercial", "consumer", "import", "", None):
+            with self.subTest(phase=phase):
+                with self.assertRaisesRegex(TypeError, "readiness_phase"):
+                    replace(candidate, readiness_phase=phase)
+                with self.assertRaisesRegex(TypeError, "readiness_phase"):
+                    ImmutableReleaseHandle(
+                        release_id=candidate.release_id,
+                        release_digest=candidate.release_digest,
+                        import_run_id=candidate.import_run_id,
+                        readiness_phase=phase,
+                        readiness_receipt_digest=candidate.readiness_receipt_digest,
+                        posts=candidate.release_posts,
+                        creators=candidate.release_creators,
+                        entities=candidate.release_entities,
+                        homepages=candidate.release_homepages,
+                        tags=candidate.release_tags,
+                        media_assets=candidate.release_media_assets,
+                    )
+
     def test_actor_and_immutable_release_handles_reject_identity_drift(self) -> None:
         with self.assertRaisesRegex(ValueError, "UserAccount"):
             ActorHandle(
@@ -331,7 +352,6 @@ class TestDataControlPlaneContractTest(unittest.TestCase):
                 release_id="release-1",
                 release_digest="not-a-digest",
                 import_run_id="import-1",
-                readiness_phase="research",
                 readiness_receipt_digest="sha256:" + "a" * 64,
                 posts=(BusinessObjectRef("Post", "post-1"),),
                 creators=(BusinessObjectRef("Creator", "creator-1"),),

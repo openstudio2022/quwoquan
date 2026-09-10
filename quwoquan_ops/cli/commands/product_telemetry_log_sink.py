@@ -125,7 +125,6 @@ def _write_full_workload_log_sink_gate_block(
     report_target: str,
     resolved_target: str,
     formal_release: bool,
-    release_input_classification: str,
     contract_graph_digest: str,
     timing: dict[str, Any],
 ) -> dict[str, Any]:
@@ -145,7 +144,6 @@ def _write_full_workload_log_sink_gate_block(
             "resolvedTarget": resolved_target,
             "workload": "full",
             "formalRelease": formal_release,
-            "releaseInputClassification": release_input_classification,
             "contractGraphDigest": contract_graph_digest,
             "status": "gate_block",
             "logSink": receipt,
@@ -164,7 +162,6 @@ def _write_full_workload_log_sink_gate_block(
         extra={
             "workload": "full",
             "formalRelease": formal_release,
-            "releaseInputClassification": release_input_classification,
             "contractGraphDigest": contract_graph_digest,
             "logSink": receipt,
         },
@@ -178,7 +175,6 @@ def _write_full_workload_log_sink_gate_block(
         "status": "gate_block",
         "workload": "full",
         "formalRelease": formal_release,
-        "releaseInputClassification": release_input_classification,
         "contractGraphDigest": contract_graph_digest,
         "logSink": receipt,
         **timing,

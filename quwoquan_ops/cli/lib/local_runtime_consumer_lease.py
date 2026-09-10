@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import fcntl
+import functools
+import uuid
 import json
 import os
 import shutil
@@ -11,8 +14,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from quwoquan_ops.cli.lib.common import utc_now, write_json
-from quwoquan_ops.cli.lib.output_paths import repo_local_dir, safe_segment
+from quwoquan_ops.cli.lib.common import utc_now
+from quwoquan_ops.cli.lib.output_paths import (
+    repo_local_dir, safe_segment, deployment_target_path,
+    _atomic_write_secure_json_object, _read_secure_json_object,
+)
 
 
 CommandRunner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
@@ -24,8 +30,46 @@ SUPPORTED_PLATFORMS = frozenset({"android", "ios-simulator", "ios-physical"})
 OCCUPANCY_FREE_STATES = frozenset({"stale", "released"})
 
 
-def consumer_lease_dir() -> Path:
-    return repo_local_dir("local-runtime-consumers")
+def consumer_lease_dir(target: str) -> Path:
+    legacy = repo_local_dir("local-runtime-consumers")
+    if legacy.is_dir() and any(legacy.glob("*.json")):
+        raise ValueError("OPS.LEASE.reconcile_required: legacy worktree lease receipts exist")
+    if target not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
+        raise ValueError("unsupported consumer lease target")
+    return deployment_target_path(target, "process", "local-runtime-consumers")
+
+
+def _lease_transaction(function: Any) -> Any:
+    """同一 target 内原子化 acquire/bind/release，不持有环境全生命周期锁。"""
+    @functools.wraps(function)
+    def locked(*args: Any, **kwargs: Any) -> Any:
+        from quwoquan_ops.cli.lib.host_locks import named_host_lock_path
+        directory = consumer_lease_dir(str(kwargs["target"]))
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        # device/application 的切环境冲突跨 target；同一短事务锁保护扫描与写入。
+        mutation_path = named_host_lock_path("local-runtime-consumers", "mutation")
+        mutation_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        descriptor = os.open(
+            mutation_path,
+            os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600,
+        )
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            return function(*args, **kwargs)
+        finally:
+            os.close(descriptor)
+    return locked
+
+
+def _write_lease(path: Path, payload: dict[str, Any]) -> None:
+    _atomic_write_secure_json_object(path, payload, label="consumer lease")
+
+
+def _require_generation(value: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized or normalized != value or any(c in normalized for c in "\x00\n\r/\\"):
+        raise ValueError("instance_generation must be an exact runtime generation")
+    return normalized
 
 
 def _lease_path(*, target: str, device: str, consumer: str) -> Path:
@@ -36,14 +80,15 @@ def _lease_path(*, target: str, device: str, consumer: str) -> Path:
             safe_segment(consumer, fallback="consumer"),
         )
     )
-    return consumer_lease_dir() / f"{filename}.json"
+    return consumer_lease_dir(target) / f"{filename}.json"
 
 
-def _consumer_lease_id(*, platform: str, target: str, device: str, consumer: str) -> str:
+def _consumer_lease_id(*, platform: str, target: str, device: str, consumer: str,
+                       nonce: str, instance_generation: str) -> str:
     return "sha256:" + hashlib.sha256(
         (
             f"{platform.strip().lower()}\0{target.strip()}\0{device.strip()}\0"
-            f"{consumer.strip()}"
+            f"{consumer.strip()}\0{nonce}\0{instance_generation}"
         ).encode("utf-8")
     ).hexdigest()
 
@@ -59,6 +104,7 @@ def _require_sha256_identity(value: str, *, field: str) -> str:
     return normalized
 
 
+@_lease_transaction
 def acquire_consumer_lease(
     *,
     target: str,
@@ -66,6 +112,7 @@ def acquire_consumer_lease(
     consumer: str,
     package_name: str,
     ports: Sequence[int],
+    instance_generation: str,
     platform: str = "android",
     handoff_digest: str = "",
     release_id: str = "",
@@ -85,16 +132,29 @@ def acquire_consumer_lease(
         )
     if normalized_platform == "android" and not normalized_ports:
         raise ValueError("at least one positive port is required for Android")
+    generation = _require_generation(instance_generation)
+    for existing in list_consumer_leases():
+        if (not existing.get("releasedAt") and existing.get("device") == device.strip()
+                and existing.get("packageName") == package_name.strip()
+                and existing.get("target") != target.strip()):
+            raise ValueError("OPS.LEASE.device_environment_conflict: exact prior session release required before switching environment")
     path = _lease_path(target=target, device=device, consumer=consumer)
+    previous = _read_secure_json_object(path, label="consumer lease")
+    if previous and not previous.get("releasedAt"):
+        raise ValueError("OPS.LEASE.in_use: existing lease requires exact release or reconcile")
+    nonce = uuid.uuid4().hex
     lease_id = _consumer_lease_id(
         platform=normalized_platform,
         target=target,
         device=device,
-        consumer=consumer,
+        consumer=consumer, nonce=nonce, instance_generation=generation,
     )
     payload: dict[str, Any] = {
         "schema": "qwq.local_runtime_consumer_lease",
         "leaseId": lease_id,
+        "nonce": nonce,
+        "instanceGeneration": generation,
+        "ownerPid": os.getpid(),
         "platform": normalized_platform,
         "target": target.strip(),
         "device": device.strip(),
@@ -114,16 +174,18 @@ def acquire_consumer_lease(
     ):
         if value.strip():
             payload[key] = value.strip()
-    write_json(path, payload)
+    _write_lease(path, payload)
     return {**payload, "path": str(path)}
 
 
+@_lease_transaction
 def bind_consumer_lease(
     *,
     target: str,
     device: str,
     consumer: str,
     lease_id: str,
+    instance_generation: str,
     handoff_digest: str,
     release_id: str = "",
     manifest_digest: str = "",
@@ -164,6 +226,7 @@ def bind_consumer_lease(
         ("device", normalized_device),
         ("consumer", normalized_consumer),
         ("leaseId", normalized_lease_id),
+        ("instanceGeneration", _require_generation(instance_generation)),
     ):
         if payload.get(field) != expected:
             raise ValueError(f"consumer lease receipt {field} mismatch")
@@ -173,6 +236,8 @@ def bind_consumer_lease(
         target=normalized_target,
         device=normalized_device,
         consumer=normalized_consumer,
+        nonce=str(payload.get("nonce") or ""),
+        instance_generation=instance_generation,
     )
     if normalized_lease_id != expected_lease_id:
         raise ValueError("consumer lease id is not canonical for its exact identity")
@@ -199,11 +264,13 @@ def bind_consumer_lease(
             raise ValueError(f"consumer lease {field} conflicts with existing evidence")
         if value:
             payload[field] = value
-    write_json(path, payload)
+    _write_lease(path, payload)
     return {**payload, "path": str(path)}
 
 
-def release_consumer_lease(*, target: str, device: str, consumer: str) -> bool:
+@_lease_transaction
+def release_consumer_lease(*, target: str, device: str, consumer: str,
+                           lease_id: str, instance_generation: str) -> bool:
     """标记 released 并保留回执。
 
     互斥由状态承担，代际证据由保留的 releaseId/manifestDigest/
@@ -211,34 +278,38 @@ def release_consumer_lease(*, target: str, device: str, consumer: str) -> bool:
     运行同代际的 lease 证据。
     """
 
+    _require_sha256_identity(lease_id, field="lease_id")
+    _require_generation(instance_generation)
     path = _lease_path(target=target, device=device, consumer=consumer)
-    if not path.is_file():
+    payload = _read_secure_json_object(path, label="consumer lease")
+    if payload is None:
         return False
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
-    if not isinstance(payload, dict):
-        return False
+    if (
+        payload.get("leaseId") != _require_sha256_identity(lease_id, field="lease_id")
+        or payload.get("instanceGeneration") != _require_generation(instance_generation)
+    ):
+        raise ValueError("OPS.LEASE.generation_conflict: exact lease identity differs")
+    if payload.get("releasedAt"):
+        return True
     payload["releasedAt"] = utc_now()
-    write_json(path, payload)
+    _write_lease(path, payload)
     return True
 
 
 def list_consumer_leases(target: str | None = None) -> list[dict[str, Any]]:
-    directory = consumer_lease_dir()
+    if target is None:
+        return [lease for item in ("alpha-local", "beta-local", "gamma-local", "prod-sim")
+                for lease in list_consumer_leases(item)]
+    directory = consumer_lease_dir(target)
     if not directory.is_dir():
         return []
     leases: list[dict[str, Any]] = []
     for path in sorted(directory.glob("*.json")):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if not isinstance(payload, dict):
-            continue
-        if target and str(payload.get("target") or "") != target:
-            continue
+        payload = _read_secure_json_object(path, label="consumer lease")
+        if payload is None:
+            raise ValueError("consumer lease vanished during inspection")
+        if str(payload.get("target") or "") != target:
+            raise ValueError("consumer lease target identity mismatch")
         leases.append({**payload, "path": str(path)})
     return leases
 
@@ -264,6 +335,9 @@ def inspect_consumer_leases(
             adb_path=adb_path,
             xcrun_path=xcrun_path,
         )
+        if state == "stale" and not lease.get("releasedAt"):
+            state = "active_unverified"
+            detail = "explicit reconcile required; " + detail
         inspected.append({**lease, "state": state, "detail": detail})
     return inspected
 

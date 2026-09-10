@@ -3,7 +3,10 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
 export PYTHONDONTWRITEBYTECODE=1
-export PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$APP_DIR/scripts/device:$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
+export QWQ_LAUNCH_HOST_HOME="$(python3 -c 'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
+# direct 不使用 hermetic 私有证据根作为运行时事实源。
+export QWQ_OUTPUT_ROOT="$QWQ_LAUNCH_HOST_HOME/.cache/quwoquan/runtime-output"
 ENVIRONMENT="${QWQ_ENVIRONMENT:-alpha}"
 DEVICE_ID=""
 RUN_MODE="${QWQ_RUN_MODE:-content-live}"
@@ -40,6 +43,13 @@ import math, sys
 if any(not math.isfinite(float(value)) or float(value) <= 0 for value in sys.argv[1:]): raise SystemExit(2)
 PY
 
+CONTENT_SOURCE="$(python3 - "$ENVIRONMENT" <<'PY'
+import sys
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
+print(load_launch_manifest_contract()["content_source_policy"][sys.argv[1]])
+PY
+)" || block "canonical content source policy unavailable"
+if [[ "$CONTENT_SOURCE" == "remote" ]]; then
 PREFLIGHT_PURPOSE="$(python3 - "$RUN_MODE" <<'PY'
 import sys
 from quwoquan_ops.cli.lib.app_debug_preflight_handoff import (
@@ -113,9 +123,17 @@ while IFS= read -r preflight_warning; do
   [[ -n "$preflight_warning" ]] || continue
   log "WARN: $preflight_warning"
 done <<< "$PREFLIGHT_WARNING_TEXT"
-# Workspace-direct test_live intentionally carries no release-grade consumer
-# lease. Keep that absence visible and non-promotable without blocking compile.
-log "WARN: runtime consumer lease is unavailable; test_live remains nonPromotable."
+# 先只读同 target 的 canonical running identity；真正 acquire 在 executor lifetime
+# 内重新持锁验证，不能把此处的 read 当作可绕过原子校验的授权。
+python3 - "$ENVIRONMENT-local" <<'PY' || block "OPS.LEASE.runtime_identity_unavailable"
+import sys
+from canonical_app_instance.runtime_lease import running_generation, runtime_authority_environment
+with runtime_authority_environment():
+    running_generation(sys.argv[1])
+PY
+else
+  log "source: bundled_snapshot; cloud preflight/transport/readiness not applicable; nonPromotable."
+fi
 
 log "tree: $APP_DIR"
 if ! SDK_JSON="$(python3 "$APP_DIR/scripts/tools/flutter_facade/resolve_real_flutter.py" --format json)"; then
@@ -197,7 +215,7 @@ MATERIAL_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/qwq-dev-launch.XXXXXX")"
 mkdir -m 0700 "$MATERIAL_ROOT/qwq_runtime"
 trap 'rm -rf -- "$MATERIAL_ROOT"' EXIT
 TRUST_PATH="$MATERIAL_ROOT/qwq_runtime/runtime-config-trust.json"
-log "config: signing $ENVIRONMENT runtime package + trust envelope (test_live)"
+log "config: signing $ENVIRONMENT $CONTENT_SOURCE document + artifact trust (test_live)"
 if ! HANDOFF_JSON="$(python3 "$APP_DIR/scripts/device/build_launcher_handoff.py" \
     --env "$ENVIRONMENT" --target "${ENVIRONMENT}-local" \
     --launch-provenance canonical_launcher --launch-policy test_live \
@@ -209,15 +227,7 @@ ENTRYPOINT="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["entryp
 APP_ID="$(python3 -c 'import sys
 from quwoquan_ops.cli.lib.app_identity import resolve_app_identity
 print(resolve_app_identity(platform=sys.argv[1], build_profile="nonprod", build_mode="debug").application_id)' "$PLATFORM")"
-if [[ "$DEVICE_KIND" == "ios-simulator" ]]; then
-  DATA_ROOT="$(xcrun simctl get_app_container "$DEVICE_ID" "$APP_ID" data 2>/dev/null || true)"
-  LEGACY_RECEIPT="$DATA_ROOT/Library/Application Support/qwq_runtime/runtime-config-active-receipt.json"
-  if [[ -f "$LEGACY_RECEIPT" ]] && grep -q '"runtimeConfigSupplyMode":"embedded_default_package"' "$LEGACY_RECEIPT"; then
-    rm -f "${LEGACY_RECEIPT%/*}"/runtime-config-*.json
-  fi
-elif [[ "$PLATFORM" == "android" ]] && adb -s "$DEVICE_ID" shell run-as "$APP_ID" sh -c "'grep -q embedded_default_package no_backup/runtime-config-active-receipt.json'" 2>/dev/null; then
-  adb -s "$DEVICE_ID" shell run-as "$APP_ID" sh -c "'rm -f no_backup/runtime-config-*.json'"
-fi
+# 旧 active 只允许原生显式 CAS activation 迁移；启动器不得删除配置或 receipt 绕过验证。
 export QWQ_ENVIRONMENT="$ENVIRONMENT" QWQ_APP_RUNTIME_ENV="$ENVIRONMENT"
 export QWQ_LAUNCH_TARGET="${ENVIRONMENT}-local" QWQ_APP_RUN_MODE="$RUN_MODE"
 export QWQ_APP_BUILD_PROFILE=nonprod QWQ_APP_BUILD_CONTEXT=runtime QWQ_APP_LAUNCH_POLICY=test_live
@@ -227,7 +237,7 @@ export QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT="$MATERIAL_ROOT"
 unset QWQ_MANAGED_FLUTTER_ENTRY
 log "launch: $APP_ID on $DEVICE_ID → build / install / activate / attach（r 热重载 R 热重启 q 退出）"
 EXIT_CODE=0
-python3 "$APP_DIR/scripts/device/run_app_instance.py" \
+python3 -c 'from canonical_app_instance.runtime_lease import run_canonical; raise SystemExit(run_canonical())' \
   --device-kind "$DEVICE_KIND" --device "$DEVICE_ID" \
   --application-id "$APP_ID" --entrypoint "$ENTRYPOINT" \
   --activation-timeout-seconds "${QWQ_APP_ACTIVATION_TIMEOUT_SECONDS:-30}" \

@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import ssl
 import time
+import unicodedata
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -19,7 +21,7 @@ from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
-from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
 
 from quwoquan_ops.cli.lib.content_api_consumer_authority import (
     CARRIERS,
@@ -57,10 +59,6 @@ from quwoquan_ops.cli.lib.readiness_case_result import (
     canonical_json_bytes,
     write_readiness_case_result,
 )
-from quwoquan_ops.cli.lib.research_consumer_credential import (
-    issue_research_consumer_credential,
-)
-
 
 class ContentApiConsumerError(ValueError):
     """An explicit authority is invalid or the runner cannot retain evidence."""
@@ -91,15 +89,73 @@ class HttpObservation:
 
 
 HttpRequest = Callable[..., HttpObservation]
-CredentialIssuer = Callable[..., dict[str, Any]]
+
+
+def _client_session_id(value: str | None) -> str:
+    if value is None:
+        return uuid.uuid4().hex
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value.encode("utf-8", errors="surrogatepass")) > 128
+        or any(
+            char.isspace() or unicodedata.category(char) in {"Cc", "Cs"}
+            for char in value
+        )
+    ):
+        raise ContentApiConsumerError(
+            "client_session_id must be 1..128 UTF-8 bytes without whitespace or control characters"
+        )
+    return value
+
+
+def _feed_page_limit() -> str:
+    from quwoquan_data.scripts import cli  # noqa: F401：建立 Data canonical import 根
+    from content.release.environment.post_api_feed_verification import (
+        PostApiVerificationError,
+        _post_feed_page_limit,
+    )
+
+    try:
+        return str(_post_feed_page_limit())
+    except PostApiVerificationError as exc:
+        raise ContentApiConsumerError("GetFeed pagination contract is invalid") from exc
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ContentApiConsumerTransportError('HTTP redirects are forbidden for canonical content reads')
+
+
+def _read_bounded_body(response, *, maximum: int, deadline: float | None) -> bytes:
+    if deadline is None:
+        return response.read(maximum + 1)
+    chunks: list[bytes] = []
+    remaining_bytes = maximum + 1
+    read = getattr(response, 'read1', response.read)
+    while remaining_bytes > 0:
+        remaining_time = deadline - time.monotonic()
+        if remaining_time <= 0:
+            raise ContentApiConsumerTransportError('HTTP content read deadline exceeded')
+        # urllib 的 timeout 是单次 socket 等待；逐块同步剩余总时限，避免慢速 body 无限延长。
+        raw = getattr(getattr(response, 'fp', None), 'raw', None)
+        transport_socket = getattr(raw, '_sock', None)
+        if transport_socket is not None:
+            transport_socket.settimeout(remaining_time)
+        chunk = read(min(65536, remaining_bytes))
+        if time.monotonic() >= deadline:
+            raise ContentApiConsumerTransportError('HTTP content read deadline exceeded')
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining_bytes -= len(chunk)
+    return b''.join(chunks)
 
 
 def _default_http_request(
     *,
     api_base: str,
-    ca_file: Path,
-    bearer_token: str,
-    attestation_token: str,
+    ca_file: Path | None,
     method: str,
     path: str,
     page_id: str,
@@ -109,7 +165,25 @@ def _default_http_request(
     release_id: str = "",
     release_digest: str = "",
     manifest_digest: str = "",
+    client_session_id: str | None = None,
+    max_response_bytes: int = 2 * 1024 * 1024,
+    deadline_monotonic: float | None = None,
+    follow_redirects: bool = False,
 ) -> HttpObservation:
+    if type(max_response_bytes) is not int or not 0 < max_response_bytes <= 2 * 1024 * 1024:
+        raise ContentApiConsumerError('HTTP response byte budget is invalid')
+    if follow_redirects is not False:
+        raise ContentApiConsumerError('HTTP redirects cannot be enabled for canonical content reads')
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise ContentApiConsumerError('HTTP timeout budget is invalid')
+    if deadline_monotonic is not None:
+        if not math.isfinite(deadline_monotonic):
+            raise ContentApiConsumerError('HTTP total deadline is invalid')
+        remaining = deadline_monotonic - time.monotonic()
+        if remaining <= 0:
+            raise ContentApiConsumerTransportError('HTTP content read deadline exceeded')
+        timeout_seconds = min(timeout_seconds, remaining)
+    session_id = _client_session_id(client_session_id)
     request_id = "OPS.content-api-consumer." + uuid.uuid4().hex
     trace_id = "OPS.content-api-consumer." + uuid.uuid4().hex
     normalized_path = "/" + path.lstrip("/")
@@ -126,34 +200,36 @@ def _default_http_request(
     headers = {
         "Accept": "application/json",
         "X-Client-Page-Id": page_id,
-        "X-Client-Session-Id": "content-api-consumer",
+        "X-Client-Session-Id": session_id,
         "X-Client-Sent-At": started_at,
         "X-Client-Device-Platform": "ops",
         "X-Client-App-Version": "content-api-consumer-v1",
         "X-Request-Id": request_id,
         "X-Trace-Id": trace_id,
     }
-    if bearer_token:
-        headers["Authorization"] = f"Bearer {bearer_token}"
-        headers["X-Research-Identity-Attestation"] = attestation_token
     if encoded is not None:
         headers["Content-Type"] = "application/json"
     request = Request(url, data=encoded, headers=headers, method=method)
-    context = ssl.create_default_context(cafile=str(ca_file))
-    opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context))
+    context = ssl.create_default_context(cafile=str(ca_file)) if ca_file is not None else ssl.create_default_context()
+    opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context), _NoRedirect())
     try:
         with opener.open(request, timeout=timeout_seconds) as response:
             status = int(response.status)
-            raw = response.read(2 * 1024 * 1024 + 1)
+            raw = _read_bounded_body(response, maximum=max_response_bytes, deadline=deadline_monotonic)
     except HTTPError as exc:
         status = int(exc.code)
-        raw = exc.read(2 * 1024 * 1024 + 1)
+        try:
+            raw = _read_bounded_body(exc, maximum=max_response_bytes, deadline=deadline_monotonic)
+        finally:
+            exc.close()
     except (OSError, URLError, ssl.SSLError) as exc:
         raise ContentApiConsumerTransportError(
             f"HTTP transport failed for {method} {normalized_path}: "
             f"{type(exc).__name__}"
         ) from exc
-    if len(raw) > 2 * 1024 * 1024:
+    if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+        raise ContentApiConsumerTransportError('HTTP content read deadline exceeded')
+    if len(raw) > max_response_bytes:
         raise ContentApiConsumerError(
             f"HTTP response exceeded byte budget for {method} {normalized_path}"
         )
@@ -260,9 +336,9 @@ def _feed_probe(
     common: Mapping[str, Any],
 ) -> tuple[HttpObservation, dict[str, Any]]:
     query = (
-        {"sort": "recommend", "channelId": "recommend", "limit": "50"}
+        {"sort": "recommend", "channelId": "recommend", "limit": _feed_page_limit()}
         if sample.carrier == "homepage"
-        else {"identity": "work", "type": sample.carrier, "limit": "50"}
+        else {"identity": "work", "type": sample.carrier, "limit": _feed_page_limit()}
     )
     observation = request(
         **common,
@@ -364,7 +440,7 @@ def _recommendation_probe(
         method="GET",
         path="content/feed",
         page_id="content.feed.list",
-        query={"sort": "recommend", "channelId": "recommend", "limit": "50"},
+        query={"sort": "recommend", "channelId": "recommend", "limit": _feed_page_limit()},
     )
     try:
         _assert_activation(
@@ -473,10 +549,11 @@ def run_content_api_consumer(
     report_dir: Path,
     output_root: Path,
     http_request: HttpRequest = _default_http_request,
-    credential_issuer: CredentialIssuer = issue_research_consumer_credential,
+    client_session_id: str | None = None,
 ) -> dict[str, Any]:
-    """Execute and retain exactly sixteen read-only API observations/results."""
+    """Execute sixteen public reads sharing one session, fresh unless explicit."""
 
+    session_id = _client_session_id(client_session_id)
     target = str(target or "").strip()
     release_id = _required_identity(release_id, label="release-id")
     manifest_digest = _required_digest(manifest_digest, label="manifest-digest")
@@ -578,47 +655,13 @@ def run_content_api_consumer(
         "ref": _report_ref(consumer_health_binding_path, output_root=authority_root),
         "digest": _digest_bytes(consumer_health_binding_raw),
     }
-    credential_error = ""
-    bearer_token = ""
-    attestation_token = ""
-    # 只有 research release 走白名单研究凭证；commercial/production 是公开 serving，
-    # 十六格观测以匿名读者身份进行，与 App 游客一致（DEC-041）。
-    if str(readiness.get("releaseClass") or "") == "research":
-        try:
-            credential = credential_issuer(
-                environment="alpha",
-                release_id=release_id,
-                verify_run_id=verify_run_id,
-            )
-            bearer_token = str(credential.get("bearerToken") or "").strip()
-            attestation_token = str(credential.get("attestationToken") or "").strip()
-            credential_base = str(credential.get("apiBaseUrl") or "").strip().rstrip("/")
-            credential_ca = Path(str(credential.get("sslCaFile") or "")).expanduser()
-            if (
-                not bearer_token
-                or not attestation_token
-                or credential_base != api_base
-                or credential_ca.resolve() != ca_file.resolve()
-            ):
-                raise ContentApiConsumerError(
-                    "research_consumer_credential topology/TLS identity drifted"
-                )
-        except (OSError, RuntimeError, TypeError, ValueError):
-            # The terminal is retained for every required cell; credential exception
-            # text is intentionally excluded because an upstream client might echo a
-            # secret while failing.
-            bearer_token = ""
-            attestation_token = ""
-            credential_error = "research_consumer_credential is unavailable"
-
     observations: list[dict[str, Any]] = []
     raw_results: list[dict[str, str]] = []
     statuses: list[str] = []
     common = {
         "api_base": api_base,
         "ca_file": ca_file,
-        "bearer_token": bearer_token,
-        "attestation_token": attestation_token,
+        "client_session_id": session_id,
         "release_id": release_id,
         "release_digest": release_digest,
         "manifest_digest": manifest_digest,
@@ -633,8 +676,6 @@ def run_content_api_consumer(
             status = "passed"
             reason_code = ""
             try:
-                if credential_error:
-                    raise ContentApiConsumerTransportError(credential_error)
                 observation, compact = _PROBES[entry](
                     sample,
                     request=http_request,

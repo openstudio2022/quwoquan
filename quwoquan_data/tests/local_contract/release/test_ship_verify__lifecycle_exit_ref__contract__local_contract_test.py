@@ -21,7 +21,7 @@ from content.release.environment._ship_consumer_verification import (  # noqa: E
 from content.release.environment._ship_operation_dependencies import (  # noqa: E402
     ShipOperationDependencies,
 )
-from content.release.environment.readiness import ShipReadinessPhase  # noqa: E402
+from content.release.environment.readiness import ShipReadinessAction  # noqa: E402
 from content.release.environment.run_evidence import (  # noqa: E402
     create_run,
     write_environment_result,
@@ -86,8 +86,6 @@ def _release(
             "sourceRevision": _SOURCE_REVISION,
             "sourceDigest": _SOURCE_DIGEST,
             "entityCatalogDigest": _ENTITY_CATALOG_DIGEST,
-            "releaseClass": "production",
-            "productLifecycleState": "production",
             "containsUnverifiedAssets": research,
             "rightsStatusCounts": {
                 "verified": 0,
@@ -225,7 +223,6 @@ def _dependencies(
             "sourceOwner": "qwq_data",
             "releaseId": release.name,
             "manifestDigest": manifest_digest,
-            "releaseClass": "production",
             "releaseKind": str(release_kind),
             "mode": "sync",
             "deletePolicy": "tombstone",
@@ -271,7 +268,6 @@ def _dependencies(
             "active": {
                 "releaseId": release.name,
                 "manifestDigest": manifest_digest,
-                "releaseClass": "production",
                 "projectionVersion": 2,
                 "revision": 1,
                 "activatedAt": "2026-09-05T00:00:03Z",
@@ -296,7 +292,6 @@ def _dependencies(
             "sourceOwner": "qwq_data",
             "releaseId": release.name,
             "manifestDigest": manifest_digest,
-            "releaseClass": "production",
             "projectionVersion": 2,
             "revision": 1,
             "activatedAt": "2026-09-05T00:00:03Z",
@@ -370,8 +365,6 @@ def _dependencies(
         "schema": "quwoquan_data.environment_release_result",
         "environment": "gamma",
         "releaseId": release.name,
-        "releaseClass": "production",
-        "productLifecycleState": "production",
         "containsUnverifiedAssets": research,
         "manifestDigest": manifest_digest,
         **predecessor_admission,
@@ -474,7 +467,6 @@ def test_ship_verify__production_forwards_lifecycle_exit_ref(
             env="gamma",
             import_run_id="activate-001",
             run_id="commercial-verify-with-ref",
-            readiness_phase="production",
             lifecycle_exit_ref=_LIFECYCLE_EXIT_REF,
             release_admission=replace(
                 _ADMISSION,
@@ -489,14 +481,14 @@ def test_ship_verify__production_forwards_lifecycle_exit_ref(
     )
 
     assert observed["environment"] is DeploymentEnvironment.GAMMA
-    assert observed["phase"] is ShipReadinessPhase.PRODUCTION
+    assert observed["action"] is ShipReadinessAction.VERIFY
     assert observed["lifecycle_exit_ref"] == _LIFECYCLE_EXIT_REF
     assert observed["release_id"] == "release-a"
     assert observed["verify_run_id"] == "commercial-verify-with-ref"
     assert observed["manifest_digest"] == payload_digest(release)
     result = observed["result"]
     assert result["lifecycleExitRef"] == _LIFECYCLE_EXIT_REF
-    assert result["readinessPhase"] == "production"
+    assert "readinessPhase" not in result
     assert result["status"] == "completed"
     assert result["handoffArtifactRef"].endswith("/producer_release_handoff.json")
     assert result["handoffArtifactDigest"].startswith("sha256:")
@@ -540,7 +532,6 @@ def test_ship_verify__rejects_revision_chain_drift_before_consumer(
                 env="gamma",
                 import_run_id="activate-001",
                 run_id="verify-revision-drift",
-                readiness_phase="production",
                 lifecycle_exit_ref="",
                 release_admission=observed["admission"],
             ),
@@ -568,7 +559,6 @@ def test_ship_verify__rejects_import_predecessor_checksum_drift_before_consumer(
                 env="gamma",
                 import_run_id="activate-001",
                 run_id="verify-checksum-drift",
-                readiness_phase="production",
                 lifecycle_exit_ref="",
                 release_admission=observed["admission"],
             ),
@@ -594,7 +584,6 @@ def test_ship_verify__rejects_unsafe_import_run_id_before_consumer(
                 env="gamma",
                 import_run_id=import_run_id,
                 run_id="verify-unsafe-import-run",
-                readiness_phase="production",
                 lifecycle_exit_ref="",
                 release_admission=observed["admission"],
             ),
@@ -612,7 +601,6 @@ def _verify_args(
         "env": "gamma",
         "import_run_id": "activate-001",
         "run_id": run_id,
-        "readiness_phase": "production",
         "lifecycle_exit_ref": "",
         "previous_environment_readiness": "",
         "release_admission": admission,
@@ -624,7 +612,6 @@ def _verify_args(
 @pytest.mark.parametrize(
     ("case", "expected_stage", "message"),
     [
-        ("invalid_phase", "readiness_phase", "readiness-phase"),
         ("missing_homepage", "homepage_verification_cases", "cases missing"),
         ("drifted_homepage", "homepage_verification_cases", "does not bind"),
         (
@@ -643,9 +630,7 @@ def test_ship_verify__post_create_direct_failures_write_one_typed_result(
     observed: dict[str, Any] = {}
     dependencies = _dependencies(tmp_path, observed=observed)
     args = _verify_args(observed["admission"], run_id=f"verify-{case}")
-    if case == "invalid_phase":
-        args.readiness_phase = "invalid"
-    elif case == "missing_homepage":
+    if case == "missing_homepage":
         (
             tmp_path / "env/gamma/runs/data-release/release-a/apply-001/"
             "homepage_verification_cases.json"
@@ -711,13 +696,16 @@ def test_ship_verify__failed_receipt_error_does_not_replace_operation_error(
     def _fail_result(_path: Path, _result: dict[str, Any]) -> None:
         raise OSError("receipt sink unavailable")
 
-    dependencies = replace(dependencies, write_verification_result=_fail_result)
-    with pytest.raises(SystemExit, match="readiness-phase") as exc:
+    dependencies = replace(
+        dependencies,
+        write_verification_result=_fail_result,
+        write_tag_consumer_verification=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("tag unavailable")),
+    )
+    with pytest.raises(SystemExit, match="tag consumer verification failed") as exc:
         verify_release_consumers(
             _verify_args(
                 observed["admission"],
                 run_id="verify-receipt-write-failure",
-                readiness_phase="invalid",
             ),
             dependencies=dependencies,
         )

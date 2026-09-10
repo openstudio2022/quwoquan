@@ -5,11 +5,12 @@ import 'package:quwoquan_app/runtime/errors/generated/user/user_errors.g.dart';
 import '../../../../../support/runtime/errors/error_chain_probe.dart'
     show canonicalRuntimeErrorBody;
 
-/// USER.AUTH 登录会话链路错误码契约(含研究态身份)。
+/// USER.AUTH 登录会话链路错误码契约与退休码拒绝识别回归。
 ///
-/// 断言值以 `lib/runtime/errors/generated/user/user_errors.g.dart` 为准:
-/// fromCode 解析、httpStatus、recoveryAction 恢复语义三件套,
-/// 并对代表码走 CloudErrorMapper 映射负例。
+/// spec_ref: specs/feature-tree/user-identity-profile-relationship/spec.md#req-002
+/// 真相源：user-service/contracts/account/account_session/errors.yaml 与
+/// operations.yaml；验证派生枚举的解析、HTTP 状态与恢复语义，
+/// 并确保退休码不会经 CloudErrorMapper 重新成为正式 typed 域错误。
 void main() {
   group('UserErrorCode — 登录同意与凭据契约(USER.AUTH)', () {
     test('未同意协议:400 surface,用户必须先勾选协议', () {
@@ -69,7 +70,7 @@ void main() {
     });
   });
 
-  group('UserErrorCode — 账号安全与研究态身份契约', () {
+  group('UserErrorCode — 账号安全与退休码拒绝识别契约', () {
     test('账号安全校验不可用:503 retry 且带退避秒数', () {
       expect(
         UserErrorCode.fromCode('USER.AUTH.account_security_unavailable'),
@@ -87,13 +88,11 @@ void main() {
       expect(UserErrorCode.accountSecurityUnavailable.recoveryAfterSeconds, 3);
     });
 
-    test('研究态身份无效:403 surface', () {
+    test('退休研究态身份码按未知码返回 null', () {
       expect(
         UserErrorCode.fromCode('USER.USER.research_identity_invalid'),
-        UserErrorCode.researchIdentityInvalid,
+        isNull,
       );
-      expect(UserErrorCode.researchIdentityInvalid.httpStatus, 403);
-      expect(UserErrorCode.researchIdentityInvalid.recoveryAction, 'surface');
     });
   });
 
@@ -125,29 +124,29 @@ void main() {
       expect(recovery.action, 'surface');
     });
 
-    test('research_identity_invalid 响应解析为 typed user 域错误', () {
+    test('退休 research_identity_invalid 响应不解析为 typed user 域错误', () {
+      const retiredCode = 'USER.USER.research_identity_invalid';
+      // 历史 wire 响应只用于负例，不恢复旧 operation 或 production enum。
       final exception = CloudErrorMapper.fromStatusCode(
-        UserErrorCode.researchIdentityInvalid.httpStatus,
+        403,
         body: canonicalRuntimeErrorBody(
-          code: UserErrorCode.researchIdentityInvalid.code,
+          code: retiredCode,
           origin: 'user',
           kind: 'permission',
           nature: 'requiresUserAction',
           businessObject: 'account_session',
           functionModule: 'user',
-          userMessage: UserErrorCode.researchIdentityInvalid.defaultMessageZh,
-          recoveryAction: UserErrorCode.researchIdentityInvalid.recoveryAction,
-          disruptionLevel:
-              UserErrorCode.researchIdentityInvalid.disruptionLevel,
+          userMessage: '历史研究态身份错误',
+          recoveryAction: 'surface',
+          disruptionLevel: 'inlineCard',
         ),
         requestPath: '/user/auth/research-identity',
       );
 
-      expect(exception.domainErrorCode?.domain, 'user');
-      expect(
-        exception.domainErrorCode?.code,
-        UserErrorCode.researchIdentityInvalid.code,
-      );
+      expect(exception.domainErrorCode, isNull);
+      expect(exception.statusCode, 403);
+      expect(exception.code, retiredCode);
+      expect(exception.runtimeFailure.code, retiredCode);
       expect(exception.runtimeFailure.recovery.action, 'surface');
     });
   });

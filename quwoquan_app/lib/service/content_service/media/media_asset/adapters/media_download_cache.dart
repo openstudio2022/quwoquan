@@ -5,6 +5,7 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/runtime/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/cache_telemetry_sink.dart';
@@ -21,12 +22,18 @@ class MediaDownloadCache {
     required CloudHttpClient client,
     int maxCacheSizeMb = 200,
     int maxConcurrentDownloads = 4,
+    String? storageNamespace,
     Future<String> Function()? cacheDirectoryPathProvider,
     MediaCacheFileStorageGateway? fileStorageGateway,
     CacheTelemetrySink telemetrySink = const DeveloperLogCacheTelemetrySink(
       name: 'MediaDownloadCache',
     ),
-  }) : _client = client,
+  }) : _storageNamespace =
+           storageNamespace ??
+           (CloudRuntimeConfig.isHydrated
+               ? '${CloudRuntimeConfig.launchTarget}|${CloudRuntimeConfig.appEnvironment}'
+               : 'unbound'),
+       _client = client,
        _maxCacheSize = maxCacheSizeMb * 1024 * 1024,
        _maxConcurrent = maxConcurrentDownloads,
        _cacheDirectoryPathProvider = cacheDirectoryPathProvider,
@@ -51,16 +58,34 @@ class MediaDownloadCache {
       <String, Completer<String?>>{};
 
   String? _cacheDir;
+  final String _storageNamespace;
+  int _epoch = 0;
+  Future<void> _diskMutationTail = Future<void>.value();
+  Future<void>? _clearInFlight;
+
+  Future<T> _mutateDisk<T>(Future<T> Function() action) {
+    final next = _diskMutationTail.then((_) => action());
+    _diskMutationTail = next.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return next;
+  }
 
   Future<String> get _cachePath async {
     if (_cacheDir != null) return _cacheDir!;
     final overridePath = await _cacheDirectoryPathProvider?.call();
-    final mediaDirectoryPath =
+    final rootPath =
         overridePath ??
         _fileStorageGateway.joinPath(
           await _fileStorageGateway.temporaryPath(),
           'qwq_media_cache',
         );
+    // clear 只删除本 target 的目录，冷重启后的其他 target 不受影响。
+    final mediaDirectoryPath = _fileStorageGateway.joinPath(
+      rootPath,
+      sha256.convert(utf8.encode(_storageNamespace)).toString(),
+    );
     if (!await _fileStorageGateway.directoryExists(mediaDirectoryPath)) {
       await _fileStorageGateway.ensureDirectory(mediaDirectoryPath);
     }
@@ -70,6 +95,9 @@ class MediaDownloadCache {
 
   /// Returns the local file path for a cached URL, downloading if needed.
   Future<String?> getFile(String url) async {
+    final epoch = _epoch;
+    await _clearInFlight;
+    if (epoch != _epoch) return null;
     final normalized = url.trim();
     if (normalized.isEmpty) {
       return null;
@@ -85,6 +113,7 @@ class MediaDownloadCache {
     }
 
     final cachedPath = await getCachedFilePath(normalized);
+    if (epoch != _epoch) return null;
     if (cachedPath != null) {
       return cachedPath;
     }
@@ -93,6 +122,9 @@ class MediaDownloadCache {
 
   /// Returns a cached local file path without triggering a network download.
   Future<String?> getCachedFilePath(String url) async {
+    final epoch = _epoch;
+    await _clearInFlight;
+    if (epoch != _epoch) return null;
     final normalized = url.trim();
     if (normalized.isEmpty) {
       return null;
@@ -109,6 +141,7 @@ class MediaDownloadCache {
     }
 
     final basePath = await _cachePath;
+    if (epoch != _epoch) return null;
     final localPath = _fileStorageGateway.joinPath(
       basePath,
       '$key${_extensionFromUrl(normalized)}',
@@ -172,6 +205,9 @@ class MediaDownloadCache {
   }
 
   Future<String?> _download(String url, {bool isPrefetch = false}) async {
+    final epoch = _epoch;
+    await _clearInFlight;
+    if (epoch != _epoch) return null;
     final key = _keyFromUrl(url);
     final existing = _inflightByKey[key];
     if (existing != null) {
@@ -182,6 +218,7 @@ class MediaDownloadCache {
     _downloadQueue.add(
       _DownloadRequest(
         key: key,
+        epoch: epoch,
         url: url,
         completer: completer,
         isPrefetch: isPrefetch,
@@ -201,11 +238,12 @@ class MediaDownloadCache {
 
   Future<void> _executeDownload(_DownloadRequest request) async {
     try {
-      if (!_inflightByKey.containsKey(request.key)) {
+      if (request.epoch != _epoch ||
+          !identical(_inflightByKey[request.key], request.completer)) {
         return;
       }
       final response = await _client.get(Uri.parse(request.url));
-      if (response.statusCode != 200) {
+      if (request.epoch != _epoch || response.statusCode != 200) {
         _completeRequest(request, null);
         return;
       }
@@ -215,8 +253,19 @@ class MediaDownloadCache {
       final ext = _extensionFromUrl(request.url);
       final localPath = _fileStorageGateway.joinPath(basePath, '$key$ext');
 
-      await _fileStorageGateway.writeAsBytes(localPath, response.bodyBytes);
-
+      final written = await _mutateDisk(() async {
+        if (request.epoch != _epoch) return false;
+        await _fileStorageGateway.writeAsBytes(localPath, response.bodyBytes);
+        if (request.epoch != _epoch) {
+          await _fileStorageGateway.delete(localPath);
+          return false;
+        }
+        return true;
+      });
+      if (!written || request.epoch != _epoch) {
+        _completeRequest(request, null);
+        return;
+      }
       final fileSize = response.bodyBytes.length;
       _entries[key] = _CacheEntry(
         localPath: localPath,
@@ -232,11 +281,13 @@ class MediaDownloadCache {
       // 可观测，网络/存储异常不得静默消失。
       _telemetrySink.record('media.download_failed', <String, Object?>{
         'key': request.key,
-        'error': error.toString(),
+        'errorType': error.runtimeType.toString(),
       });
       _completeRequest(request, null);
     } finally {
-      _inflightByKey.remove(request.key);
+      if (identical(_inflightByKey[request.key], request.completer)) {
+        _inflightByKey.remove(request.key);
+      }
       _activeDownloads--;
       _processDownloadQueue();
     }
@@ -264,7 +315,24 @@ class MediaDownloadCache {
   }
 
   /// Clears all cached files.
-  Future<void> clear() async {
+  Future<void> clear() {
+    _epoch++;
+    _entries.clear();
+    _downloadQueue.clear();
+    for (final completer in _inflightByKey.values) {
+      if (!completer.isCompleted) completer.complete(null);
+    }
+    _inflightByKey.clear();
+    _currentSize = 0;
+    late final Future<void> clearing;
+    clearing = _mutateDisk(_clearFiles).whenComplete(() {
+      if (identical(_clearInFlight, clearing)) _clearInFlight = null;
+    });
+    _clearInFlight = clearing;
+    return clearing;
+  }
+
+  Future<void> _clearFiles() async {
     var clearedBytes = 0;
     var clearedFiles = 0;
     try {
@@ -289,15 +357,6 @@ class MediaDownloadCache {
     } catch (_) {
       return;
     } finally {
-      _entries.clear();
-      _downloadQueue.clear();
-      for (final completer in _inflightByKey.values) {
-        if (!completer.isCompleted) {
-          completer.complete(null);
-        }
-      }
-      _inflightByKey.clear();
-      _currentSize = 0;
       _telemetrySink.record('resource.bytes_cleared', <String, Object?>{
         'bytes': clearedBytes,
         'files': clearedFiles,
@@ -309,7 +368,9 @@ class MediaDownloadCache {
   int get currentCacheSizeBytes => _currentSize;
 
   String _keyFromUrl(String url) {
-    return sha1.convert(utf8.encode(url.trim())).toString();
+    return sha1
+        .convert(utf8.encode('$_storageNamespace|${url.trim()}'))
+        .toString();
   }
 
   String _extensionFromUrl(String url) {
@@ -335,12 +396,14 @@ class _CacheEntry {
 }
 
 class _DownloadRequest {
+  final int epoch;
   final String key;
   final String url;
   final Completer<String?> completer;
   final bool isPrefetch;
 
   _DownloadRequest({
+    required this.epoch,
     required this.key,
     required this.url,
     required this.completer,

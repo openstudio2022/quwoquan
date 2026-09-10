@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (  # noqa: F401
-    RELEASE_INPUT_CLASSIFICATIONS,
     RUNTIME_CANDIDATE_TYPE,
     validate_candidate_manifest,
 )

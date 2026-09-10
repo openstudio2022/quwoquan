@@ -116,6 +116,12 @@ class BuildTimeSelfSupplyContractTest(unittest.TestCase):
             self.assertEqual(manifest["runtimeConfigSupplyMode"], SELF_SUPPLY_MODE)
             self.assertEqual(manifest["launchProvenance"], "workspace_ide_debug")
             self.assertEqual(manifest["launchPolicy"], "test_live")
+            # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+            self.assertEqual(manifest["contentSource"], "bundled_snapshot")
+            self.assertFalse(manifest["requiresLocalTransport"])
+            self.assertEqual(request["package"]["schema"], "app-offline-bootstrap-document")
+            self.assertNotIn("expiresAt", request["package"])
+            self.assertEqual(request["package"]["runtime"], {"appRuntimeEnv": "alpha"})
             self.assertEqual(request["packageDigest"], summary["packageDigest"])
             self.assertEqual(trust["buildProfile"], "nonprod")
             self.assertEqual(
@@ -228,7 +234,9 @@ class BuildTimeSelfSupplyContractTest(unittest.TestCase):
         self.assertIn(f'"{SELF_SUPPLY_MODE}"', supply)
         # 外部 canonical 供给已激活且新鲜时保持不变；重建后 requestDigest 变化才刷新。
         self.assertIn("ios_runtime_config_self_supply_skipped reason=external_active", supply)
-        self.assertIn("activeReceipt?[\"requestDigest\"] as? String == requestDigest", supply)
+        self.assertIn("activeReceipt[\"requestDigest\"] as? String == requestDigest", supply)
+        self.assertIn("_ = try readVerifiedIdentity()", supply)
+        self.assertIn("case .failure(let error):", supply)
         # 消费只编入 DEBUG，且位于外部 activation 之后、fatal gate 之前。
         debug_block = delegate[
             delegate.index("#if DEBUG\n      // Debug-nonprod 构建期自供给") : delegate.index(

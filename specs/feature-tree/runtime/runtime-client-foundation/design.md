@@ -75,7 +75,7 @@
 
 <a id="dec-004"></a>
 ### DEC-004 启动身份六维正交与运行时内容身份解析
-- 决策：把启动链路的身份事实拆为六个正交维度——环境（environment）、平台（platform）、BuildMode、启动来源（launch provenance）、安装渠道（install channel）与内容激活身份（content activation identity）。任一维度只允许作为观测事实记录，业务行为只由环境与服务端状态决定。App 端由单一不可变 production `RuntimePackageResolver/Validator` 解析并校验 runtime package，`app_bootstrap` 与 local_contract 测试直接调用同一实现，不设 `ForTest` 后门；内容身份由 Content API 响应经 typed `ContentActivationIdentity` 值对象送达 Query Slice 与缓存层，App 不拥有内容激活写入。
+- 决策：把启动链路的身份事实拆为六个正交维度——环境（environment）、平台（platform）、BuildMode、启动来源（launch provenance）、安装渠道（install channel）与内容激活身份（content activation identity）。任一维度只允许作为观测事实记录，业务行为只消费 typed ports 的内容状态与能力，environment/source/profile 只在组合根判定。App 端由单一不可变 production `RuntimePackageResolver/Validator` 解析并校验 runtime package，`app_bootstrap` 与 local_contract 测试直接调用同一实现，不设 `ForTest` 后门；在线内容身份由 Content API 的 typed identity 送达 Query Slice 与缓存，App 不拥有服务端 activation；Alpha 快照独立携带制品绑定 source identity，不构造假的 ContentActivationIdentity 或 active receipt。
 - 对象边界由以下不可变值对象与派生投影组成。
   - `RuntimeManifest`：runtime 拥有的 immutable value object，随 artifact 嵌入，进程内只读，不是 aggregate。
   - `LaunchProvenance`：`StartupAttempt` runtime session 的 value object，只用于观测，禁止业务消费。
@@ -85,11 +85,11 @@
 - 内容只读边界：`ContentDiscoveryFeedQuery` 返回带 identity 的 Slice。
 - 启动观测边界：`StartupAttemptRecorder` 追加 provenance，`StartupAttemptQuery` 供 telemetry/UAT 回读。
 - 测试证据边界：`StartupCaseEvidenceAppender/Query` 生成并比较 `BehaviorFingerprint`，不得成为业务 runtime 依赖。
-- 缓存切换：`ContentQuerySnapshotStore` 以 `manifestDigest` 为 namespace 原子切换；新 digest 切新 namespace，`no_active_release` 清当前可见快照且不回放旧 release，网络失败可在最大年龄内展示“已验证但可能过期”的 LKG 而不冒充当前成功，服务端回滚到旧 release 时可恢复其保留 namespace。
-- 无内容 surface：`no_active_release` 是无 CTA 的 `AppEmptyState`。
-- 可重试失败 surface：网络、协议或身份错误是带 canonical 重试的 `AppPageErrorState`。
+- 缓存切换：namespace 先绑定已验证 target/environment 与授权 authority，再隔离 source/principal/audience/内容 digest，不再仅用 manifestDigest。no_active_release 清在线可见快照且不回放旧 release；网络失败只能依 DEC-007 回放合法 public 历史，不能冒充 active。服务回滚即使回到旧 digest 也推进新的 context epoch，不能接受上一轮旧 completion。
+- 无内容 surface：在线 no_active_release 是 canonical AppEmptyState；Alpha 未支持能力由 typed capability unavailable 表达，不冒充无服务激活。
+- 可重试失败 surface：确定网络暂态使用 canonical 重试；协议、身份/权限与取消遵循各自恢复动作和 DEC-007 的禁止 fallback，不强制统一为重试。
 - 致命失败 surface：只有配置或签名致命错误进入 bootstrap/native recovery。Debug/Profile/Release 对同一错误渲染同一 surface，Debug 仅追加脱敏诊断。
-- 被否决方案：`launchMode` 参与业务分支（如 `blocksRemoteForDirectUnboundLaunch` 判死 direct debug）、构建期把内容三元烘焙进 App 制品、Provider 直接解析 wire 或持有可变全局内容身份、测试经 `hydrate*ForTest` 后门旁路生产解析。
+- 被否决方案：`launchMode` 参与业务分支（如 `blocksRemoteForDirectUnboundLaunch` 判死 direct debug）、构建期把在线 active release 烘焙进 App 制品或把 Alpha source identity 冒充其三元、Provider 直接解析 wire 或持有可变全局内容身份、测试经 `hydrate*ForTest` 后门旁路生产解析。
 - 约束与影响：`app_effective_launch_manifest` 不再携带 `contentBindingState` 或内容三元。
 - 发布边界：内容发布或回滚不要求重新打包 App。
 - 行为不变量：同一 runtime 输入下改变 provenance/channel/BuildMode 时 `BehaviorFingerprint` 必须不变，该性质由 local_contract 穷举验证。
@@ -115,6 +115,22 @@
 - 约束与影响：真相源是 `quwoquan_app/android/app/build.gradle.kts` 的 `minSdk = flutter.minSdkVersion`。五年约束由合同对照 Flutter SDK 解析值与 Android 正式发布日裁定。本决策管操作系统安装下限，不管 `targetSdk` / `compileSdk`，也不管 Product Ops 的 App Build minimum。
 - 关联要求：`REQ-004`
 - 关联验收：`GWT-003`
+
+<a id="dec-007"></a>
+### DEC-007 已验证上下文、单调 epoch 与安全历史缓存
+
+- 对象与 owner：runtime 从已验证配置建立稳定 target/environment authority namespace，账号 owner 只在此下保存 token/refresh token；同 authority 的配置摘要更新不创建新授权 namespace，prod-sim 与 prod-hosted 即使同 env 也隔离。installId 由安装 owner 保持安装级，仅为安装身份，绝不推导或恢复授权；无来源历史 token 不迁入猜测环境。
+- 读写边界：既有 ContentQuerySnapshotStore、详情缓存和 resident 是可重建读模型，last-confirmed identity 与 policy proof 只能证明某个已验证历史 scope，不能证明当前 active。actual persistence 必须保存并恢复 activation/source identity、mixed object cards 锚点及连续页链；不另建无界存储、不扩大现有对象/页数/UTF-8 byte 预算。
+- 新鲜与安全：fresh 小于 5 分钟且本地 visibility/permission 有效直接读，不再等待远端 blocked-keywords 前置。stale 和无网冷启动仅 public、同 scope、本地策略仍有效时显式历史展示；snapshot/详情/resident 均在年龄等于 24 小时即失效，不由互相命中延长寿命。运营 LKG target 隔离，以 app-remote-config REQ-004 的已验证快照最大年龄为独立上限，恰到期即失效，缺失或无法验证则不能放行；媒体完整字节与短签 grant 各自验证许可/期限，不以元数据命中证明可播放。
+- 故障选择：仅确定 network/连接 timeout、5xx、429 允许上述受限 fallback，保留原失败观测且标记 stale；caller cancel、总 deadline 耗尽、401/403、contract/digest 失败、删除/撤权或 scope 不明均拒绝并撤出受影响可见 items，不以 broad catch 转成功。fresh 也不覆盖已知安全失效。
+- 并发与恢复：环境/source/principal/release 切换递增单调 context epoch，先取消 feed/detail/config/media、停止播放器与 outbox flush、失效 resident/cursor/session/feedRequestId，再采用新 scope。每个成功、失败、下载与持久写 completion 都比较捕获 epoch，A→B→A 也不能回写。环境切换冷重启/重建 provider scope，由新客户端消费新 endpoint；同 authority 合法配置刷新保留登录但替换连接/请求上下文。失败保留可证明的历史记录，不从 null identity 绕过授权，恢复联网后由真实响应重新确认。
+- Alpha 边界：永久离线 canonical 公共快照由制品许可/完整性验证，不使用上述在线 stale TTL，不恢复账号授权，也不承诺即时远端撤权；Local continuation 绑定 source/query/session/version，不能伪装 Remote cursor。
+- 理由：稳定授权 namespace 避免刷新配置无故注销，单调 epoch 避免 digest 回环和旧异步写入；安全历史读可以提高弱网可用性而不伪造当前身份。
+- 被否决方案：只按 env 或 digest 隔离、每次配置摘要更新清登录、installId 恢复 token、null identity 放行、宽泛 catch fallback、expired 旧值继续展示、缓存命中仍等待远端策略、为恢复增加无界数量/字节、旧 cursor 跨 source 续接。
+- SLI/SLO 与测试 seam：分别记录 fresh/stale/expired、fallback 原因与拒绝、context discard、persist/restore integrity、元数据/媒体命中；敏感 principal/设备只进入脱敏日志，缓存成功不计 Remote SLO。保持端侧 6 秒总预算，不给 fallback 新一轮 deadline。local_contract 以可控时钟覆盖 5 分钟/恰 24 小时与时间倒退、真实 store 重启、ABA/旧 completion、所有错误分类；api_integration 用真实 HTTP/权限撤销验证禁止 fallback；user_acceptance 验证断网冷启和同包切环境不串 token/卡片/播放器。
+- 关联要求：[`local-cache-architecture REQ-001/002/004`](./local-cache-architecture/spec.md#req-004)。
+- 关联验收：[`GWT-001`](./local-cache-architecture/spec.md#gwt-001)、[`GWT-003`](./local-cache-architecture/spec.md#gwt-003)，尚缺闭环由该 Story OPEN-002 承接。
+- 影响 Story：[`local-cache-architecture`](./local-cache-architecture/spec.md)。
 
 ## 5. 失败与恢复
 

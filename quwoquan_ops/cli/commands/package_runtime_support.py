@@ -87,7 +87,6 @@ def _validate_runtime_package_identity_readback(
     manifest_path: Path,
 ) -> dict[str, Any]:
     """Read back one non-claiming package identity from all three artifacts."""
-    import quwoquan_ops.cli.stackctl as _stackctl
     from quwoquan_ops.cli.lib.deployment_candidate_manifest import manifest
 
     payloads: dict[str, dict[str, Any]] = {}
@@ -110,14 +109,14 @@ def _validate_runtime_package_identity_readback(
 
     identities: dict[str, dict[str, Any]] = {}
     for label, payload in payloads.items():
-        classification = payload.get("releaseInputClassification")
+        if {
+            "releaseInputClassification", "releaseClass", "productLifecycleState"
+        }.intersection(payload):
+            raise ValueError(f"{label} contains retired release classification fields")
         graph_digest = payload.get("contractGraphDigest")
-        if classification not in _stackctl.RELEASE_INPUT_CLASSIFICATIONS:
-            raise ValueError(f"{label} releaseInputClassification is invalid")
         if re.fullmatch(r"sha256:[0-9a-f]{64}", str(graph_digest or "")) is None:
             raise ValueError(f"{label} contractGraphDigest is invalid")
         identities[label] = {
-            "releaseInputClassification": str(classification),
             "contractGraphDigest": str(graph_digest),
             "graphqlReadRegistry": payload.get("graphqlReadRegistry"),
             "appLaunchBundle": payload.get("appLaunchBundle"),

@@ -1,6 +1,6 @@
 ---
 name: continue
-description: Resume and drive the development loop from wherever the session stopped - finish interrupted todos with their verification, or close a finished round via plan-next and enter the next one. Use when the user says 继续, 继续开发, 接着做, 续跑, 按规划实施, or 复盘后接着做, or when a session resumes after an interrupted todo run.
+description: Resume the development loop from where the session stopped - finish interrupted todos with their verification, or close a finished round via plan-next and enter the next one. Use when the user says 继续, 继续开发, 接着做, 续跑, 按规划实施, 复盘后接着做, or when a session resumes after an interrupted run.
 metadata:
   kind: workflow
   command: /continue
@@ -10,7 +10,7 @@ metadata:
 
 ## 触发与输入
 
-用于从中断位置续跑，或收口已完成轮次后进入下一轮。输入优先是当前 todo/plan、Git 字节、最近 immutable owner ref、证据与持久交接（如有），不以对话印象为证据。角色交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.continue`，可见输出由 canonical projector 生成。
+用于从中断位置续跑，或收口已完成轮次后进入下一轮。输入优先是当前 todo/plan、Git 字节、最近 immutable owner ref、证据与持久交接（如有），不以对话印象为证据。
 
 ## 执行
 

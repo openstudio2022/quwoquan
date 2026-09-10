@@ -959,8 +959,6 @@ def test_failed_receipt_retains_bounded_search_attempt_evidence() -> None:
         "schema": "quwoquan_data.environment_release_result",
         "environment": "alpha",
         "releaseId": "release-a",
-        "releaseClass": "production",
-        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "manifestDigest": "sha256:" + "a" * 64,
         "admissionKind": "producer_handoff",
@@ -988,3 +986,131 @@ def test_failed_receipt_retains_bounded_search_attempt_evidence() -> None:
         row["operation"]["status"] for row in payload["operationAttempts"]
     ] == [503, 503]
     assert payload["error"].endswith("upstream_unavailable")
+
+
+def test_search_projection_empty_200_polls_until_converged_within_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """刚激活的 release 在 ES 有最终一致窗口：200 但目标未出现是「未收敛」，在收敛预算内轮询而非立即阻断。"""
+    clock = {"now": 0.0}
+    slept: list[float] = []
+
+    def _sleep(seconds: float) -> None:
+        slept.append(seconds)
+        clock["now"] += seconds
+
+    monkeypatch.setattr(subject, "_monotonic_seconds", lambda: clock["now"])
+    monkeypatch.setattr(subject, "_sleep_seconds", _sleep)
+    responses = iter(
+        [
+            client_subject.PublicApiResponse(status=200, payload={"hits": []}, operation=_operation(status=200)),
+            client_subject.PublicApiResponse(status=200, payload={"hits": []}, operation=_operation(status=200)),
+            client_subject.PublicApiResponse(
+                status=200,
+                payload={"hits": [{"objectId": "post-a"}]},
+                operation=_operation(status=200),
+            ),
+        ]
+    )
+    client = SimpleNamespace(
+        new_request_identity=lambda **_kwargs: _logical_request(),
+        post_json=lambda *_args, **_kwargs: next(responses),
+    )
+
+    proof = subject._search_hits_until_converged(
+        client,
+        convergence_deadline=clock["now"] + subject.SEARCH_PROJECTION_CONVERGENCE_SECONDS,
+        query="西湖",
+        object_types=["content.post"],
+        content_types=["image"],
+        object_id="post-a",
+    )
+
+    assert proof["matchedObjectIds"] == ["post-a"]
+    assert slept == [subject.SEARCH_PROJECTION_POLL_SECONDS] * 2
+
+
+def test_search_projection_convergence_budget_exhaustion_keeps_first_blocker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = {"now": 0.0}
+    monkeypatch.setattr(subject, "_monotonic_seconds", lambda: clock["now"])
+    monkeypatch.setattr(subject, "_sleep_seconds", lambda seconds: clock.__setitem__("now", clock["now"] + seconds))
+    client = SimpleNamespace(
+        new_request_identity=lambda **_kwargs: _logical_request(),
+        post_json=lambda *_args, **_kwargs: client_subject.PublicApiResponse(
+            status=200, payload={"hits": []}, operation=_operation(status=200)
+        ),
+    )
+
+    with pytest.raises(subject.SearchProjectionVerificationError) as captured:
+        subject._search_hits_until_converged(
+            client,
+            convergence_deadline=clock["now"] + 12.0,
+            query="西湖",
+            object_types=["content.post"],
+            content_types=["image"],
+            object_id="post-a",
+        )
+
+    assert captured.value.projection_pending is True
+    assert "outcome=empty status=200" in str(captured.value)
+    assert clock["now"] <= 12.0
+
+
+def test_search_projection_request_errors_are_not_treated_as_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(subject, "_sleep_seconds", lambda _seconds: None)
+    client = SimpleNamespace(
+        new_request_identity=lambda **_kwargs: _logical_request(),
+        post_json=lambda *_args, **_kwargs: client_subject.PublicApiResponse(
+            status=500, payload={"code": "SEARCH.INTERNAL"}, operation=_operation(status=500)
+        ),
+    )
+
+    with pytest.raises(subject.SearchProjectionVerificationError) as captured:
+        subject._search_hits_until_converged(
+            client,
+            convergence_deadline=subject._monotonic_seconds() + 300.0,
+            query="西湖",
+            object_types=["content.post"],
+            object_id="post-a",
+        )
+
+    assert captured.value.projection_pending is False
+
+
+def test_search_projection_queries_by_publish_title_before_source_title(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """视频/图片 manifest.title 可能是来源平台的原始描述；索引与交付用的是 publishTitle。"""
+    from core.control_types import ContentType
+    from content.release.environment.post_api_media_verification import PostApiCase
+
+    monkeypatch.setattr(subject, "_sleep_seconds", lambda _seconds: None)
+    post_ref = "video/风光/三峡水库开闸泄洪/1"
+    manifest_path = tmp_path / "payload/objects/posts" / post_ref / "manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps({"title": "This is part of the 2020 China floods.", "publishTitle": "三峡水库开闸泄洪"}),
+        encoding="utf-8",
+    )
+    queries: list[str] = []
+
+    def post_json(_path, *, body, **_kwargs):
+        queries.append(body["query"])
+        return client_subject.PublicApiResponse(
+            status=200, payload={"hits": [{"objectId": "post-a"}]}, operation=_operation(status=200)
+        )
+
+    client = SimpleNamespace(new_request_identity=lambda **_kwargs: _logical_request(), post_json=post_json)
+    rows = subject.verify_search_projection(
+        client,
+        release_root=tmp_path,
+        cases=[PostApiCase(post_ref=post_ref, post_id="post-a", content_type=ContentType.VIDEO, author_id="a", source_attribution=None)],
+        creators_by_author={},
+    )
+
+    assert queries == ["三峡水库开闸泄洪"]
+    assert rows[0]["matchedObjectIds"] == ["post-a"]

@@ -90,8 +90,6 @@ def test_m1000_header_and_result_need_no_sampling_authority_or_uat_plan() -> Non
             "commercialAcceptedCount": 0,
         },
         canonical_merkle="sha256:" + "2" * 64,
-        release_class="production",
-        product_lifecycle_state="production",
         pool_digest="sha256:" + "3" * 64,
         counts=counts,
         contents=contents,
@@ -258,8 +256,6 @@ def test_milestone_build_writes_no_uat_artifact_or_consumer_fields(
         return {
             "schema": "quwoquan_data.release",
             "releaseId": release_id,
-            "releaseClass": "production",
-            "productLifecycleState": "production",
             "canonicalMerkle": "sha256:" + "2" * 64,
             "executionIds": [execution_id],
             "counts": counts,
@@ -294,7 +290,6 @@ def test_milestone_build_writes_no_uat_artifact_or_consumer_fields(
         publish_root=publish_root,
         release_root=release_root,
         release_id=release_id,
-        release_class="production",
         cohort={"milestone": milestone},
     )
 
@@ -336,7 +331,6 @@ def test_release_asset_admission_allows_identical_asset_reuse_across_objects(
         release_id="reuse-001",
         objects_root=tmp_path,
         desired={"entities": ["fixture"], "posts": ["image/fixture/1"]},
-        release_class="production",
     )
 
     assert len(document["assets"]) == 2
@@ -375,5 +369,4 @@ def test_release_asset_admission_rejects_reused_id_with_identity_drift(
             release_id="reuse-drift-001",
             objects_root=tmp_path,
             desired={"entities": ["fixture"], "posts": ["image/fixture/1"]},
-            release_class="production",
         )

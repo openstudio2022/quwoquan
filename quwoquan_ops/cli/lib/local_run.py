@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.lib.observability import write_run_manifest
 from quwoquan_ops.cli.lib.output_paths import (
-    output_root,
+    env_root,
     run_evidence_dir,
     safe_segment,
 )
@@ -40,7 +40,7 @@ def resolve_local_run(
     explicit_run_root: str = "",
     explicit_observability_root: str = "",
 ) -> LocalRunPaths:
-    base = root or output_root()
+    base = root or env_root(env).parents[1]
     state_dir = base / "env" / env / "local" / target / "process"
     state_path = state_dir / "local_run.json"
     saved = _read_state(state_path)

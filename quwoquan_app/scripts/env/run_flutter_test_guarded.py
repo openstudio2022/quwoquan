@@ -301,7 +301,7 @@ def _with_runtime_environment_defines(args: list[str]) -> list[str]:
   runtime_env = (
     defined.get("APP_RUNTIME_ENV")
     or os.environ.get("QWQ_APP_RUNTIME_ENV")
-    or "alpha"
+    or "beta"
   ).strip()
   try:
     values = test_live_runtime_values(

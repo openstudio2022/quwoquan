@@ -33,6 +33,7 @@ class LocalRuntimeConsumerLeaseIosLivenessTest(unittest.TestCase):
             {"QWQ_OUTPUT_ROOT": output_root},
         ):
             lease = acquire_consumer_lease(
+                instance_generation="runtime-1",
                 target="beta-local",
                 device="SIMULATOR-UDID",
                 consumer="direct-flutter-run",
@@ -56,6 +57,7 @@ class LocalRuntimeConsumerLeaseIosLivenessTest(unittest.TestCase):
             {"QWQ_OUTPUT_ROOT": output_root},
         ):
             lease = acquire_consumer_lease(
+                instance_generation="runtime-1",
                 target="gamma-local",
                 device="REGISTERED-IPHONE-UDID",
                 consumer="canonical-launcher",
@@ -80,6 +82,7 @@ class LocalRuntimeConsumerLeaseIosLivenessTest(unittest.TestCase):
             bundle_id = "com.example.quwoquanApp.nonprod.debug"
             app_url = "/private/var/containers/Bundle/Application/ID/Runner.app"
             lease = acquire_consumer_lease(
+                instance_generation="runtime-1",
                 target="alpha-local",
                 device="REGISTERED-IPHONE-UDID",
                 consumer="canonical-launcher",
@@ -143,6 +146,7 @@ class LocalRuntimeConsumerLeaseIosLivenessTest(unittest.TestCase):
             {"QWQ_OUTPUT_ROOT": output_root},
         ):
             lease = acquire_consumer_lease(
+                instance_generation="runtime-1",
                 target="alpha-local",
                 device="SIMULATOR-UDID",
                 consumer="flutter-run",
@@ -210,6 +214,7 @@ class LocalRuntimeConsumerLeaseIosLivenessTest(unittest.TestCase):
             {"QWQ_OUTPUT_ROOT": output_root},
         ):
             lease = acquire_consumer_lease(
+                instance_generation="runtime-1",
                 target="alpha-local",
                 device="SIMULATOR-UDID",
                 consumer="flutter-run",
@@ -275,6 +280,7 @@ class LocalRuntimeConsumerLeaseIosLivenessTest(unittest.TestCase):
             {"QWQ_OUTPUT_ROOT": output_root},
         ):
             lease = acquire_consumer_lease(
+                instance_generation="runtime-1",
                 target="gamma-local",
                 device="SIMULATOR-UDID",
                 consumer="flutter-run",
@@ -323,7 +329,8 @@ class LocalRuntimeConsumerLeaseIosLivenessTest(unittest.TestCase):
                 runner=stopped,
                 xcrun_path="xcrun",
             )
-            self.assertEqual(active, [])
+            self.assertEqual(len(active), 1)
+            self.assertEqual(active[0]["state"], "active_unverified")
             self.assertEqual(
                 len(list_consumer_leases("gamma-local")),
                 1,
@@ -331,103 +338,38 @@ class LocalRuntimeConsumerLeaseIosLivenessTest(unittest.TestCase):
             )
 
     def test_lease_acquire_succeeds_while_uat_holds_shared_use_lock(self) -> None:
-        """app-content-uat 全程持共享 use lock；run.sh 内的 lease 获取
-        必须与之兼容（历史上 lease 持排他锁会与外层共享锁自死锁）。"""
-        with tempfile.TemporaryDirectory() as output_root:
-            environment = {
-                **os.environ,
-                "QWQ_OUTPUT_ROOT": output_root,
-                "PYTHONDONTWRITEBYTECODE": "1",
-            }
-            lock_probe = subprocess.run(
-                [
-                    sys.executable,
-                    "-c",
-                    (
-                        "import os, subprocess, sys\n"
-                        "os.environ['QWQ_OUTPUT_ROOT'] = sys.argv[1]\n"
-                        "sys.path.insert(0, sys.argv[2])\n"
-                        "from quwoquan_ops.cli.lib.local_runtime_reservation import (\n"
-                        "    acquire_local_runtime_use_lock,\n"
-                        ")\n"
-                        "handle = acquire_local_runtime_use_lock(\n"
-                        "    target='gamma-local', purpose='uat-outer'\n"
-                        ")\n"
-                        "result = subprocess.run(\n"
-                        "    [sys.executable, sys.argv[3], '--output-format',\n"
-                        "     'json', 'consumer-lease', 'acquire', '--target',\n"
-                        "     'gamma-local', '--platform', 'ios-simulator',\n"
-                        "     '--device', 'SIM-UDID', '--consumer', 'inner-run',\n"
-                        "     '--bundle-id', 'com.example.quwoquanApp',\n"
-                        "     '--ports', ''],\n"
-                        "    check=False, capture_output=True, text=True,\n"
-                        ")\n"
-                        "handle.close()\n"
-                        "sys.stderr.write(result.stderr)\n"
-                        "sys.stdout.write(result.stdout)\n"
-                        "sys.exit(result.returncode)\n"
-                    ),
-                    output_root,
-                    str(ROOT),
-                    str(STACKCTL),
-                ],
-                cwd=ROOT,
-                env=environment,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(lock_probe.returncode, 0, lock_probe.stderr)
-            payload = json.loads(lock_probe.stdout)
-            self.assertEqual(payload["exitCode"], 0)
-            self.assertTrue(payload["lease"]["leaseId"].startswith("sha256:"))
+        """真实子进程的共享锁可并存，不通过修改真实 CLI authority 做测试。"""
+        from quwoquan_ops.cli.lib.local_runtime_reservation import acquire_local_runtime_use_lock
+        guard = acquire_local_runtime_use_lock(target="gamma-local", purpose="uat-outer")
+        try:
+            result = subprocess.run([
+                sys.executable, "-B", "-c",
+                "from quwoquan_ops.cli.lib.local_runtime_reservation import acquire_local_runtime_use_lock; "
+                "from quwoquan_ops.cli.lib.local_runtime_consumer_lease import acquire_consumer_lease; "
+                "import json; "
+                "guard=acquire_local_runtime_use_lock(target='gamma-local',purpose='inner'); "
+                "print(json.dumps(acquire_consumer_lease(target='gamma-local',device='SIM-UDID',consumer='inner',"
+                "package_name='app',ports=(),platform='ios-simulator',instance_generation='runtime-1'))); guard.close()",
+            ], cwd=ROOT, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}, capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(json.loads(result.stdout)["leaseId"].startswith("sha256:"))
+        finally:
+            guard.close()
 
     def test_stackctl_accepts_ios_leases_without_transport_ports(self) -> None:
-        for platform, device in (
-            ("ios-simulator", "SIMULATOR-UDID"),
-            ("ios-physical", "REGISTERED-IPHONE-UDID"),
-        ):
-            with self.subTest(
-                platform=platform
-            ), tempfile.TemporaryDirectory() as output_root:
-                environment = {
-                    **os.environ,
-                    "QWQ_OUTPUT_ROOT": output_root,
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                }
-                acquire = subprocess.run(
-                    [
-                        sys.executable,
-                        str(STACKCTL),
-                        "--output-format",
-                        "json",
-                        "consumer-lease",
-                        "acquire",
-                        "--target",
-                        "beta-local",
-                        "--platform",
-                        platform,
-                        "--device",
-                        device,
-                        "--bundle-id",
-                        "com.example.quwoquanApp",
-                        "--ports",
-                        "",
-                    ],
-                    cwd=ROOT,
-                    env=environment,
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                )
-                self.assertEqual(acquire.returncode, 0, acquire.stderr)
-                payload = json.loads(acquire.stdout)
-                self.assertEqual(payload["lease"]["platform"], platform)
-                self.assertEqual(payload["lease"]["ports"], [])
-                self.assertEqual(
-                    payload["lease"]["bundleId"],
-                    "com.example.quwoquanApp",
-                )
+        from quwoquan_ops.cli import stackctl
+        for platform, device in (("ios-simulator", "SIMULATOR-UDID"), ("ios-physical", "REGISTERED-IPHONE-UDID")):
+            args = stackctl.build_parser().parse_args([
+                "consumer-lease", "acquire", "--target", "beta-local", "--platform", platform,
+                "--device", device, "--bundle-id", "com.example.quwoquanApp", "--ports", "",
+                "--instance-generation", "runtime-1",
+            ])
+            with patch.object(stackctl, "load_startup_attempt", return_value={"status": "running", "attemptId": "runtime-1"}), patch.object(stackctl, "load_test_live_startup_attempt", return_value=None):
+                payload = stackctl.command_consumer_lease(args)
+            self.assertEqual(payload["exitCode"], 0)
+            self.assertEqual(payload["lease"]["platform"], platform)
+            self.assertEqual(payload["lease"]["ports"], [])
+            self.assertEqual(payload["lease"]["bundleId"], "com.example.quwoquanApp")
 
 
 if __name__ == "__main__":

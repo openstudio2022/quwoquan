@@ -76,6 +76,29 @@ func TestLoadReleaseBindingRejectsIdentityDriftAndNonCanonicalDigest(t *testing.
 	})
 }
 
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+func TestLoadReleaseBindingRejectsRetiredCategoryFields(t *testing.T) {
+	for _, relative := range []string{"payload/release.json", "attestations/release.json"} {
+		for _, field := range []string{"releaseClass", "productLifecycleState", "readinessPhase"} {
+			t.Run(relative+"/"+field, func(t *testing.T) {
+				root := writeReleaseBindingFixture(t, "release-a", "release-a", testManifestDigest)
+				path := filepath.Join(root, relative)
+				raw, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				mutated := strings.Replace(string(raw), "{", `{"`+field+`":"research",`, 1)
+				if err := os.WriteFile(path, []byte(mutated), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := releaseimport.LoadReleaseBinding(root); err == nil || !strings.Contains(err.Error(), "retired category field "+field) {
+					t.Fatalf("retired field must fail closed: %v", err)
+				}
+			})
+		}
+	}
+}
+
 func writeReleaseBindingFixture(
 	t *testing.T,
 	headerReleaseID string,

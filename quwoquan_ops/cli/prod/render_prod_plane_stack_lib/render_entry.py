@@ -39,6 +39,7 @@ from .package_inputs import (
     _plane_spec,
     _prevalidation_spec,
     _resolve_render_output_dir,
+    _validate_prevalidation_interpolation,
     parse_args,
 )
 from .runtime_outputs import (
@@ -47,6 +48,7 @@ from .runtime_outputs import (
     _write_runtime_systemd_unit,
 )
 from .volume_layout import _filter_top_level_volumes
+from .data_plane_wiring import _prevalidation_port_bindings, _runtime_network_name, _validate_prevalidation_startup
 
 try:
     import yaml
@@ -180,6 +182,8 @@ def main() -> int:
             )
         if args.plane == "service" and "integration-service" not in image_only_services:
             raise SystemExit("FAIL: integration-service must remain image/config-only")
+        _validate_prevalidation_startup(set(startup_services))
+        config_services = list(governed)
     credentials_root = str(plane.get("credentialsPath") or "").strip()
     runtime_credentials = dict(plane.get("rootlessRuntimeCredentials") or {})
     selected = governed + support
@@ -195,7 +199,16 @@ def main() -> int:
     media_ref_path = Path(media_state_ref)
     if media_ref_path.is_absolute() or ".." in media_ref_path.parts:
         raise SystemExit("FAIL: rootlessRuntimeLayout.mediaStateRef must be a safe state-relative path")
-    media_root = str((resolve_target_local_dir("prod-hosted") / media_ref_path).resolve())
+    # 媒体状态是远端平面账号的持久目录，不是本机 QWQ_DEPLOY_WORK_ROOT 下的路径：
+    # 渲染到 compose 的 bind source 必须是远端 composeProjectRoot 下的 state 目录，
+    # 且按 instance/replica 隔离，重新 sync compose 目录时不被覆盖。
+    remote_compose_root = str(plane.get("composeProjectRoot") or "").rstrip("/")
+    if not remote_compose_root.startswith("/"):
+        raise SystemExit(f"FAIL: plane {args.plane} composeProjectRoot must be absolute")
+    media_root = (
+        f"{remote_compose_root}/state/{args.instance}/{args.replica_id}/"
+        f"{media_ref_path.as_posix()}"
+    )
     legal_root = str(layout.get("legalStaticRoot") or "runtime/legal-static")
     portal_root = str(layout.get("portalStaticRoot") or "runtime/portal")
     web_root = str(layout.get("webStaticRoot") or "runtime/public-web")
@@ -223,7 +236,6 @@ def main() -> int:
     if output_root.exists():
         remove_deployment_tree("prod-hosted", "rendered", render_name)
     output_root.mkdir(parents=True, exist_ok=True)
-    Path(media_root).mkdir(parents=True, exist_ok=True)
     legal_package_public = (
         legal_static_deployment_package_dir("prod", target="prod-hosted")
         / "current"
@@ -410,10 +422,7 @@ def main() -> int:
     rendered_services: dict[str, Any] = {}
     selected_names = set(selected)
     governed_names = set(governed)
-    observability_config = plane.get("rootlessObservabilityRuntime") or {}
-    service_network_name = str(
-        observability_config.get("serviceNetworkName") or ""
-    ).strip()
+    service_network_name = _runtime_network_name(args.plane, args.instance, args.replica_id)
     config_sources = _stack._write_config_tree(
         config_services=config_services,
         candidate_digest=args.candidate_digest,
@@ -421,6 +430,7 @@ def main() -> int:
         isolated_prevalidation=(
             args.instance == "prevalidate" and args.data_mode == "isolated"
         ),
+        prevalidation_services=(selected_names if args.instance == "prevalidate" else None),
     )
     if (
         args.plane == "service"
@@ -523,15 +533,15 @@ def main() -> int:
                 "condition": "service_completed_successfully"
             }
             rendered["depends_on"] = dependencies
-        if service_network_name:
-            rendered["networks"] = ["service-plane"]
         rendered_services[service_name] = rendered
 
-    compose_payload: dict[str, Any] = {"services": rendered_services}
-    if service_network_name:
-        compose_payload["networks"] = {
-            "service-plane": {"name": service_network_name}
-        }
+    # 包括部署 one-shot 在内，每个实例/replica 只接本项目网络，不复用模板网络名。
+    for rendered in rendered_services.values():
+        rendered["networks"] = ["service-plane"]
+    compose_payload: dict[str, Any] = {
+        "services": rendered_services,
+        "networks": {"service-plane": {"name": service_network_name}},
+    }
     top_level_volumes = dict(template.get("volumes") or {})
     top_level_volumes.update(isolated_data_volumes)
     if any(name in RUNTIME_LOG_EXPORT_SERVICES for name in rendered_services):
@@ -564,6 +574,7 @@ def main() -> int:
             output_root,
             args.plane,
             render_name=render_name,
+            service_network=service_network_name,
             remote_root=(
                 f"{str(plane.get('composeProjectRoot') or '').rstrip('/')}"
                 f"/instances/{args.instance}/{args.replica_id}"
@@ -577,6 +588,12 @@ def main() -> int:
         args.image_transport_tag,
         args.instance,
     )
+    if args.instance == "prevalidate":
+        environment = dict(
+            line.split("=", 1) for line in (output_root / "stack.env").read_text().splitlines()
+            if line and not line.startswith("#")
+        )
+        _validate_prevalidation_interpolation(compose_payload, environment)
     systemd_unit_file = _write_runtime_systemd_unit(
         output_root,
         plane=plane,
@@ -607,6 +624,20 @@ def main() -> int:
         "supportComposeServices": support,
         "startupServices": startup_services,
         "imageAndConfigOnlyServices": image_only_services,
+        "network": service_network_name,
+        "crossPlaneTransport": (
+            _prevalidation_spec()["crossPlaneTransport"]
+            if args.instance == "prevalidate" else None
+        ),
+        "publishedPorts": (
+            [binding for binding in _prevalidation_port_bindings()
+             if binding["plane"] == args.plane and binding["service"] in startup_services]
+            if args.instance == "prevalidate" else []
+        ),
+        "unavailablePublicCapabilities": (
+            _prevalidation_spec()["unavailablePublicCapabilities"]
+            if args.instance == "prevalidate" else []
+        ),
         "dataMode": args.data_mode,
         "dataPlaneBinding": data_plane_identity,
         "dataPlaneBindingDigest": (

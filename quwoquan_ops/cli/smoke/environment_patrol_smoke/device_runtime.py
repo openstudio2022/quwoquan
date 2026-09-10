@@ -26,7 +26,7 @@ from quwoquan_ops.cli.lib.flutter_android_device_proxy import (
     REAL_FLUTTER_ENV,
 )
 from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
-    acquire_consumer_lease,
+    acquire_consumer_lease, bind_consumer_lease,
 )
 from quwoquan_ops.cli.lib.package_reuse.patrol_command_envelope import (
     PATROL_COMMAND_ENVELOPE_DIGEST_ENV,
@@ -511,8 +511,26 @@ def _acquire_patrol_consumer_lease(
     lease_runtime_env = str(getattr(args, "runtime_env", "") or "").strip() or (
         _runtime_env_for_alias(args.env_name)
     )
+    from quwoquan_ops.cli.lib.startup_attempt_receipt import load_startup_attempt
+    from quwoquan_ops.cli.lib.test_live_startup_attempt_receipt import load_test_live_startup_attempt
+    from quwoquan_ops.cli.lib.local_runtime_reservation import acquire_local_runtime_use_lock
+    guard = acquire_local_runtime_use_lock(target=target_name, purpose="patrol-lease-bind")
+    try:
+        attempts = [load_startup_attempt(target_name), load_test_live_startup_attempt(target_name)]
+        active = [item for item in attempts if item and item.get("status") == "running"]
+        if len(active) != 1:
+            raise RuntimeError("OPS.LEASE.runtime_generation_unavailable: Patrol requires one running generation")
+        generation = str(active[0]["attemptId"])
+        return _acquire_patrol_generation_lease(args, device, command_env, target_name, consumer, lease_runtime_env, ports, is_android, emulator, generation)
+    finally:
+        guard.close()
+
+
+def _acquire_patrol_generation_lease(args: argparse.Namespace, device: dict[str, Any], command_env: dict[str, str], target_name: str, consumer: str, lease_runtime_env: str, ports: list[int], is_android: bool, emulator: bool, generation: str) -> tuple[str, str, str, str]:
+    device_id = str(device["id"])
     lease = acquire_consumer_lease(
         target=target_name,
+        instance_generation=generation,
         device=device_id,
         consumer=consumer,
         package_name=(
@@ -530,6 +548,7 @@ def _acquire_patrol_consumer_lease(
             "QWQ_RUN_CONSUMER_ID": consumer,
             "QWQ_CONSUMER_LEASE_ACQUIRED": "1",
             "QWQ_CONSUMER_LEASE_ID": str(lease["leaseId"]),
+            "QWQ_CONSUMER_INSTANCE_GENERATION": generation,
         }
     )
     if is_android:
@@ -561,29 +580,12 @@ def _bind_patrol_consumer_lease_to_handoff(
     """Update the same deterministic lease with its exact launcher identity."""
 
     target_name, device_id, consumer, lease_id = consumer_lease
-    is_android = str(device.get("targetPlatform") or "").lower().startswith("android")
-    emulator = _canonical_emulator_flag(device)
-    ports = [
-        int(value)
-        for value in command_env.get("QWQ_ANDROID_LOCAL_PORTS", "").split(",")
-        if value.strip()
-    ]
-    rebind_runtime_env = str(getattr(args, "runtime_env", "") or "").strip() or (
-        _runtime_env_for_alias(args.env_name)
-    )
-    rebound = acquire_consumer_lease(
+    rebound = bind_consumer_lease(
         target=target_name,
         device=device_id,
         consumer=consumer,
-        package_name=(
-            android_release_uat_package(rebind_runtime_env, "debug")
-            if is_android
-            else ios_release_uat_bundle_ids(rebind_runtime_env, "debug")[0]
-        ),
-        ports=ports,
-        platform=(
-            "android" if is_android else "ios-simulator" if emulator else "ios-physical"
-        ),
+        lease_id=lease_id,
+        instance_generation=command_env["QWQ_CONSUMER_INSTANCE_GENERATION"],
         handoff_digest=str(handoff["effectiveLaunchManifestDigest"]),
     )
     if rebound.get("leaseId") != lease_id:

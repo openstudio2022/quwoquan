@@ -92,10 +92,9 @@ def verify_content_delivery(
             or readiness.get("manifestDigest") != manifest_digest
         ):
             raise ValueError("release readiness identity or result is invalid")
-        readiness_phase = str(readiness.get("readinessPhase") or "").strip()
-        if readiness_phase not in {"consumer", "research", "commercial", "production"}:
-            raise ValueError("release readiness phase is invalid")
-        consumer_readiness = readiness_phase == "consumer"
+        from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
+        _validate_data_schema(readiness, "environment_release_readiness")
 
         post_ids = _string_set(readiness.get("postIds"), label="readiness postIds")
         entity_refs = _string_set(
@@ -218,27 +217,20 @@ def verify_content_delivery(
             str(row.get("personaId") or "").strip() for row in creators
         }
         search_rows = post_report.get("searchQueries")
-        if consumer_readiness:
-            if search_rows is not None:
-                raise ValueError("consumer readiness must not embed Search verification")
-            searchable_posts: set[str] = set()
-        else:
-            if not isinstance(search_rows, list):
-                raise ValueError("Search verification is missing")
-            searchable_posts = {
-                str(row.get("targetId") or "").strip()
-                for row in search_rows
-                if isinstance(row, Mapping) and row.get("targetType") == "post"
-            }
-            searchable_personas = {
-                str(row.get("targetId") or "").strip()
-                for row in search_rows
-                if isinstance(row, Mapping) and row.get("targetType") == "author"
-            }
-            if searchable_posts != post_ids or searchable_personas != persona_ids:
-                raise ValueError(
-                    "Search does not expose every selected Post and Persona"
-                )
+        if not isinstance(search_rows, list):
+            raise ValueError("Search verification is missing")
+        searchable_posts = {
+            str(row.get("targetId") or "").strip()
+            for row in search_rows
+            if isinstance(row, Mapping) and row.get("targetType") == "post"
+        }
+        searchable_personas = {
+            str(row.get("targetId") or "").strip()
+            for row in search_rows
+            if isinstance(row, Mapping) and row.get("targetType") == "author"
+        }
+        if searchable_posts != post_ids or searchable_personas != persona_ids:
+            raise ValueError("Search does not expose every selected Post and Persona")
         if any(row.get("profileStatus") != 200 for row in creators):
             raise ValueError("Persona public profile readback is incomplete")
 

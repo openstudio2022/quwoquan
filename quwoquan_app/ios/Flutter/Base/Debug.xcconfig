@@ -1,4 +1,5 @@
 #include "../Generated.xcconfig"
+#include "BuildIsolation.xcconfig"
 
 // 明确设置 SDK 路径，避免 native_assets 构建错误。
 SDKROOT = iphoneos

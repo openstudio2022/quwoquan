@@ -16,7 +16,6 @@ from pathlib import Path
 import quwoquan_ops.cli.lib.package_reuse as _pkg
 
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
-    RELEASE_INPUT_CLASSIFICATIONS,
     RUNTIME_CANDIDATE_TYPE,
 )
 from quwoquan_ops.cli.lib.output_paths import (
@@ -149,7 +148,6 @@ def write_package_fingerprint(
     report_dir: str,
     include_services: bool,
     details: list[str],
-    release_input_classification: str,
     contract_graph_digest: str,
     graphql_read_registry: dict[str, object],
     app_launch_bundle: dict[str, object] | None = None,
@@ -164,8 +162,6 @@ def write_package_fingerprint(
         raise ValueError("package fingerprint requires a report reference")
     if not include_services:
         raise ValueError("runtime package fingerprint requires all services")
-    if release_input_classification not in RELEASE_INPUT_CLASSIFICATIONS:
-        raise ValueError("package fingerprint releaseInputClassification is invalid")
     if (
         not isinstance(contract_graph_digest, str)
         or len(contract_graph_digest) != 71
@@ -233,7 +229,6 @@ def write_package_fingerprint(
             "digest": content_digest,
             "fileCount": content_count,
         },
-        "releaseInputClassification": release_input_classification,
         "contractGraphDigest": contract_graph_digest,
         "graphqlReadRegistry": graphql_read_registry,
         "appLaunchBundle": app_launch_bundle,
@@ -355,9 +350,6 @@ def can_reuse_package(
         report_ref = payload.get("reportRef")
         if not isinstance(report_ref, str) or not report_ref.strip():
             raise ValueError("fingerprint reportRef is invalid")
-        classification = payload.get("releaseInputClassification")
-        if classification not in RELEASE_INPUT_CLASSIFICATIONS:
-            raise ValueError("fingerprint releaseInputClassification is invalid")
         contract_graph_digest = payload.get("contractGraphDigest")
         if (
             not isinstance(contract_graph_digest, str)
@@ -475,7 +467,6 @@ def can_reuse_package(
             "workspaceStatusDigest": payload["workspaceStatusDigest"],
             "workspaceDigest": expected_input_digest,
             "packageDigest": expected_content_digest,
-            "releaseInputClassification": classification,
             "contractGraphDigest": contract_graph_digest,
             "graphqlReadRegistry": graphql_read_registry,
             "appLaunchBundle": payload.get("appLaunchBundle"),

@@ -77,6 +77,15 @@ func renderAppLaunchContractDart(contract appLaunchContract) []byte {
 	output.WriteString("const String appLaunchContractSourceDigest =\n    ")
 	output.WriteString(strconv.Quote(contract.SourceDigest))
 	output.WriteString(";\n")
+	writeDartLaunchStringMap(&output, "appContentSourcePolicy", contract.ContentSourcePolicy)
+	writeDartLaunchStringMap(&output, "runtimeDocumentContentSources", contract.RuntimeDocumentContentSources)
+	writeDartLaunchStringMap(&output, "runtimeDocumentSchemaValues", contract.SchemaValues)
+	writeDartLaunchStringMap(&output, "appLaunchTargetEnvironment", contract.TargetEnvironment)
+	writeDartStringSet(&output, "offlineBootstrapDocumentRequiredFields", contract.SchemaRequiredFields["offline_bootstrap_document"])
+	writeDartStringSet(&output, "offlineBootstrapRuntimeRequiredFields", contract.OfflineBootstrapRuntimeFields)
+	writeDartStringSet(&output, "runtimeConfigPackageRuntimeRequiredFields", contract.RuntimePackageRuntimeFields)
+	fmt.Fprintf(&output, "const int runtimeConfigPackageMaxLifetimeSeconds = %d;\n", contract.RuntimePackageMaxLifetimeSeconds)
+	fmt.Fprintf(&output, "const int runtimeConfigPackageMaxFutureSkewSeconds = %d;\n", contract.RuntimePackageMaxFutureSkewSeconds)
 	writeDartStringSet(&output, "appLaunchProvenances", contract.LaunchProvenances)
 	writeDartStringSet(&output, "appLaunchLocalTransportTargets", contract.LocalTransportTargets)
 	writeDartStringSet(&output, "runtimeConfigSupplyModes", contract.RuntimeConfigSupplyModes)
@@ -102,6 +111,14 @@ func renderAppLaunchContractDart(contract appLaunchContract) []byte {
 	output.WriteString(strconv.Quote(string(artifactJSON)))
 	output.WriteString(";\n")
 	return []byte(output.String())
+}
+
+func writeDartLaunchStringMap(output *strings.Builder, name string, values map[string]string) {
+	fmt.Fprintf(output, "const Map<String, String> %s = <String, String>{\n", name)
+	for _, key := range sortedStringMapKeys(values) {
+		fmt.Fprintf(output, "  %s: %s,\n", strconv.Quote(key), strconv.Quote(values[key]))
+	}
+	output.WriteString("};\n")
 }
 
 func writeDartStringSet(output *strings.Builder, name string, values []string) {
@@ -237,6 +254,9 @@ func renderAppLaunchContractSwift(contract appLaunchContract) []byte {
 	output.WriteString("\n")
 	writeSwiftStringArray(&output, "environments", contract.Environments)
 	writeSwiftStringMap(&output, "targetEnvironment", contract.TargetEnvironment)
+	writeSwiftStringMap(&output, "contentSourcePolicy", contract.ContentSourcePolicy)
+	writeSwiftStringMap(&output, "runtimeDocumentContentSources", contract.RuntimeDocumentContentSources)
+	writeSwiftStringArray(&output, "offlineBootstrapRuntimeRequiredFields", contract.OfflineBootstrapRuntimeFields)
 	writeSwiftStringArray(&output, "localTransportTargets", contract.LocalTransportTargets)
 	writeSwiftStringSliceMap(&output, "buildProfileEnvironments", contract.BuildProfileEnvironments)
 	writeSwiftStringMap(&output, "buildProfileLaunchPolicies", contract.BuildProfileLaunchPolicies)
@@ -345,6 +365,9 @@ func renderAppLaunchContractJava(contract appLaunchContract) []byte {
 	output.WriteString(";\n")
 	writeJavaStringList(&output, "ENVIRONMENTS", contract.Environments)
 	writeJavaStringMap(&output, "TARGET_ENVIRONMENT", contract.TargetEnvironment)
+	writeJavaStringMap(&output, "CONTENT_SOURCE_POLICY", contract.ContentSourcePolicy)
+	writeJavaStringMap(&output, "RUNTIME_DOCUMENT_CONTENT_SOURCES", contract.RuntimeDocumentContentSources)
+	writeJavaStringList(&output, "OFFLINE_BOOTSTRAP_RUNTIME_REQUIRED_FIELDS", contract.OfflineBootstrapRuntimeFields)
 	writeJavaStringList(&output, "LOCAL_TRANSPORT_TARGETS", contract.LocalTransportTargets)
 	writeJavaStringListMap(&output, "BUILD_PROFILE_ENVIRONMENTS", contract.BuildProfileEnvironments)
 	writeJavaStringMap(&output, "BUILD_PROFILE_LAUNCH_POLICIES", contract.BuildProfileLaunchPolicies)

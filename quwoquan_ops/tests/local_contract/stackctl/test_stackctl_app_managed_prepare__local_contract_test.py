@@ -57,7 +57,6 @@ def _readiness_payload() -> dict[str, Any]:
         "releaseId": "alpha-slice-003",
         "verifyRunId": "verify-20260830T1600Z",
         "manifestDigest": _DIGEST,
-        "readinessPhase": "research",
         "passed": True,
     }
 
@@ -67,7 +66,6 @@ def _binding(readiness_path: Path) -> dict[str, Any]:
         "releaseId": "alpha-slice-003",
         "verifyRunId": "verify-20260830T1600Z",
         "manifestDigest": _DIGEST,
-        "readinessPhase": "research",
         "readinessReceiptRef": str(readiness_path.absolute()),
         "readinessReceiptDigest": "sha256:"
         + hashlib.sha256(readiness_path.read_bytes()).hexdigest(),

@@ -291,8 +291,8 @@ final class RuntimeConfigActivationCoordinator {
    *
    * <p>与外部请求走同一 validate → CAS activate → receipt 路径，区别只有两点：请求来自
    * assets 而非私有容器，`expectedActiveDigest` 由这里以当前 active digest 现场补齐。
-   * 决策矩阵：active 为外部供给且新鲜 → 保持不变（NOT_REQUESTED）；active 缺席 / 过期 /
-   * 同为自供给但 requestDigest 变化（重建）→ 激活；已是该请求 → ACTIVATED。失败只记账。
+   * 决策矩阵：合法在线 active → 保持不变；缺席或合法同源 Alpha 离线重建 → 激活；
+   * 过期在线或损坏 active → typed 失败，绝不自动回落 Alpha。
    */
   synchronized ConsumeResult consumeBundledSelfSupplyRequest(InputStream requestStream) {
     Map<String, Object> request = null;
@@ -314,23 +314,27 @@ final class RuntimeConfigActivationCoordinator {
           || !"".equals(stringMapValue(request, "expectedActiveDigest"))) {
         throw new ActivationFailure("runtime_config_activation_identity_mismatch");
       }
+      if (!"bundled_snapshot".equals(effectiveManifestStringMapValue(request, "contentSource"))) {
+        throw new ActivationFailure("runtime_config_content_source_mismatch");
+      }
       Map<String, Object> state = store.readStateEnvelope();
       if ("present".equals(state.get("state"))) {
-        String activeSupplyMode = "";
-        try {
-          activeSupplyMode = stringMapValue(readActiveReceipt(), "runtimeConfigSupplyMode");
-        } catch (RuntimeConfigPackageStore.RuntimeConfigException ignored) {
-          // 无可读 active receipt 时按“非外部供给”处理，交给下面的 CAS 激活替换。
+        Map<String, Object> activeReceipt = readActiveReceipt();
+        if (!receiptMatchesActiveState(activeReceipt, state)) {
+          throw new ActivationFailure("runtime_config_activation_receipt_mismatch");
         }
-        if (!SELF_SUPPLY_MODE.equals(activeSupplyMode)) {
-          // 外部 canonical launcher 已激活且新鲜：显式外部选择优先于构建期默认。
+        Object activePackage = state.get("package");
+        if (!(activePackage instanceof Map)
+            || !AppLaunchContract.SCHEMA_VALUES.get("offline_bootstrap_document")
+                .equals(((Map<?, ?>) activePackage).get("schema"))) {
           return ConsumeResult.notRequested();
         }
-        if (isAlreadyActivated(request, requestDigest)) {
-          return ConsumeResult.activated();
-        }
+        if (isAlreadyActivated(request, requestDigest)) return ConsumeResult.activated();
+      } else if (!"absent".equals(state.get("state"))) {
+        Object code = state.get("errorCode");
+        throw new ActivationFailure(code instanceof String ? (String) code : "runtime_config_package_malformed");
       }
-      // 过期包仍可被替换（豁免时间窗读 CAS 前值）；结构性损坏在这里抛出并记账。
+      // 只有合法同源离线或缺席可以自动供给；在线过期/损坏绝不回落 Alpha。
       previousActiveDigest = store.readCurrentActiveDigest();
       previousActiveDigestKnown = true;
       JsonObject packageDocument = requestDocument.getAsJsonObject("package");
@@ -523,6 +527,11 @@ final class RuntimeConfigActivationCoordinator {
       issues.add(error.code);
     }
     JsonObject packageDocument = rawPackage.getAsJsonObject();
+    String documentSource = AppLaunchContract.RUNTIME_DOCUMENT_CONTENT_SOURCES.get(stringValue(packageDocument, "schema"));
+    if (documentSource == null || !documentSource.equals(stringValue(manifest, "contentSource"))
+        || !documentSource.equals(AppLaunchContract.CONTENT_SOURCE_POLICY.get(environment))) {
+      issues.add("runtime_config_content_source_mismatch");
+    }
     String packageLaunchPolicy = stringValue(packageDocument, "launchPolicy");
     if (packageLaunchPolicy == null) {
       issues.add("runtime_config_activation_request_malformed");

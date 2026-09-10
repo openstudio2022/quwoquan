@@ -14,7 +14,51 @@ from content.release.canonical.producer_release_handoff import (
     read_producer_release_handoff,
     write_producer_release_handoff,
 )
-from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REPO_ROOT
+from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REFERENCE_RELEASES_ROOT, REPO_ROOT
+from core.schema import assert_valid
+
+
+def handle_export_offline(args: argparse.Namespace) -> None:
+    """显式下游派生入口；不进入 producer finalize/handoff/环境状态机。"""
+    from content.release.canonical.offline_snapshot import build_bundle, export_bundle, write_dart_identity
+    from content.release.canonical.offline_snapshot_contract import safe_path
+    from core.paths import LIBRARY_ROOT, carried_media_root
+    import subprocess
+
+    try:
+        actual_revision = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+        if args.source_revision != actual_revision:
+            raise ValueError("OFFLINE.SOURCE_REVISION_NOT_CURRENT")
+        selection_path = Path(args.selection_file).expanduser().absolute()
+        safe_path(selection_path.parent, selection_path.name)
+        selection = json.loads(selection_path.read_bytes())
+        output = Path(args.output_dir).expanduser().absolute()
+        publish = Path(args.publish_root).expanduser().absolute()
+        protected = [publish, Path(args.library_root or LIBRARY_ROOT).expanduser(), Path(args.carried_root or carried_media_root()).expanduser()]
+        for root in protected:
+            physical = root.resolve()
+            target = output.resolve()
+            if target == physical or physical in target.parents or target in physical.parents:
+                raise ValueError("OFFLINE.OUTPUT_OVERLAPS_CANONICAL_SOURCE")
+        bundle = build_bundle(
+            repo=Path(REPO_ROOT), publish_root=publish, selection=selection,
+            source_revision=args.source_revision,
+            library_root=Path(args.library_root).expanduser() if args.library_root else None,
+            carried_root=Path(args.carried_root).expanduser() if args.carried_root else None,
+        )
+        identity_path = None
+        if args.dart_identity_output:
+            identity_path = Path(args.dart_identity_output).expanduser().absolute()
+            allowed = Path(REPO_ROOT) / "quwoquan_app/lib/runtime/config/generated/offline_content_bundle_identity.g.dart"
+            if identity_path != allowed:
+                raise ValueError("OFFLINE.IDENTITY_OUTPUT_PATH_INVALID")
+            safe_path(identity_path.parent, identity_path.name)
+        result = export_bundle(bundle, output, check=args.check)
+        if identity_path is not None:
+            write_dart_identity(result, identity_path, check=args.check)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise SystemExit(f"[release export-offline] GATE_BLOCK {exc}") from exc
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2))
 
 
 def handle_publish_object(args: argparse.Namespace) -> None:
@@ -33,7 +77,7 @@ _COHORT_CARRIER_PREFIXES = (
 
 
 def _normalize_cohort(raw: dict, *, milestone: str, release_root: Path, release_id: str) -> Path:
-    """AI 只声明 objectRefs/milestone/producerBaselineRevision；排序、releaseClass、
+    """AI 只声明 objectRefs/milestone/producerBaselineRevision；排序、
     expectedCarrierCounts 与 canonical 字节由这里补齐，并 create-once 写入 release 目录。"""
 
     refs = raw.get("objectRefs")
@@ -49,11 +93,11 @@ def _normalize_cohort(raw: dict, *, milestone: str, release_root: Path, release_
     cohort = {
         **raw,
         "schema": "quwoquan_data.release_cohort",
-        "releaseClass": str(raw.get("releaseClass") or "production"),
         "milestone": str(raw.get("milestone") or milestone),
         "objectRefs": object_refs,
         "expectedCarrierCounts": dict(raw.get("expectedCarrierCounts") or counts),
     }
+    assert_valid(cohort, "release", "release_cohort", label="explicit cohort")
     data = (json.dumps(cohort, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     target = release_root / release_id / _CANONICAL_COHORT_NAME
     if target.exists() and target.read_bytes() != data:
@@ -104,14 +148,12 @@ def handle_release_finalize(args: argparse.Namespace) -> None:
             submitted, milestone=str(args.milestone), release_root=release_root, release_id=release_id
         )
         cohort = json.loads(cohort_file.read_bytes())
-        release_class = str(cohort["releaseClass"])
         if not (release_root / release_id / "payload/release.json").is_file():
             build_report = build_pool_release(
                 publish_root=publish_root,
                 release_root=release_root,
                 release_id=release_id,
                 cohort_file=cohort_file,
-                release_class=release_class,
             )
         else:
             build_report = {"status": "replayed", "releaseId": release_id}
@@ -130,6 +172,11 @@ def handle_release_finalize(args: argparse.Namespace) -> None:
             publish_root=publish_root,
             release_root=release_root,
         )
+        reference_copy = write_versioned_release_copy(
+            release_dir=release_root / release_id,
+            reference_root=Path(args.reference_root or REFERENCE_RELEASES_ROOT),
+            release_id=release_id,
+        )
     except (FileNotFoundError, OSError, ProducerReleaseHandoffError, ObjectTransactionError, TypeError, ValueError) as exc:
         raise SystemExit(f"[release finalize] GATE_BLOCK {exc}") from exc
     print(json.dumps({
@@ -146,8 +193,42 @@ def handle_release_finalize(args: argparse.Namespace) -> None:
             "producerBaselineRevision": document.get("producerBaselineRevision"),
             "producerContractDigest": document.get("producerContractDigest"),
         },
+        "referenceCopy": reference_copy,
         "terminal": "END",
     }, ensure_ascii=False, indent=2))
+
+
+_VERSIONED_RELEASE_FILES = ("cohort.json", "producer_release_handoff.json")
+
+
+def write_versioned_release_copy(*, release_dir: Path, reference_root: Path, release_id: str) -> dict[str, str]:
+    """把里程碑 release 的 cohort 与 handoff 逐字节复制到受版本控制的 reference/releases/<releaseId>/。
+
+    create-or-same：副本不存在则写入，已存在且逐字节相同视为 replay，不同则 fail closed——
+    副本只是可删除输出根的耐久备份，不允许出现第二套字节。
+    """
+
+    target_dir = reference_root / release_id
+    statuses: dict[str, str] = {}
+    for name in _VERSIONED_RELEASE_FILES:
+        source = release_dir / name
+        if not source.is_file():
+            raise ObjectTransactionError(f"DATA.RELEASE.REFERENCE_COPY_SOURCE_MISSING: {source}")
+        data = source.read_bytes()
+        target = target_dir / name
+        if target.exists():
+            if target.read_bytes() != data:
+                raise ObjectTransactionError(
+                    f"DATA.RELEASE.REFERENCE_COPY_CONFLICT: {target} differs from {source}"
+                )
+            statuses[name] = "replayed"
+            continue
+        target_dir.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        temporary.write_bytes(data)
+        os.replace(temporary, target)
+        statuses[name] = "created"
+    return {"root": target_dir.as_posix(), **statuses}
 
 
 def handle_handoff_verify(args: argparse.Namespace) -> None:

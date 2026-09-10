@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import re
+import hashlib
+from contextlib import contextmanager
+from contextvars import ContextVar
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -125,6 +128,39 @@ def validate_domain_service_ownership(nodes: Iterable[Node]) -> list[str]:
     return errors
 
 
+_BATCH_CACHE: ContextVar[dict | None] = ContextVar("feature-owner-batch", default=None)
+
+
+@contextmanager
+def ownership_batch(nodes: list[Node]):
+    """单次完整解析复用只读规则；退出重验输入，绝不跨candidate缓存。"""
+    from .nodes import discover_nodes
+    def identity():
+        current = discover_nodes()
+        inputs = [path for node in current for path in (node.spec, node.design)]
+        return [(path, path.resolve(), hashlib.sha256(path.read_bytes()).digest() if path.is_file() else None) for path in inputs]
+    if nodes != discover_nodes():
+        raise ValueError("GATE_BLOCK: owner batch nodes 在解析前漂移")
+    before = identity()
+    token = _BATCH_CACHE.set({})
+    try:
+        yield
+        if identity() != before:
+            raise ValueError("GATE_BLOCK: owner batch canonical inputs 在解析期间漂移")
+    finally:
+        _BATCH_CACHE.reset(token)
+
+
+def _engineering_roots(node: Node) -> list[str]:
+    cache = _BATCH_CACHE.get()
+    if cache is None:
+        return engineering_roots(node)
+    key = ("engineering", node)
+    if key not in cache:
+        cache[key] = engineering_roots(node)
+    return cache[key]
+
+
 def owners_for_path(target: Path, nodes: Iterable[Node]) -> list[Node]:
     try:
         rel = target.resolve().relative_to(context.REPO_ROOT.resolve()).as_posix()
@@ -132,7 +168,7 @@ def owners_for_path(target: Path, nodes: Iterable[Node]) -> list[Node]:
         return []
     matches: list[tuple[int, Node]] = []
     for node in nodes:
-        for root in engineering_roots(node):
+        for root in _engineering_roots(node):
             root = root.rstrip("/")
             exact_singleton = root in REPOSITORY_SINGLETON_ROOTS
             if rel == root or (not exact_singleton and rel.startswith(root + "/")):
@@ -280,6 +316,18 @@ def _anchor_references(
 
 
 def _design_ownerships(
+    nodes: Iterable[Node], l1_owner: Node | None = None,
+) -> list[DesignOwnership]:
+    cache = _BATCH_CACHE.get()
+    if cache is None:
+        return _read_design_ownerships(nodes, l1_owner)
+    key = ("design", l1_owner)
+    if key not in cache:
+        cache[key] = _read_design_ownerships(nodes, l1_owner)
+    return cache[key]
+
+
+def _read_design_ownerships(
     nodes: Iterable[Node],
     l1_owner: Node | None = None,
 ) -> list[DesignOwnership]:

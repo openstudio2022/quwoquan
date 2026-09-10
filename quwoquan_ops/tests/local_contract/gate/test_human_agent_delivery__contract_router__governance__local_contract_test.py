@@ -754,9 +754,9 @@ def test_dynamic_workflow_skills_bind_pre_during_post_without_static_inventory()
         assert headings == [
             "触发与输入", "执行", "完成证据", "失败与停止", "条件性交接",
         ]
-        binding_ref = f"#workflow_interaction_binding.bindings.{skill}"
-        assert binding_ref in skill_text
-        assert "canonical projector" in skill_text
+        # binding 的唯一 owner 是 contract 的 bindings.<skill>（键即 Skill 目录名，第 747 行已锁定闭包）；
+        # Skill body 不复述该引用与 projector 语义，否则 14 份正文各付一次样板句。
+        assert "workflow_interaction_binding.bindings." not in skill_text
         assert not schema_fields.issubset(set(skill_text.split()))
 
     missing = deepcopy(contract)

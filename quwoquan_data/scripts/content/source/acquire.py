@@ -51,6 +51,7 @@ def _asset_record_defaults() -> dict[str, str]:
 
 # 单个来源文件的传输上限，不是准入判据：源体允许大于对象预算，降采样/转码要先拿到源体。
 _MAX_SOURCE_BYTES = MEDIA_PROCESSING_POLICY.source_asset_max_bytes
+_MAX_PUBLISHABLE_PIXELS = MEDIA_PROCESSING_POLICY.max_publishable_image_pixels
 # 开放许可白名单：CC0、CC BY、CC BY-SA、公有领域（含 PDM）。命中即 rightsStatus=verified；
 # 其它可读 license 记为 unverified 并把 license 原文写进 rightsIssues；读不到记 unknown。
 _LICENSE_VERIFIED = re.compile(r"^(cc0|cc[ -]by(?:[ -]sa)?(?:[ -][0-9.]+)?(?:[ -][a-z]{2})?|public domain|pd(?:m|-[a-z0-9-]+)?)\b", re.I)
@@ -102,7 +103,15 @@ def _platform_of(source: dict[str, Any]) -> str:
         return "Wikimedia Commons"
     if host.endswith("wikipedia.org"):
         return "维基百科"
+    if _is_toutiao_baike_host(host):
+        return "头条百科"
     return host
+
+
+def _is_toutiao_baike_host(host: str) -> bool:
+    """头条百科/快懂百科：`www.baike.com` 与其子域；publish 实体 schema 的百科闭集成员 `toutiao_baike`。"""
+
+    return host == "baike.com" or host.endswith(".baike.com")
 
 
 # ── 本地读取 ──────────────────────────────────────────────────────────
@@ -140,7 +149,10 @@ def _ingest_page(source: dict[str, Any]) -> dict[str, Any]:
     host = str(source["sourceUrl"]).split("//", 1)[-1].split("/", 1)[0]
     host_parts = host.split(".")
     source_id = _slug("_".join(host_parts[:2]) if len(host_parts) >= 2 else host)
-    is_encyclopedia = host.endswith("wikipedia.org") or host.endswith("baike.baidu.com")
+    if _is_toutiao_baike_host(host):
+        # 与 final_surface_projection._homepage_source_kind 的 "toutiao" 判据同一个词根。
+        source_id = "toutiao_baike"
+    is_encyclopedia = host.endswith("wikipedia.org") or host.endswith("baike.baidu.com") or _is_toutiao_baike_host(host)
     return {
         "title": str(source["title"]).strip(),
         "sourceId": source_id,
@@ -253,6 +265,9 @@ def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[st
     declared_sha1 = str(source.get("sha1") or "").strip().lower()
     if declared_sha1 and hashlib.sha1(body).hexdigest() != declared_sha1:
         raise AcquireError(f"DATA.ACQUIRE.SOURCE_SHA1_DRIFT: {file_page}")
+    # source unit 身份必须由下载原件决定：转码/降采样派生体的字节不保证逐次相同，
+    # 若用派生体摘要定 unit id，重放会为同一 target 生成第二个 unit。
+    original_sha = _sha256(body)
     derived: list[str] = []
     derivative: dict[str, Any] | None = None
     width = height = 0
@@ -263,7 +278,9 @@ def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[st
             raise AcquireError(f"DATA.ACQUIRE.MIME_MISMATCH: {file_page} is not a decodable image")
         width, height = dims
         budget = source_unit_asset_budget_bytes(carrier)
-        if len(body) > budget:
+        # 入池存储体必须既装进对象字节预算、又不超过可发布像素上限：全景接片常常字节不大
+        # 但栅格数亿像素，若原样入池会在 publish 截面被判否，所以两条阈值任一超出都降采样。
+        if len(body) > budget or width * height > _MAX_PUBLISHABLE_PIXELS:
             variant = derive_budget_compliant_variant(body, budget_bytes=budget)
             if variant is None or len(variant["bytes"]) > budget:
                 raise AcquireError(f"DATA.ACQUIRE.IMAGE_OVER_BUDGET: {file_page}")
@@ -314,6 +331,7 @@ def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[st
         "media": {
             "kind": kind,
             "body": body,
+            "originalSha256": original_sha,
             "mime": mime,
             "directUrl": str(source["directUrl"]),
             "width": width,
@@ -328,6 +346,8 @@ def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[st
             "watermarkKind": str(source["watermarkKind"]),
             "watermarkNote": str(source.get("watermarkNote") or ""),
             "derivedModifications": sorted(set(derived)),
+            # 访问政策只记录不判否：缺席即缺席，不补 open。
+            **({"accessPolicy": str(source["accessPolicy"])} if source.get("accessPolicy") else {}),
         },
     }
 
@@ -404,6 +424,7 @@ def _asset_row(
         "watermarkKind": media["watermarkKind"],
         "watermarkNote": media["watermarkNote"],
         "derivedModifications": list(media["derivedModifications"]),
+        **({"accessPolicy": media["accessPolicy"]} if media.get("accessPolicy") else {}),
         **(extra or {}),
     }
 
@@ -422,8 +443,12 @@ def _materialize(
     library_root = library_root_for_output(output_root)
     carrier = carrier_of_target_ref(target_ref)
     candidate_digest = _sha256(_canonical(source))
-    # 媒体来源的原始字节就是媒体本身，不再复制一份 snapshot 进 source CAS。
-    raw_sha = _sha256(acquired["snapshot"] if acquired["snapshot"] is not None else acquired["media"]["body"])
+    # 媒体来源的原始字节就是媒体本身，不再复制一份 snapshot 进 source CAS；
+    # unit 身份取下载原件的摘要，而不是可能逐次不同的派生体摘要。
+    if acquired["snapshot"] is not None:
+        raw_sha = _sha256(acquired["snapshot"])
+    else:
+        raw_sha = acquired["media"].get("originalSha256") or _sha256(acquired["media"]["body"])
     unit_id = "%s__%s" % (
         _slug(acquired["sourceId"]),
         hashlib.sha256("\n".join((execution_id, target_ref, str(source["sourceUrl"]), raw_sha)).encode("utf-8")).hexdigest()[:16],
@@ -454,6 +479,12 @@ def _materialize(
         "rawSha256": raw_sha,
         "sourceMarkdownSha256": source_sha,
     }
+    if isinstance(source.get("discoverySignals"), dict) and source["discoverySignals"]:
+        # 热度/发现信号只记录不判否：原样转录，不派生任何判据。
+        meta["discoverySignals"] = dict(source["discoverySignals"])
+    if source.get("accessPolicy"):
+        # 来源站点 robots/ToS 态度只记录：schema 已把取值限定在闭集，这里不再解释含义。
+        meta["accessPolicy"] = str(source["accessPolicy"])
     assets: list[dict[str, Any]] = []
     receipt_ref = ""
     with _lock(unit.parent / f".{unit_id}.lock"):

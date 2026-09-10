@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class AppLaunchContract {
-  public static final String SOURCE_DIGEST = "sha256:e886af2683ad9a21a5ac7dd6a2d27ce5b9c97b6976a45312c35067b70fee1dc3";
+  public static final String SOURCE_DIGEST = "sha256:4be28129198ec16f6e0c4850348d67ef2fa24426ef33354ba1ebc4195c1262e6";
   public static final List<String> ENVIRONMENTS = Collections.unmodifiableList(Arrays.asList(
       "alpha",
       "beta",
@@ -22,6 +22,19 @@ public final class AppLaunchContract {
       {"prod-hosted", "prod"},
       {"prod-sim", "prod"}
   });
+  public static final Map<String, String> CONTENT_SOURCE_POLICY = stringMap(new String[][] {
+      {"alpha", "bundled_snapshot"},
+      {"beta", "remote"},
+      {"gamma", "remote"},
+      {"prod", "remote"}
+  });
+  public static final Map<String, String> RUNTIME_DOCUMENT_CONTENT_SOURCES = stringMap(new String[][] {
+      {"app-offline-bootstrap-document", "bundled_snapshot"},
+      {"app-runtime-config-package", "remote"}
+  });
+  public static final List<String> OFFLINE_BOOTSTRAP_RUNTIME_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
+      "appRuntimeEnv"
+  ));
   public static final List<String> LOCAL_TRANSPORT_TARGETS = Collections.unmodifiableList(Arrays.asList(
       "alpha-local",
       "beta-local",
@@ -95,7 +108,7 @@ public final class AppLaunchContract {
       {"APP.LAUNCH.runtime_dependency_unavailable", "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。"},
       {"APP.LAUNCH.workspace_entrypoint_inactive", "工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。"},
       {"APP.LAUNCH.workspace_flutter_sdk_unavailable", "工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。"},
-      {"APP.PREPARATION.content_binding_unavailable", "无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=research 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。"},
+      {"APP.PREPARATION.content_binding_unavailable", "无法从服务端 active release readback 解析出唯一 schema/digest 合法且 passed=true 的内容 readiness；内容绑定不携带类别或命名轨道，零个或多个候选均阻断，禁止 latest 猜测。"},
       {"APP.PREPARATION.receipt_invalid", "managed preparation receipt 缺失、schema/digest 非法或与本次 launch 身份不一致，canonical launcher 不得复用。"},
       {"APP.PREPARATION.runtime_unavailable", "managed 准备无法复用 exact running full runtime，且不满足有界替换条件（非 target lock 内、存在其他 live consumer lease 或替换失败）。"},
       {"APP.PREPARATION.strict_preflight_failed", "managed 严格预检（TLS、api-edge、user-service、integration-service、SMS Provider/relay identity、真实 OTP journey 与 homepage/creator avatar/image/typed video/premium stream 媒体字节）任一失败，在 Flutter build 前阻断。"},
@@ -119,6 +132,7 @@ public final class AppLaunchContract {
       {"runtime_config_activation_rollback_failed", "失败回滚未完成或 CAS 后状态未知。"},
       {"runtime_config_activation_write_failed", "active package 原子写入失败。"},
       {"runtime_config_active_digest_conflict", "expectedActiveDigest 与当前 active digest CAS 冲突。"},
+      {"runtime_config_content_source_mismatch", "文档类型、环境和内容源策略不一致。"},
       {"runtime_config_digest_unavailable", "平台摘要原语不可用。"},
       {"runtime_config_effective_manifest_digest_mismatch", "effectiveLaunchManifest 摘要不一致。"},
       {"runtime_config_effective_manifest_malformed", "effectiveLaunchManifest 结构非法。"},
@@ -127,6 +141,7 @@ public final class AppLaunchContract {
       {"runtime_config_internal_failure", "原生实现未预期异常的 fail-closed 包装码。"},
       {"runtime_config_keyring_mismatch", "package 自带公钥与 trust envelope 不一致。"},
       {"runtime_config_launch_policy_mismatch", "package launchPolicy 与 manifest 不符。"},
+      {"runtime_config_network_forbidden", "离线 source 不授予任何 endpoint 或网络操作能力。"},
       {"runtime_config_package_digest_mismatch", "packageDigest 与 canonical JSON 摘要不符。"},
       {"runtime_config_package_empty", "runtime package 内容为空。"},
       {"runtime_config_package_malformed", "runtime package 解码或结构非法。"},
@@ -136,7 +151,7 @@ public final class AppLaunchContract {
       {"runtime_config_package_too_large", "runtime package 超出尺寸上限。"},
       {"runtime_config_payload_digest_mismatch", "payloadDigest 与签名载荷不符。"},
       {"runtime_config_profile_mismatch", "package buildProfile 与消费方 profile 不符。"},
-      {"runtime_config_runtime_values_invalid", "runtime 字段集合或值类型违反 runtime_value_keys。"},
+      {"runtime_config_runtime_values_invalid", "runtime 字段集合或值类型违反当前签名文档的字段契约。"},
       {"runtime_config_schema_mismatch", "package schema 与契约不符。"},
       {"runtime_config_signature_algorithm_mismatch", "签名算法不是 ed25519。"},
       {"runtime_config_signature_invalid", "Ed25519 验签失败。"},
@@ -157,6 +172,7 @@ public final class AppLaunchContract {
       {"app_launch_attempt", "app-launch-attempt"},
       {"app_launcher_handoff", "app-launcher-handoff"},
       {"app_managed_preparation", "quwoquan_ops.app_managed_preparation.v1"},
+      {"offline_bootstrap_document", "app-offline-bootstrap-document"},
       {"runtime_config_activation_receipt", "app-runtime-config-activation-receipt"},
       {"runtime_config_activation_request", "app-runtime-config-activation-request"},
       {"runtime_config_package", "app-runtime-config-package"},
@@ -173,6 +189,7 @@ public final class AppLaunchContract {
       "launchPolicy",
       "runtimeConfigPackageDigest",
       "runtimeConfigTrustEnvelopeDigest",
+      "contentSource",
       "requiresLocalTransport",
       "transport"
   ));
@@ -226,6 +243,7 @@ public final class AppLaunchContract {
       "launchPolicy",
       "runtimeConfigPackageDigest",
       "runtimeConfigTrustEnvelopeDigest",
+      "contentSource",
       "requiresLocalTransport",
       "transport",
       "compileDiagnostics",
@@ -254,6 +272,23 @@ public final class AppLaunchContract {
       "createdAt",
       "status",
       "firstBlocker"
+  ));
+  public static final List<String> OFFLINE_BOOTSTRAP_DOCUMENT_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
+      "schema",
+      "environment",
+      "buildProfile",
+      "target",
+      "launchPolicy",
+      "contentSource",
+      "sourceGitSha",
+      "sourceTreeDigest",
+      "trustEnvelopeDigest",
+      "runtime",
+      "payloadDigest",
+      "signatureAlgorithm",
+      "signatureKeyId",
+      "trustedPublicKeys",
+      "signature"
   ));
   public static final List<String> RUNTIME_CONFIG_ACTIVATION_RECEIPT_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
       "schema",

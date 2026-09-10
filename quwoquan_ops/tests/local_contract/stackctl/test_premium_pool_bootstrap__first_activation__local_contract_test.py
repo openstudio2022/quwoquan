@@ -29,6 +29,8 @@ MANIFEST_DIGEST = "sha256:" + "a" * 64
 BASELINE_ID = "sha256:" + "b" * 64
 PACKAGE_DIGEST = "sha256:" + "c" * 64
 VIDEO_ID = "data_post_" + "d" * 64
+# 派生 sample plan 以 canonical 对象身份指认样本；导入报告把它绑定到环境 postId。
+VIDEO_CANONICAL_ID = "qwq_data_" + "1" * 24
 ARTICLE_ID = "data_post_" + "e" * 64
 
 
@@ -58,18 +60,34 @@ def _import_report(
                 "activationMode": "stage-only",
                 "releaseId": release_id,
                 "manifestDigest": manifest_digest,
+                "sourceOwner": "qwq_data",
+                "mode": "upsert", "deletePolicy": "none",
+                "counts": {"postsLoaded": 2, "entitiesLoaded": 1},
+                "auditEvents": [],
+                "stageResult": {
+                    "postsExpected": 2, "postsProjected": 2,
+                    "mediaExpected": 1, "mediaProjected": 1,
+                    "outboxExpected": 2, "outboxProjected": 2,
+                    "projectionVersion": 1, "replayed": False,
+                },
                 "postBindings": [
                     {
                         "postRef": "video/攻略/峨眉山/1",
                         "postId": VIDEO_ID,
+                        "contentId": VIDEO_CANONICAL_ID,
                         "contentType": "video",
                         "usageScope": "research",
+                        "contentVersion": 1,
+                        "authorId": "author-1",
                     },
                     {
                         "postRef": "article/攻略/峨眉山/1",
                         "postId": ARTICLE_ID,
+                        "contentId": "qwq_data_" + "2" * 24,
                         "contentType": "article",
                         "usageScope": "research",
+                        "contentVersion": 1,
+                        "authorId": "author-1",
                     },
                 ],
             }
@@ -127,7 +145,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
                             {
                                 "sampleId": "canary-video-001",
                                 "carrier": "video",
-                                "objectId": VIDEO_ID,
+                                "objectId": VIDEO_CANONICAL_ID,
                                 "objectRef": "objects/posts/video/攻略/峨眉山/1",
                                 "objectDigest": "sha256:" + "7" * 64,
                             }
@@ -151,7 +169,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004（Alpha 激活绑定 ReleaseUatSamplePlan）
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             binding = self._load(_import_report(root), root)
             self.assertEqual(binding.release_id, RELEASE_ID)
             self.assertEqual(binding.manifest_digest, MANIFEST_DIGEST)
@@ -167,7 +185,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
                 "already has premium pool entries",
@@ -180,7 +198,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
                 "ReleaseUatSamplePlan video sample",
@@ -189,13 +207,28 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
                     _import_report(root), root, content_id="data_post_" + "f" * 64
                 )
 
+    def test_canonical_sample_id_must_resolve_to_the_bound_environment_post_id(self) -> None:
+        """精选池条目以环境 postId 为身份；canonical objectId 只用于经导入报告解析样本。
+
+        spec_ref: environment-topology-and-packaging GWT-004
+        """
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            with self.assertRaisesRegex(
+                premium_pool_release.PremiumPoolReleaseError,
+                "environment postId bound to the ReleaseUatSamplePlan video sample",
+            ):
+                self._load(_import_report(root), root, content_id=VIDEO_CANONICAL_ID)
+            binding = self._load(_import_report(root), root, content_id=VIDEO_ID)
+            self.assertEqual(binding.content_id, VIDEO_ID)
+
     def test_a_non_video_binding_is_refused(self) -> None:
         """精选池只收 ReleaseUatSamplePlan 明确选中的 video 样本。
 
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
                 "ReleaseUatSamplePlan video sample",
@@ -208,7 +241,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             report = _import_report(root, environment="beta")
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
@@ -222,7 +255,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
                 "does not match the active candidate release",
@@ -237,7 +270,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             report = _import_report(root)
             payload = json.loads(report.read_text(encoding="utf-8"))
             payload["status"] = "failed"
@@ -259,7 +292,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
             {"activationMode": "activate"},
         ):
             with tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
+                root = Path(temporary).resolve()
                 report = _import_report(root)
                 payload = json.loads(report.read_text(encoding="utf-8"))
                 payload.update(overrides)
@@ -276,7 +309,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             binding = self._load(_import_report(root), root)
             recorded = premium_pool_release._premium_receipt_binding(binding)
             self.assertIn("releaseImportBinding", recorded)

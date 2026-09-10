@@ -1,23 +1,14 @@
-"""immutable release attestation 绑定与 ContractGraph 摘要（逐字迁自原单文件）。
-
-``canonical_contract_graph_digest`` 通过包属性读取 ``CONTRACT_GRAPH_PATH``，
-以保持测试对包属性 monkeypatch 的既有语义。
-"""
+"""immutable release attestation 绑定与 ContractGraph 摘要。"""
 
 from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
 from pathlib import Path
 
 import quwoquan_ops.cli.lib.deployment_candidate_manifest as _pkg
 
-from .constants import (
-    _DIGEST,
-    _RELEASE_BINDING_FIELDS,
-    _RELEASE_LIFECYCLE_CLASSES,
-)
+from .constants import RELEASE_ATTESTATION_SCHEMA_PATH
 
 
 def _release_binding(path_value: str, *, label: str) -> dict[str, str]:
@@ -32,58 +23,23 @@ def _release_binding(path_value: str, *, label: str) -> dict[str, str]:
         raise ValueError(f"{label} release attestation is unreadable: {exc}") from exc
     if not isinstance(value, dict):
         raise TypeError(f"{label} release attestation must be an object")
-    release_id = str(value.get("releaseId") or "").strip()
-    release_digest = str(value.get("payloadSha256") or "").strip()
-    release_class = str(value.get("releaseClass") or "").strip()
-    lifecycle = str(value.get("productLifecycleState") or "").strip()
-    if value.get("schema") != "quwoquan_data.release_attestation":
-        raise ValueError(f"{label} release attestation schema mismatch")
-    if not release_id or _DIGEST.fullmatch(release_digest) is None:
-        raise ValueError(f"{label} release identity is invalid")
-    if release_class not in _RELEASE_LIFECYCLE_CLASSES:
-        raise ValueError(f"{label} releaseClass is invalid")
-    if lifecycle not in _RELEASE_LIFECYCLE_CLASSES:
-        raise ValueError(f"{label} productLifecycleState is invalid")
-    if release_class != lifecycle:
-        raise ValueError(
-            f"{label} release lifecycle identity must keep "
-            "releaseClass equal to productLifecycleState"
-        )
+    # Data authoring schema 是唯一闭集；旧类别和未知字段不能被投影掉后通过。
+    try:
+        from jsonschema import Draft202012Validator, FormatChecker
+    except ImportError as exc:
+        raise ValueError("release attestation schema validator is unavailable") from exc
+
+    schema = json.loads(RELEASE_ATTESTATION_SCHEMA_PATH.read_text(encoding="utf-8"))
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    error = next(validator.iter_errors(value), None)
+    if error is not None:
+        raise ValueError(f"{label} release attestation schema mismatch: {error.message}")
     return {
-        "releaseId": release_id,
-        "releaseDigest": release_digest,
+        "releaseId": value["releaseId"],
+        "releaseDigest": value["payloadSha256"],
         "attestationRef": str(path),
         "attestationDigest": "sha256:" + hashlib.sha256(encoded).hexdigest(),
-        "releaseClass": release_class,
-        "productLifecycleState": lifecycle,
     }
-
-
-def release_input_classification(release: object) -> str:
-    """Classify both immutable release inputs without claiming release readiness."""
-
-    if not isinstance(release, Mapping) or set(release) != {"candidate", "rollback"}:
-        raise ValueError("release input bindings must contain candidate and rollback")
-    classes: list[str] = []
-    for label in ("candidate", "rollback"):
-        binding = release.get(label)
-        if not isinstance(binding, Mapping) or set(binding) != _RELEASE_BINDING_FIELDS:
-            raise ValueError(f"{label} release input binding fields mismatch")
-        release_class = str(binding.get("releaseClass") or "").strip()
-        lifecycle = str(binding.get("productLifecycleState") or "").strip()
-        if release_class not in _RELEASE_LIFECYCLE_CLASSES:
-            raise ValueError(f"{label} releaseClass is invalid")
-        if lifecycle != release_class:
-            raise ValueError(
-                f"{label} release lifecycle identity must keep "
-                "releaseClass equal to productLifecycleState"
-            )
-        classes.append(release_class)
-    if classes == ["research", "research"]:
-        return "research_inputs"
-    if classes == ["commercial", "commercial"]:
-        return "commercial_inputs"
-    return "mixed_inputs"
 
 
 def canonical_contract_graph_digest() -> str:

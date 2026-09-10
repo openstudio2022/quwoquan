@@ -36,8 +36,6 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
-from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
-
 from quwoquan_ops.cli.commands.app_preflight_debug import (
     _execute_otp_login_journey,
     command_app_debug_preflight,
@@ -208,11 +206,9 @@ def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
             "reportDir": _stackctl.relpath(report_dir),
         }
 
-    readiness_phase = ReadinessPhase(str(readiness["readinessPhase"]))
     readiness_result = _stackctl.command_content_readiness(
         argparse.Namespace(
             command="content-readiness",
-            phase=readiness_phase.value,
             env=environment,
             release_id=str(readiness["releaseId"]),
             verify_run_id=str(readiness["verifyRunId"]),

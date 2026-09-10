@@ -174,6 +174,8 @@ rules:
       - "quwoquan_ops/cli/prepare_test_python.py"
       - "quwoquan_ops/cli/agent_host_protocol_probe.py"
       - "quwoquan_ops/cli/read_only_entry.py"
+      - "quwoquan_ops/cli/integration_run.py"
+      - "quwoquan_ops/cli/lane_worktree_commands.py"
       - "quwoquan_ops/cli/tools/**"
       - "quwoquan_ops/cli/lib/review_*.py"
       - "quwoquan_ops/cli/lib/handoff_store.py"

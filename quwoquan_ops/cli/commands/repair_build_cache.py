@@ -58,10 +58,13 @@ def _startup_receipt_cache_audit(
     return evidence
 
 
-def _consumer_lease_receipt_audit() -> list[dict[str, Any]]:
+def _consumer_lease_receipt_audit(target: str = "") -> list[dict[str, Any]]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    directory = _stackctl.consumer_lease_dir()
+    if not target:
+        return [receipt for item in _stackctl.LOCAL_BUILD_CACHE_TARGETS
+                for receipt in _consumer_lease_receipt_audit(item)]
+    directory = _stackctl.consumer_lease_dir(target)
     if not directory.exists():
         return []
     if not directory.is_dir() or directory.is_symlink():

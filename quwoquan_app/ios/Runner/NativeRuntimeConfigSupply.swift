@@ -61,6 +61,8 @@ enum NativeRuntimeConfigReadError: Error {
   case policyMismatch
   case endpointInvalid
   case runtimeValuesInvalid
+  case contentSourceMismatch
+  case networkForbidden
   case sourceIdentityInvalid
   case algorithmMismatch
   case keyringMismatch
@@ -113,6 +115,8 @@ enum NativeRuntimeConfigReadError: Error {
     case .policyMismatch: code = "runtime_config_launch_policy_mismatch"
     case .endpointInvalid: code = "runtime_config_endpoint_invalid"
     case .runtimeValuesInvalid: code = "runtime_config_runtime_values_invalid"
+    case .contentSourceMismatch: code = "runtime_config_content_source_mismatch"
+    case .networkForbidden: code = "runtime_config_network_forbidden"
     case .sourceIdentityInvalid: code = "runtime_config_source_identity_invalid"
     case .algorithmMismatch: code = "runtime_config_signature_algorithm_mismatch"
     case .keyringMismatch: code = "runtime_config_keyring_mismatch"
@@ -228,6 +232,11 @@ enum NativeRuntimeConfigStore {
 
   static func readActivePackage() -> NativeRuntimeConfigReadState {
     loadActivePackage()
+  }
+
+  static var networkAccessAllowed: Bool {
+    guard case .present(let active) = readActivePackage() else { return false }
+    return AppLaunchContract.runtimeDocumentContentSources[active.package["schema"] as? String ?? ""] == "remote"
   }
 
   private static func loadActivePackage(
@@ -420,9 +429,11 @@ enum NativeRuntimeConfigStore {
     expectedPackageDigest: String?,
     allowStaleIdentity: Bool = false
   ) throws -> NativeRuntimeConfigActiveProjection {
-    guard Set(package.keys) == packageFields,
-          package["schema"] as? String
-            == AppLaunchContract.schemaValues["runtime_config_package"]
+    let schema = package["schema"] as? String ?? ""
+    let offline = schema == AppLaunchContract.schemaValues["offline_bootstrap_document"]
+    let fields = offline ? Set(AppLaunchContract.offlineBootstrapDocumentRequiredFields) : packageFields
+    guard Set(package.keys) == fields,
+          offline || schema == AppLaunchContract.schemaValues["runtime_config_package"]
     else {
       throw NativeRuntimeConfigReadError.schemaMismatch
     }
@@ -454,7 +465,15 @@ enum NativeRuntimeConfigStore {
     else {
       throw NativeRuntimeConfigReadError.policyMismatch
     }
-    _ = try validateRuntimeValues(package["runtime"], environment: environment)
+    let source = AppLaunchContract.runtimeDocumentContentSources[schema]
+    // 只识别显式 activation 的 CAS 前值；退役 Alpha 在线包仍不可消费或作为新候选。
+    let retiredAlphaIdentity = allowStaleIdentity && !offline && environment == "alpha" && target == "alpha-local"
+    guard source != nil, retiredAlphaIdentity || source == AppLaunchContract.contentSourcePolicy[environment],
+          !offline || (package["contentSource"] as? String == source && profile == "nonprod"
+            && target == "alpha-local"
+            && package["trustEnvelopeDigest"] as? String == trust.trustEnvelopeDigest)
+    else { throw NativeRuntimeConfigReadError.contentSourceMismatch }
+    _ = try validateRuntimeValues(package["runtime"], environment: environment, offline: offline)
     let packageKeyring = try normalizedKeyring(
       package["trustedPublicKeys"],
       invalidError: .keyringMismatch
@@ -499,7 +518,7 @@ enum NativeRuntimeConfigStore {
     } catch {
       throw NativeRuntimeConfigReadError.signatureInvalid
     }
-    try validateFreshness(package, allowStaleIdentity: allowStaleIdentity)
+    if !offline { try validateFreshness(package, allowStaleIdentity: allowStaleIdentity) }
     let packageDigest = nativeSHA256Identity(try canonicalJSONData(package))
     if let expectedPackageDigest, packageDigest != expectedPackageDigest {
       throw NativeRuntimeConfigReadError.packageDigestMismatch
@@ -544,15 +563,17 @@ enum NativeRuntimeConfigStore {
 
   static func validateRuntimeValues(
     _ value: Any?,
-    environment: String
+    environment: String,
+    offline: Bool = false
   ) throws -> [String: Any] {
+    let fields = offline ? Set(AppLaunchContract.offlineBootstrapRuntimeRequiredFields) : runtimeFields
     guard let runtime = value as? [String: Any],
-          Set(runtime.keys) == runtimeFields,
+          Set(runtime.keys) == fields,
           runtime["appRuntimeEnv"] as? String == environment
     else {
       throw NativeRuntimeConfigReadError.runtimeValuesInvalid
     }
-    for key in runtimeFields {
+    for key in fields {
       guard let raw = runtime[key] as? String,
             !raw.isEmpty,
             raw == raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1050,8 +1071,8 @@ enum NativeRuntimeConfigActivationCoordinator {
   ///
   /// 与外部请求走同一 validate → CAS activate → receipt 路径，区别只有两点：请求位于
   /// 制品而非私有容器，`expectedActiveDigest` 由这里以当前 active digest 现场补齐。
-  /// 决策矩阵：制品无请求 → 未请求；active 为外部供给且新鲜 → 保持不变（未请求）；
-  /// active 缺席 / 过期 / 同为自供给但 requestDigest 变化（重建）→ 激活；已是该请求 → 已激活。
+  /// 决策矩阵：制品无请求 → 未请求；合法在线 active → 保持不变；
+  /// 缺席或已有合法 Alpha 离线且请求变化 → 激活；过期在线/损坏 → typed 失败，不回落。
   /// 失败只记账并返回 typed 码，调用方继续既有 trust/config 阻断，不得静默回退。
   static func consumeBundledSelfSupplyRequest() -> NativeRuntimeConfigActivationConsumeResult {
     let notRequested = NativeRuntimeConfigActivationConsumeResult(
@@ -1079,23 +1100,20 @@ enum NativeRuntimeConfigActivationCoordinator {
       try validateRequest(decoded)
       guard receiptIdentity.isComplete,
             receiptIdentity.runtimeConfigSupplyMode == nativeRuntimeSelfSupplyMode,
+            (decoded["effectiveLaunchManifest"] as? [String: Any])?["contentSource"] as? String == "bundled_snapshot",
             decoded["expectedActiveDigest"] as? String == ""
       else {
         throw NativeRuntimeConfigReadError.activationIdentityMismatch
       }
       switch NativeRuntimeConfigStore.readActivePackage() {
       case .present(let active):
-        let activeReceipt = try? readActiveReceiptDocument()
-        let activeSupplyMode = activeReceipt?["runtimeConfigSupplyMode"] as? String ?? ""
-        if activeSupplyMode != nativeRuntimeSelfSupplyMode {
-          // 外部 canonical launcher 已激活且新鲜：显式外部选择优先于构建期默认。
-          NSLog(
-            "QWQStartup ios_runtime_config_self_supply_skipped reason=external_active supplyMode=%@",
-            activeSupplyMode
-          )
+        _ = try readVerifiedIdentity()
+        let activeReceipt = try readActiveReceiptDocument()
+        guard active.package["schema"] as? String == AppLaunchContract.schemaValues["offline_bootstrap_document"] else {
+          NSLog("QWQStartup ios_runtime_config_self_supply_skipped reason=external_active")
           return notRequested
         }
-        if activeReceipt?["requestDigest"] as? String == requestDigest,
+        if activeReceipt["requestDigest"] as? String == requestDigest,
            active.packageDigest == receiptIdentity.packageDigest {
           return NativeRuntimeConfigActivationConsumeResult(
             requested: true,
@@ -1107,9 +1125,9 @@ enum NativeRuntimeConfigActivationCoordinator {
         previousActiveDigest = active.packageDigest
       case .absent:
         previousActiveDigest = ""
-      case .failure:
-        // 过期包仍可被替换（豁免时间窗读 CAS 前值）；结构性损坏在这里抛出并记账。
-        previousActiveDigest = try currentActiveDigest()
+      case .failure(let error):
+        // 只有显式 canonical activation 可以替换在线过期包；默认供给不降级权限。
+        throw error
       }
       previousActiveDigestKnown = true
       guard let package = decoded["package"] as? [String: Any],
@@ -1260,6 +1278,14 @@ enum NativeRuntimeConfigActivationCoordinator {
     do {
       let identity = try readVerifiedIdentity()
       let runtime = active.package["runtime"] as? [String: Any] ?? [:]
+      if AppLaunchContract.runtimeDocumentContentSources[active.package["schema"] as? String ?? ""] != "remote" {
+        return .present([
+          "runtimeEnvironment": active.package["environment"] as? String ?? "",
+          "runtimeConfigDigest": identity.packageDigest,
+          "effectiveLaunchManifestDigest": identity.effectiveLaunchManifestDigest,
+          "contentSource": "bundled_snapshot",
+        ])
+      }
       return .present([
         "runtimeEnvironment": active.package["environment"] as? String ?? "",
         "runtimeConfigDigest": identity.packageDigest,
@@ -1363,8 +1389,10 @@ enum NativeRuntimeConfigActivationCoordinator {
           AppLaunchContract.buildProfileLaunchPolicies[manifestBuildProfile] == launchPolicy,
           canonicalDigest(manifest["runtimeConfigPackageDigest"] as? String) != nil,
           canonicalDigest(manifest["runtimeConfigTrustEnvelopeDigest"] as? String) != nil,
+          let contentSource = nonEmptyString(manifest["contentSource"]),
+          contentSource == AppLaunchContract.contentSourcePolicy[manifestEnvironment],
           let requiresLocalTransport = strictBoolean(manifest["requiresLocalTransport"]),
-          requiresLocalTransport == isLocalTransportTarget(manifestTarget),
+          requiresLocalTransport == (contentSource == "remote" && isLocalTransportTarget(manifestTarget)),
           let transport = manifest["transport"] as? [String: Any],
           Set(transport.keys) == transportFields,
           let transportRequired = strictBoolean(transport["required"]),
@@ -1376,7 +1404,7 @@ enum NativeRuntimeConfigActivationCoordinator {
       throw NativeRuntimeConfigReadError.effectiveManifestMalformed
     }
     if transportRequired {
-      guard isLocalTransportTarget(manifestTarget),
+      guard contentSource == "remote", isLocalTransportTarget(manifestTarget),
             canonicalDigest(reverseReceiptDigest) != nil,
             canonicalDigest(consumerLeaseID) != nil,
             let expectedPorts = canonicalPorts(reverseExpectedPorts),
@@ -1397,7 +1425,8 @@ enum NativeRuntimeConfigActivationCoordinator {
     guard nativeSHA256Identity(try canonicalJSONData(manifest)) == manifestDigest else {
       throw NativeRuntimeConfigReadError.effectiveManifestDigestMismatch
     }
-    guard package["environment"] as? String == environment,
+    guard AppLaunchContract.runtimeDocumentContentSources[package["schema"] as? String ?? ""] == contentSource,
+          package["environment"] as? String == environment,
           package["buildProfile"] as? String == buildProfile,
           package["target"] as? String == target,
           package["launchPolicy"] as? String == manifest["launchPolicy"] as? String,
@@ -1740,8 +1769,9 @@ enum NativeRuntimeConfigActivationCoordinator {
       identity = try readVerifiedIdentity()
     } catch NativeRuntimeConfigReadError.packageMissing,
             NativeRuntimeConfigReadError.activationReceiptMissing,
-            NativeRuntimeConfigReadError.freshnessInvalid {
-      // 过期旧包一定不是当前请求的目标包：交给完整 activate 流程替换，不得死锁。
+            NativeRuntimeConfigReadError.freshnessInvalid,
+            NativeRuntimeConfigReadError.contentSourceMismatch {
+      // 显式请求的 CAS 前值已验过签名/结构，旧包不作为候选；完整 activate 再验证新文档。
       return false
     }
     let receipt = try readActiveReceiptDocument()

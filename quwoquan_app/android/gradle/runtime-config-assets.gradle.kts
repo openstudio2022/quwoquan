@@ -16,7 +16,7 @@ import java.util.Base64
 //
 // Debug-nonprod 构建期自供给（REQ-003 build_time_self_supply）：
 // QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT 缺席且本次请求只含 nonprod debug artifact task 时，
-// 以当前源码树调用仓内 canonical handoff builder 现场签发 alpha test_live package + nonprod
+// 以当前源码树调用 canonical handoff builder 签发独立 Alpha offline bootstrap + nonprod
 // trust，物化到源码树外的私有目录并只挂到 debug source set；其余 buildMode/buildProfile
 // 缺外部注入仍以 trust blocker fail-closed。
 
@@ -391,7 +391,10 @@ fun validateRuntimeConfigTrust(
         if (request["schema"] != requestSchema?.get("schema_value") ||
             request["buildProfile"] != SELF_SUPPLY_BUILD_PROFILE ||
             request["expectedActiveDigest"] != "" ||
-            requestManifest?.get("runtimeConfigSupplyMode") != SELF_SUPPLY_MODE
+            requestManifest?.get("runtimeConfigSupplyMode") != SELF_SUPPLY_MODE ||
+            requestManifest?.get("contentSource") != "bundled_snapshot" ||
+            (request["package"] as? Map<*, *>)?.get("schema") !=
+                (schemas["offline_bootstrap_document"] as? Map<*, *>)?.get("schema_value")
         ) {
             reject("The Android build-time self supply request identity conflicts with the debug build.")
         }

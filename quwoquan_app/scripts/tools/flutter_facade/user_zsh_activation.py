@@ -77,7 +77,21 @@ def generated_user_zsh_projection(
     context: UserZshActivationContext,
 ) -> bytes:
     carrier = context.carrier_path.resolve(strict=True)
+    quoted_carrier = shlex.quote(str(carrier))
+    # 载体先于身份变量判否：worktree 重组、迁移或删除后载体路径失效时，不得留下
+    # "身份变量已导出而 PATH 未前置"的半激活 shell（它会让 direct run.sh 的 CocoaPods
+    # 复核以 cocoapods_mixed 误判），也不得泄出 zsh 原始 `no such file` 报错；
+    # 只打印一行 typed blocker 与修复命令，随后原样返回。
     body_lines = [
+        f"if [[ ! -r {quoted_carrier} ]]; then",
+        "  print -u2 -- 'GATE_BLOCK: APP.LAUNCH.workspace_entrypoint_inactive; "
+        f"canonical worktree carrier is unavailable: {carrier}; "
+        "re-run `make app-activate-flutter-facade FACADE_ACTION=\"--scope all\"` "
+        "from the worktree you are developing in'",
+        "  return 2",
+        "fi",
+    ]
+    body_lines.extend(
         f"export {key}={shlex.quote(value)}"
         for key, value in context.identity_environment_entries(
             sdk_binding,
@@ -85,8 +99,8 @@ def generated_user_zsh_projection(
             python_binding,
             entrypoint_binding,
         )
-    ]
-    body_lines.append(f"builtin source {shlex.quote(str(carrier))}")
+    )
+    body_lines.append(f"builtin source {quoted_carrier}")
     body = ("\n".join(body_lines) + "\n").encode("utf-8")
     digest = "sha256:" + hashlib.sha256(body).hexdigest()
     return f"{context.config_marker} {digest}\n".encode("utf-8") + body

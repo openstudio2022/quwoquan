@@ -19,11 +19,11 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import (
     _lifecycle_exit_path,
     _record_phase,
     _run_data_phase,
+    _run_data_lifecycle,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.evidence import (
     _drain_resource_journal,
     _live_matrix_evidence_errors,
-    _pre_down_shared_targets,
     _provider_local_functional_errors,
     _run_down_phase,
 )
@@ -39,9 +39,7 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
     _repo_matrix_dir,
     _startup_attempt_matches_package_identity,
 )
-from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import (
-    ResearchLifecycleUnsupported, _resolve_matrix_inputs,
-)
+from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import _resolve_matrix_inputs
 from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import _device_uat_bindings, _docker_daemon_ready
 from quwoquan_ops.cli.lib.local_env_gate_matrix.reporting import _write_matrix_result
 from quwoquan_ops.cli.lib.local_env_gate_timing import (
@@ -67,6 +65,12 @@ def _run_local_env_gate_matrix(
     include_l0: bool = True,
     release_attestation: str = "",
     rollback_release_attestation: str = "",
+    release_handoff_ref: str = "",
+    release_system_attestation_ref: str = "",
+    release_system_attestation_digest: str = "",
+    rollback_release_handoff_ref: str = "",
+    rollback_release_system_attestation_ref: str = "",
+    rollback_release_system_attestation_digest: str = "",
     test_data_request: dict[str, str] | None = None,
     test_data_evidence: dict[str, str] | None = None,
     test_data_handoff: dict[str, str] | None = None,
@@ -100,6 +104,12 @@ def _run_local_env_gate_matrix(
         input_bindings = _resolve_matrix_inputs(
             release_attestation=release_attestation,
             rollback_release_attestation=rollback_release_attestation,
+            release_handoff_ref=release_handoff_ref,
+            release_system_attestation_ref=release_system_attestation_ref,
+            release_system_attestation_digest=release_system_attestation_digest,
+            rollback_release_handoff_ref=rollback_release_handoff_ref,
+            rollback_release_system_attestation_ref=rollback_release_system_attestation_ref,
+            rollback_release_system_attestation_digest=rollback_release_system_attestation_digest,
             test_data_request=test_data_request,
             test_data_evidence=test_data_evidence,
             test_data_handoff=test_data_handoff,
@@ -113,18 +123,7 @@ def _run_local_env_gate_matrix(
             device_profile=device_profile,
             execution_class=execution_class,
         )
-    except ResearchLifecycleUnsupported as exc:
-        return {
-            "exitCode": 2,
-            "summary": "stackctl matrix release lifecycle is GATE_BLOCK",
-            "details": [str(exc)],
-            "failureCategory": "research_lifecycle_unsupported",
-            "claim": "GATE_BLOCK",
-            "status": "gate_block",
-            "executed": 0,
-            "skipped": 0,
-        }
-    except ValueError as exc:
+    except (OSError, ValueError) as exc:
         return {
             "exitCode": 2,
             "summary": "stackctl matrix release/data inputs are GATE_BLOCK",
@@ -151,7 +150,8 @@ def _run_local_env_gate_matrix(
     failure_category = ""
     matrix_release_train_id = ""
     package_baselines: dict[str, str] = {}
-    resource_journal: list[str] = []
+    resource_journal: dict[str, dict[str, Any]] = {}
+    previous_readiness: dict[str, str] = {}
 
     docker_ok, docker_detail = _docker_daemon_ready()
     phases.append(
@@ -195,14 +195,6 @@ def _run_local_env_gate_matrix(
         data_ids = _data_run_ids(matrix_run_id, env_name)
         block["dataRunIds"] = data_ids
         environments[target] = block
-
-        down_exit = _pre_down_shared_targets(
-            target, down_fn=down_fn, phases=phases, block=block
-        )
-        if down_exit != 0:
-            overall_exit = down_exit
-            failure_category = "down"
-            break
 
         package_payload = _invoke_env(
             package_fn,
@@ -324,21 +316,27 @@ def _run_local_env_gate_matrix(
         )
         block["up"] = up_payload
         up_exit = _record_phase(phases, name=f"{target}_up", payload=up_payload)
-        if up_exit == 0:
-            resource_journal.append(target)
+        if up_payload.get("runtimeCreated") is True:
+            resource_journal[target] = up_payload
         if up_exit != 0:
             overall_exit = up_exit
             failure_category = "up"
             cleanup_payload, cleanup_exit = _run_down_phase(
                 target, down_fn=down_fn, phases=phases,
-                phase_name=f"{target}_failed_up_cleanup",
+                phase_name=f"{target}_failed_up_cleanup", ownership=up_payload,
             )
             block["failedUpCleanup"] = cleanup_payload
-            if cleanup_exit != 0:
-                overall_exit = cleanup_exit
-                failure_category = "down"
-            elif target in resource_journal:
-                resource_journal.remove(target)
+            if cleanup_exit == 0 and target in resource_journal:
+                resource_journal.pop(target)
+            environments[target] = block
+            break
+
+        if up_payload.get("runtimeReused") is True:
+            # 本矩阵后续包含 release/rollback mutation；普通使用租约不授予维护权。
+            # 在维护租约接口接好前明确阻断，不触碰已复用用户的 runtime 或数据。
+            overall_exit = 2
+            failure_category = "runtime_maintenance_lease_required"
+            block["maintenanceBlocker"] = "OPS.RUNTIME.maintenance_required"
             environments[target] = block
             break
 
@@ -375,12 +373,9 @@ def _run_local_env_gate_matrix(
         if overall_exit != 0:
             cleanup_payload, cleanup_exit = _run_down_phase(
                 target, down_fn=down_fn, phases=phases,
-                phase_name=f"{target}_startup_identity_cleanup",
+                phase_name=f"{target}_startup_identity_cleanup", ownership=up_payload,
             )
             block["startupIdentityCleanup"] = cleanup_payload
-            if cleanup_exit != 0:
-                overall_exit = cleanup_exit
-                failure_category = "down"
             environments[target] = block
             break
 
@@ -481,206 +476,25 @@ def _run_local_env_gate_matrix(
                 failure_category = "provider"
 
         if overall_exit == 0:
-            data_root = ["python3", "quwoquan_data/scripts/cli.py"]
-            original_readiness = _data_readiness_path(
-                env_name,
-                candidate_release["releaseId"],
-                data_ids["originalVerify"],
+            overall_exit, failure_category = _run_data_lifecycle(
+                phases=phases, block=block, target=target, environment=env_name,
+                candidate=candidate_release, rollback=rollback_release,
+                data_ids=data_ids, data_fn=data_fn,
+                previous_readiness=previous_readiness,
             )
-            data_exit, data_payload = _run_data_phase(
-                phases,
-                phase_name=f"{target}_data_candidate_apply",
-                environment=env_name,
-                action="candidate-apply",
-                argv=[
-                    *data_root,
-                    "ship",
-                    "apply",
-                    "--release-id",
-                    candidate_release["releaseId"],
-                    "--env",
-                    env_name,
-                    "--run-id",
-                    data_ids["originalImport"],
-                    "--import",
-                    "--full-sync",
-                ],
-                report_path=(
-                    original_readiness.parent.parent
-                    / data_ids["originalImport"]
-                    / "result.json"
-                ),
-                data_fn=data_fn,
-            )
-            block["candidateApply"] = data_payload
-            if data_exit != 0:
-                overall_exit = data_exit
-                failure_category = "data_candidate_apply"
-
-        if overall_exit == 0:
-            data_exit, data_payload = _run_data_phase(
-                phases,
-                phase_name=f"{target}_data_candidate_verify",
-                environment=env_name,
-                action="candidate-verify",
-                argv=[
-                    "python3",
-                    "quwoquan_data/scripts/cli.py",
-                    "ship",
-                    "verify",
-                    "--release-id",
-                    candidate_release["releaseId"],
-                    "--env",
-                    env_name,
-                    "--import-run-id",
-                    data_ids["originalImport"],
-                    "--run-id",
-                    data_ids["originalVerify"],
-                    "--readiness-phase",
-                    "consumer",
-                ],
-                report_path=original_readiness,
-                data_fn=data_fn,
-            )
-            block["candidateVerify"] = data_payload
-            if data_exit != 0:
-                overall_exit = data_exit
-                failure_category = "data_candidate_verify"
-
-        if overall_exit == 0:
-            rollback_readiness = _data_readiness_path(
-                env_name,
-                rollback_release["releaseId"],
-                data_ids["rollbackVerify"],
-            )
-            data_exit, data_payload = _run_data_phase(
-                phases,
-                phase_name=f"{target}_data_rollback_apply",
-                environment=env_name,
-                action="rollback-apply",
-                argv=[
-                    "python3",
-                    "quwoquan_data/scripts/cli.py",
-                    "ship",
-                    "rollback",
-                    "--to-release",
-                    rollback_release["releaseId"],
-                    "--from-release-id",
-                    candidate_release["releaseId"],
-                    "--env",
-                    env_name,
-                    "--run-id",
-                    data_ids["rollbackImport"],
-                    "--import",
-                ],
-                report_path=(
-                    rollback_readiness.parent.parent
-                    / data_ids["rollbackImport"]
-                    / "result.json"
-                ),
-                data_fn=data_fn,
-            )
-            block["rollbackApply"] = data_payload
-            if data_exit != 0:
-                overall_exit = data_exit
-                failure_category = "data_rollback"
-
-        if overall_exit == 0:
-            data_exit, data_payload = _run_data_phase(
-                phases,
-                phase_name=f"{target}_data_rollback_verify",
-                environment=env_name,
-                action="rollback-verify",
-                argv=[
-                    "python3",
-                    "quwoquan_data/scripts/cli.py",
-                    "ship",
-                    "verify",
-                    "--release-id",
-                    rollback_release["releaseId"],
-                    "--env",
-                    env_name,
-                    "--import-run-id",
-                    data_ids["rollbackImport"],
-                    "--run-id",
-                    data_ids["rollbackVerify"],
-                    "--readiness-phase",
-                    "consumer",
-                ],
-                report_path=rollback_readiness,
-                data_fn=data_fn,
-            )
-            block["rollbackVerify"] = data_payload
-            if data_exit != 0:
-                overall_exit = data_exit
-                failure_category = "data_rollback_verify"
-
-        if overall_exit == 0:
+            if overall_exit == 0:
+                previous_readiness = {
+                    key: _data_readiness_path(env_name, release["releaseId"], data_ids[slot])
+                    .relative_to(_matrix_pkg.output_root()).as_posix()
+                    for key, release, slot in (
+                        ("candidateVerify", candidate_release, "originalVerify"),
+                        ("rollbackVerify", rollback_release, "rollbackVerify"),
+                        ("replayVerify", candidate_release, "replayVerify"),
+                    )
+                }
             replay_readiness = _data_readiness_path(
-                env_name,
-                candidate_release["releaseId"],
-                data_ids["replayVerify"],
+                env_name, candidate_release["releaseId"], data_ids["replayVerify"],
             )
-            data_exit, data_payload = _run_data_phase(
-                phases,
-                phase_name=f"{target}_data_replay_apply",
-                environment=env_name,
-                action="replay-apply",
-                argv=[
-                    "python3",
-                    "quwoquan_data/scripts/cli.py",
-                    "ship",
-                    "apply",
-                    "--release-id",
-                    candidate_release["releaseId"],
-                    "--env",
-                    env_name,
-                    "--run-id",
-                    data_ids["replayImport"],
-                    "--import",
-                    "--full-sync",
-                ],
-                report_path=(
-                    replay_readiness.parent.parent
-                    / data_ids["replayImport"]
-                    / "result.json"
-                ),
-                data_fn=data_fn,
-            )
-            block["replayApply"] = data_payload
-            if data_exit != 0:
-                overall_exit = data_exit
-                failure_category = "data_replay"
-
-        if overall_exit == 0:
-            data_exit, data_payload = _run_data_phase(
-                phases,
-                phase_name=f"{target}_data_replay_verify",
-                environment=env_name,
-                action="replay-verify",
-                argv=[
-                    "python3",
-                    "quwoquan_data/scripts/cli.py",
-                    "ship",
-                    "verify",
-                    "--release-id",
-                    candidate_release["releaseId"],
-                    "--env",
-                    env_name,
-                    "--import-run-id",
-                    data_ids["replayImport"],
-                    "--run-id",
-                    data_ids["replayVerify"],
-                    "--readiness-phase",
-                    "commercial",
-                ],
-                report_path=replay_readiness,
-                data_fn=data_fn,
-            )
-            block["replayVerify"] = data_payload
-            if data_exit != 0:
-                overall_exit = data_exit
-                failure_category = "data_replay_verify"
 
         if overall_exit == 0 and execution_class == "live":
             homepage_payload = _homepage_release_evidence(
@@ -719,17 +533,17 @@ def _run_local_env_gate_matrix(
                     "--original-release-id",
                     candidate_release["releaseId"],
                     "--original-import-run-id",
-                    data_ids["originalImport"],
+                    data_ids["originalActivate"],
                     "--original-verify-run-id",
                     data_ids["originalVerify"],
                     "--rollback-to-release-id",
                     rollback_release["releaseId"],
                     "--rollback-run-id",
-                    data_ids["rollbackImport"],
+                    data_ids["rollbackRun"],
                     "--rollback-verify-run-id",
                     data_ids["rollbackVerify"],
                     "--replay-import-run-id",
-                    data_ids["replayImport"],
+                    data_ids["replayActivate"],
                     "--replay-verify-run-id",
                     data_ids["replayVerify"],
                     "--run-id",
@@ -799,7 +613,7 @@ def _run_local_env_gate_matrix(
                     "--lease-id",
                     lease_id,
                     "--import-run-id",
-                    data_ids["replayImport"],
+                    data_ids["replayActivate"],
                     "--verify-run-id",
                     data_ids["replayVerify"],
                 ],
@@ -818,6 +632,8 @@ def _run_local_env_gate_matrix(
                         environment=env_name,
                         release_id=candidate_release["releaseId"],
                         lease_id=lease_id,
+                        import_run_id=data_ids["replayActivate"],
+                        verify_run_id=data_ids["replayVerify"],
                     )
                 except ValueError as exc:
                     overall_exit = 2
@@ -916,6 +732,8 @@ def _run_local_env_gate_matrix(
                         environment=env_name,
                         release_id=candidate_release["releaseId"],
                         lease_id=lease_id,
+                        import_run_id=data_ids["replayActivate"],
+                        verify_run_id=data_ids["replayVerify"],
                     )
                 except ValueError as exc:
                     revoke_exit = 2
@@ -925,19 +743,20 @@ def _run_local_env_gate_matrix(
                             details=[str(exc)],
                         )
                     )
-            if revoke_exit != 0:
+            if revoke_exit != 0 and overall_exit == 0:
                 overall_exit = revoke_exit
                 failure_category = "acceptance_lease_revoke"
 
         down_payload, down_exit = _run_down_phase(
-            target, down_fn=down_fn, phases=phases, phase_name=f"{target}_down"
+            target, down_fn=down_fn, phases=phases, phase_name=f"{target}_down",
+            ownership=up_payload,
         )
         block["down"] = down_payload
-        if down_exit != 0:
+        if down_exit != 0 and overall_exit == 0:
             overall_exit = down_exit
             failure_category = "down"
-        elif target in resource_journal:
-            resource_journal.remove(target)
+        elif down_exit == 0 and target in resource_journal:
+            resource_journal.pop(target)
 
         environments[target] = block
         if overall_exit != 0:

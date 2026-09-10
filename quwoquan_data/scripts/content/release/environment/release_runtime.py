@@ -39,8 +39,6 @@ from core.media_asset_url import (
 from core.media_library_sync import sync_media_library
 from core.release_layout import payload_digest, payload_file, payload_root
 from core.schema import assert_valid
-from governance.coverage.distribution import RELEASE_CLASSES
-
 
 _HANDOFF_FILENAME = "producer_release_handoff.json"
 _SYSTEM_ATTESTATION_SUFFIX = ("attestations", "release.json")
@@ -381,8 +379,8 @@ def _admit_empty_baseline_attestation(
             "DATA.RELEASE.SYSTEM_ATTESTATION_IDENTITY_DRIFT: attestation identity is invalid"
         )
     identity_fields = (
-        "releaseId", "sourceOwner", "releaseKind", "releaseClass",
-        "productLifecycleState", "containsUnverifiedAssets", "rightsStatusCounts",
+        "releaseId", "sourceOwner", "releaseKind",
+        "containsUnverifiedAssets", "rightsStatusCounts",
         "authorizationRequiredAssetIds", "researchAcceptedCount",
         "commercialAcceptedCount", "canonicalMerkle", "executionIds", "sourceDigests",
     )
@@ -503,33 +501,18 @@ def assert_environment_release_policy(
             f"environment={env} count={len(post_refs)} cap={cap}"
         )
     header = read_json(payload_file(release, "release.json"))
-    target_environment = str(header.get("targetEnvironment") or "").strip()
-    if target_environment and target_environment != env:
-        raise SystemExit(
-            "[ship] DATA.RELEASE.TARGET_ENVIRONMENT_MISMATCH: "
-            f"manifest={target_environment} requested={env}"
-        )
-    release_class = str(header.get("releaseClass") or "").strip()
-    lifecycle = str(header.get("productLifecycleState") or "").strip()
-    if release_class not in RELEASE_CLASSES or lifecycle != release_class:
-        raise SystemExit(
-            "[ship] DATA.RELEASE.USAGE_SCOPE_MISMATCH: "
-            "environment names cannot derive authorization; immutable "
-            f"releaseClass/lifecycle={release_class or '<missing>'}/"
-            f"{lifecycle or '<missing>'}"
-        )
+    try:
+        validate_release_header(header, label="environment release policy")
+    except ValueError as exc:
+        raise SystemExit(f"[ship] DATA.RELEASE.ENVIRONMENT_POLICY_INVALID: {exc}") from exc
 
 
 def release_media_public_slices(release: Path) -> dict[str, str]:
-    """Map每个交付 key 到其摘要；production release 只有公开交付 slice（DEC-041）。"""
+    """Map每个交付 key 到其摘要；release 只有公开交付 slice（DEC-041）。"""
     header_path = payload_file(release, "release.json")
     if not header_path.is_file():
         raise SystemExit(f"[ship] immutable release header 不存在：{header_path}")
-    release_class = str(read_json(header_path).get("releaseClass") or "").strip()
-    if release_class not in RELEASE_CLASSES:
-        raise SystemExit(
-            "[ship] release header 必须声明 production releaseClass"
-        )
+    validate_release_header(read_json(header_path), label="release media header")
     manifest = read_json(payload_file(release, "media_manifest.json"))
     if manifest.get("schema") != "quwoquan_data.release_media_manifest":
         raise SystemExit("[ship] release media manifest schema 无效")
@@ -546,7 +529,7 @@ def release_media_public_slices(release: Path) -> dict[str, str]:
             raise SystemExit(f"[ship] release media manifest 交付 key 非法: {exc}") from exc
         if not is_public_media_slice_key(key):
             raise SystemExit(
-                f"[ship] production release 不得携带非公开交付 key: {key}"
+                f"[ship] release 不得携带非公开交付 key: {key}"
             )
         sha256 = str(row.get("sha256") or "")
         prior = slices.get(key)

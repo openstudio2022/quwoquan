@@ -1,10 +1,6 @@
-"""Governed asset rights recording for the single production release class.
+"""记录资产真实权利事实；取得媒体不代表商用授权。
 
-Acquisition and distribution are deliberately separate: a locally acquired
-file never proves that commercial redistribution is authorized. The
-`DistributionDecision` values (`research_allowed|commercial_allowed|blocked`) are
-per-asset recorded rights facts frozen into canonical bytes; they do not select a
-release class. The only release class is `production`.
+`DistributionDecision` 是 canonical 字节中的逐资产记录，不选择 release 类别。
 """
 from __future__ import annotations
 
@@ -21,17 +17,6 @@ POLICY_PATH = (
     Path(__file__).resolve().parents[3]
     / "control_plane/_shared/content_distribution.policy.yaml"
 )
-
-
-class ProductLifecycleState(StrEnum):
-    PRODUCTION = "production"
-
-
-class ReleaseClass(StrEnum):
-    PRODUCTION = "production"
-
-
-RELEASE_CLASSES: frozenset[str] = frozenset(item.value for item in ReleaseClass)
 
 
 class AcquisitionStatus(StrEnum):
@@ -56,8 +41,6 @@ class DistributionDecision(StrEnum):
 @dataclass(frozen=True, slots=True)
 class ContentDistributionPolicy:
     policy_id: str
-    product_lifecycle_state: ProductLifecycleState
-    release_class: ReleaseClass
     image_generation_allowed: bool
     video_generation_allowed: bool
     illustrated_rate_target: float
@@ -79,8 +62,6 @@ class ContentDistributionPolicy:
     asset_record_defaults: tuple[tuple[str, str], ...]
 
     def __post_init__(self) -> None:
-        if self.release_class.value != self.product_lifecycle_state.value:
-            raise ValueError("releaseClass must equal productLifecycleState")
         if not self.image_provider_priority or self.image_provider_priority[0] != "pinterest":
             raise ValueError("research image provider priority must start with pinterest")
         if self.image_generation_allowed or self.video_generation_allowed:
@@ -159,8 +140,6 @@ def load_content_distribution_policy(
     acquisition = raw["acquisition"]
     if any(bool(value) for value in acquisition.values()):
         raise ValueError("content acquisition bypass controls must remain disabled")
-    lifecycle = ProductLifecycleState(str(raw["productLifecycleState"]))
-    release_class = ReleaseClass(str(raw["releaseClass"]))
     media_generation = raw["mediaGeneration"]
     research_discovery = raw["researchDiscovery"]
     article_media = raw["articleMedia"]
@@ -168,8 +147,6 @@ def load_content_distribution_policy(
     video_popularity = research_discovery["videoPopularity"]
     return ContentDistributionPolicy(
         policy_id=str(raw["policyId"]),
-        product_lifecycle_state=lifecycle,
-        release_class=release_class,
         image_generation_allowed=bool(media_generation["imageAllowed"]),
         video_generation_allowed=bool(media_generation["videoAllowed"]),
         illustrated_rate_target=float(article_media["illustratedRateTarget"]),
@@ -397,6 +374,12 @@ def project_asset_admission(
         # 只搬运 AI 申报的水印判定，供运营按资产审核；缺席一律 unknown，不得假定 absent。
         "watermarkStatus": str(asset.get("watermarkStatus") or "unknown").strip(),
         "watermarkKind": str(asset.get("watermarkKind") or "unknown").strip(),
+        # 访问政策只搬运；缺席即缺席，不补 open——header 只汇总明确申报为受限的资产。
+        **(
+            {"accessPolicy": str(asset["accessPolicy"]).strip()}
+            if str(asset.get("accessPolicy") or "").strip()
+            else {}
+        ),
     }
 
 
@@ -405,8 +388,6 @@ __all__ = [
     "AcquisitionStatus",
     "ContentDistributionPolicy",
     "DistributionDecision",
-    "ProductLifecycleState",
-    "ReleaseClass",
     "RightsStatus",
     "asset_contract_missing_fields",
     "distribution_decision",

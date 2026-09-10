@@ -175,23 +175,15 @@ from quwoquan_ops.cli.lib.release_video_delivery import (
     ReleaseVideoDeliveryError, load_release_video_binding,
 )
 from quwoquan_ops.cli.lib.content_release_readiness import (
-    ProbeOutcome, ProbeSource, ReadinessPhase, ShipReadinessReceipt, VerificationProfile,
+    ProbeOutcome, ProbeSource, ShipReadinessReceipt, VerificationProfile,
     load_content_release_readiness_policy,
 )
 from quwoquan_ops.cli.lib.app_content_uat_plan import build_app_content_uat_plan
 from quwoquan_ops.cli.lib.app_content_uat_release_samples import (
     resolve_release_sample_requests,
     validate_release_sample_probe,
-    validate_release_strict_probe,
 )
 from quwoquan_ops.cli.lib.content_delivery_verification import verify_content_delivery
-from quwoquan_ops.cli.lib.research_content_isolation import verify_research_content_isolation
-from quwoquan_ops.cli.lib.research_isolation_runtime_probe import (
-    ResearchIsolationProbeError, run_research_isolation_runtime_probe,
-)
-from quwoquan_ops.cli.lib.research_consumer_credential import (
-    ResearchConsumerCredentialError, issue_research_consumer_credential,
-)
 from quwoquan_ops.cli.lib.content_api_consumer import run_content_api_consumer
 from quwoquan_ops.cli.lib.runtime_port_ownership import (
     project_canonical_runtime_owned_ports,
@@ -278,6 +270,7 @@ from quwoquan_ops.cli.lib.local_graphql_read_registry_keys import (
 from quwoquan_ops.cli.lib.runtime_topology_package import (
     CONTENT_COMMERCIAL_COMPOSE_PROFILES, FULL_WORKLOAD_COMPOSE_PROFILES,
     load_runtime_topology_package, materialize_runtime_topology_package,
+    materialize_prod_hosted_runtime_topology_manifest,
 )
 from quwoquan_ops.cli.lib.data_plane_binding import (
     materialize_data_plane_binding_package,
@@ -287,14 +280,14 @@ from quwoquan_ops.cli.lib.service_core_composition import (
     project_compose_document,
 )
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
-    RELEASE_INPUT_CLASSIFICATIONS, canonical_contract_graph_digest,
+    canonical_contract_graph_digest,
     canonical_local_observability_log_sink_composition, load_candidate_manifest,
     load_provider_binding_overlay, materialize_mutable_provider_binding_overlay,
     materialize_observability_log_sink_package,
     materialize_provider_binding_overlay, materialize_provider_runtime_package,
     observability_log_sink_composition_digest, provider_binding_overlay_build_inputs,
     provider_runtime_image_environment_key,
-    release_input_classification as classify_release_inputs, seal_provider_runtime_package_images,
+    seal_provider_runtime_package_images,
     validate_observability_log_sink_package, validate_release_attestations,
     write_candidate_manifest,
 )
@@ -326,7 +319,7 @@ from quwoquan_ops.cli.lib.managed_preparation import (
     MANAGED_PREPARATION_SCHEMA, ManagedPreparationBlocked,
     _managed_active_release_readback, _managed_android_adb_reverse_ports, _managed_content_binding, _managed_device_identity,
     _managed_device_trust, _managed_inspect_running_full_runtime,
-    _managed_research_readiness_candidates, _managed_runtime_ready,
+    _managed_readiness_candidates, _managed_runtime_ready,
     _managed_strict_preflight, _write_managed_preparation_receipt, run_managed_preparation,
 )
 from quwoquan_ops.cli.lib.filter_catalog_release import (
@@ -361,10 +354,9 @@ from quwoquan_ops.migrations.travel_to_gathering import (
 )
 
 
-def _local_stack_operation_lock(target_name: str) -> Any:
+def _local_stack_operation_lock(target_name: str, *, wait_seconds: float = 0) -> Any:
     return _reservation_local_stack_operation_lock(
-        target_name,
-        lock_path=local_runtime_operation_lock_path(),
+        target_name, wait_seconds=wait_seconds,
     )
 
 
@@ -414,13 +406,12 @@ from quwoquan_ops.cli.commands import loadtest as loadtest_commands
 from quwoquan_ops.cli.commands import package_domain as package_domain_commands
 from quwoquan_ops.cli.commands import premium_pool as premium_pool_commands
 from quwoquan_ops.cli.commands import prod_hosted_plan as prod_hosted_plan_commands
+from quwoquan_ops.cli.prod import setup_prod_plane_ssh_access as prod_bootstrap_commands
 from quwoquan_ops.cli.commands import (
     product_telemetry_log_sink as product_telemetry_log_sink_commands,
 )
 from quwoquan_ops.cli.commands import provider_config as provider_config_commands
 from quwoquan_ops.cli.commands import provider_debug as provider_debug_commands
-from quwoquan_ops.cli.commands import research_isolation_probe as research_isolation_probe_commands
-from quwoquan_ops.cli.commands import research_consumer_credential as research_consumer_credential_commands
 from quwoquan_ops.cli.commands import roll as roll_commands
 from quwoquan_ops.cli.commands import status as status_commands
 from quwoquan_ops.cli.commands import store_channels as store_channels_commands
@@ -440,8 +431,8 @@ from quwoquan_ops.cli.commands.app_preflight import (
     command_app_domain_api_integration,
 )
 from quwoquan_ops.cli.commands.app_preflight_shared import (
-    _DATA_ACTIVATION_SCHEMA, _DATA_COMMERCIAL_READINESS_QUERY_NAMES,
-    _DATA_CONSUMER_READINESS_QUERY_NAMES, _DATA_LIFECYCLE_EXIT_SCHEMA, _DATA_READINESS_DIGEST_RE,
+    _DATA_ACTIVATION_SCHEMA, _DATA_READINESS_QUERY_NAMES,
+    _DATA_LIFECYCLE_EXIT_SCHEMA, _DATA_READINESS_DIGEST_RE,
     _DATA_READINESS_SCHEMA, _canonical_document_checksum, _data_readiness_segment,
     _data_release_readiness_path, _load_data_release_lifecycle_exit, _load_data_release_readiness,
     _load_test_data_release_readiness, _validate_data_activation_envelope,
@@ -521,8 +512,6 @@ from quwoquan_ops.cli.commands.product_telemetry_log_sink import (
 )
 from quwoquan_ops.cli.commands.provider_config import command_provider_config
 from quwoquan_ops.cli.commands.provider_debug import _normalize_debug_phone, command_provider_debug
-from quwoquan_ops.cli.commands.research_isolation_probe import command_research_isolation_probe
-from quwoquan_ops.cli.commands.research_consumer_credential import command_research_consumer_credential
 from quwoquan_ops.cli.commands.repair_build_cache import (
     _builder_prune_reclaimed_evidence, _canonical_output_layout_plan_ref, _command_result_evidence,
     _consumer_lease_receipt_audit, _finish_build_cache_reclaim,
@@ -794,6 +783,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_commands.register_parser(subparsers)
 
     prod_hosted_plan_commands.register_parser(subparsers)
+    prod_bootstrap_commands.register_runtime_parser(subparsers)
 
     content_acceptance_commands.register_content_readiness_parser(subparsers)
     content_acceptance_commands.register_content_api_consumer_parser(subparsers)
@@ -810,9 +800,6 @@ def build_parser() -> argparse.ArgumentParser:
     filter_catalog_commands.register_parser(subparsers)
 
     premium_pool_commands.register_parser(subparsers)
-
-    research_isolation_probe_commands.register_parser(subparsers)
-    research_consumer_credential_commands.register_parser(subparsers)
 
     repair_domain_commands.register_parser(subparsers)
     roll_commands.register_parser(subparsers)
@@ -964,6 +951,14 @@ _TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES = frozenset(
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    # 真正执行入口封闭宿主权威；模块 API 的显式路径注入仅用于离线契约测试。
+    if args.command in {"up", "down", "dev-session", "app-managed-prepare", "repair", "consumer-lease"}:
+        from quwoquan_ops.cli.lib.host_locks import require_canonical_runtime_authority
+        try:
+            require_canonical_runtime_authority()
+        except ValueError as exc:
+            return print_result(args, {"exitCode": 2, "blockerKind": "runtime_authority_mismatch",
+                                      "summary": "stackctl is GATE_BLOCK", "details": [str(exc)]})
     payload = stackctl_dispatch.dispatch(args, globals())
     return print_result(args, payload)
 

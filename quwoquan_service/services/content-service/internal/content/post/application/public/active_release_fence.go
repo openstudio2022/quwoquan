@@ -10,8 +10,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
 var canonicalManifestDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -27,7 +25,6 @@ type ActiveReleaseFence struct {
 	ReleaseID         string
 	ManifestDigest    string
 	Revision          int64
-	ReleaseClass      string
 	ProjectionVersion int64
 	ActivatedAt       time.Time
 }
@@ -121,19 +118,16 @@ func ValidateActiveReleaseFence(
 			strings.TrimSpace(fence.SourceOwner) != sourceOwner ||
 			strings.TrimSpace(fence.ReleaseID) != "" ||
 			strings.TrimSpace(fence.ManifestDigest) != "" ||
-			strings.TrimSpace(fence.ReleaseClass) != "" ||
 			fence.Revision != 0 || fence.ProjectionVersion != 0 ||
 			!fence.ActivatedAt.IsZero() {
 			return &ActiveReleaseFenceError{Reason: "not-found fence contains state"}
 		}
 		return nil
 	}
-	releaseClass := strings.TrimSpace(fence.ReleaseClass)
 	if strings.TrimSpace(fence.Environment) != environment ||
 		strings.TrimSpace(fence.SourceOwner) != sourceOwner ||
 		strings.TrimSpace(fence.ReleaseID) == "" ||
 		!canonicalManifestDigestPattern.MatchString(strings.TrimSpace(fence.ManifestDigest)) ||
-		!postports.IsKnownReleaseClass(releaseClass) ||
 		fence.Revision <= 0 || fence.ProjectionVersion <= 0 ||
 		fence.ActivatedAt.IsZero() {
 		return &ActiveReleaseFenceError{Reason: "found fence identity is incomplete or drifted"}

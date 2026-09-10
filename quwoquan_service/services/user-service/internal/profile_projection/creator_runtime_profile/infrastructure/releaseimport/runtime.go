@@ -182,11 +182,7 @@ func LoadCreatorsForRelease(releaseRoot, mediaAvatarBaseURL string) (desiredStat
 	if state.Schema != releaseSchema || strings.TrimSpace(state.ReleaseID) == "" {
 		return desiredState{}, nil, fmt.Errorf("invalid immutable release desired state")
 	}
-	releaseClass, err := loadReleaseClass(releaseRoot)
-	if err != nil {
-		return desiredState{}, nil, err
-	}
-	releaseAssets, err := runtimemedia.LoadReleaseMediaAssets(releaseRoot, state.ReleaseID, releaseClass)
+	releaseAssets, err := runtimemedia.LoadReleaseMediaAssets(releaseRoot, state.ReleaseID)
 	if err != nil {
 		return desiredState{}, nil, fmt.Errorf("load release media authority: %w", err)
 	}
@@ -263,23 +259,6 @@ func candidateImportReport(candidate model.CreatorReleaseCandidateState, verifie
 		verifiedAt = &value
 	}
 	return importReport{Schema: reportSchema, Status: status, Environment: candidate.Environment, ReleaseID: candidate.ReleaseID, SourceOwner: candidate.SourceOwner, ManifestDigest: candidate.ManifestDigest, ActivationMode: activationStageOnly, ProjectionDatabase: projectionDatabase, ProjectionVersion: projection, ClosureDigest: closure, VerifiedAt: verifiedAt, Counts: counts{CreatorsExpected: candidate.ExpectedCount, CreatorsProjected: projected}, AuthorIDs: append([]string(nil), candidate.AuthorIDs...), ProfileDigests: append([]model.CreatorProfileDigestBinding(nil), candidate.ProfileDigests...), VerifiedCreatorIDs: verifiedCreatorIDs, PostgreSQLWrites: candidate.PostgreSQLWrites, GeneratedAt: generatedAt.Format(time.RFC3339Nano)}
-}
-
-func loadReleaseClass(releaseRoot string) (string, error) {
-	raw, err := os.ReadFile(filepath.Join(releaseRoot, "payload", "release.json"))
-	if err != nil {
-		return "", fmt.Errorf("read release header: %w", err)
-	}
-	var header struct {
-		ReleaseClass string `json:"releaseClass"`
-	}
-	if err := json.Unmarshal(raw, &header); err != nil {
-		return "", fmt.Errorf("decode release header: %w", err)
-	}
-	if strings.TrimSpace(header.ReleaseClass) == "" {
-		return "", fmt.Errorf("release header releaseClass is required")
-	}
-	return strings.TrimSpace(header.ReleaseClass), nil
 }
 
 func safeRef(ref string) error {

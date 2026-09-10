@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:crypto/crypto.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/runtime/shell/state/startup_auth_restore_gate_provider.dart';
@@ -274,34 +277,49 @@ class AuthSessionStore {
   AuthSessionStore({
     FlutterSecureStorage? secureStorage,
     Future<SharedPreferences> Function()? prefsFactory,
-  }) : _secureStorage = secureStorage ?? const FlutterSecureStorage(),
-       _prefsFactory = prefsFactory ?? SharedPreferences.getInstance;
+    String storageNamespace = 'unbound',
+  }) : _storageNamespace = storageNamespace.trim(),
+       _secureStorage = secureStorage ?? const FlutterSecureStorage(),
+       _prefsFactory = prefsFactory ?? SharedPreferences.getInstance {
+    if (_storageNamespace.isEmpty) {
+      throw ArgumentError.value(storageNamespace, 'storageNamespace');
+    }
+  }
 
-  static const _accessTokenKey = 'auth.access_token';
-  static const _refreshTokenKey = 'auth.refresh_token';
-  static const _rememberedRefreshTokenKey = 'auth.remembered_refresh_token';
-  static const _ownerIdKey = 'auth.owner_id';
-  static const _activePersonaIdKey = 'auth.active_persona_id';
-  static const _accountStateKey = 'auth.account_state';
-  static const _identityOriginKey = 'auth.identity_origin';
+  final String _storageNamespace;
+
+  String _scopedKey(String suffix) =>
+      'auth.${Uri.encodeComponent(_storageNamespace)}.$suffix';
+
+  String get _accessTokenKey => _scopedKey('access_token');
+  String get _refreshTokenKey => _scopedKey('refresh_token');
+  String get _rememberedRefreshTokenKey =>
+      _scopedKey('remembered_refresh_token');
+  String get _ownerIdKey => _scopedKey('owner_id');
+  String get _activePersonaIdKey => _scopedKey('active_persona_id');
+  String get _accountStateKey => _scopedKey('account_state');
+  String get _identityOriginKey => _scopedKey('identity_origin');
+  // installId 只标识安装，不是授权凭据，不随 target 变化。
   static const _installIdKey = 'auth.install_id';
-  static const _lastRefreshAtKey = 'auth.last_refresh_at_epoch_ms';
-  static const _lastForegroundAuthCheckAtKey =
-      'auth.last_foreground_auth_check_at_epoch_ms';
-  static const _rememberedLoginMethodKey = 'auth.remembered_login_method';
-  static const _rememberedLoginMaskedIdentifierKey =
-      'auth.remembered_login_masked_identifier';
-  // 完整手机号属 PII，存安全存储（与 token 同等保护），不入 SharedPreferences。
-  static const _rememberedLoginIdentifierKey =
-      'auth.remembered_login_identifier';
-  static const _rememberedDisplayNameKey = 'auth.remembered_display_name';
-  static const _rememberedAvatarUrlKey = 'auth.remembered_avatar_url';
-  static const _rememberedNicknameCustomizedKey =
-      'auth.remembered_nickname_customized';
-  static const _manualLoggedOutKey = 'auth.manual_logged_out';
-  static const _launchPromptDismissedKey = 'auth.launch_prompt_dismissed';
-  static const _quickLoginExpiresAtKey = 'auth.quick_login_expires_at_epoch_ms';
-  static const _sessionRememberTtlKey = 'auth.session_remember_ttl_seconds';
+  String get _lastRefreshAtKey => _scopedKey('last_refresh_at_epoch_ms');
+  String get _lastForegroundAuthCheckAtKey =>
+      _scopedKey('last_foreground_auth_check_at_epoch_ms');
+  String get _rememberedLoginMethodKey => _scopedKey('remembered_login_method');
+  String get _rememberedLoginMaskedIdentifierKey =>
+      _scopedKey('remembered_login_masked_identifier');
+  // 完整手机号与 token 同样保存在安全存储。
+  String get _rememberedLoginIdentifierKey =>
+      _scopedKey('remembered_login_identifier');
+  String get _rememberedDisplayNameKey => _scopedKey('remembered_display_name');
+  String get _rememberedAvatarUrlKey => _scopedKey('remembered_avatar_url');
+  String get _rememberedNicknameCustomizedKey =>
+      _scopedKey('remembered_nickname_customized');
+  String get _manualLoggedOutKey => _scopedKey('manual_logged_out');
+  String get _launchPromptDismissedKey => _scopedKey('launch_prompt_dismissed');
+  String get _quickLoginExpiresAtKey =>
+      _scopedKey('quick_login_expires_at_epoch_ms');
+  String get _sessionRememberTtlKey =>
+      _scopedKey('session_remember_ttl_seconds');
 
   final FlutterSecureStorage _secureStorage;
   final Future<SharedPreferences> Function() _prefsFactory;
@@ -628,7 +646,10 @@ class ProviderBackedCloudAuthTokenProvider implements CloudAuthTokenProvider {
 }
 
 final authSessionStoreProvider = Provider<AuthSessionStore>((ref) {
-  return AuthSessionStore();
+  return AuthSessionStore(
+    storageNamespace:
+        '${CloudRuntimeConfig.launchTarget}|${CloudRuntimeConfig.appEnvironment}',
+  );
 });
 
 final authSessionControllerProvider =

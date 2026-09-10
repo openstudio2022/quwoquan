@@ -1,5 +1,6 @@
 # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 
+import json
 import os
 import subprocess
 import sys
@@ -179,14 +180,66 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         self.assertIn('payload.get("status") not in {"passed", "warning"}', launcher)
         self.assertIn("export QWQ_APP_LAUNCH_POLICY=test_live", launcher)
         self.assertIn("--launch-policy test_live", launcher)
-        self.assertIn(
-            '"runtime consumer lease is unavailable; test_live remains nonPromotable."',
+        # readiness 可以 warning，但 exact 安全租约缺失必须阻断，不能降级放行。
+        self.assertRegex(
+            launcher,
+            r'OPS\.LEASE\.runtime_identity_unavailable: no exact running generation\.'
+            r'[^\n]*\n\s+exit 2',
+        )
+        self.assertRegex(
+            launcher,
+            r'OPS\.LEASE\.acquire_blocked: exact runtime lease is required\.'
+            r'[^\n]*\n\s+exit 2',
+        )
+        self.assertIn('--instance-generation "$QWQ_RUNTIME_INSTANCE_GENERATION"', launcher)
+        self.assertNotIn(
+            'runtime consumer lease is unavailable; test_live remains nonPromotable.',
             launcher,
         )
         self.assertIn("record_prelaunch_warning", launcher)
         self.assertIn('bash "$APP_DIR/run.sh"', app_instance)
         self.assertNotIn("app-debug-preflight", app_instance)
         self.assertNotIn("flutter run", app_instance)
+    def test_runtime_lease_response_requires_exact_identity_before_launch(self) -> None:
+        source = (APP_DIR / "run.sh").read_text(encoding="utf-8")
+        # 执行 launcher 正在使用的解析器，正例必须真正输出 canonical leaseId。
+        parser = source.split("<<'PYLEASE'\n", 1)[1].split("\nPYLEASE", 1)[0]
+        identity = {
+            "target": "beta-local",
+            "device": "contract-device",
+            "consumer": "contract-consumer",
+            "instanceGeneration": "contract-generation",
+        }
+        lease_id = "sha256:" + "a" * 64
+        valid = {"exitCode": 0, "lease": {**identity, "leaseId": lease_id}}
+        cases = [("valid", valid, "")]
+        for field in identity:
+            drifted = deepcopy(valid)
+            drifted["lease"][field] = "unrelated"
+            cases.append((field, drifted, "response identity drifted"))
+        failed = deepcopy(valid)
+        failed["exitCode"] = 2
+        cases.append(("failed acquire", failed, "response identity drifted"))
+        for invalid_id in ("", "not-a-canonical-lease"):
+            invalid = deepcopy(valid)
+            invalid["lease"]["leaseId"] = invalid_id
+            cases.append((invalid_id, invalid, "missing canonical leaseId"))
+        for label, payload, blocker in cases:
+            with self.subTest(case=label):
+                result = subprocess.run(
+                    [sys.executable, "-B", "-c", parser, json.dumps(payload), *identity.values()],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if blocker:
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn(blocker, result.stderr)
+                    self.assertEqual(result.stdout, "")
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.strip(), lease_id)
+
     def test_each_metadata_target_builds_one_canonical_handoff(self) -> None:
         contract = load_launch_manifest_contract()
         for target, environment in contract["target_environment"].items():
@@ -364,7 +417,8 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         self.assertIn('scripts/device/run_app_instance.py"', source)
         self.assertNotIn('"$QWQ_REAL_FLUTTER" run', source)
         self.assertIn('exec "$APP_DIR/scripts/device/dev_launch.sh"', source)
-        self.assertIn("Hermetic direct run.sh always re-execs from a frozen private source projection.", source)
+        self.assertIn('--check-remote-launch-surface "${ORIGINAL_LAUNCH_ARGUMENTS[@]}"', source)
+        self.assertIn('enter_workspace_launch_projection()', source)
         self.assertIn('argument" == "--hermetic', source)
 
     def test_android_debug_mounts_only_external_profile_trust_asset(self) -> None:
@@ -380,10 +434,11 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             with self.subTest(gradle=host_gradle.name):
                 gradle = host_gradle.read_text(encoding="utf-8")
                 self.assertIn("runtime-config-assets.gradle.kts", gradle)
-                self.assertIn(
-                    'sourceSets.getByName("main").assets.srcDir',
-                    gradle,
-                )
+                if host_gradle == APP_DIR / "android/app/build.gradle.kts":
+                    self.assertIn('if (androidRuntimeConfigSelfSupply) "debug" else "main"', gradle)
+                    self.assertIn('sourceSets.getByName(consumingSourceSet).assets.srcDir', gradle)
+                else:
+                    self.assertIn('sourceSets.getByName("main").assets.srcDir', gradle)
         self.assertIn("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT", shared_validation)
         self.assertIn("runtime-config-trust.json", shared_validation)
         self.assertIn("runtime-config-package.json", shared_validation)
@@ -919,8 +974,8 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             "transport evidence must be empty when transport.required=false",
         ):
             _build_handoff(
-                "alpha",
-                "alpha-local",
+                "beta",
+                "beta-local",
                 "--reverse-expected-ports",
                 "7443",
             )

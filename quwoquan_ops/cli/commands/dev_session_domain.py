@@ -130,9 +130,8 @@ def _run_dev_session_target(
             target=target,
         )
     except (OSError, RuntimeError, ValueError) as exc:
-        active_attempt = None
-        conflict = None
-        warnings.append(f"stale runtime receipt ignored for test_live: {exc}")
+        return {"exitCode": 2, "blockerKind": "runtime_receipt_unreadable",
+                "details": [str(exc)], "phases": [], "runtimeCreated": False}
     if conflict is not None:
         return _stackctl._dev_session_workload_conflict(conflict)
 
@@ -147,7 +146,7 @@ def _run_dev_session_target(
     runtime_payload: dict[str, Any] | None = None
     preflight_payload: dict[str, Any] | None = None
     runtime_was_started = False
-    resume_requested = not launch_app_requested and bool(content_binding_request)
+    resume_requested = True
     if resume_requested:
         try:
             resume_candidate, resume_warnings = (
@@ -161,11 +160,11 @@ def _run_dev_session_target(
             warnings.extend(resume_warnings)
             mutable_workspace_warnings.extend(resume_warnings)
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
-            resume_candidate = None
-            warnings.append(
-                "running mutable session cannot be reused; refreshing it: "
-                + str(exc)
-            )
+            return {
+                "exitCode": 2, "blockerKind": "runtime_identity_conflict",
+                "details": [str(exc)], "phases": phases,
+                "runtimeReused": False, "runtimeCreated": False,
+            }
         if resume_candidate is not None:
             runtime_payload = resume_candidate
     if runtime_payload is None:
@@ -264,7 +263,6 @@ def _run_dev_session_target(
                 "details": [
                     f"releaseId={content_binding['releaseId']}",
                     f"verifyRunId={content_binding['verifyRunId']}",
-                    f"readinessPhase={content_binding['readinessPhase']}",
                 ],
                 "reportDir": _stackctl.relpath(report_dir),
             }
@@ -653,8 +651,8 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
 
     if terminal_exit == 0:
         try:
-            with _stackctl._local_stack_operation_lock(selections[0][1]):
-                for environment, target in selections:
+            for environment, target in selections:
+                with _stackctl._local_stack_operation_lock(target, wait_seconds=30):
                     # The repo-level all-nonprod run only aggregates the three
                     # target runs.  A mutable startup receipt is target-owned,
                     # so its runRoot must stay below that environment's

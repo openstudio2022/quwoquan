@@ -55,6 +55,7 @@ def register_parser(
         default=_stackctl.DEFAULT_BUILD_GRACE_SECONDS,
     )
     consumer_lease_parser.add_argument("--lease-id", default="")
+    consumer_lease_parser.add_argument("--instance-generation", default="")
     consumer_lease_parser.add_argument("--handoff-digest", default="")
     consumer_lease_parser.add_argument("--release-id", default="")
     consumer_lease_parser.add_argument("--manifest-digest", default="")
@@ -99,6 +100,13 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                 purpose=f"consumer-lease-acquire:{device}",
             )
             try:
+                generation = str(getattr(args, "instance_generation", "") or "")
+                if target == "prod-sim":
+                    raise ValueError("OPS.RUNTIME.unmanaged_target: prod-sim has no generation authority")
+                attempts = [_stackctl.load_startup_attempt(target), _stackctl.load_test_live_startup_attempt(target)]
+                active = [item for item in attempts if item and item.get("status") != "stopped"]
+                if len(active) != 1 or active[0].get("status") != "running" or active[0].get("attemptId") != generation:
+                    raise ValueError("OPS.LEASE.generation_conflict: runtime is not the requested running generation")
                 application_id = str(args.package_name).strip()
                 if platform in {"ios-simulator", "ios-physical"}:
                     application_id = str(getattr(args, "bundle_id", "") or "").strip()
@@ -114,6 +122,7 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                     target=target,
                     device=device,
                     consumer=consumer,
+                    instance_generation=str(getattr(args, "instance_generation", "") or ""),
                     package_name=application_id,
                     ports=ports,
                     platform=platform,
@@ -152,6 +161,7 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                     target=target,
                     device=device,
                     consumer=consumer,
+                    instance_generation=str(getattr(args, "instance_generation", "") or ""),
                     lease_id=str(getattr(args, "lease_id", "") or ""),
                     handoff_digest=str(getattr(args, "handoff_digest", "") or ""),
                     release_id=str(getattr(args, "release_id", "") or ""),
@@ -181,9 +191,11 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
             )
             try:
                 released = _stackctl.release_consumer_lease(
+                    lease_id=str(getattr(args, "lease_id", "") or ""),
                     target=target,
                     device=device,
                     consumer=consumer,
+                    instance_generation=str(getattr(args, "instance_generation", "") or ""),
                 )
             finally:
                 use_lock.close()

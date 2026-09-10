@@ -1,4 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
 import 'package:quwoquan_app/runtime/shell/settings/appearance_settings_models.dart';
 import 'package:quwoquan_app/runtime/shell/state/accessibility_provider.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
@@ -65,9 +68,16 @@ final appearanceSettingsControllerProvider =
 class AppearanceSettingsController extends Notifier<AppearanceSettingsState> {
   bool _ensureLoadStarted = false;
 
+  bool get _isBundledContent =>
+      CloudRuntimeConfig.isHydrated &&
+      CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot;
+
   @override
   AppearanceSettingsState build() {
     final initial = AppearanceSettingsState.initial();
+    if (_isBundledContent) {
+      return initial.copyWith(hasLoaded: true);
+    }
     if (!_ensureLoadStarted) {
       _ensureLoadStarted = true;
       Future<void>.microtask(ensureLoaded);
@@ -83,6 +93,10 @@ class AppearanceSettingsController extends Notifier<AppearanceSettingsState> {
   }
 
   Future<void> load() async {
+    if (_isBundledContent) {
+      state = state.copyWith(hasLoaded: true, isLoading: false);
+      return;
+    }
     state = state.copyWith(isLoading: true, clearLastError: true);
     try {
       final view = await ref
@@ -111,6 +125,13 @@ class AppearanceSettingsController extends Notifier<AppearanceSettingsState> {
     AppearanceFontSizePreset? fontSizePreset,
     required AppearanceApplyScope applyScope,
   }) async {
+    if (_isBundledContent) {
+      state = state.copyWith(
+        lastError: contentCapabilityUnavailable('account_appearance_write'),
+        clearPendingMutation: true,
+      );
+      return;
+    }
     final current = state.snapshot;
     final mutation = AppearanceSettingsMutation(
       themeMode: themeMode ?? current.themeMode,
@@ -154,6 +175,10 @@ class AppearanceSettingsController extends Notifier<AppearanceSettingsState> {
   }
 
   Future<void> syncPending() async {
+    if (_isBundledContent) {
+      state = state.copyWith(clearPendingMutation: true, isLoading: false);
+      return;
+    }
     final mutation = state.pendingMutation;
     if (mutation == null) {
       return;

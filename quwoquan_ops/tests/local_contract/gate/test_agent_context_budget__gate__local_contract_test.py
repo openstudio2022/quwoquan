@@ -218,7 +218,8 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         self.assertEqual([], self.module.check_hotl_runtime_matrix())
 
     def test_hotl_runtime_matrix_rejects_missing_scenario_and_oversize(self) -> None:
-        self.module.ROOT = self.root
+        # Skill 闭集从 fixture 的 .agents/skills 发现派生，因此先铺好全部 Skill 再写一个只含 commit 行的矩阵。
+        self._use_fixture_root(git=False)
         path = self._write(
             self.module.HOTL_RUNTIME_MATRIX_PATH,
             self.module.HOTL_RUNTIME_MATRIX_START
@@ -256,6 +257,99 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         self._write("vendor/AGENTS.md", "third party")
         issues = self.module.check_agents_budget()
         self.assertTrue(any("非第一方" in issue for issue in issues), issues)
+
+    def test_layered_budget_real_repo_is_within_budget_or_registered(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t1
+        self.assertEqual([], self.module.check_layered_budget())
+
+    def _layer_baseline(self, entries: list[dict], *, skill_file_bytes: int = 400) -> None:
+        self._write(
+            self.module.LAYER_BUDGET_BASELINE_REL,
+            self.module.yaml.safe_dump(
+                {
+                    "schema": "agent-context-budget-ratchet",
+                    "layer_budgets": {
+                        "root_agents_bytes": 100,
+                        "l1_agents_bytes": 80,
+                        "deep_agents_bytes": 40,
+                        "skill_file_bytes": skill_file_bytes,
+                        "skill_description_chars": 300,
+                    },
+                    "entries": entries,
+                },
+                sort_keys=False,
+            ),
+        )
+
+    def test_layered_budget_blocks_unregistered_oversize_per_layer(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t1
+        self._use_fixture_root(git=False)
+        # fixture Skill 约 220 B；把 Skill 预算压到 100 B 让每个 Skill 文件都成为未登记超限项。
+        self._layer_baseline([], skill_file_bytes=100)
+        self._write("AGENTS.md", "a" * 101)
+        self._write("l1/AGENTS.md", "b" * 81)
+        self._write("l1/deep/AGENTS.md", "c" * 41)
+        issues = self.module.check_layered_budget()
+        self.assertTrue(any("AGENTS.md: agents 101 bytes 超过分层预算 100" in issue for issue in issues), issues)
+        self.assertTrue(any("l1/AGENTS.md: agents 81 bytes 超过分层预算 80" in issue for issue in issues), issues)
+        self.assertTrue(any("l1/deep/AGENTS.md: agents 41 bytes 超过分层预算 40" in issue for issue in issues), issues)
+        skill_issues = [issue for issue in issues if "skill_file" in issue and "未在 baseline 登记" in issue]
+        self.assertEqual(len(skill_issues), len(self.workflow_names), issues)
+
+    def test_layered_budget_ratchet_only_shrinks_and_rejects_stale_entries(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t1
+        self._use_fixture_root(git=False)
+        skill_rel = f".agents/skills/{self.workflow_names[0]}/SKILL.md"
+        skill_size = len((self.root / skill_rel).read_bytes())
+        self._write("AGENTS.md", "a" * 50)
+        self._write("grown/AGENTS.md", "g" * 90)
+        self._write("held/AGENTS.md", "h" * 90)
+        self._layer_baseline(
+            [
+                {"path": "AGENTS.md", "kind": "agents", "ceiling": 60},
+                {"path": "grown/AGENTS.md", "kind": "agents", "ceiling": 85},
+                {"path": "held/AGENTS.md", "kind": "agents", "ceiling": 90},
+                {"path": "missing/AGENTS.md", "kind": "agents", "ceiling": 999},
+                {"path": skill_rel, "kind": "skill_file", "ceiling": skill_size},
+            ],
+            skill_file_bytes=100,
+        )
+        issues = self.module.check_layered_budget()
+        self.assertTrue(any("AGENTS.md: agents 已回落到预算内" in issue and "须同批删除" in issue for issue in issues), issues)
+        self.assertTrue(any("grown/AGENTS.md: agents 90 bytes 超过 baseline ceiling 85" in issue for issue in issues), issues)
+        self.assertFalse(any("held/AGENTS.md" in issue for issue in issues), "在册且未增长的超限项应放行")
+        self.assertTrue(any("missing/AGENTS.md (agents) 指向不存在的文件" in issue for issue in issues), issues)
+        self.assertFalse(any(f"{skill_rel}: skill_file" in issue for issue in issues), "在册且未增长的 Skill 应放行")
+        other_skill_issues = [issue for issue in issues if "skill_file" in issue and "未在 baseline 登记" in issue]
+        self.assertEqual(len(other_skill_issues), len(self.workflow_names) - 1, issues)
+
+    def test_layered_budget_rejects_baseline_shape_drift(self) -> None:
+        self._use_fixture_root(git=False)
+        self._write(self.module.LAYER_BUDGET_BASELINE_REL, "schema: something-else\n")
+        issues = self.module.check_layered_budget()
+        self.assertTrue(any("schema 必须为 agent-context-budget-ratchet" in issue for issue in issues), issues)
+        self._write(
+            self.module.LAYER_BUDGET_BASELINE_REL,
+            "schema: agent-context-budget-ratchet\nlayer_budgets:\n  root_agents_bytes: 1\nentries: []\n",
+        )
+        issues = self.module.check_layered_budget()
+        self.assertTrue(any("layer_budgets 必须精确包含" in issue for issue in issues), issues)
+
+    def test_hotl_runtime_matrix_skill_closure_is_derived_from_discovery(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t1
+        self.assertFalse(hasattr(self.module, "HOTL_RUNTIME_MATRIX_SKILLS"), "Skill 闭集不得硬编码")
+        self._use_fixture_root(git=False)
+        rows = "".join(f"| SKILL:{name} |\n" for name in self.workflow_names if name != self.workflow_names[0])
+        rows += "| SKILL:phantom-skill |\n"
+        rows += "".join(f"| BOUNDARY:{name} |\n" for name in self.module.HOTL_RUNTIME_MATRIX_BOUNDARIES)
+        header = "| " + " | ".join(self.module.HOTL_RUNTIME_MATRIX_COLUMNS) + " |\n"
+        self._write(
+            self.module.HOTL_RUNTIME_MATRIX_PATH,
+            self.module.HOTL_RUNTIME_MATRIX_START + "\n" + header + rows + self.module.HOTL_RUNTIME_MATRIX_END,
+        )
+        issues = self.module.check_hotl_runtime_matrix()
+        self.assertTrue(any(f"SKILL:{self.workflow_names[0]} 必须恰好一行" in issue for issue in issues), issues)
+        self.assertTrue(any("SKILL:phantom-skill 不对应任何已发现的 Workflow Skill" in issue for issue in issues), issues)
 
     def test_delivery_skills_bind_exact_owner_manifest_and_read_only_terminal(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1

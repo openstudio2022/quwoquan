@@ -7,7 +7,7 @@
 ## 1. 背景、目标与非目标
 
 - 设计目标：让同一环境与同一服务端状态下的配置、启动、内容 identity 和恢复动作可比较，并让 Alpha/Beta/Gamma 双模拟器证据不被父 report 提升为 promotion 事实。
-- 非目标：复制 URL/端口、创建环境专用数据源、实现长期内容库或定义 App 业务对象。本设计覆盖四环境、双端与正式浏览器的合同和证据映射，但不把尚未执行或受外部账号、签名、设备、DNS/TLS、发布授权阻断的矩阵单元声明为已通过；这些单元的 OPEN 只在其真实证据到位后关闭。
+- 非目标：复制 URL/端口、创建环境专用业务模型、第二套内容库或假服务；Alpha canonical 快照 adapter 与 Remote 只在组合根不同。本设计覆盖四环境、双端与正式浏览器的合同和证据映射，但不把尚未执行或受外部账号、签名、设备、DNS/TLS、发布授权阻断的矩阵单元声明为已通过；这些单元的 OPEN 只在其真实证据到位后关闭。
 
 ## 2. Story 协作与状态流
 
@@ -20,16 +20,16 @@
 - 本设计不新增业务 aggregate。环境 operation 是由 stackctl 独占推进的 process。
 - target-scoped CaseResult、runtime receipt 与 release lifecycle/readback 是各自 append-only 的观察事实，不承载内容对象。
 - 写路径只经 stackctl：环境 release apply/rollback/replay 由现有 release command 推进，App 验收按 `alpha-local,beta-local,gamma-local` 的冻结顺序推进，受控 Edge target 只能操作当前 runtime receipt 绑定的精确 Compose project/container。
-- 读路径只读取 topology resolver、只读 status、release lifecycle/readback 与 target-scoped CaseResult。App 从 Content API 响应读取 release identity；父 report 只能引用原始结果，不得重写为 Alpha-only aggregate 或 promotion passed。
+- 读路径读取 topology resolver、status、release readback 与 CaseResult；Remote 从 Content API 确认 active identity，Alpha 从已验证制品快照取得独立 source identity。父 report 只引用原始结果，不改写 authority；离线不代填服务环境事实。
 - endpoint、证书、package identity、Compose project 与容器身份只来自 `quwoquan_ops/environments` 和 stackctl 产物；测试 target 不定义第二套 URL、端口或 runtime identity。
 
 ## 4. 关键决策
 
 <a id="dec-001"></a>
 ### DEC-001 三环境内容验收以可恢复窗口编排原始 CaseResult
-- 决策：Alpha/Beta/Gamma 每个 target 都在正向 release-bound 首页读回后、同一次安装内执行受控 Edge 5xx 窗口；窗口结束必须恢复精确 receipt-bound runtime 并重新读回同一 release。empty-baseline/lifecycle 证据仍由 release owner 独立执行，不由 App fault window 代写。
+- 决策：Beta/Gamma Remote App 在同一次安装的正向读回后验证受控 Edge 恢复；独立 Alpha API gate 验证服务端 Edge 与 empty/replay lifecycle，Alpha 离线 App 则证明同一故障期间继续读取快照。两类 source 证据不互换；窗口只在目标维护租约与精确 receipt-bound runtime 内执行并恢复，不停止其他 target。
 - 状态流：正向窗口先冻结原 release 与两平台身份。
-- 状态流：空态窗口保存原 release、应用已核验 empty baseline、顺序取得 Android/iOS 原始结果后 same-digest replay。
+- 状态流：Alpha API 空态窗口保存原 release、应用已核验 empty baseline、取得服务原始结果后 same-digest replay；它不覆盖 Alpha 离线 App 的 source 或生成其 no-active-release 结果。
 - 状态流：5xx target 由 suite plan 明确包含，并在 `finally` 恢复精确 Edge 容器与 health。所有窗口结束时原 release 必须恢复。
 - 理由：active release、无 active content 与运行时失败是三种不同服务端事实。分窗可避免把合法空态解释为失败，也避免为了测空态而污染 active-release suite；原始结果可保留平台差异而不误签 aggregate Green。
 - 被否决方案：在 App 注入空列表/fixture、把 no-active-release 合并为 active suite 步骤、手工停止任意 Edge、以父 report 替代平台结果、跳过失败后的 release/container 恢复，或让 App 制品携带期望 release identity。
@@ -37,7 +37,7 @@
 - 失败恢复：故障 target 无论在哪一步失败都先恢复容器并通过 health，空态窗口中断先 same-digest replay 原 release。恢复失败保留首个 typed blocker并停止后续窗口，不产生 passed。
 - 可测试观察面：suite plan 必须出现受控 Edge target。
 - 可测试观察面：target raw result 可回读 platform、release/App/package/startup identity、window outcome 与 `nonPromotable=true`。
-- 可测试观察面：release lifecycle/readback 证明 empty/original 切换，runtime health 与 fault cleanup 证明无遗留故障。local_contract 观察编排与结果语义，api_integration 观察 lifecycle，user_acceptance 在 production Remote composition 上观察两端恢复。
+- 可测试观察面：local_contract 观察编排与结果语义，api_integration 观察独立 Alpha API 与 Beta/Gamma lifecycle/cleanup，user_acceptance 观察 Beta/Gamma 两端 Remote 恢复及 Alpha 离线不受 Edge 故障影响；任一未测路径保持 OPEN。
 - 关联要求：[`environment-topology-and-packaging/REQ-005`](./environment-topology-and-packaging/spec.md#req-005)
 - 影响 Story：[`environment-topology-and-packaging`](./environment-topology-and-packaging/spec.md)
 - 关联验收：[`environment-topology-and-packaging/GWT-004`](./environment-topology-and-packaging/spec.md#gwt-004)
@@ -45,22 +45,22 @@
 <a id="dec-002"></a>
 ### DEC-002 App 原生制品与目标运行配置按静态信任域和安装后激活分离
 
-- 对象边界：`AppArtifact`、不可变 `RuntimeConfigPackage` 与平台私有容器中的单槽 `ActiveRuntimeConfigPointer` 是三个独立事实。runtime package 不作为 AppArtifact 的 owned entity，也不得进入 Flutter kernel、Mach-O 或 DEX；Profile/Release、prod buildProfile 与 beta/gamma 制品维持零嵌入。唯一例外是 Debug-nonprod 的 `build_time_self_supply`：构建阶段在无外部 canonical handoff 时由仓内 canonical handoff builder 现场签发 alpha `test_live` package，并以 `runtime_config_activation_request` 形态随 nonprod trust envelope 进入制品；它不是第二个读取面——原生 gate 在冷启动只把它当作一份待激活请求，经同一 CAS/receipt 路径写入私有容器单槽，读取路径仍只有 `ActiveRuntimeConfigPointer`。active pointer 只引用一份已验证 package digest，不内嵌历史或无界 ACK 集合。
-- 构建身份：`app_artifact_manifest.yaml` 是 `buildProfile(nonprod|prod) × BuildMode` 包身份与显示名的唯一值真相源。运行环境继续是 Alpha、Beta、Gamma、Prod，但不参与 application/bundle ID 或二进制编译身份。确定性 codegen 只投影 Android `nonprod/prod` productFlavor 与 iOS profile-specific xcconfig、scheme 和 configuration；默认 Debug 固定为 nonprod，Prod 只允许 prod Release。
+- 对象边界：AppArtifact、受签 runtime document 与私有容器单槽 pointer 各自独立。Alpha 使用独立 signed offline bootstrap document 绑定 canonical 快照和完整媒体；Beta/Gamma/Prod 使用在线 runtime config package。两类文档都经同一 activation/CAS/receipt/read chain 验证并选定一份 active document，不建立直接读 bundle 的第二 bootstrap。离线文档不声明假 HTTPS endpoint、在线授权或 server active release，其独立完整性合同不等于忽略在线 expiry；source 判别由 canonical launch metadata 拥有，DEC-006 约束组合根消费。
+- 构建身份：[`App artifact manifest`](../../../../quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml) 是 `buildProfile(nonprod|prod) × BuildMode` 包身份与显示名的唯一值真相源。运行环境继续是 Alpha、Beta、Gamma、Prod，但不参与 application/bundle ID 或二进制编译身份。确定性 codegen 只投影 Android `nonprod/prod` productFlavor 与 iOS profile-specific xcconfig、scheme 和 configuration；默认 Debug 固定为 nonprod，Prod 只允许 prod Release。
 - 信任边界：每个 build profile 的独立 `runtime_config_trust_envelope` 是 AppArtifact 的只读构建输入，由平台 App 签名保护，只含 schema、build profile、Ed25519 算法与非空可信公钥环，不含 environment、target、endpoint、package、公钥私钥引用或 secret。nonprod 信任根只接受 Alpha、Beta、Gamma 的签发者，prod 信任根只接受 Prod 签发者；信任根轮换属于新的 AppArtifact 构建，不通过 runtime package 自举。
-- 写路径：stackctl/canonical launcher 是目标配置 activation 的唯一外部 owner，在安装后把完整 activation request 写入 App 私有容器，由冷启动原生 activation coordinator 在首个业务 Shell 前消费。coordinator 先用制品内信任根验证 schema、profile、environment、target、签名、摘要和 freshness，再以临时文件、同步落盘和原子替换推进 active pointer；不得改写源码树、构建输出或已签名 AppArtifact，Flutter channel 不提供任何安装 command。coordinator 只消费外部 activation request 与既有 active package 两类输入，无 canonical handoff 的构建在 trust gate fail-closed，不存在构建期嵌入默认的第三输入。
+- 写路径：stackctl/canonical launcher 是目标配置 activation 的唯一外部 owner，在安装后把完整 activation request 写入 App 私有容器，由冷启动原生 activation coordinator 在首个业务 Shell 前消费。coordinator 先用制品内信任根验证 schema、profile、environment、target、签名、摘要和 freshness，再以临时文件、同步落盘和原子替换推进 active pointer；不得改写源码树、构建输出或已签名 AppArtifact，Flutter channel 不提供任何安装 command。同一 coordinator 按 canonical 文档类型校验在线 package 或独立 signed offline document，默认 Alpha 的离线请求同样经过 activation/CAS，不因缺在线 endpoint 而构造假配置；新在线 package 的 freshness 始终完整校验。
 - 入口边界：受支持的启动入口可以有不同 command surface，但只能向本 owner 提交同一份当前生成的 activation contract，不得拥有第二套配置生成、验证、激活或回执协议。入口、构建、安装、attach 与启动终态的实现由各自 owner 裁决；本设计只裁决它们与 runtime config 交界时的输入、结果与恢复不变量，见 [`DEC-003`](#dec-003)。
-- 读路径：原生 `RuntimeConfigPackageReader` query 只返回平台私有容器中的 active package 与制品内 trust envelope，Dart resolver 再执行同一契约验证。读者不读取 bundle/asset 中的 target package，不接受 Dart define、环境变量、手写 JSON keyring或 package 自带公钥作为 fallback。冷启动、Hot Restart 与图标启动均消费同一 active digest。
-- 首次启动：新安装若尚无 active package，原生层返回 typed absent，Dart 进入阻断式配置页；它不得降级为空 map、零配置、通用网络错误或业务 Shell。Prod 可从制品内稳定 bootstrap authority 获取受签 package，但获取结果仍经同一 installer 激活，bootstrap authority 不携带 rollout stage 或业务配置。
+- 读路径：原生 reader 只返回私有容器中的 active document 与制品内 trust envelope，Dart resolver 按 canonical 文档类型完成同一验证链。离线 bundle 只提供待激活 signed document 与被其绑定的内容资产，不是绕过 active pointer 的第二 bootstrap reader；冷启动、Hot Restart 与图标启动消费同一 active digest，不接受 define、环境变量、自带 keyring 或假 HTTPS fallback。
+- 首次启动：Alpha 默认供给独立 signed offline document，经同一原生 activation/CAS 后读取所绑定完整快照；激活缺失或失败仍 typed absent/blocked，不绕过 read chain。在线 source 缺有效 package 则阻断，不以离线文档或空在线配置补齐。Prod 可从制品内稳定 bootstrap authority 获取受签 package，但获取结果仍经同一 installer 激活，bootstrap authority 不携带 rollout stage 或业务配置。
 - 失败恢复：新 package 无效、过期、写入失败或 readback 不一致时 activation 失败且 active pointer 保持上一份已验证 digest；首次安装无上一份时保持 absent。回滚只把 pointer 条件更新到仍在保留窗内的上一份已验证 package，目标 5 分钟内完成，不 clean、不重编、不重签 AppArtifact。
-- 被否决方案：environment-specific flavor/scheme、endpoint `--dart-define`、把 target package 注入已签名制品后重签、bundle package 与私有容器双读，以及曾被采用又退役的"Debug-nonprod 无任何构建期供给、仅靠 PATH facade 注入 handoff"——该方案把最基础的开发启动押在仓库外无版本控制的 shell 状态上，worktree 重组后静默失效且门禁不可见。`build_time_self_supply` 以"嵌入激活请求、单槽激活、单读取面"替代早前被否决的 `embedded_default_package` 双读旁路。
+- 被否决方案：environment-specific flavor/scheme、endpoint define、注入在线 package 后重签已签名制品、bundle 与私有容器故障双读，以及依赖仓库外 PATH/shell 才能默认启动。Alpha canonical 离线材料是显式 source，不是在线签名包失效后的第三输入。
 - 被否决方案：package 携带并自证 trusted keyring、手写 JSON keyring 环境变量、共享“当前环境”文件、build phase 自愈，以及旧环境 flavor 或旧 handoff 字段 fallback。
 - 被否决方案：任一启动、构建或测试入口自行生成 trust envelope、注入 endpoint，或维护第二套 installer、reader 或状态机。
-- 可测试观察面：local_contract 由 metadata 驱动覆盖 trust envelope、package、installer、reader 和 resolver 的必填字段、签名、profile/target、原子替换及 absent/failed 四态，并比对生成的 profile identity，证明旧环境 flavor 和 target package bundle writer 数量为零。
+- 可测试观察面：local_contract 由 metadata 驱动覆盖两种 signed document 的签名、profile/target、同一 installer/reader/resolver、CAS 与 absent/failed 结果；证明 Alpha 离线不伪造 endpoint、不豁免 online expiry，且无旧环境 flavor 或直接 bundle bootstrap 读取旁路。
 - 可测试观察面：local_contract 覆盖所有受支持入口只能提交当前 generated activation contract；对于未经 canonical handoff 的入口，只断言本 owner 的 typed 配置失败、active pointer 不变与无伪成功回执。入口解析、设备选择、工具链和 attach 行为由它们的 owner 测试，不在本 DEC 复制。
-- 可测试观察面：api_integration 只构建一次 nonprod APK/`.app`，记录完整 AppArtifact digest，安装后顺序激活 Alpha、Beta、Gamma package；每次 activation 仅 package/active digest 改变，AppArtifact digest、签名和可执行文件 digest全部不变，失败 activation 保留上一 active digest。
+- 可测试观察面：同一 nonprod APK/`.app` 在 Alpha 离线与 Beta/Gamma 在线 source 间显式切换，完整 AppArtifact digest、签名与可执行字节不变；只更新已验证配置/绑定并重建上下文，失败保留上一已验证 source。在线 package 原子性与离线闭包完整性分别证明。
 - 可测试观察面：user_acceptance 回读 Android/iOS 安装 identity、trust envelope digest、active package digest、runtime environment 与 target，并证明冷启动、连续 Hot Restart、图标启动和配置回滚保持同一规范化身份；首次无 package 显示配置阻断页。
-- SLI/SLO：activation attempt 及 active receipt 的记录面只引用 [`app_launch_manifest.yaml` 的 `schemas.runtime_config_activation_receipt`](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml)，不在 Design 维护第二份字段表或旧精确字段集。有效 package 的本地 activation 在 5 秒内成功率目标为 99.9%；禁止记录 endpoint、密钥或 package 原文。无 active package、签名失败、过期、身份错配与原子 readback 失败均立即告警，配置回滚目标为 5 分钟内完成。
+- SLI/SLO：activation attempt 及 active receipt 的记录面只引用 [App launch manifest 的 `schemas.runtime_config_activation_receipt`](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml)，不在 Design 维护第二份字段表或旧精确字段集。有效 package 的本地 activation 在 5 秒内成功率目标为 99.9%；禁止记录 endpoint、密钥或 package 原文。无 active package、签名失败、过期、身份错配与原子 readback 失败均立即告警，配置回滚目标为 5 分钟内完成。
 - Schema 迁移恢复：host executor、native 与 Dart 的运行路径只接受上述 canonical metadata 当前 generated schema，不得删字段推断旧 schema、继续轮询旧 receipt 或 dual-read。已安装基线如存在历史 receipt，只允许在新 activation 开始前执行一次性离线迁移：将旧 receipt 从运行时可见路径隔离并写独立迁移审计，随后由 canonical activation 全量校验 active package 并产生当前 schema receipt。迁移不得伪造缺失字段、产生兼容 reader 或将历史回执当作 CAS 成功证据；迁移未完成时 activation fail closed 且 active pointer 保持不变。
 - 关联要求：[`environment-topology-and-packaging/REQ-003`](./environment-topology-and-packaging/spec.md#req-003)、[`REQ-004`](./environment-topology-and-packaging/spec.md#req-004)
 - 关联验收：[`environment-topology-and-packaging/GWT-002`](./environment-topology-and-packaging/spec.md#gwt-002)、[`GWT-003`](./environment-topology-and-packaging/spec.md#gwt-003)
@@ -69,18 +69,18 @@
 ### DEC-003 所有启动入口只能消费同一 runtime-config activation 合同
 
 - 对象边界：本 owner 只拥有 build-profile 信任域、runtime package、activation request/receipt、active pointer 和配置可用结果之间的一致性。工作区入口投影、构建/安装、工具链、原生插件图、依赖投影、设备选择与 attach 归 [`environment-topology-and-packaging`](./environment-topology-and-packaging/spec.md) 及其实现 owner；启动安全终态归 [`cold-start-performance`](../runtime-client-foundation/cold-start-performance/spec.md) owner。本 DEC 只消费这些 owner 的 canonical 输入/结果，不规定其版本、命令、组件图或终态内部字段。
-- 真相源：[`app_artifact_manifest.yaml`](../../../../quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml) 与 [`app_launch_manifest.yaml`](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml) 是交界处 schema、状态、typed failure 与信任策略的唯一 authoring source。Design 只引用 canonical metadata anchor，不复制 receipt 字段、允许值、错误码或历史字段集。
+- 真相源：[App artifact manifest](../../../../quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml) 与 [App launch manifest](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml) 是交界处 schema、状态、typed failure 与信任策略的唯一 authoring source。Design 只引用 canonical metadata anchor，不复制 receipt 字段、允许值、错误码或历史字段集。
 - Command 边界：入口 owner 只能将当前 generated activation request 提交给 canonical activation coordinator；只有 coordinator 可验证制品信任、package 与 request 身份，并以 CAS 推进 active pointer。入口、test host 和 host executor 不得代写、补全或转译 activation receipt。
-- 角色入口边界：面向人类的 `make app-dev`、面向 AI/自动化的 `make app-uat`、全局可调用的 `run.sh` 与受控制 IDE 虽承担不同交互角色，但都只能薄提交同一 canonical contract；Make 与 IDE 不拥有设备发现、env/target 扩展、状态机、provenance、receipt 或第二套 activation 协议，自动化入口也不替代 required human surfaces。字面 `flutter run` 是经 launcher `flutter` dispatcher 的 managed 薄入口：dispatcher 只对本 App 工作区的 `run` 子命令归一化进入 canonical launcher（固定 alpha/content-live/test_live），按固定顺序完成 device 解析、alpha runtime、lease/transport、device trust、exact 内容绑定与严格 readiness preflight 后前台 exec `run.sh`，薄提交同一 canonical contract；managed 路径的 readiness 不可用在 Flutter build 前 fail-closed，不新建第二套激活协议。非 `run` 子命令与其他项目以 exact argv/env/cwd 透传真实 SDK。`run.sh` 与受管字面 `flutter run` 无显式 `-d` 时的单设备自动、多设备双 TTY 数字交互、非 TTY typed block 与显式 exact `-d` 均由 canonical device authority 裁决。
+- 角色入口边界：Make、IDE、raw SDK、受管字面命令与 run.sh 只消费同一 canonical 启动 contract，不持第二套配置生成或设备权威。默认 Alpha 的 signed offline document 经过同一 activation/CAS/read chain 并验证快照与设备绑定，无云栈、TLS/登录 readiness 前置；在线 source 消费目标签名配置和对应严格 readiness。direct 安全租约只防运行占用，不提升 managed/UAT authority；其余子命令和项目 exact 透传，设备选择由 canonical device authority 裁决。
 - 终端注入边界：Cursor terminal profiles 与显式 opt-in、可逆的 user-zsh managed source block 只注入受管 PATH bin 目录（含 launcher `flutter` dispatcher）与钉定的 Flutter SDK/CocoaPods/Python 身份，不改 ZDOTDIR、不生成 terminal receipt；既有 shell 只能显式 source 刷新，移除注入即完全回退。terminal carrier receipt、`workspace_flutter_run` 与 `native_flutter_run` provenance 均已退役，`app_launch_attempt` 的两个 carrier 字段固定为空值。
 - 依赖 staleness 恢复边界：只有 live worktree 的外层 canonical launcher 在创建 private workspace projection 前、stdin/stderr 双 TTY 的交互会话中，才允许对首个 `APP.DEPENDENCY.bundle_stale` 自动执行一次 canonical `stackctl app-dependency-sync` 并在 active readback 与本次 sync attempt 一致后重试一次 projection（one-shot）；非交互/CI/UAT、private projection 内、同步失败、activation ambiguous 与第二次 stale 均 fail-closed，首个 stale blocker 必须先输出且不得被替换。sync 事务自身的对象与恢复语义由 [`platform-ops-governance` design](../../platform-ops-governance/design.md#dec-003) 拥有，本 DEC 只冻结启动侧触发边界。
 - Retry owner：iOS UAT parent 由 entry/toolchain owner 在 attempt-1 前一次性冻结 exact `PATH` 与同一 six-field physical CocoaPods binding，并由 attempt-1/retry 原样消费；ambient parent shell identity、attempt 间重发现与 child 反向传回均无 authority，binding 漂移在 Flutter child 前 typed block。
 - UAT authority 边界：raw authority 仍固定为 `ReleaseUatSamplePlan → TargetUatBinding → raw ReadinessCaseResult → EnvironmentAcceptanceFact`；父 report 只读投影 raw refs、exact-byte digests、coverage 与缺口，无独立 outcome verdict，也不能进入或回写该链。
 - Query 边界：native、Dart 与 host readback 只消费 [`schemas.runtime_config_activation_receipt`](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml) 当前 generated schema 的 canonical result。入口 provenance、启动终态或缓存的旧回执不得被推断为配置成功，也不得成为第二个 query source。
-- 结果边界：任一受支持入口只有在 canonical activation receipt 与 active package readback 同时满足当前 metadata contract 时，才能声明 runtime config 可用。启动 owner 得到的 attached、safe-terminal 或页面结果是配置证据的下游消费者，不能反向补齐缺失或无效的 activation result。
+- 结果边界：两类 source 都要求同一 canonical activation receipt 和 active document readback 满足 metadata contract；Alpha 另验证所绑定完整快照。离线 receipt 只证明本地 bootstrap 文档激活，不证明在线 endpoint 或 server active release，不能为通过判断伪造在线回执。启动 owner 得到的 attached、safe-terminal 或页面结果是配置证据的下游消费者，不能反向补齐缺失或无效的 activation result。
 - 失败恢复：当前 schema 缺失、非法、身份错配或 readback 不一致均按 metadata 的 typed 结果 fail closed，active pointer 保持上一份已验证 digest；首次安装则保持 absent。历史 receipt 只能走 [`DEC-002`](#dec-002) 的 activation 前一次性离线迁移，运行路径不提供兼容 reader。
 - 被否决方案：在 Design 锁定入口命令、SDK/构建工具版本、terminal surface 枚举、原生插件图、依赖 component 与 cold-start 内部终态，在平台或入口复制 metadata 字段，为历史 receipt 引入 dual-read，静默修改全部 user shell；恢复 ZDOTDIR shim、terminal carrier receipt 或 `workspace_flutter_run` carrier；保留 `embedded_default_package` 构建期默认供给旁路；让 `native_flutter_run` 成为第二启动协议；managed 启动按 latest 猜测内容。
-- 可测试观察面：metadata local contract 验证 authoring source 与各生成消费面的指纹一致、carrier 字段全空约束、未知或历史 schema fail closed；runtime-config local contract 验证不同入口提交同一 contract 时得到同一配置结果、无 canonical handoff 的构建（含绕过 dispatcher 的 raw SDK 绝对路径）fail closed，失败不改变上一 active pointer。terminal 注入、命令解析、设备交互、构建投影、依赖图、attach 和 safe-terminal 测试归各自 owner，本 DEC 不重述其实现断言。
+- 可测试观察面：metadata local contract 验证 authoring source 与各生成消费面的指纹一致、carrier 字段全空约束、未知或历史 schema fail closed；runtime-config local contract 验证不同入口提交同一 contract 时得到同一配置结果、在线 source 无合法 handoff 时 fail closed，raw SDK 默认 Alpha 与其他入口的离线完整性结果一致，失败不改变上一 active pointer。terminal 注入、命令解析、设备交互、构建投影、依赖图、attach 和 safe-terminal 测试归各自 owner，本 DEC 不重述其实现断言。
 - SLI/SLO：activation 保持 [`DEC-002`](#dec-002) 的时延、成功率、告警和回滚目标；记录面只跟随 canonical metadata，不维护第二份观测 schema。
 - 关联要求：[`environment-topology-and-packaging/REQ-003`](./environment-topology-and-packaging/spec.md#req-003)、[`REQ-004`](./environment-topology-and-packaging/spec.md#req-004)
 - 影响 Story：只影响 [`environment-topology-and-packaging`](./environment-topology-and-packaging/spec.md) 与 runtime-config 的 contract 交界。
@@ -92,15 +92,43 @@
 - 对象边界：`environmentArtifact.releaseTrainId` 是 Alpha/Beta/Gamma 跨 target 的共同 source train 身份；`baselineId` 是 package input capsule 的 target-scoped 身份，包含各环境配置输入，不是跨 target 标量。矩阵结果分别持久化单一 `releaseTrainId` 与闭集 `packageBaselines[target]`。
 - 状态流：每个 target 的 package 成功后立即回读 fresh active candidate manifest，在任何 `up`、Data 变更或 Patrol 前校验 package result、active pointer、manifest 与 `environmentArtifact.sourceCapsule.baselineId` 四者一致。首个 target 冻结 release train，后续 target 只允许相同 train 并记录自己的 baseline。
 - 读路径：App UAT 聚合回执和只读 availability 按 target 读取 `packageBaselines[target]`，并要求 `runtimeBindings[target].candidateDigest == startup.candidateDigest == package baseline`。空 scalar、从 Alpha 任取一个 baseline、缺 target key、release train 漂移和旧 startup/UAT 都是 typed generation mismatch。
-- 失败恢复：任一 target 的 train、baseline、candidate digest 或 active manifest 漂移时保留已完成的 target evidence，在首个 Patrol 前停止；不得用旧 UAT、当前 active pointer 的后来值或重新解释的 scalar 补齐。normal `down` 与既有 release lifecycle 仍是唯一恢复路径。
+- 失败恢复：任一 target 的 train、baseline、candidate digest 或 active manifest 漂移时保留已有 evidence 并阻断该 suite，不用旧 UAT 或后来 pointer 补齐。package candidate 与运行 generation 独立，恢复只经目标显式 lifecycle/lease 协调；不能默认 down 已复用 runtime 或其他 target。
 - 被否决方案：要求三环境 `baselineId` 相同、用 Alpha baseline 代表矩阵、只比较 receipt 时间、接受空 `packageBaseline`，或在 UAT 后重新读取可变 active pointer 推断代际。
 - 可测试观察面：local contract 覆盖三个不同 baseline/同一 train 通过、train 漂移与 target baseline 漂移在 device runner 前阻断、matrix receipt 字段精确，以及 read-only availability 拒绝 startup candidate 或 target baseline 不同的旧 UAT。
 - 关联要求：[`environment-topology-and-packaging/REQ-002`](./environment-topology-and-packaging/spec.md#req-002)、[`REQ-003`](./environment-topology-and-packaging/spec.md#req-003)
 - 关联验收：[`environment-topology-and-packaging/GWT-001`](./environment-topology-and-packaging/spec.md#gwt-001)、[`GWT-002`](./environment-topology-and-packaging/spec.md#gwt-002)
 
+<a id="dec-005"></a>
+### DEC-005 Data 生命周期矩阵以 activation 结果作为 Exit 前驱
+
+- 决策与 owner：Ops matrix 只编排下游 environment commands，不创建 producer facts；candidate 与 rollback 必须持有显式 handoff 或 empty-baseline system attestation，并在任何环境 mutation 前与 immutable release identity 精确对账。Data ship 仍拥有 prepared apply、activate、rollback、verify 与 Exit 的 append-only 结果，Content 仍按 runtime-data-engineering `DEC-003` 拥有 active pointer CAS。
+- 状态流：original 和 same-digest replay 都执行 `apply → activate → verify`；apply 只准备 candidate 与导入报告，activate 成功后才能验证公开可见性。rollback 目标先 apply 准备，再消费刚读回的 Content active release/digest/revision 作为 expected-current 三元组，成功后 verify；不从旧 verify、counts 或环境名猜 current。
+- Exit 边界：canonical `environment_release_lifecycle_exit.schema.json` 的 original/replay run 槽绑定 activate 结果，其 import 前驱由 activation result 的 exact `importRunId` 追到 prepared apply；rollback 槽只绑定 rollback 结果。existing environment lifecycle verifier 是前驱及导入闭包的唯一检查点，Exit 补验阶段 kind、同环境、same-digest replay、distinct run IDs 与 canonical refs，不并列一套宽松验证。
+- 就绪与配置边界：默认只有一套内容验证，不接受发布类别或命名 readiness 轨道；导入准备与可见性验证由已有生命周期动作和 exact 前驱区分。能力、观测、doctor 与运行隔离要求只消费显式环境配置，不在业务代码按环境名分流。完整 integration/release 验证单独声明 Exit evidence 需求，普通 managed/content-live 启动不强制 rollback/replay；Exit 只接受 original 或 replay 的精确 activation/verify 对，不只比较 import 身份。
+- 理由与被否决方案：prepared apply 证明 stage 成功而不证明 CAS/公开可见，不能同时要求一个槽既为 apply 又为已 activated；不放宽 activated validator、不恢复 `--release-id` 隐式准入、不保留类别常量或选择参数，不通过 mock 跳过生命周期矛盾。
+- 失败与恢复：任一 binding、CAS 或读回失败保留首个 typed blocker 和已完成原始结果，停止后续阶段；Exit create-once 且重算完整闭包。仅在现役 owner 命令允许且持有 exact 前驱时恢复，不手改 pointer、不重置环境，也不由本设计推导实际 Prod 执行授权。
+- 可测试观察面：local_contract 覆盖无类别显式输入、环境配置、命令顺序、独立 Exit 要求、apply 不能充当 Exit activation、activation 到 prepared apply 的跨 release/run/digest 拒绝；api_integration 以真实 original/rollback/replay 和四入口 same identity readback 证明恢复。矩阵 aggregate 不代写 EAF 或 production authority。
+- 关联要求与验收：[`environment-topology-and-packaging GWT-004`](./environment-topology-and-packaging/spec.md#gwt-004) 与 [`OPEN-018`](./environment-topology-and-packaging/spec.md#open-018)。
+- 影响 Story：[`environment-topology-and-packaging`](./environment-topology-and-packaging/spec.md)；producer 完成不增加下游条件。
+
+<a id="dec-006"></a>
+### DEC-006 内容 source 在组合根选择，离线制品与在线配置分别验信
+
+- 对象与 owner：canonical producer 拥有选定 release/cohort、许可与完整媒体闭包；App 只消费其不可变离线派生产物，不重选业务内容。runtime 组合根根据已验证配置构造同一组 typed read ports；页面、domain/application、Provider 消费端不读取 source/profile。Alpha local adapter 与 Remote adapter 复用 canonical Post/Creator/实体投影，离线只发布 typed capability，不伪造服务 active identity。
+- Command/query：构建准备完整 snapshot 并验证 digest/引用/许可，由独立 signed offline bootstrap document 绑定；离线与在线 document 共用 canonical activation/CAS/receipt/read chain，只有文档类型的验证合同不同，不另建 bootstrap reader。AppContentSource 的 typed 取值只消费 [`App launch manifest`](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml) 的 source 策略，Dart/wire 映射不在设计复制。source 在 provider scope 创建前冻结，显式换环境结束设备绑定、取消旧请求/播放器/outbox，再冷启动或重建整个 scope，不修改旧 client base。
+- 信任与时间：离线完整性由独立 signed offline document、制品签名、source digest 和许可共同承担，不继承在线 24 小时到期；不能靠忽略在线 expiry 实现离线。在线 endpoint trust、profile、target、签名与新配置有效期不豁免。尚有效在线配置在刷新失败时保留，到期按 canonical 错误恢复，不能用离线包续命；同 authority 刷新保留授权 namespace。
+- 一致性：封存推荐/频道与 premium 选择、稳定对象/详情引用和本地 continuation，同 cohort 参数化证明过滤/空态/分页/去重/取消/重试等价，不复制个性化引擎。媒体以显式本地交付类型进入统一图片/播放器边界，不把 file/asset 假装 HTTPS 或签名 grant。
+- 失败与恢复：不完整首装包在构建期阻断；升级只在新闭包全部验证后切换，失败保持旧完整快照。在线失败从不切离线。永久离线仅接受可公开离线再分发许可，需要即时撤权的内容禁止进入；未知或不支持登录/写入/私有能力返回明确不可用，不假写成功。
+- 理由：统一用户可观察行为而非强迫同一传输，既使首次离线可用，也不把离线结果冒充在线健康或授权。
+- 被否决方案：all-Remote、失败切 Mock/fixture、把视频全集当 premium、页面按 Alpha 分支、伪造 server active receipt、三套 nonprod 包名、动态换旧 client base、全局放宽签名 expiry 或永久离线即时撤权承诺。
+- SLI/SLO 与测试 seam：分别计离线冷启动/浏览和在线推荐/premium、媒体首帧/播放/seek、stale 与恢复；沿用端侧 6 秒终态和既有在线 timeout/retry，不把目标记为实测。local_contract 比较同 cohort 两 adapter、完整性和到期边界；api_integration 证明 Remote identity/媒体闭包；user_acceptance 在四默认入口无后端首装、跨配置到期与升级故障中证明页面/播放器。线上 SLO 冲突在 OPEN-020 裁决前不得判绿。
+- 关联要求：[`environment-topology-and-packaging REQ-008`](./environment-topology-and-packaging/spec.md#req-008)。
+- 关联验收：[`GWT-007`](./environment-topology-and-packaging/spec.md#gwt-007)，未实现和未测保持该 Story 的 OPEN-019/020。
+- 影响 Story：[`environment-topology-and-packaging`](./environment-topology-and-packaging/spec.md)。
+
 ## 5. 失败与恢复
 
-- 环境 operation lock、consumer lease、runtime identity、release identity、设备或 health 任一不满足时均在写前 fail closed。
+- mutation 的目标 operation fence、使用租约、运行/内容身份或设备 ownership 不满足时写前 fail closed；默认 Alpha 离线校验不要求云侧 health，在线 freshness 不为离线例外放宽。
 - fault active、原 release 未恢复或任一平台 CaseResult 缺失时，父 report 只能失败；已有原始结果保持 append-only，不覆盖、不补写。
 - 回滚只使用进入窗口前冻结的 immutable release、runtime receipt 与 target topology，不依赖重新 package、重新 build 或当前工作树。
 
@@ -109,18 +137,18 @@
 - 成本增加为每个本地 target 固定的小型验收窗口：两个模拟器与一次受控 Edge 窗口；不随 M100/M1000 对象总量线性放大。release lifecycle/rollback/replay 继续作为独立证据，不由该窗口隐含完成。
 - Edge 与原 release 的恢复目标均为 5 分钟内完成；任何验收退出时 active fault 数必须为零，runtime health 必须通过，原 release readback 必须与进入前 digest 相同。
 - SLI 直接读取 stackctl create-once run result、target CaseResult、fault cleanup、health 与 release lifecycle/readback；告警以未清理 fault、恢复超时、digest 漂移或平台结果缺失为触发，不维护第二份状态台账。
-- rollout 已扩展到 Alpha/Beta/Gamma 两个模拟器并固定 `nonPromotable=true`；每个 target 必须独立执行受控 Edge 恢复，不能用 Alpha 结果代替 Beta/Gamma。Android/iOS 真机、正式 Green 与 Prod 仍保持对应 OPEN 和人工门，不能由本 DEC 推导通过。
+- 目标验收覆盖 Alpha 离线与 Beta/Gamma Remote 的双模拟器，均保持 nonPromotable；服务 Edge/empty/replay 由独立 Alpha API gate 与 Beta/Gamma 验证。尚未执行的任一平台、真机、正式 Green 或 Prod 保持对应 OPEN，不使用已实现时态或另一环境的结果代填。
 
 ### 启动与恢复证据分层映射
 
 | Environment | Platform / entrypoint | 行为与验收锚点 | `local_contract` | `api_integration` | `user_acceptance` / 证据源 |
 | --- | --- | --- | --- | --- | --- |
 | Alpha/Beta/Gamma | Android/iOS：`make app-dev` → `stackctl dev-session --launch-app --app-mode` → `run.sh`，以及 direct `run.sh`、packaged Debug | `app-dev` 只提供人类一键薄入口，默认 Alpha/content-live 并委托 canonical device authority；完整 runtime package 得到 `configurationState=complete`；[`GWT-002`](./environment-topology-and-packaging/spec.md#gwt-002)、[`UAT-003`](../../spec.md#uat-003) | Make 参数/default/多设备拒绝、无第二状态与 launcher/handoff/identity suites | 真实 stackctl 委托与 immutable projection 的 profile 编译、package identity、install/launch receipt；结果按 compile/package/install/attach/safe-terminal 分段 | `run.sh` 是 required human surface；Android Emulator/登记真机与 iOS Simulator/登记 iPhone 观察冷启动、Hot Restart、图标启动和安全终态原始 CaseResult，VM attach 不替代同制品 safe terminal |
-| Alpha/Beta/Gamma | Android/iOS：受管 PATH 字面 `flutter run`（launcher `flutter` dispatcher → canonical launcher） | managed one-command 入口；固定 alpha/content-live/test_live，按固定顺序完成 exact device、alpha runtime、lease/transport、device trust、exact 内容绑定与严格 preflight 后前台 exec `run.sh`，attempt 记录 `canonical_launcher`，任一 readiness 不可用在 Flutter build 前 typed blocker；[`GWT-002`](./environment-topology-and-packaging/spec.md#gwt-002)、[`UAT-003 install-launch-equivalence`](../../spec.md#install-launch-equivalence) | dispatcher 子命令分流与 exact 透传、readiness fail-closed 顺序、非 alpha ambient 选择器拒绝、raw SDK 旁路负例、bundle stale 单次同步恢复、PATH 注入投影与回退 | managed preflight 真实探测 TLS/api-edge/user/integration/SMS Provider/OTP/内容字节，preparation receipt 与同一 attempt 的 compile/install/activation/launch receipt 串联 | 受管终端真实执行字面 `flutter run` 一命令到达 alpha 首页内容；多设备双 TTY 数字选择；raw SDK 绝对路径与非 alpha ambient 选择器 fail closed |
+| Alpha | Android/iOS：raw SDK、受管字面 `flutter run`、IDE、run.sh | 同一默认离线 source 与完整性校验；[`GWT-007`](./environment-topology-and-packaging/spec.md#gwt-007) | 同 cohort typed ports、媒体闭包、到期边界、设备绑定与入口等价 | 真实制品派生/安装与 source digest；不以离线结果签 API activation | 无后端、断网、无预热首装及再次冷启动的首页/premium/详情/播放/seek；不要求云栈或登录 readiness |
 | Alpha/Beta/Gamma | Android/iOS：受控制 IDE attach（`workspace_ide_debug`） | required human surface；pre-launch 进入同一 executor，IDE 只连接 attempt-scoped VM service；[`GWT-002`](./environment-topology-and-packaging/spec.md#gwt-002)、[`UAT-003 install-launch-equivalence`](../../spec.md#install-launch-equivalence) | projection 生成/回退、profile、pre-launch/attach 状态、超时与错误码契约 | canonical executor 产出 compile/install/activation/launch/attached 分段 receipt，IDE 不生成第二 handoff | Reload 后从受控制 profile 启动并完成真实 attach，结果与同设备 `run.sh`/字面命令行为指纹一致 |
 | Alpha/Beta/Gamma | Android/iOS：`make app-uat` → `stackctl app-content-uat` | AI/自动化无交互薄入口，仅接受 nonprod local targets；按 canonical contract 编排而不替代 required human surfaces；[`GWT-002`](./environment-topology-and-packaging/spec.md#gwt-002) | 参数闭集、Prod 拒绝、无交互/无第二状态、父 report 无 verdict | 真实 app-content-uat 委托、iOS attempt-1/retry frozen Pod binding、raw refs/digests/coverage exact readback | 每个 target/platform/device 结果来自 canonical raw `ReadinessCaseResult`；父 report 只读且不签发 outcome，自动化结果不替代 `run.sh`、受管字面 `flutter run` 或 IDE 用户验收 |
 | Prod | Android/iOS：Release package、`prod-sim`/`prod-hosted` | Debug 禁止、exact artifact、签名与纯度 fail closed；[`GWT-001`](./environment-topology-and-packaging/spec.md#gwt-001)、[`GWT-003`](./environment-topology-and-packaging/spec.md#gwt-003) | Prod Debug 拒绝、manifest/identity/purity、测试依赖泄漏负例 | Android Release artifact 与 iOS unsigned iphoneos compile；签名、安装和 hosted 前置逐层记录 | 只消费已授权 exact Release artifact；缺正式 ID、签名、市场账号、真机或授权的单元保持 `OPEN-002/003`，不得由 simulator/package-only 代替 |
 | Alpha/Beta/Gamma/Prod | Web：`package --kind web`、`app-artifact --app-platform web`、`dev-session` | 单一 Web 编译 writer、exact manifest/current 投影、静态恢复面不依赖 API 健康；[`GWT-001`](./environment-topology-and-packaging/spec.md#gwt-001)、[`public-content-web-entry GWT-006`](../runtime-client-foundation/public-content-web-entry/spec.md#gwt-006) | Web bootstrap 状态机、authoring source/codegen、单 writer 与 manifest digest 契约 | exact artifact 的 HTML/字体 HTTP status、UTF-8、MIME、digest、缓存/Service Worker；API plane 关闭时静态恢复面仍可读 | Chrome/Safari 的字体 200、慢载、404、首次离线、缓存离线和 SW 更新；四环境公网缺口继续由 `public-content-web-entry OPEN-004` 承接 |
 | Alpha/Beta/Gamma/Prod | 原生 fatal recovery → 官方 Web CTA | CTA 打开本环境 exact origin 且中文可读；[`UAT-003`](../../spec.md#uat-003)、[`public-content-web-entry GWT-006`](../runtime-client-foundation/public-content-web-entry/spec.md#gwt-006) | fatal 注入状态机、canonical URL 与单一恢复动作 | 恢复 URL 的 HTTP 200、UTF-8、字体/HTML digest 与 artifact manifest 绑定 | 真正点击 CTA 后的浏览器页面、中文像素、键盘可达与恢复动作；`UIApplication.open`/Intent 成功本身不计通过 |
 
-所有 CaseResult 只按 [`app_launch_manifest.yaml` 的 canonical attempt schema](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml) 与 [`app_artifact_manifest.yaml`](../../../../quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml) 绑定同一冻结 source/capsule、制品、启动证据与本次 attempt，Design 不复制字段表。静态门禁、真实编译、package、install/VM attach、同制品 startup safe terminal、runtime health 和用户可见终态分别报告，前一层不得替代后一层。
+所有 CaseResult 只按 [App launch manifest 的 canonical attempt schema](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml) 与 [App artifact manifest](../../../../quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml) 绑定同一冻结 source/capsule、制品、启动证据与本次 attempt，Design 不复制字段表。静态门禁、真实编译、package、install/VM attach、同制品 startup safe terminal、runtime health 和用户可见终态分别报告，前一层不得替代后一层。

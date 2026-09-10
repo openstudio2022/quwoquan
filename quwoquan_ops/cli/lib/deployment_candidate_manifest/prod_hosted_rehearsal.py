@@ -171,12 +171,40 @@ def _run_git(args: Sequence[str], *, repo_root: Path) -> str:
     return result.stdout.strip()
 
 
+def _candidate_input_paths(candidate_root: Path | None) -> list[str]:
+    """候选打包输入的仓内路径闭包（来自封存的 package input capsule）。"""
+
+    if candidate_root is None:
+        return []
+    capsule = candidate_root / "input-capsule" / "manifest.json"
+    if capsule.is_symlink() or not capsule.is_file():
+        return []
+    try:
+        payload = json.loads(capsule.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return []
+    roots = payload.get("deploymentInputRoots") if isinstance(payload, Mapping) else None
+    paths: list[str] = []
+    for item in roots or []:
+        value = str(item or "").strip()
+        # 仓外绝对路径（release attestation 等）已由候选 release 绑定校验，不参与 git 比较。
+        if value and not value.startswith("/") and not value.startswith(".qwq_output"):
+            paths.append(value)
+    return paths
+
+
 def rehearsal_candidate_source_gate(
     candidate: Mapping[str, Any],
     *,
     repo_root: Path,
+    candidate_root: Path | None = None,
 ) -> dict[str, str]:
-    """SIT-003 t1：候选 sourceRevision 必须同时等于 HEAD 与本地 dev1.0，且工作树干净。"""
+    """SIT-003 t1：候选内容身份必须等于 HEAD，HEAD 必须是本地 dev1.0 head，且工作树干净。
+
+    `stackctl package` 是内容寻址的：打包输入字节同一时复用既有不可变候选并保留首次打包的
+    sourceRevision。因此 sourceRevision 与 HEAD 不等只在「它是 HEAD 的祖先」且「两者之间没有
+    任何打包输入路径的改动」时成立（与 integration_run 的候选身份规则一致）。
+    """
 
     source_revision = str(candidate.get("sourceRevision") or "")
     if _GIT_SHA.fullmatch(source_revision) is None:
@@ -187,14 +215,40 @@ def rehearsal_candidate_source_gate(
     if dirty:
         raise RehearsalError("rehearsal refuses an uncommitted worktree")
     head = _run_git(["rev-parse", "HEAD"], repo_root=repo_root)
-    if head != source_revision:
-        raise RehearsalError("rehearsal candidate sourceRevision does not match HEAD")
     dev_head = _run_git(["rev-parse", "--verify", "--quiet", DEV_REF], repo_root=repo_root)
-    if dev_head != source_revision:
-        raise RehearsalError(
-            "rehearsal candidate must be the exact local dev1.0 head"
+    if dev_head != head:
+        raise RehearsalError("rehearsal requires HEAD to be the exact local dev1.0 head")
+    reused_from_ancestor = False
+    if head != source_revision:
+        ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", source_revision, head],
+            cwd=repo_root,
+            check=False,
+        ).returncode == 0
+        if not ancestor:
+            raise RehearsalError("rehearsal candidate sourceRevision does not match HEAD")
+        input_paths = _candidate_input_paths(candidate_root)
+        if not input_paths:
+            raise RehearsalError(
+                "rehearsal candidate sourceRevision does not match HEAD and its package "
+                "inputs are unavailable for content comparison"
+            )
+        changed = _run_git(
+            ["diff", "--name-only", source_revision, head, "--", *input_paths],
+            repo_root=repo_root,
         )
-    return {"head": head, "devHead": dev_head, "sourceRevision": source_revision}
+        if changed:
+            raise RehearsalError(
+                "rehearsal candidate sourceRevision does not match HEAD: package inputs changed "
+                f"({changed.splitlines()[0]} ...)"
+            )
+        reused_from_ancestor = True
+    return {
+        "head": head,
+        "devHead": dev_head,
+        "sourceRevision": source_revision,
+        "reusedFromAncestor": "true" if reused_from_ancestor else "false",
+    }
 
 
 def _docker_inspect(ref: str, template: str) -> str | None:

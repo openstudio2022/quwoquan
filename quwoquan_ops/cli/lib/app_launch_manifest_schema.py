@@ -213,6 +213,23 @@ def _validate_schema_value(
                     contract=contract,
                 )
             )
+    schema_one_of = field_contract.get("schema_one_of")
+    if schema_one_of is not None:
+        if (
+            schema_one_of != ["runtime_config_package", "offline_bootstrap_document"]
+            or "schema_ref" in field_contract
+            or not isinstance(value, dict)
+        ):
+            return issues + [f"{field_path} has an invalid closed document union"]
+        selected = [
+            name for name in schema_one_of
+            if contract["schemas"][name]["schema_value"] == value.get("schema")
+        ]
+        if len(selected) != 1:
+            return issues + [f"{field_path}.schema is not a declared document discriminator"]
+        issues.extend(validate_schema_document(
+            value, selected[0], contract=contract, field_path=field_path,
+        ))
     schema_ref = field_contract.get("schema_ref")
     if isinstance(schema_ref, str) and isinstance(value, dict):
         issues.extend(

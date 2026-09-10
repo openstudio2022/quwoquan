@@ -29,7 +29,10 @@ import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart'
     show appImageLoadErrorKey, appImageLoadSuccessKey;
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/testing/test_keys.dart';
+
 import '../../../support/runtime/patrol/patrol_test_support.dart';
+
 import 'package:quwoquan_app/l10n/app_localizations_zh.dart';
 
 const _apiContractEnv = String.fromEnvironment(
@@ -43,10 +46,11 @@ const _nonprodEnvironments = <String>{'alpha', 'beta', 'gamma'};
 // 首页推荐 feed 卡片容器 key（home_multi_form_feed.dart 真相源）。
 const _kFeedCard0 = ValueKey<String>('home-feed-card-0');
 const _kHomeSearchChrome = ValueKey<String>('home-primary-tab-chrome');
-// 视频书（featured 频道）入口与终态 key（home_primary_tab_strip / home_page /
-// works_immersive_viewer_* 真相源）。
-const _kFeaturedTab = ValueKey<String>('home-primary-tab-featured');
-const _kFeaturedChannelBody = ValueKey<String>('video-book-root');
+// 视频书是独立一级根入口；正文终态与返回 key 由沉浸 viewer 拥有。
+const _kVideoBookEntry = TestKeys.mainTabVideoBook;
+const _kVideoBookRoot = ValueKey<String>('video-book-root');
+// works_immersive_viewer_canvas.dart 的既有 key，TestKeys 尚未声明对应常量。
+const _kWorksTopBack = ValueKey<String>('works-top-back');
 const _kVideoPlayerReady = ValueKey<String>('video-player-ready');
 const _kVideoPlayerError = ValueKey<String>('video-player-error');
 const _kWorksVideoDeliveryUnresolved = ValueKey<String>(
@@ -172,12 +176,14 @@ void main() {
     },
   );
 
-  // 视频书 = 首页「精选」频道 + premium 单路数据源 + 沉浸 viewer。它与三路浏览流
+  // 视频书 = 独立一级根入口 + premium 单路数据源 + 沉浸 viewer。它与三路浏览流
   // 不共享回退：premium 池空即空态、任一集交付引用解析失败即显式失败态，二者都
   // 不得被首页推荐绿冒充（environment-topology-and-packaging REQ-002：
   // premium_stream release-bound 非空读回）。
   patrolTest(
-    'home_video_book_featured_channel_renders_playable_episode',
+    // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t2
+    // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t3
+    'home_video_book_root_entry_renders_playable_episode',
     tags: ['user-acceptance', 'home-rec', 'discovery', 'video-book'],
     skip: !kRunPatrolAcceptance,
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 12)),
@@ -185,13 +191,13 @@ void main() {
       await launchPatrolAppOnce($);
       await _recoverToHomeFeed($);
 
-      await $(_kFeaturedTab).tap();
+      await $(_kVideoBookEntry).tap();
       final entered = await _waitForKeyInTree(
         $,
-        _kFeaturedChannelBody,
+        _kVideoBookRoot,
         timeout: const Duration(seconds: 12),
       );
-      expect(entered, isTrue, reason: '点击「视频书」频道必须进入 premium 沉浸正文');
+      expect(entered, isTrue, reason: '点击底栏「视频书」必须进入独立根页的 premium 沉浸正文');
 
       // 终态三选一：ready（内容 + 交付 + 播放器均成立）/ 显式失败 / 合法空态。
       // 只有 ready 是验收通过；空态与失败态都必须可区分并作为红报告。
@@ -235,7 +241,8 @@ void main() {
         reason: '视频书首集必须完成原生播放器初始化（release-bound 可播放视频）',
       );
 
-      await $.platform.android.pressBack();
+      // 独立根页通过正文返回动作回首页；系统 back 可能直接退出 Android App。
+      await $(_kWorksTopBack).tap();
       await _recoverToHomeFeed($);
     },
   );
@@ -375,8 +382,8 @@ void main() {
       );
       expect(entered, isTrue, reason: '点击内容卡应进入沉浸消费（首页 chrome 被全屏沉浸路由覆盖）');
 
-      // 返回：原生返回键应回到推荐 feed。
-      await $.platform.android.pressBack();
+      // 返回：使用沉浸正文的返回动作恢复推荐 feed。
+      await $(_kWorksTopBack).tap();
       await $.pump(const Duration(milliseconds: 400));
       await $.pump(const Duration(seconds: 1));
       final returned = await _waitUntil(

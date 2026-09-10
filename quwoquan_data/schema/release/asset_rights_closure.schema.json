@@ -261,6 +261,10 @@
         "watermarkKind": {
           "enum": ["none", "author_signature", "platform_logo", "stock_agency", "other", "unknown"]
         },
+        "accessPolicy": {
+          "description": "来源站点 robots/ToS 对自动访问的态度，由 ingest 资产行原样转录；只记录不阻断，缺席即缺席。",
+          "enum": ["open", "robots_disallowed", "tos_restricted"]
+        },
         "rightsAuditStatus": {
           "enum": [
             "verified",

@@ -175,6 +175,12 @@ flutter:
   assets:
     - assets/filters/filter_presets.json
     - assets/assistant/config/progress_text_policy.json
+    - path: assets/content/alpha/manifest.json
+      flavors:
+        - nonprod
+    - path: assets/content/alpha/media/
+      flavors:
+        - nonprod
 
   shaders:
     - shaders/article_page_curl_lighting.frag

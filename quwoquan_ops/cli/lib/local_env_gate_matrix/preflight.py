@@ -214,26 +214,14 @@ def _release_binding(attestation: str, *, label: str) -> dict[str, Any]:
         or _SHA256.fullmatch(digest) is None
     ):
         raise ValueError(f"{label} release attestation identity is invalid")
-    release_class = payload.get("releaseClass")
-    lifecycle_state = payload.get("productLifecycleState")
+    if {"releaseClass", "productLifecycleState", "readinessPhase"}.intersection(payload):
+        raise ValueError(f"{label} release attestation contains retired category fields")
     contains_unverified_assets = payload.get("containsUnverifiedAssets")
-    if (
-        release_class not in {"research", "commercial", "production"}
-        or lifecycle_state != release_class
-        or not isinstance(contains_unverified_assets, bool)
-        or (
-            release_class == "commercial"
-            and contains_unverified_assets is not False
-        )
-    ):
-        raise ValueError(
-            f"{label} release attestation lifecycle identity is invalid"
-        )
+    if not isinstance(contains_unverified_assets, bool):
+        raise ValueError(f"{label} release attestation rights identity is invalid")
     return {
         "releaseId": release_id,
         "releaseDigest": digest,
-        "releaseClass": release_class,
-        "productLifecycleState": lifecycle_state,
         "containsUnverifiedAssets": contains_unverified_assets,
         "attestation": str(path.resolve()),
     }

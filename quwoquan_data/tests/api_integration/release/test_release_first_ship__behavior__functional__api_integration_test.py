@@ -18,7 +18,6 @@ from content.release.environment.run_evidence import (
     create_run as create_environment_run,
     write_environment_result,
 )
-from content.release.environment.readiness import ShipReadinessPhase
 from content.release.environment.release_contract import (
     build_release_contract,
     write_release_contract,
@@ -112,8 +111,6 @@ def _release(
         "releaseId": release_id,
         "sourceOwner": "qwq_data",
         "releaseKind": release_kind,
-        "releaseClass": "production",
-        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "rightsStatusCounts": {
             "verified": 0,
@@ -235,7 +232,6 @@ def _write_import_result(
         valid_environments=frozenset({environment}),
     )
     header = read_json(release / "payload/release.json")
-    release_class = str(header["releaseClass"])
     candidate = apply_run / "content-candidate-receipt.json"
     write_json(
         candidate,
@@ -246,7 +242,6 @@ def _write_import_result(
             "sourceOwner": "qwq_data",
             "releaseId": release.name,
             "manifestDigest": admission.manifest_digest,
-            "releaseClass": release_class,
             "releaseKind": str(header["releaseKind"]),
             "mode": "sync",
             "deletePolicy": "tombstone",
@@ -297,7 +292,6 @@ def _write_import_result(
             "active": {
                 "releaseId": release.name,
                 "manifestDigest": admission.manifest_digest,
-                "releaseClass": release_class,
                 "projectionVersion": 2,
                 "revision": 1,
                 "activatedAt": "2026-09-05T00:00:03Z",
@@ -323,7 +317,6 @@ def _write_import_result(
             "sourceOwner": "qwq_data",
             "releaseId": release.name,
             "manifestDigest": admission.manifest_digest,
-            "releaseClass": release_class,
             "projectionVersion": 2,
             "revision": 1,
             "activatedAt": "2026-09-05T00:00:03Z",
@@ -384,8 +377,6 @@ def _write_import_result(
             "schema": "quwoquan_data.environment_release_result",
             "environment": environment,
             "releaseId": release.name,
-            "releaseClass": release_class,
-            "productLifecycleState": str(header["productLifecycleState"]),
             "containsUnverifiedAssets": bool(header["containsUnverifiedAssets"]),
             "manifestDigest": admission.manifest_digest,
             **admission.result_envelope(),
@@ -539,8 +530,6 @@ def _superseded_research_apply_blocks_before_readiness_or_import(
     release = _release(tmp_path)
     header_path = release / "payload/release.json"
     header = read_json(header_path)
-    header["releaseClass"] = "production"
-    header["productLifecycleState"] = "production"
     write_json(header_path, header)
     _patch_roots(monkeypatch, tmp_path)
     monkeypatch.setattr(
@@ -596,8 +585,6 @@ def _superseded_research_rollback_import_is_blocked_before_cas_adapter(
     release = _release(tmp_path)
     header_path = release / "payload/release.json"
     header = read_json(header_path)
-    header["releaseClass"] = "production"
-    header["productLifecycleState"] = "production"
     write_json(header_path, header)
     _patch_roots(monkeypatch, tmp_path)
     monkeypatch.setattr(
@@ -878,7 +865,6 @@ def test_ship_verify_uses_environment_topology_without_manual_network_arguments(
             env=environment.value,
             import_run_id=import_run_id,
             run_id="verify-001",
-            readiness_phase="production",
             lifecycle_exit_ref="",
             release_admission=_fixture_admission(release),
         )
@@ -952,14 +938,13 @@ def test_ship_verify_binds_consumer_readiness_to_verified_release(
             env="gamma",
             import_run_id=import_run_id,
             run_id="verify-ready",
-            readiness_phase="production",
             lifecycle_exit_ref=lifecycle_exit_ref,
             release_admission=_fixture_admission(release),
         )
     )
 
     assert observed["environment"] is DeploymentEnvironment.GAMMA
-    assert observed["phase"].value == "production"
+    assert observed["action"].value == "verify"
     assert observed["lifecycle_exit_ref"] == lifecycle_exit_ref
     assert observed["release_id"] == release.name
     assert observed["verify_run_id"] == "verify-ready"
@@ -1015,7 +1000,6 @@ def test_ship_verify_preserves_failed_consumer_receipt(
                 env="alpha",
                 import_run_id=import_run_id,
                 run_id="verify-failed",
-                readiness_phase="production",
                 lifecycle_exit_ref="",
                 release_admission=_fixture_admission(release),
             )

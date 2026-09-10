@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any
 
@@ -12,17 +13,47 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
     ROOT,
     EnvRunner,
 )
-# Data producer 单一 production 类别（DEC-041）与历史 research/commercial 三值闭集。
-_RELEASE_CLASSES = frozenset({"research", "commercial", "production"})
-
 from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import (
     _device_binding_errors,
     _release_binding,
 )
 
 
-class ResearchLifecycleUnsupported(ValueError):
-    """Retained import name for callers; Research is now a supported branch."""
+def _release_admission_binding(
+    binding: dict[str, Any], *, handoff_ref: str,
+    system_attestation_ref: str, system_attestation_digest: str,
+) -> dict[str, Any]:
+    """Data 拥有准入验证；矩阵额外对账 package 使用的完整 attestation 字节。"""
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_data_args
+    import quwoquan_ops.cli.lib.local_env_gate_matrix as matrix_pkg
+
+    argv: list[str] = []
+    for flag, value in (("--handoff-ref", handoff_ref),
+                        ("--system-attestation-ref", system_attestation_ref),
+                        ("--system-attestation-digest", system_attestation_digest)):
+        if value:
+            argv.extend((flag, value))
+    try:
+        args = _parse_data_args(["ship", "apply", *argv, "--env", "alpha"])
+        from content.release.environment.release_runtime import admit_environment_release
+
+        admission = admit_environment_release(
+            args, repo_root=ROOT, output_root=matrix_pkg.output_root(),
+            release_root=matrix_pkg.output_root() / "data" / "releases",
+        )
+    except (SystemExit, OSError, TypeError, ValueError) as exc:
+        raise ValueError(f"Data release admission is GATE_BLOCK: {exc}") from exc
+    canonical = admission.release / "attestations" / "release.json"
+    if (admission.release_id != binding["releaseId"]
+            or admission.manifest_digest != binding["releaseDigest"]
+            or canonical.read_bytes() != Path(binding["attestation"]).read_bytes()):
+        raise ValueError("Data release admission differs from package attestation identity")
+    header = json.loads((admission.release / "payload" / "release.json").read_text(encoding="utf-8"))
+    if header.get("containsUnverifiedAssets") != binding["containsUnverifiedAssets"]:
+        raise ValueError("Data release header rights differ from package attestation identity")
+    return {**binding, "admissionArgv": argv,
+            "milestone": header.get("milestone"),
+            "admissionEnvelope": admission.result_envelope()}
 
 
 @dataclass(frozen=True)
@@ -41,6 +72,12 @@ def _resolve_matrix_inputs(
     *,
     release_attestation: str,
     rollback_release_attestation: str,
+    release_handoff_ref: str = "",
+    release_system_attestation_ref: str = "",
+    release_system_attestation_digest: str = "",
+    rollback_release_handoff_ref: str = "",
+    rollback_release_system_attestation_ref: str = "",
+    rollback_release_system_attestation_digest: str = "",
     test_data_request: dict[str, str] | None,
     test_data_evidence: dict[str, str] | None,
     test_data_handoff: dict[str, str] | None,
@@ -64,14 +101,16 @@ def _resolve_matrix_inputs(
     if candidate_release["releaseId"] == rollback_release["releaseId"]:
         raise ValueError("candidate and rollback release must be different")
 
-    # Research and commercial are explicit release metadata branches.  The
-    # matrix must not reject either class or infer it from an environment; the
-    # downstream lifecycle phases consume the two exact attestation identities.
-    candidate_class = str(candidate_release["releaseClass"])
-    rollback_class = str(rollback_release["releaseClass"])
-    if candidate_class not in _RELEASE_CLASSES or rollback_class not in _RELEASE_CLASSES:
-        raise ValueError("matrix release lifecycle branch is unknown")
-
+    candidate_release = _release_admission_binding(
+        candidate_release, handoff_ref=release_handoff_ref,
+        system_attestation_ref=release_system_attestation_ref,
+        system_attestation_digest=release_system_attestation_digest,
+    )
+    rollback_release = _release_admission_binding(
+        rollback_release, handoff_ref=rollback_release_handoff_ref,
+        system_attestation_ref=rollback_release_system_attestation_ref,
+        system_attestation_digest=rollback_release_system_attestation_digest,
+    )
 
     request_by_target = dict(test_data_request or {})
     evidence_by_target = dict(test_data_evidence or {})

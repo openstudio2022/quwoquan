@@ -1,4 +1,4 @@
-# spec_ref: specs/feature-tree/discovery-content/spec.md
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/design.md#dec-003
 """Content release-control Data adapters and activation orchestration contracts."""
 
 from __future__ import annotations
@@ -47,7 +47,6 @@ def _candidate(release_id: str = "release-a") -> dict[str, object]:
         "sourceOwner": "qwq_data",
         "releaseId": release_id,
         "manifestDigest": DIGEST_A,
-        "releaseClass": "production",
         "releaseKind": "content",
         "mode": "sync",
         "deletePolicy": "tombstone",
@@ -125,7 +124,6 @@ def _active(
         result.update(
             releaseId=release_id,
             manifestDigest=digest,
-            releaseClass="production",
             projectionVersion=5,
             revision=revision,
             activatedAt="2026-09-05T00:00:00Z",
@@ -155,7 +153,6 @@ def _activation(expected: dict[str, object], *, revision: int) -> dict[str, obje
         "active": {
             "releaseId": "release-a",
             "manifestDigest": DIGEST_A,
-            "releaseClass": "production",
             "projectionVersion": 8,
             "revision": revision,
             "activatedAt": "2026-09-05T00:00:03Z",
@@ -357,14 +354,20 @@ def _release(root: Path) -> tuple[Path, ReleaseAdmission]:
         release / "payload/release.json",
         {
             "releaseId": "release-a",
-            "releaseClass": "production",
-            "productLifecycleState": "production",
             "containsUnverifiedAssets": True,
         },
     )
     write_json(
         release / "payload/desired_state.json",
         {"releaseId": "release-a", "desiredRefs": {"entities": [], "posts": []}},
+    )
+    write_json(
+        release / "payload/media_manifest.json",
+        {
+            "schema": "quwoquan_data.release_media_manifest", "releaseId": "release-a",
+            "sourceOwner": "qwq_data", "assets": [], "issues": [],
+            "counts": {"assets": 0, "issues": 0},
+        },
     )
     digest = payload_digest(release)
     return release, ReleaseAdmission(
@@ -492,8 +495,6 @@ def _prepare_apply(root: Path, admission: ReleaseAdmission) -> None:
             "schema": "quwoquan_data.environment_release_result",
             "environment": "alpha",
             "releaseId": "release-a",
-            "releaseClass": "production",
-            "productLifecycleState": "production",
             "containsUnverifiedAssets": True,
             "manifestDigest": admission.manifest_digest,
             **admission.result_envelope(),
@@ -650,4 +651,120 @@ def test_activate_readback_failure_is_ambiguous_without_applied_ref(
     result = read_json(run / "result.json")
     assert result["status"] == "failed"
     assert result["failedStage"] == "owner_fenced_readback"
+    assert "ambiguous" in result["error"]
+    assert result["contentPreActiveReceiptRef"]
+    assert result["contentActivationReceiptRef"]
+    assert result["contentPostActiveReceiptRef"]
     assert not (run / "applied_ref.json").exists()
+
+
+@pytest.mark.parametrize("rollback", [False, True])
+@pytest.mark.parametrize("available", [False, True])
+def test_public_media_readback_precedes_activation_and_rollback_cas(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rollback: bool, available: bool
+) -> None:
+    import hashlib
+    from content.release.environment.public_api_client import PublicApiClient, PublicBinaryResponse
+
+    release, admission = _release(tmp_path)
+    body = b"candidate-public-body"
+    write_json(release / "payload/media_manifest.json", {
+        "schema": "quwoquan_data.release_media_manifest", "releaseId": "release-a",
+        "sourceOwner": "qwq_data", "issues": [], "counts": {"assets": 1, "issues": 0},
+        "assets": [{
+            "assetId": "a", "kind": "image", "version": 1, "contentType": "image/webp",
+            "sha256": "sha256:" + hashlib.sha256(body).hexdigest(), "bytes": len(body),
+            "publicSliceKey": "media/image/s/asset/a/v1/source.webp",
+            "ownerRefs": ["posts/article/a"], "rightsSnapshotRefs": ["rights/a"],
+        }],
+    })
+    admission = replace(admission, manifest_digest=payload_digest(release))
+    _prepare_apply(tmp_path, admission)
+    calls: list[str] = []
+    deps = _activate_dependencies(tmp_path, admission, _active(found=True))
+    target = deps.resolve_environment_release_target("alpha")
+    target.media_delivery_base_url = "https://media.example.invalid"
+    query, activate = deps.query_content_active_release, deps.activate_content_release
+
+    def query_active(**kwargs):
+        calls.append("query")
+        return query(**kwargs)
+
+    def activate_content(**kwargs):
+        calls.append("cas")
+        return activate(**kwargs)
+
+    def get_bytes(*args, **kwargs):
+        calls.append("media")
+        if available:
+            return PublicBinaryResponse(200, "image/webp", "", body)
+        return PublicBinaryResponse(404, "text/plain", "", b"missing")
+
+    deps.query_content_active_release = query_active
+    deps.activate_content_release = activate_content
+    deps.require_environment_readiness = lambda **kwargs: None
+    deps.write_release_evidence = lambda path, document, name: write_json(path, document)
+    monkeypatch.setattr(PublicApiClient, "get_bytes", get_bytes)
+    monkeypatch.setattr(_ship_operations, "scan_release_contract", lambda *args, **kwargs: {"status": "passed"})
+    args = argparse.Namespace(
+        env="alpha", import_run_id="apply-1", run_id="media-block", confirm_prod_apply=False,
+        release_admission=admission, from_release_id="release-old", from_manifest_digest=DIGEST_B,
+        from_revision=3, import_to_db=True, dry_run=False,
+    )
+    operation = _ship_operations.rollback_release if rollback else _ship_operations.activate_release
+    if available:
+        operation(args, dependencies=deps)
+        assert calls == ["media", "query", "cas", "query"]
+    else:
+        with pytest.raises(RuntimeError, match="media closure"):
+            operation(args, dependencies=deps)
+        assert calls == ["media"]
+    result = read_json(tmp_path / "env/alpha/runs/data-release/release-a/media-block/result.json")
+    assert result["status"] == ("completed" if available else "failed")
+    if not available:
+        assert result["failedStage"] == "candidate_media_readback"
+        assert "ambiguous" not in result["error"]
+
+
+@pytest.mark.parametrize("previous_found", [False, True])
+@pytest.mark.parametrize("observation", ["candidate", "previous", "empty", "unavailable"])
+def test_unknown_cas_queries_exact_pointer_once_without_retry_or_rollback(
+    tmp_path: Path, previous_found: bool, observation: str
+) -> None:
+    _release_path, admission = _release(tmp_path)
+    _prepare_apply(tmp_path, admission)
+    deps = _activate_dependencies(tmp_path, admission, _active(found=previous_found))
+    query = deps.query_content_active_release
+    calls: list[str] = []
+
+    def query_active(**kwargs):
+        calls.append("query")
+        path = Path(kwargs["report_path"])
+        if "ambiguous" in path.name:
+            if observation == "unavailable":
+                raise TimeoutError("exact pointer query unavailable")
+            if observation in {"previous", "empty"}:
+                return _evidence(path, _active(found=observation == "previous"), tmp_path)
+        return query(**kwargs)
+
+    def activate(**kwargs):
+        calls.append("cas")
+        raise TimeoutError("CAS response lost token=do-not-leak")
+
+    deps.query_content_active_release = query_active
+    deps.activate_content_release = activate
+    with pytest.raises(_ship_operations.ContentActivationAmbiguousError, match="ambiguous"):
+        _ship_operations.activate_release(argparse.Namespace(
+            env="alpha", import_run_id="apply-1", run_id="cas-unknown",
+            confirm_prod_apply=False, release_admission=admission,
+        ), dependencies=deps)
+    assert calls == ["query", "cas", "query"]
+    run = tmp_path / "env/alpha/runs/data-release/release-a/cas-unknown"
+    result = read_json(run / "result.json")
+    assert result["status"] == "failed"
+    assert result["failedStage"] == "content_activation_cas"
+    assert "do-not-leak" not in result["error"]
+    assert result["contentPreActiveReceiptRef"]
+    assert bool(result["contentPostActiveReceiptRef"]) is (observation != "unavailable")
+    assert not (run / "applied_ref.json").exists()
+    assert not (run / "rollback_ref.json").exists()

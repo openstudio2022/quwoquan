@@ -132,9 +132,6 @@ def _dev_session_active_receipts(
     requested_attempt: dict[str, Any] | None = None
     active: list[dict[str, Any]] = []
     mutable_targets: list[str] = [target]
-    for candidate in _stackctl.local_runtime_peer_targets(topology, target):
-        if _mutable_test_live_target(topology, candidate):
-            mutable_targets.append(candidate)
     for candidate in mutable_targets:
         target_attempt = _stackctl.load_startup_attempt(candidate)
         test_live_attempt = _load_test_live_attempt_for_preflight(

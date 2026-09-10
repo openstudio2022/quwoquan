@@ -133,7 +133,20 @@ func TestMain(m *testing.M) {
 	workerWG.Add(1)
 	go func() {
 		defer workerWG.Done()
-		_ = signalDeliveryCoordinator.Run(workerCtx, 10*time.Millisecond)
+		// 与生产 runRecoveringWorker 同语义：relay 因单次 Deliver 错误退出后立即重启，
+		// 否则某个用例的 cleanAll 与 relay 的 read→mark 竞争（"outbox event not found"）
+		// 会让 relay 静默死亡，后续所有用例都拿不到 publishedAt 检查点。
+		for {
+			err := signalDeliveryCoordinator.Run(workerCtx, 10*time.Millisecond)
+			if err == nil || workerCtx.Err() != nil {
+				return
+			}
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
 	}()
 
 	// 真实链路：auth middleware 从可信 Principal 派生 actor（不信任客户端 header），

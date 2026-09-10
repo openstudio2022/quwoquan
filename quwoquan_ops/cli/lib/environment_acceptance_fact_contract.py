@@ -22,6 +22,9 @@ ENVIRONMENTS = ("alpha", "beta", "gamma")
 ACCEPTANCE_PROFILES = ("smoke", "integration", "release")
 PREDECESSOR = {"alpha": None, "beta": "alpha", "gamma": "beta"}
 NO_LIVE_ENVIRONMENT_REQUIRED = "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED"
+# lane 验收默认只真跑 Alpha；ImpactPlan 判定 Beta 敏感但用户未显式 opt-in 时，Beta 以该原因码写 typed not_required。
+BETA_OPTIONAL_BY_POLICY = "ACCEPTANCE.BETA_OPTIONAL_BY_POLICY"
+NOT_REQUIRED_REASON_CODES = frozenset({NO_LIVE_ENVIRONMENT_REQUIRED, BETA_OPTIONAL_BY_POLICY})
 _DIGEST_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
 _GIT_OID_RE = re.compile(r"^[a-f0-9]{40}(?:[a-f0-9]{24})?$")
 _IDENTITY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
@@ -76,8 +79,10 @@ _FACT_KEYS_BY_STATUS = {
 
 __all__ = [
     "ACCEPTANCE_PROFILES",
+    "BETA_OPTIONAL_BY_POLICY",
     "DSSE_PAYLOAD_TYPE",
     "ENVIRONMENTS",
+    "NOT_REQUIRED_REASON_CODES",
     "NO_LIVE_ENVIRONMENT_REQUIRED",
     "PREDECESSOR",
     "SCHEMA",

@@ -28,6 +28,35 @@ from quwoquan_ops.cli.lib.runtime_topology_package import (
 )
 
 
+def release_attestation_payload(release_id: str, payload_digest: str) -> dict[str, Any]:
+    """构造 Data 现役闭集 attestation；权利与 source identity 保持真实字段。"""
+    digest = "sha256:" + "4" * 64
+    return {
+        "schema": "quwoquan_data.release_attestation",
+        "releaseId": release_id,
+        "sourceOwner": "qwq_data",
+        "releaseKind": "content",
+        "containsUnverifiedAssets": True,
+        "rightsStatusCounts": {"verified": 0, "unverified": 1, "restricted": 0, "unknown": 0},
+        "authorizationRequiredAssetIds": ["asset-1"],
+        "researchAcceptedCount": 1,
+        "commercialAcceptedCount": 0,
+        "executionIds": ["execution-1"],
+        "carrierCounts": {"homepage": 1, "article": 0, "image": 0, "video": 0, "total": 1},
+        "entityCount": 1,
+        "postCount": 0,
+        "creatorCount": 0,
+        "tagCount": 0,
+        "canonicalMerkle": digest,
+        "sourceRevision": digest,
+        "sourceDigest": digest,
+        "entityCatalogDigest": digest,
+        "sourceDigests": [{"algorithm": "sha256", "digest": digest, "inputs": ["content"]}],
+        "payloadSha256": payload_digest,
+        "recordedAt": "2026-09-09T00:00:00Z",
+    }
+
+
 @lru_cache(maxsize=1)
 def _compiled_provider_bindings() -> dict[str, Any]:
     """Compile the Provider binding capsule once for the whole test process.
@@ -168,7 +197,6 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                     "baselineId": self.snapshot["baselineId"],
                     "sourceRevision": self.snapshot["sourceRevision"],
                     "workspaceStatusDigest": self.snapshot["workspaceStatusDigest"],
-                    "releaseInputClassification": "commercial_inputs",
                     "contractGraphDigest": self.contract_graph_digest,
                     "graphqlReadRegistry": self.graphql_read_registry,
                     "deploymentInputs": {"digest": digest},
@@ -227,25 +255,12 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
         )
         self.release = self.root / "candidate-release.json"
         self.rollback = self.root / "rollback-release.json"
-        for path, release_id, release_digest, release_class in (
-            (
-                self.release,
-                "west-lake-canonical-20260729",
-                "8" * 64,
-                "commercial",
-            ),
-            (self.rollback, "pilot-002", "5" * 64, "commercial"),
+        for path, release_id, release_digest in (
+            (self.release, "west-lake-canonical-20260729", "8" * 64),
+            (self.rollback, "pilot-002", "5" * 64),
         ):
             path.write_text(
-                json.dumps(
-                    {
-                        "schema": "quwoquan_data.release_attestation",
-                        "releaseId": release_id,
-                        "releaseClass": release_class,
-                        "productLifecycleState": release_class,
-                        "payloadSha256": "sha256:" + release_digest,
-                    }
-                )
+                json.dumps(release_attestation_payload(release_id, "sha256:" + release_digest))
                 + "\n",
                 encoding="utf-8",
             )

@@ -121,10 +121,10 @@ def test_referenced_receipt_reader_rejects_fifo_and_hardlink(
         resolve_fingerprint_binding(binding, repo_root=hardlink_root)
 
 
-def test_referenced_receipt_reader_keeps_open_inode_during_replacement(
+def test_referenced_receipt_reader_rejects_current_name_replacement(
     tmp_path: Path, monkeypatch
 ) -> None:
-    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
     binding, ref, raw = _referenced_receipt_fixture()
     root = tmp_path / "repo-race"
     receipt = root / ref
@@ -143,10 +143,10 @@ def test_referenced_receipt_reader_keeps_open_inode_during_replacement(
         return real_read(descriptor, size)
 
     monkeypatch.setattr(os, "read", replace_path_then_read)
-    observed = resolve_fingerprint_binding(binding, repo_root=root)
+    with pytest.raises(EvidenceFingerprintError, match="目录项身份漂移"):
+        resolve_fingerprint_binding(binding, repo_root=root)
     assert replaced
     assert receipt.read_bytes() == b"{}"
-    assert observed["ref"] == binding["ref"]
 
 
 def test_owner_manifest_reader_rejects_ancestor_and_final_symlinks(
@@ -205,10 +205,10 @@ def test_owner_manifest_reader_rejects_fifo_and_hardlink(tmp_path: Path) -> None
         review_cli._read_owner_manifest_exact_bytes(ref)
 
 
-def test_owner_manifest_reader_keeps_open_inode_during_replacement(
+def test_owner_manifest_reader_rejects_current_name_replacement(
     tmp_path: Path,
 ) -> None:
-    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
     original = canonical_json_bytes({"fixture": "opened-descriptor"})
     replacement = canonical_json_bytes({"fixture": "replacement-path"})
     ref = _owner_manifest_ref(original)
@@ -235,8 +235,8 @@ def test_owner_manifest_reader_keeps_open_inode_during_replacement(
         mock.patch.object(
             review_cli.os, "read", side_effect=replace_path_then_read
         ),
+        pytest.raises(OSError, match="目录项身份漂移"),
     ):
-        observed = review_cli._read_owner_manifest_exact_bytes(ref)
+        review_cli._read_owner_manifest_exact_bytes(ref)
     assert replaced
     assert manifest.read_bytes() == replacement
-    assert observed == original

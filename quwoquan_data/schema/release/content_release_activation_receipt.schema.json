@@ -66,7 +66,6 @@
       "required": [
         "releaseId",
         "manifestDigest",
-        "releaseClass",
         "projectionVersion",
         "revision",
         "activatedAt"
@@ -79,11 +78,6 @@
         "manifestDigest": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
-        },
-        "releaseClass": {
-          "enum": [
-            "production"
-          ]
         },
         "projectionVersion": {
           "type": "integer",

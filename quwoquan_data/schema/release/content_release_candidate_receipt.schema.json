@@ -45,11 +45,6 @@
       "type": "string",
       "format": "date-time"
     },
-    "releaseClass": {
-      "enum": [
-        "production"
-      ]
-    },
     "releaseKind": {
       "enum": [
         "content",
@@ -152,7 +147,6 @@
       },
       "then": {
         "required": [
-          "releaseClass",
           "releaseKind",
           "mode",
           "deletePolicy",
@@ -165,11 +159,6 @@
       "else": {
         "not": {
           "anyOf": [
-            {
-              "required": [
-                "releaseClass"
-              ]
-            },
             {
               "required": [
                 "releaseKind"

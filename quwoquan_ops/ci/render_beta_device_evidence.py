@@ -198,6 +198,10 @@ def render_stack_bundle(
             raise ValueError(f"{label} evidence environment mismatch")
         if evidence.get("target") not in {None, "beta-local"}:
             raise ValueError(f"{label} evidence target mismatch")
+        if label in {"package", "up"} and {
+            "releaseInputClassification", "releaseClass", "productLifecycleState"
+        }.intersection(evidence):
+            raise ValueError(f"{label} evidence contains retired release classification fields")
         if label == "package":
             _require_direct_binding(
                 evidence,
@@ -210,10 +214,6 @@ def render_stack_bundle(
                 raise ValueError("package artifactDigest is not bound to the manifest")
             if "formalRelease" in evidence:
                 raise ValueError("package evidence must not claim formalRelease")
-            if evidence.get("releaseInputClassification") != "commercial_inputs":
-                raise ValueError(
-                    "package evidence requires commercial release inputs"
-                )
             if evidence.get("contractGraphDigest") != manifest.get(
                 "contractGraphDigest"
             ):
@@ -247,15 +247,13 @@ def render_stack_bundle(
                 evidence.get("runtimeMode") != "immutable-oci"
                 or evidence.get("runtimeCandidateDigest") != candidate
                 or evidence.get("formalRelease") is not True
-                or evidence.get("releaseInputClassification")
-                != "commercial_inputs"
                 or not runtime_images_valid
                 or evidence.get("destructiveRepairPerformed") is not False
                 or evidence.get("destructiveActions") != []
             ):
                 raise ValueError(
                     "Beta up evidence is not an immutable candidate runtime "
-                    "with commercial release inputs and without destructive repair"
+                    "without destructive repair"
                 )
             if evidence.get("contractGraphDigest") != manifest.get(
                 "contractGraphDigest"

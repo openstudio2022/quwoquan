@@ -40,8 +40,6 @@ _STACKCTL_HANDLER_NAMES = {
     "doctor": "command_doctor",
     "content-readiness": "command_content_readiness",
     "content-api-consumer": "command_content_api_consumer",
-    "research-isolation-probe": "command_research_isolation_probe",
-    "research-consumer-credential": "command_research_consumer_credential",
     "app-content-preflight": "command_app_content_preflight",
     "app-debug-preflight": "command_app_debug_preflight",
     "app-domain-api-integration": "command_app_domain_api_integration",
@@ -73,6 +71,9 @@ def command_handlers(namespace: Mapping[str, Any]) -> dict[str, CommandHandler]:
     handlers["hosted-read-only"] = namespace[
         "hosted_read_only_commands"
     ].command_hosted_read_only
+    handlers["prod-hosted-bootstrap"] = namespace[
+        "prod_bootstrap_commands"
+    ].command_runtime_bootstrap
     handlers["migration"] = namespace[
         "travel_to_gathering_migration"
     ].command

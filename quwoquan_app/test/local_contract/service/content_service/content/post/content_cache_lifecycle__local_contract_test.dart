@@ -1,4 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/di/feed_session_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/content_cache_lifecycle_dependencies.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
@@ -39,7 +45,6 @@ void main() {
     String personaId = 'persona-a',
   }) => ContentCacheIsolationIdentity(
     environment: 'alpha',
-    audience: ContentReleaseAudience.research,
     accountId: accountId,
     personaId: personaId,
     sourceOwner: 'qwq_data',
@@ -77,6 +82,57 @@ void main() {
       activationIdentity: cacheIdentity.activationIdentity,
     );
   }
+
+  // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-003
+  test('同账号 A-B-A 使旧 epoch 永久失效，清理同步触发媒体与归因', () {
+    var mediaClears = 0;
+    var sessionResets = 0;
+    final lifecycle = ContentCacheLifecycleCoordinator(
+      postCache: postCache,
+      querySnapshotStore: queryStore,
+      clearSignedMediaDelivery: () {},
+      clearIsolationIdentity: () {},
+      clearMediaDownloads: () async {
+        mediaClears++;
+      },
+      resetFeedSession: () {
+        sessionResets++;
+      },
+    );
+    final a = session(accountId: 'a', personaId: 'a');
+    final b = session(accountId: 'b', personaId: 'b');
+    lifecycle.handleSessionChange(null, a);
+    final epoch = queryStore.requestEpoch;
+    final detailEpoch = postCache.requestEpoch;
+    lifecycle.handleSessionChange(a, b);
+    lifecycle.handleSessionChange(b, a);
+    expect(
+      () => queryStore.requireCurrentRequest(epoch),
+      throwsA(isA<CloudOperationCancelledException>()),
+    );
+    expect(
+      () => postCache.requireCurrentRequest(detailEpoch),
+      throwsA(isA<CloudOperationCancelledException>()),
+    );
+    expect(mediaClears, 2);
+    expect(sessionResets, 2);
+  });
+
+  test('feed invalidate 同时更换 sessionId 和 server feedRequestId', () {
+    final container = ProviderContainer(
+      overrides: [
+        ...sealedCloudBoundaryOverrides(),
+        contentCacheLifecycleCoordinatorProvider.overrideWithValue(coordinator),
+      ],
+    );
+    addTearDown(container.dispose);
+    final feed = container.read(feedSessionProvider.notifier);
+    final old = feed.sessionId;
+    feed.adoptServerFeedRequestId('frq_old');
+    feed.invalidate();
+    expect(feed.sessionId, isNot(old));
+    expect(feed.currentFeedRequestId, isNot('frq_old'));
+  });
 
   test('logout、account 与 persona 切换统一清缓存和 signed grant', () {
     var first = session(accountId: 'account-a', personaId: 'persona-a');

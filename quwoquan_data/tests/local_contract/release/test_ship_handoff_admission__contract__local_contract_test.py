@@ -42,8 +42,6 @@ def _release_and_handoff(
             "releaseId": release_id,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
-            "releaseClass": "production",
-            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 0,
@@ -301,8 +299,6 @@ def _empty_baseline_attestation(
         "releaseId": release_id,
         "sourceOwner": "qwq_data",
         "releaseKind": "empty_baseline",
-        "releaseClass": "production",
-        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "rightsStatusCounts": {
             "verified": 0,
@@ -646,8 +642,6 @@ def _environment_result_document(**overrides: object) -> dict[str, object]:
         "schema": "quwoquan_data.environment_release_result",
         "environment": "alpha",
         "releaseId": "release-a",
-        "releaseClass": "production",
-        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "manifestDigest": "sha256:" + "a" * 64,
         "admissionKind": "producer_handoff",

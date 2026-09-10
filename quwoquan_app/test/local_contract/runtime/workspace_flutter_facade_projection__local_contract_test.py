@@ -748,7 +748,7 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
         self.assertEqual(user_zsh["generatedProjectionState"], "drifted")
         self.assertEqual(user_zsh["workspaceEntrypointState"], "drifted")
 
-    def test_user_zsh_long_lived_shell_refreshes_cached_raw_sdk_then_manages_run(
+    def test_user_zsh_long_lived_shell_refreshes_cached_raw_sdk_then_runs_direct(
         self,
     ) -> None:
         self._require_macos_zsh()
@@ -781,24 +781,39 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
             fake_dispatcher = fake_launcher_bin / "flutter"
             fake_dispatcher.write_bytes((LAUNCHER_BIN / "flutter").read_bytes())
             fake_dispatcher.chmod(0o755)
+            (fake_launcher_bin.parent / "worktree_selection.py").write_bytes(
+                (LAUNCHER_BIN.parent / "worktree_selection.py").read_bytes()
+            )
             fake_wrapper = _write_executable(
                 fake_launcher_bin / "run.sh",
                 f"#!/bin/sh\nexec {shlex.quote(str(fake_app / 'run.sh'))} \"$@\"\n",
             )
-            _write_executable(
-                fake_app / "run.sh",
-                "#!/bin/sh\nprintf 'CANONICAL_RUN %s %s\\n' "
-                '"${QWQ_MANAGED_FLUTTER_ENTRY:-}" "$*"\n',
-            )
-            fake_app.joinpath("pubspec.yaml").write_text(
-                "name: fixture_app\n", encoding="utf-8"
-            )
-            fake_app.joinpath(".flutter-version").write_text(
-                "3.47.0\n", encoding="utf-8"
-            )
-            fake_stackctl = fake_app.parent / "quwoquan_ops/cli/stackctl.py"
-            fake_stackctl.parent.mkdir(parents=True)
-            fake_stackctl.touch()
+            run_capture = self.root / "canonical-run.json"
+            physical_python = Path(sys.executable).resolve()
+            # 两棵普通目录夹具，不创建 git worktree；记录真实进程而非 PTY 回显。
+            other_app = self.root / "other-lane/quwoquan_app"
+            for app in (fake_app, other_app):
+                _write_executable(
+                    app / "run.sh",
+                    f"#!{physical_python}\n"
+                    "import json, os, sys\n"
+                    "from pathlib import Path\n"
+                    f"Path({str(run_capture)!r}).write_text(json.dumps({{\n"
+                    "    'launcher': str(Path(__file__).resolve()),\n"
+                    "    'cwd': str(Path.cwd()),\n"
+                    "    'argv': sys.argv[1:],\n"
+                    "    'managed': os.environ.get('QWQ_MANAGED_FLUTTER_ENTRY'),\n"
+                    "}), encoding='utf-8')\n",
+                )
+                app.joinpath("pubspec.yaml").write_text(
+                    "name: fixture_app\n", encoding="utf-8"
+                )
+                app.joinpath(".flutter-version").write_text(
+                    "3.47.0\n", encoding="utf-8"
+                )
+                fake_stackctl = app.parent / "quwoquan_ops/cli/stackctl.py"
+                fake_stackctl.parent.mkdir(parents=True)
+                fake_stackctl.touch()
             fake_carrier = fake_app / "scripts/tools/flutter_facade/user_zsh_projection.zsh"
             fake_carrier.parent.mkdir(parents=True)
             fake_carrier.write_bytes(USER_ZSH_CARRIER.read_bytes())
@@ -806,7 +821,6 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
             fake_facade.write_bytes(
                 (FACADE_DIR / "flutter_facade.py").read_bytes()
             )
-            physical_python = Path(sys.executable).resolve()
             fake_projection = self.home / ".config/quwoquan/fake-flutter-facade.zsh"
             fake_projection.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             fake_projection.write_text(
@@ -830,12 +844,37 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
             self.assertNotIn("GATE_BLOCK", refreshed)
             self.assertIn(str(fake_dispatcher), shell.command("whence -p flutter"))
             self.assertIn(str(fake_wrapper), shell.command("whence -p run.sh"))
-            managed = shell.command(
-                f"cd {shlex.quote(str(fake_app))} && flutter run -d managed-device"
-            )
-            self.assertIn(
-                "CANONICAL_RUN 1 --env alpha --device managed-device", managed
-            )
+            for app in (fake_app, other_app):
+                cwd = app / "lib/nested"
+                cwd.mkdir(parents=True)
+                # 默认离线 Alpha 不得伪造 managed preparation；还需清除旧 shell
+                # 遗留标记。换 cwd 后必须启动当前树，不能退回 PATH dispatcher 树。
+                for inherited_marker in (False, True):
+                    with self.subTest(app=app, inherited_marker=inherited_marker):
+                        run_capture.unlink(missing_ok=True)
+                        marker_command = (
+                            "export QWQ_MANAGED_FLUTTER_ENTRY=1"
+                            if inherited_marker
+                            else "unset QWQ_MANAGED_FLUTTER_ENTRY"
+                        )
+                        output = shell.command(
+                            f"{marker_command}; cd {shlex.quote(str(cwd))} "
+                            "&& flutter run -d 'direct device' --verbose"
+                        )
+                        self.assertNotIn("GATE_BLOCK", output)
+                        self.assertTrue(run_capture.is_file(), output)
+                        self.assertEqual(
+                            json.loads(run_capture.read_text(encoding="utf-8")),
+                            {
+                                "launcher": str(app / "run.sh"),
+                                "cwd": str(cwd),
+                                "argv": [
+                                    "--env", "alpha", "--device", "direct device",
+                                    "--verbose",
+                                ],
+                                "managed": None,
+                            },
+                        )
 
     def test_user_zsh_fresh_login_shell_auto_projects_commands(self) -> None:
         self._require_macos_zsh()

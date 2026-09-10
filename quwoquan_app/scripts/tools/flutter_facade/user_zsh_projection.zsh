@@ -138,6 +138,13 @@ unset -f _qwq_user_zsh_sha256 _qwq_user_zsh_fail
 unset _qwq_user_zsh_carrier_source
 if (( _qwq_user_zsh_projection_status != 0 )); then
   unset _qwq_user_zsh_projection_status
+  # 失败即完全回退：生成投影已在 source 本载体前导出钉定身份变量，若保留它们而 PATH
+  # 未前置，shell 会停在"半激活"态（direct run.sh 的 CocoaPods 复核据此误判 mixed）。
+  unset QWQ_REAL_FLUTTER QWQ_REAL_FLUTTER_VERSION \
+    QWQ_COCOAPODS_EXECUTABLE QWQ_COCOAPODS_VERSION QWQ_COCOAPODS_EXECUTABLE_DIGEST \
+    QWQ_COCOAPODS_RUNTIME_ENVIRONMENT_DIGEST QWQ_COCOAPODS_COMMAND_RESOLUTION_DIGEST \
+    QWQ_COCOAPODS_BINDING_SEAL QWQ_WORKSPACE_PYTHON QWQ_WORKSPACE_PYTHON_VERSION \
+    QWQ_USER_ZSH_CARRIER_DIGEST QWQ_FLUTTER_DISPATCHER_DIGEST QWQ_RUN_SH_WRAPPER_DIGEST
   return 2
 fi
 unset _qwq_user_zsh_projection_status

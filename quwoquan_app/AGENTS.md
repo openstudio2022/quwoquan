@@ -12,7 +12,7 @@
 
 ## 组合与测试隔离
 
-- `alpha/beta/gamma/prod` 全部使用同一 production Remote composition。环境只提供 runtime package、endpoint、容量和发布阶段；App 可见第一方业务数据只来自该环境已激活的 canonical immutable release。
+- Alpha 默认读取 canonical release 派生、制品绑定且含完整媒体的离线快照；Beta/Gamma/Prod 使用 Remote。二者只在组合根选择同一 typed ports 的 adapter，页面与 application 不判断 environment/source/profile；不允许 Remote 失败回退离线、Mock 或 fixture。来源、能力与信任边界由 [`environment-topology-and-packaging` REQ-008](../specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-008) 拥有。
 - production、runner、UAT support 与启动脚本不得注入 Mock/fixture、直接数据库 seed 或 Mock/Remote 切换入口。`presentation/**`、`application/**` 和 `runtime/**` 不导入 test/mock 目录。
 - production 依赖按 domain 分片：`lib/runtime/di/<domain>_dependencies.dart` 是该 domain 唯一可命名 `Remote*` 实现的地方；Provider 只声明 typed port。`lib/runtime/di/app_providers.dart` 只是 export barrel，不声明 Provider。
 - Riverpod 状态纪律：State 类不可变（`const` 构造 + `copyWith` + `==`/`hashCode`）；StateNotifier 异步操作必须有错误处理并防重复加载；`ref.watch` 只在 build 监听，`ref.read` 执行动作，`ref.listen` 处理副作用。

@@ -272,3 +272,11 @@
  仍为零。让 `verified > 0` 需要数据生产侧发布带 `geoTagRef` 的 canonical 内容
  （或在线 UGC 进入 canonical 供给统计口径），扩充标签定义不会转化为可用信号。
 - 完成判定：`DOM-002` 可复跑，且 `verified > 0`（至少一条语义轴打通采集、供给、消费三级）
+
+### OPEN-003 已发布对象 rights.json 来源字段沿用许可证页，需 canonical 重投影版本事务
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：release `20260907--pool-production-m10--full-eligible-001` 与 `20260908--pool-production-m100--full-eligible-001` 的资产账本中 130/151 条 `canonicalFilePage`/`snapshotUrl`/`originalAssetUrl` 为 CC 许可证页（旧取值链把 `authorizationProof` 放在首位）；真实来源仍保留在 `rights.json.source`、manifest `collectionPageUrl` 与 `content_review.assetRights[].sourceUrl`，权利结论不受影响。取值链已在 `post_transaction.py`/`object_transaction.py` 修正，但 canonical publish 是 create-once 事务（已发布对象只允许 exact replay），尚缺以既有 execution 产物为输入、追加 `_pool/versions` 新记录的重投影事务，存量 `rights.json` 仍未完成重投影。
+- 完成判定：提供以现有 execution 产物为输入、追加新 `_pool/versions` 记录的 canonical 重投影事务（不改写既有版本字节），对受影响对象执行后从全池重切 release；重切 release 的 `release_asset_admission` 中 `sourceUrl`/`canonicalFilePage` 不再等于 `authorizationProof`，来源与权利事实完整记录且权利只作记录（子树 multi-carrier-release 的 production release 验收保持通过），`DOM-001` 领域边界验收仍成立。

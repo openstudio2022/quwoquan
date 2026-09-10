@@ -17,7 +17,12 @@ from quwoquan_ops.cli import stackctl
 def _plan(*, include_search: bool) -> dict[str, object]:
     plan: dict[str, object] = {
         "videoPagination": {"pageSize": 20, "expectedWorkIds": ["video-001"]},
-        "mediaChecks": {"automatic": True},
+        "mediaChecks": {
+            "automatic": True,
+            **{name: {"expectedPostIds": ["runtime-video-001"]} for name in (
+                "homepageRecommendation", "typedVideo", "premiumVideo",
+            )},
+        },
         "orderedSamples": [
             {
                 "sampleId": "video-001",
@@ -37,23 +42,27 @@ def _plan(*, include_search: bool) -> dict[str, object]:
                 "expectedObjectId": f"id-{kind}",
             }
             for kind, object_type in (
-                ("post", "content.post"),
+                ("article", "content.post"),
                 ("homepage", "entity.homepage"),
-                ("persona", "user.profile"),
+                ("image", "content.post"),
+                ("video", "content.post"),
             )
         ]
     return plan
 
 
-def _readiness(tmp_path: Path, *, phase: str) -> Path:
-    path = tmp_path / phase / "release-readiness.json"
-    path.parent.mkdir(parents=True)
-    path.write_text(json.dumps({"readinessPhase": phase}), encoding="utf-8")
+def _readiness(tmp_path: Path) -> Path:
+    from quwoquan_ops.tests.support.test_data_verification_test_support import _readiness as receipt
+
+    path = tmp_path / "release-readiness.json"
+    path.write_text(json.dumps(receipt(
+        environment="alpha", post_ids=("runtime-video-001",),
+    )), encoding="utf-8")
     return path
 
 
 class StackctlAppContentReleaseProbePhaseScopeTest(unittest.TestCase):
-    def test_consumer_skips_search_but_keeps_page_media_checks(self) -> None:
+    def test_default_release_requires_search_and_exact_page_media_checks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             captured: dict[str, object] = {}
@@ -124,41 +133,38 @@ class StackctlAppContentReleaseProbePhaseScopeTest(unittest.TestCase):
             ):
                 result = stackctl._run_app_content_release_probe(
                     target="alpha-local",
-                    readiness_path=_readiness(root, phase="consumer"),
-                    app_uat_plan=_plan(include_search=False),
+                    readiness_path=_readiness(root),
+                    app_uat_plan=_plan(include_search=True),
                     report_dir=root / "probe",
                 )
 
         self.assertEqual(
             captured["only_checks"],
             (
-                "video_book_feed",
-                "premium_feed",
-                "feed_media_slices",
-                "media_sample",
-                "release_sample",
+                "content_feed", "homepage_recommend", "video_book_feed",
+                "premium_feed", "feed_media_slices", "global_search",
+                "media_sample", "release_sample", "author_posts_contract",
             ),
         )
-        self.assertEqual(captured["release_search_canaries"], [])
-        self.assertEqual(result["readinessPhase"], "consumer")
-        self.assertIs(result["searchCanariesRequired"], False)
-        self.assertEqual(result["searchCanaries"], [])
+        self.assertEqual(len(captured["release_search_canaries"]), 4)
+        self.assertNotIn("readinessPhase", result)
+        self.assertIs(result["searchCanariesRequired"], True)
+        self.assertEqual(len(result["searchCanaries"]), 4)
 
-    def test_lifecycle_phases_still_require_search_canaries(self) -> None:
+    def test_default_release_rejects_missing_search_or_exact_media_before_probe(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            for phase in ("research", "commercial"):
-                with self.subTest(phase=phase):
-                    with self.assertRaisesRegex(
-                        ValueError,
-                        "App content UAT plan is incomplete",
-                    ):
-                        stackctl._run_app_content_release_probe(
-                            target="alpha-local",
-                            readiness_path=_readiness(root, phase=phase),
-                            app_uat_plan=_plan(include_search=False),
-                            report_dir=root / "probe",
-                        )
+            for missing in ("searchCanaries", "homepageRecommendation", "typedVideo", "premiumVideo"):
+                plan = _plan(include_search=True)
+                (plan if missing == "searchCanaries" else plan["mediaChecks"]).pop(missing)
+                with self.subTest(missing=missing), mock.patch.object(
+                    stackctl, "_run_environment_integration_probe"
+                ) as probe, self.assertRaisesRegex(ValueError, "App content UAT plan is incomplete"):
+                    stackctl._run_app_content_release_probe(
+                        target="alpha-local", readiness_path=_readiness(root),
+                        app_uat_plan=plan, report_dir=root / "probe",
+                    )
+                probe.assert_not_called()
 
 
 if __name__ == "__main__":

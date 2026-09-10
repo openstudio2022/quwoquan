@@ -27,11 +27,6 @@ from content.release.model import DataSourceOwner, ReleaseKind
 from core.io import read_json, write_json
 from core.release_layout import attestation_root, payload_digest, payload_file
 from core.schema import assert_valid
-from verify.release_publishability import (
-    phase_lifecycle_alignment_issue,
-    readiness_phase_issue,
-)
-
 
 class EnvironmentReleaseReadinessError(ValueError):
     """Release/environment evidence cannot support a commercial readiness claim."""
@@ -96,13 +91,8 @@ def write_environment_release_readiness(
     output_root: Path,
     output_path: Path,
     previous_environment_readiness_path: Path | None = None,
-    readiness_phase: str = "production",
 ) -> Path:
     """Write append-only Data release/import/readback readiness evidence."""
-    phase_issue = readiness_phase_issue(readiness_phase)
-    if phase_issue is not None:
-        raise EnvironmentReleaseReadinessError(phase_issue)
-
     header_path = payload_file(release_root, "release.json")
     desired_path = payload_file(release_root, "desired_state.json")
     media_manifest_path = payload_file(release_root, "media_manifest.json")
@@ -159,18 +149,7 @@ def write_environment_release_readiness(
     actual_payload_digest = payload_digest(release_root)
     if header.get("releaseKind") != ReleaseKind.CONTENT:
         raise EnvironmentReleaseReadinessError("readiness receipt requires a content release")
-    release_class = str(header.get("releaseClass") or "")
-    product_lifecycle_state = str(header.get("productLifecycleState") or "")
-    alignment_issue = phase_lifecycle_alignment_issue(
-        readiness_phase, release_class, product_lifecycle_state
-    )
-    if alignment_issue is not None:
-        raise EnvironmentReleaseReadinessError(
-            f"readiness phase drifts from immutable release lifecycle: {alignment_issue}"
-        )
     lifecycle_fields = (
-        "releaseClass",
-        "productLifecycleState",
         "containsUnverifiedAssets",
         "rightsStatusCounts",
         "authorizationRequiredAssetIds",
@@ -257,10 +236,6 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError(
             "Search projection does not exactly match imported Posts and Personas"
         )
-    if post_report.get("readinessPhase") != readiness_phase:
-        raise EnvironmentReleaseReadinessError(
-            "post verification readinessPhase drift"
-        )
     if any(
         not isinstance(row, Mapping)
         or not isinstance(row.get("mediaProbes"), list)
@@ -284,7 +259,7 @@ def write_environment_release_readiness(
         for row in feed_queries
         if isinstance(row, Mapping)
     }
-    # App 视频书唯一消费 premium_stream 池：全部 readiness phase 都必须携带并
+    # App 视频书唯一消费 premium_stream 池：readiness 必须携带并
     # 证明 premium_stream 读回（对齐 environment-topology-and-packaging spec；
     # typed_video 绿不代表视频书绿）。
     required_query_names = {
@@ -297,7 +272,7 @@ def write_environment_release_readiness(
     }
     if set(queries_by_name) != required_query_names:
         raise EnvironmentReleaseReadinessError(
-            "feedQueries do not match the declared readiness phase"
+            "feedQueries do not match the required readiness queries"
         )
     try:
         closure = validate_readiness_closure(
@@ -379,9 +354,6 @@ def write_environment_release_readiness(
             environment=environment,
             release_id=release_id,
             manifest_digest=actual_payload_digest,
-            release_class=release_class,
-            product_lifecycle_state=product_lifecycle_state,
-            readiness_phase=readiness_phase,
             import_run_id=import_run_id,
             verify_run_id=verify_run_id,
             import_report_ref=content_import_report_ref,
@@ -397,8 +369,6 @@ def write_environment_release_readiness(
         "releaseId": release_id,
         "releaseKind": ReleaseKind.CONTENT,
         "sourceOwner": DataSourceOwner.QWQ_DATA,
-        "releaseClass": release_class,
-        "productLifecycleState": product_lifecycle_state,
         "containsUnverifiedAssets": bool(
             header.get("containsUnverifiedAssets")
         ),
@@ -410,7 +380,6 @@ def write_environment_release_readiness(
         "commercialAcceptedCount": int(
             header.get("commercialAcceptedCount") or 0
         ),
-        "readinessPhase": readiness_phase,
         "manifestDigest": actual_payload_digest,
         "mediaManifestDigest": media_manifest_digest,
         "importRunId": import_run_id,

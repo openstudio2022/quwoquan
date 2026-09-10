@@ -12,7 +12,7 @@ from core.source_digest import (
     SourceDigestError,
     content_source_revision,
 )
-from governance.coverage.distribution import ProductLifecycleState, ReleaseClass
+from core.schema import assert_valid
 
 _SCHEMA = "quwoquan_data.release_attestation"
 
@@ -59,8 +59,6 @@ class ReleaseAttestation:
     release_id: str
     source_owner: DataSourceOwner
     release_kind: ReleaseKind
-    release_class: ReleaseClass
-    product_lifecycle_state: ProductLifecycleState
     contains_unverified_assets: bool
     rights_status_counts: dict[str, int]
     authorization_required_asset_ids: tuple[str, ...]
@@ -87,10 +85,6 @@ class ReleaseAttestation:
             raise ReleaseAttestationError("releaseId is required")
         if self.source_owner is not DataSourceOwner.QWQ_DATA:
             raise ReleaseAttestationError("sourceOwner must be qwq_data")
-        if self.release_class.value != self.product_lifecycle_state.value:
-            raise ReleaseAttestationError(
-                "releaseClass must equal productLifecycleState"
-            )
         expected_statuses = {"verified", "unverified", "restricted", "unknown"}
         if set(self.rights_status_counts) != expected_statuses or any(
             not isinstance(value, int) or isinstance(value, bool) or value < 0
@@ -248,8 +242,6 @@ class ReleaseAttestation:
             "releaseId": self.release_id,
             "sourceOwner": self.source_owner.value,
             "releaseKind": self.release_kind.value,
-            "releaseClass": self.release_class.value,
-            "productLifecycleState": self.product_lifecycle_state.value,
             "containsUnverifiedAssets": self.contains_unverified_assets,
             "rightsStatusCounts": dict(self.rights_status_counts),
             "authorizationRequiredAssetIds": list(
@@ -302,14 +294,10 @@ class ReleaseAttestation:
                 SourceDefinitionSnapshot.from_document(item.to_document())
                 for item in document.object_sequence("sourceDigests")
             ]
-            return cls(
+            receipt = cls(
                 release_id=document.string("releaseId"),
                 source_owner=DataSourceOwner(document.string("sourceOwner")),
                 release_kind=ReleaseKind(document.string("releaseKind")),
-                release_class=ReleaseClass(document.string("releaseClass")),
-                product_lifecycle_state=ProductLifecycleState(
-                    document.string("productLifecycleState")
-                ),
                 contains_unverified_assets=document.boolean(
                     "containsUnverifiedAssets"
                 ),
@@ -346,6 +334,8 @@ class ReleaseAttestation:
                     "sourceIdentitySetDigest"
                 ),
             )
+            assert_valid(value, "release", "release_attestation", label="release attestation")
+            return receipt
         except (JsonObjectDecodeError, SourceDigestError, ValueError) as exc:
             raise ReleaseAttestationError(str(exc)) from exc
 

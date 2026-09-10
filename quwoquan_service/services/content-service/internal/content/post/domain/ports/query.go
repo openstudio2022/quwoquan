@@ -161,20 +161,17 @@ func (v ViewerContext) IsOwner(author PersonaID) bool {
 
 // PostDetailQuery 是 GetPost 的 immutable 输入。
 type PostDetailQuery struct {
-	postID            PostID
-	viewer            ViewerContext
-	researchPrincipal bool
+	postID PostID
+	viewer ViewerContext
 }
 
 func NewPostDetailQuery(
 	postID PostID,
 	viewer ViewerContext,
-	researchPrincipal ...bool,
 ) PostDetailQuery {
 	return PostDetailQuery{
-		postID:            NewPostID(string(postID)),
-		viewer:            viewer,
-		researchPrincipal: len(researchPrincipal) > 0 && researchPrincipal[0],
+		postID: NewPostID(string(postID)),
+		viewer: viewer,
 	}
 }
 
@@ -186,21 +183,16 @@ func (q PostDetailQuery) Viewer() ViewerContext {
 	return q.viewer
 }
 
-func (q PostDetailQuery) ResearchPrincipal() bool {
-	return q.researchPrincipal
-}
-
 // AuthorPostPageQuery 是 ListUserPosts 的 transport-neutral 输入。cursor 保留
 // wire 值，进入 reader 前必须由 application 解析为 AuthorPostCursor。
 type AuthorPostPageQuery struct {
-	authorPersonaID   PersonaID
-	viewer            ViewerContext
-	identity          ContentIdentity
-	contentType       ContentType
-	visibility        PostVisibility
-	cursor            string
-	limit             int
-	researchPrincipal bool
+	authorPersonaID PersonaID
+	viewer          ViewerContext
+	identity        ContentIdentity
+	contentType     ContentType
+	visibility      PostVisibility
+	cursor          string
+	limit           int
 }
 
 func NewAuthorPostPageQuery(
@@ -211,17 +203,15 @@ func NewAuthorPostPageQuery(
 	visibility PostVisibility,
 	cursor string,
 	limit int,
-	researchPrincipal ...bool,
 ) AuthorPostPageQuery {
 	return AuthorPostPageQuery{
-		authorPersonaID:   NewPersonaID(string(authorPersonaID)),
-		viewer:            viewer,
-		identity:          ContentIdentity(strings.TrimSpace(string(identity))),
-		contentType:       ContentType(strings.TrimSpace(string(contentType))),
-		visibility:        PostVisibility(strings.TrimSpace(string(visibility))),
-		cursor:            strings.TrimSpace(cursor),
-		limit:             limit,
-		researchPrincipal: len(researchPrincipal) > 0 && researchPrincipal[0],
+		authorPersonaID: NewPersonaID(string(authorPersonaID)),
+		viewer:          viewer,
+		identity:        ContentIdentity(strings.TrimSpace(string(identity))),
+		contentType:     ContentType(strings.TrimSpace(string(contentType))),
+		visibility:      PostVisibility(strings.TrimSpace(string(visibility))),
+		cursor:          strings.TrimSpace(cursor),
+		limit:           limit,
 	}
 }
 
@@ -251,10 +241,6 @@ func (q AuthorPostPageQuery) Cursor() string {
 
 func (q AuthorPostPageQuery) Limit() int {
 	return q.limit
-}
-
-func (q AuthorPostPageQuery) ResearchPrincipal() bool {
-	return q.researchPrincipal
 }
 
 // PostCreatorDisclosureSlice 是用户可见的虚拟创作者披露，排除作者质量和

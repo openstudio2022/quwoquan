@@ -43,7 +43,6 @@ def _binding() -> dict[str, object]:
         "releaseId": "release-panda-001",
         "verifyRunId": "verify-alpha-001",
         "manifestDigest": _DIGEST_A,
-        "readinessPhase": "consumer",
         "releaseAttestationRef": (
             "data/releases/release-panda-001/attestations/release.json"
         ),

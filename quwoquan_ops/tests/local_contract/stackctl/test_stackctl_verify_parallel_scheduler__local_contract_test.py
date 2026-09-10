@@ -5,8 +5,11 @@ spec_ref: specs/feature-tree/runtime/runtime-testinfra/spec.md#sit-002.t3
 
 from __future__ import annotations
 
+import argparse
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from threading import Event, Lock
 from unittest import mock
 
@@ -64,6 +67,51 @@ class StackctlVerifyParallelSchedulerContractTest(unittest.TestCase):
         self.assertLessEqual(probe.peak, 4)
         self.assertEqual([item[0] for item in results], commands)
         self.assertEqual(readiness, {"exitCode": 0})
+
+    def test_full_profiles_require_explicit_exit_without_a_content_track(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-004
+        for profile in ("baseline", "smoke", "integration", "release"):
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as temporary:
+                args = argparse.Namespace(
+                    kind="topology", profile=profile, service="",
+                    env="" if profile == "baseline" else "alpha",
+                    target="" if profile == "baseline" else "alpha-local",
+                    report_dir=temporary, test_data_request="",
+                    data_release_id="release-1", data_verify_run_id="verify-1",
+                    data_manifest_digest="sha256:" + "a" * 64,
+                    data_lifecycle_exit_ref="exact-exit-ref",
+                )
+
+                def static_wave(_commands, *, target_name, readiness_call):
+                    del target_name
+                    if profile in {"integration", "release"}:
+                        self.assertIsNotNone(readiness_call)
+                        readiness_call()
+                    else:
+                        self.assertIsNone(readiness_call)
+                    # 只截取真实编排传入的调用边界，不启动环境或下游 wave。
+                    raise StopIteration("readiness boundary observed")
+
+                with (
+                    mock.patch.object(stackctl, "resolve_report_dir", return_value=Path(temporary)),
+                    mock.patch.object(stackctl, "active_deployment_candidate_snapshot", return_value=None),
+                    mock.patch.object(stackctl, "read_startup_attempt", return_value=None),
+                    mock.patch.object(stackctl, "can_reuse_package", return_value=(True, "exact package")),
+                    mock.patch.object(stackctl, "_selected_verify_commands", return_value=[]),
+                    mock.patch.object(stackctl, "_run_static_verify_wave", side_effect=static_wave),
+                    mock.patch.object(stackctl, "command_content_readiness", return_value={}) as readiness,
+                    self.assertRaisesRegex(StopIteration, "readiness boundary observed"),
+                ):
+                    stackctl.command_verify(args)
+                if profile in {"integration", "release"}:
+                    readiness.assert_called_once()
+                    request = readiness.call_args.args[0]
+                    self.assertNotIn("phase", vars(request))
+                    self.assertTrue(request.require_lifecycle_exit)
+                    self.assertEqual(request.lifecycle_exit_ref, "exact-exit-ref")
+                    self.assertEqual(request.verify_run_id, "verify-1")
+                else:
+                    readiness.assert_not_called()
 
     def test_profile_health_is_a_barrier_and_patrol_stays_serial(self) -> None:
         probe = _OverlapProbe()

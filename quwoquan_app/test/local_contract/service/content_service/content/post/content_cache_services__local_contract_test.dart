@@ -3,6 +3,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
+import 'package:http/http.dart' as http;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentDiscoveryFeedQuery;
@@ -36,6 +39,8 @@ CachedContentRepository _cachedContentRepository({
 }) {
   cacheIdentity ??= _defaultCacheIdentity();
   querySnapshotStore.adoptContentCacheIsolationIdentity(cacheIdentity);
+  // 本对象 double 显式证明测试样本 public、同 scope 且本地策略有效。
+  querySnapshotStore.replayPolicy = (_) => true;
   return CachedContentRepository(
     feedDelegate: delegate,
     deleteDelegate: InMemoryContentPostDeleteCommandWriter(
@@ -62,7 +67,10 @@ CachedContentPostReader _cachedContentPostReader({
 }) {
   cacheIdentity ??= _defaultCacheIdentity();
   querySnapshotStore.adoptContentCacheIsolationIdentity(cacheIdentity);
+  // 本对象 double 显式证明测试样本 public、同 scope 且本地策略有效。
+  querySnapshotStore.replayPolicy = (_) => true;
   postCache.adoptNamespace(cacheIdentity);
+  postCache.detailReplayPolicy = (_) => true;
   return CachedContentPostReader(
     detailDelegate: delegate,
     authorPostsDelegate: delegate,
@@ -80,7 +88,6 @@ const _defaultDigest =
 ContentCacheIsolationIdentity _defaultCacheIdentity() {
   return ContentCacheIsolationIdentity(
     environment: 'alpha',
-    audience: ContentReleaseAudience.commercial,
     accountId: 'account-default',
     personaId: 'persona-default',
     sourceOwner: 'qwq_data',
@@ -93,6 +100,204 @@ ContentCacheIsolationIdentity _defaultCacheIdentity() {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-003
+  test('详情与 query 在恰好 24h 驱逐，fresh 在 5m 截止', () {
+    var now = DateTime.utc(2026, 9, 9);
+    final postCache = PostObjectCacheService(now: () => now);
+    postCache.adoptNamespace(_defaultCacheIdentity());
+    postCache.putDetail(_detailPayload('expiry-post'));
+    final store = ContentQuerySnapshotStore(now: () => now);
+    store.put(key: 'surface=userPosts&userId=one', items: const []);
+    now = now.add(const Duration(minutes: 5));
+    expect(
+      store.get('surface=userPosts&userId=one')!.freshness,
+      CacheFreshness.stale,
+    );
+    now = now.add(const Duration(hours: 23, minutes: 55));
+    expect(postCache.getDetail('expiry-post'), isNull);
+    expect(store.get('surface=userPosts&userId=one'), isNull);
+  });
+
+  test('时钟回退不使未来详情与快照重新成为 fresh', () {
+    var now = DateTime.utc(2026, 9, 9);
+    final postCache = PostObjectCacheService(now: () => now);
+    postCache.adoptNamespace(_defaultCacheIdentity());
+    postCache.putDetail(_detailPayload('future-post'));
+    final store = ContentQuerySnapshotStore(now: () => now);
+    store.put(key: 'surface=userPosts', items: const []);
+    now = now.subtract(const Duration(seconds: 1));
+    expect(postCache.getDetail('future-post'), isNull);
+    expect(store.get('surface=userPosts'), isNull);
+  });
+
+  test('无 public 本地策略证明时即使同 identity 也不回放', () {
+    final identity = _defaultCacheIdentity();
+    final store = ContentQuerySnapshotStore();
+    store.adoptContentCacheIsolationIdentity(identity);
+    final snapshot = ContentQuerySnapshot(
+      key: identity.isolateQueryKey('surface=userPosts'),
+      items: [_postDto('private-or-unknown')],
+      fetchedAt: DateTime.now(),
+      activationIdentity: identity.activationIdentity,
+    );
+    expect(store.canReplay(snapshot), isFalse);
+    final postCache = PostObjectCacheService()..adoptNamespace(identity);
+    expect(
+      postCache.canReplayDetail(_detailPayload('private-or-unknown')),
+      isFalse,
+    );
+  });
+
+  test('旧详情成功与失败都不能在 clear 后污染新 namespace', () async {
+    final delegate = _CountingContentRepository();
+    final cache = PostObjectCacheService();
+    final reader = _cachedContentPostReader(
+      delegate: delegate,
+      postCache: cache,
+      querySnapshotStore: ContentQuerySnapshotStore(),
+    );
+    for (final fail in [false, true]) {
+      final pendingDetail = Completer<ContentPostDetailPayload>();
+      delegate.pendingDetail = pendingDetail;
+      final pending = reader.getPost(postId: 'post_1');
+      final assertion = expectLater(
+        pending,
+        throwsA(isA<CloudOperationCancelledException>()),
+      );
+      await Future<void>.delayed(Duration.zero);
+      cache.clearNamespace();
+      cache.adoptNamespace(_defaultCacheIdentity());
+      if (fail) {
+        pendingDetail.completeError(CloudErrorMapper.fromStatusCode(401));
+      } else {
+        pendingDetail.complete(_detailPayload('post_1'));
+      }
+      await assertion;
+      expect(cache.getDetail('post_1'), isNull);
+    }
+  });
+
+  test('真实 bounded 磁盘编码恢复 activation tuple 和 objectCards', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final identity = _defaultCacheIdentity();
+    final key = identity.isolateQueryKey('surface=discoveryFeed&cursor=');
+    final store = ContentQuerySnapshotStore(persistToPreferences: true);
+    store.adoptContentCacheIsolationIdentity(identity);
+    store.put(
+      key: key,
+      items: [contentCachePostFixture('post-card')],
+      activationIdentity: identity.activationIdentity,
+      objectCards: const [
+        FeedObjectCard(
+          objectKind: 'homepage',
+          objectId: 'homepage-1',
+          title: 'card',
+          tagRefs: [],
+          anchorIndex: 0,
+        ),
+      ],
+    );
+    await store.flushPersistence();
+    final restarted = ContentQuerySnapshotStore(persistToPreferences: true);
+    restarted.adoptContentCacheIsolationIdentity(identity);
+    await restarted.ensureHydrated();
+    final restored = restarted.get(key)!.value;
+    expect(restored.activationIdentity, identity.activationIdentity);
+    expect(
+      restored.toDiscoveryFeedPage().objectCards.single.objectId,
+      'homepage-1',
+    );
+    expect(restored.toDiscoveryFeedPage().objectCards.single.anchorIndex, 0);
+  });
+
+  test('fallback 白名单排除权限、contract、未知、取消与 caller deadline', () {
+    for (final status in [500, 503, 429]) {
+      expect(
+        isContentCacheTransportFallback(
+          CloudErrorMapper.fromStatusCode(status),
+        ),
+        isTrue,
+      );
+    }
+    for (final error in <Object>[
+      CloudErrorMapper.fromStatusCode(401),
+      CloudErrorMapper.fromStatusCode(403),
+      CloudErrorMapper.invalidResponse(message: 'digest mismatch'),
+      StateError('not a network error'),
+      const FormatException('invalid hash'),
+      const CloudOperationCancelledException(),
+      http.RequestAbortedException(),
+    ]) {
+      expect(
+        isContentCacheTransportFallback(error),
+        isFalse,
+        reason: error.runtimeType.toString(),
+      );
+    }
+    expect(
+      isContentCacheTransportFallback(TimeoutException('connection timeout')),
+      isTrue,
+    );
+    expect(
+      isContentCacheTransportFallback(
+        TimeoutException('budget'),
+        deadlineAt: DateTime.now(),
+      ),
+      isFalse,
+    );
+  });
+
+  test('旧 feed 成功在 A-B-A epoch 后不调用 resolver 或写新缓存', () async {
+    final store = ContentQuerySnapshotStore();
+    final delegate = _CountingContentRepository();
+    final response = Completer<DiscoveryFeedPage>();
+    delegate.pendingFeedPage = response;
+    final repo = _cachedContentRepository(
+      delegate: delegate,
+      postCache: PostObjectCacheService(),
+      querySnapshotStore: store,
+    );
+    final pending = repo.listDiscoveryFeedPage(category: 'moment');
+    final assertion = expectLater(
+      pending,
+      throwsA(isA<CloudOperationCancelledException>()),
+    );
+    await Future<void>.delayed(Duration.zero);
+    store.clearAll();
+    store.adoptContentCacheIsolationIdentity(null);
+    store.adoptContentCacheIsolationIdentity(_defaultCacheIdentity());
+    response.complete(
+      DiscoveryFeedPage(
+        items: [_postDto('old-post')],
+        activationIdentity: _defaultCacheIdentity().activationIdentity,
+      ),
+    );
+    await assertion;
+    expect(store.count, 0);
+  });
+
+  test('坏 objectCard anchor 整页拒绝，不静默丢卡', () {
+    final map = ContentQuerySnapshot(
+      key: 'surface=userPosts',
+      items: [_postDto('post')],
+      fetchedAt: DateTime.now(),
+    ).toMap();
+    map['objectCards'] = [
+      const FeedObjectCard(
+        objectKind: 'homepage',
+        objectId: 'id',
+        title: 'title',
+        tagRefs: [],
+        anchorIndex: 1,
+      ).toWire(),
+    ];
+    expect(ContentQuerySnapshot.fromMap(map), isNull);
+    map['objectCards'] = [
+      <String, Object?>{'objectId': 'broken'},
+    ];
+    expect(ContentQuerySnapshot.fromMap(map), isNull);
+  });
 
   group('runtime ContentActivationIdentity 四态解析', () {
     const digest =
@@ -218,7 +423,6 @@ void main() {
 
     ContentCacheIsolationIdentity cacheIdentity({
       String environment = 'alpha',
-      ContentReleaseAudience audience = ContentReleaseAudience.research,
       String accountId = 'account-a',
       String personaId = 'persona-a',
       String sourceOwner = 'qwq_data',
@@ -226,7 +430,6 @@ void main() {
     }) {
       return ContentCacheIsolationIdentity(
         environment: environment,
-        audience: audience,
         accountId: accountId,
         personaId: personaId,
         sourceOwner: sourceOwner,
@@ -262,46 +465,22 @@ void main() {
       expect(store.get(feedKey), isNull);
     });
 
-    test('未验签 JWT 只产生分区提示，未获 Remote tuple 前仍禁止回放', () {
-      final payload = base64Url
-          .encode(
-            utf8.encode(
-              jsonEncode(<String, Object?>{
-                'roles': <String>['research'],
-              }),
-            ),
-          )
-          .replaceAll('=', '');
-      final hint = contentReleaseAudiencePartitionHintFromAccessToken(
-        'unsigned.$payload.signature',
+    test('隔离 key 无类别且覆盖 environment、account、persona、owner 与 release tuple', () {
+      final key = cacheIdentity().isolateQueryKey(feedKey);
+
+      expect(key, contains('environment=alpha'));
+      expect(key, isNot(contains('audience=')));
+      expect(key, isNot(contains('releaseClass=')));
+      expect(key, contains('account=account-a'));
+      expect(key, contains('persona=persona-a'));
+      expect(key, contains('sourceOwner=qwq_data'));
+      expect(key, contains('releaseId=release-a'));
+      expect(
+        key,
+        contains('manifestDigest=${Uri.encodeQueryComponent(digestA)}'),
       );
-      final identity = cacheIdentity(audience: hint);
-      final store = newStore();
-      store.adoptContentCacheIsolationIdentity(null);
-      putBoundSnapshot(store, identity);
-
-      expect(hint, ContentReleaseAudience.research);
-      expect(store.get(identity.isolateQueryKey(feedKey)), isNull);
+      expect(key, endsWith(feedKey));
     });
-
-    test(
-      '隔离 key 完整覆盖 environment、audience、account、persona、owner 与 release tuple',
-      () {
-        final key = cacheIdentity().isolateQueryKey(feedKey);
-
-        expect(key, contains('environment=alpha'));
-        expect(key, contains('audience=research'));
-        expect(key, contains('account=account-a'));
-        expect(key, contains('persona=persona-a'));
-        expect(key, contains('sourceOwner=qwq_data'));
-        expect(key, contains('releaseId=release-a'));
-        expect(
-          key,
-          contains('manifestDigest=${Uri.encodeQueryComponent(digestA)}'),
-        );
-        expect(key, endsWith(feedKey));
-      },
-    );
 
     test('账号、Persona 与 release 切换均 fail closed，只有完全相同身份可回放', () {
       final store = newStore();
@@ -313,7 +492,6 @@ void main() {
 
       for (final switched in <ContentCacheIsolationIdentity>[
         cacheIdentity(environment: 'beta'),
-        cacheIdentity(audience: ContentReleaseAudience.commercial),
         cacheIdentity(accountId: 'account-b'),
         cacheIdentity(personaId: 'persona-b'),
         cacheIdentity(sourceOwner: 'other_owner'),
@@ -415,10 +593,10 @@ void main() {
           deadlineAt: DateTime.now().add(const Duration(seconds: 6)),
         ),
         throwsA(
-          isA<StateError>().having(
+          isA<http.ClientException>().having(
             (error) => error.message,
             'message',
-            'feed offline',
+            'connection unavailable',
           ),
         ),
       );
@@ -549,160 +727,120 @@ void main() {
       );
     });
 
-    test('feed 首屏先返回持久快照并用同一结果句柄完成远端再验证', () async {
+    test('fresh 首屏不请求远端或远端关键词，5m 后才再验证', () async {
+      var now = DateTime.utc(2026, 9, 9);
       final delegate = _CountingContentRepository();
+      var keywordRequests = 0;
       final repo = _cachedContentRepository(
         delegate: delegate,
         postCache: PostObjectCacheService(),
-        querySnapshotStore: ContentQuerySnapshotStore(),
-      );
-
-      final first = await repo.listDiscoveryFeedPage(category: 'moment');
-      final refresh = Completer<DiscoveryFeedPage>();
-      delegate.pendingFeedPage = refresh;
-      final stale = await repo.listDiscoveryFeedPage(category: 'moment');
-
-      expect(first.items.single.id, 'post_1');
-      expect(stale.items.single.id, 'post_1');
-      expect(stale.isStaleWhileRevalidate, isTrue);
-      expect(stale.isCacheFallback, isFalse);
-      expect(delegate.feedRequestCount, 2);
-
-      refresh.complete(
-        DiscoveryFeedPage(items: <ContentPostViewData>[_postDto('post_2')]),
-      );
-      final revalidated = await stale.revalidation!;
-      expect(revalidated.items.single.id, 'post_2');
-      expect(revalidated.isCacheFallback, isFalse);
-      expect(delegate.feedRequestCount, 2);
-    });
-
-    test('feed 首屏远端再验证失败时保留快照并暴露真实失败', () async {
-      final delegate = _CountingContentRepository();
-      final repo = _cachedContentRepository(
-        delegate: delegate,
-        postCache: PostObjectCacheService(),
-        querySnapshotStore: ContentQuerySnapshotStore(),
-      );
-
-      await repo.listDiscoveryFeedPage(category: 'moment');
-      delegate.failFeedRequests = true;
-      final stale = await repo.listDiscoveryFeedPage(category: 'moment');
-      final fallback = await stale.revalidation!;
-
-      expect(stale.items.single.id, 'post_1');
-      expect(stale.isStaleWhileRevalidate, isTrue);
-      expect(fallback.items.single.id, 'post_1');
-      expect(fallback.isCacheFallback, isTrue);
-      expect(fallback.cacheFallbackError, isA<StateError>());
-      expect(delegate.feedRequestCount, 2);
-    });
-
-    test('feed 缓存回退仍过滤账号屏蔽关键词', () async {
-      final delegate = _CountingContentRepository();
-      final repo = _cachedContentRepository(
-        delegate: delegate,
-        postCache: PostObjectCacheService(),
-        querySnapshotStore: ContentQuerySnapshotStore(),
-        blockedKeywordsLoader: () async => <String>['缓存内容'],
-      );
-
-      await repo.listDiscoveryFeedPage(category: 'moment');
-      delegate.failFeedRequests = true;
-      final stale = await repo.listDiscoveryFeedPage(category: 'moment');
-      final fallback = await stale.revalidation!;
-
-      expect(stale.items, isEmpty);
-      expect(fallback.items, isEmpty);
-      expect(fallback.isCacheFallback, isTrue);
-    });
-
-    test('缓存回退关键词读取阻塞时取消终止且晚完成不产生新请求或写缓存', () async {
-      final delegate = _CountingContentRepository();
-      final store = ContentQuerySnapshotStore();
-      final keywords = Completer<List<String>>();
-      final loaderStarted = Completer<void>();
-      final repo = _cachedContentRepository(
-        delegate: delegate,
-        postCache: PostObjectCacheService(),
-        querySnapshotStore: store,
+        querySnapshotStore: ContentQuerySnapshotStore(now: () => now),
         blockedKeywordsLoader: () {
-          if (!loaderStarted.isCompleted) {
-            loaderStarted.complete();
-          }
-          return keywords.future;
+          keywordRequests++;
+          return Completer<List<String>>().future;
         },
       );
       await repo.listDiscoveryFeedPage(category: 'moment');
-      delegate.failFeedRequests = true;
-      final cancellation = CloudOperationCancellationSignal();
-
-      final pending = repo.listDiscoveryFeedPage(
-        category: 'moment',
-        cancellation: cancellation,
-      );
-      await loaderStarted.future;
-      cancellation.cancel();
-      await expectLater(
-        pending.timeout(const Duration(seconds: 1)),
-        throwsA(isA<CloudOperationCancelledException>()),
-      );
-      final requestCountAfterCancel = delegate.feedRequestCount;
-      final cacheCountAfterCancel = store.count;
-
-      keywords.complete(const <String>[]);
-      await Future<void>.delayed(Duration.zero);
-      expect(delegate.feedRequestCount, requestCountAfterCancel);
-      expect(store.count, cacheCountAfterCancel);
-      expect(requestCountAfterCancel, 1);
-      expect(cacheCountAfterCancel, 1);
+      final fresh = await repo.listDiscoveryFeedPage(category: 'moment');
+      expect(fresh.items.single.id, 'post_1');
+      expect(fresh.revalidation, isNull);
+      expect(delegate.feedRequestCount, 1);
+      expect(keywordRequests, 0);
+      now = now.add(const Duration(minutes: 5));
+      final refresh = Completer<DiscoveryFeedPage>();
+      delegate.pendingFeedPage = refresh;
+      final stale = await repo.listDiscoveryFeedPage(category: 'moment');
+      expect(stale.isStaleWhileRevalidate, isTrue);
+      refresh.complete(DiscoveryFeedPage(items: [_postDto('post_2')]));
+      expect((await stale.revalidation!).items.single.id, 'post_2');
+      expect(delegate.feedRequestCount, 2);
     });
 
-    test('缓存回退关键词读取阻塞时由请求期限终止', () async {
+    test('stale 首屏仅真实网络失败回退，保留原始错误', () async {
+      var now = DateTime.utc(2026, 9, 9);
+      final delegate = _CountingContentRepository();
+      final repo = _cachedContentRepository(
+        delegate: delegate,
+        postCache: PostObjectCacheService(),
+        querySnapshotStore: ContentQuerySnapshotStore(now: () => now),
+      );
+      await repo.listDiscoveryFeedPage(category: 'moment');
+      now = now.add(const Duration(minutes: 5));
+      delegate.failFeedRequests = true;
+      final stale = await repo.listDiscoveryFeedPage(category: 'moment');
+      final fallback = await stale.revalidation!;
+      expect(fallback.items.single.id, 'post_1');
+      expect(fallback.cacheFallbackError, isA<http.ClientException>());
+    });
+
+    test('本地关键词或权限策略无效时不回放，不能绕到远端策略 loader', () async {
       final delegate = _CountingContentRepository();
       final store = ContentQuerySnapshotStore();
-      final keywords = Completer<List<String>>();
+      var keywordRequests = 0;
       final repo = _cachedContentRepository(
         delegate: delegate,
         postCache: PostObjectCacheService(),
         querySnapshotStore: store,
-        blockedKeywordsLoader: () => keywords.future,
+        blockedKeywordsLoader: () async {
+          keywordRequests++;
+          return ['缓存内容'];
+        },
       );
       await repo.listDiscoveryFeedPage(category: 'moment');
+      store.replayPolicy = (_) => false;
       delegate.failFeedRequests = true;
-
-      final pending = repo.listDiscoveryFeedPage(
-        category: 'moment',
-        deadlineAt: DateTime.now().add(const Duration(milliseconds: 20)),
-      );
-
       await expectLater(
-        pending.timeout(const Duration(seconds: 1)),
+        repo.listDiscoveryFeedPage(category: 'moment'),
+        throwsA(isA<http.ClientException>()),
+      );
+      expect(keywordRequests, 0);
+    });
+
+    test('取消与已耗尽 deadline 即使有 fresh 缓存也不回放', () async {
+      final delegate = _CountingContentRepository();
+      final repo = _cachedContentRepository(
+        delegate: delegate,
+        postCache: PostObjectCacheService(),
+        querySnapshotStore: ContentQuerySnapshotStore(),
+      );
+      await repo.listDiscoveryFeedPage(category: 'moment');
+      final cancellation = CloudOperationCancellationSignal()..cancel();
+      await expectLater(
+        repo.listDiscoveryFeedPage(
+          category: 'moment',
+          cancellation: cancellation,
+        ),
+        throwsA(isA<CloudOperationCancelledException>()),
+      );
+      await expectLater(
+        repo.listDiscoveryFeedPage(
+          category: 'moment',
+          deadlineAt: DateTime.now().subtract(const Duration(seconds: 1)),
+        ),
         throwsA(isA<TimeoutException>()),
       );
       expect(delegate.feedRequestCount, 1);
-      expect(store.count, 1);
     });
 
-    test('个人作品优先请求远端，失败时才回退快照', () async {
+    test('个人作品 fresh 不请求远端，stale 网络失败才回退', () async {
+      var now = DateTime.utc(2026, 9, 9);
       final delegate = _CountingContentRepository();
       final repo = _cachedContentPostReader(
         delegate: delegate,
         postCache: PostObjectCacheService(),
-        querySnapshotStore: ContentQuerySnapshotStore(),
+        querySnapshotStore: ContentQuerySnapshotStore(now: () => now),
       );
-
-      final first = await repo.listUserPosts(userId: 'user_1');
-      final second = await repo.listUserPosts(userId: 'user_1');
+      await repo.listUserPosts(userId: 'user_1');
+      expect(
+        (await repo.listUserPosts(userId: 'user_1')).items.single.id,
+        'post_1',
+      );
+      expect(delegate.userPostsRequestCount, 1);
+      now = now.add(const Duration(minutes: 5));
       delegate.failUserPostsRequests = true;
       final fallback = await repo.listUserPosts(userId: 'user_1');
-
-      expect(first.items.single.id, 'post_1');
-      expect(second.items.single.id, 'post_1');
-      expect(delegate.userPostsRequestCount, 3);
-      expect(fallback.items.single.id, 'post_1');
       expect(fallback.isCacheFallback, isTrue);
-      expect(fallback.cacheFallbackError, isA<StateError>());
+      expect(fallback.cacheFallbackError, isA<http.ClientException>());
     });
 
     test('post 详情命中对象缓存后不重复请求远端', () async {
@@ -850,6 +988,7 @@ void main() {
       final valid = ContentQuerySnapshot.fromMap(<String, dynamic>{
         'key': queryKey,
         'items': const <Object?>[],
+        'objectCards': const <Object?>[],
         'outcome': 'empty',
         'emptyReason': 'no_eligible_content',
         'fetchedAt': DateTime.utc(2026, 7, 29).toIso8601String(),
@@ -1568,6 +1707,7 @@ class _CountingContentRepository extends Fake
   bool failFeedRequests = false;
   bool failUserPostsRequests = false;
   Completer<DiscoveryFeedPage>? pendingFeedPage;
+  Completer<ContentPostDetailPayload>? pendingDetail;
 
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
@@ -1586,7 +1726,7 @@ class _CountingContentRepository extends Fake
   }) async {
     feedRequestCount += 1;
     if (failFeedRequests) {
-      throw StateError('feed offline');
+      throw http.ClientException('connection unavailable');
     }
     final pending = pendingFeedPage;
     if (pending != null) {
@@ -1609,6 +1749,7 @@ class _CountingContentRepository extends Fake
     DateTime? deadlineAt,
   }) async {
     detailRequestCount += 1;
+    if (pendingDetail != null) return pendingDetail!.future;
     return _detailPayload(postId, post: post);
   }
 
@@ -1623,7 +1764,7 @@ class _CountingContentRepository extends Fake
   }) async {
     userPostsRequestCount += 1;
     if (failUserPostsRequests) {
-      throw StateError('user posts offline');
+      throw http.ClientException('connection unavailable');
     }
     return CursorPage<ContentPostViewData>(
       items: <ContentPostViewData>[post],

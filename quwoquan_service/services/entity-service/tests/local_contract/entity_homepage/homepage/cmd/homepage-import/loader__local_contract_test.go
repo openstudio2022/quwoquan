@@ -121,13 +121,11 @@ func loadHomepageProjections(
 	imageBase string,
 ) ([]application.ImportedHomepageInput, []string, error) {
 	t.Helper()
-	// 既有用例断言 canonical public slice URL，对应 commercial release class。
 	return homepageimport.LoadHomepageProjections(
 		root,
 		filter,
 		releaseMediaAuthority(t, root),
 		runtimemedia.MediaDeliveryBases{Image: imageBase},
-		"commercial",
 	)
 }
 
@@ -354,7 +352,6 @@ func TestLoadHomepageProjectionsRejectsObjectKeyAndIdentityDrift(t *testing.T) {
 				nil,
 				authority,
 				runtimemedia.MediaDeliveryBases{Image: "https://image.example.com"},
-				"commercial",
 			)
 			if err == nil || !strings.Contains(err.Error(), test.errorMarker) {
 				t.Fatalf("%s drift must fail closed, err=%v", test.name, err)
@@ -398,7 +395,6 @@ func TestLoadHomepageProjectionsRejectsOwnerAndRightsDrift(t *testing.T) {
 				nil,
 				authority,
 				runtimemedia.MediaDeliveryBases{Image: "https://image.example.com"},
-				"commercial",
 			)
 			if err == nil || !strings.Contains(err.Error(), test.errorMarker) {
 				t.Fatalf("%s drift must fail closed, err=%v", test.name, err)

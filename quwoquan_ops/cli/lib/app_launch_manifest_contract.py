@@ -297,8 +297,8 @@ def load_launch_manifest_contract(
             )
     handoff_fields = schemas["app_launcher_handoff"]["fields"]
     if (
-        handoff_fields.get("runtimeConfigPackage", {}).get("schema_ref")
-        != "runtime_config_package"
+        handoff_fields.get("runtimeConfigPackage", {}).get("schema_one_of")
+        != ["runtime_config_package", "offline_bootstrap_document"]
         or "dartDefines" in handoff_fields
         or "dartDefinesDigest" in handoff_fields
     ):
@@ -439,6 +439,18 @@ def validate_runtime_config_activation_request(
                 )
 
     if isinstance(package, dict) and isinstance(effective_manifest, dict):
+        try:
+            source = runtime_document_content_source(package, selected_contract)
+            if effective_manifest.get("contentSource") != source:
+                issues.append("activation request contentSource disagrees with signed document")
+            if source == "bundled_snapshot" and (
+                package.get("trustEnvelopeDigest") != request.get("trustEnvelopeDigest")
+                or effective_manifest.get("requiresLocalTransport") is not False
+                or effective_manifest.get("transport", {}).get("required") is not False
+            ):
+                issues.append("offline activation cannot grant trust or transport authority")
+        except LaunchManifestContractError as error:
+            issues.append(str(error))
         for field in ("environment", "buildProfile", "target", "launchPolicy"):
             if package.get(field) != effective_manifest.get(field):
                 issues.append(
@@ -651,6 +663,27 @@ def runtime_config_trust_envelope_digest(
     )
 
 
+def runtime_document_schema_name(document: object, contract: dict[str, Any]) -> str | None:
+    if not isinstance(document, dict):
+        return None
+    for name in ("runtime_config_package", "offline_bootstrap_document"):
+        if document.get("schema") == contract["schemas"][name]["schema_value"]:
+            return name
+    return None
+
+
+def runtime_document_content_source(document: object, contract: dict[str, Any]) -> str:
+    if not isinstance(document, dict):
+        raise LaunchManifestContractError("runtime document must be an object")
+    source = contract["runtime_document_content_sources"].get(document.get("schema"))
+    expected = contract["content_source_policy"].get(document.get("environment"))
+    if source is None or source != expected or (
+        source == "bundled_snapshot" and document.get("contentSource") != source
+    ):
+        raise LaunchManifestContractError("runtime document content source policy mismatch")
+    return source
+
+
 def validate_runtime_config_package(
     package: object,
     runtime_config_trust_envelope: object,
@@ -661,9 +694,13 @@ def validate_runtime_config_package(
     """Validate one signed runtime package against an explicit trust envelope."""
 
     selected_contract = contract or load_launch_manifest_contract()
+    document_schema = runtime_document_schema_name(package, selected_contract)
+    if document_schema is None:
+        return ["runtimeConfigPackage.schema is not a declared document discriminator"]
+    offline = document_schema == "offline_bootstrap_document"
     issues = _validate_schema_document(
         package,
-        "runtime_config_package",
+        document_schema,
         contract=selected_contract,
         field_path="runtimeConfigPackage",
     )
@@ -708,7 +745,15 @@ def validate_runtime_config_package(
             "runtimeConfigPackage buildProfile disagrees with runtimeConfigTrustEnvelope"
         )
     runtime = package.get("runtime")
-    runtime_keys = set(selected_contract["runtime_value_keys"])
+    runtime_keys = set(selected_contract["schemas"][document_schema]["fields"]["runtime"]["required_fields"])
+    try:
+        runtime_document_content_source(package, selected_contract)
+    except LaunchManifestContractError as error:
+        issues.append(str(error))
+    if offline and isinstance(runtime_config_trust_envelope, dict):
+        trust_issues = validate_runtime_config_trust_envelope(runtime_config_trust_envelope, selected_contract)
+        if not trust_issues and package.get("trustEnvelopeDigest") != runtime_config_trust_envelope_digest(runtime_config_trust_envelope, selected_contract):
+            issues.append("offline bootstrap trustEnvelopeDigest disagrees with artifact trust")
     if isinstance(runtime, dict):
         for key in sorted(set(runtime) - runtime_keys):
             issue = f"runtimeConfigPackage.runtime.{key} is not declared by metadata"
@@ -940,7 +985,10 @@ def validate_handoff_against_metadata(
     if target_environments.get(target) != environment:
         issues.append("effective launch target/environment mapping is invalid")
     local_targets = set(selected_contract["local_transport_targets"])
-    requires_local_transport = target in local_targets
+    source = selected_contract["content_source_policy"].get(environment)
+    if effective_manifest.get("contentSource") != source:
+        issues.append("effective launch contentSource disagrees with canonical environment policy")
+    requires_local_transport = source == "remote" and target in local_targets
     if effective_manifest.get("requiresLocalTransport") is not requires_local_transport:
         issues.append("requiresLocalTransport disagrees with canonical target topology")
 
@@ -955,8 +1003,8 @@ def validate_handoff_against_metadata(
         "consumerLeaseId",
     )
     if transport_required is True:
-        if target not in local_targets:
-            issues.append("transport.required is only valid for a local target")
+        if not requires_local_transport:
+            issues.append("transport.required is only valid for a remote local target")
         for field in ("reverseReceiptDigest", "consumerLeaseId"):
             if not is_digest_identity(transport.get(field), selected_contract):
                 issues.append(f"transport.{field} must be a canonical digest identity")

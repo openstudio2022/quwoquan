@@ -19,6 +19,7 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
 from quwoquan_ops.ci import release_evidence_reader as lifecycle
+from quwoquan_ops.tests.support.deployment_candidate_manifest_test_support import release_attestation_payload
 from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
     app_artifact_manifest,
 )
@@ -231,12 +232,9 @@ class FinalAcceptanceFixture:
             "pilot_release",
             self.artifact / "evidence/release/pilot-release-attestation.json",
             {
-                "schema": "quwoquan_data.release_attestation",
-                "releaseId": RELEASE_ID,
-                "payloadSha256": RELEASE_DIGEST,
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
+                **release_attestation_payload(RELEASE_ID, RELEASE_DIGEST),
                 "containsUnverifiedAssets": False,
+                "rightsStatusCounts": {"verified": 1, "unverified": 0, "restricted": 0, "unknown": 0},
                 "authorizationRequiredAssetIds": [],
                 "recordedAt": self.pilot_recorded_at,
             },
@@ -245,11 +243,7 @@ class FinalAcceptanceFixture:
             "pilot_rollback",
             self.artifact / "evidence/release/pilot-rollback-attestation.json",
             {
-                "schema": "quwoquan_data.release_attestation",
-                "releaseId": ROLLBACK_ID,
-                "payloadSha256": ROLLBACK_DIGEST,
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
+                **release_attestation_payload(ROLLBACK_ID, ROLLBACK_DIGEST),
                 "recordedAt": self.pilot_recorded_at,
             },
         )
@@ -265,16 +259,22 @@ class FinalAcceptanceFixture:
                         "environment": environment,
                         "originalReleaseId": RELEASE_ID,
                         "originalManifestDigest": RELEASE_DIGEST,
-                        "originalVerifyChecksum": TEST_DIGEST,
-                        "rollbackReleaseId": f"rollback-{environment}",
-                        "rollbackManifestDigest": TEST_DIGEST,
-                        "rollbackVerifyChecksum": TEST_DIGEST,
+                        "exitRunId": f"exit-{environment}",
+                        "originalImportRunId": "activate-original",
+                        "originalVerifyRunId": "verify-original",
+                        "originalImportResultRef": f"env/{environment}/runs/data-release/{RELEASE_ID}/activate-original/result.json",
+                        "originalVerifyResultRef": f"env/{environment}/runs/data-release/{RELEASE_ID}/verify-original/result.json",
                         "rollbackToReleaseId": ROLLBACK_ID,
                         "rollbackToManifestDigest": ROLLBACK_DIGEST,
-                        "rollbackToVerifyChecksum": TEST_DIGEST,
-                        "replayReleaseId": f"replay-{environment}",
+                        "rollbackRunId": "rollback",
+                        "rollbackVerifyRunId": "verify-rollback",
+                        "rollbackResultRef": f"env/{environment}/runs/data-release/{ROLLBACK_ID}/rollback/result.json",
+                        "rollbackVerifyResultRef": f"env/{environment}/runs/data-release/{ROLLBACK_ID}/verify-rollback/result.json",
+                        "replayImportRunId": "activate-replay",
+                        "replayVerifyRunId": "verify-replay",
                         "replayManifestDigest": RELEASE_DIGEST,
-                        "replayVerifyChecksum": TEST_DIGEST,
+                        "replayImportResultRef": f"env/{environment}/runs/data-release/{RELEASE_ID}/activate-replay/result.json",
+                        "replayVerifyResultRef": f"env/{environment}/runs/data-release/{RELEASE_ID}/verify-replay/result.json",
                         "passed": True,
                         "recordedAt": OBSERVED_AT,
                     }

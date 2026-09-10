@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/shell/startup/app_startup_runtime.dart';
 import 'package:quwoquan_app/runtime/shell/state/appearance_settings_provider.dart';
 import 'package:quwoquan_app/runtime/shell/state/startup_auth_restore_gate_provider.dart';
@@ -146,6 +148,10 @@ final class StartupInitScheduler {
       return;
     }
     _shellServicesStarted = true;
+    if (CloudRuntimeConfig.isHydrated &&
+        CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot) {
+      return;
+    }
     _bestEffort('startup_realtime_foreground', () {
       final realtime = ref.read(realtimeConnectionManagerProvider.notifier);
       realtime.onAppForeground();

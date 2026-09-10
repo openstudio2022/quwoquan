@@ -132,10 +132,11 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
             "candidate_evidence_manifest"
         )
         assert candidate["owner_identity_ref"] == owner_ref
-        # candidate v2：exact paths 只挂在各自 Feature-owner group 下，顶层不再重复。
+        # 完整路径从不可变对象读取，manifest不重复内嵌。
+        from lib.candidate_evidence import load_candidate_path_set
         assert [
             path
-            for group in candidate["impacted_owner_groups"]
+            for group in load_candidate_path_set(candidate, repo_root=ROOT)["impacted_owner_groups"]
             for path in group["paths"]
         ] == [probe.relative_to(ROOT).as_posix()]
         assert candidate["impact_plan_identity"]["digest"].startswith("sha256:")

@@ -23,7 +23,7 @@ def _write(path: Path, value: object) -> Path:
 
 
 def _fixture(root: Path) -> Path:
-    release_id = "research-m100-first"
+    release_id = "release-m100-first"
     environment = "alpha"
     evidence = root / "env/alpha/runs/data-release" / release_id / "verify-001"
     import_path = _write(
@@ -93,24 +93,10 @@ def _fixture(root: Path) -> Path:
             ],
         },
     )
-    return _write(
-        evidence / "release-readiness.json",
-        {
-            "schema": "quwoquan_data.environment_release_readiness",
-            "passed": True,
-            "readinessPhase": "research",
-            "environment": environment,
-            "releaseId": release_id,
-            "manifestDigest": _DIGEST,
-            "postIds": ["post-article", "post-image", "post-video"],
-            "entityRefs": ["entity-a"],
-            "creatorIds": ["creator-a", "creator-b"],
-            "contentImportReportRef": import_path.relative_to(root).as_posix(),
-            "creatorAttributionRef": creator_path.relative_to(root).as_posix(),
-            "homepageApiVerificationRef": homepage_path.relative_to(root).as_posix(),
-            "postApiVerificationRef": post_path.relative_to(root).as_posix(),
-        },
-    )
+    from quwoquan_ops.tests.support.app_content_preflight_test_support import write_release_readiness
+
+    path, _ = write_release_readiness(root, environment=environment, release_id=release_id, manifest_digest=_DIGEST)
+    return path
 
 
 def test_content_delivery_verifies_only_the_runtime_content_closure(
@@ -121,7 +107,7 @@ def test_content_delivery_verifies_only_the_runtime_content_closure(
         output_root=tmp_path,
         readiness_path=readiness,
         environment="alpha",
-        release_id="research-m100-first",
+        release_id="release-m100-first",
         manifest_digest=_DIGEST,
     )
     assert report["result"] == "ready"
@@ -133,18 +119,14 @@ def test_content_delivery_verifies_only_the_runtime_content_closure(
         "searchablePosts": 3,
         "recommendablePosts": 3,
         "homepages": 1,
-        "personas": 2,
+        "personas": 1,
     }
 
 
-def test_content_delivery_accepts_consumer_receipt_before_live_search_probe(
+def test_content_delivery_rejects_missing_live_search_evidence(
     tmp_path: Path,
 ) -> None:
     readiness = _fixture(tmp_path)
-    readiness_payload = json.loads(readiness.read_text(encoding="utf-8"))
-    readiness_payload["readinessPhase"] = "consumer"
-    _write(readiness, readiness_payload)
-
     post_path = readiness.with_name("post-api-verification.json")
     post_payload = json.loads(post_path.read_text(encoding="utf-8"))
     post_payload.pop("searchQueries")
@@ -154,18 +136,17 @@ def test_content_delivery_accepts_consumer_receipt_before_live_search_probe(
         output_root=tmp_path,
         readiness_path=readiness,
         environment="alpha",
-        release_id="research-m100-first",
+        release_id="release-m100-first",
         manifest_digest=_DIGEST,
     )
 
-    assert report["result"] == "ready"
-    assert report["counts"]["searchablePosts"] == 0
-    assert report["counts"]["recommendablePosts"] == 3
+    assert report["result"] == "blocked"
+    assert report["issues"] == ["Search verification is missing"]
 
 
 def test_content_delivery_rejects_non_imported_status(tmp_path: Path) -> None:
     readiness = _fixture(tmp_path)
-    import_path = readiness.with_name("import.json")
+    import_path = tmp_path / json.loads(readiness.read_text())["contentImportReportRef"]
     import_payload = json.loads(import_path.read_text(encoding="utf-8"))
     # schema 闭集之外的状态（历史误期望的 "active"）必须被拒绝
     import_payload["status"] = "active"
@@ -175,7 +156,7 @@ def test_content_delivery_rejects_non_imported_status(tmp_path: Path) -> None:
         output_root=tmp_path,
         readiness_path=readiness,
         environment="alpha",
-        release_id="research-m100-first",
+        release_id="release-m100-first",
         manifest_digest=_DIGEST,
     )
     assert report["result"] == "blocked"
@@ -188,7 +169,7 @@ def test_content_delivery_blocks_count_drift_without_unrelated_gates(
     tmp_path: Path,
 ) -> None:
     readiness = _fixture(tmp_path)
-    import_path = readiness.with_name("import.json")
+    import_path = tmp_path / json.loads(readiness.read_text())["contentImportReportRef"]
     imported = json.loads(import_path.read_text(encoding="utf-8"))
     imported["counts"]["postsUpserted"] = 2
     _write(import_path, imported)
@@ -197,7 +178,7 @@ def test_content_delivery_blocks_count_drift_without_unrelated_gates(
         output_root=tmp_path,
         readiness_path=readiness,
         environment="alpha",
-        release_id="research-m100-first",
+        release_id="release-m100-first",
         manifest_digest=_DIGEST,
     )
     assert report["result"] == "blocked"
@@ -223,7 +204,7 @@ def test_stackctl_content_delivery_is_an_integration_only_readback(
             env="alpha",
             target="",
             report_dir=str(tmp_path / "report"),
-            data_release_id="research-m100-first",
+            data_release_id="release-m100-first",
             data_verify_run_id="verify-001",
             data_manifest_digest=_DIGEST,
         )

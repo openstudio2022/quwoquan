@@ -575,12 +575,18 @@ func TestContentAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *t
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	if got := len(lock.AppExposedOperations); got != 47 {
+	// 研究态 readback 已从正式 App 契约移除，不能由生成器重新暴露。
+	for _, operation := range lock.AppExposedOperations {
+		if operation.LocalOperationID == "GetResearchReleaseReadback" {
+			t.Fatal("Content App surface retained retired research readback")
+		}
+	}
+	if got := len(lock.AppExposedOperations); got != 46 {
 		ids := make([]string, 0, len(lock.AppExposedOperations))
 		for _, operation := range lock.AppExposedOperations {
 			ids = append(ids, operation.CanonicalOperationID)
 		}
-		t.Fatalf("Content App-exposed operations = %d, want 47: %s", got, strings.Join(ids, ", "))
+		t.Fatalf("Content App-exposed operations = %d, want 46: %s", got, strings.Join(ids, ", "))
 	}
 
 	appDir := t.TempDir()
@@ -592,8 +598,8 @@ func TestContentAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 47 {
-		t.Fatalf("Content typed request artifacts = %d, want 47", got)
+	if got := len(artifacts); got != 46 {
+		t.Fatalf("Content typed request artifacts = %d, want 46", got)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,
@@ -687,12 +693,18 @@ func TestUserAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *test
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	if got := len(lock.AppExposedOperations); got != 75 {
+	// 正式会话契约不再签发或回读研究态身份。
+	for _, operation := range lock.AppExposedOperations {
+		if operation.LocalOperationID == "IssueWhitelistedResearchSession" || operation.LocalOperationID == "GetResearchSessionAttestation" {
+			t.Fatal("User App surface retained retired research identity")
+		}
+	}
+	if got := len(lock.AppExposedOperations); got != 74 {
 		ids := make([]string, 0, len(lock.AppExposedOperations))
 		for _, operation := range lock.AppExposedOperations {
 			ids = append(ids, operation.CanonicalOperationID)
 		}
-		t.Fatalf("User App-exposed operations = %d, want 75: %s", got, strings.Join(ids, ", "))
+		t.Fatalf("User App-exposed operations = %d, want 74: %s", got, strings.Join(ids, ", "))
 	}
 
 	appDir := t.TempDir()
@@ -704,8 +716,8 @@ func TestUserAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 75 {
-		t.Fatalf("User typed request artifacts = %d, want 75", got)
+	if got := len(artifacts); got != 74 {
+		t.Fatalf("User typed request artifacts = %d, want 74", got)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,

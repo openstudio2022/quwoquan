@@ -479,59 +479,18 @@ func (r *fakeQueryActiveSupplyReader) ActiveSupplySnapshot(
 	return r.snapshot, r.err
 }
 
-func readyQueryActiveSupply(releaseClass string) postports.ActiveSupplySnapshot {
+func readyQueryActiveSupply() postports.ActiveSupplySnapshot {
 	return postports.ActiveSupplySnapshot{
 		Environment:       "alpha",
 		SourceOwner:       "qwq_data",
 		Status:            "active",
 		ActiveReleaseID:   "rel-query-active",
 		ManifestDigest:    queryFenceManifestDigest,
-		ReleaseClass:      releaseClass,
 		ProjectionVersion: 11,
 		Revision:          3,
 		ActivatedAt:       time.Unix(1_800_000_000, 0).UTC(),
 		ReadbackStatus:    "passed",
 		Posts:             3,
-	}
-}
-
-// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-032
-func TestPublicPostQueriesDenyNonResearchBeforeReaderForResearchRelease(t *testing.T) {
-	active := &fakeQueryActiveSupplyReader{snapshot: readyQueryActiveSupply("research")}
-	detail := &fakePostDetailReader{}
-	author := &fakeAuthorPostReader{}
-	gathering := &fakeGatheringPostReaderForQueryFence{}
-	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
-		Detail: detail, Author: author, Gathering: gathering, ActiveSupply: active,
-	})
-
-	for name, invoke := range map[string]func() error{
-		"GetPost": func() error {
-			_, err := facade.GetPost(context.Background(), postports.NewPostDetailQuery(
-				postports.NewPostID("research-post"), queryViewer("persona-member"), false,
-			))
-			return err
-		},
-		"ListUserPosts": func() error {
-			_, err := facade.ListUserPosts(context.Background(), postports.NewAuthorPostPageQuery(
-				postports.NewPersonaID("research-author"), queryViewer("persona-member"),
-				"", "", "", "", 20, false,
-			))
-			return err
-		},
-		"ListPostsByGathering": func() error {
-			_, err := facade.ListPostsByGathering(context.Background(),
-				postports.NewGatheringPostPageQuery("gathering-research", "", 20, false),
-			)
-			return err
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			assertPostQueryErrorCode(t, invoke(), contentgenerated.AppErrorFromPostNotFound(""))
-		})
-	}
-	if detail.calls != 0 || author.calls != 0 || gathering.calls != 0 {
-		t.Fatalf("non-research principal reached content readers: detail=%d author=%d gathering=%d", detail.calls, author.calls, gathering.calls)
 	}
 }
 
@@ -549,54 +508,15 @@ func (r *fakeGatheringPostReaderForQueryFence) ListGatheringPosts(
 	return postports.GatheringPostPageSlice{Items: []postports.AuthorPostItemSlice{}}, nil
 }
 
-func TestResearchPrincipalQueriesUseExactActiveReleaseFence(t *testing.T) {
-	active := &fakeQueryActiveSupplyReader{snapshot: readyQueryActiveSupply("research")}
-	detail := &fakePostDetailReader{found: true, detail: postports.PostDetailSlice{
-		PostID: "research-post", AuthorPersonaID: "research-author",
-		Status: "published", Visibility: "public", ModerationStatus: "approved",
-	}}
-	author := &fakeAuthorPostReader{page: postports.AuthorPostPageSlice{Items: []postports.AuthorPostItemSlice{}}}
-	gathering := &fakeGatheringPostReaderForQueryFence{}
-	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
-		Detail: detail, Author: author, Gathering: gathering, ActiveSupply: active,
-	})
-
-	if _, err := facade.GetPost(context.Background(), postports.NewPostDetailQuery(
-		"research-post", queryViewer("persona-research"), true,
-	)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := facade.ListUserPosts(context.Background(), postports.NewAuthorPostPageQuery(
-		"research-author", queryViewer("persona-research"), "", "", "", "", 20, true,
-	)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := facade.ListPostsByGathering(context.Background(),
-		postports.NewGatheringPostPageQuery("gathering-research", "", 20, true),
-	); err != nil {
-		t.Fatal(err)
-	}
-
-	for name, binding := range map[string][2]string{
-		"detail":    {detail.request.ActiveReleaseID(), detail.request.ManifestDigest()},
-		"author":    {author.request.ActiveReleaseID(), author.request.ManifestDigest()},
-		"gathering": {gathering.request.ActiveReleaseID(), gathering.request.ManifestDigest()},
-	} {
-		if binding[0] != "rel-query-active" || binding[1] != queryFenceManifestDigest {
-			t.Fatalf("%s binding=(%q,%q), want exact active identity", name, binding[0], binding[1])
-		}
-	}
-}
-
 func TestPublicPostQueriesFailClosedOnMalformedActiveRelease(t *testing.T) {
-	active := &fakeQueryActiveSupplyReader{snapshot: readyQueryActiveSupply("research")}
+	active := &fakeQueryActiveSupplyReader{snapshot: readyQueryActiveSupply()}
 	active.snapshot.ManifestDigest = "invalid"
 	detail := &fakePostDetailReader{}
 	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
 		Detail: detail, ActiveSupply: active,
 	})
 	_, err := facade.GetPost(context.Background(), postports.NewPostDetailQuery(
-		"research-post", queryViewer("persona-research"), true,
+		"post-a", queryViewer("persona-a"),
 	))
 	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromRequiredDependencyUnavailable(""))
 	if detail.calls != 0 {
@@ -611,7 +531,7 @@ func TestPublicPostQueryActiveSupplyReadFailureFailsBeforeContentReader(t *testi
 		Detail: detail, ActiveSupply: active,
 	})
 	_, err := facade.GetPost(context.Background(), postports.NewPostDetailQuery(
-		"research-post", queryViewer("persona-research"), true,
+		"post-a", queryViewer("persona-a"),
 	))
 	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromStorageReadFailed(""))
 	if detail.calls != 0 {
@@ -638,25 +558,4 @@ func (lister *fakePublicPostIDLister) ListPublicPostIDs(
 		lister.manifestDigest = activeReleaseBinding[1]
 	}
 	return []string{"post-active"}, nil
-}
-
-func TestSitemapReleaseGateDeniesAnonymousResearchAndBindsExplicitResearch(t *testing.T) {
-	active := &fakeQueryActiveSupplyReader{snapshot: readyQueryActiveSupply("research")}
-	lister := &fakePublicPostIDLister{}
-	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{ActiveSupply: active})
-
-	_, err := facade.ListPublicPostIDs(context.Background(), lister, 500, false)
-	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromPostNotFound(""))
-	if lister.calls != 0 {
-		t.Fatalf("anonymous research sitemap reached lister: calls=%d", lister.calls)
-	}
-
-	ids, err := facade.ListPublicPostIDs(context.Background(), lister, 500, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(ids) != 1 || lister.releaseID != "rel-query-active" ||
-		lister.manifestDigest != queryFenceManifestDigest {
-		t.Fatalf("research sitemap not exact-release-bound: ids=%v lister=%+v", ids, lister)
-	}
 }

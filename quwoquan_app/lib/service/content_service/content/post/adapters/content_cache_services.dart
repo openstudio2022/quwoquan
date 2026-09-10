@@ -4,6 +4,12 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
+import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+
 import 'package:quwoquan_app/service/content_service/content/post/domain/generated/content_post_snapshot_policy.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
@@ -17,17 +23,49 @@ import 'package:quwoquan_app/runtime/platform/storage/cache/cache_telemetry_sink
 import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/object_cache_store.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show ContentFeedEmptyReason, ContentFeedOutcome, isCanonicalSha256Digest;
+    show
+        ContentFeedEmptyReason,
+        ContentFeedOutcome,
+        FeedObjectCard,
+        CloudOperationCancelledException,
+        isCanonicalSha256Digest;
 import 'package:shared_preferences/shared_preferences.dart';
 
 part 'content_query_snapshot_persistence_codec.dart';
+
+/// 这里只判定失败类别；调用方仍须证明同 scope/public/本地策略与年龄。
+bool isContentCacheTransportFallback(Object error, {DateTime? deadlineAt}) {
+  if ((deadlineAt != null && !DateTime.now().isBefore(deadlineAt)) ||
+      error is CloudOperationCancelledException ||
+      error is http.RequestAbortedException) {
+    return false;
+  }
+  final failure = error is CloudException
+      ? error
+      : CloudErrorMapper.fromException(error);
+  final kind = failure.runtimeFailure.kind;
+  if (kind == RuntimeFailureKind.cancelled ||
+      kind == RuntimeFailureKind.contract ||
+      kind == RuntimeFailureKind.parsing ||
+      failure.statusCode == 401 ||
+      failure.statusCode == 403) {
+    return false;
+  }
+  final status = failure.statusCode;
+  if (status != null) return status == 429 || (status >= 500 && status <= 599);
+  return kind == RuntimeFailureKind.network ||
+      kind == RuntimeFailureKind.timeout;
+}
 
 class PostObjectCacheService {
   PostObjectCacheService({
     ObjectCacheStore<ContentPostDetailPayload>? detailStore,
     ObjectCacheStore<ContentPostViewData>? projectionStore,
     int maxMemoryEntries = 200,
-  }) : _detailStore =
+    this.detailsMaxAge = const Duration(hours: 24),
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       _detailStore =
            detailStore ??
            ObjectCacheStore<ContentPostDetailPayload>(
              maxMemoryEntries: maxMemoryEntries,
@@ -38,23 +76,56 @@ class PostObjectCacheService {
            ObjectCacheStore<ContentPostViewData>(
              maxMemoryEntries: maxMemoryEntries,
              freshFor: const Duration(minutes: 10),
-           );
+           ) {
+    if (detailsMaxAge <= Duration.zero ||
+        detailsMaxAge > const Duration(hours: 24)) {
+      throw ArgumentError.value(detailsMaxAge, 'detailsMaxAge');
+    }
+  }
 
   final ObjectCacheStore<ContentPostDetailPayload> _detailStore;
   final ObjectCacheStore<ContentPostViewData> _projectionStore;
   String _namespace = '';
+  final Duration detailsMaxAge;
+  final DateTime Function() _now;
+  final Map<String, DateTime> _detailWrittenAt = <String, DateTime>{};
+  int _requestEpoch = 0;
+  int get requestEpoch => _requestEpoch;
+  bool Function(ContentPostDetailPayload payload)? detailReplayPolicy;
+
+  bool canReplayDetail(ContentPostDetailPayload payload) =>
+      _namespace.isNotEmpty && (detailReplayPolicy?.call(payload) ?? false);
+
+  void requireCurrentRequest(int epoch) {
+    if (epoch != _requestEpoch) throw const CloudOperationCancelledException();
+  }
 
   void adoptNamespace(ContentCacheIsolationIdentity identity) {
+    if (_namespace != identity.cacheKeyPrefix) {
+      _requestEpoch++;
+      detailReplayPolicy = null;
+    }
     _namespace = identity.cacheKeyPrefix;
   }
 
   void clearNamespace() {
+    detailReplayPolicy = null;
     clearAllRebuildable();
     _namespace = '';
   }
 
   CacheReadResult<ContentPostDetailPayload>? getDetail(String postId) {
-    return _detailStore.get(_objectKey(postId));
+    if (_namespace.isEmpty) return null;
+    final key = _objectKey(postId);
+    final writtenAt = _detailWrittenAt[key];
+    if (writtenAt == null ||
+        _now().isBefore(writtenAt) ||
+        _now().difference(writtenAt) >= detailsMaxAge) {
+      _detailStore.remove(key);
+      _detailWrittenAt.remove(key);
+      return null;
+    }
+    return _detailStore.get(key);
   }
 
   CacheReadResult<ContentPostViewData>? getProjection(String postId) {
@@ -62,7 +133,10 @@ class PostObjectCacheService {
   }
 
   void putDetail(ContentPostDetailPayload payload) {
+    if (_namespace.isEmpty) return;
     final post = payload.post;
+    _detailWrittenAt.removeWhere((key, _) => _detailStore.get(key) == null);
+    _detailWrittenAt[_objectKey(post.id)] = _now();
     final version = _resolvePostVersion(post);
     _detailStore.put(
       _objectKey(post.id),
@@ -70,6 +144,7 @@ class PostObjectCacheService {
       objectVersion: version,
       cacheClass: CacheClass.recent,
     );
+    _detailWrittenAt.removeWhere((key, _) => _detailStore.get(key) == null);
     putProjection(post);
   }
 
@@ -96,15 +171,21 @@ class PostObjectCacheService {
     if (normalized.isEmpty) {
       return;
     }
+    _requestEpoch++;
+    _detailWrittenAt.remove(_objectKey(normalized));
     _detailStore.remove(_objectKey(normalized));
     _projectionStore.remove(_objectKey(normalized));
   }
 
   int clearRecentDetails() {
+    _requestEpoch++;
+    _detailWrittenAt.clear();
     return _detailStore.clearAllRebuildable();
   }
 
   int clearAllRebuildable() {
+    _requestEpoch++;
+    _detailWrittenAt.clear();
     return _detailStore.clearAllRebuildable() +
         _projectionStore.clearAllRebuildable();
   }
@@ -133,7 +214,15 @@ class ContentQuerySnapshot {
     this.outcome = ContentFeedOutcome.content,
     this.emptyReason,
     this.activationIdentity,
+    this.objectCards = const <FeedObjectCard>[],
   }) {
+    for (final card in objectCards) {
+      if (card.anchorIndex < 0 || card.anchorIndex >= items.length) {
+        throw const FormatException(
+          'objectCard anchorIndex must identify an item',
+        );
+      }
+    }
     final digest = policyDigest;
     if (digest != null && !isCanonicalSha256Digest(digest)) {
       throw const FormatException(
@@ -150,6 +239,7 @@ class ContentQuerySnapshot {
 
   final String key;
   final List<ContentPostViewData> items;
+  final List<FeedObjectCard> objectCards;
   final String? nextCursor;
   final String? previousCursor;
   final DateTime? paginationExpiresAt;
@@ -185,6 +275,7 @@ class ContentQuerySnapshot {
         paginationExpiresAt!.isAfter((now ?? DateTime.now()).toUtc());
     return DiscoveryFeedPage(
       items: items,
+      objectCards: objectCards,
       outcome: outcome,
       emptyReason: emptyReason,
       nextCursor: paginationIsUsable ? nextCursor : null,
@@ -200,6 +291,9 @@ class ContentQuerySnapshot {
     return <String, dynamic>{
       'key': key,
       'items': items.map(_postSnapshotMap).toList(growable: false),
+      'objectCards': objectCards
+          .map((card) => card.toWire())
+          .toList(growable: false),
       'nextCursor': nextCursor,
       'previousCursor': previousCursor,
       'paginationExpiresAt': paginationExpiresAt?.toUtc().toIso8601String(),
@@ -222,8 +316,19 @@ class ContentQuerySnapshot {
       if (key.isEmpty || rawItems is! List || rawFetchedAt.isEmpty) {
         return null;
       }
+      if (rawItems.any((item) => item is! Map)) return null;
+      final rawCards = map['objectCards'];
+      if (rawCards is! List || rawCards.any((card) => card is! Map)) {
+        return null;
+      }
+      final cards = rawCards
+          .map(
+            (card) =>
+                FeedObjectCard.fromWire(Map<String, Object?>.from(card as Map)),
+          )
+          .toList(growable: false);
       final items = rawItems
-          .whereType<Map>()
+          .cast<Map>()
           .map(
             (item) => contentPostViewDataFromReadModelMap(
               _normalizePostSnapshotMap(item),
@@ -246,6 +351,7 @@ class ContentQuerySnapshot {
       return ContentQuerySnapshot(
         key: key,
         items: List<ContentPostViewData>.unmodifiable(items),
+        objectCards: List<FeedObjectCard>.unmodifiable(cards),
         fetchedAt: DateTime.parse(rawFetchedAt).toLocal(),
         nextCursor: map['nextCursor']?.toString(),
         previousCursor: map['previousCursor']?.toString(),
@@ -535,7 +641,7 @@ class ContentQuerySnapshotStore {
     this.maximumAge = const Duration(hours: 24),
     this.hydrationDeadline = const Duration(milliseconds: 1500),
     bool persistToPreferences = false,
-    String storageKey = defaultStorageKey,
+    String? storageKey,
     ContentQuerySnapshotPersistencePolicy persistencePolicy =
         const ContentQuerySnapshotPersistencePolicy(),
     ContentQuerySnapshotPersistenceBackend persistenceBackend =
@@ -543,7 +649,12 @@ class ContentQuerySnapshotStore {
     CacheTelemetrySink telemetrySink = const DeveloperLogCacheTelemetrySink(),
     DateTime Function()? now,
   }) : _persistToPreferences = persistToPreferences,
-       _storageKey = storageKey,
+       // 显式 key 是调用方注入的完整存储身份；production 默认绑定已验证 target/env。
+       _storageKey =
+           storageKey ??
+           (CloudRuntimeConfig.isHydrated
+               ? '$defaultStorageKey.${Uri.encodeComponent('${CloudRuntimeConfig.launchTarget}|${CloudRuntimeConfig.appEnvironment}')}'
+               : '$defaultStorageKey.unbound'),
        _persistencePolicy = persistencePolicy,
        _persistenceBackend = persistenceBackend,
        _telemetrySink = telemetrySink,
@@ -591,6 +702,24 @@ class ContentQuerySnapshotStore {
   bool _persistenceDirty = false;
   ContentCacheIsolationIdentity? _isolationIdentity;
   bool _principalIdentityAdopted = false;
+  int _requestEpoch = 0;
+  int get requestEpoch => _requestEpoch;
+
+  /// composition 提供同步、本地的 public/visibility/permission 准入证明。
+  /// 缺证明不回放；不得把远端 loader 或 last-confirmed 身份当授权。
+  bool Function(ContentQuerySnapshot snapshot)? replayPolicy;
+
+  bool canReplay(ContentQuerySnapshot snapshot) =>
+      _isolationIdentity != null &&
+      _isReplayable(snapshot) &&
+      _snapshotAge(snapshot) < maximumAge &&
+      (replayPolicy?.call(snapshot) ?? false);
+
+  void requireCurrentRequest(int epoch) {
+    if (epoch != _requestEpoch) throw const CloudOperationCancelledException();
+  }
+
+  void invalidateRequests() => _requestEpoch++;
 
   /// 采纳当前 production query/cache 的完整隔离身份。
   ///
@@ -601,6 +730,10 @@ class ContentQuerySnapshotStore {
   void adoptContentCacheIsolationIdentity(
     ContentCacheIsolationIdentity? identity,
   ) {
+    if (_isolationIdentity != identity) {
+      invalidateRequests();
+      replayPolicy = null;
+    }
     _isolationIdentity = identity;
     _principalIdentityAdopted = true;
   }
@@ -667,7 +800,7 @@ class ContentQuerySnapshotStore {
       return null;
     }
     final age = _snapshotAge(snapshot);
-    if (age > maximumAge) {
+    if (age >= maximumAge) {
       _diskBackedKeys.remove(normalized);
       _schedulePersist();
       _telemetrySink.record('query_snapshot.expire', <String, Object?>{
@@ -680,7 +813,7 @@ class ContentQuerySnapshotStore {
     if (!_isReplayable(snapshot)) {
       return null;
     }
-    final freshness = age <= freshFor
+    final freshness = age < freshFor
         ? CacheFreshness.fresh
         : CacheFreshness.stale;
     final source = _diskBackedKeys.contains(normalized)
@@ -702,6 +835,7 @@ class ContentQuerySnapshotStore {
   void put({
     required String key,
     required List<ContentPostViewData> items,
+    List<FeedObjectCard> objectCards = const <FeedObjectCard>[],
     String? nextCursor,
     String? previousCursor,
     DateTime? paginationExpiresAt,
@@ -730,6 +864,7 @@ class ContentQuerySnapshotStore {
     _snapshots[normalized] = ContentQuerySnapshot(
       key: normalized,
       items: List<ContentPostViewData>.unmodifiable(items),
+      objectCards: List<FeedObjectCard>.unmodifiable(objectCards),
       nextCursor: nextCursor,
       previousCursor: previousCursor,
       paginationExpiresAt: paginationExpiresAt,
@@ -751,6 +886,7 @@ class ContentQuerySnapshotStore {
   }
 
   int clearAll() {
+    invalidateRequests();
     final count = _snapshots.length;
     _snapshots.clear();
     _diskBackedKeys.clear();
@@ -800,7 +936,8 @@ class ContentQuerySnapshotStore {
     }
     if (_utf8WireLength(raw, stopAfter: _persistencePolicy.maxPersistedBytes) >
         _persistencePolicy.maxPersistedBytes) {
-      await _persistenceBackend.remove(_storageKey);
+      // 通过既有单写 drain 清理，不能让旧 hydration 删除更新后的落盘值。
+      _schedulePersist();
       return;
     }
     final decoded = jsonDecode(raw);
@@ -823,7 +960,7 @@ class ContentQuerySnapshotStore {
       if (snapshot == null) {
         continue;
       }
-      if (_snapshotAge(snapshot) > maximumAge) {
+      if (_snapshotAge(snapshot) >= maximumAge) {
         expiredCount += 1;
         continue;
       }
@@ -837,6 +974,10 @@ class ContentQuerySnapshotStore {
     );
     var restoredCount = 0;
     for (final snapshot in persistableSnapshots) {
+      final current = _snapshots[snapshot.key];
+      if (current != null && !current.fetchedAt.isBefore(snapshot.fetchedAt)) {
+        continue;
+      }
       _snapshots.remove(snapshot.key);
       _snapshots[snapshot.key] = snapshot;
       _diskBackedKeys.add(snapshot.key);
@@ -864,7 +1005,8 @@ class ContentQuerySnapshotStore {
 
   Duration _snapshotAge(ContentQuerySnapshot snapshot) {
     final age = _now().difference(snapshot.fetchedAt);
-    return age.isNegative ? Duration.zero : age;
+    // 时钟回退无法证明年龄，不把未来快照重新标为 fresh。
+    return age.isNegative ? maximumAge : age;
   }
 
   void _schedulePersist() {

@@ -819,12 +819,15 @@ def test_persistent_lane_admission_schema_is_exact_and_closed() -> None:
         "isolation": "branch_per_writer",
         "promotion": "declared_pull_request_edge_only",
         "resync": "mandatory_fast_forward_after_integration_or_abort",
+        "resync_scope": "clean_or_non_overlapping_ancestor_only",
         "worktree_lifecycle": "retained",
         "concurrency_evidence": "required",
     }
     for mutate in (
         lambda value: value.update(unexpected=True),
         lambda value: value.update(resync="optional"),
+        lambda value: value.update(resync_scope="merge_into_other_worktrees"),
+        lambda value: value.pop("resync_scope"),
         lambda value: value.update(worktree_lifecycle="deleted"),
         lambda value: value.pop("concurrency_evidence"),
     ):
@@ -834,7 +837,7 @@ def test_persistent_lane_admission_schema_is_exact_and_closed() -> None:
             )
         )
         mutate(broken["persistent_lane_admission"])
-        with pytest.raises(ValueError, match="exact isolation/promotion/resync/worktree_lifecycle|must be"):
+        with pytest.raises(ValueError, match="exact isolation/promotion/resync/resync_scope/worktree_lifecycle|must be"):
             load_policy_bytes(
                 yaml.safe_dump(broken, allow_unicode=True, sort_keys=False).encode(
                     "utf-8"

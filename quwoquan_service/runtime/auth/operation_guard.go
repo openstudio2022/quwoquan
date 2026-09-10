@@ -424,29 +424,8 @@ func authorizeGeneratedOperation(
 		return
 	}
 	principal, hasPrincipal := PrincipalFromContext(r.Context())
-	// DEC-032：research principal 必须先收敛到具名能力闭集；只有闭集中的
-	// research-only operation 可穿过 public commercial gate，其余 blocked
-	// operation 对所有调用者继续 fail closed。
-	if researchRoleDeniesOperation(
-		principal,
-		hasPrincipal,
-		descriptor.OperationSecurityDescriptor,
-	) {
-		writeOperationGuardError(
-			w,
-			r,
-			"forbidden",
-			"research capability surface denies this operation",
-		)
-		return
-	}
 	if boundary == publicOperationBoundary &&
-		descriptor.CommercialStatus != "ready" &&
-		!researchRoleAllowsNamedOperation(
-			principal,
-			hasPrincipal,
-			descriptor.OperationSecurityDescriptor,
-		) {
+		descriptor.CommercialStatus != "ready" {
 		writeOperationGuardError(
 			w,
 			r,

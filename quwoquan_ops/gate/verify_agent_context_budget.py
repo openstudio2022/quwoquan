@@ -45,20 +45,8 @@ HOTL_RUNTIME_MATRIX_PATH = (
 )
 HOTL_RUNTIME_MATRIX_START = "<!-- HOTL_RUNTIME_MATRIX:START -->"
 HOTL_RUNTIME_MATRIX_END = "<!-- HOTL_RUNTIME_MATRIX:END -->"
-HOTL_RUNTIME_MATRIX_SKILLS = (
-    "commit",
-    "content-production",
-    "continue",
-    "design",
-    "dev",
-    "distill",
-    "environment-ops",
-    "explore",
-    "incident-inspection",
-    "plan-next",
-    "prd",
-    "review",
-)
+# HOTL 运行矩阵的 Skill 闭集从 .agents/skills 发现派生（见 _workflow_skills），不再硬编码：
+# 硬编码列表曾让新增 Skill 既不进矩阵也不被门禁看见。
 HOTL_RUNTIME_MATRIX_BOUNDARIES = (
     "session",
     "shell",
@@ -130,6 +118,8 @@ CONTROL_WORKFLOWS_WITHOUT_AUTOMATIC_REVIEW = {
     "plan-next",
     "review",
     "commit",
+    "sync-lane-from-dev",
+    "integrate-lane-to-dev",
 }
 REQUIRED_SKILL_SECTIONS = (
     "触发与输入",
@@ -395,11 +385,20 @@ def check_hotl_runtime_matrix() -> list[str]:
             f"{HOTL_RUNTIME_MATRIX_PATH}: HOTL 运行矩阵 {size} bytes 超过 "
             f"{HOTL_RUNTIME_MATRIX_MAX_BYTES} bytes"
         )
-    for skill in HOTL_RUNTIME_MATRIX_SKILLS:
+    skills = _workflow_skills()
+    if not skills:
+        issues.append(f"{HOTL_RUNTIME_MATRIX_PATH}: 未发现任何 Workflow Skill，无法校验 SKILL 场景闭集")
+    for skill in skills:
         marker = f"| SKILL:{skill} |"
         if section.count(marker) != 1:
             issues.append(
                 f"{HOTL_RUNTIME_MATRIX_PATH}: 场景 {marker.strip('| ')} 必须恰好一行"
+            )
+    known = set(skills)
+    for match in re.finditer(r"^\| SKILL:([^ |]+) \|", section, re.M):
+        if match.group(1) not in known:
+            issues.append(
+                f"{HOTL_RUNTIME_MATRIX_PATH}: 场景 SKILL:{match.group(1)} 不对应任何已发现的 Workflow Skill"
             )
     for boundary in HOTL_RUNTIME_MATRIX_BOUNDARIES:
         marker = f"| BOUNDARY:{boundary} |"
@@ -412,6 +411,107 @@ def check_hotl_runtime_matrix() -> list[str]:
         issues.append(
             f"{HOTL_RUNTIME_MATRIX_PATH}: Skill/边界矩阵必须各有一份完整固定列头"
         )
+    return issues
+
+
+LAYER_BUDGET_BASELINE_REL = "quwoquan_ops/policies/gates/agent_context_budget_baseline.yaml"
+LAYER_BUDGET_KEYS = {
+    "root_agents_bytes",
+    "l1_agents_bytes",
+    "deep_agents_bytes",
+    "skill_file_bytes",
+    "skill_description_chars",
+}
+LAYER_BASELINE_KINDS = {"agents", "skill_file", "skill_description"}
+
+
+def _load_layer_baseline() -> tuple[dict[str, int], dict[tuple[str, str], int], list[str]]:
+    """读取分层预算与棘轮 baseline；形状漂移直接判否，不接受默认值兜底。"""
+
+    baseline = ROOT / LAYER_BUDGET_BASELINE_REL
+    if not baseline.is_file():
+        return {}, {}, [f"缺分层预算 baseline: {LAYER_BUDGET_BASELINE_REL}"]
+    try:
+        payload = yaml.safe_load(baseline.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as error:
+        return {}, {}, [f"{LAYER_BUDGET_BASELINE_REL}: 不可读或不是合法 YAML（{error}）"]
+    issues: list[str] = []
+    if not isinstance(payload, dict) or payload.get("schema") != "agent-context-budget-ratchet":
+        return {}, {}, [f"{LAYER_BUDGET_BASELINE_REL}: schema 必须为 agent-context-budget-ratchet"]
+    budgets = payload.get("layer_budgets")
+    if not isinstance(budgets, dict) or set(budgets) != LAYER_BUDGET_KEYS or any(
+        not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in budgets.values()
+    ):
+        return {}, {}, [f"{LAYER_BUDGET_BASELINE_REL}: layer_budgets 必须精确包含 {sorted(LAYER_BUDGET_KEYS)} 且为正整数"]
+    entries = payload.get("entries")
+    ceilings: dict[tuple[str, str], int] = {}
+    if not isinstance(entries, list):
+        return dict(budgets), {}, [f"{LAYER_BUDGET_BASELINE_REL}: entries 必须是列表"]
+    for index, entry in enumerate(entries):
+        if (
+            not isinstance(entry, dict)
+            or set(entry) != {"path", "kind", "ceiling"}
+            or entry["kind"] not in LAYER_BASELINE_KINDS
+            or not isinstance(entry["ceiling"], int)
+            or isinstance(entry["ceiling"], bool)
+            or entry["ceiling"] <= 0
+        ):
+            issues.append(f"{LAYER_BUDGET_BASELINE_REL}: entries[{index}] 必须为 path/kind/ceiling 且 kind 在 {sorted(LAYER_BASELINE_KINDS)}")
+            continue
+        key = (str(entry["kind"]), str(entry["path"]))
+        if key in ceilings:
+            issues.append(f"{LAYER_BUDGET_BASELINE_REL}: entries 重复登记 {key[1]} ({key[0]})")
+        ceilings[key] = int(entry["ceiling"])
+    return dict(budgets), ceilings, issues
+
+
+def _ratchet(
+    *, kind: str, rel: str, actual: int, budget: int, unit: str,
+    ceilings: dict[tuple[str, str], int], seen: set[tuple[str, str]],
+) -> str | None:
+    key = (kind, rel)
+    ceiling = ceilings.get(key)
+    if actual <= budget:
+        if ceiling is not None:
+            return f"{rel}: {kind} 已回落到预算内（{actual} ≤ {budget} {unit}），须同批删除 baseline 条目"
+        return None
+    if ceiling is None:
+        return f"{rel}: {kind} {actual} {unit} 超过分层预算 {budget} {unit}，且未在 baseline 登记"
+    seen.add(key)
+    if actual > ceiling:
+        return f"{rel}: {kind} {actual} {unit} 超过 baseline ceiling {ceiling} {unit}（只减不增）"
+    return None
+
+
+def check_layered_budget() -> list[str]:
+    """根/L1/更深子树 AGENTS、Skill 文件与 description 各自的独立预算，存量超限项只能按 baseline 棘轮收敛。"""
+
+    budgets, ceilings, issues = _load_layer_baseline()
+    if not budgets:
+        return issues
+    seen: set[tuple[str, str]] = set()
+    for path in _find_agents_files():
+        rel = _rel(path)
+        depth = 0 if path.parent == ROOT else len(path.parent.relative_to(ROOT).parts)
+        budget = budgets["root_agents_bytes"] if depth == 0 else budgets["l1_agents_bytes"] if depth == 1 else budgets["deep_agents_bytes"]
+        issue = _ratchet(kind="agents", rel=rel, actual=len(path.read_bytes()), budget=budget, unit="bytes", ceilings=ceilings, seen=seen)
+        if issue:
+            issues.append(issue)
+    for name, fields in _workflow_skill_metadata().items():
+        path = ROOT / ".agents/skills" / name / "SKILL.md"
+        rel = _rel(path)
+        issue = _ratchet(kind="skill_file", rel=rel, actual=len(path.read_bytes()), budget=budgets["skill_file_bytes"], unit="bytes", ceilings=ceilings, seen=seen)
+        if issue:
+            issues.append(issue)
+        issue = _ratchet(
+            kind="skill_description", rel=rel, actual=len(str(fields.get("description") or "")),
+            budget=budgets["skill_description_chars"], unit="chars", ceilings=ceilings, seen=seen,
+        )
+        if issue:
+            issues.append(issue)
+    for key in sorted(set(ceilings) - seen):
+        if not (ROOT / key[1]).is_file():
+            issues.append(f"{LAYER_BUDGET_BASELINE_REL}: 条目 {key[1]} ({key[0]}) 指向不存在的文件，须删除")
     return issues
 
 
@@ -934,6 +1034,7 @@ CHECKS = (
     ("HOTL 运行矩阵", check_hotl_runtime_matrix),
     ("WFR 回潮", check_retired_workflow_resolution),
     ("AGENTS 链预算", check_agents_budget),
+    ("分层预算棘轮", check_layered_budget),
     ("默认 manifest 预算", check_manifest_budget),
     ("Workflow Skill 五段", check_workflow_skills),
     ("命令与 harness 薄壳", check_commands_and_harness_stubs),

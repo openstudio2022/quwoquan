@@ -29,7 +29,8 @@ finally:
     sys.path.pop(0)
 
 
-def test_prepared_inputs_are_external_valid_and_commercial(
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001
+def test_prepared_inputs_are_external_valid_and_category_free(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -55,8 +56,11 @@ def test_prepared_inputs_are_external_valid_and_commercial(
 
     for filename in ("candidate-release.json", "rollback-release.json"):
         payload = json.loads((workspace / filename).read_text(encoding="utf-8"))
-        assert payload["releaseClass"] == "commercial"
-        assert payload["productLifecycleState"] == "commercial"
+        assert not {"releaseClass", "productLifecycleState", "readinessPhase"}.intersection(payload)
+        from jsonschema import Draft202012Validator
+        schema_path = ROOT / "quwoquan_data/schema/release/release_attestation.schema.json"
+        Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8"))).validate(payload)
+        assert payload["payloadSha256"].startswith("sha256:")
 
 
 def test_preparation_refuses_to_overwrite_existing_key(

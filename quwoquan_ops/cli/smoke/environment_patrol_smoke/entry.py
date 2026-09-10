@@ -484,6 +484,8 @@ def main() -> int:
                     target=consumer_lease[0],
                     device=consumer_lease[1],
                     consumer=consumer_lease[2],
+                    lease_id=consumer_lease[3],
+                    instance_generation=command_env["QWQ_CONSUMER_INSTANCE_GENERATION"],
                 )
             if secret_define_path is not None and not args.dry_run:
                 secret_define_path.unlink(missing_ok=True)
@@ -668,6 +670,8 @@ def main() -> int:
                         target=consumer_lease[0],
                         device=consumer_lease[1],
                         consumer=consumer_lease[2],
+                        lease_id=consumer_lease[3],
+                        instance_generation=command_env["QWQ_CONSUMER_INSTANCE_GENERATION"],
                     )
                 reverse_teardown = _cleanup_android_local_port_reverse(
                     args, device, android_port_reverse

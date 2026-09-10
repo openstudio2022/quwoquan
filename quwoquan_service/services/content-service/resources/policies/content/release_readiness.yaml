@@ -1,8 +1,7 @@
 schema: content-release-readiness
 policyId: content-release
-# 每个能力必须声明其强制 probe 来源：healthScope（health 报告内该 scope 至少一个已执行探针）
-# 或 doctor: true（仅 commercial 阶段由完整环境 doctor 承担）。
-# 端口、URL、Secret 与部署配置保持在 topology/port manifest 等原真相源，不复制到本策略。
+# 只有一套内容就绪契约；环境能力由本配置显式声明，不从内容类别推断。
+# 准备、导入与激活是生命周期动作，不属于此策略的选择维度。
 capabilityProbes:
   content_api:
     healthScope: edge
@@ -18,199 +17,24 @@ capabilityProbes:
     doctor: true
   slo_query:
     doctor: true
-  legal_approval:
-    doctor: true
-  research_access_isolation:
-    researchIsolation: true
-phases:
-  import:
-    alpha:
-      target: alpha-local
-      workload: content-release
-      healthScope: content-import
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-    beta:
-      target: beta-local
-      workload: content-release
-      healthScope: content-import
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-    gamma:
-      target: gamma-local
-      workload: content-release
-      healthScope: content-import
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-  consumer:
-    alpha:
-      target: alpha-local
-      workload: content-release
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-    beta:
-      target: beta-local
-      workload: content-release
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-    gamma:
-      target: gamma-local
-      workload: content-release
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-    prod:
-      target: prod-hosted
-      workload: full
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-  production:
-    # Data producer 单一 production 类别（DEC-041）：公开交付 + guest 消费证据，无隔离探针。
-    alpha:
-      target: alpha-local
-      workload: content-release
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-    beta:
-      target: beta-local
-      workload: content-release
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-    gamma:
-      target: gamma-local
-      workload: content-release
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-    prod:
-      target: prod-hosted
-      workload: full
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-  research:
-    alpha:
-      target: alpha-local
-      workload: content-release
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-        - research_access_isolation
-    beta:
-      target: beta-local
-      workload: content-release
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-        - research_access_isolation
-    gamma:
-      target: gamma-local
-      workload: content-release
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-        - research_access_isolation
-    prod:
-      target: prod-hosted
-      workload: full
-      healthScope: content-consumer
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-        - research_access_isolation
-  commercial:
-    alpha:
-      target: alpha-local
-      workload: full
-      healthScope: full
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-        - telemetry_log_sink
-        - trace_query
-        - slo_query
-    beta:
-      target: beta-local
-      workload: full
-      healthScope: full
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-        - telemetry_log_sink
-        - trace_query
-        - slo_query
-    gamma:
-      target: gamma-local
-      workload: full
-      healthScope: full
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-        - telemetry_log_sink
-        - trace_query
-        - slo_query
-    prod:
-      target: prod-hosted
-      workload: full
-      healthScope: full
-      capabilities:
-        - content_api
-        - content_media
-        - content_services
-        - app_consumer
-        - telemetry_log_sink
-        - trace_query
-        - slo_query
-        - legal_approval
+environments:
+  alpha:
+    target: alpha-local
+    workload: full
+    healthScope: full
+    capabilities: [content_api, content_media, content_services, app_consumer, telemetry_log_sink, trace_query, slo_query]
+  beta:
+    target: beta-local
+    workload: full
+    healthScope: full
+    capabilities: [content_api, content_media, content_services, app_consumer, telemetry_log_sink, trace_query, slo_query]
+  gamma:
+    target: gamma-local
+    workload: full
+    healthScope: full
+    capabilities: [content_api, content_media, content_services, app_consumer, telemetry_log_sink, trace_query, slo_query]
+  prod:
+    target: prod-hosted
+    workload: full
+    healthScope: full
+    capabilities: [content_api, content_media, content_services, app_consumer, telemetry_log_sink, trace_query, slo_query]

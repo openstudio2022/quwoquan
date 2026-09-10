@@ -14,9 +14,12 @@ from quwoquan_ops.tests.support.app_content_preflight_test_support import (
     stackctl,
     tempfile,
     unittest,
+    write_release_readiness,
 )
 from quwoquan_ops.tests.support.derivable_release_payload_test_support import (
     derive_fixture_release_uat_sample_plan,
+    release_header_fixture,
+    release_attestation_fixture,
     write_derivable_release_payload,
 )
 
@@ -51,7 +54,6 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
     ) -> None:
         readiness = {
             "releaseId": "release-a",
-            "readinessPhase": "commercial",
             "appUatEnvelope": {
                 "releaseId": "release-other",
                 "videoWorkId": "legacy-video",
@@ -553,7 +555,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 "immutable_candidate",
             )
 
-    def test_active_candidate_resolves_only_commercial_release_and_lifecycle(self) -> None:
+    def test_active_candidate_resolves_default_release_without_category_or_lifecycle(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory, patch.dict(
             os.environ,
             {"QWQ_OUTPUT_ROOT": temporary_directory},
@@ -563,12 +565,10 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             candidate_dir.mkdir()
             attestation = root / "release.json"
             attestation.write_text(
-                json.dumps(
-                    {
-                        "releaseClass": "commercial",
-                        "productLifecycleState": "commercial",
-                    }
-                )
+                json.dumps(release_attestation_fixture(
+                    release_header_fixture(release_id="release-a"),
+                    payload_digest="sha256:" + "1" * 64,
+                ))
                 + "\n",
                 encoding="utf-8",
             )
@@ -604,27 +604,11 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             )
             lifecycle_path.parent.mkdir(parents=True)
             lifecycle_path.write_text("{}\n", encoding="utf-8")
-            readiness = {
-                "releaseId": "release-a",
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
-                "readinessPhase": "commercial",
-                "verifyRunId": "verify-a",
-                "manifestDigest": manifest_digest,
-                "counts": {"posts": 3, "creators": 1},
-                "postIds": ["article-a", "image-a", "video-a"],
-                "creatorIds": ["creator-a"],
-                "feedQueries": [
-                    {"name": "typed_article", "matchedPostIds": ["article-a"]},
-                    {"name": "typed_image", "matchedPostIds": ["image-a"]},
-                    {"name": "typed_video", "matchedPostIds": ["video-a"]},
-                    {
-                        "name": "homepage_recommend",
-                        "matchedPostIds": ["article-a", "image-a", "video-a"],
-                    },
-                    {"name": "premium_stream", "matchedPostIds": ["video-a"]},
-                ],
-            }
+            readiness_path, _ = write_release_readiness(
+                root, environment="alpha", release_id="release-a",
+                verify_run_id="verify-a", manifest_digest=manifest_digest,
+            )
+            readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
 
             with (
                 patch.object(
@@ -646,23 +630,28 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 resolved = stackctl._resolve_active_app_content_evidence(
                     "alpha-local"
                 )
+                # 旧 research 字段即使重新签出匹配文件 digest，也必须被现役 schema 拒绝。
+                valid_attestation = json.loads(attestation.read_text(encoding="utf-8"))
+                for field in ("releaseClass", "productLifecycleState", "readinessPhase"):
+                    with self.subTest(retired_field=field):
+                        attestation.write_text(
+                            json.dumps({**valid_attestation, field: "research"}), encoding="utf-8"
+                        )
+                        manifest["release"]["candidate"]["attestationDigest"] = (
+                            "sha256:" + hashlib.sha256(attestation.read_bytes()).hexdigest()
+                        )
+                        (candidate_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+                        with self.assertRaisesRegex(ValueError, "Additional properties are not allowed"):
+                            stackctl._resolve_active_app_content_evidence("alpha-local")
+                load_readiness.assert_called_once()
 
             self.assertEqual(resolved[0]["baselineId"], manifest["baselineId"])
             self.assertEqual(resolved[1], readiness)
             self.assertEqual(resolved[2], readiness_path)
-            self.assertEqual(
-                resolved[3],
-                "env/alpha/runs/release-lifecycle-exit/"
-                "release-a/exit-a/lifecycle-exit.json",
-            )
-            self.assertEqual(
-                load_readiness.call_args.kwargs["readiness_phase"],
-                stackctl.ReadinessPhase.COMMERCIAL,
-            )
-            self.assertEqual(
-                load_lifecycle.call_args.kwargs["lifecycle_exit_ref"],
-                resolved[3],
-            )
+            self.assertEqual(resolved[3], "")
+            self.assertNotIn("readiness_phase", load_readiness.call_args.kwargs)
+            self.assertNotIn("releaseClass", resolved[1])
+            load_lifecycle.assert_not_called()
 
     def test_active_release_uat_contract_derives_plan_and_rejects_drift(self) -> None:
         """spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-004"""
@@ -671,37 +660,23 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             release_root = root / "data/releases/release-a"
             attestation_path = release_root / "attestations/release.json"
             attestation_path.parent.mkdir(parents=True)
-            header = {
-                "schema": "quwoquan_data.release",
-                "releaseId": "release-a",
-                "sourceOwner": "qwq_data",
-                "releaseKind": "content",
-                "releaseClass": "production",
-                "productLifecycleState": "production",
-                "poolDigest": "sha256:" + "5" * 64,
-                "canonicalMerkle": "sha256:" + "6" * 64,
-                "sourceIdentitySetDigest": "sha256:" + "7" * 64,
-                "counts": {"homepage": 1, "article": 1, "image": 1, "video": 1, "total": 4},
-                "contents": [
+            header = release_header_fixture(
+                release_id="release-a",
+                contents=[
                     {"contentId": "article-a", "version": 1, "postRef": "article/a/1"},
                     {"contentId": "image-a", "version": 1, "postRef": "image/a/1"},
                     {"contentId": "video-a", "version": 1, "postRef": "video/a/1"},
                 ],
-            }
+            )
             write_derivable_release_payload(
                 release_root / "payload",
                 release_header=header,
                 entity_refs=["entity-a"],
                 header_bytes=json.dumps(header).encode("utf-8"),
             )
-            attestation_path.write_text(json.dumps({
-                "schema": "quwoquan_data.release_attestation",
-                "releaseId": "release-a",
-                "releaseClass": "production",
-                "productLifecycleState": "production",
-                "canonicalMerkle": header["canonicalMerkle"],
-                "payloadSha256": "sha256:" + "3" * 64,
-            }), encoding="utf-8")
+            attestation_path.write_text(json.dumps(release_attestation_fixture(
+                header, payload_digest="sha256:" + "3" * 64,
+            )), encoding="utf-8")
             candidate = {
                 "releaseId": "release-a",
                 "releaseDigest": "sha256:" + "3" * 64,
@@ -760,24 +735,14 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             release_root = root / "data/releases" / release_id
             readiness_path = root / "release-readiness.json"
             manifest_digest = "sha256:" + "3" * 64
-            header = {
-                "schema": "quwoquan_data.release",
-                "releaseId": release_id,
-                "sourceOwner": "qwq_data",
-                "releaseKind": "content",
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
-                "milestone": "M100",
-                "poolDigest": "sha256:" + "2" * 64,
-                "canonicalMerkle": "sha256:" + "6" * 64,
-                "sourceIdentitySetDigest": "sha256:" + "7" * 64,
-                "contents": [
+            header = release_header_fixture(
+                release_id=release_id,
+                contents=[
                     {"contentId": "article-a", "postRef": "article/a"},
                     {"contentId": "image-a", "postRef": "image/a"},
                     {"contentId": "video-a", "postRef": "video/a"},
                 ],
-                "authors": [],
-            }
+            )
             header_path = write_derivable_release_payload(
                 release_root / "payload",
                 release_header=header,
@@ -812,14 +777,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 release_header=header,
                 manifest_digest=manifest_digest,
             )
-            attestation = {
-                "schema": "quwoquan_data.release_attestation",
-                "releaseId": release_id,
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
-                "canonicalMerkle": header["canonicalMerkle"],
-                "payloadSha256": manifest_digest,
-            }
+            attestation = release_attestation_fixture(header, payload_digest=manifest_digest)
             attestation_path = release_root / "attestations/release.json"
             attestation_path.parent.mkdir(parents=True)
             attestation_path.write_text(json.dumps(attestation), encoding="utf-8")
@@ -833,23 +791,13 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             homepage_report_path.write_text(json.dumps({
                 "entities": [{"entityRef": "entity-a", "homepageId": "homepage-a"}],
             }), encoding="utf-8")
-            readiness = {
-                "releaseId": release_id,
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
-                "readinessPhase": "commercial",
-                "verifyRunId": "verify-a",
-                "manifestDigest": manifest_digest,
-                "homepageApiVerificationRef": str(homepage_report_path),
-                "postIds": ["article-a", "image-a", "video-a"],
-                "feedQueries": [
-                    {"name": "typed_article", "matchedPostIds": ["article-a"]},
-                    {"name": "typed_image", "matchedPostIds": ["image-a"]},
-                    {"name": "typed_video", "matchedPostIds": ["video-a"]},
-                    {"name": "homepage_recommend", "matchedPostIds": ["article-a"]},
-                    {"name": "premium_stream", "matchedPostIds": ["video-a"]},
-                ],
-            }
+            from quwoquan_ops.tests.support.test_data_verification_test_support import _readiness
+            readiness = _readiness(
+                environment="alpha", release_id=release_id,
+                manifest_digest=manifest_digest,
+                post_ids=("article-a", "image-a", "video-a"),
+                entity_ref="entity-a", source_identities=header["sourceIdentities"],
+            )
             readiness_path.write_text(json.dumps(readiness), encoding="utf-8")
             projected_plan = {
                 "releaseId": release_id,
@@ -869,7 +817,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                         },
                         readiness,
                         readiness_path,
-                        "env/alpha/runs/release-lifecycle-exit/release-a/exit-a/lifecycle-exit.json",
+                        "",
                     ),
                 ),
                 patch.object(
@@ -917,7 +865,6 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             readiness_path = Path(temporary_directory) / "release-readiness.json"
             readiness = {
                 "releaseId": "release-test-live-a",
-                "readinessPhase": "consumer",
                 "verifyRunId": "verify-test-live-a",
                 "manifestDigest": "sha256:" + "3" * 64,
             }

@@ -90,16 +90,6 @@ final class RemoteAccountSessionCommandWriter implements AccountSessionWriter {
         command,
         context: invocationContext(UserRequestPageIds.logout),
       );
-
-  @override
-  Future<WhitelistedResearchSession> issueWhitelistedResearchSession(
-    IssueWhitelistedResearchSessionCommand command,
-  ) => client.userAccountSessionIssueWhitelistedResearchSession(
-    command,
-    context: invocationContext(
-      UserRequestPageIds.issueWhitelistedResearchSession,
-    ),
-  );
 }
 
 String _anonymousLoginIdempotencyKey(LoginAnonymousCommand command) {

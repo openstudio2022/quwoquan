@@ -523,8 +523,6 @@ surfaces:
     operation_ids:
       - LoginAnonymous
       - RefreshToken
-      - IssueWhitelistedResearchSession
-      - GetResearchReleaseReadback
       - GetActivePersonaContext
       - UpsertDevicePushEndpoint
       - RemoveDevicePushEndpoint

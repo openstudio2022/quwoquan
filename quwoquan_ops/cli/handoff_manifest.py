@@ -217,6 +217,8 @@ def produce(data: dict[str, Any]) -> Path | str:
         )
     except (TypeError, ValueError) as exc:
         raise HandoffManifestError(str(exc)) from exc
+    from lib.candidate_evidence import export_candidate_closure
+    candidate_closure = export_candidate_closure(normalized_candidate_evidence_ref, repo_root=ROOT)
     identity = {
         "intent": intent,
         "triggers": list(dict.fromkeys(triggers)),
@@ -227,6 +229,7 @@ def produce(data: dict[str, Any]) -> Path | str:
         "human_decision_projection": human_decision_projection,
         "owner_identity_ref": normalized_owner_identity_ref,
         "candidate_evidence_ref": normalized_candidate_evidence_ref,
+        "candidate_closure": candidate_closure,
         "review_plan_ref": plan_ref,
         "evidence_receipt_refs": normalized_refs,
         "reviewer_result_refs": normalized_result_refs,

@@ -13,18 +13,6 @@ enum ContentErrorCode {
   ),
   forbiddenDelete('CONTENT.USER.forbidden_delete', 'surface', 0, 403),
   unauthorized('CONTENT.USER.unauthorized', 'surface', 0, 401),
-  researchIdentityInvalid(
-    'CONTENT.USER.research_identity_invalid',
-    'surface',
-    0,
-    403,
-  ),
-  researchReleaseStateUnavailable(
-    'CONTENT.SYSTEM.research_release_state_unavailable',
-    'retry',
-    5,
-    503,
-  ),
   invalidArgument('CONTENT.USER.invalid_argument', 'surface', 0, 400),
   invalidContentType('CONTENT.USER.invalid_content_type', 'surface', 0, 400),
   rateLimited('CONTENT.USER.rate_limited', 'retry', 60, 429),
@@ -298,10 +286,6 @@ enum ContentErrorCode {
         return ContentErrorCode.forbiddenDelete;
       case 'CONTENT.USER.unauthorized':
         return ContentErrorCode.unauthorized;
-      case 'CONTENT.USER.research_identity_invalid':
-        return ContentErrorCode.researchIdentityInvalid;
-      case 'CONTENT.SYSTEM.research_release_state_unavailable':
-        return ContentErrorCode.researchReleaseStateUnavailable;
       case 'CONTENT.USER.invalid_argument':
         return ContentErrorCode.invalidArgument;
       case 'CONTENT.USER.invalid_content_type':
@@ -439,8 +423,6 @@ class ContentErrorMessages {
     ContentErrorCode.gatheringParticipationRequired: '只有这次行动的有效参与者才能关联共同经历',
     ContentErrorCode.forbiddenDelete: '无权删除此内容',
     ContentErrorCode.unauthorized: '请先登录',
-    ContentErrorCode.researchIdentityInvalid: '当前研究态身份无效或已过期',
-    ContentErrorCode.researchReleaseStateUnavailable: '研究回读所需内容状态暂不可用，请稍后重试',
     ContentErrorCode.invalidArgument: '请求参数有误，请检查后重试',
     ContentErrorCode.invalidContentType: '不支持的内容类型',
     ContentErrorCode.rateLimited: '操作太频繁，请稍后重试',
@@ -512,9 +494,6 @@ class ContentErrorMessages {
         'Only an active participant of this gathering can attach it to a post',
     ContentErrorCode.forbiddenDelete: 'Not allowed to delete this post',
     ContentErrorCode.unauthorized: 'Please sign in to continue',
-    ContentErrorCode.researchIdentityInvalid:
-        'The research identity is invalid or expired',
-    ContentErrorCode.researchReleaseStateUnavailable: 'The content state required for research readback is temporarily unavailable',
     ContentErrorCode.invalidArgument: 'Invalid request, please check and retry',
     ContentErrorCode.invalidContentType: 'Unsupported content type',
     ContentErrorCode.rateLimited: 'Too many requests, please retry later',

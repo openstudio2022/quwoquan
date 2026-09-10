@@ -118,7 +118,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
   static const Duration _kTransitionDuration = Duration(milliseconds: 260);
 
   static double _contentHeight(BuildContext context) {
-    return AppSpacing.bottomNavBarHeight(context);
+    return AppSpacing.immersiveEngagementContentHeight(context);
   }
 
   static double _actionCellWidth(BuildContext ctx) =>

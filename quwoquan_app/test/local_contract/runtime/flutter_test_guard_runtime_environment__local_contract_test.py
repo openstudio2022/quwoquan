@@ -45,6 +45,15 @@ _RUNTIME_VALUES = _runtime_values()
 
 
 class FlutterTestGuardRuntimeEnvironmentContractTest(unittest.TestCase):
+    def test_default_host_tests_use_remote_beta_not_offline_alpha(self) -> None:
+        subject = _load_subject()
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(
+            subject, "test_live_runtime_values", return_value=_RUNTIME_VALUES
+        ) as resolve:
+            args = subject._with_runtime_environment_defines([])
+        self.assertEqual(resolve.call_args.args, ("beta", "beta-local"))
+        self.assertIn("--dart-define=APP_RUNTIME_ENV=beta", args)
+
     def test_stackctl_environment_selects_the_packaged_runtime(self) -> None:
         subject = _load_subject()
         with mock.patch.dict(

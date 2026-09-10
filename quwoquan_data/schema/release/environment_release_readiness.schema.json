@@ -9,15 +9,12 @@
     "environment",
     "releaseId",
     "releaseKind",
-    "releaseClass",
-    "productLifecycleState",
     "containsUnverifiedAssets",
     "rightsStatusCounts",
     "authorizationRequiredAssetIds",
     "researchAcceptedCount",
     "commercialAcceptedCount",
     "sourceOwner",
-    "readinessPhase",
     "manifestDigest",
     "mediaManifestDigest",
     "importRunId",
@@ -62,16 +59,6 @@
     },
     "sourceOwner": {
       "const": "qwq_data"
-    },
-    "releaseClass": {
-      "enum": [
-        "production"
-      ]
-    },
-    "productLifecycleState": {
-      "enum": [
-        "production"
-      ]
     },
     "containsUnverifiedAssets": {
       "type": "boolean"
@@ -150,11 +137,6 @@
         "M100",
         "M1000",
         "M10000"
-      ]
-    },
-    "readinessPhase": {
-      "enum": [
-        "production"
       ]
     },
     "manifestDigest": {
@@ -579,9 +561,6 @@
         "environment",
         "releaseId",
         "manifestDigest",
-        "releaseClass",
-        "productLifecycleState",
-        "readinessPhase",
         "importRunId",
         "verifyRunId",
         "importReportRef",
@@ -643,21 +622,6 @@
             {
               "$ref": "#/$defs/previousEnvironmentActivation"
             }
-          ]
-        },
-        "releaseClass": {
-          "enum": [
-            "production"
-          ]
-        },
-        "productLifecycleState": {
-          "enum": [
-            "production"
-          ]
-        },
-        "readinessPhase": {
-          "enum": [
-            "production"
           ]
         },
         "importRunId": {

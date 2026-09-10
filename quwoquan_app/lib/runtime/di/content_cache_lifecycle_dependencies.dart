@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/di/feed_session_provider.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart';
 import 'package:quwoquan_app/runtime/di/signed_media_delivery_dependencies.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
@@ -15,6 +16,9 @@ final contentCacheLifecycleCoordinatorProvider =
         querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
         clearSignedMediaDelivery: () =>
             ref.read(signedMediaDeliveryCoordinatorProvider).clearAll(),
+        clearMediaDownloads: () => ref.read(mediaDownloadCacheProvider).clear(),
+        resetFeedSession: () =>
+            ref.read(feedSessionProvider.notifier).invalidate(),
         clearIsolationIdentity: ref
             .read(contentCacheIsolationIdentityProvider.notifier)
             .clear,
@@ -24,21 +28,28 @@ final contentCacheLifecycleCoordinatorProvider =
         coordinator.handleSessionChange,
         fireImmediately: true,
       );
+      ref.onDispose(() {
+        coordinator.invalidatePendingRequests();
+      });
       return coordinator;
     });
 
-/// 账号/Persona/audience/release tuple 变化时统一清理全部可重建内容状态。
+/// 账号/Persona/release tuple 变化时统一清理全部可重建内容状态。
 final class ContentCacheLifecycleCoordinator {
   ContentCacheLifecycleCoordinator({
     required PostObjectCacheService postCache,
     required ContentQuerySnapshotStore querySnapshotStore,
     required void Function() clearSignedMediaDelivery,
     required void Function() clearIsolationIdentity,
+    Future<void> Function()? clearMediaDownloads,
+    void Function()? resetFeedSession,
   }) : this._(
          postCache,
          querySnapshotStore,
          clearSignedMediaDelivery,
          clearIsolationIdentity,
+         clearMediaDownloads,
+         resetFeedSession,
        );
 
   ContentCacheLifecycleCoordinator._(
@@ -46,13 +57,23 @@ final class ContentCacheLifecycleCoordinator {
     this._querySnapshotStore,
     this._clearSignedMediaDelivery,
     this._clearIsolationIdentity,
+    this._clearMediaDownloads,
+    this._resetFeedSession,
   );
 
   final PostObjectCacheService _postCache;
   final ContentQuerySnapshotStore _querySnapshotStore;
   final void Function() _clearSignedMediaDelivery;
   final void Function() _clearIsolationIdentity;
+  final Future<void> Function()? _clearMediaDownloads;
+  final void Function()? _resetFeedSession;
   String? _sessionIdentity;
+
+  void invalidatePendingRequests() {
+    _postCache.clearNamespace();
+    _querySnapshotStore.invalidateRequests();
+  }
+
   ContentActivationIdentity? _activationIdentity;
 
   void handleSessionChange(AuthSessionState? previous, AuthSessionState next) {
@@ -77,8 +98,11 @@ final class ContentCacheLifecycleCoordinator {
   }
 
   void clearRebuildableContent() {
-    _postCache.clearAllRebuildable();
+    _postCache.clearNamespace();
     _querySnapshotStore.clearAll();
+    _resetFeedSession?.call();
+    final clearDownloads = _clearMediaDownloads;
+    if (clearDownloads != null) unawaited(clearDownloads());
     _clearSignedMediaDelivery();
     _clearIsolationIdentity();
     unawaited(_querySnapshotStore.flushPersistence());
@@ -90,8 +114,6 @@ final class ContentCacheLifecycleCoordinator {
       session.isAuthenticated ? 'authenticated' : 'guest',
       session.ownerId.trim(),
       session.activePersonaId.trim(),
-      contentReleaseAudiencePartitionHintFromAccessToken(session.accessToken)
-          .name,
     ].join('|');
   }
 }

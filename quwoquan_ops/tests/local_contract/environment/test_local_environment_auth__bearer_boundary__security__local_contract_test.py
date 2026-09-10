@@ -69,61 +69,34 @@ class LocalEnvironmentAuthBoundaryTest(unittest.TestCase):
             self.assertNotIn("ACCESS_TOKEN", auth.environment)
             self.assertNotIn("QWQ_ACCEPTANCE_OWNER_ID", auth.environment)
             self.assertEqual(auth.secret_path.stat().st_mode & 0o777, 0o600)
-            user_key = auth.environment[
-                "USER_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64"
-            ]
-            self.assertEqual(
-                user_key,
-                auth.environment[
-                    "CONTENT_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64"
-                ],
-            )
-            self.assertEqual(len(base64.b64decode(user_key, validate=True)), 32)
-            allowlist = json.loads(
-                auth.environment[
-                    "USER_RESEARCH_IDENTITY_ACCOUNT_ID_ALLOWLIST_JSON"
-                ]
-            )
-            managed = json.loads(
-                auth.environment["USER_MANAGED_ACCEPTANCE_IDENTITY_JSON"]
-            )
-            self.assertEqual(allowlist, [managed["accountId"]])
-            self.assertTrue(managed["accountId"].startswith("uo_01_ph_"))
-            binding = work_root / "alpha-local/secrets/research-identity-binding.json"
-            self.assertEqual(binding.stat().st_mode & 0o777, 0o600)
-            self.assertNotIn("accessToken", managed)
-            self.assertNotIn("refreshToken", managed)
+            self.assertFalse(any("RESEARCH_IDENTITY" in key for key in auth.environment))
+            self.assertNotIn("USER_MANAGED_ACCEPTANCE_IDENTITY_JSON", auth.environment)
+            self.assertEqual(auth.environment["AUTH_JWT_ISSUER"], "quwoquan.alpha.local")
+            keys = json.loads(auth.environment["OTP_CODE_REF_KEYS_JSON"])
+            active_key = auth.environment["OTP_CODE_REF_ACTIVE_KEY_VERSION"]
+            self.assertEqual(len(base64.b64decode(keys[active_key], validate=True)), 32)
+            self.assertFalse((work_root / "alpha-local/secrets/research-identity-binding.json").exists())
 
-    def test_research_identity_binding_is_target_deterministic_and_fail_closed(self) -> None:
+    def test_research_issuers_are_retired_and_auth_remains_target_isolated(self) -> None:
+        for name in ("materialize_local_research_identity_binding", "load_local_research_identity_binding"):
+            self.assertFalse(hasattr(local_environment_auth, name))
         with tempfile.TemporaryDirectory() as directory:
             work_root = Path(directory)
-            first = local_environment_auth.materialize_local_research_identity_binding(
-                environment="alpha",
-                target_name="alpha-local",
-                deployment_work_root=work_root,
+            first = local_environment_auth.prepare_local_environment_auth(
+                "alpha", "alpha-local", deployment_work_root=work_root,
             )
-            second = local_environment_auth.materialize_local_research_identity_binding(
-                environment="alpha",
-                target_name="alpha-local",
-                deployment_work_root=work_root,
+            repeated = local_environment_auth.load_local_environment_auth(
+                "alpha", "alpha-local", deployment_work_root=work_root,
             )
-            self.assertEqual(first, second)
-            self.assertEqual(
-                first["accountId"],
-                local_environment_auth._deterministic_phone_owner_id(
-                    "alpha-local", first["phone"]
-                ),
+            other = local_environment_auth.prepare_local_environment_auth(
+                "beta", "beta-local", deployment_work_root=work_root,
             )
-            path = work_root / "alpha-local/secrets/research-identity-binding.json"
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            payload["accountId"] = "uo_01_ph_0000_00000000000000000000000000"
-            path.write_text(json.dumps(payload), encoding="utf-8")
-            path.chmod(0o600)
-            with self.assertRaisesRegex(RuntimeError, "GATE_BLOCK"):
-                local_environment_auth.load_local_research_identity_binding(
-                    environment="alpha",
-                    target_name="alpha-local",
-                    deployment_work_root=work_root,
+            self.assertEqual(first.environment, repeated.environment)
+            self.assertNotEqual(first.environment["AUTH_JWT_SECRET"], other.environment["AUTH_JWT_SECRET"])
+            first.secret_path.chmod(0o644)
+            with self.assertRaisesRegex(RuntimeError, "must use mode 0600"):
+                local_environment_auth.load_local_environment_auth(
+                    "alpha", "alpha-local", deployment_work_root=work_root,
                 )
 
     def test_read_only_loader_never_creates_missing_auth_material(self) -> None:

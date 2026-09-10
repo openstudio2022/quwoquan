@@ -569,5 +569,10 @@ def transition_test_live_startup_attempt(
         expected_environment=environment,
         expected_target=target,
     )
+    from .local_runtime_capacity import update_runtime_capacity_reservation
+    if status != "stopped":
+        update_runtime_capacity_reservation(target=target, generation=normalized_attempt, status=status)
     _atomic_write(path, validated)
+    if status == "stopped":
+        update_runtime_capacity_reservation(target=target, generation=normalized_attempt, status=status)
     return validated

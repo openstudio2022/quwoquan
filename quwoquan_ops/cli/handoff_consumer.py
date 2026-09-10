@@ -330,6 +330,7 @@ def build_handoff_fingerprint(
         *([identity["human_decision_ref"]] if identity.get("human_decision_ref") else []),
         identity["owner_identity_ref"],
         identity["candidate_evidence_ref"],
+        *[item["ref"] for item in identity["candidate_closure"]],
         identity["review_plan_ref"],
         *identity["evidence_receipt_refs"],
         *identity["reviewer_result_refs"],
@@ -412,6 +413,10 @@ def validate_handoff_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raise HandoffConsumerError("IDENTITY.MIGRATION_REQUIRED: owner_manifest_ref 已退役")
     owner_identity_ref = normalize_repo_relative_path(payload["owner_identity_ref"], ROOT)
     candidate_evidence_ref = normalize_repo_relative_path(payload["candidate_evidence_ref"], ROOT)
+    from lib.candidate_evidence import export_candidate_closure, validate_candidate_closure
+    validate_candidate_closure(payload["candidate_closure"], candidate_ref=candidate_evidence_ref, owner_identity_ref=owner_identity_ref)
+    if payload["candidate_closure"] != export_candidate_closure(candidate_evidence_ref, repo_root=ROOT):
+        raise HandoffConsumerError("CANDIDATE.STALE: handoff candidate closure current bytes 漂移")
     plan_ref, plan = _load_json_ref(payload["review_plan_ref"], label="review plan")
     if owner_identity_ref != (plan.get("owner_identity") or {}).get("ref") or candidate_evidence_ref != (plan.get("candidate_evidence_identity") or {}).get("ref"):
         raise HandoffConsumerError("handoff owner/candidate refs 与 plan 不一致")
@@ -477,6 +482,7 @@ def validate_handoff_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "human_decision_projection": human_projection,
         "owner_identity_ref": owner_identity_ref,
         "candidate_evidence_ref": candidate_evidence_ref,
+        "candidate_closure": payload["candidate_closure"],
         "review_plan_ref": plan_ref,
         "evidence_receipt_refs": evidence_refs,
         "reviewer_result_refs": reviewer_result_refs,

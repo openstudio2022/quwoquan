@@ -20,7 +20,7 @@ from content.release.model import DeploymentEnvironment
 from core.control_types import ContentType
 from core.io import read_json
 from core.release_layout import payload_digest, payload_file
-from governance.coverage.distribution import RELEASE_CLASSES
+from content.release.canonical.release_header import validate_release_header
 
 
 @dataclass(frozen=True)
@@ -52,7 +52,6 @@ def _release_media_case(
     row: Mapping[str, Any],
     *,
     media_origin: str,
-    release_class: str,
 ) -> ReleaseMediaAssetCase:
     asset_id = _required_text(row, "assetId", endpoint="release media asset")
     kind = _required_text(row, "kind", endpoint=f"release media asset {asset_id}")
@@ -121,7 +120,6 @@ def read_post_and_creator_cases(
     importer_report_path: Path,
     creator_importer_report_path: Path,
     media_delivery_base_url: str,
-    readiness_phase: str = "production",
 ) -> tuple[list[PostApiCase], dict[str, CreatorProfileCase]]:
     """Bind importer readback to immutable creator/post/media authorities."""
 
@@ -134,13 +132,7 @@ def read_post_and_creator_cases(
         raise PostApiVerificationError(
             f"release header is unreadable: {exc}"
         ) from exc
-    release_class = str(release_header.get("releaseClass") or "").strip()
-    # 单一 production 类别与单一 production 相位（DEC-041）。
-    if release_class not in RELEASE_CLASSES or readiness_phase != "production":
-        raise PostApiVerificationError(
-            f"readiness phase {readiness_phase} cannot verify a "
-            f"{release_class or 'classless'} release"
-        )
+    validate_release_header(release_header, label="post API release header")
     try:
         desired = read_json(payload_file(release_root, "desired_state.json"))
         report = assert_import_report_contract(
@@ -350,7 +342,6 @@ def read_post_and_creator_cases(
                     _release_media_case(
                         asset,
                         media_origin=media_origin,
-                        release_class=release_class,
                     )
                     for asset in media_assets.values()
                     if f"posts/{post_ref}" in (asset.get("ownerRefs") or [])

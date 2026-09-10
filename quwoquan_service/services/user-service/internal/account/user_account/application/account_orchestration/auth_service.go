@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	rtauth "quwoquan_service/runtime/auth"
+	rtmedia "quwoquan_service/runtime/media"
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/otpseal"
 	sessiongenerated "quwoquan_service/services/user-service/generated/account/account_session"
@@ -81,7 +82,6 @@ type AuthService struct {
 	nicknamePrefix           string
 	managedAcceptancePhone   string
 	managedAcceptanceOwnerID string
-	researchAccountIDs       map[string]struct{}
 }
 
 type AuthServiceOption func(*AuthService)
@@ -188,8 +188,8 @@ func WithDefaultNicknamePrefix(prefix string) AuthServiceOption {
 	}
 }
 
-// WithManagedAcceptanceIdentity binds the one target-scoped Research
-// acceptance subject to its pre-runtime canonical account identity.  It is
+// WithManagedAcceptanceIdentity binds the target-scoped ordinary acceptance
+// subject to its pre-runtime canonical account identity. It is
 // intentionally exact-match and does not change identity allocation for any
 // other phone or environment.
 func WithManagedAcceptanceIdentity(phone, ownerID string) AuthServiceOption {
@@ -199,25 +199,6 @@ func WithManagedAcceptanceIdentity(phone, ownerID string) AuthServiceOption {
 		if phone != "" && useridentity.IsCanonicalOwnerID(ownerID) {
 			service.managedAcceptancePhone = phone
 			service.managedAcceptanceOwnerID = ownerID
-		}
-	}
-}
-
-// WithResearchAccountAllowlist 绑定 research 身份账号闭集（DEC-032）：登录与
-// refresh 的 access token 签发单点在账号命中该闭集时向 token roles 附加
-// research，能力面由 operation guard 按 role 收敛，与客户端请求头无关。
-// 空闭集表示 research 身份未启用，不影响任何账号。
-func WithResearchAccountAllowlist(accountIDs []string) AuthServiceOption {
-	return func(service *AuthService) {
-		allowlist := make(map[string]struct{}, len(accountIDs))
-		for _, raw := range accountIDs {
-			accountID := strings.TrimSpace(raw)
-			if accountID != "" {
-				allowlist[accountID] = struct{}{}
-			}
-		}
-		if len(allowlist) > 0 {
-			service.researchAccountIDs = allowlist
 		}
 	}
 }
@@ -618,6 +599,11 @@ func avatarURLWithVersion(raw string, version int) string {
 	}
 	parsed, err := url.Parse(value)
 	if err != nil {
+		return value
+	}
+	// 公开 slice 的版本已编码在路径中；再加 query 会被端侧 canonical resolver 拒绝。
+	// 保留原 URL 的查询与签名字节，不通过删 query 绕过校验。
+	if _, versioned := rtmedia.PublicSliceVersion(parsed.Path); versioned {
 		return value
 	}
 	query := parsed.Query()

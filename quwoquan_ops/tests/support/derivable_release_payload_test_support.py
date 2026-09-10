@@ -18,6 +18,78 @@ from quwoquan_ops.cli.lib.release_uat_sample_plan_derivation import (
 )
 
 
+def release_header_fixture(
+    *, release_id: str,
+    contents: Sequence[Mapping[str, Any]] | None = None,
+    source_identities: Sequence[Mapping[str, Any]] | None = None,
+    source_identity_set_digest: str = "",
+) -> dict[str, Any]:
+    """显式构造现役闭集 header，不对传入文档删除旧类别或放宽 schema。"""
+    from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+    from quwoquan_ops.cli.lib.release_uat_sample_plan_derivation import canonical_digest
+
+    digest = "sha256:" + "6" * 64
+    sources = list(source_identities or [{
+        "sourceRevision": "sha256:" + "a" * 64,
+        "sourceDigest": "sha256:" + "b" * 64,
+        "entityCatalogDigest": "sha256:" + "c" * 64,
+        "executionIds": ["execution-1"],
+    }])
+    rows = [
+        {"version": 1, "selectionIdentityDigest": digest,
+         "canonicalObjectDigest": digest, "contentLibraryBindingDigest": digest, **row}
+        for row in (contents if contents is not None else [
+            {"contentId": f"{carrier}-a", "postRef": f"{carrier}/a/1"}
+            for carrier in ("article", "image", "video")
+        ])
+    ]
+    counts = {carrier: sum(str(row["postRef"]).startswith(carrier + "/") for row in rows)
+              for carrier in ("article", "image", "video")}
+    header = {
+        "schema": "quwoquan_data.release", "releaseId": release_id,
+        "sourceOwner": "qwq_data", "releaseKind": "content",
+        "containsUnverifiedAssets": True,
+        "rightsStatusCounts": {"verified": 0, "unverified": 1, "restricted": 0, "unknown": 0},
+        "authorizationRequiredAssetIds": ["asset-1"],
+        "researchAcceptedCount": 1, "commercialAcceptedCount": 0,
+        "sourceIdentities": sources,
+        "sourceIdentitySetDigest": source_identity_set_digest or canonical_digest({
+            "schema": "quwoquan_data.source_identity_set", "sourceIdentities": sources,
+        }),
+        "executionIds": sorted({item for source in sources for item in source["executionIds"]}),
+        "sourceDigests": [{"algorithm": "sha256", "digest": digest, "inputs": ["quwoquan_data"]}],
+        "canonicalMerkle": digest, "poolDigest": digest,
+        "counts": {"homepage": 1, **counts, "total": len(rows) + 1},
+        "contents": rows,
+    }
+    _validate_data_schema(header, "release_header")
+    return header
+
+
+def release_attestation_fixture(
+    header: Mapping[str, Any], *, payload_digest: str,
+) -> dict[str, Any]:
+    """从完整 header 明确投影 attestation 身份与权利事实。"""
+    from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
+    fields = (
+        "releaseId", "sourceOwner", "releaseKind", "containsUnverifiedAssets",
+        "rightsStatusCounts", "authorizationRequiredAssetIds", "researchAcceptedCount",
+        "commercialAcceptedCount", "executionIds", "sourceIdentities",
+        "sourceIdentitySetDigest", "canonicalMerkle", "sourceDigests",
+    )
+    attestation = {
+        "schema": "quwoquan_data.release_attestation",
+        **{field: header[field] for field in fields},
+        "carrierCounts": dict(header["counts"]),
+        "entityCount": header["counts"]["homepage"],
+        "postCount": len(header["contents"]), "creatorCount": 1, "tagCount": 1,
+        "payloadSha256": payload_digest, "recordedAt": "2026-09-09T00:00:00Z",
+    }
+    _validate_data_schema(attestation, "release_attestation")
+    return attestation
+
+
 def release_payload_root(output_root: Path, release_id: str) -> Path:
     """The only payload location the derivation accepts."""
     return output_root / "data" / "releases" / release_id / "payload"
@@ -102,5 +174,7 @@ def derive_fixture_release_uat_sample_plan(
 __all__ = [
     "derive_fixture_release_uat_sample_plan",
     "release_payload_root",
+    "release_header_fixture",
+    "release_attestation_fixture",
     "write_derivable_release_payload",
 ]

@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import io
+import json
+from types import SimpleNamespace
+from unittest import mock
 import tempfile
 import unittest
 from pathlib import Path
@@ -119,6 +124,26 @@ def _materialize(
 
 
 class FirstPartyImageCompositionTest(unittest.TestCase):
+    # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001
+    def test_readiness_summary_has_no_retired_phase_dependency(self) -> None:
+        module = _load_module()
+        policy = SimpleNamespace(
+            policy_id="content-readiness",
+            requirements=(SimpleNamespace(environment="alpha", target="alpha-local"),),
+        )
+        output = io.StringIO()
+        with (
+            mock.patch.object(module, "load_environment_topology", return_value={}),
+            mock.patch.object(module, "validate_environment_topology", return_value=[]),
+            mock.patch.object(module, "validate_first_party_image_composition_contract", return_value=[]),
+            mock.patch.object(module, "validate_service_build_image_contract", return_value=[]),
+            mock.patch.object(module, "load_content_release_readiness_policy", return_value=policy),
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(module.main(), 0)
+        payload = json.loads(output.getvalue().split("\n", 1)[1])
+        self.assertEqual(payload["contentReleaseReadiness"]["requirements"], ["alpha:alpha-local"])
+
     def _issues(self, **kwargs) -> list[str]:
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:

@@ -32,6 +32,76 @@ public final class RuntimeConfigPackageStoreTest {
 
   @Rule public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+  @Test
+  public void offlineDocumentSurvivesNextDayWithoutEndpointAuthority() throws Exception {
+    TestMaterial material = TestMaterial.create("nonprod");
+    material.packageDocument.addProperty("schema", "app-offline-bootstrap-document");
+    material.packageDocument.addProperty("environment", "alpha");
+    material.packageDocument.addProperty("target", "alpha-local");
+    material.packageDocument.addProperty("contentSource", "bundled_snapshot");
+    material.packageDocument.addProperty("trustEnvelopeDigest", material.trustDigest());
+    material.packageDocument.remove("issuedAt");
+    material.packageDocument.remove("expiresAt");
+    JsonObject runtime = new JsonObject();
+    runtime.addProperty("appRuntimeEnv", "alpha");
+    material.packageDocument.add("runtime", runtime);
+    material.resign();
+    RuntimeConfigPackageStore store = createStoreAt(material, RuntimeConfigPackageStore.durableAtomicWriter(), NOW.plusSeconds(86400 * 100));
+    installFirst(store, material);
+    assertEquals("present", store.readStateEnvelope().get("state"));
+    assertFalse(store.networkAccessAllowed());
+    assertEquals("runtime_config_network_forbidden", expectFailure(store::readRecoveryRuntimeValues).code);
+    material.packageDocument.getAsJsonObject("runtime").addProperty("gatewayBaseUrl", "");
+    material.resign();
+    assertEquals("runtime_config_runtime_values_invalid", expectFailure(() -> store.activate(
+        material.packageDocument, material.packageDigest(), material.trustDigest(),
+        store.readCurrentActiveDigest())).code);
+  }
+
+  @Test
+  public void selfSupplyDoesNotReplaceExpiredOrCorruptedRemoteActive() throws Exception {
+    TestMaterial remote = TestMaterial.create("nonprod");
+    RuntimeConfigPackageStore initial = createStore(remote, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator coordinator = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), initial);
+    JsonObject remoteRequest = activationRequest(remote, "");
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED,
+        coordinator.consumePendingRequest(writeActivationRequest(remoteRequest)).kind);
+    byte[] previous = Files.readAllBytes(activeFile().toPath());
+    TestMaterial offline = remote.nextPackage("alpha", "alpha-local");
+    offline.packageDocument.addProperty("schema", "app-offline-bootstrap-document");
+    offline.packageDocument.remove("issuedAt");
+    offline.packageDocument.remove("expiresAt");
+    offline.packageDocument.addProperty("contentSource", "bundled_snapshot");
+    offline.packageDocument.addProperty("trustEnvelopeDigest", offline.trustDigest());
+    JsonObject runtime = new JsonObject();
+    runtime.addProperty("appRuntimeEnv", "alpha");
+    offline.packageDocument.add("runtime", runtime);
+    offline.resign();
+    JsonObject request = activationRequest(offline, "");
+    request.addProperty("environment", "alpha");
+    request.addProperty("target", "alpha-local");
+    JsonObject manifest = request.getAsJsonObject("effectiveLaunchManifest");
+    manifest.addProperty("environment", "alpha");
+    manifest.addProperty("target", "alpha-local");
+    manifest.addProperty("contentSource", "bundled_snapshot");
+    manifest.addProperty("requiresLocalTransport", false);
+    manifest.addProperty("runtimeConfigSupplyMode", "build_time_self_supply");
+    refreshEffectiveManifestDigest(request);
+    RuntimeConfigPackageStore stale = createStoreAt(remote, RuntimeConfigPackageStore.durableAtomicWriter(), NOW.plusSeconds(86400 * 2));
+    RuntimeConfigActivationCoordinator staleCoordinator = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), stale);
+    RuntimeConfigActivationCoordinator.ConsumeResult expiredResult = staleCoordinator.consumeBundledSelfSupplyRequest(
+        new ByteArrayInputStream(RuntimeConfigPackageStore.canonicalJsonBytes(request)));
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.FAILED, expiredResult.kind);
+    assertEquals("runtime_config_freshness_invalid", expiredResult.errorCode);
+    assertArrayEquals(previous, Files.readAllBytes(activeFile().toPath()));
+    Files.writeString(activeFile().toPath(), "broken");
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.FAILED,
+        staleCoordinator.consumeBundledSelfSupplyRequest(new ByteArrayInputStream(
+            RuntimeConfigPackageStore.canonicalJsonBytes(request))).kind);
+    assertEquals("broken", Files.readString(activeFile().toPath()));
+  }
+
   @Test
   public void firstReadIsTypedAbsentAndIncludesArtifactTrust() throws Exception {
     TestMaterial material = TestMaterial.create("nonprod");
@@ -626,7 +696,7 @@ public final class RuntimeConfigPackageStoreTest {
     String previousManifestDigest =
         initialRequest.get("effectiveLaunchManifestDigest").getAsString();
 
-    TestMaterial next = current.nextPackage("alpha", "alpha-local");
+    TestMaterial next = current.nextPackage("beta", "beta-local");
     JsonObject nextRequest = activationRequest(next, current.packageDigest());
     String nextRequestDigest = writeActivationRequest(nextRequest);
     boolean[] failedSecondReceipt = {false};
@@ -732,9 +802,9 @@ public final class RuntimeConfigPackageStoreTest {
     assertEquals(
         "runtime_config_effective_manifest_digest_mismatch",
         receipt.get("errorCode").getAsString());
-    assertEquals("alpha", receipt.get("environment").getAsString());
+    assertEquals("beta", receipt.get("environment").getAsString());
     assertEquals("nonprod", receipt.get("buildProfile").getAsString());
-    assertEquals("alpha-local", receipt.get("target").getAsString());
+    assertEquals("beta-local", receipt.get("target").getAsString());
     assertEquals("canonical_launcher", receipt.get("launchProvenance").getAsString());
     assertEquals(
         "external_runtime_package", receipt.get("runtimeConfigSupplyMode").getAsString());
@@ -896,12 +966,13 @@ public final class RuntimeConfigPackageStoreTest {
     transport.addProperty("consumerLeaseId", "");
     JsonObject manifest = new JsonObject();
     manifest.addProperty("schema", "app-effective-launch-manifest");
-    manifest.addProperty("environment", "alpha");
+    manifest.addProperty("environment", "beta");
     manifest.addProperty("buildProfile", "nonprod");
-    manifest.addProperty("target", "alpha-local");
+    manifest.addProperty("target", "beta-local");
     manifest.addProperty("entrypoint", "lib/main_prod.dart");
     manifest.addProperty("launchProvenance", "canonical_launcher");
     manifest.addProperty("runtimeConfigSupplyMode", "external_runtime_package");
+    manifest.addProperty("contentSource", "remote");
     manifest.addProperty("launchPolicy", "test_live");
     manifest.addProperty("runtimeConfigPackageDigest", material.packageDigest());
     manifest.addProperty("runtimeConfigTrustEnvelopeDigest", material.trustDigest());
@@ -910,9 +981,9 @@ public final class RuntimeConfigPackageStoreTest {
 
     JsonObject request = new JsonObject();
     request.addProperty("schema", "app-runtime-config-activation-request");
-    request.addProperty("environment", "alpha");
+    request.addProperty("environment", "beta");
     request.addProperty("buildProfile", "nonprod");
-    request.addProperty("target", "alpha-local");
+    request.addProperty("target", "beta-local");
     request.add("package", material.packageDocument.deepCopy());
     request.addProperty("packageDigest", material.packageDigest());
     request.addProperty("trustEnvelopeDigest", material.trustDigest());
@@ -1048,15 +1119,15 @@ public final class RuntimeConfigPackageStoreTest {
 
       JsonObject runtimePackage = new JsonObject();
       runtimePackage.addProperty("schema", "app-runtime-config-package");
-      runtimePackage.addProperty("environment", "alpha");
+      runtimePackage.addProperty("environment", "beta");
       runtimePackage.addProperty("buildProfile", "nonprod");
-      runtimePackage.addProperty("target", "alpha-local");
+      runtimePackage.addProperty("target", "beta-local");
       runtimePackage.addProperty("launchPolicy", "test_live");
       runtimePackage.addProperty("issuedAt", "2026-08-22T23:55:00Z");
       runtimePackage.addProperty("expiresAt", "2026-08-23T23:55:00Z");
       runtimePackage.addProperty("sourceGitSha", "a".repeat(40));
       runtimePackage.addProperty("sourceTreeDigest", "sha256:" + "b".repeat(64));
-      runtimePackage.add("runtime", runtimeValues("alpha"));
+      runtimePackage.add("runtime", runtimeValues("beta"));
       runtimePackage.addProperty("payloadDigest", "");
       runtimePackage.addProperty("signatureAlgorithm", "ed25519");
       runtimePackage.addProperty("signatureKeyId", "primary");

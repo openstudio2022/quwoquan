@@ -353,15 +353,20 @@ def test_prod_hosted_mutations_are_rejected_before_runtime_or_network() -> None:
 
 def test_hosted_read_only_default_plan_has_only_remote_read_checks() -> None:
     with (
-        mock.patch.object(stackctl, "command_status", return_value={"exitCode": 0, "summary": "status"}),
-        mock.patch.object(stackctl, "command_health", return_value={"exitCode": 0, "summary": "health"}),
-        mock.patch.object(stackctl, "command_verify", return_value={"exitCode": 0, "summary": "verify"}),
+        mock.patch.object(stackctl, "command_status", side_effect=AssertionError("local status forbidden")),
+        mock.patch.object(stackctl, "_read_only_user_availability_report", return_value={"status": "failed", "firstBlocker": "provider unavailable", "evidence": {}}) as availability,
+        mock.patch.object(stackctl, "command_health", return_value={"exitCode": 0, "summary": "health"}) as health,
+        mock.patch.object(stackctl, "command_verify", side_effect=AssertionError("local verify receipt forbidden")),
         mock.patch.object(stackctl, "command_inspect", return_value={"exitCode": 0, "summary": "inspect"}),
     ):
         result = hosted_read_only.command_hosted_read_only(
-            argparse.Namespace(target="prod-hosted", check=[])
+            argparse.Namespace(target="prod-hosted", check=[], deployment_instance="prevalidate", candidate_digest="sha256:" + "a" * 64, host_id="selected-host", ssh_host="selected.invalid")
         )
-    assert result["exitCode"] == 0
+    assert result["exitCode"] == 2
+    assert availability.call_args.kwargs["deployment_instance"] == "prevalidate"
+    assert health.call_args.args[0].host_id == "selected-host"
+    assert health.call_args.args[0].candidate_digest == "sha256:" + "a" * 64
+    assert result["checks"][2]["exitCode"] == 2
     assert [item["check"] for item in result["checks"]] == list(
         hosted_read_only.ALLOWED_CHECKS
     )

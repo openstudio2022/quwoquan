@@ -3,8 +3,8 @@
 
 契约（specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003）：
 - 本 App 的 `flutter run` 是一键托管入口：白名单翻译参数后以前台
-  `QWQ_MANAGED_FLUTTER_ENTRY=1 exec run.sh --env alpha --device <id>` 进入
-  canonical launcher（alpha/content-live）；无 `-d` 时委托 canonical device
+  `exec run.sh --env alpha --device <id>` 进入 canonical 离线 launcher，
+  不执行在线 managed preparation（alpha/content-live）；无 `-d` 时委托 canonical device
   authority（单设备自动、多设备 TTY 数字选择、非 TTY typed 阻断）。
 - 外部 Flutter project 的 `run` 与其余全部子命令（--version、doctor、
   analyze、test、pub、build 等）解析真实 Flutter SDK 后逐字 exec 透传
@@ -16,7 +16,9 @@
   <参数>` 并 exit 2；本文件按自身物理路径定位仓库根，任意 cwd 可用。
 - 启动的是"当前所站的那棵树"：从 cwd 向上找到本 App 根（pubspec 旁有 run.sh、
   同仓有 quwoquan_ops/cli/stackctl.py）即 exec 该树的 run.sh；cwd 不在任何本 App
-  树内时退回 dispatcher 自身所在树。多 clone/worktree 并存时修改与启动因此同源。
+  树内时枚举同仓全部 worktree——`--worktree <目录|分支>` 显式命中、TTY 数字选择、
+  非 TTY typed 阻断——不再静默退回 dispatcher 自身所在树。多 lane worktree 并存时
+  修改与启动因此同源且可选。
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ _APP_ROOT = _DISPATCHER_PATH.parents[4]
 _CANONICAL_RUN_SH = _APP_ROOT / "run.sh"
 _DEVICE_AUTHORITY = _APP_ROOT / "scripts/tools/device/discover_flutter_mobile_devices.py"
 _FACADE_MODULE_PATH = _APP_ROOT / "scripts/tools/flutter_facade/flutter_facade.py"
+_WORKTREE_SELECTION_PATH = _APP_ROOT / "scripts/tools/launcher/worktree_selection.py"
 
 # 三个码均已在 canonical metadata 登记（app_launch_manifest launch_blockers）。
 _SDK_BLOCKER = "APP.LAUNCH.workspace_flutter_sdk_unavailable"
@@ -129,25 +132,53 @@ def _is_app_root(candidate: Path) -> bool:
     )
 
 
-def _launch_root_for(cwd: Path) -> Path | None:
+def _load_worktree_selection_module():
+    spec = importlib.util.spec_from_file_location(
+        "qwq_launcher_worktree_selection", _WORKTREE_SELECTION_PATH
+    )
+    if spec is None or spec.loader is None:
+        print(
+            f"{_ENTRYPOINT_BLOCKER}: canonical worktree_selection 模块不可用：{_WORKTREE_SELECTION_PATH}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _launch_root_for(cwd: Path, explicit_worktree: str = "") -> Path | None:
     """cwd 所在的本 App 树；cwd 位于外部 Flutter project 时返回 None（应透传）。
 
     先看最近 pubspec 根：是本 App 则用它，是别的 Flutter project 则透传。
     没有 pubspec 时再向上找仓库根下的 quwoquan_app/（例如站在仓库根执行）。
-    都找不到则退回 dispatcher 自身所在树，保持"任意 cwd 可用"。
+    都找不到时枚举同仓 worktree：显式 `--worktree`、单树自动、多树 TTY 选择、
+    非 TTY typed 阻断；不静默退回 dispatcher 自身所在树。
     """
-    project_root = _nearest_pubspec_project_root(cwd)
-    if project_root is not None:
-        return project_root if _is_app_root(project_root) else None
-    current = cwd.absolute()
-    while True:
-        nested = current / "quwoquan_app"
-        if _is_app_root(nested):
-            return nested
-        parent = current.parent
-        if parent == current:
-            return _APP_ROOT
-        current = parent
+    selection = _load_worktree_selection_module()
+    if not explicit_worktree:
+        project_root = _nearest_pubspec_project_root(cwd)
+        if project_root is not None:
+            return project_root if _is_app_root(project_root) else None
+        current = cwd.absolute()
+        while True:
+            nested = current / "quwoquan_app"
+            if _is_app_root(nested):
+                return nested
+            parent = current.parent
+            if parent == current:
+                break
+            current = parent
+    try:
+        return selection.resolve_launch_app_dir(
+            cwd=cwd,
+            anchor_app_dir=_APP_ROOT,
+            explicit=explicit_worktree,
+            interactive=sys.stdin.isatty() and sys.stderr.isatty(),
+        )
+    except selection.WorktreeSelectionError as error:
+        print(f"GATE_BLOCK: {_ENTRYPOINT_BLOCKER}: {error}", file=sys.stderr)
+        raise SystemExit(2)
 
 
 def _validate_managed_ambient_selectors(environment: dict[str, str]) -> None:
@@ -234,7 +265,9 @@ def _managed_run(arguments: list[str], launch_root: Path) -> int:
         )
         raise SystemExit(2)
     environment = dict(os.environ)
-    environment["QWQ_MANAGED_FLUTTER_ENTRY"] = "1"
+    # 默认 Alpha 离线走同一 direct executor，不进入在线 managed preparation。
+    # 数据源仍由 canonical handoff 的签名策略决定，而非此入口变量。
+    environment.pop("QWQ_MANAGED_FLUTTER_ENTRY", None)
     launcher_arguments = [
         str(run_sh),
         "--env",
@@ -251,10 +284,16 @@ def _managed_run(arguments: list[str], launch_root: Path) -> int:
 def main(argv: list[str]) -> int:
     if len(argv) < 2 or argv[1] != "run":
         return _passthrough(argv[1:])
-    launch_root = _launch_root_for(Path.cwd())
+    selection = _load_worktree_selection_module()
+    try:
+        explicit_worktree, run_arguments = selection.strip_worktree_option(argv[2:])
+    except selection.WorktreeSelectionError as error:
+        print(f"GATE_BLOCK: {_ENTRYPOINT_BLOCKER}: {error}", file=sys.stderr)
+        raise SystemExit(2)
+    launch_root = _launch_root_for(Path.cwd(), explicit_worktree)
     if launch_root is None:
         return _passthrough(argv[1:])
-    return _managed_run(argv[2:], launch_root)
+    return _managed_run(run_arguments, launch_root)
 
 
 if __name__ == "__main__":

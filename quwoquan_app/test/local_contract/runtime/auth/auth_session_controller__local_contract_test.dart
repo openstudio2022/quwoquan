@@ -20,13 +20,122 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart'
 import 'package:quwoquan_app/service/user_service/account/account_session/application/public/account_session_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+
 import '../../../support/runtime/errors/runtime_failure_fixtures.dart';
+import '../../../support/runtime/config/runtime_package_test_hydration.dart';
+import '../../../support/runtime/cloud_boundary_test_scope.dart';
 
 AccountSessionLifecycleWriter _lifecycleWriter(
   Future<TokenRefreshGrant> Function(RefreshTokenCommand command) refresh,
 ) => _StubAccountSessionLifecycleWriter(refresh);
 
 void main() {
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007.t1
+  test('Alpha 只恢复本地安装标识，不恢复账号授权或创建匿名账号', () async {
+    await hydrateRuntimePackageForTests(environment: 'alpha');
+    final store = _MemoryAuthSessionStore(
+      stored: const StoredAuthSession(
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        ownerId: 'old-owner',
+        activePersonaId: 'old-persona',
+        accountState: 'active',
+        identityOrigin: 'phone',
+        installId: 'local-install',
+        lastRefreshAtEpochMs: 0,
+        lastForegroundAuthCheckAtEpochMs: 0,
+        manualLoggedOut: false,
+        launchPromptDismissed: false,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        ...sealedCloudBoundaryOverrides(),
+        authSessionStoreProvider.overrideWithValue(store),
+      ],
+    );
+    try {
+      final controller = container.read(authSessionControllerProvider.notifier);
+      await controller.restore();
+      final state = container.read(authSessionControllerProvider);
+      expect(state.installId, 'local-install');
+      expect(state.isGuest, isTrue);
+      expect(state.hasTrustedSession, isFalse);
+      expect(state.ownerId, isEmpty);
+      expect(state.accessToken, isEmpty);
+      expect(await controller.refreshSessionIfNeeded(force: true), isFalse);
+      await expectLater(
+        controller.accessTokenForRequest(),
+        throwsA(isA<CloudException>()),
+      );
+      await expectLater(
+        controller.ensureTrustedGuestSession(),
+        throwsA(isA<CloudException>()),
+      );
+      expect(store.stored.accessToken, 'old-access');
+    } finally {
+      container.dispose();
+      await hydrateRuntimePackageForTests(environment: 'beta');
+    }
+  });
+
+  // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-003
+  test('新 ProviderScope 授权不接受旧 scope 的晚到 refresh', () async {
+    StoredAuthSession stored(String token) => StoredAuthSession(
+      accessToken: token,
+      refreshToken: 'refresh-$token',
+      ownerId: 'owner-$token',
+      activePersonaId: 'persona-$token',
+      accountState: 'active',
+      identityOrigin: 'phone',
+      installId: 'same-install',
+      lastRefreshAtEpochMs: DateTime.now().millisecondsSinceEpoch,
+      lastForegroundAuthCheckAtEpochMs: DateTime.now().millisecondsSinceEpoch,
+      manualLoggedOut: false,
+      launchPromptDismissed: false,
+    );
+    final oldStore = _MemoryAuthSessionStore(stored: stored('old'));
+    final newStore = _MemoryAuthSessionStore(stored: stored('new'));
+    final response = Completer<TokenRefreshGrant>();
+    final started = Completer<void>();
+    final oldScope = ProviderContainer(
+      overrides: [
+        ...sealedCloudBoundaryOverrides(),
+        authSessionStoreProvider.overrideWithValue(oldStore),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) {
+            started.complete();
+            return response.future;
+          }),
+        ),
+      ],
+    );
+    final controller = oldScope.read(authSessionControllerProvider.notifier);
+    await controller.restore();
+    final pending = controller.refreshSessionIfNeeded(force: true);
+    await started.future;
+    oldScope.dispose();
+    final nextScope = ProviderContainer(
+      overrides: [
+        ...sealedCloudBoundaryOverrides(),
+        authSessionStoreProvider.overrideWithValue(newStore),
+      ],
+    );
+    addTearDown(nextScope.dispose);
+    await nextScope.read(authSessionControllerProvider.notifier).restore();
+    response.complete(
+      const TokenRefreshGrant(
+        accessToken: 'late-old',
+        refreshToken: 'late-refresh',
+        sessionRememberTtlSeconds: 2592000,
+      ),
+    );
+    expect(await pending, isFalse);
+    expect(newStore.stored.accessToken, 'new');
+    expect(oldStore.stored.accessToken, 'old');
+    expect(nextScope.read(authSessionControllerProvider).accessToken, 'new');
+  });
+
   test('账号注销本地清理回执加密持久化并在成功后物理删除', () async {
     FlutterSecureStorage.setMockInitialValues(<String, String>{});
     const store = SecureTerminalAccountCleanupReceiptStore();

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import fcntl
 import re
 import subprocess
 import sys
@@ -27,6 +29,7 @@ from quwoquan_ops.ci.environment_scheduler import (  # noqa: E402
     load_execution_request,
     request_exact_ref,
     select_next_request,
+    claim_execution_request,
     supersede_request,
 )
 from quwoquan_ops.ci.integration_qualification import (  # noqa: E402
@@ -127,6 +130,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     next_request = commands.add_parser("next")
     _add_exact(next_request, "--request", required=True, action="append")
+    next_request.add_argument("--claim", action="store_true", help="atomically reserve the selected target before executor handoff")
+
+    execute = commands.add_parser("execute")
+    _add_exact(execute, "--request", required=True)
+    execute.add_argument("--claim-id", required=True)
+    execute.add_argument("--operation", required=True, choices=("up", "down", "dev-session"))
 
     transition = commands.add_parser("transition")
     _add_exact(transition, "--request", required=True)
@@ -378,7 +387,64 @@ def _handle_next(args: argparse.Namespace) -> dict[str, object]:
         if load_execution_request(args.store_root, exact)["requestId"]
         == selected["requestId"]
     )
+    if getattr(args, "claim", False):
+        claim = claim_execution_request(store_root=args.store_root, request_ref=selected_ref)
+        return {"terminal": "claimed", "request": selected, "requestRef": selected_ref, "executionClaim": claim}
     return {"terminal": "selected", "request": selected, "requestRef": selected_ref}
+
+
+def _handle_execute(args: argparse.Namespace) -> dict[str, object]:
+    """执行 exact claim 的唯一无 App 子命令；异常保留占用，不以父 PID 清理。"""
+    from quwoquan_ops.cli.lib.output_paths import (
+        deployment_target_path, _read_secure_json_object, _atomic_write_secure_json_object,
+    )
+    request = load_execution_request(args.store_root, args.request)
+    target = str(request["target"])
+    directory = deployment_target_path(target, "process", "environment-execution")
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(directory / ".claim.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise EnvironmentExecutionError("ENVIRONMENT_EXECUTION.IN_USE", "executor already holds the target claim") from exc
+        slot = directory / "execution-slot.json"
+        claim = _read_secure_json_object(slot, label="environment execution slot")
+        if not claim or claim.get("claimId") != args.claim_id or claim.get("request") != args.request or claim.get("storeRoot") != str(args.store_root.resolve()):
+            raise EnvironmentExecutionError("ENVIRONMENT_EXECUTION.CLAIM_MISMATCH", "exact claim/request/store required")
+        if claim.get("executorStarted"):
+            raise EnvironmentExecutionError("ENVIRONMENT_EXECUTION.RECONCILE_REQUIRED", "prior executor has no verified closure")
+        from quwoquan_ops.ci.environment_scheduler import current_task_state
+        if current_task_state(store_root=args.store_root, request_id=request["requestId"]) != "mutation_started":
+            raise EnvironmentExecutionError("ENVIRONMENT_EXECUTION.RECONCILE_REQUIRED", "superseded request cannot begin a new executor")
+        claim = {**claim, "executorStarted": True}
+        _atomic_write_secure_json_object(slot, claim, label="environment execution slot")
+        argv = [sys.executable, "-B", str(args.repository / "quwoquan_ops/cli/stackctl.py"), "--output-format", "json", args.operation]
+        argv += ["--env", str(request["environment"])] if args.operation == "dev-session" else ["--target", target]
+        if args.operation == "up":
+            argv.append("--skip-app")
+        child_env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "QWQ_ENVIRONMENT_EXECUTION_CLAIM_ID": args.claim_id,
+                     "QWQ_ENVIRONMENT_EXECUTION_FD": str(descriptor)}
+        # run 等待此无 App 命令完成；硬杀/异常不走 unlink，旧代继续占用。
+        completed = subprocess.run(argv, cwd=args.repository, env=child_env, capture_output=True, text=True, check=False, start_new_session=True, pass_fds=(descriptor,))
+        if completed.returncode != 0:
+            return {"terminal": "GATE_BLOCK", "code": "ENVIRONMENT_EXECUTION.CHILD_FAILED", "exitCode": completed.returncode,
+                    "executionClaim": args.claim_id, "detail": "child failed; target claim retained for verified recovery"}
+        from quwoquan_ops.cli.lib.local_runtime_reservation import local_runtime_operation_lock_path
+        executor_fence = local_runtime_operation_lock_path(target).with_suffix(".executor.json")
+        if _read_secure_json_object(executor_fence, label="target executor fence") is not None:
+            raise EnvironmentExecutionError("ENVIRONMENT_EXECUTION.RECONCILE_REQUIRED", "target executor fence remains after child exit")
+        if _read_secure_json_object(slot, label="environment execution slot") != claim:
+            raise EnvironmentExecutionError("ENVIRONMENT_EXECUTION.CLAIM_MISMATCH", "claim changed before closure")
+        slot.unlink()
+        parent_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
+        return {"terminal": "executed", "exitCode": 0, "executionClaim": args.claim_id, "target": target}
+    finally:
+        os.close(descriptor)
 
 
 def _handle_transition(args: argparse.Namespace) -> dict[str, object]:
@@ -561,6 +627,7 @@ def _dispatch(args: argparse.Namespace) -> dict[str, object]:
     handlers = {
         "request": _handle_request,
         "next": _handle_next,
+        "execute": _handle_execute,
         "transition": _handle_transition,
         "supersede": _handle_supersede,
         "issue": _handle_issue,
@@ -578,8 +645,15 @@ def main(argv: list[str] | None = None) -> int:
         args = _build_parser().parse_args(argv)
         args.repository = args.repository.resolve()
         args.store_root = args.store_root.expanduser()
-        _emit(_dispatch(args))
-        return 0
+        if args.command == "execute" or (args.command == "next" and getattr(args, "claim", False)):
+            from quwoquan_ops.cli.lib.host_locks import require_canonical_runtime_authority
+            try:
+                require_canonical_runtime_authority()
+            except ValueError as exc:
+                raise EnvironmentExecutionError("ENVIRONMENT_EXECUTION.AUTHORITY_MISMATCH", str(exc)) from exc
+        result = _dispatch(args)
+        _emit(result)
+        return 2 if result.get("terminal") == "GATE_BLOCK" else 0
     except (
         EnvironmentExecutionError,
         EnvironmentSchedulerError,

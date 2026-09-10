@@ -9,6 +9,7 @@ projection/stackctl/readback 全部用可计数 stub 注入。正例用 pty 提�
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import pty
@@ -20,6 +21,8 @@ import time
 from pathlib import Path
 
 import pytest
+
+from quwoquan_app.scripts.device import prepare_workspace_launch_projection as projection
 
 APP_DIR = Path(__file__).resolve().parents[3]
 LAUNCHER = APP_DIR / "run.sh"
@@ -247,7 +250,17 @@ def _build_sandbox(
         root / "quwoquan_app/scripts/device/prepare_workspace_launch_projection.py"
     )
     prepare.parent.mkdir(parents=True)
-    prepare.write_text(_PREPARE_STUB, encoding="utf-8")
+    # 仅投影生成是 stub；自动同步回执解析与脱敏必须执行生产 helper 原字节。
+    prepare.write_text(
+        "import json\nimport re\nimport sys\nfrom pathlib import Path\n\n"
+        + inspect.getsource(projection._sanitize_dependency_diagnostic)
+        + "\n\n"
+        + inspect.getsource(projection.read_committed_dependency_sync_attempt)
+        + '\n\nif __name__ == "__main__":\n'
+        + "\n".join("    " + line for line in _PREPARE_STUB.splitlines())
+        + "\n",
+        encoding="utf-8",
+    )
 
     stackctl = root / "quwoquan_ops/cli/stackctl.py"
     stackctl.parent.mkdir(parents=True)
@@ -386,6 +399,53 @@ def _run_driver_with_streams(
         )
     finally:
         os.close(master_fd)
+
+
+@pytest.mark.parametrize(
+    "payload, expected_code",
+    [
+        ("[]", 3),
+        ("{", 3),
+        ("", 3),
+        (json.dumps({"exitCode": True, "summary": "blocked", "details": []}), 2),
+        (json.dumps({"exitCode": 0, "summary": "ok", "details": "invalid"}), 2),
+    ],
+)
+def test_sync_receipt_rejects_malformed_envelope(
+    tmp_path: Path, payload: str, expected_code: int
+) -> None:
+    report = tmp_path / "sync.json"
+    report.write_text(payload, encoding="utf-8")
+    with pytest.raises(SystemExit) as failure:
+        projection.read_committed_dependency_sync_attempt(report, 0)
+    assert failure.value.code == expected_code
+
+
+@pytest.mark.parametrize(
+    "detail, forbidden, expected",
+    [
+        ("token=secret-token", "secret-token", "token=[REDACTED]"),
+        ("authorization: bearer secret-auth", "secret-auth", "authorization=[REDACTED]"),
+        (" ".join(("-----BEGIN", "PRIVATE KEY-----", "sensitive")), "sensitive", "[REDACTED dependency diagnostic]"),
+        ("runtime-config-trust.json sensitive", "sensitive", "[REDACTED dependency diagnostic]"),
+    ],
+)
+def test_failed_sync_receipt_redacts_diagnostics(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    detail: str, forbidden: str, expected: str,
+) -> None:
+    report = tmp_path / "sync.json"
+    report.write_text(
+        json.dumps({"exitCode": 2, "summary": "blocked", "details": [detail]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit) as failure:
+        projection.read_committed_dependency_sync_attempt(report, 2)
+    assert failure.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert expected in captured.err
+    assert forbidden not in captured.err
 
 
 class TestStaticContract:

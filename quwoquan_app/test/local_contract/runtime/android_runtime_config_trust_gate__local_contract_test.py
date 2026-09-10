@@ -197,29 +197,69 @@ tasks.register("assembleNonprodProfile")
                 self.assertIn("APP.LAUNCH.runtime_config_trust_missing", result.stdout)
                 self.assertIn(expected_reason, result.stdout)
 
-    def test_debug_artifact_without_asset_root_stays_gate_blocked(self) -> None:
-        # 构建期默认供给（embedded_default_package）已退役：Debug artifact 缺
-        # asset root 时不再物化仓库外私有默认供给目录，直接 typed GATE_BLOCK。
-        # user.home 定向到临时目录以断言零物化，GRADLE_USER_HOME 显式固定回
-        # 真实缓存以保住 --offline 的依赖解析。
-        private_home = self.root / "private-home"
-        private_home.mkdir()
-        result = self._run(
-            "assembleNonprodDebug",
-            extra_environment={
-                "GRADLE_USER_HOME": str(self._gradle_user_home()),
-            },
-            extra_arguments=(f"-Duser.home={private_home}",),
+    # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+    def test_debug_artifact_without_asset_root_self_supplies_alpha(self) -> None:
+        from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
+            runtime_config_activation_request_digest,
+            runtime_config_trust_envelope_digest,
+            validate_runtime_config_activation_request,
+            validate_runtime_config_package,
         )
 
-        self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertIn("APP.LAUNCH.runtime_config_trust_missing", result.stdout)
-        self.assertIn("./quwoquan_app/run.sh -d <device>", result.stdout)
-        self.assertEqual(
-            sorted(private_home.glob(".cache/quwoquan/default-debug-supply/**/*")),
-            [],
-            result.stdout,
+        # 新版自供给按 java.io.tmpdir 物化，随本测试清理；沿用既有离线依赖缓存。
+        private_tmp = self.root / "private-tmp"
+        private_tmp.mkdir()
+        result = self._run(
+            "assembleNonprodDebug",
+            extra_arguments=(f"-Djava.io.tmpdir={private_tmp}",),
         )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        prefix = "[android-runtime-config] runtimeConfigSupplyMode=build_time_self_supply "
+        summaries = [
+            json.loads(line[len(prefix):])
+            for line in result.stdout.splitlines()
+            if line.startswith(prefix)
+        ]
+        self.assertEqual(len(summaries), 1, result.stdout)
+        summary = summaries[0]
+        runtime_roots = list(private_tmp.glob("qwq-android-self-supply/*/qwq_runtime"))
+        self.assertEqual(len(runtime_roots), 1, result.stdout)
+        runtime_root = runtime_roots[0]
+        self.assertFalse(runtime_root.resolve().is_relative_to(REPO_ROOT.resolve()))
+        self.assertEqual(
+            {path.name for path in runtime_root.iterdir()},
+            {"runtime-config-trust.json", "runtime-config-self-supply-request.json"},
+        )
+        trust = json.loads((runtime_root / "runtime-config-trust.json").read_text())
+        request = json.loads(
+            (runtime_root / "runtime-config-self-supply-request.json").read_text()
+        )
+        contract = json.loads(GENERATED_CONTRACT.read_text())["appLaunchManifest"]
+        self.assertEqual(validate_runtime_config_activation_request(request, contract), [])
+        self.assertEqual(validate_runtime_config_package(request["package"], trust, contract), [])
+        self.assertEqual(request["expectedActiveDigest"], "")
+        self.assertEqual(trust["buildProfile"], "nonprod")
+        for field, expected in (
+            ("environment", "alpha"), ("target", "alpha-local"), ("buildProfile", "nonprod"),
+        ):
+            self.assertEqual(request[field], expected)
+            self.assertEqual(summary[field], expected)
+        manifest = request["effectiveLaunchManifest"]
+        self.assertEqual(manifest["contentSource"], "bundled_snapshot")
+        self.assertEqual(manifest["runtimeConfigSupplyMode"], "build_time_self_supply")
+        self.assertEqual(manifest["launchProvenance"], "workspace_ide_debug")
+        self.assertEqual(summary["runtimeConfigSupplyMode"], manifest["runtimeConfigSupplyMode"])
+        self.assertEqual(summary["launchProvenance"], manifest["launchProvenance"])
+        self.assertEqual(
+            request["package"]["schema"],
+            contract["schemas"]["offline_bootstrap_document"]["schema_value"],
+        )
+        self.assertEqual(
+            request["trustEnvelopeDigest"], runtime_config_trust_envelope_digest(trust, contract),
+        )
+        self.assertEqual(summary["requestDigest"], runtime_config_activation_request_digest(request, contract))
+        for field in ("packageDigest", "trustEnvelopeDigest", "effectiveLaunchManifestDigest"):
+            self.assertEqual(summary[field], request[field])
 
     def test_release_and_profile_artifacts_without_asset_root_stay_gate_blocked(
         self,
@@ -270,7 +310,13 @@ tasks.register("assembleNonprodProfile")
         self.assertIn("AppLaunchContract.LAUNCH_PROVENANCES", source)
         self.assertIn("AppLaunchContract.RUNTIME_CONFIG_SUPPLY_MODES", source)
 
-    def test_shared_java_and_patrol_activities_compile_in_isolation(self) -> None:
+    # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+    def test_shared_java_runtime_config_contract(self) -> None:
+        _, _, gson_jar, tink_jar, _, _ = self._compile_shared_java_contract()
+        self.assertEqual(gson_jar.name, "gson-2.13.2.jar")
+        self.assertEqual(tink_jar.name, "tink-android-1.23.0.jar")
+
+    def _compile_shared_java_contract(self) -> tuple[Path, Path, Path, Path, Path, Path]:
         android_jar = self._android_sdk_root() / "platforms/android-37.0/android.jar"
         gson_jar = self._single_cached_jar(
             "caches/modules-2/files-2.1/com.google.code.gson/gson/2.13.2/*/gson-2.13.2.jar"
@@ -366,6 +412,17 @@ tasks.register("assembleNonprodProfile")
         )
         self.assertEqual(java_test.returncode, 0, java_test.stdout)
 
+        return java_output, android_jar, gson_jar, tink_jar, flutter_embedding, lifecycle_common
+
+    def test_shared_java_and_patrol_activities_compile_in_isolation(self) -> None:
+        (
+            java_output,
+            android_jar,
+            gson_jar,
+            tink_jar,
+            flutter_embedding,
+            lifecycle_common,
+        ) = self._compile_shared_java_contract()
         kotlin_compiler = self._single_cached_jar(
             "caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.0/*/kotlin-compiler-embeddable-2.4.0.jar"
         )

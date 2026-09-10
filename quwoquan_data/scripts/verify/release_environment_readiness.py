@@ -20,8 +20,6 @@ from content.release.environment.release_readiness_closure import (
 )
 from core.io import read_json
 from core.release_layout import payload_file
-from verify.release_publishability import phase_lifecycle_alignment_issue
-
 
 def _read_object(path: Path, *, label: str, issues: list[str]) -> dict[str, Any]:
     try:
@@ -78,8 +76,6 @@ def environment_release_readiness_issues(
         else ("sourceRevision", "sourceDigest", "entityCatalogDigest")
     )
     header_projection_fields = (
-        "releaseClass",
-        "productLifecycleState",
         "containsUnverifiedAssets",
         "rightsStatusCounts",
         "authorizationRequiredAssetIds",
@@ -99,14 +95,6 @@ def environment_release_readiness_issues(
         issues.append(f"{path}: guestLogin drift from post verification")
     if readiness.get("feedQueries") != post_verification.get("feedQueries"):
         issues.append(f"{path}: feedQueries drift from post verification")
-    readiness_phase = str(readiness.get("readinessPhase") or "")
-    alignment_issue = phase_lifecycle_alignment_issue(
-        readiness_phase,
-        str(readiness.get("releaseClass") or ""),
-        str(readiness.get("productLifecycleState") or ""),
-    )
-    if alignment_issue is not None:
-        issues.append(f"{path}: {alignment_issue}")
     if any(
         field in readiness
         for field in ("internalSubjectHash", "researchIsolationVerificationRef", "researchIsolationVerificationDigest")
@@ -301,7 +289,6 @@ def environment_release_readiness_issues(
     if readiness.get("counts") != expected_counts:
         issues.append(f"{path}: counts drift from bound evidence")
 
-    readiness_phase = str(readiness.get("readinessPhase") or "")
     try:
         import_report_ref = (
             (import_run / "import.json").relative_to(output_root).as_posix()
@@ -317,11 +304,6 @@ def environment_release_readiness_issues(
             environment=environment,
             release_id=release_id,
             manifest_digest=str(attestation.get("payloadSha256") or ""),
-            release_class=str(release_header.get("releaseClass") or ""),
-            product_lifecycle_state=str(
-                release_header.get("productLifecycleState") or ""
-            ),
-            readiness_phase=readiness_phase,
             import_run_id=import_run_id,
             verify_run_id=verify_run_id,
             import_report_ref=import_report_ref,

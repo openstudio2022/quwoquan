@@ -17,6 +17,14 @@ from quwoquan_ops.cli.lib.app_content_uat_plan import (
     load_release_uat_sample_plan,
 )
 
+from quwoquan_ops.tests.support.test_data_verification_test_support import (
+    _readiness as release_readiness,
+    _with_checksum,
+)
+from quwoquan_ops.tests.support.derivable_release_payload_test_support import (
+    release_header_fixture,
+)
+
 CARRIERS = ("homepage", "article", "image", "video")
 ENTRIES = ("feed", "search", "recommendation", "direct_or_object_route")
 DIGESTS = {
@@ -43,25 +51,22 @@ def _readiness(
     article_ids = [f"article-{index:03d}" for index in range(1, 101)]
     image_ids = [f"image-{index:03d}" for index in range(1, 101)]
     video_ids = [f"video-{index:03d}" for index in range(1, 11)]
-    return {
-        "releaseId": release_id,
-        "releaseClass": "research",
-        "productLifecycleState": "research",
-        "manifestDigest": DIGESTS["manifest"],
-        "sourceIdentities": [{"executionId": "execution-a"}],
-        "sourceIdentitySetDigest": DIGESTS["source"],
-        "entityRefs": [f"/entity/place-{index:03d}" for index in range(1, 101)],
-        "postIds": [*article_ids, *image_ids, *video_ids],
-        "feedQueries": [
-            {"name": "typed_article", "matchedPostIds": article_ids},
-            {"name": "typed_image", "matchedPostIds": image_ids},
-            {"name": "typed_video", "matchedPostIds": video_ids},
-            {
-                "name": "homepage_recommend",
-                "matchedPostIds": [*article_ids, *image_ids, *video_ids],
-            },
-        ],
-    }
+    posts = [*article_ids, *image_ids, *video_ids]
+    readiness = release_readiness(
+        release_id=release_id, manifest_digest=DIGESTS["manifest"],
+        post_ids=tuple(posts), entity_ref="/entity/place-001",
+    )
+    readiness["sourceIdentitySetDigest"] = DIGESTS["source"]
+    readiness["activationEnvelope"]["sourceIdentitySetDigest"] = DIGESTS["source"]
+    readiness["activationEnvelopeDigest"] = _canonical_digest(readiness["activationEnvelope"])
+    readiness["entityRefs"] = [f"/entity/place-{index:03d}" for index in range(1, 101)]
+    readiness["counts"].update(entities=100, premiumPlayableVideos=10)
+    for query in readiness["feedQueries"]:
+        query["matchedPostIds"] = {
+            "typed_article": article_ids, "typed_image": image_ids,
+            "typed_video": video_ids, "premium_stream": video_ids,
+        }.get(query["name"], posts)
+    return _with_checksum(readiness)
 
 
 def _contents() -> list[dict[str, object]]:
@@ -70,8 +75,9 @@ def _contents() -> list[dict[str, object]]:
             "contentId": f"{carrier}-{index:03d}",
             "version": 1,
             "postRef": f"{carrier}/work-{index:03d}/1",
-            "executionId": f"{carrier}-execution",
-            "sourceIdentityDigest": DIGESTS["source"],
+            "selectionIdentityDigest": DIGESTS["source"],
+            "canonicalObjectDigest": DIGESTS["contents"],
+            "contentLibraryBindingDigest": DIGESTS["pool"],
         }
         for carrier, count in (("article", 100), ("image", 100), ("video", 10))
         for index in range(1, count + 1)
@@ -187,12 +193,11 @@ def _header() -> dict[str, object]:
     # producer detachment 禁止 header 携带 selectionScope/samplePlanRef/samplePlanDigest；
     # 下游派生 plan 只与 header 的 identity、digest 与 counts 对齐。
     return {
-        "schema": "quwoquan_data.release",
-        "releaseId": "release-m100-a",
-        "sourceOwner": "qwq_data",
-        "releaseKind": "content",
-        "releaseClass": "research",
-        "productLifecycleState": "research",
+        **release_header_fixture(
+            release_id="release-m100-a", contents=_contents(),
+            source_identities=_readiness()["sourceIdentities"],
+            source_identity_set_digest=DIGESTS["source"],
+        ),
         "milestone": "M100",
         "milestoneTargets": {
             "homepage": 100,
@@ -209,7 +214,6 @@ def _header() -> dict[str, object]:
         },
         "poolDigest": DIGESTS["pool"],
         "canonicalMerkle": DIGESTS["merkle"],
-        "sourceIdentities": [{"executionId": "execution-a"}],
         "sourceIdentitySetDigest": DIGESTS["source"],
         "contents": _contents(),
     }
@@ -234,11 +238,7 @@ def _build(
 
 def test_uat_plan__missing_header_and_sample_plan_fail_closed__local_contract() -> None:
     readiness = _readiness()
-    readiness["counts"] = {
-        "entities": 100,
-        "posts": 210,
-        "premiumPlayableVideos": 10,
-    }
+    readiness["counts"].update(entities=100, posts=210, premiumPlayableVideos=10)
 
     with pytest.raises(ValueError, match="explicit release header is missing"):
         build_app_content_uat_plan(readiness)
@@ -281,9 +281,7 @@ def test_uat_plan__projects_canonical_samples_and_required_cells__local_contract
     assert plan["mediaChecks"]["typedVideo"]["expectedPostIds"] == [
         f"video-{index:03d}" for index in range(1, 11)
     ]
-    # Legacy fixture has no premium_stream row; plan preserves the old typed-video
-    # fallback only for that historical shape. Current readiness carries an exact
-    # premium_stream row and strict Research tests exercise it directly.
+    # 默认无类别路径只消费显式 premium_stream，不依赖旧 typed-video fallback。
     assert plan["mediaChecks"]["premiumVideo"]["expectedPostIds"] == [
         f"video-{index:03d}" for index in range(1, 11)
     ]
@@ -300,11 +298,7 @@ def test_uat_plan__eligible_overshoot_is_allowed_but_shortfall_fails__local_cont
 
 def test_uat_plan__counts_cannot_infer_or_replace_explicit_plan__local_contract() -> None:
     readiness = _readiness()
-    readiness["counts"] = {
-        "entities": 999,
-        "posts": 999,
-        "premiumPlayableVideos": 99,
-    }
+    readiness["counts"].update(entities=999, posts=999, premiumPlayableVideos=99)
 
     with pytest.raises(ValueError, match="ReleaseUatSamplePlan is missing"):
         build_app_content_uat_plan(readiness, release_header=_header())
@@ -370,24 +364,15 @@ def _write_release_fixture(output_root: Path, *, release_id: str) -> tuple[Path,
         ),
         encoding="utf-8",
     )
-    header: dict[str, object] = {
-        "schema": "quwoquan_data.release",
-        "releaseId": release_id,
-        "sourceOwner": "qwq_data",
-        "releaseKind": "content",
-        "releaseClass": "production",
-        "productLifecycleState": "production",
-        "milestone": "M1",
-        "counts": {"homepage": 1, "article": 1, "image": 1, "video": 1, "total": 4},
-        "poolDigest": DIGESTS["pool"],
-        "canonicalMerkle": DIGESTS["merkle"],
-        "sourceIdentities": [{"executionId": "execution-derived"}],
-        "sourceIdentitySetDigest": DIGESTS["source"],
-        "contents": [
+    header = release_header_fixture(
+        release_id=release_id,
+        source_identities=_readiness()["sourceIdentities"],
+        source_identity_set_digest=DIGESTS["source"],
+        contents=[
             {"contentId": f"content-{carrier}", "version": 1, "postRef": post_ref}
             for carrier, post_ref in post_refs.items()
         ],
-    }
+    )
     (payload / "release.json").write_text(
         json.dumps(header, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -425,25 +410,16 @@ def test_load_release_uat_sample_plan__derives_create_once_from_release_bytes__l
         release_root=payload, release_header=header
     )
     assert (again, again_ref, again_digest) == (plan, ref, digest)
-    readiness = {
-        "releaseId": "release-derived-a",
-        "releaseClass": "production",
-        "productLifecycleState": "production",
-        "manifestDigest": DIGESTS["manifest"],
-        "sourceIdentities": [{"executionId": "execution-derived"}],
-        "sourceIdentitySetDigest": DIGESTS["source"],
-        "entityRefs": ["/entity/地点/景区/塘栖古镇"],
-        "postIds": ["content-article", "content-image", "content-video"],
-        "feedQueries": [
-            {"name": "typed_video", "matchedPostIds": ["content-video"]},
-            {"name": "homepage_recommend", "matchedPostIds": ["content-article"]},
-            {
-                "name": "premium_stream",
-                "query": "sort=recommend&channelId=premium_stream&limit=20",
-                "matchedPostIds": ["content-video"],
-            },
-        ],
-    }
+    readiness = release_readiness(
+        release_id="release-derived-a", manifest_digest=DIGESTS["manifest"],
+        post_ids=("content-article", "content-image", "content-video"),
+        entity_ref="/entity/地点/景区/塘栖古镇",
+        source_identities=header["sourceIdentities"],
+    )
+    readiness["sourceIdentitySetDigest"] = header["sourceIdentitySetDigest"]
+    readiness["activationEnvelope"]["sourceIdentitySetDigest"] = header["sourceIdentitySetDigest"]
+    readiness["activationEnvelopeDigest"] = _canonical_digest(readiness["activationEnvelope"])
+    readiness = _with_checksum(readiness)
     uat_plan = build_app_content_uat_plan(
         readiness,
         release_header=header,
@@ -486,25 +462,25 @@ def test_load_release_uat_sample_plan__rejects_cross_release_receipt_and_noncano
 
 
 
-def test_uat_plan__research_feed_projection_rejects_missing_or_nonrelease_ids__local_contract() -> None:
+def test_uat_plan__default_feed_projection_rejects_missing_or_nonrelease_ids__local_contract() -> None:
     readiness = _readiness()
-    readiness["feedQueries"].append(
-        {
-            "name": "premium_stream",
-            "query": "sort=recommend&channelId=premium_stream&limit=10",
-            "matchedPostIds": ["video-001"],
-        }
-    )
-    plan = _build(readiness=readiness)
+    premium = next(row for row in readiness["feedQueries"] if row["name"] == "premium_stream")
+    premium["matchedPostIds"] = ["video-001"]
+    plan = _build(readiness=_with_checksum(readiness))
     assert plan["mediaChecks"]["premiumVideo"]["expectedPostIds"] == ["video-001"]
+    assert "releaseClass" not in plan["releaseIdentity"]
 
-    drifted = _readiness()
-    drifted["feedQueries"].append(
-        {
-            "name": "premium_stream",
-            "query": "sort=recommend&channelId=premium_stream&limit=10",
-            "matchedPostIds": ["other-release-video"],
-        }
-    )
+    premium["matchedPostIds"] = ["other-release-video"]
     with pytest.raises(ValueError, match="not release-bound"):
-        _build(readiness=drifted)
+        _build(readiness=_with_checksum(readiness))
+    readiness["feedQueries"].remove(premium)
+    with pytest.raises(ValueError, match="Data environment_release_readiness schema"):
+        _build(readiness=_with_checksum(readiness))
+
+
+@pytest.mark.parametrize("field", ["releaseClass", "productLifecycleState", "readinessPhase"])
+def test_uat_plan__research_categories_are_rejected__local_contract(field: str) -> None:
+    readiness = _readiness()
+    readiness[field] = "research"
+    with pytest.raises(ValueError, match="Additional properties are not allowed"):
+        _build(readiness=_with_checksum(readiness))

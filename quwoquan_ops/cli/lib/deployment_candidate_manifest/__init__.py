@@ -47,7 +47,6 @@ from quwoquan_ops.cli.lib.graphql_read_registry_package import (  # noqa: F401
 from .constants import (  # noqa: F401
     _DIGEST,
     _RELEASE_BINDING_FIELDS,
-    _RELEASE_LIFECYCLE_CLASSES,
     CANDIDATE_MANIFEST_SCHEMA,
     CANDIDATE_VALIDATION_PURPOSES,
     CONTRACT_GRAPH_PATH,
@@ -56,7 +55,6 @@ from .constants import (  # noqa: F401
     LOG_SINK_ADAPTER_ID,
     OBSERVABILITY_LOG_SINK_PACKAGE_SCHEMA,
     PROVIDER_RUNTIME_PACKAGE_SCHEMA,
-    RELEASE_INPUT_CLASSIFICATIONS,
     ROOT,
     RUNTIME_CANDIDATE_TYPE,
     SPEC_REFS,
@@ -90,7 +88,6 @@ from .candidate_staging import (  # noqa: F401
 from .release_binding import (  # noqa: F401
     _release_binding,
     canonical_contract_graph_digest,
-    release_input_classification,
     validate_release_attestations,
 )
 from .environment_artifact import (  # noqa: F401

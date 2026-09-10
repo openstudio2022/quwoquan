@@ -69,7 +69,7 @@ allowlist:
   service/circle_service/circle_management/circle/presentation/my_circles_rail.dart:88: 同上：圈子封面为用户自建社区媒体
   service/circle_service/circle_management/circle_membership/presentation/circle_compact_card.dart:58: 同上：圈子封面为用户自建社区媒体
   service/circle_service/circle_management/circle_membership/presentation/section_members.dart:177: 圈子成员头像取自 user account 域
-  service/content_service/content/comment/presentation/comment_input_overlay_components.dart:190: 同上：评论输入态渲染的是本次待发送的自有附件
+  service/content_service/content/comment/presentation/comment_input_overlay_components.dart:208: 同上：评论输入态渲染的是本次待发送的自有附件
   service/content_service/content/comment/presentation/comment_thread_atoms.dart:185: 评论附件为评论者运行时上传的自有媒体（CommentAttachmentSlice.url），评论作者头像取自 user account 域；release payload 不含 comments，评论不属 release 交付闭包
   service/content_service/content/comment/presentation/comment_thread_atoms.dart:233: 评论附件为评论者运行时上传的自有媒体（CommentAttachmentSlice.url），评论作者头像取自 user account 域；release payload 不含 comments，评论不属 release 交付闭包
   service/content_service/content/comment/presentation/comment_thread_rows.dart:78: 同上：评论作者头像取自 user account 域，非 release creator 头像交付

@@ -32,19 +32,16 @@ SPEC_REFS = (
     "runtime/runtime-data-engineering/SIT-001",
 )
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
-_RELEASE_LIFECYCLE_CLASSES = frozenset({"research", "commercial", "production"})
+RELEASE_ATTESTATION_SCHEMA_PATH = (
+    ROOT / "quwoquan_data/schema/release/release_attestation.schema.json"
+)
 _RELEASE_BINDING_FIELDS = frozenset(
     {
         "releaseId",
         "releaseDigest",
         "attestationRef",
         "attestationDigest",
-        "releaseClass",
-        "productLifecycleState",
     }
-)
-RELEASE_INPUT_CLASSIFICATIONS = frozenset(
-    {"research_inputs", "commercial_inputs", "mixed_inputs"}
 )
 CANDIDATE_VALIDATION_PURPOSES = frozenset(
     {"self_verify", "currentness", "teardown"}

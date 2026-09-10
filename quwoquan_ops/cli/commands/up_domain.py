@@ -415,7 +415,7 @@ def _reuse_running_full_for_bounded_workload(
     import quwoquan_ops.cli.stackctl as _stackctl
 
     workload = str(getattr(args, "workload", "") or "").strip()
-    if workload not in {"content-release", "content-commercial"}:
+    if workload not in {"full", "content-release", "content-commercial"}:
         return None
     try:
         active_attempt = _stackctl.load_startup_attempt(target_name)
@@ -628,9 +628,13 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     local_targets = {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
     if requested_target not in local_targets:
         return _stackctl._command_up_impl(args)
+    if requested_target == "prod-sim":
+        return {"exitCode": 2, "blockerKind": "unmanaged_runtime_authority",
+                "summary": "prod-sim legacy executor has no generation authority",
+                "details": ["OPS.RUNTIME.unmanaged_target: explicit migration required"]}
     operation_scope = contextlib.ExitStack()
     try:
-        operation_scope.enter_context(_stackctl._local_stack_operation_lock(requested_target))
+        operation_scope.enter_context(_stackctl._local_stack_operation_lock(requested_target, wait_seconds=30))
         topology = _stackctl.load_environment_topology()
         active_attempt = _stackctl.load_startup_attempt(requested_target)
         bounded_reuses_full = (
@@ -654,7 +658,17 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         lock_error = exc
     else:
         with operation_scope:
-            return _stackctl._command_up_impl(args)
+            payload = _stackctl._command_up_impl(args)
+            # attemptId 是现有真实启动事务的 opaque 代际，不从 candidate 推断。
+            current = _stackctl.load_startup_attempt(requested_target)
+            previous_id = str((active_attempt or {}).get("attemptId") or "")
+            generation = str((current or {}).get("attemptId") or "")
+            created = bool(generation and generation != previous_id)
+            return {
+                **payload, "runtimeCreated": created,
+                "instanceGeneration": generation,
+                "runtimeReused": bool(payload.get("runtimeReused", False)),
+            }
     topology = _stackctl.load_environment_topology()
     target = _stackctl.get_target(topology, requested_target)
     env_name = str(target["env"])

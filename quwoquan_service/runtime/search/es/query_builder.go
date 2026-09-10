@@ -8,6 +8,7 @@ package es
 import (
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	rtsearch "quwoquan_service/runtime/search"
 )
@@ -30,6 +31,26 @@ type QueryBuilder struct {
 	// text clause, so it only fires for short queries (<= this many terms).
 	// 0 disables fuzziness entirely.
 	FuzzyMaxTerms int
+	// FuzzyMaxRunes bounds the same clause by characters: a CJK title without
+	// spaces is a single "term" but the analyzer emits one token per character,
+	// so fuzzy expansions scale with runes, not terms（实测 16 字标题的 fuzzy
+	// multi_match 在单节点 ES 上 500–750ms，越过 800ms client 预算）。0 disables
+	// the rune guard.
+	FuzzyMaxRunes int
+}
+
+func (b *QueryBuilder) fuzzyEligible(terms []string) bool {
+	if b.FuzzyMaxTerms <= 0 || len(terms) > b.FuzzyMaxTerms {
+		return false
+	}
+	if b.FuzzyMaxRunes <= 0 {
+		return true
+	}
+	runes := 0
+	for _, term := range terms {
+		runes += utf8.RuneCountInString(term)
+	}
+	return runes <= b.FuzzyMaxRunes
 }
 
 // NewQueryBuilder returns a builder with the default field weights.
@@ -39,6 +60,7 @@ func NewQueryBuilder() *QueryBuilder {
 		PhraseFields:  []string{"title^3", "summary^1.5"},
 		PinyinFields:  []string{"title.py^1.2", "authorName.py", "groupName.py", "entityName.py", "placeName.py"},
 		FuzzyMaxTerms: 2,
+		FuzzyMaxRunes: 8,
 	}
 }
 
@@ -81,7 +103,7 @@ func (b *QueryBuilder) Build(plan rtsearch.RetrievePlan) map[string]any {
 				},
 			})
 		}
-		if b.FuzzyMaxTerms > 0 && len(plan.Terms) <= b.FuzzyMaxTerms {
+		if b.fuzzyEligible(plan.Terms) {
 			textShould = append(textShould, map[string]any{
 				"multi_match": map[string]any{
 					"query":         query,

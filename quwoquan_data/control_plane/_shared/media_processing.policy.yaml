@@ -5,6 +5,12 @@ policyId: media_processing
 sourceAssetMaxBytes: 536870912
 pageImageRenditionWidth: 1920
 maxPublishableImagePixels: 80000000
+# 源图愿意解码的最大栅格像素（宽×高）。全景接片常见 1.5–4 亿像素，PIL 默认 1.79 亿
+# 会把它们当解压炸弹判否；这里是该阈值的唯一声明位，探测与派生都从它取值，PIL 默认值
+# 不再是隐含的第二阈值。派生侧对 JPEG 用 draft 在解码前降到交付宽度，全幅栅格不进内存，
+# 因此上限约束的是「愿意读多大的源」而非进程内存。存储体是否可发布仍由
+# `maxPublishableImagePixels` 判定：源超过它就在下载截面降采样，不会带着原栅格入池。
+maxSourcePixels: 600000000
 # 单对象存储预算：一个对象是一份消费者价值，其逻辑字节闭包按载体封顶。
 # 这里是该预算的唯一声明位——下载截面的单资产判否与 publish 截面的闭包准入
 # 都从这张表取值，两侧因此不可能对同一个对象得出不同预算。

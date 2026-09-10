@@ -39,8 +39,6 @@ from core.control_types import ContentType
 from core.io import write_json
 from core.paths import OUTPUT_ROOT
 from core.schema import assert_valid
-from verify.release_publishability import readiness_phase_issue
-
 POST_DETAIL_PAGE_ID = "content.post.get"
 USER_PROFILE_PAGE_ID = "user.profile"
 
@@ -212,12 +210,8 @@ def write_post_api_verification(
     api_base_url: str,
     media_delivery_base_url: str,
     ssl_cafile: str = "",
-    readiness_phase: str = "production",
 ) -> Path:
     """Write schema-validated, release-bound public post API evidence."""
-    phase_issue = readiness_phase_issue(readiness_phase)
-    if phase_issue is not None:
-        raise PostApiVerificationError(f"post API verification {phase_issue}")
     try:
         cases, creators_by_author = read_post_and_creator_cases(
             environment=environment,
@@ -226,10 +220,9 @@ def write_post_api_verification(
             importer_report_path=importer_report_path,
             creator_importer_report_path=creator_importer_report_path,
             media_delivery_base_url=media_delivery_base_url,
-            readiness_phase=readiness_phase,
         )
         media_origin = media_delivery_base_url.rstrip("/")
-        # production 证据以 fresh guest 闭合：公开交付对匿名可达（DEC-041）。
+        # 证据以 fresh guest 闭合：公开交付对匿名可达（DEC-041）。
         unauthenticated_client = PublicApiClient(
             base_url=api_base_url,
             ssl_cafile=ssl_cafile,
@@ -240,7 +233,7 @@ def write_post_api_verification(
             client,
             cases,
             creators_by_author,
-            # App 视频书唯一消费 premium_stream 池；全部 readiness phase 都必须
+            # App 视频书唯一消费 premium_stream 池；readiness 必须
             # 证明 premium_stream release-bound 非空读回（environment-topology-
             # and-packaging spec），否则 typed_video 绿会被误当成视频书绿。
             include_premium_stream=True,
@@ -301,7 +294,6 @@ def write_post_api_verification(
         "environment": environment.value,
         "releaseId": release_id,
         "runId": run_id,
-        "readinessPhase": readiness_phase,
         "sourceImportReportRef": importer_ref,
         "creatorImportReportRef": creator_importer_ref,
         "apiBaseUrl": api_base_url.rstrip("/"),

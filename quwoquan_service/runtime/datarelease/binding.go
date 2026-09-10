@@ -36,8 +36,6 @@ type SourceOwner string
 
 type ReleaseKind string
 
-type ReleaseClass string
-
 type Digest string
 
 const (
@@ -45,54 +43,35 @@ const (
 
 	ReleaseKindContent       ReleaseKind = "content"
 	ReleaseKindEmptyBaseline ReleaseKind = "empty_baseline"
-
-	ReleaseClassResearch   ReleaseClass = "research"
-	ReleaseClassCommercial ReleaseClass = "commercial"
-	// ReleaseClassProduction 是 Data producer 单一 production 类别（DEC-041）；
-	// research/commercial 为历史 release 的封存取值，下游按 OPEN-024 退役。
-	ReleaseClassProduction ReleaseClass = "production"
 )
-
-// IsKnownReleaseClass 是四域 importer 与 release-control 共用的 releaseClass 闭集。
-func IsKnownReleaseClass(class ReleaseClass) bool {
-	switch class {
-	case ReleaseClassResearch, ReleaseClassCommercial, ReleaseClassProduction:
-		return true
-	default:
-		return false
-	}
-}
 
 // Header is the identity-bearing subset of payload/release.json. Other header
 // fields remain owned by the producer schema and are deliberately not copied
 // into the shared importer API.
 type Header struct {
-	Schema       string       `json:"schema"`
-	ReleaseID    string       `json:"releaseId"`
-	SourceOwner  SourceOwner  `json:"sourceOwner"`
-	ReleaseKind  ReleaseKind  `json:"releaseKind"`
-	ReleaseClass ReleaseClass `json:"releaseClass"`
+	Schema      string      `json:"schema"`
+	ReleaseID   string      `json:"releaseId"`
+	SourceOwner SourceOwner `json:"sourceOwner"`
+	ReleaseKind ReleaseKind `json:"releaseKind"`
 }
 
 // Attestation is the identity-bearing subset of attestations/release.json.
 type Attestation struct {
-	Schema        string       `json:"schema"`
-	ReleaseID     string       `json:"releaseId"`
-	SourceOwner   SourceOwner  `json:"sourceOwner"`
-	ReleaseKind   ReleaseKind  `json:"releaseKind"`
-	ReleaseClass  ReleaseClass `json:"releaseClass"`
-	PayloadSHA256 Digest       `json:"payloadSha256"`
+	Schema        string      `json:"schema"`
+	ReleaseID     string      `json:"releaseId"`
+	SourceOwner   SourceOwner `json:"sourceOwner"`
+	ReleaseKind   ReleaseKind `json:"releaseKind"`
+	PayloadSHA256 Digest      `json:"payloadSha256"`
 }
 
 // Tuple is the common immutable release identity consumed by Data importers
 // and release-control. PayloadSHA256 has been recomputed from payload/, not
 // merely copied from the attestation.
 type Tuple struct {
-	ReleaseID     string       `json:"releaseId"`
-	SourceOwner   SourceOwner  `json:"sourceOwner"`
-	ReleaseKind   ReleaseKind  `json:"releaseKind"`
-	ReleaseClass  ReleaseClass `json:"releaseClass"`
-	PayloadSHA256 Digest       `json:"payloadSha256"`
+	ReleaseID     string      `json:"releaseId"`
+	SourceOwner   SourceOwner `json:"sourceOwner"`
+	ReleaseKind   ReleaseKind `json:"releaseKind"`
+	PayloadSHA256 Digest      `json:"payloadSha256"`
 }
 
 type ErrorCode string
@@ -227,7 +206,6 @@ func Load(releaseRoot string) (Tuple, error) {
 		ReleaseID:     header.ReleaseID,
 		SourceOwner:   header.SourceOwner,
 		ReleaseKind:   header.ReleaseKind,
-		ReleaseClass:  header.ReleaseClass,
 		PayloadSHA256: actualDigest,
 	}, nil
 }
@@ -345,17 +323,11 @@ func decodeHeader(raw []byte) (Header, error) {
 	if err != nil {
 		return Header{}, err
 	}
-	releaseClass, err := requiredString(object, HeaderPath, "releaseClass")
-	if err != nil {
-		return Header{}, err
-	}
-
 	header := Header{
-		Schema:       schema,
-		ReleaseID:    releaseID,
-		SourceOwner:  SourceOwner(sourceOwner),
-		ReleaseKind:  ReleaseKind(releaseKind),
-		ReleaseClass: ReleaseClass(releaseClass),
+		Schema:      schema,
+		ReleaseID:   releaseID,
+		SourceOwner: SourceOwner(sourceOwner),
+		ReleaseKind: ReleaseKind(releaseKind),
 	}
 	if err := validateHeaderFields(header); err != nil {
 		return Header{}, err
@@ -387,10 +359,6 @@ func decodeAttestation(raw []byte) (Attestation, error) {
 	if err != nil {
 		return Attestation{}, err
 	}
-	releaseClass, err := requiredString(object, AttestationPath, "releaseClass")
-	if err != nil {
-		return Attestation{}, err
-	}
 	payloadSHA256, err := requiredString(object, AttestationPath, "payloadSha256")
 	if err != nil {
 		return Attestation{}, err
@@ -401,7 +369,6 @@ func decodeAttestation(raw []byte) (Attestation, error) {
 		ReleaseID:     releaseID,
 		SourceOwner:   SourceOwner(sourceOwner),
 		ReleaseKind:   ReleaseKind(releaseKind),
-		ReleaseClass:  ReleaseClass(releaseClass),
 		PayloadSHA256: Digest(payloadSHA256),
 	}
 	if err := validateAttestationFields(attestation); err != nil {
@@ -428,6 +395,10 @@ func decodeJSONObject(raw []byte, relativePath string) (map[string]json.RawMessa
 		name, ok := token.(string)
 		if !ok {
 			return nil, &LoadError{Code: CodeInvalidJSON, Path: relativePath, Detail: "object field name is invalid"}
+		}
+		switch name {
+		case "releaseClass", "productLifecycleState", "readinessPhase":
+			return nil, &LoadError{Code: CodeInvalidField, Path: relativePath, Field: name, Detail: "retired category field is forbidden"}
 		}
 		if _, exists := object[name]; exists {
 			return nil, &LoadError{Code: CodeInvalidJSON, Path: relativePath, Field: name, Detail: "duplicate field"}
@@ -488,9 +459,6 @@ func validateHeaderFields(header Header) error {
 	if header.ReleaseKind != ReleaseKindContent && header.ReleaseKind != ReleaseKindEmptyBaseline {
 		return invalidEnum(HeaderPath, "releaseKind", string(header.ReleaseKind))
 	}
-	if !IsKnownReleaseClass(header.ReleaseClass) {
-		return invalidEnum(HeaderPath, "releaseClass", string(header.ReleaseClass))
-	}
 	return nil
 }
 
@@ -500,9 +468,6 @@ func validateAttestationFields(attestation Attestation) error {
 	}
 	if attestation.ReleaseKind != ReleaseKindContent && attestation.ReleaseKind != ReleaseKindEmptyBaseline {
 		return invalidEnum(AttestationPath, "releaseKind", string(attestation.ReleaseKind))
-	}
-	if !IsKnownReleaseClass(attestation.ReleaseClass) {
-		return invalidEnum(AttestationPath, "releaseClass", string(attestation.ReleaseClass))
 	}
 	if !canonicalDigestPattern.MatchString(string(attestation.PayloadSHA256)) {
 		return &LoadError{Code: CodeInvalidField, Path: AttestationPath, Field: "payloadSha256", Detail: "expected canonical sha256:<64 lowercase hex>"}
@@ -523,7 +488,6 @@ func validateSameIdentity(header Header, attestation Attestation) error {
 		{field: "releaseId", header: header.ReleaseID, attestation: attestation.ReleaseID},
 		{field: "sourceOwner", header: string(header.SourceOwner), attestation: string(attestation.SourceOwner)},
 		{field: "releaseKind", header: string(header.ReleaseKind), attestation: string(attestation.ReleaseKind)},
-		{field: "releaseClass", header: string(header.ReleaseClass), attestation: string(attestation.ReleaseClass)},
 	}
 	for _, comparison := range comparisons {
 		if comparison.header != comparison.attestation {

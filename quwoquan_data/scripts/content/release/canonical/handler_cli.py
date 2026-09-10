@@ -10,6 +10,17 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("release", help="构建不可变的通用内容发布包")
     commands = parser.add_subparsers(dest="release_command", required=True)
 
+    offline = commands.add_parser("export-offline", help="从显式 canonical cohort 派生 Alpha 工程离线包；不发布或激活")
+    offline.add_argument("--selection-file", required=True)
+    offline.add_argument("--source-revision", required=True)
+    offline.add_argument("--publish-root", required=True)
+    offline.add_argument("--output-dir", required=True)
+    offline.add_argument("--library-root")
+    offline.add_argument("--carried-root")
+    offline.add_argument("--dart-identity-output", help="生成制品内 manifest 摘要常量的显式路径")
+    offline.add_argument("--check", action="store_true", help="只读验证现有导出和制品摘要，不刷新文件")
+    offline.set_defaults(handler=owner.handle_export_offline)
+
     finalize = commands.add_parser(
         "finalize",
         help="一次完成 pool-build、release-integrity 与 create-once producer handoff",
@@ -24,6 +35,10 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     finalize.add_argument("--producer-baseline-revision", required=True)
     finalize.add_argument("--publish-root")
     finalize.add_argument("--release-root")
+    finalize.add_argument(
+        "--reference-root",
+        help="cohort/handoff 版本化副本根（缺省 quwoquan_data/reference/releases）；只是耐久备份，handoff-verify 不读它",
+    )
     finalize.set_defaults(handler=owner.handle_release_finalize)
 
     handoff_verify = commands.add_parser(
@@ -69,16 +84,22 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     lifecycle_exit = commands.add_parser(
         "lifecycle-exit",
-        help="从 exact apply/verify/rollback/replay 结果签发 canonical Exit",
+        help="从 exact activate/verify/rollback/replay 结果签发 canonical Exit",
     )
     lifecycle_exit.add_argument("--env", required=True)
     lifecycle_exit.add_argument("--original-release-id", required=True)
-    lifecycle_exit.add_argument("--original-import-run-id", required=True)
+    lifecycle_exit.add_argument(
+        "--original-import-run-id", required=True,
+        help="original 成功 activate run；由其 importRunId 重验 prepared apply",
+    )
     lifecycle_exit.add_argument("--original-verify-run-id", required=True)
     lifecycle_exit.add_argument("--rollback-to-release-id", required=True)
     lifecycle_exit.add_argument("--rollback-run-id", required=True)
     lifecycle_exit.add_argument("--rollback-verify-run-id", required=True)
-    lifecycle_exit.add_argument("--replay-import-run-id", required=True)
+    lifecycle_exit.add_argument(
+        "--replay-import-run-id", required=True,
+        help="same-digest replay 成功 activate run，不接受 prepared apply run",
+    )
     lifecycle_exit.add_argument("--replay-verify-run-id", required=True)
     lifecycle_exit.add_argument("--run-id", required=True)
     lifecycle_exit.set_defaults(handler=_load_lifecycle_exit)

@@ -110,6 +110,22 @@ func TestBuildFuzzinessOnlyFiresForShortQueries(t *testing.T) {
 	if buildHasFuzziness(t, b, longPlan) {
 		t.Fatal("long queries must not pay the fuzziness CPU cost")
 	}
+	// 中文长标题不含空格是单个 term，但按字符展开的 fuzzy 与词数无关地昂贵：
+	// 16 字标题在单节点 ES 上 500–750ms，越过 800ms client 预算后整条 /search 变成 unavailable。
+	cjkTitlePlan, _ := rtsearch.PlanRequest(rtsearch.RetrieveRequest{
+		Targets: []rtsearch.Target{rtsearch.TargetArticle},
+		Terms:   rtsearch.SplitQueryTerms("《长恨歌》：一首诗里的华清宫往事"),
+	}, rtsearch.Viewer{})
+	if buildHasFuzziness(t, b, cjkTitlePlan) {
+		t.Fatal("a long CJK single-term query must not pay the fuzziness CPU cost")
+	}
+	shortCJKPlan, _ := rtsearch.PlanRequest(rtsearch.RetrieveRequest{
+		Targets: []rtsearch.Target{rtsearch.TargetArticle},
+		Terms:   []string{"三峡水库", "泄洪"},
+	}, rtsearch.Viewer{})
+	if !buildHasFuzziness(t, b, shortCJKPlan) {
+		t.Fatal("short CJK queries within the rune guard keep the fuzziness clause")
+	}
 }
 
 func buildHasFuzziness(t *testing.T, b *QueryBuilder, plan rtsearch.RetrievePlan) bool {

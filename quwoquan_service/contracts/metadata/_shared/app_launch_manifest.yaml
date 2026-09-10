@@ -18,6 +18,17 @@ target_environment:
   prod-sim: prod
   prod-hosted: prod
 
+# source 是签名文档类型与环境的唯一策略；不是可覆盖的运行时开关。
+content_source_policy:
+  alpha: bundled_snapshot
+  beta: remote
+  gamma: remote
+  prod: remote
+
+runtime_document_content_sources:
+  app-runtime-config-package: remote
+  app-offline-bootstrap-document: bundled_snapshot
+
 local_transport_targets:
   - alpha-local
   - beta-local
@@ -56,10 +67,10 @@ runtime_config_trust:
 # - external_runtime_package：安装后由 canonical launcher 写入平台私有容器的外部签名
 #   package；Profile/Release、prod buildProfile 与 beta/gamma 的唯一供给方式。
 # - build_time_self_supply：Debug-nonprod 构建在无外部 canonical handoff 时，由构建阶段
-#   调用仓内 canonical handoff builder 现场签发 alpha test_live package 与 nonprod trust
-#   envelope，并以 activation request 形态嵌入制品；原生 gate 在冷启动仅当无外部 active
-#   package（缺席、过期或同为自供给且 digest 变化）时按同一 CAS/receipt 路径激活。
-#   每次构建重签、不缓存；Profile/Release、prod 与非 alpha 环境不得物化或消费该模式。
+#   调用 canonical handoff builder 签发 Alpha offline bootstrap document 与 nonprod
+#   trust envelope，以 activation request 嵌入制品。仅 active 缺席或既有合法同源
+#   Alpha 离线文档重建时经同一 CAS/receipt 激活，在线过期与损坏绝不自动转离线。
+#   每次构建重签；Profile/Release、prod 与非 alpha 环境不得隐式物化或消费该模式。
 runtime_config_supply_modes:
   - external_runtime_package
   - build_time_self_supply
@@ -132,7 +143,7 @@ launch_blockers:
   APP.LAUNCH.launch_surface_unsupported: 启动入口不属于 canonical launcher、工作区字面 Flutter 或受控制 IDE profile。
   APP.LAUNCH.managed_argument_unsupported: 受管字面 flutter run 收到会改变 canonical build/runtime identity 的参数（如 --target、flavor、dart-define、Profile/Release 或端口类），typed 阻断而非静默忽略。
   APP.PREPARATION.runtime_unavailable: managed 准备无法复用 exact running full runtime，且不满足有界替换条件（非 target lock 内、存在其他 live consumer lease 或替换失败）。
-  APP.PREPARATION.content_binding_unavailable: 无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=research 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。
+  APP.PREPARATION.content_binding_unavailable: 无法从服务端 active release readback 解析出唯一 schema/digest 合法且 passed=true 的内容 readiness；内容绑定不携带类别或命名轨道，零个或多个候选均阻断，禁止 latest 猜测。
   APP.PREPARATION.strict_preflight_failed: managed 严格预检（TLS、api-edge、user-service、integration-service、SMS Provider/relay identity、真实 OTP journey 与 homepage/creator avatar/image/typed video/premium stream 媒体字节）任一失败，在 Flutter build 前阻断。
   APP.PREPARATION.receipt_invalid: managed preparation receipt 缺失、schema/digest 非法或与本次 launch 身份不一致，canonical launcher 不得复用。
   APP.DEPENDENCY.lock_drift: App 生产工程、UAT test host 或已投影依赖的锁定身份不一致。
@@ -174,7 +185,9 @@ runtime_config_error_codes:
   runtime_config_target_mismatch: package target 与请求 target 不符。
   runtime_config_launch_policy_mismatch: package launchPolicy 与 manifest 不符。
   runtime_config_endpoint_invalid: runtime endpoint 值非法。
-  runtime_config_runtime_values_invalid: runtime 字段集合或值类型违反 runtime_value_keys。
+  runtime_config_runtime_values_invalid: runtime 字段集合或值类型违反当前签名文档的字段契约。
+  runtime_config_content_source_mismatch: 文档类型、环境和内容源策略不一致。
+  runtime_config_network_forbidden: 离线 source 不授予任何 endpoint 或网络操作能力。
   runtime_config_freshness_invalid: issuedAt/expiresAt 生命周期校验失败。
   runtime_config_source_identity_invalid: sourceGitSha/sourceTreeDigest 身份非法。
   runtime_config_signature_algorithm_mismatch: 签名算法不是 ed25519。
@@ -292,6 +305,53 @@ schemas:
       - runtime 字段集合必须恰好来自 runtime_value_keys，值全部为非空 string；内容 release、灰度 stage、channel 与 secret 字段一律拒绝。
       - trustedPublicKeys 是签名覆盖的 canonical Ed25519 公钥投影且必须包含 signatureKeyId；验签时还必须与消费方独立配置的 trusted keyring 完全一致，package 自带公钥不得独立成为信任根。私钥引用、私钥字节与 secret 不得进入 package。
 
+  # 不授予 endpoint 权限的制品启动材料，不是豁免 freshness 的在线配置包。
+  offline_bootstrap_document:
+    schema_value: app-offline-bootstrap-document
+    additional_fields: false
+    required_fields:
+      - schema
+      - environment
+      - buildProfile
+      - target
+      - launchPolicy
+      - contentSource
+      - sourceGitSha
+      - sourceTreeDigest
+      - trustEnvelopeDigest
+      - runtime
+      - payloadDigest
+      - signatureAlgorithm
+      - signatureKeyId
+      - trustedPublicKeys
+      - signature
+    fields:
+      schema: { type: string, const: app-offline-bootstrap-document }
+      environment: { type: string, const: alpha }
+      buildProfile: { type: string, const: nonprod }
+      target: { type: string, const: alpha-local }
+      launchPolicy: { type: string, const: test_live }
+      contentSource: { type: string, const: bundled_snapshot }
+      sourceGitSha: { type: string, format: git_object_sha }
+      sourceTreeDigest: { type: string, format: git_tree_digest }
+      trustEnvelopeDigest: { type: string, format: sha256_identity }
+      runtime:
+        type: object
+        additional_fields: false
+        required_fields: [appRuntimeEnv]
+        fields:
+          appRuntimeEnv: { type: string, const: alpha }
+      payloadDigest: { type: string, format: sha256_identity }
+      signatureAlgorithm: { type: string, const: ed25519 }
+      signatureKeyId: { type: string, min_length: 1 }
+      trustedPublicKeys: { type: object, value_type: string }
+      signature: { type: string, format: strict_base64_ed25519_signature }
+    constraints:
+      - 只允许 content_source_policy 与 runtime_document_content_sources 共同指定的 Alpha bundled_snapshot；签名覆盖 contentSource、profile、target、source identity 与 trustEnvelopeDigest。
+      - 使用 runtime_config_package 相同 canonical payloadDigest 与 Ed25519 签名算法及独立制品 trust envelope；trustEnvelopeDigest 必须匹配实际制品 envelope。没有 issuedAt/expiresAt，禁止任何 endpoint 字段（包括空值），不获得网络能力。
+      - 通过同一 activation/CAS/active receipt/read 链消费；没有第二 store、在线失败 fallback 或远端 readiness authority。在线 package 的 freshness 不变。
+      - 构建期默认自供给只可激活 absent 或更新既有合法 Alpha 离线文档；在线、过期、损坏与 receipt 不匹配的 active 不得自动转离线。旧 Alpha 在线文档只能经显式 canonical activation 迁移。
+
   runtime_config_activation_request:
     schema_value: app-runtime-config-activation-request
     additional_fields: false
@@ -311,7 +371,7 @@ schemas:
       environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
       buildProfile: { type: string, allowed_values: [nonprod, prod] }
       target: { type: string, allowed_values: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
-      package: { type: object, schema_ref: runtime_config_package }
+      package: { type: object, schema_one_of: [runtime_config_package, offline_bootstrap_document] }
       packageDigest: { type: string, format: sha256_identity }
       trustEnvelopeDigest: { type: string, format: sha256_identity }
       effectiveLaunchManifest: { type: object, schema_ref: app_effective_launch_manifest }
@@ -492,6 +552,7 @@ schemas:
       - launchPolicy
       - runtimeConfigPackageDigest
       - runtimeConfigTrustEnvelopeDigest
+      - contentSource
       - requiresLocalTransport
       - transport
     fields:
@@ -505,6 +566,7 @@ schemas:
       launchPolicy: { type: string, allowed_values: [test_live, prod_release] }
       runtimeConfigPackageDigest: { type: string, format: sha256_identity }
       runtimeConfigTrustEnvelopeDigest: { type: string, format: sha256_identity }
+      contentSource: { type: string, allowed_values: [bundled_snapshot, remote] }
       requiresLocalTransport: { type: boolean }
       transport:
         type: object
@@ -523,7 +585,8 @@ schemas:
           consumerLeaseId: { type: string }
     constraints:
       - target 必须映射到 target_environment 中声明的 environment。
-      - requiresLocalTransport 必须等于 target 是否属于 local_transport_targets；它表达目标拓扑，不表示当前 handoff 已附带 transport receipt。
+      - contentSource 必须等于 content_source_policy[environment] 且与 runtime_document_content_sources[文档 schema] 一致；离线文档的签名 contentSource 必须同值。在线包不得追加 contentSource 字段改变既有签名形状。
+      - requiresLocalTransport 必须等于 contentSource=remote 且 target 属于 local_transport_targets；离线 transport.required=false 且 ports/lease/receipt 全空，禁止产生在线 readiness。
       - transport.required=true 只允许 local_transport_targets，且端口集合必须相等，receipt digest 与 consumer lease ID 必须是 sha256 identity。
       - transport.required=false 时端口和本地 transport identity 必须为空；这种 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。
       - prod-hosted 必须令 local transport 为 false，且全部端口与本地 transport identity 为空。
@@ -546,6 +609,7 @@ schemas:
       - launchPolicy
       - runtimeConfigPackageDigest
       - runtimeConfigTrustEnvelopeDigest
+      - contentSource
       - requiresLocalTransport
       - transport
       - compileDiagnostics
@@ -563,10 +627,11 @@ schemas:
       launchPolicy: { type: string, source: app_effective_launch_manifest.launchPolicy }
       runtimeConfigPackageDigest: { type: string, source: app_effective_launch_manifest.runtimeConfigPackageDigest }
       runtimeConfigTrustEnvelopeDigest: { type: string, source: app_effective_launch_manifest.runtimeConfigTrustEnvelopeDigest }
+      contentSource: { type: string, source: app_effective_launch_manifest.contentSource }
       requiresLocalTransport: { type: boolean, source: app_effective_launch_manifest.requiresLocalTransport }
       transport: { type: object, source: app_effective_launch_manifest.transport }
       compileDiagnostics: { type: object, value_type: string }
-      runtimeConfigPackage: { type: object, schema_ref: runtime_config_package }
+      runtimeConfigPackage: { type: object, schema_one_of: [runtime_config_package, offline_bootstrap_document] }
       effectiveLaunchManifest: { type: object, schema_ref: app_effective_launch_manifest }
       effectiveLaunchManifestDigest: { type: string, format: sha256_identity }
     constraints:
@@ -640,14 +705,12 @@ schemas:
           - releaseId
           - verifyRunId
           - manifestDigest
-          - readinessPhase
           - readinessReceiptRef
           - readinessReceiptDigest
         fields:
           releaseId: { type: string, min_length: 1 }
           verifyRunId: { type: string, min_length: 1 }
           manifestDigest: { type: string, format: sha256_identity }
-          readinessPhase: { type: string, allowed_values: [research] }
           readinessReceiptRef: { type: string, min_length: 1 }
           readinessReceiptDigest: { type: string, format: sha256_identity }
       strictPreflightReceiptRef: { type: string }
@@ -662,9 +725,9 @@ schemas:
       - exact readback：runtimeIdentity（复用或有界替换后的 runtime attempt/compose identity）、consumerId、consumerLeaseId、Android reverse transport/所有权、device trust receipt、contentBinding、strict debug preflight receipt 与 strict content preflight receipt 的全部身份字段必须来自本次 preparation 的真实 readback，不得从 latest、缓存或历史 receipt 补猜。
       - consumerId 是 dispatcher/run.sh 为本次前台启动预先确定的稳定 consumer identity；preparation 必须以该 consumer 获取 consumerLeaseId，保持该 lease active 并交给同一 run.sh 接管。run.sh exact readback 后不得重复 acquire，最终 cleanup 只释放同一 consumer；consumerLeaseId 必须是 canonical sha256 identity。
       - androidReversePorts 是同一 lease 的完整 canonical same-port transport 集合，Android prepared receipt 必须非空，非 Android 必须为空；androidReverseOwnedPorts 只记录 preparation 在获取同一 consumer lease 前新建、且启动 cleanup 可以安全移除的 Android same-port reverse 集合；非 Android 或没有新建映射时为空，不得把既存映射声明为本次所有。
-      - contentBinding 必须保留 create_test_live_content_binding 返回的完整 canonical binding，并向 prepared receipt 投影 releaseId、verifyRunId、manifestDigest、readinessPhase、readinessReceiptRef 与 readinessReceiptDigest；readinessReceiptRef 必须是 absolute regular no-symlink exact receipt，digest 必须是该文件 exact bytes 的 sha256，JSON 必须同一 releaseId/verifyRunId/manifestDigest/readinessPhase=research/passed=true。服务端 active release readback 的合法候选必须唯一；零个或多个候选一律以 APP.PREPARATION.content_binding_unavailable 阻断。
+      - contentBinding 必须保留 create_test_live_content_binding 返回的完整 canonical binding，并向 prepared receipt 投影 releaseId、verifyRunId、manifestDigest、readinessReceiptRef 与 readinessReceiptDigest；readinessReceiptRef 必须是 absolute regular no-symlink exact receipt，digest 必须是该文件 exact bytes 的 sha256，JSON 必须同一 releaseId/verifyRunId/manifestDigest 且 passed=true 并通过现役 Data schema。绑定与 readiness 不携带类别或命名消费轨道，禁止补入默认标签；环境差异只由已验证环境配置表达。服务端 active release readback 的合法候选必须唯一；零个或多个候选一律以 APP.PREPARATION.content_binding_unavailable 阻断。
       - deviceTrustReceiptRef/deviceTrustReceiptDigest 必须同时为空或同时非空；无需 local trust 的 physical device 允许两者为空，非空 digest 必须是 canonical sha256 identity。verify-first 只在已有 trust receipt 的 leases 包含当前 consumerLeaseId 时复用，否则必须以当前真实 lease install/bind 后再 verify。
       - strictPreflightReceiptRef/strictPreflightReceiptDigest 继续绑定 write_app_debug_preflight_receipt 生成的 exact debug preflight envelope；strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须绑定本次 preparation 私有原子写入的 quwoquan_ops.app_content_preflight_exact.v1 envelope；envelope 顶层投影 absolute readiness 身份并在 payload 中原样保留 command_app_content_preflight 返回的 exact payload，禁止信任 command 自写的 mutable report path。两组 ref 必须是 absolute regular no-symlink，digest 均为文件 exact bytes sha256。
-      - strict content payload 必须 schema=quwoquan_ops.app_content_preflight、target 与本次 target 一致、status=passed，并与 contentBinding 的 releaseId/manifestDigest/readinessReceiptRef/readinessReceiptDigest 完全一致；releaseProbe 必须 exitCode=0、executedSampleCount>0 且 mediaChecks.automatic=true。readiness receipt 还必须同一 verifyRunId/readinessPhase=research/passed=true，确保 release/verify/manifest/research 身份单轨。
+      - strict content payload 必须 schema=quwoquan_ops.app_content_preflight、target 与本次 target 一致、status=passed，并与 contentBinding 的 releaseId/manifestDigest/readinessReceiptRef/readinessReceiptDigest 完全一致；releaseProbe 必须 exitCode=0、executedSampleCount>0 且 mediaChecks.automatic=true。readiness receipt 还必须同一 verifyRunId 且 passed=true，确保 release/verify/manifest 身份与 exact receipt 一致。
       - status=blocked 时 firstBlocker 必须非空且取 launch_blockers 闭集，尚未完成的 target/environment/platform/deviceId/runtimeIdentity/consumer/transport/trust/content/preflight 字段允许按本 schema 取空值；不得伪造中间身份。status=prepared 时 firstBlocker 必须为空，target/environment/platform/deviceId/runtimeIdentity/consumerId/consumerLeaseId/contentBinding/strictPreflightReceiptRef/strictPreflightReceiptDigest/strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须全部非空且逐字段合法，trust ref/digest 必须满足成对约束。
       - canonical run.sh 必须在 Flutter build 前独立严格验证 receipt、readiness exact receipt、strict debug preflight envelope 与 strict content preflight exact payload 的字段集、类型、闭集、byte sha256、consumer/runtime/content/trust 身份和本次 target/device/purpose；任何漂移以 APP.PREPARATION.receipt_invalid 阻断，并把 readinessReceiptDigest 交给 final consumer-lease bind。

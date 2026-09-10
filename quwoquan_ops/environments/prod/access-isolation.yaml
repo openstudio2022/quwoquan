@@ -98,6 +98,14 @@ prevalidation:
     requireHealthyExceptProviderBound: true
     providerBoundServices: [product-ops-service]
     providerReadinessStatus: GATE_BLOCK
+  # Podman 必须提供原生 host.containers.internal -> 宿主回环连接。
+  # 禁止用 extra_hosts:host-gateway 覆盖、host network 或公开数据库补救。
+  crossPlaneTransport: native-rootless-loopback
+  startupDependencies:
+    gamma-proxy: [api-edge]
+    api-edge: [user-service]
+    user-service: [integration-service]
+  unavailablePublicCapabilities: [media-delivery, media-upload, livekit-sfu, turn, ops, commercial-login]
   capacityStrategy: constrained-per-replica-host
   minimumHostResources:
     cpuCores: 2
@@ -132,15 +140,19 @@ prevalidation:
       mongodb: {memLimit: 256m, pidsLimit: 256}
       mongo-init: {memLimit: 96m, pidsLimit: 128}
       redis: {memLimit: 64m, pidsLimit: 128}
-      object-storage: {memLimit: 160m, pidsLimit: 256}
+      # 160m 已在日本主机 OOM；预算上调后仍须真实启动峰值验收。
+      object-storage: {memLimit: 384m, pidsLimit: 256}
       object-storage-init: {memLimit: 64m, pidsLimit: 128}
-      elasticsearch: {memLimit: 384m, pidsLimit: 512}
+      # 128m JVM heap 不包含堆外/文件映射开销，原 384m 也已 OOM。
+      # 宿主读回可用约 6GiB；保留 OS/sub2api 余量，不放宽全局默认预算。
+      elasticsearch: {memLimit: 768m, pidsLimit: 512}
       gamma-proxy: {memLimit: 96m, pidsLimit: 256}
       realtime-gateway: {memLimit: 96m, pidsLimit: 256}
       rtc-service: {memLimit: 96m, pidsLimit: 256}
   planes:
     service:
       startupServices:
+        - api-edge
         - recommendation-service
         - content-service
         - chat-service
@@ -154,29 +166,34 @@ prevalidation:
         - entity-service
         - notification-service
       imageAndConfigOnlyServices: [integration-service]
-      exposedPorts:
-        - 39000
-        - 39010
-        - 39100
-        - 32019
-        - 39200
-        - 39210
-        - 39220
-        - 39230
-        - 39240
-        - 39250
-        - 39270
-        - 39290
-        - 39320
-        - 39400
-        - 39410
-        - 39420
-        - 39430
-        - 39440
+      # 渲染、跨平面 URL 和宿主占用前检共享此唯一发布口源。
+      # 未启动 integration、未监听 ops/media proxy 端口不得占位。
+      publishedPorts:
+        - {service: gamma-proxy, target: 80, published: 39000}
+        - {service: gamma-proxy, target: 2019, published: 32019}
+        - {service: chat-service, target: 18081, published: 39200}
+        - {service: user-service, target: 18081, published: 39210}
+        - {service: content-service, target: 18080, published: 39220}
+        - {service: assistant-service, target: 18087, published: 39230}
+        - {service: recommendation-service, target: 8000, published: 39240}
+        - {service: product-ops-service, target: 18086, published: 39250}
+        - {service: platform-ops-service, target: 18088, published: 39260}
+        - {service: tag-service, target: 18092, published: 39270}
+        - {service: search-service, target: 18095, published: 39280}
+        - {service: entity-service, target: 18084, published: 39290}
+        - {service: circle-service, target: 18082, published: 39300}
+        - {service: notification-service, target: 18087, published: 39320}
+        - {service: postgres, target: 5432, published: 39400}
+        - {service: mongodb, target: 27017, published: 39410}
+        - {service: redis, target: 6379, published: 39420}
+        - {service: elasticsearch, target: 9200, published: 39430}
+        - {service: object-storage, target: 9000, published: 39440}
     edge:
       startupServices: [realtime-gateway, rtc-service]
       imageAndConfigOnlyServices: []
-      exposedPorts: [39340, 39350]
+      publishedPorts:
+        - {service: realtime-gateway, target: 18090, published: 39340}
+        - {service: rtc-service, target: 18083, published: 39350}
   isolatedData:
     empty: true
     seedAllowed: false

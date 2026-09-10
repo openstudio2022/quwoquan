@@ -51,7 +51,7 @@ def test_startup_attempt_has_atomic_transactional_lifecycle(tmp_path: Path) -> N
             "startup_attempt_path",
             return_value=receipt_path,
         ),
-        mock.patch.object(subject, "output_root", return_value=tmp_path),
+        mock.patch.dict("os.environ", {"QWQ_OUTPUT_ROOT": str(tmp_path)}),
     ):
         prepared = subject.transition_startup_attempt(status="prepared", **common)
         partial = subject.transition_startup_attempt(status="partial", **common)
@@ -101,7 +101,7 @@ def test_startup_attempt_rejects_non_formal_compose_project(
             "startup_attempt_path",
             return_value=tmp_path / "process/startup_attempt.json",
         ),
-        mock.patch.object(subject, "output_root", return_value=tmp_path),
+        mock.patch.dict("os.environ", {"QWQ_OUTPUT_ROOT": str(tmp_path)}),
     ):
         with pytest.raises(ValueError, match="Compose project mismatch"):
             subject.transition_startup_attempt(
@@ -387,7 +387,7 @@ def test_new_attempt_never_inherits_stopped_attempt_identity(tmp_path: Path) -> 
     }
     with (
         mock.patch.object(subject, "startup_attempt_path", return_value=receipt_path),
-        mock.patch.object(subject, "output_root", return_value=tmp_path),
+        mock.patch.dict("os.environ", {"QWQ_OUTPUT_ROOT": str(tmp_path)}),
     ):
         subject.transition_startup_attempt(
             attempt_id="attempt-1", status="prepared", **identity
@@ -443,7 +443,7 @@ def test_existing_attempt_rejects_every_identity_mutation(tmp_path: Path) -> Non
     )
     with (
         mock.patch.object(subject, "startup_attempt_path", return_value=receipt_path),
-        mock.patch.object(subject, "output_root", return_value=tmp_path),
+        mock.patch.dict("os.environ", {"QWQ_OUTPUT_ROOT": str(tmp_path)}),
     ):
         subject.transition_startup_attempt(
             attempt_id="attempt-1", status="prepared", **identity
@@ -491,7 +491,7 @@ def test_startup_attempt_rejects_run_root_outside_environment_evidence(
     composition = _composition()
     with (
         mock.patch.object(subject, "startup_attempt_path", return_value=receipt_path),
-        mock.patch.object(subject, "output_root", return_value=tmp_path),
+        mock.patch.dict("os.environ", {"QWQ_OUTPUT_ROOT": str(tmp_path)}),
         pytest.raises(ValueError, match="target-environment run evidence"),
     ):
         subject.transition_startup_attempt(

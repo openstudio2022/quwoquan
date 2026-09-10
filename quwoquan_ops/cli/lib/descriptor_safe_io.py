@@ -38,18 +38,26 @@ def read_regular_single_link_at(
     *,
     display_path: str | None = None,
     require_current_name: bool = False,
+    max_bytes: int | None = None,
 ) -> bytes:
     """Read one descriptor-bound inode; optionally require its name to stay bound."""
 
     descriptor = os.open(name, _regular_file_open_flags(), dir_fd=directory_fd)
     label = display_path or name
     try:
-        _validate_regular_single_link(descriptor, display_path=label)
+        metadata = _validate_regular_single_link(descriptor, display_path=label)
+        if max_bytes is not None and (max_bytes < 0 or metadata.st_size > max_bytes):
+            raise OSError(errno.EFBIG, f"{label} 超出读取字节边界")
         chunks: list[bytes] = []
+        total = 0
         while True:
-            chunk = os.read(descriptor, 64 * 1024)
+            remaining = 64 * 1024 if max_bytes is None else min(64 * 1024, max_bytes - total + 1)
+            chunk = os.read(descriptor, remaining)
             if not chunk:
                 break
+            total += len(chunk)
+            if max_bytes is not None and total > max_bytes:
+                raise OSError(errno.EFBIG, f"{label} 读取期间超出字节边界")
             chunks.append(chunk)
         if require_current_name:
             opened = os.fstat(descriptor)
@@ -71,6 +79,8 @@ def read_repo_relative_regular_single_link(
     relative_path: str,
     *,
     expected_directory_parts: tuple[str, ...] | None = None,
+    max_bytes: int | None = None,
+    require_current_name: bool = False,
 ) -> bytes:
     """Walk from the actual repo root fd and read one exact relative file."""
 
@@ -94,7 +104,8 @@ def read_repo_relative_regular_single_link(
             os.close(directory_fd)
             directory_fd = child_fd
         return read_regular_single_link_at(
-            directory_fd, parts[-1], display_path=relative_path
+            directory_fd, parts[-1], display_path=relative_path,
+            max_bytes=max_bytes, require_current_name=require_current_name,
         )
     finally:
         if directory_fd is not None:

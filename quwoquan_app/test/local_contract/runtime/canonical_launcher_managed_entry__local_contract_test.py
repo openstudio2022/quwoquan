@@ -41,18 +41,17 @@ def _passed_content_live_payload(
         "contentLive": "passed",
         "nonPromotable": True,
         "contentBindingState": "bound",
-        "target": "alpha-local",
+        "target": "beta-local",
         "firstBlocker": "",
         "warnings": [],
-        "releaseId": "research-alpha",
+        "releaseId": "release-beta",
         "manifestDigest": _MANIFEST_DIGEST,
         "readinessReceiptRef": readiness_ref,
         "readinessReceiptDigest": readiness_digest,
         "contentBinding": {
-            "releaseId": "research-alpha",
-            "verifyRunId": "verify-alpha",
+            "releaseId": "release-beta",
+            "verifyRunId": "verify-beta",
             "manifestDigest": _MANIFEST_DIGEST,
-            "readinessPhase": "research",
             "readinessReceiptRef": readiness_ref,
             "readinessReceiptDigest": readiness_digest,
         },
@@ -66,11 +65,11 @@ def _passed_content_preflight_payload(
 ) -> dict[str, object]:
     return {
         "schema": "quwoquan_ops.app_content_preflight",
-        "target": "alpha-local",
+        "target": "beta-local",
         "status": "passed",
         "exitCode": 0,
         "details": [],
-        "releaseId": "research-alpha",
+        "releaseId": "release-beta",
         "manifestDigest": _MANIFEST_DIGEST,
         "readinessReceiptRef": readiness_ref,
         "readinessReceiptDigest": readiness_digest,
@@ -101,6 +100,14 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
         (app / "run.sh").chmod(0o755)
         executor_dir = app / "scripts/device"
         (executor_dir / "canonical_app_instance").mkdir(parents=True)
+        # 入口政策使用生产 helper 和 canonical metadata；其子进程独立导入，
+        # 不让真实 ops 模块污染后续 launcher 的沙箱 stackctl/dev_up 替身。
+        (executor_dir / "build_launcher_handoff.py").write_text(
+            "import runpy\nimport sys\n"
+            f"sys.path.insert(0, {str(REPO_ROOT)!r})\n"
+            f"runpy.run_path({str(APP_DIR / 'scripts/device/build_launcher_handoff.py')!r}, run_name='__main__')\n",
+            encoding="utf-8",
+        )
         dev_launch_log = root / "dev_launch.log"
         dev_launch = executor_dir / "dev_launch.sh"
         dev_launch.write_text(
@@ -178,7 +185,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
             "    lease_id = str(lease_state['leaseId'])\n"
             "if '--consumer-id' in sys.argv:\n"
             "    consumer_id = sys.argv[sys.argv.index('--consumer-id') + 1]\n"
-            "    lease_id = 'sha256:' + hashlib.sha256(('ios-simulator\\0alpha-local\\0device-1\\0' + consumer_id).encode('utf-8')).hexdigest()\n"
+            "    lease_id = 'sha256:' + hashlib.sha256(('ios-simulator\\0beta-local\\0device-1\\0' + consumer_id).encode('utf-8')).hexdigest()\n"
             "if 'app-managed-prepare' in sys.argv:\n"
             f"    with Path({str(managed_log)!r}).open("
             "'a', encoding='utf-8') as handle:\n"
@@ -188,9 +195,10 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
             "    if receipt_path.is_file():\n"
             "        receipt = json.loads(receipt_path.read_text(encoding='utf-8'))\n"
             "        receipt['consumerId'] = consumer_id\n"
-            "        lease_id = 'sha256:' + hashlib.sha256(('ios-simulator\\0alpha-local\\0device-1\\0' + consumer_id).encode('utf-8')).hexdigest()\n"
+            "        lease_id = 'sha256:' + hashlib.sha256(('ios-simulator\\0beta-local\\0device-1\\0' + consumer_id).encode('utf-8')).hexdigest()\n"
             "        receipt['consumerLeaseId'] = lease_id\n"
-            "        lease_state_path.write_text(json.dumps({'consumer': consumer_id, 'leaseId': lease_id}), encoding='utf-8')\n"
+            "        generation = receipt['runtimeIdentity']['startupAttemptId']\n"
+            "        lease_state_path.write_text(json.dumps({'consumer': consumer_id, 'leaseId': lease_id, 'instanceGeneration': generation}), encoding='utf-8')\n"
             "        receipt_path.write_text(json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + '\\n', encoding='utf-8')\n"
             "        if str(value.get('receiptDigest') or '') != 'sha256:' + 'f' * 64:\n"
             "            value['receiptDigest'] = 'sha256:' + hashlib.sha256(receipt_path.read_bytes()).hexdigest()\n"
@@ -206,8 +214,9 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
             "    raise SystemExit(managed_exit)\n"
             "if 'consumer-lease' in sys.argv and 'status' in sys.argv:\n"
             "    print(json.dumps({'exitCode': 0, 'occupyingLeases': [{\n"
-            "        'target': 'alpha-local', 'device': 'device-1',\n"
+            "        'target': 'beta-local', 'device': 'device-1',\n"
             "        'consumer': consumer_id, 'leaseId': lease_id,\n"
+            "        'instanceGeneration': lease_state['instanceGeneration'],\n"
             "    }]}))\n"
             "    raise SystemExit(0)\n"
             "if 'consumer-lease' in sys.argv and 'bind' in sys.argv:\n"
@@ -272,7 +281,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
         root: Path,
         *,
         device_id: str = "device-1",
-        target: str = "alpha-local",
+        target: str = "beta-local",
     ) -> tuple[Path, str]:
         """落一份与生产 schema 同构的 prepared receipt + 两份 strict receipt。"""
         managed_dir = root / "managed-preparation"
@@ -282,10 +291,9 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
             json.dumps(
                 {
                     "schema": "quwoquan_data.release_readiness.v1",
-                    "releaseId": "research-alpha",
-                    "verifyRunId": "verify-alpha",
+                    "releaseId": "release-beta",
+                    "verifyRunId": "verify-beta",
                     "manifestDigest": _MANIFEST_DIGEST,
-                    "readinessPhase": "research",
                     "passed": True,
                 },
                 ensure_ascii=False,
@@ -302,7 +310,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                 {
                     "schema": "quwoquan_ops.app_debug_preflight",
                     "purpose": "content_live",
-                    "target": "alpha-local",
+                    "target": "beta-local",
                     "payload": _passed_content_live_payload(
                         readiness_ref=str(readiness_ref),
                         readiness_digest=readiness_digest,
@@ -324,9 +332,9 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
             json.dumps(
                 {
                     "schema": "quwoquan_ops.app_content_preflight_exact.v1",
-                    "target": "alpha-local",
+                    "target": "beta-local",
                     "status": "passed",
-                    "releaseId": "research-alpha",
+                    "releaseId": "release-beta",
                     "manifestDigest": _MANIFEST_DIGEST,
                     "readinessReceiptRef": str(readiness_ref),
                     "readinessReceiptDigest": readiness_digest,
@@ -346,12 +354,12 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                 {
                     "schema": "quwoquan_ops.app_managed_preparation.v1",
                     "target": target,
-                    "environment": "alpha",
+                    "environment": "beta",
                     "platform": "ios",
                     "deviceId": device_id,
                     "runtimeIdentity": {
-                        "startupAttemptId": "alpha-attempt-1",
-                        "composeProject": "quwoquan_alpha_test_live",
+                        "startupAttemptId": "beta-attempt-1",
+                        "composeProject": "quwoquan_beta_test_live",
                         "composeDigest": "sha256:" + "4" * 64,
                         "configurationDigest": "sha256:" + "5" * 64,
                         "providerRuntimeDigest": "sha256:" + "6" * 64,
@@ -365,10 +373,9 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                     "deviceTrustReceiptRef": "",
                     "deviceTrustReceiptDigest": "",
                     "contentBinding": {
-                        "releaseId": "research-alpha",
-                        "verifyRunId": "verify-alpha",
+                        "releaseId": "release-beta",
+                        "verifyRunId": "verify-beta",
                         "manifestDigest": _MANIFEST_DIGEST,
-                        "readinessPhase": "research",
                         "readinessReceiptRef": str(readiness_ref),
                         "readinessReceiptDigest": readiness_digest,
                     },
@@ -411,6 +418,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                     [
                         "bash",
                         "run.sh",
+                        "--env", "beta",
                         "--mode",
                         "content-live",
                         "--device",
@@ -433,7 +441,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                 self.assertEqual(
                     len(managed_calls.strip().splitlines()), 1, managed_calls
                 )
-                self.assertIn("--target alpha-local", managed_calls)
+                self.assertIn("--target beta-local", managed_calls)
                 self.assertIn("--device device-1", managed_calls)
                 consumer_args = managed_calls.strip().split()
                 consumer_id = consumer_args[consumer_args.index("--consumer-id") + 1]
@@ -443,6 +451,17 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                 )
                 self.assertNotIn("consumer-lease acquire", stackctl_calls)
                 self.assertIn("consumer-lease status", stackctl_calls)
+                # launcher 退出时只能归还本次 receipt 的 exact lease/generation。
+                receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                lease_state = json.loads(
+                    (sandbox / "managed_lease_state.json").read_text(encoding="utf-8")
+                )
+                generation = receipt["runtimeIdentity"]["startupAttemptId"]
+                self.assertEqual(lease_state["instanceGeneration"], generation)
+                releases = [line for line in stackctl_calls.splitlines() if "consumer-lease release" in line]
+                self.assertEqual(len(releases), 1, stackctl_calls)
+                self.assertIn(f"--lease-id {receipt['consumerLeaseId']}", releases[0])
+                self.assertIn(f"--instance-generation {generation}", releases[0])
                 self.assertIn(
                     "managed preparation receipt verified", result.stdout
                 )
@@ -482,6 +501,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                     [
                         "bash",
                         "run.sh",
+                        "--env", "beta",
                         "--mode",
                         "content-live",
                         "--device",
@@ -520,6 +540,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                     [
                         "bash",
                         "run.sh",
+                        "--env", "beta",
                         "--mode",
                         "content-live",
                         "--device",
@@ -569,6 +590,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                     [
                         "bash",
                         "run.sh",
+                        "--env", "beta",
                         "--mode",
                         "content-live",
                         "--device",
@@ -615,6 +637,34 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
             expected_detail="content readiness byte digest mismatch",
         )
 
+    def test_named_content_tracks_are_rejected_before_build(self) -> None:
+        for field in ("readinessPhase", "releaseClass", "productLifecycleState"):
+            with self.subTest(field=field):
+                def mutate(receipt: dict[str, object]) -> None:
+                    binding = receipt["contentBinding"]
+                    assert isinstance(binding, dict)
+                    binding[field] = "production"
+
+                self._assert_prebuild_receipt_invalid(
+                    mutate=mutate,
+                    expected_detail="content binding field set drifted",
+                )
+
+    def test_named_readiness_track_with_matching_digest_is_rejected(self) -> None:
+        def mutate(receipt: dict[str, object]) -> None:
+            binding = receipt["contentBinding"]
+            assert isinstance(binding, dict)
+            ref = Path(str(binding["readinessReceiptRef"]))
+            readiness = json.loads(ref.read_text(encoding="utf-8"))
+            readiness["readinessPhase"] = "production"
+            ref.write_text(json.dumps(readiness) + "\n", encoding="utf-8")
+            binding["readinessReceiptDigest"] = _sha256_file(ref)
+
+        self._assert_prebuild_receipt_invalid(
+            mutate=mutate,
+            expected_detail="content readiness receipt identity drifted",
+        )
+
     def test_strict_content_digest_drift_is_receipt_invalid_before_build(self) -> None:
         def mutate(receipt: dict[str, object]) -> None:
             receipt["strictContentPreflightReceiptDigest"] = "sha256:" + "f" * 64
@@ -641,6 +691,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                 [
                     "bash",
                     "run.sh",
+                    "--env", "beta",
                     "--mode",
                     "content-live",
                     "--device",
@@ -658,6 +709,22 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
             self.assertIn("running runtime identity drifted", result.stderr)
             self.assertFalse((sandbox / "preflight_calls.log").exists())
             self.assertFalse((sandbox / "find_device.log").exists())
+
+    def test_alpha_managed_entry_rejects_remote_preparation_before_side_effects(self) -> None:
+        temporary, app, environment = self._workspace()
+        with temporary:
+            self._mark_as_live_worktree(app)
+            environment["QWQ_MANAGED_FLUTTER_ENTRY"] = "1"
+            result = subprocess.run(
+                ["bash", "run.sh", "--env", "alpha", "--device", "device-1"],
+                cwd=app, env=environment, capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("APP.LAUNCH.launch_surface_unsupported", result.stderr)
+            self.assertIn("offline hermetic/UAT requires device-bound evidence", result.stderr)
+            self.assertNotIn("can't open file", result.stderr)
+            for name in ("dev_launch", "managed_calls", "stackctl_calls", "preflight_calls", "find_device", "flutter"):
+                self.assertFalse((app.parent / f"{name}.log").exists(), name)
 
     def test_unset_managed_entry_in_live_worktree_execs_direct_launcher(self) -> None:
         temporary, app, environment = self._workspace()

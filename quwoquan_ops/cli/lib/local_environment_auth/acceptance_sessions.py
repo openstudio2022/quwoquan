@@ -2,7 +2,7 @@
 
 本模块内被测试 patch 的依赖（``request_local_environment_*`` /
 ``_test_data_actor_phone`` / ``_clear_local_otp_send_throttle`` /
-``load_local_research_identity_binding`` / ``materialize_test_data_identity_set`` /
+``materialize_test_data_identity_set`` /
 ``open_local_phone_acceptance_session``）一律经 ``_pkg.`` 属性访问。
 """
 
@@ -54,20 +54,11 @@ def open_local_phone_acceptance_session(
             "utf-8"
         )
     ).hexdigest()
-    if canonical_identity_set_id == "research-identity" and actor_index == 0:
-        research_identity = _pkg.load_local_research_identity_binding(
-            environment=environment,
-            target_name=target_name,
-        )
-        phone = research_identity["phone"]
-        expected_owner_id = research_identity["accountId"]
-    else:
-        phone = _pkg._test_data_actor_phone(
-            target_name=target_name,
-            identity_set_id=canonical_identity_set_id,
-            actor_index=actor_index,
-        )
-        expected_owner_id = ""
+    phone = _pkg._test_data_actor_phone(
+        target_name=target_name,
+        identity_set_id=canonical_identity_set_id,
+        actor_index=actor_index,
+    )
     _pkg._clear_local_otp_send_throttle(target_name=target_name, phone=phone)
     device_id = f"acceptance-{environment}-{actor_digest[:16]}"
     common = {
@@ -143,10 +134,6 @@ def open_local_phone_acceptance_session(
             login, "refreshToken", "phone login response"
         ),
     )
-    if expected_owner_id and session.owner_id != expected_owner_id:
-        raise RuntimeError(
-            "phone login owner does not match managed acceptance identity"
-        )
     me = _pkg.request_local_environment_json(
         base_url,
         path="/me",

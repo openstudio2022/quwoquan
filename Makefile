@@ -1359,7 +1359,7 @@ config-slo-gate:
 	@python3 quwoquan_ops/cli/stackctl.py verify --kind config-slo --profile baseline --prometheus-url "$(PROMETHEUS_URL)"
 
 .PHONY: commit-gate gate-smoke gate-integration gate-release test-api-contract test-api-contract-chat
-.PHONY: install-hooks verify-local-worktree-lifecycle lane-bootstrap lane-preflight lane-resync
+.PHONY: install-hooks verify-local-worktree-lifecycle lane-bootstrap lane-preflight lane-resync lane-resync-execute
 
 # L0 本地入库门禁（pre-commit 同源）：并行静态 + 影响面测试，目标 ≤10m / 硬顶 15m。
 commit-gate:
@@ -1384,6 +1384,13 @@ lane-preflight:
 
 lane-resync:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/lane_worktree_commands.py resync
+
+# 回同步执行面（integrate-lane-to-dev Skill 第 5 步）：按 branch_policy resync_scope 三态判定，
+# 只对干净/非重叠脏树且为 dev1.0 祖先的 lane 做 ff-only 并推送同名远端；其余 lane 零写只报告。
+# NO_PUSH=1 只 ff 不推送。任一 lane 非 ff_done 时退出码 1，JSON 结果打印到 stdout。
+lane-resync-execute:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/lane_worktree_commands.py resync --execute \
+		$$( [ "$${NO_PUSH:-0}" = "1" ] && printf -- '--no-push' )
 .PHONY: prepare-test-python verify-test-no-fake verify-test-nonfunctional-coverage verify-test-directory-layout verify-test-coverage-map
 .PHONY: verify-execution-profiles
 .PHONY: test-local-contract test-app-python-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance verify-homepage-performance-evidence test-delivery-ci-local-contract
@@ -1788,26 +1795,48 @@ evidence-signing-bootstrap:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/evidence_signing_bootstrap.py \
 		$$( [ "$${ROTATE:-0}" = "1" ] && printf -- '--rotate' ) $(EVIDENCE_SIGNING_ARGS)
 
-# integration 工作区模式二：对 exact candidate 做本地 readiness + Alpha（条件 Beta）真实验证，
-# 签发 EnvironmentAcceptanceFact 并（PUBLISH=1 时）以 expected-old CAS fast-forward 发布到远端 dev1.0。
-# 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION 指向两份不同的 immutable Data release attestation；
-# 签名私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT（先 make evidence-signing-bootstrap）。RELEASE_HANDOFF_REF 是 candidate release
-# 的 authoritative handoff-ref-v1（content-release Review handoff 输出），Data ship apply/activate/verify 只接受它做 admission。
-# 可选：CANDIDATE=<sha>（默认 HEAD）、OWNER_IDENTITY=<ref>、READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
-.PHONY: integrate
-integrate:
+# lane 工作树验收：对 exact candidate（默认 HEAD，必须是当前 lane 分支 head）做本地 readiness + Alpha 真实验证并签发
+# EnvironmentAcceptanceFact，终态 accepted 并产出 portable acceptance bundle；不 admit、不 publish。
+# Beta 只在 BETA=1 时真跑，否则以 typed not_required 闭合。
+# 验收在产出 Data handoff 的 lane 工作树完成，release 不携带类别或命名就绪轨道。
+# 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION（两份不同的 immutable Data release attestation）、
+# RELEASE_HANDOFF_REF（candidate release 的 authoritative handoff-ref-v1）；私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT。
+# 可选：BASELINE=<sha>、BETA=1、MERGED_LANES="lane/a lane/b"、CANDIDATE、OWNER_IDENTITY、
+# READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
+# REUSE=1 仅复用同 commit/tree/parent/ImpactPlan/profile 且签名与引用有效的事实，不改变 Beta opt-in。
+.PHONY: accept
+accept:
 	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
-		echo "[integrate] GATE_BLOCK: RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填（两份不同的 immutable Data release attestation）" >&2; exit 2; fi
+		echo "[accept] GATE_BLOCK: RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填（两份不同的 immutable Data release attestation）" >&2; exit 2; fi
 	@if [ -z "$(RELEASE_HANDOFF_REF)" ]; then \
-		echo "[integrate] GATE_BLOCK: RELEASE_HANDOFF_REF 必填（candidate release 的 handoff-ref-v1；qwq-data ship 只接受 handoff admission）" >&2; exit 2; fi
+		echo "[accept] GATE_BLOCK: RELEASE_HANDOFF_REF 必填（candidate release 的 authoritative handoff-ref-v1）" >&2; exit 2; fi
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
+		--mode acceptance \
 		--candidate "$${CANDIDATE:-HEAD}" \
+		$$( [ -n "$(BASELINE)" ] && printf -- '--baseline %s' "$(BASELINE)" ) \
+		$$( [ "$${BETA:-0}" = "1" ] && printf -- '--beta' ) \
+		$$( for lane in $(MERGED_LANES); do printf -- '--merged-lanes %s ' "$$lane"; done ) \
 		--release-attestation "$(RELEASE_ATTESTATION)" \
 		--rollback-release-attestation "$(ROLLBACK_RELEASE_ATTESTATION)" \
 		--release-handoff-ref "$(RELEASE_HANDOFF_REF)" \
 		--readiness-level "$${READINESS_LEVEL:-fast}" \
 		--profile "$${PROFILE:-integration}" \
 		$$( [ -n "$(OWNER_IDENTITY)" ] && printf -- '--owner-identity %s' "$(OWNER_IDENTITY)" ) \
+		$$( [ "$${REUSE:-0}" = "1" ] && printf -- '--reuse' ) \
+		$(INTEGRATE_ARGS)
+
+# integration 工作区（分支 dev1.0，HEAD 已 ff 到 candidate）消费 lane 的 acceptance bundle：exact bytes 导入本工作树 store、
+# 验签并复核 candidate 绑定与 expectedParent == 远端 dev1.0，然后 admit 并（PUBLISH=1 时）以 expected-old lease fast-forward
+# 发布到远端 dev1.0、按 before|after|other 读回。这里不启动任何环境、不需要 Data release 输入；Gamma 与 prod canary 在 publish 之后推进。
+# 必填：ACCEPTANCE_BUNDLE=<lane make accept 产出的 acceptance-bundle 目录>。可选：CANDIDATE=<sha>（默认 HEAD）、PUBLISH=1、INTEGRATE_ARGS 透传。
+.PHONY: integrate
+integrate:
+	@if [ -z "$(ACCEPTANCE_BUNDLE)" ]; then \
+		echo "[integrate] GATE_BLOCK: ACCEPTANCE_BUNDLE 必填（lane 工作树 make accept 产出的 acceptance-bundle 目录；integration 不再自行跑环境）" >&2; exit 2; fi
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
+		--mode integrate \
+		--candidate "$${CANDIDATE:-HEAD}" \
+		--acceptance-bundle "$(ACCEPTANCE_BUNDLE)" \
 		$$( [ "$${PUBLISH:-0}" = "1" ] && printf -- '--publish' ) \
 		$(INTEGRATE_ARGS)
 

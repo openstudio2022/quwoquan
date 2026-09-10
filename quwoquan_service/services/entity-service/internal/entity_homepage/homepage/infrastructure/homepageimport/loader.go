@@ -58,30 +58,6 @@ var assetRoleToIntroductionRole = map[string]string{
 	"related": "related",
 }
 
-// MediaDeliveryAccessMode 契约 enum 值（唯一真相源
-// contracts/metadata/_shared/types.yaml MediaDeliveryAccessMode）。
-// research release 的媒体交付引用是相对私有 CAS key，App 必须换短签消费；
-// commercial release 的交付引用是 canonical public slice。
-const (
-	mediaDeliveryAccessModePublic      = "public"
-	mediaDeliveryAccessModeSignedGrant = "signed_grant"
-)
-
-// mediaDeliveryAccessModeForReleaseClass 把 release header 的 releaseClass 映射
-// 为逐资产 accessMode（DEC-033/DEC-041）：research → signed_grant、
-// commercial/production → public。其它/未声明类别返回空串表示缺席——契约
-// accessMode 为 NULLABLE，缺席时端按存量 public 交付消费，不得由 importer 造值。
-func mediaDeliveryAccessModeForReleaseClass(releaseClass string) string {
-	switch strings.TrimSpace(releaseClass) {
-	case "research":
-		return mediaDeliveryAccessModeSignedGrant
-	case "commercial", "production":
-		return mediaDeliveryAccessModePublic
-	default:
-		return ""
-	}
-}
-
 type entityHeader struct {
 	Label           string                       `json:"label"`
 	Domain          string                       `json:"domain"`
@@ -186,7 +162,6 @@ func loadIntroductionAssets(
 	entityDir string,
 	releaseAssets map[string]runtimemedia.ReleaseMediaAsset,
 	mediaBases runtimemedia.MediaDeliveryBases,
-	accessMode string,
 ) ([]application.HomepageIntroductionAsset, error) {
 	rawManifest, err := os.ReadFile(filepath.Join(entityDir, "manifest.json"))
 	if err != nil {
@@ -241,7 +216,7 @@ func loadIntroductionAssets(
 		assets = append(assets, application.HomepageIntroductionAsset{
 			AssetID:    assetID,
 			URL:        resolved.DeliveryRef,
-			AccessMode: accessMode,
+			AccessMode: "public",
 			Caption:    strings.TrimSpace(asset.Caption),
 			Role:       role,
 		})
@@ -287,16 +262,14 @@ func frontmatterCoverAssetID(page []byte) (string, error) {
 }
 
 // LoadHomepageProjections 遍历 publish/entities，把有 page.md 的实体转为导入投影。
-// filter 必须来自 immutable release desired state；releaseClass 必须来自 release
-// header（DEC-031：交付形态由 release 断言，不得推断），它决定逐资产 accessMode。
+// filter 必须来自 immutable release desired state；媒体只消费已经验证的公开
+// release authority，不接受类别参数或根据环境推断交付形态（DEC-031/DEC-041）。
 func LoadHomepageProjections(
 	publishRoot string,
 	filter map[string]bool,
 	releaseAssets map[string]runtimemedia.ReleaseMediaAsset,
 	mediaBases runtimemedia.MediaDeliveryBases,
-	releaseClass string,
 ) ([]application.ImportedHomepageInput, []string, error) {
-	accessMode := mediaDeliveryAccessModeForReleaseClass(releaseClass)
 	entRoot := filepath.Join(publishRoot, "entities")
 	var inputs []application.ImportedHomepageInput
 	var issues []string
@@ -353,7 +326,6 @@ func LoadHomepageProjections(
 			filepath.Dir(path),
 			releaseAssets,
 			mediaBases,
-			accessMode,
 		)
 		if assetErr != nil {
 			return assetErr

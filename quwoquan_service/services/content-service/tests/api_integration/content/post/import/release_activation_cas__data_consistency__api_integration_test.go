@@ -24,7 +24,7 @@ import (
 
 func releaseCASOptions(releaseID, digest string, version int64) ImportOptions {
 	return ImportOptions{
-		ReleaseID: releaseID, ManifestDigest: digest, ReleaseClass: "research", ReleaseKind: "content",
+		ReleaseID: releaseID, ManifestDigest: digest, ReleaseKind: "content",
 		ActivationMode: "stage-only", Mode: "sync", DeletePolicy: "tombstone",
 		SourceOwner: "qwq_data", ProjectionVersion: version,
 	}
@@ -46,12 +46,11 @@ func releaseCASPost(contentID, postRef string, now time.Time) PostDoc {
 
 func releaseCASMedia(assetID, _ string) map[string]ReleaseMediaAsset {
 	assetDigest := "sha256:" + strings.Repeat("9", 64)
-	plain := strings.TrimPrefix(assetDigest, "sha256:")
 	return map[string]ReleaseMediaAsset{
 		assetID: {
 			AssetID: assetID, Kind: "image", Version: 1, ContentType: "image/jpeg",
-			PrivateObjectKey: "media/objects/sha256/" + plain[:2] + "/" + plain[2:4] + "/" + plain + ".jpg",
-			SHA256:           assetDigest, Bytes: 128,
+			PublicSliceKey: "media/image/s/asset/" + assetID + "/v1/source.jpg",
+			SHA256:         assetDigest, Bytes: 128,
 		},
 	}
 }
@@ -810,7 +809,7 @@ func TestMongoVerifiedCandidateQueryIsExactAndReadOnly(t *testing.T) {
 	candidate, err := ReadVerifiedImportedPostReleaseCandidate(
 		ctx, db, "alpha", opts.SourceOwner, opts.ReleaseID, opts.ManifestDigest,
 	)
-	if err != nil || !candidate.Found || candidate.ReleaseClass != opts.ReleaseClass ||
+	if err != nil || !candidate.Found ||
 		candidate.ReleaseKind != opts.ReleaseKind || candidate.Mode != opts.Mode ||
 		candidate.DeletePolicy != opts.DeletePolicy || candidate.ProjectionVersion <= 0 ||
 		candidate.VerifiedAt.IsZero() || candidate.Counts.PostsExpected != 1 ||
@@ -893,6 +892,42 @@ func TestMongoVerifiedCandidateQueryIsExactAndReadOnly(t *testing.T) {
 		ctx, db, "alpha", opts.SourceOwner, opts.ReleaseID, opts.ManifestDigest,
 	); err == nil || !strings.Contains(err.Error(), "digest drift") {
 		t.Fatalf("drifted exact candidate was exposed: %v", err)
+	}
+}
+
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+func TestMongoReleaseControlRejectsRetiredCandidateAndPointerCategories(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	opts := releaseCASOptions("release-no-category", "sha256:"+strings.Repeat("c", 64), 1)
+	if _, err := StageImportedPostRelease(ctx, db, "alpha", nil, nil, now, opts); err != nil {
+		t.Fatal(err)
+	}
+	target := ImportedReleaseBinding{SourceOwner: opts.SourceOwner, ReleaseID: opts.ReleaseID, ManifestDigest: opts.ManifestDigest}
+	if _, err := ActivateImportedPostRelease(ctx, db, "alpha", target, ExpectedActiveRelease{Empty: true, SourceOwner: opts.SourceOwner}, now); err != nil {
+		t.Fatal(err)
+	}
+	state := db.Collection("data_release_state")
+	for _, kind := range []string{"candidate", "active_pointer"} {
+		for _, field := range []string{"releaseClass", "productLifecycleState", "readinessPhase"} {
+			if _, err := state.UpdateOne(ctx, bson.M{"kind": kind}, bson.M{"$set": bson.M{field: "research"}}); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			if kind == "candidate" {
+				_, err = ReadVerifiedImportedPostReleaseCandidate(ctx, db, "alpha", opts.SourceOwner, opts.ReleaseID, opts.ManifestDigest)
+			} else {
+				_, err = ReadActiveImportedPostRelease(ctx, db, "alpha", opts.SourceOwner)
+			}
+			if err == nil || !strings.Contains(err.Error(), "retired release category") {
+				t.Fatalf("%s %s was accepted: %v", kind, field, err)
+			}
+			if _, err := state.UpdateOne(ctx, bson.M{"kind": kind}, bson.M{"$unset": bson.M{field: ""}}); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 }
 

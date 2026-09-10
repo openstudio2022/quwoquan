@@ -43,11 +43,6 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
-    "releaseClass": {
-      "enum": [
-        "production"
-      ]
-    },
     "projectionVersion": {
       "type": "integer",
       "minimum": 1
@@ -77,7 +72,6 @@
         "required": [
           "releaseId",
           "manifestDigest",
-          "releaseClass",
           "projectionVersion",
           "revision",
           "activatedAt"
@@ -94,11 +88,6 @@
             {
               "required": [
                 "manifestDigest"
-              ]
-            },
-            {
-              "required": [
-                "releaseClass"
               ]
             },
             {

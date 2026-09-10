@@ -360,7 +360,6 @@ def build_candidate_binding(
     target: str,
     manifest: Mapping[str, Any],
     readiness: Mapping[str, Any],
-    allow_consumer: bool = False,
 ) -> CandidateBinding:
     release = (manifest.get("release") or {}).get("candidate") or {}
     release_id = str(release.get("releaseId") or "").strip()
@@ -372,26 +371,9 @@ def build_candidate_binding(
         or readiness.get("manifestDigest") != release_digest
     ):
         raise ValueError("Data readiness is not bound to the package candidate release")
-    readiness_phase = str(readiness.get("readinessPhase") or "").strip()
-    allowed_readiness_phases = {"research", "commercial", "production"}
-    if allow_consumer:
-        allowed_readiness_phases.add("consumer")
-    if readiness_phase not in allowed_readiness_phases:
-        raise ValueError(
-            "test-data readiness must be an immutable research or commercial release"
-        )
-    release_class = str(readiness.get("releaseClass") or "").strip()
-    expected_release_class = (
-        release_class if readiness_phase == "consumer" else readiness_phase
-    )
-    if (
-        expected_release_class not in {"research", "commercial", "production"}
-        or release_class != expected_release_class
-        or readiness.get("productLifecycleState") != expected_release_class
-    ):
-        raise ValueError(
-            "Data readiness releaseClass/productLifecycleState drift from phase"
-        )
+    from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
+    _validate_data_schema(readiness, "environment_release_readiness")
     readiness_unsigned = {
         key: value for key, value in readiness.items() if key != "verificationChecksum"
     }
@@ -404,31 +386,14 @@ def build_candidate_binding(
     canonical_git_revision = len(source_revision) == 40 and all(
         character in "0123456789abcdef" for character in source_revision
     )
-    if "sourceIdentities" in readiness or "sourceIdentitySetDigest" in readiness:
-        # 新 Data 溯源模型：readiness 以 sourceIdentities/
-        # sourceIdentitySetDigest 表达来源，顶层 sourceRevision 投影已
-        # 退役；release 身份绑定由上方 releaseId/manifestDigest 精确元组
-        # 承担。CandidateBinding 的 source_revision 只绑定 package
-        # candidate 的 Git revision。
-        source_revision_matches = bool(
-            str(readiness.get("sourceIdentitySetDigest") or "").strip()
-        )
-    else:
-        readiness_source_revision = str(
-            readiness.get("sourceRevision") or ""
-        ).strip()
-        source_revision_matches = readiness_source_revision == source_revision
-    if readiness_phase == "consumer":
-        # Consumer readiness is bound to the mutable test-live runtime by the
-        # exact release/verify/manifest/readiness tuple. Its Data provenance is
-        # represented by sourceIdentities, not by the package Git revision.
-        # Keep CandidateBinding source_revision tied to the current runtime and
-        # do not require the retired top-level Data sourceRevision projection.
-        source_revision_matches = allow_consumer
-    if not canonical_git_revision or not source_revision_matches:
-        raise ValueError(
-            "Data readiness sourceRevision is not bound to the package candidate"
-        )
+    # Data 源摘要与 package Git revision 是不同身份，不能互相冒充。
+    if not canonical_git_revision:
+        raise ValueError("package candidate sourceRevision is not a canonical Git revision")
+    if "sourceIdentities" in readiness and readiness.get("sourceIdentitySetDigest") != canonical_digest({
+        "schema": "quwoquan_data.source_identity_set",
+        "sourceIdentities": readiness["sourceIdentities"],
+    }):
+        raise ValueError("Data readiness sourceIdentitySetDigest mismatch")
     posts = _release_references(
         readiness.get("postIds"),
         field="postIds",
@@ -464,7 +429,6 @@ def build_candidate_binding(
         release_id=release_id,
         release_digest=release_digest,
         import_run_id=str(readiness.get("importRunId") or ""),
-        readiness_phase=readiness_phase,
         readiness_receipt_digest=readiness_receipt_digest,
         release_posts=posts,
         release_creators=creators,
@@ -624,20 +588,23 @@ def build_test_data_handoff(
 ) -> dict[str, Any]:
     """Freeze a redacted, exact candidate/request/evidence handoff contract."""
 
-    if "sourceIdentities" in readiness or "sourceIdentitySetDigest" in readiness:
-        # 新 Data 溯源模型：溯源由 sourceIdentities/sourceIdentitySetDigest
-        # 与 readiness checksum 承担；handoff 的 sourceRevision 字段绑定
-        # package candidate 的 Git revision（见 CandidateBinding）。
-        if not str(readiness.get("sourceIdentitySetDigest") or "").strip():
-            raise ValueError(
-                "canonical Data readiness sourceIdentitySetDigest is absent"
-            )
-    else:
-        source_revision = str(readiness.get("sourceRevision") or "").strip()
-        if source_revision != candidate.source_revision:
-            raise ValueError(
-                "canonical Data readiness sourceRevision drifted from candidate"
-            )
+    rebound = build_candidate_binding(
+        environment=candidate.environment,
+        target=candidate.target,
+        manifest={
+            "sourceRevision": candidate.source_revision,
+            "baselineId": candidate.baseline_id,
+            "packageDigest": candidate.package_digest,
+            "runtimeConfigDigest": candidate.runtime_config_digest,
+            "release": {"candidate": {
+                "releaseId": candidate.release_id,
+                "releaseDigest": candidate.release_digest,
+            }},
+        },
+        readiness=readiness,
+    )
+    if rebound != candidate:
+        raise ValueError("canonical Data readiness drifted from candidate binding")
     evidence_unsigned = {
         key: value for key, value in evidence.items() if key != "evidenceDigest"
     }
@@ -700,7 +667,6 @@ def build_test_data_handoff(
         "releaseId": candidate.release_id,
         "manifestDigest": candidate.release_digest,
         "importRunId": candidate.import_run_id,
-        "readinessPhase": candidate.readiness_phase,
         "readinessReceiptDigest": candidate.readiness_receipt_digest,
         "requestDigest": request_document.get("requestDigest"),
         "evidenceDigest": evidence_digest,

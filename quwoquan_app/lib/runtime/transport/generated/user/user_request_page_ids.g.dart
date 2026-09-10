@@ -45,7 +45,6 @@ class UserRequestPageIds {
     'GetProfileUpdateProposal': 'user.get.profile.update.proposal',
     'GetRelationship': 'user.relationship',
     'GetRelationshipCapability': 'user.get.relationship.capability',
-    'GetResearchSessionAttestation': 'user.get.research.session.attestation',
     'GetUserHomepageBundle': 'user.get.user.homepage.bundle',
     'GetUserInterestProfile': 'user.get.user.interest.profile',
     'GetUserProfile': 'user.profile',
@@ -53,8 +52,6 @@ class UserRequestPageIds {
     'InitiateContactDiscovery': 'user.initiate.contact.discovery',
     'InvalidateDevicePushEndpoint': 'user.invalidate.device.push.endpoint',
     'IssueAccountAppealCredential': 'user.issue.account.appeal.credential',
-    'IssueWhitelistedResearchSession':
-        'user.issue.whitelisted.research.session',
     'ListBlockedUsers': 'user.block.list',
     'ListCredentials': 'user.list.credentials',
     'ListFollowers': 'user.followers',
@@ -158,8 +155,6 @@ class UserRequestPageIds {
   static const String getRelationship = 'user.relationship';
   static const String getRelationshipCapability =
       'user.get.relationship.capability';
-  static const String getResearchSessionAttestation =
-      'user.get.research.session.attestation';
   static const String getUserHomepageBundle = 'user.get.user.homepage.bundle';
   static const String getUserInterestProfile = 'user.get.user.interest.profile';
   static const String getUserProfile = 'user.profile';
@@ -170,8 +165,6 @@ class UserRequestPageIds {
       'user.invalidate.device.push.endpoint';
   static const String issueAccountAppealCredential =
       'user.issue.account.appeal.credential';
-  static const String issueWhitelistedResearchSession =
-      'user.issue.whitelisted.research.session';
   static const String listBlockedUsers = 'user.block.list';
   static const String listCredentials = 'user.list.credentials';
   static const String listFollowers = 'user.followers';

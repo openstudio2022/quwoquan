@@ -488,15 +488,16 @@ def _validate_data_readiness(
         raise _consumer_error(
             "Data readiness manifestDigest drifted from explicit authority"
         )
-    declared = str(readiness.get("releaseClass") or "")  # DEC-041: production 为现役单一类别
-    release_class = declared if declared in {"research", "commercial", "production"} else "<lifecycle-bound>"
+    from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
+    try:
+        _validate_data_schema(readiness, "environment_release_readiness")
+    except ValueError as exc:
+        raise _consumer_error(str(exc)) from exc
     expected = {
         "schema": "quwoquan_data.environment_release_readiness",
         "environment": "alpha",
         "releaseId": release_id,
-        "releaseClass": release_class,
-        "productLifecycleState": release_class,
-        "readinessPhase": release_class,
         "importRunId": import_run_id,
         "verifyRunId": verify_run_id,
         "passed": True,
@@ -655,8 +656,13 @@ def _load_import_mappings(
     import_run_id: str,
     manifest_digest: str,
 ) -> tuple[dict[str, tuple[str, str]], dict[tuple[str, str, str], str], dict[str, str]]:
+    from quwoquan_ops.cli.commands.app_preflight_readiness import _resolve_data_prepared_import
+
+    import_path, prepared_run_id = _resolve_data_prepared_import(
+        readiness, evidence_root=output_root,
+    )
     expected_run_prefix = (
-        Path("env/alpha/runs/data-release") / release_id / import_run_id
+        Path("env/alpha/runs/data-release") / release_id / prepared_run_id
     ).as_posix()
     homepage_cases_path = _ref_authority(
         (Path(expected_run_prefix) / "homepage_verification_cases.json").as_posix(),
@@ -713,7 +719,7 @@ def _load_import_mappings(
         cases.get("schema") != "quwoquan_data.homepage_verification_case_manifest"
         or cases.get("environment") != "alpha"
         or cases.get("releaseId") != release_id
-        or cases.get("runId") != import_run_id
+        or cases.get("runId") != prepared_run_id
         or homepage_verification.get("schema")
         != "quwoquan_data.homepage_api_verification"
         or homepage_verification.get("environment") != "alpha"

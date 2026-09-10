@@ -19,6 +19,7 @@ from .local_environment_auth import (
 from .output_paths import active_deployment_candidate, env_runs_root, output_root
 from .app_content_uat_plan import build_app_content_uat_plan, load_release_uat_sample_plan
 from .test_live_content_binding import load_test_live_content_binding
+from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
 
 
 COLLECTION_PATH = "/control-plane/product/recommendation/premium-pool"
@@ -27,6 +28,26 @@ PREMIUM_FEED_PATH = "/content/feed?sort=recommend&channelId=premium_stream&limit
 
 class PremiumPoolReleaseError(RuntimeError):
     pass
+
+
+def _validate_release_document(value: Mapping[str, Any], name: str) -> None:
+    try:
+        _validate_data_schema(value, name)
+    except ValueError as exc:
+        raise PremiumPoolReleaseError(str(exc)) from exc
+
+
+def _regular_path(source: Path, *, label: str) -> Path:
+    if any(path.is_symlink() for path in (source, *source.parents)):
+        raise PremiumPoolReleaseError(f"{label} must be a regular non-symlink file")
+    return source.resolve()
+
+
+def _validate_readiness_checksum(readiness: Mapping[str, Any]) -> None:
+    unsigned = {key: value for key, value in readiness.items() if key != "verificationChecksum"}
+    encoded = json.dumps(unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    if readiness.get("verificationChecksum") != "sha256:" + hashlib.sha256(encoded).hexdigest():
+        raise PremiumPoolReleaseError("readiness receipt verification checksum drifted")
 
 
 def _require_sha256_digest(value: object, *, label: str) -> str:
@@ -48,7 +69,7 @@ def _load_release_sample_plan_documents_from_attestation(
     manifest_digest: str,
     attestation_ref: object,
     attestation_digest: object,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Any], str]:
     ref = str(attestation_ref or "").strip()
     digest = _require_sha256_digest(
         attestation_digest, label="release attestation digest"
@@ -57,7 +78,7 @@ def _load_release_sample_plan_documents_from_attestation(
     if not ref or source.is_symlink():
         raise PremiumPoolReleaseError("release attestation reference is unsafe")
     try:
-        path = source.resolve(strict=True)
+        path = _regular_path(source, label="release attestation")
         raw = path.read_bytes()
         attestation = json.loads(raw.decode("utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -75,16 +96,19 @@ def _load_release_sample_plan_documents_from_attestation(
         or path.parent.name != "attestations"
     ):
         raise PremiumPoolReleaseError("release attestation identity drifted")
+    _validate_release_document(attestation, "release_attestation")
     release_root = path.parents[1]
     header_path = release_root / "payload/release.json"
-    if header_path.is_symlink():
-        raise PremiumPoolReleaseError("release header is unsafe")
+    _regular_path(header_path, label="release header")
     try:
         header = json.loads(header_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise PremiumPoolReleaseError("release header is unreadable") from exc
     if not isinstance(header, Mapping):
         raise PremiumPoolReleaseError("release header must be a JSON object")
+    _validate_release_document(header, "release_header")
+    if header.get("releaseId") != release_id:
+        raise PremiumPoolReleaseError("release header identity drifted")
     try:
         sample_plan, _, sample_plan_digest = load_release_uat_sample_plan(
             release_root=header_path.parent, release_header=header
@@ -185,7 +209,6 @@ class PremiumPoolTestLiveBinding:
     import_run_id: str
     verify_run_id: str
     content_id: str
-    readiness_phase: str
     readiness_receipt_ref: str
     readiness_receipt_digest: str
     startup_attempt_id: str
@@ -197,7 +220,7 @@ class PremiumPoolBootstrapBinding:
     """首次激活绑定：只以 `apply` 的导入证据为输入。
 
     与 candidate 绑定的本质区别是没有 `verify_run_id`——这条路径存在的前提正是
-    consumer 档校验尚未、也无法通过。
+    内容就绪校验尚未、也无法通过。
     """
 
     environment: str
@@ -238,7 +261,7 @@ def load_premium_pool_candidate_binding(
         baseline_id,
         require_full=True,
     )
-    receipt_path = Path(readiness_receipt).expanduser().resolve()
+    receipt_path = _regular_path(Path(readiness_receipt).expanduser(), label="readiness receipt")
     receipt_root = env_runs_root(environment).resolve()
     try:
         receipt_ref = str(receipt_path.relative_to(receipt_root))
@@ -255,11 +278,15 @@ def load_premium_pool_candidate_binding(
         or readiness.get("schema") != "quwoquan_data.environment_release_readiness"
         or readiness.get("environment") != environment
         or readiness.get("passed") is not True
-        or readiness.get("readinessPhase") not in {"consumer", "commercial", "production"}
     ):
         raise PremiumPoolReleaseError(
-            "readiness receipt is not a passed canonical consumer receipt"
+            "readiness receipt is not a passed canonical receipt"
         )
+    _validate_release_document(readiness, "environment_release_readiness")
+    _validate_readiness_checksum(readiness)
+    expected_ref = f"data-release/{readiness['releaseId']}/{readiness['verifyRunId']}/release-readiness.json"
+    if receipt_ref != expected_ref:
+        raise PremiumPoolReleaseError("readiness receipt path is not bound to its exact release/verify run")
     release_binding = manifest.get("release")
     candidate_release = (
         release_binding.get("candidate") if isinstance(release_binding, dict) else None
@@ -319,7 +346,7 @@ def load_premium_pool_bootstrap_binding(
 ) -> PremiumPoolBootstrapBinding:
     """Bind the first PremiumPoolEntry of an environment to its import evidence.
 
-    `immutable-candidate` 要求一份已通过的 consumer 档收据，而该档校验把
+    `immutable-candidate` 要求一份已通过的内容就绪收据，而该校验把
     「`premium_stream` 非空」当作通过条件，因此空池环境无法自举。这条路径只在
     池确实为空时开放，且不放宽 release 绑定：内容必须是本次导入落库的视频。
     """
@@ -327,7 +354,7 @@ def load_premium_pool_bootstrap_binding(
     if not pool_is_empty:
         raise PremiumPoolReleaseError(
             "environment already has premium pool entries; "
-            "use the consumer readiness receipt instead"
+            "use the content readiness receipt instead"
         )
     active = active_deployment_candidate(target)
     if not isinstance(active, dict):
@@ -341,7 +368,7 @@ def load_premium_pool_bootstrap_binding(
         baseline_id,
         require_full=True,
     )
-    report_path = Path(import_report).expanduser().resolve()
+    report_path = _regular_path(Path(import_report).expanduser(), label="import report")
     report_root = env_runs_root(environment).resolve()
     try:
         report_ref = str(report_path.relative_to(report_root))
@@ -366,6 +393,10 @@ def load_premium_pool_bootstrap_binding(
         raise PremiumPoolReleaseError(
             "import report is not a passed canonical stage-only content import report"
         )
+    _validate_release_document(report, "import_report")
+    expected_ref = f"data-release/{report['releaseId']}/{report_path.parent.name}/import.json"
+    if report_ref != expected_ref:
+        raise PremiumPoolReleaseError("import report path is not bound to its exact release/apply run")
     release_binding = manifest.get("release")
     candidate_release = (
         release_binding.get("candidate") if isinstance(release_binding, dict) else None
@@ -390,21 +421,27 @@ def load_premium_pool_bootstrap_binding(
         )
     )
     video_work_id = _required_raw_video_sample(sample_plan)
-    canonical_content_id = str(content_id or "").strip()
-    if not canonical_content_id or canonical_content_id != video_work_id:
-        raise PremiumPoolReleaseError(
-            "contentId must be the exact ReleaseUatSamplePlan video sample"
-        )
-    imported_video_ids = {
+    # sample plan 的 video objectId 是 canonical 对象身份（qwq_data_…）；精选池条目与推荐候选
+    # 都以环境 postId（data_post_…）为身份，两者经导入报告 postBindings 的 contentId → postId 绑定。
+    sample_post_ids = {
         str(row.get("postId") or "").strip()
         for row in report.get("postBindings") or []
         if isinstance(row, dict)
         and row.get("contentType") == "video"
         and str(row.get("postId") or "").strip()
+        and video_work_id in {
+            str(row.get("contentId") or "").strip(),
+            str(row.get("postId") or "").strip(),
+        }
     }
-    if canonical_content_id not in imported_video_ids:
+    if not sample_post_ids:
         raise PremiumPoolReleaseError(
             "ReleaseUatSamplePlan video sample is absent from the import report"
+        )
+    canonical_content_id = str(content_id or "").strip()
+    if canonical_content_id not in sample_post_ids:
+        raise PremiumPoolReleaseError(
+            "contentId must be the environment postId bound to the ReleaseUatSamplePlan video sample"
         )
     return PremiumPoolBootstrapBinding(
         environment=environment,
@@ -522,10 +559,7 @@ def load_premium_pool_test_live_binding(
         raise PremiumPoolReleaseError(
             "readiness receipt does not match the current test-live content binding"
         )
-    if supplied_receipt_path.is_symlink():
-        raise PremiumPoolReleaseError(
-            "readiness receipt must be a regular non-symlink file"
-        )
+    _regular_path(supplied_receipt_path, label="readiness receipt")
     try:
         encoded = supplied_receipt_path.read_bytes()
         readiness = json.loads(encoded.decode("utf-8"))
@@ -539,7 +573,11 @@ def load_premium_pool_test_live_binding(
             "readiness receipt digest drifted from the current test-live content binding"
         )
 
-    readiness_phase = str(readiness.get("readinessPhase") or "").strip()
+    _validate_release_document(readiness, "environment_release_readiness")
+    _validate_readiness_checksum(readiness)
+    expected_ref = f"env/{environment}/runs/data-release/{readiness['releaseId']}/{readiness['verifyRunId']}/release-readiness.json"
+    if receipt_ref != expected_ref:
+        raise PremiumPoolReleaseError("test-live readiness reference is not bound to its exact release/verify run")
     expected_readiness = {
         "schema": "quwoquan_data.environment_release_readiness",
         "environment": environment,
@@ -548,10 +586,7 @@ def load_premium_pool_test_live_binding(
         "manifestDigest": content_binding.get("manifestDigest"),
         "passed": True,
     }
-    if (
-        readiness_phase not in {"consumer", "commercial", "production"}
-        or any(readiness.get(field) != value for field, value in expected_readiness.items())
-    ):
+    if any(readiness.get(field) != value for field, value in expected_readiness.items()):
         raise PremiumPoolReleaseError(
             "readiness receipt does not match the current test-live content evidence"
         )
@@ -580,7 +615,6 @@ def load_premium_pool_test_live_binding(
         import_run_id=import_run_id,
         verify_run_id=str(readiness["verifyRunId"]),
         content_id=canonical_content_id,
-        readiness_phase=readiness_phase,
         readiness_receipt_ref=receipt_ref,
         readiness_receipt_digest=receipt_digest,
         startup_attempt_id=attempt_id,
@@ -901,7 +935,6 @@ def _premium_receipt_binding(binding: PremiumPoolBinding) -> dict[str, Any]:
             "manifestDigest": binding.manifest_digest,
             "importRunId": binding.import_run_id,
             "verifyRunId": binding.verify_run_id,
-            "readinessPhase": binding.readiness_phase,
             "readinessReceiptRef": binding.readiness_receipt_ref,
             "readinessReceiptDigest": binding.readiness_receipt_digest,
             "videoWorkId": binding.content_id,

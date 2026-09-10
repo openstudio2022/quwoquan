@@ -21,6 +21,7 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output"
 DEFAULT_DEPLOY_WORK_ROOT = Path.home() / ".cache" / "quwoquan" / "deploy"
+DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT = Path.home() / ".cache" / "quwoquan" / "runtime-output"
 DEPLOY_ENVS = frozenset({"alpha", "beta", "gamma", "prod"})
 ENV_SEGMENTS = DEPLOY_ENVS | {"repo"}
 DEFAULT_DEPLOY_TARGET_BY_ENV = {
@@ -445,7 +446,13 @@ def run_evidence_dir(parent: Path, command_name: str, target: str) -> Path:
 
 
 def env_root(env_name: str) -> Path:
-    return output_root() / "env" / normalize_env(env_name)
+    environment = normalize_env(env_name)
+    # 本地运行事实属于宿主而非工作树；repo/data 与 hosted prod 输出不迁移。
+    # 显式输出根仍是离线工具/测试的依赖注入 seam，不自动搬迁或双读旧事实。
+    root = output_root()
+    if environment in {"alpha", "beta", "gamma"} and not os.environ.get("QWQ_OUTPUT_ROOT"):
+        root = DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT
+    return root / "env" / environment
 
 
 def env_runs_root(env_name: str) -> Path:
@@ -474,10 +481,7 @@ def validate_env_run_evidence_dir(
     if any(part == ".." for part in candidate_input.parts):
         raise ValueError("report directory cannot contain parent traversal")
 
-    output_root_absolute = output_root().expanduser().absolute()
-    expected_runs_absolute = (
-        output_root_absolute / "env" / normalize_env(env_name) / "runs"
-    )
+    expected_runs_absolute = env_runs_root(env_name).expanduser().absolute()
     expected_runs_root = expected_runs_absolute.resolve()
     candidate_absolute = (
         candidate_input
@@ -528,6 +532,11 @@ def target_local_dir(target: str) -> Path:
 
 
 def target_process_dir(target: str) -> Path:
+    if target in {"alpha-local", "beta-local", "gamma-local"} and not os.environ.get("QWQ_OUTPUT_ROOT"):
+        legacy = output_root() / "env" / env_for_target(target) / "local" / target / "process"
+        if any((legacy / name).exists() or (legacy / name).is_symlink()
+               for name in ("startup_attempt.json", "test_live_startup_attempt.json")):
+            raise ValueError("OPS.RUNTIME.reconcile_required: legacy worktree startup receipt requires explicit reconciliation")
     return target_local_dir(target) / "process"
 
 

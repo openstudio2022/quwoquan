@@ -7,8 +7,6 @@ import re
 
 from content.release.environment.handler import VALID_ENVS, handle_ship
 from core.control_types import ReleaseRunKind
-from verify.release_publishability import READINESS_PHASES
-
 _SHA256_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -123,21 +121,15 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "--previous-environment-readiness",
         default="",
         help=(
-            "Beta/Gamma/Prod milestone production activation 必需的前一环境 "
+            "Beta/Gamma/Prod milestone activation 必需的前一环境 "
             "release-readiness.json（相对 QWQ_OUTPUT_ROOT）"
         ),
-    )
-    verify.add_argument(
-        "--readiness-phase",
-        choices=sorted(READINESS_PHASES),
-        default="production",
-        help="production：以 fresh guest 身份验证首页/载体/公开媒体与 premium_stream 读回",
     )
     verify.add_argument(
         "--lifecycle-exit-ref",
         default="",
         help=(
-            "commercial phase 必需的 canonical rollback/replay lifecycle Exit "
+            "verify 必需的 canonical rollback/replay lifecycle Exit "
             "ref（相对 QWQ_OUTPUT_ROOT）"
         ),
     )

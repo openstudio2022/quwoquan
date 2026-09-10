@@ -73,7 +73,6 @@ def test_admission_lists_watermarked_assets_without_blocking(tmp_path: Path, mon
         release_id="watermark-001",
         objects_root=tmp_path,
         desired={"entities": [], "posts": ["image/风光/a/1", "image/风光/b/1"]},
-        release_class="production",
     )
 
     assert document["watermarkedAssetIds"] == ["logo"]

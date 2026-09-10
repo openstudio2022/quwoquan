@@ -270,12 +270,6 @@ final accountSessionLifecycleCommandWriterProvider =
       return ref.watch(accountSessionCommandWriterProvider);
     });
 
-/// Alpha Research 短期身份签发；production composition 仍只经 generated client。
-final accountSessionResearchIdentityWriterProvider =
-    Provider<AccountSessionResearchIdentityWriter>((ref) {
-      return ref.watch(accountSessionCommandWriterProvider);
-    });
-
 /// UserAccount 生命周期终态写面（CloseAccount，Apple 5.1.1(v) 注销）。
 /// production Remote-only；alpha/test 经 ProviderScope override 注入替身。
 final accountLifecycleCommandWriterProvider =
@@ -317,9 +311,7 @@ CloudOperationInvocationContext _accountSessionInvocationContext(
 ) {
   final surface =
       clientPageId == UserRequestPageIds.loginAnonymous ||
-          clientPageId == UserRequestPageIds.refreshToken ||
-          clientPageId ==
-              UserRequestPageIds.issueWhitelistedResearchSession
+          clientPageId == UserRequestPageIds.refreshToken
       ? AppUiSurfaces.appShell
       : clientPageId == UserRequestPageIds.logout
       ? AppUiSurfaces.settingsHome

@@ -59,6 +59,7 @@ def register_parser(
             "config",
             "security",
             "release",
+            "content",
             "all",
         ],
         default="all",
@@ -74,9 +75,18 @@ def register_parser(
             "config",
             "security",
             "release",
+            "content",
             "all",
         ],
     )
+    inspect_parser.add_argument("--release-id", default="", help="content: expected active release; never activates it")
+    inspect_parser.add_argument("--manifest-digest", default="", help="content: expected active manifest digest")
+    inspect_parser.add_argument("--page-size", type=int, default=20)
+    inspect_parser.add_argument("--max-pages", type=int, default=100)
+    inspect_parser.add_argument("--max-bytes", type=int, default=32 * 1024 * 1024)
+    inspect_parser.add_argument("--total-seconds", type=float, default=60.0)
+    inspect_parser.add_argument("--detail-samples", type=int, default=5)
+    inspect_parser.add_argument("--candidate-digest", default="")
     inspect_parser.add_argument("--distribution-root", default="")
     inspect_parser.add_argument("--verify-hosted", action="store_true")
     inspect_parser.add_argument(
@@ -86,8 +96,48 @@ def register_parser(
     )
 
 
+def _command_content_inventory(args: argparse.Namespace) -> dict[str, Any]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.content_inventory import InventoryLimits, collect_content_inventory
+
+    started_monotonic, started_at = _stackctl._start_timing()
+    inventory = collect_content_inventory(
+        target=args.target, release_id=args.release_id, manifest_digest=args.manifest_digest,
+        limits=InventoryLimits(page_size=args.page_size, max_pages=args.max_pages,
+                               max_bytes=args.max_bytes, total_seconds=args.total_seconds,
+                               detail_samples=args.detail_samples),
+    )
+    try:
+        topology = _stackctl.load_environment_topology()
+        env_name = str(_stackctl.get_target(topology, args.target)["env"])
+    except (OSError, ValueError, RuntimeError):
+        # authority 解析已返回 typed blocker；报告落 repo，不重复抛错丢失失败证据。
+        env_name = "repo"
+    report_dir = _stackctl.resolve_report_dir(args, env_name, args.target)
+    timing = _stackctl._finish_timing(started_monotonic, started_at)
+    blocker = inventory["firstBlocker"]
+    details = [blocker["type"]] if blocker else ["public browse inventory collected; windows and media are observations only"]
+    status = "failed" if blocker else "ok"
+    summary = f"stackctl inspect content {status} for {args.target}"
+    _stackctl.write_json(report_dir / "content.json", inventory)
+    _stackctl.write_json(report_dir / "report.json", {
+        "command": "inspect", "inspection": {"content": inventory},
+        "findings": details if blocker else [], **timing,
+    })
+    _stackctl._write_summary_bundle(
+        report_dir, command="inspect", target=args.target, status=status,
+        summary=summary, details=details, extra={"scope": "content"}, timing=timing,
+    )
+    return {"exitCode": 1 if blocker else 0, "summary": summary, "details": details,
+            "reportDir": _stackctl.relpath(report_dir), "contentInventory": inventory, **timing}
+
+
 def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
+
+    # 内容只读盘点绝不进入 availability/candidate 聚合，其内部可能隐式 derive。
+    if args.scope == "content":
+        return _command_content_inventory(args)
 
     topology = _stackctl.load_environment_topology()
     target = _stackctl.get_target(topology, args.target)
@@ -107,7 +157,7 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             if getattr(args, "currentness", False)
             else _stackctl._candidate_workspace_report(args.target)
         )
-        if "config" in scopes or "data" in scopes
+        if args.target != "prod-hosted" and ("config" in scopes or "data" in scopes)
         else None
     )
     if "network" in scopes:
@@ -136,26 +186,7 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             ),
         }
         if args.target == "prod-hosted":
-            runtimes = _stackctl._prod_instance_runtime_reports(
-                report_dir,
-                instance=str(getattr(args, "deployment_instance", "prod") or "prod"),
-                host=str(getattr(args, "ssh_host", "") or ""),
-                host_id=str(getattr(args, "host_id", "") or ""),
-            )
-            inspection["config"]["rootlessRuntimeReplicas"] = runtimes
-            for runtime in runtimes:
-                plane = str(runtime.get("plane") or "unknown")
-                findings.extend(_stackctl._prod_plane_runtime_findings(runtime, plane=plane))
-            service_runtimes = [
-                runtime for runtime in runtimes if runtime.get("plane") == "service"
-            ]
-            edge_runtimes = [
-                runtime for runtime in runtimes if runtime.get("plane") == "edge"
-            ]
-            if len(service_runtimes) == 1:
-                inspection["config"]["rootlessRuntime"] = service_runtimes[0]
-            if len(edge_runtimes) == 1:
-                inspection["config"]["edgeRootlessRuntime"] = edge_runtimes[0]
+            inspection["config"]["runtimeIdentitySource"] = "hosted SSH readback; see userAvailability.evidence.runtime"
         if "data" not in scopes and candidate_workspace is not None:
             findings.extend(
                 f"candidate workspace: {issue}"
@@ -224,7 +255,11 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             }
             findings.append(f"release distribution: {error}")
     try:
-        user_availability = _stackctl._read_only_user_availability_report(args.target)
+        from quwoquan_ops.cli.commands.hosted_read_only import identity_arguments
+
+        user_availability = _stackctl._read_only_user_availability_report(
+            args.target, **(identity_arguments(args) if args.target == "prod-hosted" else {}),
+        )
     except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
         detail = f"read-only availability aggregation blocked: {error}"
         user_availability = {
@@ -240,6 +275,12 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         }
         findings.append(detail)
     inspection["userAvailability"] = user_availability
+    if args.target == "prod-hosted":
+        hosted_evidence = user_availability.get("evidence", {})
+        inspection["runtimeDiagnostics"] = hosted_evidence
+        findings.extend((hosted_evidence.get("containerRuntime") or {}).get("issues") or [])
+        findings.extend((hosted_evidence.get("firstPartyReadiness") or {}).get("issues") or [])
+        findings = list(dict.fromkeys(findings))
     output_inspection = dict(inspection)
     timing = _stackctl._finish_timing(started_monotonic, started_at)
     _stackctl.write_json(
@@ -293,6 +334,7 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         "reportDir": _stackctl.relpath(report_dir),
         "userAvailability": user_availability.get("userAvailability", []),
         "firstBlockerClass": user_availability.get("firstBlockerClass", "startup_identity"),
+        "runtimeDiagnostics": user_availability.get("evidence", {}) if args.target == "prod-hosted" else {},
         **timing,
     }
 
@@ -300,6 +342,8 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
 def _local_log_report(target_name: str) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    if target_name == "prod-hosted":
+        return {"paths": [], "runtimeDiagnostics": {"availability": "unavailable", "reason": "hosted logs require an exact remote log reader; local runtime logs are not hosted evidence"}}
     candidates: dict[str, Path] = {
         "alpha-state": _stackctl.target_process_dir("alpha-local"),
         "beta-state": _stackctl.target_process_dir("beta-local"),

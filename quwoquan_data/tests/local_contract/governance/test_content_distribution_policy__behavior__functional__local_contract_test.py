@@ -33,9 +33,9 @@ def _asset(*, rights_status: str, proof: str = "") -> dict[str, object]:
 def test_production_policy_is_explicit_and_disables_media_generation() -> None:
     policy = load_content_distribution_policy()
 
-    assert policy.policy_id == "production-content"
-    assert policy.product_lifecycle_state.value == "production"
-    assert policy.release_class.value == "production"
+    assert policy.policy_id == "content-distribution"
+    assert not hasattr(policy, "product_lifecycle_state")
+    assert not hasattr(policy, "release_class")
     assert policy.image_generation_allowed is False
     assert policy.video_generation_allowed is False
     assert policy.image_provider_priority[:2] == ("pinterest", "tuchong")
@@ -159,9 +159,9 @@ def test_environment_cannot_select_lifecycle_or_release_class(monkeypatch) -> No
 
     policy = load_content_distribution_policy()
 
-    assert policy.policy_id == "production-content"
-    assert policy.product_lifecycle_state.value == "production"
-    assert policy.release_class.value == "production"
+    assert policy.policy_id == "content-distribution"
+    assert not hasattr(policy, "product_lifecycle_state")
+    assert not hasattr(policy, "release_class")
 
 
 def test_image_commercial_admission_cannot_exceed_frozen_usage_or_model_release_scope() -> None:

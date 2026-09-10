@@ -38,3 +38,13 @@ fi
 
 echo "[hooks] installed via core.hooksPath=quwoquan_ops/hooks (readback ok)"
 echo "[hooks] pre-commit: staged boundary（secret/PII、generated 边界、branch policy）; pre-push: branch policy; post-commit: 轻量标记下次 session 检查"
+
+# 每次 clone / 新 worktree 都会跑 install-hooks：借此把 Flutter facade PATH 注入的漂移
+# 暴露出来（worktree 重组后旧投影会指向不存在的路径）。只报告、不修改用户 shell；
+# Debug-nonprod 启动本身不依赖 facade（REQ-003 build_time_self_supply），因此不阻断。
+facade_status_json="$(PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/quwoquan_app/scripts/tools/flutter_facade/activate_cursor_workspace.py" --scope all --status 2>/dev/null || true)"
+if printf '%s' "$facade_status_json" | grep -Eq '"(projectionState|workspaceEntrypointState)": "(drifted|missing|inactive)"'; then
+  echo "[hooks] NOTICE: Flutter facade PATH 注入已漂移或未激活（run.sh / 受管 flutter run 不在 PATH）。"
+  echo "[hooks]         裸 flutter run 与 ./quwoquan_app/run.sh 不受影响；需要全局 run.sh 时在本工作树执行："
+  echo "[hooks]         make app-activate-flutter-facade FACADE_ACTION=\"--scope all\""
+fi

@@ -1,7 +1,5 @@
 schema: quwoquan.content_distribution_policy
-policyId: production-content
-productLifecycleState: production
-releaseClass: production
+policyId: content-distribution
 mediaGeneration:
   imageAllowed: false
   videoAllowed: false
@@ -35,7 +33,7 @@ researchDiscovery:
     statistical: true
     nonBlocking: true
 # 权利只记录不阻断：四种 rightsStatus 都可发布，公众可见性由下游运营运行时配置决定。
-productionDistribution:
+distribution:
   recordedRightsStatuses:
     - verified
     - unverified

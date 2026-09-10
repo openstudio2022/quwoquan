@@ -106,13 +106,14 @@ def _provider_local_functional_errors(
     return errors
 
 
-def _down_target(target: str, *, down_fn: EnvRunner) -> dict[str, Any]:
+def _down_target(target: str, *, down_fn: EnvRunner, generation: str) -> dict[str, Any]:
     """Only use stackctl down; never kill listeners, clear locks, or wipe state."""
     return _invoke_env(
         down_fn,
         _namespace(
             command="down",
             target=target,
+            expected_generation=generation,
             formal_release_teardown=False,
             release_manifest="",
             output_format="json",
@@ -128,30 +129,21 @@ def _run_down_phase(
     down_fn: EnvRunner,
     phases: list[dict[str, Any]],
     phase_name: str,
+    ownership: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], int]:
-    payload = _down_target(target, down_fn=down_fn)
+    generation = str((ownership or {}).get("instanceGeneration") or "")
+    if (ownership or {}).get("runtimeCreated") is not True:
+        # 复用或创建前失败不授予清理权；不把无动作伪装成 down 证据。
+        payload = {"exitCode": 0, "cleanupDisposition": "preserved_not_owned", "target": target}
+    elif not generation:
+        payload = {"exitCode": 2, "blockerKind": "cleanup_generation_missing", "target": target}
+    else:
+        payload = _down_target(target, down_fn=down_fn, generation=generation)
     return payload, _record_phase(phases, name=phase_name, payload=payload)
 
 
-def _pre_down_shared_targets(
-    target: str,
-    *,
-    down_fn: EnvRunner,
-    phases: list[dict[str, Any]],
-    block: dict[str, Any],
-) -> int:
-    for other in CANONICAL_TARGETS:
-        payload, exit_code = _run_down_phase(
-            other, down_fn=down_fn, phases=phases, phase_name=f"{target}_pre_down_{other}"
-        )
-        if exit_code != 0:
-            block["preDown"] = payload
-            return exit_code
-    return 0
-
-
 def _drain_resource_journal(
-    resource_journal: list[str],
+    resource_journal: dict[str, dict[str, Any]],
     *,
     down_fn: EnvRunner,
     phases: list[dict[str, Any]],
@@ -164,6 +156,7 @@ def _drain_resource_journal(
             down_fn=down_fn,
             phases=phases,
             phase_name=f"{target}_resource_journal_finally_down",
+            ownership=resource_journal[target],
         )
         environments.setdefault(target, {})["resourceJournalFinallyDown"] = payload
         if exit_code != 0 and first_exit == 0:
@@ -332,10 +325,14 @@ def _live_matrix_evidence_errors(
         "telemetryBefore",
         "providerMatrix",
         "candidateApply",
+        "candidateActivate",
         "candidateVerify",
+        "rollbackPrepare",
+        "rollbackActiveQuery",
         "rollbackApply",
         "rollbackVerify",
         "replayApply",
+        "replayActivate",
         "verify",
         "replayVerify",
         "homepageReleaseEvidence",

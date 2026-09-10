@@ -33,7 +33,7 @@ fi
 # raw Xcode 也得到与 canonical executor 相同的 typed blocker。
 # Debug-nonprod 构建期自供给（REQ-003 build_time_self_supply）：无外部 canonical handoff
 # 时，以当前源码树（SRCROOT 推导的 APP_DIR，不读任何用户级配置）调用仓内 canonical
-# handoff builder 现场签发 alpha test_live package + nonprod trust，并以激活请求形态嵌入
+# handoff builder 签发独立 Alpha offline bootstrap + nonprod trust，并以激活请求形态嵌入
 # 制品；Profile/Release 与 prod 仍 fail-closed。
 RUNTIME_TRUST_PATH="${QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH:-}"
 SELF_SUPPLY_REQUEST_PATH=""

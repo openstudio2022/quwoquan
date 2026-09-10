@@ -34,6 +34,7 @@ from lib.evidence_fingerprint import (  # noqa: E402
     validate_ref,
     workspace_digests,
 )
+from lib.candidate_evidence import read_candidate_closure  # noqa: E402
 import review_dispatch as review_dispatch_module  # noqa: E402
 from lib.descriptor_safe_io import (  # noqa: E402
     read_repo_relative_regular_single_link,
@@ -103,8 +104,12 @@ def _workspace_source_classification(repo_root: Path = ROOT) -> dict[str, Any]:
         if result.returncode == 0 and result.stdout.strip():
             merge_base_sha = result.stdout.strip()
             break
+    # 此处只判全树是否为空，不消费路径明细；normal 仍包含每个非空未跟踪目录，
+    # 禁用 rename 配对不改变空/非空，且只读查询不抢默认 index 锁。
+    # candidate 的完整路径与五类快照仍由 canonical snapshot_paths 独立逐阶段校验。
     status = subprocess.run(
-        ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        ["git", "--no-optional-locks", "status", "--porcelain=v1", "-z",
+         "--untracked-files=normal", "--no-renames"],
         cwd=repo_root,
         capture_output=True,
         check=False,
@@ -228,6 +233,11 @@ def _fingerprint(
         raise EvidenceRunnerError(
             "exact plan bytes identity 为 evidence fingerprint 重算必填输入"
         )
+    # 闭包位于Git忽略目录，workspace摘要不能代替每个边界的有界exact-byte读回。
+    try:
+        read_candidate_closure(plan["candidate_evidence_identity"]["ref"], repo_root=repo_root)
+    except (OSError, ValueError) as exc:
+        raise EvidenceRunnerError(f"{getattr(exc, 'code', 'CANDIDATE.STALE')}: {exc}") from exc
     current_plan = review_dispatch_module.recompute_plan_fingerprint(plan, registry)
     payload = current_plan["digest_payload"]
     generator_path = Path(__file__).resolve()

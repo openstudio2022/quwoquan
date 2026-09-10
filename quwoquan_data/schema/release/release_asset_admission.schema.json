@@ -5,8 +5,6 @@
   "required": [
     "schema",
     "releaseId",
-    "releaseClass",
-    "productLifecycleState",
     "containsUnverifiedAssets",
     "rightsStatusCounts",
     "authorizationRequiredAssetIds",
@@ -25,16 +23,6 @@
     "releaseId": {
       "type": "string",
       "minLength": 1
-    },
-    "releaseClass": {
-      "enum": [
-        "production"
-      ]
-    },
-    "productLifecycleState": {
-      "enum": [
-        "production"
-      ]
     },
     "containsUnverifiedAssets": {
       "type": "boolean"
@@ -77,6 +65,15 @@
     },
     "watermarkedAssetIds": {
       "description": "AI 看图申报 watermarkStatus=present 的资产；只记录供运营审核，不阻断。",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "accessRestrictedAssetIds": {
+      "description": "来源行申报 accessPolicy 为 robots_disallowed|tos_restricted 的资产；只记录供运营决定公众可见性，不阻断。",
       "type": "array",
       "uniqueItems": true,
       "items": {
@@ -337,6 +334,9 @@
           },
           "watermarkKind": {
             "enum": ["none", "author_signature", "platform_logo", "stock_agency", "other", "unknown"]
+          },
+          "accessPolicy": {
+            "enum": ["open", "robots_disallowed", "tos_restricted"]
           }
         }
       }

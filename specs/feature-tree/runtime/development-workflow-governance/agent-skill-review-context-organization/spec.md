@@ -38,6 +38,7 @@
 - `.agents/skills/*/SKILL.md` metadata 是唯一宿主发现面，body 是唯一 Workflow Skill 正文，只拥有触发与输入、执行、完成证据、失败停止、条件性交接五段；完成判据就地声明，不再经共享 completion/interaction 文档二次跳转。
 - Feature spec/design/contracts 拥有功能行为、设计约束与验收；Review role 只拥有职责和盲区，checklist 只拥有分级判定并引用命名 evidence。
 - `.cursor/commands` 只是一行式显式入口；`.cursor/agents` 与 `.codex/agents` 只允许 Reviewer projection。宿主专属目录不得承载 Workflow Skill stub、发现副本或规范正文。
+- 每层上下文各有独立字节预算，不得互相挤占：根 `AGENTS.md` ≤ 6 KiB，L1 子树 `AGENTS.md` ≤ 5 KiB，更深子树 ≤ 2 KiB，单个 Workflow Skill 文件 ≤ 4 KiB，单条 description ≤ 300 字符；根加祖先链 16 KiB 与 description 合计 8000 字符的总量上限继续成立。子树 `AGENTS.md` 不复述已有 spec/design/contract owner 的解释性知识，只以一句指向替代；Skill body 不复述根 `AGENTS.md`、canonical contract 或其他 Skill 已唯一拥有的规则（角色交互 binding、owner manifest 前置、零 Reviewer 派审形态、六类 handoff 触发），只保留本 Skill 独有的输入、步骤、证据与停止条件。存量超限文件只登记于 `quwoquan_ops/policies/gates/agent_context_budget_baseline.yaml`，条目字节只减不增，回落到预算内即须同批删除条目。
 - Workflow Skill 只有在业务语义明确要求独立 actor 时才可派发子 Agent；主会话必须直接拥有流程推进与机械命令，派发前读取 canonical artifact/receipt 判断该工作单元尚未完成，默认同一时刻只启动一个前台语义 actor。被派发 actor 只写边界内语义产物，不得再派发子 Agent、关闭阶段、创建替代 execution 或执行发布；`starting up`、超时或调用失败不得触发自动补发，只有 definitively failed 的 typed blocker 才可由主会话决定人工恢复。
 
 <a id="req-002"></a>
@@ -49,7 +50,8 @@
   精确下钻；同优先级多 owner、无 owner或解析失败必须产生 typed owner 解析结果。
 - `explore`、`plan-next` 及 `continue` 的只读恢复 best-effort 调用 `feature-context`：唯一 owner 成功时保存并消费 immutable exact ref；无 owner、多 owner或解析失败时记录 typed 结果，基于当前 Git 快照继续只读，不 `GATE_BLOCK` 整个控制流程，也不得据此进入 mutation。
 - prd、design、dev 等 mutation workflow 进入写入前必须持有唯一且 current 的 immutable exact ref；用户显式或准出 Review 必须复用该 PRE owner identity ref，并绑定 POST current candidate evidence predecessor。ref 缺失、旧 schema、内容摘要漂移、owner 多义、锚点冲突或 fingerprint stale 必须 fail-closed。控制型零 Reviewer workflow 不得包装送审交付件旁路 owner manifest。
-- candidate evidence v2 以一个版本化 lane policy 允许的逻辑 `delivery_owner` 和 current branch `lead_lane` 代表整次原子交付；PRE `owner_identity_ref` 是该交付 primary target 的唯一 current predecessor。每条 changed path 必须由同一 Feature Tree resolver 唯一解析，在 `impacted_owner_groups` 中只存一次；每个 Feature owner 只保留一次最小 immutable owner identity、由 current resolver 可重建的 owner-chain digest 与 bytewise 稳定排序路径，且 primary target owner 必须出现在分组中。
+- candidate evidence 以一个版本化 lane policy 允许的逻辑 delivery owner 和 current branch lead lane 代表整次原子交付；PRE owner identity 是该交付 primary target 的唯一 current predecessor。每条 changed path 必须由同一 Feature Tree resolver 唯一解析，在一个完整、内容寻址、不可变且可移植的 owner/path 对象中只存一次；每个 Feature owner 只保留一次最小 owner identity、可由 current resolver 重建的 owner-chain digest 与 bytewise 稳定排序路径，且 primary target owner 必须出现在分组中。candidate 只绑定该对象的 exact identity 与完整覆盖信息，字段和资源边界由 canonical candidate contract 单点声明。
+- candidate manifest 保持既有预算，不因完整路径集合超预算而拆分原子交付、压缩丢路径、截断证据或更换基线。producer 必须先原子发布完整路径对象再发布 candidate；所有 Review/evidence/handoff consumer 必须有界读取并验证完整闭包、前驱关联、exact bytes、scope identity 与 current freshness，缺对象、篡改、逃逸、非 regular/single-link 文件及陈旧身份均 fail-closed。跨 runner 传输必须包含同一闭包的 exact bytes，不得仅复制摘要或依赖原宿主；旧 schema 必须按 canonical migration terminal 拒绝，不保留双读兼容。
 - 多个合法 Feature owner 只表示一个 delivery 的影响面，不再要求拆分；同一 candidate 必须绑定 100% changed paths 的 workspace digests、唯一 ImpactPlan identity、current fingerprint，并作为一个 candidate 和一个原子 PR 交付。空路径、无 owner、同优先级多 owner、primary owner 漂移或 current 重算 stale 均以独立 typed terminal fail-closed。
 - delivery/candidate identity 只写版本控制中的逻辑 lane、仓库相对路径、内容摘要和 exact ref；宿主绝对路径及本机 clone/worktree inventory 只能用于本地诊断，不得成为 Hosted admission 硬输入。
 - manifest 不包含 profiles。Review profile 只在显式或准出 Review 中按 current `changed_paths + deliverable` 派生 specialist 与 evidence，不复制 feature owner 或 design 内容。
@@ -59,7 +61,7 @@
 ### REQ-003 Review 固定为主审加最多一名专审
 
 - 显式或准出 Review 的 PRE 只由主会话完成 owner、范围、验收和 evidence 预检；其 POST 按 registry 先执行命名 evidence，再装配唯一 primary 与最高优先级 specialist。计划形态和预算必须遵守 canonical contract 与 registry limits。
-- `explore`、`plan-next`、`continue`、`review` 与 `commit` 是零 Reviewer 的控制型 workflow：前两者不产生送审交付件，`continue` 复用被恢复 workflow，`review` 禁止递归自审，`commit` lane 提交不要求 Review evidence。其他 workflow 在 registry 保留 primary/specialist 角色配置供显式或准出派发，开发期 POST 默认零 Reviewer；显式 Review 仍受同一两角色上限。
+- `explore`、`plan-next`、`continue`、`review`、`commit`、`sync-lane-from-dev` 与 `integrate-lane-to-dev` 是零 Reviewer 的控制型 workflow：前两者不产生送审交付件，`continue` 复用被恢复 workflow，`review` 禁止递归自审，`commit` lane 提交不要求 Review evidence，`sync-lane-from-dev` 只把 `dev1.0` 同步进当前 lane 工作树，`integrate-lane-to-dev` 只在唯一 integration 工作区把 lane head 合入 `dev1.0` 并回同步各 lane；后两者的 Git 通道、Alpha 事实复用与回同步边界由 [`daily-merge-release-strategy` REQ-002](../../deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#req-002) 唯一拥有，本 Story 只拥有其零 Reviewer 与 Skill 形状。其他 workflow 在 registry 保留 primary/specialist 角色配置供显式或准出派发，开发期 POST 默认零 Reviewer；显式 Review 仍受同一两角色上限。
 - 修复后只允许 finding owner 定向复审；禁止第二次自动复审、超时自动重试或绕过 registry limits。
 - 24KiB 是单个 Reviewer **最终 assembled input** 的硬边界，不是 dispatcher 规则文件估算：canonical assembler 必须计入 executor/system prompt、role、checklist、grading、owner identity、candidate evidence identity、changed paths/diff summary、named evidence/finding summary 与 relevant contexts。超预算先做带 marker、原始 byte count 与 digest 的结构化压缩/ref-only/truncation；仍超预算返回 `REVIEW.CONTEXT_BUDGET_EXCEEDED`，owner/candidate identity 永不静默删除。reviewer result 与 consolidation identity 必须记录 exact assembled byte count、digest 和压缩/截断元数据。
 
@@ -117,6 +119,7 @@
 - GIVEN 根/子树 AGENTS、Workflow Skill、角色/checklist、Feature 设计和 harness adapter 处于当前态。
 - WHEN 运行 Agent 上下文治理门禁，并对含长 wrapper、长 finding 与长 relevant context 的 Reviewer input 执行 canonical final assembly。
 - THEN 根加最近子树 AGENTS 不超过 16KiB，单 Reviewer 最终 assembled input 不超过 24KiB，默认 manifest 不超过 8KiB；压缩必须可审计，无法压入时 typed `REVIEW.CONTEXT_BUDGET_EXCEEDED`。
+- AND 根、L1 子树、更深子树 `AGENTS.md`、单个 Workflow Skill 文件与单条 description 各自不超过分层预算；不在册的超限文件、在册但字节增长的条目、以及已回落到预算内却仍在册的条目都判否，HOTL 运行矩阵的 Skill 闭集从 `.agents/skills` 发现派生而不是硬编码。
 - AND 角色 reference、规范性 Cursor rule、共享 completion/interaction 跳转或 harness 规范副本出现时门禁判否并指出唯一迁移层。
 - AND 需要独立语义 actor 的 Workflow Skill 必须声明主会话 owner、canonical artifact 启动去重、单一前台调用、被派发 actor 禁止嵌套派发/阶段推进/发布，以及 `starting up` 或失败不自动补发；缺任一边界时治理合同测试判否。
 
@@ -127,17 +130,18 @@
 - WHEN 只读控制 Skill、mutation workflow 与显式/准出 Review 分别以默认格式请求 feature context。
 - THEN 唯一 owner 成功时，Skill PRE 产出的 owner identity exact ref 是显式/准出 Review candidate evidence 的稳定 predecessor，均指向相同的 AppRoot/L1/L2/L3、DEC/REQ/GWT 锚点和适用 AGENTS，不含父链全文或 profiles。
 - AND 无 owner、多 owner或解析失败时，只读控制 Skill 记录 typed 结果并基于当前 Git 快照继续只读，不产生 mutation 授权；mutation workflow 与显式/准出 Review 返回 typed `GATE_BLOCK`。
-- AND 一个包含 Review 实现路径与 App 路径的 candidate 仍由单一 delivery owner/lead lane 形成一个 ImpactPlan、candidate 与原子 PR；所有 changed paths 由 resolver 唯一解析为两个稳定排序且路径全覆盖的 impacted Feature-owner groups；路径只在所属 group 存一次，owner chain/contexts 不按 group 复制而以 digest 绑定可重建事实，跨合法 owner 本身不产生 split terminal。
+- AND 一个包含 Review 实现路径与 App 路径的 candidate 仍由单一 delivery owner/lead lane 形成一个 ImpactPlan、candidate 与原子 PR；所有 changed paths 由 resolver 唯一解析为两个稳定排序且路径全覆盖的 impacted Feature-owner groups；完整 groups 仅存于内容寻址不可变对象，candidate exact ref 绑定该对象，owner chain/contexts 不按 group 复制，跨合法 owner 本身不产生 split terminal。
 - AND changed paths 为空、任一路径无 owner或多 owner、primary target owner 未出现在 groups、groups 路径遗漏/重复/篡改、lane policy/owner chain/workspace/ImpactPlan/fingerprint current 重算漂移，或旧 candidate schema 被消费时均 fail-closed；Hosted 校验不依赖宿主绝对路径或本机 worktree inventory。
 - AND ref 摘要漂移、内容寻址 writer 最终读取期间目录项被替换，或 Review profile 未按 `changed_paths + deliverable` 派生时 fail-closed，其中 writer 只有在已验证 fd 与返回 ref 的当前目录项仍指向同一单链接 regular inode 时才可返回。
+- AND 对完整路径序列本身超过 candidate manifest 预算的大候选，正式 producer 仍输出预算内的单个 candidate，全部原始路径、owner 映射与前驱可由同一不可变对象完整读回；并发同值发布幂等，失败不得暴露缺失依赖的 candidate。对象缺失、内容/计数/前驱篡改、超声明长度、路径或目录 symlink、scope 与 current 字节漂移及旧 schema 均 typed 拒绝；Review、named evidence 与跨 runner handoff 的完整闭包消费均有直接合同证明。
 
 <a id="gwt-003"></a>
 ### GWT-003 PRE 零 Reviewer 且 POST 至多两名
 
-- GIVEN pageflip、纯 Python gate、无 profile 的普通实现和上述五个零 Reviewer 控制型 workflow。
+- GIVEN pageflip、纯 Python gate、无 profile 的普通实现和上述七个零 Reviewer 控制型 workflow。
 - WHEN 分别生成显式 Review 的 PRE 与 POST plan。
 - THEN 全部 PRE 的 reviewers/evidence 为空；pageflip POST 只有 Developer 与 UX，纯 Python gate 只有 Developer 与 Ops，无 profile 的普通实现 POST 只有 primary。
-- AND 上述五个控制型 workflow 为零 Reviewer，任一仅由显式或准出入口生成的 initial Review plan 的 Reviewer 不超过两名。
+- AND 上述七个控制型 workflow 为零 Reviewer，任一仅由显式或准出入口生成的 initial Review plan 的 Reviewer 不超过两名。
 
 <a id="gwt-004"></a>
 ### GWT-004 命名 Evidence、指纹与定向复审
@@ -176,9 +180,9 @@
 <a id="gwt-008"></a>
 ### GWT-008 非阻断 Workflow Trace 与宿主能力矩阵
 
-- GIVEN 版本控制中的 12 个 `.agents/skills/*/SKILL.md`、Cursor 当前实际存在的显式 command，以及 Codex 不存在 Workflow command stub 的文件事实。
+- GIVEN 版本控制中的 14 个 `.agents/skills/*/SKILL.md`、Cursor 当前实际存在的显式 command，以及 Codex 不存在 Workflow command stub 的文件事实。
 - WHEN 运行 `python3 quwoquan_ops/cli/workflow_trace.py matrix`，或通过 `start`、`finish`、`readback` 记录和读取一轮 runtime trace。
-- THEN matrix 精确列出 12 个 Skill、Cursor 仅列实际存在的 8 个显式入口、Codex 显式入口全部为 `unsupported`；未绑定真实宿主 sample 的 discovery 只能为 `declared`，任何文件存在事实都不得产生 `verified`。
+- THEN matrix 精确列出 14 个 Skill、Cursor 仅列实际存在的 10 个显式入口、Codex 显式入口全部为 `unsupported`；未绑定真实宿主 sample 的 discovery 只能为 `declared`，任何文件存在事实都不得产生 `verified`。
 - AND start 记录 entry kind、host、selected Skill、Skill body digest、可选 owner ref、capability status 与时间；finish 必须绑定 exact start ref、create-once，并记录 terminal、可选 candidate ref、status 与时间；opaque owner/candidate ref 仅携带、不在此处冒充双身份校验。
 - AND `natural_language` 不得自动标为 `verified`；只有实际 host sample 与显式 command evidence 才允许对应显式入口为 `verified`。trace 写入、校验、tamper 或 readback 失败只返回 typed non-blocking advisory，不接 hook、硬门或业务高频路径。
 
@@ -192,6 +196,16 @@
 - 父级设计：`DEC-002`、`DEC-003`、`DEC-004`、`DEC-005`。
 
 ## 7. 开放事项
+
+<a id="open-005"></a>
+### OPEN-005 大候选无损闭包的正式准出证据尚未齐备
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：无损路径对象与跨 runner exact-byte 闭包已进入单轨契约，但当前完整交付尚缺同一 clean HEAD 的全部命名 evidence、Reviewer 与后续准出证据。AGENTS 上下文链的既有超预算也仍须由其 owner 收敛；本地闭包合同及预算内 candidate 不替代完整交付准出，不能用部分范围或预算豁免关闭。
+- 完成判定：`GWT-002.t10` 的完整 merge-base 到 HEAD 路径、前驱及 freshness 由正式 producer 和全部消费者证明；`GWT-007.t1` 的 current 命名证据与有界 Review 均通过，且 required 上下文预算门无阻断。
+- 依赖：最近 L2 candidate 引用设计、canonical candidate schema、Review/handoff 消费链与 AGENTS 上下文预算 owner。
 
 <a id="open-001"></a>
 ### OPEN-001 渐进上下文与轻量 Review 尚未全部绑定真实证据
@@ -217,6 +231,27 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：当前 exact candidate-bound Code Health report 将 `evidence_runner.py::run_plan`、`agent_governance_contract.py::validate_candidate_evidence_manifest` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`，并将 `review_dispatch.py` 标为 `CODE_HEALTH.FILE_LINES_ADVISORY`；这些 calibration `PR_WARN` 不阻断 candidate，但会增加 exact identity、artifact 与 fail-closed 分支的审计成本。
-- 完成判定：`GWT-003` 与 `GWT-007` 对应行为继续满足；在独立 owner increment 中逐项收敛这 3 个 identity，保持现有 Review schema、create-once、digest 与 terminal 合同；fresh clean-range Code Health 不再产生对应 advisory，且不得新增 allowlist、baseline 或削弱 Reviewer 输入预算。
+- 影响或价值：当前 Code Health 将 `evidence_runner.py::run_plan`、`agent_governance_contract.py::validate_candidate_evidence_manifest` 及无损闭包的 `handoff_consumer.py::validate_handoff_payload`、`agent_governance_contract.py::validate_candidate_path_set`、`candidate_evidence.py::_validate_path_set`、`candidate_evidence.py::validate_candidate_closure`、`feature_tree/ownership.py::_read_design_ownerships` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`，并将 `review_dispatch.py` 标为 `CODE_HEALTH.FILE_LINES_ADVISORY`；这些 calibration `PR_WARN` 不阻断 candidate，但增加 exact identity、artifact 与 fail-closed 分支的审计成本。单个 schema 迁移增量的 `CHANGE_SIZE_ADVISORY` 保持原子闭包边界，不以拆候选消除；路径与 owner 解析热点的结构收敛交对应精确 owner 增量。
+- 完成判定：`GWT-002.t10`、`GWT-003` 与 `GWT-007` 对应行为继续满足；独立 owner increment 逐项收敛上述 identity，保持单轨 Review schema、有界读取、create-once、digest 与 terminal 合同；fresh clean-range Code Health 不再产生对应结构 advisory，且不得新增 allowlist、baseline 或削弱 Reviewer 输入预算。
 - 依赖：current Code Health named evidence与 Review focused contracts。
+
+<a id="open-004"></a>
+### OPEN-004 content-production 多 actor 派发契约尚未进入规格与治理合同
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：data-engineering 在 `7f67384ea` 把 `content-production` Skill 的 actor 契约改写为主会话可派发子 Agent、author 可为独立子 Agent 会话、reviewer 按 execution 并行（同一 execution 至多一个、不同 execution 可并行），并删除了 `human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.content-production` 的绑定引用；但 `REQ-001` 第六条与 `GWT-001.t3` 仍要求单主会话 owner、全局单一前台 reviewer 调用与被派发 actor 禁止嵌套派发，`test_agent_context_budget__gate__local_contract_test` 与 `test_human_agent_delivery__contract_router__governance__local_contract_test` 两条治理合同仍固化该单主会话契约，导致 `04. Lane Gate` 判否。本次仅为通过 04 把 Skill 正文恢复到规格措辞，data lane 想要的多 actor 派发契约尚未在规格、治理合同与 Skill 三处形成一致的 canonical 声明，`references/rounds.md`、`references/recipes.md` 中「每 execution 各派 author 与 reviewer 子 Agent、2+2 错峰」的操作说明也与现行契约存在张力。
+- 目标：由 prd/design 走正规流程裁定是否放开多 actor 派发；若放开，先修改本 spec `REQ-001`/`GWT-001` 与两条治理合同测试，再改 Skill 正文与 references；若不放开，data lane 回收 references 中与单主会话契约相悖的操作说明。任何一方都不得再以先改 Skill 正文的方式绕过合同。
+- 完成判定：`GWT-001.t3` 与 `GWT-005` 对应行为满足：`.agents/skills/content-production/SKILL.md` 声明的 actor 契约、`REQ-001` 第六条、`agent_governance_contract`/`human_agent_delivery_contract` 相关合同测试三者措辞一致且 `04. Lane Gate` 的 ops local_contract shard 全部通过；如裁定放开多 actor 派发，`GWT-001.t3` 的 AND 子句与对应 `spec_ref` 测试须先于 Skill 正文更新，且 Skill 仍保留 `#workflow_interaction_binding.bindings.content-production` 绑定引用。
+- 依赖：`L2 DEC-005` 的 Workflow Skill 有界派发决策；data-engineering lane 对 `content-production` references 的 owner 增量；`quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding`。
+
+<a id="open-006"></a>
+### OPEN-006 其他 lane 拥有的上下文文件仍超分层预算
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：分层预算落地时，engineering 拥有的根 `AGENTS.md`、`quwoquan_ops/AGENTS.md` 与 12 个 Skill 已收敛到预算内；仍超限且只能由各自 owner lane 收敛的文件登记在 `quwoquan_ops/policies/gates/agent_context_budget_baseline.yaml`：`quwoquan_data/AGENTS.md`（L1 预算 5 KiB，现约 8.7 KiB；其中载体判定、五条硬门、放弃而不阻塞、producer 完成定义与 actor 契约约 3 KiB 与 `content-production` Skill 逐字重复，违反该文件自述的「不复制步骤正文」）、`quwoquan_app/AGENTS.md` 与 `quwoquan_service/AGENTS.md`（分别超 L1 预算约 0.6 KiB 与 30 B）、`content-production` Skill 文件（预算 4 KiB，现约 8.2 KiB）、`environment-ops` Skill 文件与 description、`incident-inspection` description。尚缺：这些 owner lane 各自的一次瘦身增量与对应 baseline 条目删除。
+- 完成判定：`GWT-001.t1` 持续绑定；baseline `entries` 归零后删除该 baseline 文件并把分层预算改为全仓零容忍。
+- 依赖：data-engineering、product-mainline、ops 三条 lane 的独立增量；`lane_ownership.yaml` 决定每个条目的 owner。

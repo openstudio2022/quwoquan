@@ -98,7 +98,6 @@ Future<void> _runQuwoquanAppInBootstrapZone({
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
   configureRecoveryRuntimeOperations();
-  registerFirebaseIncomingCallBackgroundHandler();
   _bootstrapProviderScopeOverrides = List<Override>.unmodifiable(
     providerScopeOverrides,
   );
@@ -108,6 +107,9 @@ Future<void> _runQuwoquanAppInBootstrapZone({
   try {
     unawaited(_hydrateNativeStartupTimingForBootstrap());
     await CloudRuntimeConfig.hydrateFromNativeRuntimePackage();
+    if (CloudRuntimeConfig.networkAccessAllowed) {
+      registerFirebaseIncomingCallBackgroundHandler();
+    }
     initializeStartupTelemetryRuntime();
     CloudRuntimeConfig.validateRequiredEndpoints();
     attachStartupTelemetryTransport();

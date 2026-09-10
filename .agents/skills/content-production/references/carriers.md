@@ -1,18 +1,23 @@
-# 四载体差异
+# 四载体分轨
 
-共用六步；本文件只写差异。每个对象只有一份主来源（来源单一类型判定），可附同源配图。
+共用六步；本文件只写差异：来源与发现、候选级质量筛选、采集与处理、产物、评分维度（维度锚点见 [quality.md](quality.md)，来源模板见 [sourcing.md](sourcing.md)）。一个实体默认产 1 homepage + 1 article + 1–2 image [+ video]。
 
-## homepage（实体主页）
+## homepage（实体主页，事实型）
 
-- 对象根 `entities/<域>/<类型>/<名称>/`，坐标即实体身份，无 angle/title/seq；候选绑定必须带 `region`（现有 `Topic/地理/行政区/<region>` 节点，publish 用它派生 `geoTagRef`）。
-- acquire：一个 zh.wikipedia 条目页（必须，publish 的 `_entity.json` 要求百科主源）；可附该条目 Commons 配图。
-- author：`4.draft/page.md`，首行 H1 为实体名，正文含地点、类型、看点、到达方式等事实段；不写 `entity_page_input.json`。
+- 对象根 `entities/<域>/<类型>/<名称>/`，坐标即实体身份，无 angle/title/seq；候选绑定必须带 `region`（现有 `Topic/地理/行政区/<region>` 节点，publish 用它派生 `geoTagRef`）。实体口径是用户愿意去的一切地方，类型只取 `Entity/地点/*` 现有叶子。
+- 来源与发现：名录 = 携程景点榜（按城市遍历、热度排序、读热度分/点评数/「必打卡」标签、类型筛「自然风光/户外活动/温泉/夜游/名胜古迹」以捞出网红地、露营地、秘境）∪ zh.wikipedia 分层类目（5A/4A/3A、一级博物馆、历史文化名镇名村、国家级自然保护区、各省文保）∪ AI 按地域给的秘境名单。主源：有 zh.wikipedia 条目取维基；否则取头条百科 `www.baike.com/wiki/<名>`（publish 实体 schema 的 `toutiao_baike` 成员）。百度百科 robots 全站禁止，不用。
+- 候选级筛选（可重放）：百科正文 ≥ 600 字且有信息框或 ≥3 条结构化事实；非消歧义；名称能定位到行政区；热度信号只作排序；有 ≥1 张可用配图优先，0 张走 text_only。
+- acquire：一个百科条目页（必须）；可附条目自身配图 / 头条百科 CC 图 / Flickr CC 图。
+- author：`4.draft/page.md`，首行 H1 为实体名，正文含位置、类型、看点、到达方式、季节/贴士等事实段；不写 `entity_page_input.json`。
 - publish：物化 `_entity.json + page.md + manifest.json`，实体绑定 `entityRef + tagRefs`。
+- 评分维度：`fact_traceability` 事实可溯源、`information_completeness` 信息完整、`structure_clarity` 结构清晰、`practical_value` 实用性、`image_relevance` 配图相关与质量、`source_quality` 来源质量。
 
-## article（文章）
+## article（文章，叙事/攻略型）
 
 - 对象根 `posts/article/<angle>/<title>/<seq>/`。
-- acquire：一个 zh.wikipedia 主题条目页（线路、文化、事件、现象），可附同页图片。
+- 来源与发现：主源是同一实体条目换 `publishAngle`（人文/攻略/风光/美食/摄影/自驾/徒步）或一个主题条目页；事实参考追加携程游记/攻略（`site:you.ctrip.com/travels <实体> 游记|攻略`，按热度/最新）、新闻旅游频道（新华网/中新网）与政府/文旅厅/景区官网公告（门票、开放时间、季节、交通的权威事实，补 `practical_density`）、磨房户外线路帖、zh.wikivoyage；选题风向参考 YouTube/Bilibili 热门 vlog 标题与携程「必打卡」标签。马蜂窝页面若为服务端渲染可按 `accessPolicy=robots_disallowed` 取事实参考；小红书、穷游、去哪儿、知乎、公众号属技术性规避（登录墙/503/挑战页），不用。
+- 候选级筛选：游记正文 ≥ 1,500 字、含行程/交通/费用/时间/贴士中 ≥3 项、发布 ≤ 3 年、非软广、非纯图流水账；单篇不够则多篇合参。
+- acquire：第三方文本全部 `factual_reference_only`（游记页 HTML→text 落盘）；可附同源或 Flickr/Commons 配图。
 - author：`4.draft/draft.article.md`，frontmatter：
 
 ```yaml
@@ -23,20 +28,26 @@ creatorProfileId: qwq_creator_travel_blogger_001
 ---
 ```
 
-正文 Markdown；引用图片用 `![caption](assets/<fileName>)`，只允许本对象 `assets/` 内文件。不写 `writing_pack.json`；无配图即 text_only，有配图即 illustrated（首图自动成为封面，其余为正文图），配图张数不设下限，0 张、1 张、多张都合法。post 的 `entityType/name` 指向的 homepage 必须已发布或同批发布，否则 release 时 `REFERENCE_MISSING`；选题前先用 `release pool-query` 确认实体是否已存在，已发布的实体不能重复 init。
+正文 Markdown，AI 亲笔原创、只取来源事实不搬运表达；引用图片用 `![caption](assets/<fileName>)`，只允许本对象 `assets/` 内文件。无配图即 text_only，有配图即 illustrated（首图自动成为封面），配图张数不设下限。post 的 `entityType/name` 指向的 homepage 必须已发布或同批发布，否则 release 时 `REFERENCE_MISSING`；选题前先用 `release pool-query` 确认实体是否已存在，已发布的实体不能重复 init。
+- 评分维度：`fact_traceability`、`originality` 原创性、`angle_and_title` 角度与标题、`practical_density` 实用信息密度、`readability` 可读性与结构、`image_match` 配图匹配。
 
-## image（图片作品）
+## image（图片作品，视觉型）
 
 - 对象根 `posts/image/<angle>/<title>/<seq>/`。
-- acquire：1–N 个 Commons 图片文件页，各一句相关性理由。
-- author：`4.draft/image_work.json`：`{"title","caption","assetRefs":["assets/..."],"creatorProfileId"}`；至少一个 assetRef。
+- 来源与发现：**创作者批量优先**——Commons 高产上传者 `allimages&aiuser`（Zhangzhugang / Huangdan2060 / Gisling / N509FZ…）与 QI/FP/VI 类目；图虫标签周榜/摄影师 rest 列表（带 favorites/views，`unverified`）；Pinterest 画板 RSS + `originals` 原图（`unknown`，`accessPolicy=robots_disallowed`）；Openverse API（Flickr CC 无 key 入口）；Flickr API（有 key 时 `people.getPublicPhotos`/`photos.search` `license=4,5,9,10`）；iNaturalist（自然保护区实体）；头条百科 `license: CC BY-SA 4.0 / copyright: self` 图；Unsplash/Pexels/Pixabay API 只在不足时补（`unverified`）。以上全部入池，权利与 accessPolicy 逐资产记录，公众可见性由运营策略决定；500px 只作发现。
+- 候选级筛选：长边 ≥ 1,600px；非扫描件/图表/地图/截图；主体明确切题（AI 看原件）；水印为 `platform_logo|stock_agency` 排除，`author_signature` 保留并申报；曝光/构图基本合格；长宽比 ≤ 3:1 优先，更宽的全景每实体至多 1 张；interestingness/faves/图虫 favorites、QI/FP、`sourceTier` 作排序。
+- acquire：1–N 个文件页，各一句相关性理由；Commons 附 `sha1`，其他来源以 sha256 自证；逐张看原件申报水印三字段。
+- author：`4.draft/image_work.json`：`{"title","caption","assetRefs":["assets/..."],"creatorProfileId"}`；至少一个 assetRef；caption 写地点/季节/视角/故事。
 - publish：`manifest.json` 无正文，每个 asset 的权利字段由 acquire 记录、seal 转录。
+- 评分维度：`subject_relevance` 切题与主体、`technical_quality` 技术质量、`composition_aesthetics` 构图与美感、`uniqueness` 独特性、`caption_value` caption 信息价值、`rights_clarity` 权利清晰度。
 
-## video（视频）
+## video（视频，动态视觉型）
 
-- 对象根 `posts/video/<angle>/<title>/<seq>/`。
-- 发现：在 Commons 沿 `Category:Videos from China` 类目树检索，不要用不存在的 `Videos of X`。高产出子类：`Drone videos from China`、`Time-lapse videos from China`、`Walking China`、`Videos from Beijing`、`Videos from Shanghai`、`Videos from Hong Kong`、`Videos from Taiwan`、`Videos of nature of China`；用 `action=query&list=categorymembers&cmtitle=Category:<名>&cmtype=file|subcat` 遍历，再用 `list=search&srnamespace=6&srsearch=<地名> filetype:video` 补全文检索。选片只看切题与可播放，不看文件大小与容器。
-- acquire：一个 Commons 视频文件页（webm/ogv/mpg/mp4 皆可）；脚本对超预算或容器不在 `mp4|webm` 的源体统一转码为 H.264 mp4（720p、目标约 16 MiB、硬上限为载体预算 50 MiB），登记 `derivativeBinding`，并从派生体抽 poster 帧写 `posterAssetRef`。
-- author：`4.draft/video_script.json`：`{"title","caption","scriptLines":["..."],"creatorProfileId"}`；`sourceVideoAssetRef` 缺省取对象唯一 source video。
+- 对象根 `posts/video/<angle>/<title>/<seq>/`。主题偏好：壮美河山——川西、新疆、西藏、雪山江河湖海、航拍、全国游。
+- 来源与发现：Commons（`Category:Drone videos from China`、`Aerial videos from China`、`Time-lapse videos from China`、`Walking China`、`Videos from <地区>` 子树，全文 `<地名> filetype:video`）；YouTube 无 key 走 `yt-dlp`（`ytsearch` 发现、频道 `/videos` 批量、单条 `license` 与 views/likes/comments/订阅数，只下载 CC）——有 Data API v3 key 时换 `search.list?videoLicense=creativeCommon`；**Bilibili UP 主批量**（`yt-dlp --flat-playlist https://space.bilibili.com/<mid>/video` + 逐条元数据，`unverified` + `authorizationRequired`，视频放量主力之一）；Dailymotion API（`unverified`）；Pexels/Pixabay/Vimeo CC 补航拍空镜。频道/UP 主全集是批量入口，入池仍逐条按实体落点与候选级筛选。港澳台条目只用于补视频。抖音、快手、西瓜、小红书属登录墙，不进任何路径。
+- 候选级筛选：时长 15s–5min、≥720p、实景为主（非 talking-head/讲解/幻灯）、无二传平台烫印（抖音/快手 logo → `platform_logo` 排除）、切题且能落到已发布或同轮实体（多实体线路落主实体；OPEN-021 判永不入 cohort 的实体不能作落点）；观看数/点赞只作排序。
+- acquire：Commons 直链 `curl`；YouTube 用 `yt-dlp -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]"` 直取 720p mp4 让多数片段免转码；脚本对超预算或容器不在 `mp4|webm` 的源体统一转码为 H.264 mp4（720p、目标约 16 MiB、硬上限为载体预算 50 MiB），登记 `derivativeBinding`，并从派生体抽 poster 帧写 `posterAssetRef`；视频 execution 的 `task acquire` 放后台运行。看 poster 申报水印。
+- author：`4.draft/video_script.json`：`{"title","caption","scriptLines":["..."],"creatorProfileId"}`；`sourceVideoAssetRef` 缺省取对象唯一 source video；scriptLines 基于来源描述与实体事实。
 - review：`assetRights` 由 seal 自动覆盖 video 与 poster 两条，reviewer 不必手写。
 - publish：poster identity 冻结进 manifest；不设热度、时长下限或探测字段完整性门。
+- 评分维度：`subject_relevance` 切题与实体可辨识、`visual_quality` 画质、`editing_rhythm` 剪辑与节奏、`audio_fit` 音轨适配、`unique_perspective` 独特视角、`rights_clarity` 权利清晰度。

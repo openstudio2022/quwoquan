@@ -57,10 +57,19 @@
 <a id="req-002"></a>
 ### REQ-002 东西向平面、端口与访问隔离
 
-- 受支持环境必须在各自 `runtime.yaml` 声明完整 `edge / media / service / data` 子网与结构化 `urlRoles`；四环境网络平面同构，环境差异不得改变平面结构。环境间允许差异化的完整维度清单由 [`environment-topology-and-packaging` REQ-002](../runtime-config/environment-topology-and-packaging/spec.md#req-002) 拥有，本能力不复制。
+- 受支持云侧环境必须在各自 `runtime.yaml` 声明完整 `edge / media / service / data` 子网与结构化 `urlRoles`；四环境云侧网络平面同构。Alpha 离线 App 不创建或依赖这些网络平面，按需 Alpha API gate 仍消费完整 topology；离线结果不证明其 DNS/TLS 或服务健康。环境间允许差异化的完整维度清单由 [`environment-topology-and-packaging` REQ-002](../runtime-config/environment-topology-and-packaging/spec.md#req-002) 拥有，本能力不复制。
 - 本地 host 端口必须来自 1000 端口块 + plane + 10 端口槽位模型，canonical 端口以 `0` 结尾；端口块与槽位字面值只由 `quwoquan_ops/environments/local_env_port_manifest.yaml` 拥有。
 - 服务间（east-west）URL 只经 `domain_governance.yaml` 的 east-west 分类声明，消费者读取 topology resolver 投影，不得自造服务发现面。
 - `prod-hosted` 的运维访问按 `edge / media / service / data` 四平面隔离，平面、账号与凭据投影事实只由 `quwoquan_ops/environments/prod/access-isolation.yaml` 拥有；子网 CIDR 仍由 `prod/runtime.yaml` 的 `subnets` 声明，两份文件不得互相复制。
+
+<a id="req-003"></a>
+### REQ-003 设备接入、共享宿主隔离与生产故障域
+
+- Beta/Gamma 及独立 Alpha API gate 保持 canonical HTTPS Host/SNI，路由、DNS、CA 与转发分别验证。Simulator/Emulator 使用受管宿主路由与系统信任；Android 真机可在验证 USB reverse 的 DNS、精确信任和 API/CDN/原生播放器后登记支持，只转发所需公开入口，不暴露数据库或管理端口。
+- iPhone 真机首选受控 LAN、split DNS、受限 listener/防火墙与设备 CA；缺同网条件明确阻断对应 slot。USB-only 只有证明手机到宿主的真实反向路由及媒体播放后才登记，普通 Mac→iPhone 转发不构成证明。
+- DNS、证书、trust store 与转发按 target/device/lease 增量维护，释放只撤销本次 created 且无人复用的资源，不重置 hosts、全部信任或整份 reverse 列表。共享 daemon 的单例与生命周期由实例隔离 owner 负责，网络可达不授予清理权。
+- Prod 使用公网 DNS/公共 CA，不依赖开发机、USB 或离线包。prod-sim 与 prod-hosted 为不同 target，其证据不能互换。生产 502 先只读定位 edge/upstream/部署身份，激活、部署、DNS 与证书变更仍须独立授权。
+- 单机多个环境和自动重启不等于跨主机高可用。Prod 保持一个逻辑环境与单 active authority，跨故障域服务副本、LB/edge failover 与数据/对象存储可靠性在资源授权及故障演练前保持 OPEN，不宣称零中断或已达到新的 RPO/RTO。
 
 ## 6. 契约与依赖
 
@@ -87,6 +96,14 @@
 - THEN 四平面完整、端口命中块与槽位模型、east-west URL 只来自治理分类投影。
 - AND `prod-hosted` 运维访问按四平面隔离且凭据事实只来自 `access-isolation.yaml`。
 
+<a id="sit-003"></a>
+### SIT-003 设备公开入口与故障域证据不互相替代
+
+- GIVEN 目标配置和设备接入授权有效，不同 target 共存，Prod 与本地 target 的证据分离。
+- WHEN 验证路由、DNS、TLS、推荐/premium 与媒体，或撤销一个设备的接入资源并执行故障恢复。
+- THEN Simulator/Emulator、Android USB、iPhone LAN 各自以 canonical Host/SNI 和实际页面/媒体证明接入，解绑仅影响本次 owned 资源；iPhone USB-only 未证明真正反向路由时报告不支持/阻断。
+- THEN Prod 只接受公网与 exact hosted 身份证据，502 不解释为空库存；缺跨故障域资源和真实 failover 演练时高可用保持 OPEN，本地并行或重启成功不替代它。
+
 ## 8. 开放事项
 
 <a id="open-002"></a>
@@ -97,3 +114,13 @@
 - 准出影响：`track`
 - 影响或价值：尚缺由 `environment_topology` resolver 生成、带 `east-west-upstream` 治理分类的服务发现 URL 只读投影；运行时消费者仍直接读取 target `origins` / environment config，无法真实证明 `SIT-002` t1 的「east-west URL 只来自治理分类投影」。四平面完整、端口块槽位、`prod-hosted` 四平面独立账号/凭据与凭据来源分句均已有直接测试绑定。
 - 完成判定：`SIT-002` t1 具备正反测试，证明 resolver 只从 `east-west-upstream` 分类与环境服务发现事实生成投影，运行时消费者只读该投影，未知分类、重复 ownership 与自造 URL 均 fail closed。
+
+<a id="open-003"></a>
+### OPEN-003 真机链路与生产跨故障域恢复尚未证实
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：Android 真机受管 trust/USB、iPhone LAN/USB-only 尚缺逐路径 fresh 页面与原生媒体证据；Prod 公开 502 及当前同 host service/edge placement 不能证明可用或跨故障域高可用。跨主机副本、LB、持久数据恢复点及 RPO/RTO 尚需对应 owner 设计和授权，不能由本地并行推定完成。
+- 完成判定：`SIT-003` 每条接入路径分别取得 DNS/TCP/TLS/页面/媒体证据并登记支持或阻断；高可用结论仅在 owner 冻结目标、获资源授权并完成真实故障域 failover/数据恢复演练后成立。USB-only 未支持不抹除已验证 LAN 或模拟器结果。
+- 依赖：登记设备、局域网、生产运行 owner 授权、跨故障域容量与数据可靠性方案。

@@ -59,7 +59,6 @@ from .provider_runtime_package import (
 from .release_binding import (
     _release_binding,
     canonical_contract_graph_digest,
-    release_input_classification,
     validate_release_attestations,
 )
 
@@ -447,7 +446,9 @@ def _validate_prod_hosted_release_evidence_currentness(
         # rehearsal 候选没有 GHCR release evidence；它的 currentness 就是
         # 候选 sourceRevision 仍等于当前 HEAD 与本地 dev1.0（SIT-003 t1）。
         try:
-            _rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=ROOT)
+            _rehearsal.rehearsal_candidate_source_gate(
+                candidate, repo_root=ROOT, candidate_root=candidate_root
+            )
         except _rehearsal.RehearsalError as exc:
             raise ValueError(str(exc)) from exc
         return
@@ -689,10 +690,9 @@ def write_candidate_manifest(
         release_attestation,
         rollback_release_attestation,
     )
-    release_classification = release_input_classification(release)
     contract_graph_digest = canonical_contract_graph_digest()
     if (
-        fingerprint.get("releaseInputClassification") != release_classification
+        {"releaseInputClassification", "releaseClass", "productLifecycleState"}.intersection(fingerprint)
         or fingerprint.get("contractGraphDigest") != contract_graph_digest
     ):
         raise ValueError("package fingerprint release identity drifted")
@@ -754,7 +754,6 @@ def write_candidate_manifest(
         ),
         "providerRuntime": provider_runtime,
         "release": release,
-        "releaseInputClassification": release_classification,
         "contractGraphDigest": contract_graph_digest,
         "graphqlReadRegistry": graphql_read_registry,
         "appLaunchBundle": (
@@ -844,7 +843,6 @@ def validate_candidate_manifest(
         "observabilityLogSink",
         "providerRuntime",
         "release",
-        "releaseInputClassification",
         "contractGraphDigest",
         "graphqlReadRegistry",
         "appLaunchBundle",
@@ -971,9 +969,11 @@ def validate_candidate_manifest(
             current = _release_binding(attestation_ref, label=label)
             if current != binding:
                 raise ValueError(f"{label} release attestation bytes drifted")
-    expected_classification = release_input_classification(release)
-    if payload.get("releaseInputClassification") != expected_classification:
-        raise ValueError("deployment candidate release input classification drifted")
+    if (
+        release["candidate"]["releaseId"] == release["rollback"]["releaseId"]
+        or release["candidate"]["releaseDigest"] == release["rollback"]["releaseDigest"]
+    ):
+        raise ValueError("candidate and rollback release identities must be distinct")
     if (
         purpose == "currentness"
         and payload.get("contractGraphDigest") != canonical_contract_graph_digest()
@@ -1002,7 +1002,7 @@ def validate_candidate_manifest(
         label="package fingerprint",
     )
     if (
-        fingerprint.get("releaseInputClassification") != expected_classification
+        {"releaseInputClassification", "releaseClass", "productLifecycleState"}.intersection(fingerprint)
         or fingerprint.get("contractGraphDigest") != payload.get("contractGraphDigest")
         or fingerprint.get("graphqlReadRegistry") != graphql_read_registry
         or fingerprint.get("appLaunchBundle") != payload.get("appLaunchBundle")

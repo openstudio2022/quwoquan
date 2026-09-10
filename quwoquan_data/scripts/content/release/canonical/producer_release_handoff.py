@@ -258,7 +258,6 @@ def _validate_query_against_sealed(
     object_ref: str,
     sealed_root: Path,
     header: Mapping[str, Any],
-    release_class: str,
 ) -> None:
     expected_carrier, expected_type, projected_ref = _carrier_for_ref(object_ref)
     if row.get("objectRef") != object_ref or row.get("carrier") != expected_carrier:
@@ -467,7 +466,7 @@ def _validate_query_against_sealed(
 
 
 def _project_live_pool_rows(
-    *, live_root: Path, sealed_root: Path, object_refs: list[str], header: Mapping[str, Any], release_class: str
+    *, live_root: Path, sealed_root: Path, object_refs: list[str], header: Mapping[str, Any]
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for object_ref in sorted(object_refs):
@@ -491,14 +490,13 @@ def _project_live_pool_rows(
             object_ref=object_ref,
             sealed_root=sealed_root,
             header=header,
-            release_class=release_class,
         )
         rows.append(row)
     return rows
 
 
 def _validate_embedded_pool_rows(
-    *, rows: object, sealed_root: Path, object_refs: list[str], header: Mapping[str, Any], release_class: str
+    *, rows: object, sealed_root: Path, object_refs: list[str], header: Mapping[str, Any]
 ) -> list[dict[str, Any]]:
     if not isinstance(rows, list):
         raise _error("DATA.RELEASE.HANDOFF_POOL_IDENTITY_DRIFT", "contentPoolObjects")
@@ -514,7 +512,6 @@ def _validate_embedded_pool_rows(
             object_ref=object_ref,
             sealed_root=sealed_root,
             header=header,
-            release_class=release_class,
         )
         result.append(dict(row))
     return result
@@ -531,19 +528,6 @@ def _validate_release_facts(
 ) -> tuple[dict[str, Any], dict[str, int], str, str]:
     release_dir = _assert_no_symlink(release_root / release_id, label="release", regular=False)
     header, header_raw = _read_json_file(release_dir / "payload/release.json", label="release header", canonical=True)
-    cohort_release_class = str(cohort.get("releaseClass") or "")
-    header_release_class = str(header.get("releaseClass") or "")
-    if header_release_class != cohort_release_class:
-        raise _error(
-            "DATA.RELEASE.HANDOFF_RELEASE_CLASS_DRIFT",
-            f"cohort={cohort_release_class!r} header={header_release_class!r}",
-        )
-    product_lifecycle_state = str(header.get("productLifecycleState") or "")
-    if product_lifecycle_state != header_release_class:
-        raise _error(
-            "DATA.RELEASE.HANDOFF_RELEASE_LIFECYCLE_DRIFT",
-            f"releaseClass={header_release_class!r} productLifecycleState={product_lifecycle_state!r}",
-        )
     try:
         if policy_targets is None:
             assert_valid(
@@ -630,7 +614,6 @@ def _validate_handoff(value: object, *, repo_root: Path, output_root: Path, rele
         sealed_root=release_root / release_id / "payload/objects",
         object_refs=list(cohort["objectRefs"]),
         header=header,
-        release_class=str(cohort.get("releaseClass") or ""),
     )
     if document["carrierCounts"] != counts:
         raise _error("DATA.RELEASE.HANDOFF_POOL_DIGEST_DRIFT", release_id)
@@ -687,7 +670,6 @@ def write_producer_release_handoff(*, release_id: str, cohort_file: Path, milest
         sealed_root=release_root / release_id / "payload/objects",
         object_refs=list(cohort["objectRefs"]),
         header=header,
-        release_class=str(cohort.get("releaseClass") or ""),
     )
     document = {
         "schema": _SCHEMA,

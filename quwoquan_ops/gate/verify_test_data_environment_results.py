@@ -193,8 +193,15 @@ def _validate_handoff(
         issues.append("handoff releaseId is missing")
     if not str(handoff.get("importRunId") or "").strip():
         issues.append("handoff importRunId is missing")
-    if handoff.get("readinessPhase") not in {"research", "commercial"}:
-        issues.append("handoff readinessPhase is invalid")
+    expected_fields = {
+        "schema", "environment", "target", "sourceRevision", "baselineId", "packageDigest",
+        "runtimeConfigDigest", "releaseId", "manifestDigest", "importRunId",
+        "readinessReceiptDigest", "requestDigest", "evidenceDigest", "candidateBindingDigest",
+        "expectedCases", "expectedProviderOwners", "expectedProviderCapabilities",
+        "requiredOperations", "allowedOperations", "handoffDigest",
+    }
+    if set(handoff) - expected_fields:
+        issues.append("handoff contains unknown or retired fields")
     for field in (
         "expectedCases",
         "expectedProviderOwners",

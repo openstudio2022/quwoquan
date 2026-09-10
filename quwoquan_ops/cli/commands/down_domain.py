@@ -41,6 +41,7 @@ def register_parser(
     down_parser = subparsers.add_parser("down")
     down_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     down_parser.add_argument("--target", choices=_stackctl.TARGETS, required=True)
+    down_parser.add_argument("--expected-generation", default="")
     down_parser.add_argument(
         "--workload",
         choices=["content-release", "content-commercial", "full"],
@@ -199,6 +200,10 @@ def _bounded_workload_down_decision(
 def command_down(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    if args.target == "prod-sim":
+        return {"exitCode": 2, "blockerKind": "unmanaged_runtime_authority",
+                "summary": "prod-sim legacy teardown has no generation authority",
+                "details": ["OPS.RUNTIME.unmanaged_target: explicit migration required"]}
     bounded_decision = _stackctl._bounded_workload_down_decision(args)
     if bounded_decision is not None:
         return bounded_decision
@@ -206,11 +211,22 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
         return _stackctl._command_down_unlocked(args)
     try:
         with _stackctl._local_stack_operation_lock(args.target):
+            expected = str(getattr(args, "expected_generation", "") or "")
+            if expected:
+                attempts = [
+                    _stackctl.load_startup_attempt(args.target),
+                    _stackctl.load_test_live_startup_attempt(args.target),
+                ]
+                active = [item for item in attempts if item and item.get("status") != "stopped"]
+                if len(active) != 1 or active[0].get("attemptId") != expected:
+                    return {"exitCode": 2, "blockerKind": "runtime_generation_conflict",
+                            "summary": f"stackctl down is GATE_BLOCK for {args.target}",
+                            "details": ["OPS.RUNTIME.generation_conflict: refusing stale cleanup"]}
             leases = _stackctl.active_consumer_leases(args.target)
             if leases:
                 return _stackctl._consumer_lease_down_gate(args, leases)
             return _stackctl._command_down_unlocked(args)
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError, OSError) as exc:
         topology = _stackctl.load_environment_topology()
         target = _stackctl.get_target(topology, args.target)
         report_dir = _stackctl.resolve_report_dir(
@@ -750,6 +766,8 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
                 }
         if purge_rebuildable_state:
             cmd.append("--purge-rebuildable-state")
+        from quwoquan_ops.cli.lib.output_paths import env_root
+        env = {**(env or {}), "QWQ_OUTPUT_ROOT": str(env_root(env_name).parents[1])}
         runtime_result = _stackctl.run(cmd, env=env)
         if runtime_result.returncode == 0 and purge_rebuildable_state:
             shutil.rmtree(_stackctl.target_cache_dir(args.target), ignore_errors=True)

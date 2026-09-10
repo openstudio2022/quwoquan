@@ -447,14 +447,16 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         target_name=target_name,
         profile=profile,
     )
-    phase = profile.readiness_phase
+    requires_content_readiness = profile in {
+        VerificationProfile.INTEGRATION,
+        VerificationProfile.RELEASE,
+    }
 
     def readiness_call() -> dict[str, Any]:
-        assert phase is not None
         return _stackctl.command_content_readiness(
             argparse.Namespace(
                 command="content-readiness",
-                phase=phase.value,
+                require_lifecycle_exit=True,
                 env=env_name,
                 release_id=getattr(args, "data_release_id", ""),
                 verify_run_id=getattr(args, "data_verify_run_id", ""),
@@ -472,7 +474,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
     static_results, readiness_payload, static_gate_ms = _stackctl._run_static_verify_wave(
         commands,
         target_name=target_name,
-        readiness_call=readiness_call if phase is not None else None,
+        readiness_call=readiness_call if requires_content_readiness else None,
     )
     for command, result, duration_ms in static_results:
         command_key = " ".join(command)
@@ -491,11 +493,11 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         if result.returncode != 0:
             issues.append(result.stderr.strip() or result.stdout.strip() or "unknown verify failure")
     content_readiness_ready = True
-    if phase is not None and readiness_payload is not None:
+    if requires_content_readiness and readiness_payload is not None:
         steps.append(
             {
                 "kind": "readiness",
-                "phase": phase.value,
+                "requireLifecycleExit": True,
                 "exitCode": readiness_payload["exitCode"],
                 "reportDir": readiness_payload.get("reportDir", ""),
                 "details": readiness_payload.get("details", []),

@@ -24,6 +24,14 @@ class EnvironmentTopologyUserPostgresContractTest(unittest.TestCase):
                     {"edge", "media", "service", "data"},
                 )
 
+    def test_environment_configuration_does_not_select_content_categories(self) -> None:
+        # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+        topology = load_environment_topology()
+        for env_name, environment in topology["environments"].items():
+            with self.subTest(environment=env_name):
+                for field in ("releaseClass", "productLifecycleState", "readinessPhase", "researchContentIsolation"):
+                    self.assertNotIn(field, environment)
+
     def test_local_import_without_user_postgres_port_role_fails_closed(self) -> None:
         topology = copy.deepcopy(load_environment_topology())
         del topology["targets"]["alpha-local"]["dataRelease"]["userPostgresPortRole"]

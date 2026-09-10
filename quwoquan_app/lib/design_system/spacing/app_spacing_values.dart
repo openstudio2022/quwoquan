@@ -376,15 +376,24 @@ class AppSpacing {
 
   static const double _primaryTabFontSize = 14.0;
 
-  /// 主壳底部导航的响应式内容区高度（icon + gap + label 区域）。
-  /// 在保留可读性的前提下压紧底栏垂直占位。
+  /// 主壳导航内容区同时承载点击热区，至少容纳中央主操作的 48pt 热区。
   static double bottomNavBarHeight(BuildContext context) => responsiveWideValue(
     context,
-    compact: 44.0,
-    regular: 46.0,
-    expanded: 48.0,
+    compact: bottomNavPrimaryActionHitSize,
+    regular: bottomNavPrimaryActionHitSize,
+    expanded: bottomNavPrimaryActionHitSize,
     wide: 52.0,
   );
+
+  /// 沉浸互动栏保留原有内容密度，不跟随主导航热区扩张。
+  static double immersiveEngagementContentHeight(BuildContext context) =>
+      responsiveWideValue(
+        context,
+        compact: 44.0,
+        regular: 46.0,
+        expanded: 48.0,
+        wide: 52.0,
+      );
 
   /// 工具栏统一上下内边距。
   /// 顶部/底部工具栏共享，让间距与顶部工具栏 label-to-underline 视觉距离一致。
@@ -782,14 +791,11 @@ class AppSpacing {
   /// 媒体查看器顶栏位置指示器预估宽度（如 "1/9"）: 44.0
   static const double mediaViewerPositionIndicatorWidth = 44.0;
 
-  /// 底部导航中间创作按钮宽度，使用小圆角正方形避免压过普通导航项。
-  static const double primaryActionPillWidth = 40.0;
-
-  /// 底部导航中间创作按钮高度，与宽度一致形成正方形主操作入口。
+  /// 中央创作按钮使用横向圆角矩形；视觉宽高与点击热区分离。
+  static const double primaryActionPillWidth = 56.0;
   static const double primaryActionPillHeight = 40.0;
-
-  /// 底部导航中间创作按钮圆形直径，保留给存量测试或旧样式引用。
-  static const double primaryActionCircleSize = primaryActionPillHeight;
+  static const double primaryActionPillRadius = 12.0;
+  static const double bottomNavPrimaryActionHitSize = 48.0;
 
   /// 底部导航普通项图标尺寸，保持当前主壳视觉基线。
   static const double bottomNavItemIconSize = iconMedium;
@@ -808,9 +814,6 @@ class AppSpacing {
 
   /// 底部导航标签字距。
   static const double bottomNavLabelLetterSpacing = -0.08;
-
-  /// 底部导航主操作阴影垂直偏移。
-  static const double bottomNavPrimaryActionShadowOffsetDy = two;
 
   /// 沉浸媒体底栏作者头像尺寸，三档统一避免压过动作列。
   static double immersiveEngagementAvatarSize(BuildContext context) =>

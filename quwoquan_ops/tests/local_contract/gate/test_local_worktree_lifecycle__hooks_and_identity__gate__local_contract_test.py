@@ -484,9 +484,12 @@ def test_lane_command_targets_render_without_mutation_and_derive_policy(policy) 
     for branch, directory in policy.lane_worktree_directories:
         assert any(branch in command and f"/{directory}" in command for command in bootstrap)
         assert any(f"/{directory}" in command and "merge --ff-only dev1.0" in command for command in resync)
+    # 渲染是默认路径：不带 --execute 的 CLI 只打印命令；mutation 只能由显式 --execute 进入
+    # resync 三态执行面（其零写合同见 test_lane_resync_execute__gate__local_contract_test）。
     source = (ROOT / "quwoquan_ops/cli/lane_worktree_commands.py").read_text(encoding="utf-8")
-    assert "subprocess" not in source
     assert "os.system" not in source
+    assert 'if args.action == "resync" and args.execute:' in source
+    assert "def render(" in source and "git(" not in source.split("def render(", 1)[1].split("\ndef ", 1)[0]
 
 
 def test_lane_ownership_schema_is_closed_and_uses_branch_policy_lanes(policy) -> None:
@@ -508,6 +511,13 @@ def test_lane_ownership_schema_is_closed_and_uses_branch_policy_lanes(policy) ->
     assert inventory.ownership_owner("quwoquan_app/lib/main.dart", rules) == "lane/product-mainline"
     assert inventory.ownership_owner("quwoquan_ops/policies/branch_policy.yaml", rules) == "lane/engineering"
     assert inventory.ownership_owner("quwoquan_ops/policies/app_build_projection_policy.json", rules) == "lane/ops"
+    # 以点开头的工程面目录不得因前缀剥离而失去 owner；"./" 显式前缀仍要归一。
+    assert inventory.ownership_owner(".agents/skills/commit/SKILL.md", rules) == "lane/engineering"
+    assert inventory.ownership_owner("./.agents/skills/commit/SKILL.md", rules) == "lane/engineering"
+    assert inventory.ownership_owner(".agents/skills/content-production/SKILL.md", rules) == "lane/data-engineering"
+    assert inventory.ownership_owner(".agents/skills/environment-ops/SKILL.md", rules) == "lane/ops"
+    assert inventory.ownership_owner(".cursor/commands/commit.md", rules) == "lane/engineering"
+    assert inventory.ownership_owner(".github/workflows/delivery-gate.yml", rules) == "lane/engineering"
 
 
 def test_policy_install_command_matches_real_entrypoint(policy) -> None:

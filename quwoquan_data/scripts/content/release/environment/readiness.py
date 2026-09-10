@@ -1,4 +1,4 @@
-"""Data-side adapter for the phase-scoped Ops environment receipt."""
+"""Data-side adapter for the action-scoped Ops environment receipt."""
 from __future__ import annotations
 
 import json
@@ -18,14 +18,14 @@ _STACKCTL = REPO_ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
 _RECEIPT_SCHEMA = "quwoquan_ops.ship_readiness_receipt"
 
 
-class ShipReadinessPhase(StrEnum):
+class ShipReadinessAction(StrEnum):
     IMPORT = "import"
-    PRODUCTION = "production"
+    VERIFY = "verify"
 
 
 @dataclass(frozen=True, slots=True)
 class ShipReadinessReceipt:
-    phase: ShipReadinessPhase
+    action: ShipReadinessAction
     environment: DeploymentEnvironment
     target: str
     outcome: str
@@ -39,11 +39,11 @@ class ShipReadinessReceipt:
 def _decode_receipt(value: object) -> ShipReadinessReceipt:
     if not isinstance(value, Mapping):
         raise ValueError("Ops ship readiness receipt must be an object")
-    required = {"schema", "phase", "environment", "target", "outcome", "reportDir"}
+    required = {"schema", "action", "environment", "target", "outcome", "reportDir"}
     if not required.issubset(value) or value.get("schema") != _RECEIPT_SCHEMA:
         raise ValueError("Ops ship readiness receipt contract is invalid")
     return ShipReadinessReceipt(
-        phase=ShipReadinessPhase(str(value["phase"])),
+        action=ShipReadinessAction(str(value["action"])),
         environment=DeploymentEnvironment(str(value["environment"])),
         target=str(value["target"]),
         outcome=str(value["outcome"]),
@@ -54,7 +54,7 @@ def _decode_receipt(value: object) -> ShipReadinessReceipt:
 def require_environment_readiness(
     *,
     environment: DeploymentEnvironment,
-    phase: ShipReadinessPhase,
+    action: ShipReadinessAction,
     run: Path,
     release_id: str = "",
     verify_run_id: str = "",
@@ -65,11 +65,11 @@ def require_environment_readiness(
     verify_run_id = str(verify_run_id or "").strip()
     manifest_digest = str(manifest_digest or "").strip()
     lifecycle_exit_ref = str(lifecycle_exit_ref or "").strip()
-    if phase is ShipReadinessPhase.PRODUCTION and (
+    if action is ShipReadinessAction.VERIFY and (
         not release_id or not verify_run_id or not manifest_digest
     ):
         raise SystemExit(
-            f"[ship] GATE_BLOCK {environment.value}/{phase.value}: "
+            f"[ship] GATE_BLOCK {environment.value}/{action.value}: "
             "releaseId, verifyRunId and manifestDigest are required"
         )
     command = [
@@ -78,14 +78,14 @@ def require_environment_readiness(
         "--output-format",
         "json",
         "content-readiness",
-        "--phase",
-        phase.value,
+        "--action",
+        action.value,
         "--env",
         environment.value,
         "--report-dir",
         str(run / "ops-readiness"),
     ]
-    if phase is ShipReadinessPhase.PRODUCTION:
+    if action is ShipReadinessAction.VERIFY:
         command.extend(
             [
                 "--release-id",
@@ -109,11 +109,11 @@ def require_environment_readiness(
         receipt = _decode_receipt(json.loads(completed.stdout))
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         raise SystemExit(
-            f"[ship] GATE_BLOCK {environment.value}/{phase.value}: Ops ship readiness receipt is invalid"
+            f"[ship] GATE_BLOCK {environment.value}/{action.value}: Ops ship readiness receipt is invalid"
         ) from exc
     evidence: dict[str, object] = {
         "schema": "quwoquan_data.environment_readiness_ref",
-        "phase": receipt.phase.value,
+        "action": receipt.action.value,
         "environment": receipt.environment.value,
         "target": receipt.target,
         "outcome": receipt.outcome,
@@ -122,11 +122,13 @@ def require_environment_readiness(
     if lifecycle_exit_ref:
         evidence["lifecycleExitRef"] = lifecycle_exit_ref
     write_json(run / "environment-readiness.json", evidence)
+    if receipt.environment is not environment or receipt.action is not action:
+        raise SystemExit(f"[ship] GATE_BLOCK {environment.value}/{action.value}: Ops readiness identity differs")
     if completed.returncode != 0 or not receipt.passed:
         raise SystemExit(
-            f"[ship] GATE_BLOCK {environment.value}/{phase.value}: required environment capability is unavailable"
+            f"[ship] GATE_BLOCK {environment.value}/{action.value}: required environment capability is unavailable"
         )
     return receipt
 
 
-__all__ = ["ShipReadinessPhase", "ShipReadinessReceipt", "require_environment_readiness"]
+__all__ = ["ShipReadinessAction", "ShipReadinessReceipt", "require_environment_readiness"]

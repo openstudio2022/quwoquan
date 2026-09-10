@@ -3279,18 +3279,6 @@ export const platformConfig = {
       "sensitive": false
     },
     {
-      "key": "sys.content-service.research_identity.attestation_key_base64",
-      "type": "string",
-      "owner": "",
-      "default": null,
-      "scope": "workload",
-      "reload": "restart",
-      "rollout": "progressive",
-      "risk_level": "",
-      "ui_editable": false,
-      "sensitive": true
-    },
-    {
       "key": "sys.content-service.service.http.addr",
       "type": "string",
       "owner": "",
@@ -7423,54 +7411,6 @@ export const platformConfig = {
       "type": "bool",
       "owner": "",
       "default": false,
-      "scope": "workload",
-      "reload": "restart",
-      "rollout": "progressive",
-      "risk_level": "",
-      "ui_editable": false,
-      "sensitive": false
-    },
-    {
-      "key": "sys.user-service.research_identity.account_id_allowlist_json",
-      "type": "string",
-      "owner": "",
-      "default": null,
-      "scope": "workload",
-      "reload": "restart",
-      "rollout": "progressive",
-      "risk_level": "",
-      "ui_editable": false,
-      "sensitive": true
-    },
-    {
-      "key": "sys.user-service.research_identity.attestation_key_base64",
-      "type": "string",
-      "owner": "",
-      "default": null,
-      "scope": "workload",
-      "reload": "restart",
-      "rollout": "progressive",
-      "risk_level": "",
-      "ui_editable": false,
-      "sensitive": true
-    },
-    {
-      "key": "sys.user-service.research_identity.enabled",
-      "type": "bool",
-      "owner": "",
-      "default": false,
-      "scope": "workload",
-      "reload": "restart",
-      "rollout": "progressive",
-      "risk_level": "",
-      "ui_editable": false,
-      "sensitive": false
-    },
-    {
-      "key": "sys.user-service.research_identity.ttl_seconds",
-      "type": "int",
-      "owner": "",
-      "default": 300,
       "scope": "workload",
       "reload": "restart",
       "rollout": "progressive",

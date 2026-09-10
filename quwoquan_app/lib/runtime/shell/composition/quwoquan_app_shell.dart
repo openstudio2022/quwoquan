@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -198,6 +199,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
           }
         },
         onRealtimeForeground: () {
+          if (!CloudRuntimeConfig.networkAccessAllowed) return;
           try {
             ref
                 .read(realtimeConnectionManagerProvider.notifier)
@@ -212,6 +214,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
           }
         },
         onRealtimeBackground: () {
+          if (!CloudRuntimeConfig.networkAccessAllowed) return;
           try {
             ref
                 .read(realtimeConnectionManagerProvider.notifier)

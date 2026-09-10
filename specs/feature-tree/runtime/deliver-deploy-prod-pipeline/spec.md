@@ -46,7 +46,7 @@
 <a id="req-001"></a>
 ### REQ-001 本地质量、托管验真与标签驱动发布
 
-- Source writer 只生产绑定 exact candidate 的源码事实；worktree 或 integration 中不重叠文件可并行编辑，但 Git index、commit/ref、共享生成物、环境、设备、package 与外部 mutation 必须由单一受信执行者串行提交。
+- Source writer 只生产绑定 exact candidate 的源码事实；不重叠文件可并行编辑，默认 Git index/commit/ref 与共享生成物仍独占串行。环境、设备、package 与外部 mutation 按各自实际资源授予唯一执行权，不使用跨环境全局互斥：云侧按 host-target 单实例，设备按 device/application 独占，构建只锁私有输出，独立 target 可持续并行。租约、executor fence、容量及 owned cleanup 由 [`multi-environment-instance-isolation` REQ-001/004](./multi-environment-instance-isolation/spec.md#req-004) 拥有；资格前驱与 Prod 授权顺序不变。
 - Environment Ops 必须在尚未移动 `dev1.0` 的 detached exact candidate 上执行 Alpha，并仅对 typed 高风险影响执行 Beta；两者通过后，trusted integration publisher 可按既有通道以 expected-old 的非 force fast-forward CAS 更新 `dev1.0`。此外，匹配 `integration/dev1.0` 可用 update line 的 before/after OID 经 ancestry 证明执行普通认证 non-force fast-forward 源码 push；缺 OID、authority 不可用、非快进、force/delete 或来源不匹配均 fail closed。direct push 不签发 `integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion、release 或 Prod authority；需要晋级/发布时仍须 exact candidate + Alpha/Beta、current dev head Gamma 与既有后续资格链。
 - integration scheduler 只对 current exact `dev1.0` head 执行 Gamma，封存 `IntegrationQualificationFact`；Gamma 必须绑定同一 candidate/tree 和 Alpha/Beta exact-byte predecessor，不得无差别重跑相同 CaseResult。新 head 使旧事实不再适用于当前 promotion。
 - `dev1.0 -> main` 的唯一 required context 只验证 branch/head/base/merge tree、审批、ruleset、IntegrationQualificationFact、签名、时效、policy/workflow pin 与 secret/generated 边界；不得安装语言工具链、构建、运行源码测试、ABG、Provider live、设备或环境命令。合入后 `MainSourceSeal` 只授予 `source-admitted`，不授予发布资格。
@@ -76,13 +76,13 @@
 ### REQ-003 验证执行面与证据分层
 
 - Alpha/Beta/Gamma 的正式 producer 必须位于受控本地 Environment Ops 执行面；GitHub-hosted 与 GitHub self-hosted workflow 均不得执行 ABG、Data mutation、设备 Journey 或环境 cleanup。
-- Alpha 是默认真实依赖最小闭包；Beta 仅由 typed 高风险 impact 启用；Gamma 只对 exact current `dev1.0` head执行。`no_live` 必须生成绑定 candidate 与 ImpactPlan 的 `not_required` fact，不能从 skipped 推导。
-- 环境 PASS 仅在 package identity、startup、full health、受影响 CaseResult、readback、inspect/doctor、finally teardown、lease revoke 与端口释放全部闭合后封存为唯一 `EnvironmentAcceptanceFact`；Beta/Gamma 分别引用前驱 exact bytes。
+- Alpha 是默认真实依赖最小闭包，也是 lane 合入 `dev1.0` 的唯一必跑环境；Beta 只在 lane 验收显式 opt-in 时真跑，否则不按集成深度分流，统一以政策原因码 `ACCEPTANCE.BETA_OPTIONAL_BY_POLICY` 签绑定 candidate 与 ImpactPlan 的 typed `not_required` fact，不能从 skipped 推导；Gamma 只对 exact current `dev1.0` head 执行，与可选 prod canary 一起构成 integration 侧仅有的两级集成验证（见 [L2 DEC-014](./design.md#dec-014)）。
+- 环境 PASS 仅在 package identity、startup、full health、受影响 CaseResult、readback、inspect/doctor 与本次 owned cleanup/lease closure 全部闭合后封存唯一 EnvironmentAcceptanceFact；新建资源按授权 teardown 并证明端口释放，复用的健康 runtime 保持运行且只释放本次 exact lease，不为签发事实 down 其他 target。Beta/Gamma 仍引用前驱 exact bytes；Alpha 离线 App 结果不能替代 Alpha 服务 gate 或环境资格。
 - 模拟器或仿真器只支持本地集成事实并显式 `nonPromotable`；最终签名包的 Android/iOS 物理设备接受属于 RC qualification，不进入五分钟 promotion，也不重跑 ABG 业务矩阵。
 - GitHub 只验证不可变证据并承担 RC build/sign/attest、资格归约、正式 tag admission 和 Prod approval/transaction。普通 source push、lane PR、promotion PR 不得触发 packaging、coverage 全量、设备矩阵、Provider live 或 environment workflow。
 - Nightly 只运行 fingerprint-aware 的深度回归、性能与可靠性，不轮转环境、不替代任何 candidate/head/RC 的 required fact，也不改变资格、标签或生产状态。
 - `prevalidate` / `prod-sim` 历史 snapshot 仅允许显式 `non-promotable` / history reader 只读；它们不得产生 admission 或 verdict，也不得进入正式发布链。
-- `prevalidate` 另接受 integration 工作区的 exact dev candidate rehearsal：候选必须由当前干净工作树以 canonical prod-hosted 打包入口生成并绑定 `sourceRevision`/tree，且 `sourceRevision` 同时等于 HEAD 与本地 `refs/heads/dev1.0`；镜像为本机 build-once 的 `linux/amd64` content digest，只经 exact digest 校验交付到目标平面账号；只进入 `prevalidate` deployment instance、`data-mode isolated` 与独立 namespace，结果固定 `nonPromotable=true`、`releaseEligibility=GATE_BLOCK`，零 ledger/receipt/admission/tag/stage 写入，不得进入正式链，也不得替代 Gamma、RC qualification 或 prod canary 证据。隔离数据面可接受 canonical immutable content release 的 hosted-import 与 activation（既非 seed 也非正式生产数据），其 readback 只构成 rehearsal 诊断。rehearsal 候选允许 legal-static 主体字段仍为占位，但必须在候选与报告中显式标记，且不构成任何法务、登录商用或发布证据；rehearsal 的公网入口由宿主共享 edge 按 Host 分流并以宿主自身 ACME 承接，不属于 `public-ca-prod` 签发自动化，也不构成 DNS/TLS 准出证据。
+- `prevalidate` 另接受 integration 工作区的 exact dev candidate rehearsal：候选必须由当前干净工作树以 canonical prod-hosted 打包入口生成并绑定 `sourceRevision`/tree，HEAD 必须等于本地 `refs/heads/dev1.0`，且候选内容身份等于 HEAD——`sourceRevision` 等于 HEAD，或者（打包入口按内容寻址复用既有不可变候选时）`sourceRevision` 是 HEAD 的祖先且两者之间没有任何打包输入路径的改动；镜像为本机 build-once 的 `linux/amd64` content digest，只经 exact digest 校验交付到目标平面账号；只进入 `prevalidate` deployment instance、`data-mode isolated` 与独立 namespace，结果固定 `nonPromotable=true`、`releaseEligibility=GATE_BLOCK`，零 ledger/receipt/admission/tag/stage 写入，不得进入正式链，也不得替代 Gamma、RC qualification 或 prod canary 证据。隔离数据面可接受 canonical immutable content release 的 hosted-import 与 activation（既非 seed 也非正式生产数据），其 readback 只构成 rehearsal 诊断。rehearsal 候选允许 legal-static 主体字段仍为占位，但必须在候选与报告中显式标记，且不构成任何法务、登录商用或发布证据；rehearsal 的公网入口由宿主共享 edge 按 Host 分流并以宿主自身 ACME 承接，不属于 `public-ca-prod` 签发自动化，也不构成 DNS/TLS 准出证据。
 - promotion 的固定 SLI 为 `promotionReadyAt -> mainReadbackAt`，包含 queue、验真、merge 与 ref readback，不包含 ABG、产品等待、qualification、tag、Prod 或 soak。目标 p95 为 300 秒；当前 enforcement budget 只可按固定窗口的完整全样本算法单调收紧，不得分阶段、success-only、重置计时或放宽。
 
 ## 6. 契约与依赖
@@ -125,8 +125,10 @@
 - GIVEN integration 工作树干净且 HEAD 等于本地 `refs/heads/dev1.0`，候选由 canonical prod-hosted 打包入口生成并绑定该 `sourceRevision`/tree。
 - GIVEN `prod-hosted` 平面账号、rootless Podman 与 user systemd 已就绪，且宿主共享 edge 独占公网 80/443。
 - WHEN 以该 exact dev candidate 执行 `prevalidate` rehearsal。
-- THEN 工作树脏、HEAD 不等于候选 `sourceRevision`、候选不等于本地 `refs/heads/dev1.0` head、镜像架构不是 `linux/amd64`，或本地镜像 content digest 与候选不一致时，在任何远端传输前 fail closed。
+- THEN 工作树脏、HEAD 不等于本地 `refs/heads/dev1.0` head、候选内容身份不等于 HEAD（`sourceRevision` 既不等于 HEAD，也不是「HEAD 的祖先且打包输入路径无改动」的内容寻址复用）、镜像架构不是 `linux/amd64`，或本地镜像 content digest 与候选不一致时，在任何远端传输前 fail closed。
 - THEN 候选镜像只经 exact digest 从本机交付到目标平面账号并读回一致，部署只落 `prevalidate` deployment instance 与独立 namespace，service/edge user systemd unit 为 enabled/active。
+- THEN 必需服务的原生健康探针持续执行且通过，初始化任务成功完成；探针未调度、OOM、初始化失败或超过启动预算均返回可区分的失败结果，既有共存应用、候选镜像与持久数据不因重试被无条件清理。
+- THEN 受限输入存储与可重建部署工作区隔离，按环境、预验证/正式用途及密钥用途独立授权；符号链接、非当前用户所有或宽权限目录在写入前拒绝。准备空目录不生成账号、凭据或证书，也不构成任何依赖就绪证据。
 - THEN 报告分轴给出 container runtime、Provider readiness 与 release eligibility，其中 `releaseEligibility` 恒为 `GATE_BLOCK` 且 `nonPromotable=true`；该候选不可被 formal rollout、frozen diagnostic snapshot 输入、tag、admission 或 ledger 消费。
 - THEN 隔离数据面对 canonical immutable content release 的 hosted-import 与 activation readback 只记为 rehearsal 诊断；legal-static 占位与宿主共享 edge 的 TLS 承接均在候选与报告中显式标记为非准出证据。
 
@@ -236,6 +238,6 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：正式链在 stable tag、GHCR 工厂物料、production approval 与多 member 冗余前置齐备前无法把任何候选送上 `prod-hosted`；在此之前，唯一能把当前 exact dev candidate 部署到日本单机做端到端内部验证的受治理通道就是 `REQ-003` 新增的 rehearsal。当前 prevalidate 输入只接受 reviewed main 的 GHCR frozen snapshot，`stackctl package --env prod --target prod-hosted` 只接受 GHCR digest manifest 且 legal-static 占位直接阻断，镜像交付只会从 registry 拉取；因此 rehearsal 的候选来源校验、本机 `linux/amd64` build-once 物料、exact digest 本地交付、legal-static 占位标记、隔离数据面 release import 诊断与非准出 TLS 标记均尚无实现或直接测试。
-- 完成判定：`SIT-003` 的 `t1`、`t2`、`t3`、`t4` 分别由 current `local_contract` 直接绑定并通过，且同一 exact dev candidate 在真实 `prod-hosted` 单机上完成一次 rehearsal，报告的 `releaseEligibility` 为 `GATE_BLOCK`、`nonPromotable=true`。
-- 依赖：`prod-hosted` 平面账号、rootless Podman 与 user systemd 已 bootstrap；宿主共享 edge 与公网 DNS 子域记录由仓外运维提供。
+- 影响或价值：正式链在 stable tag、GHCR 工厂物料、production approval 与多 member 冗余前置齐备前无法把任何候选送上 `prod-hosted`；在此之前，唯一能把当前 exact dev candidate 部署到日本单机做端到端内部验证的受治理通道就是 `REQ-003` 新增的 rehearsal。候选来源门、本机 `linux/amd64` build-once 物料、exact digest 本地交付、legal-static 占位标记、rehearsal 专用签名材料（GraphQL read registry、官方 Skill 包）、prod-hosted runtime-topology 身份与非准出 TLS 标记已由 `local_contract` 绑定；尚缺真实 `prod-hosted` 单机上的一次 rehearsal 部署读回、隔离数据面对 canonical release 的 hosted-import/activation 诊断读回，以及宿主共享 edge 公网入口下 prod buildProfile App 以白名单身份可达的读回。
+- 完成判定：`SIT-003` 的 `t1`、`t2`、`t3`、`t4` 分别由 current `local_contract` 直接绑定并通过；同一 exact dev candidate 在真实 `prod-hosted` 单机上完成一次 rehearsal——镜像 exact digest 交付读回一致、service/edge unit enabled/active、报告 `releaseEligibility` 为 `GATE_BLOCK` 且 `nonPromotable=true`（`t2`、`t3`），隔离数据面完成一次 canonical release 的 hosted-import/activation 诊断读回，且宿主共享 edge 按 Host 分流并标记为非准出后 prod buildProfile App 以白名单身份可达（`t4`）。
+- 依赖：`prod-hosted` 平面账号、rootless Podman 与 user systemd 已 bootstrap 并经平面账号 SSH 读回；`api/ops/cdn/upload/rtc.quwoquan.com` A 记录已发布；GraphQL read registry 的 rehearsal 签名 key 由仓外 `QWQ_GRAPHQL_READ_REGISTRY_*` 显式提供且 keyId 必须与正式 prod authority 可区分；工作树必须干净且 HEAD 等于本地 `dev1.0`，跨会话并行写入同一 worktree 时须先合并提交再打包；prod 内部 cohort 需要 User 拥有的四环境授权与签发契约、经正式认证核验的真实 accountId、独立受限密钥注入及真实 OTP Provider 依赖，不能仅打开当前拒绝 prod 的非生产 managed identity 开关；Data 必须消费同候选、同实例的 binding 与现役 handoff，按 apply、activate、verify 取得隔离读回，Content 与 App 不得把 production release 字样等同于公开访问。现役生产内容 handoff 的评审计划/候选前驱必须在消费面可验，旧 research attestation 不进入正式 integrate；POST candidate evidence 的 integration 工作区身份仍需由治理 owner 支持，不得以切换分支或关闭 current 校验替代。秘密目录准备不解除账号、Provider、mTLS、App signer 与设备输入缺失，相关正向验收继续阻断。

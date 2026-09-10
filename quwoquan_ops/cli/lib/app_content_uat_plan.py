@@ -275,10 +275,6 @@ def _release_identity(
         raise ValueError("App content UAT release header releaseId mismatch")
     if release_uat_sample_plan.get("releaseId") != release_id:
         raise ValueError("App content UAT ReleaseUatSamplePlan releaseId mismatch")
-    for field in ("releaseClass", "productLifecycleState"):
-        expected = _required_text(readiness.get(field), label=f"readiness {field}")
-        if release_header.get(field) != expected:
-            raise ValueError(f"App content UAT release header {field} mismatch")
     header_source_set = release_header.get("sourceIdentities")
     readiness_source_set = readiness.get("sourceIdentities")
     if header_source_set is not None or readiness_source_set is not None:
@@ -360,8 +356,6 @@ def _release_identity(
     return {
         "releaseId": release_id,
         "payloadSha256": payload_sha256,
-        "releaseClass": str(release_header["releaseClass"]),
-        "productLifecycleState": str(release_header["productLifecycleState"]),
         "milestone": release_uat_sample_plan.get("milestone"),
         "poolDigest": _required_digest(
             release_header.get("poolDigest"), label="release header poolDigest"
@@ -486,6 +480,9 @@ def load_release_uat_sample_plan(
     与漂移 fail closed 见 `release_uat_sample_plan_derivation`。
     """
 
+    from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
+    _validate_data_schema(release_header, "release_header")
     try:
         return load_or_derive_release_uat_sample_plan(
             payload_root=release_root,
@@ -562,9 +559,13 @@ def build_app_content_uat_plan(
 ) -> dict[str, Any]:
     """Project exact release samples and environment readback into Ops UAT inputs."""
 
+    from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
     _validate_readiness_surface(readiness)
+    _validate_data_schema(readiness, "environment_release_readiness")
     if release_header is None or not isinstance(release_header, Mapping):
         raise ValueError("App content UAT explicit release header is missing")
+    _validate_data_schema(release_header, "release_header")
     if release_uat_sample_plan is None or not isinstance(
         release_uat_sample_plan, Mapping
     ):

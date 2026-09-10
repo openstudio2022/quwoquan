@@ -10,10 +10,9 @@ from content.release.canonical.object_transaction_contract import ObjectTransact
 from core.schema import assert_valid
 
 
-def _cohort(*, milestone: str | None = None, release_class: str = "production") -> dict[str, object]:
+def _cohort(*, milestone: str | None = None) -> dict[str, object]:
     document: dict[str, object] = {
         "schema": "quwoquan_data.release_cohort",
-        "releaseClass": release_class,
         "producerBaselineRevision": "a" * 40,
         "objectRefs": ["posts/article/攻略/西湖/1"],
         "expectedCarrierCounts": {
@@ -77,7 +76,6 @@ def test_partial_production_cohort_omits_milestone_and_builds_exact_explicit_set
     prepared = pool.prepare_pool_release(
         publish_root=tmp_path / "publish",
         cohort=cohort,
-        release_class="production",
     )
 
     assert prepared.cohort_selection.milestone is None
@@ -102,5 +100,4 @@ def test_milestone_claim_fails_short_of_policy_targets(
         pool.prepare_pool_release(
             publish_root=tmp_path / "publish",
             cohort=cohort,
-            release_class="production",
         )

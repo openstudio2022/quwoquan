@@ -96,6 +96,12 @@ def command_matrix(args: argparse.Namespace) -> dict[str, Any]:
         rollback_release_attestation=str(
             getattr(args, "rollback_release_attestation", "") or ""
         ),
+        release_handoff_ref=str(getattr(args, "release_handoff_ref", "") or ""),
+        release_system_attestation_ref=str(getattr(args, "release_system_attestation_ref", "") or ""),
+        release_system_attestation_digest=str(getattr(args, "release_system_attestation_digest", "") or ""),
+        rollback_release_handoff_ref=str(getattr(args, "rollback_release_handoff_ref", "") or ""),
+        rollback_release_system_attestation_ref=str(getattr(args, "rollback_release_system_attestation_ref", "") or ""),
+        rollback_release_system_attestation_digest=str(getattr(args, "rollback_release_system_attestation_digest", "") or ""),
         test_data_request=request_by_target,
         test_data_evidence=evidence_by_target,
         test_data_handoff=handoff_by_target,
@@ -144,6 +150,11 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
     )
     matrix_parser.add_argument("--release-attestation", required=True)
     matrix_parser.add_argument("--rollback-release-attestation", required=True)
+    for prefix in ("release", "rollback-release"):
+        admission = matrix_parser.add_mutually_exclusive_group(required=True)
+        admission.add_argument(f"--{prefix}-handoff-ref")
+        admission.add_argument(f"--{prefix}-system-attestation-ref")
+        matrix_parser.add_argument(f"--{prefix}-system-attestation-digest")
     matrix_parser.add_argument(
         "--test-data-request",
         action="append",

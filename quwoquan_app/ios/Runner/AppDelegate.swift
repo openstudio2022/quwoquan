@@ -1939,7 +1939,7 @@ private final class RecoveryFailureEncryptedStore {
     primaryButton: RecoveryActionButton,
     webButton: RecoveryActionButton
   ) {
-    guard !recoveryVersionCheckInFlight else { return }
+    guard !recoveryVersionCheckInFlight, NativeRuntimeConfigStore.networkAccessAllowed else { return }
     recoveryVersionCheckInFlight = true
     guard var components = URLComponents(string: recoveryBaseURLString) else {
       recoveryVersionCheckInFlight = false
@@ -2079,7 +2079,7 @@ private final class RecoveryFailureEncryptedStore {
     _ rawURL: String,
     completion: @escaping (Bool) -> Void
   ) {
-    guard let url = URL(string: rawURL), isTrustedRecoveryURL(url) else {
+    guard NativeRuntimeConfigStore.networkAccessAllowed, let url = URL(string: rawURL), isTrustedRecoveryURL(url) else {
       completion(false)
       return
     }

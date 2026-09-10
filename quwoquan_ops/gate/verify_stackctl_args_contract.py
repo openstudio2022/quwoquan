@@ -55,10 +55,10 @@ def main() -> int:
     if (
         readiness_help.returncode != 0
         or "--target" in readiness_help.stdout
-        or "--phase" not in readiness_help.stdout
+        or "--phase" in readiness_help.stdout
         or "--env" not in readiness_help.stdout
     ):
-        issues.append("stackctl content-readiness must require phase/env and forbid target override")
+        issues.append("stackctl content-readiness must require env and forbid retired phase/target override")
 
     verify_help = run(["python3", str(STACKCTL), "verify", "--help"])
     if (

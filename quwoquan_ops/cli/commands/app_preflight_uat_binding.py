@@ -46,7 +46,6 @@ from quwoquan_ops.cli.commands.app_preflight_uat_page_evidence import (
     _app_content_patrol_evidence,
     _controlled_edge_recovery_evidence_issue,
 )
-from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
 from quwoquan_ops.cli.lib.test_data.capabilities.chat_service import (
     DIRECT_CONVERSATION_WITH_MESSAGES,
     DirectConversationResult,
@@ -117,16 +116,11 @@ def _verified_app_content_readiness(
         "readinessReceiptDigest"
     ):
         raise ValueError("App content UAT readiness receipt digest drifted")
-    try:
-        readiness_phase = ReadinessPhase(str(readiness.get("readinessPhase") or ""))
-    except ValueError as exc:
-        raise ValueError("App content UAT readiness phase is invalid") from exc
     canonical, canonical_path = _stackctl._load_data_release_readiness(
         environment=environment,
         release_id=release_id,
         verify_run_id=str(readiness.get("verifyRunId") or ""),
         manifest_digest=manifest_digest,
-        readiness_phase=readiness_phase,
     )
     if canonical_path.resolve() != readiness_path or canonical != readiness:
         raise ValueError("App content UAT readiness canonical identity drifted")
@@ -448,7 +442,6 @@ def _app_content_immutable_runtime_binding(
         "releaseId": str(release_candidate.get("releaseId") or ""),
         "verifyRunId": str(readiness.get("verifyRunId") or ""),
         "manifestDigest": str(release_candidate.get("releaseDigest") or ""),
-        "readinessPhase": str(readiness.get("readinessPhase") or ""),
         "readinessReceiptRef": str(preflight.get("readinessReceiptRef") or ""),
         "readinessReceiptDigest": str(preflight.get("readinessReceiptDigest") or ""),
         "lifecycleExitRef": str(preflight.get("lifecycleExitRef") or ""),
@@ -518,7 +511,6 @@ def _app_content_immutable_actor_context(
         "releaseId": readiness.get("releaseId"),
         "manifestDigest": readiness.get("manifestDigest"),
         "verifyRunId": readiness.get("verifyRunId"),
-        "readinessPhase": readiness.get("readinessPhase"),
     }
     if any(
         runtime_binding.get(field) != value for field, value in expected_runtime.items()

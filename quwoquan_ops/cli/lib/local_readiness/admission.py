@@ -14,6 +14,7 @@ from lib.agent_governance_contract import (
     validate_required_fields,
 )
 from lib.candidate_evidence import CandidateEvidenceError, validate_candidate_ref
+from lib.review_owner_manifest import read_owner_manifest_exact_bytes
 from lib.evidence_fingerprint import (
     EvidenceFingerprintError,
     normalize_repo_relative_path,
@@ -39,13 +40,10 @@ def owner_manifest_assets(owner_manifest: Path | None, *, repo_root: Path, candi
     ]
     manifest_value: dict[str, Any] | None = None
     if owner_manifest is not None:
-        resolved = owner_manifest.resolve()
         try:
-            relative = str(resolved.relative_to(repo_root.resolve()))
-        except ValueError as exc:
-            raise _core.LocalReadinessError("owner manifest 必须位于仓库内") from exc
-        try:
-            raw_bytes = resolved.read_bytes()
+            # 保留词法ref，由同一有界fd reader拒绝任一symlink组件与多链接文件。
+            relative = normalize_repo_relative_path(owner_manifest.as_posix(), repo_root)
+            raw_bytes = read_owner_manifest_exact_bytes(relative, repo_root=repo_root)
             validate_content_addressed_ref(
                 relative, raw_bytes=raw_bytes, repo_root=repo_root
             )

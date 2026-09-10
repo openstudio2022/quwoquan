@@ -589,7 +589,7 @@ public final class StartupGateActivity extends Activity {
 
   private void checkNativeRecoveryVersion(
       TextView title, TextView message, Button primary, Button web) {
-    if (recoveryVersionCheckInFlight) {
+    if (recoveryVersionCheckInFlight || !runtimeConfigPackageStore.networkAccessAllowed()) {
       return;
     }
     recoveryVersionCheckInFlight = true;
@@ -735,7 +735,7 @@ public final class StartupGateActivity extends Activity {
       String fallback,
       String failureMessage,
       boolean recheckVersionOnReturn) {
-    if (recoveryExternalOpenInFlight) {
+    if (recoveryExternalOpenInFlight || !runtimeConfigPackageStore.networkAccessAllowed()) {
       return;
     }
     recoveryExternalOpenInFlight = true;

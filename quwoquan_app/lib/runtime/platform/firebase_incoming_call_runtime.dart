@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -79,7 +80,8 @@ bool _backgroundHandlerRegistered = false;
 
 /// 必须在 `runApp` 前注册，确保 Android 在主 isolate 尚未启动时也能找到回调句柄。
 void registerFirebaseIncomingCallBackgroundHandler() {
-  if (currentAppPlatform != AppPlatform.android ||
+  if (!CloudRuntimeConfig.networkAccessAllowed ||
+      currentAppPlatform != AppPlatform.android ||
       _backgroundHandlerRegistered) {
     return;
   }
@@ -311,7 +313,8 @@ final class FirebasePushMessagingRuntime implements PushTapIntentSource {
   }
 
   Future<FirebasePushMessagingRuntimeState> _initialize() async {
-    if (_platformReader() != AppPlatform.android) {
+    if (!CloudRuntimeConfig.networkAccessAllowed ||
+        _platformReader() != AppPlatform.android) {
       return const FirebasePushMessagingRuntimeState.unsupported();
     }
     try {

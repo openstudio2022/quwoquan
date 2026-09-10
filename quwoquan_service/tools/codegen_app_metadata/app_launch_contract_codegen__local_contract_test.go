@@ -10,6 +10,34 @@ import (
 
 const appLaunchContractTestMetadataDir = "../../contracts/metadata"
 
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+func TestAppLaunchOfflineDocumentPolicyProjectsWithoutEndpointAuthority(t *testing.T) {
+	contract, err := loadAppLaunchContract(appLaunchContractTestMetadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contract.ContentSourcePolicy["alpha"] != "bundled_snapshot" ||
+		contract.ContentSourcePolicy["beta"] != "remote" ||
+		contract.RuntimeDocumentContentSources["app-offline-bootstrap-document"] != "bundled_snapshot" {
+		t.Fatal("content source mapping drifted")
+	}
+	for _, key := range contract.SchemaRequiredFields["offline_bootstrap_document"] {
+		if key == "expiresAt" || key == "issuedAt" || strings.Contains(key, "BaseUrl") {
+			t.Fatalf("offline document grants online claim %s", key)
+		}
+	}
+	artifacts, err := renderAppLaunchContractArtifacts(contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, artifact := range artifacts {
+		if !strings.Contains(string(artifact.Content), "bundled_snapshot") ||
+			!strings.Contains(string(artifact.Content), "app-offline-bootstrap-document") {
+			t.Fatalf("projection %s lost offline discriminator", artifact.RelativePath)
+		}
+	}
+}
+
 // spec_ref: specs/feature-tree/runtime/spec.md#req-001
 func TestAppLaunchContractCodegenProjectsCanonicalContractToEveryRuntime(t *testing.T) {
 	root := t.TempDir()
@@ -307,6 +335,19 @@ func TestAppLaunchContractCodegenRejectsUnknownDuplicateMissingAndDrift(t *testi
 				)
 			},
 			want: "app_managed_preparation.fields.target.allowed_values",
+		},
+		{
+			name:       "managed content binding rejects named readiness track",
+			sourceName: "app_launch_manifest.yaml",
+			mutate: func(source string) string {
+				return strings.Replace(
+					source,
+					"          releaseId: { type: string, min_length: 1 }",
+					"          releaseId: { type: string, min_length: 1 }\n          readinessPhase: { type: string, allowed_values: [production] }",
+					1,
+				)
+			},
+			want: "app_managed_preparation.fields.contentBinding.fields",
 		},
 		{
 			name:       "managed runtime identity falls back to string",

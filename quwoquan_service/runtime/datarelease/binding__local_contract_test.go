@@ -25,7 +25,6 @@ func TestLoadReturnsVerifiedImmutableReleaseTuple(t *testing.T) {
 	if tuple.ReleaseID != "release-20260906-001" ||
 		tuple.SourceOwner != datarelease.SourceOwnerQWQData ||
 		tuple.ReleaseKind != datarelease.ReleaseKindContent ||
-		tuple.ReleaseClass != datarelease.ReleaseClassResearch ||
 		tuple.PayloadSHA256 != datarelease.Digest(digest) {
 		t.Fatalf("unexpected tuple: %+v", tuple)
 	}
@@ -33,7 +32,9 @@ func TestLoadReturnsVerifiedImmutableReleaseTuple(t *testing.T) {
 
 func TestLoadMatchesProducerPathBlobMerkleVector(t *testing.T) {
 	root, digest := writeReleaseFixture(t)
-	const producerVector = "sha256:4f16e774570b1ce55931d251c731308e2d92e263c19d5ab7842486ab48a03245"
+	// 无类别 fixture 的固定向量由 Data core.tree_integrity.holdings_merkle 独立核算；
+	// 叶子顺序为 objects/entity.json（36 bytes）、release.json（119 bytes）。
+	const producerVector = "sha256:9f8e03ae67b0a0729ce6cecc8c4c632e8b2ac9abde3f49efdec3b373877b1d52"
 	if digest != producerVector {
 		t.Fatalf("payload digest differs from producer tree_integrity vector: got %s want %s", digest, producerVector)
 	}
@@ -64,7 +65,6 @@ func TestLoadRejectsHeaderAttestationIdentityDrift(t *testing.T) {
 		{name: "release id", field: "releaseId", value: "other-release", code: datarelease.CodeIdentityDrift},
 		{name: "source owner", field: "sourceOwner", value: "other-owner", code: datarelease.CodeInvalidField},
 		{name: "release kind", field: "releaseKind", value: "empty_baseline", code: datarelease.CodeIdentityDrift},
-		{name: "release class", field: "releaseClass", value: "commercial", code: datarelease.CodeIdentityDrift},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -122,9 +122,9 @@ func TestLoadRejectsMissingEmptyAndInvalidFields(t *testing.T) {
 		field  string
 	}{
 		{
-			name: "missing release class", target: "attestations/release.json",
-			mutate: func(document map[string]any) { delete(document, "releaseClass") },
-			code:   datarelease.CodeMissingField, field: "releaseClass",
+			name: "missing release kind", target: "attestations/release.json",
+			mutate: func(document map[string]any) { delete(document, "releaseKind") },
+			code:   datarelease.CodeMissingField, field: "releaseKind",
 		},
 		{
 			name: "empty release id", target: "attestations/release.json",
@@ -159,49 +159,20 @@ func TestLoadRejectsMissingEmptyAndInvalidFields(t *testing.T) {
 }
 
 // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
-func TestLoadAcceptsProductionReleaseClassAndRejectsUnknown(t *testing.T) {
-	setClass := func(class string) func(map[string]any) {
-		return func(document map[string]any) { document["releaseClass"] = class }
-	}
-
-	t.Run("production is the single active producer class", func(t *testing.T) {
-		root, digest := writeReleaseFixture(t)
-		mutateJSONDocument(t, filepath.Join(root, "payload", "release.json"), setClass("production"))
-		// header 字节变化后 payload digest 变化，attestation 必须重新绑定同一 exact bytes。
-		digest = payloadDigest(t, filepath.Join(root, "payload"))
-		mutateJSONDocument(t, filepath.Join(root, "attestations", "release.json"), func(document map[string]any) {
-			document["releaseClass"] = "production"
-			document["payloadSha256"] = digest
-		})
-
-		tuple, err := datarelease.Load(root)
-		if err != nil {
-			t.Fatalf("production release must load: %v", err)
+func TestLoadRejectsRetiredCategoryFields(t *testing.T) {
+	for _, target := range []string{datarelease.HeaderPath, datarelease.AttestationPath} {
+		for _, field := range []string{"releaseClass", "productLifecycleState", "readinessPhase"} {
+			for _, value := range []any{"research", "commercial", "production", "default", "", nil} {
+				t.Run(fmt.Sprintf("%s/%s/%v", target, field, value), func(t *testing.T) {
+					root, _ := writeReleaseFixture(t)
+					mutateJSONDocument(t, filepath.Join(root, target), func(document map[string]any) {
+						document[field] = value
+					})
+					_, err := datarelease.Load(root)
+					assertLoadError(t, err, datarelease.CodeInvalidField, field)
+				})
+			}
 		}
-		if tuple.ReleaseClass != datarelease.ReleaseClassProduction {
-			t.Fatalf("release class drifted: %+v", tuple)
-		}
-	})
-
-	t.Run("unknown class fails closed", func(t *testing.T) {
-		root, _ := writeReleaseFixture(t)
-		mutateJSONDocument(t, filepath.Join(root, "attestations", "release.json"), setClass("preview"))
-
-		_, err := datarelease.Load(root)
-		assertLoadError(t, err, datarelease.CodeInvalidField, "releaseClass")
-	})
-
-	for _, class := range []datarelease.ReleaseClass{
-		datarelease.ReleaseClassResearch,
-		datarelease.ReleaseClassCommercial,
-		datarelease.ReleaseClassProduction,
-	} {
-		if !datarelease.IsKnownReleaseClass(class) {
-			t.Fatalf("%s must be a known release class", class)
-		}
-	}
-	if datarelease.IsKnownReleaseClass("") || datarelease.IsKnownReleaseClass("preview") {
-		t.Fatal("empty or unknown release class must not be known")
 	}
 }
 
@@ -246,11 +217,10 @@ func writeReleaseFixture(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 	header := map[string]any{
-		"schema":       datarelease.HeaderSchema,
-		"releaseId":    "release-20260906-001",
-		"sourceOwner":  string(datarelease.SourceOwnerQWQData),
-		"releaseKind":  string(datarelease.ReleaseKindContent),
-		"releaseClass": string(datarelease.ReleaseClassResearch),
+		"schema":      datarelease.HeaderSchema,
+		"releaseId":   "release-20260906-001",
+		"sourceOwner": string(datarelease.SourceOwnerQWQData),
+		"releaseKind": string(datarelease.ReleaseKindContent),
 	}
 	writeJSONDocument(t, filepath.Join(root, "payload", "release.json"), header)
 	writeFile(t, filepath.Join(root, "payload", "objects", "entity.json"), []byte(`{"entityRef":"地点/景区/测试"}`))
@@ -260,7 +230,6 @@ func writeReleaseFixture(t *testing.T) (string, string) {
 		"releaseId":     "release-20260906-001",
 		"sourceOwner":   string(datarelease.SourceOwnerQWQData),
 		"releaseKind":   string(datarelease.ReleaseKindContent),
-		"releaseClass":  string(datarelease.ReleaseClassResearch),
 		"payloadSha256": digest,
 	}
 	writeJSONDocument(t, filepath.Join(root, "attestations", "release.json"), attestation)

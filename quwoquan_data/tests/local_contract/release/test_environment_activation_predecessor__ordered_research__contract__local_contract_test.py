@@ -45,9 +45,6 @@ def _previous_receipt(output: Path, environment: str) -> Path:
         "releaseId": "release-m100",
         "manifestDigest": DIGEST,
         "sourceIdentitySetDigest": IDENTITY_SET_DIGEST,
-        "releaseClass": "production",
-        "productLifecycleState": "production",
-        "readinessPhase": "production",
         # production 收据的 guest 证据（单轨谓词要求非空）。
         "guestActorHash": "sha256:" + "c" * 64,
         "guestLogin": {"path": "/auth/login/anonymous", "pageId": "user.login.anonymous", "status": 200},
@@ -165,9 +162,6 @@ def test_milestone_envelope_keeps_prod_production_and_requires_gamma() -> None:
         source_revision=None,
         source_digest=None,
         entity_catalog_digest=None,
-        release_class="production",
-        product_lifecycle_state="production",
-        readiness_phase="production",
         import_run_id="import-prod",
         verify_run_id="verify-prod",
         import_report_ref=(
@@ -180,6 +174,6 @@ def test_milestone_envelope_keeps_prod_production_and_requires_gamma() -> None:
         previous_environment_activation=predecessor,
     )
 
-    assert envelope["releaseClass"] == "production"
-    assert envelope["productLifecycleState"] == "production"
+    assert "releaseClass" not in envelope
+    assert "productLifecycleState" not in envelope
     assert envelope["previousEnvironmentActivation"] == predecessor

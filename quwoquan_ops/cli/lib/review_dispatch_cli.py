@@ -16,13 +16,24 @@ def _load_json(
     *,
     label: str,
     refuse: Callable[[str, str], None],
+    repo_root: Path,
 ) -> dict[str, Any] | None:
     if not path:
         return None
-    source = Path(path)
-    if not source.is_file():
-        refuse(f"REVIEW.{label.upper()}_MISSING", f"{label} 不存在：{path}")
-    value = json.loads(source.read_text(encoding="utf-8"))
+    if label == "owner_identity":
+        from .evidence_fingerprint import normalize_repo_relative_path
+        from .review_owner_manifest import read_owner_manifest_exact_bytes
+        try:
+            relative = normalize_repo_relative_path(path, repo_root)
+            raw = read_owner_manifest_exact_bytes(relative, repo_root=repo_root)
+        except (OSError, ValueError) as exc:
+            refuse("REVIEW.OWNER_MANIFEST_INVALID", str(exc))
+        value = json.loads(raw)
+    else:
+        source = Path(path)
+        if not source.is_file():
+            refuse(f"REVIEW.{label.upper()}_MISSING", f"{label} 不存在：{path}")
+        value = json.loads(source.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         refuse(f"REVIEW.{label.upper()}_INVALID", f"{label} 必须是 JSON object")
     return value
@@ -123,10 +134,10 @@ def main(
             round_name=args.round_name,
             finding_owners=args.finding_owner,
             previous_plan=_load_json(
-                args.previous_plan, label="previous_plan", refuse=refuse
+                args.previous_plan, label="previous_plan", refuse=refuse, repo_root=repo_root
             ),
             context_manifest=_load_json(
-                args.owner_identity, label="owner_identity", refuse=refuse
+                args.owner_identity, label="owner_identity", refuse=refuse, repo_root=repo_root
             ),
             context_manifest_ref=args.owner_identity,
             candidate_evidence_ref=args.candidate_evidence,

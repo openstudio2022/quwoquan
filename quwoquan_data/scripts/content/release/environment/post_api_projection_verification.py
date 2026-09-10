@@ -38,12 +38,28 @@ def _sleep_seconds(seconds: float) -> None:
     time.sleep(seconds)
 
 
+# Search 投影由 Content outbox 异步驱动，刚激活的 release 在 ES 里有一段最终一致窗口。
+# 这两个常量是 readiness 层的收敛预算，与 operations.yaml 的请求级重试（1500ms × 2）是不同语义：
+# 后者管单次请求，前者管「投影还没到」。整个 verify_search_projection 共享一个截止时间。
+# 实测 alpha 上 Search 投影按约 5 分钟一批落库（激活后 ~315s 才出现全部对象），预算须覆盖整周期加余量。
+SEARCH_PROJECTION_CONVERGENCE_SECONDS = 720.0
+SEARCH_PROJECTION_POLL_SECONDS = 5.0
+
+
 class SearchProjectionVerificationError(PostApiVerificationError):
     """Search readiness blocker retaining bounded physical-attempt evidence."""
 
-    def __init__(self, message: str, *, operation_attempts: list[dict[str, Any]]):
+    def __init__(
+        self,
+        message: str,
+        *,
+        operation_attempts: list[dict[str, Any]],
+        projection_pending: bool = False,
+    ):
         super().__init__(message)
         self.operation_attempts = tuple(dict(row) for row in operation_attempts)
+        # True 表示最后一次读回是 HTTP 200 但目标对象尚未出现：投影未收敛而非请求失败。
+        self.projection_pending = projection_pending
 
 
 def _operation_payload(response: Any, *, endpoint: str) -> dict[str, Any]:
@@ -344,6 +360,7 @@ def _search_hits(
             raise SearchProjectionVerificationError(
                 first_failure_message,
                 operation_attempts=attempts,
+                projection_pending=response.status == HTTPStatus.OK,
             )
         retry_after_seconds = retry_directive.recovery_after_seconds
         if _monotonic_seconds() + retry_after_seconds >= deadline:
@@ -359,6 +376,25 @@ def _search_hits(
     )
 
 
+def _search_hits_until_converged(
+    client: PublicApiClient,
+    *,
+    convergence_deadline: float,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """在收敛预算内把「200 但目标未出现」当作投影未到而轮询；请求级错误原样抛出。"""
+    while True:
+        try:
+            return _search_hits(client, **kwargs)
+        except SearchProjectionVerificationError as exc:
+            if (
+                not exc.projection_pending
+                or _monotonic_seconds() + SEARCH_PROJECTION_POLL_SECONDS >= convergence_deadline
+            ):
+                raise
+            _sleep_seconds(SEARCH_PROJECTION_POLL_SECONDS)
+
+
 def verify_search_projection(
     client: PublicApiClient,
     *,
@@ -367,6 +403,7 @@ def verify_search_projection(
     creators_by_author: Mapping[str, CreatorProfileCase],
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    convergence_deadline = _monotonic_seconds() + SEARCH_PROJECTION_CONVERGENCE_SECONDS
     for case in cases:
         manifest_path = (
             release_root
@@ -385,14 +422,17 @@ def verify_search_projection(
             raise PostApiVerificationError(
                 f"search post manifest is unreadable for {case.post_ref}: {exc}"
             ) from exc
+        # 发布标题（publishTitle）才是交付与索引的标题；manifest.title 对视频/图片可能是来源
+        # 平台的原始描述（如英文 file page 描述），用它查不到自己。
         query = str(
-            manifest.get("title")
-            or manifest.get("publishTitle")
+            manifest.get("publishTitle")
+            or manifest.get("title")
             or manifest.get("caption")
             or case.post_id
         ).strip()
-        proof = _search_hits(
+        proof = _search_hits_until_converged(
             client,
+            convergence_deadline=convergence_deadline,
             query=query,
             object_types=["content.post"],
             content_types=[_search_content_type(case.content_type.value)],
@@ -409,8 +449,9 @@ def verify_search_projection(
         creators_by_author.values(),
         key=lambda item: item.creator_ref,
     ):
-        proof = _search_hits(
+        proof = _search_hits_until_converged(
             client,
+            convergence_deadline=convergence_deadline,
             query=creator.display_name,
             object_types=["user.profile"],
             object_id=creator.persona_id,

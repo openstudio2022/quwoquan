@@ -114,23 +114,9 @@ func main() {
 	if err != nil || !objectInfo.IsDir() {
 		log.Fatalf("[homepage-import] release object closure unavailable: %s: %v", objectRoot, err)
 	}
-	headerRaw, err := os.ReadFile(filepath.Join(*releaseRoot, "payload", "release.json"))
-	if err != nil {
-		log.Fatalf("[homepage-import] read release header: %v", err)
-	}
-	var header struct {
-		ReleaseClass string `json:"releaseClass"`
-	}
-	if err := json.Unmarshal(headerRaw, &header); err != nil {
-		log.Fatalf("[homepage-import] parse release header: %v", err)
-	}
-	if strings.TrimSpace(header.ReleaseClass) != string(releaseTuple.ReleaseClass) {
-		log.Fatalf("[homepage-import] release class differs from verified immutable release tuple")
-	}
 	releaseAssets, err := runtimemedia.LoadReleaseMediaAssets(
 		*releaseRoot,
 		desired.ReleaseID,
-		strings.TrimSpace(header.ReleaseClass),
 	)
 	if err != nil {
 		log.Fatalf("[homepage-import] load release media authority: %v", err)
@@ -140,7 +126,6 @@ func main() {
 		filter,
 		releaseAssets,
 		runtimemedia.MediaDeliveryBases{Image: *mediaImageBase},
-		strings.TrimSpace(header.ReleaseClass),
 	)
 	if err != nil {
 		log.Fatalf("[homepage-import] load projections: %v", err)

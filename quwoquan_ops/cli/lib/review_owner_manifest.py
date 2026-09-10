@@ -106,6 +106,8 @@ def read_owner_manifest_exact_bytes(
         repo_root,
         manifest_ref,
         expected_directory_parts=OWNER_MANIFEST_DIRECTORY_PARTS,
+        max_bytes=int(contract_section("feature_context_manifest")["max_bytes"]),
+        require_current_name=True,
     )
 
 

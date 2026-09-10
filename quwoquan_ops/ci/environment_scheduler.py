@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import base64
+import fcntl
+import uuid
 import hashlib
 import json
 import os
@@ -18,6 +20,7 @@ from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
     DSSE_PAYLOAD_TYPE,
     ENVIRONMENTS,
     NO_LIVE_ENVIRONMENT_REQUIRED,
+    NOT_REQUIRED_REASON_CODES,
 )
 from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
     SCHEMA as ACCEPTANCE_SCHEMA,
@@ -324,6 +327,7 @@ def create_execution_request(
         "schema": REQUEST_SCHEMA,
         "candidate": {**identity, **exact_candidate},
         "environment": environment,
+        "target": f"{environment}-local",
         "impactPlanDigest": impact_digest,
         "priority": priority,
         "executionMode": "hermetic_detached_exact_candidate",
@@ -377,6 +381,8 @@ def load_execution_request(
         raise EnvironmentSchedulerError(
             "ENVIRONMENT_SCHEDULER.INVALID", "request environment is unsupported"
         )
+    if request.get("target") != f"{environment}-local":
+        raise EnvironmentSchedulerError("ENVIRONMENT_SCHEDULER.INVALID", "request target drifted")
     candidate_binding = request.get("candidate")
     if not isinstance(candidate_binding, Mapping):
         raise EnvironmentSchedulerError(
@@ -448,7 +454,7 @@ def select_next_request(
             continue
         seen.add(key)
         state = current_task_state(store_root=root, request_id=request["requestId"])
-        if state not in _TERMINAL_STATES and state != "safe_teardown_required":
+        if state in {None, "queued"}:
             requests.append(request)
     if not requests:
         return None
@@ -461,6 +467,50 @@ def select_next_request(
             item["requestId"],
         ),
     )
+
+
+def claim_execution_request(*, store_root: Path, request_ref: Mapping[str, str]) -> dict[str, Any]:
+    """选中不等于执行权：持久化 target slot；owner 死亡绝不自动回收。
+
+    本函数只签发执行占用，不证明子进程已受 fencing。调用方必须持有该 exact
+    claim 并经受管 executor 执行；缺 cleanup/隔离证据时 slot 保留供显式恢复。
+    """
+    from quwoquan_ops.cli.lib.output_paths import (
+        deployment_target_path, _read_secure_json_object, _atomic_write_secure_json_object,
+    )
+    root = _safe_root(store_root)
+    request = load_execution_request(root, request_ref)
+    target = str(request["target"])
+    directory = deployment_target_path(target, "process", "environment-execution")
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(directory / ".claim.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        path = directory / "execution-slot.json"
+        existing = _read_secure_json_object(path, label="environment execution slot")
+        if existing is not None:
+            raise EnvironmentSchedulerError(
+                "ENVIRONMENT_SCHEDULER.EXECUTION_IN_USE",
+                "target execution slot requires explicit verified closure; no PID/TTL takeover",
+            )
+        state = current_task_state(store_root=root, request_id=request["requestId"])
+        if state not in {None, "queued"}:
+            raise EnvironmentSchedulerError("ENVIRONMENT_SCHEDULER.INVALID_TRANSITION", "request is not queued")
+        claim = {
+            "schema": "quwoquan_ops.environment_execution_claim.v1",
+            "target": target, "requestId": request["requestId"],
+            "executionNonce": uuid.uuid4().hex, "ownerPid": os.getpid(),
+            "storeRoot": str(root), "request": dict(request_ref), "claimedAt": _now(),
+        }
+        claim["claimId"] = canonical_digest(claim)
+        _atomic_write_secure_json_object(path, claim, label="environment execution slot")
+        # 中断时先保留占用再恢复事件，绝不通过缺事件重新签发执行权。
+        if state is None:
+            append_task_state(store_root=root, request_ref=request_ref, state="queued")
+        append_task_state(store_root=root, request_ref=request_ref, state="mutation_started")
+        return {**claim, "path": str(path)}
+    finally:
+        os.close(descriptor)
 
 
 def _event_paths(root: Path, request_id: str) -> list[Path]:
@@ -754,11 +804,11 @@ def issue_environment_acceptance_fact(
     if status == "not_required":
         if (
             request["environment"] != "beta"
-            or reason_code != NO_LIVE_ENVIRONMENT_REQUIRED
+            or reason_code not in NOT_REQUIRED_REASON_CODES
         ):
             raise EnvironmentSchedulerError(
                 "ENVIRONMENT_SCHEDULER.NOT_REQUIRED_INVALID",
-                "only Beta may use typed no-live not_required",
+                "only Beta may use typed no-live or policy-optional not_required",
             )
     elif reason_code is not None:
         raise EnvironmentSchedulerError(
