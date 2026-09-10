@@ -6,6 +6,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -744,9 +745,30 @@ final class RuntimeConfigActivationCoordinator {
     }
   }
 
-  private static JsonObject readStreamDocument(InputStream input, String malformedCode)
+  static JsonObject readStreamDocument(InputStream input, String malformedCode)
       throws IOException, RuntimeConfigPackageStore.RuntimeConfigException {
-    byte[] payload = input.readNBytes(RuntimeConfigPackageStore.MAX_BYTES + 1);
+    // API 31 不提供 InputStream.readNBytes；最多读取上限加一字节以识别超限。
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    byte[] buffer = new byte[8192];
+    int remaining = RuntimeConfigPackageStore.MAX_BYTES + 1;
+    while (remaining > 0) {
+      int count = input.read(buffer, 0, Math.min(buffer.length, remaining));
+      if (count < 0) {
+        break;
+      }
+      if (count == 0) {
+        int value = input.read();
+        if (value < 0) {
+          break;
+        }
+        output.write(value);
+        remaining--;
+      } else {
+        output.write(buffer, 0, count);
+        remaining -= count;
+      }
+    }
+    byte[] payload = output.toByteArray();
     if (payload.length == 0 || payload.length > RuntimeConfigPackageStore.MAX_BYTES) {
       throw new RuntimeConfigPackageStore.RuntimeConfigException(malformedCode);
     }

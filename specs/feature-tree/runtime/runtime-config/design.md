@@ -117,6 +117,8 @@
 - 对象与 owner：canonical producer 拥有选定 release/cohort、许可与完整媒体闭包；App 只消费其不可变离线派生产物，不重选业务内容。runtime 组合根根据已验证配置构造同一组 typed read ports；页面、domain/application、Provider 消费端不读取 source/profile。Alpha local adapter 与 Remote adapter 复用 canonical Post/Creator/实体投影，离线只发布 typed capability，不伪造服务 active identity。
 - Command/query：构建准备完整 snapshot 并验证 digest/引用/许可，由独立 signed offline bootstrap document 绑定；离线与在线 document 共用 canonical activation/CAS/receipt/read chain，只有文档类型的验证合同不同，不另建 bootstrap reader。AppContentSource 的 typed 取值只消费 [`App launch manifest`](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml) 的 source 策略，Dart/wire 映射不在设计复制。source 在 provider scope 创建前冻结，显式换环境结束设备绑定、取消旧请求/播放器/outbox，再冷启动或重建整个 scope，不修改旧 client base。
 - 信任与时间：离线完整性由独立 signed offline document、制品签名、source digest 和许可共同承担，不继承在线 24 小时到期；不能靠忽略在线 expiry 实现离线。在线 endpoint trust、profile、target、签名与新配置有效期不豁免。尚有效在线配置在刷新失败时保留，到期按 canonical 错误恢复，不能用离线包续命；同 authority 刷新保留授权 namespace。
+- 验收装配：现役 `app-content-uat` 在编排边界按 canonical source 分流前置与测试集；页面和 application 不增加环境开关。`TargetUatBinding` 与 raw `ReadinessCaseResult` 用互斥的 source authority 表达离线制品/快照或在线 release/activation，复用 exact ref/digest、create-once 和设备/runner 绑定。离线不得填造在线字段，Remote 不因离线分支放宽验签、有效期、登录或 CAS/readback。
+- 准出消费：同一 Alpha candidate 同时要求 Android/iOS 离线页面逐 case 执行事实和独立服务/API 事实。汇总器只检查身份、覆盖与 required 状态，不根据 suite 退出码、启动日志、首屏或服务回读补写页面 PASS；模拟器 raw result 不形成生产真机资格。
 - 一致性：封存推荐/频道与 premium 选择、稳定对象/详情引用和本地 continuation，同 cohort 参数化证明过滤/空态/分页/去重/取消/重试等价，不复制个性化引擎。媒体以显式本地交付类型进入统一图片/播放器边界，不把 file/asset 假装 HTTPS 或签名 grant。
 - 失败与恢复：不完整首装包在构建期阻断；升级只在新闭包全部验证后切换，失败保持旧完整快照。在线失败从不切离线。永久离线仅接受可公开离线再分发许可，需要即时撤权的内容禁止进入；未知或不支持登录/写入/私有能力返回明确不可用，不假写成功。
 - 理由：统一用户可观察行为而非强迫同一传输，既使首次离线可用，也不把离线结果冒充在线健康或授权。

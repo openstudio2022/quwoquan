@@ -1,8 +1,14 @@
 // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-016
 
 import 'dart:async';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/semantics.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+
+import '../../../../../support/runtime/config/runtime_package_test_hydration.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -132,7 +138,10 @@ ContentPostViewData _post({
   );
 }
 
-Future<void> _pumpFeed(WidgetTester tester) async {
+Future<void> _pumpFeed(
+  WidgetTester tester, {
+  ValueChanged<String>? onUserTap,
+}) async {
   await tester.binding.setSurfaceSize(const Size(390, 844));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -171,7 +180,8 @@ Future<void> _pumpFeed(WidgetTester tester) async {
               isDark: false,
               channelId: 'recommend',
               template: 'single_column_multiform',
-              onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
+              onUserTap: (id, {avatarUrl, backgroundUrl, displayName}) =>
+                  onUserTap?.call(id),
             ),
           ),
         ),
@@ -182,6 +192,58 @@ Future<void> _pumpFeed(WidgetTester tester) async {
 }
 
 void main() {
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-008
+  testWidgets('原生作者入口和真实点赞可定位，拒绝后布尔态与计数不变', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await hydrateRuntimePackageForTests(environment: 'alpha');
+    final post = _post();
+    _feedItems = [post];
+    String? openedCreator;
+    try {
+      await _pumpFeed(tester, onUserTap: (id) => openedCreator = id);
+      final avatar = find.bySemanticsIdentifier(
+        'creator-avatar:${post.personaId}',
+      );
+      expect(avatar, findsOneWidget);
+      final avatarNode = tester.getSemantics(avatar);
+      expect(
+        avatarNode.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+      avatarNode.owner!.performAction(avatarNode.id, SemanticsAction.tap);
+      await tester.pumpAndSettle();
+      expect(openedCreator, post.personaId);
+      final like = find.bySemanticsIdentifier('post-like:${post.id}');
+      final before = tester.getSemantics(like).getSemanticsData();
+      expect(before.flagsCollection.isToggled, Tristate.isFalse);
+      final likeNode = tester.getSemantics(like);
+      expect(
+        likeNode.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+      likeNode.owner!.performAction(likeNode.id, SemanticsAction.tap);
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsIdentifier('capability-unavailable:like'),
+        findsOneWidget,
+      );
+      expect(
+        find.text(SearchText.recoveryContentUnavailableTitle),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(SearchText.recoveryReturnAction));
+      await tester.pumpAndSettle();
+      final after = tester.getSemantics(like).getSemanticsData();
+      expect(after.flagsCollection.isToggled, Tristate.isFalse);
+      expect(after.value, before.value);
+      expect(tester.takeException(), isNull);
+    } finally {
+      semantics.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await hydrateRuntimePackageForTests(environment: 'beta');
+    }
+  });
+
   testWidgets('signedGrant feed 图分流到 SignedGrantImage（kind=image），公开头像不受影响', (
     tester,
   ) async {

@@ -1,11 +1,19 @@
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_surface_view.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_view_projection.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+/// 组合根交入已选公开媒体能力；领域不读取环境、端点或全局配置。
+typedef ContentSurfaceMediaResolution = MediaDeliveryReference? Function(
+  String? reference, {
+  required MediaDeliveryKind kind,
+  String assetId,
+  int version,
+  String? sha256,
+});
 
 /// 统一展示模型的唯一映射器：`ContentPostViewData (+ wire)` → [ContentSurfaceView]。
 ///
@@ -20,18 +28,8 @@ class ContentSurfaceViewMapper {
     ContentPostViewData dto, {
     Map<String, dynamic>? wire,
     ContentSurfaceReferral referral = const ContentSurfaceReferral(),
-    MediaDeliveryResolver? mediaResolver,
+    required ContentSurfaceMediaResolution resolveMedia,
   }) {
-    final endpoints = MediaEndpointConfig.tryCreateAvailable(
-      avatarBaseUrl: CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
-      imageBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
-      videoBaseUrl: CloudRuntimeConfig.mediaVideoCdnBaseUrl,
-      attachmentBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
-    );
-    final resolver =
-        mediaResolver ??
-        (endpoints == null ? null : MediaDeliveryResolver(endpoints));
-
     final title = dto.normalizedTitle.isEmpty ? null : dto.normalizedTitle;
     final body = dto.normalizedBody.isEmpty ? null : dto.normalizedBody;
 
@@ -45,20 +43,21 @@ class ContentSurfaceViewMapper {
     final videoAssetId = videoItem?.mediaAssetId ?? dto.mediaAssetId ?? '';
     final videoAccessMode = videoItem?.accessMode;
 
-    final mediaCover = resolver?.tryResolve(
+    final mediaCover = resolveMedia(
       dto.mediaCoverUrl,
       kind: MediaDeliveryKind.image,
       assetId: coverBinding.assetId,
     );
-    final mediaThumbnail = resolver?.tryResolve(
+    final mediaThumbnail = resolveMedia(
       dto.mediaThumbnailUrl,
       kind: MediaDeliveryKind.image,
       assetId: thumbnailBinding.assetId,
     );
-    final mediaVideo = resolver?.tryResolve(
+    final mediaVideo = resolveMedia(
       dto.mediaVideoUrl,
       kind: MediaDeliveryKind.video,
       assetId: videoAssetId,
+      version: videoItem?.mediaAssetVersion ?? dto.mediaAssetVersion ?? 0,
     );
     final mediaVideoCover = mediaThumbnail ?? mediaCover;
     final videoCoverAccessMode = mediaThumbnail != null
@@ -78,10 +77,11 @@ class ContentSurfaceViewMapper {
     final images = dto.mediaImageUrls
         .map((raw) {
           final item = _mediaItemFor(dto, url: raw, kind: 'image');
-          final reference = resolver?.tryResolve(
+          final reference = resolveMedia(
             raw,
             kind: MediaDeliveryKind.image,
             assetId: item?.mediaAssetId ?? '',
+            version: item?.mediaAssetVersion ?? 0,
           );
           return reference == null
               ? null
@@ -104,13 +104,13 @@ class ContentSurfaceViewMapper {
           )
         : null;
 
-    final authorAvatar = resolver?.tryResolve(
+    final authorAvatar = resolveMedia(
       dto.avatarUrl,
       kind: MediaDeliveryKind.avatar,
       assetId: dto.authorAvatarAssetId ?? '',
     );
     // 作者背景图契约未携带资产标识，保持缺席，不以 personaId 冒充。
-    final authorBackground = resolver?.tryResolve(
+    final authorBackground = resolveMedia(
       dto.authorBackgroundUrl,
       kind: MediaDeliveryKind.background,
     );
@@ -160,11 +160,17 @@ class ContentSurfaceViewMapper {
   static ContentSurfaceView fromArticleDetailPayload(
     ContentPostDetailPayload payload, {
     required String fallbackArticleId,
+    required ContentSurfaceMediaResolution resolveMedia,
     ContentSurfaceReferral referral = const ContentSurfaceReferral(),
   }) {
     final wire = payload.mergedArticleWireMap;
     final dto = contentPostViewDataFromReadModelMap(wire);
-    final base = fromDto(dto, wire: wire, referral: referral);
+    final base = fromDto(
+      dto,
+      wire: wire,
+      referral: referral,
+      resolveMedia: resolveMedia,
+    );
     return base.copyWith(
       article: projectArticleDetailViewFromPayload(
         payload,
@@ -235,7 +241,10 @@ class ContentSurfaceViewMapper {
     if (url.isNotEmpty) {
       for (final item in dto.mediaItems) {
         if (item.coverUrl == url || item.thumbnailUrl == url) {
-          return (assetId: item.coverAssetId ?? '', accessMode: item.accessMode);
+          return (
+            assetId: item.coverAssetId ?? '',
+            accessMode: item.accessMode,
+          );
         }
       }
       for (final item in dto.mediaItems) {

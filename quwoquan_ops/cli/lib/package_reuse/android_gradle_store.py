@@ -737,6 +737,10 @@ def run_gradle_invocations(
         command = [str(root / "gradlew"), "--no-daemon", "--stacktrace"]
         if offline:
             command.append("--offline")
+        else:
+            # 插件解析可把底层下载失败折叠为 UnknownPluginException。
+            # 保留 INFO 层的仓库响应供诊断/既有暂态分类，不能据 not-found 盲重试。
+            command.append("--info")
         command.extend(invocation.tasks)
         results.append(
             _run_gradle_invocation(

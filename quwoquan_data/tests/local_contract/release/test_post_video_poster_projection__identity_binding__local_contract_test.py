@@ -75,7 +75,7 @@ def video_execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     (publish / ".git").mkdir(parents=True)
     _write(publish / "repository.json", {
         "schema": "quwoquan_data.publish_repository.v2", "repositoryId": "poster-projection-test",
-        "layoutVersion": 2, "producerContractDigest": "sha256:" + "a" * 64,
+        "layoutVersion": 2,
     })
     monkeypatch.setattr(post_transaction, "PUBLISH_ROOT", publish)
     execution_id = "20260909--travel-video-poster-binding--local--pilot-001"

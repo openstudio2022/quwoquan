@@ -18,6 +18,7 @@ from quwoquan_ops.cli.lib.package_reuse.input_capsule import (
     _digest_record,
     verify_package_input_capsule,
 )
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
 
 ProjectionBuildSeal = _projection_seal.ProjectionBuildSeal
 seal_projection_build = _projection_seal.seal_projection_build
@@ -57,6 +58,21 @@ _BUILD_PROJECTION_SEAL_FIELDS = {
     "derivedEntryCount",
     "buildProjectionDigest",
 }
+
+
+def _offline_launch(value: Mapping[str, Any]) -> bool:
+    """只接受 canonical policy 选择的离线来源，不能用字段绕过 Remote 约束。"""
+    source = value.get("contentSource")
+    if source is None:
+        return False
+    contract = load_launch_manifest_contract()
+    environment = value.get("environment")
+    if (source != "bundled_snapshot" or environment != "alpha"
+            or value.get("target") != "alpha-local"
+            or contract["content_source_policy"].get(environment) != source
+            or "packageDigest" in value):
+        raise ValueError("App content UAT offline source/authority mismatch")
+    return True
 
 
 def _canonical_digest(value: Mapping[str, Any]) -> str:
@@ -452,7 +468,9 @@ def verify_app_content_launch_projection(
     if evidence_path.is_symlink() or not evidence_path.is_file():
         raise ValueError("App content UAT source projection evidence is missing")
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-    if not isinstance(evidence, dict) or set(evidence) != _PROJECTION_EVIDENCE_FIELDS:
+    offline = isinstance(evidence, dict) and evidence.get("contentSource") == "bundled_snapshot"
+    fields = (_PROJECTION_EVIDENCE_FIELDS - {"packageDigest"}) | {"contentSource"} if offline else _PROJECTION_EVIDENCE_FIELDS
+    if not isinstance(evidence, dict) or set(evidence) != fields:
         raise ValueError("App content UAT source projection evidence fields mismatch")
     projection = projection_root.expanduser().resolve()
     if str(projection) != evidence.get("sourceProjectionRoot"):
@@ -490,8 +508,9 @@ def materialize_app_content_launch_projection(
     if manifest_ref.is_symlink() or not manifest_ref.is_file():
         raise ValueError("App content UAT source capsule manifest is missing")
     manifest = verify_package_input_capsule(manifest_ref.parent)
+    offline = _offline_launch(runtime_binding)
     expected = {
-        "baselineId": runtime_binding.get("candidateDigest"),
+        "baselineId": runtime_binding.get("sourceCapsuleBaselineId" if offline else "candidateDigest"),
         "sourceRevision": runtime_binding.get("sourceRevision"),
         "workspaceStatusDigest": runtime_binding.get(
             "sourceCapsuleWorkspaceStatusDigest"
@@ -502,12 +521,11 @@ def materialize_app_content_launch_projection(
         raise ValueError("App content UAT candidate/source capsule identity drifted")
     candidate_digest = str(runtime_binding.get("candidateDigest") or "")
     package_digest = str(runtime_binding.get("packageDigest") or "")
-    if not candidate_digest.startswith(_DIGEST_PREFIX) or not package_digest.startswith(
-        _DIGEST_PREFIX
-    ):
+    if not _valid_digest(candidate_digest) or (not offline and not _valid_digest(package_digest)):
         raise ValueError("App content UAT candidate/package identity is invalid")
     roots = {str(value) for value in manifest.get("deploymentInputRoots") or []}
-    if not _REQUIRED_LAUNCH_ROOTS.issubset(roots):
+    if not all(any(required == root or required.startswith(root + "/") for root in roots)
+               for required in _REQUIRED_LAUNCH_ROOTS):
         raise ValueError("App content UAT source capsule lacks canonical launch closure")
 
     projection = _fresh_path_under(
@@ -569,6 +587,9 @@ def materialize_app_content_launch_projection(
         "sourceProjectionDigest": projection_digest,
         "sourceProjectionFileCount": projection_count,
     }
+    if offline:
+        evidence.pop("packageDigest")
+        evidence["contentSource"] = "bundled_snapshot"
     evidence_ref = _fresh_path_under(
         evidence_path,
         output_root,
@@ -646,5 +667,10 @@ def write_app_content_launch_control(
         "launchReportRef": str(report_path.absolute()),
         "startupTerminalReceiptRef": str(terminal_receipt_path.absolute()),
     }
+    if _offline_launch(runtime_binding):
+        if platform not in {"android", "ios-simulator"}:
+            raise ValueError("App content UAT offline evidence requires a rehearsal device")
+        control.pop("packageDigest")
+        control["contentSource"] = "bundled_snapshot"
     digest = _atomic_private_json(control_ref, control)
     return {**control, "controlDigest": digest, "controlRef": str(control_ref)}

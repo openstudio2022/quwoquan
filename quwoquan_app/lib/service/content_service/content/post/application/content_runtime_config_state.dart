@@ -56,7 +56,7 @@ class ContentRuntimeConfigState {
   factory ContentRuntimeConfigState.fromAppConfig(
     ContentAppConfig config, {
     required ContentRuntimeConfigState fallback,
-    AppRemoteConfigSnapshot? snapshot,
+    AppContentConfigSnapshot? snapshot,
   }) {
     final mergedFlags = <String, bool>{
       ...fallback.featureFlags,

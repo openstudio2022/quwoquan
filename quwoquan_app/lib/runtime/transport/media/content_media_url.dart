@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 
@@ -112,6 +113,11 @@ List<String> _resolveMediaReference(
     return <String>[source];
   }
 
+  if (endpointConfig == null &&
+      imageCdnBaseUrl == null &&
+      videoCdnBaseUrl == null) {
+    return publicMediaDelivery.candidates(source, kind);
+  }
   final endpoints =
       endpointConfig ??
       MediaEndpointConfig.tryCreateAvailable(

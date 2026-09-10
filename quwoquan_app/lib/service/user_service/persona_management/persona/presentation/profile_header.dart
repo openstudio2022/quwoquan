@@ -23,6 +23,7 @@ class ProfileHeader extends StatelessWidget {
     super.key,
     required this.isDark,
     this.avatarUrl,
+    this.personaId,
     this.avatarAssetId,
     this.avatarAccessMode,
     this.displayName,
@@ -37,6 +38,7 @@ class ProfileHeader extends StatelessWidget {
 
   final bool isDark;
   final String? avatarUrl;
+  final String? personaId;
 
   /// 头像的媒体交付绑定（DEC-033）：signedGrant + 资产标识在场时分流到
   /// 私有媒体桥接原子，禁止从 URL 形态推断交付形态；契约缺席即为 null。
@@ -128,6 +130,10 @@ class ProfileHeader extends StatelessWidget {
                         )
                       : AppAvatarImage(
                           imageUrl: publicUrl,
+                          successSemanticIdentifier:
+                              (personaId?.isNotEmpty ?? false)
+                              ? 'creator-profile-avatar:$personaId'
+                              : null,
                           size: avatarRadius * 2,
                           fit: BoxFit.cover,
                           errorWidget: fallback,

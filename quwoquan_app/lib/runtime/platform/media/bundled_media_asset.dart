@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/runtime/config/offline_content_failure.dart';
@@ -18,11 +16,11 @@ final class BundledMediaAsset {
     required this.byteLength,
     required this.mimeType,
     required this.bundleDigest,
-    required AssetBundle assets,
+    required this._assets,
     this.width,
     this.height,
     this.durationMs,
-  }) : _assets = assets;
+  });
 
   final String assetId;
   final int version;

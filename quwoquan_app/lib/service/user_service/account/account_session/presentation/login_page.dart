@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,8 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/di/login_dependencies.dart';
 import 'package:quwoquan_app/runtime/platform/native_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/one_tap_login_native_bridge.dart';
@@ -105,6 +108,7 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
   final Stopwatch _stateDwellStopwatch = Stopwatch()..start();
 
   LoginFlowState get _flow => _flowController.state;
+  CloudException? _capabilityFailure;
 
   bool get _isAccountSuspensionEntry =>
       authPromptReasonForName(widget.reason) ==
@@ -126,6 +130,18 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
     )..addListener(_handleFlowChanged);
     _phoneController = TextEditingController();
     _otpController = TextEditingController();
+    _capabilityFailure = ref.read(loginCapabilityFailureProvider);
+    if (_capabilityFailure != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _trackLoginOperation(
+          operationId: 'resolve_login_entry',
+          result: 'unsupported',
+          error: _capabilityFailure,
+        );
+      });
+      return;
+    }
     _armStateDwellWatchdog();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -144,6 +160,7 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_capabilityFailure != null) return;
     if (state == AppLifecycleState.resumed) {
       _refreshCountdownFromDeadline(trackResume: true);
       if (_flow.step == LoginStep.phoneEntry ||
@@ -182,33 +199,54 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _handleBackOrDismiss();
       },
-      child: LoginFrame(
-        state: _flow,
-        socialMethodAvailability: _socialMethodAvailability,
-        dismissPolicy: widget.dismissPolicy,
-        isInline: widget.surfaceMode == LoginSurfaceMode.inline,
-        phoneController: _phoneController,
-        otpController: _otpController,
-        onAgreementToggle: _toggleAgreement,
-        onNavigate: _handleBackOrDismiss,
-        onOneTap: () => unawaited(_runWithConsent(LoginPendingIntent.oneTap)),
-        onOtherPhone: () => _enterPhoneEntry(preserveRoot: true),
-        onPhonePrimary: () => unawaited(_handlePhonePrimary()),
-        onAgreementTap: () => context.push(AppRoutePaths.legalUserAgreement),
-        onPrivacyTap: () => context.push(AppRoutePaths.legalPrivacyPolicy),
-        onSocialMethod: _handleSocialMethod,
-        onPhoneChanged: _handlePhoneChanged,
-        onPhoneEditingComplete: _handlePhoneEditingComplete,
-        onOtpChanged: _handleOtpChanged,
-        onResendOtp: () => unawaited(_requestOtp(resend: true)),
-        onRetryOtpVerify: () => unawaited(_verifyOtp()),
-        onChangePhone: _changePhone,
-        onRetrySocial: () => unawaited(_retrySocialAuthorization()),
-        onCancelSocial: _cancelSocialAuthorization,
-        onAccountRestrictionSupport: () =>
-            unawaited(_openAccountRestrictionSupport()),
-        accountRestrictionSupportBusy: _openingAccountRestrictionSupport,
-      ),
+      child: _capabilityFailure != null
+          ? Semantics(
+              identifier:
+                  'capability-unavailable:account_authentication:${widget.reason ?? 'login'}',
+              child: AppPageErrorState(
+                semantic: UiErrorSemanticResolver.resolve(
+                  context,
+                  error: _capabilityFailure!,
+                  category: UiErrorCategory.pageLoad,
+                  scope: UiErrorScope.page,
+                  sourceRouteId: AppRoutePaths.loginPathTemplate,
+                ),
+                onRecovery: (_) async {
+                  _dismissLogin();
+                  return UiRecoveryOutcome.cancelled;
+                },
+              ),
+            )
+          : LoginFrame(
+              state: _flow,
+              socialMethodAvailability: _socialMethodAvailability,
+              dismissPolicy: widget.dismissPolicy,
+              isInline: widget.surfaceMode == LoginSurfaceMode.inline,
+              phoneController: _phoneController,
+              otpController: _otpController,
+              onAgreementToggle: _toggleAgreement,
+              onNavigate: _handleBackOrDismiss,
+              onOneTap: () =>
+                  unawaited(_runWithConsent(LoginPendingIntent.oneTap)),
+              onOtherPhone: () => _enterPhoneEntry(preserveRoot: true),
+              onPhonePrimary: () => unawaited(_handlePhonePrimary()),
+              onAgreementTap: () =>
+                  context.push(AppRoutePaths.legalUserAgreement),
+              onPrivacyTap: () =>
+                  context.push(AppRoutePaths.legalPrivacyPolicy),
+              onSocialMethod: _handleSocialMethod,
+              onPhoneChanged: _handlePhoneChanged,
+              onPhoneEditingComplete: _handlePhoneEditingComplete,
+              onOtpChanged: _handleOtpChanged,
+              onResendOtp: () => unawaited(_requestOtp(resend: true)),
+              onRetryOtpVerify: () => unawaited(_verifyOtp()),
+              onChangePhone: _changePhone,
+              onRetrySocial: () => unawaited(_retrySocialAuthorization()),
+              onCancelSocial: _cancelSocialAuthorization,
+              onAccountRestrictionSupport: () =>
+                  unawaited(_openAccountRestrictionSupport()),
+              accountRestrictionSupportBusy: _openingAccountRestrictionSupport,
+            ),
     );
     if (widget.surfaceMode == LoginSurfaceMode.inline) {
       return content;

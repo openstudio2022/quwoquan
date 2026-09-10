@@ -1,6 +1,17 @@
 @import XCTest;
 @import patrol;
 @import ObjectiveC.runtime;
+#import <CommonCrypto/CommonDigest.h>
+
+static NSString *QWQOfflineScreenshotDigest(NSData *data) {
+  unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+  CC_SHA256(data.bytes, (CC_LONG)data.length, digest);
+  NSMutableString *hex = [NSMutableString stringWithString:@"sha256:"];
+  for (NSUInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++) {
+    [hex appendFormat:@"%02x", digest[index]];
+  }
+  return hex;
+}
 
 PATROL_INTEGRATION_TEST_IOS_RUNNER(RunnerUITests)
 
@@ -58,6 +69,148 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
 - (void)setUp {
   [super setUp];
   self.continueAfterFailure = NO;
+}
+
+- (NSPredicate *)offlinePredicate:(NSString *)selector {
+  if ([selector hasPrefix:@"text-prefix:"]) {
+    NSString *prefix = [selector substringFromIndex:@"text-prefix:".length];
+    return [NSPredicate predicateWithFormat:@"label BEGINSWITH %@", prefix];
+  }
+  return [NSPredicate predicateWithFormat:@"identifier == %@ OR label == %@", selector, selector];
+}
+
+- (XCUIElement *)offlineElement:(NSString *)selector app:(XCUIApplication *)app {
+  XCUIElement *element = [[app descendantsMatchingType:XCUIElementTypeAny]
+      matchingPredicate:[self offlinePredicate:selector]].firstMatch;
+  XCTAssertTrue([element waitForExistenceWithTimeout:15.0], @"实际页面缺少 %@", selector);
+  return element;
+}
+
+- (NSArray<NSNumber *> *)offlinePlaybackTimes:(NSString *)value {
+  NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:
+      @"(\\d+):(\\d{2})\\s*/\\s*(\\d+):(\\d{2})" options:0 error:nil];
+  NSTextCheckingResult *match = [regex firstMatchInString:value options:0 range:NSMakeRange(0, value.length)];
+  XCTAssertNotNil(match, @"实际进度必须含当前时间和总时长");
+  NSInteger current = [[value substringWithRange:[match rangeAtIndex:1]] integerValue] * 60
+      + [[value substringWithRange:[match rangeAtIndex:2]] integerValue];
+  NSInteger duration = [[value substringWithRange:[match rangeAtIndex:3]] integerValue] * 60
+      + [[value substringWithRange:[match rangeAtIndex:4]] integerValue];
+  return @[@(current), @(duration)];
+}
+
+- (void)testExecutesOfflinePageCaseInCanonicalProductionProcess {
+  NSDictionary *environment = NSProcessInfo.processInfo.environment;
+  NSString *target = environment[@"QWQ_IOS_TARGET_BUNDLE_ID"];
+  XCTAssertGreaterThan(target.length, 0);
+  XCTAssertEqualObjects(target, environment[@"QWQ_IOS_EXPECTED_BUNDLE_ID"]);
+  XCTAssertNotEqualObjects(target, QWQPatrolHostBundleIdentifier);
+  XCTAssertNotEqualObjects(target, NSBundle.mainBundle.bundleIdentifier);
+  NSData *encoded = [[NSData alloc] initWithBase64EncodedString:environment[@"QWQ_OFFLINE_PAGE_PLAN"] options:0];
+  NSDictionary *plan = [NSJSONSerialization JSONObjectWithData:encoded options:0 error:nil];
+  XCTAssertEqualObjects(plan[@"schema"], @"quwoquan_ops.offline_page_case.v1");
+  XCTAssertEqualObjects(plan[@"applicationId"], target);
+  XCTAssertEqualObjects(plan[@"platform"], @"ios");
+  NSArray *steps = plan[@"steps"];
+  XCTAssertTrue([steps isKindOfClass:NSArray.class]);
+  XCTAssertTrue(steps.count > 0 && steps.count <= 40);
+  NSSet *operations = [NSSet setWithArray:@[@"visible", @"tap", @"scroll", @"seek", @"playback", @"back", @"reveal"]];
+  for (NSDictionary *step in steps) {
+    XCTAssertTrue([step isKindOfClass:NSDictionary.class]);
+    XCTAssertEqual(step.count, 2);
+    XCTAssertTrue([operations containsObject:step[@"operation"]]);
+    XCTAssertTrue([step[@"selector"] isKindOfClass:NSString.class]);
+    XCTAssertGreaterThan([step[@"selector"] length], 0);
+    if ([step[@"selector"] hasPrefix:@"text-prefix:"]) {
+      XCTAssertTrue([@[@"visible", @"seek", @"playback"] containsObject:step[@"operation"]]);
+      XCTAssertGreaterThan([[step[@"selector"] substringFromIndex:@"text-prefix:".length] length], 0);
+    }
+  }
+  XCUIApplication *app = [[XCUIApplication alloc] initWithBundleIdentifier:target];
+  XCTAssertTrue(QWQExternalAUTIsActivatableState(app.state));
+  NSNumber *before = QWQExternalAUTProcessID(app);
+  XCTAssertNotNil(before);
+  XCTAssertEqualObjects(before, plan[@"canonicalProcessId"]);
+  [app activate];
+  XCTAssertTrue([app waitForState:XCUIApplicationStateRunningForeground timeout:10.0]);
+  NSMutableArray *observations = [NSMutableArray array];
+  for (NSDictionary *step in steps) {
+    NSString *operation = step[@"operation"];
+    XCTAssertEqualObjects(before, QWQExternalAUTProcessID(app));
+    if ([operation isEqualToString:@"back"]) {
+      XCUIElement *back = [app.buttons matchingPredicate:[NSPredicate predicateWithFormat:
+          @"label == '返回' OR label == 'Back'"]].firstMatch;
+      if (back.exists && back.hittable) { [back tap]; }
+      else {
+        XCUICoordinate *start = [app coordinateWithNormalizedOffset:CGVectorMake(0.01, 0.5)];
+        XCUICoordinate *end = [app coordinateWithNormalizedOffset:CGVectorMake(0.8, 0.5)];
+        [start pressForDuration:0.1 thenDragToCoordinate:end];
+      }
+    }
+    NSString *selector = step[@"selector"];
+    if ([operation isEqualToString:@"reveal"]) {
+      for (NSInteger index = 0; index < 30; index++) {
+        XCUIElement *candidate = [[app descendantsMatchingType:XCUIElementTypeAny]
+            matchingPredicate:[self offlinePredicate:selector]].firstMatch;
+        CGRect intersection = CGRectIntersection(candidate.frame, app.windows.firstMatch.frame);
+        if (candidate.exists && !CGRectIsEmpty(intersection) && !CGRectIsNull(intersection)) { break; }
+        [app swipeUp];
+      }
+    }
+    XCUIElement *element = [self offlineElement:selector app:app];
+    XCTAssertFalse(CGRectIsEmpty(element.frame));
+    CGRect intersection = CGRectIntersection(element.frame, app.windows.firstMatch.frame);
+    XCTAssertFalse(CGRectIsEmpty(intersection) || CGRectIsNull(intersection));
+    NSString *observed = [NSString stringWithFormat:@"%@ %@ %@", element.identifier, element.label, element.value ?: @""];
+    if ([operation isEqualToString:@"tap"]) {
+      XCTAssertTrue(element.hittable); [element tap];
+    } else if ([operation isEqualToString:@"scroll"]) {
+      [element swipeUp];
+    } else if ([operation isEqualToString:@"seek"]) {
+      NSInteger previous = [self offlinePlaybackTimes:observed][0].integerValue;
+      [element adjustToNormalizedSliderPosition:0.65];
+      XCUIElement *updated = [self offlineElement:selector app:app];
+      observed = [NSString stringWithFormat:@"%@ %@", updated.label, updated.value ?: @""];
+      XCTAssertGreaterThanOrEqual([self offlinePlaybackTimes:observed][0].integerValue, previous + 2);
+    } else if ([operation isEqualToString:@"playback"]) {
+      NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:180.0];
+      NSInteger first = [self offlinePlaybackTimes:observed][0].integerValue;
+      XCTAssertLessThanOrEqual(first, 2, @"完整播放必须从开头观察");
+      BOOL completed = NO;
+      while (deadline.timeIntervalSinceNow > 0) {
+        XCUIElement *updated = [self offlineElement:selector app:app];
+        observed = [NSString stringWithFormat:@"%@ %@", updated.label, updated.value ?: @""];
+        NSArray<NSNumber *> *times = [self offlinePlaybackTimes:observed];
+        XCTAssertGreaterThan(times[1].integerValue, 0);
+        if (times[0].integerValue >= times[1].integerValue - 1 && times[0].integerValue > first) {
+          completed = YES; break;
+        }
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.15]];
+      }
+      XCTAssertTrue(completed, @"实际视频未完整播放");
+    } else { XCTAssertTrue([@[@"visible", @"back", @"reveal"] containsObject:operation]); }
+    [observations addObject:@{@"operation": operation, @"selector": selector, @"observed": observed}];
+  }
+  XCTAssertEqual(app.state, XCUIApplicationStateRunningForeground);
+  NSData *png = app.screenshot.PNGRepresentation;
+  XCTAssertGreaterThan(png.length, 32);
+  NSNumber *after = QWQExternalAUTProcessID(app);
+  XCTAssertEqualObjects(before, after);
+  XCTAssertEqual(app.state, XCUIApplicationStateRunningForeground);
+  NSString *screenshot = [png base64EncodedStringWithOptions:0];
+  for (NSUInteger offset = 0, index = 0; offset < screenshot.length; offset += 3000, index++) {
+    NSLog(@"QWQ_OFFLINE_SCREENSHOT %@ %lu %@", plan[@"planDigest"], (unsigned long)index,
+        [screenshot substringWithRange:NSMakeRange(offset, MIN(3000, screenshot.length - offset))]);
+  }
+  NSDictionary *evidence = @{
+    @"schema": @"quwoquan_ops.offline_native_page_result.v1", @"caseId": plan[@"caseId"],
+    @"planDigest": plan[@"planDigest"], @"platform": @"ios", @"applicationId": target,
+    @"processIdBefore": before, @"processIdAfter": after, @"status": @"passed", @"observations": observations,
+    @"candidateDigest": plan[@"candidateDigest"], @"artifactDigest": plan[@"artifactDigest"],
+    @"deviceId": plan[@"deviceId"], @"launchAttemptId": plan[@"launchAttemptId"],
+    @"screenshotDigest": QWQOfflineScreenshotDigest(png), @"screenshotByteLength": @(png.length),
+  };
+  NSData *data = [NSJSONSerialization dataWithJSONObject:evidence options:NSJSONWritingSortedKeys error:nil];
+  NSLog(@"QWQ_OFFLINE_PAGE %@", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]);
 }
 
 - (void)testReusesCanonicalProductionProcessAndFindsHomeSurface {

@@ -8,6 +8,8 @@ import 'package:quwoquan_app/runtime/platform/storage/client_interaction_state_s
 const String _postInteractionStateStorageKey = 'post_interaction_state';
 
 class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
+  int _stateRevision = 0;
+
   @override
   PostInteractionState build() {
     unawaited(_hydratePersistedState());
@@ -15,10 +17,12 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
   }
 
   Future<void> _hydratePersistedState() async {
+    final revision = _stateRevision;
     final raw = await readPersistedInteractionMap(
       _postInteractionStateStorageKey,
     );
-    if (!ref.mounted) {
+    // 盘面是启动时快照；不能覆盖读取期间已经 prime/确认/乐观更新的实时状态。
+    if (!ref.mounted || revision != _stateRevision) {
       return;
     }
     if (raw == null) {
@@ -212,6 +216,7 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
   }
 
   Future<void> _persistState() async {
+    _stateRevision++;
     await writePersistedInteractionMap(
       _postInteractionStateStorageKey,
       state.toMap(),

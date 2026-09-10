@@ -111383,6 +111383,10 @@
         ],
         "adapters": [
           {
+            "path": "quwoquan_app/lib/service/content_service/content/feed_delivery_page/adapters/discovery_feed_query_bundled.dart",
+            "sha256": "4348fe05d93ddce623fa1f244ba7eca2b8347833c127cacf88f46c4912e5c7d9"
+          },
+          {
             "path": "quwoquan_app/lib/service/content_service/content/feed_delivery_page/adapters/discovery_feed_query_remote.dart",
             "sha256": "b653137742d0cec12c9158a80d3ff2f14ca9c7e9ab477d5c1d35a00c1e5c9a84"
           }
@@ -112417,7 +112421,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_widget__local_contract_test.dart",
-            "sha256": "1d1d4f939e11fe876799ac3286a7359fdeacb6cf05bc9f24222f0618c838063d"
+            "sha256": "b26aa6c9ca9b443aac62cdfbd2ba031f4b92ac198612afce2bdf49af723e1008"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_wishlist__local_contract_test.dart",
@@ -114626,7 +114630,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/domain/content_surface_view_mapper.dart",
-            "sha256": "6d4d0cc9e36fd4f083a4a0fdd52adaf730cb602a121c9049ad64c7bb19fa226e"
+            "sha256": "70b275d16d5ea1f28ebc578e2a8e6921ee8bbfb662d6afcf48d4e9a279536259"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/domain/content_type_constants.dart",
@@ -114704,7 +114708,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/content_runtime_config_state.dart",
-            "sha256": "6d26ceba931063e161c8cc6f26fd949a890b8d2e56161b43b66771143f369781"
+            "sha256": "8d57bb605af9eb3019b0cfe97edae25a04b24c50cd0a0aa2c8c7ac4a45241eff"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/create_draft_store_provider.dart",
@@ -114788,7 +114792,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/post_interaction_state.dart",
-            "sha256": "42dfcbfb043dacb37f230674d52aac383043ba96d892efc7993c70b9d9cb8873"
+            "sha256": "d5f6ab7ba1c0577291af59ea57b3c7b32c74b08f30f8d344eea05b3f8d28dc7c"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/post_publication_intent_queue_models.dart",
@@ -115003,6 +115007,10 @@
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/post_publication_remote.dart",
             "sha256": "7e2027563b909b4ba2a043d371eea5e5bc90d9234fbcaa04e906be5ea204d498"
+          },
+          {
+            "path": "quwoquan_app/lib/service/content_service/content/post/adapters/post_reader_bundled.dart",
+            "sha256": "2632c118b092b25bf0b79ed81270c5b6f659ec95b02e28e50b0c4297bda206e8"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/post_reader_remote.dart",
@@ -115266,7 +115274,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_surface_view_mapper__local_contract_test.dart",
-            "sha256": "f7bf6449c7af98d149c0058d4eddd1a61977bb7c629a87769c0d372e6ccb5a48"
+            "sha256": "2d7247a73c8f8ba0bc59d8a2cd1115104bab066523c7ff2e87fa6c010671aca3"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_time_label__local_contract_test.dart",
@@ -115434,7 +115442,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_multi_form_feed_signed_delivery_routing__local_contract_test.dart",
-            "sha256": "92767f27e4de94ae34e5736613019a7e8bc6519681fbe048bbe08e5b04beb439"
+            "sha256": "bc6b9305c6f21e3d783a6538f85bc373d5388775d5772ed0a3ba0115c530b924"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_multi_form_feed_tracker_lifecycle__local_contract_test.dart",
@@ -115502,11 +115510,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/post_interaction_state__local_contract_test.dart",
-            "sha256": "f65a18ab4e5d0ee55e71c5393c953043df3dac5f12040f2d7607ece604f34004"
+            "sha256": "c13a4d6bc18db18b5beb55d3d59d8249212f2daf57428304806a3ebc899ce986"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/post_media_delivery_binding__local_contract_test.dart",
-            "sha256": "6923bbaaf9de7aef4304f79692a6176e9260fff1df6f649a8de3c2927a3caa7f"
+            "sha256": "d4f54cbb4cfba72f1f265b0f4b00852452a489be63e1131d66d14e0a13cf949e"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/post_publication_continuation_registry__local_contract_test.dart",
@@ -125076,7 +125084,7 @@
         "presentation": [
           {
             "path": "quwoquan_app/lib/service/user_service/account/account_session/presentation/login_page.dart",
-            "sha256": "55e702289e8635034f109ef359408cac5e9d2c92d0a6d13c8b92634860251bc3"
+            "sha256": "be37d79c7f873dacbabf2509e9f141247232c709a8c512b3ea2b11bf4eec6528"
           }
         ],
         "localContract": [
@@ -125098,7 +125106,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/account_session/login_page_widget__local_contract_test.dart",
-            "sha256": "57ba115ffde3922a53333b0329cbd32671f7ae2dc94bf7e5a5f6dd90330ab6eb"
+            "sha256": "c6e17ac0f211f9a09e2889501186dc31013cc4e0cabaddbcc6416f5b925e5225"
           }
         ],
         "apiIntegration": [
@@ -126578,6 +126586,10 @@
             "sha256": "885d6bba0591c340bab5ba15349f7fb81fa92ef9c6cf5c21a9cbade312e9ab42"
           },
           {
+            "path": "quwoquan_app/lib/service/user_service/persona_management/persona/adapters/profile_query_bundled.dart",
+            "sha256": "63e22a3d7dcef47aa204ae7d1e4ebafaeca5cc4b48724a7715740bddb87b8e48"
+          },
+          {
             "path": "quwoquan_app/lib/service/user_service/persona_management/persona/adapters/profile_query_remote.dart",
             "sha256": "225a5114db1e3ed29faf78f142103ad8460ee7811331c067cd9be308555cad47"
           },
@@ -126695,7 +126707,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_header_signed_delivery_routing__local_contract_test.dart",
-            "sha256": "de2b1174de2889f1889d66e234d034a43fc14df010d80bda042db64bb5ca2f0a"
+            "sha256": "6b94ff81a6fad09dc758bbf44d46b8b5b04bf82973245a1ca5962c9bf9a7f552"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_interaction_tab__local_contract_test.dart",
@@ -130149,7 +130161,7 @@
     },
     {
       "path": "_schemas/readiness_result_bundle.schema.json",
-      "sha256": "74c7360e61ec70b459bf8090befcb5a93d111179d40456cbbe759b3f960898be"
+      "sha256": "9871da02638aac409042d0b3eb11b5b207b504a8927ae9fae740029c3cd9581a"
     },
     {
       "path": "_schemas/storage.schema.json",
@@ -130161,7 +130173,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "90f84b6ba3ff09b54e2c425758a43269135758b2ed3df8f34ecc9111de70fb90"
+      "sha256": "54792c99b3a0f5477d3ae73584b717fe25a68e1e636167af098d33fe32cd5ce7"
     },
     {
       "path": "_shared/app_pages.yaml",
@@ -136246,7 +136258,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "90f84b6ba3ff09b54e2c425758a43269135758b2ed3df8f34ecc9111de70fb90",
+      "sha256": "54792c99b3a0f5477d3ae73584b717fe25a68e1e636167af098d33fe32cd5ce7",
       "mediaType": "application/yaml",
       "content": {
         "app_launch_attempt_forward_states": [
@@ -136521,7 +136533,7 @@
               "contentSource 必须等于 content_source_policy[environment] 且与 runtime_document_content_sources[文档 schema] 一致；离线文档的签名 contentSource 必须同值。在线包不得追加 contentSource 字段改变既有签名形状。",
               "requiresLocalTransport 必须等于 contentSource=remote 且 target 属于 local_transport_targets；离线 transport.required=false 且 ports/lease/receipt 全空，禁止产生在线 readiness。",
               "transport.required=true 只允许 local_transport_targets，且端口集合必须相等，receipt digest 与 consumer lease ID 必须是 sha256 identity。",
-              "transport.required=false 时端口和本地 transport identity 必须为空；这种 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。",
+              "transport.required=false 时端口和本地 transport identity 必须为空；Remote 的 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。bundled_snapshot 页面 UAT 绑定实际设备、安装制品、签名快照与 exact source candidate，不要求在线 transport、Provider、登录或服务端 activation。",
               "prod-hosted 必须令 local transport 为 false，且全部端口与本地 transport identity 为空。",
               "buildProfile、launchPolicy 必须与 environment 满足 launch_policies 和 app_artifact_manifest.build_profiles 的映射；launchProvenance 必须来自 app_artifact_manifest.launch_provenances 且不得改变业务行为，runtimeConfigSupplyMode 必须来自 runtime_config_supply_modes。",
               "runtimeConfigPackageDigest 必须等于 handoff 所携带 runtimeConfigPackage 的 digest_contract canonical JSON 摘要。",

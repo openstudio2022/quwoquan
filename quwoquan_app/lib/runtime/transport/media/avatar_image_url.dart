@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 
@@ -38,6 +39,13 @@ List<String> resolveAvatarImageUrlCandidates(
     return <String>[source];
   }
 
+  if (endpointConfig == null && avatarCdnBaseUrl == null) {
+    return publicMediaDelivery.candidates(
+      source,
+      MediaDeliveryKind.avatar,
+      version: avatarVersion ?? 0,
+    );
+  }
   final avatarBase =
       avatarCdnBaseUrl ?? CloudRuntimeConfig.mediaAvatarCdnBaseUrl;
   final endpoints =

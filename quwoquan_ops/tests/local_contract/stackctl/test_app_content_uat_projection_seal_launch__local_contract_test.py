@@ -232,14 +232,36 @@ def test_control_and_report_bind_exact_build_projection_seal_fields() -> None:
         _REPO_ROOT / "quwoquan_ops/cli/commands/app_preflight_uat_binding_contract.py"
     ).read_text(encoding="utf-8")
 
+    handoff = (
+        _REPO_ROOT / "quwoquan_app/scripts/device/build_launcher_handoff.py"
+    ).read_text(encoding="utf-8")
+    control_call = launcher.index("--canonical-launch-control-exports")
+    control_exports = launcher.index('eval "$CANONICAL_LAUNCH_EXPORTS"', control_call)
+    assert launcher.rfind("build_launcher_handoff.py", 0, control_call) >= 0
+    assert control_call < control_exports < launcher.index(
+        "seal_app_content_projection_build predependency"
+    )
+
+    seal_function = launcher[
+        launcher.index("seal_app_content_projection_build()") : launcher.index(
+            "verify_dependency_projection_after_command()"
+        )
+    ]
+    for field, exported in (
+        ("buildProjectionPolicyId", "QWQ_CANONICAL_BUILD_PROJECTION_POLICY_ID"),
+        ("buildProjectionSealRef", "QWQ_CANONICAL_BUILD_PROJECTION_SEAL_REF"),
+        ("expectedBuildProjectionDigest", "QWQ_CANONICAL_EXPECTED_BUILD_PROJECTION_DIGEST"),
+    ):
+        assert field in handoff
+        assert exported in handoff
+        assert f'"${exported}"' in seal_function
+        assert field in binding
     for field in (
-        "buildProjectionPolicyId",
-        "buildProjectionSealRef",
-        "expectedBuildProjectionDigest",
         "derivedOutputPolicyDigest",
         "derivedOutputDigest",
         "buildProjectionDigest",
         "buildProjectionSealDigest",
+        "buildProjectionSealRef",
     ):
         assert field in launcher
         assert field in binding
@@ -409,8 +431,8 @@ def test_retry_control_mandatorily_binds_expected_projection_digest(
     source_evidence.write_text("{}\n", encoding="utf-8")
     control = launch.write_app_content_launch_control(
         runtime_binding={
-            "environment": "alpha",
-            "target": "alpha-local",
+            "environment": "beta",
+            "target": "beta-local",
             "candidateDigest": "sha256:" + "a" * 64,
             "packageDigest": "sha256:" + "b" * 64,
             "sourceRevision": "c" * 40,

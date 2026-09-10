@@ -70,7 +70,7 @@ jobs:
           PREVIOUS_EXACT="$(materialize_fact previous-released "$PREVIOUS_FACT")"
           ROLLBACK_EXACT="$(materialize_fact rollback-readiness "$ROLLBACK_FACT")"
           python3 - "$STORE" "$TAG_FACT" <<'PY'
-          import hashlib, json, subprocess, sys
+          import hashlib, json, re, subprocess, sys
           from pathlib import Path
           store, tag_ref = Path(sys.argv[1]), sys.argv[2]
           tag = json.loads((store / tag_ref).read_text(encoding="utf-8"))
@@ -79,10 +79,9 @@ jobs:
               exact = tag.get(field)
               ref = exact.get("ref") if isinstance(exact, dict) else None
               digest = exact.get("digest") if isinstance(exact, dict) else None
-              if not isinstance(ref, str) or not ref.startswith("ghcr.io/") or not isinstance(digest, str):
+              if not isinstance(exact, dict) or set(exact) != {"ref", "digest"} or not isinstance(ref, str) or re.fullmatch(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}", ref) is None or not isinstance(digest, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None:
                   raise SystemExit(f"GATE_BLOCK: stable tag AdmissionFact {field} must be an exact OCI ref/digest")
-              if ref.rsplit("@", 1)[-1] != digest:
-                  raise SystemExit(f"GATE_BLOCK: stable tag AdmissionFact {field} OCI digest drifted")
+              # ref 中的 manifest digest 由 materialize-oci 验证；exact.digest 按 canonical loader 绑定 fact 字节。
               destination = store / ref
               destination.parent.mkdir(parents=True, exist_ok=True)
               subprocess.run([
@@ -165,6 +164,28 @@ jobs:
           python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
             --ref "$ADMISSION_OCI_REF" --output-file "$STORE/$ADMISSION_OCI_REF" >/dev/null
           test "sha256:$(shasum -a 256 "$STORE/$ADMISSION_OCI_REF" | awk '{print $1}')" = "$ADMISSION_DIGEST"
+          # 先验证完整 predecessor 列表，避免 process substitution 吞掉拒绝状态。
+          PREDECESSORS="$(python3 - "$STORE/$ADMISSION_OCI_REF" <<'PY'
+          import json, re, sys
+          fact = json.load(open(sys.argv[1], encoding="utf-8"))
+          exact_ref = re.compile(r"^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")
+          exact_digest = re.compile(r"^sha256:[0-9a-f]{64}$")
+          for field in ("releaseTagAdmission", "qualification", "candidateMaterialManifest", "previousActiveReleasedLedger", "rollbackReadiness"):
+              value = fact.get(field)
+              if not isinstance(value, dict) or set(value) != {"ref", "digest"} or exact_ref.fullmatch(str(value.get("ref", ""))) is None or exact_digest.fullmatch(str(value.get("digest", ""))) is None:
+                  raise SystemExit(f"GATE_BLOCK: ProdActivationAdmissionFact {field} is not exact OCI-bound evidence")
+              # authority.digest 是独立受信的 fact 字节摘要，不是 ref 的 OCI manifest 摘要。
+              print("authority", value["ref"], value["digest"], sep="\t")
+          factories = fact.get("factoryMaterials")
+          if not isinstance(factories, dict) or set(factories) != {"service", "app"}:
+              raise SystemExit("GATE_BLOCK: ProdActivationAdmissionFact factory closure is incomplete")
+          for kind in ("service", "app"):
+              value = factories[kind]
+              if not isinstance(value, dict) or set(value) != {"ociRef", "ociDigest", "payloadDigest", "materialDigest"} or exact_ref.fullmatch(str(value.get("ociRef", ""))) is None or value["ociRef"].rsplit("@", 1)[-1] != value.get("ociDigest"):
+                  raise SystemExit(f"GATE_BLOCK: {kind} factory material locator drifted")
+              print("factory", value["ociRef"], value["ociDigest"], sep="\t")
+          PY
+          )"
           while IFS=$'\t' read -r kind ref digest; do
             test -n "$kind" && test -n "$ref" && test -n "$digest"
             case "$kind" in
@@ -192,26 +213,7 @@ jobs:
                 ;;
               *) echo "::error::GATE_BLOCK: unknown activation predecessor kind $kind"; exit 2 ;;
             esac
-          done < <(python3 - "$STORE/$ADMISSION_OCI_REF" <<'PY'
-          import json, re, sys
-          fact = json.load(open(sys.argv[1], encoding="utf-8"))
-          exact_ref = re.compile(r"^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")
-          exact_digest = re.compile(r"^sha256:[0-9a-f]{64}$")
-          for field in ("releaseTagAdmission", "qualification", "candidateMaterialManifest", "previousActiveReleasedLedger", "rollbackReadiness"):
-              value = fact.get(field)
-              if not isinstance(value, dict) or set(value) != {"ref", "digest"} or exact_ref.fullmatch(str(value.get("ref", ""))) is None or exact_digest.fullmatch(str(value.get("digest", ""))) is None or value["ref"].rsplit("@", 1)[-1] != value["digest"]:
-                  raise SystemExit(f"GATE_BLOCK: ProdActivationAdmissionFact {field} is not exact OCI-bound evidence")
-              print("authority", value["ref"], value["digest"], sep="\t")
-          factories = fact.get("factoryMaterials")
-          if not isinstance(factories, dict) or set(factories) != {"service", "app"}:
-              raise SystemExit("GATE_BLOCK: ProdActivationAdmissionFact factory closure is incomplete")
-          for kind in ("service", "app"):
-              value = factories[kind]
-              if not isinstance(value, dict) or set(value) != {"ociRef", "ociDigest", "payloadDigest", "materialDigest"} or exact_ref.fullmatch(str(value.get("ociRef", ""))) is None or value["ociRef"].rsplit("@", 1)[-1] != value.get("ociDigest"):
-                  raise SystemExit(f"GATE_BLOCK: {kind} factory material locator drifted")
-              print("factory", value["ociRef"], value["ociDigest"], sep="\t")
-          PY
-          )
+          done <<< "$PREDECESSORS"
           SERVICE_FACTORY_EXACT="$(cat "$RUNNER_TEMP/service-factory.exact")"
           APP_FACTORY_EXACT="$(cat "$RUNNER_TEMP/app-factory.exact")"
           python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-materialize-input \
@@ -452,21 +454,22 @@ jobs:
           python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
             --ref "$RELEASED_OCI_REF" --output-file "$STORE/$RELEASED_LOCAL_REF" >/dev/null
           test "sha256:$(shasum -a 256 "$STORE/$RELEASED_LOCAL_REF" | awk '{print $1}')" = "$RELEASED_DIGEST"
+          RELEASED_PREDECESSORS="$(python3 - "$STORE/$RELEASED_LOCAL_REF" <<'PY'
+          import json, re, sys
+          released = json.load(open(sys.argv[1], encoding="utf-8"))
+          value = released.get("admission")
+          if not isinstance(value, dict) or set(value) != {"ref", "digest"} or re.fullmatch(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}", str(value.get("ref", ""))) is None or re.fullmatch(r"sha256:[0-9a-f]{64}", str(value.get("digest", ""))) is None:
+              raise SystemExit("GATE_BLOCK: ProdReleasedFact admission predecessor is invalid")
+          print(value["ref"], value["digest"], sep="\t")
+          PY
+          )"
           while IFS=$'\t' read -r ref payload_digest; do
             [[ "$ref" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
             mkdir -p "$STORE/$(dirname "$ref")"
             python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
               --ref "$ref" --output-file "$STORE/$ref" >/dev/null
             test "sha256:$(shasum -a 256 "$STORE/$ref" | awk '{print $1}')" = "$payload_digest"
-          done < <(python3 - "$STORE/$RELEASED_LOCAL_REF" <<'PY'
-          import json, sys
-          released = json.load(open(sys.argv[1], encoding="utf-8"))
-          value = released.get("admission")
-          if not isinstance(value, dict) or set(value) != {"ref", "digest"}:
-              raise SystemExit("GATE_BLOCK: ProdReleasedFact admission predecessor is invalid")
-          print(value["ref"], value["digest"], sep="\t")
-          PY
-          )
+          done <<< "$RELEASED_PREDECESSORS"
           RELEASED_REF="$RELEASED_LOCAL_REF"
           FULL_STAGE_READBACK="$RUNNER_TEMP/prod-soak/full-stage-readback.json"
           CREDENTIAL_EVIDENCE="$RUNNER_TEMP/prod-soak/credentials.json"

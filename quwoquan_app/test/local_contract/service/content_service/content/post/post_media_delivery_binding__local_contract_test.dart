@@ -175,7 +175,7 @@ void main() {
 
       final view = ContentSurfaceViewMapper.fromDto(
         dto,
-        mediaResolver: _mediaResolver,
+        resolveMedia: _mediaResolver.tryResolve,
       );
 
       expect(view.images, hasLength(1));
@@ -217,7 +217,7 @@ void main() {
 
       final view = ContentSurfaceViewMapper.fromDto(
         dto,
-        mediaResolver: _mediaResolver,
+        resolveMedia: _mediaResolver.tryResolve,
       );
 
       expect(view.video, isNotNull);
@@ -248,7 +248,7 @@ void main() {
 
       final view = ContentSurfaceViewMapper.fromDto(
         dto,
-        mediaResolver: _mediaResolver,
+        resolveMedia: _mediaResolver.tryResolve,
       );
 
       expect(view.images, hasLength(1));

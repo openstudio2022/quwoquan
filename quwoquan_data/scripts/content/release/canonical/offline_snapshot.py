@@ -21,12 +21,29 @@ class OfflineBundle:
     media_bytes: dict[str, bytes]
 
 
+def _verify_migration_source(source: CanonicalSource, selection: dict, source_revision: str) -> None:
+    """显式转换审计只绑定原件和新包，不参与普通内容解析。"""
+    if not safe_path(source.root, "offline_source_migration.json").exists():
+        return
+    from core.schema import assert_valid
+    migration = source.json("offline_source_migration.json")
+    assert_valid(migration, "release", "offline_source_migration")
+    if migration["sourceRevision"] != source_revision or migration["selectionDigest"] != digest(selection):
+        raise OfflineSnapshotError("OFFLINE.MIGRATION_BINDING_DRIFT")
+    for field, prefix, error in (("convertedFiles", "", "BYTES"), ("originalFiles", "original/publish/", "ORIGINAL")):
+        for row in migration[field]:
+            raw = source.read(prefix + row["ref"])
+            if len(raw) != row["byteLength"] or digest_bytes(raw) != row["sha256"]:
+                raise OfflineSnapshotError(f"OFFLINE.MIGRATION_{error}_DRIFT")
+
+
 def build_bundle(*, repo: Path, publish_root: Path, selection: dict, source_revision: str,
                  library_root: Path | None = None, carried_root: Path | None = None) -> OfflineBundle:
     validate_selection(selection)
     if re.fullmatch(r"[0-9a-f]{40}", source_revision) is None:
         raise OfflineSnapshotError("OFFLINE.SOURCE_REVISION_INVALID")
     source = CanonicalSource(publish_root)
+    _verify_migration_source(source, selection, source_revision)
     post_refs = selection["objectRefs"]
     entities, creators, tags = capture_closure(source, post_refs)
     owners = post_refs + ["entities/" + ref for ref in entities] + ["creators/" + ref for ref in creators]
@@ -57,7 +74,7 @@ def build_bundle(*, repo: Path, publish_root: Path, selection: dict, source_revi
                 f"{ENTITY_ROOT}/domain/model/homepage.go", f"{ENTITY_ROOT}/infrastructure/homepageimport/loader.go",
                 "quwoquan_data/schema/release/offline_content_bundle.schema.json", "quwoquan_data/schema/release/offline_operator_selection.schema.json",
                 "quwoquan_data/schema/content/post_manifest.schema.json", "quwoquan_data/scripts/core/article_package.py", "quwoquan_data/scripts/core/media_asset_url.py",
-                *(f"quwoquan_data/scripts/content/release/canonical/{name}.py" for name in ("offline_snapshot", "offline_snapshot_source", "offline_snapshot_projection", "offline_snapshot_contract"))):
+                *(f"quwoquan_data/scripts/content/release/canonical/{name}.py" for name in ("offline_snapshot", "offline_snapshot_source", "offline_snapshot_projection", "offline_snapshot_contract", "offline_snapshot_migration"))):
         validator.files[ref] = safe_path(repo, ref).read_bytes()
     contract_files = [{"ref": ref, "sha256": digest_bytes(raw), "byteLength": len(raw)} for ref, raw in sorted(validator.files.items())]
     provenance = {"kind": "explicit_canonical_cohort", "purpose": "alpha_offline_engineering", "sourceRevision": source_revision,

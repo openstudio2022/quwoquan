@@ -275,6 +275,7 @@ def acceptance_main(store: Path, monkeypatch: pytest.MonkeyPatch):
         "_local_readiness": (store / "readiness.json", {"cache_hit": True}),
         "build_head_candidate": new_candidate_path, "create_source_fact": store / "source.json", "release_claim": None,
         "_not_required_beta": {}, "_issue": {"ref": "issued.json", "digest": IMPACT},
+        "_alpha_offline_pages": {"caseCount": 26},
     }
     calls = {}
     for name, value in replacements.items():
@@ -345,6 +346,32 @@ def test_acceptance_main_reuse_honors_beta_opt_in(acceptance_main, opted_in: boo
     assert summary["reused"]["readiness"] is True
     for name in ("create_publish_admission", "local_git_cas_publish", "_stackctl", "_data_ship"):
         setup.calls[name].assert_not_called()
+
+
+def test_existing_candidate_is_used_before_pages_without_claim_or_release(acceptance_main, monkeypatch) -> None:
+    setup = acceptance_main
+    candidate = json.loads((setup.store / "fresh-candidate.json").read_bytes())
+    exact = {"ref": "fresh-candidate.json", "digest": IMPACT}
+    existing = mock.Mock(return_value=(exact, candidate))
+    monkeypatch.setattr(integration_run, "_existing_candidate", existing)
+    assert integration_run.main([*setup.argv, "--candidate-ref", exact["ref"] + "=" + IMPACT]) == 0
+    setup.calls["build_head_candidate"].assert_not_called()
+    setup.calls["release_claim"].assert_not_called()
+    assert setup.calls["create_source_fact"].call_args.kwargs["candidate_ref"] == exact
+    assert setup.calls["_alpha_offline_pages"].call_args.kwargs["candidate_ref"] == exact
+    assert setup.calls["_run_environment"].call_args.kwargs["offline_pages"] == {"caseCount": 26}
+    summary = json.loads((setup.store / "runs/policy-reuse/summary.json").read_bytes())
+    names = [phase["name"] for phase in summary["phases"]]
+    assert names.index("alpha.offline-pages") < names.index("alpha.issue")
+
+
+def test_offline_failure_stops_before_services_and_fact_issuance(acceptance_main) -> None:
+    setup = acceptance_main
+    setup.calls["_alpha_offline_pages"].side_effect = integration_run.IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", "missing case")
+    assert integration_run.main(setup.argv) == 1
+    setup.calls["_run_environment"].assert_not_called()
+    setup.calls["_issue"].assert_not_called()
+    setup.calls["_write_acceptance_bundle"].assert_not_called()
 
 
 def test_acceptance_without_reuse_runs_fresh_alpha_and_explicit_beta(acceptance_main) -> None:

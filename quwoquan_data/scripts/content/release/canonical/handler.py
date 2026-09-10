@@ -202,7 +202,7 @@ _VERSIONED_RELEASE_FILES = ("cohort.json", "producer_release_handoff.json")
 
 
 def write_versioned_release_copy(*, release_dir: Path, reference_root: Path, release_id: str) -> dict[str, str]:
-    """把里程碑 release 的 cohort 与 handoff 逐字节复制到受版本控制的 reference/releases/<releaseId>/。
+    """把里程碑 cohort 与 handoff 逐字节保存到显式副本根（默认独立 publish/releases）。
 
     create-or-same：副本不存在则写入，已存在且逐字节相同视为 replay，不同则 fail closed——
     副本只是可删除输出根的耐久备份，不允许出现第二套字节。
@@ -241,11 +241,13 @@ def handle_handoff_verify(args: argparse.Namespace) -> None:
             repo_root=Path(REPO_ROOT).resolve(),
             output_root=output_root,
             release_root=release_root,
+            expected_repository_id=getattr(args, "expected_repository_id", None),
         )
     except (FileNotFoundError, OSError, ProducerReleaseHandoffError, TypeError, ValueError) as exc:
         raise SystemExit(f"[release handoff-verify] GATE_BLOCK {exc}") from exc
     print(json.dumps({
         "schema": "quwoquan_data.handoff_verify_result",
+        "repositoryId": document["repositoryId"],
         "releaseId": document["releaseId"],
         "milestone": document["milestone"],
         "carrierCounts": document["carrierCounts"],

@@ -61,7 +61,7 @@ def inputs(tmp_path, monkeypatch):
     (publish / ".git").mkdir(parents=True)
     _json(publish / "repository.json", {
         "schema": "quwoquan_data.publish_repository.v2", "repositoryId": "test-content",
-        "layoutVersion": 2, "producerContractDigest": "sha256:" + "a" * 64,
+        "layoutVersion": 2,
     })
     monkeypatch.setattr(materialize, "CONTROL_PLANE_CREATOR_POOL_ROOT", pool)
     monkeypatch.setattr(materialize, "PUBLISH_ROOT", publish)

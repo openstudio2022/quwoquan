@@ -2,7 +2,7 @@
 import Foundation
 
 enum AppLaunchContract {
-  static let sourceDigest = "sha256:4be28129198ec16f6e0c4850348d67ef2fa24426ef33354ba1ebc4195c1262e6"
+  static let sourceDigest = "sha256:f301c900d3c4bdd8ceeb83e78e800d81974adb0d12f775b0f0e92d3f963b95ef"
   static let environments: [String] = [
     "alpha",
     "beta",

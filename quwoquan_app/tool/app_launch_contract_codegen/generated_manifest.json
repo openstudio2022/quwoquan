@@ -1,7 +1,7 @@
 {
   "schema": "qwq.app-launch-contract-codegen-manifest",
   "generator": "tools/codegen_app_metadata --app-launch-contract-only",
-  "sourceDigest": "sha256:4be28129198ec16f6e0c4850348d67ef2fa24426ef33354ba1ebc4195c1262e6",
+  "sourceDigest": "sha256:f301c900d3c4bdd8ceeb83e78e800d81974adb0d12f775b0f0e92d3f963b95ef",
   "inputs": [
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml",
@@ -9,34 +9,34 @@
     },
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml",
-      "sha256": "sha256:90f84b6ba3ff09b54e2c425758a43269135758b2ed3df8f34ecc9111de70fb90"
+      "sha256": "sha256:54792c99b3a0f5477d3ae73584b717fe25a68e1e636167af098d33fe32cd5ce7"
     }
   ],
   "outputs": [
     {
       "path": "quwoquan_app/android/app/src/runtimeConfigShared/java/com/quwoquan/quwoquan_app/AppLaunchContract.java",
-      "sha256": "sha256:827a642d083c2f33b1c9c358044f1c3f84fb0e0383343040bcb48c424b42ce62",
+      "sha256": "sha256:2b631309ac8d09da4e89c75052f0f95400c0bd5f6404f9d847eee1d7bbe07f66",
       "bytes": 21497
     },
     {
       "path": "quwoquan_app/ios/Runner/AppLaunchContract.generated.swift",
-      "sha256": "sha256:b1c259ae09ba841a2e5aa23f128180f922f9e3ecea0f04a43802a62fd1b767d3",
+      "sha256": "sha256:afe7d29f12fea742cd76cfb2d857eefe15f80fee1f5338f6dc209772315e3df2",
       "bytes": 18132
     },
     {
       "path": "quwoquan_app/lib/runtime/config/generated/app_launch_contract.g.dart",
-      "sha256": "sha256:911bc2852dc70fccd1db7a5bc24daf21ae0ffbfe3311f2abb5e985b9e9591223",
-      "bytes": 69837
+      "sha256": "sha256:e93400da82db67b2c72be7b19e885cbd46eed4c0e2bd9ada6c08b1945cba1c5d",
+      "bytes": 70017
     },
     {
       "path": "quwoquan_app/tool/app_launch_contract_codegen/app_launch_contract.generated.json",
-      "sha256": "sha256:ff35e91ddaf40003ace7e1cf9e3803804af7acce102061185f139e997b88b917",
-      "bytes": 105769
+      "sha256": "sha256:f948284280bbed7a37b1f0734ff68d60cf251ea90042e979add02ca37b652a31",
+      "bytes": 105949
     },
     {
       "path": "quwoquan_ops/cli/lib/generated/app_launch_contract.py",
-      "sha256": "sha256:9fd868e8afc24d3139ef788a8ee6a217ad1371cb19be5f5a9d8b23a5d37d5879",
-      "bytes": 83358
+      "sha256": "sha256:de1d53bcf73d6a8b0983e947d8215e098ec92bcc04a7dff3f8fc5ce594154cb0",
+      "bytes": 83538
     }
   ]
 }

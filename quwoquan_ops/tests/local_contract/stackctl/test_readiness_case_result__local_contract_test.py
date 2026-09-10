@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from quwoquan_ops.cli.lib import readiness_case_result as result_module
 from quwoquan_ops.cli.lib.readiness_case_result import (
     ReadinessCaseResultError,
     build_readiness_result_bundle,
@@ -90,6 +91,37 @@ def _service_result() -> dict[str, object]:
         "provider": "first-party-https",
     })
     return result
+
+
+def _offline_result() -> dict[str, object]:
+    result = _result()
+    for field in ("baselineId", "packageDigest", "configurationDigest", "candidateManifestSha256",
+                  "provider", "releaseId", "releaseDigest", "reasonCode"):
+        result.pop(field, None)
+    result.update(contentSource="bundled_snapshot", environment="alpha", deploymentTarget="alpha-local",
+                  status="passed", observedOutcome="capability_unavailable")
+    return result
+
+
+@pytest.mark.parametrize("stdlib", [False, True])
+def test_offline_raw_uses_existing_result_with_disjoint_authority(monkeypatch, stdlib: bool) -> None:
+    if stdlib:
+        monkeypatch.setattr(result_module, "Draft202012Validator", None)
+    value = _offline_result()
+    assert validate_readiness_case_result(value, generated_at=str(value["completedAt"])) == value
+    for field in ("baselineId", "provider", "releaseId", "releaseDigest", "packageDigest"):
+        mixed = dict(value, **{field: _result()[field]})
+        with pytest.raises(ReadinessCaseResultError):
+            validate_readiness_case_result(mixed, generated_at=str(value["completedAt"]))
+    for field in ("candidateDigest", "targetUatBindingDigest", "deviceIdentity"):
+        missing = dict(value)
+        missing.pop(field)
+        with pytest.raises(ReadinessCaseResultError):
+            validate_readiness_case_result(missing, generated_at=str(value["completedAt"]))
+    remote = _result()
+    remote.pop("provider")
+    with pytest.raises(ReadinessCaseResultError):
+        validate_readiness_case_result(remote, generated_at=str(value["completedAt"]))
 
 def test_validator_uses_canonical_schema_and_rejects_retired_fields() -> None:
     result = _result()

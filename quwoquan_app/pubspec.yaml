@@ -178,6 +178,9 @@ flutter:
     - path: assets/content/alpha/manifest.json
       flavors:
         - nonprod
+    - path: assets/content/alpha/bundle_identity.json
+      flavors:
+        - nonprod
     - path: assets/content/alpha/media/
       flavors:
         - nonprod

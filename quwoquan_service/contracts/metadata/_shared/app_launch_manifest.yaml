@@ -588,7 +588,7 @@ schemas:
       - contentSource 必须等于 content_source_policy[environment] 且与 runtime_document_content_sources[文档 schema] 一致；离线文档的签名 contentSource 必须同值。在线包不得追加 contentSource 字段改变既有签名形状。
       - requiresLocalTransport 必须等于 contentSource=remote 且 target 属于 local_transport_targets；离线 transport.required=false 且 ports/lease/receipt 全空，禁止产生在线 readiness。
       - transport.required=true 只允许 local_transport_targets，且端口集合必须相等，receipt digest 与 consumer lease ID 必须是 sha256 identity。
-      - transport.required=false 时端口和本地 transport identity 必须为空；这种 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。
+      - transport.required=false 时端口和本地 transport identity 必须为空；Remote 的 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。bundled_snapshot 页面 UAT 绑定实际设备、安装制品、签名快照与 exact source candidate，不要求在线 transport、Provider、登录或服务端 activation。
       - prod-hosted 必须令 local transport 为 false，且全部端口与本地 transport identity 为空。
       - buildProfile、launchPolicy 必须与 environment 满足 launch_policies 和 app_artifact_manifest.build_profiles 的映射；launchProvenance 必须来自 app_artifact_manifest.launch_provenances 且不得改变业务行为，runtimeConfigSupplyMode 必须来自 runtime_config_supply_modes。
       - runtimeConfigPackageDigest 必须等于 handoff 所携带 runtimeConfigPackage 的 digest_contract canonical JSON 摘要。

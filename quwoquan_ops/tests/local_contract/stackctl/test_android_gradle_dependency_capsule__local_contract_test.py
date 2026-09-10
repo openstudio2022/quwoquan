@@ -548,6 +548,50 @@ def test_online_invocation_retries_only_transient_network_failure_in_same_home(
     assert backoffs == [1.0]
 
 
+@pytest.mark.parametrize("offline", [False, True])
+def test_both_hosts_capture_online_plugin_resolution_details_without_debug(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    offline: bool,
+) -> None:
+    # spec_ref: specs/feature-tree/platform-ops-governance/design.md#dec-003
+    project = tmp_path / "project"
+    production = _wrapper(project)
+    patrol = project / "quwoquan_app/test_host/patrol/android"
+    shutil.copytree(production, patrol)
+    home = tmp_path / "private-home"
+    home.mkdir()
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def fake_run(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, stdout="resolved")
+
+    monkeypatch.setattr(gradle_store, "run_managed_subprocess", fake_run)
+    invocations = canonical_android_uat_gradle_invocations(project)
+    run_gradle_invocations(
+        project_root=project,
+        gradle_user_home=home,
+        invocations=invocations,
+        offline=offline,
+        environment={},
+    )
+
+    assert len(calls) == 2
+    for (command, kwargs), invocation in zip(calls, invocations, strict=True):
+        assert command[0] == str(invocation.gradle_root / "gradlew")
+        assert ("--info" in command) is not offline
+        assert ("--offline" in command) is offline
+        assert "--stacktrace" in command
+        assert "--no-daemon" in command
+        assert "--debug" not in command
+        assert "--refresh-dependencies" not in command
+        assert command[-len(invocation.tasks):] == list(invocation.tasks)
+        assert kwargs["env"] == {"GRADLE_USER_HOME": str(home)}
+
+
 @pytest.mark.parametrize(
     "failure_output",
     [
@@ -560,6 +604,13 @@ def test_online_invocation_retries_only_transient_network_failure_in_same_home(
             "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'"
         ),
         "Plugin with id 'com.android.application' not found",
+        (
+            "Plugin [id: 'org.gradle.kotlin.kotlin-dsl', version: '6.4.2'] "
+            "was not found in any of the following sources:\n"
+            "- Plugin Repositories (could not resolve plugin artifact "
+            "'org.gradle.kotlin.kotlin-dsl:"
+            "org.gradle.kotlin.kotlin-dsl.gradle.plugin:6.4.2')"
+        ),
     ],
 )
 def test_online_invocation_does_not_retry_deterministic_failure(

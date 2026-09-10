@@ -13,7 +13,7 @@ from core.publish_repository import (
 def repository(root: Path):
     root.mkdir()
     (root / ".git").mkdir()
-    document = {"schema": "quwoquan_data.publish_repository.v2", "repositoryId": "test-content", "layoutVersion": 2, "producerContractDigest": "sha256:" + "a" * 64}
+    document = {"schema": "quwoquan_data.publish_repository.v2", "repositoryId": "test-content", "layoutVersion": 2}
     (root / "repository.json").write_text(json.dumps(document))
     return document
 
@@ -27,6 +27,15 @@ def test_root_is_explicit_and_identity_checked(tmp_path):
     with pytest.raises(PublishRepositoryError, match="MISSING"):
         require_publish_repository(tmp_path / "absent")
     assert not (tmp_path / "absent").exists()
+
+
+def test_repository_marker_rejects_release_contract_digest(tmp_path):
+    root = tmp_path / "publish"
+    document = repository(root)
+    document["producerContractDigest"] = "sha256:" + "a" * 64
+    (root / "repository.json").write_text(json.dumps(document))
+    with pytest.raises(PublishRepositoryError, match="DATA.REPOSITORY.IDENTITY_INVALID"):
+        require_publish_repository(root)
 
 
 def test_repository_control_files_are_not_canonical_objects(tmp_path):

@@ -18,8 +18,9 @@ enum UiRecoveryOutcome {
   cancelled,
 }
 
-typedef UiRecoveryActionCallback =
-    Future<UiRecoveryOutcome> Function(UiErrorAction action);
+typedef UiRecoveryActionCallback = Future<UiRecoveryOutcome> Function(
+  UiErrorAction action,
+);
 
 /// 非页面阻断动作的统一错误对话框；保留输入现场并只执行 metadata 恢复动作。
 class AppActionErrorFeedback {
@@ -28,6 +29,7 @@ class AppActionErrorFeedback {
   static Future<void> show(
     BuildContext context, {
     required UiErrorSemantic semantic,
+    String? semanticIdentifier,
     UiErrorActionCallback? onAction,
   }) async {
     final primary = semantic.primaryAction;
@@ -36,34 +38,37 @@ class AppActionErrorFeedback {
     }
     await showAppCupertinoDialog<void>(
       context: context,
-      builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text(semantic.title),
-        content: Text(semantic.message),
-        actions: <Widget>[
-          if (onAction != null && semantic.secondaryAction != null)
-            CupertinoDialogAction(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                unawaited(onAction(semantic.secondaryAction!));
-              },
-              child: Text(semantic.secondaryAction!.label),
-            ),
-          if (onAction != null && primary != null)
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                unawaited(onAction(primary));
-              },
-              child: Text(primary.label),
-            )
-          else if (onAction == null || semantic.secondaryAction == null)
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text(ContentText.gotIt),
-            ),
-        ],
+      builder: (dialogContext) => Semantics(
+        identifier: semanticIdentifier,
+        child: CupertinoAlertDialog(
+          title: Text(semantic.title),
+          content: Text(semantic.message),
+          actions: <Widget>[
+            if (onAction != null && semantic.secondaryAction != null)
+              CupertinoDialogAction(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(onAction(semantic.secondaryAction!));
+                },
+                child: Text(semantic.secondaryAction!.label),
+              ),
+            if (onAction != null && primary != null)
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(onAction(primary));
+                },
+                child: Text(primary.label),
+              )
+            else if (onAction == null || semantic.secondaryAction == null)
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(ContentText.gotIt),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -143,7 +143,11 @@ def _record_history(root: Path, ref: str, manifest: dict) -> list[dict]:
 
 def _records(root: Path, ref: str, manifest: dict, review: dict) -> dict:
     latest = _record_history(root, ref, manifest)[-1]
-    if latest.get("payloadDigest") != pool_payload_digest(root):
+    # 本入口只检查旧 _pool 布局；不能调用现役排除 records/ 的摘要算法。
+    from content.release.canonical.pool_cutover import _regular_tree
+    original_rows = [{"path": path.relative_to(root).as_posix(), "sha256": _digest_file(path), "bytes": path.stat().st_size}
+                     for path in _regular_tree(root) if path.relative_to(root).parts[0] != "_pool"]
+    if latest.get("payloadDigest") != _digest_bytes(_json_bytes(original_rows)):
         _fail("ORIGINAL_PAYLOAD_DRIFT", ref)
     digest = _digest_file(root / "content_review.json")
     admission = manifest.get("admission") or {}

@@ -182,6 +182,8 @@
 - Beta/Gamma/Prod 仍只走 Remote，四环境共用页面与 typed ports；只有组合根读取 source/profile 选择 adapter。成功/空/失败、稳定对象身份、详情引用、过滤、分页终止/去重/取消/重试及媒体播放/seek 的可观察合同相同；同 canonical cohort 参数化验证，在线个性化排序、账号权限和新鲜度属于明确能力差异，不要求在线各环境永久同量同序。
 - 首页消费推荐 Post items，视频书消费 canonical premium 精选；离线快照封存选择与频道清单，不把普通 video 等同 premium、不复制在线推荐引擎。未支持登录、写入和私有访问返回 typed capability unavailable，不假写成功、不跨环境回放。
 - 离线快照身份证明制品绑定的 source/version/digest，不证明服务端 active release、账号授权或 activation receipt。只收录具有公开离线再分发许可的内容，永久离线不承诺即时撤权；需要即时撤权的内容不得进入快照。Alpha API gate 可独立运行，但不能要求 Alpha App 走 Remote，也不能用离线 App 结果签服务环境或晋级资格。
+- `app-content-uat` 根据 canonical launch metadata 的 source 选择前置与套件。离线页面验收只消费 exact candidate、实际安装启动的制品、签名离线文档、快照及设备绑定，不请求在线 preflight、登录身份、Provider readiness 或服务 activation；Remote 保留全部原有约束。离线登录、写入和私有访问按 typed capability unavailable 验收，不伪造登录成功。
+- Alpha 准出须同时消费 Android 与 iOS 的 required 离线页面 raw `ReadinessCaseResult`，逐项绑定同一 candidate、各自实际制品、快照、启动 attempt、设备和执行证据。缺平台、缺 case、失败、身份漂移或只有启动日志/服务查询均阻断；模拟器结果保持 `rehearsal/nonPromotable`。离线页面与 Alpha 服务/API 是独立必需证据，二者均通过后才可签发同一候选的 acceptance bundle。
 - Alpha bootstrap 使用独立 signed offline document 绑定 bundle 完整性与许可，和在线 endpoint 配置共用同一 activation/CAS/receipt/read chain，不直接绕过 active pointer 读 bundle，不伪造 HTTPS。离线文档不继承在线配置 24 小时有效期；不能通过忽略在线 expiry 实现离线，Beta/Gamma/Prod 的签名、有效期和信任域完整保留。source 类型及映射由 canonical launch metadata 冻结，组合根消费 AppContentSource typed 值，不自持 wire 副本。在线配置提前刷新验证后原子激活，失败保留尚有效旧配置，到期 fail closed。
 - nonprod 仍是一套包身份；离线资产仅进入 nonprod、Beta/Gamma 不消费、Prod 制品不包含该内容或替身装配。跨环境显式切换重建进程或完整 ProviderScope，不在旧 client 动态换 endpoint；缓存与认证隔离消费 [`local-cache-architecture` REQ-004](../../runtime-client-foundation/local-cache-architecture/spec.md#req-004)。
 - 在线内容更新须在完整媒体、四域 candidate 与首页/premium/必要详情查询闭包全部 ready 后，按 [`runtime-data-engineering` DEC-003](../../runtime-data-engineering/design.md#dec-003) 单 CAS 可见；失败保旧，结果不明先回读 exact pointer，再按现役授权显式 rollback，不用客户端旧缓存或第二 active flag 伪造更新成功。
@@ -542,6 +544,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：Alpha canonical 快照派生/公开离线许可/完整资产、typed adapter、四入口冷启动/媒体及在线 candidate-scoped 推荐/精选/必要查询预物化尚缺 fresh 闭环。CAS 后异步追平会 fail closed，不能写成已实现无中断切换；首次无 previous、结果未知、显式 rollback 与 exact pointer readback 必须故障注入验证。
+- 待补能力：离线页面 UAT 使用制品/快照 authority 的 typed binding 与双平台 required case 消费，解除对在线身份与 activation 的错误依赖。仅完成合并、契约或局部测试不关闭本 OPEN。
 - 完成判定：`GWT-007` 由 canonical cohort 参数化 local_contract、真实媒体/四域/query barrier/CAS/recovery api_integration 和 Android/iOS 首装离线及在线页面/播放器 user_acceptance 直接绑定；源码或局部测试不替代完整证据。
 - 依赖：canonical Data producer、Content/Recommendation/Search candidate owner、App 组合根与启动 metadata；规格不新增 wire 字段，未具备 typed 契约前对应实现仍阻断。
 

@@ -3,9 +3,29 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-enum AppRemoteConfigSource { defaults, diskCache, networkFresh, staleDiskCache }
+enum AppRemoteConfigSource {
+  defaults,
+  diskCache,
+  networkFresh,
+  staleDiskCache,
+  bundledSnapshot,
+}
 
-class AppRemoteConfigSnapshot {
+/// 配置消费者只读取统一类型，不依赖配置来自磁盘、网络还是制品。
+abstract interface class AppContentConfigSnapshot {
+  ContentAppConfig get content;
+  String get configHash;
+  AppRemoteConfigSource get source;
+  String get defaultActivation;
+}
+
+/// 组合根绑定读取与持久化策略；业务 notifier 不选择 source。
+abstract interface class AppContentConfigReader {
+  Future<AppContentConfigSnapshot?> readActiveSnapshot();
+  Future<AppContentConfigSnapshot> refresh();
+}
+
+class AppRemoteConfigSnapshot implements AppContentConfigSnapshot {
   const AppRemoteConfigSnapshot._({
     required this.schema,
     required this.configHash,
@@ -19,18 +39,22 @@ class AppRemoteConfigSnapshot {
   static const Duration fallbackMaxAge = Duration(hours: 6);
 
   final String schema;
+  @override
   final String configHash;
   final DateTime fetchedAt;
   final Duration maxAge;
   final AppConfigSlice wire;
+  @override
   final AppRemoteConfigSource source;
 
   bool get isExpired => DateTime.now().toUtc().isAfter(expiresAt);
 
   DateTime get expiresAt => fetchedAt.toUtc().add(maxAge);
 
+  @override
   ContentAppConfig get content => wire.content;
 
+  @override
   String get defaultActivation => wire.activationPolicy.defaultActivation;
 
   factory AppRemoteConfigSnapshot.fromWire(

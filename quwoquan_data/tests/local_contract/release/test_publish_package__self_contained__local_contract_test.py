@@ -51,7 +51,7 @@ def _package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     (publish / ".git").mkdir()
     _write_json(publish / "repository.json", {
         "schema": "quwoquan_data.publish_repository.v2", "repositoryId": "test-publish",
-        "layoutVersion": 2, "producerContractDigest": "sha256:" + "a" * 64,
+        "layoutVersion": 2,
     })
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(manifest_path.read_bytes())

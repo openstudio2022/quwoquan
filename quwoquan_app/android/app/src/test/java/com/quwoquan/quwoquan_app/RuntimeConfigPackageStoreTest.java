@@ -34,6 +34,45 @@ public final class RuntimeConfigPackageStoreTest {
 
   // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
   @Test
+  public void activationReaderSupportsShortReadsWithoutNewerAndroidStreamApi() throws Exception {
+    byte[] payload = "{\"value\":\"short-read\"}".getBytes(StandardCharsets.UTF_8);
+    ByteArrayInputStream input = new ByteArrayInputStream(payload) {
+      @Override public byte[] readNBytes(int length) {
+        throw new AssertionError("readNBytes is unavailable on API 31");
+      }
+      @Override public synchronized int read(byte[] buffer, int offset, int length) {
+        return super.read(buffer, offset, Math.min(length, 3));
+      }
+    };
+    assertEquals("short-read", RuntimeConfigActivationCoordinator.readStreamDocument(
+        input, "runtime_config_activation_request_malformed").get("value").getAsString());
+  }
+
+  @Test
+  public void activationReaderRejectsNumbersOutsideCanonicalDocumentContract() throws Exception {
+    assertEquals("runtime_config_package_malformed", expectFailure(() ->
+        RuntimeConfigActivationCoordinator.readStreamDocument(
+            new ByteArrayInputStream("{\"value\":17}".getBytes(StandardCharsets.UTF_8)),
+            "runtime_config_activation_request_malformed")).code);
+  }
+
+  @Test
+  public void activationReaderEnforcesExactSizeBoundaryAndRejectsEmpty() throws Exception {
+    byte[] boundary = new byte[RuntimeConfigPackageStore.MAX_BYTES];
+    java.util.Arrays.fill(boundary, (byte) ' ');
+    boundary[0] = '{';
+    boundary[1] = '}';
+    assertTrue(RuntimeConfigActivationCoordinator.readStreamDocument(
+        new ByteArrayInputStream(boundary), "runtime_config_activation_request_malformed").entrySet().isEmpty());
+    for (byte[] payload : new byte[][] {new byte[0], java.util.Arrays.copyOf(boundary, boundary.length + 1)}) {
+      assertEquals("runtime_config_activation_request_malformed", expectFailure(() ->
+          RuntimeConfigActivationCoordinator.readStreamDocument(new ByteArrayInputStream(payload),
+              "runtime_config_activation_request_malformed")).code);
+    }
+  }
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+  @Test
   public void offlineDocumentSurvivesNextDayWithoutEndpointAuthority() throws Exception {
     TestMaterial material = TestMaterial.create("nonprod");
     material.packageDocument.addProperty("schema", "app-offline-bootstrap-document");

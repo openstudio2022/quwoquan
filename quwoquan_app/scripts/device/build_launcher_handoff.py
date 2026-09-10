@@ -4,8 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
+import shlex
+import stat
 import subprocess
 import sys
 import tempfile
@@ -376,6 +380,181 @@ def build_handoff(
     return handoff
 
 
+def _read_private_launch_control(control_path: Path, root: Path) -> Any:
+    """只读私有 control；先校验权限与输出根，再解析文档。"""
+    if (
+        not control_path.is_absolute()
+        or control_path.is_symlink()
+        or not control_path.is_file()
+        or stat.S_IMODE(control_path.stat().st_mode) & 0o077
+    ):
+        raise ValueError("canonical launch control is missing or not private")
+    try:
+        control_path.resolve().relative_to(root)
+    except ValueError:
+        raise ValueError("canonical launch control escapes QWQ_OUTPUT_ROOT") from None
+    return json.loads(control_path.read_text(encoding="utf-8"))
+
+
+def _validate_launch_control_fields(control: Any) -> bool:
+    """先判定离线来源，再校验对应字段闭集；返回已校验的离线标记。"""
+    fields = {
+        "schema", "actor", "environment", "target", "platform", "deviceId",
+        "candidateDigest", "packageDigest", "sourceRevision", "sourceCapsuleDigest",
+        "sourceCapsuleManifestDigest", "sourceCapsuleManifestRef",
+        "sourceProjectionRoot", "sourceProjectionEvidenceDigest",
+        "sourceProjectionEvidenceRef", "buildProjectionPolicyId",
+        "buildProjectionSealRef", "expectedBuildProjectionDigest",
+        "launchAttemptRef", "launchReportRef", "startupTerminalReceiptRef",
+    }
+    offline = isinstance(control, dict) and control.get("contentSource") == "bundled_snapshot"
+    if offline:
+        policy = load_launch_manifest_contract()["content_source_policy"]
+        if (control.get("environment") != "alpha" or control.get("target") != "alpha-local"
+                or policy.get("alpha") != control["contentSource"]
+                or control.get("platform") not in {"android", "ios-simulator"}):
+            raise ValueError("canonical offline launch source/target/device mismatch")
+        fields = (fields - {"packageDigest"}) | {"contentSource"}
+    if not isinstance(control, dict) or set(control) != fields:
+        raise ValueError("canonical launch control fields mismatch")
+    return offline
+
+
+def _validate_launch_control_identity(control: dict[str, Any], declared_digest: str) -> None:
+    """摘要通过后才校验 control schema、actor 与平台构建策略。"""
+    encoded = json.dumps(
+        control, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    if "sha256:" + hashlib.sha256(encoded).hexdigest() != declared_digest:
+        raise ValueError("canonical launch control digest mismatch")
+    if control.get("schema") != "quwoquan_ops.app_content_uat_launch_control.v1":
+        raise ValueError("canonical launch control schema mismatch")
+    if control.get("actor") != "app-content-uat":
+        raise ValueError("canonical launch control actor mismatch")
+    policy_by_platform = {
+        "android": "flutter-android-3.47-gradle-8.14-agp-8.11.1",
+        "android-physical": "flutter-android-3.47-gradle-8.14-agp-8.11.1",
+        "ios-simulator": "flutter-ios-3.47-cocoapods-1.16.2",
+        "ios-physical": "flutter-ios-3.47-cocoapods-1.16.2",
+    }
+    if policy_by_platform.get(control.get("platform")) != control.get("buildProjectionPolicyId"):
+        raise ValueError("canonical launch build projection policy mismatch")
+
+
+def _validate_launch_control_digests(control: dict[str, Any], offline: bool) -> None:
+    """按原顺序检查构建与来源摘要；离线仅豁免不存在的 packageDigest。"""
+    expected_build_digest = control.get("expectedBuildProjectionDigest")
+    if expected_build_digest is not None and re.fullmatch(
+        r"sha256:[0-9a-f]{64}", str(expected_build_digest)
+    ) is None:
+        raise ValueError("canonical launch expected build projection digest is invalid")
+    for field in (
+        "candidateDigest", "packageDigest", "sourceCapsuleDigest",
+        "sourceCapsuleManifestDigest", "sourceProjectionEvidenceDigest",
+    ):
+        if offline and field == "packageDigest":
+            continue
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", str(control.get(field) or "")) is None:
+            raise ValueError(f"canonical launch control {field} is invalid")
+
+
+def _validate_launch_control_source_paths(
+    control: dict[str, Any], source_root: Path, capsule: str,
+) -> None:
+    """先绑定 launcher source root，再绑定非符号链接的 capsule 文件。"""
+    if Path(str(control.get("sourceProjectionRoot") or "")).resolve() != source_root:
+        raise ValueError("canonical launch source projection differs from run.sh root")
+    source_capsule = Path(str(control.get("sourceCapsuleManifestRef") or ""))
+    if capsule != str(source_capsule) or source_capsule.is_symlink() or not source_capsule.is_file():
+        raise ValueError("canonical launch source capsule reference drifted")
+
+
+def _validate_launch_control_output_paths(
+    control: dict[str, Any], root: Path, attempt: str, report: str,
+) -> None:
+    """按 attempt/report/terminal/seal 顺序要求 exact、fresh 且不逃逸的输出。"""
+    for label, raw, expected in (
+        ("attempt", attempt, control.get("launchAttemptRef")),
+        ("report", report, control.get("launchReportRef")),
+        ("safe-terminal", control.get("startupTerminalReceiptRef"), control.get("startupTerminalReceiptRef")),
+        ("build-projection-seal", control.get("buildProjectionSealRef"), control.get("buildProjectionSealRef")),
+    ):
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute() or str(candidate) != str(expected):
+            raise ValueError(f"{label} path must be absolute")
+        absolute = Path(candidate.absolute())
+        if absolute.exists() or absolute.is_symlink():
+            raise ValueError(f"{label} path must be fresh")
+        try:
+            absolute.resolve(strict=False).relative_to(root)
+        except ValueError:
+            raise ValueError(f"{label} path must stay inside QWQ_OUTPUT_ROOT") from None
+
+
+def _validate_launch_control_projection_evidence(control: dict[str, Any]) -> None:
+    """输出路径通过后才读取并校验 source projection evidence。"""
+    evidence_path = Path(str(control.get("sourceProjectionEvidenceRef") or ""))
+    if evidence_path.is_symlink() or not evidence_path.is_file():
+        raise ValueError("canonical launch source projection evidence is missing")
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    evidence_digest = "sha256:" + hashlib.sha256(json.dumps(
+        evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")).hexdigest()
+    if evidence_digest != control.get("sourceProjectionEvidenceDigest"):
+        raise ValueError("canonical launch source projection evidence drifted")
+
+
+def canonical_launch_control_exports(arguments: list[str]) -> dict[str, str]:
+    """依序校验 bounded launcher 私有 control；所有阶段通过后才返回导出值。"""
+    output_root, source, control_ref, declared_digest, attempt, report, capsule = arguments
+    root = Path(output_root).expanduser().resolve()
+    source_root = Path(source).expanduser().resolve()
+    control_path = Path(control_ref).expanduser()
+    control = _read_private_launch_control(control_path, root)
+    offline = _validate_launch_control_fields(control)
+    _validate_launch_control_identity(control, declared_digest)
+    _validate_launch_control_digests(control, offline)
+    _validate_launch_control_source_paths(control, source_root, capsule)
+    _validate_launch_control_output_paths(control, root, attempt, report)
+    _validate_launch_control_projection_evidence(control)
+    return {
+        "QWQ_CANONICAL_CANDIDATE_DIGEST": control["candidateDigest"],
+        "QWQ_CANONICAL_CANDIDATE_PACKAGE_DIGEST": control.get("packageDigest", ""),
+        "QWQ_CANONICAL_CONTENT_SOURCE": "bundled_snapshot" if offline else "remote",
+        "QWQ_CANONICAL_SOURCE_PROJECTION_EVIDENCE_DIGEST": control["sourceProjectionEvidenceDigest"],
+        "QWQ_CANONICAL_SOURCE_PROJECTION_EVIDENCE_REF": control["sourceProjectionEvidenceRef"],
+        "QWQ_CANONICAL_SOURCE_CAPSULE_MANIFEST_DIGEST": control["sourceCapsuleManifestDigest"],
+        "QWQ_CANONICAL_SOURCE_CAPSULE_MANIFEST_REF": control["sourceCapsuleManifestRef"],
+        "QWQ_CANONICAL_BUILD_PROJECTION_POLICY_ID": control["buildProjectionPolicyId"],
+        "QWQ_CANONICAL_BUILD_PROJECTION_SEAL_REF": control["buildProjectionSealRef"],
+        "QWQ_CANONICAL_EXPECTED_BUILD_PROJECTION_DIGEST": control.get("expectedBuildProjectionDigest") or "",
+        "QWQ_PACKAGE_SOURCE_REVISION": control["sourceRevision"],
+        "QWQ_PACKAGE_SOURCE_TREE_DIGEST": control["sourceCapsuleDigest"],
+        "QWQ_CANONICAL_CONTROL_ENVIRONMENT": control["environment"],
+        "QWQ_CANONICAL_CONTROL_TARGET": control["target"],
+        "QWQ_CANONICAL_CONTROL_PLATFORM": control["platform"],
+        "QWQ_CANONICAL_CONTROL_DEVICE_ID": control["deviceId"],
+        "QWQ_APP_STARTUP_TERMINAL_RECEIPT": control["startupTerminalReceiptRef"],
+    }
+
+
+def resolve_launch_content_source(arguments: list[str]) -> str:
+    """仅已校验 control 的 Alpha 可跳过 Remote preparation，不接纳环境变量授权。"""
+    environment, canonical_source, report, *selectors = arguments
+    source = load_launch_manifest_contract()["content_source_policy"].get(environment)
+    if source == "bundled_snapshot":
+        if not report or canonical_source != source:
+            raise ValueError(
+                "APP.LAUNCH.launch_surface_unsupported: offline hermetic/UAT requires "
+                "device-bound evidence; offline hermetic launch requires exact app-content-uat control."
+            )
+    else:
+        check_remote_launch_surface(selectors)
+        if source != "remote":
+            raise ValueError("APP.LAUNCH.launch_surface_unsupported: invalid content source")
+    return source
+
+
 def check_remote_launch_surface(arguments: list[str]) -> int:
     """只校验现有 launcher 参数，不启动 runtime 或签发 readiness。"""
     parser = argparse.ArgumentParser(add_help=False)
@@ -399,6 +578,17 @@ def check_remote_launch_surface(arguments: list[str]) -> int:
 
 
 def main() -> int:
+    if sys.argv[1:2] in (["--canonical-launch-control-exports"], ["--resolve-launch-content-source"]):
+        try:
+            if sys.argv[1] == "--canonical-launch-control-exports":
+                exports = canonical_launch_control_exports(sys.argv[2:])
+                print("\n".join(name + "=" + shlex.quote(str(value)) for name, value in exports.items()))
+            else:
+                print(resolve_launch_content_source(sys.argv[2:]))
+            return 0
+        except (LaunchManifestContractError, OSError, TypeError, ValueError) as error:
+            print(f"GATE_BLOCK: {error}", file=sys.stderr)
+            return 2
     if sys.argv[1:2] == ["--check-remote-launch-surface"]:
         try:
             return check_remote_launch_surface(sys.argv[2:])

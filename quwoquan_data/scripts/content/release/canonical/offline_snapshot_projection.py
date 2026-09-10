@@ -77,8 +77,8 @@ def project_post(source: CanonicalSource, ref: str, media: dict[str, dict], vali
               "tagRefs": m["tagRefs"], "entityRefs": m["entityRefs"],
               "sourceAttribution": {f["name"]: m["sourceAttribution"][f["name"]] for f in validator.types["SourceAttribution"]["fields"] if f["name"] in m["sourceAttribution"]}}
     homepage_ref = m["entityRefs"][0]
-    # exact 西湖 cohort 属于已登记景区类型；其他实体类型不得猜测映射。
-    entity = source.json("entities/" + homepage_ref.removeprefix("/entity/") + "/_entity.json")
+    # 离线主页只支持已登记景区类型；其他实体类型不得猜测映射。
+    entity = source.json("entities/" + homepage_ref.removeprefix("/entity/") + "/manifest.json")
     if entity["type"] != "景区":
         raise OfflineSnapshotError("OFFLINE.HOMEPAGE_TYPE_UNSUPPORTED")
     for target in (view, detail):
@@ -160,8 +160,8 @@ def project_creators(source: CanonicalSource, refs: list[str], media: dict[str, 
 def project_homepages(source: CanonicalSource, refs: list[str], media: dict[str, dict], selected_at: str, validator: PublicContractValidator) -> list[dict]:
     results = []
     for ref in refs:
-        header = source.json(f"entities/{ref}/_entity.json")
         manifest = source.json(f"entities/{ref}/manifest.json")
+        header = manifest
         if header["type"] != "景区":
             raise OfflineSnapshotError("OFFLINE.HOMEPAGE_TYPE_UNSUPPORTED")
         markdown = source.read(f"entities/{ref}/page.md").decode("utf-8")

@@ -109,6 +109,7 @@ def homepage_catalog_primary(
 def homepage_source_kind(raw: Mapping[str, Any]) -> tuple[str, str, str]:
     """沿用 canonical 百科种类判据；seal 与显式主源投影只维护同一份闭集。"""
 
+    declared_extractor = (raw.get("meta") or {}).get("extractor")
     identity = " ".join((
         str(raw.get("sourceId") or ""),
         str(raw.get("sourceKind") or ""),
@@ -120,10 +121,10 @@ def homepage_source_kind(raw: Mapping[str, Any]) -> tuple[str, str, str]:
         ("toutiao", "toutiao_baike", "toutiao_baike_html"),
     ):
         if marker in identity:
-            return kind, extractor, "encyclopedia-primary"
+            return kind, declared_extractor or extractor, "encyclopedia-primary"
     if any(marker in identity for marker in ("media", "image", "commons")):
         return "image_collection", "image_collection_download", "image-collection-attribution"
-    return "web_page", "html_text", ""
+    return "web_page", declared_extractor or "html_text", ""
 
 
 def homepage_primary_source(metadata: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:

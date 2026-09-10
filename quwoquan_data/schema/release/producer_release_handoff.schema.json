@@ -7,6 +7,7 @@
   "required": [
     "schema",
     "handoffId",
+    "repositoryId",
     "releaseId",
     "milestone",
     "carrierCounts",
@@ -19,6 +20,10 @@
   "properties": {
     "schema": {
       "const": "quwoquan_data.producer_release_handoff"
+    },
+    "repositoryId": {
+      "$ref": "../publish/repository.schema.json#/properties/repositoryId",
+      "description": "创建时的独立内容仓身份；离线消费者不需要访问原工作树。"
     },
     "handoffId": {
       "type": "string",

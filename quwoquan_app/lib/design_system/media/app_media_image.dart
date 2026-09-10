@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/runtime/platform/local_image_provider.dart';
@@ -18,9 +19,9 @@ bool isRemoteMediaImageSource(String source) {
 }
 
 bool isRemoteResolvableMediaImageSource(String source) {
-  final normalized = normalizeMediaImageSource(
-    source,
-  ).replaceFirst(RegExp(r'^/+'), '').toLowerCase();
+  final normalized = normalizeMediaImageSource(source)
+      .replaceFirst(RegExp(r'^/+'), '')
+      .toLowerCase();
   return isRemoteMediaImageSource(source) ||
       normalized.startsWith('media/') ||
       normalized.startsWith('avatar/');
@@ -46,7 +47,8 @@ ImageProvider<Object>? mediaImageProvider(String? source) {
     if (candidates.isEmpty) {
       return null;
     }
-    return CachedNetworkImageProvider(candidates.first);
+    return publicMediaDelivery.verifiedImageProvider(candidates.first) ??
+        CachedNetworkImageProvider(candidates.first);
   }
   return localFileImageProvider(localMediaImagePath(normalized));
 }

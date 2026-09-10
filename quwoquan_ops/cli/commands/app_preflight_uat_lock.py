@@ -19,9 +19,16 @@ def command_app_content_uat(args: argparse.Namespace) -> dict[str, Any]:
     dry_run = bool(getattr(args, "dry_run", False))
     if dry_run or not targets or not device_id:
         return _stackctl._command_app_content_uat(args)
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline import content_source_for_target
+    try:
+        remote_targets = [target for target in targets if content_source_for_target(target) == "remote"]
+    except ValueError as error:
+        return _stackctl._command_app_content_uat(args, initial_issues=(str(error),))
+    if not remote_targets:
+        return _stackctl._command_app_content_uat(args)
     try:
         runtime_use_lock = _stackctl.acquire_local_runtime_use_lock(
-            target=",".join(targets),
+            target=",".join(remote_targets),
             purpose=f"app-content-uat:{args.platform}:{device_id}",
         )
     except RuntimeError as error:

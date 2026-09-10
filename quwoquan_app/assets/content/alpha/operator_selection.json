@@ -2,27 +2,27 @@
   "schema": "quwoquan.offline_operator_selection",
   "version": 1,
   "purpose": "alpha_offline_engineering",
-  "selectedAt": "2026-09-09T20:35:00+08:00",
+  "selectedAt": "2026-09-10T16:43:00+08:00",
   "authority": {
     "kind": "explicit_user_selection",
-    "evidence": "用户在本次 Ask 中明确选择西湖三 Post 集合，并同意西湖灯光秀作为 Alpha 离线工程视频书样本；仅本地工程用途，不授予生产 premium 资格，不修改既有版权事实。",
+    "evidence": "用户批准 small-fix Alpha 完整资格与 dev1.0 合入计划，授权以已核验现役 M1 四载体闭包替换旧西湖样本。本次显式选择三峡文章、图片和视频及其主页、作者依赖；视频仅用作 Alpha 离线工程视频书样本，不授予生产 premium 资格，不修改原审核及版权事实。",
     "grantsProductionPremium": false,
     "changesRightsFacts": false
   },
   "objectRefs": [
-    "posts/article/文化/西湖十景漫读/1",
-    "posts/image/摄影/西湖晴日与雷峰塔/1",
-    "posts/video/风光/西湖灯光秀/1"
+    "posts/article/攻略/三峡大坝：从水利工程到观景现场的阅读指南/1",
+    "posts/image/风光/三峡工程截流水泥三角锥/1",
+    "posts/video/风光/三峡大坝2020年泄洪影像记录/1"
   ],
   "channels": [
     {
       "channelId": "recommend",
       "orderedObjectRefs": [
-        "posts/article/文化/西湖十景漫读/1",
-        "posts/image/摄影/西湖晴日与雷峰塔/1",
-        "posts/video/风光/西湖灯光秀/1"
+        "posts/article/攻略/三峡大坝：从水利工程到观景现场的阅读指南/1",
+        "posts/image/风光/三峡工程截流水泥三角锥/1",
+        "posts/video/风光/三峡大坝2020年泄洪影像记录/1"
       ]
     },
-    {"channelId": "premium", "orderedObjectRefs": ["posts/video/风光/西湖灯光秀/1"]}
+    {"channelId": "premium", "orderedObjectRefs": ["posts/video/风光/三峡大坝2020年泄洪影像记录/1"]}
   ]
 }

@@ -106,7 +106,7 @@ def _acquired_source(root: Path, object_ref: str, source: Mapping[str, Any]) -> 
 
 
 def _acquired_targets(root: Path, carrier: str) -> dict[str, dict[str, Any]]:
-    from content.execution.task_init import _target_ref
+    from content.execution.task_init import execution_target_ref
     from content.release.canonical.object_transaction_contract import ObjectTransactionError, _read_json, _digest_file
     from core.schema import assert_valid
     manifest = _read_json(_acquired_path(root, "execution_manifest.json"))
@@ -118,7 +118,7 @@ def _acquired_targets(root: Path, carrier: str) -> dict[str, dict[str, Any]]:
     assert_valid(target_set, "execution", "target_set", label="preflight target_set")
     if target_set["executionId"] != root.name or target_set["carrier"] != carrier:
         raise ObjectTransactionError("DATA.PREFLIGHT.TARGET_IDENTITY_DRIFT")
-    pairs = [(_target_ref(row, carrier=carrier), row) for row in target_set["targets"]]
+    pairs = [(execution_target_ref(row, carrier=carrier), row) for row in target_set["targets"]]
     if [ref for ref, _ in pairs] != target_set["targetRefs"] or len(pairs) != target_set["targetCount"]:
         raise ObjectTransactionError("DATA.PREFLIGHT.TARGET_IDENTITY_DRIFT")
     return dict(pairs)
@@ -149,13 +149,15 @@ def acquired_asset_identity_view(*, execution_root: Path, selections: list[dict[
         index = _acquired_assets(root, ref)
         _validate_acquire_target(root, ref)
         assets = _selected_identity_rows(root, selection["assetRefs"], index, carrier)
-        entity = "/entity/" + targets[ref]["entityType"] + "/" + targets[ref]["name"]
+        entity = targets[ref]["entityRef"]
         manifest = {"contentType": "article" if carrier == "homepage" else carrier, "assets": assets}
+        canonical_ref = ref
         if carrier == "homepage":
-            manifest.update(schema="quwoquan_data.entity_object", entityRef=entity)
+            manifest.update(schema="quwoquan_data.entity_object", entityRef=entity, entityId=targets[ref]["entityId"])
+            canonical_ref = "entities/" + entity.removeprefix("/entity/")
         else:
             manifest["entityRefs"] = [entity]
-        candidates.append({"objectRef": ref, "manifest": manifest})
+        candidates.append({"objectRef": canonical_ref, "manifest": manifest})
     return candidates
 
 

@@ -44,9 +44,6 @@ if [[ "$QWQ_DEV_LAUNCH_HERMETIC" == "0" \
   exec "$APP_DIR/scripts/device/dev_launch.sh" "${ORIGINAL_LAUNCH_ARGUMENTS[@]}"
 fi
 
-# 未接离线 evidence 不得进入下面的在线 preparation；默认 Alpha 由上方 direct 接管。
-PYTHONDONTWRITEBYTECODE=1 python3 "$APP_DIR/scripts/device/build_launcher_handoff.py" --check-remote-launch-surface "${ORIGINAL_LAUNCH_ARGUMENTS[@]}"
-
 # Hermetic 在冻结投影执行；app-content-uat 已携带 candidate projection，不再包装。
 enter_workspace_launch_projection() {
   if [[ -n "${QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST:-}" \
@@ -672,132 +669,15 @@ if [[ "$EXIT_AFTER_LAUNCH" == "1" || -n "$TEST_LIVE_REPORT_OVERRIDE" ]]; then
   fi
   if ! CANONICAL_LAUNCH_EXPORTS="$(
     PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
-    python3 - \
+    python3 "$APP_DIR/scripts/device/build_launcher_handoff.py" \
+    --canonical-launch-control-exports \
     "$QWQ_OUTPUT_ROOT" \
     "$ROOT_DIR" \
     "$CANONICAL_LAUNCH_CONTROL" \
     "$CANONICAL_LAUNCH_CONTROL_DIGEST" \
     "$LAUNCH_RECEIPT" \
     "$TEST_LIVE_REPORT_OVERRIDE" \
-    "${QWQ_PACKAGE_SOURCE_CAPSULE_MANIFEST:-}" <<'PY'
-import hashlib
-import json
-import os
-import pathlib
-import re
-import shlex
-import stat
-import sys
-
-root = pathlib.Path(sys.argv[1]).expanduser().resolve()
-source_root = pathlib.Path(sys.argv[2]).expanduser().resolve()
-control_path = pathlib.Path(sys.argv[3]).expanduser()
-declared_control_digest = sys.argv[4]
-attempt_arg, report_arg, source_capsule_arg = sys.argv[5:]
-if (
-    not control_path.is_absolute()
-    or control_path.is_symlink()
-    or not control_path.is_file()
-    or stat.S_IMODE(control_path.stat().st_mode) & 0o077
-):
-    raise SystemExit("canonical launch control is missing or not private")
-try:
-    control_path.resolve().relative_to(root)
-except ValueError:
-    raise SystemExit("canonical launch control escapes QWQ_OUTPUT_ROOT") from None
-control = json.loads(control_path.read_text(encoding="utf-8"))
-fields = {
-    "schema", "actor", "environment", "target", "platform", "deviceId",
-    "candidateDigest", "packageDigest", "sourceRevision", "sourceCapsuleDigest",
-    "sourceCapsuleManifestDigest", "sourceCapsuleManifestRef",
-    "sourceProjectionRoot", "sourceProjectionEvidenceDigest",
-    "sourceProjectionEvidenceRef", "buildProjectionPolicyId",
-    "buildProjectionSealRef", "expectedBuildProjectionDigest",
-    "launchAttemptRef", "launchReportRef", "startupTerminalReceiptRef",
-}
-if not isinstance(control, dict) or set(control) != fields:
-    raise SystemExit("canonical launch control fields mismatch")
-encoded = json.dumps(
-    control, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-).encode("utf-8")
-actual_control_digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
-if actual_control_digest != declared_control_digest:
-    raise SystemExit("canonical launch control digest mismatch")
-if control.get("schema") != "quwoquan_ops.app_content_uat_launch_control.v1":
-    raise SystemExit("canonical launch control schema mismatch")
-if control.get("actor") != "app-content-uat":
-    raise SystemExit("canonical launch control actor mismatch")
-policy_by_platform = {
-    "android": "flutter-android-3.47-gradle-8.14-agp-8.11.1",
-    "android-physical": "flutter-android-3.47-gradle-8.14-agp-8.11.1",
-    "ios-simulator": "flutter-ios-3.47-cocoapods-1.16.2",
-    "ios-physical": "flutter-ios-3.47-cocoapods-1.16.2",
-}
-if policy_by_platform.get(control.get("platform")) != control.get(
-    "buildProjectionPolicyId"
-):
-    raise SystemExit("canonical launch build projection policy mismatch")
-expected_build_digest = control.get("expectedBuildProjectionDigest")
-if expected_build_digest is not None and re.fullmatch(
-    r"sha256:[0-9a-f]{64}", str(expected_build_digest)
-) is None:
-    raise SystemExit("canonical launch expected build projection digest is invalid")
-for field in (
-    "candidateDigest", "packageDigest", "sourceCapsuleDigest",
-    "sourceCapsuleManifestDigest", "sourceProjectionEvidenceDigest",
-):
-    if re.fullmatch(r"sha256:[0-9a-f]{64}", str(control.get(field) or "")) is None:
-        raise SystemExit(f"canonical launch control {field} is invalid")
-if pathlib.Path(str(control.get("sourceProjectionRoot") or "")).resolve() != source_root:
-    raise SystemExit("canonical launch source projection differs from run.sh root")
-source_capsule = pathlib.Path(str(control.get("sourceCapsuleManifestRef") or ""))
-if source_capsule_arg != str(source_capsule) or source_capsule.is_symlink() or not source_capsule.is_file():
-    raise SystemExit("canonical launch source capsule reference drifted")
-for label, raw, expected in (
-    ("attempt", attempt_arg, control.get("launchAttemptRef")),
-    ("report", report_arg, control.get("launchReportRef")),
-    ("safe-terminal", control.get("startupTerminalReceiptRef"), control.get("startupTerminalReceiptRef")),
-    ("build-projection-seal", control.get("buildProjectionSealRef"), control.get("buildProjectionSealRef")),
-):
-    candidate = pathlib.Path(raw).expanduser()
-    if not candidate.is_absolute() or str(candidate) != str(expected):
-        raise SystemExit(f"{label} path must be absolute")
-    absolute = pathlib.Path(candidate.absolute())
-    if absolute.exists() or absolute.is_symlink():
-        raise SystemExit(f"{label} path must be fresh")
-    try:
-        absolute.resolve(strict=False).relative_to(root)
-    except ValueError:
-        raise SystemExit(f"{label} path must stay inside QWQ_OUTPUT_ROOT") from None
-evidence_path = pathlib.Path(str(control.get("sourceProjectionEvidenceRef") or ""))
-if evidence_path.is_symlink() or not evidence_path.is_file():
-    raise SystemExit("canonical launch source projection evidence is missing")
-evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-evidence_digest = "sha256:" + hashlib.sha256(json.dumps(
-    evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-).encode("utf-8")).hexdigest()
-if evidence_digest != control.get("sourceProjectionEvidenceDigest"):
-    raise SystemExit("canonical launch source projection evidence drifted")
-for name, value in {
-    "QWQ_CANONICAL_CANDIDATE_DIGEST": control["candidateDigest"],
-    "QWQ_CANONICAL_CANDIDATE_PACKAGE_DIGEST": control["packageDigest"],
-    "QWQ_CANONICAL_SOURCE_PROJECTION_EVIDENCE_DIGEST": control["sourceProjectionEvidenceDigest"],
-    "QWQ_CANONICAL_SOURCE_PROJECTION_EVIDENCE_REF": control["sourceProjectionEvidenceRef"],
-    "QWQ_CANONICAL_SOURCE_CAPSULE_MANIFEST_DIGEST": control["sourceCapsuleManifestDigest"],
-    "QWQ_CANONICAL_SOURCE_CAPSULE_MANIFEST_REF": control["sourceCapsuleManifestRef"],
-    "QWQ_CANONICAL_BUILD_PROJECTION_POLICY_ID": control["buildProjectionPolicyId"],
-    "QWQ_CANONICAL_BUILD_PROJECTION_SEAL_REF": control["buildProjectionSealRef"],
-    "QWQ_CANONICAL_EXPECTED_BUILD_PROJECTION_DIGEST": expected_build_digest or "",
-    "QWQ_PACKAGE_SOURCE_REVISION": control["sourceRevision"],
-    "QWQ_PACKAGE_SOURCE_TREE_DIGEST": control["sourceCapsuleDigest"],
-    "QWQ_CANONICAL_CONTROL_ENVIRONMENT": control["environment"],
-    "QWQ_CANONICAL_CONTROL_TARGET": control["target"],
-    "QWQ_CANONICAL_CONTROL_PLATFORM": control["platform"],
-    "QWQ_CANONICAL_CONTROL_DEVICE_ID": control["deviceId"],
-    "QWQ_APP_STARTUP_TERMINAL_RECEIPT": control["startupTerminalReceiptRef"],
-}.items():
-    print(name + "=" + shlex.quote(str(value)))
-PY
+    "${QWQ_PACKAGE_SOURCE_CAPSULE_MANIFEST:-}"
   )"; then
     echo "[run] APP.LAUNCH.receipt_invalid: app-content-uat evidence paths are unsafe or stale." >&2
     exit 2
@@ -875,6 +755,9 @@ export QWQ_LAUNCH_TARGET="${REQUESTED_TARGET:-${QWQ_APP_RUNTIME_ENV}-local}"
 export QWQ_APP_RUN_MODE="$RUN_MODE"
 export QWQ_APP_BUILD_CONTEXT=runtime
 export QWQ_APP_LAUNCH_POLICY=test_live
+CONTENT_SOURCE="$(PYTHONDONTWRITEBYTECODE=1 python3 "$APP_DIR/scripts/device/build_launcher_handoff.py" \
+  --resolve-launch-content-source "$QWQ_APP_RUNTIME_ENV" \
+  "${QWQ_CANONICAL_CONTENT_SOURCE:-}" "$TEST_LIVE_REPORT_OVERRIDE" "${ORIGINAL_LAUNCH_ARGUMENTS[@]}")"
 if [[ -n "$TEST_LIVE_REPORT_OVERRIDE" \
    && ( "$QWQ_CANONICAL_CONTROL_ENVIRONMENT" != "$QWQ_APP_RUNTIME_ENV" \
      || "$QWQ_CANONICAL_CONTROL_TARGET" != "$QWQ_LAUNCH_TARGET" ) ]]; then
@@ -1061,7 +944,7 @@ managed_prelaunch_cleanup() {
   exit "$exit_code"
 }
 
-if [[ "${QWQ_MANAGED_FLUTTER_ENTRY:-}" == "1" ]]; then
+if [[ "$CONTENT_SOURCE" == "remote" && "${QWQ_MANAGED_FLUTTER_ENTRY:-}" == "1" ]]; then
   if [[ -z "$DEVICE_ID" ]]; then
     echo "[run] APP.PREPARATION.receipt_invalid: managed flutter entry requires an explicit --device id." >&2
     exit 2
@@ -1489,6 +1372,7 @@ fi
 
 # 整个 attempt 只允许一个 preflight owner。上游编排方（dev-session）已执行时会
 # 交出 exact receipt；launcher 只复用或显式阻断，绝不重复执行第二次 preflight。
+if [[ "$CONTENT_SOURCE" == "remote" ]]; then
 APP_CONTENT_PREFLIGHT_JSON=""
 if [[ -n "${QWQ_APP_DEBUG_PREFLIGHT_RECEIPT:-}" ]]; then
   if ! APP_CONTENT_PREFLIGHT_JSON="$(
@@ -1645,6 +1529,11 @@ PY
     record_prelaunch_warning \
       "content delivery verification skipped because release binding identity is incomplete."
   fi
+fi
+
+else
+  APP_CONTENT_PREFLIGHT_JSON='{}'
+  APP_CONTENT_DELIVERY_JSON='{}'
 fi
 
 if [[ -z "$DEVICE_ID" && -t 0 && -t 2 ]]; then
@@ -1859,7 +1748,8 @@ device_kind = detect_device_kind(
     emulator=bool(device.get("emulator", False)) if device else None,
 )
 print(f"export QWQ_RUN_DEVICE_KIND={shlex.quote(device_kind)}")
-if device_kind.startswith("android"):
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
+if device_kind.startswith("android") and load_launch_manifest_contract()["content_source_policy"][environment] == "remote":
     try:
         topology = load_environment_topology()
         overrides = resolve_app_endpoint_overrides(
@@ -2110,7 +2000,7 @@ RUNTIME_STACKCTL_PYTHON="$(
 
 if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
   export ANDROID_SERIAL="$DEVICE_ID"
-  if [[ -z "$QWQ_ANDROID_LOCAL_PORTS" ]]; then
+  if [[ "$CONTENT_SOURCE" == "remote" && -z "$QWQ_ANDROID_LOCAL_PORTS" ]]; then
     echo "[run] GATE_BLOCK: APP.LAUNCH.transport_unavailable: Android public ports are unavailable." >&2
     exit 2
   fi
@@ -2129,9 +2019,9 @@ QWQ_DEBUG_APP_ID="$(
   exit 2
 }
 
-if [[ "${QWQ_RUN_DEVICE_KIND:-}" == ios-* \
+if [[ "$CONTENT_SOURCE" == "remote" && ( "${QWQ_RUN_DEVICE_KIND:-}" == ios-* \
    || ("${QWQ_RUN_DEVICE_KIND:-}" == android* \
-      && -n "$QWQ_ANDROID_LOCAL_PORTS") ]]; then
+      && -n "$QWQ_ANDROID_LOCAL_PORTS") ) ]]; then
   if [[ "${QWQ_MANAGED_PREPARATION_ACTIVE:-0}" == "1" ]]; then
     if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" != "1" \
        || "$QWQ_CONSUMER_LEASE_ID" != "$QWQ_MANAGED_CONSUMER_LEASE_ID" \
@@ -2218,7 +2108,9 @@ fi
 # device trust 回执必须绑定真实 consumer lease（漂移修正：不再使用
 # canonical-launcher 拼接出来的 fabricated lease 身份）。managed 入口的 trust
 # 已由 app-managed-prepare 以其准备期 lease 安装并验证，这里直接复用。
-if [[ "${QWQ_MANAGED_PREPARATION_ACTIVE:-0}" == "1" ]]; then
+if [[ "$CONTENT_SOURCE" == "bundled_snapshot" ]]; then
+  : # 离线包由制品 trust envelope 验签，不安装在线 transport trust。
+elif [[ "${QWQ_MANAGED_PREPARATION_ACTIVE:-0}" == "1" ]]; then
   echo "[run] reusing managed preparation device trust for $DEVICE_ID"
 elif [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
    || "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
@@ -2488,6 +2380,10 @@ RUN_INSTANCE_CMD=(
   --activation-timeout-seconds "$ACTIVATION_TIMEOUT_SECONDS"
   --attach-timeout-seconds "$LAUNCH_TIMEOUT_SECONDS"
 )
+if [[ "$CONTENT_SOURCE" == "bundled_snapshot" ]]; then
+  export PYTHONPATH="$APP_DIR/scripts/device:$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
+  RUN_INSTANCE_CMD=(python3 -c 'from canonical_app_instance.runtime_lease import run_canonical; raise SystemExit(run_canonical(acquire_runtime=False))' "${RUN_INSTANCE_CMD[@]:2}")
+fi
 if [[ -n "$IDE_VM_SERVICE_INFO_FILE" ]]; then
   RUN_INSTANCE_CMD+=(
     --vm-service-info-file "$IDE_VM_SERVICE_INFO_FILE"
@@ -2887,6 +2783,9 @@ report = {
     "dependencyProjectionPostbuildReadbackRef": dependency_projection_postbuild_readback_ref,
     "dependencyProjectionPostbuildReadbackDigest": dependency_projection_postbuild_readback_digest,
 }
+if handoff.get("contentSource") == "bundled_snapshot":
+    report.pop("candidatePackageDigest")
+    report["contentSource"] = "bundled_snapshot"
 written_report = write_app_content_launch_report(
     report=report,
     output_root=pathlib.Path(output_root),

@@ -26,6 +26,38 @@ def _digest(marker: str) -> str:
     return "sha256:" + marker * 64
 
 
+def _launcher_environment(root: Path) -> dict[str, str]:
+    """设备 inventory/SDK 是外部边界；解析和参数校验仍使用生产实现。"""
+    binary_root = root / "bin"
+    binary_root.mkdir()
+    flutter = binary_root / "flutter"
+    pinned_version = (_REPO_ROOT / "quwoquan_app/.flutter-version").read_text().strip()
+    flutter.write_text(
+        f"#!{sys.executable}\n"
+        "import json, pathlib, sys\n"
+        f"capture = pathlib.Path({str(root / 'flutter-argv.jsonl')!r})\n"
+        "with capture.open('a', encoding='utf-8') as stream:\n"
+        "    stream.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "if sys.argv[1:] == ['devices', '--machine']:\n"
+        "    print(json.dumps([{'id': 'emulator-5554', "
+        "'targetPlatform': 'android-arm64', 'emulator': True}]))\n"
+        "elif sys.argv[1:] == ['--version', '--machine']:\n"
+        f"    print(json.dumps({{'frameworkVersion': {pinned_version!r}}}))\n"
+        "else:\n"
+        "    raise SystemExit('unexpected Flutter operation: ' + repr(sys.argv[1:]))\n",
+        encoding="utf-8",
+    )
+    flutter.chmod(0o755)
+    return {
+        "HOME": str(root),
+        "PATH": os.pathsep.join(
+            (str(binary_root), str(Path(sys.executable).parent), os.environ["PATH"])
+        ),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "QWQ_REAL_FLUTTER": str(flutter),
+    }
+
+
 def _fixture(
     root: Path,
     *,
@@ -38,37 +70,51 @@ def _fixture(
         "quwoquan_app/lib/main_prod.dart": b"// candidate bytes\n",
     }
     if canonical_launcher:
-        files.update(
-            {
-                "quwoquan_app/run.sh": (
-                    _REPO_ROOT / "quwoquan_app/run.sh"
-                ).read_bytes(),
-                "quwoquan_ops/cli/stackctl.py": (
-                    b"import json\n"
-                    b"print(json.dumps({"
-                    b"'purpose': 'content_live', "
-                    b"'status': 'passed', "
-                    b"'nonPromotable': True, "
-                    b"'warnings': []}))\n"
-                ),
-                "quwoquan_ops/cli/lib/__init__.py": b"",
-                "quwoquan_ops/cli/lib/app_debug_preflight_handoff.py": (
-                    b"def app_debug_preflight_purpose(run_mode):\n"
-                    b"    return 'content_live' if run_mode == "
-                    b"'content-live' else 'runtime'\n"
-                ),
-                "quwoquan_ops/cli/lib/dev_up.py": (
-                    b"def find_device(*_args, **_kwargs):\n"
-                    b"    return {'targetPlatform': 'android-arm64'}\n"
-                ),
-                ("quwoquan_app/scripts/device/canonical_app_instance/__init__.py"): b"",
-                ("quwoquan_app/scripts/device/canonical_app_instance/arguments.py"): (
-                    b"class CanonicalExecutorError(Exception):\n"
-                    b"    pass\n\n"
-                    b"def sanitize_attach_arguments(arguments):\n"
-                    b"    return tuple(arguments)\n"
-                ),
-            }
+        # control、source policy、IDE handoff 与 topology 必须执行真实源代码，
+        # 连同 import/metadata 闭包封入 capsule；不以 helper 替身放行前置校验。
+        for relative in (
+            "quwoquan_app/run.sh",
+            "quwoquan_app/.flutter-version",
+            "quwoquan_app/scripts/device/build_launcher_handoff.py",
+            "quwoquan_app/scripts/device/canonical_app_instance/__init__.py",
+            "quwoquan_app/scripts/device/canonical_app_instance/arguments.py",
+            "quwoquan_app/scripts/device/canonical_app_instance/vm_service_info_file.py",
+            "quwoquan_app/scripts/tools/flutter_facade/flutter_facade.py",
+            "quwoquan_app/scripts/tools/flutter_facade/resolve_real_flutter.py",
+            "quwoquan_ops/cli/lib/app_debug_preflight_handoff.py",
+            "quwoquan_ops/cli/lib/app_identity.py",
+            "quwoquan_ops/cli/lib/app_launch_manifest_contract.py",
+            "quwoquan_ops/cli/lib/app_launch_manifest_schema.py",
+            "quwoquan_ops/cli/lib/app_runtime_config_signing.py",
+            "quwoquan_ops/cli/lib/common.py",
+            "quwoquan_ops/cli/lib/data_plane_binding.py",
+            "quwoquan_ops/cli/lib/dev_up.py",
+            "quwoquan_ops/cli/lib/environment_topology.py",
+            "quwoquan_ops/cli/lib/generated/app_launch_contract.py",
+            "quwoquan_ops/cli/lib/local_app_runtime_config_keys.py",
+            "quwoquan_ops/cli/lib/local_runtime_consumer_lease.py",
+            "quwoquan_ops/cli/lib/openssl3_resolver.py",
+            "quwoquan_ops/cli/lib/output_paths.py",
+            "quwoquan_ops/cli/lib/port_manifest.py",
+            "quwoquan_ops/cli/lib/service_core_composition.py",
+            "quwoquan_ops/environments/domain_governance.yaml",
+            "quwoquan_ops/environments/local_env_port_manifest.yaml",
+            "quwoquan_ops/environments/alpha/runtime.yaml",
+            "quwoquan_ops/environments/beta/runtime.yaml",
+            "quwoquan_ops/environments/gamma/runtime.yaml",
+            "quwoquan_ops/environments/prod/runtime.yaml",
+            "quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml",
+            "quwoquan_service/services/content-service/environments/beta/deploy/kustomization.yaml",
+        ):
+            files[relative] = (_REPO_ROOT / relative).read_bytes()
+        # 只替换服务 readiness 的外部命令；意外触及租约、信任或其他操作即失败。
+        files["quwoquan_ops/cli/stackctl.py"] = (
+            b"import json, sys\n"
+            b"assert sys.argv[1:] == ['--output-format', 'json', "
+            b"'app-debug-preflight', '--purpose', 'content_live', "
+            b"'--target', 'beta-local', '--runtime-mode', 'test_live'], sys.argv\n"
+            b"print(json.dumps({'purpose': 'content_live', 'status': 'passed', "
+            b"'nonPromotable': True, 'warnings': []}))\n"
         )
     entries: list[dict[str, object]] = []
     for relative, content in files.items():
@@ -104,8 +150,8 @@ def _fixture(
         "entries": entries,
     }
     runtime_binding: dict[str, object] = {
-        "environment": "alpha",
-        "target": "alpha-local",
+        "environment": "beta",
+        "target": "beta-local",
         "candidateDigest": manifest["baselineId"],
         "packageDigest": _digest("e"),
         "sourceRevision": manifest["sourceRevision"],
@@ -385,8 +431,8 @@ def test_projected_run_sh_uses_canonical_output_root_for_private_control(
     )
     projected_app = Path(projection["sourceProjectionRoot"]) / "quwoquan_app"
     command, child_environment = _app_content_canonical_launch_command(
-        environment="alpha",
-        target="alpha-local",
+        environment="beta",
+        target="beta-local",
         device_id="emulator-5554",
         attempt_path=attempt_path,
         report_path=report_path,
@@ -395,9 +441,10 @@ def test_projected_run_sh_uses_canonical_output_root_for_private_control(
         launch_control=control,
     )
     base_environment = {
-        "HOME": os.environ.get("HOME", str(tmp_path)),
-        "PATH": os.environ["PATH"],
+        **_launcher_environment(tmp_path),
         **child_environment,
+        # control 通过后明确停在 SDK 外部边界，不依赖 sandbox 漏文件报错。
+        "QWQ_REAL_FLUTTER": str(tmp_path / "unavailable-sdk/bin/flutter"),
     }
     legacy_environment = dict(base_environment)
     legacy_environment.pop("QWQ_OUTPUT_ROOT")
@@ -430,16 +477,9 @@ def test_projected_run_sh_uses_canonical_output_root_for_private_control(
     assert child_environment["QWQ_OUTPUT_ROOT"] == str(output_root)
 
 
-@pytest.mark.parametrize(
-    "launch_provenance",
-    # workspace facade 已退役：run.sh 只承认 canonical_launcher 与
-    # workspace_ide_debug（后者需要 IDE VM service handoff，另有专测）。
-    ("canonical_launcher",),
-)
-def test_real_run_sh_warning_branches_reach_supervisor_attempt(
+def test_real_run_sh_remote_transport_failure_blocks_before_supervisor(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    launch_provenance: str,
 ) -> None:
     manifest, runtime_binding, manifest_path = _fixture(
         tmp_path,
@@ -454,200 +494,73 @@ def test_real_run_sh_warning_branches_reach_supervisor_attempt(
     projection = launch.materialize_app_content_launch_projection(
         runtime_binding=runtime_binding,
         output_root=output_root,
-        projection_root=output_root / "warning/source-projection",
-        evidence_path=output_root / "warning/source-projection.json",
+        projection_root=output_root / "transport/source-projection",
+        evidence_path=output_root / "transport/source-projection.json",
     )
-    projected_root = Path(projection["sourceProjectionRoot"])
-    projected_app = projected_root / "quwoquan_app"
-    fake_flutter = tmp_path / "bin/flutter"
-    fake_flutter.parent.mkdir(parents=True)
-    fake_flutter.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    fake_flutter.chmod(0o755)
-
-    resolver = projected_app / "scripts/tools/flutter_facade/resolve_real_flutter.py"
-    resolver.parent.mkdir(parents=True)
-    resolver.write_text(
-        "import json, os\n"
-        "print(json.dumps({"
-        "'executable': os.environ['QWQ_TEST_FAKE_FLUTTER'], "
-        "'flutterVersion': '3.35.1', "
-        f"'commandResolutionDigest': {_digest('9')!r}"
-        "}))\n",
-        encoding="utf-8",
-    )
-    ops_lib = projected_root / "quwoquan_ops/cli/lib"
-    ops_lib.mkdir(parents=True, exist_ok=True)
-    (ops_lib / "app_debug_preflight_handoff.py").write_text(
-        "def app_debug_preflight_purpose(run_mode):\n"
-        "    return 'content_live' if run_mode == 'content-live' else 'runtime'\n",
-        encoding="utf-8",
-    )
-    (ops_lib / "dev_up.py").write_text(
-        "def find_device(*_args, **_kwargs):\n"
-        "    return {'targetPlatform': 'android-arm64', 'emulator': True}\n"
-        "def detect_device_kind(*_args, **_kwargs):\n"
-        "    return 'android_emulator'\n"
-        "def load_environment_topology():\n"
-        "    return {}\n"
-        "def resolve_app_endpoint_overrides(*_args, **_kwargs):\n"
-        "    return {key: 'http://127.0.0.1:1' for key in ("
-        "'gatewayBaseUrl', 'legalBaseUrl', 'mediaAvatarBaseUrl', "
-        "'mediaImageBaseUrl', 'mediaVideoBaseUrl', 'mediaUploadBaseUrl')}\n"
-        "def enable_android_adb_reverse(*_args, **_kwargs):\n"
-        "    raise RuntimeError('synthetic reverse failure')\n",
-        encoding="utf-8",
-    )
-    (ops_lib / "app_identity.py").write_text(
-        "def application_id_for(*_args):\n"
-        "    return 'com.leadwise.quwoquan.nonprod.debug'\n",
-        encoding="utf-8",
-    )
-    stackctl = projected_root / "quwoquan_ops/cli/stackctl.py"
-    stackctl.write_text(
-        "import json, sys\n"
-        "if 'app-debug-preflight' in sys.argv:\n"
-        "    print(json.dumps({"
-        "'purpose': 'content_live', 'status': 'passed', "
-        "'nonPromotable': True, 'warnings': []}))\n"
-        "    raise SystemExit(0)\n"
-        "if 'device-trust' in sys.argv:\n"
-        "    raise SystemExit(19)\n"
-        "raise SystemExit(23)\n",
-        encoding="utf-8",
-    )
-    python_resolver = projected_app / "scripts/ios/build_resolve_stackctl_python.sh"
-    python_resolver.parent.mkdir(parents=True, exist_ok=True)
-    python_resolver.write_text(
-        f"#!/bin/sh\nprintf '%s\\n' {sys.executable!r}\n",
-        encoding="utf-8",
-    )
-    python_resolver.chmod(0o755)
-    handoff = projected_app / "scripts/device/build_launcher_handoff.py"
-    handoff.write_text(
+    projected_app = Path(projection["sourceProjectionRoot"]) / "quwoquan_app"
+    environment = _launcher_environment(tmp_path)
+    adb_capture = tmp_path / "adb-argv.jsonl"
+    adb = tmp_path / "bin/adb"
+    adb.write_text(
+        f"#!{sys.executable}\n"
         "import json, pathlib, sys\n"
-        "trust = pathlib.Path(sys.argv[sys.argv.index("
-        "'--runtime-config-trust-output') + 1])\n"
-        "trust.write_text('{}\\n', encoding='utf-8')\n"
-        "launch_provenance = sys.argv[sys.argv.index("
-        "'--launch-provenance') + 1]\n"
-        "print(json.dumps({"
-        "'entrypoint': 'lib/main_nonprod.dart', "
-        "'launchProvenance': launch_provenance, "
-        "'runtimeConfigSupplyMode': 'external_runtime_package', "
-        f"'runtimeConfigPackageDigest': {_digest('4')!r}, "
-        f"'runtimeConfigTrustEnvelopeDigest': {_digest('3')!r}, "
-        f"'effectiveLaunchManifestDigest': {_digest('5')!r}"
-        "}))\n",
+        f"capture = pathlib.Path({str(adb_capture)!r})\n"
+        "with capture.open('a', encoding='utf-8') as stream:\n"
+        "    stream.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "assert sys.argv[1:] == ['-s', 'emulator-5554', 'reverse', '--list']\n"
+        "raise SystemExit(19)\n",
         encoding="utf-8",
     )
-    supervisor_capture = tmp_path / "supervisor-argv.json"
-    supervisor = projected_app / "scripts/device/supervise_app_launch.py"
-    supervisor.write_text(
-        "import json, os, pathlib, sys\n"
-        "pathlib.Path(os.environ['QWQ_TEST_SUPERVISOR_CAPTURE']).write_text("
-        "json.dumps({'argv': sys.argv[1:], 'startupTerminalReceipt': "
-        "os.environ.get('QWQ_APP_STARTUP_TERMINAL_RECEIPT', '')}), "
-        "encoding='utf-8')\n"
-        "raise SystemExit(7)\n",
-        encoding="utf-8",
-    )
-    dependency_prep = projected_app / "scripts/device/prepare_flutter_dependencies.py"
-    dependency_prep.write_text(
-        "import pathlib, shlex, sys\n"
-        "root = pathlib.Path(sys.argv[sys.argv.index('--projection-root') + 1])\n"
-        "state = pathlib.Path(sys.argv[sys.argv.index('--private-state-root') + 1])\n"
-        "cache = root / 'quwoquan_app/.dart_tool/qwq_pub_cache'\n"
-        "home = state / 'flutter/production/home'\n"
-        "xdg_config = state / 'flutter/production/xdg-config'\n"
-        "xdg_cache = state / 'flutter/production/xdg-cache'\n"
-        "gradle = root / 'quwoquan_app/.dart_tool/qwq_android_gradle_dependency/home'\n"
-        "expectation = state / 'dependency-projection-expectation.json'\n"
-        "prebuild = state / 'dependency-projection-prebuild-readback.json'\n"
-        "[path.mkdir(parents=True, exist_ok=True) for path in "
-        "(cache, home, xdg_config, xdg_cache, gradle)]\n"
-        "expectation.write_text('{}\\n', encoding='utf-8')\n"
-        "prebuild.write_text('{}\\n', encoding='utf-8')\n"
-        "values = {"
-        "'PUB_CACHE': cache, 'GRADLE_USER_HOME': gradle, 'HOME': home, "
-        "'XDG_CONFIG_HOME': xdg_config, 'XDG_CACHE_HOME': xdg_cache}\n"
-        "[print('export ' + key + '=' + shlex.quote(str(value))) "
-        "for key, value in values.items()]\n"
-        "print('export FLUTTER_SWIFT_PACKAGE_MANAGER=false')\n"
-        "print('export GIT_CONFIG_GLOBAL=/dev/null')\n"
-        "print('export GIT_CONFIG_NOSYSTEM=1')\n"
-        "print('export GIT_TERMINAL_PROMPT=0')\n"
-        "print('export QWQ_DEPENDENCY_PROJECTION_EXPECTATION_REF=' "
-        "+ shlex.quote(str(expectation)))\n"
-        f"print('export QWQ_DEPENDENCY_PROJECTION_EXPECTATION_DIGEST={_digest('6')}')\n"
-        "print('export QWQ_DEPENDENCY_PROJECTION_PREBUILD_READBACK_REF=' "
-        "+ shlex.quote(str(prebuild)))\n"
-        f"print('export QWQ_DEPENDENCY_PROJECTION_PREBUILD_READBACK_DIGEST={_digest('7')}')\n",
-        encoding="utf-8",
-    )
-    launch_arguments = [
-        "bash",
-        "run.sh",
-        "--mode",
-        "content-live",
-        "-d",
-        "device",
-    ]
+    adb.chmod(0o755)
+    # 下游哨兵只记录是否跨过硬边界；绝不返回伪造 handoff 或构建证据。
+    downstream_capture = tmp_path / "unexpected-downstream.txt"
+    for script in ("supervise_app_launch.py", "prepare_flutter_dependencies.py"):
+        (projected_app / "scripts/device" / script).write_text(
+            "import pathlib\n"
+            f"pathlib.Path({str(downstream_capture)!r}).write_text({script!r})\n"
+            "raise SystemExit(97)\n",
+            encoding="utf-8",
+        )
+
     process = subprocess.run(
-        launch_arguments,
+        [
+            "bash", "run.sh", "--env", "beta", "--target", "beta-local",
+            "--mode", "content-live", "-d", "emulator-5554",
+        ],
         cwd=projected_app,
         env={
-            "HOME": os.environ.get("HOME", str(tmp_path)),
-            "PATH": os.environ["PATH"],
+            **environment,
             "QWQ_OUTPUT_ROOT": str(output_root),
-            "QWQ_TEST_FAKE_FLUTTER": str(fake_flutter),
-            "QWQ_TEST_SUPERVISOR_CAPTURE": str(supervisor_capture),
             "QWQ_PACKAGE_SOURCE_CAPSULE_MANIFEST": str(manifest_path),
-            "QWQ_APP_LAUNCH_PROVENANCE": launch_provenance,
+            "QWQ_APP_LAUNCH_PROVENANCE": "canonical_launcher",
         },
         capture_output=True,
         text=True,
         check=False,
         timeout=10,
     )
-    assert process.returncode != 0
-    assert supervisor_capture.is_file(), (
-        f"stdout={process.stdout}\nstderr={process.stderr}"
-    )
-    supervisor_capture_payload = json.loads(
-        supervisor_capture.read_text(encoding="utf-8")
-    )
-    supervisor_argv = supervisor_capture_payload["argv"]
-    warnings = [
-        supervisor_argv[index + 1]
-        for index, value in enumerate(supervisor_argv[:-1])
-        if value == "--warning"
+
+    assert process.returncode == 2, (process.stdout, process.stderr)
+    assert "content delivery verification skipped" in process.stderr
+    assert (
+        "APP.LAUNCH.transport_unavailable: unable to read existing adb reverse mappings"
+        in process.stderr
+    ), (process.stdout, process.stderr)
+    assert "GATE_BLOCK: failed to resolve device-specific Remote topology" in process.stderr
+    assert "Traceback" not in process.stderr
+    assert [json.loads(line) for line in adb_capture.read_text().splitlines()] == [
+        ["-s", "emulator-5554", "reverse", "--list"]
     ]
-    assert any("content delivery verification skipped" in item for item in warnings)
-    assert any(
-        "Android transport preparation is unavailable" in item for item in warnings
-    )
-    assert any(
-        "target-bound transport trust is unavailable" in item for item in warnings
-    )
-    assert any("Android reverse ports are unavailable" in item for item in warnings)
-    assert "--require-safe-terminal" in supervisor_argv
-    terminal_index = supervisor_argv.index("--startup-terminal-receipt")
-    terminal_receipt = Path(supervisor_argv[terminal_index + 1])
-    attempt_index = supervisor_argv.index("--receipt")
-    launch_attempt = Path(supervisor_argv[attempt_index + 1])
-    assert terminal_receipt.is_absolute()
-    assert terminal_receipt.parent == launch_attempt.parent
-    assert terminal_receipt.name == "startup-terminal.json"
-    assert supervisor_capture_payload["startupTerminalReceipt"] == str(terminal_receipt)
-    provenance_index = supervisor_argv.index("--launch-provenance")
-    assert supervisor_argv[provenance_index + 1] == launch_provenance
-    assert not terminal_receipt.exists()
-    teardown_receipts = list(output_root.rglob("teardown.json"))
-    assert len(teardown_receipts) == 1
-    teardown = json.loads(teardown_receipts[0].read_text(encoding="utf-8"))
-    assert teardown["schema"] == "quwoquan_app.launch_teardown.v1"
-    assert teardown["status"] == "passed"
-    assert teardown["warnings"] == []
+    flutter_calls = [
+        json.loads(line)
+        for line in (tmp_path / "flutter-argv.jsonl").read_text().splitlines()
+    ]
+    assert ["--version", "--machine"] in flutter_calls
+    assert not downstream_capture.exists()
+    assert not list(output_root.rglob("startup-terminal.json"))
+    # transport 在 attempt/evidence 路径分配前失败；不得借清理回执伪造已启动。
+    assert not list(output_root.rglob("attempt.json"))
+    assert not list(output_root.rglob("teardown.json"))
 
 
 def test_real_run_sh_rejects_forged_workspace_ide_provenance_without_handoff(
@@ -677,10 +590,14 @@ def test_real_run_sh_rejects_forged_workspace_ide_provenance_without_handoff(
         (
             "bash",
             "run.sh",
+            "--env",
+            "beta",
+            "--target",
+            "beta-local",
             "--mode",
             "content-live",
             "-d",
-            "device",
+            "emulator-5554",
             "--ide-vm-service-info",
             str(output_root / "forged-ide-vm-service.json"),
         ),
@@ -701,5 +618,10 @@ def test_real_run_sh_rejects_forged_workspace_ide_provenance_without_handoff(
 
     assert process.returncode == 2
     assert "APP.LAUNCH.workspace_entrypoint_inactive" in process.stderr
-    assert "not bound to the original workspace projection handoff" in (process.stderr)
+    assert "not bound to the original workspace projection handoff" in process.stderr
+    assert "workspace projection does not bind one original output runs root" in (
+        process.stderr
+    )
+    assert "ModuleNotFoundError" not in process.stderr
+    assert "No such file or directory" not in process.stderr
     assert not supervisor_capture.exists()

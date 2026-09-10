@@ -134,8 +134,6 @@ entries:
 - spec: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
-  anchor: GWT-009
-- spec: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
   anchor: GWT-013
 - spec: specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/spec.md
   anchor: GWT-001

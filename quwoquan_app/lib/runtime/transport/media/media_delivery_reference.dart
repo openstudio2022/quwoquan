@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
@@ -142,12 +143,7 @@ class MediaEndpointConfig {
 /// [CloudRuntimeConfig]. Missing values stay unavailable; callers must render
 /// their declared recovery/fallback state instead of inventing an authority.
 final mediaEndpointConfigProvider = Provider<MediaEndpointConfig?>((ref) {
-  return MediaEndpointConfig.tryCreateAvailable(
-    avatarBaseUrl: CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
-    imageBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
-    videoBaseUrl: CloudRuntimeConfig.mediaVideoCdnBaseUrl,
-    attachmentBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
-  );
+  return publicMediaDelivery.endpoints;
 });
 
 /// 已验证的公开媒体交付引用。
@@ -161,18 +157,70 @@ class MediaDeliveryReference {
     this.assetId = '',
     this.version = 0,
     this.sha256,
+    this.bundleDigest,
   });
+
+  /// 离线公开 slice 的类型化引用；实际目录与字节由所选 port 在消费前核验。
+  /// 不构造网络 authority，也不接受任意本地文件或私有签名 URI。
+  factory MediaDeliveryReference.bundled(
+    String reference, {
+    required MediaDeliveryKind kind,
+    required String bundleDigest,
+    String assetId = '',
+    int version = 0,
+    String? sha256,
+  }) {
+    final source = reference.trim();
+    final uri = Uri.tryParse(source);
+    if (!RegExp(r'^sha256:[0-9a-f]{64}$').hasMatch(bundleDigest) ||
+        uri == null ||
+        uri.hasScheme ||
+        uri.hasAuthority ||
+        uri.hasFragment ||
+        source.startsWith('/') ||
+        MediaDeliveryResolver._containsNonCanonicalPathSyntax(source)) {
+      throw const MediaDeliveryResolutionException(
+        MediaDeliveryResolutionFailure.invalidCanonicalPath,
+        '离线媒体必须是制品摘要绑定的 canonical 公开 slice 引用',
+      );
+    }
+    final segments = MediaDeliveryResolver._validateCanonicalPath(uri.path);
+    final query = MediaDeliveryResolver._validateCanonicalQuery(
+      uri,
+      kind: kind,
+      segments: segments,
+    );
+    MediaDeliveryResolver._effectiveEndpointKind(kind, segments, query);
+    final canonical = MediaDeliveryResolver._canonicalizePublicUri(
+      uri,
+      segments: segments,
+      queryParameters: query,
+      requestedVersion: version,
+    );
+    return MediaDeliveryReference._(
+      kind: kind,
+      deliveryUri: canonical.uri,
+      assetId: assetId,
+      version: canonical.version,
+      sha256: sha256,
+      bundleDigest: bundleDigest,
+    );
+  }
 
   final MediaDeliveryKind kind;
   final Uri deliveryUri;
   final String assetId;
   final int version;
   final String? sha256;
+  final String? bundleDigest;
 
   String get url => deliveryUri.toString();
 
   /// 与环境端点、公开 pathname 和版本绑定，禁止以原始 object key 作为缓存身份。
   String get cacheIdentity {
+    if (bundleDigest != null) {
+      return 'bundled|$bundleDigest|${kind.name}|$url|${assetId.trim()}|$version|${sha256 ?? ''}';
+    }
     final query = deliveryUri.hasQuery ? '?${deliveryUri.query}' : '';
     return '${kind.name}|${deliveryUri.origin}${deliveryUri.path}$query|'
         '${assetId.trim()}|$version';

@@ -18,10 +18,40 @@ from core.schema import assert_valid
 class CanonicalSource:
     root: Path
     files: dict[str, bytes] = field(default_factory=dict)
+    locations: dict[str, str] = field(default_factory=dict)
+
+    def object_path(self, ref: str) -> Path:
+        from content.release.canonical.aggregate_release_closure import object_root
+        from core.publish_layout import logical_object_ref
+
+        safe_path(self.root, ref)
+        if ref not in self.locations:
+            kind, logical = ref.split("/", 1)
+            from content.release.canonical.object_transaction_contract import ObjectTransactionError
+            for candidate in (self.root / kind).rglob("manifest.json"):
+                safe_path(self.root, candidate.relative_to(self.root).as_posix())
+            try:
+                path = object_root(self.root, kind, logical)
+            except ObjectTransactionError as exc:
+                raise OfflineSnapshotError(str(exc)) from exc
+            if kind in {"posts", "entities"}:
+                manifest = json.loads(safe_path(self.root, path.relative_to(self.root).as_posix() + "/manifest.json").read_bytes())
+                if logical_object_ref(manifest, kind) != logical:
+                    raise OfflineSnapshotError("OFFLINE.SOURCE_IDENTITY_DRIFT")
+            self.locations[ref] = path.relative_to(self.root).as_posix()
+        return safe_path(self.root, self.locations[ref])
+
+    def _path(self, ref: str) -> Path:
+        for logical in sorted(self.locations, key=len, reverse=True):
+            if ref.startswith(logical + "/"):
+                return safe_path(self.root, self.locations[logical] + ref[len(logical):])
+        return safe_path(self.root, ref)
 
     def read(self, ref: str) -> bytes:
-        raw = safe_path(self.root, ref).read_bytes()
-        old = self.files.setdefault(ref, raw)
+        path = self._path(ref)
+        raw = path.read_bytes()
+        physical_ref = path.relative_to(self.root).as_posix()
+        old = self.files.setdefault(physical_ref, raw)
         if old != raw:
             raise OfflineSnapshotError("OFFLINE.SOURCE_CHANGED_DURING_CAPTURE")
         return raw
@@ -34,7 +64,7 @@ class CanonicalSource:
 
     def capture_object(self, ref: str) -> None:
         # 仅遍历显式选择的对象内文件；不反查 Creator 的所有作品或全池。
-        root = safe_path(self.root, ref)
+        root = self.object_path(ref)
         for path in sorted(root.rglob("*")):
             if path.is_symlink():
                 raise OfflineSnapshotError("OFFLINE.SYMLINK_FORBIDDEN")
@@ -107,67 +137,82 @@ def _read_media(sha256: str, size: int, suffix: str, *, library: Path, carried: 
     return observed[0]
 
 
-def _rights(source: CanonicalSource, owner: str, asset_id: str, sha256: str) -> tuple[str, dict, list[dict]]:
-    rights = source.json(f"{owner}/rights.json") if not owner.startswith("creators/") else {}
-    records = [r for r in rights.get("assets", []) if r.get("assetId") == asset_id]
-    snapshots = []
-    prefix = owner + "/rights_snapshots/"
-    for ref in sorted(source.files):
-        if ref.startswith(prefix) and ref.endswith(".json"):
-            document = source.json(ref)
-            if document.get("assetId") == asset_id:
-                bound = document.get("manifestAsset", {}).get("sha256")
-                if bound and bound != sha256:
-                    raise OfflineSnapshotError("OFFLINE.RIGHTS_DIGEST_DRIFT")
-                snapshots.append({"ref": ref, "sha256": digest_bytes(source.files[ref]), "document": document})
-                if "commercialRights" in document:
-                    records.append(document["commercialRights"])
-    if not records or not snapshots:
+def _rights(source: CanonicalSource, owner: str, asset: dict, documents: list[dict]) -> tuple[str, dict, list[dict]]:
+    records, snapshots = [], []
+    for document in documents:
+        if document["ref"] not in asset["sourceRefs"]:
+            continue
+        matches = [row for row in document["assets"] if row.get("assetId") == asset["assetId"]]
+        for row in matches:
+            if row.get("sha256") != asset["sha256"] or row.get("bytes") != asset["bytes"]:
+                raise OfflineSnapshotError("OFFLINE.RIGHTS_DIGEST_DRIFT")
+        if matches:
+            ref = f"{owner}/{document['ref']}"
+            raw = source.read(ref)
+            snapshots.append({"ref": source._path(ref).relative_to(source.root).as_posix(), "sha256": digest_bytes(raw), "document": source.json(ref)})
+            records.extend(matches)
+    if not records:
         raise OfflineSnapshotError("OFFLINE.RIGHTS_EVIDENCE_MISSING")
-    record = records[0]
-    attribution = record.get("attribution")
-    if not isinstance(attribution, str) or not attribution.strip():
-        raise OfflineSnapshotError("OFFLINE.ATTRIBUTION_MISSING")
-    return attribution, record.get("asset", {}), snapshots
+    attributions = {row.get("attribution") for row in records}
+    if len(attributions) != 1 or not isinstance(next(iter(attributions)), str) or not next(iter(attributions)).strip():
+        raise OfflineSnapshotError("OFFLINE.ATTRIBUTION_MISSING_OR_CONFLICTING")
+    return next(iter(attributions)), records[0].get("asset", {}), snapshots
+
+
+def _media_row(source: CanonicalSource, owner: str, metadata: dict, documents: list[dict]) -> tuple[dict, bytes]:
+    asset_id, sha256, size = metadata["assetId"], metadata["sha256"], metadata["bytes"]
+    relative = metadata["path"]
+    if len(Path(relative).parts) != 2 or not relative.startswith("media/"):
+        raise OfflineSnapshotError("OFFLINE.MEDIA_PATH_INVALID")
+    kind = "avatar" if owner.startswith("creators/") else metadata["kind"]
+    mime = metadata["mimeType"]
+    attribution, dimensions, snapshots = _rights(source, owner, metadata, documents)
+    reference = build_public_media_slice_key(asset_id=asset_id, kind=kind, version=1, content_type=mime)
+    if not reference:
+        raise OfflineSnapshotError("OFFLINE.PUBLIC_SLICE_INVALID")
+    asset_path = f"assets/content/alpha/media/{sha256.removeprefix('sha256:')}{Path(relative).suffix}"
+    try:
+        raw = source.read(f"{owner}/{relative}")
+    except FileNotFoundError as error:
+        raise OfflineSnapshotError("OFFLINE.MEDIA_MISSING: " + asset_id) from error
+    if len(raw) != size or digest_bytes(raw) != sha256:
+        raise OfflineSnapshotError("OFFLINE.MEDIA_HASH_OR_SIZE_DRIFT")
+    row = {"assetId": asset_id, "version": 1, "kind": kind, "canonicalReference": reference, "assetPath": asset_path,
+           "sha256": sha256, "byteLength": len(raw), "mimeType": mime, "attribution": attribution,
+           "redistributionEvidence": {"purpose": "alpha_offline_engineering", "ownerRefs": [owner], "snapshots": snapshots}}
+    for key in ("width", "height", "durationMs"):
+        value = metadata.get(key, dimensions.get(key))
+        if value:
+            row[key] = value
+    return row, raw
+
+
+def _source_media(source: CanonicalSource, owner: str) -> tuple[list[dict], list[dict]]:
+    from content.release.canonical.post_transaction_sources import read_object_sources
+    creator = owner.startswith("creators/")
+    header = source.json(f"{owner}/profile.json" if creator else f"{owner}/manifest.json")
+    assets = header["assets"]
+    if creator:
+        avatar = header["avatarAsset"]
+        if len(assets) != 1 or any(assets[0].get(key) != avatar.get(key) for key in ("assetId", "kind", "sha256")):
+            raise OfflineSnapshotError("OFFLINE.CREATOR_AVATAR_BINDING_DRIFT")
+    return assets, read_object_sources(source.object_path(owner), header)
 
 
 def capture_media(source: CanonicalSource, owners: list[str], *, library: Path | None = None, carried: Path | None = None) -> tuple[list[dict], dict[str, bytes]]:
     rows: dict[str, dict] = {}
     bodies: dict[str, bytes] = {}
     for owner in owners:
-        creator = owner.startswith("creators/")
-        header = source.json(f"{owner}/profile.json" if creator else f"{owner}/manifest.json")
-        manifest_assets = {r["assetId"]: r for r in header.get("assets", [])}
-        refs = source.json(f"{owner}/assets.refs.json" if creator else f"{owner}/asset.refs.json")
-        for ref in refs["assets"]:
-            asset_id, sha256, size = ref["assetId"], ref["sha256"], ref["bytes"]
-            metadata = manifest_assets.get(asset_id, ref)
-            suffix = Path(ref["objectKey"]).suffix
-            kind = "avatar" if creator else metadata["kind"]
-            mime = metadata["mimeType"]
-            if ref["objectKey"] != content_addressed_media_object_key(sha256, suffix=suffix):
-                raise OfflineSnapshotError("OFFLINE.CAS_OBJECT_KEY_DRIFT")
-            if metadata.get("sha256", sha256) != sha256:
-                raise OfflineSnapshotError("OFFLINE.MANIFEST_ASSET_DIGEST_DRIFT")
-            attribution, dimensions, snapshots = _rights(source, owner, asset_id, sha256)
-            reference = build_public_media_slice_key(asset_id=asset_id, kind=kind, version=1, content_type=mime)
-            if not reference:
-                raise OfflineSnapshotError("OFFLINE.PUBLIC_SLICE_INVALID")
-            asset_path = f"assets/content/alpha/media/{sha256.removeprefix('sha256:')}{suffix}"
-            raw = _read_media(sha256, size, suffix, library=library or LIBRARY_ROOT, carried=carried or carried_media_root())
-            row = {"assetId": asset_id, "version": 1, "kind": kind, "canonicalReference": reference, "assetPath": asset_path,
-                   "sha256": sha256, "byteLength": len(raw), "mimeType": mime, "attribution": attribution,
-                   "redistributionEvidence": {"purpose": "alpha_offline_engineering", "ownerRefs": [owner], "snapshots": snapshots}}
-            for key in ("width", "height", "durationMs"):
-                value = metadata.get(key, dimensions.get(key))
-                if value:
-                    row[key] = value
+        assets, documents = _source_media(source, owner)
+        for metadata in assets:
+            row, raw = _media_row(source, owner, metadata, documents)
+            asset_id, asset_path = row["assetId"], row["assetPath"]
             if asset_id in rows:
                 old = rows[asset_id]
                 if any(old[k] != row[k] for k in ("canonicalReference", "sha256", "byteLength", "mimeType", "kind")):
                     raise OfflineSnapshotError("OFFLINE.MEDIA_IDENTITY_COLLISION")
                 old["redistributionEvidence"]["ownerRefs"].append(owner)
-                old["redistributionEvidence"]["snapshots"].extend(snapshots)
+                old["redistributionEvidence"]["snapshots"].extend(row["redistributionEvidence"]["snapshots"])
             else:
                 rows[asset_id] = row
             if asset_path in bodies and bodies[asset_path] != raw:

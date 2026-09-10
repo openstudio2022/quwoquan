@@ -784,7 +784,7 @@ def publish_repository(tmp_path):
     (root / ".git").mkdir(parents=True)
     subject.io.write(root / "repository.json", subject.io.encode({
         "schema": "quwoquan_data.publish_repository.v2", "repositoryId": "skill-offline",
-        "layoutVersion": 2, "producerContractDigest": "sha256:" + "a" * 64,
+        "layoutVersion": 2,
     }))
     return root
 
@@ -795,7 +795,10 @@ def test_preflight_selection_keeps_invalid_occupied_and_absent_distinct(tmp_path
     publish = tmp_path / "publish"
     # 无有效 record 的主页仍占用身份，selection 中的计划不能使其 eligible。
     homepage = "entities/travel/sichuan/qiushan"
-    subject.io.write(publish / homepage / "manifest.json", b"{}")
+    target = chosen["targets"][0]["target"]
+    subject.io.write(publish / homepage / "manifest.json", subject.io.encode({
+        "entityRef": target["entityRef"], "entityId": target["entityId"], "version": 1,
+    }))
     before = {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
     command = ["--workspace", str(tmp_path), "preflight", "--selection", "image/selection.json", "--publish-root", str(publish)]
     assert producer.main(command) == 0
@@ -804,6 +807,8 @@ def test_preflight_selection_keeps_invalid_occupied_and_absent_distinct(tmp_path
     ref = subject.canonical_target_ref(chosen["targets"][0]["target"])
     assert rows[ref]["state"] == "absent" and not rows[ref]["occupied"]
     assert rows[homepage]["state"] == "invalid" and rows[homepage]["occupied"] and not rows[homepage]["eligible"]
+    assert rows[homepage]["objectId"] == target["entityId"]
+    assert rows[homepage]["code"] == "DATA.POOL.EXPLICIT_ADMISSION_MISSING"
     assert result["coverage"]["selectedWithoutManifestRefs"] == [ref]
     assert result["poolQuery"]["preflight"] == []
     assert {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()} == before
@@ -941,7 +946,7 @@ def acquired_source_fixture(tmp_path, monkeypatch):
     def initialize(carrier, refs):
         execution_id = fixture.EXECUTION_ID.replace("-image-", f"-{carrier}-")
         round_path = tmp_path / "round.json"
-        targets = [{"carrier": carrier, **fixture.TARGET, "entityId": "fixture-xihu", "entityRef": "/entity/地点/景区/西湖"}]
+        targets = [{"carrier": carrier, **fixture.TARGET, "entityId": "fixture-xihu", "entityRef": "/entity/travel/stable/xihu"}]
         if carrier == "homepage":
             targets = [homepage_targets[ref] for ref in refs]
         round_path.write_bytes(subject.io.encode({"schema": "quwoquan_data.round_spec", "executions": {carrier: execution_id}, "targets": targets}))
@@ -975,6 +980,7 @@ def test_acquired_preflight_uses_real_ingest_hashes_without_draft_or_writes(tmp_
     assert producer.main(command) == 0
     result = json.loads(capsys.readouterr().out)
     assert len(calls) == 1
+    assert calls[0][0]["manifest"]["entityRefs"] == ["/entity/travel/stable/xihu"]
     assets = calls[0][0]["manifest"]["assets"]
     index = fixture.source_assets(execution)
     expected = []
@@ -1004,6 +1010,10 @@ def test_acquired_homepage_preflight_accepts_explicit_empty_assets_without_draft
     assert fixture.HOME_REF != canonical_ref
     assert result["coverage"]["candidateManifestRefs"] == [canonical_ref]
     assert result["poolQuery"]["preflight"][0]["objectRef"] == canonical_ref
+    from content.release.canonical.image_identity import acquired_asset_identity_view
+    candidate = acquired_asset_identity_view(execution_root=execution, selections=selected["targets"], carrier="homepage")[0]
+    assert candidate["manifest"]["entityRef"] == "/entity/travel/stable/xihu"
+    assert candidate["manifest"]["entityId"] == "fixture-xihu"
     assert not (execution / fixture.HOME_REF / "4.draft").exists()
     assert {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()} == before
 

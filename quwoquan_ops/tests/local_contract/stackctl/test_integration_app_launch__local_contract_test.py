@@ -108,7 +108,7 @@ class IntegrationAppLaunchContractTest(unittest.TestCase):
             mock.patch.object(launch, "_tls_ca_file", return_value=Path("/dev/null")),
             mock.patch.object(launch, "_default_http_request", side_effect=fake_request),
         ):
-            result = launch.content_readback(target="alpha-local")
+            result = launch.content_readback(target="alpha-local", expected_release={"releaseId": "release-test", "releaseDigest": "sha256:" + "a" * 64})
         self.assertFalse(result["passed"])
         self.assertEqual(result["failures"], ["video-book: items is empty"])
         self.assertEqual(result["results"]["home-feed"]["itemCount"], 1)
@@ -128,7 +128,7 @@ class IntegrationAppLaunchContractTest(unittest.TestCase):
             mock.patch.object(launch, "_tls_ca_file", return_value=Path("/dev/null")),
             mock.patch.object(launch, "_default_http_request", side_effect=observations),
         ):
-            return launch.content_readback(target="alpha-local")
+            return launch.content_readback(target="alpha-local", expected_release={"releaseId": "release-test", "releaseDigest": "sha256:" + "a" * 64})
 
     @staticmethod
     def _content_page(**overrides):
@@ -153,7 +153,14 @@ class IntegrationAppLaunchContractTest(unittest.TestCase):
                     self._content_page(), self._content_page(**{field: value}), self._content_page(),
                 ])
                 self.assertFalse(result["passed"])
-                self.assertIn("video-book: content identity differs between queries", result["failures"])
+                self.assertIn("video-book: content identity differs from expected candidate release", result["failures"])
+
+    def test_consistent_but_wrong_candidate_release_is_rejected(self) -> None:
+        for field, value in (("releaseId", "old-release"), ("manifestDigest", "sha256:" + "b" * 64)):
+            result = self._readback_payloads([self._content_page(**{field: value})] * 3)
+            self.assertFalse(result["passed"])
+            self.assertEqual(len(result["failures"]), 3)
+            self.assertIn("expected candidate release", result["failures"][0])
 
     def test_nonempty_invalid_envelopes_are_not_ready(self) -> None:
         for overrides in (
@@ -183,15 +190,70 @@ class IntegrationAppLaunchContractTest(unittest.TestCase):
                     launch.select_ios_simulator()
         self.assertEqual(blocked.exception.code, launch.DEVICE_BLOCKER)
 
+    def test_offline_artifact_includes_identity_only_in_nonprod(self) -> None:
+        import yaml
+        from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import _verify_snapshot_assets
+
+        app = ROOT / "quwoquan_app"
+        declarations = yaml.safe_load((app / "pubspec.yaml").read_text())["flutter"]["assets"]
+        expected = ("assets/content/alpha/manifest.json", "assets/content/alpha/bundle_identity.json")
+        for name in expected:
+            self.assertEqual([row for row in declarations if isinstance(row, dict) and row.get("path") == name],
+                             [{"path": name, "flavors": ["nonprod"]}])
+        source = app / expected[0]
+        reads = []
+        def read_asset(name):
+            reads.append(name)
+            return (app / name).read_bytes()
+        _verify_snapshot_assets(read_asset, source=source, raw=source.read_bytes(), manifest={"media": []})
+        self.assertEqual(reads, list(expected))
+
+    def test_offline_raw_cannot_replace_native_screenshot_or_page_identity(self) -> None:
+        import json
+        from quwoquan_ops.tests.local_contract.ci.test_integration_app_offline_uat__local_contract_test import (
+            _CANDIDATE, _receipt_matrix,
+        )
+
+        for damage in ("screenshot", "route", "carrier"):
+            with self.subTest(damage=damage):
+                root = self.root / damage
+                receipts, write = _receipt_matrix(root)
+                receipt = json.loads((root / receipts["android"]["ref"]).read_bytes())
+                page = receipt["pageResultRefs"][0]
+                if damage == "screenshot":
+                    execution = json.loads((root / page["evidence"]["ref"]).read_bytes())
+                    screenshot = root / execution["screenshot"]["ref"]
+                    execution["screenshot"] = write(execution["screenshot"]["ref"], screenshot.read_bytes() + b"changed")
+                    write(page["evidence"]["ref"], execution)
+                    expected = "screenshot differs from native"
+                else:
+                    raw = json.loads((root / page["result"]["ref"]).read_bytes())
+                    if damage == "route":
+                        raw["target"]["id"] = "/another-page"
+                    else:
+                        raw["carrier"] = "video"
+                    write(page["result"]["ref"], raw)
+                    expected = "plan/launch candidate identity drifted"
+                # 此单元边界隔离 exact-byte reader，直接证明原生观察/页面身份不能互换。
+                def read(exact, *, binary=False):
+                    raw = (root / exact["ref"]).read_bytes()
+                    return raw if binary else json.loads(raw)
+                binding = read(receipt["targetUatBindingRefs"]["alpha-local"])
+                with self.assertRaisesRegex(ValueError, expected):
+                    launch._offline_execution(read=read, page=page, result=read(page["result"]),
+                                              receipt=receipt, binding=binding, candidate=_CANDIDATE)
+
     def test_integration_run_wires_alpha_app_launch_for_app_scope(self) -> None:
         source = Path(integration_run.__file__).read_text(encoding="utf-8")
         self.assertIn('if environment == "alpha" and "app" in scopes:', source)
-        self.assertIn('phases.run(f"{environment}.app-launch"', source)
+        self.assertIn('phases.run("alpha.offline-pages"', source)
+        self.assertNotIn("_alpha_app_launch_cases", source)
+        self.assertIn('phases.run(f"{environment}.content-readback"', source)
         self.assertIn("cases.extend(app_cases)", source)
         self.assertIn('scopes=tuple(str(scope) for scope in plan["scopes"])', source)
         # health 之后、verify 之前：runtime 仍在线且尚未 down。
-        self.assertLess(source.index('phases.run(f"{environment}.health"'), source.index('phases.run(f"{environment}.app-launch"'))
-        self.assertLess(source.index('phases.run(f"{environment}.app-launch"'), source.index('phases.run(f"{environment}.verify"'))
+        self.assertLess(source.index('phases.run(f"{environment}.health"'), source.index('phases.run(f"{environment}.content-readback"'))
+        self.assertLess(source.index('phases.run(f"{environment}.content-readback"'), source.index('phases.run(f"{environment}.verify"'))
         for code in ("INTEGRATION_RUN.APP_LAUNCH_FAILED", "INTEGRATION_RUN.CONTENT_READBACK_FAILED"):
             self.assertIn(code, source)
 

@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-001
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-001.t1
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-001.t2
@@ -17,11 +18,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/config/app_remote_config_snapshot.dart';
 import 'package:quwoquan_app/runtime/config/app_remote_config_store.dart';
+import 'package:quwoquan_app/runtime/config/offline_content_bundle.dart';
+import 'package:quwoquan_app/runtime/config/offline_content_failure.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_display_config.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../support/service/content_service/content/post/test_content_app_config.dart';
@@ -60,6 +65,17 @@ final class _MemoryAppRemoteConfigStore implements AppRemoteConfigStore {
   }
 }
 
+final class _ConfigReader implements AppContentConfigReader {
+  _ConfigReader(this.load);
+  final Future<AppContentConfigSnapshot> Function() load;
+
+  @override
+  Future<AppContentConfigSnapshot?> readActiveSnapshot() async => null;
+
+  @override
+  Future<AppContentConfigSnapshot> refresh() => load();
+}
+
 Map<String, Object?> _signedRemoteConfig(
   Map<String, Object?> content, {
   String activationPolicy = 'next_session',
@@ -71,6 +87,7 @@ Map<String, Object?> _signedRemoteConfig(
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test('default active remains usable before remote fetch completes', () {
     final store = _MemoryAppRemoteConfigStore();
     final container = ProviderContainer(
@@ -127,10 +144,9 @@ void main() {
     expect(store.activeSnapshot?.configHash, state.pending?.configHash);
     // 当前会话首页频道结构不跳变：新频道结构只进入 pending。
     expect(state.active.homeChannels, ContentUIConfig.homeChannels);
-    expect(
-      state.pending?.homeChannels.map((channel) => channel.id),
-      <String>['ops_takeover_channel'],
-    );
+    expect(state.pending?.homeChannels.map((channel) => channel.id), <String>[
+      'ops_takeover_channel',
+    ]);
   });
 
   test('startup activates the last-known-good snapshot from disk', () async {
@@ -229,8 +245,70 @@ void main() {
     );
   });
 
+  test('typed 离线配置直接生效，不触碰远端或在线 LKG', () async {
+    final bundle = await OfflineContentBundle.load();
+    final container = ProviderContainer(
+      overrides: [
+        ...sealedCloudBoundaryOverrides(),
+        appContentConfigReaderProvider.overrideWithValue(
+          _ConfigReader(() async => bundle.configuration),
+        ),
+        appRemoteConfigStoreProvider.overrideWith(
+          (ref) => throw StateError('不可读写在线 LKG'),
+        ),
+        contentConfigRepositoryProvider.overrideWith(
+          (ref) => throw StateError('不可读取远端配置'),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(appRemoteConfigProvider.notifier).refresh();
+    final state = container.read(appRemoteConfigProvider);
+    expect(state.active.source, AppRemoteConfigSource.bundledSnapshot);
+    expect(state.active.configHash, bundle.configuration.configHash);
+    expect(state.active.isEnabled('enable_article_page_curl'), isTrue);
+    expect(state.pending, isNull);
+    expect(state.errorMessage, isNull);
+  });
+
+  test('typed reader 失败保留错误，不回退另一个 source', () async {
+    final container = ProviderContainer(
+      overrides: [
+        ...sealedCloudBoundaryOverrides(),
+        appContentConfigReaderProvider.overrideWithValue(
+          _ConfigReader(() async {
+            throw const OfflineContentFailure(
+              'bundle_configuration_integrity_invalid',
+            );
+          }),
+        ),
+        appRemoteConfigStoreProvider.overrideWith(
+          (ref) => throw StateError('不可读写在线 LKG'),
+        ),
+        contentConfigRepositoryProvider.overrideWith(
+          (ref) => throw StateError('不可读取远端配置'),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(appRemoteConfigProvider.notifier).refresh();
+    final state = container.read(appRemoteConfigProvider);
+    expect(state.active.source, AppRemoteConfigSource.defaults);
+    expect(state.active.configHash, isNull);
+    expect(state.pending, isNull);
+    expect(state.errorMessage, isNotNull);
+  });
+
+  test('业务 config provider 不判断 source 或读取裸 bundle key', () {
+    final source = File('lib/runtime/di/app_providers_content_runtime.dart')
+        .readAsStringSync();
+    expect(source, isNot(contains('AppContentSource')));
+    expect(source, isNot(contains('CloudRuntimeConfig')));
+    expect(source, isNot(contains('bundle.document')));
+  });
+
   test('components must not fetch /config/app outside the facade', () {
-    const allowedCaller = 'lib/runtime/di/app_providers_content_runtime.dart';
+    const allowedCaller = 'lib/runtime/di/content_dependencies.dart';
     final offenders = <String>[];
     for (final entity in Directory('lib').listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) {
@@ -247,8 +325,9 @@ void main() {
     expect(
       offenders,
       isEmpty,
-      reason: '组件不得直接重复拉取 /config/app；'
-          '唯一调用点是 $allowedCaller 的 AppRemoteConfigNotifier',
+      reason:
+          '组件不得直接重复拉取 /config/app；'
+          '唯一调用点是 $allowedCaller 的 typed 配置 reader',
     );
   });
 

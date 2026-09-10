@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
+from quwoquan_ops.cli.lib import target_uat_binding as binding_module
 from quwoquan_ops.cli.lib.target_uat_binding import (
     TARGET_UAT_BINDING_SCHEMA,
     TargetUatBindingError,
@@ -141,6 +142,55 @@ def _schema_validator() -> Draft202012Validator:
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(schema)
     return Draft202012Validator(schema, format_checker=FormatChecker())
+
+
+def _offline_binding() -> dict[str, object]:
+    return binding_module.build_offline_target_uat_binding(
+        candidate_digest=_digest("1"), commit_sha="a" * 40, tree_sha="b" * 40,
+        runtime_config_digest=_digest("2"),
+        snapshot={"ref": "offline/snapshot-identity.json", "digest": _digest("3")},
+        launch_attempt={"ref": "offline/launch-attempt.json", "digest": _digest("4")},
+        artifact={"class": "production_behavior", "digest": _digest("5"),
+                  "applicationId": _launch()["applicationId"],
+                  "buildMode": "debug", "buildProfile": "nonprod"},
+        platform="android", device=_device(), runner=_runner(),
+        created_at="2026-09-10T01:00:00Z",
+    )
+
+
+def test_offline_binding_roundtrips_without_remote_authority(tmp_path: Path) -> None:
+    binding = _offline_binding()
+    _schema_validator().validate(binding)
+    assert binding["contentSource"] == "bundled_snapshot"
+    assert binding["nonPromotable"] is True
+    assert not {"releaseId", "activeCas", "readback", "provider", "packageDigest"} & binding.keys()
+    written = write_create_once_target_uat_binding(output_root=tmp_path, binding=binding)
+    assert read_target_uat_binding(written.path) == binding
+    assert not write_create_once_target_uat_binding(output_root=tmp_path, binding=binding).created
+    # 同一 store 保留两种互斥 authority，不能把离线路径当在线 slot 读取。
+    write_create_once_target_uat_binding(output_root=tmp_path, binding=_binding())
+
+
+@pytest.mark.parametrize("mutation", [
+    {"provider": _provider()}, {"activeCas": {"ref": "old.json", "digest": _digest("a")}},
+    {"releaseId": "release-a"}, {"environment": "beta"}, {"target": "beta-local"},
+    {"profile": "promotable"}, {"nonPromotable": False}, {"commitSha": "HEAD"},
+    {"snapshot": {"ref": "../escape.json", "digest": _digest("3")}},
+])
+def test_offline_binding_rejects_mixed_authority_and_unsafe_identity(mutation: dict) -> None:
+    value = dict(_offline_binding(), **mutation)
+    with pytest.raises(TargetUatBindingError):
+        validate_target_uat_binding(value)
+    with pytest.raises(ValidationError):
+        _schema_validator().validate(value)
+
+
+@pytest.mark.parametrize("field", ["candidateDigest", "runtimeConfigDigest", "commitSha", "treeSha"])
+def test_offline_binding_slot_binds_candidate_and_launch_source(field: str) -> None:
+    value = _offline_binding()
+    value[field] = _digest("e") if field.endswith("Digest") else "e" * 40
+    with pytest.raises(TargetUatBindingError, match="slot identity"):
+        validate_target_uat_binding(value)
 
 
 def test_builder_emits_complete_schema_valid_binding_and_canonical_newline() -> None:

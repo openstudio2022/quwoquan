@@ -10,6 +10,14 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("release", help="构建不可变的通用内容发布包")
     commands = parser.add_subparsers(dest="release_command", required=True)
 
+    from content.release.canonical.offline_snapshot_migration import handle_migrate_offline_source
+    migration = commands.add_parser("migrate-offline-source", help="显式一次性转换冻结旧源为独立当前 schema 输入；保留原审核，不写共享 publish")
+    for flag in ("selection-file", "source-revision", "publish-root", "executions-root", "author-authority", "output-dir"):
+        migration.add_argument("--" + flag, required=True)
+    migration.add_argument("--library-root")
+    migration.add_argument("--carried-root")
+    migration.set_defaults(handler=handle_migrate_offline_source)
+
     offline = commands.add_parser("export-offline", help="从显式 canonical cohort 派生 Alpha 工程离线包；不发布或激活")
     offline.add_argument("--selection-file", required=True)
     offline.add_argument("--source-revision", required=True)
@@ -37,7 +45,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     finalize.add_argument("--release-root")
     finalize.add_argument(
         "--reference-root",
-        help="cohort/handoff 版本化副本根（缺省 quwoquan_data/reference/releases）；只是耐久备份，handoff-verify 不读它",
+        help="cohort/handoff 版本化副本根（缺省 QWQ_PUBLISH_ROOT/releases）；只是耐久备份，handoff-verify 不读它",
     )
     finalize.set_defaults(handler=owner.handle_release_finalize)
 
@@ -47,6 +55,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     handoff_verify.add_argument("--release-id", required=True)
     handoff_verify.add_argument("--release-root")
+    handoff_verify.add_argument("--expected-repository-id", help="显式约束内容仓身份；离线校验不要求挂载生产仓")
     handoff_verify.set_defaults(handler=owner.handle_handoff_verify)
 
     pool_query = commands.add_parser(

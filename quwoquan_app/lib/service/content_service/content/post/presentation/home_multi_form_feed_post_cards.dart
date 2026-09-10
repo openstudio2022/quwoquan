@@ -160,44 +160,47 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                   key: const ValueKey('home-relation-card-header'),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      onPressed: () => widget.onUserTap(profileSubjectId),
-                      // DEC-033：作者头像走唯一 typed 分流入口（kind=avatar），
-                      // 不在消费点手写第二份「什么算私有」的判据。
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.avatarUserSm / 2,
-                        ),
-                        child: mediaDeliveryImage(
-                          binding: contentPostAuthorAvatarBinding(item),
-                          kind: MediaDeliveryKind.avatar,
-                          width: AppSpacing.avatarUserSm,
-                          height: AppSpacing.avatarUserSm,
-                          fit: BoxFit.cover,
-                          publicBuilder: (context, publicUrl) =>
-                              RoundedSquareAvatar(
-                                size: AppSpacing.avatarUserSm,
-                                imageUrl: publicUrl,
-                                name: item.displayName,
-                                borderRadius: AppSpacing.avatarUserSm / 2,
-                                backgroundColor: AppColors.iosSecondaryFill(
-                                  context,
+                    Semantics(
+                      identifier: 'creator-avatar:$profileSubjectId',
+                      child: CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        onPressed: () => widget.onUserTap(profileSubjectId),
+                        // DEC-033：作者头像走唯一 typed 分流入口（kind=avatar），
+                        // 不在消费点手写第二份「什么算私有」的判据。
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.avatarUserSm / 2,
+                          ),
+                          child: mediaDeliveryImage(
+                            binding: contentPostAuthorAvatarBinding(item),
+                            kind: MediaDeliveryKind.avatar,
+                            width: AppSpacing.avatarUserSm,
+                            height: AppSpacing.avatarUserSm,
+                            fit: BoxFit.cover,
+                            publicBuilder: (context, publicUrl) =>
+                                RoundedSquareAvatar(
+                                  size: AppSpacing.avatarUserSm,
+                                  imageUrl: publicUrl,
+                                  name: item.displayName,
+                                  borderRadius: AppSpacing.avatarUserSm / 2,
+                                  backgroundColor: AppColors.iosSecondaryFill(
+                                    context,
+                                  ),
+                                  fallbackIcon:
+                                      CupertinoIcons.person_crop_circle_fill,
                                 ),
-                                fallbackIcon:
-                                    CupertinoIcons.person_crop_circle_fill,
+                            absentWidget: RoundedSquareAvatar(
+                              size: AppSpacing.avatarUserSm,
+                              imageUrl: '',
+                              name: item.displayName,
+                              borderRadius: AppSpacing.avatarUserSm / 2,
+                              backgroundColor: AppColors.iosSecondaryFill(
+                                context,
                               ),
-                          absentWidget: RoundedSquareAvatar(
-                            size: AppSpacing.avatarUserSm,
-                            imageUrl: '',
-                            name: item.displayName,
-                            borderRadius: AppSpacing.avatarUserSm / 2,
-                            backgroundColor: AppColors.iosSecondaryFill(
-                              context,
+                              fallbackIcon:
+                                  CupertinoIcons.person_crop_circle_fill,
                             ),
-                            fallbackIcon:
-                                CupertinoIcons.person_crop_circle_fill,
                           ),
                         ),
                       ),

@@ -1,4 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
+import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/di/media_viewer_interaction_state_bridge.dart';
+import 'package:quwoquan_app/runtime/di/post_interaction_state_dependencies.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+
+import '../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -17,9 +26,78 @@ import 'package:quwoquan_app/service/content_service/content/content_behavior_fa
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
+final class _GuestSession extends AuthSessionController {
+  @override
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
+}
+
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007.t1
 void main() {
+  testWidgets('真实点赞拒绝显示 unavailable，原状态和 outbox 均不变', (tester) async {
+    await hydrateRuntimePackageForTests(environment: 'alpha');
+    final semantics = tester.ensureSemantics();
+    late WidgetRef captured;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...sealedCloudBoundaryOverrides(),
+          authSessionControllerProvider.overrideWith(_GuestSession.new),
+        ],
+        child: CupertinoApp(
+          home: Consumer(
+            builder: (context, ref, _) {
+              captured = ref;
+              return CupertinoButton(
+                child: const Text('like'),
+                onPressed: () =>
+                    runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+                      syncPostLikeIntent(
+                        ref,
+                        postId: 'post',
+                        previousLiked: false,
+                        isLiked: true,
+                        likeCount: 1,
+                      );
+                    }),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    try {
+      await tester.tap(find.text('like'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(SearchText.recoveryContentUnavailableTitle),
+        findsOneWidget,
+      );
+      expect(
+        captured.read(postInteractionStateProvider).isLiked('post'),
+        isFalse,
+      );
+      expect(
+        find.bySemanticsIdentifier('capability-unavailable:like'),
+        findsOneWidget,
+      );
+      expect(captured.read(clientStateSyncOutboxProvider).entries, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text(SearchText.recoveryReturnAction));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(SearchText.recoveryContentUnavailableTitle),
+        findsNothing,
+      );
+      expect(find.text('like'), findsOneWidget);
+    } finally {
+      semantics.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await hydrateRuntimePackageForTests(environment: 'beta');
+    }
+  });
+
   test('Alpha HTTP 直连及媒体流式入口均在出站前拒绝', () async {
     await hydrateRuntimePackageForTests(environment: 'alpha');
     var requests = 0;
@@ -63,6 +141,7 @@ void main() {
     await hydrateRuntimePackageForTests(environment: 'alpha');
     final container = ProviderContainer(
       overrides: [
+        ...sealedCloudBoundaryOverrides(),
         clientStateSyncRuntimeDependenciesProvider.overrideWith(
           (ref) => throw StateError('离线不得创建同步引擎依赖'),
         ),

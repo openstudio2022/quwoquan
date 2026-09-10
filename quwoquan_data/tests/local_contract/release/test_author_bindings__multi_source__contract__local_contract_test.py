@@ -26,7 +26,7 @@ EXECUTION_ID = "20260908--travel-image-bindings--local--pilot-001"
 IMAGE_REF = "posts/image/风光/同一作品/1"
 HOME_REF = "entities/地点/景区/西湖"
 OTHER_REF = "entities/地点/景区/另一对象"
-TARGET = {"name": "西湖", "entityType": "地点/景区", "region": "中国/浙江省/杭州市", "publishTitle": "同一作品", "publishAngle": "风光", "publishSeq": 1}
+TARGET = {"entityRef": "/entity/地点/景区/西湖", "entityId": "qwq_entity_xihu", "name": "西湖", "entityType": "地点/景区", "region": "中国/浙江省/杭州市", "publishTitle": "同一作品", "publishAngle": "风光", "publishSeq": 1}
 AUTHOR = {"host": "cursor", "modelFamily": "gpt", "sessionId": "author", "invocation": {"provider": "openai", "model": "gpt-5", "runId": "author-run"}}
 REVIEWER = {**AUTHOR, "sessionId": "reviewer", "invocation": {**AUTHOR["invocation"], "runId": "reviewer-run"}}
 
@@ -61,7 +61,7 @@ def _execution(carrier: str, refs: list[str]) -> Path:
         "selectionPolicy": "frozen", "entityCatalogDigest": "sha256:" + "0" * 64,
         "candidateBinding": {"scope": "output", "ref": "fixture.json", "digest": "sha256:" + "1" * 64, "candidateCount": len(refs)},
         "targetCount": len(refs), "targetRefs": refs,
-        "targets": [{"name": ref.rsplit("/", 1)[-1], "entityType": TARGET["entityType"], "region": TARGET["region"]} if carrier == "homepage" else TARGET for ref in refs],
+        "targets": [{"name": ref.rsplit("/", 1)[-1], "entityType": TARGET["entityType"], "region": TARGET["region"], "entityRef": TARGET["entityRef"] if ref == HOME_REF else "/entity/地点/景区/另一对象", "entityId": TARGET["entityId"] if ref == HOME_REF else "qwq_entity_other"} if carrier == "homepage" else TARGET for ref in refs],
     })
     return root
 
@@ -129,7 +129,7 @@ def test_ordered_image_captions_survive_seal_review_and_full_manifest(tmp_path: 
     assert [row["sourceAssetRef"] for row in assets] == refs
     assert [row["caption"] for row in assets] == expected
     assert result["manifest"]["caption"] == "整组总说明"
-    assert result["manifest"]["sourceAttribution"]["publicationAdmission"] == "production_release"
+    assert result["manifest"]["sourceAttribution"]["publicationAdmission"] == "research_release"
     assert result["manifest"]["sourceAttribution"]["commercialAuthorizationStatus"] == "unverified"
     assert [row["fileName"] for row in assets] == ["assets/" + Path(ref).name for ref in refs]
     index = source_assets(root)
@@ -156,7 +156,8 @@ def test_publication_does_not_derive_commercial_authorization(carrier: str, auth
         "distributionDecision": "production_allowed", "rightsAuditStatus": "verified",
     }
     result = projection.media_attribution([asset], carrier=carrier, collected_at="2026-09-09T00:00:00Z")
-    assert result["publicationAdmission"] == "production_release"
+    # 对象级权利词汇是既有记录事实；不把 release 单轨误写成新的权利枚举。
+    assert result["publicationAdmission"] == ("commercial_release" if authorization == "verified" else "research_release")
     assert result["commercialAuthorizationStatus"] == authorization
     mixed = projection.media_attribution([asset, {**asset, "commercialAuthorizationStatus": "unverified"}], carrier=carrier, collected_at="2026-09-09T00:00:00Z")
     assert mixed["commercialAuthorizationStatus"] == "unverified"
@@ -184,7 +185,13 @@ def test_author_seal_rejects_bad_image_bindings_before_publish(tmp_path: Path, b
     results, issues = seal._seal_author(root, EXECUTION_ID, [IMAGE_REF])
     assert results == [] and issues[0]["code"] == "DATA.SEAL.DRAFT_INVALID"
     assert not (root / IMAGE_REF / "manifest.json").exists()
-    with pytest.raises(ObjectTransactionError):
+    binding_error = {
+        "unknown_caption": "assetCaptions", "unselected_caption": "assetCaptions",
+        "caption_alias": "assetCaptions", "asset_alias": "assetRefs",
+        "unknown_asset": "assetRefs", "blank_caption": "assetCaptions",
+        "ambiguous_caption": "assetCaptions",
+    }[bad_case]
+    with pytest.raises(ObjectTransactionError, match=binding_error):
         _intent(root, IMAGE_REF, "image")
 
 

@@ -14,6 +14,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:quwoquan_app/runtime/errors/generated/user/user_errors.g.dart';
 import 'package:quwoquan_app/runtime/auth/account_restriction_support.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
@@ -90,6 +95,62 @@ void main() {
       }),
     );
   });
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+  for (final composed in [true, false]) {
+    testWidgets('登录 unavailable 可见可退出且不假成功 composed=$composed', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final reason = composed
+          ? AuthGateReason.profileTab
+          : AuthGateReason.openChat;
+      final failure = contentCapabilityUnavailable('account_authentication');
+      final auth = _RecordingAuthFacets(
+        readinessError: composed ? null : failure,
+      );
+      final recorder = RecordingAppTelemetryRecorder();
+      var dismissed = 0;
+      var loggedIn = 0;
+      await _pumpHost(
+        tester,
+        auth: auth,
+        recorder: recorder,
+        capabilityFailure: composed ? failure : null,
+        reason: reason.name,
+        onDismiss: () => dismissed++,
+        onLoggedIn: () => loggedIn++,
+      );
+      expect(find.byType(AppPageErrorState), findsOneWidget);
+      expect(
+        find.bySemanticsIdentifier(
+          'capability-unavailable:account_authentication:${reason.name}',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(SearchText.recoveryContentUnavailableTitle),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('loginPhoneField')),
+        findsNothing,
+      );
+      expect(auth.sendOtpCalls, 0);
+      expect(auth.readinessCalls, composed ? 0 : 1);
+      expect(loggedIn, 0);
+      expect(
+        recorder.recorded.any(
+          (event) => event.extensions['result'] == 'unsupported',
+        ),
+        isTrue,
+      );
+      await tester.tap(find.text(SearchText.recoveryReturnAction));
+      await tester.pump();
+      expect(dismissed, 1);
+      expect(loggedIn, 0);
+      semantics.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 
   group('状态与错误合同', () {
     test('terminal latch 只允许一个完成方取得终态', () {
@@ -340,7 +401,11 @@ void main() {
       expect(footerLabels, containsAll(<String>['其他登录方式', '微信', 'QQ', '支付宝']));
       expect(footerLabels, isNot(contains('其他手机号登录')));
 
-      for (final text in <String>['欢迎回来', '本机号码 ${_SyntheticLoginIdentity.maskedPhone}', '其他登录方式']) {
+      for (final text in <String>[
+        '欢迎回来',
+        '本机号码 ${_SyntheticLoginIdentity.maskedPhone}',
+        '其他登录方式',
+      ]) {
         expect(
           tester.widget<Text>(find.text(text)).textAlign,
           TextAlign.center,
@@ -715,7 +780,10 @@ void main() {
       expect(auth.idempotencyKeys.toSet(), hasLength(1));
       expect(
         find.text(
-          FoundationText.loginOtpSentTo.replaceFirst('%s', _SyntheticLoginIdentity.maskedPhone),
+          FoundationText.loginOtpSentTo.replaceFirst(
+            '%s',
+            _SyntheticLoginIdentity.maskedPhone,
+          ),
         ),
         findsOneWidget,
       );
@@ -1297,6 +1365,7 @@ Future<void> _pumpHost(
   required _RecordingAuthFacets auth,
   _RecordingCredentialWriter? credentialWriter,
   _MutableAuthStore? store,
+  CloudException? capabilityFailure,
   OneTapLoginClient oneTapClient = const _UnavailableOneTapLoginClient(),
   NativeAuthBridge nativeAuthBridge = const _TestNativeAuthBridge(),
   AccountRestrictionSupportLauncher? supportLauncher,
@@ -1313,6 +1382,8 @@ Future<void> _pumpHost(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        ...sealedCloudBoundaryOverrides(),
+        loginCapabilityFailureProvider.overrideWithValue(capabilityFailure),
         authSessionStoreProvider.overrideWithValue(authStore),
         accountSessionLoginCommandWriterProvider.overrideWithValue(auth),
         accountSessionLifecycleCommandWriterProvider.overrideWithValue(auth),
@@ -1542,6 +1613,7 @@ class _RecordingAuthFacets
   _RecordingAuthFacets({
     this.phoneLoginError,
     this.socialError,
+    this.readinessError,
     this.readinessAvailability = OtpDeliveryReadinessAvailability.ready,
     FederatedLoginOutcome? socialOutcome,
     OtpChallengeIssueResult? otpResult,
@@ -1566,6 +1638,7 @@ class _RecordingAuthFacets
 
   final Object? phoneLoginError;
   final Object? socialError;
+  final Object? readinessError;
   final OtpDeliveryReadinessAvailability readinessAvailability;
   final FederatedLoginOutcome socialOutcome;
   final OtpChallengeIssueResult otpResult;
@@ -1583,6 +1656,7 @@ class _RecordingAuthFacets
   @override
   Future<OtpDeliveryReadinessSnapshot> getOtpDeliveryReadiness() async {
     readinessCalls += 1;
+    if (readinessError case final error?) throw error;
     return OtpDeliveryReadinessSnapshot(
       availability: readinessAvailability,
       retryAfterSeconds: 0,

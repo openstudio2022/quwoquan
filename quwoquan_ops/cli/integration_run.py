@@ -15,7 +15,7 @@
 
 只编排、不解释结论：环境动作一律经 `stackctl` 子进程，事实一律经
 `quwoquan_ops.ci.scoped_candidate` / `environment_scheduler` 既有 create-once 入口。
-任一步失败即保留首个 typed blocker 并把已启动的本地 runtime 放倒（finally down）。
+任一步失败保留首个 typed blocker；finally 只清理本 invocation 创建的 exact runtime generation。
 """
 
 from __future__ import annotations
@@ -574,85 +574,94 @@ def _package_with_dependency_recovery(*, environment: str, args: argparse.Namesp
     return _require_ok(result, "INTEGRATION_RUN.PACKAGE_FAILED")
 
 
-def _alpha_app_launch_cases(*, candidate: Mapping[str, str], runtime: Mapping[str, str], evidence_dir: Path,
-                            log_dir: Path, args: argparse.Namespace, env_summary: dict[str, Any]) -> list[dict[str, str]]:
-    """Alpha 的 App 启动 + 首页/视频书 readback：两份 raw ReadinessCaseResult，任一失败即 typed blocker。
+def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping[str, str],
+                         args: argparse.Namespace, run_dir: Path, phases: Phases) -> dict[str, Any]:
+    """服务启动前执行双端页面；证据保持 rehearsal，绝不补写服务 runtime identity。"""
+    from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
 
-    服务 health 不等于 App 能启动；candidate 影响面含 `app` 时这是 Alpha 准入的必需证据，
-    没有可用模拟器同样阻断，不得降级为 PASS（environment-topology-and-packaging REQ-003、
-    local-continuous-integration REQ-004）。
-    """
+    devices = {"android": args.android_device_id, "ios": args.ios_device_id}
+    if not all(devices.values()) or len(set(devices.values())) != 2:
+        raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_DEVICE_UNAVAILABLE", "explicit distinct --android-device-id and --ios-device-id are required")
+    receipts = {}
+    for platform, device in devices.items():
+        result = phases.run(f"alpha.offline-{platform}", lambda: _require_ok(_stackctl(
+            "app-content-uat", "--targets", "alpha-local", "--platform", "android" if platform == "android" else "ios-simulator",
+            "--device-id", device, "--candidate", f"{candidate_ref['ref']}={candidate_ref['digest']}",
+            log_dir=run_dir / "offline" / platform,
+        ), "INTEGRATION_RUN.APP_LAUNCH_FAILED"))
+        if result.report_dir is None:
+            raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", "offline receipt directory is absent")
+        path = result.report_dir / "receipt.json"
+        receipts[platform] = {"ref": _output_ref(path), "digest": exact_file_digest(path)}
+    try:
+        evidence = offline_receipt_evidence(root=OUTPUT_ROOT, receipts=receipts, candidate=candidate, devices=devices)
+    except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", str(exc)) from exc
+    # 将原始闭包 exact 复制到 store；不改 raw 路径、摘要或 nonPromotable。
+    prefix = f"offline-page-evidence/{candidate['candidateId'].removeprefix('sha256:')}"
+    for exact in evidence["files"]:
+        _bundle_put(_store() / prefix, exact["ref"], _bundle_bytes(OUTPUT_ROOT, exact))
+    return {"root": prefix, "receipts": receipts, "devices": devices, "files": evidence["files"],
+            "cases": [{"ref": prefix + "/" + exact["ref"], "digest": exact["digest"]} for exact in evidence["cases"]],
+            "required": True, "nonPromotable": True, "caseCount": len(evidence["cases"])}
 
-    from quwoquan_ops.cli.lib.integration_app_launch import (
-        APP_LAUNCH_SPEC_REF, CONTENT_READBACK_SPEC_REF, IntegrationAppLaunchError,
-        case_result, content_readback, launch_and_observe, select_ios_simulator,
-    )
+
+def _validate_offline_axis(*, store: Path, axis: Mapping[str, Any], candidate: Mapping[str, Any]) -> list[dict[str, str]]:
+    from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
 
     try:
-        device = select_ios_simulator(preferred_udid=str(getattr(args, "app_launch_device", "") or ""))
-        observation = launch_and_observe(
-            repo_root=ROOT, device=device, log_dir=log_dir,
-            timeout_seconds=float(getattr(args, "app_launch_timeout_seconds", 900)),
-        )
-    except IntegrationAppLaunchError as exc:
-        raise IntegrationRunError(exc.code, exc.detail) from exc
-    launch_receipt = log_dir / "app-launch-alpha.json"
-    launch_receipt.write_text(json.dumps({
-        "device": {"udid": device.udid, "name": device.name},
-        "phases": observation.phases,
-        "launched": observation.launched,
-        "routerShell": observation.router_shell,
-        "configurationComplete": observation.configuration_complete,
-        "exitCode": observation.exit_code,
-        "firstBlocker": observation.first_blocker,
-        "logRef": _output_ref(observation.log_path) if observation.log_path else "",
-        "startedAt": observation.started_at,
-        "completedAt": observation.completed_at,
-    }, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    env_summary["appLaunch"] = {"device": device.name, "passed": observation.passed, "receipt": _output_ref(launch_receipt)}
-    if not observation.passed:
-        raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", observation.first_blocker or "App launch did not reach launched/router_shell/complete")
+        expected_root = f"offline-page-evidence/{candidate['candidateId'].removeprefix('sha256:')}"
+        if (axis.get("root") != expected_root or axis.get("required") is not True
+                or axis.get("nonPromotable") is not True or axis.get("caseCount") != 26):
+            raise ValueError("required offline evidence axis is missing or drifted")
+        evidence = offline_receipt_evidence(root=_bundle_path(store, expected_root), receipts=axis["receipts"],
+                                            candidate=candidate, devices=axis["devices"])
+        expected_cases = [{"ref": expected_root + "/" + exact["ref"], "digest": exact["digest"]} for exact in evidence["cases"]]
+        if axis["files"] != evidence["files"] or axis.get("cases") != expected_cases:
+            raise ValueError("offline evidence closure drifted")
+        return [{"ref": expected_root + "/" + exact["ref"], "digest": exact["digest"]} for exact in evidence["files"]]
+    except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", str(exc)) from exc
 
-    readback_started = _now()
-    readback = content_readback(target="alpha-local")
-    readback_receipt = log_dir / "content-readback-alpha.json"
-    readback_receipt.write_text(json.dumps(readback, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    env_summary["contentReadback"] = {"passed": readback["passed"], "receipt": _output_ref(readback_receipt), "failures": readback["failures"]}
+
+def _alpha_content_readback_cases(*, candidate: Mapping[str, str], runtime: Mapping[str, str], evidence_dir: Path,
+                                  log_dir: Path, args: argparse.Namespace, env_summary: dict[str, Any]) -> list[dict[str, str]]:
+    """独立服务/API 必需轴：只消费服务 authority 和 candidate Data attestation。"""
+    from quwoquan_ops.cli.lib.integration_app_launch import CONTENT_READBACK_SPEC_REF, case_result, content_readback
+
+    started = _now()
+    readback = content_readback(target="alpha-local", expected_release=_acceptance_release_inputs(args)["release"]["candidate"])
+    receipt = log_dir / "content-readback-alpha.json"
+    receipt.write_text(json.dumps(readback, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    env_summary["contentReadback"] = {"passed": readback["passed"], "receipt": _output_ref(receipt), "failures": readback["failures"]}
     if not readback["passed"]:
         raise IntegrationRunError("INTEGRATION_RUN.CONTENT_READBACK_FAILED", "; ".join(readback["failures"]))
-    readback_completed = _now()
-
-    refs: list[dict[str, str]] = []
-    for index, (case_id, object_id, spec_ref, target_id, receipt, started, completed) in enumerate((
-        ("app-launch:ios-simulator", "app-launch:alpha:ios-simulator", APP_LAUNCH_SPEC_REF, "app.launch.ios_simulator",
-         launch_receipt, observation.started_at, observation.completed_at),
-        ("content-readback:home-feed+video-book", "content-readback:alpha:home-feed+video-book", CONTENT_READBACK_SPEC_REF,
-         "content.feed.list", readback_receipt, readback_started, readback_completed),
-    )):
-        result = case_result(
-            case_id=case_id, object_id=object_id, spec_ref=spec_ref, target_id=target_id, environment="alpha",
-            candidate=candidate, runtime=runtime, started_at=started, completed_at=completed,
-            artifact_sha256=hashlib.sha256(receipt.read_bytes()).hexdigest(), receipt_ref=_output_ref(receipt),
-        )
-        case_path = evidence_dir / "cases" / f"app-{index:03d}.json"
-        case_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_canonical(case_path, validate_readiness_case_result(result, generated_at=completed))
-        refs.append({"ref": case_path.relative_to(_store()).as_posix(), "digest": exact_file_digest(case_path)})
-    return refs
+    completed = _now()
+    result = case_result(
+        case_id="content-readback:home-feed+video-book", object_id="content-readback:alpha:home-feed+video-book",
+        spec_ref=CONTENT_READBACK_SPEC_REF, target_id="content.feed.list", environment="alpha", candidate=candidate,
+        runtime=runtime, started_at=started, completed_at=completed,
+        artifact_sha256=hashlib.sha256(receipt.read_bytes()).hexdigest(), receipt_ref=_output_ref(receipt),
+    )
+    return [_write_canonical(evidence_dir / "cases" / "content-readback.json", validate_readiness_case_result(result, generated_at=completed))]
 
 
 def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, str], impact_plan_digest: str,
                      args: argparse.Namespace, run_dir: Path, phases: Phases, summary: dict[str, Any],
-                     previous_readiness: Path | None = None, scopes: Sequence[str] = ()) -> dict[str, Any]:
+                     previous_readiness: Path | None = None, scopes: Sequence[str] = (),
+                     offline_pages: Mapping[str, Any] | None = None) -> dict[str, Any]:
     target = f"{environment}-local"
     store = _store()
     evidence_dir = store / "environment-evidence" / candidate["candidateId"].removeprefix("sha256:") / environment
     log_dir = run_dir / environment
     env_summary: dict[str, Any] = {"environment": environment, "target": target, "reports": {}}
     summary["environments"][environment] = env_summary
-    started_up = False
+    ownership: dict[str, Any] = {}
     app_cases: list[dict[str, str]] = []
     release_inputs = _acceptance_release_inputs(args)
+    if environment == "alpha" and "app" in scopes:
+        _validate_offline_axis(store=store, axis=offline_pages or {}, candidate=candidate)
+        env_summary["offlinePages"] = dict(offline_pages or {})
     try:
         package = phases.run(f"{environment}.package", lambda: _package_with_dependency_recovery(
             environment=environment, args=args, log_dir=log_dir, phases=phases,
@@ -674,8 +683,10 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
                                   "reusedFromAncestor": packaged_revision != candidate["commit"]}
 
         up = phases.run(f"{environment}.up", lambda: _stackctl("up", "--target", target, "--skip-app", "--workload", args.workload, log_dir=log_dir))
-        started_up = True
+        ownership = dict(up.payload)
         _require_ok(up, "INTEGRATION_RUN.UP_FAILED")
+        if ownership.get("runtimeCreated") is not True or not ownership.get("instanceGeneration"):
+            raise IntegrationRunError("INTEGRATION_RUN.UP_FAILED", "acceptance requires an owned runtime generation; reused/unknown runtime is preserved")
         env_summary["reports"]["up"] = _report_source(up)
         # health 的 release_active 层要求该环境已导入并验证 candidate Data release（release-readiness 回执）。
         readiness = phases.run(f"{environment}.data-release", lambda: _apply_data_release(
@@ -686,10 +697,8 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
         env_summary["reports"]["health"] = _report_source(health)
         runtime = _health_runtime(health=health, environment=environment, candidate=candidate, expected_baseline=baseline)
         env_summary["runtimeIdentity"] = runtime
-        if environment == "alpha" and "app" in scopes:
-            # App 可启动、首页与视频书可访问是 Alpha 准入的必需事实，在服务 health 之后、
-            # runtime 仍在线时执行；模拟器缺失或任一 readback 失败都在这里 typed 阻断。
-            app_cases = phases.run(f"{environment}.app-launch", lambda: _alpha_app_launch_cases(
+        if environment == "alpha":
+            app_cases = phases.run(f"{environment}.content-readback", lambda: _alpha_content_readback_cases(
                 candidate=candidate, runtime=runtime, evidence_dir=evidence_dir, log_dir=log_dir, args=args, env_summary=env_summary,
             ))
         verify = phases.run(f"{environment}.verify", lambda: _require_ok(_stackctl("verify", "--env", environment, "--target", target, "--kind", "all", "--profile", profile, log_dir=log_dir), "INTEGRATION_RUN.VERIFY_FAILED"))
@@ -701,11 +710,20 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
         health_payload = health.report_json()[1]  # type: ignore[index]
         provider_ok = _provider_ready(health_payload)
     finally:
-        if started_up:
-            down = phases.run(f"{environment}.down", lambda: _stackctl("down", "--target", target, "--workload", args.workload, log_dir=log_dir))
-            env_summary["reports"]["down"] = _report_source(down)
-            if down.exit_code != 0:
-                raise IntegrationRunError("INTEGRATION_RUN.DOWN_FAILED", f"stackctl down {target} failed: {down.payload.get('summary')}")
+        primary_failure = sys.exc_info()[0] is not None
+        if ownership.get("runtimeCreated") is True and ownership.get("instanceGeneration"):
+            try:
+                down = phases.run(f"{environment}.down", lambda: _require_ok(_stackctl(
+                    "down", "--target", target, "--workload", args.workload,
+                    "--expected-generation", str(ownership["instanceGeneration"]), log_dir=log_dir,
+                ), "INTEGRATION_RUN.DOWN_FAILED"))
+                env_summary["reports"]["down"] = _report_source(down)
+            except Exception as exc:
+                if not primary_failure:
+                    raise
+                env_summary["cleanupBlocker"] = str(exc)
+        else:
+            env_summary["cleanupDisposition"] = "preserved_not_owned"
     status_after = phases.run(f"{environment}.lease-readback", lambda: _stackctl("status", "--target", target, log_dir=log_dir))
     locks = status_after.payload.get("localRuntimeLocks")
     if locks not in ([], None):
@@ -726,7 +744,8 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
         return _write_canonical(evidence_dir / f"{role}.json", _evidence_object(
             role=role, status=status, environment=environment, profile=profile, candidate=candidate,
             impact_plan_digest=impact_plan_digest,
-            source={**_report_source(source), **({"acceptanceBinding": acceptance_binding} if role == "runtime-identity" else {})},
+            source={**_report_source(source), **({"acceptanceBinding": acceptance_binding,
+                    **({"offlinePages": dict(offline_pages)} if offline_pages is not None else {})} if role == "runtime-identity" else {})},
         ))
 
     named = {
@@ -741,6 +760,8 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
     }
     cases = _case_results_from_verify(verify=verify, environment=environment, profile=profile, candidate=candidate, runtime=runtime, evidence_dir=evidence_dir)
     cases.extend(app_cases)
+    if offline_pages is not None:
+        cases.extend(offline_pages["cases"])
     env_summary["caseResults"] = len(cases)
     return {"named": named, "cases": cases, "readiness": readiness}
 
@@ -861,6 +882,59 @@ def _reusable_acceptance(*, store: Path, candidate_id: str, environment: str, pr
     return {"ref": path.relative_to(store).as_posix(), "digest": _sha256_hex(raw)}
 
 
+def _validate_offline_fact_case_refs(*, axis: Mapping[str, Any], fact: Mapping[str, Any]) -> None:
+    required = {item["ref"] for item in axis.get("cases", [])}
+    present = {item["ref"] for item in fact["caseResultRefs"]}
+    if not required.issubset(present):
+        raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", "Alpha fact lacks required offline raw cases")
+
+
+def _validate_alpha_readback_case(*, cases: Sequence[Mapping[str, Any]], candidate: Mapping[str, Any]) -> None:
+    expected = {"caseId": "content-readback:home-feed+video-book", "producer": "ops", "layer": "environment_acceptance",
+                "status": "passed", "candidateDigest": candidate["candidateId"], "commitSha": candidate["commit"]}
+    if not any(all(case.get(key) == value for key, value in expected.items()) for case in cases):
+        raise IntegrationRunError("INTEGRATION_RUN.CONTENT_READBACK_FAILED", "offline pages cannot replace required Alpha API readback")
+
+
+def _offline_fact_refs(*, store: Path, fact: Mapping[str, Any], candidate: Mapping[str, Any]) -> list[dict[str, str]]:
+    """离线轴受 Alpha EAF runtimeIdentity 的签名摘要覆盖，导出/导入/复用均重新验真。"""
+    if fact.get("environment") != "alpha":
+        return []
+    runtime = _read_store_object(store, fact["runtimeIdentity"], "runtimeIdentity")
+    axis = (runtime.get("source") or {}).get("offlinePages")
+    app_required = bool(classify_impacts(candidate.get("paths", []))["scopes"]["app"])
+    if axis is None and not app_required:
+        return []
+    refs = _validate_offline_axis(store=store, axis=axis or {}, candidate=candidate)
+    _validate_offline_fact_case_refs(axis=axis or {}, fact=fact)
+    service_cases = [_read_store_object(store, exact, "Alpha raw case") for exact in fact["caseResultRefs"]]
+    _validate_alpha_readback_case(cases=service_cases, candidate=candidate)
+    return refs
+
+
+def _existing_candidate(*, exact: str, identity: Mapping[str, str], impact_plan_digest: str,
+                        owner_identity: str = "") -> tuple[dict[str, str], dict[str, Any]]:
+    from quwoquan_ops.ci.scoped_candidate.core import _load_exact_ref, exact_digest
+
+    try:
+        ref, digest = exact.rsplit("=", 1)
+        candidate_ref = {"ref": ref, "digest": digest}
+        candidate, _ = _load_exact_ref(_store(), candidate_ref, "candidate")
+        if (candidate.get("schema") != _CANDIDATE_SCHEMA
+                or candidate.get("candidateId") != exact_digest({k: v for k, v in candidate.items() if k != "candidateId"})
+                or any(candidate.get(key) != identity[field] for key, field in (("commit", "commit"), ("tree", "tree"), ("expectedParent", "parent")))
+                or candidate.get("impactPlanDigest") != impact_plan_digest
+                or (owner_identity and candidate.get("ownerIdentityRef") != owner_identity)):
+            raise ValueError("existing candidate commit/tree/parent/ImpactPlan/owner drifted")
+        claim, _ = _load_exact_ref(_store(), {"ref": candidate["claimRef"], "digest": candidate["claimDigest"]}, "claim")
+        if (claim.get("paths") != candidate.get("paths") or claim.get("expectedParent") != candidate["expectedParent"]
+                or claim.get("ownerIdentityRef") != candidate.get("ownerIdentityRef")):
+            raise ValueError("existing candidate claim scope or owner drifted")
+        return candidate_ref, candidate
+    except (KeyError, TypeError, ValueError) as exc:
+        raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", str(exc)) from exc
+
+
 def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str, impact_plan_digest: str,
                              profile: str, beta: bool = False, signature_verifier: Any = None,
                              expected_signer_identity: str | None = None,
@@ -899,6 +973,10 @@ def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str
             release_inputs=release_inputs,
         )
         if alpha is None:
+            continue
+        try:
+            _offline_fact_refs(store=store, fact=_read_store_object(store, alpha, "alpha"), candidate=body)
+        except (IntegrationRunError, KeyError, OSError, ValueError):
             continue
         beta_ref = _reusable_acceptance(
             store=store, candidate_id=candidate_id, environment="beta", profile=profile,
@@ -1102,7 +1180,7 @@ def _write_acceptance_bundle(*, run_dir: Path, candidate_ref: Mapping[str, str],
     for environment, fact_ref in (("alpha", alpha_ref), ("beta", beta_ref)):
         add(fact_ref, f"{environment}Fact")
         fact = _read_store_object(store, fact_ref, f"{environment}Fact")
-        for exact in _fact_evidence_refs(fact):
+        for exact in [*_fact_evidence_refs(fact), *_offline_fact_refs(store=store, fact=fact, candidate=candidate)]:
             add(exact, f"{environment} evidence")
     plan_bytes = plan_path.read_bytes()
     _bundle_put(bundle_dir, "impact-plan.json", plan_bytes)
@@ -1212,6 +1290,7 @@ def _import_acceptance_bundle(*, bundle_dir: Path, commit: str, tree: str, paren
             signature_verifier=verifier, expected_signer_identity=signer_identity,
         )
         required.extend(_fact_evidence_refs(validated))
+        required.extend(_offline_fact_refs(store=store, fact=validated, candidate=candidate))
         if (validated.get("profile") != manifest["profile"] or validated.get("nonPromotable") is not False
                 or validated.get("impactPlanDigest") != manifest["impactPlan"].get("digest")
                 or candidate.get("impactPlanDigest") != manifest["impactPlan"].get("digest")
@@ -1235,6 +1314,7 @@ def _import_acceptance_bundle(*, bundle_dir: Path, commit: str, tree: str, paren
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--candidate", default="HEAD", help="exact commit（HEAD 或 lane head sha）")
+    parser.add_argument("--candidate-ref", default="", help="acceptance：复用已冻结 candidate 的 store ref=sha256:digest，不重新 acquire claim")
     parser.add_argument("--mode", choices=("integrate", "acceptance"), default="integrate",
                         help="integrate=integration 工作区消费 acceptance bundle 并 admit/publish；"
                              "acceptance=lane 工作树跑 readiness + Alpha（--beta 时含 Beta）并签发事实与 bundle")
@@ -1274,9 +1354,8 @@ def _parser() -> argparse.ArgumentParser:
                         help="acceptance 专用：复用同 commit/tree/parent/ImpactPlan/profile 的有效 Alpha/Beta 事实；"
                              "Beta 状态必须匹配本次 --beta 政策，summary 标记 reused")
     parser.add_argument("--run-id", default="")
-    parser.add_argument("--app-launch-device", default="",
-                        help="Alpha App 启动证据使用的 iOS 模拟器 udid；缺省选已 Booted 或第一台可用 iPhone")
-    parser.add_argument("--app-launch-timeout-seconds", type=int, default=900)
+    parser.add_argument("--android-device-id", default="", help="Alpha 离线 UAT 的 exact Android emulator serial；不自动发现")
+    parser.add_argument("--ios-device-id", default="", help="Alpha 离线 UAT 的 exact iOS simulator UDID；不自动发现")
     return parser
 
 
@@ -1302,6 +1381,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.mode == "integrate":
             # integrate 只消费 lane 事实：不签发、不跑环境，因此不需要私钥与 Data release 输入。
             for flag, value in (("--baseline", args.baseline), ("--beta", args.beta), ("--reuse", args.reuse), ("--merged-lanes", args.merged_lanes),
+                                ("--candidate-ref", args.candidate_ref), ("--android-device-id", args.android_device_id), ("--ios-device-id", args.ios_device_id),
                                 ("--release-attestation", args.release_attestation),
                                 ("--rollback-release-attestation", args.rollback_release_attestation),
                                 ("--release-handoff-ref", args.release_handoff_ref)):
@@ -1373,7 +1453,7 @@ def main(argv: list[str] | None = None) -> int:
             ))
             manifest = imported["manifest"]
             candidate = imported["candidate"]
-            claim_path = _store() / candidate["claimRef"]
+            # 导入的 claim 属于 lane；integration 不释放未取得的 ownership。
             summary["candidate"].update({"candidateId": candidate["candidateId"], "candidateRef": dict(manifest["candidate"]), "claimRef": candidate["claimRef"]})
             summary["acceptanceBundle"] = {
                 "path": str(args.acceptance_bundle), "bundleId": manifest["bundleId"], "runId": manifest.get("runId"),
@@ -1437,7 +1517,13 @@ def main(argv: list[str] | None = None) -> int:
                 expected_signer_identity=args.signer_identity,
                 release_inputs=_acceptance_release_inputs(args),
             ))
-        if reusable is not None:
+        if args.candidate_ref:
+            candidate_ref, candidate = _existing_candidate(exact=args.candidate_ref, identity=identity,
+                                                           impact_plan_digest=impact_digest, owner_identity=args.owner_identity)
+            if reusable is not None and reusable["candidateRef"] != candidate_ref:
+                reusable = None
+            reused["candidate"] = True
+        elif reusable is not None:
             # 复用既有 exact candidate：不再 build/claim；Alpha（及政策匹配的 Beta）事实进入 lane bundle。
             candidate_path = reusable["candidatePath"]
             candidate_ref = reusable["candidateRef"]
@@ -1475,9 +1561,14 @@ def main(argv: list[str] | None = None) -> int:
             summary["environments"]["alpha"] = {"environment": "alpha", "executed": False, "reused": True, "acceptance": alpha_ref}
             phases.run("alpha.reuse", lambda: alpha_ref)
         else:
+            offline_pages = None
+            if "app" in plan["scopes"]:
+                offline_pages = phases.run("alpha.offline-pages", lambda: _alpha_offline_pages(
+                    candidate=candidate_identity, candidate_ref=candidate_ref, args=args, run_dir=run_dir, phases=phases,
+                ))
             alpha_evidence = _run_environment(environment="alpha", profile=args.profile, candidate=candidate_identity,
                                               impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary,
-                                              scopes=tuple(str(scope) for scope in plan["scopes"]))
+                                              scopes=tuple(str(scope) for scope in plan["scopes"]), offline_pages=offline_pages)
             alpha_ref = phases.run("alpha.issue", lambda: _issue(
                 environment="alpha", candidate_ref=candidate_ref, impact_plan_digest=impact_digest, evidence=alpha_evidence,
                 status="passed", predecessor=None, profile=args.profile, args=args, signer=signer,

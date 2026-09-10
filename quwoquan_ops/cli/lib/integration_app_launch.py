@@ -1,21 +1,13 @@
-"""integrate Alpha 准入的 App 启动与内容 readback 证据（`alpha.app-launch` 阶段）。
+"""Alpha 的独立必需证据：双端离线页面 raw 闭包与 exact release API 回读。
 
-"服务健康"不等于"App 能起来、首页与视频书有内容"。当 candidate 的影响面含 `app` 时，
-Alpha 环境在 health 之后必须：
-
-1. 在一台 iOS 模拟器上以 canonical launcher（`quwoquan_app/run.sh --env alpha`）真实
-   编译、安装、激活并启动 App，观察到 `QWQ_APP_LAUNCH_PHASE status=launched` 与
-   `ios_startup_safe_terminal surface=router_shell … configurationState=complete`；
-2. 对同一 Alpha 网关做推荐频道、视频书精品频道及普通视频浏览的 Remote readback，
-   HTTP 200、规范 content envelope、Post items 非空且内容身份一致。
-
-两者各形成一份 raw `ReadinessCaseResult`，进入 Alpha `EnvironmentAcceptanceFact` 的
-`caseResultRefs`；任一失败即 typed blocker，不得降级为 PASS。没有可用模拟器同样阻断。
-本模块只编排与观察，不解释业务结论；HTTP 与 TLS 只复用 content-api-consumer 的同一实现。
+离线页面保留 rehearsal/nonPromotable；服务身份只由真实服务/API 轴提供。
+旧 direct 启动观察函数仅供开发诊断，不再参与 acceptance authority。
+HTTP 与 TLS 复用 content-api-consumer，设备执行由 stackctl app-content-uat 拥有。
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -238,14 +230,18 @@ def _content_page_identity(payload: Mapping[str, Any], items: list[Any]) -> tupl
     return release_id, digest
 
 
-def content_readback(*, target: str = "alpha-local", timeout_seconds: float = 12.0) -> dict[str, Any]:
-    """回读真实页面及普通视频，要求非空规范结果且全部绑定同一内容版本。"""
+def content_readback(*, expected_release: Mapping[str, str], target: str = "alpha-local",
+                     timeout_seconds: float = 12.0) -> dict[str, Any]:
+    """回读页面及普通视频，必须 exact 匹配 candidate attestation 的 release/cohort。"""
+    expected_identity = (expected_release.get("releaseId"), expected_release.get("releaseDigest"))
+    if (not expected_identity[0] or not isinstance(expected_identity[1], str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", expected_identity[1]) is None):
+        raise IntegrationAppLaunchError(READBACK_BLOCKER, "expected candidate release identity is required")
 
     api_base = _topology_api_base(target)
     ca_file = _tls_ca_file(target)
     results: dict[str, Any] = {}
     failures: list[str] = []
-    accepted_identity: tuple[str, str] | None = None
     for name, query, collection in CONTENT_READBACK_QUERIES:
         try:
             observation = _default_http_request(
@@ -282,14 +278,173 @@ def content_readback(*, target: str = "alpha-local", timeout_seconds: float = 12
             continue
         release_id, digest = identity
         results[name].update({"releaseId": release_id, "manifestDigest": digest})
-        if accepted_identity is None:
-            accepted_identity = identity
-        elif identity != accepted_identity:
-            failures.append(f"{name}: content identity differs between queries")
+        if identity != expected_identity:
+            failures.append(f"{name}: content identity differs from expected candidate release")
     return {
         "apiBase": api_base, "results": results, "failures": failures,
         "passed": not failures, "countScope": "observed-pages", "traversalComplete": False,
     }
+
+
+def _validate_offline_execution_refs(*, execution: Mapping[str, Any], receipt: Mapping[str, Any]) -> None:
+    """只校验执行文档指向本次 receipt 的三项 exact 身份，不读取下一阶段证据。"""
+    expected_refs = {"targetUatBinding": receipt["targetUatBindingRefs"]["alpha-local"],
+                     "launchBinding": receipt["launchBindingRef"], "nativeDriverBinding": receipt["nativeDriverBindingRef"]}
+    if any(execution.get(key) != ref for key, ref in expected_refs.items()):
+        raise ValueError("offline execution binding drifted")
+
+
+def _validate_offline_execution_identity(*, plan: Mapping[str, Any], launch: Mapping[str, Any],
+                                         binding: Mapping[str, Any], candidate: Mapping[str, Any]) -> None:
+    expected = {"candidateDigest": candidate["candidateId"], "artifactDigest": binding["artifact"]["digest"],
+                "deviceId": binding["device"]["identity"], "platform": binding["platform"], "applicationId": binding["artifact"]["applicationId"]}
+    if any(plan.get(key) != value or launch.get(key) != value for key, value in expected.items()):
+        raise ValueError("offline execution candidate/artifact/device drifted")
+
+
+def _validate_offline_launch_identity(*, plan: Mapping[str, Any], launch: Mapping[str, Any], result: Mapping[str, Any],
+                                    binding: Mapping[str, Any], candidate: Mapping[str, Any],
+                                    snapshot: Mapping[str, Any], attempt: Mapping[str, Any]) -> None:
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import document_digest
+
+    expected_plan = {"caseId": result["caseId"], "route": result["target"]["id"], "carrier": result["carrier"],
+                     "canonicalProcessId": launch.get("canonicalProcessId"),
+                     "launchAttemptId": launch.get("launchAttemptId"), "snapshotDigest": document_digest(snapshot)}
+    expected_launch = {"launchAttemptDigest": document_digest(attempt), "launchAttemptId": attempt.get("attemptId"),
+                       "sourceGitSha": candidate["commit"], "runtimeConfigPackageDigest": binding["runtimeConfigDigest"]}
+    if (any(plan.get(key) != value for key, value in expected_plan.items())
+            or any(launch.get(key) != value for key, value in expected_launch.items())):
+        raise ValueError("offline execution plan/launch candidate identity drifted")
+
+
+def _validate_offline_installed_artifact(*, aut: Mapping[str, Any], binding: Mapping[str, Any], launch: Mapping[str, Any]) -> None:
+    from quwoquan_ops.cli.smoke.environment_patrol_smoke.artifact_binding import validate_tested_app_artifact_binding
+
+    comparison = validate_tested_app_artifact_binding(aut)
+    if (aut.get("deviceId") != binding["device"]["identity"] or aut.get("platform") != binding["platform"]
+            or any(comparison[key] != launch[key] for key in ("applicationId", "artifactDigest"))):
+        raise ValueError("offline installed artifact identity drifted")
+
+
+def _offline_execution(*, read: Any, page: Mapping[str, Any], result: Mapping[str, Any],
+                       receipt: Mapping[str, Any], binding: Mapping[str, Any], candidate: Mapping[str, Any]) -> None:
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import native_page_screenshot, validate_native_page_result
+
+    if (result.get("receiptRef") or result.get("artifactPath")) != page["evidence"]["ref"]:
+        raise ValueError("offline raw execution evidence ref drifted")
+    execution = read(page["evidence"])
+    _validate_offline_execution_refs(execution=execution, receipt=receipt)
+    plan, launch, native = read(execution["plan"]), read(execution["launchBinding"]), read(execution["nativeResult"])
+    _validate_offline_execution_identity(plan=plan, launch=launch, binding=binding, candidate=candidate)
+    snapshot, attempt = read(binding["snapshot"]), read(binding["launchAttempt"])
+    _validate_offline_launch_identity(plan=plan, launch=launch, result=result, binding=binding,
+                                    candidate=candidate, snapshot=snapshot, attempt=attempt)
+    validate_native_page_result("QWQ_OFFLINE_PAGE " + json.dumps(native), plan=plan, launch=launch)
+    read(execution["nativeDriverBinding"])
+    for field in ("autBefore", "autAfter"):
+        _validate_offline_installed_artifact(aut=execution[field], binding=binding, launch=launch)
+    if execution["command"].get("exitCode") != 0:
+        raise ValueError("offline native command failed")
+    screenshot = read(execution["screenshot"], binary=True)
+    log = read(execution["log"], binary=True).decode("utf-8")
+    if validate_native_page_result(log, plan=plan, launch=launch) != native:
+        raise ValueError("offline native raw log differs from result")
+    if native_page_screenshot(log, native) != screenshot:
+        raise ValueError("offline screenshot differs from native foreground observation")
+
+
+def _offline_evidence_path(root: Path, exact: Mapping[str, str]) -> Path:
+    """先验证 exact ref 形状与词法边界，再允许读取文件或查询 symlink。"""
+    if not isinstance(exact, Mapping) or set(exact) != {"ref", "digest"}:
+        raise ValueError("offline evidence requires exact ref/digest")
+    relative = Path(exact["ref"])
+    if (relative.is_absolute() or any(part in {".", ".."} for part in relative.parts) or not relative.parts
+            or relative.as_posix() != exact["ref"] or any(char in exact["ref"] for char in "\x00\n\r\\")):
+        raise ValueError("offline evidence ref escapes output root")
+    return root / relative
+
+
+def _read_offline_evidence_bytes(root: Path, exact: Mapping[str, str]) -> tuple[bytes, str]:
+    path = _offline_evidence_path(root, exact)
+    relative = path.relative_to(root)
+    if any((root / Path(*relative.parts[:index])).is_symlink() for index in range(1, len(relative.parts) + 1)):
+        raise ValueError("offline evidence symlink is forbidden")
+    encoded = path.read_bytes()
+    digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
+    if digest != exact["digest"]:
+        raise ValueError("offline evidence exact bytes drifted: " + exact["ref"])
+    return encoded, digest
+
+
+def _validate_offline_receipt_status(receipt: Mapping[str, Any]) -> None:
+    if (receipt.get("schema") != "quwoquan_ops.app_content_uat_receipt" or receipt.get("profile") != "rehearsal"
+            or receipt.get("status") != "passed" or receipt.get("exitCode") != 0
+            or receipt.get("contentSource") != "bundled_snapshot" or receipt.get("nonPromotable") is not True
+            or receipt.get("targets") != ["alpha-local"] or receipt.get("firstBlocker")
+            or receipt.get("dryRun") is True):
+        raise ValueError("offline receipt is not an executed complete result")
+
+
+def _offline_receipt_pages(receipt: Mapping[str, Any]) -> tuple[list[Any], list[Any], list[Any]]:
+    raw_refs = receipt["rawResultRefs"]["alpha-local"]
+    raw_digests = receipt["rawResultDigests"]["alpha-local"]
+    pages = receipt["pageResultRefs"]
+    if (not isinstance(pages, list) or not pages or len(raw_refs) != len(pages) or len(raw_digests) != len(pages)
+            or len({row["slotId"] for row in pages}) != len(pages)):
+        raise ValueError("offline rawResultRefs are absent or incomplete")
+    return raw_refs, raw_digests, pages
+
+
+def _validate_offline_raw_projection(*, slot: str, exact_raw: Mapping[str, str], raw_ref: Mapping[str, str],
+                                     raw_digest: Mapping[str, str]) -> None:
+    if (raw_ref != {"slotId": slot, "ref": exact_raw["ref"]}
+            or raw_digest != {"slotId": slot, "digest": exact_raw["digest"]}):
+        raise ValueError("offline raw ref/digest projection drifted")
+
+
+def offline_receipt_evidence(*, root: Path, receipts: Mapping[str, Mapping[str, str]],
+                             candidate: Mapping[str, Any], devices: Mapping[str, str]) -> dict[str, Any]:
+    """逐字节消费双端 raw 与绑定闭包；parent receipt 的 complete 不是页面 verdict。"""
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import validate_offline_page_coverage
+
+    files: dict[str, str] = {}
+
+    def read(exact: Mapping[str, str], *, binary: bool = False) -> Any:
+        encoded, digest = _read_offline_evidence_bytes(root, exact)
+        files[exact["ref"]] = digest
+        if binary:
+            return encoded
+        value = json.loads(encoded)
+        if not isinstance(value, dict):
+            raise ValueError("offline evidence must be an object")
+        return value
+
+    if set(receipts) != {"android", "ios"} or set(devices) != set(receipts) or not all(devices.values()):
+        raise ValueError("offline page requires two explicit platform devices and receipts")
+    results, bindings, case_refs = [], [], []
+    for platform, exact in receipts.items():
+        receipt = read(exact)
+        _validate_offline_receipt_status(receipt)
+        binding_ref = receipt["targetUatBindingRefs"]["alpha-local"]
+        binding = read(binding_ref)
+        if binding["platform"] != platform or binding["device"]["identity"] != devices[platform]:
+            raise ValueError("offline receipt device differs from explicit selector")
+        bindings.append(binding)
+        raw_refs, raw_digests, pages = _offline_receipt_pages(receipt)
+        for index, page in enumerate(pages):
+            slot, exact_raw = page["slotId"], page["result"]
+            _validate_offline_raw_projection(slot=slot, exact_raw=exact_raw, raw_ref=raw_refs[index], raw_digest=raw_digests[index])
+            result = read(exact_raw)
+            if result.get("platform") != platform or slot != platform + ":" + result["caseId"]:
+                raise ValueError("offline raw platform differs from receipt")
+            _offline_execution(read=read, page=page, result=result, receipt=receipt, binding=binding, candidate=candidate)
+            results.append(result)
+            case_refs.append(dict(exact_raw))
+    validate_offline_page_coverage(results=results, bindings=bindings, candidate=candidate)
+    if len({binding["snapshot"]["digest"] for binding in bindings}) != 1:
+        raise ValueError("offline platforms bind different snapshots")
+    return {"files": [{"ref": ref, "digest": digest} for ref, digest in sorted(files.items())],
+            "cases": case_refs, "results": results, "bindings": bindings}
 
 
 def case_result(

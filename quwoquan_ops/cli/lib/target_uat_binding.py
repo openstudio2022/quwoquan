@@ -53,6 +53,13 @@ TARGET_UAT_BINDING_KEYS = frozenset(
         "createdAt",
     }
 )
+_REMOTE_AUTHORITY_KEYS = frozenset({
+    "releaseId", "releaseDigest", "releaseUatSamplePlanRef", "releaseUatSamplePlanDigest",
+    "packageDigest", "configurationDigest", "environmentRuntimeDigest", "activeCas", "readback", "provider",
+})
+_OFFLINE_BINDING_KEYS = (TARGET_UAT_BINDING_KEYS - _REMOTE_AUTHORITY_KEYS) | {
+    "contentSource", "commitSha", "treeSha", "snapshot", "launchAttempt",
+}
 
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _IDENTITY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,255}$")
@@ -344,7 +351,6 @@ def _validate_runner(value: object) -> dict[str, str]:
 def _validate_profile_constraints(value: Mapping[str, Any]) -> None:
     profile = value["profile"]
     environment = value["environment"]
-    provider = value["provider"]
     device = value["device"]
     runner = value["runner"]
     artifact = value["artifact"]
@@ -363,6 +369,7 @@ def _validate_profile_constraints(value: Mapping[str, Any]) -> None:
                 "and nonPromotable=true"
             )
         return
+    provider = value["provider"]
     if (
         provider["registered"] is not True
         or device["class"] != "physical"
@@ -417,6 +424,13 @@ def validate_target_uat_binding(
 ) -> dict[str, Any]:
     """Validate closed shape, digests, slot identity, profile and stale inputs."""
 
+    if isinstance(binding, Mapping) and binding.get("contentSource") == "bundled_snapshot":
+        normalized = _validate_offline_binding(binding)
+        if expected_bindings is not None:
+            if not isinstance(expected_bindings, Mapping):
+                raise _error("expected_bindings must be an object")
+            _assert_expected(normalized, expected_bindings)
+        return normalized
     value = _strict_object(binding, field="binding", keys=TARGET_UAT_BINDING_KEYS)
     if value["schema"] != TARGET_UAT_BINDING_SCHEMA:
         raise _error("schema is not quwoquan_ops.target_uat_binding.v1")
@@ -485,6 +499,64 @@ def validate_target_uat_binding(
             raise _error("expected_bindings must be an object")
         _assert_expected(normalized, expected_bindings)
     return normalized
+
+
+def _binding_slot(value: Mapping[str, Any]) -> dict[str, Any]:
+    if value.get("contentSource") == "bundled_snapshot":
+        # 同一实际启动 attempt 只能有一个 slot；时间戳不能用来避开 create-once。
+        return {key: item for key, item in value.items() if key not in {"bindingId", "createdAt"}}
+    return target_uat_binding_slot_identity(
+        target=value["target"], release_id=value["releaseId"], release_digest=value["releaseDigest"],
+        platform=value["platform"], provider=value["provider"], device_identity=value["device"]["identity"],
+        profile=value["profile"], runner=value["runner"],
+    )
+
+
+def _validate_offline_binding(binding: Mapping[str, Any]) -> dict[str, Any]:
+    value = _strict_object(binding, field="binding", keys=frozenset(_OFFLINE_BINDING_KEYS))
+    for field, expected in (("schema", TARGET_UAT_BINDING_SCHEMA), ("environment", "alpha"),
+                            ("target", "alpha-local"), ("profile", "rehearsal")):
+        if value[field] != expected:
+            raise _error(f"offline {field} must be {expected}")
+    normalized = dict(value)
+    for field in ("bindingId", "candidateDigest", "runtimeConfigDigest"):
+        normalized[field] = _digest(value[field], field=field)
+    for field in ("commitSha", "treeSha"):
+        if re.fullmatch(r"(?:[a-f0-9]{40}|[a-f0-9]{64})", _text(value[field], field=field)) is None:
+            raise _error(f"{field} must be an exact Git object id")
+    for field in ("snapshot", "launchAttempt"):
+        normalized[field] = _validate_source(value[field], field=field)
+    normalized.update(artifact=_validate_artifact(value["artifact"]), device=_validate_device(value["device"]),
+                      runner=_validate_runner(value["runner"]), createdAt=_created_at(value["createdAt"]),
+                      nonPromotable=_boolean(value["nonPromotable"], field="nonPromotable"))
+    if normalized["artifact"]["buildProfile"] != "nonprod":
+        raise _error("offline artifact must use nonprod buildProfile")
+    platform = _text(value["platform"], field="platform")
+    if {"android": "emulator", "ios": "simulator"}.get(platform) != normalized["device"]["class"]:
+        raise _error("offline platform/device class mismatch")
+    _validate_profile_constraints(normalized)
+    expected = "sha256:" + hashlib.sha256(_canonical_json_bytes(_binding_slot(normalized), newline=False)).hexdigest()
+    if normalized["bindingId"] != expected:
+        raise _error("bindingId does not match the exact slot identity")
+    return normalized
+
+
+def build_offline_target_uat_binding(
+    *, candidate_digest: str, commit_sha: str, tree_sha: str, runtime_config_digest: str,
+    snapshot: Mapping[str, Any], launch_attempt: Mapping[str, Any], artifact: Mapping[str, Any],
+    platform: str, device: Mapping[str, Any], runner: Mapping[str, Any], created_at: str,
+) -> dict[str, Any]:
+    """绑定调用方已验真的制品/快照/启动；不发现候选或推断在线 authority。"""
+    value: dict[str, Any] = {
+        "schema": TARGET_UAT_BINDING_SCHEMA, "contentSource": "bundled_snapshot",
+        "environment": "alpha", "target": "alpha-local", "profile": "rehearsal", "nonPromotable": True,
+        "candidateDigest": candidate_digest, "commitSha": commit_sha, "treeSha": tree_sha,
+        "runtimeConfigDigest": runtime_config_digest, "snapshot": dict(snapshot),
+        "launchAttempt": dict(launch_attempt), "artifact": dict(artifact), "platform": platform,
+        "device": dict(device), "runner": dict(runner), "createdAt": created_at,
+    }
+    value["bindingId"] = "sha256:" + hashlib.sha256(_canonical_json_bytes(_binding_slot(value), newline=False)).hexdigest()
+    return validate_target_uat_binding(value)
 
 
 def canonical_target_uat_binding_bytes(binding: Mapping[str, Any]) -> bytes:
@@ -729,16 +801,7 @@ def _prepare_store(output_root: Path) -> Path:
 def _reject_slot_aliases(
     store: Path, binding: Mapping[str, Any], destination: Path
 ) -> None:
-    slot = target_uat_binding_slot_identity(
-        target=binding["target"],
-        release_id=binding["releaseId"],
-        release_digest=binding["releaseDigest"],
-        platform=binding["platform"],
-        provider=binding["provider"],
-        device_identity=binding["device"]["identity"],
-        profile=binding["profile"],
-        runner=binding["runner"],
-    )
+    slot = _binding_slot(binding)
     try:
         entries = list(os.scandir(store))
     except OSError as exc:
@@ -762,16 +825,7 @@ def _reject_slot_aliases(
                 f"existing target UAT binding has a noncanonical path: {entry.name}",
                 code=_CONFLICT,
             )
-        existing_slot = target_uat_binding_slot_identity(
-            target=existing["target"],
-            release_id=existing["releaseId"],
-            release_digest=existing["releaseDigest"],
-            platform=existing["platform"],
-            provider=existing["provider"],
-            device_identity=existing["device"]["identity"],
-            profile=existing["profile"],
-            runner=existing["runner"],
-        )
+        existing_slot = _binding_slot(existing)
         if existing_slot == slot:
             raise _error(
                 "the same slot already exists under a different binding path",

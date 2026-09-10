@@ -13,12 +13,16 @@ enum VideoPlaybackOverlayMode { none, inlineFeed }
 /// 不需要知道当前是公开还是私有。
 @immutable
 class _PlaybackCandidate {
-  const _PlaybackCandidate({required this.url, required this.cacheIdentity});
+  const _PlaybackCandidate({
+    required this.url,
+    required this.cacheIdentity,
+    this.publicReference,
+  });
 
   final String url;
   final String cacheIdentity;
+  final MediaDeliveryReference? publicReference;
 }
-
 
 class VideoPlayerWidget extends ConsumerStatefulWidget {
   /// 已在 mapper/边界验证的公开媒体交付引用；播放器不再解析业务 object key。
@@ -29,6 +33,7 @@ class VideoPlayerWidget extends ConsumerStatefulWidget {
   final SignedVideoDelivery? signedDelivery;
   final MediaDeliveryReference? adaptiveDeliveryReference;
   final int adaptiveDescriptorVersion;
+
   /// 封面的 typed 交付绑定（DEC-033）：私有封面走短签路，公开封面走公开候选。
   /// 播放器不从 URL 形态推断交付形态，绑定由调用方按投影声明交出。
   final MediaDeliveryBinding thumbnailBinding;

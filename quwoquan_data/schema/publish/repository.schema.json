@@ -3,11 +3,10 @@
   "description": "独立发布仓身份，不包含机器路径、环境、运行状态或隐式最新指针。",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "repositoryId", "layoutVersion", "producerContractDigest"],
+  "required": ["schema", "repositoryId", "layoutVersion"],
   "properties": {
     "schema": {"const": "quwoquan_data.publish_repository.v2"},
     "repositoryId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"},
-    "layoutVersion": {"const": 2},
-    "producerContractDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+    "layoutVersion": {"const": 2}
   }
 }
