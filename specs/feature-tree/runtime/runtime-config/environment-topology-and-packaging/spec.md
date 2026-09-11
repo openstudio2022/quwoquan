@@ -36,7 +36,7 @@
 - 云侧四环境保持同构 schema/网络平面（归 [`system-topology-and-networking` REQ-002](../../system-topology-and-networking/spec.md#req-002)）；App 只在组合根选择 Alpha canonical 离线快照或 Beta/Gamma/Prod Remote，详见 [`REQ-008`](#req-008)。其余环境差异限于容量、endpoint、访问控制、内容版本和第三方 sandbox 策略，不形成不同业务页面。
 - App / Service env package 都必须携带 canonical unversioned schema identity、artifact policy 摘要与机器可读报告。
 - App 产品支持面固定为 Android、iOS 与 Web；未持有平台工程、包身份、签名和真实安装启动证据的平台不得进入 metadata、schema、CI 或发布矩阵。
-- Android 与 iOS 可执行制品必须由 `stackctl package` 从同一只读 source capsule 按 `buildProfile(nonprod|prod)` 构建，Web 只生成一份共享 bundle；每次组件构建必须显式选择 build product，并在写 manifest 前回读包身份、签名、artifact digest 与生产纯度。AppArtifact 以 build-profile 级 trust envelope 隔离 nonprod/prod；nonprod 可携带 REQ-008 的完整 Alpha 离线快照及同源启动材料，其完整性验证不是在线 endpoint 签名包的双读 fallback。Beta/Gamma 在线签名配置在安装后经 canonical activation 写入同一 nonprod App 私有容器，切环境不触发重编、重签或改变制品摘要；Prod 不携带非生产离线资产。
+- Android 与 iOS 可执行制品必须由 `stackctl package` 从同一只读 source capsule 按 `buildProfile(nonprod|prod)` 构建，Web 只生成一份共享 bundle；每次组件构建必须显式选择 build product，并在写 manifest 前回读包身份、签名、artifact digest 与生产纯度。AppArtifact 以 build-profile 级 trust envelope 隔离 nonprod/prod；Alpha 离线装配另外按 REQ-008 在构建依赖与资源面隔离，不能将 nonprod 信任域等同 Alpha 资产许可。Beta/Gamma 在线签名配置在安装后经 canonical activation 写入同一在线 nonprod App 私有容器，二者切环境不触发重编、重签或改变制品摘要；Beta/Gamma/Prod 均不携带 Alpha 实现与离线资产。
 - production App 的 pub/plugin/Pod/registrant/linker/filelist/SBOM 与最终 APK/AAB/IPA 可达图不得含 Patrol、integration_test、PatrolJUnitRunner、XCTest 或其他 test runner；设备 UAT 只能由物理隔离的 test host 单向依赖 production App。
 - 日常与 CI 构建只消费已锁定依赖；Dart lock、Flutter plugin podspec、Podfile.lock、Pods/Manifest.lock 与 CocoaPods executable/version 任一漂移时在编译前返回 typed blocker，启动路径不得自动 update 锁定声明或联网修复。唯一有界例外是依赖 staleness 的交互式同步恢复：live worktree 的外层 hermetic launcher 在创建 private workspace projection 前检出 active dependency bundle 与当前 source/toolchain identity 漂移时，先输出 canonical `APP.DEPENDENCY.bundle_stale`（detail 只携带白名单字段名，如 `field=nativeResolutionInputDigest`）；仅当 stdin 与 stderr 均为 TTY、处于 live workspace 且同一次 launcher 调用内尚未执行过同步时，才允许自动执行一次 canonical `stackctl app-dependency-sync`，成功且 active readback 与本次 sync attempt 一致后仅重试一次 projection。同步失败、activation ambiguous、第二次 stale、非交互/CI/UAT 或 private projection 内一律 fail-closed，首个 stale blocker 必须先输出且不得被替换；该例外绝不更新任何锁定声明。direct/lightweight 路径不创建 private projection，只对本次直接执行所需的 pub 输入负责。
 - 显式 App 依赖同步每次只在 fresh、attempt-scoped 私有 Gradle home 内联网解析，禁止强制 refresh、跨 attempt seed 或 global cache fallback。
@@ -87,21 +87,22 @@
 - 终端注入必须可凭受版本控制真相源重建且可逆：具名激活入口向 Cursor terminal profiles 与显式 opt-in 的 user-zsh managed source block 注入同一受管 PATH bin 目录（含 launcher `flutter` dispatcher）与钉定的 Flutter SDK/CocoaPods/Python 身份，不改 ZDOTDIR、不生成 terminal receipt；dispatcher 只对本 App 工作区的 `run` 子命令进入 managed 入口，其余子命令与其他项目 exact 透传真实 SDK。新终端自动生效，既有 shell 只能通过显式 source 刷新接入；移除注入并重载、或移除 user-zsh managed block 即完全回退，不得要求修改 Flutter 安装或遗留第二 launcher。
 - `run.sh` 前台会话与并发语义：TTY 下 r/R/q 分别桥接为同一 attach 会话的 hot reload、hot restart 与停止，非 TTY 保持无键盘面。跨设备并行 canonical run 互不阻塞——deploy work state 按 run/设备隔离；direct/lightweight 不执行 `adb reverse`，managed/hermetic 控制面的 Android `adb reverse` 必须幂等且只清理本 invocation 新建的映射，不清理预存或他会话映射；同设备重复启动复用同一受控绑定；显式跨环境切换先结束旧会话并冷启动或重建完整 ProviderScope，旧 lease 不得解绑新会话。
 - canonical launcher 固定选择 nonprod build profile，默认 Alpha 离线，显式 Beta/Gamma 只选择各自在线签名配置；它禁止选择 Prod 或直接覆盖 URL、密钥、target、manifest 与 release。
-- 环境选择器只选择 nonprod 内的 canonical source/运行配置，不选择原生包身份、不进入 Flutter 编译输入、不直接决定页面行为。
+- 环境选择器不选择原生包身份或直接决定页面行为；Beta/Gamma 只选择在线运行配置，不进入 Flutter 编译输入。Alpha 选择独立的 source composition/资源投影，而不是在同一编译图内注入环境 define。
 - `workspace_ide_debug` surface 没有自建的 mode 协议；run mode 与环境同构，经 `QWQ_RUN_MODE`（`content-live|ui-only`，默认 `content-live`）选择并交同一 canonical 执行体校验，IDE profile 只投影同一输入，非法值 fail closed。受管字面 `flutter run` 不参与 mode 选择协议：managed 入口固定 alpha/content-live，任何非 alpha 的 ambient 环境或 mode 选择器对字面命令 typed 拒绝。
-- canonical Debug 安装或复用同一 nonprod AppArtifact；默认 Alpha 的独立 signed offline document 与在线目标签名配置均经同一原生 coordinator 验证、CAS 激活与 read chain，再按文档类型读取 source。冷启动与 Hot Restart 都只消费该 canonical 解析结果，Dart 不读取 endpoint define、环境变量或第二 keyring；配置变化不重编/重签，实际环境在握手后成立，换环境前结束旧会话并重建 scope。
-- App 构建不得读取或改写共享的“当前环境”文件，nonprod 组件只编译一次。
-- 同包 Alpha→Beta→Gamma→Alpha 显式切换只改变已验证 source/配置绑定并重建完整运行上下文，不要求 clean、重编、重签或重装；不得只移动 pointer 而继续使用旧 client。
+- canonical Debug 按 REQ-008 选择 Alpha 隔离制品或 Beta/Gamma 共用在线 nonprod AppArtifact；默认 Alpha 的独立 signed offline document 与在线目标签名配置均经同一原生 coordinator 验证、CAS 激活与 read chain，再按文档类型读取 source。冷启动与 Hot Restart 都只消费该 canonical 解析结果，Dart 不读取 endpoint define、环境变量或第二 keyring；配置变化不重编/重签，实际环境在握手后成立，换环境前结束旧会话并重建 scope。
+- App 构建不得读取或改写共享的“当前环境”文件，Beta/Gamma 在线 nonprod 组件只编译一次，Alpha 构建投影与产物另行隔离。
+- Beta→Gamma 显式切换只改变已验证配置绑定并重建完整运行上下文，不要求 clean、重编、重签或重装；Alpha↔在线必须选择 REQ-008 的隔离制品，不要求跨 source 保持摘要不变，不得只移动 pointer 而继续使用旧 client。
 - 并发 activation 必须以 expected active digest 条件更新，不能共享可写 handoff 或相互覆盖。AppArtifact digest 与签名必须保持不变。
-- effective launch 配置不拥有内容激活事实。在线 App 只从 Content API 的 canonical typed identity 确认 server active release，环境期望仅用于 evidence 比对；Alpha 的制品快照携带独立 source/version/digest，不写服务端 activation receipt。在线发布/回滚不重打 App，Alpha 快照升级随 nonprod 制品更新并在验证失败时保留旧完整快照。
+- effective launch 配置不拥有内容激活事实。在线 App 只从 Content API 的 canonical typed identity 确认 server active release，环境期望仅用于 evidence 比对；Alpha 的制品快照携带独立 source/version/digest，不写服务端 activation receipt。在线发布/回滚不重打 App，Alpha 快照升级随其独立隔离制品更新并在验证失败时保留旧完整快照。
 - canonical Debug 仅在操作者未选择环境时默认 Alpha；两个环境选择器冲突、Prod、任意 target override、在线 package 过期/缺失、所选 source 的 trust envelope 缺失、摘要不一致或 activation readback 失败均 fail-closed。Profile、Release 与 Prod 启动禁止隐式推断。
 - 在线 source 的 Android managed/hermetic 控制面从 topology 推导包名、设备与所需 `adb reverse` 端口，在 Flutter 构建前获取 release-bound lease 并准备可验证 transport receipt；其 teardown 在退出时释放本次创建的 lease 并仅移除本次 owned reverse 映射。direct/lightweight 不创建 transport/readiness receipt，但仍取得自己的安全使用租约；外层已委托同 invocation lease 时只消费该 exact 绑定，不重复 acquire。异常中断后的 managed provisional lease 由 App 进程 liveness 判为 stale 并等待显式 GC。
 - 在线 source 的 iOS managed/hermetic 控制面为 Simulator 与已登记 iPhone 同源准备签名 runtime package、安装后 activation 与同一 `consumer-lease` 对象，Simulator 额外执行系统公共 CA 预检；direct/lightweight 也持同一安全 lease 协议但不签 managed preparation，Alpha 离线只持设备绑定。
 - iOS lease 绑定 platform、设备标识、bundle ID、target、active package digest、启动宽限期与 handoff digest，且不携带 transport ports。
 - 宽限期后，Simulator 必须结合 `simctl get_app_container`、`user/<uid>` launchd 域中的 `UIKitApplication:<bundleId>` service 与 executable path 判定存活。已登记 iPhone 必须结合 `devicectl device info apps/processes` 的结构化 App URL 与 process executable 判定存活。
+- iOS Simulator VM discovery 只消费本次 `simctl launch` 返回的 exact device/PID 与 pre-launch 时间边界：从该设备该 PID 的结构化日志读唯一 VM URI，再以全局 lsof 证明对应 loopback listener 唯一属于该 PID。多模拟器同 bundle ID 不使用全局同名 mDNS 来选择 App；非 loopback、跨 PID、旧日志、多个 URI 或 listener 错配均阻断，不把缺日志作为关闭身份检查的理由。发现总时限 15 秒，token 不进入日志或错误。
 - 结构化状态读取失败只能保留 `active_unverified` 证据，不得代偿为已停止或已存活。
 - 已验证存活的 App lease 不受 12 小时 provisional 上限影响；`consumer-lease status` 和 down/package/roll 前检查必须严格只读，不得删除 stale 文件。只有显式 `release`/GC 可以清理 lease。
-- canonical launcher 固定编译 production `lib/main_prod.dart`；`lib/main.dart` 只能薄委托同一入口，不能建立裸 Flutter 启动协议。
+- 在线 canonical launcher 固定编译 production `lib/main_prod.dart`；Alpha 必须使用隔离 source composition，其入口选择由 canonical launch metadata 冻结后才可接入 launcher/native build。`lib/main.dart` 只薄委托 canonical Alpha 入口，不得以 runtime if 同时导入两个 composition；raw SDK 的平台构建与 launcher 投影均供给同一 snapshot，缺少输入时阻断而不建立第二启动协议。
 - 所有受支持入口都由同一启动解析边界选择 REQ-008 的 typed source：Alpha 只读制品快照，其他环境只读 Remote；禁止 alpha test runner、fixture override、假服务或 Remote 失败后切本地。在线 source 继续通过 canonical activation/native reader/resolver 验证目标签名包。
 - Gradle/Xcode 只验证所选 `nonprod/prod` profile、build-profile trust envelope、build product 摘要与设备证明；target runtime package 不进入 build phase、bundle resource 或 assets。
 - 在线 source 的 canonical Debug 只允许从 metadata/topology 构建所选 handoff 并在安装后 activation；Alpha 离线按 REQ-008 验证 canonical 制品材料；本平台 transport/readiness 仅由 managed/hermetic 外层准备；direct 安全使用租约经同一控制面取得，不得伪造或提升 authority。两层均不得推断 URL、复制配置到源码/构建树或吞掉 activation 失败；只有显式 managed/hermetic 控制面可按其合同启动或复用 runtime。
@@ -179,13 +180,15 @@
 ### REQ-008 canonical 离线与在线读取行为等价、权威分离
 
 - 未显式选择环境时，raw SDK、受管 `flutter run`、IDE 与 `run.sh` 均默认 Alpha 包内快照；首装断网且无后端/预热缓存仍可浏览首页推荐 Post 与视频书 premium、详情、头像/图片/封面和完整视频。快照从 canonical 出库按 exact release/cohort 确定性派生，包含完整引用与媒体字节及许可，不手写演示内容、不导入 test doubles、不做 Remote fallback。
-- Beta/Gamma/Prod 仍只走 Remote，四环境共用页面与 typed ports；只有组合根读取 source/profile 选择 adapter。成功/空/失败、稳定对象身份、详情引用、过滤、分页终止/去重/取消/重试及媒体播放/seek 的可观察合同相同；同 canonical cohort 参数化验证，在线个性化排序、账号权限和新鲜度属于明确能力差异，不要求在线各环境永久同量同序。
+- Beta/Gamma/Prod 仍只走 Remote，四环境共用页面与 typed ports；Alpha 与在线分别由隔离构建的组合根装配 adapter，不在共享 production 图中按 runtime source/profile 选择两套实现。成功/空/失败、稳定对象身份、详情引用、过滤、分页终止/去重/取消/重试及媒体播放/seek 的可观察合同相同；同 canonical cohort 参数化验证，在线个性化排序、账号权限和新鲜度属于明确能力差异，不要求在线各环境永久同量同序。
 - 首页消费推荐 Post items，视频书消费 canonical premium 精选；离线快照封存选择与频道清单，不把普通 video 等同 premium、不复制在线推荐引擎。未支持登录、写入和私有访问返回 typed capability unavailable，不假写成功、不跨环境回放。
 - 离线快照身份证明制品绑定的 source/version/digest，不证明服务端 active release、账号授权或 activation receipt。只收录具有公开离线再分发许可的内容，永久离线不承诺即时撤权；需要即时撤权的内容不得进入快照。Alpha API gate 可独立运行，但不能要求 Alpha App 走 Remote，也不能用离线 App 结果签服务环境或晋级资格。
 - `app-content-uat` 根据 canonical launch metadata 的 source 选择前置与套件。离线页面验收只消费 exact candidate、实际安装启动的制品、签名离线文档、快照及设备绑定，不请求在线 preflight、登录身份、Provider readiness 或服务 activation；Remote 保留全部原有约束。离线登录、写入和私有访问按 typed capability unavailable 验收，不伪造登录成功。
 - Alpha 准出须同时消费 Android 与 iOS 的 required 离线页面 raw `ReadinessCaseResult`，逐项绑定同一 candidate、各自实际制品、快照、启动 attempt、设备和执行证据。缺平台、缺 case、失败、身份漂移或只有启动日志/服务查询均阻断；模拟器结果保持 `rehearsal/nonPromotable`。离线页面与 Alpha 服务/API 是独立必需证据，二者均通过后才可签发同一候选的 acceptance bundle。
 - Alpha bootstrap 使用独立 signed offline document 绑定 bundle 完整性与许可，和在线 endpoint 配置共用同一 activation/CAS/receipt/read chain，不直接绕过 active pointer 读 bundle，不伪造 HTTPS。离线文档不继承在线配置 24 小时有效期；不能通过忽略在线 expiry 实现离线，Beta/Gamma/Prod 的签名、有效期和信任域完整保留。source 类型及映射由 canonical launch metadata 冻结，组合根消费 AppContentSource typed 值，不自持 wire 副本。在线配置提前刷新验证后原子激活，失败保留尚有效旧配置，到期 fail closed。
-- nonprod 仍是一套包身份；离线资产仅进入 nonprod、Beta/Gamma 不消费、Prod 制品不包含该内容或替身装配。跨环境显式切换重建进程或完整 ProviderScope，不在旧 client 动态换 endpoint；缓存与认证隔离消费 [`local-cache-architecture` REQ-004](../../runtime-client-foundation/local-cache-architecture/spec.md#req-004)。
+- Alpha 是独立隔离制品，只有该制品的源依赖闭包、构建资源和组合根可包含 canonical 离线 snapshot、bundle loader 与 Alpha adapter；不得因同属 nonprod 信任域而将这些字节放入 Beta/Gamma 用户 App。Beta/Gamma/Prod 复用同一真实业务与 Remote 实现，差异只由 URL、配置和既有信任域承担。包身份与 trust envelope 仍消费 canonical metadata，不新增环境包名或绕过签名/activation 合同。
+- 隔离必须由构建前入口的传递 import/export/part 闭包（含 conditional URI）、本地 path package、pubspec 资产声明、插件/原生装配输入及最终制品审计分别证明；runtime if、未消费资源或 tree shaking 不构成不存在的证明。用户 App 闭包禁止 test runner、fixture、Mock、Alpha adapter 与离线 bundle。任一闭包不明或残留必须 fail closed，不签发纯度通过。
+- Alpha 与在线制品之间切换允许更换制品，不能继续要求相同 AppArtifact digest；Beta/Gamma 仍共享在线 nonprod 制品，仅按原有已验证 activation 切换配置。跨 source 切换结束旧进程或重建完整 ProviderScope，不在旧 client 动态换 endpoint；缓存与认证隔离消费 [`local-cache-architecture` REQ-004](../../runtime-client-foundation/local-cache-architecture/spec.md#req-004)。
 - 在线内容更新须在完整媒体、四域 candidate 与首页/premium/必要详情查询闭包全部 ready 后，按 [`runtime-data-engineering` DEC-003](../../runtime-data-engineering/design.md#dec-003) 单 CAS 可见；失败保旧，结果不明先回读 exact pointer，再按现役授权显式 rollback，不用客户端旧缓存或第二 active flag 伪造更新成功。
 - 可用性分别报告离线启动/浏览、在线推荐/premium、头像/图片、视频首帧/持续播放/seek、stale 比例及恢复时长。沿用前台读取与媒体准备 6 秒总预算、在线 operation 的 timeout/retry 合同，以及 CAS 后 60 秒回读与显式 rollback 后 5 分钟恢复目标；这些是合同目标，未有 fresh 证据不得声明已达成。库存未知不得填 0，首屏、推荐窗口、声明对象数、激活闭包、详情可读和媒体可播放分别计数并说明遍历边界。
 - 在线 Feed SLO 必须由 Content owner 统一 canonical operation 与 observability 的指标范围、分母、窗口及告警派生；目前 99.9%/500ms 与 99.5%/200ms 的冲突不能择宽判绿，首刷/续页与端到端媒体不混算。生产跨故障域可用性不由本地单实例结果证明。
@@ -212,7 +215,7 @@
 - AND immutable package 在开始时复制精确输入闭包到只读 capsule，所有 App/Service/GraphQL/OCI artifact 绑定同一 capsule identity；封存后 live Data/App/Service 修改不使当前构建失败，下一次 capture 才观察这些变化并生成新的 candidate identity。
 - AND Alpha/Beta/Gamma `dev-session` 从当前工作树与 topology 实时 render target 隔离的 test-live runtime，不创建 immutable candidate；工作区或配置变化进入告警，严格 health/verify 仍如实失败。
 - AND Prod `stackctl package / up / health / verify` 只读取 immutable active candidate，重复 package 只在完整 manifest 和全部 digest 相同的情况下返回原始 receipt，不隐式重建或覆盖候选。
-- AND 同一 release train 的组件从同一 source capsule 按 nonprod/prod 信任域构建；Alpha/Beta/Gamma composition 引用相同 nonprod image/App/Web artifact digest，Prod 引用独立 prod digest。交换信任域 artifact/config/binding、篡改 `APP_ENV` 或挂载不兼容环境配置时均在 listener 或业务 Shell 前失败。
+- AND 同一 release train 的组件从同一 source capsule 按 nonprod/prod 信任域构建；Alpha/Beta/Gamma composition 引用相同 nonprod image digest；Beta/Gamma 共享在线 nonprod App，Alpha 使用 REQ-008 的隔离 App，Prod 引用独立 prod digest；Web 在线 bundle 不含 Alpha 资产。交换信任域 artifact/config/binding、篡改 `APP_ENV` 或挂载不兼容环境配置时均在 listener 或业务 Shell 前失败。
 - AND 多 target 会话可并行生成各自隔离的 compile/launch、告警与 health 结果，不预清理其他 target；单个 runtime health 失败不抹除真实编译结果，也不自动 down 已复用服务。
 - AND Android/iOS 的 production dependency graph、native linker/filelist、SBOM 与最终制品均不含测试插件或 test runner，物理隔离的 UAT test host 枚举全部 canonical 用户验收 case 而不反向进入 production package。
 - AND Dart/Pod 跨锁与 CocoaPods executable/version 一致；任一漂移在真实编译前返回 `APP.DEPENDENCY.lock_drift`，且不执行自动 update 或 repo refresh。跨锁范围含物理隔离的 UAT test host：它与生产工程跑同一份 `pubspec.lock` 依赖声明，两侧受版本控制的 `Podfile.lock` 在全部 pubspec 派生插件 pod 上必须同版本，否则验收结果不代表生产行为。test-only pod 与各自独有的 vendored SDK 只存在于一侧，不构成漂移。
@@ -252,7 +255,7 @@
 - AND 记录 failed receipt 时 active digest 读取失败保持最后已知 CAS 值，以 `runtime_config_activation_rollback_failed` 追加标记状态未知，不覆盖原始失败码。
 - AND recovery context 对 active package 缺席与读取失败分流，读取失败携带登记错误码而不吞错为空上下文。
 - AND Android/iOS Debug 与 Hot Restart 消费同一 canonical source 解析：在线核对 handoff/trust/active package，Alpha 核对制品快照与其完整性；目标与信任一致后进入同一安全 Shell，不把 endpoint 写入 Flutter 编译输入。
-- AND Android/iOS nonprod AppArtifact 仅构建签名一次；默认 Alpha 与显式 Alpha/Beta/Gamma 共用完整制品摘要，Alpha 验证离线快照，Beta/Gamma 激活匹配 target 的在线配置。同包显式切换先结束旧会话并重建 scope，不 clean/重装/重编/重签，并发 activation 不互相覆盖。
+- AND Android/iOS 的 Beta/Gamma 在线 nonprod AppArtifact 仅构建签名一次并共用完整摘要，Alpha 另有隔离制品并验证离线快照。在线同包切换先结束旧会话并重建 scope，不 clean/重装/重编/重签；跨 Alpha 制品切换不声称摘要不变，并发 activation 不互相覆盖。
 - AND 冷启动和连续 Hot Restart 均先完成 `beginStartupAttempt`，再以 `configurationState=complete` 发送 attempt 事件；Hot Restart 的 `welcomeExitMs` 始终相对本次 attempt 且不超过 6000ms。
 - AND 在线 source 无 active release 时只接受 canonical no_active_release 或 typed unavailable，不以普通空列表冒充成功；有 active release 时只从 Content API 验证身份。Alpha 快照身份独立且不伪造 server activation；Prod readiness/rollback 准出证据缺失仍阻断，不由离线包或 UAT 期望值补造。
 - AND `stackctl app-content-uat` 只有在 Alpha/Beta/Gamma 的 `environmentArtifact.releaseTrainId` 相同、`packageBaselines[target]` 分别精确等于各自 manifest/sourceCapsule/startup candidate，并且每个 source 由 managed/hermetic 控制面持其必要的设备/target lease、从 immutable 私有 projection 产生同源零 warning canonical launch evidence 时，才可生成父完整性投影；该投影不得聚合为独立 passed receipt。每个 raw `ReadinessCaseResult` 必须与同一 target/platform/device、immutable source capsule、真实安装 AppArtifact 和 source 所需配置/trust 的 canonical binding 完全一致（Alpha 不伪造在线 package），并逐 target 持久化 launch attempt/provenance/artifact/trust/attempt digest、`candidateDigest`、`packageDigest`、`startupTerminalAttemptId`、`startupTerminalEvidenceDigest` 与 `startupTerminalEvidenceRef`。Android 不得绕过 launcher；direct/lightweight 启动日志、截图、VM attach 或 warning/degraded 观测不得提升为 promotable raw result。故障控制只作用于 runtime receipt 绑定的精确容器且始终恢复，任何 target 失败时保留已有 raw evidence、将未执行 required slots 标为 blocked/skipped 原因并停止后续 App 执行。父 report 只读持有 required raw refs、exact-byte digests、coverage 与缺口，不得持有 outcome verdict 或掩盖这些结果。
@@ -317,7 +320,7 @@
 - GIVEN 同一 canonical cohort 有许可完备、含完整媒体的制品绑定快照和在线 candidate，四环境使用同一 typed ports 与页面。
 - WHEN Alpha 在无后端、断网、无缓存首装后经各默认入口浏览，或在线环境准备、切换、回读与回滚内容。
 - THEN Alpha 各入口通过独立 signed offline document 的同一 activation/CAS/read chain 读取同一快照，在在线配置 24 小时到期前、恰到期及之后仍可浏览推荐 items、premium、详情和播放/seek；坏签名/摘要或缺媒体阻断制品/激活并保留已验证旧快照，不忽略在线 expiry、不造 HTTPS 或 server active identity。
-- THEN 同 cohort 的离线/Remote 参数化合同证明身份、过滤、详情、空态和分页边界等价；Beta/Gamma/Prod 不消费离线快照且在线签名过期仍阻断，页面不按 source/profile 分支，nonprod 同包切环境重建上下文。
+- THEN 同 cohort 的离线/Remote 参数化合同证明身份、过滤、详情、空态和分页边界等价；Beta/Gamma/Prod 的源依赖、pubspec 资源、原生插件/装配与最终制品均不包含 Alpha adapter/bundle、fixture、Mock 或 test runner，不能仅以 runtime if/tree shaking 为证。在线签名过期仍阻断，页面不按 source/profile 分支；Beta/Gamma 同包切配置重建上下文，Alpha 使用独立隔离制品。
 - THEN 在线缺媒体、精选/必要查询未 ready 或 CAS race 保持旧版本；CAS 结果未知与 60 秒回读失败先查权威 pointer，再显式 rollback，5 分钟内恢复或明确阻断，首次无 previous 不猜旧版本；读会话和媒体不混版本。
 - THEN 报告将声明库存、激活闭包、详情、推荐窗口、premium 和媒体成功分开，不可达为未知；服务 SLO 口径冲突及未测设备/生产故障域保持 OPEN，不以离线成功、首屏数量或旧 receipt 计为 Remote 健康。
 
@@ -545,7 +548,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：Alpha canonical 快照派生/公开离线许可/完整资产、typed adapter、四入口冷启动/媒体及在线 candidate-scoped 推荐/精选/必要查询预物化尚缺 fresh 闭环。CAS 后异步追平会 fail closed，不能写成已实现无中断切换；首次无 previous、结果未知、显式 rollback 与 exact pointer readback 必须故障注入验证。
-- 待补能力：离线页面 UAT 使用制品/快照 authority 的 typed binding 与双平台 required case 消费，解除对在线身份与 activation 的错误依赖。仅完成合并、契约或局部测试不关闭本 OPEN。
+- 待补能力：离线页面 UAT 使用制品/快照 authority 的 typed binding 与双平台 required case 消费，解除对在线身份与 activation 的错误依赖。Alpha 专用入口及完整构建投影、content/profile/media composition 的源闭包、launch metadata/codegen 的入口约束、原生自供给与最终制品资源/插件纯度须同轮闭合；source entrypoint 必须消费现役 metadata 映射，不能以手写环境入口映射绕过。仅完成合并、契约、闭包门或局部测试不关闭本 OPEN。
 - 完成判定：`GWT-007` 由 canonical cohort 参数化 local_contract、真实媒体/四域/query barrier/CAS/recovery api_integration 和 Android/iOS 首装离线及在线页面/播放器 user_acceptance 直接绑定；源码或局部测试不替代完整证据。
 - 依赖：canonical Data producer、Content/Recommendation/Search candidate owner、App 组合根与启动 metadata；规格不新增 wire 字段，未具备 typed 契约前对应实现仍阻断。
 

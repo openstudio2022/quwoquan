@@ -433,14 +433,6 @@ class _HomePageState extends ConsumerState<HomePage>
     });
   }
 
-  void _handleTabSwipeDragEnd(DragEndDetails details) {
-    final direction = TabSwipeSwitchRegion.directionFromDragEnd(details);
-    if (direction == null) {
-      return;
-    }
-    _handleTabSwipe(direction);
-  }
-
   void _handleTabSwipe(TabSwipeDirection direction) {
     final order = _channelOrder();
     final currentIndex = order.indexOf(_activeChannelId);
@@ -526,7 +518,6 @@ class _HomePageState extends ConsumerState<HomePage>
                             child: HomePrimaryTabStrip(
                               activeChannelId: effectiveActiveChannelId,
                               onChannelChanged: _handleChannelChange,
-                              onHorizontalDragEnd: _handleTabSwipeDragEnd,
                               isDark: isDark,
                               channels: channels,
                             ),

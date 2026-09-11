@@ -154,6 +154,7 @@ class MediaDeliveryReference {
   const MediaDeliveryReference._({
     required this.kind,
     required this.deliveryUri,
+    required this.sourceReference,
     this.assetId = '',
     this.version = 0,
     this.sha256,
@@ -200,6 +201,7 @@ class MediaDeliveryReference {
     return MediaDeliveryReference._(
       kind: kind,
       deliveryUri: canonical.uri,
+      sourceReference: reference,
       assetId: assetId,
       version: canonical.version,
       sha256: sha256,
@@ -209,6 +211,9 @@ class MediaDeliveryReference {
 
   final MediaDeliveryKind kind;
   final Uri deliveryUri;
+
+  /// 上游提交的原始字节；获取器入口使用它，不把解析结果回灌业务 URL。
+  final String sourceReference;
   final String assetId;
   final int version;
   final String? sha256;
@@ -339,6 +344,7 @@ class MediaDeliveryResolver {
       return MediaDeliveryReference._(
         kind: kind,
         deliveryUri: canonical.uri,
+        sourceReference: rawReference,
         assetId: assetId,
         version: canonical.version,
         sha256: sha256,
@@ -380,6 +386,7 @@ class MediaDeliveryResolver {
     return MediaDeliveryReference._(
       kind: kind,
       deliveryUri: canonical.uri,
+      sourceReference: rawReference,
       assetId: assetId,
       version: canonical.version,
       sha256: sha256,

@@ -224,7 +224,6 @@ class _HomeMomentGridTile extends ConsumerWidget {
           _feedDeliveryImage(
             binding: _feedBinding(url, signedDelivery),
             isDark: isDark,
-            endpointConfig: ref.watch(mediaEndpointConfigProvider),
             cdnPreset: CdnImagePreset.thumbnail,
           ),
           if (showMore)
@@ -334,7 +333,6 @@ class _HomeFeedImageCarouselState
                   child: _feedDeliveryImage(
                     binding: _feedBinding(urls[index], delivery),
                     isDark: widget.isDark,
-                    endpointConfig: ref.watch(mediaEndpointConfigProvider),
                     placeholder: _placeholder(),
                   ),
                 );
@@ -494,18 +492,13 @@ class _HomeFeedVideoCard extends ConsumerWidget {
     final sharedTimelineEnabled = ref.watch(
       contentFeatureFlagProvider('enable_shared_video_timeline'),
     );
-    final endpointConfig = ref.watch(mediaEndpointConfigProvider);
-    final resolver = endpointConfig == null
-        ? null
-        : MediaDeliveryResolver(endpointConfig);
+    final resolver = ref.watch(publicMediaDeliveryProvider);
     final mediaAssetId = dto.mediaAssetId?.trim() ?? '';
     final mediaAssetVersion = dto.mediaAssetVersion ?? 0;
     // 视频本体的交付声明取自投影 mediaItems 的同一条目。私有视频走短签渐进式
     // MP4：分段 Range 由原生播放器发起、交付边缘按段复算签名，因此单签 URL 即可
     // 播放。绝不按公开地址播放私有资产——那会把授权判定悄悄跳过。
-    final videoDelivery = _feedImageDeliveryIndex(
-      dto,
-    )[dto.mediaVideoUrl.trim()];
+    final videoDelivery = _feedImageDeliveryIndex(dto)[dto.mediaVideoUrl];
     final videoBinding = MediaDeliveryBinding(
       assetId: videoDelivery?.assetId ?? mediaAssetId,
       accessMode: videoDelivery?.accessMode,
@@ -519,7 +512,7 @@ class _HomeFeedVideoCard extends ConsumerWidget {
             mediaAssetId.isEmpty ||
             mediaAssetVersion <= 0
         ? null
-        : resolver?.tryResolve(
+        : resolver.tryResolve(
             dto.hlsCmafMasterManifestUrl,
             kind: MediaDeliveryKind.video,
             assetId: mediaAssetId,
@@ -551,21 +544,13 @@ class _HomeFeedVideoCard extends ConsumerWidget {
               mediaDeliveryVideo(
                 binding: videoBinding,
                 placeholder: coverBinding.hasRenderableSource
-                    ? _feedDeliveryImage(
-                        binding: coverBinding,
-                        isDark: isDark,
-                        endpointConfig: endpointConfig,
-                      )
+                    ? _feedDeliveryImage(binding: coverBinding, isDark: isDark)
                     : null,
                 absentWidget: coverBinding.hasRenderableSource
-                    ? _feedDeliveryImage(
-                        binding: coverBinding,
-                        isDark: isDark,
-                        endpointConfig: endpointConfig,
-                      )
+                    ? _feedDeliveryImage(binding: coverBinding, isDark: isDark)
                     : null,
                 publicBuilder: (context, publicUrl) {
-                  final videoReference = resolver?.tryResolve(
+                  final videoReference = resolver.tryResolve(
                     publicUrl,
                     kind: MediaDeliveryKind.video,
                     // 资产身份缺席就传空：以 post 标识冒充媒体资产标识会让缓存与
@@ -580,7 +565,6 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                         ? _feedDeliveryImage(
                             binding: coverBinding,
                             isDark: isDark,
-                            endpointConfig: endpointConfig,
                           )
                         : const SizedBox.shrink();
                   }
@@ -611,11 +595,7 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                     ),
               )
             else if (coverBinding.hasRenderableSource)
-              _feedDeliveryImage(
-                binding: coverBinding,
-                isDark: isDark,
-                endpointConfig: endpointConfig,
-              ),
+              _feedDeliveryImage(binding: coverBinding, isDark: isDark),
             // 中央播放标识只属于完全未初始化的静态封面态；预热/初始化后由
             // VideoPlayerWidget 自己呈现加载或画面，避免长按时叠出两个播放按钮。
             // 与沉浸暂停态共用无背景圆角三角，避免 tip 角与圆形底造成两套视觉语言。

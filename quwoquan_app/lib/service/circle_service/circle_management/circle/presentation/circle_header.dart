@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
 import 'package:quwoquan_app/design_system/object_page/object_page_sections.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
@@ -72,17 +71,9 @@ class CircleHeader extends StatelessWidget {
   }
 
   Widget? _buildAvatarChild(BuildContext context) {
-    final url = (avatarUrl ?? '').trim();
+    final url = avatarUrl ?? '';
     if (url.isEmpty) {
       return null;
-    }
-    if (isLocalFileImageSource(url)) {
-      return AppMediaImage(
-        key: const ValueKey<String>('circle-header-avatar-image'),
-        imageSource: url,
-        fit: BoxFit.cover,
-        errorWidget: _buildAvatarFallback(context),
-      );
     }
     return AppMediaImage(
       key: const ValueKey<String>('circle-header-avatar-image'),

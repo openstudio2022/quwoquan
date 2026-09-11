@@ -33,6 +33,13 @@ bool _bootstrapFirstFrameConfirmed = false;
 bool _bootstrapRecoveryMounted = false;
 bool _bootstrapRecoveryScheduled = false;
 List<Override> _bootstrapProviderScopeOverrides = const <Override>[];
+VoidCallback? _configureContentComposition;
+
+/// 由制品入口登记装配，在可信运行配置水合后、任何业务 Provider 创建前执行。
+/// recovery 重入复用同一入口装配，不在共享启动层导入隔离 adapter。
+void configureAppContentComposition(VoidCallback configure) {
+  _configureContentComposition = configure;
+}
 
 /// 首次 [runZonedGuarded] 建立的 bootstrap Zone。
 ///
@@ -107,6 +114,7 @@ Future<void> _runQuwoquanAppInBootstrapZone({
   try {
     unawaited(_hydrateNativeStartupTimingForBootstrap());
     await CloudRuntimeConfig.hydrateFromNativeRuntimePackage();
+    _configureContentComposition?.call();
     if (CloudRuntimeConfig.networkAccessAllowed) {
       registerFirebaseIncomingCallBackgroundHandler();
     }

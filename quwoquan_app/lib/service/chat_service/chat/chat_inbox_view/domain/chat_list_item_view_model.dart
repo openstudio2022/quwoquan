@@ -2,7 +2,6 @@ import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/applicati
 import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/design_system/formatters/chat_time_formatter.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -59,10 +58,7 @@ class ChatListItemViewModel {
       timeLabel: dto.lastMessageTime == null
           ? ''
           : ChatTimeFormatter.formatForConversationList(dto.lastMessageTime!),
-      avatarUrl: resolveAvatarImageUrl(
-        dto.avatarUrl,
-        endpointConfig: mediaEndpointConfig,
-      ),
+      avatarUrl: dto.avatarUrl,
       groupAvatarVersion: dto.groupAvatarVersion,
       previewIcon: preview.icon,
       unreadCount: dto.unreadCount,
@@ -90,10 +86,7 @@ class ChatListItemViewModel {
       timeLabel: dto.lastActiveAt == null
           ? ''
           : ChatTimeFormatter.formatForConversationList(dto.lastActiveAt!),
-      avatarUrl: resolveAvatarImageUrl(
-        dto.avatarUrl,
-        endpointConfig: mediaEndpointConfig,
-      ),
+      avatarUrl: dto.avatarUrl,
       groupAvatarVersion: dto.groupAvatarVersion,
       previewIcon: preview.icon,
       unreadCount: dto.unreadCount,

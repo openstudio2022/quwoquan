@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/domain/signed_media_delivery_lease.dart';
+
 import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -8,8 +10,6 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
-import 'package:quwoquan_app/runtime/platform/local_image_provider.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
@@ -288,12 +288,7 @@ const ValueKey<String> articleImageRetryKey = ValueKey<String>(
 );
 
 class ArticleAdaptiveImage extends ConsumerStatefulWidget {
-  const ArticleAdaptiveImage({
-    super.key,
-    required this.imageUrl,
-    this.signedDeliveryUrl = '',
-    this.signedCacheIdentity = '',
-  });
+  const ArticleAdaptiveImage({super.key, required this.imageUrl, this.lease});
 
   static const String diagnosticSchemePrefix = 'diagnostic://pageflip/';
 
@@ -301,10 +296,7 @@ class ArticleAdaptiveImage extends ConsumerStatefulWidget {
 
   /// 已换签的私有交付地址（DEC-033）。在场时跳过公开候选推导单候选直传，
   /// 文章特有的加载体验状态机保持不变——换签不得让消费面换一套观感。
-  final String signedDeliveryUrl;
-
-  /// 稳定资产身份缓存键。签名 query 随 TTL 轮换，不参与缓存键。
-  final String signedCacheIdentity;
+  final SignedMediaDeliveryLease? lease;
 
   @override
   ConsumerState<ArticleAdaptiveImage> createState() =>
@@ -332,7 +324,8 @@ class _ArticleAdaptiveImageState extends ConsumerState<ArticleAdaptiveImage> {
   @override
   void didUpdateWidget(covariant ArticleAdaptiveImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.imageUrl.trim() != widget.imageUrl.trim()) {
+    if (oldWidget.imageUrl != widget.imageUrl ||
+        oldWidget.lease != widget.lease) {
       _beginLoadingGeneration();
     }
   }
@@ -437,8 +430,8 @@ class _ArticleAdaptiveImageState extends ConsumerState<ArticleAdaptiveImage> {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedImageUrl = widget.imageUrl.trim();
-    if (resolvedImageUrl.isEmpty || resolvedImageUrl.startsWith('asset://')) {
+    final resolvedImageUrl = widget.imageUrl;
+    if (resolvedImageUrl.isEmpty) {
       // 空引用或未被 manifest/端点解析的 asset:// 残留：缺席态。
       return _ArticleImageSourceAbsent(reference: resolvedImageUrl);
     }
@@ -451,52 +444,9 @@ class _ArticleAdaptiveImageState extends ConsumerState<ArticleAdaptiveImage> {
         ),
       );
     }
-    if (isLocalFileImageSource(resolvedImageUrl)) {
-      // 创作预览/编辑器面板的本地文件路径：不经公开媒体交付解析。
-      final localPath = resolvedImageUrl.startsWith('file://')
-          ? Uri.parse(resolvedImageUrl).toFilePath()
-          : resolvedImageUrl;
-      return Image(
-        image: localFileImageProvider(localPath),
-        fit: BoxFit.cover,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (context, error, stackTrace) => const KeyedSubtree(
-          key: appImageLoadErrorKey,
-          child: _ArticleImageUnavailableSurface(),
-        ),
-      );
-    }
-    final signedDeliveryUrl = widget.signedDeliveryUrl.trim();
-    if (signedDeliveryUrl.isNotEmpty) {
-      // 短签地址已由协调器校验：不进入公开候选推导，也不经 CDN 变体处理。
-      return _buildNetworkImage(
-        context,
-        <String>[signedDeliveryUrl],
-        forceFailed: false,
-        cacheKey: widget.signedCacheIdentity.trim(),
-      );
-    }
-    // 端点单源：只消费 provider 注入的媒体端点。provider 为 null 表示
-    // 端点缺席，不允许 resolver 内部回退到全局静态形成第二真相源。
-    final endpointConfig = ref.watch(mediaEndpointConfigProvider);
-    final imageCandidates = endpointConfig == null
-        ? const <String>[]
-        : resolveContentMediaUrlCandidates(
-            resolvedImageUrl,
-            endpointConfig: endpointConfig,
-          );
-    final httpCandidates = imageCandidates
-        .where(
-          (candidate) =>
-              candidate.startsWith('http://') ||
-              candidate.startsWith('https://'),
-        )
-        .toList(growable: false);
-    if (httpCandidates.isEmpty) {
-      // media object key 无法解析出交付 URL（媒体端点未注入）：缺席态，
-      // 不得退化为本地文件加载去制造一个假的「加载失败」。
-      return _ArticleImageSourceAbsent(reference: resolvedImageUrl);
-    }
+    final httpCandidates = <String>[
+      widget.lease?.deliveryUri.toString() ?? widget.imageUrl,
+    ];
     if (!listEquals(_lastCandidates, httpCandidates)) {
       _lastCandidates = httpCandidates;
     }
@@ -514,7 +464,6 @@ class _ArticleAdaptiveImageState extends ConsumerState<ArticleAdaptiveImage> {
     BuildContext context,
     List<String> candidates, {
     required bool forceFailed,
-    String cacheKey = '',
   }) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final presentation = forceFailed && !_loadResolved
@@ -530,7 +479,8 @@ class _ArticleAdaptiveImageState extends ConsumerState<ArticleAdaptiveImage> {
       key: ValueKey<String>('article-image-load-$generation'),
       imageUrl: candidates.first,
       imageUrlCandidates: candidates,
-      cacheKey: cacheKey.isEmpty ? null : cacheKey,
+      cacheKey: widget.lease?.cacheIdentity,
+      lease: widget.lease,
       fit: BoxFit.cover,
       onLoadSucceeded: () => _onLoadSucceeded(generation),
       onLoadFailed: (error) => _onLoadFailed(generation, error),
@@ -894,13 +844,11 @@ class ArticleWrappedParagraph extends StatelessWidget {
                       kind: MediaDeliveryKind.image,
                       publicBuilder: (context, publicUrl) =>
                           ArticleAdaptiveImage(imageUrl: publicUrl),
-                      signedReadyBuilder:
-                          (context, deliveryUrl, cacheIdentity) =>
-                              ArticleAdaptiveImage(
-                                imageUrl: imageUrl,
-                                signedDeliveryUrl: deliveryUrl,
-                                signedCacheIdentity: cacheIdentity,
-                              ),
+                      signedReadyBuilder: (context, lease) =>
+                          ArticleAdaptiveImage(
+                            imageUrl: imageUrl,
+                            lease: lease,
+                          ),
                     ),
                   ),
                 ),

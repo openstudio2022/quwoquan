@@ -297,13 +297,13 @@ void main() {
         ),
       );
 
-      final image = tester.widget<CachedNetworkImage>(
-        find.byType(CachedNetworkImage),
-      );
+      final image = tester.widget<Image>(find.byType(Image));
+      final resize = image.image as ResizeImage;
+      final provider = resize.imageProvider as CachedNetworkImageProvider;
       final physicalExtent = (64 * tester.view.devicePixelRatio).round();
-      expect(image.cacheManager, isA<ImageCacheManager>());
-      expect(image.maxWidthDiskCache, physicalExtent);
-      expect(image.maxHeightDiskCache, physicalExtent);
+      expect(provider.cacheManager, isA<ImageCacheManager>());
+      expect(resize.width, physicalExtent);
+      expect(resize.height, physicalExtent);
     });
 
     testWidgets(
@@ -325,13 +325,10 @@ void main() {
           ),
         );
 
-        final image = tester.widget<CachedNetworkImage>(
-          find.byType(CachedNetworkImage),
-        );
-        expect(image.memCacheWidth, appImageDecodeMaxPhysicalExtent);
-        expect(image.memCacheHeight, appImageDecodeMaxPhysicalExtent);
-        expect(image.maxWidthDiskCache, appImageDecodeMaxPhysicalExtent);
-        expect(image.maxHeightDiskCache, appImageDecodeMaxPhysicalExtent);
+        final image = tester.widget<Image>(find.byType(Image));
+        final resize = image.image as ResizeImage;
+        expect(resize.width, appImageDecodeMaxPhysicalExtent);
+        expect(resize.height, appImageDecodeMaxPhysicalExtent);
       },
     );
 
@@ -342,17 +339,18 @@ void main() {
         _wrap(
           const AppCachedNetworkImage(
             imageUrl: 'media/background/s/archived-avatar/user/fixture_user_current/v1/background.png',
+            mediaKind: MediaDeliveryKind.background,
           ),
         ),
       );
 
-      final image = tester.widget<CachedNetworkImage>(
-        find.byType(CachedNetworkImage),
-      );
+      final image = tester.widget<Image>(find.byType(Image));
+      final resize = image.image as ResizeImage;
+      final provider = resize.imageProvider as CachedNetworkImageProvider;
       const objectKey =
           'media/background/s/archived-avatar/user/fixture_user_current/v1/background.png';
       expect(
-        image.imageUrl,
+        provider.url,
         _testMediaEndpointConfig
             .baseFor(MediaDeliveryKind.image)
             .replace(path: '/$objectKey')
@@ -369,18 +367,18 @@ void main() {
         _wrap(const AppCachedNetworkImage(imageUrl: objectKey)),
       );
 
-      final image = tester.widget<CachedNetworkImage>(
-        find.byType(CachedNetworkImage),
-      );
+      final image = tester.widget<Image>(find.byType(Image));
+      final resize = image.image as ResizeImage;
+      final provider = resize.imageProvider as CachedNetworkImageProvider;
       expect(
-        image.imageUrl,
+        provider.url,
         _testMediaEndpointConfig
             .baseFor(MediaDeliveryKind.image)
             .replace(path: '/$objectKey')
             .toString(),
       );
-      expect(image.imageUrl, contains('/media/image/'));
-      expect(image.imageUrl, isNot(contains('/media/image/media/image/')));
+      expect(provider.url, contains('/media/image/'));
+      expect(provider.url, isNot(contains('/media/image/media/image/')));
     });
 
     testWidgets(
@@ -415,7 +413,7 @@ void main() {
     testWidgets('成功与失败共享加载周期起点并上报真实耗时', (tester) async {
       var now = DateTime.utc(2026, 8, 27, 4, 15);
       final telemetry = RecordingAppTelemetryRecorder();
-      const successUrl = 'https://cdn.example.test/media/image/success.png';
+      const successUrl = 'media/image/s/test/post/success/v1/image.png';
 
       await tester.pumpWidget(
         _wrap(
@@ -430,12 +428,14 @@ void main() {
           ],
         ),
       );
-      final successFinder = find.byType(CachedNetworkImage);
-      final successImage = tester.widget<CachedNetworkImage>(successFinder);
+      final successFinder = find.byType(Image);
+      final successImage = tester.widget<Image>(successFinder);
       now = now.add(const Duration(milliseconds: 175));
-      successImage.imageBuilder!(
+      successImage.frameBuilder!(
         tester.element(successFinder),
-        MemoryImage(_transparentImage),
+        const SizedBox.shrink(),
+        0,
+        false,
       );
       await tester.pump();
 
@@ -447,7 +447,7 @@ void main() {
 
       telemetry.recorded.clear();
       now = DateTime.utc(2026, 8, 27, 4, 16);
-      const failureUrl = 'https://cdn.example.test/media/image/failure.png';
+      const failureUrl = 'media/image/s/test/post/failure/v1/image.png';
       await tester.pumpWidget(
         _wrap(
           AppCachedNetworkImage(
@@ -461,13 +461,21 @@ void main() {
           ],
         ),
       );
-      final failureFinder = find.byType(CachedNetworkImage);
-      final failureImage = tester.widget<CachedNetworkImage>(failureFinder);
+      final failureFinder = find.byType(Image);
+      final failureImage = tester.widget<Image>(failureFinder);
       now = now.add(const Duration(milliseconds: 420));
-      failureImage.errorWidget!(
+      final failure = failureImage.errorBuilder!(
         tester.element(failureFinder),
-        failureUrl,
         StateError('network unavailable'),
+        StackTrace.current,
+      );
+      await tester.pumpWidget(
+        _wrap(
+          failure,
+          overrides: [
+            appTelemetryReporterProvider.overrideWithValue(telemetry),
+          ],
+        ),
       );
       await tester.pump();
 
@@ -512,11 +520,13 @@ void main() {
       expect(find.byKey(appImageLoadErrorKey), findsNothing);
 
       // 成功态：imageBuilder 产物必须携带 success key。
-      final cachedFinder = find.byType(CachedNetworkImage);
-      final cachedImage = tester.widget<CachedNetworkImage>(cachedFinder);
-      final decoded = cachedImage.imageBuilder!(
+      final cachedFinder = find.byType(Image);
+      final cachedImage = tester.widget<Image>(cachedFinder);
+      final decoded = cachedImage.frameBuilder!(
         tester.element(cachedFinder),
-        MemoryImage(_transparentImage),
+        Image(image: MemoryImage(_transparentImage)),
+        0,
+        false,
       );
       await tester.pumpWidget(_wrap(decoded));
       await tester.pump();
@@ -537,14 +547,14 @@ void main() {
             ),
           ),
         );
-        final cachedFinder = find.byType(CachedNetworkImage);
+        final cachedFinder = find.byType(Image);
         expect(cachedFinder, findsOneWidget);
-        final cachedImage = tester.widget<CachedNetworkImage>(cachedFinder);
-        final decodedBuilder = cachedImage.imageBuilder;
-        expect(decodedBuilder, isNotNull);
-        final decoded = decodedBuilder!(
+        final cachedImage = tester.widget<Image>(cachedFinder);
+        final decoded = cachedImage.frameBuilder!(
           tester.element(cachedFinder),
-          MemoryImage(_transparentImage),
+          Image(image: MemoryImage(_transparentImage)),
+          0,
+          false,
         );
         await tester.pumpWidget(_wrap(decoded));
         await tester.pump();

@@ -242,7 +242,7 @@ class MediaAssetManifestResolver implements MediaAssetUrlResolver {
 
   String _firstResolvedContentMediaUrl(Iterable<Object?> rawValues) {
     for (final raw in rawValues) {
-      final candidate = raw?.toString().trim() ?? '';
+      final candidate = raw?.toString() ?? '';
       if (candidate.isEmpty) {
         continue;
       }

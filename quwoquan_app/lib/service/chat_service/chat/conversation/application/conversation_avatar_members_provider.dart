@@ -4,7 +4,6 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/conversation_avatar_prefetch.dart';
 
@@ -83,7 +82,7 @@ class ConversationAvatarMembersNotifier
           (item) => conversationAvatarNeedsMembers(
             conversationId: item.conversationId,
             conversationType: item.conversationType,
-            avatarUrl: resolveAvatarImageUrl(item.avatarUrl),
+            avatarUrl: item.avatarUrl,
             groupAvatarVersion: item.groupAvatarVersion,
           ),
         )
@@ -121,7 +120,7 @@ class ConversationAvatarMembersNotifier
                 userId: member.userId,
                 userHandle: member.userHandle,
                 displayName: member.displayName,
-                avatarUrl: resolveAvatarImageUrl(member.avatarUrl),
+                avatarUrl: member.avatarUrl,
                 role: member.role,
                 memberType: member.memberType,
                 joinedAt: member.joinedAt,

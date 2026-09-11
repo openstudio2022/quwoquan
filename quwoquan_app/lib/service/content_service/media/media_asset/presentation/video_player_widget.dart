@@ -16,8 +16,6 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
-    show mediaDownloadCacheProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
     show contentFeatureFlagProvider;
 import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart'
@@ -39,7 +37,6 @@ import 'package:quwoquan_app/runtime/observability/trackers/page_lifecycle_obser
 import 'package:quwoquan_app/runtime/observability/generated/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_playback_session.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_playback_timeline.dart';
-import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_player_support.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_player_surface_builder.dart';
 
 part 'video_player_widget_api.dart';
@@ -659,79 +656,14 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   Future<List<PlayableVideoSource>> _playableSourcesForCandidate(
     _PlaybackCandidate candidate,
   ) async {
-    final normalized = candidate.url.trim();
-    if (normalized.isEmpty) {
-      return const <PlayableVideoSource>[];
-    }
-    final publicReference = candidate.publicReference;
-    if (publicReference != null) {
-      // 私有短签没有公开引用，绝不交给公开媒体目录解析或降级。
-      final verifiedPath = await ref
-          .read(publicMediaDeliveryProvider)
-          .verifiedVideoPath(normalized, binding: publicReference);
-      if (verifiedPath != null) {
-        return [
-          PlayableVideoSource.cachedFile(
-            verifiedPath,
-            viewType: widget.viewType,
-          ),
-        ];
-      }
-    }
-    final sources = <PlayableVideoSource>[];
-    final seen = <String>{};
-    final networkUri = Uri.tryParse(normalized);
-    final isAdaptiveManifest =
-        networkUri != null && networkUri.path.toLowerCase().endsWith('.m3u8');
-    // HLS/CMAF 是多对象交付，单文件下载缓存会把 master manifest 脱离相对
-    // variant/segment 上下文；adaptive 候选只交给原生网络播放器。
-    if (!isAdaptiveManifest) {
-      String? cachedPath;
-      try {
-        cachedPath = await ref
-            .read(mediaDownloadCacheProvider)
-            .getCachedFilePath(normalized);
-      } catch (error, stackTrace) {
-        // 回退在线播放不阻断用户，但缓存链路故障必须可观测。
-        unawaited(
-          AppExceptionTelemetryService.instance.recordHandledException(
-            source: 'content.video_player.cached_source_lookup',
-            error: error,
-            stackTrace: stackTrace,
-          ),
-        );
-      }
-      if (cachedPath != null && seen.add('cache:$cachedPath')) {
-        sources.add(
-          PlayableVideoSource.cachedFile(cachedPath, viewType: widget.viewType),
-        );
-      }
-    }
-    if (_isNetworkVideoUri(networkUri) &&
-        await _canUseNetworkVideoUri(networkUri!) &&
-        seen.add(networkUri.toString())) {
-      sources.add(
-        PlayableVideoSource.network(
-          networkUri,
-          formatHint: isAdaptiveManifest ? VideoFormat.hls : null,
+    return ref
+        .read(publicMediaDeliveryProvider)
+        .playableSources(
+          candidate.publicReference?.sourceReference ?? candidate.url,
+          binding: candidate.publicReference,
+          lease: widget.signedDelivery?.lease,
           viewType: widget.viewType,
-        ),
-      );
-    }
-    return sources;
-  }
-
-  bool _isNetworkVideoUri(Uri? uri) {
-    if (uri == null || uri.host.isEmpty) {
-      return false;
-    }
-    final scheme = uri.scheme.toLowerCase();
-    return scheme == 'http' || scheme == 'https';
-  }
-
-  Future<bool> _canUseNetworkVideoUri(Uri uri) async {
-    // 交付 URI 已在 MediaDeliveryResolver 边界校验为 HTTPS + 注入 origin。
-    return uri.scheme.toLowerCase() == 'https' && uri.host.isNotEmpty;
+        );
   }
 
   @override

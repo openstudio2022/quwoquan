@@ -132,6 +132,12 @@ class CommandPlatformDriver:
         return self.child_environment(environment)
 
     def build(self, environment: dict[str, str]) -> None:
+        from quwoquan_app.scripts.device.app_source_isolation import audit_source_closure
+        from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
+        entrypoints = load_launch_manifest_contract()["content_source_entrypoints"]
+        if self.entrypoint not in entrypoints.values():
+            raise CanonicalExecutorError("entrypoint is not declared by canonical launch metadata")
+        audit_source_closure(APP_DIR, self.entrypoint, alpha=self.entrypoint == entrypoints["bundled_snapshot"])
         _run_checked(
             self.build_command(),
             environment=self.build_child_environment(environment),

@@ -195,6 +195,27 @@ fun escapedBuildConfigString(name: String): String =
 apply(from = rootProject.file("gradle/runtime-config-assets.gradle.kts"))
 val externalAndroidRuntimeConfigAssetRoot = extra["qwqRuntimeConfigAssetRoot"] as File?
 val androidRuntimeConfigSelfSupply = extra["qwqRuntimeConfigSelfSupply"] as Boolean
+// Flutter asset lookup 的 raw SDK 供给在编译任务后、合并/签名前完成；在线任务只校验无残留。
+tasks.configureEach {
+    if (name.startsWith("compileFlutterBuild")) {
+        doLast {
+            val appRoot = rootProject.projectDir.parentFile
+            val repository = appRoot.parentFile
+            val variant = name.removePrefix("compileFlutterBuild").replaceFirstChar { it.lowercase() }
+            val resolver = ProcessBuilder("bash", appRoot.resolve("scripts/ios/build_resolve_stackctl_python.sh").path).start()
+            val python = resolver.inputStream.bufferedReader().readText().trim()
+            check(resolver.waitFor() == 0 && python.isNotEmpty()) { "Alpha asset Python identity unavailable" }
+            val process = ProcessBuilder(
+                python, appRoot.resolve("scripts/device/app_source_isolation.py").path,
+                "--repository", repository.path,
+                "--destination", layout.buildDirectory.dir("intermediates/flutter/$variant/flutter_assets").get().asFile.path,
+                "--entrypoint", project.findProperty("target")?.toString() ?: "lib/main.dart",
+                "--native-assets",
+            ).inheritIO().apply { environment()["PYTHONDONTWRITEBYTECODE"] = "1" }.start()
+            check(process.waitFor() == 0) { "canonical source asset isolation failed" }
+        }
+    }
+}
 androidComponents {
     beforeVariants { variantBuilder ->
         val buildProfile =

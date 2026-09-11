@@ -77,6 +77,17 @@
 - 影响 Story：[`collaborative-recall`](./collaborative-recall/spec.md)、[`personalized-ranking`](./personalized-ranking/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-005"></a>
+### DEC-005 首页频道条独占两态几何与最新选择同步
+- 决策：`HomePage` 保持频道 active、配置顺序与登录门控唯一所有权；`HomePrimaryTabStrip` 只持有单一 ScrollController 与局部显示几何。发布默认的关注/推荐前缀在偏移为零时完整展示；选中自然中心越过整条可用视区中点后，滚动并把推荐覆盖锚定最左，左侧裁剪隐藏关注，频道集合和 key 不变。右侧滚动标签仍以整条视区（非剩余子区域）中点为目标并按首尾范围 clamp；非默认前缀不重排配置。
+- 理由：标签宽度受配置文案、响应字号及 textScaler 影响，固定索引或固定宽度无法维持居中；推荐锚点属于首页而非共享 tab 默认行为。
+- 被否决方案：改共享 `CenteredScrollableTabBar` 默认行为、删除关注、另存频道 active、以 `_isAnimating` 忽略后续选择、在标签条注册正文切页 drag。
+- 约束与影响：每次有效 active/布局变化在当前帧布局完成后按最新几何更新目标，新的滚动动作取消旧动画；dispose 撤销控制器，回到首段恢复零偏移。Reduce Motion 使用即时定位。几何无效不发滚动命令，下次有效布局重新同步，不伪造频道选择或引入网络恢复轨。
+- 测试与观测：真实 Widget 的中心坐标、可命中性、ScrollPosition、实际 active 与正文 key 是测试 seam；覆盖窄屏/缩放/配置替换、末项可见、连续选择和拖动/正文 fling 分离。复用既有频道行为与帧遥测，不新增 wire event；局部显示调整不替代真机帧预算验收。回滚为同一实现增量整体回退，不保留双轨开关。
+- 关联要求：[`streaming-feed-performance` REQ-002](./streaming-feed-performance/spec.md#req-002)
+- 影响 Story：[`streaming-feed-performance`](./streaming-feed-performance/spec.md)
+- 关联验收：[`GWT-002`](./streaming-feed-performance/spec.md#gwt-002)
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

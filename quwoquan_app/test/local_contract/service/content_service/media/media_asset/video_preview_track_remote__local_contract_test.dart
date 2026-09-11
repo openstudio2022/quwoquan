@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -7,6 +9,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/applicati
 import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/video_preview_track_remote.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
+
 import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
 
 void main() {
@@ -17,14 +20,16 @@ void main() {
     final resolver = _resolver();
     final descriptor = _descriptor(resolver);
     final query = RemoteVideoPreviewTrackQuery(
-      httpClient: CloudHttpClient(
-        client: MockClient((request) async {
-          requestCount += 1;
-          expect(request.headers['Accept'], 'application/json');
-          return http.Response(jsonEncode(_manifestJson()), 200);
-        }),
+      mediaDelivery: RemotePublicMediaDelivery(
+        _endpoints(),
+        httpClient: () => CloudHttpClient(
+          client: MockClient((request) async {
+            requestCount += 1;
+            expect(request.headers['Accept'], 'application/json');
+            return http.Response(jsonEncode(_manifestJson()), 200);
+          }),
+        ),
       ),
-      mediaDeliveryResolver: resolver,
       telemetry: telemetry,
     );
 
@@ -50,13 +55,15 @@ void main() {
     // 推进到 v3；发布投影下发 descriptor.assetVersion=3，而 manifest 仍记录
     // 处理落库时的 v2。轨道身份是 (assetId, trackVersion)，落后版本必须接受。
     final laggingQuery = RemoteVideoPreviewTrackQuery(
-      httpClient: CloudHttpClient(
-        client: MockClient(
-          (_) async =>
-              http.Response(jsonEncode(_manifestJson(assetVersion: 1)), 200),
+      mediaDelivery: RemotePublicMediaDelivery(
+        _endpoints(),
+        httpClient: () => CloudHttpClient(
+          client: MockClient(
+            (_) async =>
+                http.Response(jsonEncode(_manifestJson(assetVersion: 1)), 200),
+          ),
         ),
       ),
-      mediaDeliveryResolver: resolver,
       telemetry: telemetry,
     );
     final manifest = await laggingQuery.loadManifest(descriptor);
@@ -70,13 +77,15 @@ void main() {
 
     // manifest 版本领先描述符版本：处理结果不可能先于消费投影存在，拒绝。
     final aheadQuery = RemoteVideoPreviewTrackQuery(
-      httpClient: CloudHttpClient(
-        client: MockClient(
-          (_) async =>
-              http.Response(jsonEncode(_manifestJson(assetVersion: 9)), 200),
+      mediaDelivery: RemotePublicMediaDelivery(
+        _endpoints(),
+        httpClient: () => CloudHttpClient(
+          client: MockClient(
+            (_) async =>
+                http.Response(jsonEncode(_manifestJson(assetVersion: 9)), 200),
+          ),
         ),
       ),
-      mediaDeliveryResolver: resolver,
       telemetry: telemetry,
     );
     await expectLater(
@@ -87,12 +96,14 @@ void main() {
     final trackMismatch = _manifestJson();
     trackMismatch['trackVersion'] = 2;
     final trackQuery = RemoteVideoPreviewTrackQuery(
-      httpClient: CloudHttpClient(
-        client: MockClient(
-          (_) async => http.Response(jsonEncode(trackMismatch), 200),
+      mediaDelivery: RemotePublicMediaDelivery(
+        _endpoints(),
+        httpClient: () => CloudHttpClient(
+          client: MockClient(
+            (_) async => http.Response(jsonEncode(trackMismatch), 200),
+          ),
         ),
       ),
-      mediaDeliveryResolver: resolver,
       telemetry: telemetry,
     );
     await expectLater(
@@ -104,12 +115,14 @@ void main() {
     final frames = invalidCrop['frames']! as List<Map<String, Object?>>;
     frames.first['x'] = 1000;
     final cropQuery = RemoteVideoPreviewTrackQuery(
-      httpClient: CloudHttpClient(
-        client: MockClient(
-          (_) async => http.Response(jsonEncode(invalidCrop), 200),
+      mediaDelivery: RemotePublicMediaDelivery(
+        _endpoints(),
+        httpClient: () => CloudHttpClient(
+          client: MockClient(
+            (_) async => http.Response(jsonEncode(invalidCrop), 200),
+          ),
         ),
       ),
-      mediaDeliveryResolver: resolver,
       telemetry: telemetry,
     );
     await expectLater(
@@ -123,12 +136,14 @@ void main() {
     final descriptor = _descriptor(resolver);
     final unknownFieldManifest = _manifestJson()..['legacyManifestVersion'] = 1;
     final unknownFieldQuery = RemoteVideoPreviewTrackQuery(
-      httpClient: CloudHttpClient(
-        client: MockClient(
-          (_) async => http.Response(jsonEncode(unknownFieldManifest), 200),
+      mediaDelivery: RemotePublicMediaDelivery(
+        _endpoints(),
+        httpClient: () => CloudHttpClient(
+          client: MockClient(
+            (_) async => http.Response(jsonEncode(unknownFieldManifest), 200),
+          ),
         ),
       ),
-      mediaDeliveryResolver: resolver,
       telemetry: telemetry,
     );
     await expectLater(
@@ -141,12 +156,15 @@ void main() {
         missingMimeTypeManifest['sprites']! as List<Map<String, Object?>>;
     sprites.single.remove('mimeType');
     final missingMimeTypeQuery = RemoteVideoPreviewTrackQuery(
-      httpClient: CloudHttpClient(
-        client: MockClient(
-          (_) async => http.Response(jsonEncode(missingMimeTypeManifest), 200),
+      mediaDelivery: RemotePublicMediaDelivery(
+        _endpoints(),
+        httpClient: () => CloudHttpClient(
+          client: MockClient(
+            (_) async =>
+                http.Response(jsonEncode(missingMimeTypeManifest), 200),
+          ),
         ),
       ),
-      mediaDeliveryResolver: resolver,
       telemetry: telemetry,
     );
     await expectLater(
@@ -156,16 +174,13 @@ void main() {
   });
 }
 
-MediaDeliveryResolver _resolver() {
-  return MediaDeliveryResolver(
-    MediaEndpointConfig(
-      avatarBaseUrl: 'https://avatar.example.test',
-      imageBaseUrl: 'https://image.example.test',
-      videoBaseUrl: 'https://video.example.test',
-      attachmentBaseUrl: 'https://attachment.example.test',
-    ),
-  );
-}
+MediaEndpointConfig _endpoints() => MediaEndpointConfig(
+  avatarBaseUrl: 'https://avatar.example.test',
+  imageBaseUrl: 'https://image.example.test',
+  videoBaseUrl: 'https://video.example.test',
+  attachmentBaseUrl: 'https://attachment.example.test',
+);
+MediaDeliveryResolver _resolver() => MediaDeliveryResolver(_endpoints());
 
 VideoPreviewTrackDescriptor _descriptor(MediaDeliveryResolver resolver) {
   return VideoPreviewTrackDescriptor(

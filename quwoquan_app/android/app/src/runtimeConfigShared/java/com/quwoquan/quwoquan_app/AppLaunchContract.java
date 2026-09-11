@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class AppLaunchContract {
-  public static final String SOURCE_DIGEST = "sha256:f301c900d3c4bdd8ceeb83e78e800d81974adb0d12f775b0f0e92d3f963b95ef";
+  public static final String SOURCE_DIGEST = "sha256:3060c668589ff5bc24da05a355b395a73f02903f578ca89705b36c578d45d73f";
   public static final List<String> ENVIRONMENTS = Collections.unmodifiableList(Arrays.asList(
       "alpha",
       "beta",
@@ -362,7 +362,10 @@ public final class AppLaunchContract {
       "reverseReceiptDigest",
       "consumerLeaseId"
   ));
-  public static final String APP_EFFECTIVE_LAUNCH_MANIFEST_ENTRYPOINT = "lib/main_prod.dart";
+  public static final Map<String, String> APP_EFFECTIVE_LAUNCH_MANIFEST_ENTRYPOINT = stringMap(new String[][] {
+      {"bundled_snapshot", "lib/main_alpha.dart"},
+      {"remote", "lib/main_prod.dart"}
+  });
   public static final String RUNTIME_CONFIG_PACKAGE_SIGNATURE_ALGORITHM = "ed25519";
   public static final int RUNTIME_CONFIG_PACKAGE_MAX_LIFETIME_SECONDS = 86400;
   public static final int RUNTIME_CONFIG_PACKAGE_MAX_FUTURE_SKEW_SECONDS = 300;

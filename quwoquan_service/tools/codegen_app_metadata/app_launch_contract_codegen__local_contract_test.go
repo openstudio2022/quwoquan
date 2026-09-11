@@ -788,7 +788,6 @@ func collectAppLaunchContractProjectionValues(t *testing.T, document map[string]
 	}
 	for _, field := range []string{
 		"runtimeConfigPackageSignatureAlgorithm",
-		"appEffectiveLaunchManifestEntrypoint",
 	} {
 		value, ok := document[field].(string)
 		if !ok {
@@ -796,6 +795,11 @@ func collectAppLaunchContractProjectionValues(t *testing.T, document map[string]
 		}
 		values = append(values, value)
 	}
+	entrypoints, ok := document["appEffectiveLaunchManifestEntrypoint"].(map[string]any)
+	if !ok || entrypoints["bundled_snapshot"] != "lib/main_alpha.dart" || entrypoints["remote"] != "lib/main_prod.dart" {
+		t.Fatalf("source entrypoints must isolate Alpha: %#v", entrypoints)
+	}
+	values = append(values, "lib/main_alpha.dart", "lib/main_prod.dart")
 	return values
 }
 

@@ -54,7 +54,19 @@ RUNTIME_PYTHON="$(bash "$STACKCTL_PYTHON_RESOLVER")" || {
   exit 2
 }
 
-if [[ -z "$RUNTIME_TRUST_PATH" && "${CONFIGURATION:-}" == "Debug-nonprod" ]]; then
+# Flutter 有时传 absolute target；只按同一 App 根归一，不按 ambient 环境猜测。
+NORMALIZED_FLUTTER_TARGET="$($RUNTIME_PYTHON - "$APP_DIR" "${FLUTTER_TARGET:-lib/main.dart}" <<'PY'
+from pathlib import Path
+import sys
+app = Path(sys.argv[1]).resolve()
+target = Path(sys.argv[2])
+if not target.is_absolute():
+    target = app / target
+print(target.resolve().relative_to(app).as_posix())
+PY
+)" || exit 2
+if [[ -z "$RUNTIME_TRUST_PATH" && "${CONFIGURATION:-}" == "Debug-nonprod" \
+   && ( "$NORMALIZED_FLUTTER_TARGET" == "lib/main.dart" || "$NORMALIZED_FLUTTER_TARGET" == "lib/main_alpha.dart" ) ]]; then
   SELF_SUPPLY_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/qwq-ios-self-supply.XXXXXX")"
   chmod 0700 "$SELF_SUPPLY_ROOT"
   RUNTIME_TRUST_PATH="$SELF_SUPPLY_ROOT/runtime-config-trust.json"
@@ -123,18 +135,19 @@ if decoded_defines.get("RUN_PATROL_ACCEPTANCE", "").strip().lower() == "true":
         "APP.PACKAGE.production_test_dependency_leak: Patrol belongs to quwoquan_app/test_host/patrol"
     )
 app_dir = Path(sys.argv[3]).resolve()
-main_entrypoint = (app_dir / "lib/main_prod.dart").resolve()
-# lib/main.dart 是纯委托到 main_prod 的 SDK 默认入口：raw `flutter run` 不带 --target
-# 时 Xcode 收到的就是它。接受该别名但仍归一为 canonical 入口编译，其他入口一律拒绝。
-admissible_entrypoints = {main_entrypoint, (app_dir / "lib/main.dart").resolve()}
-requested = sys.argv[2].strip()
-if requested:
-    requested_path = Path(requested)
-    if not requested_path.is_absolute():
-        requested_path = app_dir / requested_path
-    if requested_path.resolve() not in admissible_entrypoints:
-        raise SystemExit("FLUTTER_TARGET must remain lib/main_prod.dart")
-print("export FLUTTER_TARGET=" + shlex.quote("lib/main_prod.dart"))
+sys.path.insert(0, str(app_dir.parent))
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
+mapping = load_launch_manifest_contract()["content_source_entrypoints"]
+requested = sys.argv[2].strip() or "lib/main.dart"
+requested_path = Path(requested)
+if not requested_path.is_absolute():
+    requested_path = app_dir / requested_path
+if requested_path.resolve() == (app_dir / "lib/main.dart").resolve():
+    requested_path = app_dir / mapping["bundled_snapshot"]
+allowed = {(app_dir / value).resolve(): value for value in mapping.values()}
+if requested_path.resolve() not in allowed:
+    raise SystemExit("FLUTTER_TARGET must match canonical source entrypoint")
+print("export FLUTTER_TARGET=" + shlex.quote(allowed[requested_path.resolve()]))
 print("export DART_DEFINES=" + shlex.quote(existing or "__QWQ_COMPILE_ONLY__"))
 PY
 )" || {

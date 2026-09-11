@@ -222,11 +222,11 @@ final class SignedMediaDeliveryCoordinator {
       );
     }
 
-    final lease = SignedMediaDeliveryLease(
+    final lease = SignedMediaDeliveryLease.fromGrant(
+      grant: grant,
       assetId: assetId,
       kind: kind,
-      deliveryUri: uri,
-      expiresAt: grant.expiresAt,
+      now: _now(),
     );
     // 复用窗口按契约声明的 ttlSeconds 计算余量，不用本地时钟反推剩余时间。
     final margin = _renewalSafetyMargin(Duration(seconds: grant.ttlSeconds));

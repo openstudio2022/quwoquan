@@ -177,9 +177,7 @@ func renderAppLaunchContractPython(contract appLaunchContract) ([]byte, error) {
 		"APP_EFFECTIVE_LAUNCH_MANIFEST_TRANSPORT_REQUIRED_FIELDS",
 		contract.EffectiveManifestTransportFields,
 	)
-	output.WriteString("APP_EFFECTIVE_LAUNCH_MANIFEST_ENTRYPOINT = ")
-	output.WriteString(strconv.Quote(contract.EffectiveManifestEntrypoint))
-	output.WriteString("\n")
+	writePythonStringMap(&output, "APP_EFFECTIVE_LAUNCH_MANIFEST_ENTRYPOINT", contract.EffectiveManifestEntrypoint)
 	output.WriteString("RUNTIME_CONFIG_PACKAGE_SIGNATURE_ALGORITHM = ")
 	output.WriteString(strconv.Quote(contract.RuntimePackageSignatureAlgorithm))
 	output.WriteString("\nRUNTIME_CONFIG_PACKAGE_MAX_LIFETIME_SECONDS = ")
@@ -283,9 +281,7 @@ func renderAppLaunchContractSwift(contract appLaunchContract) []byte {
 		"appEffectiveLaunchManifestTransportRequiredFields",
 		contract.EffectiveManifestTransportFields,
 	)
-	output.WriteString("  static let appEffectiveLaunchManifestEntrypoint = ")
-	output.WriteString(quoteAppLaunchString(contract.EffectiveManifestEntrypoint))
-	output.WriteString("\n")
+	writeSwiftStringMap(&output, "appEffectiveLaunchManifestEntrypoint", contract.EffectiveManifestEntrypoint)
 	output.WriteString("  static let runtimeConfigPackageSignatureAlgorithm = ")
 	output.WriteString(quoteAppLaunchString(contract.RuntimePackageSignatureAlgorithm))
 	output.WriteString("\n  static let runtimeConfigPackageMaxLifetimeSeconds = ")
@@ -394,9 +390,7 @@ func renderAppLaunchContractJava(contract appLaunchContract) []byte {
 		"APP_EFFECTIVE_LAUNCH_MANIFEST_TRANSPORT_REQUIRED_FIELDS",
 		contract.EffectiveManifestTransportFields,
 	)
-	output.WriteString("  public static final String APP_EFFECTIVE_LAUNCH_MANIFEST_ENTRYPOINT = ")
-	output.WriteString(quoteAppLaunchString(contract.EffectiveManifestEntrypoint))
-	output.WriteString(";\n")
+	writeJavaStringMap(&output, "APP_EFFECTIVE_LAUNCH_MANIFEST_ENTRYPOINT", contract.EffectiveManifestEntrypoint)
 	output.WriteString("  public static final String RUNTIME_CONFIG_PACKAGE_SIGNATURE_ALGORITHM = ")
 	output.WriteString(quoteAppLaunchString(contract.RuntimePackageSignatureAlgorithm))
 	output.WriteString(";\n  public static final int RUNTIME_CONFIG_PACKAGE_MAX_LIFETIME_SECONDS = ")

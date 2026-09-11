@@ -162,10 +162,11 @@ void main() {
       expect(image.cdnPreset, CdnImagePreset.none);
       // 稳定缓存身份：签名 query 不参与缓存键，并透传到底层网络图片组件。
       expect(image.cacheKey, 'signed|image|asset-1');
-      final cached = tester.widget<CachedNetworkImage>(
-        find.byType(CachedNetworkImage),
-      );
+      final decoded = tester.widget<Image>(find.byType(Image));
+      final resized = decoded.image as ResizeImage;
+      final cached = resized.imageProvider as CachedNetworkImageProvider;
       expect(cached.cacheKey, 'signed|image|asset-1');
+      expect(image.lease, isNotNull);
     });
 
     testWidgets('兑换等待中渲染占位，不出现错误态与成功态', (tester) async {
@@ -567,8 +568,8 @@ void main() {
             assetId: 'asset-1',
             kind: MediaDeliveryKind.image,
             accessMode: MediaDeliveryAccessMode.signedGrant,
-            readyBuilder: (context, deliveryUrl, cacheIdentity) => Text(
-              '$deliveryUrl|$cacheIdentity',
+            readyBuilder: (context, lease) => Text(
+              '${lease.deliveryUri}|${lease.cacheIdentity}',
               textDirection: TextDirection.ltr,
             ),
           ),

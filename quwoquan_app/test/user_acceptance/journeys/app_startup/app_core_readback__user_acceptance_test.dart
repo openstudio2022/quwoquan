@@ -370,6 +370,7 @@ Future<void> _expectHomeFeed(PatrolIntegrationTester $) async {
     isTrue,
     reason: 'tapping home content must open its production detail surface',
   );
+  await _expectOpenedHomeMedia($);
   await $.tester.tap(find.byKey(_worksTopBackKey).first);
   await $(find.byKey(_homeSearchChromeKey))
       .waitUntilVisible(timeout: const Duration(seconds: 40));
@@ -380,6 +381,55 @@ Future<void> _expectHomeFeed(PatrolIntegrationTester $) async {
     reason:
         'returning from content detail must preserve the home feed position',
   );
+}
+
+/// 首页点击必须验证当前作品的媒体终态，不能由相邻预加载页或头像代替。
+Future<void> _expectOpenedHomeMedia(PatrolIntegrationTester $) async {
+  expect($.tester.takeException(), isNull, reason: '首页进入浏览器不得产生构建异常');
+  final viewer = $.tester.widget<WorksImmersiveViewer>(
+    find.byType(WorksImmersiveViewer).last,
+  );
+  final posts = viewer.externalPosts;
+  expect(posts, isNotNull, reason: '首页入口必须保留原内容列表');
+  expect(viewer.initialPostIndex, inInclusiveRange(0, posts!.length - 1));
+  final post = posts[viewer.initialPostIndex];
+  final canvas = find.byKey(
+    ValueKey<String>('works-status-content-canvas-${post.id}'),
+  );
+  final Finder terminal;
+  if (post.type == 'image') {
+    final selectedImage = find.descendant(
+      of: canvas,
+      matching: find.byKey(
+        ValueKey<String>('image-book-page-${viewer.initialImageIndex}'),
+      ),
+    );
+    terminal = find.descendant(
+      of: selectedImage,
+      matching: find.byKey(
+        const ValueKey<String>('image-book-decoded-surface'),
+      ),
+    );
+  } else if (post.type == 'video') {
+    final stage = find.byKey(
+      ValueKey<String>(
+        'works-video-stage-${post.id}-${viewer.initialImageIndex}',
+      ),
+    );
+    terminal = find.descendant(
+      of: stage,
+      matching: find.byKey(const ValueKey<String>('video-player-ready')),
+    );
+  } else {
+    // 文章/文字的成功终态由各自阅读验收负责，不伪造媒体解码要求。
+    return;
+  }
+  expect(
+    await _waitForAnyFinder($, <Finder>[terminal]),
+    isTrue,
+    reason: '首页点击的当前作品必须完成真实图片解码或原生视频就绪，而非仅挂载页面',
+  );
+  expect($.tester.takeException(), isNull, reason: '媒体加载期间不得产生未处理异常');
 }
 
 Future<void> _expectImageDecode(PatrolIntegrationTester $) async {

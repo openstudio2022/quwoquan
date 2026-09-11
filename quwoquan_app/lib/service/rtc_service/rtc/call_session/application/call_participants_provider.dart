@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_participant_presentation.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_participant.dart';
@@ -206,8 +205,7 @@ class CallParticipantsNotifier extends Notifier<CallParticipantsState> {
   }
 
   String? _avatarUrl(String? value) {
-    final text = value?.trim() ?? '';
-    return text.isEmpty ? null : resolveAvatarImageUrl(text);
+    return value == null || value.isEmpty ? null : value;
   }
 }
 

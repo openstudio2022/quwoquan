@@ -24,6 +24,9 @@ import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart'
 import '../../../../../support/runtime/config/runtime_package_test_hydration.dart';
 
 import 'dart:async';
+
+import 'package:quwoquan_app/runtime/platform/media/bundled_public_media_delivery.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -73,7 +76,6 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_page_flip_book.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_caption_widgets.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -239,33 +241,35 @@ final class _EndpointBoundPostArticleDetailProjector
   }
 }
 
-List<Override> _sealedViewerBoundaryOverrides() => <Override>[
-  ...sealedCloudBoundaryOverrides(),
-  activePersonaContextProvider.overrideWith(
-    (_) async => ActivePersonaContextViewData.fallback(
-      personaId: 'immersive-viewer-test-persona',
-      ownerUserId: 'immersive-viewer-test-account',
-      displayName: '测试用户',
-      avatarUrl: '',
-    ),
-  ),
-  videoPreviewTrackQueryProvider.overrideWithValue(
-    const _UnusedVideoPreviewTrackQuery(),
-  ),
-  runtimeLoggerProvider.overrideWith((ref) {
-    final logger = RuntimeLogger(
-      resource: const RuntimeLogResource(
-        sourceType: 'app',
-        environment: 'alpha',
-        service: 'quwoquan_app',
-        appVersion: 'test',
+List<Override> _sealedViewerBoundaryOverrides({bool productionMedia = false}) =>
+    <Override>[
+      ...sealedCloudBoundaryOverrides(),
+      activePersonaContextProvider.overrideWith(
+        (_) async => ActivePersonaContextViewData.fallback(
+          personaId: 'immersive-viewer-test-persona',
+          ownerUserId: 'immersive-viewer-test-account',
+          displayName: '测试用户',
+          avatarUrl: '',
+        ),
       ),
-      buffer: InMemoryRuntimeLogBuffer(),
-    );
-    ref.onDispose(logger.dispose);
-    return logger;
-  }),
-];
+      if (!productionMedia)
+        videoPreviewTrackQueryProvider.overrideWithValue(
+          const _UnusedVideoPreviewTrackQuery(),
+        ),
+      runtimeLoggerProvider.overrideWith((ref) {
+        final logger = RuntimeLogger(
+          resource: const RuntimeLogResource(
+            sourceType: 'app',
+            environment: 'alpha',
+            service: 'quwoquan_app',
+            appVersion: 'test',
+          ),
+          buffer: InMemoryRuntimeLogBuffer(),
+        );
+        ref.onDispose(logger.dispose);
+        return logger;
+      }),
+    ];
 
 final class _UnusedVideoPreviewTrackQuery implements VideoPreviewTrackQuery {
   const _UnusedVideoPreviewTrackQuery();
@@ -1176,7 +1180,9 @@ Widget _wrap(
   ContentDiscoveryFeedQuery? feedQuery,
 }) {
   final allOverrides = [
-    ..._sealedViewerBoundaryOverrides(),
+    ..._sealedViewerBoundaryOverrides(
+      productionMedia: useProductionMediaDelivery,
+    ),
     ...mockContentFacetOverrides(
       store: InMemoryContentPostStore(),
       detailReader: detailReader,
@@ -1618,6 +1624,8 @@ void main() {
     platform.initializeCompleter = initialization;
     final bundle = (await tester.runAsync(() async {
       await hydrateRuntimePackageForTests(environment: 'alpha');
+      installCanonicalOfflineAssetsForTests();
+      installPublicMediaDelivery(BundledPublicMediaDelivery());
       return OfflineContentBundle.load();
     }))!;
     addTearDown(() => hydrateRuntimePackageForTests(environment: 'beta'));
@@ -1707,6 +1715,8 @@ void main() {
   // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-008
   test('离线 typed 视频引用拒绝资产版本摘要漂移且 Remote 不接管旧快照', () async {
     await hydrateRuntimePackageForTests(environment: 'alpha');
+    installCanonicalOfflineAssetsForTests();
+    installPublicMediaDelivery(BundledPublicMediaDelivery());
     addTearDown(() => hydrateRuntimePackageForTests(environment: 'beta'));
     final bundle = await OfflineContentBundle.load();
     final asset = bundle.media.byAssetId.values.firstWhere(
@@ -1758,15 +1768,15 @@ void main() {
     ]) {
       expect(invalid.cacheIdentity, isNot(correct.cacheIdentity));
       await expectLater(
-        offline.verifiedVideoPath(asset.canonicalReference, binding: invalid),
+        offline.playableSources(asset.canonicalReference, binding: invalid),
         throwsA(isA<OfflineContentFailure>()),
       );
     }
     await hydrateRuntimePackageForTests(environment: 'beta');
     final remote = publicMediaDelivery;
     await expectLater(
-      remote.verifiedVideoPath(asset.canonicalReference, binding: correct),
-      throwsA(isA<OfflineContentFailure>()),
+      remote.playableSources(asset.canonicalReference, binding: correct),
+      throwsA(isA<FormatException>()),
     );
     expect(
       remote.tryResolve(
@@ -1837,8 +1847,8 @@ void main() {
     expect(mediaPageflipSource, contains('media-pageflip-flipping-layer'));
     expect(
       imageBookSource,
-      contains('cacheManagerForPreset'),
-      reason: '每页唯一解码链必须使用 cover cache manager。',
+      contains('profile: CdnImagePreset.full'),
+      reason: '每页默认解码必须向统一获取器传入 full profile。',
     );
     expect(
       viewerSource,
@@ -6236,10 +6246,7 @@ void main() {
         'inline-${DateTime.now().microsecondsSinceEpoch}.jpg';
     MediaLoadFailureCache.instance.clear();
     addTearDown(MediaLoadFailureCache.instance.clear);
-    final articleIdentity = resolveContentMediaUrl(
-      articleObjectKey,
-      endpointConfig: _testMediaEndpointConfig,
-    );
+    final articleIdentity = articleObjectKey;
     MediaLoadFailureCache.instance.recordFailure(
       articleIdentity,
       error: const _HttpStatusTestException(404, 'controlled initial failure'),

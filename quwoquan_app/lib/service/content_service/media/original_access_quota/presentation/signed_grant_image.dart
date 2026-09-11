@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
-import 'package:quwoquan_app/runtime/di/signed_media_delivery_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_binding.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
     show MediaDeliveryKind;
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/domain/signed_media_delivery_lease.dart';
@@ -29,6 +30,7 @@ class SignedGrantImage extends ConsumerStatefulWidget {
     required this.assetId,
     required this.kind,
     required this.accessMode,
+    this.reference = '',
     this.width,
     this.height,
     this.fit,
@@ -41,6 +43,7 @@ class SignedGrantImage extends ConsumerStatefulWidget {
 
   /// release authority 下发的媒体资产标识；禁止以 postId/personaId 冒充。
   final String assetId;
+  final String reference;
 
   /// 媒体交付种类（头像面用 avatar，内容图与封面用 image）。
   final MediaDeliveryKind kind;
@@ -60,11 +63,7 @@ class SignedGrantImage extends ConsumerStatefulWidget {
   /// 消费面自带加载体验语义（如文章图的静默占位阈值、延迟指示与失败重试）时
   /// 由此交回该面渲染：换签编排只此一处，渲染不被换签绕过。委托拿到的是已
   /// 校验的短签地址与稳定缓存身份，签名 query 不得进入缓存键。
-  final Widget Function(
-    BuildContext context,
-    String deliveryUrl,
-    String cacheIdentity,
-  )?
+  final Widget Function(BuildContext context, SignedMediaDeliveryLease lease)?
   readyBuilder;
 
   final VoidCallback? onLoadSucceeded;
@@ -134,11 +133,15 @@ class _SignedGrantImageState extends ConsumerState<SignedGrantImage> {
     _lease = null;
 
     ref
-        .read(signedMediaDeliveryCoordinatorProvider)
-        .resolve(
-          assetId: assetId,
+        .read(publicMediaDeliveryProvider)
+        .acquireLease(
+          widget.reference,
+          binding: MediaDeliveryBinding(
+            assetId: assetId,
+            accessMode: widget.accessMode,
+            publicUrl: widget.reference,
+          ),
           kind: widget.kind,
-          accessMode: MediaDeliveryAccessMode.signedGrant,
         )
         .then(
           (lease) {
@@ -198,8 +201,17 @@ class _SignedGrantImageState extends ConsumerState<SignedGrantImage> {
     final generation = _generation;
     try {
       final lease = await ref
-          .read(signedMediaDeliveryCoordinatorProvider)
-          .refresh(assetId: widget.assetId.trim(), kind: widget.kind);
+          .read(publicMediaDeliveryProvider)
+          .acquireLease(
+            widget.reference,
+            binding: MediaDeliveryBinding(
+              assetId: widget.assetId,
+              accessMode: widget.accessMode,
+              publicUrl: widget.reference,
+            ),
+            kind: widget.kind,
+            refresh: true,
+          );
       if (!mounted || generation != _generation) {
         return;
       }
@@ -243,7 +255,7 @@ class _SignedGrantImageState extends ConsumerState<SignedGrantImage> {
         final deliveryUrl = lease.deliveryUri.toString();
         final readyBuilder = widget.readyBuilder;
         if (readyBuilder != null) {
-          return readyBuilder(context, deliveryUrl, lease.cacheIdentity);
+          return readyBuilder(context, lease);
         }
         return AppCachedNetworkImage(
           imageUrl: deliveryUrl,
@@ -252,6 +264,7 @@ class _SignedGrantImageState extends ConsumerState<SignedGrantImage> {
           imageUrlCandidates: <String>[deliveryUrl],
           // 稳定缓存身份：签名 query 随 TTL 轮换，不参与缓存键。
           cacheKey: lease.cacheIdentity,
+          lease: lease,
           width: widget.width,
           height: widget.height,
           fit: widget.fit,

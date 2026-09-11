@@ -1,5 +1,4 @@
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_asset_manifest_resolver.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/qwq_markdown_ast.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/qwq_markdown_parser.dart';
@@ -353,7 +352,7 @@ class ArticleMarkdownCodec {
     final coverImageUrl =
         mediaAssetsById[coverAssetId]?.urlFor(MediaAssetVariantProfile.cover) ??
         assetsById[coverAssetId] ??
-        resolveContentMediaUrl(parsed.frontMatter.coverImage);
+        parsed.frontMatter.coverImage;
 
     return ArticleDocumentData(
       nodes: nodes,
@@ -562,9 +561,7 @@ class ArticleMarkdownCodec {
     MediaAssetVariants? mediaVariants,
   }) {
     final assetId = ref.assetId.trim();
-    final resolvedImageUrl =
-        assetsById[assetId] ??
-        _directMediaUrlFor(assetId, mediaUrlResolver: mediaUrlResolver);
+    final resolvedImageUrl = assetsById[assetId] ?? '';
     // 引用无法解析出交付 URL 时 imageUrl 保持空（缺席语义，GWT-016）：
     // 不得伪装成 asset:// URL 让加载栈以本地文件失败收场。
     // 资产身份由 assetId 携带，序列化写回不受影响。
@@ -582,24 +579,6 @@ class ArticleMarkdownCodec {
       imageWidth: mediaVariants?.displayWidth,
       imageHeight: mediaVariants?.displayHeight,
     );
-  }
-
-  static String _directMediaUrlFor(
-    String assetId, {
-    String Function(String raw)? mediaUrlResolver,
-  }) {
-    final injected = mediaUrlResolver?.call(assetId) ?? '';
-    if (injected.isNotEmpty) {
-      return injected;
-    }
-    final candidates = resolveContentMediaUrlCandidates(assetId);
-    if (candidates.isEmpty) {
-      return '';
-    }
-    final first = candidates.first;
-    return first.startsWith('http://') || first.startsWith('https://')
-        ? first
-        : '';
   }
 
   static String _assetIdForNode(ArticleDocumentNode node) {
@@ -775,12 +754,7 @@ String _resolveArticleMediaReference(
   String? gatewayBaseUrl,
   String? imageCdnBaseUrl,
   String? videoCdnBaseUrl,
-}) => resolveContentMediaUrl(
-  raw,
-  gatewayBaseUrl: gatewayBaseUrl,
-  imageCdnBaseUrl: imageCdnBaseUrl,
-  videoCdnBaseUrl: videoCdnBaseUrl,
-);
+}) => raw;
 
 class _InlineMentionParseResult {
   const _InlineMentionParseResult({required this.text, required this.spans});

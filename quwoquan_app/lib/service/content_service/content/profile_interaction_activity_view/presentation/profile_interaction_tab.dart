@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
     show MediaDeliveryKind;
@@ -16,8 +17,6 @@ import 'package:quwoquan_app/service/content_service/content/profile_interaction
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/presentation/profile_interaction_comment_route.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
@@ -52,12 +51,11 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 part 'profile_interaction_tab_widgets.dart';
 part 'profile_interaction_tab_inline_actions.dart';
 
-typedef ProfileShareInteractionBuilder =
-    Widget Function({
-      required ShareInteractionDirection direction,
-      required String personaId,
-      required bool inlineScroll,
-    });
+typedef ProfileShareInteractionBuilder = Widget Function({
+  required ShareInteractionDirection direction,
+  required String personaId,
+  required bool inlineScroll,
+});
 
 class ProfileInteractionTab extends ConsumerStatefulWidget {
   const ProfileInteractionTab({
@@ -323,15 +321,14 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
   }) {
     final displayUserId = item.displayPersonaId;
     final displayName = item.displayName;
-    final avatarUrl = resolveAvatarImageUrl(item.displayAvatarUrl);
+    final avatarUrl = item.displayAvatarUrl;
     final fg = AppColorsFunctional.getColor(
       widget.isDark,
       ColorType.foregroundPrimary,
     );
     final fgSecondary = AppColors.iosSecondaryLabel(context);
-    final separator = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: widget.isDark ? 0.24 : 0.14);
+    final separator = AppColors.iosSeparator(context)
+        .withValues(alpha: widget.isDark ? 0.24 : 0.14);
 
     return Column(
       children: <Widget>[

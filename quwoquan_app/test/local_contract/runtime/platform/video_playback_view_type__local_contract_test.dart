@@ -57,29 +57,26 @@ void main() {
       expect(network.controller.viewType, VideoViewType.textureView);
     });
 
-    test(
-      'Android platform view binds only valid live surfaces and reattaches on visibility',
-      () {
-        final source = _readAppFile(
-          'vendor/plugins/video_player_android/android/src/main/java/'
-          'io/flutter/plugins/videoplayer/platformview/PlatformVideoView.java',
-        );
+    test('Android platform view binds only valid live surfaces and reattaches on visibility', () {
+      final source = _readAppFile(
+        'vendor/plugins/video_player_android/android/src/main/java/'
+        'io/flutter/plugins/videoplayer/platformview/PlatformVideoView.java',
+      );
 
-        expect(source, contains('setupSurfaceWithCallback(exoPlayer);'));
-        expect(source, contains('if (surface.isValid())'));
-        expect(source, contains('exoPlayer.setVideoSurface(surface);'));
-        expect(
-          source,
-          contains('exoPlayer.clearVideoSurface(holder.getSurface());'),
-        );
-        expect(source, contains('visibility == View.VISIBLE && isShown()'));
-        expect(
-          source,
-          isNot(contains('exoPlayer.setVideoSurfaceView(surfaceView);')),
-        );
-        expect(source, isNot(contains('getSurface().release()')));
-      },
-    );
+      expect(source, contains('setupSurfaceWithCallback(exoPlayer);'));
+      expect(source, contains('if (surface.isValid())'));
+      expect(source, contains('exoPlayer.setVideoSurface(surface);'));
+      expect(
+        source,
+        contains('exoPlayer.clearVideoSurface(holder.getSurface());'),
+      );
+      expect(source, contains('visibility == View.VISIBLE && isShown()'));
+      expect(
+        source,
+        isNot(contains('exoPlayer.setVideoSurfaceView(surfaceView);')),
+      );
+      expect(source, isNot(contains('getSurface().release()')));
+    });
   });
 }
 

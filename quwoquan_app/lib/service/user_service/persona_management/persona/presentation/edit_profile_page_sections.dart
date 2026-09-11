@@ -751,6 +751,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       verticalPadding: AppSpacing.intraGroupSm,
       trailing: _MediaPreview(
         source: _effectiveCover,
+        draft: _pickedCoverSource == null
+            ? null
+            : DraftImageFile(_pickedCoverSource!),
         isAvatar: false,
         previewKey: const ValueKey<String>('edit-profile-cover-preview'),
       ),
@@ -765,6 +768,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       verticalPadding: AppSpacing.intraGroupSm,
       trailing: _MediaPreview(
         source: _effectiveAvatar,
+        draft: _pickedAvatarSource == null
+            ? null
+            : DraftImageFile(_pickedAvatarSource!),
         isAvatar: true,
         previewKey: const ValueKey<String>('edit-profile-avatar-preview'),
       ),

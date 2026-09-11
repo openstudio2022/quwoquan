@@ -4,9 +4,9 @@
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-016.t4
 //
 // 文章内嵌图片三态语义（REQ-017）：
-// 「缺席（引用无法解析出交付 URL）」「加载中」「失败」必须渲染
-// 互不混同的语义标识；缺席是工程缺陷，必须经 ExceptionTelemetryPort
-// 留证据而不是塌陷成无差别灰框。
+// 「缺席（上游引用为空）」「加载中」「失败」必须渲染互不混同的语义标识；
+// 非空引用被获取器拒绝或依赖不可用属于失败，不得误报缺席。
+// 真正缺席必须经 ExceptionTelemetryPort 留证据，而不是塌陷成无差别灰框。
 import 'dart:async';
 import 'dart:io';
 
@@ -17,6 +17,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 // ignore: depend_on_referenced_packages
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/runtime/observability/app_observability_ports.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
@@ -26,6 +27,7 @@ import 'package:quwoquan_app/design_system/spacing/immersive_media_wait_motion.d
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_content_block_renderer.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
 
 final MediaEndpointConfig _testMediaEndpointConfig = MediaEndpointConfig(
@@ -148,7 +150,12 @@ Widget _wrap(
 }) {
   return ProviderScope(
     overrides: <Override>[
+      ...sealedCloudBoundaryOverrides(),
       mediaEndpointConfigProvider.overrideWithValue(endpointConfig),
+      // 明确本套件的获取器；空端点用例不依赖进程全局的环境装配。
+      publicMediaDeliveryProvider.overrideWithValue(
+        RemotePublicMediaDelivery(endpointConfig),
+      ),
       exceptionTelemetryPortProvider.overrideWithValue(telemetry),
       ...overrides,
     ],
@@ -178,12 +185,6 @@ void _reportNetworkFailure(WidgetTester tester) {
   expect(callback, isNotNull);
   callback!(StateError('controlled article image load failure'));
 }
-
-String _articleImageIdentity([String objectKey = _articleImageObjectKey]) =>
-    _testMediaEndpointConfig
-        .baseFor(MediaDeliveryKind.image)
-        .replace(path: '/$objectKey')
-        .toString();
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -246,7 +247,7 @@ void main() {
       );
     });
 
-    testWidgets('缺席：asset:// 残留引用同样归缺席态且遥测携带资产引用', (tester) async {
+    testWidgets('失败：在场 asset:// 引用被获取器拒绝，不误报内容缺席', (tester) async {
       final telemetry = _RecordingExceptionTelemetryPort();
       await tester.pumpWidget(
         _wrap(
@@ -256,14 +257,24 @@ void main() {
         ),
       );
       await tester.pump();
+      // 获取器失败经公开回调回报，文章终态在下一帧呈现。
+      await tester.pump();
 
-      expect(find.byKey(articleImageSourceAbsentKey), findsOneWidget);
-      expect(find.byKey(appImageLoadErrorKey), findsNothing);
-      expect(telemetry.handledSources, hasLength(1));
-      expect(telemetry.handledErrorTexts.single, contains('asset-42'));
+      expect(_networkImage(tester).imageUrl, 'asset://asset-42');
+      expect(find.byKey(articleImageSourceAbsentKey), findsNothing);
+      expect(find.byKey(appImageLoadErrorKey), findsOneWidget);
+      expect(find.byKey(articleImageFailedSurfaceKey), findsOneWidget);
+      expect(find.byKey(articleImageRetryKey), findsOneWidget);
+      expect(find.text(ContentText.imageLoadFailed), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(articleImageFailedSurfaceKey)),
+        _articleImageFrameSize,
+      );
+      expect(telemetry.handledSources, isEmpty);
+      expect(telemetry.handledErrorTexts, isEmpty);
     });
 
-    testWidgets('缺席：媒体端点未注入时 media key 引用归缺席态而非伪装本地加载', (tester) async {
+    testWidgets('失败：Remote 获取器端点不可用时在场 media key 不归缺席态', (tester) async {
       final telemetry = _RecordingExceptionTelemetryPort();
       await tester.pumpWidget(
         _wrap(
@@ -275,10 +286,21 @@ void main() {
         ),
       );
       await tester.pump();
+      // 获取器失败经公开回调回报，文章终态在下一帧呈现。
+      await tester.pump();
 
-      expect(find.byKey(articleImageSourceAbsentKey), findsOneWidget);
-      expect(find.byKey(appImageLoadErrorKey), findsNothing);
-      expect(telemetry.handledSources, hasLength(1));
+      expect(_networkImage(tester).imageUrl, _articleImageObjectKey);
+      expect(find.byKey(articleImageSourceAbsentKey), findsNothing);
+      expect(find.byKey(appImageLoadErrorKey), findsOneWidget);
+      expect(find.byKey(appImageLoadPlaceholderKey), findsNothing);
+      expect(find.byKey(articleImageFailedSurfaceKey), findsOneWidget);
+      expect(find.byKey(articleImageRetryKey), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(articleImageFailedSurfaceKey)),
+        _articleImageFrameSize,
+      );
+      expect(telemetry.handledSources, isEmpty);
+      expect(telemetry.handledOperationIds, isEmpty);
     });
 
     testWidgets('缺席态 rebuild 不重复上报遥测', (tester) async {
@@ -318,7 +340,8 @@ void main() {
 
     testWidgets('失败：负缓存激活时渲染可见失败态而非无差别灰块，且不产生缺席遥测', (tester) async {
       final telemetry = _RecordingExceptionTelemetryPort();
-      final identity = _articleImageIdentity();
+      // 负缓存绑定消费方的原始引用，URL/profile 变换只属于统一获取器。
+      const identity = _articleImageObjectKey;
       MediaLoadFailureCache.instance.recordFailure(
         identity,
         error: const HttpExceptionWithStatus(404, 'not found', uri: null),
@@ -382,7 +405,7 @@ void main() {
       final runtimeFailureObjectKey =
           'media/image/s/archived-image/post/p1/v1/'
           'runtime-failure-${DateTime.now().microsecondsSinceEpoch}.webp';
-      final identity = _articleImageIdentity(runtimeFailureObjectKey);
+      final identity = runtimeFailureObjectKey;
       MediaLoadFailureCache.instance.recordFailure(
         identity,
         error: const HttpExceptionWithStatus(404, 'not found', uri: null),
@@ -511,7 +534,7 @@ void main() {
     testWidgets('失败重试：同框呈现恢复入口，清负缓存并以新 generation 立即显示指示', (tester) async {
       const retryObjectKey =
           'media/image/s/archived-image/post/p1/v1/retry.webp';
-      final identity = _articleImageIdentity(retryObjectKey);
+      const identity = retryObjectKey;
       MediaLoadFailureCache.instance.recordFailure(
         identity,
         error: const HttpExceptionWithStatus(404, 'not found', uri: null),

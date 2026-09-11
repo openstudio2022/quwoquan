@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/domain/signed_media_delivery_lease.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart'
     show appImageLoadErrorKey;
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
@@ -65,11 +66,7 @@ class MediaDeliveryImage extends StatelessWidget {
   ///
   /// 消费面自带加载体验语义时两路都应交回该面渲染，否则同一处会出现
   /// 「公开走消费面体验、私有走通用体验」两套观感。
-  final Widget Function(
-    BuildContext context,
-    String deliveryUrl,
-    String cacheIdentity,
-  )?
+  final Widget Function(BuildContext context, SignedMediaDeliveryLease lease)?
   signedReadyBuilder;
 
   final VoidCallback? onLoadSucceeded;
@@ -80,6 +77,7 @@ class MediaDeliveryImage extends StatelessWidget {
     if (binding.isSignedGrant) {
       return SignedGrantImage(
         assetId: binding.assetId,
+        reference: binding.publicUrl,
         kind: kind,
         accessMode: MediaDeliveryAccessMode.signedGrant,
         width: width,
@@ -103,8 +101,8 @@ class MediaDeliveryImage extends StatelessWidget {
       );
     }
     if (binding.isPublic) {
-      final publicUrl = binding.publicUrl.trim();
-      if (publicUrl.isEmpty) {
+      final publicUrl = binding.publicUrl;
+      if (publicUrl.trim().isEmpty) {
         return _terminal(absentWidget ?? const SizedBox.shrink());
       }
       return publicBuilder(context, publicUrl);

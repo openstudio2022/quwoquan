@@ -47,4 +47,9 @@ if [[ -z "$resolved_flutter_root" ]]; then
   exit 4
 fi
 
-exec /bin/sh "$resolved_flutter_root/packages/flutter_tools/bin/xcode_backend.sh" build
+/bin/sh "$resolved_flutter_root/packages/flutter_tools/bin/xcode_backend.sh" build
+# raw SDK 未使用 pubspec 私有投影时，也在签名前补齐同一 exact snapshot 资源。
+RUNTIME_PYTHON="$(bash "$APP_DIR/scripts/ios/build_resolve_stackctl_python.sh")"
+PYTHONDONTWRITEBYTECODE=1 "$RUNTIME_PYTHON" "$APP_DIR/scripts/device/app_source_isolation.py" \
+  --repository "$APP_DIR/.." --destination "$BUILT_PRODUCTS_DIR/App.framework/flutter_assets" \
+  --entrypoint "$FLUTTER_TARGET" --native-assets

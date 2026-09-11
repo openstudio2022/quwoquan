@@ -1,4 +1,8 @@
 import 'dart:async';
+
+import 'package:quwoquan_app/runtime/di/alpha_content_composition.dart';
+import 'package:quwoquan_app/runtime/platform/media/bundled_public_media_delivery.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -38,6 +42,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007.t2
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  installCanonicalOfflineAssetsForTests();
 
   test('Alpha 组合根选择 creator 与作者作品，Beta 不复用离线 adapter', () async {
     final client = GeneratedCloudOperationClient(
@@ -46,6 +51,8 @@ void main() {
     CloudOperationInvocationContext context(String _, String _) =>
         throw StateError('离线不得构造调用上下文');
     await hydrateRuntimePackageForTests(environment: 'alpha');
+    installPublicMediaDelivery(BundledPublicMediaDelivery());
+    installAlphaContentComposition();
     final container = ProviderContainer(
       overrides: sealedCloudBoundaryOverrides(),
     );
@@ -92,6 +99,8 @@ void main() {
     } finally {
       container.dispose();
       await hydrateRuntimePackageForTests(environment: 'beta');
+      ContentProductionComposition.useRemoteReadComposition();
+      UserProductionComposition.useRemoteReadComposition();
     }
     final remote = UserProductionComposition.generatedAdapter<ProfileQuery>(
       UserProductionAdapter.profileQuery,
@@ -148,6 +157,8 @@ void main() {
 
   test('Alpha 公开图片由实际包内字节解码，缺媒体拒绝且换文档不复用旧来源', () async {
     await hydrateRuntimePackageForTests(environment: 'alpha');
+    installPublicMediaDelivery(BundledPublicMediaDelivery());
+    installAlphaContentComposition();
     final offline = publicMediaDelivery;
     try {
       expect(offline.endpoints, isNull);
@@ -157,9 +168,9 @@ void main() {
       final media = (manifest['media'] as List<dynamic>)
           .cast<Map<String, dynamic>>();
       for (final row in media.where((row) => row['kind'] != 'video')) {
-        final provider = offline.verifiedImageProvider(
+        final provider = offline.imageProvider(
           row['canonicalReference'] as String,
-        )!;
+        );
         expect(provider, isA<BundledImageProvider>());
         final image = await _decodeImage(provider);
         expect(image.image.width, greaterThan(0));
@@ -167,23 +178,20 @@ void main() {
         image.dispose();
       }
       await expectLater(
-        _decodeImage(offline.verifiedImageProvider('media/image/missing.png')!),
+        _decodeImage(offline.imageProvider('media/image/missing.png')),
         throwsA(isA<OfflineContentFailure>()),
       );
       await expectLater(
-        offline.verifiedVideoPath('media/video/missing.mp4'),
+        offline.playableSources('media/video/missing.mp4'),
         throwsA(isA<OfflineContentFailure>()),
       );
       await hydrateRuntimePackageForTests(environment: 'beta');
+      ContentProductionComposition.useRemoteReadComposition();
+      UserProductionComposition.useRemoteReadComposition();
       final remote = publicMediaDelivery;
       expect(identical(remote, offline), isFalse);
       expect(remote.endpoints, isNotNull);
-      expect(
-        remote.verifiedImageProvider(
-          media.first['canonicalReference'] as String,
-        ),
-        isNull,
-      );
+      expect(remote, isA<RemotePublicMediaDelivery>());
       expect(
         remote.candidates(
           'https://untrusted.invalid/image.png',
@@ -192,9 +200,13 @@ void main() {
         isEmpty,
       );
       await hydrateRuntimePackageForTests(environment: 'alpha');
+      installPublicMediaDelivery(BundledPublicMediaDelivery());
+      installAlphaContentComposition();
       expect(identical(publicMediaDelivery, offline), isFalse);
     } finally {
       await hydrateRuntimePackageForTests(environment: 'beta');
+      ContentProductionComposition.useRemoteReadComposition();
+      UserProductionComposition.useRemoteReadComposition();
     }
   });
 
@@ -207,6 +219,8 @@ void main() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(channel, (_) async => directory.path);
     await hydrateRuntimePackageForTests(environment: 'alpha');
+    installPublicMediaDelivery(BundledPublicMediaDelivery());
+    installAlphaContentComposition();
     try {
       final manifest = jsonDecode(
         await rootBundle.loadString(offlineContentManifestAssetPath),
@@ -215,21 +229,26 @@ void main() {
           .cast<Map<String, dynamic>>()
           .firstWhere((row) => row['kind'] == 'video');
       final delivery = publicMediaDelivery;
-      final path = await delivery.verifiedVideoPath(
+      final sources = await delivery.playableSources(
         video['canonicalReference'] as String,
       );
-      expect(path, isNotNull);
+      final handle = sources.single.createController();
+      final path = Uri.parse(handle.controller.dataSource).toFilePath();
+      addTearDown(handle.controller.dispose);
       expect(path, startsWith(directory.path));
-      final bytes = await File(path!).readAsBytes();
+      final bytes = await File(path).readAsBytes();
       expect(bytes.length, video['byteLength']);
       expect('sha256:${sha256.convert(bytes)}', video['sha256']);
-      expect(
-        await delivery.verifiedVideoPath(video['canonicalReference'] as String),
-        path,
-      );
+      final repeated = (await delivery.playableSources(
+        video['canonicalReference'] as String,
+      )).single.createController();
+      addTearDown(repeated.controller.dispose);
+      expect(Uri.parse(repeated.controller.dataSource).toFilePath(), path);
     } finally {
       messenger.setMockMethodCallHandler(channel, null);
       await hydrateRuntimePackageForTests(environment: 'beta');
+      ContentProductionComposition.useRemoteReadComposition();
+      UserProductionComposition.useRemoteReadComposition();
       await directory.delete(recursive: true);
     }
   });

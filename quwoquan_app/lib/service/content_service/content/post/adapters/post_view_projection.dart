@@ -2,7 +2,6 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/gener
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_article_detail_projector.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_asset_manifest_resolver.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_detail_view.dart';
@@ -51,12 +50,7 @@ ContentArticleRender projectArticleDetailView(
   MediaDeliveryResolver? mediaResolver,
 }) {
   String resolveImage(String? raw) {
-    final source = raw?.trim() ?? '';
-    if (source.isEmpty) return '';
-    return mediaResolver
-            ?.tryResolve(source, kind: MediaDeliveryKind.image)
-            ?.url ??
-        resolveContentMediaUrl(source);
+    return raw ?? '';
   }
 
   final articleAssetManifestResolver = MediaAssetManifestResolver(
@@ -179,7 +173,7 @@ ArticleDocumentData _projectArticleDocument({
         raw[ArticleDetailWireKeys.articleTemplate]?.toString() ?? 'gentle',
     fontPreset:
         raw[ArticleDetailWireKeys.articleFontPreset]?.toString() ?? 'clean',
-    coverImageUrl: coverImage.trim(),
+    coverImageUrl: coverImage,
   );
 }
 
@@ -196,7 +190,7 @@ List<ArticlePageData> _projectArticlePages({
           ? canonicalDocument.title.trim()
           : postTitle.trim(),
       body: canonicalDocument.body.trim(),
-      imageUrl: coverImage.trim(),
+      imageUrl: coverImage,
       contentBlocks: canonicalDocument.contentBlocks,
     );
     return <ArticlePageData>[
@@ -208,7 +202,7 @@ List<ArticlePageData> _projectArticlePages({
     ArticlePageData(
       id: 'page_0',
       title: postTitle.trim(),
-      imageUrl: coverImage.trim(),
+      imageUrl: coverImage,
     ),
   ];
 }

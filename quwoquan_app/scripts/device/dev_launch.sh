@@ -7,6 +7,7 @@ export PYTHONPATH="$APP_DIR/scripts/device:$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
 export QWQ_LAUNCH_HOST_HOME="$(python3 -c 'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
 # direct 不使用 hermetic 私有证据根作为运行时事实源。
 export QWQ_OUTPUT_ROOT="$QWQ_LAUNCH_HOST_HOME/.cache/quwoquan/runtime-output"
+ORIGINAL_ARGUMENTS=("$@")
 ENVIRONMENT="${QWQ_ENVIRONMENT:-alpha}"
 DEVICE_ID=""
 RUN_MODE="${QWQ_RUN_MODE:-content-live}"
@@ -49,6 +50,17 @@ from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manife
 print(load_launch_manifest_contract()["content_source_policy"][sys.argv[1]])
 PY
 )" || block "canonical content source policy unavailable"
+# 每次 direct 构建从 source-scoped fresh 仓库投影执行；不是 Git worktree。
+# 不给 live pubspec 加资产，也不让在线制品读到 Alpha adapter 源文件。
+if [[ -e "$ROOT_DIR/.git" ]]; then
+  SOURCE_PROJECTION_BASE="$(mktemp -d "${TMPDIR:-/tmp}/qwq-source-composition.XXXXXX")"
+  trap 'rm -rf -- "$SOURCE_PROJECTION_BASE"' EXIT
+  SOURCE_ENTRYPOINT="$(python3 -c 'import sys; from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract; print(load_launch_manifest_contract()["content_source_entrypoints"][sys.argv[1]])' "$CONTENT_SOURCE")"
+  python3 "$APP_DIR/scripts/device/app_source_isolation.py" --repository "$ROOT_DIR" \
+    --destination "$SOURCE_PROJECTION_BASE/repo" --entrypoint "$SOURCE_ENTRYPOINT" >/dev/null
+  bash "$SOURCE_PROJECTION_BASE/repo/quwoquan_app/scripts/device/dev_launch.sh" "${ORIGINAL_ARGUMENTS[@]}"
+  exit $?
+fi
 if [[ "$CONTENT_SOURCE" == "remote" ]]; then
 PREFLIGHT_PURPOSE="$(python3 - "$RUN_MODE" <<'PY'
 import sys
@@ -205,7 +217,7 @@ PACKAGE_STAMP="$APP_DIR/.dart_tool/qwq_dev_pub_inputs.sha256"
 PUB_INPUT_DIGEST="$(shasum -a 256 "$APP_DIR/pubspec.yaml" "$APP_DIR/pubspec.lock" | shasum -a 256 | awk '{print $1}')"
 if [[ ! -f "$PACKAGE_CONFIG" || ! -f "$PACKAGE_STAMP" || "$(<"$PACKAGE_STAMP")" != "$PUB_INPUT_DIGEST" ]]; then
   log "deps: pubspec changed → flutter pub get（本机 PUB_CACHE）"
-  (cd "$APP_DIR" && "$REAL_FLUTTER" pub get) || block "flutter pub get failed（见上方输出）"
+  (cd "$APP_DIR" && "$REAL_FLUTTER" pub get --offline --enforce-lockfile) || block "flutter pub get failed（见上方输出）"
   mkdir -p "$(dirname "$PACKAGE_STAMP")"
   printf '%s\n' "$PUB_INPUT_DIGEST" > "$PACKAGE_STAMP"
 else

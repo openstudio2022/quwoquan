@@ -382,12 +382,17 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     try {
       // grant 兑换、校验、缓存、单飞与换签只存在于 coordinator 一处（DEC-033）；
       // 「查看原图」不再自建一条 facet 直调，否则同一资产会有两套授权路径。
+      final reference = _imageUrlsForPost(post)[imageIndex];
       final lease = await ref
-          .read(signedMediaDeliveryCoordinatorProvider)
-          .resolve(
-            assetId: mediaId,
+          .read(publicMediaDeliveryProvider)
+          .acquireLease(
+            reference,
+            binding: MediaDeliveryBinding(
+              assetId: mediaId,
+              accessMode: MediaDeliveryAccessMode.signedGrant,
+              publicUrl: reference,
+            ),
             kind: MediaDeliveryKind.image,
-            accessMode: MediaDeliveryAccessMode.signedGrant,
           );
       final access = WorksViewerOriginalImageAccess(
         url: lease.deliveryUri.toString(),

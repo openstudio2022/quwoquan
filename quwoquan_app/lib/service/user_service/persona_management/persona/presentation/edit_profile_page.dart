@@ -14,6 +14,7 @@ import 'package:quwoquan_app/service/user_service/account/credential_binding/app
 import 'package:quwoquan_app/service/user_service/account/authentication_challenge/application/public/authentication_challenge_writer.dart'
     show newOtpIdempotencyKey, otpClientPlatformForRuntime;
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
+import 'package:quwoquan_app/design_system/media/app_draft_image.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/image_pick_source.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
@@ -130,9 +131,11 @@ class _MediaPreview extends StatelessWidget {
     required this.source,
     required this.isAvatar,
     required this.previewKey,
+    this.draft,
   });
 
   final String source;
+  final DraftImageFile? draft;
   final bool isAvatar;
   final Key previewKey;
 
@@ -150,6 +153,8 @@ class _MediaPreview extends StatelessWidget {
               color: AppColors.iosTertiaryLabel(context),
             ),
           )
+        : draft != null
+        ? AppDraftImage(source: draft!, fit: BoxFit.cover)
         : AppMediaImage(
             imageSource: source,
             fit: BoxFit.cover,

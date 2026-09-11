@@ -181,6 +181,12 @@ def _source_identity(
         # Capsule authority is self-verifying and intentionally independent of
         # the projection's synthetic/incomplete .git directory.
         return git_sha, tree_digest
+    if (ROOT / "source-isolation.json").is_file():
+        from quwoquan_app.scripts.device.app_source_isolation import verify_projection_identity
+        audited = verify_projection_identity(ROOT)
+        if (git_sha and git_sha != audited[0]) or (tree_digest and tree_digest != audited[1]):
+            raise ValueError("explicit source identity disagrees with audited source projection")
+        return audited
     if not git_sha:
         git_sha = str(os.environ.get("QWQ_PACKAGE_SOURCE_REVISION") or "").strip()
     if not tree_digest:

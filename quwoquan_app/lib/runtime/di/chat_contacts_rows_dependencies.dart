@@ -4,7 +4,6 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/application/
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/contact_intersection_subtitle.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
@@ -48,10 +47,7 @@ ChatContactsRow chatContactsRowFromContactView(
     personaId: dto.userId.trim().isEmpty ? null : dto.userId.trim(),
     userHandle: dto.userHandle.trim().isEmpty ? null : dto.userHandle.trim(),
     displayName: dto.displayName,
-    avatarUrl: resolveAvatarImageUrl(
-      dto.avatarUrl,
-      endpointConfig: mediaEndpointConfig,
-    ),
+    avatarUrl: dto.avatarUrl,
     subtitle: subtitle,
     relationState: dto.relationState,
     source: source,
@@ -74,10 +70,7 @@ ChatContactsRow chatContactsRowFromContactHome(
     personaId: (dto.userId?.trim().isEmpty ?? true) ? null : dto.userId!.trim(),
     userHandle: dto.userHandle.trim().isEmpty ? null : dto.userHandle.trim(),
     displayName: dto.title,
-    avatarUrl: resolveAvatarImageUrl(
-      dto.avatarUrl,
-      endpointConfig: mediaEndpointConfig,
-    ),
+    avatarUrl: dto.avatarUrl,
     subtitle: kind == ChatContactsRowKind.user
         ? contactIntersectionFactsSubtitle(dto.intersectionFacts)
         : dto.subtitle.trim(),

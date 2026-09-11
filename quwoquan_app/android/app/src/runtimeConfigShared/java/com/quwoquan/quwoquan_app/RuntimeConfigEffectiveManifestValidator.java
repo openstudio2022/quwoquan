@@ -35,8 +35,9 @@ final class RuntimeConfigEffectiveManifestValidator {
         || !AppLaunchContract.BUILD_PROFILE_LAUNCH_POLICIES
             .get(buildProfile)
             .equals(launchPolicy)
-        || !AppLaunchContract.APP_EFFECTIVE_LAUNCH_MANIFEST_ENTRYPOINT.equals(
-            stringValue(manifest, "entrypoint"))
+        || !stringValue(manifest, "entrypoint").equals(
+            AppLaunchContract.APP_EFFECTIVE_LAUNCH_MANIFEST_ENTRYPOINT.get(
+                AppLaunchContract.CONTENT_SOURCE_POLICY.get(environment)))
         || !AppLaunchContract.LAUNCH_PROVENANCES.contains(
             stringValue(manifest, "launchProvenance"))
         || !AppLaunchContract.RUNTIME_CONFIG_SUPPLY_MODES.contains(

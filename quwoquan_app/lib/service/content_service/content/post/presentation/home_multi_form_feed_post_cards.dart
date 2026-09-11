@@ -134,10 +134,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
           contextObjectTarget: feedHostTarget,
         );
         final primaryReason = intersection?.reason;
-        final hasPlayableVideo = resolveContentVideoUrlCandidates(
-          item.mediaVideoUrl,
-          endpointConfig: ref.watch(mediaEndpointConfigProvider),
-        ).isNotEmpty;
+        final hasPlayableVideo = item.mediaVideoUrl.isNotEmpty;
 
         return DecoratedBox(
           key: widget.cardContainerKey,
@@ -585,7 +582,7 @@ class _FollowingArticleCard extends StatelessWidget {
       mediaContent: mediaDeliveryCoverSlot(
         binding: _feedBinding(
           item.mediaCoverUrl,
-          _feedImageDeliveryIndex(item)[item.mediaCoverUrl.trim()],
+          _feedImageDeliveryIndex(item)[item.mediaCoverUrl],
         ),
         placeholderColor: fgSecondary.withValues(alpha: 0.12),
         cdnPreset: CdnImagePreset.thumbnail,

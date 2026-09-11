@@ -68,7 +68,9 @@ Future<_RecordingCdnImageUrlPort> _pumpWithRecordingPort(
         home: CupertinoPageScaffold(
           child: Center(
             child: AppCachedNetworkImage(
-              imageUrl: 'media/image/s/archived-image/post/p1/v1/cover.png',
+              imageUrl: preset == CdnImagePreset.avatar
+                  ? 'media/avatar/s/archived-image/post/p1/v1/cover.png'
+                  : 'media/image/s/archived-image/post/p1/v1/cover.png',
               cdnPreset: preset,
               width: width,
             ),
@@ -105,24 +107,25 @@ void main() {
       }
     });
 
-    testWidgets('avatar preset 把宽度作为目标像素尺寸透传给端口', (tester) async {
+    testWidgets('avatar profile 的处理尺寸由获取器统一策略拥有', (tester) async {
       final port = await _pumpWithRecordingPort(
         tester,
         preset: CdnImagePreset.avatar,
         width: 72,
       );
 
-      expect(port.avatarSize, 72);
+      expect(port.avatarSize, 120);
     });
 
     testWidgets('端口返回的 URL 直接成为请求 URL', (tester) async {
       await _pumpWithRecordingPort(tester, preset: CdnImagePreset.cover);
 
-      final image = tester.widget<CachedNetworkImage>(
-        find.byType(CachedNetworkImage),
-      );
-      expect(image.imageUrl, contains('/media/image/'));
-      expect(image.imageUrl, isNot(contains('x-oss-process')));
+      final image = tester.widget<Image>(find.byType(Image));
+      final provider =
+          (image.image as ResizeImage).imageProvider
+              as CachedNetworkImageProvider;
+      expect(provider.url, contains('/media/image/'));
+      expect(provider.url, isNot(contains('x-oss-process')));
     });
   });
 

@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/relationship_capability_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -59,7 +58,7 @@ class ProfileSocialRelationRowViewData {
       personaId: id,
       userHandle: w.userHandle,
       displayName: name,
-      avatarUrl: resolveAvatarImageUrl(w.avatarUrl ?? '', avatarVersion: 0),
+      avatarUrl: w.avatarUrl ?? '',
       avatarVersion: 0,
       profileVisibility: w.profileVisibility.wireName,
       relationState: w.relationState.wireName,
@@ -79,7 +78,7 @@ class ProfileSocialRelationRowViewData {
       personaId: id,
       userHandle: item.userHandle,
       displayName: name,
-      avatarUrl: resolveAvatarImageUrl(item.avatarUrl ?? ''),
+      avatarUrl: item.avatarUrl ?? '',
       profileVisibility: item.profileVisibility.wireName,
       relationState: item.relationState.wireName,
       followedAt: item.followedAt,

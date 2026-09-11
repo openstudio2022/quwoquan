@@ -9,8 +9,6 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/a
 import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_timeline_cache.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
-import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_media_view_data.dart';
@@ -687,10 +685,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
   }
 
   String _resolveAvatar(String? raw) {
-    return resolveAvatarImageUrl(
-      raw,
-      endpointConfig: ref.read(mediaEndpointConfigProvider),
-    );
+    return raw ?? '';
   }
 
   // ── 排序：seq > 0 升序，seq == 0（未确认）排最后按 timestamp ──────────

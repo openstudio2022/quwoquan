@@ -35,6 +35,20 @@
 - 影响 Story：[`group-avatar-server-precompose-and-unified-sync-contract`](./group-avatar-server-precompose-and-unified-sync-contract/spec.md)、[`media-upload-and-storage`](./media-upload-and-storage/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-002"></a>
+### DEC-002 统一媒体获取与显式装配
+
+- 决策：演进现有 `PublicMediaDeliveryPort`，由同一入口提供图片 provider、视频可播放源和 manifest 读取；业务只提交原始引用及 typed profile/绑定，平台层持有 file/network controller 差异。
+- 理由：nullable verified provider/path 使业务承担来源判断；预览 query 的 endpoint 前置异常和图片 HTTPS 过滤绕过 Alpha 的合法获取器。
+- 被否决方案：业务判断 Alpha 后关预览、`verified ?? network`、先加工 CDN URL 再调接口、长期保留第二媒体获取入口及新建泛化框架。
+- 约束与影响：Bundled 实现独立于公共 DI，由 Alpha 组合根显式注入；Beta/Gamma/Prod 共用 Remote 实现。私有授权边界失败不得进入公开获取或重写签名 URL；包内读取必须验证 digest 与资产绑定。
+- 安全边界：缓存 key 只负责缓存身份，不能授予授权；私有媒体只能携带由 typed grant 校验工厂与私有构造产生的 lease，获取时再校验 source/kind/有效期。页面不得传 bool 授权或自行构造裸私有 URI；创作本地选择器产出的 DraftImageFile 是独立 typed 草稿入口，不进入 Post 媒体获取。
+- 测试 seam：同业务驱动使用真实四环境 adapter，仅替换 HTTP/asset/platform 外部边界；真实 canvas 默认 decode 与作品预览 production provider 图必须覆盖。
+- 恢复与回滚：失败沿现有媒体终态、重试与 6 秒预算传播；preview 失败只影响可选浮标。回滚整个获取器与消费者单轨增量，不保留并行 shim。
+- 观测：复用媒体加载成功/失败、preview load 和 video QoE 事件，不记录原始 URL；P0 首帧失败不得由可选 preview 构造异常引入。
+- 关联要求：`REQ-004`
+- 关联验收：`SIT-003`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

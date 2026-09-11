@@ -211,7 +211,7 @@ final class WorkBrowserViewData {
         .where((item) => item.kind == 'video' && item.url.isNotEmpty)
         .toList(growable: false);
     if (typed.isNotEmpty) return typed;
-    final fallback = videoUrl?.trim() ?? '';
+    final fallback = videoUrl ?? '';
     if (fallback.isEmpty) return const <WorkBrowserMediaViewData>[];
     return <WorkBrowserMediaViewData>[
       WorkBrowserMediaViewData(

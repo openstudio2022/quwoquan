@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/start_group_pickable_member.dart';
 
@@ -70,7 +69,7 @@ String resolveSelectableGroupAvatar(String raw, {String? avatarCdnBaseUrl}) {
   if (raw.trim().isEmpty) {
     return '';
   }
-  return resolveAvatarImageUrl(raw, avatarCdnBaseUrl: avatarCdnBaseUrl);
+  return raw;
 }
 
 /// 图四数据源：按服务端 `source` 分页前过滤消费
@@ -181,7 +180,7 @@ Future<StartGroupContactMemberPage> loadGroupContactMemberPage(
         displayName: contact.displayName.isNotEmpty
             ? contact.displayName
             : userId,
-        avatarUrl: resolveAvatarImageUrl(contact.avatarUrl),
+        avatarUrl: contact.avatarUrl,
       ),
     );
   }

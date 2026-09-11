@@ -2,7 +2,7 @@
 import Foundation
 
 enum AppLaunchContract {
-  static let sourceDigest = "sha256:f301c900d3c4bdd8ceeb83e78e800d81974adb0d12f775b0f0e92d3f963b95ef"
+  static let sourceDigest = "sha256:3060c668589ff5bc24da05a355b395a73f02903f578ca89705b36c578d45d73f"
   static let environments: [String] = [
     "alpha",
     "beta",
@@ -356,7 +356,10 @@ enum AppLaunchContract {
     "reverseReceiptDigest",
     "consumerLeaseId",
   ]
-  static let appEffectiveLaunchManifestEntrypoint = "lib/main_prod.dart"
+  static let appEffectiveLaunchManifestEntrypoint: [String: String] = [
+    "bundled_snapshot": "lib/main_alpha.dart",
+    "remote": "lib/main_prod.dart",
+  ]
   static let runtimeConfigPackageSignatureAlgorithm = "ed25519"
   static let runtimeConfigPackageMaxLifetimeSeconds = 86400
   static let runtimeConfigPackageMaxFutureSkewSeconds = 300

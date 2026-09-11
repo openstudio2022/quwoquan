@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/runtime/platform/media/bundled_public_media_delivery.dart';
 import 'package:quwoquan_app/runtime/config/offline_content_bundle.dart';
 import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/content_surface_view_mapper.dart'
@@ -38,6 +39,7 @@ ContentPostViewData _viewData(ContentPostProjection projection) =>
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  installCanonicalOfflineAssetsForTests();
 
   // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-008
   test('真实 canonical cohort 经 Alpha 与 Remote 组合根映射保留同一媒体资产版本', () async {
@@ -55,6 +57,8 @@ void main() {
     addTearDown(() => hydrateRuntimePackageForTests(environment: 'beta'));
     for (final environment in ['alpha', 'beta', 'gamma']) {
       await hydrateRuntimePackageForTests(environment: environment);
+      if (environment == 'alpha')
+        installPublicMediaDelivery(BundledPublicMediaDelivery());
       final views = posts.map(ContentSurfaceViewMapper.fromDto).toList();
       expect(views.map((view) => view.postId), posts.map((post) => post.id));
       for (final view in views) {
@@ -87,6 +91,7 @@ void main() {
 
   test('domain 仅消费注入能力，Alpha 状态不读取在线配置且保留解析摘要', () async {
     await hydrateRuntimePackageForTests(environment: 'alpha');
+    installPublicMediaDelivery(BundledPublicMediaDelivery());
     addTearDown(() => hydrateRuntimePackageForTests(environment: 'beta'));
     final bundle = await OfflineContentBundle.load();
     final post = bundle
@@ -99,7 +104,7 @@ void main() {
           ),
         )
         .singleWhere((post) => post.isVideoLike);
-    final delivery = publicMediaDelivery;
+    final delivery = BundledPublicMediaDelivery();
     final seen = <({String assetId, int version})>[];
     final view = domain.ContentSurfaceViewMapper.fromDto(
       post,

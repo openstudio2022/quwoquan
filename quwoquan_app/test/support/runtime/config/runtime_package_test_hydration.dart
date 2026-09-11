@@ -9,12 +9,33 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:cryptography/cryptography.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/config/runtime_package_resolver.dart';
 import 'package:quwoquan_app/runtime/platform/native_runtime_config_bridge.dart';
+
+/// Alpha 专项显式安装真实仓内资产读取边界，不向在线 test bundle 加包内内容。
+void installCanonicalOfflineAssetsForTests() {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMessageHandler('flutter/assets', (message) async {
+        final path = utf8.decode(
+          message!.buffer.asUint8List(
+            message.offsetInBytes,
+            message.lengthInBytes,
+          ),
+        );
+        if (!path.startsWith('assets/content/alpha/')) return null;
+        final file = File(path);
+        final bytes = await file.readAsBytes();
+        return ByteData.sublistView(bytes);
+      });
+}
 
 /// 受管测试 runner 注入的运行时取值；键与 `RUNTIME_VALUE_DEFINE_KEYS` 同源。
 ///

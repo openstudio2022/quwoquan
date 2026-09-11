@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
     show MediaDeliveryKind;
 
@@ -9,12 +10,47 @@ import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.da
 /// 签名 URL 只存在于本租约的短期生命周期内，不写回业务 DTO 或持久缓存文档。
 @immutable
 final class SignedMediaDeliveryLease {
-  const SignedMediaDeliveryLease({
+  const SignedMediaDeliveryLease._({
     required this.assetId,
     required this.kind,
     required this.deliveryUri,
     required this.expiresAt,
   });
+
+  factory SignedMediaDeliveryLease.fromGrant({
+    required MediaOriginalAccessGrant grant,
+    required String assetId,
+    required MediaDeliveryKind kind,
+    required DateTime now,
+  }) {
+    final uri = grant.originalUrl;
+    if (grant.status != 'granted' ||
+        assetId.isEmpty ||
+        grant.mediaId != assetId ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        (uri.queryParameters['sign'] ?? '').isEmpty ||
+        (uri.queryParameters['t'] ?? '').isEmpty ||
+        !grant.expiresAt.isAfter(now)) {
+      throw const FormatException('invalid signed media grant');
+    }
+    return SignedMediaDeliveryLease._(
+      assetId: assetId,
+      kind: kind,
+      deliveryUri: uri,
+      expiresAt: grant.expiresAt,
+    );
+  }
+
+  void validateFor(String reference, MediaDeliveryKind requestedKind) {
+    if (reference != deliveryUri.toString() ||
+        kind != requestedKind ||
+        !expiresAt.isAfter(DateTime.now())) {
+      throw const FormatException(
+        'signed media lease binding mismatch or expired',
+      );
+    }
+  }
 
   /// release authority 下发的媒体资产标识（业务身份，非 CAS 字节身份）。
   final String assetId;

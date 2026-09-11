@@ -1,5 +1,3 @@
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_profile_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -21,16 +19,12 @@ PersonaProfileViewData personaProfileViewDataFromWire(
         ? personaId
         : projection.displayName,
     nicknameCustomized: projection.nicknameCustomized,
-    avatarUrl: isLocalFileImageSource(rawAvatarUrl)
-        ? rawAvatarUrl
-        : resolveAvatarImageUrl(rawAvatarUrl, avatarVersion: 0),
+    avatarUrl: rawAvatarUrl,
     // 媒体交付绑定（DEC-033）：契约缺席即保持 null，不以 personaId 冒充。
     avatarAssetId: projection.avatarAssetId,
     avatarAccessMode: projection.avatarAccessMode,
     avatarVersion: 0,
-    backgroundUrl: isLocalFileImageSource(rawBackgroundUrl)
-        ? rawBackgroundUrl
-        : resolveContentMediaUrl(rawBackgroundUrl),
+    backgroundUrl: rawBackgroundUrl,
     bio: projection.bio ?? '',
     identityTags: projection.identityTags ?? const <String>[],
     verified: false,
@@ -64,10 +58,7 @@ ActivePersonaContextViewData activePersonaContextViewDataFromWire(
     displayName: projection.displayName.isEmpty
         ? personaId
         : projection.displayName,
-    avatarUrl: resolveAvatarImageUrl(
-      projection.avatarUrl ?? '',
-      avatarVersion: projection.avatarVersion,
-    ),
+    avatarUrl: projection.avatarUrl ?? '',
     avatarVersion: projection.avatarVersion,
     contextVersion: projection.contextVersion,
     personaSnapshotVersion: projection.personaSnapshotVersion,
@@ -85,10 +76,7 @@ PersonaManagementItemViewData personaManagementItemViewDataFromWire(
     personaId: projection.personaId,
     displayName: displayName,
     userHandle: projection.userHandle ?? '',
-    avatarUrl: resolveAvatarImageUrl(
-      projection.avatarUrl ?? '',
-      avatarVersion: 0,
-    ),
+    avatarUrl: projection.avatarUrl ?? '',
     avatarVersion: 0,
     isolationLevel: projection.isolationLevel.wireName,
     profileVisibility: projection.profileVisibility.wireName,

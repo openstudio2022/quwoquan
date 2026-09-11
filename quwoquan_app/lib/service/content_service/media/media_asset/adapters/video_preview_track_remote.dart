@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/video_preview_track_query.dart';
-import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
+import 'package:quwoquan_app/runtime/platform/media/public_media_delivery_port.dart';
 import 'package:quwoquan_app/runtime/observability/generated/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_reporter.dart';
@@ -10,20 +10,12 @@ import 'package:quwoquan_cloud_contracts/generated/content_preview_track_contrac
 
 final class RemoteVideoPreviewTrackQuery implements VideoPreviewTrackQuery {
   RemoteVideoPreviewTrackQuery({
-    required CloudHttpClient httpClient,
-    required MediaDeliveryResolver mediaDeliveryResolver,
-    required AppTelemetryRecorder telemetry,
-  }) : this._(httpClient, mediaDeliveryResolver, telemetry);
+    required this.mediaDelivery,
+    required this.telemetry,
+  });
 
-  RemoteVideoPreviewTrackQuery._(
-    this._httpClient,
-    this._mediaDeliveryResolver,
-    this._telemetry,
-  );
-
-  final CloudHttpClient _httpClient;
-  final MediaDeliveryResolver _mediaDeliveryResolver;
-  final AppTelemetryRecorder _telemetry;
+  final PublicMediaDeliveryPort mediaDelivery;
+  final AppTelemetryRecorder telemetry;
   final LinkedHashMap<String, Future<VideoPreviewTrackManifest>>
   _manifestCache = LinkedHashMap<String, Future<VideoPreviewTrackManifest>>();
 
@@ -73,9 +65,9 @@ final class RemoteVideoPreviewTrackQuery implements VideoPreviewTrackQuery {
   Future<VideoPreviewTrackManifest> _decodeManifest(
     VideoPreviewTrackDescriptor descriptor,
   ) async {
-    final decoded = await _httpClient.getJson(
-      descriptor.manifestReference.deliveryUri,
-      headers: const <String, String>{'Accept': 'application/json'},
+    final decoded = await mediaDelivery.loadJson(
+      descriptor.manifestReference.sourceReference,
+      binding: descriptor.manifestReference,
     );
     final wire = PreviewTrackManifestWire.fromWire(decoded);
     // 预览轨道身份是 (assetId, trackVersion)。manifest.assetVersion 记录处理
@@ -98,13 +90,16 @@ final class RemoteVideoPreviewTrackQuery implements VideoPreviewTrackQuery {
           'preview manifest sprite identity is invalid',
         );
       }
-      final reference = _mediaDeliveryResolver.resolve(
+      final reference = mediaDelivery.tryResolve(
         entry.publicSliceKey,
         kind: MediaDeliveryKind.video,
         assetId: wire.assetId,
         version: wire.assetVersion,
         sha256: entry.sha256,
       );
+      if (reference == null) {
+        throw const FormatException('preview sprite reference invalid');
+      }
       sprites[entry.spriteId] = VideoPreviewTrackSprite(
         spriteId: entry.spriteId,
         reference: reference,
@@ -152,7 +147,7 @@ final class RemoteVideoPreviewTrackQuery implements VideoPreviewTrackQuery {
     int durationMs, {
     String? failReasonCode,
   }) async {
-    await _telemetry.record(
+    await telemetry.record(
       AppTelemetryPayload.videoPreviewTrackLoad(
         result: result,
         durationMs: durationMs,

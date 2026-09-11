@@ -134,7 +134,7 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
-        self.assertIn("export FLUTTER_TARGET=lib/main_prod.dart", result.stdout)
+        self.assertIn("export FLUTTER_TARGET=lib/main_alpha.dart", result.stdout)
         self.assertIn(environment["DART_DEFINES"], result.stdout)
         self.assertIn("compileRuntimeDefines=0", result.stderr)
         self.assertIn("embeddedRuntimePackage=0", result.stderr)

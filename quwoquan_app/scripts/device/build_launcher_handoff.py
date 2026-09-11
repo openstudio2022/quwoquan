@@ -301,7 +301,7 @@ def build_handoff(
         )
     effective_schema = contract["schemas"]["app_effective_launch_manifest"]
     handoff_schema = contract["schemas"]["app_launcher_handoff"]
-    entrypoint = effective_schema["fields"]["entrypoint"]["const"]
+    entrypoint = contract["content_source_entrypoints"][contract["content_source_policy"][args.env]]
     package_digest = runtime_config_package_digest(runtime_package, contract)
     trust_envelope_digest = runtime_config_trust_envelope_digest(
         runtime_config_trust_envelope,

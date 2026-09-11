@@ -61,10 +61,9 @@ final class ContentPostViewData {
     final type = wire.contentType.trim();
     final rawMedia = wire.mediaUrls ?? const <String>[];
     final mediaUrls = rawMedia
-        .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
-    final explicitVideoUrl = wire.videoUrl?.trim() ?? '';
+    final explicitVideoUrl = wire.videoUrl ?? '';
     final videoUrl = explicitVideoUrl.isNotEmpty
         ? explicitVideoUrl
         : type == 'video' && mediaUrls.isNotEmpty
@@ -94,7 +93,7 @@ final class ContentPostViewData {
       assistantUsePolicy: wire.assistantUsePolicy ?? AssistantUsePolicy.inherit,
       authorId: wire.authorId?.trim() ?? '',
       displayName: wire.authorDisplayName?.trim() ?? '',
-      avatarUrl: wire.authorAvatarUrl?.trim() ?? '',
+      avatarUrl: wire.authorAvatarUrl ?? '',
       authorAvatarAssetId: wire.authorAvatarAssetId,
       authorAvatarAccessMode: wire.authorAvatarAccessMode,
       authorBackgroundUrl: wire.authorBackgroundUrl,
@@ -211,13 +210,11 @@ final class ContentPostViewData {
   String get normalizedSummary => summary.trim();
   String get articlePreviewText => normalizedSummary;
 
-  List<String> get mediaImageUrls => imageUrls
-      .map((url) => url.trim())
-      .where((url) => url.isNotEmpty)
-      .toList(growable: false);
-  String get mediaCoverUrl => coverUrl?.trim() ?? '';
-  String get mediaVideoUrl => videoUrl?.trim() ?? '';
-  String get mediaThumbnailUrl => thumbnailUrl?.trim() ?? '';
+  List<String> get mediaImageUrls =>
+      imageUrls.where((url) => url.isNotEmpty).toList(growable: false);
+  String get mediaCoverUrl => coverUrl ?? '';
+  String get mediaVideoUrl => videoUrl ?? '';
+  String get mediaThumbnailUrl => thumbnailUrl ?? '';
   String get mediaVideoCoverUrl =>
       mediaThumbnailUrl.isNotEmpty ? mediaThumbnailUrl : mediaCoverUrl;
   bool get hasImages => mediaImageUrls.isNotEmpty;

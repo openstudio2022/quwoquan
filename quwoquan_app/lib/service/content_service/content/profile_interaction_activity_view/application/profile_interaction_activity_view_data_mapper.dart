@@ -1,5 +1,3 @@
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/profile_interaction_activity_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/domain/profile_interaction_filter_keys.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -41,16 +39,11 @@ ProfileInteractionActivityViewData profileInteractionActivityViewDataFromWire(
     viewerReaction: wire.viewerReaction.wireName,
     actorPersonaId: wire.actorPersonaId,
     actorDisplayName: actorDisplayName,
-    actorAvatarUrl: resolveAvatarImageUrl(
-      rawActorAvatarUrl,
-      avatarVersion: actorAvatarVersion,
-    ),
+    actorAvatarUrl: rawActorAvatarUrl,
     actorAvatarVersion: actorAvatarVersion,
     counterpartPersonaId: wire.counterpartPersonaId ?? '',
     counterpartDisplayName: wire.counterpartDisplayName ?? '',
-    counterpartAvatarUrl: resolveAvatarImageUrl(
-      wire.counterpartAvatarUrl ?? '',
-    ),
+    counterpartAvatarUrl: wire.counterpartAvatarUrl ?? '',
     targetPersonaId: wire.targetPersonaId,
     targetContentId: wire.targetContentId,
     targetContentType: wire.targetContentType.wireName,
@@ -60,16 +53,13 @@ ProfileInteractionActivityViewData profileInteractionActivityViewDataFromWire(
     targetReplyCount: wire.targetReplyCount,
     displayPersonaId: displayPersonaId,
     displayName: displayName,
-    displayAvatarUrl: resolveAvatarImageUrl(
-      displayAvatarUrl,
-      avatarVersion: displayAvatarVersion,
-    ),
+    displayAvatarUrl: displayAvatarUrl,
     displayAvatarVersion: displayAvatarVersion,
     displayUserRouteId: wire.displayUserRouteId ?? '',
     primaryText: wire.primaryText,
     contextText: wire.contextText ?? '',
     previewMediaKind: previewMediaKind,
-    previewImageUrl: resolveContentMediaUrl(wire.previewImageUrl ?? ''),
+    previewImageUrl: wire.previewImageUrl ?? '',
     previewText: wire.previewText ?? '',
     previewUnavailable: wire.previewUnavailable,
     previewObjectId: previewObjectId,

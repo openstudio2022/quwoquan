@@ -165,9 +165,7 @@ def main() -> int:
     )
     try:
         launch_contract = load_launch_manifest_contract()
-        entrypoint = launch_contract["schemas"]["app_effective_launch_manifest"][
-            "fields"
-        ]["entrypoint"]["const"]
+        entrypoint = launch_contract["content_source_entrypoints"]["remote"]
     except (KeyError, TypeError, LaunchManifestContractError) as exc:
         issues.append(f"launcher handoff metadata is invalid: {exc}")
         entrypoint = ""
@@ -175,7 +173,7 @@ def main() -> int:
         issues.append(
             "launcher handoff metadata must require lib/main_prod.dart for every environment"
         )
-    if 'entrypoint = effective_schema["fields"]["entrypoint"]["const"]' not in handoff:
+    if 'entrypoint = contract["content_source_entrypoints"]' not in handoff:
         issues.append(
             "launcher handoff must derive its entrypoint from canonical metadata"
         )

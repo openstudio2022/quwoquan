@@ -21,6 +21,7 @@ _ROOT = Path(__file__).resolve().parents[3]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from quwoquan_app.scripts.device.app_source_isolation import audit_source_closure
 from quwoquan_app.scripts.tools.flutter_facade.flutter_facade import (
     FacadeError,
     resolved_flutter_identity,
@@ -366,6 +367,13 @@ def _build_from_capsule(
         shutil.copytree(capsule_root / "repo", workspace, symlinks=True)
         _make_writable(workspace)
         app_dir = workspace / "quwoquan_app"
+        # 固定在线 build products 在任何依赖解析/编译前拒绝 Alpha 与测试闭包。
+        # Alpha 隔离产品须先经 canonical metadata 定义，不复用 nonprod 放行。
+        source_isolation = audit_source_closure(app_dir, "lib/main_prod.dart")
+        (attempt_dir / "source-isolation.json").write_text(
+            json.dumps(source_isolation, sort_keys=True, ensure_ascii=False),
+            encoding="utf-8",
+        )
         command_env = dict(os.environ)
         for key in (
             "QWQ_APP_RUNTIME_ENV",
