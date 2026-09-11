@@ -2,9 +2,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
+
+import pytest
+
+from quwoquan_ops.cli.commands.app_dependency_sync_projection import project as project_dependencies
 
 from quwoquan_app.scripts.device.app_source_isolation import (
     SourceIsolationError, audit_source_closure, project_source_inputs,
@@ -12,6 +19,83 @@ from quwoquan_app.scripts.device.app_source_isolation import (
     freeze_repository_inputs, derive_frozen_projection,
 )
 from quwoquan_app.scripts.runtime.architecture.verify_production_release_artifact import scan_artifact, _scan_stream
+
+
+@pytest.fixture(scope="module")
+def dependency_projection(tmp_path_factory):
+    repository = Path(__file__).resolve().parents[4]
+    root = tmp_path_factory.mktemp("native-assets").resolve()
+    app = project_dependencies(repository, root / "source-projection")
+    assert (app.parent / "quwoquan_ops/cli/lib/generated/app_launch_contract.py").is_file()
+    assert not (app.parent / "quwoquan_ops/cli/lib/app_launch_manifest_contract.py").exists()
+    return app
+
+
+def run_projected_native_assets(app, output, entrypoint):
+    # -I 禁止原仓 PYTHONPATH、用户 site 与 cwd 帮助补齐缺失模块；只运行投影内 CLI。
+    completed = subprocess.run(
+        [sys.executable, "-I", "-B", str(app / "scripts/device/app_source_isolation.py"),
+         "--repository", str(app.parent), "--destination", str(output),
+         "--entrypoint", entrypoint, "--native-assets"],
+        cwd=app.parent, env={"PYTHONDONTWRITEBYTECODE": "1"},
+        capture_output=True, text=True, timeout=60, check=False,
+    )
+    # 真实 stderr 单独保留，不让 Gradle 的最终包装异常掩盖 Python 首因。
+    output.with_suffix(".stderr.log").write_text(completed.stderr)
+    return completed
+
+
+@pytest.mark.parametrize("entrypoint", ["lib/main.dart", "lib/main_alpha.dart", "lib/main_prod.dart"])
+def test_dependency_projection_native_assets_entrypoints(dependency_projection, tmp_path, entrypoint):
+    app = dependency_projection
+    output = tmp_path / "flutter_assets"
+    result = run_projected_native_assets(app, output, entrypoint)
+    assert result.returncode == 0, result.stderr
+    actual = output / "assets/content/alpha"
+    if entrypoint == "lib/main_prod.dart":
+        assert not actual.exists()
+        return
+    source = app / "assets/content/alpha"
+    expected_files = {path.relative_to(source) for path in source.rglob("*") if path.is_file()}
+    assert expected_files == {path.relative_to(actual) for path in actual.rglob("*") if path.is_file()}
+    for relative in expected_files:
+        assert (actual / relative).read_bytes() == (source / relative).read_bytes()
+
+
+@pytest.mark.parametrize("entrypoint", ["lib/main.dart", "lib/main_alpha.dart"])
+@pytest.mark.parametrize("fault", ["missing_manifest", "bad_manifest", "missing_media", "bad_media"])
+def test_dependency_projection_native_assets_fail_closed(dependency_projection, tmp_path, entrypoint, fault):
+    app = dependency_projection
+    manifest = app / "assets/content/alpha/manifest.json"
+    if fault.endswith("manifest"):
+        damaged = manifest
+        expected = "FileNotFoundError" if fault.startswith("missing") else "Alpha manifest digest mismatch"
+    else:
+        damaged = app / json.loads(manifest.read_bytes())["media"][0]["assetPath"]
+        expected = "source missing or escape" if fault.startswith("missing") else "Alpha media digest mismatch"
+    original = damaged.read_bytes()
+    output = tmp_path / "flutter_assets"
+    try:
+        if fault.startswith("missing"):
+            damaged.unlink()
+        else:
+            damaged.write_bytes(original + b"corrupt")
+        result = run_projected_native_assets(app, output, entrypoint)
+        assert result.returncode != 0
+        assert expected in result.stderr, result.stderr
+        assert "ModuleNotFoundError" not in result.stderr
+        assert not output.exists()
+    finally:
+        damaged.write_bytes(original)
+
+
+def test_dependency_projection_online_rejects_stale_alpha(dependency_projection, tmp_path):
+    output = tmp_path / "flutter_assets"
+    stale = output / "assets/content/alpha"
+    stale.mkdir(parents=True)
+    result = run_projected_native_assets(dependency_projection, output, "lib/main_prod.dart")
+    assert result.returncode != 0
+    assert "online build output contains stale Alpha resources" in result.stderr, result.stderr
 
 
 class AppSourceIsolationTest(unittest.TestCase):

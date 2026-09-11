@@ -397,8 +397,9 @@ def verify_projection_identity(repository: Path) -> tuple[str, str]:
 def materialize_alpha_assets(app_dir: Path, output: Path, *, entrypoint: str) -> None:
     """原生 raw SDK build 也从同一 canonical snapshot 供给 Flutter asset lookup。"""
     app_dir = app_dir.resolve()
-    from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
-    mapping = load_launch_manifest_contract()["content_source_entrypoints"]
+    # 只消费投影已封存的生成合同，不引入投影外的运行时 loader 依赖。
+    from quwoquan_ops.cli.lib.generated.app_launch_contract import APP_LAUNCH_MANIFEST
+    mapping = APP_LAUNCH_MANIFEST["content_source_entrypoints"]
     if Path(entrypoint).is_absolute():
         entrypoint = Path(entrypoint).resolve().relative_to(app_dir.resolve()).as_posix()
     if entrypoint == "lib/main.dart":
