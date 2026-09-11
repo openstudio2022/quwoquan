@@ -323,36 +323,12 @@ func TestSubjectFollow_LocationReadAndVisitClosure(t *testing.T) {
 
 	// 新请求回读投影，证明 mark-visited 不只是命令响应自称成功：持久水位
 	// 必须已经清除 following_subjects 的红点并可跨请求观察。
-	readback := doRequest(
+	waitForFollowingSubjectVisited(
 		t,
-		http.MethodGet,
-		"/user/following-subjects?subjectType=location",
-		"",
 		headers,
+		"location",
+		"location_shenzhen",
 	)
-	if readback.Code != http.StatusOK {
-		t.Fatalf("read back visited location status=%d body=%s", readback.Code, readback.Body.String())
-	}
-	var visitedPage struct {
-		Items []struct {
-			SubjectID         string `json:"subjectId"`
-			SubjectType       string `json:"subjectType"`
-			LastVisitedAt     string `json:"lastVisitedAt"`
-			UnreadChangeCount int64  `json:"unreadChangeCount"`
-			HasUnreadChanges  bool   `json:"hasUnreadChanges"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(readback.Body.Bytes(), &visitedPage); err != nil {
-		t.Fatalf("decode visited location readback: %v", err)
-	}
-	if len(visitedPage.Items) != 1 ||
-		visitedPage.Items[0].SubjectID != "location_shenzhen" ||
-		visitedPage.Items[0].SubjectType != "location" ||
-		visitedPage.Items[0].LastVisitedAt == "" ||
-		visitedPage.Items[0].UnreadChangeCount != 0 ||
-		visitedPage.Items[0].HasUnreadChanges {
-		t.Fatalf("visited location projection did not converge: %+v", visitedPage.Items)
-	}
 }
 
 // TestSubjectFollow_IdempotentReplayAndUnfollow 验证 set/unset 命名迁移语义：
@@ -595,6 +571,51 @@ func TestPersonaFollow_ProjectsIntoFollowingSubjects(t *testing.T) {
 	}
 	if page.Items[0].TargetRouteID != "user_profile" {
 		t.Fatalf("persona row must retain the canonical profile route: %+v", page.Items[0])
+	}
+}
+
+func waitForFollowingSubjectVisited(
+	t *testing.T,
+	headers map[string]string,
+	subjectType, subjectID string,
+) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		rec := doRequest(
+			t,
+			http.MethodGet,
+			"/user/following-subjects?subjectType="+subjectType,
+			"",
+			headers,
+		)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("read back visited %s status=%d body=%s", subjectType, rec.Code, rec.Body.String())
+		}
+		var page struct {
+			Items []struct {
+				SubjectID         string `json:"subjectId"`
+				SubjectType       string `json:"subjectType"`
+				LastVisitedAt     string `json:"lastVisitedAt"`
+				UnreadChangeCount int64  `json:"unreadChangeCount"`
+				HasUnreadChanges  bool   `json:"hasUnreadChanges"`
+			} `json:"items"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+			t.Fatalf("decode visited %s readback: %v", subjectType, err)
+		}
+		if len(page.Items) == 1 &&
+			page.Items[0].SubjectID == subjectID &&
+			page.Items[0].SubjectType == subjectType &&
+			page.Items[0].LastVisitedAt != "" &&
+			page.Items[0].UnreadChangeCount == 0 &&
+			!page.Items[0].HasUnreadChanges {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("visited %s projection did not converge: %+v", subjectType, page.Items)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 

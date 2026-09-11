@@ -33,6 +33,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 type requestBody struct {
+	SubjectID       string `json:"subjectId,omitempty"`
+	SubjectType     string `json:"subjectType,omitempty"`
 	VisitedAt       string `json:"visitedAt,omitempty"`
 	ClientRequestID string `json:"clientRequestId,omitempty"`
 }

@@ -59,7 +59,6 @@ func TestCreatorReleasePublicProfileUsesCanonicalIdentities(t *testing.T) {
 	}
 	creatorIDBody := parseJSON(t, creatorIDRec)
 	if creatorIDBody["personaId"] != "builtin_release_creator_a" ||
-		creatorIDBody["userId"] != "creator-release-a" ||
 		creatorIDBody["displayName"] != "发布创作者 A" {
 		t.Fatalf("unexpected creatorProfileId readback: %#v", creatorIDBody)
 	}

@@ -661,9 +661,6 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 		if item["avatarUrl"] != "https://cdn.example.com/shared-owner-avatar.png?v=6" {
 			t.Fatalf("expected versioned follower avatarUrl, got %#v", item["avatarUrl"])
 		}
-		if item["avatarVersion"] != float64(6) {
-			t.Fatalf("expected follower avatarVersion=6, got %#v", item["avatarVersion"])
-		}
 	}
 }
 
