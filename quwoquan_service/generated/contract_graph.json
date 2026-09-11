@@ -125923,7 +125923,7 @@
         "transport": [
           {
             "path": "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/adapters/inbound/http/handler.go",
-            "sha256": "d3c8913de764787a8a9c55a51bd23b953c04b10c618a8079d51fb87dd4dafc6c"
+            "sha256": "66fe92ac834ace3b1225ea2455e8e3fef52241734fb5e53b9cae2c7836c137fc"
           }
         ],
         "localContract": [
@@ -127473,7 +127473,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache/close_cache.go",
-            "sha256": "c2d08ba239af4b925b62af834ac796f04d364ef21fa05faedd01333b59813137"
+            "sha256": "d9504aafd7f771d102b50915ef96c02b311cce41576b17fda9fdaee4434bd55e"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache/otp_code_cache.go",
@@ -127862,6 +127862,10 @@
             "sha256": "faa1fa8045555551d58b260543ec8bb461ccad8650470b64a9a654854e79d837"
           },
           {
+            "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/close_cache__local_contract_test.go",
+            "sha256": "d30a376ae9a5e31639443a3c6847c4ecee7c8b1aa4d4df11448b02a83f606800"
+          },
+          {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/creator_release_database__contract__local_contract_test.go",
             "sha256": "7d7355b0f27f3058acd4a1eae2befa5c6ec052e06b668ba1239cfa9455608a59"
           },
@@ -128073,7 +128077,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/creator_release_public_profile__api_integration_test.go",
-            "sha256": "6eead4ff9c0c165a2d2f264995c90ca4e38670d5a5961ba3279df40fe1ded231"
+            "sha256": "6a290d77700cf3af956b74fc1cf2de50b8995c461966ad821c238337cc444ff0"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/creator_runtime_profile_composition__support__api_integration_test.go",
@@ -128101,7 +128105,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/follow_contract__api_integration_test.go",
-            "sha256": "35698f1f05f71818ef2393dbc3c4b7679245d56c83182bac2297437d1ba78ef9"
+            "sha256": "0ea7e53593efc907a0c190ca897142467b2c29fadd444397c137f9680203c4f7"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/following_subject_canonical_contract__data_consistency__api_integration_test.go",
@@ -128125,7 +128129,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/homepage_bundle_contract__api_integration_test.go",
-            "sha256": "bc7509309979b056d2c62f0533218e978d6ec5c56a88e0c6f4cfbbc4114094fb"
+            "sha256": "57fa4f6b5e0f4609c0503d0ed75e4745a0f7fe3a46a4b48f5204e859fd7d0350"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/invitation_contract__security_reliability__api_integration_test.go",
@@ -128137,7 +128141,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/operation_queries__data_consistency__api_integration_test.go",
-            "sha256": "130b22ec7bd27d8e2719b3b6ad00888b88df1465d7a89c6552084b75a8bd1263"
+            "sha256": "ea1a11b20e28ff1690e2d87585d45a8380bc840e58c6475c739fb294dc557948"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/persona_command_packet__api_integration_test.go",
@@ -128149,7 +128153,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/persona_view_contract__api_integration_test.go",
-            "sha256": "312f40cd14eaaedf3aefad6d4fcc492d171ac7ef0fb33f0fad164a573ebf02b0"
+            "sha256": "bef49baab3a1040876135f04f2d1ee24c2147f6eac3124685393982e04b40802"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/pg_setup__support__api_integration_test.go",
@@ -128185,11 +128189,11 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/subject_follow_contract__api_integration_test.go",
-            "sha256": "09776ccda72290afec26b32a2407ea85c98b5011b9c004f723680a13b07715fa"
+            "sha256": "b03fb602b7f1b470199154d66600d0cd98c92817bbb782b3d00089376ce00111"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/testmain__api_integration_test.go",
-            "sha256": "8cdef394caee0c0c09d336330cf9edd45909a1c6426169df6989c71e6e4a9093"
+            "sha256": "ce5ee3a781f49b5f006c1ac458266387911898842e467ab78ec89cec9f684439"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/user_settings_packet__api_integration_test.go",
