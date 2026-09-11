@@ -52,6 +52,7 @@ from content.release.canonical.pool_source_attribution import (
 from content.release.canonical.review_rights_binding import validate_review_authority
 from content.release.canonical.canonical_inventory import allocate_package_path
 from content.release.canonical.post_transaction_sources import project_object_sources
+from content.release.canonical.post_transaction_media import copy_markdown_surface
 from core.paths import PUBLISH_ROOT
 from core.publish_layout import logical_object_ref
 from core.source_attribution import canonical_source_attribution
@@ -154,7 +155,6 @@ def build_entity_object_transaction_package(
     try:
         object_root = staging / "object"
         object_root.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(object_source / "page.md", object_root / "page.md")
         shutil.copy2(
             content_review_source,
             object_root / CANONICAL_CONTENT_REVIEW_REF,
@@ -399,6 +399,11 @@ def build_entity_object_transaction_package(
                 "height": height,
             })
 
+        copy_markdown_surface(
+            object_source / "page.md", object_root / "page.md",
+            source_assets=source_manifest.get("assets") or [],
+            canonical_assets=canonical_assets,
+        )
         if not cas_rows and not (
             str(source_manifest.get("contentType") or "") in {"article", "homepage"}
             and str(source_manifest.get("publishMediaMode") or "") == "text_only"

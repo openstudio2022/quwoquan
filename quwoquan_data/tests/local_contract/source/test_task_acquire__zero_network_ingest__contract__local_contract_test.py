@@ -6,6 +6,8 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-037.t6
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-037.t7
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-037.t8
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-037.t15
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-037.t16
 """task acquire 是零网络 ingest：只从 AI 已下载的本地字节与申报事实派生硬事实。
 
 全程在 socket 被禁用的环境下运行；任何出网尝试都会让测试直接失败。
@@ -182,6 +184,26 @@ def test_missing_rights_fields_are_schema_rejected_not_defaulted(execution: Path
     assert not (execution / TARGET_A / "1.download").exists()
 
 
+@pytest.mark.parametrize("fault", ["image", "missing_acquisition", "bad_digest", "empty_formats", "direct_with_merge"])
+def test_host_merged_source_rejects_incomplete_or_conflicting_facts(tmp_path, fault):
+    from core.schema import assert_valid
+    source = _media_source(tmp_path / "video.mp4", b"not-read", kind="video", directUrl=None, hasAudio=False,
+                           acquisition={"method": "host_merged", "tool": "yt-dlp", "metadataSha256": "a" * 64, "formatIds": ["137", "140"]})
+    if fault == "image":
+        source["kind"] = "image"
+    elif fault == "missing_acquisition":
+        del source["acquisition"]
+    elif fault == "bad_digest":
+        source["acquisition"]["metadataSha256"] = "unknown"
+    elif fault == "empty_formats":
+        source["acquisition"]["formatIds"] = []
+    else:
+        source["directUrl"] = DIRECT_URL
+    with pytest.raises(ValueError):
+        assert_valid({"schema": "quwoquan_data.ingest_manifest", "executionId": EXECUTION_ID,
+                      "targets": [{"targetRef": TARGET_A, "sources": [source]}]}, "source", "ingest_manifest")
+
+
 @pytest.mark.parametrize("rights_status", ["verified", "unverified", "restricted", "unknown"])
 def test_declared_rights_are_preserved_without_authorization_upgrade(execution: Path, tmp_path: Path, rights_status: str) -> None:
     body = _png((9, 9, 9))
@@ -267,11 +289,14 @@ def test_page_source_takes_agent_written_markdown(execution: Path, tmp_path: Pat
     assert meta["rawSha256"] == "sha256:" + hashlib.sha256(source_md.read_bytes()).hexdigest()
 
 
+@pytest.mark.parametrize("host_merged", [False, True])
 @pytest.mark.skipif(__import__("shutil").which("ffmpeg") is None or __import__("shutil").which("ffprobe") is None, reason="ffmpeg/ffprobe not on PATH")
-def test_transcoded_video_replay_keeps_one_source_unit_per_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_transcoded_video_replay_keeps_one_source_unit_per_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, host_merged: bool) -> None:
     """派生体（转码）字节逐次不同，但 unit 身份必须由下载原件决定：同一清单重放不得为同一 target 再生成第二个 unit。"""
     import subprocess
 
+    monkeypatch.setattr(paths, "DATA_EXECUTIONS_ROOT", tmp_path / "data/tasks")
+    monkeypatch.setenv("QWQ_LIBRARY_ROOT", str(tmp_path / "content_library"))
     video_id = "20260906--travel-video-six-step--ingest--pilot-001"
     video_ref = "posts/video/风光/云和梯田航拍/1"
     root = paths.DATA_EXECUTIONS_ROOT / video_id
@@ -292,8 +317,13 @@ def test_transcoded_video_replay_keeps_one_source_unit_per_target(tmp_path: Path
         "filePath": str(source), "sha1": hashlib.sha1(body).hexdigest(), "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
         "creator": "唐代吉", "description": "云和梯田航拍", "relevance": "实体实景", "hasAudio": False, "watermarkStatus": "unknown", "watermarkKind": "unknown",
     }]}]}))
+    acquisition = {"method": "host_merged", "tool": "yt-dlp", "metadataSha256": "a" * 64, "formatIds": ["137", "140"]}
+    if host_merged:
+        document = json.loads(manifest.read_bytes())
+        document["targets"][0]["sources"][0].update(directUrl=None, acquisition=acquisition)
+        manifest.write_bytes(_canonical(document))
     first = acquire_module.acquire(execution_id=video_id, request_path=manifest)
-    assert first["ingested"] == 1
+    assert first["ingested"] == 1, first
     refs_path = root / video_ref / "1.download/source_refs.json"
     before = json.loads(refs_path.read_bytes())
     assert len(before["sources"]) == 1
@@ -302,6 +332,15 @@ def test_transcoded_video_replay_keeps_one_source_unit_per_target(tmp_path: Path
     assert meta["rawSha256"] == "sha256:" + hashlib.sha256(body).hexdigest(), "unit 身份取下载原件摘要"
     asset = json.loads((unit / "assets/index.json").read_bytes())["assets"][0]
     assert asset["mimeType"] == "video/mp4" and asset["derivativeBinding"]["originalSha256"] == meta["rawSha256"]
+    if host_merged:
+        receipt = json.loads((unit.parent / meta["acquisition"]["receiptRef"]).read_bytes())
+        assert receipt["directUrl"] is None and receipt["acquisition"] == acquisition
+        assert meta["acquisition"]["sourceAcquisition"] == acquisition
+        assert asset["originalAssetUrl"] == receipt["filePage"]
+        assert asset["sourceAttribution"]["originalAssetUrl"] == receipt["filePage"]
+    from content.release.canonical.image_identity import _acquired_assets
+    # 后续 preflight 读取同一取得事实；null 直链不能被误判为资产身份漂移。
+    assert len(_acquired_assets(root, video_ref)) == 2
 
     second = acquire_module.acquire(execution_id=video_id, request_path=manifest)
     assert second["ingested"] == 1

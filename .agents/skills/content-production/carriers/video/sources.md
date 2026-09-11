@@ -13,7 +13,7 @@
 
 - 单条 request：`{"url":"https://www.youtube.com/watch?v=<id>","mode":"single","limit":1}`。
 - 频道 request：`{"url":"https://www.youtube.com/@<handle>/videos","mode":"channel","limit":10}`，limit 为 1..100。仅接受 youtube.com/www.youtube.com/youtu.be 的公开 HTTPS URL。
-- single 使用 no-playlist，channel 使用 yes-playlist/flat-playlist；两者都显式带 playlist-end/max-downloads，no-playlist 不单独代表有界。无重试，120 秒进程超时。频道 flat 候选还需宿主单条取证，不把频道当 target。
+- single 使用 no-playlist 与 playlist-end=1；不加 max-downloads=1，避免 yt-dlp 在 dump-single-json 前以 101 提前退出。channel 使用 yes-playlist/flat-playlist，并显式带 playlist-end/max-downloads；两种模式均校验响应条数。无重试，120 秒进程超时。频道 flat 候选还需宿主单条取证，不把频道当 target。
 - 保留原 uploader/uploaderUrl，只有源实际 creator 才写 creator；许可、描述、热度按原响应。每条都有稳定 video 资产 ID，duration/filesize 或 filesize_approx 即使缺直链也保留。requested_formats 或 flat URL 不伪造媒体直链。
 - entries 缺席只支持单条对象；playlist 缺 entries、entries=null 或未知类型可解释拒绝。数组 null 是不可用位置，计入 limit、不生成候选、不自动补足条数。`--response` 离线回放不代表在线可达或可播放。
 
@@ -31,6 +31,6 @@
 python3 .agents/skills/content-production/scripts/producer.py --workspace "$ROUND" register-local video --candidates video/candidates.json --candidate-id 'youtube:<id>' --asset-id 'youtube:<id>:video' --file video/host/result.mp4 --metadata video/host/result.info.json --max-bytes 536870912
 ```
 
-登记核对 id/webpage_url、计算媒体 bytes/sha256 和 metadataSha256，不下载、不手填取得成功。读取缓存前仍校验当前载体与两份摘要。不把 watch URL 假称 directUrl；分轨合并结果没有单文件直链时可登记，但当前 Data ingest 强制实际 directUrl，build-inputs 返回 `SOURCE.DIRECT_URL_REQUIRED`，需 Data 契约闭合后才能进入 ingest。
+登记核对 id/webpage_url、计算媒体 bytes/sha256 和 metadataSha256，不下载、不手填取得成功。读取缓存前仍校验当前载体与两份摘要。无单文件直链时，build-inputs 从原 info.json 读取实际 format_id 列表，输出 `directUrl=null` 及 host_merged 取得事实；缺格式 ID 或摘要漂移拒绝。Data 零网络 ingest 保留 null 与取得事实，资产署名回指作品页，不把 watch URL 假称下载直链。真实来源试点与发布仍须逐阶段验证。
 
 Data API key、ytsearch/bilisearch、Dailymotion/Vimeo/档案/Pexels/Pixabay 等没有对应模块，仅按明确需要用宿主工具取证，不新增占位客户端或自动来源切换，不绕过 DRM、登录或挑战。

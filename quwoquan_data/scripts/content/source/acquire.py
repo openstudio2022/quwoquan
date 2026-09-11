@@ -240,7 +240,7 @@ def _attribution(source: dict[str, Any], *, platform: str, collected_at: str, ha
         "originalCreatorProfileUrl": None,
         "platform": platform,
         "sourcePostUrl": str(source["sourceUrl"]),
-        "originalAssetUrl": str(source["directUrl"]),
+        "originalAssetUrl": str(source["directUrl"] or source["sourceUrl"]),
         "attributionText": f"{creator} / {platform} / {license_name}",
         "rightsBasis": license_name,
         "commercialAuthorizationStatus": str(source.get("commercialAuthorizationStatus") or defaults["commercialAuthorizationStatus"]),
@@ -340,7 +340,7 @@ def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[st
             "body": body,
             "originalSha256": original_sha,
             "mime": mime,
-            "directUrl": str(source["directUrl"]),
+            "directUrl": source["directUrl"],
             "width": width,
             "height": height,
             "derivative": derivative,
@@ -411,7 +411,7 @@ def _asset_row(
         "creator": acquired["creator"],
         "platform": acquired["platform"],
         "collectionPageUrl": acquired["canonicalUrl"],
-        "originalAssetUrl": media["directUrl"],
+        "originalAssetUrl": media["directUrl"] or acquired["canonicalUrl"],
         "capturedAt": media["collectedAt"],
         "licenseSnapshot": acquired["license"],
         "usageScope": media["usageScope"],
@@ -500,12 +500,16 @@ def _materialize(
     if source.get("accessPolicy"):
         # 来源站点 robots/ToS 态度只记录：schema 已把取值限定在闭集，这里不再解释含义。
         meta["accessPolicy"] = str(source["accessPolicy"])
+    if "extractor" in source:
+        # 正文取得方法属于宿主申报事实，不从站点身份覆盖。
+        meta["extractor"] = source["extractor"]
     assets: list[dict[str, Any]] = []
     receipt_ref = ""
     with _lock(unit.parent / f".{unit_id}.lock"):
         if unit.exists():
             existing = json.loads((unit / "meta.json").read_bytes())
-            if existing.get("rawSha256") != raw_sha or existing.get("targetRef") != target_ref:
+            if (existing.get("rawSha256") != raw_sha or existing.get("targetRef") != target_ref
+                    or existing.get("extractor") != meta.get("extractor")):
                 raise AcquireError(f"DATA.ACQUIRE.CREATE_ONCE_CONFLICT: {unit_id}")
             meta = existing
             index_path = unit / "assets/index.json"
@@ -539,6 +543,8 @@ def _materialize(
                     }
                     if media["derivative"]:
                         acquisition["derivativeBinding"] = media["derivative"]
+                    if source.get("acquisition"):
+                        acquisition["sourceAcquisition"] = source["acquisition"]
                     if media["kind"] == "video":
                         probe = _ffprobe(asset_path)
                         extra.update({k: probe[k] for k in ("durationMs", "codec", "container")})
@@ -587,6 +593,7 @@ def _materialize(
                         "sourceUnitId": unit_id,
                         "filePage": acquired["canonicalUrl"],
                         "directUrl": media["directUrl"],
+                        **({"acquisition": source["acquisition"]} if source.get("acquisition") else {}),
                         "license": acquired["license"],
                         "termsUrl": acquired["termsUrl"],
                         "creator": acquired["creator"],

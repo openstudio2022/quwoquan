@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import shutil
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from core.content_library import reference_existing_file
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _safe_id,
@@ -49,18 +48,43 @@ def _media_dimensions(path: Path, raw: Mapping[str, Any]) -> tuple[int, int, str
     return probe.width, probe.height, resolved_mime
 
 
-def _copy_post_surface(source: Path, target: Path) -> None:
-    """Copy the reviewed post surface into the transaction package.
+_MARKDOWN_IMAGE_RE = re.compile(r'!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)')
 
-    The package still carries the bodies alongside the documents, because the
-    transaction is what admits them into the content library. Which of those
-    files canonical publish ends up owning is decided once, in
-    ``build_transaction_delta``, not by what is copied here.
-    """
-    for name in ("article.md",):
-        path = source / name
-        if path.is_file():
-            shutil.copy2(path, target / name)
+
+def copy_markdown_surface(
+    source: Path, target: Path, *, source_assets: list[dict[str, Any]],
+    canonical_assets: list[dict[str, Any]],
+) -> None:
+    """只投影图片引用，保留正文其余字节；原稿与审核原件不写入。"""
+    destinations = {str(row["assetId"]): str(row["path"]) for row in canonical_assets}
+    aliases: dict[str, set[str]] = {}
+    for asset in source_assets:
+        asset_id = str(asset["assetId"])
+        filename = str(asset.get("fileName") or "")
+        bare = filename.removeprefix("assets/")
+        refs = {filename, bare, f"assets/{bare}"}
+        refs.update(asset.get("sourceAssetRefs") or [])
+        if asset.get("sourceAssetRef"):
+            refs.add(str(asset["sourceAssetRef"]))
+        for ref in refs - {""}:
+            aliases.setdefault(ref, set()).add(asset_id)
+
+    def replace(match: re.Match[str]) -> str:
+        ref = match.group(1)
+        matches = aliases.get(ref, set())
+        if len(matches) != 1 or not matches <= destinations.keys():
+            raise ObjectTransactionError(
+                f"DATA.PUBLISH.BODY_MEDIA_REF_INVALID: {ref!r}"
+            )
+        destination = _safe_rel(destinations[next(iter(matches))], label="body media path")
+        body = target.parent / destination
+        if body.is_symlink() or not body.is_file():
+            raise ObjectTransactionError(f"DATA.PUBLISH.BODY_MEDIA_MISSING: {destination}")
+        start, end = match.start(1) - match.start(), match.end(1) - match.start()
+        return match.group()[:start] + destination.as_posix() + match.group()[end:]
+
+    text = source.read_bytes().decode("utf-8")
+    target.write_bytes(_MARKDOWN_IMAGE_RE.sub(replace, text).encode("utf-8"))
 
 def _final_content_ref(target: Path, *, holds_media: bool) -> str:
     """Name the document a consumer opens first for one canonical post.
@@ -86,7 +110,7 @@ def _creator_ref(manifest: Mapping[str, Any]) -> str:
 
 
 __all__ = [
-    "_copy_post_surface",
+    "copy_markdown_surface",
     "_creator_ref",
     "_final_content_ref",
     "_media_dimensions",

@@ -79,6 +79,9 @@
       "type": "string",
       "minLength": 1
     },
+    "extractor": {
+      "$ref": "ingest_manifest.schema.json#/$defs/pageSource/properties/extractor"
+    },
     "sourceUseMode": {
       "enum": [
         "licensed_adaptation",
@@ -136,6 +139,7 @@
           "type": "string",
           "minLength": 1
         },
+        "sourceAcquisition": {"$ref": "ingest_manifest.schema.json#/$defs/hostMergedAcquisition"},
         "assetRef": {
           "type": "string",
           "pattern": "^assets/[^/]+$"

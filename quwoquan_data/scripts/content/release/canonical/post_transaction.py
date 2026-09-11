@@ -51,7 +51,7 @@ from content.release.canonical.post_transaction_existing import (
     reuse_existing_post_package,
 )
 from content.release.canonical.post_transaction_media import (
-    _copy_post_surface,
+    copy_markdown_surface,
     _creator_ref,
     _final_content_ref,
     _media_dimensions,
@@ -158,7 +158,6 @@ def build_post_object_transaction_package(
     try:
         object_root = staging / "object"
         object_root.mkdir(parents=True)
-        _copy_post_surface(source, object_root)
         shutil.copy2(
             content_review_source,
             object_root / CANONICAL_CONTENT_REVIEW_REF,
@@ -378,6 +377,12 @@ def build_post_object_transaction_package(
         canonical_assets = project_canonical_post_asset_paths(
             canonical_assets, destination_paths=destination_paths,
         )
+        if (source / "article.md").is_file():
+            copy_markdown_surface(
+                source / "article.md", object_root / "article.md",
+                source_assets=source_manifest.get("assets") or [],
+                canonical_assets=canonical_assets,
+            )
         publish_media_mode = str(
             effective_source_manifest.get("publishMediaMode") or ""
         ).strip()

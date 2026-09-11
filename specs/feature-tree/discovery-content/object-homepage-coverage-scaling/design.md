@@ -59,10 +59,10 @@
 
 - 对象边界：canonical 对象与 pool record 拥有身份、版本和 payload；现有身份 query、有限 record supersession 与对象事务原语继续复用。不建立 repair process manager、长期 case 队列或九阶段 recovery，也不宣称已有完整 Homepage 修复 CLI。
 - 只读判定：`CanonicalIdentityStateQuery` 与 pool query 区分身份不存在、当前有效及存在但无效，保留最深层 typed error、exact objectRef、依赖与当前摘要；不得把 invalid 静默当作已完成或可重新创建。
-- 一次性输入：受治理 cutover 只接受覆盖全部活跃对象的精确清单，绑定 before identity/digest、依赖 refs、证据、迁移或删除动作与 after 预期。缺证据、重复身份、漏对象、依赖未决或同时选择互斥动作均阻断；清单不是新生产队列。
+- 一次性输入：受治理 cutover 只接受覆盖全部活跃对象的精确清单，绑定 before identity/digest、依赖 refs、证据、转换或归档动作与 after 预期。转换缺证据、重复身份、漏对象、依赖未决或同时选择互斥动作均阻断；清单不是新生产队列。
 - 迁移：证据充分才保留逻辑身份及资产顺序，受测契约转换产生新版本与新摘要；原始作者、许可、来源及 review 事实不被补造。payload drift 与权利记录无效须分别验证实际证据，不能只刷新摘要或填写 passed。普通 publisher 不接受旧 schema 或特殊覆盖参数。
-- 退役：不能证明有效的对象及无法修复的依赖经精确删除授权后退出活跃树；终态写入受保护迁移证据，不靠 excluded 或 OPEN 永久保留旧运行对象。删除对象不意味着删除被任一新池、保留 release 或审计引用的媒体。
-- 原子性：在既有 staging/delta/锁/校验边界构造并验证完整新池，再以 expected-before 摘要 CAS 激活。阶段失败或并发写入保持旧状态，禁止部分可见树、整池 reset 和旁路 legacy 池；切换完成后旧树退出活跃路径并按精确保护集清理。
+- 归档与资格：不能验证的对象及未闭合依赖只归档，不进入新合格池；不得以目标数量补造资格或把归档当作重审通过。归档原件与被任一保留作品、release、review 或审计引用的媒体继续受保护。
+- 原子性：在既有 staging/delta/锁/校验边界构造并验证完整新池，再以 expected-before 摘要 CAS 激活。阶段失败或并发写入保持旧状态，禁止部分可见树、整池 reset 和旁路 legacy 池；转换后通过新包、引用闭包及保护集校验，才按精确授权清理旧链，不提前宣称完成。
 - 历史与运行隔离：旧 Git、receipt、release、rollback 与环境绑定保护集保持原字节；新 reader 不接受旧 release 作为激活输入。历史复核按原提交或制品离线运行，迁移专用旧解析器不进入普通 reader，完成后撤下；不保留在线双读双写。
 - 验收：真实对象事务构造输入，经存储边界 fault injection 制造 drift，验证全对象清单闭包、证据不足拒绝、版本/身份/媒体保护、并发 CAS 和 staging/current-switch 故障恢复。输出逐对象结果与 before/after 摘要，不以改计数或重算旧证据冒充成功。
 - 关联要求：[`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md) 的 `REQ-001` 与 [`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-001`
@@ -218,12 +218,12 @@
 <a id="dec-042"></a>
 ### DEC-042 独立内容仓拥有物理定位，身份与包摘要不随目录变化
 
-- 决策与 owner：canonical 内容在源码工作树平级独立 Git 仓，由仓身份/布局版本/实际工程契约摘要绑定；仓不是源码 worktree、submodule 或 symlink。Data owns 包/locator/记录，Service 只从 manifest 读取稳定身份，Ops 只物化 exact release。源码 worktree discovery 按 repository 身份区分，不使用目录名忽略规则。
+- 决策与 owner：canonical 内容在源码工作树平级独立 Git 仓；仓元数据除 schema 标识外只有 `repositoryId` 与 `layoutVersion`，实际工程契约摘要仅由 handoff 绑定。仓不是源码 worktree、submodule 或 symlink。Data owns 包/locator/记录，Service 只从 manifest 读取稳定身份，Ops 只物化 exact release。源码 worktree discovery 按 repository 身份区分，不使用目录名忽略规则。
 - 目录：地域实体在自身领域下依已核实行政链、已有主类型、分区、名称、组内条目管理；posts 按 carrier、主分类、分区、名称、组内条目管理。具体路径语法与容量阈值唯一归 Data schema/policy。行政链可缺区县、可为直辖市/省直管县/境外真实层级；主归属只有一个，其他地域保留 ref。地域适用性显式，当前不实现非地点 producer。
 - 分配：非空类始终从首分区开始，只用条目数与随体逻辑字节两个指标。已有同名组原地追加、不拆组；新组在容量允许者中取最低归一化负载，平分按编号，无合适者才开新分区。超大组只报告例外，无跨地域均衡、后台重分区、第三种统计阈值或 per-partition authority；inventory 可重建。
-- 身份：逻辑 entityRef/实体 ID/作品 ID 在 init 冻结，目录末级数字只表示组内条目、允许空洞且不复用，不猜版本。名称/地域/类型整理属于显式 locator 变更；包内摘要不含外层 locator，release 定位清单包含 locator。同物新版本沿用身份并递增内容版本，新包字节不可借纯移动刷新旧审核证据。
+- 身份：逻辑 entityRef/实体 ID/作品 ID 在 init 冻结，目录末级数字只表示组内条目、允许空洞且不复用，不猜版本。名称/地域/类型整理属于显式 locator 变更；包内摘要不含外层 locator，release 复用既有引用定位，不新增 objectPath 表。同物新版本沿用身份并递增内容版本，新包字节不可借纯移动刷新旧审核证据。
 - 并发与原子性：共同内容根的锁定位不依赖各源码 OUTPUT_ROOT；单对象临时包验证后原子可见，publish、整组整理与内容 Git ref 更新共享串行边界。缺根、错仓、名称/路径冲突 typed 阻断；只枚举声明对象根，Git、repository metadata 与 releases 不计入 inventory。execution/receipts 物理根不随 publish 重构变化。
-- handoff：继续仅有 cohort/handoff 两份 terminal 事实，create-or-same 保存到内容仓，绑定工程 baseline/契约摘要与所选 ID/版本/包摘要/定位的 exact 内容快照。内容 commit 只有与字节匹配才记录；不增加必须先后提交两次的仪式。重建须保存固定时间和 exact build 输入，历史 bundle 不清理为试验对象。
+- handoff：继续仅有 cohort/handoff 两份 terminal 事实，create-or-same 保存到内容仓；handoff 仅新增 `repositoryId`，工程 baseline/实际契约摘要沿用既有字段，所选对象与 exact 内容快照复用既有 release/object query digests，不另加 objectPath 表、`contentRevision` 或 `layoutVersion`，不要求内容提交或双提交。重建须保存固定时间和 exact build 输入，历史 bundle 不清理为试验对象。
 - 理由与被否决方案：地域便于人工管理，但存储位置不应决定业务身份。否决路径哈希/按名取首项、日期轮次树、跨包媒体借用、分区 mapping authority、自动 rebalance、错误根 fallback、源码提交冒充内容快照。
 - 失败恢复/回滚：沿用 `DEC-023` 的全量 before、独立备份、保护集与 expected-before staging；不交换包含 Git 的仓根。准备不授予搬迁/删除/init/clone/commit/push/环境激活权限，各动作分别确认；失败保持原对象与审计，不声称一个 lane 配置已切全局。
 - 观测与可测试面：现有 DataRoot/inventory/object-transaction 短 local_contract 验真实行政链/Unicode/分区边界与跨 worktree 共锁；身份与 importer 测试验 ref/ID/主页 ID 守恒。仅输出该事务容量例外、首个 typed blocker、before/after 摘要，无新健康服务或全池日常重哈希。
@@ -235,7 +235,7 @@
 ### DEC-043 发布闭包严格，运行实体引用与媒体失败局部降级
 
 - 决策与 owner：producer 在 exact release 构建检查显式内部 ref，运行正文使用名称快照，用户点击才调用既有目标详情 API。Entity owns 可见性/权限，Content importer 复用既有 exact 主页映射，App 复用错误展示与媒体缓存；不扩展 runtime 的 active pointer fence 或添加跨服务强一致协议。
-- 实体引用：文章 mention 从同一 Entity 映射生成而不是新增 hp 哈希公式，映射缺失呈普通文字；同名异地不得串跳。非文章保持可读 label/结构化关联，不新增通用富文本、引用卡片或 article-only GraphQL 扩展。内部语法不得泄露物理路径；没有系统实体的外部名称不捏造 ref。
+- 实体引用：文章 mention 从同一 Entity 映射生成而不是新增 hp 哈希公式，映射缺失呈普通文字；同名异地不得串跳。非文章保持可读 label/结构化关联，不新增通用富文本、引用卡片或 article-only GraphQL 扩展。内部语法不得泄露物理路径；没有系统实体的外部名称不捏造 ref。App 当前对缺映射 styled mention 的整段纯文本降级存在样式保真限制，作为已知不阻断限制跟踪，不据此宣称用户批准全部风险或真实消费验收已完成。
 - 运行一致性：普通实体下线不级联下线作品、删原文、借用媒体或改历史 release；已知不可用可隐藏链接，不知道时不为去链接额外 query。点击后服从原 403/404/410 或 Data 历史 offline View 的公开契约并允许返回，弱一致不绕过权限。严重治理删除仍走原命令，不成为地点下线副作用。
 - 媒体：包内资产相对引用在 release 物化为摘要交付键，环境 URL 经既有 endpoint/resolver 生成；实际上传摘要及 Range/MIME/readback 先于激活。正文/封面坏图局部占位，图集保留坏页位置仍可滑动，视频有界失败保留 poster/caption，poster/字幕失败不阻断可用视频，源站失效不影响随体成品。
 - 缓存与恢复：只修既有图集实际 provider 接负缓存、视频 cache hit 不续 TTL/不重复启动恢复；网络新失败、成功与用户显式重试仍按原 owner 处理。已知永久缺失不自动重试。无逐实体请求、逐媒体 HEAD、引用状态 TTL、缓存广播、后台修复或周期巡检。

@@ -1,5 +1,6 @@
 """真实单对象 builder 的新包契约；只使用临时 execution/仓与来源证据。"""
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-023
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-041.t1
 from __future__ import annotations
 
 import hashlib
@@ -51,7 +52,7 @@ def _package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     (publish / ".git").mkdir()
     _write_json(publish / "repository.json", {
         "schema": "quwoquan_data.publish_repository.v2", "repositoryId": "test-publish",
-        "layoutVersion": 2, "producerContractDigest": "sha256:" + "a" * 64,
+        "layoutVersion": 2,
     })
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(manifest_path.read_bytes())
@@ -173,6 +174,8 @@ def test_real_package_audit_apply_reads_logical_identity_and_carried_bytes(tmp_p
     path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(path.read_bytes())
     manifest.update(generator="agent", createdAt="2026-07-18T04:00:00Z", updatedAt="2026-07-18T04:00:00Z")
+    for asset in manifest["assets"]:
+        asset["collectionPageUrl"] = manifest["sourceUrls"][0]
     _write_json(path, manifest)
     result = post_transaction.build_post_object_transaction_package(execution_root=execution, object_ref=POST_REF, transaction_id=transaction_id, package_root=package)
     _admit_dependencies(package, publish)
@@ -185,6 +188,15 @@ def test_real_package_audit_apply_reads_logical_identity_and_carried_bytes(tmp_p
     assert any(row.logical_ref == POST_REF and row.path == result["target"]["objectPath"] for row in object_placements(publish))
     report = query_pool(publish, target_refs=["posts/" + POST_REF])
     assert report["counts"]["image"] == 1, report
+    manifest = json.loads((root / "manifest.json").read_bytes())
+    same = query_pool(publish, candidates=[{"objectRef": "posts/" + POST_REF, "manifest": manifest}])
+    assert same["preflight"][0]["occupied"] is True
+    assert same["preflight"][0]["imageConflicts"] == [], "逻辑 ref 与 p0001 locator 不同仍是同一对象"
+    duplicate = {**manifest, "contentId": "different-work", "objectRef": "image/风光/另一作品/1"}
+    other = query_pool(publish, candidates=[{"objectRef": "posts/" + duplicate["objectRef"], "manifest": duplicate}])
+    conflicts = other["preflight"][0]["imageConflicts"]
+    assert any(row["code"] == "DATA.POOL.IMAGE_SHA256_DUPLICATE" for row in conflicts)
+    assert all(row["objectRef"] == "posts/" + duplicate["objectRef"] for row in conflicts)
 
 
 def test_source_metadata_copy_is_not_substitute_for_real_evidence(tmp_path, monkeypatch):
@@ -196,6 +208,58 @@ def test_source_metadata_copy_is_not_substitute_for_real_evidence(tmp_path, monk
             execution_root=execution, object_ref=POST_REF, transaction_id=transaction_id, package_root=package,
         )
     assert not package.exists()
+
+
+def test_real_article_builder_projects_body_image_without_changing_original(tmp_path, monkeypatch):
+    execution, package, _, transaction_id, _, review = _package(tmp_path, monkeypatch)
+    source = execution / "posts" / POST_REF
+    manifest = json.loads((source / "manifest.json").read_bytes())
+    manifest.update(contentType="article", carrier="article")
+    _write_json(source / "manifest.json", manifest)
+    name = manifest["assets"][0]["fileName"]
+    body = f'# 标题\r\n\r\n图片说明 ![西湖光影]({name} "保留标题")。\r\n'.encode()
+    (source / "article.md").write_bytes(body)
+    post_transaction.build_post_object_transaction_package(
+        execution_root=execution, object_ref=POST_REF, transaction_id=transaction_id, package_root=package,
+    )
+    target = package / "object"
+    assert (target / "article.md").read_bytes() == body.replace(name.encode(), b"media/01.jpg")
+    assert (target / "media/01.jpg").is_file()
+    assert (source / "article.md").read_bytes() == body
+    assert (target / "content_review.json").read_bytes() == review
+
+
+@pytest.mark.parametrize("body_name", ["page.md", "article.md"])
+@pytest.mark.parametrize("ref", ["old.jpg", "assets/old.jpg", "sources/unit/assets/old.jpg"])
+@pytest.mark.parametrize("filename", ["old.jpg", "assets/old.jpg"])
+def test_markdown_projection_binds_original_aliases_to_exact_media(tmp_path, body_name, ref, filename):
+    from content.release.canonical.post_transaction_media import copy_markdown_surface
+    source = tmp_path / "source.md"
+    body = f'![说明]({ref})\n普通文字 assets/old.jpg 和 [链接](https://example.org) 保留。\n'
+    source.write_text(body, encoding="utf-8")
+    target = tmp_path / "package" / body_name
+    (target.parent / "media").mkdir(parents=True)
+    (target.parent / "media/01.jpg").write_bytes(b"already-verified-media")
+    copy_markdown_surface(source, target,
+        source_assets=[{"assetId": "a", "fileName": filename, "sourceAssetRefs": ["sources/unit/assets/old.jpg"]}],
+        canonical_assets=[{"assetId": "a", "path": "media/01.jpg"}])
+    assert target.read_text() == body.replace(f"]({ref})", "](media/01.jpg)")
+    assert source.read_text() == body
+
+
+@pytest.mark.parametrize("case", ["unknown", "ambiguous", "missing"])
+def test_markdown_projection_rejects_unbound_or_missing_images(tmp_path, case):
+    from content.release.canonical.post_transaction_media import copy_markdown_surface
+    source = tmp_path / "source.md"
+    source.write_text("![说明](assets/old.jpg)\n", encoding="utf-8")
+    assets = [] if case == "unknown" else [{"assetId": "a", "fileName": "assets/old.jpg"}]
+    if case == "ambiguous":
+        assets.append({"assetId": "b", "fileName": "assets/old.jpg"})
+    target = tmp_path / "page.md"
+    with pytest.raises(ObjectTransactionError, match="DATA.PUBLISH.BODY_MEDIA_"):
+        copy_markdown_surface(source, target, source_assets=assets,
+            canonical_assets=[{"assetId": "a", "path": "media/01.jpg"}])
+    assert not target.exists()
 
 
 @pytest.mark.parametrize("filename", ["source.md", "snapshot.html"])

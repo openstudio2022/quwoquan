@@ -15,9 +15,10 @@ def fetch(request, client, hosts):
         raise ValueError("yt-dlp request 必须声明 mode=single|channel 与 1..100 的 limit")
     if mode == "single" and limit != 1:
         raise ValueError("单条模式 limit 必须为 1")
-    flags = ["--no-playlist"] if mode == "single" else ["--yes-playlist", "--flat-playlist"]
+    # 单条已由 no-playlist 限定；max-downloads=1 会在 dump-single-json 前抛出 101。
+    flags = ["--no-playlist"] if mode == "single" else ["--yes-playlist", "--flat-playlist", "--max-downloads", str(limit)]
     command = ["yt-dlp", "--ignore-config", "--skip-download", "--dump-single-json", *flags,
-               "--playlist-end", str(limit), "--max-downloads", str(limit),
+               "--playlist-end", str(limit),
                "--socket-timeout", "30", "--retries", "0", "--extractor-retries", "0",
                "--user-agent", client.user_agent, "--", url]
     result = subprocess.run(command, capture_output=True, check=False, timeout=120)

@@ -202,7 +202,6 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
             (root / "repository.json").write_text(json.dumps({
                 "schema": "quwoquan_data.publish_repository.v2",
                 "repositoryId": "object-budget-test", "layoutVersion": 2,
-                "producerContractDigest": "sha256:" + "a" * 64,
             }), encoding="utf-8")
             yield _load_module(sandbox), sandbox
 

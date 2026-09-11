@@ -608,7 +608,7 @@ def test_selected_asset_authorization_facts_survive_real_ingest_schema(tmp_path)
 def test_local_ytdlp_result_mechanically_registered_without_fake_direct(tmp_path):
     from types import SimpleNamespace
     parser = subject.load("video", "youtube")
-    metadata = {"id": "v", "title": "山", "webpage_url": "https://www.youtube.com/watch?v=v", "requested_formats": [{}, {}], "duration": 20}
+    metadata = {"id": "v", "title": "山", "webpage_url": "https://www.youtube.com/watch?v=v", "requested_formats": [{"format_id": "137"}, {"format_id": "140"}], "duration": 20}
     row = parser.parse(subject.io.encode(metadata), {"url": metadata["webpage_url"]})[0][0]
     subject.io.write(tmp_path / "video/host/v.mp4", b"local bytes")
     subject.io.write(tmp_path / "video/host/v.info.json", subject.io.encode(metadata))
@@ -618,6 +618,17 @@ def test_local_ytdlp_result_mechanically_registered_without_fake_direct(tmp_path
     stored = subject.download_index(tmp_path, "video")[args.asset_id]
     assert stored["acquisition"] == "ytdlp_local" and "directUrl" not in stored
     assert subject.io.cached_file(tmp_path, "video", {**row["assets"][0], "sourceUrl": row["sourceUrl"]}, stored).exists()
+    chosen = selection(row)
+    chosen.update(carrier="video", executionId=chosen["executionId"].replace("-image-", "-video-"))
+    chosen["targets"][0]["target"]["carrier"] = "video"
+    chosen["targets"][0]["sources"][0]["assets"][0]["hasAudio"] = True
+    outputs = subject.build(tmp_path, [chosen], {"video": {row["id"]: row}}, {"video": {args.asset_id: stored}})
+    source = outputs["video/ingest.json"]["targets"][0]["sources"][0]
+    assert source["directUrl"] is None and source["sourceUrl"] == metadata["webpage_url"]
+    assert source["acquisition"] == {"method": "host_merged", "tool": "yt-dlp", "metadataSha256": stored["metadataSha256"], "formatIds": ["137", "140"]}
+    subject.io.write(tmp_path / "video/host/v.info.json", subject.io.encode({**metadata, "title": "changed"}), replace=True)
+    with pytest.raises(ValueError, match="元数据漂移"):
+        subject.build(tmp_path, [chosen], {"video": {row["id"]: row}}, {"video": {args.asset_id: stored}})
 
 
 def test_documented_minimal_selection_runs_real_build(tmp_path):
@@ -784,7 +795,7 @@ def publish_repository(tmp_path):
     (root / ".git").mkdir(parents=True)
     subject.io.write(root / "repository.json", subject.io.encode({
         "schema": "quwoquan_data.publish_repository.v2", "repositoryId": "skill-offline",
-        "layoutVersion": 2, "producerContractDigest": "sha256:" + "a" * 64,
+        "layoutVersion": 2,
     }))
     return root
 
@@ -795,7 +806,10 @@ def test_preflight_selection_keeps_invalid_occupied_and_absent_distinct(tmp_path
     publish = tmp_path / "publish"
     # 无有效 record 的主页仍占用身份，selection 中的计划不能使其 eligible。
     homepage = "entities/travel/sichuan/qiushan"
-    subject.io.write(publish / homepage / "manifest.json", b"{}")
+    subject.io.write(publish / homepage / "manifest.json", subject.io.encode({
+        "entityId": chosen["targets"][0]["target"]["entityId"],
+        "entityRef": chosen["targets"][0]["target"]["entityRef"], "version": 1,
+    }))
     before = {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
     command = ["--workspace", str(tmp_path), "preflight", "--selection", "image/selection.json", "--publish-root", str(publish)]
     assert producer.main(command) == 0
@@ -861,7 +875,7 @@ def test_homepage_preflight_consumes_entity_manifest_not_invented_content_type(t
         return real_query(*args, **kwargs)
     monkeypatch.setattr(pool_query, "query_pool", query)
     ref = "entities/地点/自然景观/秋山"
-    manifest = {"schema": "quwoquan_data.entity_object", "contentType": "article", "entityRef": "/entity/地点/自然景观/秋山", "assets": []}
+    manifest = {"schema": "quwoquan_data.entity_object", "contentType": "homepage", "entityRef": "/entity/地点/自然景观/秋山", "assets": []}
     subject.io.write(tmp_path / "homepage/preflight.json", subject.io.encode({"candidates": [{"objectRef": ref, "manifest": manifest}]}))
     assert producer.main(["--workspace", str(tmp_path), "preflight", "--candidate-file", "homepage/preflight.json", "--publish-root", str(tmp_path / "publish")]) == 0
     result = json.loads(capsys.readouterr().out)
@@ -871,7 +885,7 @@ def test_homepage_preflight_consumes_entity_manifest_not_invented_content_type(t
     with pytest.raises(ValueError, match="entityRef"):
         subject.preflight_manifest({"objectRef": ref, "manifest": {**manifest, "entityRef": "/entity/地点/自然景观/同名"}}, "homepage")
     with pytest.raises(ValueError, match="contentType"):
-        subject.preflight_manifest({"objectRef": ref, "manifest": {**manifest, "contentType": "homepage"}}, "homepage")
+        subject.preflight_manifest({"objectRef": ref, "manifest": {**manifest, "contentType": "article"}}, "homepage")
 
 
 def test_preflight_missing_image_facts_does_not_run_query_or_projection(tmp_path, monkeypatch, capsys):

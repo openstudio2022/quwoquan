@@ -13,7 +13,7 @@ from core.publish_repository import (
 def repository(root: Path):
     root.mkdir()
     (root / ".git").mkdir()
-    document = {"schema": "quwoquan_data.publish_repository.v2", "repositoryId": "test-content", "layoutVersion": 2, "producerContractDigest": "sha256:" + "a" * 64}
+    document = {"schema": "quwoquan_data.publish_repository.v2", "repositoryId": "test-content", "layoutVersion": 2}
     (root / "repository.json").write_text(json.dumps(document))
     return document
 

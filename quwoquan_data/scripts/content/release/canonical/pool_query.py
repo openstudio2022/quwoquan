@@ -216,7 +216,11 @@ def query_pool(publish_root: Path, *, target_refs: Sequence[str] | None = None, 
                 dependencies = _dependency_refs(manifest)
                 peers = [{"objectRef": _canonical_ref(str(peer["objectRef"])), "manifest": peer["manifest"]}
                     for ordinal, peer in enumerate(candidates) if ordinal != index]
-                conflicts = image_manifest_conflicts(connection, manifest=manifest, excluded_manifest_path=f"{ref}/manifest.json", candidate_peers=peers)
+                kind, logical = ref.split("/", 1)
+                physical = object_root(publish_root, kind, logical).relative_to(publish_root).as_posix() if facts[ref]["occupied"] else ref
+                conflicts = image_manifest_conflicts(connection, manifest=manifest, excluded_manifest_path=f"{physical}/manifest.json", candidate_peers=peers)
+                for conflict in conflicts:
+                    conflict["objectRef"] = ref
                 results.append({"objectRef": ref, "occupied": facts[ref]["occupied"], "identity": facts[ref], "dependencyRefs": dependencies,
                     "dependencyIssues": [facts[dep] for dep in dependencies if not facts[dep]["eligible"]], "imageConflicts": conflicts})
     objects = sorted(facts.values(), key=lambda row: row["objectRef"])

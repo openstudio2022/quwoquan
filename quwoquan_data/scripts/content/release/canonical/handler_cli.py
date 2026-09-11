@@ -36,6 +36,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     handoff_verify.add_argument("--release-id", required=True)
     handoff_verify.add_argument("--release-root")
+    handoff_verify.add_argument("--expected-repository-id", help="显式约束内容仓身份；离线校验不要求挂载生产仓")
     handoff_verify.set_defaults(handler=owner.handle_handoff_verify)
 
     pool_query = commands.add_parser(

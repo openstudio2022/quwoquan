@@ -17,7 +17,7 @@
 - 内容语义 relationEdge 候选事实；不包含关注、圈成员或会话成员等在线交易关系。
 - tag/entity/post/media 的跨域消费 projection、importer/outbox 与 App/Service wire 一致性。
 - 只读消费 discovery producer owner 交付的 immutable release/canonical/content-library facts，以及下游环境 owner 的 operation facts；不拥有 execution、pool、milestone、release build/handoff、promotion 或 UAT/acceptance。
-- `content_library` sole-holder 与 raw UAT authority 作为上游不变量被本域消费者验证，不在本节点复制 owner、生命周期或完成结论。
+- 最终媒体包内随体、content library 仅作采集复用与 raw UAT authority 作为上游不变量被本域消费者验证；完整包及 release 消费不依赖原库，不在本节点复制 owner、生命周期或完成结论。
 
 ### Out of Scope
 
@@ -48,7 +48,7 @@
 - 作者池准入只保存 `processResult`、`qualityResult`、版本、证据引用与状态；只有 `completed + passed + active` 可进入新 release。头像只做格式、可读取、清晰度、安全和内容质量检查，不保存 Research/Commercial 范围，不参与作者或内容的 Prod 准入，也不产生内容 commercial variant。
 - 内容池准入只保存 `processResult`、`qualityResult`、`usageScope=research|commercial`、版本、证据引用与状态；未知或缺商用证明一律是 `research`，`commercial` 必须由 receipt 中公开可审计的商用发布权证明支持。
 - `contentId`/`authorId` 是稳定身份，有效变化只追加递增版本；同一追加键相同 digest 可幂等重放，不同 digest 返回 typed conflict，禁止覆盖旧版本。
-- discovery owner 声明的 `content_library` 是 canonical media bytes sole-holder。本域 importer/service/App 只能消费 identity/digest/ref 或目标环境 materialization，不得取得 holder、recovery 或 release rebuild 写权；binding 不可达或摘要漂移时 fail closed。
+- discovery owner 的 canonical 包携带最终媒体，content library 仅作采集复用；完整包及 release 消费不依赖原库。本域 importer/service/App 只读包或目标环境 materialization 的 identity/digest/ref，不得取得 canonical/library/recovery/release rebuild 写权；随体媒体缺失或摘要漂移时 fail closed，不隐式补库或修复包。
 - alpha/beta/gamma/prod 的 importer/query 只消费 immutable release identity；本域不得自建 release、重采样 cohort、推导 milestone、写 acceptance，且无 environment fixture/self-seed 旁路。Manifest 只决定召回资格，不直接提供首页列表或搜索结果。
 - 对象主页网络可引用同一数据工程输入构建交集、推荐和小艺上下文。
 
@@ -73,11 +73,11 @@
 - 境外行政区必须覆盖声明的最小目的地集合，覆盖不足时视为发布物不完整并阻断发布。
 
 <a id="req-004"></a>
-### REQ-004 consumer 下线、rollback 与 sole-holder 边界
+### REQ-004 consumer 下线、rollback 与随体媒体只读边界
 
 - 对象从 active immutable release 退出后，runtime consumer 只按上游 active pointer/full-sync 结果删除自身 projection；不得直接删除 canonical object、pool record、release 或 content-library bytes。
 - rollback/replay 必须原子恢复 Post/outbox/Search/Recommendation/media projection 到同一 previous release identity；任一 surface 混合新旧 identity 或仅 counts 相等都 fail closed。
-- materialization 不可达时本域只返回 typed blocker；恢复由上游 content library/release owner完成，本域不得从缓存、旧 release、fixture 或 App 本地字节反向补 canonical。
+- materialization 不可达时本域只返回 typed blocker；恢复由原包/release owner 显式从完整随体包或经逐摘要验证的独立保护副本完成，本域不得从缓存、旧 release、fixture 或 App 本地字节反向补 canonical。
 
 <a id="req-005"></a>
 ### REQ-005 宿主 execution 与运营视图只作为上游只读事实
@@ -111,10 +111,10 @@
 <a id="sit-001"></a>
 ### SIT-001 canonical release 跨域消费保持同 identity
 
-- GIVEN discovery owner 已交付一个 immutable release、manifest digest 与 content-library bindings。
+- GIVEN discovery owner 已交付一个 immutable release、manifest digest 与完整随体媒体 bindings，原 execution/library 不可用。
 - WHEN runtime importer、Content outbox、Search、Recommendation、Homepage 与 App media projection 消费它。
 - THEN tag/entity/creator/post/media exact closure，Post 与 durable outbox 原子提交，各 consumer readback 同一 release identity；不创建 pool/milestone/UAT/acceptance 事实。
-- THEN content-library binding 不可达或任何 digest/ref 漂移时 fail closed，不从缓存、旧 release、fixture、SourcePool、execution/campaign/provider/model 补值。
+- THEN 随体媒体缺失或任何 digest/ref 漂移时 fail closed；原 library 不在场不阻断完整包消费，不从缓存、旧 release、fixture、SourcePool、execution/campaign/provider/model 补值。
 - THEN Research/Commercial、milestone cohort 与 UAT sample 只从上游 immutable release facts读取，本域不重采样或晋级。
 - THEN consumer rollback/replay 全部回到同一 previous release identity。
 - THEN raw UAT 与 acceptance 只由 canonical owner 写，本域 integration PASS 不代填。
@@ -180,7 +180,7 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：本域只保留的唯一未闭合能力是 importer/outbox/query/App wire 的 projection-only 硬切；仍需证明无 command/Repository/checkpoint、无 SourcePool/execution/campaign/provider/model 字段，且 content-library binding 漂移 fail closed。
+- 影响或价值：本域只保留的唯一未闭合能力是 importer/outbox/query/App wire 的 projection-only 硬切；仍需证明无 command/Repository/checkpoint、无 SourcePool/execution/campaign/provider/model 字段，且随体媒体 binding 漂移 fail closed、完整包不依赖原 library。
 - 完成判定：`SIT-003` 与 `SIT-004` 的 query/readback 边界具 local_contract/api_integration，projection 删除重建 exact 相同且 owner bytes 不变；fresh UAT/acceptance 仍由 discovery OPEN 关闭。
 
 

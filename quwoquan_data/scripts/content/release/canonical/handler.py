@@ -198,11 +198,13 @@ def handle_handoff_verify(args: argparse.Namespace) -> None:
             repo_root=Path(REPO_ROOT).resolve(),
             output_root=output_root,
             release_root=release_root,
+            expected_repository_id=getattr(args, "expected_repository_id", None),
         )
     except (FileNotFoundError, OSError, ProducerReleaseHandoffError, TypeError, ValueError) as exc:
         raise SystemExit(f"[release handoff-verify] GATE_BLOCK {exc}") from exc
     print(json.dumps({
         "schema": "quwoquan_data.handoff_verify_result",
+        "repositoryId": document["repositoryId"],
         "releaseId": document["releaseId"],
         "milestone": document["milestone"],
         "carrierCounts": document["carrierCounts"],

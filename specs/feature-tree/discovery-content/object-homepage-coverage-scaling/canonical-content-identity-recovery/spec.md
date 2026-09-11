@@ -96,6 +96,7 @@
 - 准出影响：`block`
 - 影响或价值：现有工作树已实现显式 `pool-cutover snapshot/dry-run/activate/inspect/cleanup` 与只读原 authority 盘点，但尚缺真实全池迁移验收证据，命令存在及临时 fixture 的局部通过不代表完成；既有 sequence 前进仍不证明当前 payload/rights 有效。
 - 尚缺实现与证据：覆盖当前全部对象的受测新包转换、逐项裁决与依赖闭包，以及经精确授权的真实 CAS/退役/旧树清理结果。manifest 单源的 JSON 投影复验已与 publisher 共用资产/取得/派生绑定，并覆盖说明、摘要、字节及引用篡改拒绝；离线来源摘要只归一 singular/plural 引用与空旧字段，真实来源、资产身份和顺序仍不可漂移。独立 spawn 已验证提交点前后进程故障与并发唯一胜者，临时 fixture 不能代替真实全池验收。普通读写零旧契约兼容，原始 review/receipt、媒体与历史 release 不改写。
+- 新布局接续缺口：现有 cutover 的 snapshot、原链/package 复验与 activation 仍含旧 `_pool/versions`、`_entity.json`、逻辑 ref 等同物理路径及整根 exchange 假设，不能用于带 `.git` 的独立内容仓。需先按现役事务边界核对 staging 与当前活跃快照的合并及提交方式；旧池已离开现役输入时，不得以旧根替换方案丢弃当前仓新增对象。转换包的 schema/record/source 或 pool-query 通过，也不代替 candidate 图片冲突、同实体别名与原权利投影差异的逐项裁定。当前命名运行证据见 `.qwq_output/data/local/workspace/content-production/m1000-recovery/rounds/r00/report.md`；未取得完整准出及实际授权结果前保持本 OPEN。
 - 完成判定：[`GWT-001`](#gwt-001) 与 [`GWT-003`](#gwt-003) 由真实对象事务及存储边界 fault injection 验证；全量当前对象在独立仓 staging 有明确映射/终态，实际迁移或退役只在逐项授权后完成。原错误不被摘要刷新掩盖，当前池无旧结构、悬空依赖或遗漏对象，历史审计原字节不变。
 - 最小测试入口：复用 `quwoquan_data/tests/local_contract/release/` 现有 pool-cutover snapshot/dry-run/activate/cleanup 测试，对新增 `GWT-003.t1`、`GWT-003.t2` 作子句级绑定；fixture 只证明机制，真实全量快照/备份/授权切换另取证，不以测试临时仓冒充真实切换。
 - 依赖：单轨 schema 与消费者先行；精确删除授权、真实来源/独立 review、媒体保护和事务边界遵守 [L2 DEC-023](../design.md#dec-023)。

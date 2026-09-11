@@ -225,16 +225,24 @@ def selected_assets(candidate, choice):
         raise io.InputError("候选资产身份重复")
     selected_ids = [selected["id"] for selected in choice.get("assets", [])]
     if not selected_ids or len(selected_ids) != len(set(selected_ids)) or not set(selected_ids) <= set(assets):
-        raise io.InputError("选中媒体须有已取得直链且资产引用唯一")
+        raise io.InputError("选中媒体须有本地取得事实且资产引用唯一")
     return [(assets[selected["id"]], selected) for selected in choice["assets"]]
 
 
 def media_row(root, carrier, candidate, base, asset, selected, local):
     path = io.cached_file(root, carrier, {**asset, "sourceUrl": candidate["sourceUrl"]}, local)
     rights = rights_facts({**base, **asset}, selected, root, carrier)
+    row = {**base, **rights, "kind": candidate["kind"], "directUrl": local.get("directUrl"), "filePath": str(path)}
     if not local.get("directUrl"):
-        raise io.InputError("SOURCE.DIRECT_URL_REQUIRED：本地结果已登记，但当前 Data ingest 要求实际单文件 directUrl；不得用作品页冒充")
-    row = {**base, **rights, "kind": candidate["kind"], "directUrl": local["directUrl"], "filePath": str(path)}
+        if carrier != "video" or local.get("acquisition") != "ytdlp_local":
+            raise io.InputError("SOURCE.ACQUISITION_REQUIRED：无直链视频必须有已核验的本地取得事实")
+        metadata = io.read_json(io.carrier_path(root, carrier, local["metadataPath"]))
+        formats = metadata.get("requested_formats") or metadata.get("requested_downloads") or [metadata]
+        format_ids = [str(value["format_id"]) for value in formats if value.get("format_id") is not None]
+        if len(format_ids) != len(formats) or any(not value.strip() for value in format_ids):
+            raise io.InputError("SOURCE.FORMAT_IDS_REQUIRED：元数据必须逐格式提供实际 format_id")
+        row["acquisition"] = {"method": "host_merged", "tool": "yt-dlp", "metadataSha256": local["metadataSha256"],
+                              "formatIds": list(dict.fromkeys(format_ids))}
     for field in ("sha1", "description"):
         if asset.get(field) is not None:
             row[field] = asset[field]
@@ -311,7 +319,7 @@ def preflight_manifest(candidate, carrier):
     prefix = "entities/" if carrier == "homepage" else f"posts/{carrier}/"
     if not isinstance(ref, str) or not ref.startswith(prefix):
         raise io.InputError("预检候选不得引用另一个载体工作区")
-    expected_type = "article" if carrier == "homepage" else carrier
+    expected_type = carrier
     if not isinstance(manifest, dict) or manifest.get("contentType") != expected_type:
         raise io.InputError("预检 manifest 必须声明当前 contentType")
     if carrier == "homepage":
