@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+
 import 'dart:developer' as developer;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -46,6 +48,7 @@ class AppAvatarImage extends ConsumerWidget {
     this.errorWidget,
     this.onLoadSucceeded,
     this.onLoadFailed,
+    this.successSemanticIdentifier,
   });
 
   final String imageUrl;
@@ -55,6 +58,7 @@ class AppAvatarImage extends ConsumerWidget {
   final Widget? errorWidget;
   final VoidCallback? onLoadSucceeded;
   final void Function(Object error)? onLoadFailed;
+  final String? successSemanticIdentifier;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -72,6 +76,7 @@ class AppAvatarImage extends ConsumerWidget {
       errorWidget: errorWidget,
       onLoadSucceeded: onLoadSucceeded,
       onLoadFailed: onLoadFailed,
+      successSemanticIdentifier: successSemanticIdentifier,
     );
   }
 }
@@ -196,6 +201,9 @@ class AppCachedNetworkImage extends ConsumerWidget {
   imageBuilder;
   final DateTime Function()? now;
 
+  /// 仅真实解码成功时发布的对象级语义；占位和失败不携带该身份。
+  final String? successSemanticIdentifier;
+
   /// 稳定缓存键（可选）。默认 null 时沿用完整 URL 作缓存键，行为不变。
   /// 短签 URL（signed grant）场景必须传入稳定资产身份
   /// （SignedMediaDeliveryLease.cacheIdentity）：签名 query 随 TTL 轮换，
@@ -218,6 +226,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
     this.imageBuilder,
     this.cacheKey,
     this.now,
+    this.successSemanticIdentifier,
   });
 
   List<String> _processedUrlCandidates(
@@ -373,6 +382,64 @@ class AppCachedNetworkImage extends ConsumerWidget {
     int index,
     _ImageLoadTelemetryCycle cycle,
   ) {
+    final verified = publicMediaDelivery.verifiedImageProvider(
+      candidates[index],
+    );
+    if (verified != null) {
+      return Image(
+        image: verified,
+        fit: fit,
+        width: width,
+        height: height,
+        frameBuilder: (context, child, frame, synchronous) {
+          if (frame == null) {
+            return KeyedSubtree(
+              key: appImageLoadPlaceholderKey,
+              child: placeholder ?? const SizedBox.shrink(),
+            );
+          }
+          _recordTerminalMediaLoad(
+            ref: ref,
+            cycle: cycle,
+            result: 'success',
+            candidatesTried: 1,
+          );
+          final decoded = Semantics(
+            identifier:
+                successSemanticIdentifier ?? appImageLoadSuccessKey.value,
+            image: true,
+            child: KeyedSubtree(
+              key: appImageLoadSuccessKey,
+              child: imageBuilder?.call(context, verified) ?? child,
+            ),
+          );
+          return onLoadSucceeded == null
+              ? decoded
+              : _ImageLoadSuccessReporter(
+                  reportKey: candidates[index],
+                  onReport: onLoadSucceeded!,
+                  child: decoded,
+                );
+        },
+        errorBuilder: (context, error, stackTrace) => _ImageLoadFailureReporter(
+          key: ObjectKey(cycle),
+          onReport: () {
+            _recordTerminalMediaLoad(
+              ref: ref,
+              cycle: cycle,
+              result: 'failure',
+              candidatesTried: 1,
+              error: error,
+            );
+            onLoadFailed?.call(error);
+          },
+          child: KeyedSubtree(
+            key: appImageLoadErrorKey,
+            child: errorWidget ?? _buildErrorWidget(context),
+          ),
+        ),
+      );
+    }
     final cacheManager = AppImageCacheController.cacheManagerForPreset(
       cdnPreset,
     );
@@ -422,9 +489,11 @@ class AppCachedNetworkImage extends ConsumerWidget {
                     width: width,
                     height: height,
                   );
-            final child = KeyedSubtree(
-              key: appImageLoadSuccessKey,
-              child: decoded,
+            final child = Semantics(
+              identifier:
+                  successSemanticIdentifier ?? appImageLoadSuccessKey.value,
+              image: true,
+              child: KeyedSubtree(key: appImageLoadSuccessKey, child: decoded),
             );
             final onSucceeded = onLoadSucceeded;
             if (onSucceeded == null) {

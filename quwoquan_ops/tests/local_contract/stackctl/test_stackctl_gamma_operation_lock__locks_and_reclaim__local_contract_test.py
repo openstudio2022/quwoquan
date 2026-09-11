@@ -1,4 +1,8 @@
-"""场景：本地栈操作锁互斥、Patrol 租约拒绝与 repair/reclaim 资源回收约束。"""
+"""场景：本地栈 target 锁互斥、执行 fence、Patrol 租约与回收约束。
+
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md#gwt-001
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md#req-004
+"""
 
 from __future__ import annotations
 
@@ -11,6 +15,7 @@ from subprocess import CompletedProcess
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib import local_runtime_reservation
 from quwoquan_ops.tests.support.stackctl_gamma_operation_lock_test_support import (
     StackctlGammaOperationLockContractTestBase,
 )
@@ -292,25 +297,66 @@ class StackctlGammaOperationLockContractTest(
                 "global unused Docker build cache reclaimed",
             )
 
-    def test_gamma_lock_rejects_overlapping_stack_operations(self) -> None:
+    def test_gamma_lock_rejects_same_target_and_allows_other_targets(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
-            process_dir = Path(temporary_dir) / "process"
+            # macOS 的 TMPDIR 经 /var 符号链接，fixture 使用已解析的安全目录。
+            process_dir = Path(temporary_dir).resolve() / "process"
+
+            def lock_path(target: str = "") -> Path:
+                return process_dir / (target or "host") / ".stackctl-operation.lock"
+
             with mock.patch.object(
-                stackctl,
+                local_runtime_reservation,
                 "local_runtime_operation_lock_path",
-                return_value=process_dir / ".stackctl-operation.lock",
+                side_effect=lock_path,
             ):
                 with stackctl._local_stack_operation_lock("gamma-local"):
                     with self.assertRaisesRegex(
-                        RuntimeError,
+                        stackctl.LocalOperationLockBusyError,
                         "local stack operation is already running",
                     ):
-                        with stackctl._local_stack_operation_lock("beta-local"):
-                            pass
+                        with stackctl._local_stack_operation_lock("gamma-local"):
+                            self.fail("同一 target 的第二个 executor 不得进入")
+                    with stackctl._local_stack_operation_lock("beta-local"):
+                        self.assertTrue(
+                            lock_path("beta-local").with_suffix(".executor.json").is_file()
+                        )
+                    self.assertTrue(
+                        lock_path("gamma-local").with_suffix(".executor.json").is_file()
+                    )
 
-            lock_path = process_dir / ".stackctl-operation.lock"
-            self.assertTrue(lock_path.is_file())
-            self.assertEqual(lock_path.read_text(encoding="utf-8"), "")
+            for target in ("gamma-local", "beta-local"):
+                self.assertTrue(lock_path(target).is_file())
+                self.assertEqual(lock_path(target).read_text(encoding="utf-8"), "")
+                self.assertFalse(lock_path(target).with_suffix(".executor.json").exists())
+
+    def test_failed_operation_retains_fence_and_rejects_new_executor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            # macOS 的 TMPDIR 经 /var 符号链接，fixture 使用已解析的安全目录。
+            process_dir = Path(temporary_dir).resolve() / "process"
+
+            def lock_path(target: str = "") -> Path:
+                return process_dir / (target or "host") / ".stackctl-operation.lock"
+
+            with mock.patch.object(
+                local_runtime_reservation,
+                "local_runtime_operation_lock_path",
+                side_effect=lock_path,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "executor failed"):
+                    with stackctl._local_stack_operation_lock("gamma-local"):
+                        raise RuntimeError("executor failed")
+                fence_path = lock_path("gamma-local").with_suffix(".executor.json")
+                fence = fence_path.read_bytes()
+                with self.assertRaisesRegex(
+                    stackctl.LocalOperationLockBusyError,
+                    "OPS.RUNTIME.executor_reconcile_required",
+                ):
+                    with stackctl._local_stack_operation_lock("gamma-local"):
+                        self.fail("未闭合 fence 不得被新 executor 接管")
+                self.assertEqual(fence_path.read_bytes(), fence)
+                with stackctl._local_stack_operation_lock("beta-local"):
+                    pass
 
     def test_beta_up_rejects_overlapping_stack_operations(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -334,8 +380,8 @@ class StackctlGammaOperationLockContractTest(
                 mock.patch.object(
                     stackctl,
                     "_local_stack_operation_lock",
-                    side_effect=RuntimeError(
-                        "local stack operation is already running: pid=42 target=gamma-local",
+                    side_effect=stackctl.LocalOperationLockBusyError(
+                        "local stack operation is already running: pid=42 target=beta-local",
                     ),
                 ) as operation_lock,
                 mock.patch.object(stackctl, "_write_summary_bundle"),
@@ -350,7 +396,7 @@ class StackctlGammaOperationLockContractTest(
             "wait for the active operation or stop the conflicting local runtime",
             result["details"],
         )
-        operation_lock.assert_called_once_with("beta-local")
+        operation_lock.assert_called_once_with("beta-local", wait_seconds=30)
         run.assert_not_called()
 
     def test_beta_down_rejects_active_patrol_runtime_lease(self) -> None:
@@ -391,7 +437,7 @@ class StackctlGammaOperationLockContractTest(
         operation_lock.assert_called_once_with("beta-local")
         run.assert_not_called()
 
-    def test_beta_up_releases_operation_lock_when_alpha_is_active(self) -> None:
+    def test_beta_up_releases_operation_lock_when_runtime_identity_conflicts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             report_dir = Path(temporary_dir) / "report"
             args = argparse.Namespace(
@@ -407,7 +453,7 @@ class StackctlGammaOperationLockContractTest(
             operation_lock = mock.MagicMock()
             operation_lock.__enter__.return_value = None
             self.availability.side_effect = RuntimeError(
-                "beta-local cannot start while local runtime alpha-local is active"
+                "OPS.RUNTIME.identity_conflict: beta-local running generation differs"
             )
             with (
                 mock.patch.object(

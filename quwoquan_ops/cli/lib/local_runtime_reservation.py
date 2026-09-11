@@ -5,13 +5,15 @@ import fcntl
 import os
 import re
 import socket
+import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
-
 from quwoquan_ops.cli.lib.common import relpath
+from quwoquan_ops.cli.lib.output_paths import (
+    _read_secure_json_object, _atomic_write_secure_json_object,
+)
 from quwoquan_ops.cli.lib.host_locks import (
     current_lock_owner,
     local_runtime_lock_path,
@@ -33,9 +35,14 @@ class LocalOperationLockBusyError(RuntimeError):
     """
 
 
-def local_runtime_operation_lock_path() -> Path:
-    """Return the host-scoped lock shared by all canonical local targets."""
-    return local_runtime_lock_path(LOCAL_RUNTIME_RESOURCE_GROUP)
+LOCAL_RUNTIME_TARGETS = ("alpha-local", "beta-local", "gamma-local", "prod-sim")
+
+
+def local_runtime_operation_lock_path(target: str = "") -> Path:
+    """目标运行锁与宿主维护锁分离；空 target 只用于全局维护。"""
+    if target and target not in LOCAL_RUNTIME_TARGETS:
+        raise ValueError(f"unknown local runtime target: {target!r}")
+    return local_runtime_lock_path(target or LOCAL_RUNTIME_RESOURCE_GROUP)
 
 
 def _owner_record(**fields: str) -> str:
@@ -47,24 +54,73 @@ def local_stack_operation_lock(
     target_name: str,
     *,
     lock_path: Path | None = None,
+    wait_seconds: float = 0,
 ) -> Any:
     target = str(target_name).strip()
-    if target not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
+    if target not in LOCAL_RUNTIME_TARGETS:
         raise ValueError(f"local stack operation lock does not support {target!r}")
-    lock_path = lock_path or local_runtime_operation_lock_path()
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    owner = _owner_record(target=target)
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as error:
-            handle.seek(0)
-            # 只报存活持有者：清单里可能残留被硬杀的持有者记录，原样输出会让操作员
-            # 去等一个早已退出的进程。与共享租约路径同源。
-            holder = "\n".join(_live_holder_records(handle.read())) or "unknown"
+    if wait_seconds < 0:
+        raise ValueError("wait_seconds cannot be negative")
+    # 固定顺序：host shared -> target exclusive。全局维护只拿 host exclusive，
+    # 不反向申请 target，因此不存在锁顺序环。显式路径仅供隔离测试 seam。
+    with contextlib.ExitStack() as scope:
+        if lock_path is None:
+            guard = acquire_local_runtime_use_lock(
+                target=target, purpose="target-operation",
+                lock_path=local_runtime_operation_lock_path(),
+            )
+            scope.callback(guard.close)
+        path = lock_path or local_runtime_operation_lock_path(target)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        owner = _owner_record(target=target)
+        handle = scope.enter_context(path.open("a+", encoding="utf-8"))
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError as error:
+                remaining = deadline - time.monotonic()
+                if remaining > 0:
+                    time.sleep(min(0.05, remaining))
+                    continue
+                handle.seek(0)
+                holder = "\n".join(_live_holder_records(handle.read())) or "unknown"
+                raise LocalOperationLockBusyError(
+                    f"local stack operation is already running: {holder}"
+                ) from error
+        if lock_path is None:
+            from quwoquan_ops.cli.lib.output_paths import deployment_target_path
+            slot = _read_secure_json_object(
+                deployment_target_path(target, "process", "environment-execution", "execution-slot.json"),
+                label="environment execution slot",
+            )
+            if slot is not None and (
+                slot.get("claimId") != os.environ.get("QWQ_ENVIRONMENT_EXECUTION_CLAIM_ID")
+                or slot.get("executorStarted") is not True
+            ):
+                raise LocalOperationLockBusyError("OPS.RUNTIME.execution_claim_in_use: target reserved by scheduler")
+            if slot is not None:
+                try:
+                    descriptor = int(os.environ.get("QWQ_ENVIRONMENT_EXECUTION_FD", ""))
+                    actual = os.fstat(descriptor)
+                    expected = deployment_target_path(target, "process", "environment-execution", ".claim.lock").stat()
+                    if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
+                        raise ValueError("executor descriptor identity mismatch")
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except (OSError, ValueError) as exc:
+                    raise LocalOperationLockBusyError("OPS.RUNTIME.execution_fence_missing: inherited claim descriptor required") from exc
+        # flock 本身在父进程死亡时释放，不能证明它启动的子进程已经终止。
+        # durable fence 只有正常返回才关闭；崩溃/取消/异常保留，禁止 PID/TTL 接管。
+        fence_path = path.with_suffix(".executor.json")
+        if _read_secure_json_object(fence_path, label="target executor fence") is not None:
             raise LocalOperationLockBusyError(
-                f"local stack operation is already running: {holder}"
-            ) from error
+                "OPS.RUNTIME.executor_reconcile_required: prior target executor has no verified closure"
+            )
+        nonce = uuid.uuid4().hex
+        fence = {"target": target, "executorNonce": nonce, "owner": owner,
+                 "executionClaimId": os.environ.get("QWQ_ENVIRONMENT_EXECUTION_CLAIM_ID", "")}
+        _atomic_write_secure_json_object(fence_path, fence, label="target executor fence")
         handle.seek(0)
         handle.truncate()
         handle.write(owner + "\n")
@@ -72,6 +128,19 @@ def local_stack_operation_lock(
         os.fsync(handle.fileno())
         try:
             yield
+        except BaseException:
+            # 包括 KeyboardInterrupt：上层可报告失败，但不能把未知子进程变成可接管。
+            raise
+        else:
+            current = _read_secure_json_object(fence_path, label="target executor fence")
+            if current != fence:
+                raise RuntimeError("OPS.RUNTIME.executor_fence_conflict")
+            fence_path.unlink()
+            directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
         finally:
             handle.seek(0)
             handle.truncate()
@@ -87,6 +156,7 @@ def global_local_operation_lock(
     affected_targets: Sequence[str],
     lock_path: Path | None = None,
 ) -> Any:
+    canonical_host_lock = lock_path is None
     lock_path = lock_path or local_runtime_operation_lock_path()
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     owner = _owner_record(scope=scope, mode="exclusive")
@@ -101,6 +171,14 @@ def global_local_operation_lock(
             raise LocalOperationLockBusyError(
                 "local runtime operation is already running: " + holder
             ) from error
+        if canonical_host_lock:
+            from quwoquan_ops.cli.lib.output_paths import deployment_target_path
+            for target in LOCAL_RUNTIME_TARGETS:
+                fence = local_runtime_operation_lock_path(target).with_suffix(".executor.json")
+                slot = deployment_target_path(target, "process", "environment-execution", "execution-slot.json")
+                if (_read_secure_json_object(fence, label="target executor fence") is not None
+                        or _read_secure_json_object(slot, label="environment execution slot") is not None):
+                    raise LocalOperationLockBusyError(f"OPS.RUNTIME.executor_reconcile_required: {target} still owns host resources")
         handle.seek(0)
         handle.truncate()
         handle.write(owner + "\n")
@@ -198,6 +276,7 @@ class LocalRuntimeUseLock:
         self._handle = handle
         self._record = record
         self._closed = False
+        self._host_guard: LocalRuntimeUseLock | None = None
 
     @property
     def record(self) -> str:
@@ -228,6 +307,8 @@ class LocalRuntimeUseLock:
             with contextlib.suppress(OSError, ValueError):
                 fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)
             self._handle.close()
+            if self._host_guard is not None:
+                self._host_guard.close()
 
 
 def acquire_local_runtime_use_lock(
@@ -236,8 +317,29 @@ def acquire_local_runtime_use_lock(
     purpose: str,
     lock_path: Path | None = None,
 ) -> LocalRuntimeUseLock:
-    """持有本地运行时共享租约，阻止 UAT 期间被 stackctl 启停。"""
-    path = lock_path or local_runtime_operation_lock_path()
+    """按 host shared -> target shared 顺序保护使用者及全局维护边界。"""
+    if target not in LOCAL_RUNTIME_TARGETS:
+        raise ValueError(f"unknown local runtime target: {target!r}")
+    if lock_path is None:
+        guard = acquire_local_runtime_use_lock(
+            target=target, purpose=purpose,
+            lock_path=local_runtime_operation_lock_path(),
+        )
+        try:
+            lease = acquire_local_runtime_use_lock(
+                target=target, purpose=purpose,
+                lock_path=local_runtime_operation_lock_path(target),
+            )
+            fence_path = local_runtime_operation_lock_path(target).with_suffix(".executor.json")
+            if _read_secure_json_object(fence_path, label="target executor fence") is not None:
+                lease.close()
+                raise LocalOperationLockBusyError("OPS.RUNTIME.executor_reconcile_required: consumer cannot attach to an unclosed executor")
+        except BaseException:
+            guard.close()
+            raise
+        lease._host_guard = guard
+        return lease
+    path = lock_path
     path.parent.mkdir(parents=True, exist_ok=True)
     handle = path.open("a+", encoding="utf-8")
     try:
@@ -326,24 +428,11 @@ def active_conflicting_local_targets(
     *,
     port_probe: PortProbe = _tcp_port_is_open,
 ) -> tuple[str, ...]:
-    """返回与目标争用同一主机资源组、且已在运行的其他本地环境。"""
+    """容量共享组不授予跨 target 排他权；端口不作为占用权威。"""
     targets = topology.get("targets")
-    if not isinstance(targets, Mapping):
-        raise RuntimeError("environment topology targets must be a mapping")
-
-    active: list[str] = []
-    for candidate_name in local_runtime_peer_targets(topology, requested_target):
-        candidate = targets[candidate_name]
-        origins = candidate.get("origins")
-        if not isinstance(origins, Mapping):
-            continue
-        content_origin = str(origins.get("contentService") or "").strip()
-        parsed = urlparse(content_origin)
-        if parsed.hostname not in {"127.0.0.1", "localhost"} or parsed.port is None:
-            continue
-        if port_probe(parsed.hostname, parsed.port):
-            active.append(str(candidate_name))
-    return tuple(sorted(active))
+    if not isinstance(targets, Mapping) or requested_target not in targets:
+        raise RuntimeError(f"unknown local runtime target: {requested_target}")
+    return ()
 
 
 def assert_local_runtime_available(

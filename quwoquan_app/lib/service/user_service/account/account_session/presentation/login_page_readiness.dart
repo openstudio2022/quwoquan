@@ -47,6 +47,18 @@ extension _LoginFrameHostReadiness on _LoginFrameHostState {
       }
     } catch (error) {
       if (!mounted || generation != _entryResolutionGeneration) return;
+      if (error is CloudException &&
+          error.runtimeFailure.kind == RuntimeFailureKind.unsupported) {
+        _stateDwellWatchdog?.cancel();
+        _capabilityFailure = error;
+        _flowController.refresh();
+        _trackLoginOperation(
+          operationId: 'get_otp_delivery_readiness',
+          result: 'unsupported',
+          error: error,
+        );
+        return;
+      }
       _flowController.replace(
         _flow.copyWith(
           otpReadinessState: OtpReadinessState.unavailable,

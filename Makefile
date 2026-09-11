@@ -813,7 +813,8 @@ app-uat:
 	@python3 quwoquan_ops/cli/stackctl.py --output-format json app-content-uat \
 		--targets "$(TARGETS)" \
 		--platform "$(PLATFORM)" \
-		--device-id "$(DEVICE_ID)"
+		--device-id "$(DEVICE_ID)" \
+		$(if $(CANDIDATE),--candidate "$(CANDIDATE)",)
 
 stackctl-up:
 	@if [ -z "$(TARGET)" ]; then \
@@ -1803,6 +1804,7 @@ evidence-signing-bootstrap:
 # RELEASE_HANDOFF_REF（candidate release 的 authoritative handoff-ref-v1）；私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT。
 # 可选：BASELINE=<sha>、BETA=1、MERGED_LANES="lane/a lane/b"、CANDIDATE、OWNER_IDENTITY、
 # READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
+# App 影响面必填 ANDROID_DEVICE_ID / IOS_DEVICE_ID；CANDIDATE_REF=store-ref=sha256:digest 复用预先冻结候选，不再申请 claim。
 # REUSE=1 仅复用同 commit/tree/parent/ImpactPlan/profile 且签名与引用有效的事实，不改变 Beta opt-in。
 .PHONY: accept
 accept:
@@ -1812,7 +1814,10 @@ accept:
 		echo "[accept] GATE_BLOCK: RELEASE_HANDOFF_REF 必填（candidate release 的 authoritative handoff-ref-v1）" >&2; exit 2; fi
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
 		--mode acceptance \
-		--candidate "$${CANDIDATE:-HEAD}" \
+		--candidate "$(or $(CANDIDATE),HEAD)" \
+		$(if $(CANDIDATE_REF),--candidate-ref "$(CANDIDATE_REF)",) \
+		$(if $(ANDROID_DEVICE_ID),--android-device-id "$(ANDROID_DEVICE_ID)",) \
+		$(if $(IOS_DEVICE_ID),--ios-device-id "$(IOS_DEVICE_ID)",) \
 		$$( [ -n "$(BASELINE)" ] && printf -- '--baseline %s' "$(BASELINE)" ) \
 		$$( [ "$${BETA:-0}" = "1" ] && printf -- '--beta' ) \
 		$$( for lane in $(MERGED_LANES); do printf -- '--merged-lanes %s ' "$$lane"; done ) \

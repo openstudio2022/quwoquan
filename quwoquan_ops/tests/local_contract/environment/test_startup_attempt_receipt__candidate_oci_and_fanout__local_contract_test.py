@@ -313,7 +313,7 @@ def test_fanout_failure_rolls_back_every_replica_at_each_commit_point(
     run_two = tmp_path / "env/gamma/runs/run-2"
     with (
         mock.patch.object(subject, "startup_attempt_path", return_value=receipt_path),
-        mock.patch.object(subject, "output_root", return_value=tmp_path),
+        mock.patch.dict("os.environ", {"QWQ_OUTPUT_ROOT": str(tmp_path)}),
     ):
         subject.transition_startup_attempt(
             attempt_id="attempt-1",
@@ -394,7 +394,7 @@ def test_loader_recovers_a_crash_journal_before_exposing_any_replica(
 
     with (
         mock.patch.object(subject, "startup_attempt_path", return_value=receipt_path),
-        mock.patch.object(subject, "output_root", return_value=tmp_path),
+        mock.patch.dict("os.environ", {"QWQ_OUTPUT_ROOT": str(tmp_path)}),
         mock.patch.object(
             subject,
             "_commit_staged_receipt",
@@ -426,7 +426,7 @@ def test_loader_recovers_a_crash_journal_before_exposing_any_replica(
     assert subject._fanout_transaction_path(receipt_path).exists()
     with (
         mock.patch.object(subject, "startup_attempt_path", return_value=receipt_path),
-        mock.patch.object(subject, "output_root", return_value=tmp_path),
+        mock.patch.dict("os.environ", {"QWQ_OUTPUT_ROOT": str(tmp_path)}),
     ):
         assert subject.load_startup_attempt("alpha-local") is None
 
@@ -449,7 +449,7 @@ def test_fanout_never_follows_or_replaces_an_unsafe_transaction_journal(
 
     with (
         mock.patch.object(subject, "startup_attempt_path", return_value=receipt_path),
-        mock.patch.object(subject, "output_root", return_value=tmp_path),
+        mock.patch.dict("os.environ", {"QWQ_OUTPUT_ROOT": str(tmp_path)}),
         pytest.raises(ValueError, match="symlink or non-regular file"),
     ):
         subject.transition_startup_attempt(
@@ -487,7 +487,7 @@ def test_fanout_prevalidates_every_destination_before_any_write(
 
     with (
         mock.patch.object(subject, "startup_attempt_path", return_value=receipt_path),
-        mock.patch.object(subject, "output_root", return_value=tmp_path),
+        mock.patch.dict("os.environ", {"QWQ_OUTPUT_ROOT": str(tmp_path)}),
         mock.patch.object(
             subject,
             "_prevalidate_write_path",
@@ -534,7 +534,7 @@ def test_run_root_rejects_a_different_existing_attempt_before_fanout(
     }
     with (
         mock.patch.object(subject, "startup_attempt_path", return_value=receipt_path),
-        mock.patch.object(subject, "output_root", return_value=tmp_path),
+        mock.patch.dict("os.environ", {"QWQ_OUTPUT_ROOT": str(tmp_path)}),
     ):
         subject.transition_startup_attempt(
             attempt_id="attempt-1", status="prepared", **identity

@@ -57,8 +57,9 @@ class _WorksPrimaryTopBar extends StatelessWidget {
               child: Center(
                 child: Opacity(
                   opacity: onTapClose == null ? 0 : 1,
-                  child: KeyedSubtree(
+                  child: Semantics(
                     key: const ValueKey<String>('works-top-back'),
+                    identifier: 'works-top-back',
                     child: ImmersiveToolbarIconButton(
                       icon: CupertinoIcons.back,
                       onPressed: onTapClose,

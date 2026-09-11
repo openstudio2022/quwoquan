@@ -52,21 +52,35 @@ final class CachedContentPostReader
       cancellation: cancellation,
       deadlineAt: deadlineAt,
     );
+    final requestEpoch = postCache.requestEpoch;
     final cached = postCache.getDetail(postId);
-    if (cached != null) {
+    if (cached != null && postCache.canReplayDetail(cached.value)) {
       _recordCacheHit(key: 'post:$postId', result: cached);
       if (cached.freshness != CacheFreshness.fresh) {
         unawaited(_refreshPost(postId));
       }
       return cached.value;
     }
-    final payload = await detailDelegate.getPost(
-      postId: postId,
-      cancellation: cancellation,
-      deadlineAt: deadlineAt,
-    );
-    _storePostDetail(payload);
-    return payload;
+    try {
+      final payload = await detailDelegate.getPost(
+        postId: postId,
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
+      );
+      throwIfCloudOperationInterrupted(
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
+      );
+      postCache.requireCurrentRequest(requestEpoch);
+      _storePostDetail(payload);
+      return payload;
+    } catch (error) {
+      postCache.requireCurrentRequest(requestEpoch);
+      if (!isContentCacheTransportFallback(error, deadlineAt: deadlineAt)) {
+        postCache.removePost(postId);
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -86,13 +100,22 @@ final class CachedContentPostReader
       cursor: cursor,
       limit: limit,
     );
+    final requestEpoch = querySnapshotStore.requestEpoch;
     final requestCacheIdentity = currentCacheIdentity();
     final key = querySnapshotStore.isolateQueryKey(
       baseKey,
       identity: requestCacheIdentity,
     );
     await querySnapshotStore.ensureHydrated();
-    final cached = key == null ? null : querySnapshotStore.get(key);
+    querySnapshotStore.requireCurrentRequest(requestEpoch);
+    final candidate = key == null ? null : querySnapshotStore.get(key);
+    final cached =
+        candidate != null && querySnapshotStore.canReplay(candidate.value)
+        ? candidate
+        : null;
+    if (cached != null && cached.freshness == CacheFreshness.fresh) {
+      return cached.value.toCursorPage();
+    }
     try {
       final page = await authorPostsDelegate.listUserPosts(
         userId: userId,
@@ -102,13 +125,22 @@ final class CachedContentPostReader
         cursor: cursor,
         limit: limit,
       );
+      querySnapshotStore.requireCurrentRequest(requestEpoch);
       final responseCacheIdentity = currentCacheIdentity();
       if (requestCacheIdentity == responseCacheIdentity) {
         _storeCursorPage(key, page, cacheIdentity: responseCacheIdentity);
       }
       return page;
     } catch (error) {
-      if (cached != null) {
+      querySnapshotStore.requireCurrentRequest(requestEpoch);
+      if (!isContentCacheTransportFallback(error)) {
+        postCache.clearNamespace();
+        querySnapshotStore.clearAll();
+        rethrow;
+      }
+      if (isContentCacheTransportFallback(error) &&
+          cached != null &&
+          querySnapshotStore.canReplay(cached.value)) {
         _recordCacheHit(key: key!, result: cached);
         final cachedPage = cached.value.toCursorPage();
         return CursorPage<ContentPostViewData>(
@@ -124,12 +156,24 @@ final class CachedContentPostReader
   }
 
   Future<void> _refreshPost(String postId) async {
-    final key = 'post:$postId';
+    final requestEpoch = postCache.requestEpoch;
+    final key = '$requestEpoch:post:$postId';
     if (!_inflightRefreshes.add(key)) {
       return;
     }
     try {
-      _storePostDetail(await detailDelegate.getPost(postId: postId));
+      final payload = await detailDelegate.getPost(postId: postId);
+      postCache.requireCurrentRequest(requestEpoch);
+      _storePostDetail(payload);
+    } catch (error) {
+      if (postCache.requestEpoch == requestEpoch &&
+          !isContentCacheTransportFallback(error)) {
+        postCache.removePost(postId);
+      }
+      telemetrySink.record('cache.refresh_failed', <String, Object?>{
+        'staleContext': postCache.requestEpoch != requestEpoch,
+        'errorType': error.runtimeType.toString(),
+      });
     } finally {
       _inflightRefreshes.remove(key);
     }

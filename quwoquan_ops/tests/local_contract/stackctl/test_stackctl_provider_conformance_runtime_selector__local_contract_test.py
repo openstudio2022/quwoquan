@@ -429,6 +429,57 @@ class StackctlProviderConformanceRuntimeSelectorTest(unittest.TestCase):
             runtime_environments,
         )
 
+    # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md#gwt-003
+    def test_matrix_locks_each_target_and_releases_only_acquired_leases(self) -> None:
+        targets = stackctl.LOCAL_BUILD_CACHE_TARGETS
+        args = argparse.Namespace(matrix=True, execute=True)
+        for fail_at in (None, *range(len(targets))):
+            with self.subTest(fail_at=fail_at):
+                leases = [mock.Mock() for _ in targets]
+                acquired: list[str] = []
+
+                def acquire(*, target: str, purpose: str) -> mock.Mock:
+                    index = targets.index(target)
+                    self.assertEqual(purpose, "provider-conformance-uat")
+                    if index == fail_at:
+                        raise stackctl.LocalOperationLockBusyError(f"busy: {target}")
+                    acquired.append(target)
+                    return leases[index]
+
+                def run(_args: argparse.Namespace) -> dict[str, int]:
+                    self.assertEqual(acquired, list(targets))
+                    for lease in leases:
+                        lease.close.assert_not_called()
+                    return {"exitCode": 0}
+
+                with (
+                    mock.patch.object(stackctl, "acquire_local_runtime_use_lock", side_effect=acquire),
+                    mock.patch.object(stackctl, "_command_provider_conformance_unlocked", side_effect=run) as runner,
+                ):
+                    result = stackctl.command_provider_conformance(args)
+                expected_count = len(targets) if fail_at is None else fail_at
+                self.assertEqual(acquired, list(targets[:expected_count]))
+                self.assertEqual(result["exitCode"], 0 if fail_at is None else 2)
+                if fail_at is not None:
+                    runner.assert_not_called()
+                    self.assertEqual(result["details"], [f"busy: {targets[fail_at]}"])
+                for index, lease in enumerate(leases):
+                    self.assertEqual(lease.close.call_count, int(index < expected_count))
+
+    def test_matrix_runner_failure_releases_leases_without_masking_error(self) -> None:
+        leases = [mock.Mock() for _ in stackctl.LOCAL_BUILD_CACHE_TARGETS]
+        with (
+            mock.patch.object(stackctl, "acquire_local_runtime_use_lock", side_effect=leases),
+            mock.patch.object(
+                stackctl, "_command_provider_conformance_unlocked",
+                side_effect=RuntimeError("runner failed"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "runner failed"),
+        ):
+            stackctl.command_provider_conformance(argparse.Namespace(matrix=True, execute=True))
+        for lease in leases:
+            lease.close.assert_called_once_with()
+
     def test_environment_matrix_forwards_one_exact_identity_to_every_cell(
         self,
     ) -> None:

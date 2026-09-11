@@ -58,7 +58,9 @@ def register_parser(
             "metrics",
             "config",
             "security",
+            "runtime",
             "release",
+            "content",
             "all",
         ],
         default="all",
@@ -73,10 +75,19 @@ def register_parser(
             "metrics",
             "config",
             "security",
+            "runtime",
             "release",
+            "content",
             "all",
         ],
     )
+    inspect_parser.add_argument("--release-id", default="", help="content: expected active release; never activates it")
+    inspect_parser.add_argument("--manifest-digest", default="", help="content: expected active manifest digest")
+    inspect_parser.add_argument("--page-size", type=int, default=20)
+    inspect_parser.add_argument("--max-pages", type=int, default=100)
+    inspect_parser.add_argument("--max-bytes", type=int, default=32 * 1024 * 1024)
+    inspect_parser.add_argument("--total-seconds", type=float, default=60.0)
+    inspect_parser.add_argument("--detail-samples", type=int, default=5)
     inspect_parser.add_argument("--candidate-digest", default="")
     inspect_parser.add_argument("--distribution-root", default="")
     inspect_parser.add_argument("--verify-hosted", action="store_true")
@@ -87,19 +98,59 @@ def register_parser(
     )
 
 
+def _command_content_inventory(args: argparse.Namespace) -> dict[str, Any]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.content_inventory import InventoryLimits, collect_content_inventory
+
+    started_monotonic, started_at = _stackctl._start_timing()
+    inventory = collect_content_inventory(
+        target=args.target, release_id=args.release_id, manifest_digest=args.manifest_digest,
+        limits=InventoryLimits(page_size=args.page_size, max_pages=args.max_pages,
+                               max_bytes=args.max_bytes, total_seconds=args.total_seconds,
+                               detail_samples=args.detail_samples),
+    )
+    try:
+        topology = _stackctl.load_environment_topology()
+        env_name = str(_stackctl.get_target(topology, args.target)["env"])
+    except (OSError, ValueError, RuntimeError):
+        # authority 解析已返回 typed blocker；报告落 repo，不重复抛错丢失失败证据。
+        env_name = "repo"
+    report_dir = _stackctl.resolve_report_dir(args, env_name, args.target)
+    timing = _stackctl._finish_timing(started_monotonic, started_at)
+    blocker = inventory["firstBlocker"]
+    details = [blocker["type"]] if blocker else ["public browse inventory collected; windows and media are observations only"]
+    status = "failed" if blocker else "ok"
+    summary = f"stackctl inspect content {status} for {args.target}"
+    _stackctl.write_json(report_dir / "content.json", inventory)
+    _stackctl.write_json(report_dir / "report.json", {
+        "command": "inspect", "inspection": {"content": inventory},
+        "findings": details if blocker else [], **timing,
+    })
+    _stackctl._write_summary_bundle(
+        report_dir, command="inspect", target=args.target, status=status,
+        summary=summary, details=details, extra={"scope": "content"}, timing=timing,
+    )
+    return {"exitCode": 1 if blocker else 0, "summary": summary, "details": details,
+            "reportDir": _stackctl.relpath(report_dir), "contentInventory": inventory, **timing}
+
+
 def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
+
+    # 内容只读盘点绝不进入 availability/candidate 聚合，其内部可能隐式 derive。
+    if args.scope == "content":
+        return _command_content_inventory(args)
 
     topology = _stackctl.load_environment_topology()
     target = _stackctl.get_target(topology, args.target)
     env_name = str(target["env"])
     report_dir = _stackctl.resolve_report_dir(args, env_name, args.target)
     started_monotonic, started_at = _stackctl._start_timing()
-    scopes = (
-        ["logs", "network", "data", "metrics", "config", "security", "release"]
-        if args.scope == "all"
-        else [args.scope]
-    )
+    runtime_scopes = ["logs", "network", "data", "metrics", "config", "security"]
+    scopes = {
+        "runtime": runtime_scopes,
+        "all": [*runtime_scopes, "release"],
+    }.get(args.scope, [args.scope])
     inspection: dict[str, Any] = {}
     findings: list[str] = []
     candidate_workspace = (

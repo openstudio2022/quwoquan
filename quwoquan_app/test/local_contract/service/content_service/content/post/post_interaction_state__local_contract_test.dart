@@ -1,5 +1,14 @@
 // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001
 
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:quwoquan_app/runtime/platform/storage/hive_runtime.dart';
+
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
@@ -36,6 +45,72 @@ ContentPostViewData _confirmedPost(
 }
 
 void main() {
+  test('延迟磁盘 hydration 不得覆盖首帧 prime 快照或较新写入', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'interaction-hydration-',
+    );
+    Hive.init(directory.path);
+    final box = await Hive.openBox<String>('client_interaction_state');
+    await box.put(
+      'post_interaction_state',
+      jsonEncode(
+        const PostInteractionState(
+          likedPostIds: {'stale-liked'},
+          likeCounts: {'post': 0, 'stale-liked': 1, 'untouched': 2},
+          confirmedShareCounts: {'post': 0},
+          confirmedCommentCounts: {'post': 0},
+        ).toMap(),
+      ),
+    );
+    await box.close();
+    final gate = Completer<bool>();
+    var storageAttempts = 0;
+    HiveRuntime.debugEnsureInitializedHook = () {
+      storageAttempts++;
+      // 只放行首个读取；prime 的异步持久化不会改写旧盘面，确定性重现旧读晚到。
+      return storageAttempts == 1 ? gate.future : Future.value(false);
+    };
+    final container = ProviderContainer(
+      overrides: sealedCloudBoundaryOverrides(),
+    );
+    try {
+      final notifier = container.read(postInteractionStateProvider.notifier);
+      notifier.mergeInteractionState(
+        const PostInteractionInput(
+          scopePostIds: {'post'},
+          likedPostIds: {'post'},
+          likeCounts: {'post': 7},
+          shareCounts: {'post': 3},
+          commentCounts: {'post': 4},
+        ),
+      );
+      notifier.setLiked('stale-liked', false, likeCount: 0);
+      expect(
+        container.read(postInteractionStateProvider).isLiked('post'),
+        isTrue,
+      );
+      final loaded = container.listen(postInteractionStateProvider, (_, _) {});
+      gate.complete(true);
+      // 等待真实 Hive 读完及 provider continuation，而非猜测 wall-clock sleep。
+      final opened = await Hive.openBox<String>('client_interaction_state');
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      final state = container.read(postInteractionStateProvider);
+      expect(opened.isOpen, isTrue);
+      expect(state.isLiked('post'), isTrue);
+      expect(state.isLiked('stale-liked'), isFalse);
+      expect(state.likeCountFor('post'), 7);
+      expect(state.commentCountFor('post'), 4);
+      expect(state.shareCountFor('post'), 3);
+      loaded.close();
+    } finally {
+      container.dispose();
+      HiveRuntime.resetForTest();
+      await Hive.close();
+      await directory.delete(recursive: true);
+    }
+  });
+
   group('post interaction counters', () {
     test('comment 仅使用 pending 渲染，分享只消费服务端权威计数', () {
       final container = ProviderContainer();

@@ -182,9 +182,7 @@ void syncPostLikeIntent(
   // 点赞为「游客设备态可写」：游客与登录用户均可写本地乐观态 + outbox。
   // 云侧按 deviceActorId（游客）/ userId（登录）独立计数、不并账；设备头由
   // CloudRequestHeaders 统一注入，故此处无需区分登录态。
-  ref
-      .read(postInteractionStateProvider.notifier)
-      .setLiked(postId, isLiked, likeCount: likeCount);
+  // 先取得实际写入能力，再发布乐观态；拒绝时不能留下虚假的已点赞。
   ref
       .read(clientStateSyncOutboxProvider.notifier)
       .enqueuePostLike(
@@ -192,6 +190,9 @@ void syncPostLikeIntent(
         currentLiked: previousLiked,
         isLiked: isLiked,
       );
+  ref
+      .read(postInteractionStateProvider.notifier)
+      .setLiked(postId, isLiked, likeCount: likeCount);
 }
 
 void syncProfileFollowIntent(

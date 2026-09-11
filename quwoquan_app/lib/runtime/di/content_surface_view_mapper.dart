@@ -1,9 +1,35 @@
-/// runtime/di 入口：统一展示模型映射器收敛为 domain 单一实现（DEC-033）。
-///
-/// 此前这里保留了一份与 domain 版逐字相同的拷贝，构成第二真相源，且媒体
-/// 资产标识以 `dto.id`（postId）冒充。现收敛为 re-export，消费方 import
-/// 路径不变，实现只存在于
-/// `service/content_service/content/post/domain/content_surface_view_mapper.dart`。
-library;
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_surface_view.dart';
+import 'package:quwoquan_app/service/content_service/content/post/domain/content_surface_view_mapper.dart'
+    as domain;
 
-export 'package:quwoquan_app/service/content_service/content/post/domain/content_surface_view_mapper.dart';
+/// 仅注入已选媒体能力；映射算法与资产绑定事实仍唯一由 domain 拥有。
+class ContentSurfaceViewMapper {
+  const ContentSurfaceViewMapper._();
+
+  static ContentSurfaceView fromDto(
+    ContentPostViewData dto, {
+    Map<String, dynamic>? wire,
+    ContentSurfaceReferral referral = const ContentSurfaceReferral(),
+    MediaDeliveryResolver? mediaResolver,
+  }) => domain.ContentSurfaceViewMapper.fromDto(
+    dto,
+    wire: wire,
+    referral: referral,
+    resolveMedia: mediaResolver?.tryResolve ?? publicMediaDelivery.tryResolve,
+  );
+
+  static ContentSurfaceView fromArticleDetailPayload(
+    ContentPostDetailPayload payload, {
+    required String fallbackArticleId,
+    ContentSurfaceReferral referral = const ContentSurfaceReferral(),
+  }) => domain.ContentSurfaceViewMapper.fromArticleDetailPayload(
+    payload,
+    fallbackArticleId: fallbackArticleId,
+    referral: referral,
+    resolveMedia: publicMediaDelivery.tryResolve,
+  );
+}

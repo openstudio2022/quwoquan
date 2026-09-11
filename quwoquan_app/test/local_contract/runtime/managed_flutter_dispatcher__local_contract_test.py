@@ -2,7 +2,8 @@
 # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 #
 # 层：local_contract。受管 PATH 字面 `flutter` dispatcher 契约：
-# - 本 App 的 `run` 白名单翻译后以 QWQ_MANAGED_FLUTTER_ENTRY=1 前台 exec
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+# - 本 App 的 `run` 白名单翻译后不进入在线 managed preparation，前台 exec
 #   canonical run.sh（--env alpha --device <id>）；-v 翻译为 attach --verbose；
 #   无 -d 时委托 canonical device authority；固定选择器冲突必须 typed 阻断；
 # - 外部 Flutter project 的 `run` 与非 `run` 子命令均解析真实 SDK 后 exact
@@ -188,7 +189,7 @@ class ManagedFlutterDispatcherContractTest(unittest.TestCase):
                 result = self._run_dispatcher("run", *flag)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 lines = self._captured_lines(self.run_capture)
-                self.assertIn("managed=1", lines)
+                self.assertIn("managed=", lines)
                 self.assertEqual(
                     [line for line in lines if line.startswith("arg=")],
                     [
@@ -214,7 +215,7 @@ class ManagedFlutterDispatcherContractTest(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 lines = self._captured_lines(self.run_capture)
-                self.assertIn("managed=1", lines)
+                self.assertIn("managed=", lines)
                 self.assertEqual(
                     [line for line in lines if line.startswith("arg=")],
                     [
@@ -271,7 +272,7 @@ class ManagedFlutterDispatcherContractTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         lines = self._captured_lines(self.run_capture)
-        self.assertIn("managed=1", lines)
+        self.assertIn("managed=", lines)
         self.assertIn("marker=keep-user-env", lines)
 
     def test_run_without_device_delegates_to_canonical_device_authority(self) -> None:
@@ -290,7 +291,7 @@ class ManagedFlutterDispatcherContractTest(unittest.TestCase):
             "无 -d 时必须以解析后的绝对真实 SDK 调用 device authority --pick",
         )
         lines = self._captured_lines(self.run_capture)
-        self.assertIn("managed=1", lines)
+        self.assertIn("managed=", lines)
         self.assertEqual(
             [line for line in lines if line.startswith("arg=")],
             ["arg=--env", "arg=alpha", "arg=--device", "arg=stub-device-1"],
@@ -376,7 +377,7 @@ class ManagedFlutterDispatcherContractTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         lines = self._captured_lines(self.run_capture)
-        self.assertIn("managed=1", lines)
+        self.assertIn("managed=", lines)
         self.assertIn(
             f"cwd={foreign_cwd.resolve()}",
             lines,
@@ -409,7 +410,7 @@ class ManagedFlutterDispatcherContractTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         lines = self._captured_lines(self.run_capture)
-        self.assertIn("managed=1", lines)
+        self.assertIn("managed=", lines)
         self.assertIn(f"cwd={app_cwd.resolve()}", lines)
         self.assertFalse(self.sdk_capture.exists())
 

@@ -129,9 +129,6 @@ func TestHomepageBundle_ProfileCarriesBackgroundAndNicknameCustomized(t *testing
 	if profile["avatarUrl"] != "https://cdn.example.com/homepage-bundle-avatar.png?v=5" {
 		t.Fatalf("expected versioned avatarUrl in homepage bundle profile, got %#v", profile["avatarUrl"])
 	}
-	if profile["avatarVersion"] != float64(5) {
-		t.Fatalf("expected avatarVersion=5 in homepage bundle profile, got %#v", profile["avatarVersion"])
-	}
 }
 
 func TestHomepageBundle_GuestViewOmitsRelationshipCapability(t *testing.T) {

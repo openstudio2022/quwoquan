@@ -188,5 +188,10 @@ def transition_startup_attempt(
     destinations = _fanout_destinations(path, payload)
     for destination in destinations:
         _pkg._prevalidate_write_path(destination)
+    from ..local_runtime_capacity import update_runtime_capacity_reservation
+    if status != "stopped":
+        update_runtime_capacity_reservation(target=target, generation=normalized_attempt, status=status)
     _transactional_fanout_write(path, destinations, payload)
+    if status == "stopped":
+        update_runtime_capacity_reservation(target=target, generation=normalized_attempt, status=status)
     return payload

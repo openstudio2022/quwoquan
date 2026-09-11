@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -19,6 +23,68 @@ DELIVERY_GATE = ROOT / ".github" / "workflows" / "delivery-gate.yml"
 
 
 class CommitGateFastPathTest(unittest.TestCase):
+    def test_service_checks_are_bounded_parallel_and_preserve_failures(self) -> None:
+        source = COMMIT_GATE.read_text(encoding="utf-8")
+        match = re.search(
+            r'''start_test_job "go_impacted" python3 -B -c '(.+?)' "\$TEST_DIR"''',
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(match)
+        program = match.group(1)
+        for failure in ("", "first"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                logs, commands = root / "logs", root / "bin"
+                logs.mkdir()
+                commands.mkdir()
+                for service in ("first", "second", "last"):
+                    path = root / "quwoquan_service/services" / service
+                    path.mkdir(parents=True)
+                    (path / "Makefile").touch()
+                (root / "quwoquan_service/services/fallback").mkdir()
+                fixture = f"#!{sys.executable}\n" + r'''
+import fcntl, json, os, pathlib, sys, time
+root = pathlib.Path(os.environ["SERVICE_CHECK_STATE"])
+service = pathlib.Path(sys.argv[2]).parts[1]
+def update(delta):
+    with (root / "lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        path = root / "state.json"
+        state = json.loads(path.read_text()) if path.exists() else {"active": 0, "peak": 0, "calls": []}
+        state["active"] += delta
+        state["peak"] = max(state["peak"], state["active"])
+        if delta > 0:
+            state["calls"].append([service, sys.argv[1:]])
+        path.write_text(json.dumps(state))
+update(1)
+time.sleep(0.15)
+update(-1)
+print("completed", service)
+sys.exit(17 if service == os.environ["SERVICE_CHECK_FAILURE"] else 0)
+'''
+                for name in ("make", "go"):
+                    executable = commands / name
+                    executable.write_text(fixture, encoding="utf-8")
+                    executable.chmod(0o755)
+                result = subprocess.run(
+                    [sys.executable, "-B", "-c", program, str(logs),
+                     "first", "second", "last", "fallback"],
+                    cwd=root,
+                    env={**os.environ, "PATH": str(commands) + os.pathsep + os.environ["PATH"],
+                         "SERVICE_CHECK_STATE": str(root), "SERVICE_CHECK_FAILURE": failure},
+                    capture_output=True, text=True, timeout=10, check=False,
+                )
+                self.assertEqual(result.returncode, 1 if failure else 0, result.stderr)
+                state = json.loads((root / "state.json").read_text())
+                self.assertEqual(state["peak"], 2)
+                self.assertEqual(state["active"], 0)
+                calls = dict(state["calls"])
+                self.assertEqual(set(calls), {"first", "second", "last", "fallback"})
+                self.assertEqual(calls["fallback"], ["test", "./services/fallback/...", "-count=1", "-p=8"])
+                for service in calls:
+                    self.assertIn("completed " + service, (logs / f"go_{service}.log").read_text())
+
     def test_pre_commit_only_checks_staged_boundary(self) -> None:
         source = PRE_COMMIT.read_text(encoding="utf-8")
         self.assertIn("local_readiness.py staged-boundary", source)

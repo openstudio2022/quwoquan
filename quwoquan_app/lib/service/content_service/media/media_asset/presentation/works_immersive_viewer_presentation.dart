@@ -584,11 +584,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
 
   /// 视频集序列：契约 mediaItems[kind=video]，为空时回落单视频；边界解析为交付引用。
   List<_WorksVideoDeliveryItem> _videoItemsFor(ContentPostViewData post) {
-    final endpointConfig = ref.watch(mediaEndpointConfigProvider);
-    if (endpointConfig == null) {
-      return const <_WorksVideoDeliveryItem>[];
-    }
-    final resolver = MediaDeliveryResolver(endpointConfig);
+    final resolver = ref.watch(publicMediaDeliveryProvider);
     final rawItems = _workItemFor(post).videoItems;
     final sources = rawItems.isNotEmpty
         ? rawItems
@@ -617,7 +613,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       final delivery = resolver.tryResolve(
         item.url,
         kind: MediaDeliveryKind.video,
-        assetId: item.mediaAssetId ?? post.id,
+        assetId: item.mediaAssetId ?? '',
         version: item.mediaAssetVersion ?? 0,
       );
       if (delivery == null) {
@@ -686,7 +682,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   }
 
   VideoPreviewTrackDescriptor? _previewTrackDescriptor({
-    required MediaDeliveryResolver resolver,
+    required PublicMediaDeliveryPort resolver,
     required WorkBrowserMediaViewData item,
   }) {
     final assetId = item.mediaAssetId?.trim() ?? '';

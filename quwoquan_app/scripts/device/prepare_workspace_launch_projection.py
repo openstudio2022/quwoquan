@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import stat
 import sys
@@ -238,6 +239,106 @@ def prepare_workspace_launch_projection(
     finally:
         if not complete and attempt.exists():
             remove_private_tree(attempt)
+
+
+def _sanitize_dependency_diagnostic(value: str) -> str:
+    text = " ".join(value.splitlines()).strip()
+    lowered = text.casefold()
+    if any(
+        marker in lowered
+        for marker in (
+            "-----begin private key-----",
+            "privatekey",
+            "private_key",
+            "private-key",
+            "trustedpublickeys",
+            "trusted_public_keys",
+            "trusted-public-keys",
+            "runtime-config-trust.json",
+        )
+    ):
+        return "[REDACTED dependency diagnostic]"
+    text = re.sub(
+        r"(?i)\b(authorization|password|passwd|token|secret|api[_-]?key)\b"
+        r"\s*[:=]\s*(?:bearer\s+)?[^\s,;]+",
+        r"\1=[REDACTED]",
+        text,
+    )
+    return text or "[empty dependency diagnostic]"
+
+
+def read_committed_dependency_sync_attempt(report: Path, command_status: int) -> str:
+    """验证自动同步回执；保留 malformed=3、未提交/状态漂移=2 的退出协议。"""
+    try:
+        encoded = report.read_text(encoding="utf-8")
+        if not encoded.strip():
+            raise ValueError("empty sync JSON")
+        payload = json.loads(encoded)
+    except (OSError, UnicodeError, ValueError):
+        raise SystemExit(3)
+    if not isinstance(payload, dict):
+        raise SystemExit(3)
+    exit_code = payload.get("exitCode")
+    summary = payload.get("summary")
+    details = payload.get("details")
+
+    def emit_details() -> None:
+        values = (
+            details
+            if isinstance(details, list) and all(isinstance(item, str) for item in details)
+            else []
+        )
+        values = values or [
+            summary
+            if isinstance(summary, str) and summary
+            else "APP.DEPENDENCY.sync_blocked: no details reported"
+        ]
+        for item in values:
+            print(
+                "[run] dependency sync detail: " + _sanitize_dependency_diagnostic(item),
+                file=sys.stderr,
+            )
+
+    if (
+        not isinstance(exit_code, int)
+        or isinstance(exit_code, bool)
+        or not isinstance(summary, str)
+        or not isinstance(details, list)
+        or not all(isinstance(item, str) for item in details)
+    ):
+        emit_details()
+        print(
+            "[run] APP.DEPENDENCY.sync_result_invalid: dependency sync JSON envelope is invalid.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
+    activation = payload.get("activation")
+    committed = (
+        exit_code == 0
+        and isinstance(activation, dict)
+        and activation.get("status") == "committed"
+        and isinstance(activation.get("attemptId"), str)
+        and bool(activation["attemptId"])
+    )
+    if command_status != 0 or exit_code != 0:
+        emit_details()
+        if command_status != exit_code:
+            print(
+                "[run] APP.DEPENDENCY.sync_result_exit_mismatch: "
+                f"process={command_status} result={exit_code}",
+                file=sys.stderr,
+            )
+        raise SystemExit(2)
+    if not committed:
+        emit_details()
+        print(
+            "[run] APP.DEPENDENCY.sync_activation_uncommitted: "
+            "dependency sync did not report a committed activation.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    return activation["attemptId"]
 
 
 def _failure_envelope(error: BaseException) -> tuple[dict[str, str], str]:

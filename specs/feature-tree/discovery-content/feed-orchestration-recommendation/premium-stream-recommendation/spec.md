@@ -35,6 +35,7 @@
 
 - 精品流必须统一路由、排序与解释；全局精品必须先经 product-ops 写入并由 Recommendation 消费 typed event，候选投影或排序窗口未闭合时不得返回伪精品结果。
 - 首页频道 metadata 不得包含 `featured`；视频书根页经 canonical `/video-book` route 与 `videoBook` surface 挂载 featured 内容能力，不由首页内存态 Tab 或 UI 本地补插第二入口。
+- 移动底栏的视频书入口使用竖向圆角书封面、右侧页层与中央空心播放三角组成的矢量图标；各尺寸保持同一轮廓和比例，选中只改变语义颜色，不填充、不加粗，不以通用打开书本替代。
 - 视频书根页复用现有沉浸 viewer 和 `premium_stream` 数据语义，不走普通首页 feed、不新建独立业务列表或播放器状态。compact/regular/expanded 仅允许视觉布局和安全区差异，供给、Post 状态、route、错误、交集和归因保持同源。
 - 视频书根页是沉浸式壳层：`videoBook` 目的地 active 时主壳不渲染底部导航栏、不为底栏预留底部遮挡高度，并强制深色 chrome；内容区只显示沉浸 viewer 自身的底部交互栏（作者头像、关注、想去/赞/转/评）与顶部返回/更多。底栏五项注册与 `/video-book` route 不变；左上返回退回首页或切换到其他底栏目的地后，底部导航栏恢复可见。
 - premium_stream/similar 首刷必须读取当前环境 canonical active release snapshot；健康零 active release 或同 release eligible playable-video 计数为零时返回 canonical 成功空结果，依赖读取/绑定/硬过滤/召回/scorer/hydration 故障返回 `CONTENT.SYSTEM.required_dependency_unavailable`。任何成功空态都不能替代发布门要求的当前 release 非空可播放视频精品。
@@ -73,7 +74,7 @@
 - GIVEN 用户进入精品/沉浸式内容流，内容具备质量分和交集理由。
 - WHEN content-service 请求推荐引擎，App 展示精品详情解释。
 - THEN 推荐场景为 similar/premium_stream，App 标题展示“与你相关的线索”，主句只显示 primaryText。
-- AND 移动底栏注册固定为“首页 / 视频书 / + / 联系 / 我”，Web 主导航存在同源视频书入口；`/video-book` 冷启动、返回栈与对象详情后的根目的地恢复正确，首页频道条不再出现 `featured`。
+- AND 移动底栏注册固定为“首页 / 视频书 / + / 联系 / 我”，视频书图标由圆角书封面、右侧页层及空心播放三角构成，各尺寸同源且选中仅变色；Web 主导航存在同源视频书入口；`/video-book` 冷启动、返回栈与对象详情后的根目的地恢复正确，首页频道条不再出现 `featured`。
 - AND 视频书目的地 active 时主壳不渲染底部导航栏、底部遮挡高度为零且 chrome 强制深色，沉浸 viewer 的底部交互栏贴底显示；从视频书返回首页或切换到其他底栏目的地后，底部导航栏恢复可见并高亮当前目的地。
 
 <a id="gwt-002"></a>

@@ -443,6 +443,145 @@ def _sealed_handoff_fixture(
     return sealed_root, row, manifest, record, review
 
 
+def _repository_handoff_fixture(root: Path) -> tuple[Path, dict]:
+    """冻结最小 sealed 历史 release；reader 只用内嵌目标，不依赖当前生产策略。"""
+    from content.release.canonical import producer_release_handoff as handoff
+    from core.release_layout import objects_merkle, payload_digest
+    from core.source_digest import content_source_revision
+
+    release_id = "repository-detachment"
+    release = root / "data/releases" / release_id
+    logical_ref = "entities/地点/景区/entity-a"
+    sealed, row, manifest, _record, _review = _sealed_handoff_fixture(
+        release, logical_ref=logical_ref, review_ref=logical_ref,
+    )
+    targets = {"homepage": 1, "article": 0, "image": 0, "video": 0}
+    counts = {**targets, "total": 1}
+    cohort = {"schema": "quwoquan_data.release_cohort", "milestone": "M1",
+              "objectRefs": [logical_ref], "expectedCarrierCounts": targets,
+              "producerBaselineRevision": "a" * 40}
+    desired = {"entities": [logical_ref.removeprefix("entities/")], "posts": [], "creators": [], "tags": []}
+    documents = {
+        "cohort.json": cohort,
+        "payload/desired_state.json": {"schema": "quwoquan_data.release_desired_state", "releaseId": release_id, "desiredRefs": desired},
+        "payload/index/objects.json": {"schema": "quwoquan_data.release_object_index", **desired},
+        "payload/sample_bundle.json": {"schema": "quwoquan_data.release_sample_bundle", **desired},
+    }
+    for ref, document in documents.items():
+        target = release / ref
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(handoff._canonical_bytes(document))
+    digest = "sha256:" + "2" * 64
+    header = {
+        "schema": "quwoquan_data.release", "releaseId": release_id, "sourceOwner": "qwq_data",
+        "releaseKind": "content", "containsUnverifiedAssets": False,
+        "rightsStatusCounts": dict.fromkeys(("verified", "unverified", "restricted", "unknown"), 0),
+        "authorizationRequiredAssetIds": [], "acceptedCount": 0,
+        "canonicalMerkle": objects_merkle(release), "executionIds": [manifest["executionId"]],
+        "sourceDigest": digest, "entityCatalogDigest": digest,
+        "sourceRevision": content_source_revision(source_digest=digest, entity_catalog_digest=digest),
+        "sourceDigests": [SourceDefinitionSnapshot(digest).to_document()],
+        "counts": counts, "milestone": "M1", "milestoneTargets": targets,
+    }
+    header_raw = handoff._canonical_bytes(header)
+    (sealed.parent / "release.json").write_bytes(header_raw)
+    cohort_raw = handoff._canonical_bytes(cohort)
+    document = {
+        "schema": "quwoquan_data.producer_release_handoff", "repositoryId": "test-content",
+        "handoffId": release_id, "releaseId": release_id, "milestone": "M1", "carrierCounts": counts,
+        "release": {"scope": "output", "ref": f"data/releases/{release_id}",
+                    "payloadDigest": payload_digest(release), "headerRef": f"data/releases/{release_id}/payload/release.json",
+                    "headerDigest": handoff._digest(header_raw)},
+        "explicitCohort": {"scope": "output", "ref": f"data/releases/{release_id}/cohort.json",
+                           "digest": handoff._digest(cohort_raw), "document": cohort},
+        "contentPoolObjects": [row], "producerBaselineRevision": cohort["producerBaselineRevision"],
+        "producerContractDigest": digest,
+    }
+    path = release / "producer_release_handoff.json"
+    path.write_bytes(handoff._canonical_bytes(document))
+    return path, document
+
+
+def test_handoff_repository_identity_is_portable_and_exact(tmp_path: Path) -> None:
+    from content.release.canonical import producer_release_handoff as handoff
+
+    path, document = _repository_handoff_fixture(tmp_path)
+    roots = {"repo_root": tmp_path / "absent-source", "output_root": tmp_path / "absent-output",
+             "release_root": path.parent.parent}
+    assert handoff.read_producer_release_handoff(path, **roots) == document
+    assert handoff.read_producer_release_handoff(path, expected_repository_id="test-content", **roots) == document
+    with pytest.raises(handoff.ProducerReleaseHandoffError, match="HANDOFF_REPOSITORY_IDENTITY_MISMATCH"):
+        handoff.read_producer_release_handoff(path, expected_repository_id="another-repository", **roots)
+    assert not roots["repo_root"].exists() and not roots["output_root"].exists()
+    assert path.read_bytes() == handoff._canonical_bytes(document)
+    # 仓身份匹配不跳过 sealed payload 的真实摘要验证。
+    with (path.parent / "payload/objects" / document["contentPoolObjects"][0]["objectRef"] / "manifest.json").open("ab") as stream:
+        stream.write(b"\n")
+    with pytest.raises(handoff.ProducerReleaseHandoffError, match="HANDOFF_RELEASE_INTEGRITY_FAILED"):
+        handoff.read_producer_release_handoff(path, expected_repository_id="test-content", **roots)
+
+
+@pytest.mark.parametrize("field,value", [("repositoryId", None), ("repositoryId", "bad/id"), ("producerContractDigest", None)])
+def test_handoff_requires_repository_and_contract_identity(tmp_path: Path, field: str, value: str | None) -> None:
+    from content.release.canonical import producer_release_handoff as handoff
+
+    path, document = _repository_handoff_fixture(tmp_path)
+    if value is None:
+        document.pop(field)
+    else:
+        document[field] = value
+    path.write_bytes(handoff._canonical_bytes(document))
+    with pytest.raises(handoff.ProducerReleaseHandoffError, match="HANDOFF_SCHEMA_INVALID"):
+        handoff.read_producer_release_handoff(path, repo_root=tmp_path, output_root=tmp_path, release_root=path.parent.parent)
+
+
+def test_handoff_writer_replay_rejects_another_repository(tmp_path: Path) -> None:
+    from content.release.canonical import producer_release_handoff as handoff
+    import subprocess
+
+    path, document = _repository_handoff_fixture(tmp_path)
+    repo_root = _DATA_ROOT.parent
+    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_root, check=True, capture_output=True, text=True).stdout.strip()
+    cohort = document["explicitCohort"]["document"]
+    cohort["producerBaselineRevision"] = revision
+    cohort_raw = handoff._canonical_bytes(cohort)
+    (path.parent / "cohort.json").write_bytes(cohort_raw)
+    document["explicitCohort"]["digest"] = handoff._digest(cohort_raw)
+    document["producerBaselineRevision"] = revision
+    path.write_bytes(handoff._canonical_bytes(document))
+    publish_root = tmp_path / "publish"
+    (publish_root / ".git").mkdir(parents=True)
+    marker = {"schema": "quwoquan_data.publish_repository.v2", "repositoryId": "test-content", "layoutVersion": 2}
+    (publish_root / "repository.json").write_bytes(handoff._canonical_bytes(marker))
+    kwargs = {"release_id": document["releaseId"], "cohort_file": path.parent / "cohort.json",
+              "milestone": "M1", "producer_baseline_revision": revision, "repo_root": repo_root,
+              "output_root": tmp_path, "publish_root": publish_root, "release_root": path.parent.parent}
+    assert handoff.write_producer_release_handoff(**kwargs) == (document, path, True)
+    marker["repositoryId"] = "another-repository"
+    (publish_root / "repository.json").write_bytes(handoff._canonical_bytes(marker))
+    with pytest.raises(handoff.ProducerReleaseHandoffError, match="HANDOFF_CREATE_ONCE_CONFLICT"):
+        handoff.write_producer_release_handoff(**kwargs)
+    assert path.read_bytes() == handoff._canonical_bytes(document)
+
+
+def test_handoff_verify_cli_threads_expected_repository_identity(tmp_path: Path, capsys) -> None:
+    import argparse
+    from content.release.canonical import handler, handler_cli
+
+    path, document = _repository_handoff_fixture(tmp_path)
+    parser = argparse.ArgumentParser()
+    handler_cli.register_parser(parser.add_subparsers(dest="command", required=True))
+    argv = ["release", "handoff-verify", "--release-id", document["releaseId"],
+            "--release-root", str(path.parent.parent), "--expected-repository-id", "test-content"]
+    args = parser.parse_args(argv)
+    args.handler(args)
+    result = json.loads(capsys.readouterr().out)
+    assert result["passed"] is True and result["repositoryId"] == "test-content"
+    with pytest.raises(SystemExit, match="HANDOFF_REPOSITORY_IDENTITY_MISMATCH"):
+        handler.handle_handoff_verify(parser.parse_args([*argv[:-1], "another-repository"]))
+    assert capsys.readouterr().out == ""
+
+
 def _write_handoff_fixture_documents(sealed_root: Path, row: dict, manifest: dict, record: dict) -> None:
     from content.release.canonical.producer_release_handoff import canonical_digest
 

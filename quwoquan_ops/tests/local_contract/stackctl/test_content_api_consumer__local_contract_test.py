@@ -7,6 +7,7 @@ multi-carrier-release/spec.md#gwt-034
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 from collections.abc import Mapping
 from pathlib import Path
@@ -305,6 +306,7 @@ def _run(
     monkeypatch: pytest.MonkeyPatch,
     *,
     http: Any = _http,
+    client_session_id: str | None = None,
 ) -> tuple[dict[str, Any], Path, dict[str, str]]:
     root = tmp_path / "output"
     root.mkdir()
@@ -327,6 +329,7 @@ def _run(
         report_dir=report_dir,
         output_root=root,
         http_request=http,
+        client_session_id=client_session_id,
         **refs,
     )
     return result, report_dir, refs
@@ -337,6 +340,7 @@ def test_release_consumes_public_api_without_special_credentials(tmp_path, monke
     calls = []
 
     def public_http(**kwargs):
+        inspect.signature(subject._default_http_request).bind(**kwargs)
         assert not {"bearer_token", "attestation_token"}.intersection(kwargs)
         calls.append(kwargs)
         return _http(**kwargs)
@@ -345,6 +349,103 @@ def test_release_consumes_public_api_without_special_credentials(tmp_path, monke
     assert result["exitCode"] == 0
     assert len(calls) == 16
     assert len(list((report_dir / "raw").glob("*/*.json"))) == 16
+    feed_calls = [call for call in calls if call["path"] == "content/feed"]
+    assert len(feed_calls) == 8
+    assert all(call["query"]["limit"] == "20" for call in feed_calls)
+    assert all(
+        call["body"]["limit"] == 50 for call in calls if call["path"] == "search"
+    )
+    assert len({call["client_session_id"] for call in calls}) == 1
+    for call in calls:
+        assert set(call.get("query", {})) <= {"identity", "type", "sort", "channelId", "limit"}
+        assert set(call.get("body", {})) <= {"query", "mode", "objectTypes", "ids", "limit", "contentTypes"}
+
+
+def test_runs_isolate_sessions_without_persisting_them(tmp_path, monkeypatch):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002"""
+    from uuid import UUID
+
+    sessions = []
+    for index in range(2):
+        calls = []
+
+        def capture(**kwargs):
+            inspect.signature(subject._default_http_request).bind(**kwargs)
+            calls.append(kwargs)
+            return _http(**kwargs)
+
+        run_root = tmp_path / str(index)
+        run_root.mkdir()
+        result, report_dir, _ = _run(run_root, monkeypatch, http=capture)
+        assert result["exitCode"] == 0
+        session_ids = {call["client_session_id"] for call in calls}
+        assert len(session_ids) == 1
+        session = session_ids.pop()
+        assert UUID(session).version == 4
+        sessions.append(session)
+        persisted = b"".join(path.read_bytes() for path in report_dir.rglob("*.json"))
+        assert session.encode() not in persisted
+    assert sessions[0] != sessions[1]
+
+
+def test_run_preserves_explicit_session(tmp_path, monkeypatch):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002"""
+    calls = []
+
+    def capture(**kwargs):
+        inspect.signature(subject._default_http_request).bind(**kwargs)
+        calls.append(kwargs)
+        return _http(**kwargs)
+
+    result, _, _ = _run(
+        tmp_path, monkeypatch, http=capture, client_session_id="explicit-run-session"
+    )
+    assert result["exitCode"] == 0
+    assert {call["client_session_id"] for call in calls} == {"explicit-run-session"}
+
+
+def test_feed_probes_consume_canonical_data_page_limit(tmp_path, monkeypatch):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002"""
+    from quwoquan_data.scripts import cli  # noqa: F401：建立 Data canonical import 根
+    from content.release.environment import post_api_feed_verification as feed_contract
+
+    assert feed_contract._post_feed_page_limit() == 20
+    monkeypatch.setattr(feed_contract, "_post_feed_page_limit", lambda: 7)
+    calls = []
+
+    def capture(**kwargs):
+        inspect.signature(subject._default_http_request).bind(**kwargs)
+        calls.append(kwargs)
+        return _http(**kwargs)
+
+    result, _, _ = _run(tmp_path, monkeypatch, http=capture)
+    assert result["exitCode"] == 0
+    assert all(
+        call["query"]["limit"] == "7" for call in calls if call["path"] == "content/feed"
+    )
+
+
+def test_invalid_run_session_fails_before_requests_or_evidence(tmp_path, monkeypatch):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002"""
+    with pytest.raises(subject.ContentApiConsumerError, match="client_session_id"):
+        _run(
+            tmp_path, monkeypatch, client_session_id="invalid session",
+            http=lambda **kwargs: pytest.fail("HTTP must not run"),
+        )
+    assert not (tmp_path / "output/env/alpha/runs/content-api-consumer/run-001").exists()
+
+
+def test_invalid_page_contract_fails_without_hardcoded_fallback(monkeypatch):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002"""
+    from quwoquan_data.scripts import cli  # noqa: F401：建立 Data canonical import 根
+    from content.release.environment import post_api_feed_verification as feed_contract
+
+    def invalid_contract():
+        raise feed_contract.PostApiVerificationError("fixture invalid contract")
+
+    monkeypatch.setattr(feed_contract, "_post_feed_page_limit", invalid_contract)
+    with pytest.raises(subject.ContentApiConsumerError, match="pagination contract"):
+        subject._feed_page_limit()
 
 
 @pytest.mark.parametrize("field", ["releaseClass", "productLifecycleState", "readinessPhase"])

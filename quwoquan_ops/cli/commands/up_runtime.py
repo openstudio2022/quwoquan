@@ -309,9 +309,13 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
         stage_header = _stackctl._format_stage_header(stage_index, expected_stage_total, stage)
         announce(stage_header, "started", numbered=True)
         stage_started = time.monotonic()
+        from quwoquan_ops.cli.lib.output_paths import env_root
+        child_env = dict(env or {})
+        if requested_target in {"alpha-local", "beta-local", "gamma-local"}:
+            child_env["QWQ_OUTPUT_ROOT"] = str(env_root(env_name).parents[1])
         result = _stackctl._run_with_live_output(
             argv,
-            env=env,
+            env=child_env,
             prefix=live_prefix,
             redaction_values=log_sink_redaction_values,
         )

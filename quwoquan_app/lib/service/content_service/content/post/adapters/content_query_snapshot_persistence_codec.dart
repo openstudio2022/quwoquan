@@ -89,6 +89,24 @@ void _writeSnapshotJson(
   }
   writer.writeRaw(']');
   writer.writeRaw(',');
+  _writeJsonField(
+    writer,
+    'objectCards',
+    snapshot.objectCards.map((card) => card.toWire()),
+  );
+  writer.writeRaw(',');
+  _writeJsonField(
+    writer,
+    'activationReleaseId',
+    snapshot.activationIdentity?.releaseId,
+  );
+  writer.writeRaw(',');
+  _writeJsonField(
+    writer,
+    'activationManifestDigest',
+    snapshot.activationIdentity?.manifestDigest,
+  );
+  writer.writeRaw(',');
   _writeJsonField(writer, 'nextCursor', snapshot.nextCursor);
   writer.writeRaw(',');
   _writeJsonField(writer, 'previousCursor', snapshot.previousCursor);

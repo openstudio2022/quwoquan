@@ -8,6 +8,8 @@ import 'package:quwoquan_app/service/product_ops_service/product_ops/event_recor
 import 'package:quwoquan_app/service/product_ops_service/product_ops/recovery_failure/adapters/remote_recovery_failure_writer.dart';
 import 'package:quwoquan_app/service/product_ops_service/product_ops/recovery_failure/application/recovery_failure_writer.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/generated/app_launch_contract.g.dart';
+import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/generated/ops/ops_request_page_ids.g.dart';
@@ -31,6 +33,9 @@ void configureRecoveryRuntimeOperations() {
   final registry = RecoveryRuntimeOperationsRegistry.instance;
   if (registry.isConfigured) return;
   registry.configure((binding) {
+    if (appContentSourcePolicy[binding.environment.name] != 'remote') {
+      return const _OfflineRecoveryRuntimeOperations();
+    }
     const clientContext = AppCloudClientContextProvider();
     final client = buildGeneratedCloudOperationClient(
       httpClient: CloudHttpClient(),
@@ -56,6 +61,23 @@ void configureRecoveryRuntimeOperations() {
       ),
     );
   });
+}
+
+final class _OfflineRecoveryRuntimeOperations
+    implements RecoveryRuntimeOperations {
+  const _OfflineRecoveryRuntimeOperations();
+
+  @override
+  Future<RecoveryVersionResponse> getVersion(
+    RecoveryVersionRequest request,
+  ) async {
+    throw contentCapabilityUnavailable('recovery_version');
+  }
+
+  @override
+  Future<void> reportFailure(RecoveryFailurePayload payload) async {
+    throw contentCapabilityUnavailable('recovery_report');
+  }
 }
 
 /// 恢复通道两个 operation 在 canonical 契约里都只绑定 `welcome`（启动/恢复面）。
@@ -162,6 +184,7 @@ void initializeStartupTelemetryRuntime() {
 
 /// runtime config 完成 canonical 校验后，才把同一个 journal 接到 generated Remote。
 void attachStartupTelemetryTransport() {
+  if (!CloudRuntimeConfig.networkAccessAllowed) return;
   const clientContext = AppCloudClientContextProvider();
   StartupTelemetryRuntime.instance.attachTransport(
     RemoteStartupTelemetryTransport(

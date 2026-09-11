@@ -185,17 +185,18 @@ def temporary_launcher_package(
         launch_policy = (
             "prod" + "_release" if environment == "prod" else "test_live"
         )
-        runtime_config_package = build_runtime_config_package(
-            environment=environment,
-            target=target,
-            launch_policy=launch_policy,
-            values=runtime_values,
-            source_git_sha=source_git_sha,
-            source_tree_digest=source_tree_digest,
-            signing=signing,
-            issued_at=issued_at,
-            expires_at=issued_at + timedelta(hours=1),
-        )
+        # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+        identity = dict(environment=environment, target=target, launch_policy=launch_policy,
+                        source_git_sha=source_git_sha, source_tree_digest=source_tree_digest,
+                        signing=signing)
+        if environment == "alpha":
+            from print_app_env_dart_defines import build_offline_bootstrap_document
+            runtime_config_package = build_offline_bootstrap_document(**identity)
+        else:
+            runtime_config_package = build_runtime_config_package(
+                **identity, values=runtime_values, issued_at=issued_at,
+                expires_at=issued_at + timedelta(hours=1),
+            )
         trusted_public_keys = json.loads(
             signing.trusted_public_keys_path.read_text(encoding="utf-8")
         )

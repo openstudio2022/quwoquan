@@ -3,6 +3,7 @@
 // spec_ref: specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-001
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t2
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t3
 /// user_acceptance Patrol: release-bound 核心 Remote readback 组合旅程。
 ///
@@ -14,7 +15,11 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
+import 'package:quwoquan_app/design_system/layout/app_terminal_viewport.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
+import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/runtime/shell/bottom_navigation.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/works_immersive_viewer.dart';
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/signed_grant_image.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
@@ -486,6 +491,8 @@ Future<void> _expectFeaturedVideoBook(PatrolIntegrationTester $) async {
   );
   await $.tester.tap(find.byKey(_videoBookEntryKey).first);
   await $.pump(const Duration(seconds: 1));
+  // 壳层切换不得依赖 premium 数据或播放器就绪。
+  _expectVideoBookImmersiveShell($);
 
   final pagerVisible = await _waitForAnyFinder($, <Finder>[
     find.byKey(TestKeys.worksImmersivePager),
@@ -545,6 +552,7 @@ Future<void> _expectFeaturedVideoBook(PatrolIntegrationTester $) async {
   );
   await $.tester.tap(playerReady.first);
   await $.pump(const Duration(milliseconds: 300));
+  _expectVideoBookImmersiveShell($);
   expect(
     find.byKey(_videoErrorKey).evaluate(),
     isEmpty,
@@ -614,6 +622,21 @@ Future<void> _expectFeaturedVideoBook(PatrolIntegrationTester $) async {
     AppRoutePaths.home,
     reason: 'back from video book must restore the canonical home route',
   );
+  final homeNavigation = find.byType(BottomNavigationWidget);
+  expect(homeNavigation, findsOneWidget);
+  expect(
+    $.tester.widget<BottomNavigationWidget>(homeNavigation).currentIndex,
+    0,
+    reason: '返回首页必须恢复底栏并高亮首页目的地',
+  );
+  final homeContext = $.tester.element(find.byKey(_homeSearchChromeKey));
+  final navContext = $.tester.element(homeNavigation);
+  expect(
+    AppViewportObstructionScope.of(homeContext).bottom,
+    AppSpacing.bottomNavBarHeight(navContext) +
+        MediaQuery.viewPaddingOf(navContext).bottom,
+    reason: '首页内容必须重新感知主底栏与安全区的完整遮挡高度',
+  );
   expect(
     _homeFeedOffset($),
     closeTo(feedOffsetBefore!, 1),
@@ -635,6 +658,7 @@ Future<void> _expectFeaturedVideoBook(PatrolIntegrationTester $) async {
     AppRoutePaths.videoBook,
     reason: 'video book re-entry must restore the canonical /video-book route',
   );
+  _expectVideoBookImmersiveShell($);
   if (_videoPageCount == 1) {
     expect(
       await _waitForAnyFinder($, <Finder>[
@@ -644,6 +668,22 @@ Future<void> _expectFeaturedVideoBook(PatrolIntegrationTester $) async {
       reason: 'single-page video book re-entry must restore the same release-bound work',
     );
   }
+}
+
+void _expectVideoBookImmersiveShell(PatrolIntegrationTester $) {
+  expect(
+    find.byType(BottomNavigationWidget),
+    findsNothing,
+    reason: '视频书进入、播放及重入期间均不得渲染主底栏',
+  );
+  final viewer = find.byType(WorksImmersiveViewer);
+  expect(viewer, findsOneWidget);
+  final viewerContext = $.tester.element(viewer);
+  expect(
+    AppViewportObstructionScope.of(viewerContext).bottom,
+    AppSpacing.zero,
+    reason: '视频书正文必须感知零主底栏遮挡，而非只隐藏底栏视觉',
+  );
 }
 
 double? _homeFeedOffset(PatrolIntegrationTester $) {

@@ -1,4 +1,4 @@
-"""Alpha app-content-uat 受控 Edge suite 编排与恢复证据合约。
+"""Beta app-content-uat 受控 Edge suite 编排与恢复证据合约。
 
 spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-004.t3
 """
@@ -27,14 +27,14 @@ _MANIFEST_DIGEST = "sha256:" + "b" * 64
 _BASELINE = "sha256:" + "f" * 64
 _RELEASE_TRAIN = "sha256:" + "9" * 64
 _CONTRACT_GRAPH_DIGEST = "sha256:" + "7" * 64
-_HEALTH_URL = "https://alpha-api.example.test/healthz"
+_HEALTH_URL = "https://beta-api.example.test/healthz"
 
 
 def _launch_binding(report_dir: Path) -> dict[str, str]:
-    attempt_dir = report_dir / "alpha-local/canonical-launch/attempt-1"
+    attempt_dir = report_dir / "beta-local/canonical-launch/attempt-1"
     return {
-        "target": "alpha-local",
-        "launchAttemptId": "launch-attempt-alpha",
+        "target": "beta-local",
+        "launchAttemptId": "launch-attempt-beta",
         "launchProvenance": "canonical_launcher",
         "artifactDigest": "sha256:" + "6" * 64,
         "runtimeConfigTrustEnvelopeDigest": "sha256:" + "7" * 64,
@@ -52,7 +52,7 @@ def _launch_binding(report_dir: Path) -> dict[str, str]:
 def _sample_plan() -> dict[str, object]:
     return {
         "schema": "quwoquan_data.release_uat_sample_plan",
-        "releaseId": "release-alpha",
+        "releaseId": "release-beta",
         "releaseDigest": "sha256:" + "b" * 64,
         "selectionEvidence": {"sourceIdentitySetDigest": "sha256:" + "d" * 64},
     }
@@ -72,8 +72,8 @@ def _preflight(report_dir: Path) -> dict[str, object]:
     )
     return {
         "exitCode": 0,
-        "target": "alpha-local",
-        "environment": "alpha",
+        "target": "beta-local",
+        "environment": "beta",
         "purpose": "content_live",
         "launchPolicy": "immutable_candidate",
         "nonPromotable": False,
@@ -81,32 +81,32 @@ def _preflight(report_dir: Path) -> dict[str, object]:
         "contentLive": "passed",
         "contentBindingState": "bound",
         "packageBaseline": _BASELINE,
-        "releaseId": "release-alpha",
+        "releaseId": "release-beta",
         "manifestDigest": _MANIFEST_DIGEST,
-        "readinessReceiptRef": "env/alpha/runs/readiness.json",
+        "readinessReceiptRef": "env/beta/runs/readiness.json",
         "readinessReceiptDigest": "sha256:" + "c" * 64,
         "releaseUatSamplePlan": sample_plan,
         "releaseUatSamplePlanRef": str(sample_plan_path),
         "releaseUatSamplePlanDigest": sample_plan_digest,
         "appUatPlan": {
             "releaseIdentity": {
-                "releaseId": "release-alpha",
+                "releaseId": "release-beta",
                 "payloadSha256": _MANIFEST_DIGEST,
             },
             "releaseUatSamplePlanRef": str(sample_plan_path),
             "releaseUatSamplePlanDigest": sample_plan_digest,
-            "carrierIdentities": {"video": "video-alpha"},
+            "carrierIdentities": {"video": "video-beta"},
             "orderedSamples": [
                 {
                     "sampleId": "canary-video-001",
                     "carrier": "video",
-                    "objectId": "video-alpha",
-                    "objectRef": "objects/posts/video/video-alpha",
+                    "objectId": "video-beta",
+                    "objectRef": "objects/posts/video/video-beta",
                     "objectDigest": "sha256:" + "8" * 64,
                 }
             ],
             "requiredCasePlan": [],
-            "videoPagination": {"expectedWorkIds": ["video-alpha"]},
+            "videoPagination": {"expectedWorkIds": ["video-beta"]},
         },
     }
 
@@ -115,12 +115,12 @@ def _runtime_binding(report_dir: Path) -> dict[str, object]:
     return {
         "launchPolicy": "immutable_candidate",
         "nonPromotable": False,
-        "environment": "alpha",
-        "target": "alpha-local",
+        "environment": "beta",
+        "target": "beta-local",
         "packageBaseline": _BASELINE,
         "candidateDigest": _BASELINE,
         "releaseTrainId": _RELEASE_TRAIN,
-        "composeProject": "quwoquan_alpha_test_live",
+        "composeProject": "quwoquan_beta_test_live",
         "sourceCapsuleManifestRef": str(
             report_dir / "candidate/input-capsule/manifest.json"
         ),
@@ -135,7 +135,7 @@ def _controlled_edge_evidence(*, restored: bool = True) -> dict[str, object]:
     return {
         "status": "passed",
         "controlledEdgeFault": {
-            "environment": "alpha",
+            "environment": "beta",
             "copyKey": "serviceUnavailable",
             "singlePrimaryAction": True,
             "forbiddenBrandAbsent": True,
@@ -148,9 +148,9 @@ def _controlled_edge_evidence(*, restored: bool = True) -> dict[str, object]:
         "controlledEdgeFaultReceipt": {
             "schema": "quwoquan_ops.controlled_edge_fault",
             "status": "restored" if restored else "fault_active",
-            "target": "alpha-local",
-            "environment": "alpha",
-            "composeProject": "quwoquan_alpha_test_live",
+            "target": "beta-local",
+            "environment": "beta",
+            "composeProject": "quwoquan_beta_test_live",
             "configurationDigest": _CONFIGURATION_DIGEST,
             "healthUrl": _HEALTH_URL,
             "services": [
@@ -182,7 +182,7 @@ def _smoke_command(
             "patrol",
             suite_name,
             "--gateway-base-url",
-            "https://alpha-api.example.test",
+            "https://beta-api.example.test",
         ],
         "cwd": report_dir,
         "reportPath": str(report_dir / suite_name / f"{target}.json"),
@@ -209,17 +209,17 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
         contract_graph.write_text("contract-graph\n", encoding="utf-8")
         raw_source = {
             "slotId": "sha256:" + "1" * 64,
-            "ref": "raw-readiness-case-results/alpha.json",
+            "ref": "raw-readiness-case-results/beta.json",
             "digest": "sha256:" + "2" * 64,
         }
         raw_projection = {
             "rawResultRefs": {
-                "alpha-local": [
+                "beta-local": [
                     {"slotId": raw_source["slotId"], "ref": raw_source["ref"]}
                 ]
             },
             "rawResultDigests": {
-                "alpha-local": [
+                "beta-local": [
                     {
                         "slotId": raw_source["slotId"],
                         "digest": raw_source["digest"],
@@ -227,9 +227,9 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
                 ]
             },
             "rawCoverage": {
-                "alpha-local": {"expected": 1, "present": 1, "missing": 0}
+                "beta-local": {"expected": 1, "present": 1, "missing": 0}
             },
-            "rawGaps": {"alpha-local": []},
+            "rawGaps": {"beta-local": []},
         }
         successful = subprocess.CompletedProcess(["patrol"], 0, "", "")
         patrol_result = subprocess.CompletedProcess(
@@ -331,7 +331,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
                 stackctl,
                 "_run_app_content_release_probe",
                 return_value={
-                    "target": "alpha-local",
+                    "target": "beta-local",
                     "suite": "release-bound-readback",
                     "exitCode": 0,
                     "sampleExecution": {
@@ -339,8 +339,8 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
                             {
                                 "sampleId": "canary-video-001",
                                 "carrier": "video",
-                                "sourceObjectId": "video-alpha",
-                                "readObjectId": "video-alpha",
+                                "sourceObjectId": "video-beta",
+                                "readObjectId": "video-beta",
                             }
                         ]
                     },
@@ -352,7 +352,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
                 return_value=(
                     {"schema": "fixture-target-uat-binding"},
                     {
-                        "ref": "target-uat-bindings/alpha-local.json",
+                        "ref": "target-uat-bindings/beta-local.json",
                         "digest": "sha256:" + "4" * 64,
                     },
                 ),
@@ -453,7 +453,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
             )
             result = stackctl._command_app_content_uat(
                 argparse.Namespace(
-                    targets="alpha-local",
+                    targets="beta-local",
                     platform="android",
                     device_id="emulator-5554",
                     dry_run=False,
@@ -462,7 +462,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
             )
         return result, smoke_profile, profile_runner, message_runner
 
-    def test_alpha_suite_runs_receipt_bound_fault_and_aggregates_evidence(
+    def test_beta_suite_runs_receipt_bound_fault_and_aggregates_evidence(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -474,7 +474,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
         self.assertEqual(result["exitCode"], 0)
         self.assertEqual(result["launchPolicy"], "immutable_candidate")
         self.assertTrue(result["nonPromotable"])
-        self.assertEqual(result["packageBaselines"], {"alpha-local": _BASELINE})
+        self.assertEqual(result["packageBaselines"], {"beta-local": _BASELINE})
         self.assertEqual(result["releaseTrainId"], _RELEASE_TRAIN)
         controlled_calls = [
             call
@@ -488,7 +488,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
         )
         self.assertEqual(smoke_profile.call_count, 7)
         self.assertEqual(message_runner.call_count, 1)
-        recovery = result["controlledEdgeRecoveries"]["alpha-local"]
+        recovery = result["controlledEdgeRecoveries"]["beta-local"]
         self.assertTrue(recovery["evidence"]["sameInstallRecovery"])
         self.assertEqual(recovery["receipt"]["status"], "restored")
         self.assertEqual(recovery["receipt"]["healthUrl"], _HEALTH_URL)
@@ -500,7 +500,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
         self.assertEqual(suite_run["exitCode"], 0)
         self.assertEqual(
             suite_run["evidence"]["controlledEdgeFaultReceipt"]["composeProject"],
-            "quwoquan_alpha_test_live",
+            "quwoquan_beta_test_live",
         )
 
     def test_missing_restore_receipt_is_first_failure_and_stops_later_suites(
@@ -518,7 +518,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
             result["details"],
             [
                 (
-                    "alpha-local: controlled-edge-recovery failed: controlled edge "
+                    "beta-local: controlled-edge-recovery failed: controlled edge "
                     "recovery receipt does not match current runtime binding"
                 )
             ],
@@ -557,7 +557,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
             result["details"],
             [
                 (
-                    "alpha-local: release-sample-matrix failed: "
+                    "beta-local: release-sample-matrix failed: "
                     "APP.LAUNCH.runtime_config_activation_failed"
                 )
             ],
@@ -581,7 +581,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
             result["details"],
             [
                 (
-                    "alpha-local: release-sample-matrix failed: "
+                    "beta-local: release-sample-matrix failed: "
                     "APP.LAUNCH.runtime_config_activation_failed"
                 )
             ],

@@ -21,12 +21,11 @@ import 'package:quwoquan_app/runtime/platform/native_runtime_config_bridge.dart'
 /// 缺省值只在缺 define 时兜底，保证纯 `flutter test` 也能得到结构合法的
 /// package；真实取值仍由 runner 从环境拓扑注入，宿主测试因此看到与
 /// canonical launcher 相同的 endpoint 形状。
-// 兜底环境必须与受管 runner 的默认一致（`run_flutter_test_guarded.py`
-// 取 alpha）。两侧取值不同源时，裸 `flutter test` 会装配出与受管运行不同的
-// provider 图——例如 alpha 之外的环境会接上 runtime log 的云端 transport。
+// 通用宿主测试使用 Remote 合同的 Beta；Alpha 专项必须显式水合离线文档。
+// 这只是测试前置，不改变裸 flutter run 的 Alpha 离线默认，不放宽 resolver。
 const _appRuntimeEnv = String.fromEnvironment(
   'APP_RUNTIME_ENV',
-  defaultValue: 'alpha',
+  defaultValue: 'beta',
 );
 const _gatewayBaseUrl = String.fromEnvironment(
   'CLOUD_GATEWAY_BASE_URL',
@@ -104,23 +103,41 @@ final class _HydrationChannelClient implements RuntimeConfigChannelClient {
 Future<Map<String, Object?>> buildSignedTrustEnvelopeForTests({
   String buildProfile = 'nonprod',
   String? target,
+  String? environment,
 }) async {
-  final resolvedTarget = target ?? '$_appRuntimeEnv-local';
+  final selectedEnvironment = environment ?? _appRuntimeEnv;
+  final resolvedTarget = target ?? '$selectedEnvironment-local';
+  final offline = selectedEnvironment == 'alpha';
   final algorithm = Ed25519();
   final keyPair = await algorithm.newKeyPair();
   final publicKey = await keyPair.extractPublicKey();
   final trustedPublicKeys = <String, String>{
     'nonprod-2026-01': base64.encode(publicKey.bytes),
   };
+  final trustDocument = <String, Object?>{
+    'buildProfile': buildProfile,
+    'schema': 'app-runtime-config-trust',
+    'signatureAlgorithm': 'ed25519',
+    'trustedPublicKeys': trustedPublicKeys,
+  };
+  final trustDigest =
+      'sha256:${crypto.sha256.convert(utf8.encode(canonicalJsonEncode(trustDocument)))}';
   final payload = <String, Object?>{
     'buildProfile': buildProfile,
-    'environment': _appRuntimeEnv,
-    'expiresAt': _expiresAt,
-    'issuedAt': _issuedAt,
+    'environment': selectedEnvironment,
+    if (!offline) 'expiresAt': _expiresAt,
+    if (!offline) 'issuedAt': _issuedAt,
+    if (offline) 'contentSource': 'bundled_snapshot',
+    if (offline) 'trustEnvelopeDigest': trustDigest,
     'launchPolicy': runtimePackageTestLiveLaunchPolicy,
     'payloadDigest': '',
-    'runtime': _runtimeValues(),
-    'schema': runtimePackageSchema,
+    'runtime': offline
+        ? <String, String>{'appRuntimeEnv': selectedEnvironment}
+        : <String, String>{
+            ..._runtimeValues(),
+            'appRuntimeEnv': selectedEnvironment,
+          },
+    'schema': offline ? 'app-offline-bootstrap-document' : runtimePackageSchema,
     'signatureAlgorithm': 'ed25519',
     'signatureKeyId': 'nonprod-2026-01',
     'sourceGitSha': 'a' * 40,
@@ -137,12 +154,6 @@ Future<Map<String, Object?>> buildSignedTrustEnvelopeForTests({
   final runtimePackage = <String, Object?>{
     ...payload,
     'signature': base64.encode(signature.bytes),
-  };
-  final trustDocument = <String, Object?>{
-    'buildProfile': buildProfile,
-    'schema': 'app-runtime-config-trust',
-    'signatureAlgorithm': 'ed25519',
-    'trustedPublicKeys': trustedPublicKeys,
   };
   return <String, Object?>{
     'package': runtimePackage,
@@ -161,8 +172,10 @@ Future<Map<String, Object?>> buildSignedTrustEnvelopeForTests({
 
 /// 让 `CloudRuntimeConfig` 进入已水合态。失败必须抛出，不允许静默降级——
 /// 否则整棵测试树会退回到「未水合」并把回归伪装成断言失败。
-Future<void> hydrateRuntimePackageForTests() async {
-  final envelope = await buildSignedTrustEnvelopeForTests();
+Future<void> hydrateRuntimePackageForTests({String? environment}) async {
+  final envelope = await buildSignedTrustEnvelopeForTests(
+    environment: environment,
+  );
   await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
     bridge: NativeRuntimeConfigBridge(
       client: _HydrationChannelClient(envelope),

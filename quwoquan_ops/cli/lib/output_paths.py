@@ -21,6 +21,7 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output"
 DEFAULT_DEPLOY_WORK_ROOT = Path.home() / ".cache" / "quwoquan" / "deploy"
+DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT = Path.home() / ".cache" / "quwoquan" / "runtime-output"
 DEPLOY_ENVS = frozenset({"alpha", "beta", "gamma", "prod"})
 ENV_SEGMENTS = DEPLOY_ENVS | {"repo"}
 DEFAULT_DEPLOY_TARGET_BY_ENV = {
@@ -115,7 +116,7 @@ def _revalidate_directory_chain(
         raise _UnsafeActiveCandidatePath(f"{label} parent changed during access")
 
 
-def _read_secure_json_object(path: Path, *, label: str) -> dict[str, Any] | None:
+def _read_secure_bytes(path: Path, *, label: str) -> bytes | None:
     try:
         parent_descriptor, parent_identities = _open_directory_chain(
             path.parent,
@@ -167,7 +168,12 @@ def _read_secure_json_object(path: Path, *, label: str) -> dict[str, Any] | None
             dir_fd=parent_descriptor,
             follow_symlinks=False,
         )
-        if not stat.S_ISREG(after.st_mode) or (after.st_dev, after.st_ino) != identity:
+        if (
+            not stat.S_ISREG(after.st_mode)
+            or (after.st_dev, after.st_ino) != identity
+            or (after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+            != (opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns)
+        ):
             raise _UnsafeActiveCandidatePath(f"{label} changed during access")
     except FileNotFoundError as exc:
         raise _UnsafeActiveCandidatePath(f"{label} changed during access") from exc
@@ -175,6 +181,13 @@ def _read_secure_json_object(path: Path, *, label: str) -> dict[str, Any] | None
         if descriptor >= 0:
             os.close(descriptor)
         os.close(parent_descriptor)
+    return encoded
+
+
+def _read_secure_json_object(path: Path, *, label: str) -> dict[str, Any] | None:
+    encoded = _read_secure_bytes(path, label=label)
+    if encoded is None:
+        return None
     try:
         payload = json.loads(encoded.decode("utf-8"))
     except (UnicodeError, json.JSONDecodeError) as exc:
@@ -445,7 +458,13 @@ def run_evidence_dir(parent: Path, command_name: str, target: str) -> Path:
 
 
 def env_root(env_name: str) -> Path:
-    return output_root() / "env" / normalize_env(env_name)
+    environment = normalize_env(env_name)
+    # 本地运行事实属于宿主而非工作树；repo/data 与 hosted prod 输出不迁移。
+    # 显式输出根仍是离线工具/测试的依赖注入 seam，不自动搬迁或双读旧事实。
+    root = output_root()
+    if environment in {"alpha", "beta", "gamma"} and not os.environ.get("QWQ_OUTPUT_ROOT"):
+        root = DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT
+    return root / "env" / environment
 
 
 def env_runs_root(env_name: str) -> Path:
@@ -474,10 +493,7 @@ def validate_env_run_evidence_dir(
     if any(part == ".." for part in candidate_input.parts):
         raise ValueError("report directory cannot contain parent traversal")
 
-    output_root_absolute = output_root().expanduser().absolute()
-    expected_runs_absolute = (
-        output_root_absolute / "env" / normalize_env(env_name) / "runs"
-    )
+    expected_runs_absolute = env_runs_root(env_name).expanduser().absolute()
     expected_runs_root = expected_runs_absolute.resolve()
     candidate_absolute = (
         candidate_input
@@ -527,7 +543,24 @@ def target_local_dir(target: str) -> Path:
     return env_local_root(env_for_target(target)) / safe_segment(target, fallback="local")
 
 
+def archived_worktree_startup_paths(target: str) -> tuple[Path, Path, Path]:
+    """仅供显式 Alpha reconciliation 使用；不改变普通 process guard。"""
+    if target != "alpha-local" or os.environ.get("QWQ_OUTPUT_ROOT"):
+        raise ValueError("worktree startup reconciliation requires alpha-local without QWQ_OUTPUT_ROOT")
+    process = ROOT / ".qwq_output/env/alpha/local/alpha-local/process"
+    return (
+        process / "startup_attempt.json",
+        process / "workloads/full/startup_attempt.json",
+        process / "local_run.json",
+    )
+
+
 def target_process_dir(target: str) -> Path:
+    if target in {"alpha-local", "beta-local", "gamma-local"} and not os.environ.get("QWQ_OUTPUT_ROOT"):
+        worktree_process = output_root() / "env" / env_for_target(target) / "local" / target / "process"
+        if any((worktree_process / name).exists() or (worktree_process / name).is_symlink()
+               for name in ("startup_attempt.json", "test_live_startup_attempt.json")):
+            raise ValueError("OPS.RUNTIME.reconcile_required: worktree-local startup receipt requires explicit reconciliation")
     return target_local_dir(target) / "process"
 
 

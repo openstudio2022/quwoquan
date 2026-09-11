@@ -44,7 +44,9 @@ func TestUserAccountPersonaManagementQueriesUsePostgresState(t *testing.T) {
 		t.Fatalf("GetPersonaManagementSummary status=%d body=%s", summaryResponse.Code, summaryResponse.Body.String())
 	}
 	summary := parseJSON(t, summaryResponse)
-	if summary["ownerUserId"] != ownerID || summary["totalCount"] != float64(1) || summary["activePersonaId"] != personaID {
+	quota, _ := summary["quota"].(map[string]any)
+	if summary["activeContext"] == nil || quota["ownerUserId"] != ownerID ||
+		quota["totalCount"] != float64(1) {
 		t.Fatalf("GetPersonaManagementSummary body=%#v", summary)
 	}
 
@@ -66,7 +68,21 @@ func TestUserAccountPersonaManagementQueriesUsePostgresState(t *testing.T) {
 
 func TestUserAccountInterestProfileQueryUsesMongoProjection(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	const ownerID = "readiness_interest_profile_owner"
+	const (
+		ownerID   = "readiness_interest_profile_owner"
+		personaID = "readiness_interest_profile_persona"
+	)
+	createTestProfile(t, ownerID, "readiness-interest-profile-owner")
+	createTestPersonaFull(
+		t,
+		personaID,
+		ownerID,
+		personaID,
+		"Readiness Interest",
+		"open",
+		true,
+		true,
+	)
 	_, err := mongoDB.Collection("rm_user_profile_view").InsertOne(
 		context.Background(),
 		bson.M{
@@ -96,7 +112,7 @@ func TestUserAccountInterestProfileQueryUsesMongoProjection(t *testing.T) {
 		http.MethodGet,
 		"/users/"+ownerID+"/interest-profile",
 		"",
-		nil,
+		authHeadersForPersona(ownerID, personaID),
 	)
 	if response.Code != http.StatusOK {
 		t.Fatalf("GetUserInterestProfile status=%d body=%s", response.Code, response.Body.String())

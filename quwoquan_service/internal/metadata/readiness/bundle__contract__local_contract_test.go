@@ -26,6 +26,34 @@ func TestReadinessResultBundleSchemaAcceptsCanonicalWire(t *testing.T) {
 	}
 }
 
+func TestOfflineReadinessBundleKeepsSnapshotAuthorityWithoutDeploymentFields(t *testing.T) {
+	result := contentReleaseUATResult()
+	result.ContentSource = "bundled_snapshot"
+	result.Environment, result.DeploymentTarget = "alpha", "alpha-local"
+	result.BaselineID, result.PackageDigest, result.ConfigurationDigest = "", "", ""
+	result.CandidateManifestSHA256, result.Provider = "", ""
+	result.ReleaseID, result.ReleaseDigest, result.ObservedReleaseID = "", "", ""
+	result.UATProfile, result.NonPromotable = "rehearsal", true
+	result.Platform, result.DeviceClass, result.PhysicalDevice = "android", "emulator", false
+	bundle := ReadinessResultBundle{GeneratedAt: testStart, Results: []ReadinessCaseResult{result}}
+	metadataDir := filepath.Join("..", "..", "..", "contracts", "metadata")
+	if err := ValidateBundleSchema(metadataDir, bundle); err != nil {
+		t.Fatalf("offline canonical wire rejected: %v", err)
+	}
+	encoded, err := json.Marshal(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := DecodeBundle(bytes.NewReader(encoded))
+	if err != nil || decoded.Results[0].ContentSource != "bundled_snapshot" {
+		t.Fatalf("offline source lost during strict decode: %v", err)
+	}
+	bundle.Results[0].Provider = "first-party-https"
+	if err := ValidateBundleSchema(metadataDir, bundle); err == nil {
+		t.Fatal("offline result accepted mixed online provider authority")
+	}
+}
+
 func TestContentReleaseUATWireRequiresCanonicalBinding(t *testing.T) {
 	metadataDir := filepath.Join("..", "..", "..", "contracts", "metadata")
 	schemas, err := LoadWireSchemas(metadataDir)

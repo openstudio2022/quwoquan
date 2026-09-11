@@ -1,3 +1,12 @@
+import 'dart:async';
+
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/config/app_remote_config_snapshot.dart';
+import 'package:quwoquan_app/runtime/config/app_remote_config_store.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/offline_content_bundle.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/adapters/discovery_feed_query_bundled.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/post_reader_bundled.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/content_media_upload_service.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/post_publication_status_reader.dart';
@@ -173,6 +182,17 @@ final class AppProductionContentMediaFacet implements ContentMediaFacet {
 final class ContentProductionComposition {
   const ContentProductionComposition._();
 
+  static AppContentConfigReader appContentConfigReader({
+    required ContentConfigRepository Function() repository,
+    required AppRemoteConfigStore Function() store,
+  }) {
+    if (CloudRuntimeConfig.isHydrated &&
+        CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot) {
+      return _BundledAppContentConfigReader(OfflineContentBundle.load);
+    }
+    return _RemoteAppContentConfigReader(repository, store);
+  }
+
   static AppProductionBehaviorRepository behaviorRepository({
     required ContentBehaviorFactAppender writer,
     required ActorQueuePartition queuePartition,
@@ -243,6 +263,16 @@ final class ContentProductionComposition {
       client: client,
       invocationContext: invocationContext,
     );
+    if (CloudRuntimeConfig.isHydrated &&
+        CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot) {
+      return AppProductionContentFacets(
+        feedQuery: BundledContentDiscoveryFeedQuery(
+          loadBundle: OfflineContentBundle.load,
+        ),
+        postDeleteWriter: deleteWriter,
+        behaviorWriter: behavior,
+      );
+    }
     final cached = CachedContentRepository(
       feedDelegate: discoveryFeed,
       deleteDelegate: deleteWriter,
@@ -296,9 +326,14 @@ final class ContentProductionComposition {
       userProfileCache: userProfileCache,
       telemetrySink: telemetrySink,
     );
+    final bundled =
+        CloudRuntimeConfig.isHydrated &&
+            CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot
+        ? BundledContentPostReader(loadBundle: OfflineContentBundle.load)
+        : null;
     return AppProductionContentPostReaderFacets(
-      detail: cached,
-      authorPosts: cached,
+      detail: bundled ?? cached,
+      authorPosts: bundled ?? cached,
       publicationStatus: remote,
       wishlistState: remote,
       gatheringPosts: remote,
@@ -381,5 +416,37 @@ final class ContentProductionComposition {
       ),
     };
     return result as T;
+  }
+}
+
+final class _BundledAppContentConfigReader implements AppContentConfigReader {
+  const _BundledAppContentConfigReader(this.loadBundle);
+  final Future<OfflineContentBundle> Function() loadBundle;
+
+  @override
+  Future<AppContentConfigSnapshot?> readActiveSnapshot() async => null;
+
+  @override
+  Future<AppContentConfigSnapshot> refresh() async =>
+      (await loadBundle()).configuration;
+}
+
+final class _RemoteAppContentConfigReader implements AppContentConfigReader {
+  const _RemoteAppContentConfigReader(this.repository, this.store);
+  final ContentConfigRepository Function() repository;
+  final AppRemoteConfigStore Function() store;
+
+  @override
+  Future<AppContentConfigSnapshot?> readActiveSnapshot() =>
+      store().readActiveSnapshot();
+
+  @override
+  Future<AppContentConfigSnapshot> refresh() async {
+    final snapshot = AppRemoteConfigSnapshot.fromWire(
+      await repository().getAppConfig(),
+    );
+    // 当前会话激活不等待平台缓存；离线 reader 从不读写在线 LKG。
+    unawaited(store().writeActiveSnapshot(snapshot));
+    return snapshot;
   }
 }

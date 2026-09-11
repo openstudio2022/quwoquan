@@ -548,6 +548,50 @@ def test_online_invocation_retries_only_transient_network_failure_in_same_home(
     assert backoffs == [1.0]
 
 
+@pytest.mark.parametrize("offline", [False, True])
+def test_both_hosts_capture_online_plugin_resolution_details_without_debug(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    offline: bool,
+) -> None:
+    # spec_ref: specs/feature-tree/platform-ops-governance/design.md#dec-003
+    project = tmp_path / "project"
+    production = _wrapper(project)
+    patrol = project / "quwoquan_app/test_host/patrol/android"
+    shutil.copytree(production, patrol)
+    home = tmp_path / "private-home"
+    home.mkdir()
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def fake_run(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, stdout="resolved")
+
+    monkeypatch.setattr(gradle_store, "run_managed_subprocess", fake_run)
+    invocations = canonical_android_uat_gradle_invocations(project)
+    run_gradle_invocations(
+        project_root=project,
+        gradle_user_home=home,
+        invocations=invocations,
+        offline=offline,
+        environment={},
+    )
+
+    assert len(calls) == 2
+    for (command, kwargs), invocation in zip(calls, invocations, strict=True):
+        assert command[0] == str(invocation.gradle_root / "gradlew")
+        assert ("--info" in command) is not offline
+        assert ("--offline" in command) is offline
+        assert "--stacktrace" in command
+        assert "--no-daemon" in command
+        assert "--debug" not in command
+        assert "--refresh-dependencies" not in command
+        assert command[-len(invocation.tasks):] == list(invocation.tasks)
+        assert kwargs["env"] == {"GRADLE_USER_HOME": str(home)}
+
+
 @pytest.mark.parametrize(
     "failure_output",
     [
@@ -560,6 +604,13 @@ def test_online_invocation_retries_only_transient_network_failure_in_same_home(
             "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'"
         ),
         "Plugin with id 'com.android.application' not found",
+        (
+            "Plugin [id: 'org.gradle.kotlin.kotlin-dsl', version: '6.4.2'] "
+            "was not found in any of the following sources:\n"
+            "- Plugin Repositories (could not resolve plugin artifact "
+            "'org.gradle.kotlin.kotlin-dsl:"
+            "org.gradle.kotlin.kotlin-dsl.gradle.plugin:6.4.2')"
+        ),
     ],
 )
 def test_online_invocation_does_not_retry_deterministic_failure(
@@ -893,6 +944,63 @@ def test_explicit_sync_uses_fresh_online_home_then_exact_offline_replay(
     assert calls == [False, True]
     assert result.snapshot.manifest["artifactCount"] == 1
     assert (tmp_path / "replay/home/init.d/qwq-offline.gradle").is_file()
+    policy = "init.d/qwq-plugin-repositories.gradle"
+    assert (tmp_path / "online" / policy).read_bytes() == (
+        tmp_path / "replay/home" / policy
+    ).read_bytes()
+    assert any(item.relative == f"home/{policy}" for item in result.snapshot.files)
+
+
+def test_repository_policy_changes_native_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from quwoquan_ops.cli.lib.package_reuse import native_dependency_inputs as native
+
+    source = tmp_path / "settings.gradle"
+    source.write_text("rootProject.name = 'test'\n", encoding="utf-8")
+    monkeypatch.setattr(native, "native_resolution_input_paths", lambda _root: [source])
+    before = native.native_resolution_input_identity(tmp_path)
+    monkeypatch.setattr(
+        native, "ANDROID_GRADLE_REPOSITORY_INIT",
+        native.ANDROID_GRADLE_REPOSITORY_INIT + b"// changed\n",
+    )
+    after = native.native_resolution_input_identity(tmp_path)
+    assert before["nativeResolutionInputDigest"] != after["nativeResolutionInputDigest"]
+    assert before["nativeResolutionInputs"][-1]["path"] == (
+        "@managed/android-gradle/qwq-plugin-repositories.gradle"
+    )
+
+
+def test_projection_rejects_repository_policy_drift(tmp_path: Path) -> None:
+    project, root, _sealed_root, snapshot = _sealed(tmp_path)
+    home = copy_android_gradle_snapshot(
+        snapshot, tmp_path / "replay", project_root=project, gradle_roots=[root],
+    )
+    (home / "init.d/qwq-plugin-repositories.gradle").write_bytes(b"// tampered\n")
+    with pytest.raises(ValueError, match="repository policy drifted"):
+        private_gradle_environment(gradle_user_home=home, base={})
+
+
+def test_sync_rejects_repository_policy_drift_before_seal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    root = _wrapper(project)
+
+    def mutate(**kwargs: object) -> list[object]:
+        policy = Path(str(kwargs["gradle_user_home"])) / "init.d/qwq-plugin-repositories.gradle"
+        policy.chmod(0o644)
+        policy.write_bytes(b"// tampered\n")
+        return []
+
+    monkeypatch.setattr(gradle_store, "run_gradle_invocations", mutate)
+    with pytest.raises(ValueError, match="repository policy drifted"):
+        synchronize_android_gradle_dependencies(
+            project_root=project, online_home=tmp_path / "online",
+            sealed_tree=tmp_path / "sealed", replay_tree=tmp_path / "replay",
+            gradle_roots=[root], invocations=[GradleInvocation(root, ("dependencies",))],
+        )
+    assert not (tmp_path / "sealed").exists()
 
 
 def test_package_capsule_writer_is_fresh_read_only_and_cas_verified(

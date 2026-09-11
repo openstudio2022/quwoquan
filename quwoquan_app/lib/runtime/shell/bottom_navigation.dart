@@ -53,8 +53,13 @@ class BottomNavigationWidget extends ConsumerWidget {
       ),
       _BottomDestination(
         label: AppConceptConstants.premium,
-        icon: CupertinoIcons.book,
-        selectedIcon: CupertinoIcons.book_fill,
+        iconBuilder: (color, selected, size) => AppVideoBookIcon(
+          size: size,
+          color: color,
+          state: selected
+              ? AppVideoBookIconState.selected
+              : AppVideoBookIconState.unselected,
+        ),
       ),
       _BottomDestination(
         label: '',
@@ -95,20 +100,30 @@ class BottomNavigationWidget extends ConsumerWidget {
                 final selected = currentIndex == index;
                 final destination = destinations[index];
                 return Expanded(
-                  child: CupertinoButton(
-                    key: index == 1 ? TestKeys.mainTabVideoBook : null,
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    onPressed: () {
-                      if (selected) return;
-                      HapticFeedback.selectionClick();
-                      onTap(index);
-                    },
-                    child: _BottomNavItem(
-                      destination: destination,
-                      selected: selected,
-                      activeColor: activeColor,
-                      inactiveColor: inactiveColor,
+                  child: Semantics(
+                    selected: destination.isPrimaryAction ? null : selected,
+                    label: destination.semanticLabel ?? destination.label,
+                    child: CupertinoButton(
+                      key: index == 1 ? TestKeys.mainTabVideoBook : null,
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.square(
+                        destination.isPrimaryAction
+                            ? AppSpacing.bottomNavPrimaryActionHitSize
+                            : AppSpacing.minInteractiveSize,
+                      ),
+                      onPressed: () {
+                        if (selected && !destination.isPrimaryAction) return;
+                        HapticFeedback.selectionClick();
+                        onTap(index);
+                      },
+                      child: ExcludeSemantics(
+                        child: _BottomNavItem(
+                          destination: destination,
+                          selected: selected,
+                          activeColor: activeColor,
+                          inactiveColor: inactiveColor,
+                        ),
+                      ),
                     ),
                   ),
                 );
@@ -169,68 +184,56 @@ class _BottomNavItem extends StatelessWidget {
       letterSpacing: AppSpacing.bottomNavLabelLetterSpacing,
     );
 
-    return Semantics(
-      button: true,
-      selected: selected,
-      // wide(宽屏 Web) 断点下 icon(40)+gap+label 略超内容区高度；用 scaleDown
-      // 防极小溢出（手机 compact 内容低于底栏高度不触发缩放，零视觉回归）。
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (destination.isPrimaryAction)
-              Container(
-                width: AppSpacing.primaryActionPillWidth,
-                height: AppSpacing.primaryActionPillHeight,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryColor,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryColor.withValues(alpha: 0.28),
-                      blurRadius: AppSpacing.sm,
-                      offset: const Offset(
-                        AppSpacing.zero,
-                        AppSpacing.bottomNavPrimaryActionShadowOffsetDy,
-                      ),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  destination.selectedIcon,
-                  size: AppSpacing.bottomNavPrimaryActionIconSize,
-                  color: AppColors.white,
-                ),
-              )
-            else ...[
-              if (destination.iconBuilder != null)
-                destination.iconBuilder!(
-                  selected ? activeColor : inactiveColor,
-                  selected,
-                  iconSize,
-                )
-              else
-                Icon(
-                  selected ? destination.selectedIcon : destination.icon,
-                  size: iconSize,
-                  color: selected ? activeColor : inactiveColor,
-                ),
-              SizedBox(height: AppSpacing.bottomNavIconLabelGap),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                style: labelStyle,
-                child: Text(
-                  destination.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ],
+    if (destination.isPrimaryAction) {
+      return Container(
+        width: AppSpacing.primaryActionPillWidth,
+        height: AppSpacing.primaryActionPillHeight,
+        decoration: BoxDecoration(
+          color: AppColors.primaryColor,
+          borderRadius: BorderRadius.circular(
+            AppSpacing.primaryActionPillRadius,
+          ),
         ),
+        child: Icon(
+          destination.selectedIcon,
+          size: AppSpacing.bottomNavPrimaryActionIconSize,
+          color: AppColors.white,
+        ),
+      );
+    }
+
+    // 只缩放普通图文内容以适配放大文字；点击热区由外层按钮完整保留。
+    // 中央操作独立布局，不随文字缩放而变回小方块。
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (destination.iconBuilder != null)
+            destination.iconBuilder!(
+              selected ? activeColor : inactiveColor,
+              selected,
+              iconSize,
+            )
+          else
+            Icon(
+              selected ? destination.selectedIcon : destination.icon,
+              size: iconSize,
+              color: selected ? activeColor : inactiveColor,
+            ),
+          SizedBox(height: AppSpacing.bottomNavIconLabelGap),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            style: labelStyle,
+            child: Text(
+              destination.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }

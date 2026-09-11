@@ -36,41 +36,38 @@ def test_baseline_is_empty() -> None:
     assert sweep.baseline_size() == 0
 
 
-def test_unregistered_direct_render_is_blocked(tmp_path: Path) -> None:
+def test_unregistered_direct_render_is_blocked(tmp_path: Path, monkeypatch) -> None:
     """新增一处未登记的裸直连必须被抓，否则锁只是一张过期清单。"""
 
-    target = (
-        sweep.APP_LIB
-        / "service/content_service/content/post/presentation/home_multi_form_feed.dart"
+    target = tmp_path / "probe.dart"
+    target.write_text(
+        'Widget _sweepProbe() => AppCachedNetworkImage(imageUrl: "probe");\n',
+        encoding="utf-8",
     )
-    original = target.read_text(encoding="utf-8")
-    leak = (
-        original
-        + "\n// ignore: unused_element\n"
-        + 'Widget _sweepProbe() => AppCachedNetworkImage(imageUrl: "probe");\n'
-    )
-    try:
-        target.write_text(leak, encoding="utf-8")
-        issues = _validate()
-    finally:
-        target.write_text(original, encoding="utf-8")
-    assert any("不在册" in issue for issue in issues)
+    scan = sweep.scan_direct_render_sites
+    monkeypatch.setattr(sweep, "scan_direct_render_sites", lambda: scan(tmp_path))
+    monkeypatch.setattr(sweep, "load_registry", lambda: {})
+    issues = _validate()
+    assert len(issues) == 1
+    assert "probe.dart:1" in issues[0]
+    assert "不在册" in issues[0]
 
 
-def test_stale_registry_entry_is_blocked() -> None:
+def test_stale_registry_entry_is_blocked(tmp_path: Path, monkeypatch) -> None:
     """已消失的条目必须同批删除，否则册子会逐渐指向无关代码。"""
 
-    path = sweep.REGISTRY_PATH
-    original = path.read_text(encoding="utf-8")
-    try:
-        path.write_text(
-            original + "  service/ghost/vanished.dart:1: 幽灵条目\n",
-            encoding="utf-8",
-        )
-        issues = _validate()
-    finally:
-        path.write_text(original, encoding="utf-8")
-    assert any("已不再直连" in issue for issue in issues)
+    path = tmp_path / "registry.yaml"
+    path.write_text(
+        "baseline: {}\nallowlist:\n  service/ghost/vanished.dart:1: 幽灵条目\n",
+        encoding="utf-8",
+    )
+    load = sweep.load_registry
+    monkeypatch.setattr(sweep, "load_registry", lambda: load(path))
+    monkeypatch.setattr(sweep, "scan_direct_render_sites", lambda: [])
+    issues = _validate()
+    assert len(issues) == 1
+    assert "service/ghost/vanished.dart:1" in issues[0]
+    assert "已不再直连" in issues[0]
 
 
 def test_allowlist_entry_without_reason_is_blocked() -> None:

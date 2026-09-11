@@ -71,12 +71,7 @@
         "commitSha",
         "contractGraphSourceHash",
         "deploymentTarget",
-        "baselineId",
-        "packageDigest",
-        "configurationDigest",
-        "candidateManifestSha256",
         "environment",
-        "provider",
         "startedAt",
         "completedAt",
         "runnerIdentity",
@@ -260,7 +255,8 @@
             "offline",
             "no_active_release",
             "rollback_restored",
-            "replay_restored"
+            "replay_restored",
+            "capability_unavailable"
           ]
         },
         "observedReleaseId": {
@@ -268,9 +264,126 @@
         },
         "previousReleaseId": {
           "$ref": "#/$defs/nonSecretIdentity"
+        },
+        "contentSource": {
+          "const": "bundled_snapshot"
         }
       },
       "allOf": [
+        {
+          "if": {
+            "required": [
+              "contentSource"
+            ],
+            "properties": {
+              "contentSource": {
+                "const": "bundled_snapshot"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "candidateDigest",
+              "targetUatBindingDigest",
+              "entrySurface",
+              "carrier",
+              "deviceIdentity",
+              "deviceRegistered",
+              "uatProfile",
+              "nonPromotable",
+              "artifactClass",
+              "physicalDevice"
+            ],
+            "properties": {
+              "producer": {
+                "const": "app"
+              },
+              "layer": {
+                "const": "user_acceptance"
+              },
+              "environment": {
+                "const": "alpha"
+              },
+              "deploymentTarget": {
+                "const": "alpha-local"
+              },
+              "uatProfile": {
+                "const": "rehearsal"
+              },
+              "nonPromotable": {
+                "const": true
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "baselineId"
+                  ]
+                },
+                {
+                  "required": [
+                    "packageDigest"
+                  ]
+                },
+                {
+                  "required": [
+                    "configurationDigest"
+                  ]
+                },
+                {
+                  "required": [
+                    "candidateManifestSha256"
+                  ]
+                },
+                {
+                  "required": [
+                    "provider"
+                  ]
+                },
+                {
+                  "required": [
+                    "releaseId"
+                  ]
+                },
+                {
+                  "required": [
+                    "releaseDigest"
+                  ]
+                },
+                {
+                  "required": [
+                    "importRunId"
+                  ]
+                },
+                {
+                  "required": [
+                    "verifyRunId"
+                  ]
+                },
+                {
+                  "required": [
+                    "observedReleaseId"
+                  ]
+                },
+                {
+                  "required": [
+                    "previousReleaseId"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "baselineId",
+              "packageDigest",
+              "configurationDigest",
+              "candidateManifestSha256",
+              "provider"
+            ]
+          }
+        },
         {
           "if": {
             "required": [
@@ -302,40 +415,97 @@
         },
         {
           "if": {
-            "required": ["producer", "layer"],
+            "required": [
+              "producer",
+              "layer"
+            ],
             "properties": {
-              "producer": {"const": "app"},
-              "layer": {"const": "user_acceptance"}
-            }
-          },
-          "then": {
-            "required": ["platform", "deviceClass"]
-          }
-        },
-        {
-          "if": {
-            "required": ["producer", "layer"],
-            "properties": {
-              "producer": {"const": "service"},
-              "layer": {"const": "api_integration"}
+              "producer": {
+                "const": "app"
+              },
+              "layer": {
+                "const": "user_acceptance"
+              }
             }
           },
           "then": {
             "required": [
-              "releaseId", "releaseDigest", "importRunId", "verifyRunId",
-              "objectRef", "objectDigest"
+              "platform",
+              "deviceClass"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "producer",
+              "layer"
+            ],
+            "properties": {
+              "producer": {
+                "const": "service"
+              },
+              "layer": {
+                "const": "api_integration"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "releaseId",
+              "releaseDigest",
+              "importRunId",
+              "verifyRunId",
+              "objectRef",
+              "objectDigest"
             ],
             "not": {
               "anyOf": [
-                {"required": ["platform"]},
-                {"required": ["deviceClass"]},
-                {"required": ["deviceRegistered"]},
-                {"required": ["deviceIdentity"]},
-                {"required": ["targetUatBindingDigest"]},
-                {"required": ["uatProfile"]},
-                {"required": ["nonPromotable"]},
-                {"required": ["artifactClass"]},
-                {"required": ["physicalDevice"]}
+                {
+                  "required": [
+                    "platform"
+                  ]
+                },
+                {
+                  "required": [
+                    "deviceClass"
+                  ]
+                },
+                {
+                  "required": [
+                    "deviceRegistered"
+                  ]
+                },
+                {
+                  "required": [
+                    "deviceIdentity"
+                  ]
+                },
+                {
+                  "required": [
+                    "targetUatBindingDigest"
+                  ]
+                },
+                {
+                  "required": [
+                    "uatProfile"
+                  ]
+                },
+                {
+                  "required": [
+                    "nonPromotable"
+                  ]
+                },
+                {
+                  "required": [
+                    "artifactClass"
+                  ]
+                },
+                {
+                  "required": [
+                    "physicalDevice"
+                  ]
+                }
               ]
             }
           }

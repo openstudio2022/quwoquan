@@ -1,4 +1,7 @@
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/transport/executor/unavailable_cloud_operation_executor.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/runtime/context/cloud_operation_header_factory.dart';
 import 'package:quwoquan_app/runtime/transport/executor/generated_cloud_operation_executor.dart';
@@ -29,8 +32,17 @@ CloudOperationExecutor buildGeneratedCloudOperationExecutor({
   required CloudOperationTelemetrySink telemetrySink,
   CloudRuntimeEnvironment? environment,
 }) {
+  if (CloudRuntimeConfig.isHydrated &&
+      CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot) {
+    return const UnavailableCloudOperationExecutor();
+  }
+  final selectedEnvironment =
+      environment ?? CloudRuntimeEnvironment.fromCompileTime();
+  if (!selectedEnvironment.networkAccessAllowed) {
+    return const UnavailableCloudOperationExecutor();
+  }
   return AppGeneratedCloudOperationExecutor(
-    environment: environment ?? CloudRuntimeEnvironment.fromCompileTime(),
+    environment: selectedEnvironment,
     transport: HttpCloudJsonTransport(httpClient),
     headerFactory: CloudOperationHeaderFactory(
       clientContextProvider: clientContextProvider,

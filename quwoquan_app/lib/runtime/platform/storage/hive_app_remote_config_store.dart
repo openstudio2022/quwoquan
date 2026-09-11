@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/config/app_remote_config_snapshot.dart';
@@ -9,7 +11,22 @@ import 'package:quwoquan_app/runtime/platform/storage/hive_runtime.dart';
 
 /// Hive-backed App remote-config LKG adapter.
 final class HiveAppRemoteConfigStore implements AppRemoteConfigStore {
-  const HiveAppRemoteConfigStore();
+  const HiveAppRemoteConfigStore({this.storageNamespace, this.now});
+
+  final DateTime Function()? now;
+
+  /// production 环境在冷启动后不可变；测试显式注入稳定 namespace。
+  final String? storageNamespace;
+
+  String get scopedBoxName {
+    final namespace =
+        storageNamespace ??
+        '${CloudRuntimeConfig.launchTarget}|${CloudRuntimeConfig.appEnvironment}';
+    if (namespace.trim().isEmpty) {
+      throw ArgumentError.value(namespace, 'storageNamespace');
+    }
+    return '${boxName}_${Uri.encodeComponent(namespace)}';
+  }
 
   static const String boxName = 'app_remote_config';
   static const String activeSnapshotKey = 'active_snapshot';
@@ -25,14 +42,18 @@ final class HiveAppRemoteConfigStore implements AppRemoteConfigStore {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return null;
       final persisted = decoded.cast<String, dynamic>();
-      final source =
-          AppRemoteConfigSnapshot.fromPersistedMap(persisted).isExpired
-          ? AppRemoteConfigSource.staleDiskCache
-          : AppRemoteConfigSource.diskCache;
-      return AppRemoteConfigSnapshot.fromPersistedMap(
+      final snapshot = AppRemoteConfigSnapshot.fromPersistedMap(
         persisted,
-        source: source,
+        source: AppRemoteConfigSource.diskCache,
       );
+      // 运营 LKG 的 maxAgeSec 独立于内容缓存 TTL，过期不能放行展示。
+      final readAt = (now ?? DateTime.now)().toUtc();
+      if (snapshot.maxAge <= Duration.zero ||
+          readAt.isBefore(snapshot.fetchedAt.toUtc()) ||
+          !readAt.isBefore(snapshot.expiresAt)) {
+        return null;
+      }
+      return snapshot;
     } catch (error, stackTrace) {
       // 缓存损坏时按「无本地配置」继续拉远端，但损坏本身必须留证据。
       unawaited(
@@ -62,6 +83,6 @@ final class HiveAppRemoteConfigStore implements AppRemoteConfigStore {
   }
 
   Future<Box<String>?> _boxOrNull() {
-    return HiveRuntime.openStringBoxOrNull(boxName);
+    return HiveRuntime.openStringBoxOrNull(scopedBoxName);
   }
 }

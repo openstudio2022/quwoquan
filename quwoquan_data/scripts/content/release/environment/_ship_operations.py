@@ -19,6 +19,9 @@ from content.release.environment.homepage_verification_cases import (
 from content.release.environment.importers import (
     assert_content_release_evidence_unchanged,
 )
+from content.release.environment.owner_local_staging_admission import (
+    require_candidate_media_readable,
+)
 from content.release.environment.readiness import ShipReadinessAction
 from content.release.environment.run_evidence import (
     read_environment_result,
@@ -245,6 +248,44 @@ def _readback_all_owners(
         fields[f"{owner}FencedReadbackReceiptRef"] = evidence.ref
         fields[f"{owner}FencedReadbackReceiptDigest"] = evidence.digest
     return fields
+
+
+class ContentActivationAmbiguousError(RuntimeError):
+    """CAS 可能已提交；只允许查询权威 pointer，再由 owner 显式恢复。"""
+
+
+def _remember_pointer_receipt(
+    result: dict[str, object], prefix: str, evidence: object
+) -> None:
+    assert_content_release_evidence_unchanged(evidence)
+    result[f"{prefix}ReceiptRef"] = evidence.ref
+    result[f"{prefix}ReceiptDigest"] = evidence.digest
+
+
+def _activation_failure(
+    *, dependencies: ShipOperationDependencies, target: object, run: Path,
+    base_result: dict[str, object], failed_stage: str, error: Exception | SystemExit,
+) -> Exception | SystemExit:
+    if failed_stage not in {
+        "content_activation_cas", "content_active_post_query", "owner_fenced_readback",
+    }:
+        return error
+    if failed_stage == "content_activation_cas":
+        # CLI 可能已经 CAS、但在 receipt 落盘或传输时失败。查询只能记录事实，
+        # 即使仍为旧 tuple/无 active，也不推断可重试；禁止任何隐式 CAS/rollback。
+        try:
+            observed = _required_adapter(dependencies, "query_content_active_release")(
+                env=base_result["environment"], mongo_uri=target.mongo_uri,
+                report_path=run / "content-active-ambiguous-receipt.json",
+                output_root=dependencies.output_root,
+            )
+            _remember_pointer_receipt(base_result, "contentPostActive", observed)
+        except (Exception, SystemExit):
+            pass  # 首个 CAS blocker 保留；查询不可达绝不等同无 active。
+    return ContentActivationAmbiguousError(
+        f"ambiguous: {_bounded_error(error)}; query exact Content pointer/revision "
+        "before owner-authorized recovery; no automatic CAS or rollback"
+    )
 
 
 def _lifecycle_evidence(admission: object) -> dict[str, object]:
@@ -582,6 +623,15 @@ def activate_release(
             manifest_digest=admission.manifest_digest,
         )
         base_result.update(admitted.result_fields())
+        failed_stage = "candidate_media_readback"
+        require_candidate_media_readable(
+            release=admission.release, release_id=admission.release_id,
+            manifest_digest=admission.manifest_digest,
+            media_base_url=getattr(target, "media_delivery_base_url", ""),
+            ssl_cafile=getattr(target, "ssl_cafile", ""),
+        )
+        for candidate in candidates.values():
+            assert_content_release_evidence_unchanged(candidate)
         failed_stage = "content_active_pre_query"
         pre = _required_adapter(dependencies, "query_content_active_release")(
             env=env,
@@ -589,6 +639,7 @@ def activate_release(
             report_path=run / "content-active-pre-receipt.json",
             output_root=dependencies.output_root,
         )
+        _remember_pointer_receipt(base_result, "contentPreActive", pre)
         failed_stage = "content_activation_cas"
         activation = _required_adapter(dependencies, "activate_content_release")(
             env=env,
@@ -600,12 +651,14 @@ def activate_release(
             output_root=dependencies.output_root,
         )
         failed_stage = "content_active_post_query"
+        _remember_pointer_receipt(base_result, "contentActivation", activation)
         post = _required_adapter(dependencies, "query_content_active_release")(
             env=env,
             mongo_uri=target.mongo_uri,
             report_path=run / "content-active-post-receipt.json",
             output_root=dependencies.output_root,
         )
+        _remember_pointer_receipt(base_result, "contentPostActive", post)
         active = activation.document["active"]
         expected_revision = int(pre.document.get("revision") or 0) + 1
         if (
@@ -630,12 +683,6 @@ def activate_release(
         completed = {
             **base_result,
             "status": ReleaseRunStatus.COMPLETED,
-            "contentPreActiveReceiptRef": pre.ref,
-            "contentPreActiveReceiptDigest": pre.digest,
-            "contentActivationReceiptRef": activation.ref,
-            "contentActivationReceiptDigest": activation.digest,
-            "contentPostActiveReceiptRef": post.ref,
-            "contentPostActiveReceiptDigest": post.digest,
             **readback_evidence,
         }
         # Never seal completed before its activation marker exists. If the marker
@@ -645,14 +692,20 @@ def activate_release(
         failed_stage = "terminal_result"
         _write_terminal_result(dependencies=dependencies, run=run, document=completed)
     except (Exception, SystemExit) as error:
+        failure = _activation_failure(
+            dependencies=dependencies, target=target, run=run,
+            base_result=base_result, failed_stage=failed_stage, error=error,
+        )
         receipt_error = _record_failed_result(
             dependencies=dependencies,
             run=run,
             base_result=base_result,
             failed_stage=failed_stage,
-            error=error,
+            error=failure,
         )
-        _failed_receipt_note(error=error, receipt_error=receipt_error)
+        _failed_receipt_note(error=failure, receipt_error=receipt_error)
+        if failure is not error:
+            raise failure from error
         raise
     print(f"[ship] activate env={env} release={release_id} run={run_id}")
 
@@ -779,6 +832,15 @@ def rollback_release(
             release_id=target_id,
             manifest_digest=admission.manifest_digest,
         )
+        failed_stage = "candidate_media_readback"
+        require_candidate_media_readable(
+            release=admission.release, release_id=admission.release_id,
+            manifest_digest=admission.manifest_digest,
+            media_base_url=getattr(target, "media_delivery_base_url", ""),
+            ssl_cafile=getattr(target, "ssl_cafile", ""),
+        )
+        for candidate in candidates.values():
+            assert_content_release_evidence_unchanged(candidate)
         failed_stage = "content_active_pre_query"
         pre = _required_adapter(dependencies, "query_content_active_release")(
             env=env,
@@ -795,6 +857,7 @@ def rollback_release(
             raise SystemExit(
                 "CONTENT.RELEASE.ACTIVE_CAS_CONFLICT: rollback asserted from tuple differs from queried active pointer"
             )
+        _remember_pointer_receipt(base_result, "contentPreActive", pre)
         failed_stage = "content_activation_cas"
         activation = _required_adapter(dependencies, "activate_content_release")(
             env=env,
@@ -806,12 +869,14 @@ def rollback_release(
             output_root=dependencies.output_root,
         )
         failed_stage = "content_active_post_query"
+        _remember_pointer_receipt(base_result, "contentActivation", activation)
         post = _required_adapter(dependencies, "query_content_active_release")(
             env=env,
             mongo_uri=target.mongo_uri,
             report_path=run / "content-active-post-receipt.json",
             output_root=dependencies.output_root,
         )
+        _remember_pointer_receipt(base_result, "contentPostActive", post)
         active = activation.document["active"]
         if (
             post.document.get("status") != "found"
@@ -835,12 +900,6 @@ def rollback_release(
         completed = {
             **base_result,
             "status": ReleaseRunStatus.COMPLETED,
-            "contentPreActiveReceiptRef": pre.ref,
-            "contentPreActiveReceiptDigest": pre.digest,
-            "contentActivationReceiptRef": activation.ref,
-            "contentActivationReceiptDigest": activation.digest,
-            "contentPostActiveReceiptRef": post.ref,
-            "contentPostActiveReceiptDigest": post.digest,
             **readback_evidence,
         }
         failed_stage = "applied_ref"
@@ -848,14 +907,20 @@ def rollback_release(
         failed_stage = "terminal_result"
         _write_terminal_result(dependencies=dependencies, run=run, document=completed)
     except (Exception, SystemExit) as error:
+        failure = _activation_failure(
+            dependencies=dependencies, target=target, run=run,
+            base_result=base_result, failed_stage=failed_stage, error=error,
+        )
         receipt_error = _record_failed_result(
             dependencies=dependencies,
             run=run,
             base_result=base_result,
             failed_stage=failed_stage,
-            error=error,
+            error=failure,
         )
-        _failed_receipt_note(error=error, receipt_error=receipt_error)
+        _failed_receipt_note(error=failure, receipt_error=receipt_error)
+        if failure is not error:
+            raise failure from error
         raise
     print(f"[ship] rollback env={env} target={target_id} run={run_id}")
 

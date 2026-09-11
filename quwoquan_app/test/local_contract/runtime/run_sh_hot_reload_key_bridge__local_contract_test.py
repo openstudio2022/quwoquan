@@ -4,7 +4,11 @@
 
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -101,10 +105,84 @@ class RunShDevicePickerContractTest(unittest.TestCase):
 
     def test_global_wrapper_follows_cwd_app_tree_then_execs_launcher(self) -> None:
         wrapper = GLOBAL_WRAPPER.read_text(encoding="utf-8")
-        self.assertIn('launcher="$dir/run.sh"', wrapper)
-        self.assertIn('launcher="$dir/quwoquan_app/run.sh"', wrapper)
-        self.assertIn('exec "$launcher" "$@"', wrapper)
+        self.assertIn('scripts/tools/launcher/worktree_selection.py', wrapper)
+        self.assertIn('exec "$launcher" "${passthrough[@]}"', wrapper)
         self.assertTrue(GLOBAL_WRAPPER.stat().st_mode & 0o111)
+        with tempfile.TemporaryDirectory(prefix="qwq-wrapper-contract-") as temporary:
+            root = Path(temporary).resolve()
+            apps = []
+            for name in ("anchor tree", "selected tree"):
+                repo = root / name
+                app = repo / "quwoquan_app"
+                (app / "lib/nested").mkdir(parents=True)
+                (repo / "quwoquan_ops/cli").mkdir(parents=True)
+                (repo / "quwoquan_ops/cli/stackctl.py").touch()
+                (app / "pubspec.yaml").write_text("name: launcher_contract\n")
+                # 替身最终执行体输出路径与 argv，用专属退出码证明已 exec。
+                run_sh = app / "run.sh"
+                run_sh.write_text(
+                    '#!/usr/bin/env bash\n'
+                    'printf "%s\\0" "$0" "$PWD" "$@"\n'
+                    'exit 17\n'
+                )
+                run_sh.chmod(0o755)
+                apps.append(app)
+            anchor, selected = apps
+            tool_dir = anchor / "scripts/tools/launcher"
+            (tool_dir / "bin").mkdir(parents=True)
+            copied_wrapper = tool_dir / "bin/run.sh"
+            shutil.copy2(GLOBAL_WRAPPER, copied_wrapper)
+            shutil.copy2(
+                APP_DIR / "scripts/tools/launcher/worktree_selection.py",
+                tool_dir / "worktree_selection.py",
+            )
+            # 不创建真实 linked worktree，仅替身 Git 的只读枚举；selector 使用真实字节。
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            git = bin_dir / "git"
+            git.write_text(
+                '#!/usr/bin/env bash\n'
+                '[[ "$1" == "-C" && "$3" == "worktree" && "$4" == "list" '
+                '&& "$5" == "--porcelain" ]] || exit 91\n'
+                'printf "%s" "$CONTRACT_WORKTREES"\n'
+            )
+            git.chmod(0o755)
+            environment = {
+                **os.environ,
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+                "CONTRACT_WORKTREES": "".join(
+                    f"worktree {app.parent}\nbranch refs/heads/lane/{name}\n\n"
+                    for app, name in zip(apps, ("anchor", "selected"))
+                ),
+            }
+            arguments = ["--env", "beta", "-d", "device with spaces", "", "*.dart", "--verbose"]
+            cases = [
+                (selected.parent, []),
+                (selected, []),
+                (selected / "lib/nested", []),
+                (anchor, ["--worktree", "lane/selected"]),
+                (anchor, ["--worktree=" + str(selected.parent)]),
+            ]
+            for cwd, selector_arguments in cases:
+                with self.subTest(cwd=cwd, selector=selector_arguments):
+                    result = subprocess.run(
+                        [str(copied_wrapper), *selector_arguments, *arguments],
+                        cwd=cwd, env=environment, capture_output=True, check=False,
+                    )
+                    self.assertEqual(result.returncode, 17, result.stderr.decode())
+                    self.assertEqual(
+                        result.stdout.decode().split("\0")[:-1],
+                        [str(selected / "run.sh"), str(cwd), *arguments],
+                    )
+            blocked = subprocess.run(
+                [str(copied_wrapper), *arguments], cwd=root, env=environment,
+                stdin=subprocess.DEVNULL, capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(blocked.returncode, 2, blocked.stderr)
+            self.assertIn("APP.LAUNCH.workspace_entrypoint_inactive", blocked.stderr)
+            self.assertIn("multiple App worktrees", blocked.stderr)
+            self.assertEqual(blocked.stdout, "")
 
 
 if __name__ == "__main__":

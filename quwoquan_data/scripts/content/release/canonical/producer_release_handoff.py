@@ -551,7 +551,10 @@ def _validate_release_facts(
     return header, counts, _digest(header_raw), payload_digest(release_dir)
 
 
-def _validate_handoff(value: object, *, repo_root: Path, output_root: Path, release_root: Path, expected_repository_id: str | None = None) -> dict[str, Any]:
+def _validate_handoff(
+    value: object, *, repo_root: Path, output_root: Path, release_root: Path,
+    expected_repository_id: str | None = None,
+) -> dict[str, Any]:
     del repo_root, output_root
     try:
         assert_valid(value, "release", "producer_release_handoff", label="producer release handoff")
@@ -560,7 +563,7 @@ def _validate_handoff(value: object, *, repo_root: Path, output_root: Path, rele
     if not isinstance(value, Mapping):
         raise _error("DATA.RELEASE.HANDOFF_SCHEMA_INVALID", "document must be object")
     document = dict(value)
-    if expected_repository_id is not None and document.get("repositoryId") != expected_repository_id:
+    if expected_repository_id is not None and document["repositoryId"] != expected_repository_id:
         raise _error("DATA.RELEASE.HANDOFF_REPOSITORY_IDENTITY_MISMATCH", expected_repository_id)
     revision = str(document["producerBaselineRevision"])
     if not _COMMIT.fullmatch(revision):
@@ -630,8 +633,10 @@ def write_producer_release_handoff(*, release_id: str, cohort_file: Path, milest
     if target.exists():
         try:
             existing_document, _ = _read_json_file(target, label="producer handoff", canonical=True)
-            _validate_handoff(existing_document, repo_root=repo_root, output_root=output_root, release_root=release_root,
-                              expected_repository_id=repository_id)
+            _validate_handoff(
+                existing_document, repo_root=repo_root, output_root=output_root,
+                release_root=release_root, expected_repository_id=repository_id,
+            )
         except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
             raise _error("DATA.RELEASE.HANDOFF_CREATE_ONCE_CONFLICT", str(target)) from exc
         if (
@@ -699,8 +704,10 @@ def read_producer_release_handoff(
     document, raw = _read_json_file(path, label="producer release handoff", canonical=True)
     if raw != _canonical_bytes(document):
         raise _error("DATA.RELEASE.HANDOFF_NOT_CANONICAL", str(path))
-    return validate_producer_release_handoff(document, repo_root=repo_root, output_root=output_root, release_root=release_root,
-                                            expected_repository_id=expected_repository_id)
+    return validate_producer_release_handoff(
+        document, repo_root=repo_root, output_root=output_root, release_root=release_root,
+        expected_repository_id=expected_repository_id,
+    )
 
 
 __all__ = ["ProducerReleaseHandoffError", "producer_contract_digest", "read_producer_release_handoff", "validate_producer_release_handoff", "write_producer_release_handoff"]

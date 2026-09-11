@@ -393,6 +393,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
                 children: [
                   ProfileHeader(
                     isDark: isDark,
+                    personaId: state.profile?.personaId,
                     avatarUrl: avatarUrl,
                     avatarAssetId: avatarAssetId,
                     avatarAccessMode: avatarAccessMode,

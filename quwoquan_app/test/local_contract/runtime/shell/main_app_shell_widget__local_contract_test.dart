@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -12,6 +14,10 @@ import 'package:quwoquan_app/service/content_service/content/content_behavior_fa
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_engagement_tracker.dart';
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_api_query_defaults.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/design_system/icons/app_custom_icons.dart';
@@ -25,6 +31,8 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/h
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/di/global_surface_action_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/ops_event_record_dependencies.dart';
+import 'package:quwoquan_app/service/product_ops_service/product_ops/event_record/adapters/event_record_batch_writer.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
 import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
@@ -51,7 +59,9 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 import 'package:quwoquan_app/service/user_service/account/account_session/presentation/login_page.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/my_profile_page.dart';
 import 'package:quwoquan_app/runtime/shell/welcome/welcome_flower_mark.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/generated/ops_contracts.dart' as ops;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
@@ -97,37 +107,118 @@ final class _EmptyIntersectionRepository implements IntersectionRepository {
   }) async => const <IntersectionReason>[];
 }
 
+/// 壳内视频诊断会经 runtime logger 写入日志；只替换对象级出站端口，
+/// 保留真实诊断装配和 App↔Cloud seal，不让测试构造 generated client。
+final class _AcceptingOpsEventRecordBatchWriter
+    implements OpsEventRecordBatchWriter {
+  const _AcceptingOpsEventRecordBatchWriter();
+
+  @override
+  Future<ops.EventRecordBatchReceipt> reportEventBatch(
+    ops.EventRecordBatchRequest request, {
+    required String idempotencyKey,
+  }) async => ops.EventRecordBatchReceipt(
+    acceptedCount: request.events.length,
+    duplicateBatch: false,
+  );
+
+  @override
+  Future<ops.EventRecordBatchReceipt> reportRuntimeLogBatch(
+    ops.RuntimeLogBatchRequest request, {
+    required String idempotencyKey,
+  }) async => ops.EventRecordBatchReceipt(
+    acceptedCount: request.records.length,
+    duplicateBatch: false,
+  );
+}
+
+/// 复用既有 Feed typed double，仅让 premium 首刷由用例显式完成。
+final class _PendingPremiumFeedQuery extends InMemoryContentDiscoveryFeedQuery {
+  _PendingPremiumFeedQuery(InMemoryContentPostStore store)
+    : super(store, premiumPostIds: store.posts.map((post) => post.id).toSet());
+
+  final premiumPage = Completer<DiscoveryFeedPage>();
+
+  void completeContent() {
+    premiumPage.complete(super.listDiscoveryFeedPage(category: 'premium'));
+  }
+
+  @override
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
+    required String category,
+    String? channelId,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = 20,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) {
+    if (category == 'premium') {
+      return premiumPage.future;
+    }
+    return super.listDiscoveryFeedPage(
+      category: category,
+      channelId: channelId,
+      identity: identity,
+      type: type,
+      subCategory: subCategory,
+      limit: limit,
+      cursor: cursor,
+      sort: sort,
+      sessionId: sessionId,
+      feedRequestId: feedRequestId,
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
+  }
+}
+
 List<Override> _shellTestOverrides({
   required bool authenticated,
   AuthSessionStore? store,
   bool flippable = false,
   VisitRecorderService? visitRecorderService,
+  InMemoryContentPostStore? contentStore,
+  ContentDiscoveryFeedQuery? feedQuery,
 }) {
-  final contentStore = InMemoryContentPostStore(
-    posts: [
-      ...contentPostListBuilder(
-        contentType: 'image',
-        count: 2,
-        idPrefix: 'shell-image',
-      ),
-      ...contentPostListBuilder(
-        contentType: 'video',
-        count: 2,
-        idPrefix: 'shell-video',
-      ),
-      ...contentPostListBuilder(
-        contentType: 'article',
-        count: 2,
-        idPrefix: 'shell-article',
-      ),
-    ],
-  );
+  final resolvedContentStore =
+      contentStore ??
+      InMemoryContentPostStore(
+        posts: [
+          ...contentPostListBuilder(
+            contentType: 'image',
+            count: 2,
+            idPrefix: 'shell-image',
+          ),
+          ...contentPostListBuilder(
+            contentType: 'video',
+            count: 2,
+            idPrefix: 'shell-video',
+          ),
+          ...contentPostListBuilder(
+            contentType: 'article',
+            count: 2,
+            idPrefix: 'shell-article',
+          ),
+        ],
+      );
   return <Override>[
     ...sealedCloudBoundaryOverrides(),
+    opsEventRecordBatchWriterProvider.overrideWithValue(
+      const _AcceptingOpsEventRecordBatchWriter(),
+    ),
     visitRecorderServiceProvider.overrideWithValue(
       visitRecorderService ?? VisitRecorderService(),
     ),
-    ...mockContentFacetOverrides(store: contentStore),
+    ...mockContentFacetOverrides(
+      store: resolvedContentStore,
+      feedQuery: feedQuery,
+    ),
     // 壳会把 /chat 与 /profile 页签一起挂进 IndexedStack：这两条对象级 typed port
     // 必须显式给出，否则 provider 图会一路走到被封死的 generated client。
     ...chatTestRepositoryOverrides(),
@@ -284,6 +375,8 @@ Widget _buildDarkShell(String location, {bool authenticated = true}) {
 Widget _buildShellRouter({
   required bool authenticated,
   GlobalKey<NavigatorState>? navigatorKey,
+  InMemoryContentPostStore? contentStore,
+  ContentDiscoveryFeedQuery? feedQuery,
 }) {
   final visitRecorderService = VisitRecorderService();
   return ScreenUtilInit(
@@ -293,6 +386,8 @@ Widget _buildShellRouter({
         ..._shellTestOverrides(
           authenticated: authenticated,
           visitRecorderService: visitRecorderService,
+          contentStore: contentStore,
+          feedQuery: feedQuery,
         ),
       ],
       child: MaterialApp.router(
@@ -591,6 +686,31 @@ String _activeHomeChannel(WidgetTester tester) {
   return tester
       .widget<HomePrimaryTabStrip>(find.byType(HomePrimaryTabStrip))
       .activeChannelId;
+}
+
+void _expectVideoBookImmersiveShell(WidgetTester tester) {
+  expect(find.byType(BottomNavigationWidget), findsNothing);
+  final viewer = find.byType(WorksImmersiveViewer);
+  expect(viewer, findsOneWidget);
+  expect(
+    AppViewportObstructionScope.of(tester.element(viewer)).bottom,
+    AppSpacing.zero,
+    reason: '视频书正文在所有取数状态下都不得预留主底栏遮挡。',
+  );
+}
+
+void _expectHomeNavigationRestored(WidgetTester tester) {
+  final navigation = find.byType(BottomNavigationWidget);
+  expect(navigation, findsOneWidget);
+  expect(tester.widget<BottomNavigationWidget>(navigation).currentIndex, 0);
+  final navContext = tester.element(navigation);
+  expect(
+    AppViewportObstructionScope.of(tester.element(find.byType(HomePage)))
+        .bottom,
+    AppSpacing.bottomNavBarHeight(navContext) +
+        MediaQuery.viewPaddingOf(navContext).bottom,
+    reason: '返回首页后必须恢复主底栏及其安全区遮挡。',
+  );
 }
 
 void _suppressExpectedErrors() {
@@ -937,6 +1057,90 @@ void main() {
       );
     });
 
+    for (final terminal in <String>['loading', 'empty', 'error', 'content']) {
+      testWidgets(
+        // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t3
+        '/video-book $terminal 隐藏底栏且零遮挡，正文返回后恢复首页底栏',
+        (tester) async {
+          // 壳层状态合同只需可渲染 Post；原生视频播放由真实 readback 覆盖。
+          final post = contentPostViewDataBuilder(
+            postId: 'shell-premium-terminal',
+            authorAvatarUrl: '',
+            authorBackgroundUrl: null,
+          );
+          final contentStore = InMemoryContentPostStore(posts: [post]);
+          final feedQuery = _PendingPremiumFeedQuery(contentStore);
+          const canonicalEmpty = DiscoveryFeedPage(
+            items: [],
+            outcome: ContentFeedOutcome.empty,
+            emptyReason: ContentFeedEmptyReason.noEligibleContent,
+          );
+          await tester.pumpWidget(
+            _buildShellRouter(
+              authenticated: true,
+              contentStore: contentStore,
+              feedQuery: feedQuery,
+            ),
+          );
+          await _pumpRouteTransition(tester);
+          await tester.tap(find.byKey(TestKeys.mainTabVideoBook));
+          await _pumpRouteTransition(tester);
+
+          expect(
+            find.byKey(const ValueKey<String>('works-internal-feed-loading')),
+            findsOneWidget,
+          );
+          _expectVideoBookImmersiveShell(tester);
+
+          switch (terminal) {
+            case 'loading':
+              break;
+            case 'empty':
+              feedQuery.premiumPage.complete(canonicalEmpty);
+              break;
+            case 'error':
+              feedQuery.premiumPage.completeError(
+                CloudErrorMapper.fromStatusCode(
+                  503,
+                  body:
+                      '{"code":"${ContentErrorCode.requiredDependencyUnavailable.code}"}',
+                ),
+              );
+              break;
+            case 'content':
+              feedQuery.completeContent();
+              break;
+          }
+          await _pumpRouteTransition(tester);
+          final terminalKey = switch (terminal) {
+            'loading' => 'works-internal-feed-loading',
+            'empty' => 'works-internal-feed-empty-no_eligible_content',
+            'error' => 'works-internal-feed-error',
+            'content' => 'works-status-content-canvas-${post.id}',
+            _ => throw StateError('未声明的壳层测试终态：$terminal'),
+          };
+          expect(find.byKey(ValueKey<String>(terminalKey)), findsOneWidget);
+          _expectVideoBookImmersiveShell(tester);
+          expect(tester.takeException(), isNull);
+
+          await tester.tap(
+            find.byKey(const ValueKey<String>('works-top-back')),
+          );
+          await _pumpRouteTransition(tester);
+          _expectHomeNavigationRestored(tester);
+
+          // loading 用例在返回后完成待决请求，不留下跨用例异步工作。
+          if (!feedQuery.premiumPage.isCompleted) {
+            feedQuery.premiumPage.complete(canonicalEmpty);
+            await _pumpRouteTransition(tester);
+          }
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pump();
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
     testWidgets('视频书切离后保留子树并暂停 viewer，重新进入恢复 active', (tester) async {
       _suppressExpectedErrors();
       final navigatorKey = GlobalKey<NavigatorState>();
@@ -971,29 +1175,14 @@ void main() {
             .isActive,
         isTrue,
       );
-      // 视频书 active 时是沉浸壳层：底栏不渲染、不预留底部遮挡。
-      expect(find.byType(BottomNavigationWidget), findsNothing);
-      expect(
-        tester
-            .widget<AppViewportObstructionScope>(
-              find.byType(AppViewportObstructionScope),
-            )
-            .obstruction
-            .bottom,
-        AppSpacing.zero,
-      );
+      // 从正文上下文确认沉浸壳层，不只读取 scope 自身属性。
+      _expectVideoBookImmersiveShell(tester);
 
       navigatorKey.currentContext!.go(AppRoutePaths.home);
       await _pumpRouteTransition(tester);
 
-      // 回到首页后底栏恢复可见并高亮首页。
-      expect(find.byType(BottomNavigationWidget), findsOneWidget);
-      expect(
-        tester
-            .widget<BottomNavigationWidget>(find.byType(BottomNavigationWidget))
-            .currentIndex,
-        0,
-      );
+      // 回到首页后底栏、首页高亮与底部遮挡一并恢复。
+      _expectHomeNavigationRestored(tester);
       expect(find.byKey(HomeFeaturedImmersivePage.pageKey), findsNothing);
       expect(
         find.byType(HomeFeaturedImmersivePage, skipOffstage: false),
@@ -1042,6 +1231,7 @@ void main() {
             .isActive,
         isTrue,
       );
+      _expectVideoBookImmersiveShell(tester);
     });
 
     testWidgets(
@@ -1589,6 +1779,7 @@ void main() {
       expect(find.text('CREATE_PAGE'), findsOneWidget);
     });
 
+    // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t2
     testWidgets('底部导航上下留白对称且使用统一语义 token', (tester) async {
       _suppressExpectedErrors();
       tester.view.physicalSize = const Size(1179, 2556);
@@ -1616,7 +1807,7 @@ void main() {
       );
       final videoBookIcon = find.descendant(
         of: navFinder,
-        matching: find.byIcon(CupertinoIcons.book),
+        matching: find.byType(AppVideoBookIcon),
       );
       final contactsIcon = find.descendant(
         of: navFinder,
@@ -1631,8 +1822,18 @@ void main() {
       final iconCenterY = tester.getCenter(homeIcon).dy;
 
       expect(navSize.height, closeTo(expectedHeight, 0.5));
-      expect(tester.widget<Icon>(videoBookIcon).size, expectedIconSize);
-      expect(tester.widget<Icon>(videoBookIcon).color, inactiveColor);
+      expect(
+        tester.widget<AppVideoBookIcon>(videoBookIcon).size,
+        expectedIconSize,
+      );
+      expect(
+        tester.widget<AppVideoBookIcon>(videoBookIcon).color,
+        inactiveColor,
+      );
+      expect(
+        tester.widget<AppVideoBookIcon>(videoBookIcon).state,
+        AppVideoBookIconState.unselected,
+      );
       expect(tester.widget<Icon>(contactsIcon).size, expectedIconSize);
       expect(tester.widget<Icon>(contactsIcon).color, inactiveColor);
       expect(
@@ -1705,7 +1906,7 @@ void main() {
       final inactiveColor = AppColors.iosSecondaryLabel(navElement);
       final videoBookIcon = find.descendant(
         of: navFinder,
-        matching: find.byIcon(CupertinoIcons.book),
+        matching: find.byType(AppVideoBookIcon),
       );
       final contactsIcon = find.descendant(
         of: navFinder,
@@ -1716,11 +1917,12 @@ void main() {
         matching: find.byType(AppProfilePersonIcon),
       );
 
-      final videoBook = tester.widget<Icon>(videoBookIcon);
+      final videoBook = tester.widget<AppVideoBookIcon>(videoBookIcon);
       final contacts = tester.widget<Icon>(contactsIcon);
       final profile = tester.widget<AppProfilePersonIcon>(profileIcon);
 
       expect(videoBook.size, expectedIconSize);
+      expect(videoBook.state, AppVideoBookIconState.unselected);
       expect(contacts.size, expectedIconSize);
       expect(profile.size, expectedIconSize);
       expect(profile.filled, isFalse);

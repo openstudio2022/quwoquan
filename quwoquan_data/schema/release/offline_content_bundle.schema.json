@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Build-pinned downstream Alpha offline content bundle",
+  "description": "Only the delivery/provenance envelope is owned here. Public business objects are additionally validated against current service projection/fields YAML by offline_snapshot_contract.py; no copied business field list.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "version", "bundleId", "sourceOwner", "provenance", "cohortDigest", "selectionDigest", "configurationDigest", "posts", "channels", "creators", "homepages", "tags", "configuration", "media", "counts"],
+  "properties": {
+    "schema": {"const": "quwoquan.offline_content_bundle"},
+    "version": {"const": 1},
+    "bundleId": {"type": "string", "pattern": "^alpha-[0-9a-f]{64}$"},
+    "sourceOwner": {"const": "qwq_data"},
+    "cohortDigest": {"$ref": "#/$defs/digest"},
+    "selectionDigest": {"$ref": "#/$defs/digest"},
+    "configurationDigest": {"$ref": "#/$defs/digest"},
+    "provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "purpose", "sourceRevision", "operatorSelection", "sourceFiles", "contractFiles", "sourceAttributions", "projectionPolicy"],
+      "properties": {
+        "kind": {"const": "explicit_canonical_cohort"},
+        "purpose": {"const": "alpha_offline_engineering"},
+        "sourceRevision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "operatorSelection": {"$ref": "offline_operator_selection.schema.json"},
+        "sourceFiles": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/file"}},
+        "contractFiles": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/file"}},
+        "sourceAttributions": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["sourceObjectRef", "document"], "properties": {"sourceObjectRef": {"type": "string"}, "document": {"type": "object"}}}},
+        "projectionPolicy": {"const": "canonical_import_initial_public_read_v1"}
+      }
+    },
+    "posts": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["sourceObjectRef", "projection", "detail"],
+        "properties": {
+          "sourceObjectRef": {"type": "string", "pattern": "^posts/"},
+          "projection": {"type": "object", "$comment": "content.post.ContentPostProjection: validate current service contract, reject unknown fields"},
+          "detail": {"type": "object", "$comment": "content.post.ContentPostDetailSlice: validate current service contract, reject unknown fields"}
+        }
+      }
+    },
+    "channels": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["channelId", "orderedPostIds", "selectionDigest"],
+        "properties": {
+          "channelId": {"enum": ["recommend", "premium"]},
+          "orderedPostIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^data_post_[0-9a-f]{64}$"}},
+          "selectionDigest": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "creators": {"type": "array", "items": {"$ref": "#/$defs/objectProjection"}},
+    "homepages": {"type": "array", "items": {"$ref": "#/$defs/objectProjection"}},
+    "tags": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["tagRef", "definition"],
+        "properties": {"tagRef": {"type": "string", "minLength": 1}, "definition": {"type": "object"}}
+      }
+    },
+    "configuration": {
+      "type": "object", "additionalProperties": false, "required": ["content"],
+      "properties": {"content": {"type": "object", "$comment": "content.post.ContentAppConfig, current wire names and nested types"}}
+    },
+    "media": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["assetId", "version", "kind", "canonicalReference", "assetPath", "sha256", "byteLength", "mimeType", "attribution", "redistributionEvidence"],
+        "properties": {
+          "assetId": {"type": "string", "minLength": 1}, "version": {"const": 1},
+          "kind": {"enum": ["avatar", "image", "video"]},
+          "canonicalReference": {"type": "string", "pattern": "^media/(avatar|image|video)/s/asset/[A-Za-z0-9._-]+/v1/source\\.[a-z0-9]+$"},
+          "assetPath": {"type": "string", "pattern": "^assets/content/alpha/media/[0-9a-f]{64}\\.(jpg|jpeg|png|webp|mp4|webm)$"},
+          "sha256": {"$ref": "#/$defs/digest"},
+          "byteLength": {"type": "integer", "minimum": 1},
+          "mimeType": {"enum": ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"]},
+          "width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1},
+          "durationMs": {"type": "integer", "minimum": 1},
+          "attribution": {"type": "string", "minLength": 1},
+          "redistributionEvidence": {
+            "type": "object", "additionalProperties": false,
+            "required": ["purpose", "ownerRefs", "snapshots"],
+            "properties": {
+              "purpose": {"const": "alpha_offline_engineering"},
+              "ownerRefs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+              "snapshots": {"type": "array", "minItems": 1, "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["ref", "sha256", "document"],
+                "properties": {"ref": {"type": "string"}, "sha256": {"$ref": "#/$defs/digest"}, "document": {"type": "object"}}
+              }}
+            }
+          }
+        }
+      }
+    },
+    "counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["posts", "article", "image", "video", "creators", "homepages", "tags", "media", "mediaBytes"],
+      "properties": {
+        "posts": {"type": "integer", "minimum": 1}, "article": {"type": "integer", "minimum": 0},
+        "image": {"type": "integer", "minimum": 0}, "video": {"type": "integer", "minimum": 0},
+        "creators": {"type": "integer", "minimum": 1}, "homepages": {"type": "integer", "minimum": 1},
+        "tags": {"type": "integer", "minimum": 1}, "media": {"type": "integer", "minimum": 1},
+        "mediaBytes": {"type": "integer", "minimum": 1}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "file": {
+      "type": "object", "additionalProperties": false, "required": ["ref", "sha256", "byteLength"],
+      "properties": {"ref": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/digest"}, "byteLength": {"type": "integer", "minimum": 0}}
+    },
+    "objectProjection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceObjectRef", "projection"],
+      "properties": {"sourceObjectRef": {"type": "string", "minLength": 1}, "projection": {"type": "object", "$comment": "Canonical public object projection; not a synthetic content aggregate"}}
+    }
+  }
+}

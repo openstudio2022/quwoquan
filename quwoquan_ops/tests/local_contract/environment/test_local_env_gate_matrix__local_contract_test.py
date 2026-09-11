@@ -774,12 +774,13 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
         from quwoquan_ops.cli.lib import local_env_gate_matrix as matrix_mod
 
         down = mock.Mock(return_value={"exitCode": 0, "summary": "down", "details": []})
-        payload = matrix_mod._down_target("alpha-local", down_fn=down)
+        payload = matrix_mod._down_target("alpha-local", generation="owned-1", down_fn=down)
         self.assertEqual(payload["exitCode"], 0)
         down.assert_called_once()
         args = down.call_args.args[0]
         self.assertEqual(args.target, "alpha-local")
         self.assertFalse(args.formal_release_teardown)
+        self.assertEqual(args.expected_generation, "owned-1")
 
     def test_matrix_rejects_target_subset_without_execution(self) -> None:
         from quwoquan_ops.cli.lib.local_env_gate_matrix import run_local_env_gate_matrix

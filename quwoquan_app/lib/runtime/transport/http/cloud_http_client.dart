@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/runtime/codec/cloud_json_body_decoder.dart';
 import 'package:quwoquan_app/runtime/codec/cloud_response_decoder.dart';
@@ -20,19 +23,26 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// [method] is the HTTP verb (GET, POST, etc.), [path] is the request path,
 /// [elapsedMs] is the round-trip time in milliseconds, [statusCode] is the
 /// HTTP status code (-1 on network/timeout errors).
-typedef ApiLatencyObserver =
-    void Function(String method, String path, int elapsedMs, int statusCode);
+typedef ApiLatencyObserver = void Function(
+  String method,
+  String path,
+  int elapsedMs,
+  int statusCode,
+);
 
-typedef CloudUnauthorizedRefresh =
-    Future<bool> Function(Future<void> abortTrigger);
+typedef CloudUnauthorizedRefresh = Future<bool> Function(
+  Future<void> abortTrigger,
+);
 
 /// Canonical account-state failures observed on a generated Gateway request.
 ///
 /// [presentedAccessToken] is the bearer actually attached to that request. It
 /// is passed only to the in-process session controller so a late response from
 /// an old session cannot clear a newer login. It must never enter telemetry.
-typedef CloudAuthoritativeSessionFailure =
-    Future<void> Function(CloudException failure, String presentedAccessToken);
+typedef CloudAuthoritativeSessionFailure = Future<void> Function(
+  CloudException failure,
+  String presentedAccessToken,
+);
 
 /// Raised only for the exact minimum-build gate response. The transport still
 /// throws the canonical [CloudException]; this callback lets the App root
@@ -385,6 +395,7 @@ class CloudHttpClient {
       request.headers
         ..clear()
         ..addAll(merged);
+      _requireNetworkCapability();
       final response = await _client.send(request).timeout(_timeout);
       sw.stop();
       _latencyObserver?.call(
@@ -740,12 +751,20 @@ class CloudHttpClient {
     return CloudResponseDecoder.asObject(decoded, context: context);
   }
 
+  void _requireNetworkCapability() {
+    if (CloudRuntimeConfig.isHydrated &&
+        CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot) {
+      throw contentCapabilityUnavailable('http_transport');
+    }
+  }
+
   Future<Map<String, String>> _mergeHeaders(
     Map<String, String> headers, {
     required bool requireAuth,
     required String requestPath,
     Future<void>? abortTrigger,
   }) async {
+    _requireNetworkCapability();
     final sanitizedHeaders = Map<String, String>.from(headers)
       ..removeWhere((key, _) => key.toLowerCase() == 'authorization');
     var token = await _authTokenProvider.getAccessToken();
@@ -781,6 +800,7 @@ class CloudHttpClient {
       requireAuth: requireAuth,
       requestPath: requestPath,
     );
+    _requireNetworkCapability();
     final first = await run(initialHeaders);
     _notifyClientUpgradeRequiredFromResponse(first, requestPath);
     if (!_shouldRefreshAfterResponse(
@@ -800,6 +820,7 @@ class CloudHttpClient {
       requireAuth: requireAuth,
       requestPath: requestPath,
     );
+    _requireNetworkCapability();
     final retried = await run(retryHeaders);
     _notifyClientUpgradeRequiredFromResponse(retried, requestPath);
     return retried;
@@ -846,6 +867,7 @@ class CloudHttpClient {
   }
 
   Future<http.StreamedResponse> _sendSingleAttempt(http.BaseRequest request) {
+    _requireNetworkCapability();
     final client = _client;
     if (client is RetryHttpClient) {
       return client.sendSingleAttempt(request);
@@ -1056,15 +1078,14 @@ class CloudHttpClient {
       // Transport-level singleflight is intentionally forbidden: an old
       // bearer's stuck cleanup must never suppress a newer bearer's 403.
       final cleanup =
-          Future<void>.sync(
-            () => handler(failure, presentedAccessToken),
-          ).then<void>(
-            (_) {},
-            onError: (Object _, StackTrace _) {
-              // Session cleanup owns its fail-closed transition and logging. The
-              // canonical Gateway failure remains the user-visible error.
-            },
-          );
+          Future<void>.sync(() => handler(failure, presentedAccessToken))
+              .then<void>(
+                (_) {},
+                onError: (Object _, StackTrace _) {
+                  // Session cleanup owns its fail-closed transition and logging. The
+                  // canonical Gateway failure remains the user-visible error.
+                },
+              );
       await _waitForAuthoritativeSessionFailureCleanup(
         cleanup,
         abortTrigger: abortTrigger,

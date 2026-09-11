@@ -29,6 +29,7 @@ from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     build_runtime_config_trust_envelope,
     load_launch_manifest_contract,
     runtime_config_payload_digest,
+    runtime_config_trust_envelope_digest,
     validate_runtime_config_package,
 )
 from quwoquan_ops.cli.lib.app_runtime_config_signing import (
@@ -300,6 +301,35 @@ def build_runtime_config_package(
     return package
 
 
+def build_offline_bootstrap_document(
+    *, environment: str, target: str, launch_policy: str,
+    source_git_sha: str, source_tree_digest: str, signing: Any,
+) -> dict[str, Any]:
+    contract = load_launch_manifest_contract()
+    if (environment, target, launch_policy) != ("alpha", "alpha-local", "test_live"):
+        raise ValueError("offline bootstrap is restricted to Alpha/nonprod")
+    private_bytes, _, keyring = validate_signing_material(ROOT, signing)
+    trust = build_runtime_config_trust_envelope("nonprod", keyring, contract)
+    document = {
+        "schema": contract["schemas"]["offline_bootstrap_document"]["schema_value"],
+        "environment": environment, "buildProfile": "nonprod", "target": target,
+        "launchPolicy": launch_policy, "contentSource": contract["content_source_policy"][environment],
+        "sourceGitSha": source_git_sha, "sourceTreeDigest": source_tree_digest,
+        "trustEnvelopeDigest": runtime_config_trust_envelope_digest(trust, contract),
+        "runtime": {"appRuntimeEnv": environment}, "payloadDigest": "",
+        "signatureAlgorithm": "ed25519", "signatureKeyId": signing.key_id,
+        "trustedPublicKeys": keyring, "signature": "",
+    }
+    document["payloadDigest"] = runtime_config_payload_digest(document, contract)
+    document["signature"] = base64.b64encode(
+        sign_payload(private_bytes, canonical_signed_payload(document))
+    ).decode("ascii")
+    issues = validate_runtime_config_package(document, trust, contract)
+    if issues:
+        raise ValueError("; ".join(issues))
+    return document
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env", default="gamma")
@@ -337,7 +367,15 @@ def main() -> int:
     args.launch_policy = args.launch_policy or (
         "prod_release" if args.env == "prod" else "test_live"
     )
-    if args.launch_policy == "test_live":
+    content_source = load_launch_manifest_contract()["content_source_policy"].get(args.env)
+    offline = content_source == "bundled_snapshot"
+    if offline:
+        if any((args.gateway_base_url, args.legal_base_url, args.media_avatar_base_url,
+                args.media_image_base_url, args.media_video_base_url, args.media_upload_base_url,
+                args.rtc_media_connection_url)):
+            raise SystemExit("offline bootstrap forbids endpoint overrides, including canonical URLs")
+        values = {"appRuntimeEnv": args.env}
+    elif args.launch_policy == "test_live":
         values = test_live_runtime_values(args.env, target_name)
     else:
         package_dir = app_deployment_package_dir(args.env, target=target_name)
@@ -374,7 +412,7 @@ def main() -> int:
         "rtcMediaConnectionUrl",
     )
     missing = [key for key in required_endpoint_keys if not values.get(key, "").strip()]
-    if missing:
+    if missing and not offline:
         raise SystemExit(
             "app runtime config is missing explicit endpoint values: "
             + ", ".join(missing)
@@ -396,15 +434,11 @@ def main() -> int:
             signing = prepare_local_app_runtime_config_signing(ROOT)
         else:
             signing = resolve_signing_material(ROOT)
-        package = build_runtime_config_package(
-            environment=args.env,
-            target=target_name,
-            launch_policy=args.launch_policy,
-            values=values,
-            source_git_sha=source_git_sha,
-            source_tree_digest=source_tree_digest,
-            signing=signing,
-        )
+        identity = dict(environment=args.env, target=target_name,
+                        launch_policy=args.launch_policy, source_git_sha=source_git_sha,
+                        source_tree_digest=source_tree_digest, signing=signing)
+        package = (build_offline_bootstrap_document(**identity) if offline
+                   else build_runtime_config_package(values=values, **identity))
     except (KeyError, OSError, RuntimeError, ValueError) as exc:
         print(f"GATE_BLOCK: {exc}", file=sys.stderr)
         return 2

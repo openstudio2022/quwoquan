@@ -52,6 +52,17 @@ class IntegrationRunReleaseAdmissionTest(unittest.TestCase):
                     subject._release_id(attestation)
         self.assertEqual(caught.exception.code, "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE")
 
+    def test_local_attestation_drift_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            attestation = _write_attestation(root, "release-candidate")
+            local = root / "data/releases/release-candidate/attestations/release.json"
+            local.write_bytes(local.read_bytes() + b"\n")
+            with mock.patch.object(subject, "OUTPUT_ROOT", root):
+                with self.assertRaises(subject.IntegrationRunError) as caught:
+                    subject._release_id(attestation)
+        self.assertEqual(caught.exception.code, "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE")
+
 
 if __name__ == "__main__":
     unittest.main()

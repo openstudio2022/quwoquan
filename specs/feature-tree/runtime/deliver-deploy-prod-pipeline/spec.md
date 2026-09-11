@@ -46,7 +46,7 @@
 <a id="req-001"></a>
 ### REQ-001 本地质量、托管验真与标签驱动发布
 
-- Source writer 只生产绑定 exact candidate 的源码事实；worktree 或 integration 中不重叠文件可并行编辑，但 Git index、commit/ref、共享生成物、环境、设备、package 与外部 mutation 必须由单一受信执行者串行提交。
+- Source writer 只生产绑定 exact candidate 的源码事实；不重叠文件可并行编辑，默认 Git index/commit/ref 与共享生成物仍独占串行。环境、设备、package 与外部 mutation 按各自实际资源授予唯一执行权，不使用跨环境全局互斥：云侧按 host-target 单实例，设备按 device/application 独占，构建只锁私有输出，独立 target 可持续并行。租约、executor fence、容量及 owned cleanup 由 [`multi-environment-instance-isolation` REQ-001/004](./multi-environment-instance-isolation/spec.md#req-004) 拥有；资格前驱与 Prod 授权顺序不变。
 - Environment Ops 必须在尚未移动 `dev1.0` 的 detached exact candidate 上执行 Alpha，并仅对 typed 高风险影响执行 Beta；两者通过后，trusted integration publisher 可按既有通道以 expected-old 的非 force fast-forward CAS 更新 `dev1.0`。此外，匹配 `integration/dev1.0` 可用 update line 的 before/after OID 经 ancestry 证明执行普通认证 non-force fast-forward 源码 push；缺 OID、authority 不可用、非快进、force/delete 或来源不匹配均 fail closed。direct push 不签发 `integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion、release 或 Prod authority；需要晋级/发布时仍须 exact candidate + Alpha/Beta、current dev head Gamma 与既有后续资格链。
 - integration scheduler 只对 current exact `dev1.0` head 执行 Gamma，封存 `IntegrationQualificationFact`；Gamma 必须绑定同一 candidate/tree 和 Alpha/Beta exact-byte predecessor，不得无差别重跑相同 CaseResult。新 head 使旧事实不再适用于当前 promotion。
 - `dev1.0 -> main` 的唯一 required context 只验证 branch/head/base/merge tree、审批、ruleset、IntegrationQualificationFact、签名、时效、policy/workflow pin 与 secret/generated 边界；不得安装语言工具链、构建、运行源码测试、ABG、Provider live、设备或环境命令。合入后 `MainSourceSeal` 只授予 `source-admitted`，不授予发布资格。
@@ -77,7 +77,7 @@
 
 - Alpha/Beta/Gamma 的正式 producer 必须位于受控本地 Environment Ops 执行面；GitHub-hosted 与 GitHub self-hosted workflow 均不得执行 ABG、Data mutation、设备 Journey 或环境 cleanup。
 - Alpha 是默认真实依赖最小闭包，也是 lane 合入 `dev1.0` 的唯一必跑环境；Beta 只在 lane 验收显式 opt-in 时真跑，否则不按集成深度分流，统一以政策原因码 `ACCEPTANCE.BETA_OPTIONAL_BY_POLICY` 签绑定 candidate 与 ImpactPlan 的 typed `not_required` fact，不能从 skipped 推导；Gamma 只对 exact current `dev1.0` head 执行，与可选 prod canary 一起构成 integration 侧仅有的两级集成验证（见 [L2 DEC-014](./design.md#dec-014)）。
-- 环境 PASS 仅在 package identity、startup、full health、受影响 CaseResult、readback、inspect/doctor、finally teardown、lease revoke 与端口释放全部闭合后封存为唯一 `EnvironmentAcceptanceFact`；Beta/Gamma 分别引用前驱 exact bytes。
+- 环境 PASS 仅在 package identity、startup、full health、受影响 CaseResult、readback、inspect/doctor 与本次 owned cleanup/lease closure 全部闭合后封存唯一 EnvironmentAcceptanceFact；新建资源按授权 teardown 并证明端口释放，复用的健康 runtime 保持运行且只释放本次 exact lease，不为签发事实 down 其他 target。Beta/Gamma 仍引用前驱 exact bytes；Alpha 离线 App 结果不能替代 Alpha 服务 gate 或环境资格。
 - 模拟器或仿真器只支持本地集成事实并显式 `nonPromotable`；最终签名包的 Android/iOS 物理设备接受属于 RC qualification，不进入五分钟 promotion，也不重跑 ABG 业务矩阵。
 - GitHub 只验证不可变证据并承担 RC build/sign/attest、资格归约、正式 tag admission 和 Prod approval/transaction。普通 source push、lane PR、promotion PR 不得触发 packaging、coverage 全量、设备矩阵、Provider live 或 environment workflow。
 - Nightly 只运行 fingerprint-aware 的深度回归、性能与可靠性，不轮转环境、不替代任何 candidate/head/RC 的 required fact，也不改变资格、标签或生产状态。

@@ -200,3 +200,13 @@
 - 影响或价值：模式二把 candidate scope 定义为相对远端 `dev1.0` 的全部 changed paths，因此每当本地 `dev1.0` 领先远端而未发布，下一次 `make integrate` 的 `readiness-fast` 都要覆盖累计差异；连续多次 integrate 运行中 changed paths 从数十涨到数百、`readiness-fast` 墙钟从数分钟涨到十余分钟并以 `INTEGRATION_RUN.L1_FAILED` 终止，进一步阻止发布、形成恶性循环。readiness receipt 与 Alpha 事实按 candidate 复用只消除同一 candidate 的重跑，不缩小 scope 本身。尚缺：candidate scope 相对「上一次已发布或已签发事实的 exact parent」的增量派生实现，以及证明 `readiness-fast` 输入规模不随未发布提交数单调增长的 local contract 验收证据。
 - 完成判定：`GWT-005.t2` 持续绑定；candidate scope 可以按「相对上一次已发布/已签发事实的 exact parent」增量派生且仍绑定 100% changed paths 的 workspace digests，或 integration 工作区在每次成功 admission 后即刻发布使远端不再落后；两者之一落地并由 local contract 证明 `readiness-fast` 输入规模不再随未发布提交数单调增长。
 - 依赖：[`OPEN-006`](#open-006) 解除后的真实 Alpha 签发；`quwoquan_ops/ci/scoped_candidate/` 的 parent 语义。
+
+<a id="open-010"></a>
+### OPEN-010 验收调度入口的职责拆分与复杂度收敛
+
+- 类型：`risk`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：双端离线页面与服务/API 独立证据轴接入后，`quwoquan_ops/cli/integration_run.py` 的环境执行、exact 输入复用和 CLI 分派仍集中在同一入口。增量 Code Health 报 `_run_environment`、`_find_reusable_candidate`、`main` 复杂度与超千行 advisory，尚未超过硬阻断阈值；职责拆分必须保留完整失败与资源清理语义，不为降低指标扩大成验收框架重写。
+- 完成判定：在原 CLI 入口不变、无第二调度轨道的前提下按现有职责提取上述边界；`GWT-001.t6..t12` 与 `GWT-005.t2` 的 exact candidate、release/rollback/handoff、双端 raw、签名、复用和 cleanup 负向合同保持通过，增量复杂度不再恶化且入口回到文件 advisory 阈值以内。
+- 依赖：`quwoquan_ops/cli/integration_run.py`、`quwoquan_ops/cli/lib/integration_app_launch.py` 及现役 acceptance bundle/reuse local contract；仅源码健康后续项，不代替 required Alpha 或发布证据。

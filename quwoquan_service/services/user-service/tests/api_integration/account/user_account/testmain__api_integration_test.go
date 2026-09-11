@@ -71,6 +71,7 @@ import (
 	contactpersistence "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/infrastructure/persistence"
 	visithttp "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/adapters/inbound/http"
 	visitapp "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/application"
+	visitmodel "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/domain/model"
 	visitpersistence "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/infrastructure/persistence"
 	greetinghttp "quwoquan_service/services/user-service/internal/relationship/greeting_request/adapters/inbound/http"
 	greetingapp "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
@@ -509,6 +510,17 @@ func rebuildTestHandler(ctx context.Context) error {
 		defer integrationRelayRunners.Done()
 		_ = subjectFollowRelay.Run(relationshipRelayContext, 10*time.Millisecond)
 	}()
+	if mongoDB != nil {
+		visitRelay := visitapp.NewOutboxRelay(
+			followedSubjectVisitStore,
+			&testFollowedSubjectVisitFanout{projection: followingSubjectStore},
+		)
+		integrationRelayRunners.Add(1)
+		go func() {
+			defer integrationRelayRunners.Done()
+			_ = visitRelay.Run(relationshipRelayContext, 10*time.Millisecond)
+		}()
+	}
 	greetingService := greetingapp.NewGreetingService(
 		greetingStore,
 		greetingStore,
@@ -779,6 +791,29 @@ func (f *testPersonaRelationshipFanout) PublishPersonaRelationship(ctx context.C
 		Following: payload.Following, OccurredAt: payload.OccurredAt,
 		SourceVersion: payload.Version,
 	})
+}
+
+type testFollowedSubjectVisitFanout struct {
+	projection interface {
+		ApplyVisit(ctx context.Context, personaID, subjectType, subjectID string, visitedAt time.Time) error
+	}
+}
+
+func (f *testFollowedSubjectVisitFanout) PublishFollowedSubjectVisited(
+	ctx context.Context,
+	event visitmodel.OutboxEvent,
+) error {
+	if f == nil || f.projection == nil {
+		return nil
+	}
+	payload := event.Payload
+	return f.projection.ApplyVisit(
+		ctx,
+		payload.PersonaID,
+		payload.SubjectType,
+		payload.SubjectID,
+		payload.LastVisitedAt,
+	)
 }
 
 type testSubjectFollowFanout struct {

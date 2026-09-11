@@ -1,6 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_action_feedback.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
@@ -769,7 +773,31 @@ void runWhenLoggedIn(
     if (!allowed || !context.mounted) {
       return;
     }
-    await action();
+    try {
+      await action();
+    } on CloudException catch (error, stackTrace) {
+      // 能力拒绝是动作终态，不交给未捕获异常日志，也不隐式重试写入。
+      if (error.runtimeFailure.kind != RuntimeFailureKind.unsupported) rethrow;
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'auth_gate.${reason.name}',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
+      if (!context.mounted) return;
+      await AppActionErrorFeedback.show(
+        context,
+        semanticIdentifier: 'capability-unavailable:${reason.name}',
+        semantic: UiErrorSemanticResolver.resolve(
+          context,
+          error: error,
+          category: UiErrorCategory.backgroundAction,
+          scope: UiErrorScope.global,
+        ),
+        onAction: (_) async {},
+      );
+    }
   }());
 }
 

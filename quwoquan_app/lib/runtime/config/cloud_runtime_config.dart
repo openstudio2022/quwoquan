@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
@@ -43,6 +45,12 @@ abstract final class CloudRuntimeConfig {
   static String? _runtimeConfigSupplyMode;
 
   static bool get isHydrated => _resolvedPackage != null;
+
+  static AppContentSource get contentSource => _requiredPackage().contentSource;
+
+  /// 未验证、未水合和离线文档均不授予网络能力。
+  static bool get networkAccessAllowed =>
+      _resolvedPackage?.contentSource == AppContentSource.remote;
 
   static String get appEnvironment => _requiredPackage().environment;
 
@@ -124,9 +132,18 @@ abstract final class CloudRuntimeConfig {
     RuntimePackageResolver? resolver,
     String? expectedTarget,
   }) async {
+    _clearHydratedState();
     try {
       final runtimeConfig = await bridge.readRuntimePackage();
       final runtimePackage = _runtimePackageFromBridge(runtimeConfig);
+      if (runtimePackage['schema'] ==
+              runtimeDocumentSchemaValues['offline_bootstrap_document'] &&
+          !runtimeConfig.containsKey('package')) {
+        throw CloudRuntimeConfigurationException(
+          reason: 'offline-artifact-trust-required',
+          invalidKeys: const ['trustedPublicKeys'],
+        );
+      }
       final trustedTarget = expectedTarget ?? _trustedTarget(runtimeConfig);
       final trustedBuildProfile = _trustedBuildProfile(runtimeConfig);
       final trustedPublicKeys = _trustedPublicKeys(runtimeConfig);
@@ -174,6 +191,7 @@ abstract final class CloudRuntimeConfig {
   }
 
   static void validateRequiredEndpoints() {
+    if (contentSource == AppContentSource.bundledSnapshot) return;
     final invalidKeys = <String>{};
     for (final entry in <String, String>{
       'gatewayBaseUrl': gatewayBaseUrl,
@@ -297,6 +315,14 @@ abstract final class CloudRuntimeConfig {
   }
 
   static String _runtimeValue(String key) {
+    if (contentSource == AppContentSource.bundledSnapshot) {
+      throw CloudRuntimeConfigurationException(
+        reason: 'runtime_config_network_forbidden',
+        source: 'signed-offline-bootstrap',
+        runtimeEnv: appEnvironment,
+        invalidKeys: <String>[key],
+      );
+    }
     try {
       return _requiredPackage().runtimeValue(key);
     } on RuntimePackageValidationException catch (error) {

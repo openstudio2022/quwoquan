@@ -68,8 +68,8 @@ func TestPersonaView_GetMeProfileUsesActivePersona(t *testing.T) {
 	if body["personaId"] != "sa_me_profile" {
 		t.Fatalf("expected active personaId, got %v", body["personaId"])
 	}
-	if body["ownerUserId"] != "owner_me_profile" {
-		t.Fatalf("expected ownerUserId=owner_me_profile, got %v", body["ownerUserId"])
+	if _, ok := body["ownerUserId"]; ok {
+		t.Fatalf("GetMeProfile must not expose ownerUserId, got %#v", body)
 	}
 	if body["subjectType"] != "persona" {
 		t.Fatalf("expected subjectType=persona, got %v", body["subjectType"])
@@ -85,9 +85,6 @@ func TestPersonaView_GetMeProfileUsesActivePersona(t *testing.T) {
 	}
 	if body["avatarUrl"] != "https://cdn.example.com/persona-avatar-me.png?v=7" {
 		t.Fatalf("expected versioned avatarUrl, got %#v", body["avatarUrl"])
-	}
-	if body["avatarVersion"] != float64(7) {
-		t.Fatalf("expected avatarVersion=7, got %#v", body["avatarVersion"])
 	}
 	if body["userHandle"] != "photo_me" {
 		t.Fatalf("expected userHandle=photo_me, got %#v", body)
@@ -156,9 +153,6 @@ func TestPersonaView_GetPersonaProfile(t *testing.T) {
 	if body["avatarUrl"] != "https://cdn.example.com/persona-avatar-public.png?v=9" {
 		t.Fatalf("expected versioned public avatarUrl, got %#v", body["avatarUrl"])
 	}
-	if body["avatarVersion"] != float64(9) {
-		t.Fatalf("expected public avatarVersion=9, got %#v", body["avatarVersion"])
-	}
 	if _, ok := body["ownerUserId"]; ok {
 		t.Fatalf("public profile should not expose ownerUserId, got %#v", body)
 	}
@@ -200,9 +194,6 @@ func TestPersonaView_PersonaAvatarVersionOverridesOwner(t *testing.T) {
 	body := parseJSON(t, rec)
 	if body["avatarUrl"] != "https://cdn.example.com/persona-avatar-override.png?v=4" {
 		t.Fatalf("expected persona avatarUrl to use persona version, got %#v", body["avatarUrl"])
-	}
-	if body["avatarVersion"] != float64(4) {
-		t.Fatalf("expected persona avatarVersion=4, got %#v", body["avatarVersion"])
 	}
 }
 
@@ -356,9 +347,6 @@ func TestSearchSocialRelations_DoesNotExposeOwnerUserID(t *testing.T) {
 	}
 	if first["avatarUrl"] != "https://cdn.example.com/search-target-avatar.png?v=4" {
 		t.Fatalf("expected versioned search avatarUrl, got %#v", first["avatarUrl"])
-	}
-	if first["avatarVersion"] != float64(4) {
-		t.Fatalf("expected search avatarVersion=4, got %#v", first["avatarVersion"])
 	}
 }
 

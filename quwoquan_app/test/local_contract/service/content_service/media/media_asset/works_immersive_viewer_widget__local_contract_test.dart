@@ -17,11 +17,18 @@
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t2
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t4
 
+import 'package:quwoquan_app/runtime/config/offline_content_bundle.dart';
+import 'package:quwoquan_app/runtime/config/offline_content_failure.dart';
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+
+import '../../../../../support/runtime/config/runtime_package_test_hydration.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderObject, RenderParagraph;
 import 'package:flutter/services.dart';
@@ -1161,6 +1168,7 @@ Widget _wrap(
   Widget child, {
   List overrides = const [],
   bool useProductionRuntimeConfig = false,
+  bool useProductionMediaDelivery = false,
   double? textScaleFactor,
   EdgeInsets? viewPadding,
   ContentPostDetailReader? detailReader,
@@ -1175,7 +1183,8 @@ Widget _wrap(
       configRepository: configRepository,
       feedQuery: feedQuery,
     ),
-    mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
+    if (!useProductionMediaDelivery)
+      mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
     if (!useProductionRuntimeConfig)
       contentRuntimeConfigProvider.overrideWithValue(
         buildAlphaContentRuntimeConfigDefaults(),
@@ -1563,6 +1572,209 @@ void main() {
   setUp(() {
     HttpOverrides.global = _FakeHttpOverrides();
     _mockPathProviderForImmersiveViewerTest();
+  });
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-008
+  testWidgets('隐藏底栏的作品浏览器可由原生 back 语义触发真实返回', (tester) async {
+    final semantics = tester.ensureSemantics();
+    var returned = 0;
+    final post = _photoPost();
+    try {
+      await tester.pumpWidget(
+        _wrap(
+          WorksImmersiveViewer(
+            showWorksToolbar: true,
+            showTopNavigation: false,
+            externalPosts: [post],
+            externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+            onTapBack: () => returned++,
+            onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+            onAssistantTap: () {},
+          ),
+        ),
+      );
+      await _pumpImmersiveViewerFirstFrames(tester);
+      final back = find.bySemanticsIdentifier('works-top-back');
+      expect(back, findsOneWidget);
+      final backNode = tester.getSemantics(back);
+      expect(
+        backNode.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+      backNode.owner!.performAction(backNode.id, SemanticsAction.tap);
+      await tester.pump();
+      expect(returned, 1);
+      expect(tester.takeException(), isNull);
+    } finally {
+      semantics.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
+  });
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-008
+  testWidgets('Alpha 真实快照无端点仍装配视频封面与可 seek 的本地播放器', (tester) async {
+    final platform = _installImmersiveVideoTestPlatform();
+    final initialization = Completer<void>();
+    platform.initializeCompleter = initialization;
+    final bundle = (await tester.runAsync(() async {
+      await hydrateRuntimePackageForTests(environment: 'alpha');
+      return OfflineContentBundle.load();
+    }))!;
+    addTearDown(() => hydrateRuntimePackageForTests(environment: 'beta'));
+    final post = bundle
+        .rows('posts')
+        .map(
+          (row) => ContentPostViewData.fromWire(
+            ContentPostProjection.fromWire(
+              row['projection']! as Map<String, Object?>,
+            ),
+          ),
+        )
+        .firstWhere((post) => post.type == 'video');
+    expect(publicMediaDelivery.endpoints, isNull);
+    final surfaceView = ContentSurfaceViewMapper.fromDto(post);
+    expect(surfaceView.video!.delivery.assetId, post.mediaAssetId);
+    expect(surfaceView.video!.delivery.version, post.mediaAssetVersion);
+    expect(surfaceView.video!.url, post.mediaVideoUrl);
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [surfaceView],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        useProductionMediaDelivery: true,
+      ),
+    );
+    await tester.pump();
+    expect(
+      find.byType(VideoPlayerWidget),
+      findsOneWidget,
+      reason: 'Alpha endpoints=null 不能把真实快照视频投影成空 videoItems',
+    );
+    final player = tester.widget<VideoPlayerWidget>(
+      find.byType(VideoPlayerWidget),
+    );
+    expect(player.deliveryReference!.assetId, post.mediaAssetId);
+    expect(player.deliveryReference!.version, post.mediaAssetVersion);
+    expect(player.deliveryReference!.cacheIdentity, contains(bundle.digest));
+    expect(player.thumbnailBinding.publicUrl, post.mediaVideoCoverUrl);
+    expect(player.signedDelivery, isNull);
+    final cover = find.descendant(
+      of: find.byType(VideoPlayerWidget),
+      matching: find.byKey(appImageLoadSuccessKey),
+    );
+    for (var attempt = 0; attempt < 80; attempt++) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+      });
+      await tester.pump(const Duration(milliseconds: 16));
+      if (cover.evaluate().isNotEmpty) break;
+    }
+    expect(cover, findsOneWidget, reason: '视频准备期必须实际解码包内封面而非只有封面引用');
+    initialization.complete();
+    for (var attempt = 0; attempt < 80; attempt++) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+      });
+      await tester.pump(const Duration(milliseconds: 16));
+      if (player.playbackSession!.snapshot.canSeek) break;
+    }
+    expect(player.playbackSession!.snapshot.canSeek, isTrue);
+    expect(platform.createdDataSources, hasLength(1));
+    expect(platform.createdDataSources.single.sourceType, DataSourceType.file);
+    final video = bundle.media.lookup(post.mediaVideoUrl)!;
+    final path = Uri.parse(platform.createdDataSources.single.uri!)
+        .toFilePath();
+    expect(await tester.runAsync(() => File(path).length()), video.byteLength);
+    await tester.runAsync(
+      () => player.playbackSession!.seekRelative(const Duration(seconds: 10)),
+    );
+    await tester.pump();
+    expect(platform.seekTargets, contains(const Duration(seconds: 10)));
+    expect(
+      player.playbackSession!.snapshot.position,
+      const Duration(seconds: 10),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-008
+  test('离线 typed 视频引用拒绝资产版本摘要漂移且 Remote 不接管旧快照', () async {
+    await hydrateRuntimePackageForTests(environment: 'alpha');
+    addTearDown(() => hydrateRuntimePackageForTests(environment: 'beta'));
+    final bundle = await OfflineContentBundle.load();
+    final asset = bundle.media.byAssetId.values.firstWhere(
+      (asset) => asset.kind == 'video',
+    );
+    final offline = publicMediaDelivery;
+    final correct = offline.tryResolve(
+      asset.canonicalReference,
+      kind: MediaDeliveryKind.video,
+      assetId: asset.assetId,
+      version: asset.version,
+      sha256: asset.digest,
+    )!;
+    expect(correct.deliveryUri.hasScheme, isFalse);
+    expect(correct.cacheIdentity, contains(asset.digest));
+    expect(
+      offline.tryResolve(
+        asset.canonicalReference,
+        kind: MediaDeliveryKind.video,
+        version: asset.version + 1,
+      ),
+      isNull,
+    );
+    expect(
+      offline.tryResolve(
+        '${asset.canonicalReference}?signature=private',
+        kind: MediaDeliveryKind.video,
+      ),
+      isNull,
+    );
+    for (final invalid in [
+      MediaDeliveryReference.bundled(
+        asset.canonicalReference,
+        kind: MediaDeliveryKind.video,
+        bundleDigest: bundle.digest,
+        assetId: 'wrong-asset',
+      ),
+      MediaDeliveryReference.bundled(
+        asset.canonicalReference,
+        kind: MediaDeliveryKind.video,
+        bundleDigest: bundle.digest,
+        sha256: _canonicalTestSha256,
+      ),
+      MediaDeliveryReference.bundled(
+        asset.canonicalReference,
+        kind: MediaDeliveryKind.video,
+        bundleDigest: _canonicalTestSha256,
+      ),
+    ]) {
+      expect(invalid.cacheIdentity, isNot(correct.cacheIdentity));
+      await expectLater(
+        offline.verifiedVideoPath(asset.canonicalReference, binding: invalid),
+        throwsA(isA<OfflineContentFailure>()),
+      );
+    }
+    await hydrateRuntimePackageForTests(environment: 'beta');
+    final remote = publicMediaDelivery;
+    await expectLater(
+      remote.verifiedVideoPath(asset.canonicalReference, binding: correct),
+      throwsA(isA<OfflineContentFailure>()),
+    );
+    expect(
+      remote.tryResolve(
+        'https://untrusted.invalid/${asset.canonicalReference}',
+        kind: MediaDeliveryKind.video,
+      ),
+      isNull,
+    );
   });
 
   test('沉浸媒体滑动顺滑性静态契约', () {

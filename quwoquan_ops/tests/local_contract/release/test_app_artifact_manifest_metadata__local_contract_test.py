@@ -10,6 +10,7 @@ REQ-004/GWT-003：制品身份、安装回执与渠道矩阵分离建模，Debug
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -404,11 +405,28 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
         launch_manifest = load_json_yaml(LAUNCH_MANIFEST_PATH)
         expected = launch_manifest["target_environment"]
         source = DART_RESOLVER_PATH.read_text(encoding="utf-8")
-        for target, environment in expected.items():
-            self.assertIn(f"'{target}': '{environment}'", source)
-        # Dart 侧不得引入 metadata 未声明的 target。
-        self.assertEqual(source.count("-local':"), 3)
-        self.assertEqual(source.count("'prod-"), 2)
+        self.assertIn(
+            "import 'package:quwoquan_app/runtime/config/generated/app_launch_contract.g.dart';",
+            source,
+        )
+        self.assertRegex(
+            source,
+            r"const Map<String, String> launchTargetEnvironment\s*=\s*"
+            r"appLaunchTargetEnvironment\s*;",
+        )
+        self.assertIn("launchTargetEnvironment[package.target]", source)
+        generated = (
+            DART_RESOLVER_PATH.parent / "generated/app_launch_contract.g.dart"
+        ).read_text(encoding="utf-8")
+        mapping = re.search(
+            r"const Map<String, String> appLaunchTargetEnvironment\s*=\s*"
+            r"<String, String>(\{[^}]*\});",
+            generated,
+        )
+        self.assertIsNotNone(mapping, "生成契约必须声明 target/environment 映射")
+        # 生成器使用 JSON 字符串；去掉 Dart 尾逗号后精确比较，拒绝额外 target。
+        actual = json.loads(re.sub(r",\s*}", "}", mapping.group(1)))
+        self.assertEqual(actual, expected)
 
 
 class InstallLaunchPathMatrixTest(unittest.TestCase):

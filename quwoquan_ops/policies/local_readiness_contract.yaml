@@ -76,6 +76,9 @@ timeouts:
     static:metadata_contract: 180
     # product-ops-service api_integration（event_record 单包 ~165s）单跑 ~170s，8 套件并发下超 300s。
     focused:go:product-ops-service: 600
+    # user-service api_integration（credential_binding 单包 ~265s）整包实测 ~356s；
+    # accept 20260911T012627Z 在 focused 默认 300s 被 SIGTERM，断言尚未跑完。
+    focused:go:user-service: 600
     scope_build:app-compile-ios-simulator: 900
     scope_build:app-package-smoke: 900
   resolution_order: [check, phase, level, default]

@@ -18,10 +18,22 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   int _explicitLoginGeneration = 0;
   Future<void> _sessionMutationTail = Future<void>.value();
 
-  AuthSessionStore get _store => ref.read(authSessionStoreProvider);
+  // 环境只在冷启动或完整 ProviderScope 重建时切换；旧控制器固定旧 store。
+  late final AuthSessionStore _store = ref.read(authSessionStoreProvider);
+  late final bool _offlineContent =
+      CloudRuntimeConfig.isHydrated &&
+      CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot;
+
+  void _requireRemoteAuthentication() {
+    if (_offlineContent) {
+      throw contentCapabilityUnavailable('account_authentication');
+    }
+  }
 
   @override
   AuthSessionState build() {
+    _store; // 在作用域活跃时固定授权存储，不在旧请求晚到时解析新环境。
+    _offlineContent;
     ref.onDispose(_cancelStartupRestore);
     final restoreGateOpen = ref.watch(startupAuthRestoreGateProvider);
     if (restoreGateOpen && !_restoreStarted) {
@@ -51,6 +63,15 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       final stored = await _readStoredSessionWithinStartupBudget();
       _syncDeviceActorId(stored.installId);
       if (!ref.mounted) {
+        return;
+      }
+      if (_offlineContent) {
+        // 安装标识不是授权；离线不恢复旧 bearer、账号摘要或发起匿名账号创建。
+        state = AuthSessionState(
+          status: AuthSessionStatus.guest,
+          promptReason: AuthPromptReason.firstRun,
+          installId: stored.installId,
+        );
         return;
       }
       if (stored.hasCompleteActiveSession) {
@@ -87,6 +108,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   /// `LoginAnonymous`。bootstrap 失败会把同一结构化错误交给请求链，而不是退回裸
   /// `X-Client-Device-Actor-Id` 后得到伪成功空列表。
   Future<String?> accessTokenForRequest() async {
+    _requireRemoteAuthentication();
     final restore = _restoreInFlight;
     if (restore != null) {
       await restore;
@@ -118,6 +140,11 @@ class AuthSessionController extends Notifier<AuthSessionState> {
 
   /// 首次安装、会话清理或匿名 token 失效后的单飞 bootstrap。
   Future<bool> ensureTrustedGuestSession({StoredAuthSession? knownStored}) {
+    if (_offlineContent) {
+      return Future<bool>.error(
+        contentCapabilityUnavailable('account_authentication'),
+      );
+    }
     if (state.hasTrustedSession) {
       return Future<bool>.value(true);
     }
@@ -268,6 +295,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   }
 
   Future<void> applyLoginGrant(AuthSessionGrant result) async {
+    _requireRemoteAuthentication();
     _explicitLoginGeneration += 1;
     await _runSessionMutation<void>(() async {
       await _store.saveLoginGrant(result);
@@ -281,6 +309,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   }
 
   Future<void> applyTrustedGuestGrant(AuthSessionGrant result) async {
+    _requireRemoteAuthentication();
     _validateAnonymousGrant(result);
     await _runSessionMutation<void>(() async {
       await _store.saveLoginGrant(
@@ -302,6 +331,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     String? rememberedLoginMaskedIdentifier,
     String? rememberedLoginIdentifier,
   }) async {
+    _requireRemoteAuthentication();
     _explicitLoginGeneration += 1;
     await _runSessionMutation<void>(() async {
       await _store.saveLoginGrant(
@@ -320,6 +350,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   }
 
   Future<void> applyRefreshGrant(TokenRefreshGrant result) async {
+    _requireRemoteAuthentication();
     final current = state;
     final accessToken = result.accessToken.trim();
     final refreshToken = result.refreshToken.trim();
@@ -361,6 +392,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     bool force = false,
     Future<void>? abortTrigger,
   }) async {
+    if (_offlineContent) return false;
     final current = state;
     if (!current.hasTrustedSession || current.refreshToken.trim().isEmpty) {
       return false;
@@ -871,6 +903,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
         // 前一项失败不能永久锁死会话持久化队列。
       }
       try {
+        if (!ref.mounted) throw const CloudOperationCancelledException();
         result.complete(await mutation());
       } catch (error, stackTrace) {
         result.completeError(error, stackTrace);

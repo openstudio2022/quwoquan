@@ -49,11 +49,11 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
     def _fixture(self, root: Path) -> dict[str, object]:
         readiness_path = (
             root
-            / "env/alpha/runs/data-release/release-a/verify-a/release-readiness.json"
+            / "env/beta/runs/data-release/release-a/verify-a/release-readiness.json"
         )
         readiness_path.parent.mkdir(parents=True)
         readiness = release_readiness(
-            environment="alpha", release_id="release-a",
+            environment="beta", release_id="release-a",
             manifest_digest=MANIFEST_DIGEST,
             post_ids=("article-a", "image-a", "video-a"),
             entity_ref="/entity/entity-a",
@@ -137,8 +137,8 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
             },
         }
         manifest = {
-            "environment": "alpha",
-            "target": "alpha-local",
+            "environment": "beta",
+            "target": "beta-local",
             "baselineId": BASELINE,
             "sourceRevision": "a" * 40,
             "packageDigest": PACKAGE_DIGEST,
@@ -153,8 +153,8 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
                 }
             },
             "environmentArtifact": {
-                "environment": "alpha",
-                "target": "alpha-local",
+                "environment": "beta",
+                "target": "beta-local",
                 "releaseTrainId": RELEASE_TRAIN,
                 "environmentArtifactDigest": ARTIFACT_DIGEST,
                 "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
@@ -176,22 +176,22 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
         startup = {
             "status": "running",
             "failure": None,
-            "env": "alpha",
-            "target": "alpha-local",
+            "env": "beta",
+            "target": "beta-local",
             "workload": "full",
-            "attemptId": "alpha-candidate-attempt",
-            "composeProject": "quwoquan_alpha_release_1",
+            "attemptId": "beta-candidate-attempt",
+            "composeProject": "quwoquan_beta_release_1",
             "runRoot": str(root / "run"),
             "candidateDigest": BASELINE,
             "configurationDigest": CONFIGURATION_DIGEST,
             "providerRuntimeDigest": PROVIDER_DIGEST,
             "observabilityLogSinkDigest": OBSERVABILITY_DIGEST,
-            "imageTransportTag": "candidate-alpha",
+            "imageTransportTag": "candidate-beta",
         }
         preflight = {
             "exitCode": 0,
-            "target": "alpha-local",
-            "environment": "alpha",
+            "target": "beta-local",
+            "environment": "beta",
             "purpose": "content_live",
             "launchPolicy": "immutable_candidate",
             "nonPromotable": False,
@@ -296,8 +296,8 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
         self.assertEqual(binding["releaseTrainId"], RELEASE_TRAIN)
         self.assertEqual(binding["environmentArtifactDigest"], ARTIFACT_DIGEST)
         self.assertEqual(binding["contractGraphDigest"], CONTRACT_GRAPH_DIGEST)
-        self.assertEqual(binding["startupAttemptId"], "alpha-candidate-attempt")
-        self.assertEqual(binding["composeProject"], "quwoquan_alpha_release_1")
+        self.assertEqual(binding["startupAttemptId"], "beta-candidate-attempt")
+        self.assertEqual(binding["composeProject"], "quwoquan_beta_release_1")
         self.assertEqual(
             binding["releaseUatSamplePlan"],
             fixture["preflight"]["releaseUatSamplePlan"],
@@ -310,7 +310,7 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
                 "configurationDigest": CONFIGURATION_DIGEST,
                 "providerRuntimeDigest": PROVIDER_DIGEST,
                 "observabilityLogSinkDigest": OBSERVABILITY_DIGEST,
-                "imageTransportTag": "candidate-alpha",
+                "imageTransportTag": "candidate-beta",
             },
         )
 
@@ -323,7 +323,7 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
                 **fixture["preflight"],
                 "provider": {
                     "adapterId": "ext.sms.local_capture",
-                    "environment": "alpha",
+                    "environment": "beta",
                     "configurationDigest": CONFIGURATION_DIGEST,
                     "nonPromotable": True,
                     "ready": True,
@@ -338,9 +338,9 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
                     "providerRuntimeDigest": PROVIDER_DIGEST,
                     "challengePresent": True,
                     "sessionPresent": True,
-                    "startupAttemptId": "alpha-candidate-attempt",
+                    "startupAttemptId": "beta-candidate-attempt",
                     "nonPromotable": True,
-                    "receiptRef": "env/alpha/runs/login/report.json",
+                    "receiptRef": "env/beta/runs/login/report.json",
                     "receiptDigest": _digest("e"),
                 },
             }
@@ -466,7 +466,7 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
                 ):
                     result = stackctl._command_app_content_uat(
                         argparse.Namespace(
-                            targets="alpha-local",
+                            targets="beta-local",
                             platform="android",
                             device_id="emulator-5554",
                             dry_run=True,
@@ -504,7 +504,7 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
 
             def binding(item: dict[str, object]) -> dict[str, object]:
                 target = str(item["target"])
-                marker = {"alpha-local": "1", "beta-local": "2", "gamma-local": "3"}[
+                marker = {"beta-local": "2", "gamma-local": "3"}[
                     target
                 ]
                 return {
@@ -533,7 +533,7 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
             ):
                 result = stackctl._command_app_content_uat(
                     argparse.Namespace(
-                        targets="alpha-local,beta-local,gamma-local",
+                        targets="beta-local,gamma-local",
                         platform="android",
                         device_id="emulator-5554",
                         dry_run=True,

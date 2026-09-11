@@ -324,17 +324,30 @@ while IFS= read -r line; do
   [[ -n "$line" ]] && GO_SERVICES+=("$line")
 done < <(python3 -c 'import json,sys; from pathlib import Path; print("\n".join(json.loads(Path(sys.argv[1]).read_text()).get("go_services",[])))' "$PLAN_JSON")
 if [[ "${#GO_SERVICES[@]}" -gt 0 ]]; then
-  start_test_job "go_impacted" bash -c '
-    set -euo pipefail
-    cd quwoquan_service
-    for svc in "$@"; do
-      if [[ -f "services/$svc/Makefile" ]]; then
-        make -C "services/$svc" gate
-      else
-        go test "./services/$svc/..." -count=1 -p=8
-      fi
-    done
-  ' _ "${GO_SERVICES[@]}"
+  # 独立服务最多占两个检查槽；仍由同一 deadline 进程组回收全部子进程。
+  start_test_job "go_impacted" python3 -B -c '
+import subprocess, sys
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+logs = Path(sys.argv[1]).resolve()
+root = Path("quwoquan_service")
+
+def check_service(service):
+    command = (["make", "-C", f"services/{service}", "gate"]
+               if (root / "services" / service / "Makefile").is_file()
+               else ["go", "test", f"./services/{service}/...", "-count=1", "-p=8"])
+    log = logs / f"go_{service}.log"
+    print(f"service START: {service} log={log}", flush=True)
+    with log.open("w") as output:
+        result = subprocess.run(command, cwd=root, stdout=output, stderr=subprocess.STDOUT)
+    print(f"service END: {service} exit={result.returncode} log={log}", flush=True)
+    return result.returncode
+
+with ThreadPoolExecutor(max_workers=2) as executor:
+    results = list(executor.map(check_service, sys.argv[2:]))
+sys.exit(1 if any(results) else 0)
+  ' "$TEST_DIR" "${GO_SERVICES[@]}"
 fi
 
 PYTEST_PATHS=()

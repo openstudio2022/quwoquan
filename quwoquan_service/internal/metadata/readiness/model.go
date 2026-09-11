@@ -66,6 +66,7 @@ type DeploymentBinding struct {
 }
 
 type ReadinessCaseResult struct {
+	ContentSource           string          `json:"contentSource,omitempty"`
 	ObjectID                string          `json:"objectId"`
 	SpecRef                 string          `json:"specRef"`
 	CaseID                  string          `json:"caseId"`
@@ -76,10 +77,10 @@ type ReadinessCaseResult struct {
 	CommitSHA               string          `json:"commitSha"`
 	ContractGraphSourceHash string          `json:"contractGraphSourceHash"`
 	DeploymentTarget        string          `json:"deploymentTarget"`
-	BaselineID              string          `json:"baselineId"`
-	PackageDigest           string          `json:"packageDigest"`
-	ConfigurationDigest     string          `json:"configurationDigest"`
-	CandidateManifestSHA256 string          `json:"candidateManifestSha256"`
+	BaselineID              string          `json:"baselineId,omitempty"`
+	PackageDigest           string          `json:"packageDigest,omitempty"`
+	ConfigurationDigest     string          `json:"configurationDigest,omitempty"`
+	CandidateManifestSHA256 string          `json:"candidateManifestSha256,omitempty"`
 	CandidateDigest         string          `json:"candidateDigest,omitempty"`
 	ReleaseDigest           string          `json:"releaseDigest,omitempty"`
 	ReleaseID               string          `json:"releaseId,omitempty"`
@@ -99,7 +100,7 @@ type ReadinessCaseResult struct {
 	Platform                string          `json:"platform"`
 	DeviceClass             string          `json:"deviceClass"`
 	DeviceRegistered        bool            `json:"deviceRegistered"`
-	Provider                string          `json:"provider"`
+	Provider                string          `json:"provider,omitempty"`
 	StartedAt               time.Time       `json:"startedAt"`
 	CompletedAt             time.Time       `json:"completedAt"`
 	RunnerIdentity          string          `json:"runnerIdentity"`

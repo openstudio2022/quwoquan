@@ -44,11 +44,13 @@ func (cache *ClosedAccountCache) InvalidateClosedAccount(
 			continue
 		}
 		seenPhones[phone] = struct{}{}
+		// storage.yaml 只声明 phoneDigest 维度的发码冷却/配额键；
+		// 不得按明文手机号拼 key，否则注销后同一号码仍被限流。
 		keys = append(
 			keys,
-			fmt.Sprintf("otp:code:%s", phone),
-			fmt.Sprintf("otp:resend:%s", phone),
-			fmt.Sprintf("otp:quota:%s", phone),
+			otpResendKey(phone),
+			otpQuotaKey(phone),
+			otpQuotaDeadlineKey(phone),
 		)
 	}
 

@@ -63,11 +63,13 @@
 ## 5. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 四环境 App Remote composition 显式且唯一
-- 决策：alpha/beta/gamma/prod 的 App 统一使用 production Remote composition；环境只选择 runtime package、endpoint、容量和 rollout stage。
-- 理由：runtime 负责装配机制而不拥有业务事实；把环境名映射成 App 内 Mock 会绕过服务、数据 release、媒体与错误恢复主线。
-- 被否决方案：Alpha runner/mock package、Mock/Remote 运行时开关、环境启动器或 UAT 注入 fixture、服务失败后返回本地合成成功。
-- 约束与影响：第一方业务事实只经 canonical release importer 或所属领域公开 command；测试 double 只在 local_contract 测试树，第三方 local substitute 只在服务防腐层。
+### DEC-001 四环境内容读取契约统一且交付来源显式
+- 决策：内容 source 由 canonical 启动契约唯一选择。Alpha 在 nonprod 制品内读取 canonical 内容派生的完整离线快照，Beta/Gamma/Prod 使用 Remote；页面与业务 application 共用 typed read ports，只有组合根装配对应 adapter。离线不是远端失败 fallback，不增加第五环境或三套 nonprod 包身份。
+- 理由：runtime 拥有交付机制而非内容事实；同一内容身份、详情、频道、分页与媒体终态可在本地和 Remote 比较，但离线样本不证明远端推荐、发布或账号写入成功。
+- 被否决方案：Alpha runner/mock package、调用方任意 Mock/Remote 开关、UAT 注入业务 fixture、服务失败后返回本地合成成功、包内 URL 冒充 HTTPS、离线身份冒充服务端 active release。
+- 约束与影响：离线快照由显式 cohort 与选择派生，绑定制品摘要、完整媒体及许可；在线第一方业务事实仍只经 canonical release importer 或所属领域公开 command。离线后台不创建账号、恢复业务 outbox 或授予网络能力；测试 double 只在 local_contract 测试树。
+- 失败恢复与观测：离线缺文件、签名、摘要或媒体闭包失败必须显式阻断，不切 Remote；在线 expiry、权限与恢复保持原契约，不回落 Alpha。离线浏览、在线 HTTP 成功和真实媒体播放分层计量，具体时延与回滚预算归 runtime-config 和 runtime-media owner。
+- 可测试观察面：同一 canonical cohort 的本地/Remote typed 读取等价；Alpha 首次断网和跨日冷启动可读且无后台出站；Beta/Gamma/Prod 保持在线信任与环境隔离。设备/UAT 和环境资格不得互相替代。
 - 关联要求：`REQ-001`
 - 关联能力：[`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)、[`development-workflow-governance`](./development-workflow-governance/spec.md)、[`native-edge-gesture-navigation`](./native-edge-gesture-navigation/spec.md)、[`runtime-agentpack`](./runtime-agentpack/spec.md)、[`runtime-assistant`](./runtime-assistant/spec.md)、[`runtime-client-foundation`](./runtime-client-foundation/spec.md)、[`runtime-codegen`](./runtime-codegen/spec.md)、[`runtime-config`](./runtime-config/spec.md)、[`runtime-context`](./runtime-context/spec.md)、[`runtime-control-plane-foundation`](./runtime-control-plane-foundation/spec.md)、[`runtime-data-engineering`](./runtime-data-engineering/spec.md)、[`runtime-errors`](./runtime-errors/spec.md)、[`runtime-eventstore`](./runtime-eventstore/spec.md)、[`runtime-experiments`](./runtime-experiments/spec.md)、[`runtime-external-integration`](./runtime-external-integration/spec.md)、[`runtime-governance`](./runtime-governance/spec.md)、[`runtime-http`](./runtime-http/spec.md)、[`runtime-interceptor`](./runtime-interceptor/spec.md)、[`runtime-learning`](./runtime-learning/spec.md)、[`runtime-media`](./runtime-media/spec.md)、[`runtime-messaging`](./runtime-messaging/spec.md)、[`runtime-observability`](./runtime-observability/spec.md)、[`runtime-projector`](./runtime-projector/spec.md)、[`runtime-recommendation`](./runtime-recommendation/spec.md)、[`runtime-redis`](./runtime-redis/spec.md)、[`runtime-rpc`](./runtime-rpc/spec.md)、[`runtime-skill`](./runtime-skill/spec.md)、[`runtime-streaming`](./runtime-streaming/spec.md)、[`runtime-test-pyramid`](./runtime-test-pyramid/spec.md)、[`runtime-testinfra`](./runtime-testinfra/spec.md)、[`system-architecture-and-engineering-guide`](./system-architecture-and-engineering-guide/spec.md)
 
@@ -75,7 +77,7 @@
 ### DEC-002 可执行字节按信任域构建且环境配置在装配期绑定
 
 - 决策：同一受控 source capsule 先生成一个 `releaseTrainId`，再按 `nonprod/prod` 信任域构建不可变组件。Alpha、Beta、Gamma 引用同一 nonprod App 与同一 owner 的 nonprod Cloud digest，Prod 引用独立 prod digest。四环境继续各自生成配置、SecretRef、endpoint、拓扑和 activation receipt，并在 release composition 中与兼容的组件摘要组合。
-- 决策：端侧由 `buildProfile` flavor/scheme 在原生构建图解析前绑定 application/bundle ID、签名、entitlements 与第三方 SDK 注册身份。环境名和 endpoint 只来自带 schema、签名、签发时间与 source digest 的 runtime config package。nonprod package 只允许 Alpha、Beta、Gamma，prod package 只允许 Prod，启动握手必须在进入业务 Shell 前验证 profile、environment、target、摘要和 staleness。
+- 决策：端侧由 `buildProfile` flavor/scheme 在原生构建图解析前绑定 application/bundle ID、签名、entitlements 与第三方 SDK 注册身份。环境身份只来自带 schema、签名与 source digest 的 runtime document。在线 runtime config package 携带 endpoint 并严格验证签发时间与 staleness；Alpha 的独立 signed offline bootstrap 不含 endpoint 或时间授权，经同一 activation/CAS/read 链选择离线内容。nonprod 信任域只接受 Alpha、Beta、Gamma，prod 只接受 Prod；启动握手在业务 Shell 前验证 profile、environment、target、摘要与所属文档的有效性，不因 offline 放宽在线时间窗。
 - 决策：云侧每个服务仍以四环境目录独立 author 配置，但配置与 artifact identity 由部署面挂载。external Provider binding 保留编译期防污染边界并按信任域固化，前提是 Alpha、Beta、Gamma 的 binding 声明先收敛为同一 nonprod 视图。`APP_ENV` 只校验已装配配置的环境身份，不选择 Adapter、数据源或策略。
 - 决策：`prod-sim` 与 `prod-hosted` 同属 Prod 环境但拥有不同 target activation seal。prevalidate 与 rollout 只改变配置、authority receipt 或流量 activation，不重构同一组件字节。
 - 理由：环境差异属于配置与运行事实，不属于 compiler identity。按环境重复编译会扩大过期组合并让每次验证绑定不同字节。信任域构建与环境装配分离既阻断非生产 Provider 或身份进入 Prod，又允许未变组件按真实 digest 复用。
@@ -89,7 +91,7 @@
 <a id="dec-003"></a>
 ### DEC-003 组网事实单轨叙事与供应商中立收敛
 
-- 决策：南北向公开入口与东西向平面组网只有一套叙事（[`system-topology-and-networking`](./system-topology-and-networking/spec.md)）与唯一 YAML 真相源（`domain_governance.yaml`、各环境 `runtime.yaml`、`local_env_port_manifest.yaml`、`prod/access-isolation.yaml`）；公开入口只经 `runtime.yaml → target resolver → manifest` 唯一数据流生成，规格正文不复制 host、端口、CIDR、账号字面值。
+- 决策：南北向公开入口与东西向平面组网只有一套叙事（[`system-topology-and-networking`](./system-topology-and-networking/spec.md)）与唯一 YAML 真相源（`quwoquan_ops/environments/domain_governance.yaml`、各环境 `quwoquan_ops/environments/<env>/runtime.yaml`、`quwoquan_ops/environments/local_env_port_manifest.yaml`、`quwoquan_ops/environments/prod/access-isolation.yaml`）；公开入口只经 `runtime.yaml → target resolver → manifest` 唯一数据流生成，规格正文不复制 host、端口、CIDR、账号字面值。
 - 决策：公网 DNS 收敛按记录类型划分所有权——地址类型与 zone 级授权类型由计划完全拥有，`TXT` 为共享类型只拥有自己声明的 `v=` 方法；权威写入只经供应商中立 provider 接口，DoH 证据必须来自独立于权威服务商的双公共解析器。
 - 决策：`prod-hosted` 运维访问按 `edge / media / service / data` 四平面隔离，平面、账号与凭据投影事实只由 `prod/access-isolation.yaml` 拥有。
 - 理由：组网事实曾散落在 L3 打包 Story 叙事与 ops 文档中，agent 与开发者需跨文件拼凑；字面值多处复制已产生第二真相源与维度清单漂移。

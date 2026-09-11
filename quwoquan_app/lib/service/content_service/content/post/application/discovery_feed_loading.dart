@@ -21,6 +21,21 @@ abstract class _DiscoveryFeedMapLoadingCore
           .toSet();
       _reclaimRemovedHomeChannels(removedHomeChannelIds);
     });
+    ref.listen<String>(feedSessionProvider, (previous, next) {
+      if (previous == null || previous == next) return;
+      for (final controller in [
+        ..._refreshWaitControllers.values,
+        ..._appendWaitControllers.values,
+        ..._prependWaitControllers.values,
+      ]) {
+        controller.dispose();
+      }
+      _refreshWaitControllers.clear();
+      _appendWaitControllers.clear();
+      _prependWaitControllers.clear();
+      _residentPageWindows.clear();
+      state = {};
+    });
     ref.listen<int>(contentPublicationEpochProvider, (previous, next) {
       if (previous == null || previous == next) {
         return;
@@ -316,20 +331,9 @@ abstract class _DiscoveryFeedMapLoadingCore
         return _terminalLoadResult(channelId, controller, generation);
       }
       final error = _normalizeDiscoveryFeedError(e);
-      final latestValue = state[channelId]?.value ?? currentValue;
       if (error.runtimeFailure.kind == RuntimeFailureKind.cancelled) {
-        state = {
-          ...state,
-          channelId: AsyncData(
-            (latestValue ?? const DiscoveryFeedState()).copyWith(
-              isLoading: false,
-              isRefreshing: false,
-              isAppending: false,
-              isSlow: false,
-              blockingError: null,
-            ),
-          ),
-        };
+        _residentPageWindows.remove(channelId);
+        state = {...state, channelId: AsyncData(const DiscoveryFeedState())};
         return _terminalLoadResult(channelId, controller, generation);
       }
       developer.log(
@@ -338,36 +342,8 @@ abstract class _DiscoveryFeedMapLoadingCore
         error: error,
         stackTrace: st,
       );
-      if (latestValue != null && latestValue.items.isNotEmpty) {
-        state = {
-          ...state,
-          channelId: AsyncData(
-            latestValue.copyWith(
-              isLoading: false,
-              isRefreshing: false,
-              isAppending: false,
-              isSlow: false,
-              staleDataError: error,
-              blockingError: null,
-            ),
-          ),
-        };
-        _recordPageState(
-          channelId,
-          phase: 'cacheFallback',
-          source: 'retained',
-          error: error,
-          copyKey: 'homeCacheFallback',
-          hasCache: true,
-          itemCount: latestValue.items.length,
-          requestId: latestValue.feedRequestId,
-        );
-        return DiscoveryFeedLoadResult(
-          terminal: DiscoveryFeedLoadTerminal.retainedContent,
-          generation: generation,
-          failure: error,
-        );
-      }
+      // 可安全回放的失败由 reader 返回 typed cacheFallback 页；
+      // 直接抛出的错误没有准入证明，必须撤出已有 resident。
       state = {
         ...state,
         channelId: AsyncData(
@@ -446,8 +422,6 @@ abstract class _DiscoveryFeedMapLoadingCore
     required bool keepRefreshing,
     required bool isStaleSnapshot,
   }) {
-    final retainedValue = state[channelId]?.value;
-    final hasRetainedItems = retainedValue?.items.isNotEmpty ?? false;
     final hasInitialPageProtocolViolation =
         !isStaleSnapshot &&
         page.cacheFallbackError == null &&
@@ -466,37 +440,23 @@ abstract class _DiscoveryFeedMapLoadingCore
       state = {
         ...state,
         channelId: AsyncData(
-          hasRetainedItems
-              ? retainedValue!.copyWith(
-                  isLoading: false,
-                  isRefreshing: false,
-                  isAppending: false,
-                  isSlow: false,
-                  blockingError: null,
-                  staleDataError: error,
-                  appendError: null,
-                )
-              : DiscoveryFeedState(
-                  blockingError: error,
-                  isLoading: false,
-                  isRefreshing: false,
-                  isAppending: false,
-                  isSlow: false,
-                ),
+          DiscoveryFeedState(
+            blockingError: error,
+            isLoading: false,
+            isRefreshing: false,
+            isAppending: false,
+            isSlow: false,
+          ),
         ),
       };
-      if (!hasRetainedItems) {
-        _residentPageWindows.remove(channelId);
-      }
+      _residentPageWindows.remove(channelId);
       _recordPageState(
         channelId,
-        phase: hasRetainedItems ? 'cacheFallback' : 'blockingFailure',
-        source: hasRetainedItems ? 'retained' : 'localConsistency',
+        phase: 'blockingFailure',
+        source: 'localConsistency',
         error: error,
-        copyKey: hasRetainedItems ? 'homeCacheFallback' : null,
-        hasCache: hasRetainedItems,
-        itemCount: hasRetainedItems ? retainedValue!.items.length : 0,
-        requestId: hasRetainedItems ? retainedValue!.feedRequestId : null,
+        hasCache: false,
+        itemCount: 0,
       );
       return;
     }

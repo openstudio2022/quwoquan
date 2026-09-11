@@ -160,7 +160,11 @@ def main() -> int:
     run_sh = RUN_SH.read_text(encoding="utf-8")
     for required in (
         "ANDROID_SERIAL",
-        "enable_android_adb_reverse",
+        'load_launch_manifest_contract()["content_source_policy"][environment] == "remote"',
+        '["adb", "-s", device_id, "reverse", "--list"]',
+        "public_android_ports(target)",
+        "selected device public reverse mappings must already be prepared",
+        "APP.LAUNCH.transport_unavailable",
         'export QWQ_ENVIRONMENT="${REQUESTED_ENVIRONMENT:-alpha}"',
         'export QWQ_APP_RUNTIME_ENV="$QWQ_ENVIRONMENT"',
         'export QWQ_LAUNCH_TARGET="${REQUESTED_TARGET:-${QWQ_APP_RUNTIME_ENV}-local}"',

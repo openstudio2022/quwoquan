@@ -1,4 +1,5 @@
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007.t4
 #
 # integrate Alpha 准入的 App 启动 + 首页/视频书 readback：启动观察只以 launched +
 # router_shell + configurationState=complete 为终态；readback 只接受 200 且集合非空；
@@ -6,6 +7,8 @@
 
 from __future__ import annotations
 
+import inspect
+import json
 import os
 import stat
 import sys
@@ -13,6 +16,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from types import SimpleNamespace
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
@@ -91,24 +97,94 @@ class IntegrationAppLaunchContractTest(unittest.TestCase):
                 self.trace_id = "t"
                 self.duration_ms = 1
 
+        request_signature = inspect.signature(launch._default_http_request)
+
         def fake_request(**kwargs):
+            request_signature.bind(**kwargs)
             query = kwargs["query"]
-            if query.get("type") == "video":
-                return Observation(200, {"items": []})
-            return Observation(200, {"objectCards": [{"id": "x"}]})
+            identity = {"releaseId": "release-test", "manifestDigest": "sha256:" + "a" * 64}
+            if query.get("channelId") == "premium":
+                return Observation(200, {**identity, "outcome": "empty", "emptyReason": "no_eligible_content", "items": []})
+            return Observation(200, {**identity, "outcome": "content", "items": [{"postId": "post-test"}]})
 
         with (
             mock.patch.object(launch, "_topology_api_base", return_value="https://api.alpha.test"),
             mock.patch.object(launch, "_tls_ca_file", return_value=Path("/dev/null")),
             mock.patch.object(launch, "_default_http_request", side_effect=fake_request),
         ):
-            result = launch.content_readback(target="alpha-local")
+            result = launch.content_readback(target="alpha-local", expected_release={"releaseId": "release-test", "releaseDigest": "sha256:" + "a" * 64})
         self.assertFalse(result["passed"])
         self.assertEqual(result["failures"], ["video-book: items is empty"])
         self.assertEqual(result["results"]["home-feed"]["itemCount"], 1)
-        # 查询形状与 content-api-consumer 同源：首页推荐 feed 与视频 works。
+        # 读回真实页面的推荐与精品频道；普通视频浏览保留为独立检查。
         self.assertEqual(launch.CONTENT_READBACK_QUERIES[0][1]["channelId"], "recommend")
-        self.assertEqual(launch.CONTENT_READBACK_QUERIES[1][1]["type"], "video")
+        self.assertEqual(launch.CONTENT_READBACK_QUERIES[0][2], "items")
+        self.assertEqual(launch.CONTENT_READBACK_QUERIES[1][1]["channelId"], "premium")
+        self.assertEqual(launch.CONTENT_READBACK_QUERIES[2][1]["type"], "video")
+
+    def _readback_payloads(self, payloads):
+        observations = [mock.Mock(
+            status=200, payload=payload, path="/content/feed",
+            request_id="r", trace_id="t", duration_ms=1,
+        ) for payload in payloads]
+        with (
+            mock.patch.object(launch, "_topology_api_base", return_value="https://api.alpha.test"),
+            mock.patch.object(launch, "_tls_ca_file", return_value=Path("/dev/null")),
+            mock.patch.object(launch, "_default_http_request", side_effect=observations),
+        ):
+            return launch.content_readback(target="alpha-local", expected_release={"releaseId": "release-test", "releaseDigest": "sha256:" + "a" * 64})
+
+    @staticmethod
+    def _content_page(**overrides):
+        return {
+            "outcome": "content", "items": [{"postId": "post-test"}],
+            "releaseId": "release-test", "manifestDigest": "sha256:" + "a" * 64,
+            **overrides,
+        }
+
+    def test_object_cards_cannot_substitute_home_posts(self) -> None:
+        result = self._readback_payloads([
+            self._content_page(items=[], objectCards=[{"id": "card"}]),
+            self._content_page(), self._content_page(),
+        ])
+        self.assertFalse(result["passed"])
+        self.assertIn("home-feed: items is empty", result["failures"])
+
+    def test_all_queries_must_read_the_same_release(self) -> None:
+        for field, value in (("releaseId", "another-release"), ("manifestDigest", "sha256:" + "b" * 64)):
+            with self.subTest(field=field):
+                result = self._readback_payloads([
+                    self._content_page(), self._content_page(**{field: value}), self._content_page(),
+                ])
+                self.assertFalse(result["passed"])
+                self.assertIn("video-book: content identity differs from expected candidate release", result["failures"])
+
+    def test_consistent_but_wrong_candidate_release_is_rejected(self) -> None:
+        for field, value in (("releaseId", "old-release"), ("manifestDigest", "sha256:" + "b" * 64)):
+            result = self._readback_payloads([self._content_page(**{field: value})] * 3)
+            self.assertFalse(result["passed"])
+            self.assertEqual(len(result["failures"]), 3)
+            self.assertIn("expected candidate release", result["failures"][0])
+
+    def test_nonempty_invalid_envelopes_are_not_ready(self) -> None:
+        for overrides in (
+            {"outcome": "empty"}, {"emptyReason": "no_eligible_content"},
+            {"releaseId": ""}, {"manifestDigest": "not-a-digest"},
+            {"items": [None]}, {"items": [{"postId": ""}]},
+            {"items": [{"postId": "same"}, {"postId": "same"}]},
+        ):
+            with self.subTest(overrides=overrides):
+                result = self._readback_payloads([
+                    self._content_page(**overrides), self._content_page(), self._content_page(),
+                ])
+                self.assertFalse(result["passed"])
+
+    def test_valid_release_bound_queries_report_sample_counts(self) -> None:
+        result = self._readback_payloads([self._content_page()] * 3)
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["results"]["video-book"]["releaseId"], "release-test")
+        self.assertEqual(result["countScope"], "observed-pages")
+        self.assertFalse(result["traversalComplete"])
 
     def test_missing_simulator_is_a_typed_blocker(self) -> None:
         with mock.patch.object(launch.subprocess, "run") as run:
@@ -118,17 +194,148 @@ class IntegrationAppLaunchContractTest(unittest.TestCase):
                     launch.select_ios_simulator()
         self.assertEqual(blocked.exception.code, launch.DEVICE_BLOCKER)
 
+    def test_offline_artifact_includes_identity_only_in_nonprod(self) -> None:
+        import yaml
+        from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import _verify_snapshot_assets
+
+        app = ROOT / "quwoquan_app"
+        declarations = yaml.safe_load((app / "pubspec.yaml").read_text())["flutter"]["assets"]
+        expected = ("assets/content/alpha/manifest.json", "assets/content/alpha/bundle_identity.json")
+        for name in expected:
+            self.assertEqual([row for row in declarations if isinstance(row, dict) and row.get("path") == name],
+                             [{"path": name, "flavors": ["nonprod"]}])
+        source = app / expected[0]
+        reads = []
+        def read_asset(name):
+            reads.append(name)
+            return (app / name).read_bytes()
+        _verify_snapshot_assets(read_asset, source=source, raw=source.read_bytes(), manifest={"media": []})
+        self.assertEqual(reads, list(expected))
+
+    def test_offline_raw_cannot_replace_native_screenshot_or_page_identity(self) -> None:
+        import json
+        from quwoquan_ops.tests.local_contract.ci.test_integration_app_offline_uat__local_contract_test import (
+            _CANDIDATE, _receipt_matrix,
+        )
+
+        for damage in ("screenshot", "route", "carrier"):
+            with self.subTest(damage=damage):
+                root = self.root / damage
+                receipts, write = _receipt_matrix(root)
+                receipt = json.loads((root / receipts["android"]["ref"]).read_bytes())
+                page = receipt["pageResultRefs"][0]
+                if damage == "screenshot":
+                    execution = json.loads((root / page["evidence"]["ref"]).read_bytes())
+                    screenshot = root / execution["screenshot"]["ref"]
+                    execution["screenshot"] = write(execution["screenshot"]["ref"], screenshot.read_bytes() + b"changed")
+                    write(page["evidence"]["ref"], execution)
+                    expected = "screenshot differs from native"
+                else:
+                    raw = json.loads((root / page["result"]["ref"]).read_bytes())
+                    if damage == "route":
+                        raw["target"]["id"] = "/another-page"
+                    else:
+                        raw["carrier"] = "video"
+                    write(page["result"]["ref"], raw)
+                    expected = "plan/launch candidate identity drifted"
+                # 此单元边界隔离 exact-byte reader，直接证明原生观察/页面身份不能互换。
+                def read(exact, *, binary=False):
+                    raw = (root / exact["ref"]).read_bytes()
+                    return raw if binary else json.loads(raw)
+                binding = read(receipt["targetUatBindingRefs"]["alpha-local"])
+                with self.assertRaisesRegex(ValueError, expected):
+                    launch._offline_execution(read=read, page=page, result=read(page["result"]),
+                                              receipt=receipt, binding=binding, candidate=_CANDIDATE)
+
     def test_integration_run_wires_alpha_app_launch_for_app_scope(self) -> None:
         source = Path(integration_run.__file__).read_text(encoding="utf-8")
         self.assertIn('if environment == "alpha" and "app" in scopes:', source)
-        self.assertIn('phases.run(f"{environment}.app-launch"', source)
+        self.assertIn('phases.run("alpha.offline-pages"', source)
+        self.assertNotIn("_alpha_app_launch_cases", source)
+        self.assertIn('phases.run(f"{environment}.content-readback"', source)
         self.assertIn("cases.extend(app_cases)", source)
         self.assertIn('scopes=tuple(str(scope) for scope in plan["scopes"])', source)
         # health 之后、verify 之前：runtime 仍在线且尚未 down。
-        self.assertLess(source.index('phases.run(f"{environment}.health"'), source.index('phases.run(f"{environment}.app-launch"'))
-        self.assertLess(source.index('phases.run(f"{environment}.app-launch"'), source.index('phases.run(f"{environment}.verify"'))
+        self.assertLess(source.index('phases.run(f"{environment}.health"'), source.index('phases.run(f"{environment}.content-readback"'))
+        self.assertLess(source.index('phases.run(f"{environment}.content-readback"'), source.index('phases.run(f"{environment}.verify"'))
         for code in ("INTEGRATION_RUN.APP_LAUNCH_FAILED", "INTEGRATION_RUN.CONTENT_READBACK_FAILED"):
             self.assertIn(code, source)
+
+
+@pytest.fixture
+def host_offline(tmp_path, monkeypatch):
+    from quwoquan_ops.tests.local_contract.ci.test_integration_app_offline_uat__local_contract_test import (
+        _CANDIDATE, _receipt_matrix,
+    )
+    root = tmp_path.resolve()
+    host, store = root / "host", root / "store"
+    evidence_root = host
+    receipts, _ = _receipt_matrix(evidence_root)
+    for platform, exact in receipts.items():
+        path = host / "env/alpha/runs" / platform / "receipt.json"
+        path.parent.mkdir(parents=True)
+        (host / exact["ref"]).rename(path)
+        exact["ref"] = path.relative_to(host).as_posix()
+    monkeypatch.setattr(integration_run, "OUTPUT_ROOT", root / "repo-output")
+    monkeypatch.setattr(integration_run, "env_runs_root", lambda env: host / "env" / env / "runs")
+    monkeypatch.setattr(integration_run, "_store", lambda: store)
+    def stackctl(*args, **kwargs):
+        platform = "android" if args[args.index("--platform") + 1] == "android" else "ios"
+        return integration_run.StackctlResult("app-content-uat", {"exitCode": 0, "reportDir": str((evidence_root / receipts[platform]["ref"]).parent)}, "")
+    monkeypatch.setattr(integration_run, "_stackctl", stackctl)
+    params = {"candidate": _CANDIDATE, "candidate_ref": {"ref": "candidate.json", "digest": _CANDIDATE["candidateId"]},
+              "args": SimpleNamespace(android_device_id="android-device", ios_device_id="ios-device"),
+              "run_dir": root / "run", "phases": integration_run.Phases()}
+    return SimpleNamespace(root=evidence_root, store=store, receipts=receipts, params=params)
+
+
+def test_host_offline_exact_closure_is_portable_without_resigning(host_offline):
+    setup = host_offline
+    axis = integration_run._alpha_offline_pages(**setup.params)
+    assert axis["nonPromotable"] is True and axis["caseCount"] == 26
+    for exact in axis["files"]:
+        assert (setup.store / axis["root"] / exact["ref"]).read_bytes() == (setup.root / exact["ref"]).read_bytes()
+    # 删除宿主可用性之后，验收只消费 store 内完整闭包。
+    setup.root.rename(setup.root.with_name("unavailable"))
+    refs = integration_run._validate_offline_axis(store=setup.store, axis=axis, candidate=setup.params["candidate"])
+    assert len(refs) == len(axis["files"])
+
+
+@pytest.mark.parametrize("damage", ["escape", "link", "missing", "drift", "copy-drift"])
+def test_host_offline_rejects_invalid_closure_without_success_axis(host_offline, monkeypatch, damage):
+    setup = host_offline
+    path = setup.root / "snapshot.json"
+    if damage == "escape":
+        receipt_path = setup.root / setup.receipts["android"]["ref"]
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt["pageResultRefs"][0]["evidence"]["ref"] = "../outside.json"
+        receipt_path.write_text(json.dumps(receipt))
+    elif damage == "link":
+        original = path.with_suffix(".original")
+        path.rename(original)
+        path.symlink_to(original)
+    elif damage == "missing":
+        path.unlink()
+    elif damage == "drift":
+        path.write_bytes(b"{}")
+    else:
+        put = integration_run._bundle_put
+        def drifting_put(*args):
+            result = put(*args)
+            path.write_bytes(b"{}")
+            return result
+        monkeypatch.setattr(integration_run, "_bundle_put", drifting_put)
+    with pytest.raises((integration_run.IntegrationRunError, OSError, ValueError)):
+        integration_run._alpha_offline_pages(**setup.params)
+    if damage != "copy-drift":
+        assert not setup.store.exists()
+
+
+@pytest.mark.parametrize("ref", ["../secret", "/outside", "env/alpha/../beta/report", "./report", "env//report", "env\\\\report"])
+def test_offline_path_escape_is_rejected_before_any_read(tmp_path, ref):
+    with mock.patch.object(launch, "read_repo_relative_regular_single_link", side_effect=AssertionError("must not read")):
+        with pytest.raises(ValueError):
+            launch._read_offline_evidence_bytes(tmp_path.resolve(), {"ref": ref, "digest": "sha256:" + "a" * 64})
 
 
 if __name__ == "__main__":

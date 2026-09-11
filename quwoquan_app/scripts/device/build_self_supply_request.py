@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Debug-nonprod 构建期自供给：签发 alpha test_live package 并物化为可嵌入的激活请求。
+"""Debug-nonprod 构建期自供给：签发 Alpha 离线文档并物化为可嵌入的激活请求。
 
 iOS `Debug-nonprod` 与 Android debug/nonprod 的构建阶段在无外部 canonical handoff
 时调用本脚本（spec: environment-topology-and-packaging REQ-003 build_time_self_supply）。
@@ -126,8 +126,10 @@ def build_self_supply_request(
         handoff = build_handoff(_handoff_arguments(trust_path))
     except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
         raise SelfSupplyError(f"canonical handoff issuance failed: {exc}") from exc
-    if handoff.get("buildProfile") != SELF_SUPPLY_BUILD_PROFILE:
-        raise SelfSupplyError("self supply must resolve to the nonprod build profile")
+    if (handoff.get("buildProfile") != SELF_SUPPLY_BUILD_PROFILE
+        or handoff.get("contentSource") != "bundled_snapshot"
+        or handoff.get("requiresLocalTransport") is not False):
+        raise SelfSupplyError("self supply must resolve to the nonprod offline document")
     request = build_runtime_config_activation_request(
         handoff, expected_active_digest="", contract=selected_contract
     )
@@ -164,7 +166,7 @@ def main(argv: list[str]) -> int:
             request_output=Path(arguments.request_output).expanduser(),
         )
     except (SelfSupplyError, LaunchManifestContractError, ValueError) as exc:
-        print(f"GATE_BLOCK: APP.LAUNCH.self_supply_failed: {exc}", file=sys.stderr)
+        print(f"GATE_BLOCK: APP.LAUNCH.runtime_config_trust_missing: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     return 0

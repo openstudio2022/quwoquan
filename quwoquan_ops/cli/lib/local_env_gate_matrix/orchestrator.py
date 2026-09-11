@@ -24,7 +24,6 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import (
 from quwoquan_ops.cli.lib.local_env_gate_matrix.evidence import (
     _drain_resource_journal,
     _live_matrix_evidence_errors,
-    _pre_down_shared_targets,
     _provider_local_functional_errors,
     _run_down_phase,
 )
@@ -153,7 +152,7 @@ def _run_local_env_gate_matrix(
     failure_category = ""
     matrix_release_train_id = ""
     package_baselines: dict[str, str] = {}
-    resource_journal: list[str] = []
+    resource_journal: dict[str, dict[str, Any]] = {}
     previous_readiness: dict[str, str] = {}
 
     docker_ok, docker_detail = _docker_daemon_ready()
@@ -198,14 +197,6 @@ def _run_local_env_gate_matrix(
         data_ids = _data_run_ids(matrix_run_id, env_name)
         block["dataRunIds"] = data_ids
         environments[target] = block
-
-        down_exit = _pre_down_shared_targets(
-            target, down_fn=down_fn, phases=phases, block=block
-        )
-        if down_exit != 0:
-            overall_exit = down_exit
-            failure_category = "down"
-            break
 
         package_payload = _invoke_env(
             package_fn,
@@ -327,18 +318,27 @@ def _run_local_env_gate_matrix(
         )
         block["up"] = up_payload
         up_exit = _record_phase(phases, name=f"{target}_up", payload=up_payload)
-        if up_exit == 0:
-            resource_journal.append(target)
+        if up_payload.get("runtimeCreated") is True:
+            resource_journal[target] = up_payload
         if up_exit != 0:
             overall_exit = up_exit
             failure_category = "up"
             cleanup_payload, cleanup_exit = _run_down_phase(
                 target, down_fn=down_fn, phases=phases,
-                phase_name=f"{target}_failed_up_cleanup",
+                phase_name=f"{target}_failed_up_cleanup", ownership=up_payload,
             )
             block["failedUpCleanup"] = cleanup_payload
             if cleanup_exit == 0 and target in resource_journal:
-                resource_journal.remove(target)
+                resource_journal.pop(target)
+            environments[target] = block
+            break
+
+        if up_payload.get("runtimeReused") is True:
+            # 本矩阵后续包含 release/rollback mutation；普通使用租约不授予维护权。
+            # 在维护租约接口接好前明确阻断，不触碰已复用用户的 runtime 或数据。
+            overall_exit = 2
+            failure_category = "runtime_maintenance_lease_required"
+            block["maintenanceBlocker"] = "OPS.RUNTIME.maintenance_required"
             environments[target] = block
             break
 
@@ -375,7 +375,7 @@ def _run_local_env_gate_matrix(
         if overall_exit != 0:
             cleanup_payload, cleanup_exit = _run_down_phase(
                 target, down_fn=down_fn, phases=phases,
-                phase_name=f"{target}_startup_identity_cleanup",
+                phase_name=f"{target}_startup_identity_cleanup", ownership=up_payload,
             )
             block["startupIdentityCleanup"] = cleanup_payload
             environments[target] = block
@@ -749,14 +749,15 @@ def _run_local_env_gate_matrix(
                 failure_category = "acceptance_lease_revoke"
 
         down_payload, down_exit = _run_down_phase(
-            target, down_fn=down_fn, phases=phases, phase_name=f"{target}_down"
+            target, down_fn=down_fn, phases=phases, phase_name=f"{target}_down",
+            ownership=up_payload,
         )
         block["down"] = down_payload
         if down_exit != 0 and overall_exit == 0:
             overall_exit = down_exit
             failure_category = "down"
         elif down_exit == 0 and target in resource_journal:
-            resource_journal.remove(target)
+            resource_journal.pop(target)
 
         environments[target] = block
         if overall_exit != 0:

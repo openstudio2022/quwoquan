@@ -14,7 +14,7 @@
 - [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：scoped candidate 可经本地 A/B 准入后由 trusted publisher CAS 更新 dev，也可由匹配 integration worktree 仅以 non-force fast-forward 提交源码；`dev1.0 -> main` 只做可用源码 promotion。
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：integration scheduler只对current exact dev head生产Gamma与晋级资格。
-- [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
+- [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：不同 target 可并行，跨 worktree 同 host-target 只有一个运行 generation；同身份启动 attach 复用，不同身份显式冲突，更新需独占 mutation 与 lease 协调。
 - [`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)：按 alpha、beta、gamma、prod 的准入顺序发布同一制品，任一波次失败即停止晋级。
 - [`service-core-composition`](./service-core-composition/spec.md)：以同一 Go host 组合 11 个核心服务而不改变领域契约、数据归属或独立实时/模型故障域。
 - [`workflow-naming-consolidation`](./workflow-naming-consolidation/spec.md)：**约束**：不得保留重复名称（如 05/05b、08b/08b）或依赖旧的 `workflow_run` 定时合流链。
@@ -68,7 +68,7 @@
 ### DEC-004 App 制品身份、签名隔离与多渠道分发回执
 - 决策：App 分发以三个分离对象承载事实——`AppArtifactManifest`（属于 `app_factory_material` / `CandidateMaterialManifest` exact-byte 物料闭包、由 app factory producer 写入实际 payload 并由 qualification reducer 验证的 immutable owned entity，不属于 `ReleaseEvidenceManifest`；拥有 platform、BuildMode、distributionClass、package/bundle ID、version/build、signing identity、source/artifact/launch-manifest digest 与 promotability）、`InstallReceipt`（按 store/device/build 追加且集合无界的 separate append-only fact，独立生命周期与查询）、渠道矩阵（从 canonical metadata 生成，覆盖 Apple App Store/TestFlight、华为、小米、OPPO、vivo、应用宝与官网 `official_web` APK）。打包、签名校验、安装与渠道登记统一走 `stackctl package` 的 canonical App 入口（显式 `env/platform/build-mode/distribution-class/device`），`run.sh` 与 IDE 只做薄包装。
 - 跨边界 port：构建写入走 `AppArtifactPackageWriter` 生成不可变制品、`AppArtifactManifestReader` 提供验证查询；安装证据走 `AppInstallReceiptAppender` 只追加真实安装/商店回执、`AppInstallReceiptQuery` 供准出读取。禁止脚本或 Provider 直连绕过 port。
-- 包身份隔离：alpha/beta/gamma/prod 与 Debug/Release 使用不覆盖的 application/bundle ID、显示名与签名映射。
+- 包身份隔离：只按 canonical nonprod/prod 信任域使用不同 application/bundle ID 与签名映射；Alpha/Beta/Gamma 共用 nonprod 安装身份，不新增三套包名。同设备切环境结束旧绑定后重建运行上下文，不以覆盖安装或重编实现切换。
 - 正式身份来源：Prod 正式 ID 只取已登记外部事实，非 Prod/Debug 使用隔离后缀并同步 Universal/App Links、OAuth、推送与 Keychain/App Group。
 - 签名分发边界：Debug 签名制品仅限开发者本机、Simulator/Emulator 与登记设备；TestFlight、市场与官网只接受 Release。
 - 制品格式与渠道解耦：`AppArtifactManifest` 携带显式 `artifactFormat(apk/aab/ipa/app/web)`，由打包请求声明或按平台默认推导，禁止由 distributionClass 推导（原 `store → AAB` 耦合废除）；官网与全部 APK 市场引用同一 release APK source digest，`aab` 仅当已启用渠道 capability 硬性要求时按 DEC-005 构建一次。
@@ -78,7 +78,7 @@
 - 灰度顺序：先内测或分阶段，再公开发布。
 - 快速止损：内容 active pointer、Web current pointer 与远端配置的止损在 300 秒内完成，且不要求重新打包或再次审核。
 - 商店回滚边界：已安装商店 App 不可强制回滚，服务保留商店客户端 N/N-1 兼容面，禁止把“重新发版”当唯一恢复动作。
-- 被否决方案：单一 applicationId/bundle ID 覆盖安装、Debug 包进入市场、要求市场下载物逐字节等同上传物、把内容 release 绑进商店二进制、side-load 冒充市场安装回执。
+- 被否决方案：nonprod/prod 共用安装身份、按 Alpha/Beta/Gamma 另建包名、Debug 包进入市场、要求市场下载物逐字节等同上传物、把在线 active release 绑进商店二进制、side-load 冒充市场回执。Alpha nonprod 离线快照的制品绑定不属于在线 active release。
 - 关联要求：`REQ-001`
 - 影响 Story：[`gray-release-to-prod`](./gray-release-to-prod/spec.md)、[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)
 - 关联验收：[`environment-topology-and-packaging GWT-003`](../runtime-config/environment-topology-and-packaging/spec.md#gwt-003)、[`app-release-recovery-routing GWT-004`](../../product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md#gwt-004)、[`cold-start-performance GWT-005`](../runtime-client-foundation/cold-start-performance/spec.md#gwt-005)
@@ -88,7 +88,7 @@
 - 决策：打包的唯一职责是把一份受审源码闭包变成一份带可验证身份（真实 bytes digest + 签名 + provenance：源码依赖闭包、工具链、签名身份）的不可变字节；选环境、选渠道、选灰度阶段、注入 endpoint 都不属于构建。可执行字节只按 `nonprod/prod` 两个信任域分叉（applicationId、签名、entitlements、三方 SDK 注册身份），环境是部署与激活期的数据输入。
 - 最小构建矩阵：Android `nonprod.apk` + `prod.apk`（`com.leadwise.quwoquan`，同一签名 APK 复用官网与全部 APK 市场）；`prod.aab` 仅当已启用渠道 capability 硬性要求时构建一次。iOS `nonprod/prod` 两个身份/签名档位，不按环境重编译。Web 一份 immutable bundle。云侧每组件/OS/arch 按 `nonprod/prod` 两个信任域各构建一次：alpha/beta/gamma 复用同一 nonprod digest，prod 独立 digest。环境名、config digest 与 rollout stage 不得写入镜像字节。
 - 云侧信任域裁决：external Provider binding 经编译期 overlay 固化为 Go 二进制内的单环境 `CompiledBindingFor` 视图，是防止 provider substitute 进入 prod 的最强供应链阻断，本决策保留该编译期固化而不改为运行时挂载数据。代价是云镜像不能四环境同 digest，只能按信任域二分——与 App 侧 nonprod/prod 档位完全对称。前提是 alpha/beta/gamma 三环境的 `externalBindings` 声明收敛为同一 nonprod 档内容；环境身份文件（`artifact-identity.json`）与 platform-ops 环境配置树改为部署面挂载物料，从镜像字节中移除。
-- 配置外置三层通道：编译与制品封装层不接受 endpoint 类 define，也不携带 target runtime package；AppArtifact 只内置 build-profile 级信任根。安装后 activation 层由 stackctl/canonical launcher 将带 schema 版本的签名 runtime config package 原子写入平台私有容器，可独立重发与回滚而不重编、不重签 AppArtifact。服务端 bootstrap 层下发内容绑定身份、最低支持版本与 feature flag 等运行时事实，灰度阶段不在此列。cache/tag 不授予准出资格，复用时仍 100% 验证 exact digest、producer、SBOM、provenance 与签名。
+- 配置外置三层通道：编译与制品封装层不接受 endpoint 类 define，也不携带 target runtime package；AppArtifact 内置 build-profile 信任根，nonprod 另可携带独立验真的 Alpha canonical 离线快照及启动材料，不把其摘要当成在线 endpoint 授权。安装后 activation 层由 stackctl/canonical launcher 将带 schema 版本的签名 runtime config package 原子写入平台私有容器，可独立重发与回滚而不重编、不重签 AppArtifact。服务端 bootstrap 层下发内容绑定身份、最低支持版本与 feature flag 等运行时事实，灰度阶段不在此列。cache/tag 不授予准出资格，复用时仍 100% 验证 exact digest、producer、SBOM、provenance 与签名。
 - 被否决方案：按环境重复编译（12 份 App 制品、4 套云镜像）、按渠道打不同 APK、嵌入渠道号或渠道 SDK 分支、把 rollout stage 写入制品、自建 APK 差分（商店差分由渠道免费提供，开发者永远上传全量包）。
 - 约束与影响：身份后缀与 flavor 的 `nonprod` 统一切换必须与 producer/reader 同增量原子完成，切换前 `environment_suffixes` 仍是唯一现行身份派生轨，不得双轨；`quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml` 的 `build_profiles` 是本决策的 metadata 冻结面。
 - 关联要求：`REQ-001`
@@ -109,7 +109,7 @@
 ### DEC-007 部署/分发执行与回执 owner 边界
 - 决策：CI/CD release/distribution control plane 是渠道分发动作与原始回执的唯一 owner。渠道分发回执只保留 `releaseCompositionId`、source artifact digest、`channelId`、version/build、平台侧脱敏 ID/状态、权威 readback 摘要与时间，每渠道独立且不复制 APK。灰度激活是 Platform Ops 拥有的流量策略：激活回执单独绑定 `releaseCompositionId`、策略 revision、stage、SLO 判定与时间，`policyDigest` 只属于激活决策。`canary/5/20/50/100` 不改变 APK、镜像、配置包或候选身份，App 全程无感知灰度阶段。Product Ops 只消费“最低可用版本、更新/恢复入口、当前公开版本”等只读投影，无分发执行权、不保存市场 Attempt、不持有市场凭据。
 - 指针条件更新：Web `current` 与 Android `latest` 的 compare-and-swap 只是“预期当前值一致才切换”的部署并发保护，不属于打包，不进入候选身份。
-- 数据边界：数据不是交付物，从不进入任何包。内容只经 canonical immutable content release activation 进入四环境；行为数据只允许非生产由测试数据控制面经领域公开 command/event 构造，Prod 在首条 mutation 前拒绝。
+- 数据边界：在线环境只经 canonical immutable release activation 消费内容；Alpha nonprod 可携带 canonical 公开许可快照与完整媒体，按 runtime-config DEC-006 验证，不包含私有数据、测试替身或伪造服务激活。行为数据仍只允许非生产控制面经公开 command/event 创建，Prod 拒绝测试 mutation。
 - 被否决方案：Product Ops PostgreSQL 保存分发 Attempt/Receipt、Integration runtime 代理应用市场发布、把审核/回执/CAS/OCI/policy 塞进打包身份、灰度 stage 写入 IaC 制品。
 - 约束与影响：应用市场分发只消费“Cloud 已达到允许公开的稳定状态”，不拥有也不推进灰度；市场安装事实在首个商用闭环前不得以静态渠道登记、side-load 或官网安装替代。
 - 关联要求：`REQ-001`
@@ -210,13 +210,29 @@
 - Beta 显式 opt-in：`derive_integration_depth` 仍派生 `abg_release_sensitive|alpha_integration|no_live`，但不决定 Beta 真跑或政策跳过的原因码。需要环境验收时 Alpha 必跑；Beta 只在 `--beta`（`BETA=1`）时真跑，否则无论集成深度为何都签 `status=not_required`、`reasonCode=ACCEPTANCE.BETA_OPTIONAL_BY_POLICY`。事实合同仍由 `environment_acceptance_fact_contract.NOT_REQUIRED_REASON_CODES` 唯一声明有效原因码闭集，保留 ImpactPlan 自身免环境结论的 `IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED`，但本通道不得用它代替政策原因；签发（`environment_scheduler`）、schema、admission（`create_publish_admission`）三处消费同一常量。named evidence 的 `source.basis` 与 EAF `reasonCode` 同值；ReadinessCaseResult 合同规定 passed 结果不携带 `reasonCode`，因此原因只落在 EAF 与 named evidence。
 - 候选身份、基线与多 lane 合并：acceptance 的 ImpactPlan/readiness parent 默认取远端 `dev1.0` head；candidate 已等于远端 head 时（lane 已裸 fast-forward 落地）必须显式 `--baseline <上一个已验收基线>`，否则 `INTEGRATION_RUN.NOTHING_TO_ACCEPT`。事实仍绑定 exact candidate commit/tree 与 ImpactPlan digest，`--baseline` 只决定 delta 覆盖面，不改变事实身份。用户可显式把多个 lane head 合并成一个 candidate（merge commit 在当前 lane 分支上）后一次验收：`--merged-lanes lane/<name>` 逐一解析为本地或远端 lane head exact commit，且每个都必须是 candidate 的祖先，否则 `INPUT_INVALID`；bundle 的 `mergedLanes` 只记录来源，不改变 admission 语义。
 - Command/query 分流与幂等：acceptance 不写 admission、不写 `dev1.0`、拒绝 `--publish` 与 `--acceptance-bundle`；integrate 拒绝 `--baseline`/`--beta`/`--merged-lanes` 与 Data release 输入。bundle 导入幂等：同 ref 同字节跳过，`importedFiles` 记录本次新写入数。admission 的 `expectedRemoteOid` 就是 bundle 的 `expectedParent`，远端 `dev1.0` 一旦前移即 `BUNDLE_STALE`，修复路径只有在合入新 `dev1.0` 的 head 上重新 `make accept`。
-- 失败与恢复：任一环境相位失败保留首个 typed blocker 并 `down`；bundle 任一文件缺失/漂移零写 store 以外的任何东西；不得以 lane 的 `accepted` 冒充 publish admission，也不得把 integration 工作区的裸 fast-forward push 当作已验收。
+- 失败与恢复：任一环境相位失败保留首个 typed blocker，只回收该 attempt 新建且有 generation/ownership 证明的资源，不 down 复用实例或其他 target；bundle 任一文件缺失/漂移零写 store 以外的任何东西；不得以 lane 的 `accepted` 冒充 publish admission，也不得把 integration 工作区的裸 fast-forward push 当作已验收。
 - 测试 seam：`test_integration_run_production_release__local_contract_test.py` 覆盖 `--mode` 闭集、`make accept` 含 `--beta`/`MERGED_LANES` 且不含 `--publish`、`make integrate` 只含 `--acceptance-bundle`、acceptance/integrate 互斥输入的 typed 拒绝、Beta 未 opt-in 时跨集成深度的统一政策原因与显式 opt-in 真跑分流、bundle round-trip（23 个 exact store 文件）与 digest/manifest/commit/parent/占位漂移拒绝、integrate 相位闭集 `preflight → import-bundle → admit`；`test_environment_scheduler__local_contract_test.py` 覆盖 `ACCEPTANCE.BETA_OPTIONAL_BY_POLICY` 的签发与 schema 及未知原因码拒绝。
 - 理由：lane 工作树天然满足 handoff admission 的 delivery identity；environment 事实是 create-once、以 store 相对 ref 自描述的 portable 证据，逐字节搬运后在 integration 用同一 validator 与 keyring 复核，等价于在 integration 本地签发。把「真跑环境」放在产出方、把「写 dev1.0」留在唯一 integration 工作区，既守住 Data 的 admission 合同，也让 integration 工作区不依赖他方 lane 工作树状态。Beta 改为 opt-in 是把「合入门槛 = Alpha」与「Beta 是可选加深」写成机器可判定的原因码，而不是人工降档。
 - 被否决方案：在 integration 工作区消费 handoff 时关闭 `validate_current`（放宽 Data 准入合同）；在 integration 重算 candidate/ImpactPlan 再比对 digest（candidateId 不可重建，重算只是第二真相源）；把他方 lane 的 `.qwq_output` 证据字节整目录复制到 integration 工作区（伪装 delivery identity，且无 manifest 绑定）；在 lane 工作树直接 publish（绕开唯一 integration 写入通道）；沿用 `IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED` 表示「政策跳过 Beta」（原因码失真）；在 Gamma 与 prod canary 之外再加任何第三级集成验证环境（与两级结构冲突）。
 - 关联要求：[`daily-merge-release-strategy REQ-002`](./daily-merge-release-strategy/spec.md#req-002)、[`DEC-011`](#dec-011)
 - 影响 Story：[`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)、[`local-gamma-mirror`](./local-gamma-mirror/spec.md)
 - 关联验收：[`daily-merge-release-strategy GWT-001`](./daily-merge-release-strategy/spec.md#gwt-001)
+
+<a id="dec-015"></a>
+### DEC-015 host-target 单运行权威与全执行期 fence
+
+- 对象与 owner：沿用部署控制面的 host-scoped 运行权威扩展 target slot，而非新增 coordinator。host/container-daemon 身份与受管根须一致，跨 worktree/用户不得自设锁根绕过；worktree 仅保存来源和报告引用。运行 generation 独立于 candidate pointer，package 仅产候选，不能自动替换 running；每 target 一套拓扑可包含多个进程，test-live/immutable candidate 不能并存为两套。
+- Command/query：只读 discovery/status/lease 查询不删除 stale 状态；start 相同 runtime/config identity single-flight，唯一 creator 产出后其余 attach，重复 attach 不 build/up、不清数据、不切内容。不同 identity 返回 typed conflict；显式更新须 target 独占 mutation、generation 比较与 consumer 协调，内容激活另用短 CAS。准出前驱顺序只约束事实，不限制其他健康 target 持续运行。
+- 执行权：scheduler 选中/去重/create-once 不授予执行权，必须原子 claim 同 target execution slot。唯一 executor 持 fence 贯穿全部有副作用子进程；父进程退出后旧子进程未终止或可靠隔离不得接管。superseded 只说明资格失效，不能当 cleanup 已完成。
+- 设备与租约：设备绑定按 device + application identity 独占，跨设备可共用 nonprod；每 attach 有独立 nonce、exact lease 与运行 generation，原子 acquire/bind/release 比较完整身份。direct 安全租约不签更高 authority，Alpha 离线只需设备绑定。旧退出、PID 复用、TTL 到期或本 worktree receipt 缺席均不能释放新代；跨环境切换由启动 owner 重建 scope。
+- 资源与容量：生命周期锁按 target，Docker/VM 管理和全局 GC 保留独立 host 锁。CPU/RAM/VM 配额、磁盘与构建峰值独立原子预约，配额不足只拒绝/排队新任务，绝不驱逐已有环境。构建只锁 SDK 所需私有输出，不覆盖共享 generated config；只读 exact digest 可共享，GC 尊重所有引用。
+- 失败恢复：created/reused ownership 自准备起保持可追溯，失败只清理本次 created，保留复用服务/证书/转发/数据；matrix 禁止全 target pre-down。退出或最后 consumer 释放不自动 down。stop/restart/repair 必须证明 generation、ownership 与 lease 已协调，不能凭端口/PID/进程名回收；不明执行权保持阻断，恢复走同一控制面显式 reconcile。
+- 理由：运行代际、候选、执行权与使用租约解决不同竞态；统一 host-target 权威可同时满足单例与跨环境并行，容量不足无需粗暴停止其他环境。
+- 被否决方案：全局运行串行、每 worktree 一套锁/receipt 权威、启动隐式替换、package 切运行指针、执行前一次性 fence、TTL/PID 判停、last-client down、matrix 全环境预清理、资源不足驱逐旧环境。
+- SLI/SLO 与测试 seam：单 target 重复运行数及未授权资源变更数目标为零，记录创建/复用/冲突、lease stale/释放、fence 拒绝、预算排队与恢复时长；target/env 可作有限维度，设备/PID/generation 只进脱敏日志/trace。local_contract 用 barrier、可控子进程和时钟注入并发 scheduler/旧 lease/ABA/预算不足；api_integration 跨 worktree 同 daemon 验证单 creator、父崩溃接管与 owned cleanup；设备 UAT 持续读取证明另一环境失败无干扰。生产跨主机 HA 仍归网络 owner OPEN，不从本地实验推定。
+- 关联要求：[`multi-environment-instance-isolation REQ-001/002/004`](./multi-environment-instance-isolation/spec.md#req-004)。
+- 关联验收：[`GWT-001`](./multi-environment-instance-isolation/spec.md#gwt-001)、[`GWT-003`](./multi-environment-instance-isolation/spec.md#gwt-003)，未测保持该 Story OPEN-001。
+- 影响 Story：[`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)。
 
 ## 5. 失败与恢复
 

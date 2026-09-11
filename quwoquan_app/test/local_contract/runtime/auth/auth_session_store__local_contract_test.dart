@@ -4,6 +4,9 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// 不可拨打的合成标识：只验证完整字符串的持久化，不涉及手机号校验。
+const String _syntheticPhoneIdentifier = '00000000000';
+
 const String _defaultNicknameSample = '新同学_260622_6698692';
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
@@ -34,7 +37,34 @@ AuthSessionGrant _grant(Map<String, dynamic> overrides) {
   });
 }
 
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-003
 void main() {
+  test('target 隔离授权且 installId 保持安装级，旧 token 不迁移', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth.install_id': 'installation-1',
+      'auth.owner_id': 'legacy-owner',
+    });
+    FlutterSecureStorage.setMockInitialValues(<String, String>{
+      'auth.access_token': 'legacy-access',
+      'auth.refresh_token': 'legacy-refresh',
+    });
+    final sim = AuthSessionStore(storageNamespace: 'prod-sim|prod');
+    final hosted = AuthSessionStore(storageNamespace: 'prod-hosted|prod');
+    expect((await sim.read()).accessToken, isEmpty);
+    await sim.saveLoginGrant(
+      _grant(<String, dynamic>{
+        'accessToken': 'sim-access',
+        'refreshToken': 'sim-refresh',
+        'ownerId': 'sim-owner',
+        'activePersona': <String, dynamic>{'personaId': 'sim-persona'},
+      }),
+    );
+    expect((await hosted.read()).accessToken, isEmpty);
+    expect((await hosted.read()).ownerId, isEmpty);
+    expect((await sim.read()).accessToken, 'sim-access');
+    expect((await sim.read()).installId, 'installation-1');
+    expect((await hosted.read()).installId, 'installation-1');
+  });
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     FlutterSecureStorage.setMockInitialValues(<String, String>{});
@@ -100,7 +130,7 @@ void main() {
 
   test('malformed nicknameCustomized cannot grant customized status', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
-      'auth.remembered_nickname_customized': 'true',
+      'auth.unbound.remembered_nickname_customized': 'true',
     });
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
 
@@ -111,7 +141,7 @@ void main() {
 
   test('read restores the canonical active persona key', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
-      'auth.active_persona_id': 'persona-current',
+      'auth.unbound.active_persona_id': 'persona-current',
     });
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
 
@@ -119,16 +149,19 @@ void main() {
     final preferences = await SharedPreferences.getInstance();
 
     expect(stored.activePersonaId, 'persona-current');
-    expect(preferences.getString('auth.active_persona_id'), 'persona-current');
+    expect(
+      preferences.getString('auth.unbound.active_persona_id'),
+      'persona-current',
+    );
   });
 
   test('active refresh token is never reinterpreted as quick login', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
-      'auth.account_state': 'active',
-      'auth.manual_logged_out': true,
+      'auth.unbound.account_state': 'active',
+      'auth.unbound.manual_logged_out': true,
     });
     FlutterSecureStorage.setMockInitialValues(<String, String>{
-      'auth.refresh_token': 'active-refresh',
+      'auth.unbound.refresh_token': 'active-refresh',
     });
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
 
@@ -143,12 +176,12 @@ void main() {
   test('quick login requires its canonical explicit expiry', () async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     SharedPreferences.setMockInitialValues(<String, Object>{
-      'auth.manual_logged_out': true,
-      'auth.last_refresh_at_epoch_ms': nowMs,
-      'auth.session_remember_ttl_seconds': 2592000,
+      'auth.unbound.manual_logged_out': true,
+      'auth.unbound.last_refresh_at_epoch_ms': nowMs,
+      'auth.unbound.session_remember_ttl_seconds': 2592000,
     });
     FlutterSecureStorage.setMockInitialValues(<String, String>{
-      'auth.remembered_refresh_token': 'remembered-refresh',
+      'auth.unbound.remembered_refresh_token': 'remembered-refresh',
     });
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
 
@@ -361,18 +394,18 @@ void main() {
         'identityOrigin': 'phone',
       }),
       rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
-      rememberedLoginMaskedIdentifier: '180****9016',
-      rememberedLoginIdentifier: '18000009016',
+      rememberedLoginMaskedIdentifier: '000****0000',
+      rememberedLoginIdentifier: _syntheticPhoneIdentifier,
     );
 
     final afterLogin = await store.read();
-    expect(afterLogin.rememberedLoginIdentifier, '18000009016');
+    expect(afterLogin.rememberedLoginIdentifier, _syntheticPhoneIdentifier);
 
     // 软退出保留完整号（过期后再登录可自动预填 + 自动发码）。
     await store.softLogout();
     final afterSoft = await store.read();
-    expect(afterSoft.rememberedLoginIdentifier, '18000009016');
-    expect(afterSoft.rememberedLoginMaskedIdentifier, '180****9016');
+    expect(afterSoft.rememberedLoginIdentifier, _syntheticPhoneIdentifier);
+    expect(afterSoft.rememberedLoginMaskedIdentifier, '000****0000');
   });
 
   test('彻底退出清除本机完整手机号', () async {
@@ -385,8 +418,8 @@ void main() {
         'identityOrigin': 'phone',
       }),
       rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
-      rememberedLoginMaskedIdentifier: '180****9016',
-      rememberedLoginIdentifier: '18000009016',
+      rememberedLoginMaskedIdentifier: '000****0000',
+      rememberedLoginIdentifier: _syntheticPhoneIdentifier,
     );
 
     await store.clearSession(manualLogout: true);
@@ -404,7 +437,7 @@ void main() {
         'identityOrigin': 'wechat',
       }),
       rememberedLoginMethod: AuthRememberedLoginMethod.wechat,
-      rememberedLoginIdentifier: '18000009016',
+      rememberedLoginIdentifier: _syntheticPhoneIdentifier,
     );
 
     final stored = await store.read();

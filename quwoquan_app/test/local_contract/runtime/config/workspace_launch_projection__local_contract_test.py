@@ -84,8 +84,12 @@ def test_package_and_workspace_share_one_source_root_closure() -> None:
         "quwoquan_service/cmd/service-core/composition.yaml",
         "quwoquan_service/runtime",
     )
-    assert "quwoquan_service/services" in roots
-    assert "quwoquan_service/control-plane/platform-ops" in roots
+    # 投影仅收集现役运行闭包，不能把服务根中的测试和构建输出一并带入。
+    assert "quwoquan_service/services" not in roots
+    assert "quwoquan_service/control-plane/platform-ops" not in roots
+    for subtree in ("contracts", "internal", "cmd", "config", "deploy", "environments"):
+        assert f"quwoquan_service/control-plane/platform-ops/{subtree}" in roots
+    assert not any(root.endswith(("/tests", "/build")) for root in roots)
     assert "quwoquan_service/cmd/service-core/composition.yaml" in roots
     assert len(roots) == len(set(roots))
     for module in (

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -194,6 +195,38 @@ func validateAppLaunchRuntimeConfigContracts(
 	artifact appLaunchArtifactMetadata,
 	launch appLaunchMetadata,
 ) error {
+	if !reflect.DeepEqual(launch.ContentSourcePolicy, map[string]string{
+		"alpha": "bundled_snapshot", "beta": "remote", "gamma": "remote", "prod": "remote",
+	}) || !reflect.DeepEqual(launch.RuntimeDocumentContentSources, map[string]string{
+		"app-runtime-config-package": "remote", "app-offline-bootstrap-document": "bundled_snapshot",
+	}) {
+		return fmt.Errorf("content source policy must isolate Alpha offline from remote endpoint authority")
+	}
+	for _, field := range []appLaunchSchemaField{
+		launch.Schemas.RuntimeConfigActivationRequest.Fields["package"],
+		launch.Schemas.AppLauncherHandoff.Fields["runtimeConfigPackage"],
+	} {
+		if field.SchemaRef != "" || !reflect.DeepEqual(field.SchemaOneOf, []string{"runtime_config_package", "offline_bootstrap_document"}) {
+			return fmt.Errorf("runtime document carrier must use the closed schema-discriminated union")
+		}
+	}
+	offline := launch.Schemas.OfflineBootstrapDocument
+	if offline.SchemaValue != "app-offline-bootstrap-document" ||
+		offline.Fields["environment"].Const != "alpha" ||
+		offline.Fields["buildProfile"].Const != "nonprod" ||
+		offline.Fields["target"].Const != "alpha-local" ||
+		offline.Fields["contentSource"].Const != "bundled_snapshot" ||
+		offline.Fields["trustEnvelopeDigest"].Format != "sha256_identity" {
+		return fmt.Errorf("offline bootstrap must bind Alpha/nonprod to the artifact trust")
+	}
+	if err := requireExactStringSet("offline runtime fields", mapSchemaFieldKeys(offline.Fields["runtime"].Fields), []string{"appRuntimeEnv"}); err != nil {
+		return err
+	}
+	for _, forbidden := range []string{"issuedAt", "expiresAt"} {
+		if _, exists := offline.Fields[forbidden]; exists {
+			return fmt.Errorf("offline bootstrap cannot carry online lifetime claims")
+		}
+	}
 	packageContract := launch.RuntimeConfigPackage
 	if packageContract.SignatureAlgorithm != "ed25519" ||
 		packageContract.MaxLifetimeSeconds <= 0 ||
@@ -467,6 +500,7 @@ func appLaunchNamedSchemas(schemas appLaunchSchemas) map[string]appLaunchSchemaC
 	return map[string]appLaunchSchemaContract{
 		"runtime_config_trust_envelope":     schemas.RuntimeConfigTrustEnvelope,
 		"runtime_config_package":            schemas.RuntimeConfigPackage,
+		"offline_bootstrap_document":        schemas.OfflineBootstrapDocument,
 		"runtime_config_activation_request": schemas.RuntimeConfigActivationRequest,
 		"runtime_config_activation_receipt": schemas.RuntimeConfigActivationReceipt,
 		"app_launch_attempt":                schemas.AppLaunchAttempt,
@@ -501,6 +535,10 @@ func stringSet(values []string) map[string]struct{} {
 }
 
 func validateNestedAppLaunchSchemaField(path string, field appLaunchSchemaField) error {
+	if len(field.SchemaOneOf) > 0 && (field.Type != "object" || field.SchemaRef != "" ||
+		!reflect.DeepEqual(field.SchemaOneOf, []string{"runtime_config_package", "offline_bootstrap_document"})) {
+		return fmt.Errorf("%s has an invalid schema-discriminated union", path)
+	}
 	if field.Type == "object" && len(field.Fields) > 0 {
 		if field.AdditionalFields == nil || *field.AdditionalFields {
 			return fmt.Errorf("%s object must reject additional fields", path)

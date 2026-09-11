@@ -21,6 +21,45 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('MediaDownloadCache', () {
+    // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-003
+    test('clear 后旧下载 completion 不恢复磁盘或删除同 URL 新任务', () async {
+      final directory = await Directory.systemTemp.createTemp('media_epoch_');
+      addTearDown(() => directory.delete(recursive: true));
+      final oldResponse = Completer<http.Response>();
+      final newResponse = Completer<http.Response>();
+      final started = Completer<void>();
+      var requests = 0;
+      final cache = MediaDownloadCache(
+        storageNamespace: 'test-media',
+        client: _dataPlaneClient(
+          MockClient((_) {
+            requests++;
+            if (requests == 1) {
+              started.complete();
+              return oldResponse.future;
+            }
+            return newResponse.future;
+          }),
+        ),
+        cacheDirectoryPathProvider: () async => directory.path,
+        telemetrySink: const SilentCacheTelemetrySink(),
+      );
+      const url = 'https://cdn.example.com/epoch.mp4';
+      final old = cache.getFile(url);
+      await started.future;
+      await cache.clear();
+      expect(await old, isNull);
+      final current = cache.getFile(url);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      oldResponse.complete(http.Response.bytes([1], 200));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(cache.inflightDownloadCount, 1);
+      expect(await cache.getCachedFilePath(url), isNull);
+      newResponse.complete(http.Response.bytes([2], 200));
+      final path = await current;
+      expect(path, isNotNull);
+      expect(await File(path!).readAsBytes(), [2]);
+    });
     test(
       'uses stable sha1 key and discovers existing file after restart',
       () async {
@@ -34,12 +73,17 @@ void main() {
         });
         var requestCount = 0;
         const url = 'https://cdn.example.com/video/post_1/preview.mp4';
-        final expectedKey = sha1.convert(utf8.encode(url)).toString();
+        final expectedKey = sha1
+            .convert(utf8.encode('test-media|$url'))
+            .toString();
         final firstCache = MediaDownloadCache(
-          client: _dataPlaneClient(MockClient((request) async {
-            requestCount += 1;
-            return http.Response.bytes(<int>[1, 2, 3, 4], 200);
-          })),
+          storageNamespace: 'test-media',
+          client: _dataPlaneClient(
+            MockClient((request) async {
+              requestCount += 1;
+              return http.Response.bytes(<int>[1, 2, 3, 4], 200);
+            }),
+          ),
           cacheDirectoryPathProvider: () async => tempDir.path,
           telemetrySink: const SilentCacheTelemetrySink(),
         );
@@ -51,10 +95,13 @@ void main() {
         expect(requestCount, 1);
 
         final restartedCache = MediaDownloadCache(
-          client: _dataPlaneClient(MockClient((request) async {
-            requestCount += 1;
-            return http.Response.bytes(<int>[], 500);
-          })),
+          storageNamespace: 'test-media',
+          client: _dataPlaneClient(
+            MockClient((request) async {
+              requestCount += 1;
+              return http.Response.bytes(<int>[], 500);
+            }),
+          ),
           cacheDirectoryPathProvider: () async => tempDir.path,
           telemetrySink: const SilentCacheTelemetrySink(),
         );
@@ -65,6 +112,28 @@ void main() {
         expect(requestCount, 1);
       },
     );
+
+    test('不同 target 不共享媒体文件且 clear 仅删除本 target', () async {
+      final directory = await Directory.systemTemp.createTemp('media_target_');
+      addTearDown(() => directory.delete(recursive: true));
+      MediaDownloadCache create(String namespace) => MediaDownloadCache(
+        storageNamespace: namespace,
+        client: _dataPlaneClient(
+          MockClient((_) async => http.Response.bytes([3], 200)),
+        ),
+        cacheDirectoryPathProvider: () async => directory.path,
+        telemetrySink: const SilentCacheTelemetrySink(),
+      );
+      final sim = create('prod-sim|prod');
+      final hosted = create('prod-hosted|prod');
+      const url = 'https://cdn.example.com/shared.mp4';
+      final simPath = await sim.getFile(url);
+      expect(await hosted.getCachedFilePath(url), isNull);
+      final hostedPath = await hosted.getFile(url);
+      expect(hostedPath, isNot(simPath));
+      await sim.clear();
+      expect(await hosted.getCachedFilePath(url), hostedPath);
+    });
 
     test('clear reports bytes and files through telemetry', () async {
       final tempDir = await Directory.systemTemp.createTemp(
@@ -77,9 +146,12 @@ void main() {
       });
       final telemetry = _RecordingCacheTelemetrySink();
       final cache = MediaDownloadCache(
-        client: _dataPlaneClient(MockClient((request) async {
-          return http.Response.bytes(<int>[9, 8, 7], 200);
-        })),
+        storageNamespace: 'test-media',
+        client: _dataPlaneClient(
+          MockClient((request) async {
+            return http.Response.bytes(<int>[9, 8, 7], 200);
+          }),
+        ),
         cacheDirectoryPathProvider: () async => tempDir.path,
         telemetrySink: telemetry,
       );
@@ -106,11 +178,14 @@ void main() {
       var requestCount = 0;
       final responseGate = Completer<void>();
       final cache = MediaDownloadCache(
-        client: _dataPlaneClient(MockClient((request) async {
-          requestCount += 1;
-          await responseGate.future;
-          return http.Response.bytes(<int>[1, 1, 2, 3], 200);
-        })),
+        storageNamespace: 'test-media',
+        client: _dataPlaneClient(
+          MockClient((request) async {
+            requestCount += 1;
+            await responseGate.future;
+            return http.Response.bytes(<int>[1, 1, 2, 3], 200);
+          }),
+        ),
         cacheDirectoryPathProvider: () async => tempDir.path,
         telemetrySink: const SilentCacheTelemetrySink(),
       );
@@ -142,11 +217,14 @@ void main() {
         });
         final responseGate = Completer<void>();
         final cache = MediaDownloadCache(
+          storageNamespace: 'test-media',
           maxConcurrentDownloads: 1,
-          client: _dataPlaneClient(MockClient((request) async {
-            await responseGate.future;
-            return http.Response.bytes(<int>[4, 5, 6], 200);
-          })),
+          client: _dataPlaneClient(
+            MockClient((request) async {
+              await responseGate.future;
+              return http.Response.bytes(<int>[4, 5, 6], 200);
+            }),
+          ),
           cacheDirectoryPathProvider: () async => tempDir.path,
           telemetrySink: const SilentCacheTelemetrySink(),
         );

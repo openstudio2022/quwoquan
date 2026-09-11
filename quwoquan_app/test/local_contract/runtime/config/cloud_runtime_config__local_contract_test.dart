@@ -4,6 +4,8 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/runtime/config/runtime_package_resolver.dart';
 import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_app/runtime/platform/native_runtime_config_bridge.dart';
@@ -120,7 +122,109 @@ Future<ResolvedRuntimePackage> _resolve(
   ),
 );
 
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+Future<Map<String, Object?>> _signedOffline() async {
+  final algorithm = Ed25519();
+  final key = await algorithm.newKeyPair();
+  final publicKey = await key.extractPublicKey();
+  final keys = <String, String>{'offline': base64.encode(publicKey.bytes)};
+  final trust = <String, Object?>{
+    'schema': 'app-runtime-config-trust',
+    'buildProfile': 'nonprod',
+    'signatureAlgorithm': 'ed25519',
+    'trustedPublicKeys': keys,
+  };
+  String digest(Object value) =>
+      'sha256:${crypto.sha256.convert(utf8.encode(canonicalJsonEncode(value)))}';
+  final document = <String, Object?>{
+    'schema': 'app-offline-bootstrap-document',
+    'environment': 'alpha',
+    'buildProfile': 'nonprod',
+    'target': 'alpha-local',
+    'launchPolicy': 'test_live',
+    'contentSource': 'bundled_snapshot',
+    'sourceGitSha': 'a' * 40,
+    'sourceTreeDigest': 'sha256:${'b' * 64}',
+    'trustEnvelopeDigest': digest(trust),
+    'runtime': <String, String>{'appRuntimeEnv': 'alpha'},
+    'payloadDigest': '',
+    'signatureAlgorithm': 'ed25519',
+    'signatureKeyId': 'offline',
+    'trustedPublicKeys': keys,
+  };
+  document['payloadDigest'] = digest(document);
+  document['signature'] = base64.encode(
+    (await algorithm.sign(
+      utf8.encode(canonicalJsonEncode(document)),
+      keyPair: key,
+    )).bytes,
+  );
+  return <String, Object?>{
+    'package': document,
+    'trustedBuildProfile': 'nonprod',
+    'trustedTarget': 'alpha-local',
+    'trustedPublicKeys': keys,
+    'runtimeConfigPackageDigest': digest(document),
+    'runtimeConfigTrustEnvelopeDigest': digest(trust),
+    'effectiveLaunchManifestDigest': 'sha256:${'c' * 64}',
+    'launchProvenance': 'canonical_launcher',
+    'runtimeConfigSupplyMode': 'external_runtime_package',
+  };
+}
+
 void main() {
+  test('离线签名文档跨日可用但绝不提供网络 endpoint', () async {
+    final envelope = await _signedOffline();
+    await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+      bridge: NativeRuntimeConfigBridge(client: _EnvelopeClient(envelope)),
+      resolver: RuntimePackageResolver(now: () => DateTime.utc(2040)),
+    );
+    expect(CloudRuntimeConfig.contentSource, AppContentSource.bundledSnapshot);
+    expect(CloudRuntimeConfig.networkAccessAllowed, isFalse);
+    expect(CloudRuntimeConfig.appEnvironment, 'alpha');
+    expect(CloudRuntimeConfig.buildProfile, 'nonprod');
+    expect(CloudRuntimeConfig.launchTarget, 'alpha-local');
+    expect(
+      CloudRuntimeConfig.runtimeDefineSummary['configurationSource'],
+      'signed-offline-bootstrap',
+    );
+    expect(
+      CloudRuntimeConfig.runtimeDefineSummary['configurationState'],
+      'complete',
+    );
+    expect(CloudRuntimeConfig.validateRuntimePackage, returnsNormally);
+    final environment = CloudRuntimeEnvironment.fromCompileTime();
+    expect(environment.gatewayBaseUriOrNull, isNull);
+    expect(environment.networkAccessAllowed, isFalse);
+    expect(
+      () => environment.gatewayBaseUri,
+      throwsA(isA<CloudRuntimeConfigurationException>()),
+    );
+    expect(
+      () => CloudRuntimeConfig.gatewayBaseUrl,
+      throwsA(isA<CloudRuntimeConfigurationException>()),
+    );
+  });
+
+  test('离线 endpoint 空值和伪造 profile 均 fail closed', () async {
+    for (final mutation in <void Function(Map<String, Object?>)>[
+      (document) => (document['runtime']! as Map)['gatewayBaseUrl'] = '',
+      (document) => document['expiresAt'] = '2040-01-01T00:00:00Z',
+      (document) => document['buildProfile'] = 'prod',
+    ]) {
+      final envelope = await _signedOffline();
+      mutation(envelope['package']! as Map<String, Object?>);
+      await expectLater(
+        CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+          bridge: NativeRuntimeConfigBridge(client: _EnvelopeClient(envelope)),
+        ),
+        throwsA(isA<CloudRuntimeConfigurationException>()),
+      );
+      expect(CloudRuntimeConfig.networkAccessAllowed, isFalse);
+      expect(CloudRuntimeConfig.isHydrated, isFalse);
+    }
+  });
+
   test('合法 Ed25519 runtime package 通过并成为唯一配置来源', () async {
     final resolved = await _resolve(await _signedPackage());
 

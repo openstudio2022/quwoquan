@@ -3,8 +3,8 @@
 
 契约（specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003）：
 - 本 App 的 `flutter run` 是一键托管入口：白名单翻译参数后以前台
-  `QWQ_MANAGED_FLUTTER_ENTRY=1 exec run.sh --env alpha --device <id>` 进入
-  canonical launcher（alpha/content-live）；无 `-d` 时委托 canonical device
+  `exec run.sh --env alpha --device <id>` 进入 canonical 离线 launcher，
+  不执行在线 managed preparation（alpha/content-live）；无 `-d` 时委托 canonical device
   authority（单设备自动、多设备 TTY 数字选择、非 TTY typed 阻断）。
 - 外部 Flutter project 的 `run` 与其余全部子命令（--version、doctor、
   analyze、test、pub、build 等）解析真实 Flutter SDK 后逐字 exec 透传
@@ -265,7 +265,9 @@ def _managed_run(arguments: list[str], launch_root: Path) -> int:
         )
         raise SystemExit(2)
     environment = dict(os.environ)
-    environment["QWQ_MANAGED_FLUTTER_ENTRY"] = "1"
+    # 默认 Alpha 离线走同一 direct executor，不进入在线 managed preparation。
+    # 数据源仍由 canonical handoff 的签名策略决定，而非此入口变量。
+    environment.pop("QWQ_MANAGED_FLUTTER_ENTRY", None)
     launcher_arguments = [
         str(run_sh),
         "--env",

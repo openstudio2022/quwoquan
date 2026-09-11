@@ -2,26 +2,21 @@ import 'dart:convert';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/config/generated/app_launch_contract.g.dart';
 
 const String runtimePackageSchema = 'app-runtime-config-package';
 const String runtimePackageTestLiveLaunchPolicy = 'test_live';
 const String runtimePackageProdReleaseLaunchPolicy = 'prod_release';
-const Duration runtimePackageMaximumLifetime = Duration(hours: 24);
-const Duration runtimePackageMaximumFutureSkew = Duration(minutes: 5);
+const Duration runtimePackageMaximumLifetime = Duration(
+  seconds: runtimeConfigPackageMaxLifetimeSeconds,
+);
+const Duration runtimePackageMaximumFutureSkew = Duration(
+  seconds: runtimeConfigPackageMaxFutureSkewSeconds,
+);
 
-const Set<String> runtimePackageValueKeys = <String>{
-  'appRuntimeEnv',
-  'gatewayBaseUrl',
-  'legalBaseUrl',
-  'publicWebBaseUrl',
-  'appDownloadBaseUrl',
-  'realtimeBaseUrl',
-  'mediaAvatarCdnBaseUrl',
-  'mediaImageCdnBaseUrl',
-  'mediaVideoCdnBaseUrl',
-  'mediaUploadBaseUrl',
-  'rtcMediaConnectionUrl',
-};
+const Set<String> runtimePackageValueKeys =
+    runtimeConfigPackageRuntimeRequiredFields;
 
 const Set<String> runtimePackageEndpointKeys = <String>{
   'gatewayBaseUrl',
@@ -36,23 +31,8 @@ const Set<String> runtimePackageEndpointKeys = <String>{
   'rtcMediaConnectionUrl',
 };
 
-const Set<String> runtimePackageEnvelopeKeys = <String>{
-  'schema',
-  'environment',
-  'buildProfile',
-  'target',
-  'launchPolicy',
-  'issuedAt',
-  'expiresAt',
-  'sourceGitSha',
-  'sourceTreeDigest',
-  'runtime',
-  'payloadDigest',
-  'signatureAlgorithm',
-  'signatureKeyId',
-  'trustedPublicKeys',
-  'signature',
-};
+const Set<String> runtimePackageEnvelopeKeys =
+    runtimeConfigPackageRequiredFields;
 
 const Set<String> runtimePackageTrustEnvelopeKeys = <String>{
   'package',
@@ -108,7 +88,130 @@ class RuntimePackageValidationException implements Exception {
       'invalidKeys: ${invalidKeys.join(',')})';
 }
 
-class RuntimeConfigPackage {
+abstract interface class RuntimeConfigDocument {
+  String get schema;
+  String get environment;
+  String get buildProfile;
+  String get target;
+  String get launchPolicy;
+  String get sourceGitSha;
+  String get sourceTreeDigest;
+  Map<String, String> get runtimeValues;
+  String get payloadDigest;
+  String get signatureKeyId;
+  Map<String, String> get trustedPublicKeys;
+  String get signature;
+  Map<String, Object?> digestPayloadMap();
+  Map<String, Object?> signedPayloadMap();
+}
+
+/// 独立离线文档没有时间窗或 endpoint；不能通过在线包补字段构造。
+final class OfflineBootstrapDocument implements RuntimeConfigDocument {
+  OfflineBootstrapDocument._(this._document);
+  final Map<String, Object?> _document;
+
+  factory OfflineBootstrapDocument.fromMap(Map<String, Object?> input) {
+    final invalid = <String>{
+      ...input.keys.where(
+        (key) => !offlineBootstrapDocumentRequiredFields.contains(key),
+      ),
+      ...offlineBootstrapDocumentRequiredFields.where(
+        (key) => !input.containsKey(key),
+      ),
+    };
+    for (final key in offlineBootstrapDocumentRequiredFields) {
+      if (key == 'runtime' || key == 'trustedPublicKeys') continue;
+      final value = input[key];
+      if (value is! String || value.isEmpty || value.trim() != value) {
+        invalid.add(key);
+      }
+    }
+    final runtime = input['runtime'];
+    final keyring = input['trustedPublicKeys'];
+    if (runtime is! Map ||
+        runtime.length != offlineBootstrapRuntimeRequiredFields.length ||
+        !runtime.keys.every(offlineBootstrapRuntimeRequiredFields.contains) ||
+        runtime['appRuntimeEnv'] != input['environment']) {
+      invalid.add('runtime');
+    }
+    if (keyring is! Map ||
+        keyring.isEmpty ||
+        keyring.entries.any(
+          (entry) =>
+              entry.key is! String ||
+              entry.value is! String ||
+              (entry.key as String).trim().isEmpty ||
+              (entry.value as String).trim().isEmpty,
+        )) {
+      invalid.add('trustedPublicKeys');
+    }
+    if (input['schema'] !=
+            runtimeDocumentSchemaValues['offline_bootstrap_document'] ||
+        input['contentSource'] != 'bundled_snapshot' ||
+        input['environment'] != 'alpha' ||
+        input['buildProfile'] != 'nonprod' ||
+        input['target'] != 'alpha-local' ||
+        input['launchPolicy'] != 'test_live' ||
+        input['signatureAlgorithm'] != 'ed25519') {
+      invalid.add('schema');
+    }
+    if (invalid.isNotEmpty) {
+      throw RuntimePackageValidationException(
+        reason: 'offline-document-invalid',
+        invalidKeys: invalid,
+      );
+    }
+    return OfflineBootstrapDocument._(
+      Map<String, Object?>.unmodifiable({
+        ...input,
+        'runtime': Map<String, String>.unmodifiable(
+          Map<String, String>.from(runtime as Map),
+        ),
+        'trustedPublicKeys': Map<String, String>.unmodifiable(
+          Map<String, String>.from(keyring as Map),
+        ),
+      }),
+    );
+  }
+
+  @override
+  String get schema => _document['schema']! as String;
+  @override
+  String get environment => _document['environment']! as String;
+  @override
+  String get buildProfile => _document['buildProfile']! as String;
+  @override
+  String get target => _document['target']! as String;
+  @override
+  String get launchPolicy => _document['launchPolicy']! as String;
+  @override
+  String get sourceGitSha => _document['sourceGitSha']! as String;
+  @override
+  String get sourceTreeDigest => _document['sourceTreeDigest']! as String;
+  @override
+  String get payloadDigest => _document['payloadDigest']! as String;
+  @override
+  String get signatureKeyId => _document['signatureKeyId']! as String;
+  @override
+  String get signature => _document['signature']! as String;
+  @override
+  Map<String, String> get runtimeValues =>
+      _document['runtime']! as Map<String, String>;
+  @override
+  Map<String, String> get trustedPublicKeys =>
+      _document['trustedPublicKeys']! as Map<String, String>;
+  String get trustEnvelopeDigest => _document['trustEnvelopeDigest']! as String;
+  @override
+  Map<String, Object?> signedPayloadMap() =>
+      Map.of(_document)..remove('signature');
+  @override
+  Map<String, Object?> digestPayloadMap() => {
+    ...signedPayloadMap(),
+    'payloadDigest': '',
+  };
+}
+
+class RuntimeConfigPackage implements RuntimeConfigDocument {
   const RuntimeConfigPackage({
     required this.schema,
     required this.environment,
@@ -126,19 +229,31 @@ class RuntimeConfigPackage {
     required this.signature,
   });
 
+  @override
   final String schema;
+  @override
   final String environment;
+  @override
   final String buildProfile;
+  @override
   final String target;
+  @override
   final String launchPolicy;
   final DateTime issuedAt;
   final DateTime expiresAt;
+  @override
   final String sourceGitSha;
+  @override
   final String sourceTreeDigest;
+  @override
   final Map<String, String> runtimeValues;
+  @override
   final String payloadDigest;
+  @override
   final String signatureKeyId;
+  @override
   final Map<String, String> trustedPublicKeys;
+  @override
   final String signature;
 
   factory RuntimeConfigPackage.fromMap(Map<String, Object?> input) {
@@ -270,11 +385,13 @@ class RuntimeConfigPackage {
     'trustedPublicKeys': trustedPublicKeys,
   };
 
+  @override
   Map<String, Object?> digestPayloadMap() => <String, Object?>{
     ...canonicalPayloadMap(),
     'payloadDigest': '',
   };
 
+  @override
   Map<String, Object?> signedPayloadMap() => <String, Object?>{
     ...canonicalPayloadMap(),
     'payloadDigest': payloadDigest,
@@ -284,8 +401,12 @@ class RuntimeConfigPackage {
 class ResolvedRuntimePackage {
   const ResolvedRuntimePackage({required this.package, required this.values});
 
-  final RuntimeConfigPackage package;
+  final RuntimeConfigDocument package;
   final Map<String, String> values;
+
+  AppContentSource get contentSource => package is OfflineBootstrapDocument
+      ? AppContentSource.bundledSnapshot
+      : AppContentSource.remote;
 
   String get environment => package.environment;
   String get buildProfile => package.buildProfile;
@@ -308,7 +429,14 @@ class ResolvedRuntimePackage {
   }
 
   Map<String, String> get runtimeDefineSummary => <String, String>{
-    'configurationSource': 'signed-runtime-package',
+    'configurationSource': contentSource == AppContentSource.bundledSnapshot
+        ? 'signed-offline-bootstrap'
+        : 'signed-runtime-package',
+    'contentSource': contentSource == AppContentSource.bundledSnapshot
+        ? 'bundled_snapshot'
+        : 'remote',
+    'networkAccessAllowed': (contentSource == AppContentSource.remote)
+        .toString(),
     'configurationState': 'complete',
     'runtimeEnv': environment,
     'environment': environment,
@@ -338,11 +466,23 @@ class RuntimePackageResolver {
     required String trustedBuildProfile,
     required Map<String, String> trustedPublicKeys,
   }) async {
-    final package = RuntimeConfigPackage.fromMap(runtimePackage);
+    final RuntimeConfigDocument package;
+    if (runtimePackage['schema'] ==
+        runtimeDocumentSchemaValues['offline_bootstrap_document']) {
+      package = OfflineBootstrapDocument.fromMap(runtimePackage);
+    } else if (runtimePackage['schema'] == runtimePackageSchema) {
+      package = RuntimeConfigPackage.fromMap(runtimePackage);
+    } else {
+      throw RuntimePackageValidationException(
+        reason: 'package-schema-invalid',
+        invalidKeys: const ['schema'],
+      );
+    }
     final invalidKeys = <String>{};
-
-    if (package.schema != runtimePackageSchema) {
-      invalidKeys.add('schema');
+    final source = runtimeDocumentContentSources[package.schema];
+    if (source == null ||
+        source != appContentSourcePolicy[package.environment]) {
+      invalidKeys.add('contentSource');
     }
     if (package.buildProfile != trustedBuildProfile) {
       invalidKeys.add('buildProfile');
@@ -374,18 +514,30 @@ class RuntimePackageResolver {
     if (!_sourceTreeDigestPattern.hasMatch(package.sourceTreeDigest)) {
       invalidKeys.add('sourceTreeDigest');
     }
-    _collectRuntimeValueInvalidKeys(package.runtimeValues, invalidKeys);
-
-    final now = _now().toUtc();
-    if (package.issuedAt.isAfter(now.add(runtimePackageMaximumFutureSkew))) {
-      invalidKeys.add('issuedAt');
-    }
-    if (!package.expiresAt.isAfter(now)) {
-      invalidKeys.add('expiresAt');
-    }
-    final lifetime = package.expiresAt.difference(package.issuedAt);
-    if (lifetime <= Duration.zero || lifetime > runtimePackageMaximumLifetime) {
-      invalidKeys.addAll(const <String>['issuedAt', 'expiresAt']);
+    if (package is RuntimeConfigPackage) {
+      _collectRuntimeValueInvalidKeys(package.runtimeValues, invalidKeys);
+      final now = _now().toUtc();
+      if (package.issuedAt.isAfter(now.add(runtimePackageMaximumFutureSkew))) {
+        invalidKeys.add('issuedAt');
+      }
+      if (!package.expiresAt.isAfter(now)) invalidKeys.add('expiresAt');
+      final lifetime = package.expiresAt.difference(package.issuedAt);
+      if (lifetime <= Duration.zero ||
+          lifetime > runtimePackageMaximumLifetime) {
+        invalidKeys.addAll(const <String>['issuedAt', 'expiresAt']);
+      }
+    } else if (package is OfflineBootstrapDocument) {
+      final trustDocument = <String, Object?>{
+        'schema': runtimeDocumentSchemaValues['runtime_config_trust_envelope'],
+        'buildProfile': trustedBuildProfile,
+        'signatureAlgorithm': 'ed25519',
+        'trustedPublicKeys': trustedPublicKeys,
+      };
+      final trustDigest =
+          'sha256:${crypto.sha256.convert(utf8.encode(canonicalJsonEncode(trustDocument)))}';
+      if (package.trustEnvelopeDigest != trustDigest) {
+        invalidKeys.add('trustEnvelopeDigest');
+      }
     }
     if (invalidKeys.isNotEmpty) {
       throw RuntimePackageValidationException(
@@ -450,13 +602,7 @@ class RuntimePackageResolver {
   }
 }
 
-const Map<String, String> launchTargetEnvironment = <String, String>{
-  'alpha-local': 'alpha',
-  'beta-local': 'beta',
-  'gamma-local': 'gamma',
-  'prod-sim': 'prod',
-  'prod-hosted': 'prod',
-};
+const Map<String, String> launchTargetEnvironment = appLaunchTargetEnvironment;
 final RegExp _sourceGitShaPattern = RegExp(r'^[0-9a-f]{40}$');
 final RegExp _digestPattern = RegExp(r'^sha256:[0-9a-f]{64}$');
 final RegExp _sourceTreeDigestPattern = RegExp(

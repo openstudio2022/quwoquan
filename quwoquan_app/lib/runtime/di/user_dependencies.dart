@@ -1,3 +1,7 @@
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/offline_content_bundle.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/adapters/profile_query_bundled.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
 import 'package:quwoquan_app/service/user_service/account/authentication_challenge/adapters/authentication_challenge_remote.dart';
@@ -229,6 +233,12 @@ final class UserProductionComposition {
     required Object invocationContext,
     Object? clientContextSnapshot,
   }) {
+    if (CloudRuntimeConfig.isHydrated &&
+        CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot &&
+        (adapter == UserProductionAdapter.personaQuery ||
+            adapter == UserProductionAdapter.profileQuery)) {
+      return BundledProfileQuery(loadBundle: OfflineContentBundle.load) as T;
+    }
     final dynamic context = invocationContext;
     final dynamic snapshot = clientContextSnapshot;
     final Object result = switch (adapter) {

@@ -439,24 +439,28 @@ def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
     if not bool(getattr(args, "execute", False)):
         return _stackctl._command_provider_conformance_unlocked(args)
     if bool(getattr(args, "matrix", False)):
-        target_name = ",".join(_stackctl.LOCAL_BUILD_CACHE_TARGETS)
+        target_names = _stackctl.LOCAL_BUILD_CACHE_TARGETS
     else:
         environment = str(getattr(args, "env", "") or "").strip()
         target_name = _stackctl.DEFAULT_TARGET_BY_ENV.get(environment, "")
-    if target_name not in {*_stackctl.LOCAL_BUILD_CACHE_TARGETS, ",".join(_stackctl.LOCAL_BUILD_CACHE_TARGETS)}:
-        return _stackctl._command_provider_conformance_unlocked(args)
-    try:
-        runtime_use_lock = _stackctl.acquire_local_runtime_use_lock(
-            target=target_name,
-            purpose="provider-conformance-uat",
+        target_names = (
+            (target_name,) if target_name in _stackctl.LOCAL_BUILD_CACHE_TARGETS else ()
         )
-    except RuntimeError as exc:
-        return {
-            "exitCode": 2,
-            "summary": "stackctl provider-conformance is GATE_BLOCK",
-            "details": [str(exc)],
-        }
-    with contextlib.closing(runtime_use_lock):
+    # 矩阵逐 target 持有独立租约；中途获取失败也只释放本次已获取的租约。
+    with contextlib.ExitStack() as locks:
+        try:
+            for target_name in target_names:
+                runtime_use_lock = _stackctl.acquire_local_runtime_use_lock(
+                    target=target_name,
+                    purpose="provider-conformance-uat",
+                )
+                locks.callback(runtime_use_lock.close)
+        except RuntimeError as exc:
+            return {
+                "exitCode": 2,
+                "summary": "stackctl provider-conformance is GATE_BLOCK",
+                "details": [str(exc)],
+            }
         return _stackctl._command_provider_conformance_unlocked(args)
 
 

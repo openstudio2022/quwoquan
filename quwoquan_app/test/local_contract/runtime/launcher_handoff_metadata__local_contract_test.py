@@ -1,5 +1,7 @@
 # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 
+import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -179,14 +181,66 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         self.assertIn('payload.get("status") not in {"passed", "warning"}', launcher)
         self.assertIn("export QWQ_APP_LAUNCH_POLICY=test_live", launcher)
         self.assertIn("--launch-policy test_live", launcher)
-        self.assertIn(
-            '"runtime consumer lease is unavailable; test_live remains nonPromotable."',
+        # readiness 可以 warning，但 exact 安全租约缺失必须阻断，不能降级放行。
+        self.assertRegex(
+            launcher,
+            r'OPS\.LEASE\.runtime_identity_unavailable: no exact running generation\.'
+            r'[^\n]*\n\s+exit 2',
+        )
+        self.assertRegex(
+            launcher,
+            r'OPS\.LEASE\.acquire_blocked: exact runtime lease is required\.'
+            r'[^\n]*\n\s+exit 2',
+        )
+        self.assertIn('--instance-generation "$QWQ_RUNTIME_INSTANCE_GENERATION"', launcher)
+        self.assertNotIn(
+            'runtime consumer lease is unavailable; test_live remains nonPromotable.',
             launcher,
         )
         self.assertIn("record_prelaunch_warning", launcher)
         self.assertIn('bash "$APP_DIR/run.sh"', app_instance)
         self.assertNotIn("app-debug-preflight", app_instance)
         self.assertNotIn("flutter run", app_instance)
+    def test_runtime_lease_response_requires_exact_identity_before_launch(self) -> None:
+        source = (APP_DIR / "run.sh").read_text(encoding="utf-8")
+        # 执行 launcher 正在使用的解析器，正例必须真正输出 canonical leaseId。
+        parser = source.split("<<'PYLEASE'\n", 1)[1].split("\nPYLEASE", 1)[0]
+        identity = {
+            "target": "beta-local",
+            "device": "contract-device",
+            "consumer": "contract-consumer",
+            "instanceGeneration": "contract-generation",
+        }
+        lease_id = "sha256:" + "a" * 64
+        valid = {"exitCode": 0, "lease": {**identity, "leaseId": lease_id}}
+        cases = [("valid", valid, "")]
+        for field in identity:
+            drifted = deepcopy(valid)
+            drifted["lease"][field] = "unrelated"
+            cases.append((field, drifted, "response identity drifted"))
+        failed = deepcopy(valid)
+        failed["exitCode"] = 2
+        cases.append(("failed acquire", failed, "response identity drifted"))
+        for invalid_id in ("", "not-a-canonical-lease"):
+            invalid = deepcopy(valid)
+            invalid["lease"]["leaseId"] = invalid_id
+            cases.append((invalid_id, invalid, "missing canonical leaseId"))
+        for label, payload, blocker in cases:
+            with self.subTest(case=label):
+                result = subprocess.run(
+                    [sys.executable, "-B", "-c", parser, json.dumps(payload), *identity.values()],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if blocker:
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn(blocker, result.stderr)
+                    self.assertEqual(result.stdout, "")
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.strip(), lease_id)
+
     def test_each_metadata_target_builds_one_canonical_handoff(self) -> None:
         contract = load_launch_manifest_contract()
         for target, environment in contract["target_environment"].items():
@@ -364,7 +418,12 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         self.assertIn('scripts/device/run_app_instance.py"', source)
         self.assertNotIn('"$QWQ_REAL_FLUTTER" run', source)
         self.assertIn('exec "$APP_DIR/scripts/device/dev_launch.sh"', source)
-        self.assertIn("Hermetic direct run.sh always re-execs from a frozen private source projection.", source)
+        self.assertIn('--resolve-launch-content-source "$QWQ_APP_RUNTIME_ENV"', source)
+        self.assertIn('"$TEST_LIVE_REPORT_OVERRIDE" "${ORIGINAL_LAUNCH_ARGUMENTS[@]}"', source)
+        self.assertIn('--canonical-launch-control-exports', source)
+        self.assertLess(source.index('--resolve-launch-content-source'),
+                        source.index('enter_workspace_launch_projection "${ORIGINAL_LAUNCH_ARGUMENTS[@]}"'))
+        self.assertIn('enter_workspace_launch_projection()', source)
         self.assertIn('argument" == "--hermetic', source)
 
     def test_android_debug_mounts_only_external_profile_trust_asset(self) -> None:
@@ -380,10 +439,11 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             with self.subTest(gradle=host_gradle.name):
                 gradle = host_gradle.read_text(encoding="utf-8")
                 self.assertIn("runtime-config-assets.gradle.kts", gradle)
-                self.assertIn(
-                    'sourceSets.getByName("main").assets.srcDir',
-                    gradle,
-                )
+                if host_gradle == APP_DIR / "android/app/build.gradle.kts":
+                    self.assertIn('if (androidRuntimeConfigSelfSupply) "debug" else "main"', gradle)
+                    self.assertIn('sourceSets.getByName(consumingSourceSet).assets.srcDir', gradle)
+                else:
+                    self.assertIn('sourceSets.getByName("main").assets.srcDir', gradle)
         self.assertIn("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT", shared_validation)
         self.assertIn("runtime-config-trust.json", shared_validation)
         self.assertIn("runtime-config-package.json", shared_validation)
@@ -919,11 +979,210 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             "transport evidence must be empty when transport.required=false",
         ):
             _build_handoff(
-                "alpha",
-                "alpha-local",
+                "beta",
+                "beta-local",
                 "--reverse-expected-ports",
                 "7443",
             )
+
+
+class CanonicalLaunchControlContractTest(unittest.TestCase):
+    """REQ-008：提取后的 control 仍绑定 source、私有证据和 fresh 输出。"""
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.control_path = self.root / "control.json"
+        self.capsule = self.root / "source-capsule.json"
+        self.capsule.write_text("{}", encoding="utf-8")
+        self.evidence = self.root / "source-projection.json"
+        self.evidence.write_text("{}", encoding="utf-8")
+        self.control = {
+            "schema": "quwoquan_ops.app_content_uat_launch_control.v1",
+            "actor": "app-content-uat", "environment": "alpha", "target": "alpha-local",
+            "platform": "android", "deviceId": "device-contract",
+            "contentSource": "bundled_snapshot", "candidateDigest": "sha256:" + "1" * 64,
+            "sourceRevision": "2" * 40, "sourceCapsuleDigest": "sha256:" + "3" * 64,
+            "sourceCapsuleManifestDigest": "sha256:" + "4" * 64,
+            "sourceCapsuleManifestRef": str(self.capsule),
+            "sourceProjectionRoot": str(self.root),
+            "sourceProjectionEvidenceDigest": self._digest({}),
+            "sourceProjectionEvidenceRef": str(self.evidence),
+            "buildProjectionPolicyId": "flutter-android-3.47-gradle-8.14-agp-8.11.1",
+            "buildProjectionSealRef": str(self.root / "build-seal.json"),
+            "expectedBuildProjectionDigest": None,
+            "launchAttemptRef": str(self.root / "attempt.json"),
+            "launchReportRef": str(self.root / "report.json"),
+            "startupTerminalReceiptRef": str(self.root / "terminal.json"),
+        }
+
+    @staticmethod
+    def _digest(value) -> str:
+        payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _arguments(self, control=None) -> list[str]:
+        value = self.control if control is None else control
+        self.control_path.write_text(json.dumps(value), encoding="utf-8")
+        self.control_path.chmod(0o600)
+        return [str(self.root), str(self.root), str(self.control_path), self._digest(value),
+                str(self.control["launchAttemptRef"]), str(self.control["launchReportRef"]),
+                str(self.capsule)]
+
+    def test_offline_control_exports_only_validated_source_and_capsule(self) -> None:
+        for platform, policy in (
+            ("android", "flutter-android-3.47-gradle-8.14-agp-8.11.1"),
+            ("ios-simulator", "flutter-ios-3.47-cocoapods-1.16.2"),
+        ):
+            with self.subTest(platform=platform):
+                control = {**self.control, "platform": platform, "buildProjectionPolicyId": policy}
+                exports = launcher.canonical_launch_control_exports(self._arguments(control))
+                self.assertEqual(exports["QWQ_CANONICAL_CONTENT_SOURCE"], "bundled_snapshot")
+                self.assertEqual(exports["QWQ_CANONICAL_CANDIDATE_PACKAGE_DIGEST"], "")
+                self.assertEqual(exports["QWQ_PACKAGE_SOURCE_TREE_DIGEST"], control["sourceCapsuleDigest"])
+                self.assertFalse(Path(control["launchAttemptRef"]).exists())
+
+    def test_remote_control_still_requires_exact_package_digest(self) -> None:
+        control = {**self.control, "environment": "beta", "target": "beta-local"}
+        del control["contentSource"]
+        with self.assertRaisesRegex(ValueError, "fields mismatch"):
+            launcher.canonical_launch_control_exports(self._arguments(control))
+        control["packageDigest"] = "sha256:" + "5" * 64
+        exports = launcher.canonical_launch_control_exports(self._arguments(control))
+        self.assertEqual(exports["QWQ_CANONICAL_CONTENT_SOURCE"], "remote")
+        self.assertEqual(exports["QWQ_CANONICAL_CANDIDATE_PACKAGE_DIGEST"], control["packageDigest"])
+        control["packageDigest"] = "invalid"
+        with self.assertRaisesRegex(ValueError, "packageDigest is invalid"):
+            launcher.canonical_launch_control_exports(self._arguments(control))
+
+    def test_control_rejects_closed_field_and_identity_drift(self) -> None:
+        for field, value, reason in (
+            ("contentSource", "remote", "fields mismatch"),
+            ("packageDigest", "sha256:" + "5" * 64, "fields mismatch"),
+            ("environment", "beta", "source/target/device mismatch"),
+            ("target", "beta-local", "source/target/device mismatch"),
+            ("platform", "ios-physical", "source/target/device mismatch"),
+            ("actor", "direct", "actor mismatch"),
+            ("schema", "other", "schema mismatch"),
+            ("buildProjectionPolicyId", "other", "policy mismatch"),
+            ("expectedBuildProjectionDigest", "other", "build projection digest is invalid"),
+            ("candidateDigest", "other", "candidateDigest is invalid"),
+            ("sourceCapsuleDigest", "other", "sourceCapsuleDigest is invalid"),
+            ("sourceCapsuleManifestDigest", "other", "sourceCapsuleManifestDigest is invalid"),
+            ("sourceProjectionEvidenceDigest", "sha256:" + "6" * 64, "evidence drifted"),
+            ("sourceProjectionRoot", str(self.root / "other"), "projection differs"),
+            ("sourceCapsuleManifestRef", str(self.root / "other"), "capsule reference drifted"),
+        ):
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, reason):
+                launcher.canonical_launch_control_exports(self._arguments({**self.control, field: value}))
+        with self.assertRaisesRegex(ValueError, "fields mismatch"):
+            launcher.canonical_launch_control_exports(self._arguments([]))
+
+    def test_control_validation_preserves_first_error_order(self) -> None:
+        # 同时破坏多个阶段，首错必须仍由最早的现役校验返回。
+        for changes, reason in (
+            ({"environment": "beta", "unexpected": True}, "source/target/device mismatch"),
+            ({"unexpected": True, "schema": "other"}, "fields mismatch"),
+            ({"schema": "other", "actor": "other"}, "schema mismatch"),
+            ({"actor": "other", "buildProjectionPolicyId": "other"}, "actor mismatch"),
+            ({"buildProjectionPolicyId": "other", "expectedBuildProjectionDigest": "other"}, "policy mismatch"),
+            ({"expectedBuildProjectionDigest": "other", "candidateDigest": "other"}, "build projection digest is invalid"),
+            ({"candidateDigest": "other", "sourceCapsuleDigest": "other"}, "candidateDigest is invalid"),
+            ({"sourceCapsuleDigest": "other", "sourceProjectionRoot": "other"}, "sourceCapsuleDigest is invalid"),
+            ({"sourceProjectionRoot": "other", "sourceCapsuleManifestRef": "other"}, "projection differs"),
+        ):
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, reason):
+                launcher.canonical_launch_control_exports(self._arguments({**self.control, **changes}))
+        arguments = self._arguments({**self.control, "schema": "other"})
+        arguments[3] = "sha256:" + "7" * 64
+        with self.assertRaisesRegex(ValueError, "control digest mismatch"):
+            launcher.canonical_launch_control_exports(arguments)
+        self.control_path.chmod(0o644)
+        with self.assertRaisesRegex(ValueError, "not private"):
+            launcher.canonical_launch_control_exports(arguments)
+
+        arguments = self._arguments()
+        self.evidence.unlink()
+        outputs = (
+            ("launchAttemptRef", "attempt"),
+            ("launchReportRef", "report"),
+            ("startupTerminalReceiptRef", "safe-terminal"),
+            ("buildProjectionSealRef", "build-projection-seal"),
+        )
+        for field, _label in outputs:
+            Path(self.control[field]).write_text("{}", encoding="utf-8")
+        self.capsule.unlink()
+        with self.assertRaisesRegex(ValueError, "capsule reference drifted"):
+            launcher.canonical_launch_control_exports(arguments)
+        self.capsule.write_text("{}", encoding="utf-8")
+        for field, label in outputs:
+            with self.subTest(output=field), self.assertRaisesRegex(ValueError, f"{label} path must be fresh"):
+                launcher.canonical_launch_control_exports(arguments)
+            Path(self.control[field]).unlink()
+        with self.assertRaisesRegex(ValueError, "projection evidence is missing"):
+            launcher.canonical_launch_control_exports(arguments)
+
+    def test_control_rejects_digest_mode_symlink_and_output_drift(self) -> None:
+        arguments = self._arguments()
+        arguments[3] = "sha256:" + "7" * 64
+        with self.assertRaisesRegex(ValueError, "control digest mismatch"):
+            launcher.canonical_launch_control_exports(arguments)
+        arguments = self._arguments()
+        self.control_path.chmod(0o644)
+        with self.assertRaisesRegex(ValueError, "not private"):
+            launcher.canonical_launch_control_exports(arguments)
+        self.control_path.chmod(0o600)
+        alias = self.root / "control-link.json"
+        alias.symlink_to(self.control_path)
+        with self.assertRaisesRegex(ValueError, "not private"):
+            launcher.canonical_launch_control_exports([*arguments[:2], str(alias), *arguments[3:]])
+        for index in (4, 5):
+            altered = list(arguments)
+            altered[index] = str(self.root / "other.json")
+            with self.subTest(index=index), self.assertRaisesRegex(ValueError, "must be absolute"):
+                launcher.canonical_launch_control_exports(altered)
+        for field in ("launchAttemptRef", "launchReportRef", "startupTerminalReceiptRef", "buildProjectionSealRef"):
+            output = Path(self.control[field])
+            output.write_text("{}", encoding="utf-8")
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "must be fresh"):
+                launcher.canonical_launch_control_exports(arguments)
+            output.unlink()
+        arguments[0] = str(self.root / "other-output")
+        with self.assertRaisesRegex(ValueError, "control escapes"):
+            launcher.canonical_launch_control_exports(arguments)
+
+    def test_control_cli_quotes_exports_and_has_no_partial_output_on_failure(self) -> None:
+        control = {**self.control, "deviceId": "device'; printf unsafe; #"}
+        arguments = self._arguments(control)
+        command = [sys.executable, "-B", str(Path(launcher.__file__)), "--canonical-launch-control-exports", *arguments]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        shell = subprocess.run(
+            ["bash", "-c", result.stdout + '\nprintf "%s" "$QWQ_CANONICAL_CONTROL_DEVICE_ID"'],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(shell.returncode, 0, shell.stderr)
+        self.assertEqual(shell.stdout, control["deviceId"])
+        self.evidence.write_text('{"drifted": true}', encoding="utf-8")
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("evidence drifted", result.stderr)
+
+    def test_source_selection_requires_control_and_keeps_remote_selector_guards(self) -> None:
+        for canonical_source, report in (("", ""), ("bundled_snapshot", ""), ("remote", "report")):
+            with self.subTest(source=canonical_source, report=report):
+                with self.assertRaisesRegex(ValueError, "exact app-content-uat control"):
+                    launcher.resolve_launch_content_source(["alpha", canonical_source, report])
+        self.assertEqual(launcher.resolve_launch_content_source(
+            ["alpha", "bundled_snapshot", "report", "--env", "alpha"]), "bundled_snapshot")
+        for environment in ("beta", "gamma", "prod"):
+            self.assertEqual(launcher.resolve_launch_content_source(
+                [environment, "", "", "--env", environment]), "remote")
+        with self.assertRaisesRegex(ValueError, "conflicting"):
+            launcher.resolve_launch_content_source(
+                ["beta", "", "", "--env", "alpha", "--target", "beta-local"])
 
 
 if __name__ == "__main__":

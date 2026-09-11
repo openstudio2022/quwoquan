@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
 from quwoquan_ops.cli.lib.local_runtime_consumer_lease import active_consumer_leases
-from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
+from quwoquan_ops.cli.lib.output_paths import deployment_render_dir, env_root
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 
 
@@ -60,7 +60,7 @@ def output_root() -> Path:
 
 
 def env_output_root(env_name: str) -> Path:
-    return output_root() / "env" / runtime_env_for_dev_env(env_name)
+    return env_root(runtime_env_for_dev_env(env_name))
 
 
 def deployment_render_root(target_name: str) -> Path:
@@ -93,7 +93,7 @@ def observability_run_root(env_name: str) -> Path:
         env=runtime_env,
         target=target,
         action="status",
-        root=output_root(),
+        root=env_output_root(env_name).parents[1],
     ).observability_root
 
 
@@ -119,7 +119,7 @@ def run_root(env_name: str) -> Path:
         env=runtime_env,
         target=target,
         action="status",
-        root=output_root(),
+        root=env_output_root(env_name).parents[1],
     ).run_root
 
 

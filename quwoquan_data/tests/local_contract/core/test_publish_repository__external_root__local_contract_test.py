@@ -29,6 +29,15 @@ def test_root_is_explicit_and_identity_checked(tmp_path):
     assert not (tmp_path / "absent").exists()
 
 
+def test_repository_marker_rejects_release_contract_digest(tmp_path):
+    root = tmp_path / "publish"
+    document = repository(root)
+    document["producerContractDigest"] = "sha256:" + "a" * 64
+    (root / "repository.json").write_text(json.dumps(document))
+    with pytest.raises(PublishRepositoryError, match="DATA.REPOSITORY.IDENTITY_INVALID"):
+        require_publish_repository(root)
+
+
 def test_repository_control_files_are_not_canonical_objects(tmp_path):
     root = tmp_path / "publish"
     repository(root)

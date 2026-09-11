@@ -10,6 +10,7 @@ import 'package:quwoquan_app/service/content_service/content/comment/application
 import 'package:quwoquan_app/runtime/config/app_remote_config_store.dart';
 import 'package:quwoquan_app/runtime/platform/storage/hive_app_remote_config_store.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_facets.dart';
+import 'package:quwoquan_app/runtime/di/content_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime_defaults.dart';
 
 export 'package:quwoquan_app/service/content_service/content/post/application/content_runtime_config_state.dart';
@@ -43,9 +44,19 @@ class AppRemoteConfigNotifier extends Notifier<AppRemoteConfigState> {
   }
 
   Future<void> _hydrateLkg() async {
-    final snapshot = await ref
-        .read(appRemoteConfigStoreProvider)
-        .readActiveSnapshot();
+    AppContentConfigSnapshot? snapshot;
+    try {
+      snapshot = await ref
+          .read(appContentConfigReaderProvider)
+          .readActiveSnapshot();
+    } catch (error) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        isHydrating: false,
+        errorMessage: () => runtimeErrorDisplayMessage(error),
+      );
+      return;
+    }
     if (!ref.mounted) return;
     if (snapshot == null) {
       state = state.copyWith(isHydrating: false);
@@ -65,21 +76,14 @@ class AppRemoteConfigNotifier extends Notifier<AppRemoteConfigState> {
     final fallback = buildProductionContentRuntimeConfigDefaults();
     state = state.copyWith(isRefreshing: true, errorMessage: () => null);
     try {
-      final remoteConfig = await ref
-          .read(contentConfigRepositoryProvider)
-          .getAppConfig();
+      final snapshot = await ref.read(appContentConfigReaderProvider).refresh();
       if (!ref.mounted) return;
-      final snapshot = AppRemoteConfigSnapshot.fromWire(remoteConfig);
       final next = _stateFromSnapshot(snapshot, fallback: fallback);
       state = state.copyWith(
         active: _shouldActivateImmediately(snapshot) ? next : state.active,
         pending: () => _shouldActivateImmediately(snapshot) ? null : next,
         isHydrating: false,
         isRefreshing: false,
-      );
-      // 当前会话的远程配置生效不应阻塞在 Hive I/O 上；缓存只用于后续启动优化。
-      unawaited(
-        ref.read(appRemoteConfigStoreProvider).writeActiveSnapshot(snapshot),
       );
     } catch (error) {
       if (!ref.mounted) return;
@@ -95,7 +99,7 @@ class AppRemoteConfigNotifier extends Notifier<AppRemoteConfigState> {
   }
 
   ContentRuntimeConfigState _stateFromSnapshot(
-    AppRemoteConfigSnapshot snapshot, {
+    AppContentConfigSnapshot snapshot, {
     required ContentRuntimeConfigState fallback,
   }) {
     return ContentRuntimeConfigState.fromAppConfig(
@@ -105,13 +109,20 @@ class AppRemoteConfigNotifier extends Notifier<AppRemoteConfigState> {
     );
   }
 
-  bool _shouldActivateImmediately(AppRemoteConfigSnapshot snapshot) {
+  bool _shouldActivateImmediately(AppContentConfigSnapshot snapshot) {
     return snapshot.defaultActivation == 'immediate';
   }
 }
 
 final appRemoteConfigStoreProvider = Provider<AppRemoteConfigStore>((ref) {
   return const HiveAppRemoteConfigStore();
+});
+
+final appContentConfigReaderProvider = Provider<AppContentConfigReader>((ref) {
+  return ContentProductionComposition.appContentConfigReader(
+    repository: () => ref.read(contentConfigRepositoryProvider),
+    store: () => ref.read(appRemoteConfigStoreProvider),
+  );
 });
 
 final appRemoteConfigProvider =

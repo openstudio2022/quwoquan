@@ -129,6 +129,7 @@ type appLaunchSchemaField struct {
 	Items            *appLaunchSchemaField           `yaml:"items"`
 	ValueType        string                          `yaml:"value_type"`
 	SchemaRef        string                          `yaml:"schema_ref"`
+	SchemaOneOf      []string                        `yaml:"schema_one_of"`
 	Source           string                          `yaml:"source"`
 	AdditionalFields *bool                           `yaml:"additional_fields"`
 	RequiredFields   []string                        `yaml:"required_fields"`
@@ -147,6 +148,7 @@ type appLaunchSchemaContract struct {
 type appLaunchSchemas struct {
 	RuntimeConfigTrustEnvelope     appLaunchSchemaContract `yaml:"runtime_config_trust_envelope"`
 	RuntimeConfigPackage           appLaunchSchemaContract `yaml:"runtime_config_package"`
+	OfflineBootstrapDocument       appLaunchSchemaContract `yaml:"offline_bootstrap_document"`
 	RuntimeConfigActivationRequest appLaunchSchemaContract `yaml:"runtime_config_activation_request"`
 	RuntimeConfigActivationReceipt appLaunchSchemaContract `yaml:"runtime_config_activation_receipt"`
 	AppLaunchAttempt               appLaunchSchemaContract `yaml:"app_launch_attempt"`
@@ -161,6 +163,8 @@ type appLaunchMetadata struct {
 	Owner                         string                                `yaml:"owner"`
 	DigestContract                appLaunchDigestContract               `yaml:"digest_contract"`
 	TargetEnvironment             map[string]string                     `yaml:"target_environment"`
+	ContentSourcePolicy           map[string]string                     `yaml:"content_source_policy"`
+	RuntimeDocumentContentSources map[string]string                     `yaml:"runtime_document_content_sources"`
 	LocalTransportTargets         []string                              `yaml:"local_transport_targets"`
 	LaunchPolicies                map[string]appLaunchPolicyContract    `yaml:"launch_policies"`
 	RuntimeConfigPackage          appLaunchRuntimeConfigPackageContract `yaml:"runtime_config_package"`
@@ -185,6 +189,9 @@ type appLaunchContract struct {
 	Sources                            []appLaunchContractSource
 	Environments                       []string
 	TargetEnvironment                  map[string]string
+	ContentSourcePolicy                map[string]string
+	RuntimeDocumentContentSources      map[string]string
+	OfflineBootstrapRuntimeFields      []string
 	LocalTransportTargets              []string
 	BuildProfileEnvironments           map[string][]string
 	BuildProfileLaunchPolicies         map[string]string
@@ -348,6 +355,9 @@ func loadAppLaunchContract(metadataDir string) (appLaunchContract, error) {
 		Sources:                            sources,
 		Environments:                       append([]string(nil), artifactMetadata.Environments...),
 		TargetEnvironment:                  cloneStringMap(launchMetadata.TargetEnvironment),
+		ContentSourcePolicy:                cloneStringMap(launchMetadata.ContentSourcePolicy),
+		RuntimeDocumentContentSources:      cloneStringMap(launchMetadata.RuntimeDocumentContentSources),
+		OfflineBootstrapRuntimeFields:      append([]string(nil), launchMetadata.Schemas.OfflineBootstrapDocument.Fields["runtime"].RequiredFields...),
 		LocalTransportTargets:              append([]string(nil), launchMetadata.LocalTransportTargets...),
 		BuildProfileEnvironments:           appLaunchBuildProfileEnvironments(artifactMetadata.BuildProfiles),
 		BuildProfileLaunchPolicies:         appLaunchBuildProfileLaunchPolicies(artifactMetadata.BuildProfiles),

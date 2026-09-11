@@ -25,6 +25,7 @@ from quwoquan_ops.cli.lib.app_identity import (
     build_profile_for_environment,
     launch_policy_for_build_profile,
 )
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
 from quwoquan_ops.cli.lib.environment_topology import ENVIRONMENTS, load_environment_topology
 from quwoquan_ops.cli.lib.common import load_json_yaml
 from quwoquan_ops.cli.lib.media_delivery_manifest import load_media_delivery_manifest
@@ -619,11 +620,38 @@ def _validate_consumer_boundary(issues: list[str]) -> None:
             issues.append(f"content_media_url.dart 重新引入禁止分支: {symbol}")
 
 
+def _runtime_media_endpoint_issues(
+    env_name: str,
+    source: object,
+    resolved_runtime: dict[str, object],
+    expected_bases: dict[str, object],
+) -> list[str]:
+    if source not in ("bundled_snapshot", "remote"):
+        return [f"{env_name}: 未知 canonical content source: {source!r}"]
+    issues: list[str] = []
+    for runtime_field, (topology_field, _) in APP_RUNTIME_CONFIG_MEDIA_FIELDS.items():
+        if source == "bundled_snapshot":
+            if runtime_field in resolved_runtime:
+                issues.append(
+                    f"{env_name}: bundled_snapshot runtime 禁止包含 {runtime_field}，"
+                    "离线文档不得携带在线媒体 endpoint"
+                )
+            continue
+        expected = str(expected_bases.get(topology_field) or "").rstrip("/")
+        if str(resolved_runtime.get(runtime_field) or "").rstrip("/") != expected:
+            issues.append(
+                f"{env_name}: runtime package {runtime_field} 未与 topology "
+                f"{topology_field} 保持一致"
+            )
+    return issues
+
+
 def _validate_runtime_config_authority_parity(
     issues: list[str],
     environments: tuple[str, ...] = tuple(ENVIRONMENTS),
 ) -> None:
     topology = load_environment_topology()
+    content_source_policy = load_launch_manifest_contract()["content_source_policy"]
     for env_name in environments:
         # launchPolicy 由 app_artifact_manifest 的信任域契约单点派生
         # （nonprod→test_live、prod→prod_release），解析器会校验二者匹配。
@@ -698,19 +726,17 @@ def _validate_runtime_config_authority_parity(
         except json.JSONDecodeError as exc:
             issues.append(f"{env_name}: App runtime package 输出不是 JSON: {exc}")
             continue
-        # 解析器交出的是完整 signed runtime package，媒体 endpoint 落在它的
-        # runtime 段；这里比对该段而不是已退役的扁平 define map。
+        # 解析器按 canonical source policy 返回离线文档或在线 signed package。
+        # 离线 runtime 禁止媒体 endpoint 字段；Remote 仍逐字段匹配 topology。
         resolved_runtime = package.get("runtime")
         if not isinstance(resolved_runtime, dict):
             issues.append(f"{env_name}: App runtime package 缺少 runtime 段")
             continue
-        for runtime_field, (topology_field, _) in APP_RUNTIME_CONFIG_MEDIA_FIELDS.items():
-            expected = str(expected_bases.get(topology_field) or "").rstrip("/")
-            if str(resolved_runtime.get(runtime_field) or "").rstrip("/") != expected:
-                issues.append(
-                    f"{env_name}: runtime package {runtime_field} 未与 topology "
-                    f"{topology_field} 保持一致"
-                )
+        issues.extend(
+            _runtime_media_endpoint_issues(
+                env_name, content_source_policy.get(env_name), resolved_runtime, expected_bases
+            )
+        )
 
     # endpoint 不得有编译期兜底这一意图，在 runtime package 切换后由「只从
     # package 读」直接满足：源码里根本不存在 endpoint 的 String.fromEnvironment。

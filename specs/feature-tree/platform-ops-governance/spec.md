@@ -64,6 +64,8 @@
 - 任一 mutable runtime 身份或收敛检查失败必须返回 typed `GATE_BLOCK`，不得写入成功事实。
 - immutable runtime 退出必须绑定 canonical running startup receipt 与其 `candidateDigest` 对应的只读 candidate root；candidate 自身 package/Graph/provider/observability/Compose 字节仍须完整校验，但不得因当前工作区已生成下一版 Graph 而拒绝停止旧 candidate。
 - 本地 runtime teardown 与 receipt 残留修复必须组合 `config-and-reliability-governance` 的唯一资源所有权结果，只裁定目标 runtime 自有资源并保持独立控制面在场；所有权无法唯一裁定或目标自有资源未收敛时必须 `GATE_BLOCK`，不得写入成功终态。
+- Alpha 旧 worktree startup receipt 仅可经既有 `reclaim-undownable-startup-receipt` 的显式 reconciliation 分支归档：普通 guard 不双读、不迁移、不因 `stopped` 放行。计划必须绑定当前仓库内 exact 主 receipt、`workloads/full` 副本及 `local_run` 的路径、原始字节摘要与一致的 stopped/full/runRoot 身份；任一路径穿越 symlink、未知状态或字节漂移均拒绝。
+- 该分支必须从既有 readback 证明 receipt-bound Compose project 零容器、零网络、目标自有端口空闲、零未释放 consumer lease 且无旧 executor fence/调度占用；不可读或未知资源 fail closed。apply 只消费显式确认的 exact plan 并在锁内复验全部输入与现场，只移动三份原件至 plan 固定归档路径，主 guard receipt 最后移动；不删除资源、不改写 receipt、不触 named volume 或独立控制面，部分移动必须保留归档原件并阻断自动重试。
 - 私有仓无法启用原生 required reviewers 时，生产审批事实由本领域独立 hosted approval authority 拥有。受控 GitHub App/webhook 只接收官方 event/action 闭集，验证签名与 delivery ID 后按 request→approved 追加，并绑定 installation、repository、workflow run、head SHA、candidate、environment 与 reviewer decision。
 - workflow 只按 candidate/run 读取 hosted exact-byte approval readback；该 readback 必须声明 `nativeProtection=false` 与 `enforcement=external_hosted_ledger`。缺 request/approved、签名无效、重复 delivery 不同 payload、顺序或身份漂移均 `GATE_BLOCK`，不得用 job queue、Deployment status 或人工布尔值替代。
 - 门禁 GATE_BLOCK 结构化输出只经 `quwoquan_ops/cli/lib/gate_output.py` 统一 schema 落盘 `.qwq_output/env/repo/runs/gate/`。`quwoquan_ops/gate/gate_repo.sh` 经 EXIT trap 调 `emit_gate_repo_summary.py` 发射整链结构化 summary，按 scope 独立落盘（以上支撑 DOM-001 的机器可读裁定能力）。
@@ -115,6 +117,7 @@
 - 禁止结果：不得用当前工作树重新推断旧 runtime、手工删除容器、purge volume，或在资源未收敛时伪造 `stopped` receipt。
 - 可观察结果：immutable teardown 在当前 workspace 前进后仍从 receipt candidate 自身恢复精确 Provider/observability/image composition，受控释放旧 Compose 容器与网络并保留 named volumes。
 - 可观察结果：本地 runtime teardown 与 receipt 残留修复只要求目标自有资源收敛，独立控制面保持在场不构成残留；所有权无法唯一裁定或目标自有资源仍有残留时返回 `GATE_BLOCK` 且不写成功终态。
+- 可观察结果：Alpha worktree 旧 receipt 的只读 reconciliation 生成含 exact source/destination/digest 的归档计划且原件不变；显式确认后仅移动已复验的三份原件，普通 guard 在计划阶段仍阻断。活跃/未知资源、未释放 lease、旧 fence、状态/绑定/字节变化、symlink 或未确认 apply 均在移动前拒绝，named volume 永不删除。
 - 可观察结果：GitHub webhook request/approved 事件经签名验证后进入独立 append-only approval authority，同一 delivery 幂等、不同 payload 冲突，workflow exact-byte 回读同一 candidate 且明确不冒充原生 protection。
 
 <a id="dom-002"></a>

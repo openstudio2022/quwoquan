@@ -13,6 +13,8 @@ fi
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
+# 独立于证据输出根与 hermetic 依赖 HOME 的宿主 runtime authority。
+export QWQ_LAUNCH_HOST_HOME="$(python3 -c 'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
 QWQ_OUTPUT_ROOT="$(python3 - "$QWQ_OUTPUT_ROOT" <<'PY'
 import pathlib
@@ -42,9 +44,7 @@ if [[ "$QWQ_DEV_LAUNCH_HERMETIC" == "0" \
   exec "$APP_DIR/scripts/device/dev_launch.sh" "${ORIGINAL_LAUNCH_ARGUMENTS[@]}"
 fi
 
-# Hermetic direct run.sh always re-execs from a frozen private source projection.
-# app-content-uat already supplies its own candidate projection and therefore
-# skips this workspace-only wrapper.
+# Hermetic 在冻结投影执行；app-content-uat 已携带 candidate projection，不再包装。
 enter_workspace_launch_projection() {
   if [[ -n "${QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST:-}" \
      || ( ! -e "$ROOT_DIR/.git" && ! -L "$ROOT_DIR/.git" ) ]]; then
@@ -114,106 +114,16 @@ PY
     fi
     WORKSPACE_DEPENDENCY_SYNC_PARSE_STATUS=0
     if WORKSPACE_DEPENDENCY_SYNC_ATTEMPT_ID="$(
-      python3 - "$WORKSPACE_DEPENDENCY_SYNC_REPORT" "$WORKSPACE_DEPENDENCY_SYNC_STATUS" <<'PY'
-import json
+      PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+        python3 - "$WORKSPACE_DEPENDENCY_SYNC_REPORT" "$WORKSPACE_DEPENDENCY_SYNC_STATUS" <<'PY'
 import pathlib
-import re
 import sys
 
-report = pathlib.Path(sys.argv[1])
-command_status = int(sys.argv[2])
-try:
-    encoded = report.read_text(encoding="utf-8")
-    if not encoded.strip():
-        raise ValueError("empty sync JSON")
-    payload = json.loads(encoded)
-except (OSError, UnicodeError, ValueError):
-    raise SystemExit(3)
-if not isinstance(payload, dict):
-    raise SystemExit(3)
-exit_code = payload.get("exitCode")
-summary = payload.get("summary")
-details = payload.get("details")
-
-def sanitized(value: str) -> str:
-    text = " ".join(value.splitlines()).strip()
-    lowered = text.casefold()
-    if any(
-        marker in lowered
-        for marker in (
-            "-----begin private key-----",
-            "privatekey",
-            "private_key",
-            "private-key",
-            "trustedpublickeys",
-            "trusted_public_keys",
-            "trusted-public-keys",
-            "runtime-config-trust.json",
-        )
-    ):
-        return "[REDACTED dependency diagnostic]"
-    text = re.sub(
-        r"(?i)\b(authorization|password|passwd|token|secret|api[_-]?key)\b"
-        r"\s*[:=]\s*(?:bearer\s+)?[^\s,;]+",
-        r"\1=[REDACTED]",
-        text,
-    )
-    return text or "[empty dependency diagnostic]"
-
-def emit_details() -> None:
-    values = (
-        details
-        if isinstance(details, list) and all(isinstance(item, str) for item in details)
-        else []
-    )
-    values = values or [
-        summary
-        if isinstance(summary, str) and summary
-        else "APP.DEPENDENCY.sync_blocked: no details reported"
-    ]
-    for item in values:
-        print("[run] dependency sync detail: " + sanitized(item), file=sys.stderr)
-
-if (
-    not isinstance(exit_code, int)
-    or isinstance(exit_code, bool)
-    or not isinstance(summary, str)
-    or not isinstance(details, list)
-    or not all(isinstance(item, str) for item in details)
-):
-    emit_details()
-    print(
-        "[run] APP.DEPENDENCY.sync_result_invalid: dependency sync JSON envelope is invalid.",
-        file=sys.stderr,
-    )
-    raise SystemExit(2)
-
-activation = payload.get("activation")
-committed = (
-    exit_code == 0
-    and isinstance(activation, dict)
-    and activation.get("status") == "committed"
-    and isinstance(activation.get("attemptId"), str)
-    and bool(activation["attemptId"])
+from quwoquan_app.scripts.device.prepare_workspace_launch_projection import (
+    read_committed_dependency_sync_attempt,
 )
-if command_status != 0 or exit_code != 0:
-    emit_details()
-    if command_status != exit_code:
-        print(
-            "[run] APP.DEPENDENCY.sync_result_exit_mismatch: "
-            f"process={command_status} result={exit_code}",
-            file=sys.stderr,
-        )
-    raise SystemExit(2)
-if not committed:
-    emit_details()
-    print(
-        "[run] APP.DEPENDENCY.sync_activation_uncommitted: "
-        "dependency sync did not report a committed activation.",
-        file=sys.stderr,
-    )
-    raise SystemExit(2)
-print(activation["attemptId"])
+
+print(read_committed_dependency_sync_attempt(pathlib.Path(sys.argv[1]), int(sys.argv[2])))
 PY
     )"; then
       :
@@ -759,132 +669,15 @@ if [[ "$EXIT_AFTER_LAUNCH" == "1" || -n "$TEST_LIVE_REPORT_OVERRIDE" ]]; then
   fi
   if ! CANONICAL_LAUNCH_EXPORTS="$(
     PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
-    python3 - \
+    python3 "$APP_DIR/scripts/device/build_launcher_handoff.py" \
+    --canonical-launch-control-exports \
     "$QWQ_OUTPUT_ROOT" \
     "$ROOT_DIR" \
     "$CANONICAL_LAUNCH_CONTROL" \
     "$CANONICAL_LAUNCH_CONTROL_DIGEST" \
     "$LAUNCH_RECEIPT" \
     "$TEST_LIVE_REPORT_OVERRIDE" \
-    "${QWQ_PACKAGE_SOURCE_CAPSULE_MANIFEST:-}" <<'PY'
-import hashlib
-import json
-import os
-import pathlib
-import re
-import shlex
-import stat
-import sys
-
-root = pathlib.Path(sys.argv[1]).expanduser().resolve()
-source_root = pathlib.Path(sys.argv[2]).expanduser().resolve()
-control_path = pathlib.Path(sys.argv[3]).expanduser()
-declared_control_digest = sys.argv[4]
-attempt_arg, report_arg, source_capsule_arg = sys.argv[5:]
-if (
-    not control_path.is_absolute()
-    or control_path.is_symlink()
-    or not control_path.is_file()
-    or stat.S_IMODE(control_path.stat().st_mode) & 0o077
-):
-    raise SystemExit("canonical launch control is missing or not private")
-try:
-    control_path.resolve().relative_to(root)
-except ValueError:
-    raise SystemExit("canonical launch control escapes QWQ_OUTPUT_ROOT") from None
-control = json.loads(control_path.read_text(encoding="utf-8"))
-fields = {
-    "schema", "actor", "environment", "target", "platform", "deviceId",
-    "candidateDigest", "packageDigest", "sourceRevision", "sourceCapsuleDigest",
-    "sourceCapsuleManifestDigest", "sourceCapsuleManifestRef",
-    "sourceProjectionRoot", "sourceProjectionEvidenceDigest",
-    "sourceProjectionEvidenceRef", "buildProjectionPolicyId",
-    "buildProjectionSealRef", "expectedBuildProjectionDigest",
-    "launchAttemptRef", "launchReportRef", "startupTerminalReceiptRef",
-}
-if not isinstance(control, dict) or set(control) != fields:
-    raise SystemExit("canonical launch control fields mismatch")
-encoded = json.dumps(
-    control, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-).encode("utf-8")
-actual_control_digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
-if actual_control_digest != declared_control_digest:
-    raise SystemExit("canonical launch control digest mismatch")
-if control.get("schema") != "quwoquan_ops.app_content_uat_launch_control.v1":
-    raise SystemExit("canonical launch control schema mismatch")
-if control.get("actor") != "app-content-uat":
-    raise SystemExit("canonical launch control actor mismatch")
-policy_by_platform = {
-    "android": "flutter-android-3.47-gradle-8.14-agp-8.11.1",
-    "android-physical": "flutter-android-3.47-gradle-8.14-agp-8.11.1",
-    "ios-simulator": "flutter-ios-3.47-cocoapods-1.16.2",
-    "ios-physical": "flutter-ios-3.47-cocoapods-1.16.2",
-}
-if policy_by_platform.get(control.get("platform")) != control.get(
-    "buildProjectionPolicyId"
-):
-    raise SystemExit("canonical launch build projection policy mismatch")
-expected_build_digest = control.get("expectedBuildProjectionDigest")
-if expected_build_digest is not None and re.fullmatch(
-    r"sha256:[0-9a-f]{64}", str(expected_build_digest)
-) is None:
-    raise SystemExit("canonical launch expected build projection digest is invalid")
-for field in (
-    "candidateDigest", "packageDigest", "sourceCapsuleDigest",
-    "sourceCapsuleManifestDigest", "sourceProjectionEvidenceDigest",
-):
-    if re.fullmatch(r"sha256:[0-9a-f]{64}", str(control.get(field) or "")) is None:
-        raise SystemExit(f"canonical launch control {field} is invalid")
-if pathlib.Path(str(control.get("sourceProjectionRoot") or "")).resolve() != source_root:
-    raise SystemExit("canonical launch source projection differs from run.sh root")
-source_capsule = pathlib.Path(str(control.get("sourceCapsuleManifestRef") or ""))
-if source_capsule_arg != str(source_capsule) or source_capsule.is_symlink() or not source_capsule.is_file():
-    raise SystemExit("canonical launch source capsule reference drifted")
-for label, raw, expected in (
-    ("attempt", attempt_arg, control.get("launchAttemptRef")),
-    ("report", report_arg, control.get("launchReportRef")),
-    ("safe-terminal", control.get("startupTerminalReceiptRef"), control.get("startupTerminalReceiptRef")),
-    ("build-projection-seal", control.get("buildProjectionSealRef"), control.get("buildProjectionSealRef")),
-):
-    candidate = pathlib.Path(raw).expanduser()
-    if not candidate.is_absolute() or str(candidate) != str(expected):
-        raise SystemExit(f"{label} path must be absolute")
-    absolute = pathlib.Path(candidate.absolute())
-    if absolute.exists() or absolute.is_symlink():
-        raise SystemExit(f"{label} path must be fresh")
-    try:
-        absolute.resolve(strict=False).relative_to(root)
-    except ValueError:
-        raise SystemExit(f"{label} path must stay inside QWQ_OUTPUT_ROOT") from None
-evidence_path = pathlib.Path(str(control.get("sourceProjectionEvidenceRef") or ""))
-if evidence_path.is_symlink() or not evidence_path.is_file():
-    raise SystemExit("canonical launch source projection evidence is missing")
-evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-evidence_digest = "sha256:" + hashlib.sha256(json.dumps(
-    evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-).encode("utf-8")).hexdigest()
-if evidence_digest != control.get("sourceProjectionEvidenceDigest"):
-    raise SystemExit("canonical launch source projection evidence drifted")
-for name, value in {
-    "QWQ_CANONICAL_CANDIDATE_DIGEST": control["candidateDigest"],
-    "QWQ_CANONICAL_CANDIDATE_PACKAGE_DIGEST": control["packageDigest"],
-    "QWQ_CANONICAL_SOURCE_PROJECTION_EVIDENCE_DIGEST": control["sourceProjectionEvidenceDigest"],
-    "QWQ_CANONICAL_SOURCE_PROJECTION_EVIDENCE_REF": control["sourceProjectionEvidenceRef"],
-    "QWQ_CANONICAL_SOURCE_CAPSULE_MANIFEST_DIGEST": control["sourceCapsuleManifestDigest"],
-    "QWQ_CANONICAL_SOURCE_CAPSULE_MANIFEST_REF": control["sourceCapsuleManifestRef"],
-    "QWQ_CANONICAL_BUILD_PROJECTION_POLICY_ID": control["buildProjectionPolicyId"],
-    "QWQ_CANONICAL_BUILD_PROJECTION_SEAL_REF": control["buildProjectionSealRef"],
-    "QWQ_CANONICAL_EXPECTED_BUILD_PROJECTION_DIGEST": expected_build_digest or "",
-    "QWQ_PACKAGE_SOURCE_REVISION": control["sourceRevision"],
-    "QWQ_PACKAGE_SOURCE_TREE_DIGEST": control["sourceCapsuleDigest"],
-    "QWQ_CANONICAL_CONTROL_ENVIRONMENT": control["environment"],
-    "QWQ_CANONICAL_CONTROL_TARGET": control["target"],
-    "QWQ_CANONICAL_CONTROL_PLATFORM": control["platform"],
-    "QWQ_CANONICAL_CONTROL_DEVICE_ID": control["deviceId"],
-    "QWQ_APP_STARTUP_TERMINAL_RECEIPT": control["startupTerminalReceiptRef"],
-}.items():
-    print(name + "=" + shlex.quote(str(value)))
-PY
+    "${QWQ_PACKAGE_SOURCE_CAPSULE_MANIFEST:-}"
   )"; then
     echo "[run] APP.LAUNCH.receipt_invalid: app-content-uat evidence paths are unsafe or stale." >&2
     exit 2
@@ -962,6 +755,9 @@ export QWQ_LAUNCH_TARGET="${REQUESTED_TARGET:-${QWQ_APP_RUNTIME_ENV}-local}"
 export QWQ_APP_RUN_MODE="$RUN_MODE"
 export QWQ_APP_BUILD_CONTEXT=runtime
 export QWQ_APP_LAUNCH_POLICY=test_live
+CONTENT_SOURCE="$(PYTHONDONTWRITEBYTECODE=1 python3 "$APP_DIR/scripts/device/build_launcher_handoff.py" \
+  --resolve-launch-content-source "$QWQ_APP_RUNTIME_ENV" \
+  "${QWQ_CANONICAL_CONTENT_SOURCE:-}" "$TEST_LIVE_REPORT_OVERRIDE" "${ORIGINAL_LAUNCH_ARGUMENTS[@]}")"
 if [[ -n "$TEST_LIVE_REPORT_OVERRIDE" \
    && ( "$QWQ_CANONICAL_CONTROL_ENVIRONMENT" != "$QWQ_APP_RUNTIME_ENV" \
      || "$QWQ_CANONICAL_CONTROL_TARGET" != "$QWQ_LAUNCH_TARGET" ) ]]; then
@@ -1075,6 +871,9 @@ QWQ_MANAGED_PREPARATION_ACTIVE=0
 QWQ_RUN_CONSUMER_ID="flutter-run-$$"
 QWQ_CONSUMER_LEASE_ACQUIRED=0
 QWQ_CONSUMER_LEASE_ID=""
+QWQ_RUNTIME_INSTANCE_GENERATION=""
+QWQ_MANAGED_RUNTIME_INSTANCE_GENERATION=""
+export QWQ_RUNTIME_INSTANCE_GENERATION QWQ_MANAGED_RUNTIME_INSTANCE_GENERATION
 QWQ_ANDROID_REVERSE_OWNED_PORTS=""
 QWQ_MANAGED_DEVICE_TRUST_PLATFORM=""
 QWQ_MANAGED_TRUST_CLEANUP_REQUIRED=0
@@ -1111,16 +910,23 @@ cleanup_managed_handoff_resources() {
   fi
   if [[ "${QWQ_MANAGED_LEASE_CLEANUP_REQUIRED:-0}" == "1" \
      || "${QWQ_CONSUMER_LEASE_ACQUIRED:-0}" == "1" ]]; then
+    if [[ -z "$QWQ_CONSUMER_LEASE_ID" || -z "$QWQ_RUNTIME_INSTANCE_GENERATION" ]]; then
+      record_teardown_warning "exact leaseId/generation unavailable; refusing consumer-only release; reconcile required."
+      return
+    fi
     if [[ "${QWQ_MANAGED_PREPARATION_ACTIVE:-0}" == "1" \
        && ( "$QWQ_CONSUMER_LEASE_ID" != "$QWQ_MANAGED_CONSUMER_LEASE_ID" \
-         || "$QWQ_RUN_CONSUMER_ID" != "$QWQ_MANAGED_CONSUMER_ID" ) ]]; then
+         || "$QWQ_RUN_CONSUMER_ID" != "$QWQ_MANAGED_CONSUMER_ID" \
+         || "$QWQ_RUNTIME_INSTANCE_GENERATION" != "$QWQ_MANAGED_RUNTIME_INSTANCE_GENERATION" ) ]]; then
       record_teardown_warning "managed lease cleanup identity drifted; refusing unrelated release."
       return
     fi
     if ! PYTHONDONTWRITEBYTECODE=1 \
       python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" consumer-lease release \
       --target "$QWQ_LAUNCH_TARGET" --device "$DEVICE_ID" \
-      --consumer "$QWQ_RUN_CONSUMER_ID" >/dev/null; then
+      --consumer "$QWQ_RUN_CONSUMER_ID" \
+      --lease-id "$QWQ_CONSUMER_LEASE_ID" \
+      --instance-generation "$QWQ_RUNTIME_INSTANCE_GENERATION" >/dev/null; then
       record_teardown_warning "failed to release runtime consumer lease."
     fi
     QWQ_MANAGED_LEASE_CLEANUP_REQUIRED=0
@@ -1128,8 +934,8 @@ cleanup_managed_handoff_resources() {
   fi
 }
 
-# preparation 在 run.sh 接管前即可创建 stable-consumer lease；trap 必须先于命令安装，
-# receipt command/readback 任一失败都至少按该 consumer 归还 lease。
+# preparation 失败由原 owner exact compensation；launcher 仅在已验证 receipt 后
+# 接管 leaseId + startupAttemptId。无 exact 身份时不得以 consumer-only 猜测释放。
 managed_prelaunch_cleanup() {
   local exit_code=$?
   trap - EXIT
@@ -1138,14 +944,12 @@ managed_prelaunch_cleanup() {
   exit "$exit_code"
 }
 
-if [[ "${QWQ_MANAGED_FLUTTER_ENTRY:-}" == "1" ]]; then
+if [[ "$CONTENT_SOURCE" == "remote" && "${QWQ_MANAGED_FLUTTER_ENTRY:-}" == "1" ]]; then
   if [[ -z "$DEVICE_ID" ]]; then
     echo "[run] APP.PREPARATION.receipt_invalid: managed flutter entry requires an explicit --device id." >&2
     exit 2
   fi
   echo "[run] managed preparation for $QWQ_LAUNCH_TARGET on $DEVICE_ID..."
-  QWQ_MANAGED_LEASE_CLEANUP_REQUIRED=1
-  export QWQ_MANAGED_LEASE_CLEANUP_REQUIRED
   trap managed_prelaunch_cleanup EXIT
   if ! MANAGED_PREPARE_JSON="$(
     PYTHONDONTWRITEBYTECODE=1 python3 \
@@ -1170,8 +974,6 @@ PY
     echo "[run] GATE_BLOCK: $MANAGED_PREPARE_BLOCKER: managed preparation did not reach prepared." >&2
     exit 2
   fi
-  QWQ_CONSUMER_LEASE_ACQUIRED=1
-  export QWQ_CONSUMER_LEASE_ACQUIRED
   if ! MANAGED_PREPARE_EXPORTS="$(
     PYTHONDONTWRITEBYTECODE=1 python3 - \
       "$MANAGED_PREPARE_JSON" "$QWQ_LAUNCH_TARGET" "$QWQ_APP_RUNTIME_ENV" \
@@ -1506,6 +1308,8 @@ print("export QWQ_MANAGED_PREPARATION_DIGEST=" + shlex.quote(declared_digest))
 print("export QWQ_APP_DEBUG_PREFLIGHT_RECEIPT=" + shlex.quote(str(strict_debug_ref)))
 print("export QWQ_MANAGED_CONSUMER_ID=" + shlex.quote(consumer_id))
 print("export QWQ_MANAGED_CONSUMER_LEASE_ID=" + shlex.quote(lease_id))
+print("export QWQ_RUNTIME_INSTANCE_GENERATION=" + shlex.quote(runtime["startupAttemptId"]))
+print("export QWQ_MANAGED_RUNTIME_INSTANCE_GENERATION=" + shlex.quote(runtime["startupAttemptId"]))
 print("export QWQ_MANAGED_ANDROID_REVERSE_PORTS=" + shlex.quote(reverse_ports))
 print("export QWQ_MANAGED_ANDROID_REVERSE_OWNED_PORTS=" + shlex.quote(owned_ports))
 print("export QWQ_MANAGED_DEVICE_TRUST_PLATFORM=" + shlex.quote(trust_platform))
@@ -1520,6 +1324,9 @@ PY
   fi
   eval "$MANAGED_PREPARE_EXPORTS"
   QWQ_CONSUMER_LEASE_ID="$QWQ_MANAGED_CONSUMER_LEASE_ID"
+  QWQ_CONSUMER_LEASE_ACQUIRED=1
+  QWQ_MANAGED_LEASE_CLEANUP_REQUIRED=1
+  export QWQ_CONSUMER_LEASE_ACQUIRED QWQ_MANAGED_LEASE_CLEANUP_REQUIRED
   QWQ_ANDROID_REVERSE_OWNED_PORTS="$QWQ_MANAGED_ANDROID_REVERSE_OWNED_PORTS"
   if [[ -n "$QWQ_MANAGED_DEVICE_TRUST_PLATFORM" ]]; then
     QWQ_MANAGED_TRUST_CLEANUP_REQUIRED=1
@@ -1532,12 +1339,12 @@ PY
       consumer-lease status --target "$QWQ_LAUNCH_TARGET"
   )" || ! python3 - "$MANAGED_LEASE_STATUS_JSON" \
       "$QWQ_LAUNCH_TARGET" "$DEVICE_ID" "$QWQ_RUN_CONSUMER_ID" \
-      "$QWQ_CONSUMER_LEASE_ID" <<'PY'
+      "$QWQ_CONSUMER_LEASE_ID" "$QWQ_RUNTIME_INSTANCE_GENERATION" <<'PY'
 import json
 import sys
 
 payload = json.loads(sys.argv[1])
-target, device, consumer, lease_id = sys.argv[2:6]
+target, device, consumer, lease_id, generation = sys.argv[2:7]
 if not isinstance(payload, dict) or payload.get("exitCode") != 0:
     raise SystemExit("consumer lease status readback failed")
 matching = [
@@ -1548,6 +1355,7 @@ matching = [
     and lease.get("device") == device
     and lease.get("consumer") == consumer
     and lease.get("leaseId") == lease_id
+    and lease.get("instanceGeneration") == generation
     and not lease.get("releasedAt")
 ]
 if len(matching) != 1:
@@ -1564,6 +1372,7 @@ fi
 
 # 整个 attempt 只允许一个 preflight owner。上游编排方（dev-session）已执行时会
 # 交出 exact receipt；launcher 只复用或显式阻断，绝不重复执行第二次 preflight。
+if [[ "$CONTENT_SOURCE" == "remote" ]]; then
 APP_CONTENT_PREFLIGHT_JSON=""
 if [[ -n "${QWQ_APP_DEBUG_PREFLIGHT_RECEIPT:-}" ]]; then
   if ! APP_CONTENT_PREFLIGHT_JSON="$(
@@ -1720,6 +1529,11 @@ PY
     record_prelaunch_warning \
       "content delivery verification skipped because release binding identity is incomplete."
   fi
+fi
+
+else
+  APP_CONTENT_PREFLIGHT_JSON='{}'
+  APP_CONTENT_DELIVERY_JSON='{}'
 fi
 
 if [[ -z "$DEVICE_ID" && -t 0 && -t 2 ]]; then
@@ -1918,7 +1732,6 @@ import sys
 
 from quwoquan_ops.cli.lib.dev_up import (
     detect_device_kind,
-    enable_android_adb_reverse,
     find_device,
     load_environment_topology,
     resolve_app_endpoint_overrides,
@@ -1935,7 +1748,8 @@ device_kind = detect_device_kind(
     emulator=bool(device.get("emulator", False)) if device else None,
 )
 print(f"export QWQ_RUN_DEVICE_KIND={shlex.quote(device_kind)}")
-if device_kind.startswith("android"):
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
+if device_kind.startswith("android") and load_launch_manifest_contract()["content_source_policy"][environment] == "remote":
     try:
         topology = load_environment_topology()
         overrides = resolve_app_endpoint_overrides(
@@ -1971,10 +1785,21 @@ if device_kind.startswith("android"):
                 "QWQ_MANAGED_ANDROID_REVERSE_OWNED_PORTS", ""
             )
         else:
-            ports = enable_android_adb_reverse(device_id, target, topology=topology)
-            owned_port_list = ",".join(
-                str(port) for port in ports if int(port) not in preexisting_ports
+            # 非 managed 只消费已经准备的 public transport，不创建第二网络。
+            from quwoquan_app.scripts.device.canonical_app_instance.runtime_lease import (
+                public_android_ports,
             )
+            ports = public_android_ports(target)
+            owned_port_list = ""
+        from quwoquan_app.scripts.device.canonical_app_instance.runtime_lease import (
+            public_android_ports,
+        )
+        public_ports = public_android_ports(target)
+        if managed_active and set(ports) != set(public_ports):
+            raise RuntimeError("managed reverse receipt must contain only topology public ports")
+        mappings = {(int(a), int(b)) for a, b in re.findall(r"tcp:(\d+)\s+tcp:(\d+)", before.stdout)}
+        if not ports or any((port, port) not in mappings for port in ports):
+            raise RuntimeError("selected device public reverse mappings must already be prepared")
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         if managed_active:
             print(
@@ -1982,13 +1807,8 @@ if device_kind.startswith("android"):
                 file=sys.stderr,
             )
             raise SystemExit(2)
-        warning = (
-            "Android transport preparation is unavailable; "
-            f"test_live continues with typed network recovery: {exc}"
-        )
-        print("export QWQ_ANDROID_TRANSPORT_WARNING=" + shlex.quote(warning))
-        print("export QWQ_ANDROID_TRANSPORT_READY=0")
-        raise SystemExit(0)
+        print(f"APP.LAUNCH.transport_unavailable: {exc}", file=sys.stderr)
+        raise SystemExit(2)
     port_list = ",".join(str(port) for port in ports)
     print("export QWQ_ANDROID_LOCAL_PORTS=" + shlex.quote(port_list))
     print("export QWQ_ANDROID_REVERSE_EXPECTED_PORTS=" + shlex.quote(port_list))
@@ -2180,9 +2000,9 @@ RUNTIME_STACKCTL_PYTHON="$(
 
 if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
   export ANDROID_SERIAL="$DEVICE_ID"
-  if [[ -z "$QWQ_ANDROID_LOCAL_PORTS" ]]; then
-    record_prelaunch_warning \
-      "Android reverse ports are unavailable; test_live continues to a typed runtime outcome."
+  if [[ "$CONTENT_SOURCE" == "remote" && -z "$QWQ_ANDROID_LOCAL_PORTS" ]]; then
+    echo "[run] GATE_BLOCK: APP.LAUNCH.transport_unavailable: Android public ports are unavailable." >&2
+    exit 2
   fi
 fi
 
@@ -2199,24 +2019,37 @@ QWQ_DEBUG_APP_ID="$(
   exit 2
 }
 
-if [[ "${QWQ_RUN_DEVICE_KIND:-}" == ios-* \
+if [[ "$CONTENT_SOURCE" == "remote" && ( "${QWQ_RUN_DEVICE_KIND:-}" == ios-* \
    || ("${QWQ_RUN_DEVICE_KIND:-}" == android* \
-      && -n "$QWQ_ANDROID_LOCAL_PORTS") ]]; then
+      && -n "$QWQ_ANDROID_LOCAL_PORTS") ) ]]; then
   if [[ "${QWQ_MANAGED_PREPARATION_ACTIVE:-0}" == "1" ]]; then
     if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" != "1" \
        || "$QWQ_CONSUMER_LEASE_ID" != "$QWQ_MANAGED_CONSUMER_LEASE_ID" \
-       || "$QWQ_RUN_CONSUMER_ID" != "$QWQ_MANAGED_CONSUMER_ID" ]]; then
+       || "$QWQ_RUN_CONSUMER_ID" != "$QWQ_MANAGED_CONSUMER_ID" \
+       || "$QWQ_RUNTIME_INSTANCE_GENERATION" != "$QWQ_MANAGED_RUNTIME_INSTANCE_GENERATION" ]]; then
       echo "[run] APP.PREPARATION.receipt_invalid: managed consumer lease handoff drifted." >&2
       exit 2
     fi
     echo "[run] reusing managed preparation consumer lease: $QWQ_CONSUMER_LEASE_ID"
   else
+    # 冷启动仅从同 target 唯一 running canonical receipt 读代际，不信任 ambient。
+    if ! QWQ_RUNTIME_INSTANCE_GENERATION="$(
+      HOME="$QWQ_LAUNCH_HOST_HOME" QWQ_OUTPUT_ROOT="$QWQ_LAUNCH_HOST_HOME/.cache/quwoquan/runtime-output" \
+      PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
+      "$RUNTIME_STACKCTL_PYTHON" -c 'import sys; from quwoquan_app.scripts.device.canonical_app_instance.runtime_lease import running_generation; print(running_generation(sys.argv[1]))' "$QWQ_LAUNCH_TARGET"
+    )"; then
+      echo "[run] GATE_BLOCK: OPS.LEASE.runtime_identity_unavailable: no exact running generation." >&2
+      exit 2
+    fi
+    export QWQ_RUNTIME_INSTANCE_GENERATION
     LEASE_COMMAND=(
+      env HOME="$QWQ_LAUNCH_HOST_HOME" QWQ_OUTPUT_ROOT="$QWQ_LAUNCH_HOST_HOME/.cache/quwoquan/runtime-output"
       "$RUNTIME_STACKCTL_PYTHON" "$ROOT_DIR/quwoquan_ops/cli/stackctl.py"
       --output-format json consumer-lease acquire
       --target "$QWQ_LAUNCH_TARGET"
       --device "$DEVICE_ID"
       --consumer "$QWQ_RUN_CONSUMER_ID"
+      --instance-generation "$QWQ_RUNTIME_INSTANCE_GENERATION"
     )
     case "${QWQ_RUN_DEVICE_KIND:-}" in
       ios-simulator)
@@ -2243,12 +2076,19 @@ if [[ "${QWQ_RUN_DEVICE_KIND:-}" == ios-* \
     esac
     if LEASE_JSON="$(PYTHONDONTWRITEBYTECODE=1 "${LEASE_COMMAND[@]}")"; then
       QWQ_CONSUMER_LEASE_ID="$(
-        python3 - "$LEASE_JSON" <<'PYLEASE'
+        python3 - "$LEASE_JSON" "$QWQ_LAUNCH_TARGET" "$DEVICE_ID" \
+          "$QWQ_RUN_CONSUMER_ID" "$QWQ_RUNTIME_INSTANCE_GENERATION" <<'PYLEASE'
 import json
 import re
 import sys
 
-lease_id = str((json.loads(sys.argv[1]).get("lease") or {}).get("leaseId") or "")
+payload = json.loads(sys.argv[1])
+lease = payload.get("lease") or {}
+if payload.get("exitCode") != 0 or any(lease.get(field) != expected for field, expected in zip(
+    ("target", "device", "consumer", "instanceGeneration"), sys.argv[2:6]
+)):
+    raise SystemExit("consumer lease response identity drifted; exact reconcile required")
+lease_id = str(lease.get("leaseId") or "")
 if re.fullmatch(r"sha256:[0-9a-f]{64}", lease_id) is None:
     raise SystemExit("consumer lease response is missing canonical leaseId")
 print(lease_id)
@@ -2258,8 +2098,9 @@ PYLEASE
       QWQ_CONSUMER_LEASE_ACQUIRED=1
       QWQ_MANAGED_LEASE_CLEANUP_REQUIRED=1
     else
-      record_prelaunch_warning \
-        "runtime consumer lease is unavailable; test_live remains nonPromotable."
+      printf '%s\n' "$LEASE_JSON" >&2
+      echo "[run] GATE_BLOCK: OPS.LEASE.acquire_blocked: exact runtime lease is required." >&2
+      exit 2
     fi
   fi
 fi
@@ -2267,7 +2108,9 @@ fi
 # device trust 回执必须绑定真实 consumer lease（漂移修正：不再使用
 # canonical-launcher 拼接出来的 fabricated lease 身份）。managed 入口的 trust
 # 已由 app-managed-prepare 以其准备期 lease 安装并验证，这里直接复用。
-if [[ "${QWQ_MANAGED_PREPARATION_ACTIVE:-0}" == "1" ]]; then
+if [[ "$CONTENT_SOURCE" == "bundled_snapshot" ]]; then
+  : # 离线包由制品 trust envelope 验签，不安装在线 transport trust。
+elif [[ "${QWQ_MANAGED_PREPARATION_ACTIVE:-0}" == "1" ]]; then
   echo "[run] reusing managed preparation device trust for $DEVICE_ID"
 elif [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
    || "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
@@ -2395,12 +2238,14 @@ export QWQ_RUNTIME_CONFIG_TRUST_ENVELOPE_DIGEST="$RUNTIME_CONFIG_TRUST_ENVELOPE_
 export QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST="$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
 if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" == "1" ]]; then
   LEASE_BIND_COMMAND=(
+    env HOME="$QWQ_LAUNCH_HOST_HOME" QWQ_OUTPUT_ROOT="$QWQ_LAUNCH_HOST_HOME/.cache/quwoquan/runtime-output"
     "$RUNTIME_STACKCTL_PYTHON" "$ROOT_DIR/quwoquan_ops/cli/stackctl.py"
     --output-format json consumer-lease bind
     --target "$QWQ_LAUNCH_TARGET"
     --device "$DEVICE_ID"
     --consumer "$QWQ_RUN_CONSUMER_ID"
     --lease-id "$QWQ_CONSUMER_LEASE_ID"
+    --instance-generation "$QWQ_RUNTIME_INSTANCE_GENERATION"
     --handoff-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
   )
   if [[ -n "${QWQ_CONTENT_RELEASE_ID:-}" ]]; then
@@ -2419,8 +2264,8 @@ if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" == "1" ]]; then
       echo "[run] APP.PREPARATION.receipt_invalid: managed consumer lease final bind failed." >&2
       exit 2
     fi
-    record_prelaunch_warning \
-      "failed to bind the runtime consumer lease to the final handoff digest."
+    echo "[run] GATE_BLOCK: OPS.LEASE.bind_blocked: final handoff binding failed." >&2
+    exit 2
   fi
 fi
 
@@ -2535,6 +2380,10 @@ RUN_INSTANCE_CMD=(
   --activation-timeout-seconds "$ACTIVATION_TIMEOUT_SECONDS"
   --attach-timeout-seconds "$LAUNCH_TIMEOUT_SECONDS"
 )
+if [[ "$CONTENT_SOURCE" == "bundled_snapshot" ]]; then
+  export PYTHONPATH="$APP_DIR/scripts/device:$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
+  RUN_INSTANCE_CMD=(python3 -c 'from canonical_app_instance.runtime_lease import run_canonical; raise SystemExit(run_canonical(acquire_runtime=False))' "${RUN_INSTANCE_CMD[@]:2}")
+fi
 if [[ -n "$IDE_VM_SERVICE_INFO_FILE" ]]; then
   RUN_INSTANCE_CMD+=(
     --vm-service-info-file "$IDE_VM_SERVICE_INFO_FILE"
@@ -2934,6 +2783,9 @@ report = {
     "dependencyProjectionPostbuildReadbackRef": dependency_projection_postbuild_readback_ref,
     "dependencyProjectionPostbuildReadbackDigest": dependency_projection_postbuild_readback_digest,
 }
+if handoff.get("contentSource") == "bundled_snapshot":
+    report.pop("candidatePackageDigest")
+    report["contentSource"] = "bundled_snapshot"
 written_report = write_app_content_launch_report(
     report=report,
     output_root=pathlib.Path(output_root),

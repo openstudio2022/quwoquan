@@ -74,7 +74,7 @@ class LocalRuntimeReservationContractTest(unittest.TestCase):
             {"workstation-commercial-runtime"},
         )
 
-    def test_beta_start_rejects_an_active_alpha_runtime(self) -> None:
+    def test_beta_start_allows_an_active_alpha_runtime(self) -> None:
         topology = load_environment_topology()
         alpha_port = urlparse(
             get_target(topology, "alpha-local")["origins"]["contentService"]
@@ -84,15 +84,7 @@ class LocalRuntimeReservationContractTest(unittest.TestCase):
             self.assertIn(host, {"127.0.0.1", "localhost"})
             return port == alpha_port
 
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "stackctl.py down --target alpha-local",
-        ):
-            assert_local_runtime_available(
-                topology,
-                "beta-local",
-                port_probe=probe,
-            )
+        assert_local_runtime_available(topology, "beta-local", port_probe=probe)
 
     def test_running_requested_target_does_not_conflict_with_itself(self) -> None:
         topology = load_environment_topology()

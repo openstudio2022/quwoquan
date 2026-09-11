@@ -21,7 +21,9 @@ void main() {
     );
     Hive.init(tempDirectory.path);
     HiveRuntime.debugEnsureInitializedHook = () async => true;
-    store = const HiveAppRemoteConfigStore();
+    store = const HiveAppRemoteConfigStore(
+      storageNamespace: 'alpha-local|alpha',
+    );
   });
 
   tearDown(() async {
@@ -61,7 +63,7 @@ void main() {
       await store.writeActiveSnapshot(first);
       await store.writeActiveSnapshot(second);
 
-      final box = Hive.box<String>(HiveAppRemoteConfigStore.boxName);
+      final box = Hive.box<String>(store.scopedBoxName);
       expect(box.keys.toSet(), <String>{
         HiveAppRemoteConfigStore.activeSnapshotKey,
         HiveAppRemoteConfigStore.previousSnapshotKey,
@@ -81,23 +83,53 @@ void main() {
     },
   );
 
-  test('expired active snapshot is classified as stale disk cache', () async {
+  // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-003
+  test('同 prod 不同 target 的 config LKG 不互读', () async {
+    const sim = HiveAppRemoteConfigStore(storageNamespace: 'prod-sim|prod');
+    const hosted = HiveAppRemoteConfigStore(
+      storageNamespace: 'prod-hosted|prod',
+    );
+    final snapshot = AppRemoteConfigSnapshot.fromRoot(
+      testSignedAppConfigRoot(fetchedAt: DateTime.now().toUtc()),
+    );
+    await sim.writeActiveSnapshot(snapshot);
+    expect((await sim.readActiveSnapshot())?.configHash, snapshot.configHash);
+    expect(await hosted.readActiveSnapshot(), isNull);
+  });
+
+  test('LKG 恰好过期或时钟回退都不放行', () async {
+    final fetchedAt = DateTime.utc(2026, 9, 9);
+    var now = fetchedAt;
+    final timed = HiveAppRemoteConfigStore(
+      storageNamespace: 'clock',
+      now: () => now,
+    );
+    await timed.writeActiveSnapshot(
+      AppRemoteConfigSnapshot.fromRoot(
+        testSignedAppConfigRoot(fetchedAt: fetchedAt, maxAgeSec: 60),
+      ),
+    );
+    expect(await timed.readActiveSnapshot(), isNotNull);
+    now = fetchedAt.add(const Duration(seconds: 60));
+    expect(await timed.readActiveSnapshot(), isNull);
+    now = fetchedAt.subtract(const Duration(seconds: 1));
+    expect(await timed.readActiveSnapshot(), isNull);
+  });
+
+  test('expired active snapshot cannot authorize LKG display', () async {
     final expired = AppRemoteConfigSnapshot.fromRoot(
       testSignedAppConfigRoot(fetchedAt: DateTime.utc(2020), maxAgeSec: 1),
     );
 
     await store.writeActiveSnapshot(expired);
 
-    expect(
-      (await store.readActiveSnapshot())?.source,
-      AppRemoteConfigSource.staleDiskCache,
-    );
+    expect(await store.readActiveSnapshot(), isNull);
   });
 
   test(
     'malformed active payload is ignored without a compatibility read',
     () async {
-      final box = await Hive.openBox<String>(HiveAppRemoteConfigStore.boxName);
+      final box = await Hive.openBox<String>(store.scopedBoxName);
       await box.put(HiveAppRemoteConfigStore.activeSnapshotKey, '{malformed');
 
       expect(await store.readActiveSnapshot(), isNull);

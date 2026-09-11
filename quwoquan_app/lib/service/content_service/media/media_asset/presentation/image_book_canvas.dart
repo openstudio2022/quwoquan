@@ -1,5 +1,9 @@
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+
 import 'dart:async';
+
 import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -332,11 +336,7 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
     final retained = <int>{_currentIndex - 1, _currentIndex, _currentIndex + 1}
       ..removeWhere((index) => index < 0 || index >= images.length);
     for (final index in retained) {
-      _ensurePageLoad(
-        index: index,
-        binding: images[index],
-        pageSize: pageSize,
-      );
+      _ensurePageLoad(index: index, binding: images[index], pageSize: pageSize);
     }
     for (final index in _resources.keys.toList(growable: false)) {
       if (!retained.contains(index)) {
@@ -534,7 +534,9 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
   }) {
     final identity = candidates.first;
     resource.loadIdentity = identity;
-    final cachedFailure = MediaLoadFailureCache.instance.activeFailure(identity);
+    final cachedFailure = MediaLoadFailureCache.instance.activeFailure(
+      identity,
+    );
     if (cachedFailure != null) {
       // 命中只呈现既有失败，不创建 provider，也不延长冷却窗口。
       resource
@@ -940,12 +942,14 @@ final class _DefaultImageBookImageLoadOperation
 
   Future<ui.Image> _resolveCandidate(String candidate) {
     final completer = Completer<ui.Image>();
-    final provider = CachedNetworkImageProvider(
-      candidate,
-      cacheManager: AppImageCacheController.cacheManagerForPreset(
-        CdnImagePreset.cover,
-      ),
-    );
+    final provider =
+        publicMediaDelivery.verifiedImageProvider(candidate) ??
+        CachedNetworkImageProvider(
+          candidate,
+          cacheManager: AppImageCacheController.cacheManagerForPreset(
+            CdnImagePreset.cover,
+          ),
+        );
     final stream = provider.resolve(
       createLocalImageConfiguration(context, size: pageSize),
     );

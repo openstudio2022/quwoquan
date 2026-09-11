@@ -154,6 +154,26 @@ def _command_app_content_uat(
             "reportDir": "",
         }
 
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline import (
+        content_source_for_target, run_offline_app_content_uat,
+    )
+    if any(content_source_for_target(target) == "bundled_snapshot" for target in targets):
+        offline = run_offline_app_content_uat(
+            args=args, report_dir=report_dir / "alpha-local", output_root=canonical_output_root,
+            issues=issues,
+        )
+        remote = [target for target in targets if content_source_for_target(target) == "remote"]
+        if not remote or offline["exitCode"]:
+            return offline
+        remote_args = argparse.Namespace(**vars(args))
+        remote_args.targets = ",".join(remote)
+        remote_args.report_dir = str(report_dir / "remote")
+        online = _command_app_content_uat(remote_args)
+        return {
+            **online, "targets": targets, "sourceRuns": [offline, online],
+            "rawResultRefs": {**offline["rawResultRefs"], **online.get("rawResultRefs", {})},
+        }
+
     preflights: list[dict[str, Any]] = []
     runtime_bindings: list[dict[str, Any]] = []
     if not issues:

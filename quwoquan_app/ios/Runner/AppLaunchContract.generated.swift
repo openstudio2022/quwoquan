@@ -2,7 +2,7 @@
 import Foundation
 
 enum AppLaunchContract {
-  static let sourceDigest = "sha256:2e996b2cfc7f4dac01831231fece51cb3f70cb57a881fa3771036e022e365938"
+  static let sourceDigest = "sha256:f301c900d3c4bdd8ceeb83e78e800d81974adb0d12f775b0f0e92d3f963b95ef"
   static let environments: [String] = [
     "alpha",
     "beta",
@@ -15,6 +15,19 @@ enum AppLaunchContract {
     "gamma-local": "gamma",
     "prod-hosted": "prod",
     "prod-sim": "prod",
+  ]
+  static let contentSourcePolicy: [String: String] = [
+    "alpha": "bundled_snapshot",
+    "beta": "remote",
+    "gamma": "remote",
+    "prod": "remote",
+  ]
+  static let runtimeDocumentContentSources: [String: String] = [
+    "app-offline-bootstrap-document": "bundled_snapshot",
+    "app-runtime-config-package": "remote",
+  ]
+  static let offlineBootstrapRuntimeRequiredFields: [String] = [
+    "appRuntimeEnv",
   ]
   static let localTransportTargets: [String] = [
     "alpha-local",
@@ -113,6 +126,7 @@ enum AppLaunchContract {
     "runtime_config_activation_rollback_failed": "失败回滚未完成或 CAS 后状态未知。",
     "runtime_config_activation_write_failed": "active package 原子写入失败。",
     "runtime_config_active_digest_conflict": "expectedActiveDigest 与当前 active digest CAS 冲突。",
+    "runtime_config_content_source_mismatch": "文档类型、环境和内容源策略不一致。",
     "runtime_config_digest_unavailable": "平台摘要原语不可用。",
     "runtime_config_effective_manifest_digest_mismatch": "effectiveLaunchManifest 摘要不一致。",
     "runtime_config_effective_manifest_malformed": "effectiveLaunchManifest 结构非法。",
@@ -121,6 +135,7 @@ enum AppLaunchContract {
     "runtime_config_internal_failure": "原生实现未预期异常的 fail-closed 包装码。",
     "runtime_config_keyring_mismatch": "package 自带公钥与 trust envelope 不一致。",
     "runtime_config_launch_policy_mismatch": "package launchPolicy 与 manifest 不符。",
+    "runtime_config_network_forbidden": "离线 source 不授予任何 endpoint 或网络操作能力。",
     "runtime_config_package_digest_mismatch": "packageDigest 与 canonical JSON 摘要不符。",
     "runtime_config_package_empty": "runtime package 内容为空。",
     "runtime_config_package_malformed": "runtime package 解码或结构非法。",
@@ -130,7 +145,7 @@ enum AppLaunchContract {
     "runtime_config_package_too_large": "runtime package 超出尺寸上限。",
     "runtime_config_payload_digest_mismatch": "payloadDigest 与签名载荷不符。",
     "runtime_config_profile_mismatch": "package buildProfile 与消费方 profile 不符。",
-    "runtime_config_runtime_values_invalid": "runtime 字段集合或值类型违反 runtime_value_keys。",
+    "runtime_config_runtime_values_invalid": "runtime 字段集合或值类型违反当前签名文档的字段契约。",
     "runtime_config_schema_mismatch": "package schema 与契约不符。",
     "runtime_config_signature_algorithm_mismatch": "签名算法不是 ed25519。",
     "runtime_config_signature_invalid": "Ed25519 验签失败。",
@@ -151,6 +166,7 @@ enum AppLaunchContract {
     "app_launch_attempt": "app-launch-attempt",
     "app_launcher_handoff": "app-launcher-handoff",
     "app_managed_preparation": "quwoquan_ops.app_managed_preparation.v1",
+    "offline_bootstrap_document": "app-offline-bootstrap-document",
     "runtime_config_activation_receipt": "app-runtime-config-activation-receipt",
     "runtime_config_activation_request": "app-runtime-config-activation-request",
     "runtime_config_package": "app-runtime-config-package",
@@ -167,6 +183,7 @@ enum AppLaunchContract {
     "launchPolicy",
     "runtimeConfigPackageDigest",
     "runtimeConfigTrustEnvelopeDigest",
+    "contentSource",
     "requiresLocalTransport",
     "transport",
   ]
@@ -220,6 +237,7 @@ enum AppLaunchContract {
     "launchPolicy",
     "runtimeConfigPackageDigest",
     "runtimeConfigTrustEnvelopeDigest",
+    "contentSource",
     "requiresLocalTransport",
     "transport",
     "compileDiagnostics",
@@ -248,6 +266,23 @@ enum AppLaunchContract {
     "createdAt",
     "status",
     "firstBlocker",
+  ]
+  static let offlineBootstrapDocumentRequiredFields: [String] = [
+    "schema",
+    "environment",
+    "buildProfile",
+    "target",
+    "launchPolicy",
+    "contentSource",
+    "sourceGitSha",
+    "sourceTreeDigest",
+    "trustEnvelopeDigest",
+    "runtime",
+    "payloadDigest",
+    "signatureAlgorithm",
+    "signatureKeyId",
+    "trustedPublicKeys",
+    "signature",
   ]
   static let runtimeConfigActivationReceiptRequiredFields: [String] = [
     "schema",

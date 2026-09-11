@@ -22,7 +22,9 @@ class _ActionRow extends StatelessWidget {
   });
 
   /// 首页卡想去动作 key（意图环 L0 氛围层：纯动作入口，无红点无动效）。
-  static const wishlistActionKey = ValueKey<String>('home-card-wishlist-action');
+  static const wishlistActionKey = ValueKey<String>(
+    'home-card-wishlist-action',
+  );
 
   final Key moreButtonKey;
   final ContentPostViewData item;
@@ -70,6 +72,8 @@ class _ActionRow extends StatelessWidget {
           context: context,
           selected: isLiked,
           semanticsLabel: FoundationText.like,
+          semanticsIdentifier: 'post-like:${item.id}',
+          semanticsValue: '$likeCount',
           alignment: Alignment.centerLeft,
           child: ScaleTransition(
             scale: likeScale,
@@ -144,6 +148,8 @@ class _ActionRow extends StatelessWidget {
     required VoidCallback onTap,
     Key? buttonKey,
     String? semanticsLabel,
+    String? semanticsIdentifier,
+    String? semanticsValue,
     String? label,
     bool iconOnly = false,
     bool selected = false,
@@ -158,6 +164,10 @@ class _ActionRow extends StatelessWidget {
       onPressed: onTap,
       child: Semantics(
         button: true,
+        identifier: semanticsIdentifier,
+        onTap: semanticsIdentifier == null ? null : onTap,
+        value: semanticsValue,
+        toggled: semanticsIdentifier == null ? null : selected,
         label: semanticsLabel,
         child: Container(
           height: AppSpacing.buttonHeightMdCompact,

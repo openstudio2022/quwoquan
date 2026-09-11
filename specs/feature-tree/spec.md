@@ -119,14 +119,14 @@
 ### REQ-009 当前全部跨对象 Journey 商用准出
 
 - 当前全部 Journey 的 page/surface/operation/object/store/event/behavior/metric 节点可正向追踪，且无反向孤儿。
-- command 经过该事实唯一 write owner，query 读取 named Slice；App 只访问 generated Gateway operation。
+- command 经过该事实唯一 write owner，query 读取 named Slice；App 在线访问只经 generated Gateway operation，Alpha 离线读取由同一 typed ports 消费 canonical 快照，不拥有业务写入或第二套模型。
 - 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
-- alpha/beta/gamma/prod 均使用同一个 production Remote composition。Alpha/Beta/Gamma test-live 允许在无 active content release 时编译启动并只呈现 canonical `no_active_release`/typed unavailable，不注入 Mock、fixture 或 seed。凡宣称内容、Creator、实体或发布媒体可用的验收仍必须来自 canonical immutable release。Prod 只接受 immutable release、真实用户或正式运营行为。
+- Alpha 默认使用 canonical immutable release 派生、公开离线许可与完整媒体的制品快照；Beta/Gamma/Prod 使用 Remote。四环境复用同一页面与 typed ports，只在组合根选择 source，具体边界与验收由 [`environment-topology-and-packaging` REQ-008/GWT-007](./runtime/runtime-config/environment-topology-and-packaging/spec.md#req-008) 拥有。离线不伪造服务端 active identity、不补服务 gate 或晋级资格；线上无 active release 仍只呈现 canonical 空态/typed unavailable。任何入口均不注入 Mock、fixture 或 seed，Prod 仍只接受 immutable release、真实用户或正式运营行为。
 - 内容分发不再区分 `research` 与 `commercial` 两类 release：四环境统一消费同一类 canonical immutable release，环境名不隐含任何内容成熟度，acquisition、semantic、review 与 canonical pool 不读取任何全局 lifecycle/class 字段。
-- 内容访问控制只由白名单灰度 cohort 表达：release 只对当前 cohort 开放，首批 cohort 是内部白名单账号，cohort 由 User 领域的白名单身份拥有并可逐批扩大直至公开；未进入 cohort 的账号与匿名访问只得到 canonical `no_active_release`/typed unavailable。cohort 未全量公开前，匿名媒体关闭、私有短签媒体、禁止分享/导出/索引与访问审计保持有效；资产的商业分发授权仍按逐资产 `rightsStatus/distributionDecision` 在 release 构建期裁决，不再以 release 分类表达。
-- release header、activation receipt 与 App readback 同源声明同一 release 的 `releaseId/manifestDigest` 与当前 cohort 策略；历史 `releaseClass/productLifecycleState` 字段、环境级 `researchContentIsolation` 声明与按环境名读取 lifecycle 的消费者全部退役，退役进度由 `OPEN-015` 跟踪。
-- Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
+- 在线内容访问控制只由白名单灰度 cohort 表达：release 只对当前 cohort 开放，首批 cohort 是内部白名单账号，cohort 由 User 领域的白名单身份拥有并可逐批扩大直至公开；未进入 cohort 的账号与匿名访问只得到 canonical `no_active_release`/typed unavailable。cohort 未全量公开前，匿名媒体关闭、私有短签媒体、禁止分享/导出/索引与访问审计保持有效；资产的商业分发授权仍按逐资产 `rightsStatus/distributionDecision` 在 release 构建期裁决，不再以 release 分类表达。
+- 在线 release header、服务端 activation receipt 与 Remote App readback 同源声明同一 release 的 `releaseId/manifestDigest` 与当前 cohort 策略；历史 `releaseClass/productLifecycleState` 字段、环境级 `researchContentIsolation` 声明与按环境名读取 lifecycle 的消费者全部退役，退役进度由 `OPEN-015` 跟踪。
+- Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或故障数据源切换；Alpha 离线的公开许可内容不模拟这些 Provider，未支持在线能力不生成成功事实。
 - local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
 
 <a id="req-010"></a>
@@ -152,10 +152,10 @@
 - `runtime_session` 不是持久化业务聚合，只在会话生命周期内存在；会话结束即失效，不得承载需要跨会话保留的业务事实。
 - `process_manager` 承载长流程编排，拥有自身状态、进度、取消与恢复语义；它不复制被编排对象的事实，只按公开 command 推进并记录编排进度。
 - query 直接读取强类型 Slice，不为形式统一加载聚合。
-- App 只访问统一 Gateway base URL 和 generated operation，不感知服务进程、存储或内部 URL。
+- App 在线访问只经统一 Gateway base URL 和 generated operation，不感知服务进程、存储或内部 URL；Alpha 离线 typed adapter 只读制品快照，不假设 HTTPS endpoint 或伪造远端响应。
 - 统一存储是对象专属 AggregateStore/Reader 的生成模式，不是万能 CRUD Repository。
 - 页面必须满足主题、语义 token、多屏、多端、状态恢复、无障碍、性能和观测合同。
-- Alpha/Beta/Gamma test-live 的编译与启动不要求内容 release/import receipt；一旦验证内容对象或形成环境 Green 结论，仍必须绑定 release/import receipt。非生产交易对象绑定真实主体、公开 command receipt 与清理回执，Prod 交易对象只来自真实行为。
+- Alpha 离线内容验收绑定已验证 canonical 快照与完整媒体，不要求在线 import/activation receipt，也不产生环境 Green。Beta/Gamma test-live 编译启动不要求内容 release/import receipt；在线内容与环境资格仍须 exact release/import/readback 闭包。独立 Alpha API gate 的真实依赖与发布资格不被离线结果替代；非生产交易对象绑定真实主体、公开 command receipt 与清理回执，Prod 交易对象只来自真实行为。
 - 测试 double 只存在于 local_contract 测试树，四环境 artifact 均禁止 fixture/Mock/Memory/Noop。
 
 <a id="req-011"></a>
@@ -741,13 +741,13 @@
 - GIVEN 执行“当前全部跨对象 Journey 商用准出”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“当前全部跨对象 Journey 商用准出”对应动作。
 - THEN 当前全部 Journey 的 page/surface/operation/object/store/event/behavior/metric 节点可正向追踪，且无反向孤儿。
-- THEN command 经过 aggregate owner，query 读取 named Slice；App 只访问 generated Gateway operation。
+- THEN command 经过 aggregate owner，query 读取 named Slice；App 在线只访问 generated Gateway operation，Alpha 离线只经相同 typed ports 读取 canonical 快照，不产生伪写入。
 - THEN 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - THEN 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
-- THEN alpha/beta/gamma/prod 均使用同一个 production Remote composition，内容、Creator、实体与发布媒体只来自对应环境已激活的 canonical immutable release。
-- AND 环境名不隐含内容成熟度；release 只对白名单灰度 cohort 开放，未入 cohort 的账号与匿名访问只得到 canonical `no_active_release`/typed unavailable，App readback 必须回传同一 release 的 `releaseId/manifestDigest` 与当前 cohort 策略。
+- THEN Alpha 离线与 Beta/Gamma/Prod Remote 通过同一页面及 typed ports 返回 canonical 内容、Creator、实体和媒体；source 仅在组合根选择，离线 source 身份不冒充服务端 active release，具体等价与能力差异按 environment-topology-and-packaging GWT-007 验证。
+- AND 环境名不隐含内容成熟度；在线 release 只对白名单灰度 cohort 开放，未入 cohort 的账号与匿名访问只得到 canonical `no_active_release`/typed unavailable，App readback 必须回传同一 release 的 `releaseId/manifestDigest` 与当前 cohort 策略。
 - AND 用户、评论、圈子、会话与消息只经所属领域公开 command/event 生效，Alpha/Beta/Gamma 验收数据绑定候选并可受控清理，Prod 不创建测试业务对象。
-- AND Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
+- AND Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或故障数据源切换；Alpha 离线的公开许可内容不模拟这些 Provider，未支持在线能力不生成成功事实。
 - THEN local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
 - AND 本次商用准出只接受一个 create-once `ResultBundle`：[`UAT-001`](#uat-001)、[`UAT-003`](#uat-003)、[`UAT-007`](#uat-007)、[`UAT-010`](#uat-010) 与 [`UAT-014`](#uat-014) 的子结果必须绑定同一 `sourceRevision + sourceTreeDigest + releaseTrainId`、同一 Android/iOS `packageDigests` 集合和同一 release identity。Alpha/Beta/Gamma 各自持有独立 target package，不要求跨 target 的 `candidateDigest`、`candidatePackageDigest` 或 `runtimeConfigPackageDigest` 相等；同一 target 内的全部子结果必须逐字段等于 `runtimeBindings[target].candidateDigest` 以及 `launchBindings[target].candidatePackageDigest/runtimeConfigPackageDigest`。任一子结果来自另一轮、另一 candidate、另一 package 或旧 receipt 时，整个聚合 fail closed，不得跨轮拼接补绿。
 - AND Simulator/Emulator 只可形成标记 `nonPromotable=true` 的启动、内容与受管替代 Provider 功能子集。最终准出必须由同一 ResultBundle 内的 Android 物理设备与 iPhone、双真实账号、真实飞行模式/杀进程以及目标环境真实 Provider 回执完成；simulator、protected harness、package-only 或单设备结果均不能关闭物理设备单元。

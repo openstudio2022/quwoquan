@@ -145,6 +145,44 @@ class PublicFixtureSliceIdentityTest(unittest.TestCase):
             )
         )
 
+    # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+    def test_offline_runtime_rejects_media_endpoint_fields(self) -> None:
+        public_bases = gate.load_environment_topology()["environments"]["alpha"]["publicBases"]
+        for field, (topology_field, _) in gate.APP_RUNTIME_CONFIG_MEDIA_FIELDS.items():
+            for value in (public_bases[topology_field], "", None):
+                with self.subTest(field=field, value=value):
+                    issues = self.runtime_parity_issues("alpha", {field: value})
+                    self.assertTrue(any(field in issue and "bundled_snapshot" in issue for issue in issues))
+
+    # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+    def test_remote_runtime_requires_every_media_endpoint_to_match_topology(self) -> None:
+        topology = gate.load_environment_topology()
+        for environment in ("beta", "gamma", "prod"):
+            public_bases = topology["environments"][environment]["publicBases"]
+            runtime = {
+                field: public_bases[topology_field]
+                for field, (topology_field, _) in gate.APP_RUNTIME_CONFIG_MEDIA_FIELDS.items()
+            }
+            self.assertEqual(self.runtime_parity_issues(environment, runtime), [])
+            for field in runtime:
+                for value in ("", runtime[field].rstrip("/") + "/wrong-authority-path"):
+                    with self.subTest(environment=environment, field=field, value=value):
+                        issues = self.runtime_parity_issues(environment, {**runtime, field: value})
+                        self.assertTrue(any(field in issue and "topology" in issue for issue in issues))
+                missing = {key: value for key, value in runtime.items() if key != field}
+                self.assertTrue(any(field in issue for issue in self.runtime_parity_issues(environment, missing)))
+
+    def runtime_parity_issues(self, environment: str, runtime: dict[str, object]) -> list[str]:
+        issues: list[str] = []
+        result = subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps({"contentSource": "bundled_snapshot", "runtime": runtime}), stderr=""
+        )
+        # 即使包自称离线，Remote 也不能跳过 canonical 环境策略。
+        with mock.patch.object(gate.subprocess, "run", return_value=result):
+            gate._validate_runtime_config_authority_parity(issues, (environment,))
+        return issues
+
+    # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
     def test_runtime_config_parity_uses_each_environment_target(self) -> None:
         topology = gate.load_environment_topology()
 
@@ -168,6 +206,8 @@ class PublicFixtureSliceIdentityTest(unittest.TestCase):
                     _,
                 ) in gate.APP_RUNTIME_CONFIG_MEDIA_FIELDS.items()
             }
+            if env_name == "alpha":
+                runtime = {"appRuntimeEnv": env_name}
             return subprocess.CompletedProcess(
                 command,
                 0,

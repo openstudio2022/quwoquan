@@ -93,6 +93,25 @@ def _safe_segment(value: str, *, name: str) -> str:
     return normalized
 
 
+def require_canonical_runtime_authority() -> None:
+    """真实 CLI 不接受用输出/锁根或远端 daemon 创建第二运行权威。"""
+    from quwoquan_ops.cli.lib.output_paths import (
+        DEFAULT_DEPLOY_WORK_ROOT, DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT,
+    )
+    expected = {
+        HOST_LOCK_ROOT_ENV: DEFAULT_HOST_LOCK_ROOT.expanduser().resolve(),
+        "QWQ_DEPLOY_WORK_ROOT": DEFAULT_DEPLOY_WORK_ROOT.resolve(),
+        "QWQ_OUTPUT_ROOT": DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT.resolve(),
+    }
+    for name, canonical in expected.items():
+        configured = os.environ.get(name, "").strip()
+        if configured and Path(configured).expanduser().resolve() != canonical:
+            raise ValueError(f"OPS.RUNTIME.authority_override: {name} cannot select a second live host authority")
+    # 不把可变 context/env 当作 hostIdentity；远端 daemon 需要独立受管 authority。
+    if os.environ.get("DOCKER_HOST") or os.environ.get("CONTAINER_HOST"):
+        raise ValueError("OPS.RUNTIME.daemon_authority_mismatch: explicit daemon endpoint is not admitted")
+
+
 def host_lock_root() -> Path:
     override = str(os.environ.get(HOST_LOCK_ROOT_ENV) or "").strip()
     return Path(override or DEFAULT_HOST_LOCK_ROOT).expanduser().resolve()

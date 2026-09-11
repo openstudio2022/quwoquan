@@ -219,7 +219,7 @@ def test_matrix_freezes_all_package_identities_before_any_patrol(
     assert receipt["failureCategory"] == failure_category
     assert package_targets == ["alpha-local", "beta-local"]
     runtime_runner.assert_not_called()
-    assert down_runner.call_count == 6
+    down_runner.assert_not_called()
     patrol_runner.assert_not_called()
 
 

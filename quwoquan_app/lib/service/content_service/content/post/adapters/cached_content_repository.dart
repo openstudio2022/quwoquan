@@ -42,7 +42,6 @@ class CachedContentRepository
        _currentCacheIdentity = currentCacheIdentity,
        _cacheIsolationIdentityResolver = cacheIsolationIdentityResolver,
        _userProfileCache = userProfileCache,
-       _blockedKeywordsLoader = blockedKeywordsLoader ?? _emptyBlockedKeywords,
        _telemetrySink = telemetrySink,
        _avatarPreloader =
            avatarPreloader ?? AppImageCacheController.warmAvatarCache;
@@ -57,11 +56,8 @@ class CachedContentRepository
   )
   _cacheIsolationIdentityResolver;
   final UserProfileAuthorSnapshotCache? _userProfileCache;
-  final Future<List<String>> Function() _blockedKeywordsLoader;
   final CacheTelemetrySink _telemetrySink;
   final Future<void> Function(String avatarUrl) _avatarPreloader;
-  static Future<List<String>> _emptyBlockedKeywords() async => const <String>[];
-
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
@@ -77,6 +73,7 @@ class CachedContentRepository
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
+    final requestEpoch = _querySnapshotStore.requestEpoch;
     final baseKey = contentFeedQueryKey(
       category: category,
       channelId: channelId,
@@ -96,7 +93,12 @@ class CachedContentRepository
       cancellation: cancellation,
       deadlineAt: deadlineAt,
     );
-    final cached = key == null ? null : _querySnapshotStore.get(key);
+    _querySnapshotStore.requireCurrentRequest(requestEpoch);
+    final candidate = key == null ? null : _querySnapshotStore.get(key);
+    final cached =
+        candidate != null && _querySnapshotStore.canReplay(candidate.value)
+        ? candidate
+        : null;
     final isInitialPage = cursor == null || cursor.trim().isEmpty;
     if (key != null && cached != null && isInitialPage) {
       final cachedPage = await _visibleCachedFeedPage(
@@ -106,6 +108,8 @@ class CachedContentRepository
         cancellation: cancellation,
         deadlineAt: deadlineAt,
       );
+      _querySnapshotStore.requireCurrentRequest(requestEpoch);
+      if (cached.freshness == CacheFreshness.fresh) return cachedPage;
       final revalidation = _revalidateFeedPage(
         cachedPage: cachedPage,
         key: key,
@@ -122,6 +126,10 @@ class CachedContentRepository
         feedRequestId: feedRequestId,
         cancellation: cancellation,
         deadlineAt: deadlineAt,
+      );
+      // 即使调用方的 request 已被取代，后台失败也有接收者；原 future 仍向当前调用方传播。
+      unawaited(
+        revalidation.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
       );
       return _copyFeedPage(cachedPage, revalidation: revalidation);
     }
@@ -143,7 +151,16 @@ class CachedContentRepository
         deadlineAt: deadlineAt,
       );
     } catch (error) {
-      if (key != null && cached != null) {
+      _querySnapshotStore.requireCurrentRequest(requestEpoch);
+      if (!isContentCacheTransportFallback(error, deadlineAt: deadlineAt)) {
+        _postCache.clearNamespace();
+        _querySnapshotStore.clearAll();
+        rethrow;
+      }
+      if (isContentCacheTransportFallback(error, deadlineAt: deadlineAt) &&
+          key != null &&
+          cached != null &&
+          _querySnapshotStore.canReplay(cached.value)) {
         final cachedPage = await _visibleCachedFeedPage(
           key: key,
           cached: cached,
@@ -151,6 +168,7 @@ class CachedContentRepository
           cancellation: cancellation,
           deadlineAt: deadlineAt,
         );
+        _querySnapshotStore.requireCurrentRequest(requestEpoch);
         return _copyFeedPage(cachedPage, cacheFallbackError: error);
       }
       rethrow;
@@ -173,6 +191,7 @@ class CachedContentRepository
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
+    final requestEpoch = _querySnapshotStore.requestEpoch;
     final page = await _feedDelegate.listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
@@ -191,6 +210,7 @@ class CachedContentRepository
       cancellation: cancellation,
       deadlineAt: deadlineAt,
     );
+    _querySnapshotStore.requireCurrentRequest(requestEpoch);
     _storeFeedPage(
       key,
       baseKey,
@@ -208,30 +228,20 @@ class CachedContentRepository
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
-    final blockedKeywords =
-        (await runCloudOperationPrerequisite(
-              _blockedKeywordsLoader,
-              cancellation: cancellation,
-              deadlineAt: deadlineAt,
-            ))
-            .map((keyword) => keyword.trim().toLowerCase())
-            .where((keyword) => keyword.isNotEmpty)
-            .toSet();
+    throwIfCloudOperationInterrupted(
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
+    // replayPolicy 已同步确认同 scope 本地策略及 items 可见性；这里不触发远端隐私读取。
+    if (!_querySnapshotStore.canReplay(cached.value)) {
+      throw const CloudOperationCancelledException();
+    }
     _recordCacheHit(key: key, result: cached);
     final cachedPage = cached.value.toDiscoveryFeedPage(
       currentSessionId: sessionId,
     );
-    final visibleItems = blockedKeywords.isEmpty
-        ? cachedPage.items
-        : cachedPage.items
-              .where((item) {
-                final searchable = '${item.title} ${item.normalizedBody}'
-                    .toLowerCase();
-                return !blockedKeywords.any(searchable.contains);
-              })
-              .toList(growable: false);
     return DiscoveryFeedPage(
-      items: visibleItems,
+      items: cachedPage.items,
       outcome: cachedPage.outcome,
       emptyReason: cachedPage.emptyReason,
       objectCards: cachedPage.objectCards,
@@ -262,6 +272,7 @@ class CachedContentRepository
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
+    final requestEpoch = _querySnapshotStore.requestEpoch;
     try {
       return await _fetchAndStoreFeedPage(
         key: key,
@@ -280,6 +291,18 @@ class CachedContentRepository
         deadlineAt: deadlineAt,
       );
     } catch (error) {
+      _querySnapshotStore.requireCurrentRequest(requestEpoch);
+      if (!isContentCacheTransportFallback(error, deadlineAt: deadlineAt)) {
+        _postCache.clearNamespace();
+        _querySnapshotStore.clearAll();
+        rethrow;
+      }
+      final current = _querySnapshotStore.get(key);
+      if (!isContentCacheTransportFallback(error, deadlineAt: deadlineAt) ||
+          current == null ||
+          !_querySnapshotStore.canReplay(current.value)) {
+        rethrow;
+      }
       return _copyFeedPage(cachedPage, cacheFallbackError: error);
     }
   }
@@ -311,10 +334,12 @@ class CachedContentRepository
     required String postId,
     required String idempotencyKey,
   }) async {
+    final requestEpoch = _querySnapshotStore.requestEpoch;
     final receipt = await _deleteDelegate.deletePost(
       postId: postId,
       idempotencyKey: idempotencyKey,
     );
+    _querySnapshotStore.requireCurrentRequest(requestEpoch);
     _postCache.removePost(postId);
     _querySnapshotStore.invalidatePost(postId);
     await _querySnapshotStore.flushPersistence();
@@ -356,6 +381,7 @@ class CachedContentRepository
     _querySnapshotStore.put(
       key: key,
       items: page.items,
+      objectCards: page.objectCards,
       nextCursor: page.nextCursor,
       previousCursor: page.previousCursor,
       paginationExpiresAt: page.paginationExpiresAt,

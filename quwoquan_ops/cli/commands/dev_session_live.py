@@ -633,10 +633,10 @@ def _dev_session_resume_running_mutable_runtime(
 
     current_digest = str(workspace_snapshot.get("mutableStateDigest") or "")
     resume_warnings: list[str] = []
-    if receipt.get("mutableStateDigest") != current_digest:
-        resume_warnings.append(
-            "running mutable workspace digest changed; reusing the exact "
-            "verified deployed runtime for the run-bound operation"
+    if not current_digest or receipt.get("mutableStateDigest") != current_digest:
+        raise ValueError(
+            "OPS.RUNTIME.identity_conflict: requested source/config identity differs "
+            "from the running generation; explicit maintenance is required"
         )
 
     run_root = Path(str(receipt.get("runRoot") or ""))

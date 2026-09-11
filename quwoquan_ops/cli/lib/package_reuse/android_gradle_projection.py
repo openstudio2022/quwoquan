@@ -21,6 +21,7 @@ from .android_gradle_capsule import (
     wrapper_identity,
 )
 from .android_gradle_store import _copy_regular, copy_android_gradle_snapshot
+from .native_dependency_inputs import ANDROID_GRADLE_REPOSITORY_INIT
 
 
 def _materialize_embedded_wrappers(
@@ -159,6 +160,12 @@ def private_gradle_environment(
     properties = home / "gradle.properties"
     if not control.is_file() or control.is_symlink() or not properties.is_file():
         raise ValueError("Android Gradle offline projection control is missing")
+    policy, _mode = _read_regular_nofollow(
+        home / "init.d/qwq-plugin-repositories.gradle",
+        label="plugin repository policy",
+    )
+    if policy != ANDROID_GRADLE_REPOSITORY_INIT:
+        raise ValueError("Android Gradle plugin repository policy drifted")
     environment = dict(base)
     environment["GRADLE_USER_HOME"] = str(home)
     environment.pop("GRADLE_HOME", None)

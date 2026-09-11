@@ -18,6 +18,7 @@ from quwoquan_app.scripts.device.startup_terminal_receipt import (
 from quwoquan_ops.cli.commands.app_preflight_uat_process import (
     observe_canonical_app_process_id,
 )
+from quwoquan_ops.cli.commands.app_preflight_uat_launch import _offline_launch
 from quwoquan_ops.cli.commands.app_preflight_uat_projection_path import (
     canonical_source_projection_root,
     load_canonical_projection_evidence,
@@ -602,6 +603,7 @@ def _app_content_launch_binding(
     """
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    offline = _offline_launch(runtime_binding)
     report_path = _launch_evidence_path(report_ref, label="launch report")
     attempt_path = _launch_evidence_path(attempt_ref, label="launch attempt")
     report = _stackctl._read_json_object(str(report_path))
@@ -710,6 +712,11 @@ def _app_content_launch_binding(
         "sourceProjectionDigest": launch_projection.get("sourceProjectionDigest"),
         "sourceProjectionFileCount": launch_projection.get("sourceProjectionFileCount"),
     }
+    if offline:
+        report_expected.pop("candidatePackageDigest")
+        report_expected["contentSource"] = "bundled_snapshot"
+        if "candidatePackageDigest" in report or "packageDigest" in launch_projection:
+            raise ValueError("App content UAT offline report contains remote authority")
     for field, expected in report_expected.items():
         if report.get(field) != expected:
             if field == "artifactDigest":
@@ -736,6 +743,8 @@ def _app_content_launch_binding(
         "sourceProjectionEvidenceDigest",
         "sourceProjectionDigest",
     ):
+        if offline and field == "candidatePackageDigest":
+            continue
         raw_digest = _exact_receipt_string(
             report.get(field),
             label=f"launch {field}",
@@ -840,6 +849,9 @@ def _app_content_launch_binding(
         "launchReportRef": str(report_path),
         "startupTerminalReceiptRef": str(terminal_path),
     }
+    if offline:
+        control_expected.pop("packageDigest")
+        control_expected["contentSource"] = "bundled_snapshot"
     if (
         report.get("canonicalLaunchControlDigest") != control_digest
         or set(control) != set(control_expected)
@@ -883,7 +895,7 @@ def _app_content_launch_binding(
     ):
         raise ValueError("canonical device-observed App processId is invalid")
 
-    return {
+    binding = {
         **expected_identity,
         "applicationId": str(attempt["applicationId"]),
         "canonicalProcessId": canonical_process_id,
@@ -900,7 +912,7 @@ def _app_content_launch_binding(
         "startupTerminalEvidenceDigest": str(attempt["startupTerminalEvidenceDigest"]),
         "startupTerminalEvidenceRef": str(terminal_path),
         "candidateDigest": str(runtime_binding["candidateDigest"]),
-        "candidatePackageDigest": str(runtime_binding["packageDigest"]),
+        "candidatePackageDigest": str(runtime_binding.get("packageDigest") or ""),
         "sourceCapsuleManifestDigest": str(
             launch_projection["sourceCapsuleManifestDigest"]
         ),
@@ -931,3 +943,7 @@ def _app_content_launch_binding(
         "launchReportDigest": _stackctl._canonical_document_checksum(report),
         "launchReportRef": str(report_path),
     }
+    if offline:
+        binding.pop("candidatePackageDigest")
+        binding["contentSource"] = "bundled_snapshot"
+    return binding

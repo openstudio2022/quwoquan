@@ -628,9 +628,11 @@ def test_app_coverage_config_identity_contains_the_runner_and_topology_closure()
     assert policy["serialConcurrency"] == "1"
     assert policy["phases"] == ["exclude-serial", "serial-only"]
     assert policy["maxAttempts"] == "1"
-    assert policy["resolvedDartDefines"]["PUBLIC_WEB_BASE_URL"].startswith(
-        "https://"
-    )
+    # Alpha canonical coverage 只装配离线文档，不得要求或注入远端 endpoint。
+    assert policy["resolvedDartDefines"] == {
+        "APP_RUNTIME_ENV": "alpha",
+        "APP_LAUNCH_POLICY": "test_live",
+    }
 
 
 def test_selector_byte_drift_changes_the_app_config_digest(

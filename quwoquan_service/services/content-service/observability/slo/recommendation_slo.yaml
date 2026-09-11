@@ -1,7 +1,9 @@
 # 推荐 feed SLI/SLO 声明。
-# 本文件是推荐体验目标的单一真相源：开发前先冻结 objective，再由实现阶段补齐真实指标源、
-# 告警与看板。已经存在的 HTTP 边界指标来自 runtime/observability；业务指标若暂未接入
-# Prometheus，必须保持 objective_only/observe_only，禁止在验收中宣称已完成。
+# 本文件拥有推荐体验业务目标与分场景容量模型；HTTP operation SLO 唯一权威为所属
+# contracts/**/operations.yaml。下方路由 numeric objective 仅是 sourceRef 的校验镜像，
+# local_contract 动态读取 canonical YAML 锁定一致性，不是第二套可独立调节的预算。
+# 已有 HTTP 边界指标来自 runtime/observability；业务指标若暂未接入 Prometheus，
+# 必须保持 objective_only/observe_only，禁止在验收中宣称已完成。
 service: content-service
 domain: recommendation
 capability: feed-orchestration-recommendation
@@ -89,6 +91,10 @@ routes:
 # 架构前提：排序开销只发生在首刷/刷新（CreateRankedRecommendationWindow，一次排序固化
 # TTL 600s、每 subject ≤8 窗），续页是纯 Redis 只读（GetRankedRecommendationPage），
 # 因此 feed_pagination 的目标 RPS 显著高于 feed_first_page 而单位成本显著更低。
+# 消费者 recommendation_load_profile.py 只读取 traffic_classes：延迟按该场景 ok 样本，
+# error_rate 按该场景全部压测请求（包括工具分类的 4xx/transport error），不是全路由 5xx 比率。
+# first_page/分页的 0.5% 与各自分位预算不能冒充 GetFeed 的 0.1% HTTP 错误预算；
+# 首刷 P99=900ms 保留，不能为匹配旧全路由 P99=400ms 声明而强行降低。
 load_model:
   traffic_classes:
     feed_first_page:
@@ -280,19 +286,31 @@ north_star:
 
 slis:
   - id: recommendation_feed_latency
-    description: 内容 feed 读路由用户感知延迟，分位数取自 http_server histogram。
+    description: GetFeed 全路由服务端 HTTP 延迟；覆盖首刷、续页及所有状态的 histogram 样本，
+      不等同于 App 用户感知延迟或分场景压测 ok 样本。rolling 5m 仅为观测窗口，不证明 release 达标。
+    sourceRef: quwoquan_service/services/content-service/contracts/content/post/operations.yaml#api_routes.GetFeed.slo
     source: http_server_duration_seconds
-    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route="/content/feed"}[5m])) by (le))
+    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", method="GET", route="/content/feed"}[5m])) by (le))
+    observation: { window: rolling_5m, release_proof: false }
     objectives:
+      p95_ms: 500  # canonical latency_p95_ms 校验镜像；修改必须先由 sourceRef owner 裁决。
+    diagnostic_objectives:
+      # 保留原独立分位目标但不作为 route/release 门槛：P99=400 < canonical P95=500，
+      # 且首刷负载 P99=900；无真实流量混合分布证据，不能声称这些不同分母目标同时达标。
+      status: unresolved
       p50_ms: 80
-      p95_ms: 200
       p99_ms: 400
 
   - id: recommendation_feed_availability
-    description: feed 读路由可用性 = 1 - 5xx 错误率。
+    description: GetFeed 全路由可用性 = 1 - HTTP 5xx 请求数 / 全部 HTTP 请求数；
+      following/continuation 合法空态仍按真实 HTTP 状态计数，不是业务推荐成功证据；
+      offline/stale 本地回放没有服务端请求，不得补算 HTTP success 或进入请求分母。
+      rolling 5m 仅为观测窗口，无流量不证明成功，亦不构成 release 达标证据。
+    sourceRef: quwoquan_service/services/content-service/contracts/content/post/operations.yaml#api_routes.GetFeed.slo
     source: http_server_requests_total
-    sli: 1 - sum(rate(http_server_requests_total{service="content-service", route="/content/feed", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="content-service", route="/content/feed"}[5m]))
-    objective: 0.995
+    sli: 1 - sum(rate(http_server_requests_total{service="content-service", method="GET", route="/content/feed", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="content-service", method="GET", route="/content/feed"}[5m]))
+    observation: { window: rolling_5m, release_proof: false }
+    objective: 0.999  # canonical availability_percent / 100 校验镜像；不是独立预算。
 
   - id: behavior_ingest_latency
     description: 行为上报入口 HTTP 延迟；HotPath 真正生效延迟由 Phase 1 业务指标补齐。

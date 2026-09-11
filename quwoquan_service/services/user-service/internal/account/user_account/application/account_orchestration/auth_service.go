@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	rtauth "quwoquan_service/runtime/auth"
+	rtmedia "quwoquan_service/runtime/media"
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/otpseal"
 	sessiongenerated "quwoquan_service/services/user-service/generated/account/account_session"
@@ -598,6 +599,11 @@ func avatarURLWithVersion(raw string, version int) string {
 	}
 	parsed, err := url.Parse(value)
 	if err != nil {
+		return value
+	}
+	// 公开 slice 的版本已编码在路径中；再加 query 会被端侧 canonical resolver 拒绝。
+	// 保留原 URL 的查询与签名字节，不通过删 query 绕过校验。
+	if _, versioned := rtmedia.PublicSliceVersion(parsed.Path); versioned {
 		return value
 	}
 	query := parsed.Query()

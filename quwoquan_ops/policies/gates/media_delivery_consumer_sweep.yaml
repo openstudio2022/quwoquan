@@ -101,8 +101,8 @@ allowlist:
   service/search_service/search/search_index_view/presentation/global_search_page_suggestion_widgets.dart:336: 搜索建议里的会话入口头像取自 user account 域的会话成员（_buildConversationLeading），非 release creator 交付
   service/user_service/account/user_account/presentation/my_qr_card.dart:409: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
   service/user_service/persona_management/persona/presentation/edit_profile_page.dart:153: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
-  service/user_service/persona_management/persona/presentation/profile_shell_builders_parts.dart:539: persona 背景由用户自行上传（persona_service.go 的 backgroundAssetId/backgroundUrl）；release creator 导入只写 avatar 不写 background
-  service/user_service/persona_management/persona/presentation/profile_shell_builders_parts.dart:848: persona 背景由用户自行上传（persona_service.go 的 backgroundAssetId/backgroundUrl）；release creator 导入只写 avatar 不写 background
+  service/user_service/persona_management/persona/presentation/profile_shell_builders_parts.dart:540: persona 背景由用户自行上传（persona_service.go 的 backgroundAssetId/backgroundUrl）；release creator 导入只写 avatar 不写 background
+  service/user_service/persona_management/persona/presentation/profile_shell_builders_parts.dart:849: 已在 mediaDeliveryImage 的 publicBuilder 内完成 typed 分流，公开头像分支因本地文件分支展开超出扫描回看窗口
   service/user_service/persona_management/persona/presentation/share_interaction/share_interaction_row.dart:246: 分享互动行渲染 user account 域的联系人头像，非 release creator 交付
   service/user_service/persona_management/persona/presentation/share_interaction/share_target_preview.dart:51: 分享目标预览沿用 ContentSurfaceView 公开取值，与 chat 分享卡同源
   service/user_service/relationship/persona_relationship/presentation/blocked_users_page.dart:449: 通讯录与拉黑名单渲染 user account 头像，不属 release 交付闭包

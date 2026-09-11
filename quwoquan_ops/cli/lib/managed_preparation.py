@@ -433,6 +433,7 @@ def _release_managed_preparation_resources(
     identity: Mapping[str, str],
     consumer_id: str,
     lease_id: str,
+    instance_generation: str,
     owned_ports: str,
     trust_bound: bool,
 ) -> list[str]:
@@ -475,6 +476,8 @@ def _release_managed_preparation_resources(
                 target=target,
                 device=str(identity.get("deviceId") or ""),
                 consumer=consumer_id,
+                lease_id=lease_id,
+                instance_generation=instance_generation,
             )
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             warnings.append(f"failed to release preparation consumer lease: {exc}")
@@ -632,6 +635,7 @@ def run_managed_preparation(
                 identity=identity,
                 consumer_id=str(receipt.get("consumerId") or ""),
                 lease_id=lease_id,
+                instance_generation=str(receipt["runtimeIdentity"]["startupAttemptId"]),
                 owned_ports=str(receipt.get("androidReverseOwnedPorts") or ""),
                 trust_bound=trust_bound,
             )
@@ -777,6 +781,7 @@ def run_managed_preparation(
                 consumer=normalized_consumer,
                 package_name=application_id,
                 ports=ports,
+                instance_generation=startup_attempt_id,
                 platform=identity["leasePlatform"],
             )
             lease_acquired = True
@@ -788,6 +793,7 @@ def run_managed_preparation(
                         identity=identity,
                         consumer_id="",
                         lease_id="",
+                        instance_generation=startup_attempt_id,
                         owned_ports=str(receipt["androidReverseOwnedPorts"]),
                         trust_bound=False,
                     )

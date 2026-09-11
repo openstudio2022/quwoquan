@@ -158,6 +158,9 @@ def _verified_self_supply_request(request_path: Path, build_profile: str) -> Non
         or request.get("expectedActiveDigest") != ""
         or not isinstance(manifest, dict)
         or manifest.get("runtimeConfigSupplyMode") != _SELF_SUPPLY_MODE
+        or manifest.get("contentSource") != "bundled_snapshot"
+        or not isinstance(request.get("package"), dict)
+        or request["package"].get("schema") != schemas.get("offline_bootstrap_document")
     ):
         raise SystemExit("self supply request identity conflicts with the build profile")
 

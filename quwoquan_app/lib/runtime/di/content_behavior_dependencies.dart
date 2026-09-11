@@ -5,6 +5,8 @@ import 'package:quwoquan_app/service/content_service/content/content_behavior_fa
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_tracker_port.dart';
 import 'package:quwoquan_app/runtime/di/feed_session_provider.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/adapters/local_content_behavior_repository.dart';
 import 'package:quwoquan_app/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_facets.dart';
@@ -14,9 +16,12 @@ import 'package:quwoquan_app/runtime/transport/cloud_request_headers.dart';
 
 /// ContentBehaviorFact 的唯一 production 组合入口。
 ///
-/// 四环境只装配 generated Remote command 与 actor-scoped durable outbox；
-/// 业务页面和 tracker 只消费对象级 application port。
+/// 在线装配 generated Remote command 与 actor-scoped durable outbox；
+/// 离线只装配本地观测。业务页面和 tracker 消费同一 application port。
 final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
+  if (CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot) {
+    return LocalContentBehaviorRepository();
+  }
   final feedSessionNotifier = ref.read(feedSessionProvider.notifier);
   final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
   final personaId = ref.watch(currentUserIdProvider).trim();

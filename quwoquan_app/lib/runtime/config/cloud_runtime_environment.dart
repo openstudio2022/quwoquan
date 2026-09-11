@@ -5,8 +5,8 @@ enum CloudEnvironment { alpha, beta, gamma, prod }
 final class CloudRuntimeEnvironment {
   CloudRuntimeEnvironment({
     required this.environment,
-    required this.gatewayBaseUri,
-  }) {
+    required Uri gatewayBaseUri,
+  }) : _gatewayBaseUri = gatewayBaseUri {
     if (!gatewayBaseUri.hasScheme || gatewayBaseUri.host.isEmpty) {
       throw ArgumentError.value(
         gatewayBaseUri,
@@ -33,20 +33,42 @@ final class CloudRuntimeEnvironment {
     }
   }
 
+  CloudRuntimeEnvironment.offline({required this.environment})
+    : _gatewayBaseUri = null {
+    if (environment != CloudEnvironment.alpha) {
+      throw CloudRuntimeConfigurationException(
+        reason: 'runtime_config_content_source_mismatch',
+      );
+    }
+  }
+
   final CloudEnvironment environment;
-  final Uri gatewayBaseUri;
+  final Uri? _gatewayBaseUri;
+
+  Uri? get gatewayBaseUriOrNull => _gatewayBaseUri;
+  bool get networkAccessAllowed => _gatewayBaseUri != null;
+  Uri get gatewayBaseUri =>
+      _gatewayBaseUri ??
+      (throw CloudRuntimeConfigurationException(
+        reason: 'runtime_config_network_forbidden',
+        source: 'signed-offline-bootstrap',
+        runtimeEnv: environment.name,
+        invalidKeys: const ['gatewayBaseUrl'],
+      ));
 
   factory CloudRuntimeEnvironment.fromCompileTime() {
     final environmentValue = CloudRuntimeConfig.appRuntimeEnv;
-    final gatewayValue = CloudRuntimeConfig.gatewayBaseUrl;
     final environment = CloudEnvironment.values.firstWhere(
       (candidate) => candidate.name == environmentValue,
       orElse: () =>
           throw StateError('Unsupported APP_RUNTIME_ENV: $environmentValue'),
     );
+    if (!CloudRuntimeConfig.networkAccessAllowed) {
+      return CloudRuntimeEnvironment.offline(environment: environment);
+    }
     return CloudRuntimeEnvironment(
       environment: environment,
-      gatewayBaseUri: Uri.parse(gatewayValue),
+      gatewayBaseUri: Uri.parse(CloudRuntimeConfig.gatewayBaseUrl),
     );
   }
 }

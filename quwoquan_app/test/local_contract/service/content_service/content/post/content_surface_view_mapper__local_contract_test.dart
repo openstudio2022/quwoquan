@@ -1,6 +1,13 @@
 // spec_ref: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/runtime/config/offline_content_bundle.dart';
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+import 'package:quwoquan_app/service/content_service/content/post/domain/content_surface_view_mapper.dart'
+    as domain;
+
+import '../../../../../support/runtime/config/runtime_package_test_hydration.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
+
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_surface_view.dart';
@@ -30,6 +37,107 @@ ContentPostViewData _viewData(ContentPostProjection projection) =>
     ContentPostViewData.fromWire(projection);
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-008
+  test('真实 canonical cohort 经 Alpha 与 Remote 组合根映射保留同一媒体资产版本', () async {
+    final bundle = await OfflineContentBundle.load();
+    final posts = bundle
+        .rows('posts')
+        .map(
+          (row) => ContentPostViewData.fromWire(
+            ContentPostProjection.fromWire(
+              row['projection']! as Map<String, Object?>,
+            ),
+          ),
+        )
+        .toList();
+    addTearDown(() => hydrateRuntimePackageForTests(environment: 'beta'));
+    for (final environment in ['alpha', 'beta', 'gamma']) {
+      await hydrateRuntimePackageForTests(environment: environment);
+      final views = posts.map(ContentSurfaceViewMapper.fromDto).toList();
+      expect(views.map((view) => view.postId), posts.map((post) => post.id));
+      for (final view in views) {
+        final post = posts.singleWhere((post) => post.id == view.postId);
+        final references = [
+          if (view.cover != null) view.cover!.delivery,
+          if (view.author.avatar != null) view.author.avatar!,
+          ...view.images.map((image) => image.delivery),
+          if (view.video != null) view.video!.delivery,
+        ];
+        expect(references, isNotEmpty);
+        for (final reference in references) {
+          final uri = Uri.parse(reference.url);
+          expect(uri.hasScheme, environment != 'alpha');
+          if (environment != 'alpha') expect(uri.scheme, 'https');
+          expect(reference.version, greaterThan(0));
+        }
+        if (post.isVideoLike) {
+          expect(view.video, isNotNull);
+          expect(view.video!.delivery.assetId, post.mediaAssetId);
+          expect(view.video!.delivery.version, post.mediaAssetVersion);
+          expect(view.video!.thumbnailUrl, view.cover!.url);
+        }
+        if (post.hasImages && !post.isVideoLike) {
+          expect(view.images.length, post.mediaImageUrls.length);
+        }
+      }
+    }
+  });
+
+  test('domain 仅消费注入能力，Alpha 状态不读取在线配置且保留解析摘要', () async {
+    await hydrateRuntimePackageForTests(environment: 'alpha');
+    addTearDown(() => hydrateRuntimePackageForTests(environment: 'beta'));
+    final bundle = await OfflineContentBundle.load();
+    final post = bundle
+        .rows('posts')
+        .map(
+          (row) => ContentPostViewData.fromWire(
+            ContentPostProjection.fromWire(
+              row['projection']! as Map<String, Object?>,
+            ),
+          ),
+        )
+        .singleWhere((post) => post.isVideoLike);
+    final delivery = publicMediaDelivery;
+    final seen = <({String assetId, int version})>[];
+    final view = domain.ContentSurfaceViewMapper.fromDto(
+      post,
+      resolveMedia:
+          (reference, {required kind, assetId = '', version = 0, sha256}) {
+            final asset = bundle.media.lookup(
+              reference ?? '',
+              assetId: assetId,
+            );
+            if (kind == MediaDeliveryKind.video) {
+              seen.add((assetId: assetId, version: version));
+            }
+            return delivery.tryResolve(
+              reference,
+              kind: kind,
+              assetId: assetId,
+              version: version,
+              sha256: asset?.digest,
+            );
+          },
+    );
+    expect(seen, [
+      (assetId: post.mediaAssetId!, version: post.mediaAssetVersion!),
+    ]);
+    expect(
+      view.video!.delivery.sha256,
+      bundle.media.lookup(post.mediaVideoUrl)!.digest,
+    );
+    // 显式 Remote resolver 也是纯能力输入，不因当前 Alpha 去读取在线端点。
+    final remote = ContentSurfaceViewMapper.fromDto(
+      post,
+      mediaResolver: _mediaResolver,
+    );
+    expect(Uri.parse(remote.video!.url).host, 'video.example.test');
+    expect(remote.video!.delivery.assetId, view.video!.delivery.assetId);
+    expect(remote.video!.delivery.version, view.video!.delivery.version);
+  });
+
   group('ContentSurfaceViewMapper — canonical ContentPostProjection', () {
     test('image 投影为多图 surface，并保持作者和统计口径', () {
       final dto = _viewData(
@@ -258,6 +366,59 @@ void main() {
       );
       expect(view.createdAt, isNot(view.publishedAt));
       expect(view.publishedAt, publishedAt);
+    });
+
+    test('显式媒体版本漂移与不可信 Remote 原点不产生可播放 surface', () {
+      for (final url in [
+        'media/video/s/asset/video-1/v1/source.mp4',
+        'https://untrusted.invalid/media/video/s/asset/video-1/v2/source.mp4',
+      ]) {
+        final dto = _viewData(
+          contentPostProjectionFixture(
+            contentType: 'video',
+            videoUrl: url,
+            mediaAssetId: 'video-1',
+            mediaAssetVersion: 2,
+            mediaItems: [
+              PostMediaItem(
+                kind: 'video',
+                url: url,
+                mediaAssetId: 'video-1',
+                mediaAssetVersion: 2,
+              ),
+            ],
+          ),
+        );
+        expect(
+          ContentSurfaceViewMapper.fromDto(
+            dto,
+            mediaResolver: _mediaResolver,
+          ).video,
+          isNull,
+        );
+      }
+      const image = 'media/image/s/asset/image-1/v1/source.jpg';
+      final dto = _viewData(
+        contentPostProjectionFixture(
+          contentType: 'image',
+          mediaUrls: [image],
+          mediaItems: const [
+            PostMediaItem(
+              kind: 'image',
+              url: image,
+              mediaAssetId: 'image-1',
+              mediaAssetVersion: 2,
+            ),
+          ],
+        ),
+      );
+      expect(
+        ContentSurfaceViewMapper.fromDto(
+          dto,
+          mediaResolver: _mediaResolver,
+        ).images,
+        isEmpty,
+      );
     });
 
     test('referral 上下文只透传，不改变展示事实', () {

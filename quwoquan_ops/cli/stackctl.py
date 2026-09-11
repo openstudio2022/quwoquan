@@ -354,10 +354,9 @@ from quwoquan_ops.migrations.travel_to_gathering import (
 )
 
 
-def _local_stack_operation_lock(target_name: str) -> Any:
+def _local_stack_operation_lock(target_name: str, *, wait_seconds: float = 0) -> Any:
     return _reservation_local_stack_operation_lock(
-        target_name,
-        lock_path=local_runtime_operation_lock_path(),
+        target_name, wait_seconds=wait_seconds,
     )
 
 
@@ -952,6 +951,14 @@ _TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES = frozenset(
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    # 真正执行入口封闭宿主权威；模块 API 的显式路径注入仅用于离线契约测试。
+    if args.command in {"up", "down", "dev-session", "app-managed-prepare", "repair", "consumer-lease"}:
+        from quwoquan_ops.cli.lib.host_locks import require_canonical_runtime_authority
+        try:
+            require_canonical_runtime_authority()
+        except ValueError as exc:
+            return print_result(args, {"exitCode": 2, "blockerKind": "runtime_authority_mismatch",
+                                      "summary": "stackctl is GATE_BLOCK", "details": [str(exc)]})
     payload = stackctl_dispatch.dispatch(args, globals())
     return print_result(args, payload)
 

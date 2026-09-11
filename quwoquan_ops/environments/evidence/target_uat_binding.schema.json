@@ -7,22 +7,12 @@
   "required": [
     "schema",
     "bindingId",
-    "releaseId",
-    "releaseDigest",
-    "releaseUatSamplePlanRef",
-    "releaseUatSamplePlanDigest",
     "environment",
     "target",
     "candidateDigest",
-    "packageDigest",
-    "configurationDigest",
     "runtimeConfigDigest",
-    "environmentRuntimeDigest",
-    "activeCas",
-    "readback",
     "artifact",
     "platform",
-    "provider",
     "device",
     "runner",
     "profile",
@@ -111,6 +101,23 @@
     "createdAt": {
       "type": "string",
       "format": "date-time"
+    },
+    "contentSource": {
+      "const": "bundled_snapshot"
+    },
+    "commitSha": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+    },
+    "treeSha": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+    },
+    "snapshot": {
+      "$ref": "#/$defs/source"
+    },
+    "launchAttempt": {
+      "$ref": "#/$defs/source"
     }
   },
   "$defs": {
@@ -263,6 +270,145 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "required": [
+          "contentSource"
+        ],
+        "properties": {
+          "contentSource": {
+            "const": "bundled_snapshot"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "contentSource",
+          "commitSha",
+          "treeSha",
+          "snapshot",
+          "launchAttempt"
+        ],
+        "properties": {
+          "environment": {
+            "const": "alpha"
+          },
+          "target": {
+            "const": "alpha-local"
+          },
+          "profile": {
+            "const": "rehearsal"
+          },
+          "nonPromotable": {
+            "const": true
+          },
+          "artifact": {
+            "properties": {
+              "buildProfile": {
+                "const": "nonprod"
+              }
+            }
+          }
+        },
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "releaseId"
+              ]
+            },
+            {
+              "required": [
+                "releaseDigest"
+              ]
+            },
+            {
+              "required": [
+                "releaseUatSamplePlanRef"
+              ]
+            },
+            {
+              "required": [
+                "releaseUatSamplePlanDigest"
+              ]
+            },
+            {
+              "required": [
+                "packageDigest"
+              ]
+            },
+            {
+              "required": [
+                "configurationDigest"
+              ]
+            },
+            {
+              "required": [
+                "environmentRuntimeDigest"
+              ]
+            },
+            {
+              "required": [
+                "activeCas"
+              ]
+            },
+            {
+              "required": [
+                "readback"
+              ]
+            },
+            {
+              "required": [
+                "provider"
+              ]
+            }
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "releaseId",
+          "releaseDigest",
+          "releaseUatSamplePlanRef",
+          "releaseUatSamplePlanDigest",
+          "packageDigest",
+          "configurationDigest",
+          "environmentRuntimeDigest",
+          "activeCas",
+          "readback",
+          "provider"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "contentSource"
+              ]
+            },
+            {
+              "required": [
+                "commitSha"
+              ]
+            },
+            {
+              "required": [
+                "treeSha"
+              ]
+            },
+            {
+              "required": [
+                "snapshot"
+              ]
+            },
+            {
+              "required": [
+                "launchAttempt"
+              ]
+            }
+          ]
+        }
+      }
+    },
     {
       "if": {
         "properties": {

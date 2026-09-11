@@ -3,6 +3,11 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/runtime/config/offline_content_bundle.dart';
+
+import '../../../../../support/runtime/config/runtime_package_test_hydration.dart';
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
@@ -50,6 +55,7 @@ final class _FailingOriginalAccessGateway
 Widget _host(ProfileHeader header, {OriginalAccessQuotaGateway? gateway}) {
   return ProviderScope(
     overrides: [
+      ...sealedCloudBoundaryOverrides(),
       signedMediaDeliveryCoordinatorProvider.overrideWithValue(
         SignedMediaDeliveryCoordinator(
           gateway: gateway ?? _HangingOriginalAccessGateway(),
@@ -63,6 +69,60 @@ Widget _host(ProfileHeader header, {OriginalAccessQuotaGateway? gateway}) {
 }
 
 void main() {
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-008
+  testWidgets('creator 头像成功语义绑定实际解码，未知头像无成功标识', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final bundle = (await tester.runAsync(() async {
+      await hydrateRuntimePackageForTests(environment: 'alpha');
+      return OfflineContentBundle.load();
+    }))!;
+    final creator =
+        bundle.rows('creators').first['projection']! as Map<String, Object?>;
+    final personaId = creator['personaId']! as String;
+    final selector = 'creator-profile-avatar:$personaId';
+    try {
+      await tester.pumpWidget(
+        _host(
+          ProfileHeader(
+            isDark: false,
+            personaId: personaId,
+            avatarUrl: creator['avatarUrl']! as String,
+            avatarAccessMode: MediaDeliveryAccessMode.public,
+          ),
+        ),
+      );
+      for (var attempt = 0; attempt < 80; attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 25)),
+        );
+        await tester.pump();
+        if (find.bySemanticsIdentifier(selector).evaluate().isNotEmpty) break;
+      }
+      expect(find.bySemanticsIdentifier(selector), findsOneWidget);
+      expect(
+        find.bySemanticsIdentifier('creator-profile-avatar:other'),
+        findsNothing,
+      );
+      await tester.pumpWidget(
+        _host(
+          ProfileHeader(
+            isDark: false,
+            personaId: personaId,
+            avatarUrl: 'media/avatar/missing-creator.png',
+            avatarAccessMode: MediaDeliveryAccessMode.public,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.bySemanticsIdentifier(selector), findsNothing);
+      expect(tester.takeException(), isNull);
+    } finally {
+      semantics.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await hydrateRuntimePackageForTests(environment: 'beta');
+    }
+  });
+
   testWidgets('signedGrant persona 头像分流到 SignedGrantImage（kind=avatar）', (
     tester,
   ) async {

@@ -232,7 +232,10 @@ def _admitted(relative: str) -> bool:
         return True
     if parts == ("home", "gradle.properties"):
         return True
-    if parts == ("home", "init.d", "qwq-offline.gradle"):
+    if parts in {
+        ("home", "init.d", "qwq-offline.gradle"),
+        ("home", "init.d", "qwq-plugin-repositories.gradle"),
+    }:
         return True
     if parts[:2] == ("metadata", "resolution-lock.json"):
         return True

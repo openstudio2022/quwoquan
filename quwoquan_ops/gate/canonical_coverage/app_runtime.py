@@ -125,7 +125,18 @@ def resolved_app_runtime_defines() -> dict[str, str]:
         for value_key, define_key in RUNTIME_VALUE_DEFINE_KEYS.items()
         if value_key in runtime
     }
-    missing = sorted(set(RUNTIME_VALUE_DEFINE_KEYS) - set(runtime))
+    from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
+        build_runtime_config_trust_envelope, load_launch_manifest_contract,
+        runtime_document_schema_name, validate_runtime_config_package,
+    )
+    contract = load_launch_manifest_contract()
+    offline = runtime_document_schema_name(package, contract) == "offline_bootstrap_document"
+    if offline:
+        trust = build_runtime_config_trust_envelope("nonprod", package.get("trustedPublicKeys"), contract)
+        issues = validate_runtime_config_package(package, trust, contract)
+        if issues or runtime != {"appRuntimeEnv": APP_COVERAGE_RUNTIME_ENV}:
+            raise CoverageError("App coverage offline document is invalid: " + "; ".join(issues))
+    missing = sorted(({"appRuntimeEnv"} if offline else set(RUNTIME_VALUE_DEFINE_KEYS)) - set(runtime))
     if missing:
         raise CoverageError(
             "App coverage runtime package is missing runtime values: "
@@ -136,7 +147,7 @@ def resolved_app_runtime_defines() -> dict[str, str]:
         raise CoverageError("App coverage runtime environment is not canonical alpha")
     if defines["APP_LAUNCH_POLICY"] != APP_COVERAGE_LAUNCH_POLICY:
         raise CoverageError("App coverage launch policy is not canonical test_live")
-    if not defines["PUBLIC_WEB_BASE_URL"].startswith("https://"):
+    if not offline and not defines["PUBLIC_WEB_BASE_URL"].startswith("https://"):
         raise CoverageError("App coverage public Web origin must be explicit HTTPS")
     return dict(sorted(defines.items()))
 

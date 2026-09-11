@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -51,6 +52,11 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                 (APP_DIR / "scripts/device" / relative).read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
+        # 门禁本身复用生产入口；resolve() 使其只读加载真实 metadata/import 闭包，
+        # 不把 stackctl/dev_up 替身带进安全校验，也不复制整棵 production 树。
+        (executor_dir / "build_launcher_handoff.py").symlink_to(
+            APP_DIR / "scripts/device/build_launcher_handoff.py"
+        )
         (app / "ios/Pods").mkdir(parents=True)
         (app / "ios/Podfile.lock").write_text("locked\n", encoding="utf-8")
         (app / "ios/Pods/Manifest.lock").write_text(
@@ -108,9 +114,14 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             encoding="utf-8",
         )
         flutter.chmod(0o755)
-        environment = dict(os.environ)
+        (bin_dir / "python3").symlink_to(sys.executable)
+        # 宿主的 managed receipt/source capsule 不属于本次沙箱 invocation。
+        environment = {
+            key: value for key, value in os.environ.items()
+            if not key.startswith("QWQ_")
+        }
         environment["PATH"] = f"{bin_dir}{os.pathsep}{environment['PATH']}"
-        environment.pop("QWQ_ENVIRONMENT", None)
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
         # launcher 以包路径导入 `quwoquan_ops.cli.lib.dev_up`。宿主 PYTHONPATH 若指向
         # 真实仓库根，沙箱会命中生产模块而不是这里的替身，测试就不再观察 launcher 行为。
         environment.pop("PYTHONPATH", None)
@@ -212,6 +223,8 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                     "bash",
                     "run.sh",
                     "--hermetic",
+                    "--env",
+                    "beta",
                     "--mode",
                     "ui-only",
                     "-d",
@@ -283,11 +296,11 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             "contentLive": "passed",
             "nonPromotable": True,
             "contentBindingState": "bound",
-            "target": "alpha-local",
-            "releaseId": "research-alpha",
+            "target": "beta-local",
+            "releaseId": "research-beta",
             "manifestDigest": "sha256:" + "1" * 64,
             "readinessReceiptDigest": "sha256:" + "2" * 64,
-            "contentBinding": {"verifyRunId": "verify-alpha"},
+            "contentBinding": {"verifyRunId": "verify-beta"},
         }
         temporary, app, environment = self._workspace(preflight=payload)
         with temporary:
@@ -298,7 +311,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                     {
                         "schema": "quwoquan_ops.app_debug_preflight",
                         "purpose": "content_live",
-                        "target": "alpha-local",
+                        "target": "beta-local",
                         "payload": payload,
                     },
                     ensure_ascii=False,
@@ -307,7 +320,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             )
             environment["QWQ_APP_DEBUG_PREFLIGHT_RECEIPT"] = str(receipt)
             result = subprocess.run(
-                ["bash", "run.sh", "--mode", "content-live", "-d", "device"],
+                ["bash", "run.sh", "--env", "beta", "--mode", "content-live", "-d", "device"],
                 cwd=app,
                 env=environment,
                 check=False,
@@ -337,7 +350,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                     {
                         "schema": "quwoquan_ops.app_debug_preflight",
                         "purpose": "runtime",
-                        "target": "alpha-local",
+                        "target": "beta-local",
                         "payload": {"purpose": "runtime", "status": "passed"},
                     },
                     ensure_ascii=False,
@@ -346,7 +359,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             )
             environment["QWQ_APP_DEBUG_PREFLIGHT_RECEIPT"] = str(receipt)
             result = subprocess.run(
-                ["bash", "run.sh", "--mode", "content-live", "-d", "device"],
+                ["bash", "run.sh", "--env", "beta", "--mode", "content-live", "-d", "device"],
                 cwd=app,
                 env=environment,
                 check=False,
@@ -369,14 +382,14 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                 "status": "passed",
                 "contentLive": "not_requested",
                 "nonPromotable": True,
-                "target": "alpha-local",
+                "target": "beta-local",
             },
         )
         with temporary:
             root = Path(temporary.name)
             environment.pop("QWQ_APP_DEBUG_PREFLIGHT_RECEIPT", None)
             subprocess.run(
-                ["bash", "run.sh", "--mode", "ui-only", "-d", "device"],
+                ["bash", "run.sh", "--env", "beta", "--mode", "ui-only", "-d", "device"],
                 cwd=app,
                 env=environment,
                 check=False,
@@ -415,13 +428,79 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
         self.assertIn('if ! HANDOFF_JSON="$("${HANDOFF_CMD[@]}")"; then', source)
         self.assertIn('echo "$HANDOFF_JSON" >&2', source)
 
-    def test_content_live_transport_failures_are_test_live_warnings(self) -> None:
+    def test_remote_transport_and_lease_safety_fail_closed(self) -> None:
+        """REQ-003：readiness warning 不得替代 exact transport/安全租约。"""
         source = LAUNCHER.read_text(encoding="utf-8")
+        executor = source.index('scripts/device/run_app_instance.py"')
+        for guard in (
+            'if not ports or any((port, port) not in mappings for port in ports):\n'
+            '            raise RuntimeError("selected device public reverse mappings must already be prepared")',
+            'print(f"APP.LAUNCH.transport_unavailable: {exc}", file=sys.stderr)\n'
+            '        raise SystemExit(2)',
+            'echo "[run] GATE_BLOCK: OPS.LEASE.runtime_identity_unavailable: no exact running generation." >&2\n'
+            '      exit 2',
+            'echo "[run] GATE_BLOCK: OPS.LEASE.acquire_blocked: exact runtime lease is required." >&2\n'
+            '      exit 2',
+            'echo "[run] APP.PREPARATION.receipt_invalid: managed consumer lease handoff drifted." >&2\n'
+            '      exit 2',
+        ):
+            with self.subTest(guard=guard):
+                self.assertIn(guard, source)
+                self.assertLess(source.index(guard), executor)
+        self.assertNotIn('runtime consumer lease is unavailable', source)
+        self.assertNotIn('Android transport preparation is unavailable', source)
 
-        self.assertIn('Android transport preparation is unavailable', source)
-        self.assertIn('target-bound transport trust is unavailable', source)
-        self.assertIn('Android reverse ports are unavailable', source)
-        self.assertIn('runtime consumer lease is unavailable', source)
+    def test_remote_lease_response_requires_exact_invocation_identity(self) -> None:
+        # 执行 launcher 原始校验片段，不复制协议；本测试不假造 managed 回执或
+        # 跨越依赖/build gate，只验证 acquire 回读的闭集身份与失败语义。
+        source = LAUNCHER.read_text(encoding="utf-8")
+        validator = source.split("<<'PYLEASE'\n", 1)[1].split("\nPYLEASE", 1)[0]
+        identity = {
+            "target": "beta-local", "device": "device",
+            "consumer": "launcher-test", "instanceGeneration": "generation-test",
+        }
+        lease_id = "sha256:" + "3" * 64
+        valid = {"exitCode": 0, "lease": {**identity, "leaseId": lease_id}}
+        cases = [("exact", valid, "")]
+        for field in identity:
+            cases.append((field, {
+                **valid, "lease": {**valid["lease"], field: "other"},
+            }, "consumer lease response identity drifted"))
+        cases.extend((
+            ("failed", {**valid, "exitCode": 2}, "consumer lease response identity drifted"),
+            ("missing lease", {"exitCode": 0}, "consumer lease response identity drifted"),
+            ("invalid leaseId", {**valid, "lease": {**identity, "leaseId": "invalid"}},
+             "consumer lease response is missing canonical leaseId"),
+        ))
+        for name, payload, failure in cases:
+            with self.subTest(case=name):
+                result = subprocess.run(
+                    [sys.executable, "-c", validator, json.dumps(payload), *identity.values()],
+                    check=False, capture_output=True, text=True,
+                )
+                self.assertEqual(result.returncode, 1 if failure else 0, result.stderr)
+                if failure:
+                    self.assertIn(failure, result.stderr)
+                    self.assertEqual(result.stdout, "")
+                else:
+                    self.assertEqual(result.stdout.strip(), lease_id)
+
+    def test_alpha_offline_does_not_enter_remote_hermetic_preflight(self) -> None:
+        """REQ-008：离线 evidence 未接通时精确阻断，不伪造 Remote 成功。"""
+        for selectors in ([], ["--env", "alpha"]):
+            with self.subTest(selectors=selectors):
+                temporary, app, environment = self._workspace(preflight={})
+                with temporary:
+                    result = subprocess.run(
+                        ["bash", "run.sh", "--hermetic", *selectors, "-d", "device"],
+                        cwd=app, env=environment, check=False,
+                        capture_output=True, text=True,
+                    )
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertIn("APP.LAUNCH.launch_surface_unsupported", result.stderr)
+                    self.assertIn("offline hermetic/UAT requires device-bound evidence", result.stderr)
+                    for log in ("preflight_calls.log", "find_device.log", "flutter.log"):
+                        self.assertFalse((app.parent / log).exists())
 
     def test_content_live_preflight_block_stops_before_flutter(self) -> None:
         temporary, app, environment = self._workspace(
@@ -436,7 +515,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
         )
         with temporary:
             result = subprocess.run(
-                ["bash", "run.sh", "--mode", "content-live", "-d", "device"],
+                ["bash", "run.sh", "--env", "beta", "--mode", "content-live", "-d", "device"],
                 cwd=app,
                 env=environment,
                 check=False,
@@ -457,15 +536,15 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                 "contentLive": "passed",
                 "nonPromotable": True,
                 "contentBindingState": "bound",
-                "releaseId": "research-alpha",
+                "releaseId": "research-beta",
                 "manifestDigest": "sha256:" + "1" * 64,
                 "readinessReceiptDigest": "sha256:" + "2" * 64,
-                "contentBinding": {"verifyRunId": "verify-alpha"},
+                "contentBinding": {"verifyRunId": "verify-beta"},
             },
         )
         with temporary:
             result = subprocess.run(
-                ["bash", "run.sh", "--mode", "content-live", "-d", "device"],
+                ["bash", "run.sh", "--env", "beta", "--mode", "content-live", "-d", "device"],
                 cwd=app,
                 env=environment,
                 check=False,
@@ -492,10 +571,10 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                 "contentLive": "passed",
                 "nonPromotable": True,
                 "contentBindingState": "bound",
-                "releaseId": "research-alpha",
+                "releaseId": "research-beta",
                 "manifestDigest": digest,
                 "readinessReceiptDigest": "sha256:" + "2" * 64,
-                "contentBinding": {"verifyRunId": "verify-alpha"},
+                "contentBinding": {"verifyRunId": "verify-beta"},
             },
             delivery={
                 "exitCode": 1,
@@ -505,7 +584,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
         )
         with temporary:
             result = subprocess.run(
-                ["bash", "run.sh", "--mode", "content-live", "-d", "device"],
+                ["bash", "run.sh", "--env", "beta", "--mode", "content-live", "-d", "device"],
                 cwd=app,
                 env=environment,
                 check=False,
@@ -516,8 +595,8 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             self.assertIn('"contentLive": "warning"', result.stderr)
             self.assertIn('"reason": "release readiness is unreadable"', result.stderr)
             self.assertIn(
-                "release supply-chain-drill --release-id research-alpha "
-                "--env alpha --profile delivery",
+                "release supply-chain-drill --release-id research-beta "
+                "--env beta --profile delivery",
                 result.stderr,
             )
             self.assertTrue((app.parent / "find_device.log").exists())
@@ -535,7 +614,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
         )
         with temporary:
             result = subprocess.run(
-                ["bash", "run.sh", "--mode", "ui-only", "-d", "device"],
+                ["bash", "run.sh", "--env", "beta", "--mode", "ui-only", "-d", "device"],
                 cwd=app,
                 env=environment,
                 check=False,

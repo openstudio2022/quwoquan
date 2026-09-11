@@ -50,7 +50,7 @@ def register_parser(
 ) -> None:
     app_content_uat_parser = subparsers.add_parser(
         "app-content-uat",
-        help="顺序执行 Alpha/Beta/Gamma release-bound App 内容自动验收",
+        help="按 canonical content source 顺序执行 Alpha/Beta/Gamma App 内容验收",
     )
     app_content_uat_parser.add_argument(
         "--report-dir", default=argparse.SUPPRESS
@@ -66,6 +66,9 @@ def register_parser(
     )
     app_content_uat_parser.add_argument("--device-id", required=True)
     app_content_uat_parser.add_argument("--device-registration-ref", default="")
+    app_content_uat_parser.add_argument(
+        "--candidate", default="", help="离线验收绑定的 <store-relative ref>=<sha256:digest>",
+    )
     app_content_uat_parser.add_argument("--dry-run", action="store_true")
 
 

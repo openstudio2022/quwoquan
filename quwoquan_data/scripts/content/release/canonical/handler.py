@@ -18,6 +18,49 @@ from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REFERENCE_RELEASES_ROOT, REPO_
 from core.schema import assert_valid
 
 
+def handle_export_offline(args: argparse.Namespace) -> None:
+    """显式下游派生入口；不进入 producer finalize/handoff/环境状态机。"""
+    from content.release.canonical.offline_snapshot import build_bundle, export_bundle, write_dart_identity
+    from content.release.canonical.offline_snapshot_contract import safe_path
+    from core.paths import LIBRARY_ROOT, carried_media_root
+    import subprocess
+
+    try:
+        actual_revision = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+        if args.source_revision != actual_revision:
+            raise ValueError("OFFLINE.SOURCE_REVISION_NOT_CURRENT")
+        selection_path = Path(args.selection_file).expanduser().absolute()
+        safe_path(selection_path.parent, selection_path.name)
+        selection = json.loads(selection_path.read_bytes())
+        output = Path(args.output_dir).expanduser().absolute()
+        publish = Path(args.publish_root).expanduser().absolute()
+        protected = [publish, Path(args.library_root or LIBRARY_ROOT).expanduser(), Path(args.carried_root or carried_media_root()).expanduser()]
+        for root in protected:
+            physical = root.resolve()
+            target = output.resolve()
+            if target == physical or physical in target.parents or target in physical.parents:
+                raise ValueError("OFFLINE.OUTPUT_OVERLAPS_CANONICAL_SOURCE")
+        bundle = build_bundle(
+            repo=Path(REPO_ROOT), publish_root=publish, selection=selection,
+            source_revision=args.source_revision,
+            library_root=Path(args.library_root).expanduser() if args.library_root else None,
+            carried_root=Path(args.carried_root).expanduser() if args.carried_root else None,
+        )
+        identity_path = None
+        if args.dart_identity_output:
+            identity_path = Path(args.dart_identity_output).expanduser().absolute()
+            allowed = Path(REPO_ROOT) / "quwoquan_app/lib/runtime/config/generated/offline_content_bundle_identity.g.dart"
+            if identity_path != allowed:
+                raise ValueError("OFFLINE.IDENTITY_OUTPUT_PATH_INVALID")
+            safe_path(identity_path.parent, identity_path.name)
+        result = export_bundle(bundle, output, check=args.check)
+        if identity_path is not None:
+            write_dart_identity(result, identity_path, check=args.check)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise SystemExit(f"[release export-offline] GATE_BLOCK {exc}") from exc
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2))
+
+
 def handle_publish_object(args: argparse.Namespace) -> None:
     from content.release.canonical.publish_object import handle_publish_object as handle
 
@@ -159,7 +202,7 @@ _VERSIONED_RELEASE_FILES = ("cohort.json", "producer_release_handoff.json")
 
 
 def write_versioned_release_copy(*, release_dir: Path, reference_root: Path, release_id: str) -> dict[str, str]:
-    """把里程碑 release 的 cohort 与 handoff 逐字节复制到受版本控制的 reference/releases/<releaseId>/。
+    """把里程碑 cohort 与 handoff 逐字节保存到显式副本根（默认独立 publish/releases）。
 
     create-or-same：副本不存在则写入，已存在且逐字节相同视为 replay，不同则 fail closed——
     副本只是可删除输出根的耐久备份，不允许出现第二套字节。

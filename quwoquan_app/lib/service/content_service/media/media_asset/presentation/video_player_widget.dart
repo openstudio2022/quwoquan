@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+
 import 'dart:async';
 
 import 'package:quwoquan_app/runtime/transport/media/signed_video_delivery.dart';
@@ -148,6 +150,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
           (reference) => _PlaybackCandidate(
             url: reference.url,
             cacheIdentity: reference.cacheIdentity,
+            publicReference: reference,
           ),
         )
         .toList(growable: false);
@@ -654,11 +657,26 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   }
 
   Future<List<PlayableVideoSource>> _playableSourcesForCandidate(
-    String candidate,
+    _PlaybackCandidate candidate,
   ) async {
-    final normalized = candidate.trim();
+    final normalized = candidate.url.trim();
     if (normalized.isEmpty) {
       return const <PlayableVideoSource>[];
+    }
+    final publicReference = candidate.publicReference;
+    if (publicReference != null) {
+      // 私有短签没有公开引用，绝不交给公开媒体目录解析或降级。
+      final verifiedPath = await ref
+          .read(publicMediaDeliveryProvider)
+          .verifiedVideoPath(normalized, binding: publicReference);
+      if (verifiedPath != null) {
+        return [
+          PlayableVideoSource.cachedFile(
+            verifiedPath,
+            viewType: widget.viewType,
+          ),
+        ];
+      }
     }
     final sources = <PlayableVideoSource>[];
     final seen = <String>{};

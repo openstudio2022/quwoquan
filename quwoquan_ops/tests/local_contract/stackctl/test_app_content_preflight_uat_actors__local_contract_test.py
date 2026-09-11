@@ -488,11 +488,13 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             )
             self.assertNotIn("appUatEnvelope", result)
 
-    def test_three_environment_uat_allows_target_baselines_on_one_release_train(
+    def test_three_environment_uat_separates_offline_from_remote_release_train(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             report_dir = Path(temporary_directory) / "uat"
+            output_root = Path(temporary_directory) / "output"
+            output_root.mkdir()
             manifest_digest = "sha256:" + "5" * 64
             release_train_id = "sha256:" + "e" * 64
             preflight_modes: list[tuple[str, str]] = []
@@ -657,6 +659,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 return subprocess.CompletedProcess(argv, 0, "", "")
 
             with (
+                patch.object(stackctl, "output_root", return_value=output_root),
                 patch.object(
                     stackctl,
                     "command_app_debug_preflight",
@@ -698,7 +701,19 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     )
                 )
 
-            self.assertEqual(result["exitCode"], 0)
+            self.assertEqual(result["exitCode"], 0, result)
+            offline, remote = result["sourceRuns"]
+            self.assertEqual(offline["targets"], ["alpha-local"])
+            self.assertEqual(offline["contentSource"], "bundled_snapshot")
+            self.assertEqual(offline["status"], "planned")
+            self.assertEqual(offline["rawResultRefs"], {})
+            self.assertEqual(offline["runs"], [])
+            self.assertTrue(offline["nonPromotable"])
+            self.assertEqual(remote["targets"], ["beta-local", "gamma-local"])
+            self.assertEqual(
+                [item["target"] for item in result["preflights"]],
+                ["beta-local", "gamma-local"],
+            )
             self.assertEqual(result["status"], "planned")
             self.assertEqual(result["launchPolicy"], "immutable_candidate")
             self.assertTrue(result["nonPromotable"])
@@ -706,7 +721,6 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             self.assertEqual(
                 result["packageBaselines"],
                 {
-                    "alpha-local": "sha256:" + "a" * 64,
                     "beta-local": "sha256:" + "b" * 64,
                     "gamma-local": "sha256:" + "c" * 64,
                 },
@@ -714,33 +728,33 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             self.assertEqual(result["releaseTrainId"], release_train_id)
             self.assertEqual(
                 preflight_modes,
-                [("content_live", "immutable_candidate")] * 3,
+                [("content_live", "immutable_candidate")] * 2,
             )
             self.assertEqual(
                 set(result["runtimeBindings"]),
-                {"alpha-local", "beta-local", "gamma-local"},
+                {"beta-local", "gamma-local"},
             )
             self.assertEqual(
                 len(set(result["runtimeBindingDigests"].values())),
-                3,
+                2,
             )
             self.assertIn("no raw result was written", result["details"][0])
-            # 三个 target 均执行 7 个页面 P0 suite（含 release-sample-matrix）；
-            # 每环境另有 release probe + canonical hot-restart run。
-            self.assertEqual(len(result["runs"]), 27)
-            self.assertEqual(run.call_count, 24)
+            # 仅 Beta/Gamma Remote target 消费同一 release train；Alpha 离线独立验收。
+            # 每个 Remote target 执行 7 个页面 P0 suite、release probe 与 hot-restart。
+            self.assertEqual(len(result["runs"]), 18)
+            self.assertEqual(run.call_count, 16)
             self.assertEqual(result["appUatPlan"], uat_plan)
             direct_calls = [
                 call
                 for call in run.call_args_list
                 if "verify_ios_hot_restart.py" in " ".join(map(str, call.args[0]))
             ]
-            self.assertEqual(len(direct_calls), 3)
+            self.assertEqual(len(direct_calls), 2)
             for call in direct_calls:
                 direct_argv = call.args[0]
                 self.assertEqual(
                     (call.kwargs.get("env") or {}).get("QWQ_OUTPUT_ROOT"),
-                    str(stackctl.output_root().expanduser().resolve()),
+                    str(output_root.resolve()),
                 )
                 self.assertIn("--launch-provenance", direct_argv)
                 self.assertIn("canonical_launcher", direct_argv)
@@ -765,7 +779,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 for item in result["runs"]
                 if item["suite"] == "canonical-hot-restart"
             ]
-            self.assertEqual(len(hot_restart_runs), 3)
+            self.assertEqual(len(hot_restart_runs), 2)
             for item in hot_restart_runs:
                 self.assertEqual(
                     item["launchProvenance"],
@@ -795,7 +809,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 for call in patrol_calls
                 if "app-content-app-core-readback" in " ".join(map(str, call.args[0]))
             ]
-            self.assertEqual(len(core_calls), 3)
+            self.assertEqual(len(core_calls), 2)
             for call in core_calls:
                 self.assertIn("--data-release-id", call.args[0])
                 self.assertIn("release-a", call.args[0])
@@ -816,7 +830,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 for call in smoke_profile.call_args_list
                 if call.kwargs.get("suite_name") == "app-content-profile-journey"
             ]
-            self.assertEqual(len(profile_journey_calls), 3)
+            self.assertEqual(len(profile_journey_calls), 2)
             for call in profile_journey_calls:
                 self.assertEqual(
                     call.kwargs.get("patrol_target"),
@@ -827,7 +841,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 for call in smoke_profile.call_args_list
                 if call.kwargs.get("suite_name") == "app-content-message-home"
             ]
-            self.assertEqual(len(message_calls), 3)
+            self.assertEqual(len(message_calls), 2)
             for call in message_calls:
                 self.assertEqual(
                     call.kwargs.get("patrol_target"),
@@ -836,7 +850,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             planned_messages = [
                 item for item in result["runs"] if item.get("suite") == "message-home"
             ]
-            self.assertEqual(len(planned_messages), 3)
+            self.assertEqual(len(planned_messages), 2)
             self.assertTrue(
                 all(item.get("typedTestDataConversation") for item in planned_messages)
             )
@@ -851,7 +865,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 for call in smoke_profile.call_args_list
                 if call.kwargs.get("suite_name") == "app-content-home-video-playback"
             ]
-            self.assertEqual(len(home_video_calls), 3)
+            self.assertEqual(len(home_video_calls), 2)
             for call in home_video_calls:
                 self.assertEqual(
                     call.kwargs.get("patrol_target"),
@@ -863,7 +877,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 for call in patrol_calls
                 if "app-content-home-video-playback" in " ".join(map(str, call.args[0]))
             ]
-            self.assertEqual(len(executed_home_video_calls), 3)
+            self.assertEqual(len(executed_home_video_calls), 2)
             for call in executed_home_video_calls:
                 self.assertIn("--data-release-id", call.args[0])
                 self.assertIn("release-a", call.args[0])
@@ -906,7 +920,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 for item in result["runs"]
                 if item.get("suite") == "release-bound-search-and-video-page"
             ]
-            self.assertEqual(len(planned_search), 3)
+            self.assertEqual(len(planned_search), 2)
             self.assertTrue(
                 all(
                     item.get("searchCanaries") == uat_plan["searchCanaries"]
@@ -919,7 +933,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 if "app-content-controlled-edge-recovery"
                 in " ".join(map(str, call.args[0]))
             ]
-            self.assertEqual(len(fault_calls), 3)
+            self.assertEqual(len(fault_calls), 2)
             for fault_call in fault_calls:
                 self.assertIn(
                     "--stackctl-controlled-edge-fault",
@@ -931,11 +945,10 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 if call.kwargs.get("suite_name")
                 == "app-content-controlled-edge-recovery"
             ]
-            self.assertEqual(len(fault_profile_calls), 3)
+            self.assertEqual(len(fault_profile_calls), 2)
             self.assertEqual(
                 {(call.args[0], call.args[1]) for call in fault_profile_calls},
                 {
-                    ("alpha", "alpha-local"),
                     ("beta", "beta-local"),
                     ("gamma", "gamma-local"),
                 },

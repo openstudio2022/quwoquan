@@ -9,6 +9,7 @@
     "requestId",
     "candidate",
     "environment",
+    "target",
     "impactPlanDigest",
     "priority",
     "executionMode",
@@ -49,6 +50,9 @@
           "$ref": "#/$defs/digest"
         }
       }
+    },
+    "target": {
+      "enum": ["alpha-local", "beta-local", "gamma-local"]
     },
     "environment": {
       "enum": [

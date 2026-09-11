@@ -43,6 +43,8 @@ def _source_row(*, source_id: str, url: str) -> dict[str, Any]:
 def _target(*, region: str) -> dict[str, Any]:
     return {
         "name": "九寨沟",
+        "entityRef": "/entity/地点/景区/九寨沟",
+        "entityId": "qwq_entity_jiuzhaigou",
         "entityType": "地点/景区",
         "region": region,
     }
@@ -69,21 +71,30 @@ def _project(
     )
 
 
+@pytest.mark.parametrize("source_id,url,source_kind", [
+    ("zh_wikipedia", _WIKI_URL, "wikipedia"),
+    ("toutiao_baike", "https://www.baike.com/wiki/九寨沟", "toutiao_baike"),
+])
+@pytest.mark.parametrize("extractor", [None, "html_text"])
 def test_compliant_homepage_entity_header_validates_against_publish_schema(
-    tmp_path: Path,
+    tmp_path: Path, source_id: str, url: str, source_kind: str, extractor: str | None,
 ) -> None:
-    files = _project(
-        tmp_path,
-        target=_target(region="中国/四川省/阿坝藏族羌族自治州/九寨沟县"),
-        source_rows=[_source_row(source_id="zh_wikipedia", url=_WIKI_URL)],
-    )
+    source = _source_row(source_id=source_id, url=url)
+    if extractor is not None:
+        source["meta"]["extractor"] = extractor
+    target = _target(region="中国/四川省/阿坝藏族羌族自治州/九寨沟县")
+    files = _project(tmp_path, target=target, source_rows=[source])
 
     entity = json.loads(files[Path("_entity.json")])
     assert_valid(entity, "publish", "entity", label="projected homepage entity")
     assert entity["geoTagRef"] == "Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县"
     assert entity["geoTagRef"] in entity["tagRefs"]
-    assert entity["primarySource"]["sourceKind"] == "wikipedia"
+    assert entity["entityRef"] == target["entityRef"]
+    assert entity["entityId"] == target["entityId"]
+    assert entity["primarySource"]["sourceKind"] == source_kind
     assert entity["primarySource"]["policyRevision"] == "encyclopedia-primary"
+    expected_extractor = extractor or ("wikipedia_api" if source_kind == "wikipedia" else "toutiao_baike_html")
+    assert entity["primarySource"]["extractor"] == expected_extractor
 
 
 def test_target_without_region_fails_closed_before_writing_entity(
@@ -97,14 +108,18 @@ def test_target_without_region_fails_closed_before_writing_entity(
         )
 
 
+@pytest.mark.parametrize("extractor", [None, "html_text", "wikipedia_api"])
 def test_primary_source_outside_encyclopedia_closed_set_fails_closed(
-    tmp_path: Path,
+    tmp_path: Path, extractor: str | None,
 ) -> None:
+    source = _source_row(source_id="official_site", url=_WEB_URL)
+    if extractor is not None:
+        source["meta"]["extractor"] = extractor
     with pytest.raises(ValueError, match=r"homepage entity /entity/地点/景区/九寨沟") as info:
         _project(
             tmp_path,
             target=_target(region="中国/四川省/阿坝藏族羌族自治州/九寨沟县"),
-            source_rows=[_source_row(source_id="official_site", url=_WEB_URL)],
+            source_rows=[source],
         )
 
     message = str(info.value)

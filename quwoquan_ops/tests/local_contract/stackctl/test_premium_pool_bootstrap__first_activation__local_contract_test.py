@@ -11,17 +11,19 @@ spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-pac
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from contextlib import nullcontext
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib import premium_pool_release  # noqa: E402
+from quwoquan_ops.cli.lib import output_paths, premium_pool_release  # noqa: E402
 
 
 RELEASE_ID = "release-1"
@@ -94,6 +96,11 @@ def _import_report(
         ),
         encoding="utf-8",
     )
+    (report.parent / "run.json").write_text(json.dumps({
+        "schema": "quwoquan_data.environment_release_run",
+        "environment": environment, "releaseId": release_id,
+        "runId": import_run_id, "kind": "apply", "startedAt": "2026-09-10T00:00:00Z",
+    }), encoding="utf-8")
     return report
 
 
@@ -101,7 +108,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
     def _load(
         self,
         report: Path,
-        root: Path,
+        root: Path | None,
         *,
         content_id: str = VIDEO_ID,
         pool_is_empty: bool = True,
@@ -130,9 +137,9 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
                     },
                 },
             ),
-            mock.patch.object(
-                premium_pool_release, "env_runs_root", return_value=root
-            ),
+            (mock.patch.object(
+                premium_pool_release, "_data_release_runs_root", return_value=root
+            ) if root is not None else nullcontext()),
             mock.patch.object(
                 premium_pool_release,
                 "_load_release_sample_plan_documents_from_attestation",
@@ -178,6 +185,49 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
             self.assertEqual(binding.baseline_id, BASELINE_ID)
             # 引用必须相对环境 runs 根，收据里不出现绝对路径。
             self.assertFalse(Path(binding.import_report_ref).is_absolute())
+
+    def test_bootstrap_reads_only_data_writer_root_with_and_without_override(self) -> None:
+        # spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
+        for explicit_root in (False, True):
+            with self.subTest(explicit_root=explicit_root), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary).resolve()
+                data_root, host_root = base / "repo/.qwq_output", base / "host-runtime"
+                with (
+                    mock.patch.dict(os.environ),
+                    mock.patch.object(output_paths, "DEFAULT_OUTPUT_ROOT", data_root),
+                    mock.patch.object(output_paths, "DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT", host_root),
+                ):
+                    os.environ.pop("QWQ_OUTPUT_ROOT", None)
+                    if explicit_root:
+                        data_root = base / "explicit-output"
+                        os.environ["QWQ_OUTPUT_ROOT"] = str(data_root)
+                    report = _import_report(data_root / "env/alpha/runs")
+                    self.assertEqual(self._load(report, None).import_run_id, report.parent.name)
+                    self.assertEqual(output_paths.env_runs_root("alpha"), (data_root if explicit_root else host_root) / "env/alpha/runs")
+                    for wrong_root in (host_root, base / "other"):
+                        wrong = _import_report(wrong_root / "env/alpha/runs")
+                        with self.assertRaisesRegex(premium_pool_release.PremiumPoolReleaseError, "selected environment"):
+                            self._load(wrong, None)
+
+    def test_bootstrap_rejects_run_identity_escape_and_symlink(self) -> None:
+        for mutation in ("run", "kind", "environment", "release", "escape", "symlink", "symlink_parent"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                report = _import_report(root)
+                if mutation.startswith("symlink"):
+                    selected = report if mutation == "symlink" else report.parent
+                    saved = selected.with_name("original")
+                    selected.rename(saved)
+                    selected.symlink_to(saved, target_is_directory=mutation == "symlink_parent")
+                elif mutation == "escape":
+                    report = report.parent / ".." / report.parent.name / report.name
+                else:
+                    run_path = report.parent / "run.json"
+                    run = json.loads(run_path.read_bytes())
+                    run[{"run": "runId", "kind": "kind", "environment": "environment", "release": "releaseId"}[mutation]] = "verify" if mutation == "kind" else "other"
+                    run_path.write_text(json.dumps(run), encoding="utf-8")
+                with self.assertRaises(premium_pool_release.PremiumPoolReleaseError):
+                    self._load(report, root)
 
     def test_a_populated_pool_is_not_a_bootstrap(self) -> None:
         """池非空时这条路径必须关闭，否则它就成了绕过 consumer 校验的后门。

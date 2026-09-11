@@ -52,6 +52,13 @@
 - 全局搜索使用全屏 surface；创作、更多、评论和联系人选择使用保留上方上下文的贴底 surface。选项/说明 sheet 复用 `AppBottomModalSurface`、`ConversationSheet*` 或 `showAppActionSheet`，不得裸建第二套 modal popup。
 - 设置/表单页复用 Settings inset scaffold，成员选择页复用 member-picker scaffold；新增或移动受控页同步 canonical settings manifest。Modal leading 使用关闭语义，Stack 子页使用返回语义。
 
+<a id="req-005"></a>
+### REQ-005 移动主导航的中央操作与布局一致
+
+- 主导航五项等分，中央创建入口使用品牌蓝底、白色加号的横向圆角矩形，无明显投影、无可见文字标签；与两侧图标及文字的整体垂直居中，不浮起、不使用负偏移。
+- 按钮视觉尺寸与触控热区分离：普通入口至少 44×44，中央主操作至少 48×48，并具有可辨认的“创作”读屏标签。深浅主题、底部安全区、窄屏及文字放大不改变入口顺序、创建动作或登录续接。
+- 主导航的高度与沉浸内容互动栏分别使用自身语义尺寸；扩大导航触控区不得抬高沉浸内容互动栏。
+
 ## 4. 契约引用
 
 - 父能力公开契约：[`L2 spec`](../spec.md)。
@@ -72,6 +79,14 @@
 - GIVEN 用户在 compact、regular 或 expanded 宽度打开搜索、设置或贴底操作面。
 - WHEN 页面选择布局断点、导航 leading 与 surface scaffold。
 - THEN 页面只消费 canonical token/scaffold/manifest，且宽度变化不复制产品流程、不破坏上下文或返回语义。
+
+<a id="gwt-003"></a>
+### GWT-003 移动底栏中央操作可辨认且布局稳定
+
+- GIVEN 用户在深浅主题、窄屏或常规屏宽、不同底部安全区与文字缩放下使用移动主导航。
+- WHEN 查看五个入口或点击中央创建入口。
+- THEN 五项保持等分和垂直居中，中央入口为无明显投影的品牌蓝横向圆角矩形，视觉尺寸、点击热区与读屏标签满足 `REQ-005`，原创建动作仍可触发。
+- AND 主导航高度变化不改变沉浸内容互动栏的原有高度与贴底安全区布局。
 
 ## 6. 依赖
 

@@ -175,7 +175,8 @@ class StackctlDevSessionRuntimeReuseTest(StackctlDevSessionTestBase):
                 )
                 self.assertEqual(result["phases"], [])
 
-    def test_stale_startup_receipt_is_warning_for_test_live(self) -> None:
+    def test_stale_startup_receipt_blocks_before_mutation(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md#gwt-003
         with (
             tempfile.TemporaryDirectory() as temporary,
             mock.patch.object(
@@ -183,12 +184,12 @@ class StackctlDevSessionRuntimeReuseTest(StackctlDevSessionTestBase):
                 "_dev_session_runtime_preflight",
                 side_effect=ValueError("startup attempt target identity mismatch"),
             ),
-            mock.patch.object(stackctl.subprocess, "run", return_value=_handoff_completed()),
+            mock.patch.object(stackctl.subprocess, "run") as subprocess_run,
             mock.patch.object(
                 stackctl,
                 "_start_mutable_test_live_runtime",
-                return_value=_runtime_started(),
-            ),
+                side_effect=AssertionError("身份不可读时不得启动 runtime"),
+            ) as start_runtime,
             mock.patch.object(
                 stackctl,
                 "command_app_debug_preflight",
@@ -209,9 +210,13 @@ class StackctlDevSessionRuntimeReuseTest(StackctlDevSessionTestBase):
                 report_dir=Path(temporary),
             )
 
-        self.assertEqual(result["exitCode"], 0)
-        self.assertEqual(result["status"], "warning")
-        self.assertIn("stale runtime receipt ignored", result["warnings"][0])
+        self.assertEqual(result["exitCode"], 2)
+        self.assertEqual(result["blockerKind"], "runtime_receipt_unreadable")
+        self.assertEqual(result["details"], ["startup attempt target identity mismatch"])
+        self.assertEqual(result["phases"], [])
+        self.assertFalse(result["runtimeCreated"])
+        start_runtime.assert_not_called()
+        subprocess_run.assert_not_called()
 
     def test_stopped_bounded_receipt_allows_mutable_session(self) -> None:
         events: list[str] = []
@@ -541,6 +546,8 @@ class StackctlDevSessionRuntimeReuseTest(StackctlDevSessionTestBase):
         )
 
     def test_all_nonprod_cross_target_bounded_conflict_preserves_runtime(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md#gwt-003
+
         bounded_attempt = {
             "attemptId": "commercial-beta-1",
             "status": "running",
@@ -598,22 +605,17 @@ class StackctlDevSessionRuntimeReuseTest(StackctlDevSessionTestBase):
                 side_effect=AssertionError("active bounded runtime must not be downed"),
             ),
         ):
-            result = stackctl.command_dev_session(args)
-
-        self.assertEqual(result["exitCode"], 2)
-        self.assertEqual(result["blockerKind"], "runtime_workload_conflict")
-        self.assertEqual(len(result["sessions"]), 1)
-        self.assertEqual(result["sessions"][0]["target"], "alpha-local")
-        self.assertEqual(
-            result["sessions"][0]["activeRuntime"],
-            {
-                "target": "beta-local",
-                "workload": "content-commercial",
-                "attemptId": "commercial-beta-1",
-                "status": "running",
-                "receiptScope": "target",
-            },
-        )
+            # Beta 的 bounded workload 不阻断 Alpha；此 seam 不运行 Docker。
+            with mock.patch.object(stackctl, "load_test_live_startup_attempt", return_value=None):
+                requested, conflicts = stackctl._dev_session_active_receipts(
+                    stackctl.load_environment_topology(), "alpha-local"
+                )
+                self.assertIsNone(requested)
+                self.assertEqual(conflicts, [])
+                _, own_conflicts = stackctl._dev_session_active_receipts(
+                    stackctl.load_environment_topology(), "beta-local"
+                )
+                self.assertEqual(own_conflicts[0]["attemptId"], "commercial-beta-1")
 
     def test_bounded_workload_reuses_full_and_targeted_down_is_noop(self) -> None:
         fixed_identity = {

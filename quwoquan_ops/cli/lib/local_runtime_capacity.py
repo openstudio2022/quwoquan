@@ -22,6 +22,10 @@ from typing import Any, Mapping
 import json
 import re
 import shutil
+import os
+import fcntl
+import subprocess
+import sys
 
 from quwoquan_ops.cli.lib.common import ROOT, load_json_yaml
 
@@ -433,6 +437,73 @@ def verify_local_runtime_capacity(
             probe_container_store_capacity(resolved, runner=runner),
         )
     )
+
+
+def observe_reservation_capacity() -> dict[str, int]:
+    """只读 CPU/RAM/VM/磁盘观测；不启动诊断容器、不做任何回收。"""
+    from quwoquan_ops.cli.lib.common import run
+    from quwoquan_ops.cli.lib.output_paths import deployment_work_root
+    if sys.platform == "darwin":
+        host_memory = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, check=True)
+        memory = int(host_memory.stdout.strip())
+    else:
+        memory = int(os.sysconf("SC_PHYS_PAGES")) * int(os.sysconf("SC_PAGE_SIZE"))
+    info = run(["docker", "info", "--format", "{{json .}}"], timeout_seconds=20)
+    if info.returncode != 0:
+        raise LocalRuntimeCapacityError("OPS.CAPACITY.unobserved: container VM quota unavailable")
+    document = json.loads(info.stdout)
+    path = deployment_work_root("beta-local").parent
+    while not path.exists():
+        path = path.parent
+    return {"hostCpu": int(os.cpu_count() or 0), "hostMemory": memory,
+            "vmCpu": int(document["NCPU"]), "vmMemory": int(document["MemTotal"]),
+            "disk": int(shutil.disk_usage(path).free)}
+
+
+def update_runtime_capacity_reservation(*, target: str, generation: str, status: str) -> None:
+    """在共享 host 锁内原子预约整代际预算；死亡/TTL 不释放持久预约。"""
+    from quwoquan_ops.cli.lib.host_locks import named_host_lock_path
+    from quwoquan_ops.cli.lib.output_paths import _read_secure_json_object, _atomic_write_secure_json_object
+    if target not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"} or not generation:
+        raise LocalRuntimeCapacityError("OPS.CAPACITY.invalid_generation")
+    path = named_host_lock_path("local-runtime-budget", "reservations").with_suffix(".json")
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(path.with_suffix(".lock"), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        document = _read_secure_json_object(path, label="runtime capacity reservations") or {"reservations": {}}
+        rows = document["reservations"]
+        previous = rows.get(target)
+        if previous and previous["generation"] != generation:
+            raise LocalRuntimeCapacityError("OPS.CAPACITY.generation_conflict: existing runtime budget is retained")
+        if status == "stopped":
+            if previous:
+                del rows[target]
+        elif status in {"prepared", "partial", "running"}:
+            policy = load_json_yaml(MANIFEST_PATH)["reservation"]
+            peak = status != "running"
+            demand = {"generation": generation,
+                      "cpu": int(policy["runtimeCpuCores"]) + (int(policy["buildPeakCpuCores"]) if peak else 0),
+                      "memory": int(policy["runtimeMemoryBytes"]) + (int(policy["buildPeakMemoryBytes"]) if peak else 0),
+                      "disk": int(policy["runtimeDiskBytes"])}
+            # 只有新建/增额才读取宿主；降额和 exact release 不依赖失效 daemon。
+            if not previous or any(demand[key] > previous[key] for key in ("cpu", "memory", "disk")):
+                observed = observe_reservation_capacity()
+                limits = {"cpu": min(observed["hostCpu"], observed["vmCpu"]) * float(policy["usableCpuFraction"]),
+                          "memory": min(observed["hostMemory"], observed["vmMemory"]) * float(policy["usableMemoryFraction"]),
+                          "disk": observed["disk"] - load_capacity_policy().thresholds.host_free_bytes}
+                for key, limit in limits.items():
+                    total = demand[key] + sum(row[key] for name, row in rows.items() if name != target)
+                    if total > limit:
+                        raise LocalRuntimeCapacityError(f"OPS.CAPACITY.reservation_exhausted: {key} required={total} budget={limit}; existing targets retained")
+            rows[target] = demand
+        else:
+            raise LocalRuntimeCapacityError("OPS.CAPACITY.invalid_status")
+        _atomic_write_secure_json_object(path, document, label="runtime capacity reservations")
+    except (KeyError, TypeError, json.JSONDecodeError, OSError, subprocess.SubprocessError) as exc:
+        raise LocalRuntimeCapacityError(f"OPS.CAPACITY.unverifiable: {exc}") from exc
+    finally:
+        os.close(descriptor)
 
 
 NOT_APPLICABLE_EVIDENCE: dict[str, Any] = {

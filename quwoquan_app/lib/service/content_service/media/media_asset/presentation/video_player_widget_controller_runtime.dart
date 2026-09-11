@@ -70,7 +70,7 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
         final candidateUrl = candidate.url;
         List<PlayableVideoSource> sources;
         try {
-          sources = await _playableSourcesForCandidate(candidateUrl);
+          sources = await _playableSourcesForCandidate(candidate);
         } catch (error, stackTrace) {
           if (!mounted || generation != _videoInitGeneration) {
             return;
@@ -252,10 +252,7 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
       }
     } catch (error, stackTrace) {
       if (mounted && generation == _videoInitGeneration) {
-        final kind = _classifyPlaybackFailure(
-          error,
-          widget.playbackUrl,
-        );
+        final kind = _classifyPlaybackFailure(error, widget.playbackUrl);
         _logCandidateFailure(
           index: 0,
           candidateCount: candidates.length,
