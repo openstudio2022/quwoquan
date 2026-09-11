@@ -543,7 +543,7 @@ def target_local_dir(target: str) -> Path:
     return env_local_root(env_for_target(target)) / safe_segment(target, fallback="local")
 
 
-def legacy_worktree_startup_paths(target: str) -> tuple[Path, Path, Path]:
+def archived_worktree_startup_paths(target: str) -> tuple[Path, Path, Path]:
     """仅供显式 Alpha reconciliation 使用；不改变普通 process guard。"""
     if target != "alpha-local" or os.environ.get("QWQ_OUTPUT_ROOT"):
         raise ValueError("worktree startup reconciliation requires alpha-local without QWQ_OUTPUT_ROOT")

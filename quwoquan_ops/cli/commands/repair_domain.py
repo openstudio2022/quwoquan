@@ -902,7 +902,7 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         "--worktree-startup-reconciliation",
         choices=("plan", "apply"),
         default="",
-        help="Explicit Alpha-only archive of exact legacy worktree startup receipts; never tears down resources.",
+        help="Explicit Alpha-only archive of exact archived worktree startup receipts; never tears down resources.",
     )
     repair_parser.add_argument(
         "--worktree-startup-plan-ref",

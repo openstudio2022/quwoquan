@@ -254,7 +254,7 @@ def legacy_reconciliation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
     monkeypatch.setattr(stackctl, "run", docker_readback)
     monkeypatch.setattr(stackctl, "_published_endpoint_is_occupied", lambda endpoint: False)
-    paths = output_paths.legacy_worktree_startup_paths("alpha-local")
+    paths = output_paths.archived_worktree_startup_paths("alpha-local")
     run_id = "legacy-full-alpha-attempt"
     env_root = root / ".qwq_output/env/alpha"
     run_root = env_root / "runs" / run_id

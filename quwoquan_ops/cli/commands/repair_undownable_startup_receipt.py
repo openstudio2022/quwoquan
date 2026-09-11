@@ -50,20 +50,20 @@ def _require_absent(path: Path) -> None:
         raise ValueError(f"active or unknown reconciliation exclusion: {path}")
 
 
-def _read_legacy_inputs(target: str) -> tuple[dict[str, Any], list[dict[str, str]]]:
-    paths = output_paths.legacy_worktree_startup_paths(target)
+def _read_archived_worktree_inputs(target: str) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    paths = output_paths.archived_worktree_startup_paths(target)
     encoded = [_required_bytes(path) for path in paths]
     startup, duplicate, local_run = [json.loads(item) for item in encoded]
     if not isinstance(startup, dict) or startup != duplicate or encoded[0] != encoded[1]:
-        raise ValueError("legacy startup receipt copies differ in identity or exact bytes")
+        raise ValueError("archived worktree startup receipt copies differ in identity or exact bytes")
     if startup.get("status") != "stopped" or startup.get("workload") != "full":
-        raise ValueError("legacy reconciliation only admits consistent stopped/full receipts")
+        raise ValueError("archived worktree reconciliation only admits consistent stopped/full receipts")
     # 只复用旧对象的身份/摘要校验；旧 runRoot 不能送入宿主 canonical 路径校验。
     # 原件不改写，原始 runRoot 与 local_run 在下方按 exact repo 路径独立验证。
     validate_startup_attempt({**startup, "runRoot": ""}, expected_env="alpha", expected_target=target)
     run_id = startup["attemptId"]
     if not isinstance(run_id, str) or output_paths.safe_segment(run_id) != run_id:
-        raise ValueError("legacy attemptId is not one exact path segment")
+        raise ValueError("archived worktree attemptId is not one exact path segment")
     root = output_paths.ROOT / ".qwq_output/env/alpha"
     run_root = root / "runs" / run_id
     observability = root / "observability" / run_id
@@ -72,9 +72,9 @@ def _read_legacy_inputs(target: str) -> tuple[dict[str, Any], list[dict[str, str
         "runRoot": str(run_root), "observabilityRoot": str(observability),
     }
     if local_run != expected_binding or startup.get("runRoot") != str(run_root):
-        raise ValueError("legacy local_run binding differs from exact repository runRoot")
+        raise ValueError("archived worktree local_run binding differs from exact repository runRoot")
     for directory in (run_root, observability):
-        descriptor, _ = output_paths._open_directory_chain(directory, label="legacy run binding")
+        descriptor, _ = output_paths._open_directory_chain(directory, label="archived worktree run binding")
         os.close(descriptor)
     process = paths[0].parent
     for excluded in (
@@ -225,7 +225,7 @@ def _reconcile_worktree_startup(args: argparse.Namespace, *, report_dir: Path) -
     action = args.worktree_startup_reconciliation
     moved = False
     try:
-        startup, inputs = _read_legacy_inputs(target)
+        startup, inputs = _read_archived_worktree_inputs(target)
         plan_ref = str(getattr(args, "worktree_startup_plan_ref", "") or "")
         confirmed = bool(getattr(args, "confirm_undownable_startup_receipt_reclaim", False))
         if getattr(args, "orphaned_compose_attestation", "") or getattr(args, "confirm_orphaned_compose_teardown", False):
@@ -235,8 +235,8 @@ def _reconcile_worktree_startup(args: argparse.Namespace, *, report_dir: Path) -
                 raise ValueError("planning cannot consume apply confirmation or an existing plan")
             plan_path = _plan_path(report_dir / "worktree-startup-reconciliation-plan.json")
             readback = _runtime_readback(target, startup["composeProject"])
-            if _read_legacy_inputs(target)[1] != inputs:
-                raise ValueError("legacy receipt bytes changed during live readback")
+            if _read_archived_worktree_inputs(target)[1] != inputs:
+                raise ValueError("archived worktree receipt bytes changed during live readback")
             _read_execution_exclusions(target)
             plan = {"schema": _PLAN_SCHEMA, "repository": str(output_paths.ROOT),
                     "target": target, "attemptId": startup["attemptId"], "readback": readback,
@@ -260,7 +260,7 @@ def _reconcile_worktree_startup(args: argparse.Namespace, *, report_dir: Path) -
                 raise ValueError("reconciliation plan identity/source/destination/digest changed")
             _read_execution_exclusions(target)
             with _stackctl._local_stack_operation_lock(target):
-                if (_read_legacy_inputs(target)[1] != inputs
+                if (_read_archived_worktree_inputs(target)[1] != inputs
                         or _runtime_readback(target, startup["composeProject"], check_execution=False) != plan["readback"]
                         or _required_bytes(plan_path) != raw):
                     raise ValueError("reconciliation inputs or live resource readback changed since plan")
