@@ -13,6 +13,7 @@
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t5
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t6
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t7
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004
 """
 from __future__ import annotations
 
@@ -956,6 +957,19 @@ def test_selector_plan_is_stable_for_equivalent_input_order() -> None:
     second = build_impact_plan(list(reversed(paths)), level="fast")
 
     assert first == second
+
+
+def test_user_service_focused_go_uses_check_override_within_fast_ceiling() -> None:
+    plan = build_impact_plan(
+        [
+            "quwoquan_service/services/user-service/internal/account/"
+            "user_account/infrastructure/cache/close_cache.go"
+        ],
+        level="fast",
+    )
+    check = next(item for item in plan["checks"] if item["id"] == "focused:go:user-service")
+    assert check["timeout_seconds"] == 600
+    assert check["timeout_seconds"] <= 900
 
 
 def test_source_scope_routes_fast_and_full_code_health_with_bounded_timeouts() -> None:
