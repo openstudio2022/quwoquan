@@ -39,6 +39,41 @@ def _digest(value: str) -> str:
 
 
 class GraphQLReadRegistryPackageContractTest(unittest.TestCase):
+    def test_external_scratch_keeps_contract_view_bound_to_source_projection(self):
+        from quwoquan_ops.cli.lib import graphql_read_registry_package as package
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "repo"
+            scratch = Path(directory) / "scratch"
+            for relative in (package.SCHEMA_SOURCE, package.METADATA_SOURCE):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("source")
+            root.chmod(0o555)
+            views = []
+
+            def generator(argv, **kwargs):
+                if argv[0] == "python3":
+                    view = Path(argv[argv.index("--output") + 1])
+                    execution_root = Path(kwargs["cwd"]).parent
+                    self.assertTrue(execution_root.is_relative_to(scratch))
+                    self.assertTrue(view.is_relative_to(execution_root / ".qwq_output"))
+                    self.assertEqual((execution_root / package.SCHEMA_SOURCE).read_bytes(), (root / package.SCHEMA_SOURCE).read_bytes())
+                    self.assertNotIn("--external-output-root", argv)
+                    views.append(view)
+                else:
+                    self.assertEqual(Path(argv[argv.index("--metadata-dir") + 1]), views[0])
+                    Path(argv[argv.index("--output") + 1]).write_bytes(b"registry")
+                self.assertEqual(Path(kwargs["cwd"]).name, "quwoquan_service")
+                return subprocess.CompletedProcess(argv, 0, "", "")
+
+            with mock.patch.object(package.subprocess, "run", side_effect=generator):
+                self.assertEqual(package._generate_payload(root, CANDIDATE, scratch_root=scratch), b"registry")
+            self.assertFalse(views[0].exists())
+            self.assertFalse((root / ".qwq_output").exists())
+            self.assertEqual(root.stat().st_mode & 0o777, 0o555)
+            root.chmod(0o700)
+
     def _candidate(self, root: Path, *, enabled: bool = True) -> Path:
         candidate = root / "candidate"
         service = candidate / "packages/services/api-edge"

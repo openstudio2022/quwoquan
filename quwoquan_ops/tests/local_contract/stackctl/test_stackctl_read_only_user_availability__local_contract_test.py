@@ -52,6 +52,34 @@ def _blocked_report(first_blocker_class: str = "startup_identity") -> dict[str, 
     }
 
 
+@pytest.mark.parametrize("blocked", [False, True])
+def test_log_inspection_only_reads_selected_target(monkeypatch, tmp_path, blocked):
+    # spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
+    from quwoquan_ops.cli.commands.inspect_surface import _local_log_report
+    calls = []
+
+    def target_process(target):
+        calls.append(target)
+        assert target == "gamma-local", "Gamma 诊断不得解析其他 target 的运行权威"
+        if blocked:
+            raise ValueError("OPS.RUNTIME.reconcile_required: exact target is blocked")
+        return tmp_path
+
+    monkeypatch.setattr(stackctl, "target_process_dir", target_process)
+    monkeypatch.setattr(stackctl, "_local_runtime_log_root", target_process)
+    monkeypatch.setattr(stackctl, "relpath", str)
+    monkeypatch.setattr(stackctl, "_runtime_log_evidence_report", lambda path: {"availability": "available"})
+    result = _local_log_report("gamma-local")
+    assert set(calls) == {"gamma-local"}
+    if blocked:
+        assert result["paths"] == []
+        assert result["runtimeDiagnostics"]["availability"] == "unavailable"
+        assert "reconcile_required" in result["runtimeDiagnostics"]["reason"]
+    else:
+        assert result["paths"] == [{"name": "gamma-local-state", "path": str(tmp_path)}]
+        assert result["runtimeDiagnostics"]["availability"] == "available"
+
+
 def test_report_schema_accepts_bounded_status_and_metric_vocabulary() -> None:
     schema = json.loads(
         Path(

@@ -10,7 +10,7 @@ from typing import Any
 
 from .agent_governance_contract import (
     contract_schema_version, contract_section, declared_object, validate_candidate_evidence_manifest,
-    validate_candidate_path_set, validate_feature_context_manifest,
+    validate_candidate_path_set, validate_feature_context_manifest, allowed_delivery_sources,
 )
 from .descriptor_safe_io import read_repo_relative_regular_single_link
 from .evidence_fingerprint import (
@@ -130,14 +130,9 @@ def _policy_digest(relative: str, *, repo_root: Path) -> str:
 
 def _allowed_delivery_lanes(*, repo_root: Path) -> set[str]:
     try:
-        import yaml
-        payload = yaml.safe_load((repo_root / BRANCH_POLICY_PATH).read_text(encoding="utf-8"))
-        lanes = payload["allowed_local_branches"]
+        return allowed_delivery_sources(repo_root)
     except (OSError, UnicodeError, KeyError, TypeError, ValueError) as exc:
-        _refuse("CANDIDATE.OWNER_DRIFT", f"branch policy 无法确定 delivery lane：{exc}")
-    if not isinstance(lanes, list):
-        _refuse("CANDIDATE.OWNER_DRIFT", "branch policy allowed_local_branches 必须为列表")
-    return {item for item in lanes if isinstance(item, str) and item.startswith("lane/")}
+        _refuse("CANDIDATE.OWNER_DRIFT", f"branch policy 无法确定 delivery source：{exc}")
 
 
 def _delivery_identity(*, repo_root: Path) -> tuple[str, str, dict[str, str]]:
@@ -160,12 +155,12 @@ def _delivery_identity(*, repo_root: Path) -> tuple[str, str, dict[str, str]]:
         else:
             branch = ""
     if branch not in _allowed_delivery_lanes(repo_root=repo_root):
-        _refuse("CANDIDATE.OWNER_DRIFT", f"current branch 不是版本化 policy 允许的逻辑 lane：{branch or 'detached'}")
+        _refuse("CANDIDATE.OWNER_DRIFT", f"current branch 不是版本化 policy 允许的交付来源：{branch or 'detached'}")
     policy_digests = declared_object({
         "branch_policy_digest": _policy_digest(BRANCH_POLICY_PATH, repo_root=repo_root),
         "lane_ownership_digest": _policy_digest(LANE_OWNERSHIP_PATH, repo_root=repo_root),
     }, "candidate_evidence_manifest", "delivery_policy_digest_fields")
-    # 最小 v2 中一个 current logical lane 同时承担 delivery owner 与 lead lane；
+    # 同一政策允许的来源分支标识本次交付；Feature owner 由独立路径闭包决定。
     # 不携带本机 worktree/clone inventory 或绝对路径。
     return branch, branch, policy_digests
 

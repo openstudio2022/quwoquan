@@ -226,10 +226,15 @@ def test_production_targets_remain_outside_local_orphan_recovery(
 
 
 # spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
-@pytest.fixture
-def legacy_reconciliation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md#gwt-006.t1
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md#gwt-006.t2
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md#gwt-006.t3
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md#gwt-006.t4
+@pytest.fixture(params=("alpha", "beta", "gamma"))
+def legacy_reconciliation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, request):
     from quwoquan_ops.cli.commands import repair_undownable_startup_receipt as repair
     from quwoquan_ops.cli.lib import output_paths
+    from quwoquan_ops.cli.lib.environment_topology import formal_release_compose_project_name
     from quwoquan_ops.tests.support.startup_attempt_receipt_test_support import _composition
 
     root = tmp_path.resolve() / "repo"
@@ -254,18 +259,22 @@ def legacy_reconciliation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
     monkeypatch.setattr(stackctl, "run", docker_readback)
     monkeypatch.setattr(stackctl, "_published_endpoint_is_occupied", lambda endpoint: False)
-    paths = output_paths.archived_worktree_startup_paths("alpha-local")
-    run_id = "legacy-full-alpha-attempt"
-    env_root = root / ".qwq_output/env/alpha"
+    environment = request.param
+    target = f"{environment}-local"
+    # 直接构造旧事实，避免用待测 resolver 隐藏错误的环境路径。
+    process = root / ".qwq_output/env" / environment / "local" / target / "process"
+    paths = (process / "startup_attempt.json", process / "workloads/full/startup_attempt.json", process / "local_run.json")
+    run_id = f"archived-full-{environment}-attempt"
+    env_root = root / ".qwq_output/env" / environment
     run_root = env_root / "runs" / run_id
     obs_root = env_root / "observability" / run_id
     run_root.mkdir(parents=True)
     obs_root.mkdir(parents=True)
-    composition = _composition()
+    composition = _composition(environment=environment, target=target)
     startup = {
         "schema": "stackctl-local-startup-attempt", "attemptId": run_id,
-        "env": "alpha", "target": "alpha-local", "status": "stopped", "workload": "full",
-        "composeProject": PROJECT, "candidateDigest": "sha256:" + "a" * 64,
+        "env": environment, "target": target, "status": "stopped", "workload": "full",
+        "composeProject": formal_release_compose_project_name(target), "candidateDigest": "sha256:" + "a" * 64,
         "configurationDigest": composition["configurationDigest"],
         "providerRuntimeDigest": "sha256:" + "b" * 64,
         "observabilityLogSinkDigest": "sha256:" + "c" * 64,
@@ -273,14 +282,14 @@ def legacy_reconciliation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         "runRoot": str(run_root), "startedAt": "2026-09-08T00:00:00Z",
         "updatedAt": "2026-09-08T01:00:00Z", "failure": None, "cleanupFailure": None,
     }
-    local_run = {"env": "alpha", "target": "alpha-local", "runId": run_id,
+    local_run = {"env": environment, "target": target, "runId": run_id,
                  "runRoot": str(run_root), "observabilityRoot": str(obs_root)}
     for path, payload in zip(paths, (startup, startup, local_run), strict=True):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
-    report = output_paths.env_runs_root("alpha") / "receipt-reconciliation-test"
+    report = output_paths.env_runs_root(environment) / "receipt-reconciliation-test"
     report.mkdir(parents=True)
-    args = _args(confirm=False)
+    args = _args(confirm=False, target=target)
     args.worktree_startup_reconciliation = "plan"
     args.worktree_startup_plan_ref = ""
     return repair, output_paths, args, report, paths, calls
@@ -288,7 +297,7 @@ def legacy_reconciliation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
 def _legacy_result(fixture):
     repair, _, args, report, _, _ = fixture
-    return repair.repair_undownable_startup_receipt(args, environment="alpha", report_dir=report)
+    return repair.repair_undownable_startup_receipt(args, environment=fixture[1].env_for_target(args.target), report_dir=report)
 
 
 def _legacy_apply(fixture):
@@ -308,7 +317,7 @@ def test_legacy_plan_reads_exact_bytes_without_weakening_guard(legacy_reconcilia
     assert result["status"] == "planned"
     assert [path.read_bytes() for path in paths] == before
     with pytest.raises(ValueError, match="OPS.RUNTIME.reconcile_required"):
-        output_paths.target_process_dir("alpha-local")
+        output_paths.target_process_dir(legacy_reconciliation[2].target)
     path, digest = result["planRef"].rsplit("=", 1)
     assert digest == "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest()
     plan = json.loads(Path(path).read_text())
@@ -332,7 +341,7 @@ def test_legacy_confirmed_apply_moves_original_inodes_and_preserves_bytes(legacy
         destination = Path(item["destination"])
         assert (destination.stat().st_ino, destination.read_bytes()) == original[item["source"]]
         assert not Path(item["source"]).exists()
-    assert output_paths.target_process_dir("alpha-local").is_relative_to(output_paths.DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT)
+    assert output_paths.target_process_dir(legacy_reconciliation[2].target).is_relative_to(output_paths.DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT)
     assert _legacy_result(legacy_reconciliation)["exitCode"] == 2
 
 
@@ -350,8 +359,9 @@ def test_legacy_active_and_unknown_readbacks_refuse_before_plan(legacy_reconcili
     elif resource == "lease":
         monkeypatch.setattr(repair, "list_consumer_leases", lambda t: [{"target": t, "state": "stale"}])
     else:
-        exclusion = (repair.local_runtime_operation_lock_path("alpha-local").with_suffix(".executor.json")
-                     if resource == "fence" else output_paths.deployment_target_path("alpha-local", "process", "environment-execution", "execution-slot.json"))
+        target = legacy_reconciliation[2].target
+        exclusion = (repair.local_runtime_operation_lock_path(target).with_suffix(".executor.json")
+                     if resource == "fence" else output_paths.deployment_target_path(target, "process", "environment-execution", "execution-slot.json"))
         exclusion.parent.mkdir(parents=True)
         exclusion.write_text("{}")
     before = [p.read_bytes() for p in paths]
@@ -450,7 +460,7 @@ def test_legacy_partial_move_preserves_originals_and_keeps_primary_guard(legacy_
     assert (report / "archive/full-startup_attempt.json").read_bytes() == expected
     assert paths[0].exists() and paths[2].exists()
     with pytest.raises(ValueError, match="reconcile_required"):
-        output_paths.target_process_dir("alpha-local")
+        output_paths.target_process_dir(legacy_reconciliation[2].target)
     assert _legacy_result(legacy_reconciliation)["exitCode"] == 2
 
 
@@ -470,13 +480,238 @@ def test_legacy_readback_drift_before_plan_preserves_all_sources(legacy_reconcil
     assert not (report / "worktree-startup-reconciliation-plan.json").exists()
 
 
-def test_legacy_reconciliation_cli_is_explicit_and_alpha_only(legacy_reconciliation):
+@pytest.mark.parametrize("apply,fault", [(False, ""), (True, ""), (True, "source"), (True, "attestation"), (True, "confirmation"), (True, "foreign-fence")])
+def test_running_worktree_recovery_preserves_startup_and_binds_resources(legacy_reconciliation, monkeypatch, apply, fault):
+    # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md#gwt-006.t4
+    from quwoquan_ops.cli.commands import repair_runtime_recovery as runtime
+    repair, _, args, report, paths, _ = legacy_reconciliation
+    for path in paths[:2]:
+        value = json.loads(path.read_text())
+        value["status"] = "running"
+        path.write_text(json.dumps(value))
+    before = [path.read_bytes() for path in paths]
+    args.worktree_startup_reconciliation = "recover-plan"
+    monkeypatch.setattr(stackctl, "_normal_down_structurally_impossible", lambda *a: "candidate unavailable")
+    attestation = {"attestationDigest": "sha256:" + "d" * 64}
+    monkeypatch.setattr(stackctl.orphan_compose_teardown, "load_attestation", lambda *a, **k: attestation)
+    observed = []
+
+    def exact_executor(delegated, *, worktree_recovery_gate, **kwargs):
+        import os
+        fence_path = repair.local_runtime_operation_lock_path(args.target).with_suffix(".executor.json")
+        fence_path.parent.mkdir(parents=True, exist_ok=True)
+        fence_path.write_text(json.dumps({"target": args.target, "executorNonce": "owned-recovery-test",
+                                          "owner": f"pid={os.getpid()} target={args.target}"}))
+        try:
+            gate = worktree_recovery_gate()
+        finally:
+            fence_path.unlink()
+        observed.append((delegated.confirm_orphaned_compose_teardown, gate))
+        assert gate["startup"]["status"] == "running"
+        assert [path.read_bytes() for path in paths] == before
+        return {"exitCode": 0, "consumption": "exact-consumption"}
+
+    monkeypatch.setattr(runtime, "_repair_orphaned_compose", exact_executor)
+    planned = _legacy_result(legacy_reconciliation)
+    assert planned["exitCode"] == 0, planned
+    assert planned["archived"] is False
+    plan_path = Path(planned["planRef"].rsplit("=", 1)[0])
+    plan = json.loads(plan_path.read_text())
+    assert plan["attestationDigest"] == attestation["attestationDigest"]
+    assert [item["digest"] for item in plan["inputs"]] == [repair._digest(raw) for raw in before]
+    if apply:
+        args.worktree_startup_reconciliation = "recover-apply"
+        args.worktree_startup_plan_ref = planned["planRef"]
+        args.confirm_undownable_startup_receipt_reclaim = True
+        if fault == "source":
+            for path in paths[:2]:
+                path.write_bytes(path.read_bytes() + b" ")
+        elif fault == "attestation":
+            attestation["attestationDigest"] = "sha256:" + "e" * 64
+        elif fault == "confirmation":
+            args.confirm_undownable_startup_receipt_reclaim = False
+        elif fault == "foreign-fence":
+            fence = repair.local_runtime_operation_lock_path(args.target).with_suffix(".executor.json")
+            fence.parent.mkdir(parents=True, exist_ok=True)
+            fence.write_text("{}")
+        result = _legacy_result(legacy_reconciliation)
+        if fault:
+            assert result["exitCode"] == 2, result
+            assert all(path.exists() for path in paths)
+            assert not (report / "archive").exists()
+            return
+        assert result["exitCode"] == 0, result
+        assert result["archived"] is True
+        assert all(not path.exists() for path in paths)
+        assert (report / "archive/startup_attempt.json").read_bytes() == before[0]
+        assert [item[0] for item in observed] == [False, True]
+
+
+@pytest.mark.parametrize("fault", ["", "report", "live", "drift"])
+def test_failed_guard_fence_requires_exact_zero_mutation_evidence(legacy_reconciliation, monkeypatch, fault):
+    repair, output_paths, args, report_dir, originals, _ = legacy_reconciliation
+    target = args.target
+    lock = repair.local_runtime_operation_lock_path(target)
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text("")
+    repair.local_runtime_operation_lock_path().write_text("")
+    fence = lock.with_suffix(".executor.json")
+    fence.write_text(json.dumps({"target": target, "executorNonce": "failed-query",
+        "executionClaimId": "", "owner": f"pid=12345 target={target} startedAt=2026-09-11T22:30:15Z worktree={output_paths.ROOT} lane=dev1.0 headSha=" + "a" * 40}))
+    failure_dir = report_dir.parent / "prior-failed-call"
+    failure_dir.mkdir()
+    reason = "canonical startup receipt is unreadable: OPS.RUNTIME.reconcile_required: worktree-local startup receipt requires explicit reconciliation"
+    failure = {"target": target, "command": "repair", "fix": "reclaim-undownable-startup-receipt",
+        "status": "gate_block", "destructiveRepairPerformed": False, "destructiveRepairOutcome": "none",
+        "steps": [], "executionJournal": "", "consumption": "", "details": [reason]}
+    if fault == "report":
+        failure["steps"] = [{"argv": ["docker", "rm"]}]
+    failure_path = failure_dir / "report.json"
+    failure_path.write_text(json.dumps(failure))
+    (failure_dir / "summary.json").write_text(json.dumps({"target": target, "command": "repair", "details": [reason], "generatedAt": "2026-09-11T22:30:15.5Z"}))
+    def process_probe(*a):
+        if fault != "live":
+            raise ProcessLookupError()
+    monkeypatch.setattr(repair.os, "kill", process_probe)
+    args.worktree_startup_reconciliation = "fence-plan"
+    args.failed_repair_report_ref = f"{failure_path}={repair._digest(failure_path.read_bytes())}"
+    before = fence.read_bytes()
+    result = _legacy_result(legacy_reconciliation)
+    if fault in {"report", "live"}:
+        assert result["exitCode"] == 2
+        assert fence.read_bytes() == before
+        return
+    assert result["exitCode"] == 0, result
+    args.worktree_startup_reconciliation = "fence-apply"
+    args.worktree_startup_plan_ref = result["planRef"]
+    args.confirm_undownable_startup_receipt_reclaim = True
+    if fault == "drift":
+        fence.write_bytes(before + b" ")
+    applied = _legacy_result(legacy_reconciliation)
+    if fault:
+        assert applied["exitCode"] == 2
+        assert fence.exists()
+    else:
+        assert applied["exitCode"] == 0, applied
+        assert not fence.exists()
+        assert (report_dir / "archive/executor-fence.json").read_bytes() == before
+    assert all(path.exists() for path in originals)
+
+
+def test_worktree_terminal_does_not_transition_canonical_startup(monkeypatch, tmp_path):
+    from quwoquan_ops.cli.commands.repair_runtime_recovery import _commit_orphan_compose_terminal_consumption
+    startup = {"status": "running", "attemptId": "old-worktree-attempt"}
+    calls = []
+    monkeypatch.setattr(stackctl, "_close_orphan_reclaimed_startup_receipt",
+                        lambda *a: pytest.fail("worktree recovery must not transition canonical startup"))
+    monkeypatch.setattr(stackctl, "relpath", str)
+    monkeypatch.setattr(stackctl.orphan_compose_teardown, "write_consumption_create_once", lambda *a, **k: calls.append(k))
+    monkeypatch.setattr(stackctl, "_publish_orphan_terminal_success", lambda **k: [])
+    result = _commit_orphan_compose_terminal_consumption(
+        target_name="gamma-local", fix="reclaim-undownable-startup-receipt",
+        attestation_path=tmp_path / "attestation.json",
+        attestation={"attestationDigest": "sha256:" + "d" * 64,
+                     "snapshot": {"containers": [], "networks": [], "volumes": []}},
+        startup=startup, execution_journal=tmp_path / "journal.json", destructive_steps=[],
+        report_dir=tmp_path, recovered_execution=False, preserve_startup=True,
+    )
+    assert result["exitCode"] == 0
+    assert startup["status"] == "running"
+    assert calls[0]["status"] == "passed"
+
+
+def test_running_worktree_recovery_requires_impossible_normal_down(legacy_reconciliation, monkeypatch):
+    repair, _, args, _, paths, _ = legacy_reconciliation
+    for path in paths[:2]:
+        value = json.loads(path.read_text())
+        value["status"] = "running"
+        path.write_text(json.dumps(value))
+    args.worktree_startup_reconciliation = "recover-plan"
+    monkeypatch.setattr(stackctl, "_normal_down_structurally_impossible", lambda *a: "")
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == 2
+    assert "normal down remains available" in result["details"][0]
+    assert all(path.exists() for path in paths)
+
+
+@pytest.mark.parametrize("fault", ["", "digest", "live-executor", "lease", "containers", "plan-drift"])
+def test_current_fence_recovery_binds_exact_startup_and_zero_resources(legacy_reconciliation, monkeypatch, fault):
+    repair, output_paths, args, report, old_paths, _ = legacy_reconciliation
+    target = args.target
+    process = output_paths.target_local_dir(target) / "process"
+    startup = json.loads(old_paths[0].read_text())
+    run_root = output_paths.env_runs_root(startup["env"]) / startup["attemptId"]
+    run_root.mkdir(parents=True)
+    startup["runRoot"] = str(run_root)
+    startup["status"] = "partial"
+    for relative in ("startup_attempt.json", "workloads/full/startup_attempt.json"):
+        path = process / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(startup))
+    for path in old_paths:
+        path.unlink()
+    fence = repair.local_runtime_operation_lock_path(target).with_suffix(".executor.json")
+    fence.parent.mkdir(parents=True, exist_ok=True)
+    raw = json.dumps({"target": target, "executorNonce": "test-current-executor", "executionClaimId": "",
+                      "owner": f"pid=123456789 target={target} startedAt=2026-09-12T00:00:00Z worktree={output_paths.ROOT} lane=dev1.0 headSha=" + "a" * 40}).encode()
+    fence.write_bytes(raw)
+    monkeypatch.setattr(repair, "_fence_reconciliation_locks", lambda target: contextlib.nullcontext())
+    monkeypatch.setattr(repair.os, "kill", lambda *a: (_ for _ in ()).throw(ProcessLookupError()))
+    args.worktree_startup_reconciliation = "current-fence-plan"
+    args.executor_fence_ref = f"{fence}={repair._digest(raw)}"
+    if fault == "digest":
+        args.executor_fence_ref = f"{fence}=sha256:" + "b" * 64
+    elif fault == "live-executor":
+        monkeypatch.setattr(repair.os, "kill", lambda *a: None)
+    elif fault == "lease":
+        monkeypatch.setattr(repair, "list_consumer_leases", lambda t: [{"releasedAt": ""}])
+    elif fault == "containers":
+        monkeypatch.setattr(stackctl, "_mutable_test_live_container_ids", lambda p: ["container"])
+    result = _legacy_result(legacy_reconciliation)
+    if fault not in {"", "plan-drift"}:
+        assert result["exitCode"] == 2, result
+        assert fence.read_bytes() == raw
+        return
+    assert result["exitCode"] == 0, result
+    args.worktree_startup_reconciliation = "current-fence-apply"
+    args.worktree_startup_plan_ref = result["planRef"]
+    args.confirm_undownable_startup_receipt_reclaim = True
+    if fault == "plan-drift":
+        Path(result["planRef"].rsplit("=", 1)[0]).write_text("{}")
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == (2 if fault else 0), result
+    if not fault:
+        assert not fence.exists()
+        assert (report / "archive/executor-fence.json").read_bytes() == raw
+    assert json.loads((process / "startup_attempt.json").read_text())["status"] == "partial"
+
+
+def test_reconciliation_cli_is_explicit_and_local_only(legacy_reconciliation):
+    target = legacy_reconciliation[2].target
     args = stackctl.build_parser().parse_args([
-        "repair", "--target", "alpha-local", "--fix", "reclaim-undownable-startup-receipt",
+        "repair", "--target", target, "--fix", "reclaim-undownable-startup-receipt",
         "--worktree-startup-reconciliation", "plan",
     ])
     assert args.worktree_startup_reconciliation == "plan"
-    legacy_reconciliation[2].target = "beta-local"
+    legacy_reconciliation[2].target = "prod-hosted"
     result = _legacy_result(legacy_reconciliation)
     assert result["exitCode"] == 2
-    assert "alpha-local" in result["details"][0]
+
+
+def test_reconciliation_rejects_output_root_override(legacy_reconciliation, monkeypatch):
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(legacy_reconciliation[1].DEFAULT_OUTPUT_ROOT))
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == 2
+    assert all(path.exists() for path in legacy_reconciliation[4])
+
+
+def test_reconciliation_rejects_other_environment_plan_root(legacy_reconciliation):
+    _, output_paths, args, _, paths, _ = legacy_reconciliation
+    environment = output_paths.env_for_target(args.target)
+    other = "beta" if environment == "alpha" else "alpha"
+    wrong_report = output_paths.env_runs_root(other) / "wrong-environment"
+    wrong_report.mkdir(parents=True)
+    fixture = (*legacy_reconciliation[:3], wrong_report, *legacy_reconciliation[4:])
+    assert _legacy_result(fixture)["exitCode"] == 2
+    assert all(path.exists() for path in paths)
+    assert not (wrong_report / "worktree-startup-reconciliation-plan.json").exists()

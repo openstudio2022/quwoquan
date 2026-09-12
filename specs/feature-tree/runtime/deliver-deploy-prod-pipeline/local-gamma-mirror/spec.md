@@ -124,6 +124,17 @@
   并写绑定原 attestation/consumption digest 的 create-once convergence receipt；其他 partial/unknown
   形状一律禁止收敛。
 
+<a id="req-006"></a>
+### REQ-006 本地环境旧工作树启动回执的显式归档
+
+- Alpha、Beta、Gamma 从工作树输出迁入宿主运行权威时，必须经同一受管 plan/apply 入口归档本 target 的原始启动回执；普通启动路径仍拒绝旧回执，不双读、不改写历史身份。
+- 普通归档仅接纳 exact bytes 一致的 stopped/full 回执及同环境、同 target 的 local run 绑定。plan 必须位于对应环境的宿主 evidence 根；生产 target、显式输出根覆盖、跨环境计划均拒绝。
+- running/full 旧回执只允许进入显式资源恢复计划：原件身份完整、宿主无冲突权威、无 lease/fence/slot，且其 candidate-bound normal down 客观不可用时，绑定原件 exact 摘要与既有 orphan attestation。apply 必须显式确认、在 target 锁内重验原件与 attestation，复用精确资源删除及 journal/step/consumption 回读，不改写旧或宿主 startup receipt。完成真实资源恢复后，仅以绑定该计划的成功 consumption/convergence 授权原件归档；失败保留主 guard，正常运行 reader 不读取旧事实。
+- 仅对已明确记录为旧 startup guard 或精确项目发现阶段在资源取证前拒绝、零执行步骤且无 attestation/journal/consumption 的失败调用，允许单独的 executor fence 收敛计划：绑定同 target/仓库/执行时间的失败报告与 fence 原件摘要，验证旧执行者不存在、host/target 锁可取得、无 scheduler slot/consumer lease，并对当前精确资源重采。显式确认 apply 只在锁内确认全部字节和资源未漂移后归档 fence 原 inode，不删除或改变运行资源；PID 不存在本身、任意失败报告、未知或部分执行结果均不能授权接管。
+- plan 与显式确认的 apply 分别验证资源、端口、未释放 consumer lease、executor fence 与执行 slot；任一未知或变化均在归档前阻断。归档保留原始字节与 inode，不删除容器、网络或 volume；部分失败保留原件与主 guard，不自动续跑。
+
+- 当前宿主canonical回执下的executor恢复独立于旧工作树迁移：显式提供当前fence的exact ref/digest，只允许在host→target锁内证明执行者已退出、无scheduler slot、无未释放lease、canonical与test-live项目均零容器/网络、目标端口空闲且回执副本一致后生成计划。apply须人工确认并逐字重验计划、fence、回执与资源，只归档fence原件，不改写startup回执、删除资源或推定环境passed；未知进程/资源、漂移或活跃持有者均拒绝。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_ops/environments/gamma/validation_suites.json`
@@ -219,6 +230,16 @@
 - AND 经该出口完成删除后 receipt 转为 stopped 并把 reclaim 原因写入 failure，named volumes
   全部保留，后续 up 不再被这份已失效的运行中 receipt 阻断。
 
+<a id="gwt-006"></a>
+### GWT-006 旧工作树回执按所属环境安全归档
+
+- GIVEN Alpha、Beta 或 Gamma 有 stopped/full 旧工作树回执，精确副本与 local run 身份一致，且宿主无运行权威与活跃资源。
+- WHEN 先生成归档计划，再以该 exact plan ref 显式确认 apply。
+- THEN 计划和归档只落本环境 evidence 根，原始回执字节与 inode 保持，普通 process guard 仅在全部归档成功后解除。
+- AND 跨环境计划、Prod target、输出根覆盖、未经精确恢复证明的运行中回执、来源/计划漂移、symlink、未知资源、未释放 lease 或执行 fence 均零归档阻断。
+- AND running/full 旧回执仅在 normal down 客观不可用且显式确认绑定原件与 orphan attestation 的恢复计划后处理精确资源；真实 journal/step/consumption 完整及端口收敛后归档原件，普通 startup guard 始终不放宽，旧与宿主 startup bytes 不被改写。
+- AND 归档不执行容器、网络、volume 删除；部分归档失败保留主 guard 与可审计原件，不自动重放。
+
 ## 6. 依赖
 
 - 前置要求：[`deliver-deploy-prod-pipeline`](../spec.md) 的范围、要求与 SIT。
@@ -226,6 +247,16 @@
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
 
 ## 7. 开放事项
+
+<a id="open-004"></a>
+### OPEN-004 Gamma 旧工作树运行权威迁移尚未实证
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺当前候选在宿主权威下启动与 full health 验收。三环境 stopped/full 归档、running/full 显式恢复及零mutation失败 fence 收敛已实现；两次经确认的 fence 归档和 Gamma 三份旧 startup 原件归档已取得实际执行结果，原件字节保留，旧项目资源取证为零容器/网络/卷，未执行资源删除。integration/dev1.0 已可生成 POST，宿主空间已恢复至构建阈值以上。本树M1 candidate/rollback已封存验真，五组件依赖已激活，完整Gamma候选80d93527已真实打包；不能把这些上游通过等同环境可用。VM与12GiB Docker已恢复，当前启动在旧候选的退役Content Research必填变量插值处失败，源码配置已修复但尚未形成并启动新候选；旧代际为partial。恢复资源查询期间用户关闭VM控制台造成daemon不可用，失败报告为container inventory failed且steps/journal/consumption为空，遗留canonical executor fence。既有fence恢复只支持旧worktree回执与短时已知guard拒绝，不适用于本次长时间查询失败；尚缺绑定当前canonical receipt、原执行身份和完整零mutation证据的新鲜恢复计划，不能仅扩展原因码或放宽时间窗后删除fence。
+- 本增量代码健康：恢复器既有 `_repair_orphaned_compose` 与 `_read_archived_worktree_inputs` 复杂度增长及新增重复代码为 `PR_WARN`；同一恢复 owner 内收敛并复跑聚焦合同，不能通过改阈值、语法改写隐藏复杂度或取消原件校验消除告警。
+- 完成判定：`GWT-006` 的 t1..t4 均有直接测试，Gamma 真实现场在完成获授权的资源恢复后以 exact plan/apply 归档原件，随后当前候选可在宿主权威下启动并完成 full health；未取得真实回执前保持开放。
 
 <a id="open-001"></a>
 ### OPEN-001 gamma-local 左移验证与 main 正式阻断回执

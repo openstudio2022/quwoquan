@@ -900,9 +900,17 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
     )
     repair_parser.add_argument(
         "--worktree-startup-reconciliation",
-        choices=("plan", "apply"),
+        choices=("plan", "apply", "recover-plan", "recover-apply", "fence-plan", "fence-apply", "current-fence-plan", "current-fence-apply"),
         default="",
-        help="Explicit Alpha-only archive of exact archived worktree startup receipts; never tears down resources.",
+        help="Explicit Alpha/Beta/Gamma worktree receipt archive (plan/apply), or exact orphan resource recovery (recover-plan/recover-apply); recovery apply requires confirmation and preserves volumes.",
+    )
+    repair_parser.add_argument(
+        "--executor-fence-ref", default="",
+        help="Exact current target executor fence PATH=sha256:DIGEST; current-fence plan/apply only, zero live resources required.",
+    )
+    repair_parser.add_argument(
+        "--failed-repair-report-ref", default="",
+        help="Exact report.json PATH=sha256:DIGEST for a zero-mutation startup-guard rejection; fence reconciliation only.",
     )
     repair_parser.add_argument(
         "--worktree-startup-plan-ref",

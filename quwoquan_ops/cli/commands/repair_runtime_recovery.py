@@ -184,6 +184,11 @@ def _normal_down_structurally_impossible(
             f"{candidate_root}; the receipt's own topology cannot be replayed"
         )
     try:
+        # normal down先校验候选manifest；仅拓扑可读不足以证明退出路径可用。
+        _stackctl.load_candidate_manifest(
+            target_name.removesuffix("-local"), target_name, candidate_digest,
+            require_full=True, purpose="teardown",
+        )
         topology = load_runtime_topology_package(
             candidate_root,
             environment=target_name.removesuffix("-local"),
@@ -220,12 +225,38 @@ def _normal_down_structurally_impossible(
         and not definition.get("profiles")
     )
     if not broken:
-        return ""
+        return _receipt_compose_interpolation_failure(target_name, startup)
     return (
         f"candidate {candidate_digest} projects workload={workload} into an "
         "invalid Compose project; services without image, build or gating "
         "profile: " + ",".join(broken)
     )
+
+
+def _receipt_compose_interpolation_failure(target_name: str, startup: Mapping[str, Any]) -> str:
+    """仅真实已记录attempt的Compose插值错误可进入精确资源恢复。"""
+    import quwoquan_ops.cli.stackctl as stackctl
+    from .down_domain import _bind_local_teardown_runtime, _receipt_bound_local_compose_model
+
+    if not startup.get("attemptId"):
+        return ""
+    environment = dict(os.environ)
+    env_name = target_name.removesuffix("-local")
+    _, _, project, _ = _bind_local_teardown_runtime(
+        env_name=env_name, target_name=target_name, environment=environment, purge_rebuildable_state=False,
+    )
+    if stackctl.load_startup_attempt(target_name) != startup:
+        raise ValueError("startup identity changed while checking normal down")
+    workload = str(startup.get("workload") or "full")
+    try:
+        _receipt_bound_local_compose_model(environment_name=env_name, target_name=target_name,
+                                         workload=workload, compose_project=project, environment=environment)
+    except RuntimeError as error:
+        detail = str(error)
+        if "error while interpolating" in detail and "required variable" in detail:
+            return "receipt-bound Compose interpolation is unavailable; exact orphan inventory required"
+        raise
+    return ""
 
 
 def _close_orphan_reclaimed_startup_receipt(
@@ -311,6 +342,7 @@ def _complete_orphan_compose_audit_convergence(
     other_target_port_blocks: Sequence[Mapping[str, Any]],
     report_dir: Path,
     startup: Mapping[str, Any] | None,
+    preserve_startup: bool = False,
 ) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
@@ -331,10 +363,13 @@ def _complete_orphan_compose_audit_convergence(
         post_snapshot,
         port_probe=_stackctl._published_endpoint_is_occupied,
     )
-    canonical_startup, closure = _stackctl._close_orphan_reclaimed_startup_receipt(
-        target_name,
-        startup,
-    )
+    if preserve_startup:
+        canonical_startup, closure = startup, "preserved exact worktree startup originals; archive requires recovery readback"
+    else:
+        canonical_startup, closure = _stackctl._close_orphan_reclaimed_startup_receipt(
+            target_name,
+            startup,
+        )
     convergence_path = attestation_path.with_name(
         "orphaned-compose-teardown-convergence.json"
     )
@@ -398,16 +433,20 @@ def _commit_orphan_compose_terminal_consumption(
     destructive_steps: Sequence[Mapping[str, Any]],
     report_dir: Path,
     recovered_execution: bool,
+    preserve_startup: bool = False,
 ) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
     snapshot = attestation["snapshot"]
     container_ids = [item["id"] for item in snapshot["containers"]]
     network_ids = [item["id"] for item in snapshot["networks"]]
-    canonical_startup, closure = _stackctl._close_orphan_reclaimed_startup_receipt(
-        target_name,
-        startup,
-    )
+    if preserve_startup:
+        canonical_startup, closure = startup, "preserved exact worktree startup originals; archive requires recovery readback"
+    else:
+        canonical_startup, closure = _stackctl._close_orphan_reclaimed_startup_receipt(
+            target_name,
+            startup,
+        )
     consumption_path = attestation_path.with_name(
         "orphaned-compose-teardown-consumption.json"
     )
@@ -438,7 +477,7 @@ def _commit_orphan_compose_terminal_consumption(
         "target": target_name,
         "fix": fix,
         "status": "passed",
-        "destructiveRepairPerformed": True,
+        "destructiveRepairPerformed": bool(container_ids or network_ids),
         "startupAttempt": canonical_startup,
         "attestation": _stackctl.relpath(attestation_path),
         "attestationDigest": attestation["attestationDigest"],
@@ -477,6 +516,7 @@ def _repair_orphaned_compose(
     *,
     environment: str,
     report_dir: Path,
+    worktree_recovery_gate: Any = None,
 ) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
@@ -509,9 +549,12 @@ def _repair_orphaned_compose(
     recovering_from_journal = False
     removal_verified = False
     step_evidence_verified = False
+    preserve_options = {"preserve_startup": True} if worktree_recovery_gate is not None else {}
     try:
         with _stackctl._local_stack_operation_lock(target_name):
-            runtime_gate = _stackctl._orphan_compose_runtime_gate(target_name)
+            # 显式旧工作树恢复由锁内重验原件的内部闭包提供身份；普通入口仍用canonical guard。
+            runtime_gate = (worktree_recovery_gate() if worktree_recovery_gate is not None
+                            else _stackctl._orphan_compose_runtime_gate(target_name))
             startup = runtime_gate["startup"]
             stale_mutable_startup = runtime_gate["staleMutableStartup"]
             expected_project = str(runtime_gate["expectedProject"] or "")
@@ -549,6 +592,8 @@ def _repair_orphaned_compose(
                     raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
                         "orphan Compose attestation project differs from the current startup receipt"
                     )
+            elif worktree_recovery_gate is not None:
+                project = _stackctl.orphan_compose_teardown.require_canonical_project(target_name, expected_project)
             elif expected_project or startup is None:
                 project = _stackctl.orphan_compose_teardown.discover_exact_project(
                     target=target_name,
@@ -679,6 +724,7 @@ def _repair_orphaned_compose(
                     other_target_port_blocks=other_target_port_blocks,
                     report_dir=report_dir,
                     startup=startup,
+                    **preserve_options,
                 )
             if journal_exists:
                 recovering_from_journal = True
@@ -726,6 +772,7 @@ def _repair_orphaned_compose(
                     destructive_steps=[],
                     report_dir=report_dir,
                     recovered_execution=True,
+                    **preserve_options,
                 )
             _stackctl.orphan_compose_teardown.assert_not_consumed(attestation_path)
             current_snapshot = _stackctl.orphan_compose_teardown.sample_snapshot(
@@ -822,6 +869,7 @@ def _repair_orphaned_compose(
                 destructive_steps=destructive_steps,
                 report_dir=report_dir,
                 recovered_execution=False,
+                **preserve_options,
             )
     except (
         OSError,

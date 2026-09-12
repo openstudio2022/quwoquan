@@ -57,6 +57,9 @@ def deployment_input_roots(
         "quwoquan_service/contracts/metadata",
         "quwoquan_service/tools/codegen_graphql_read_registry",
         "quwoquan_service/scripts/runtime/packaging",
+        # ContractGraph loader验证readiness runner的真实源码与spec_ref标记；
+        # 这些是编译输入而非运行镜像payload，不得从实时工作树旁路读取。
+        "quwoquan_ops/tests/acceptance",
         # The same immutable input capsule is the source of truth for App UAT.
         # Capture the complete Flutter/native tree instead of rebuilding an
         # active candidate from mutable workspace bytes.

@@ -19,6 +19,13 @@ CONTENT_ENVIRONMENT_ARTIFACT = (
 
 
 class ContentServiceSearchRuntimeTopologyTest(unittest.TestCase):
+    def test_gamma_compose_requires_only_declared_content_config(self) -> None:
+        # spec_ref: specs/feature-tree/discovery-content/spec.md#dom-001
+        path = ROOT / "quwoquan_service/services/content-service/environments/gamma/deploy/compose.yaml"
+        content = yaml.safe_load(path.read_text(encoding="utf-8"))
+        environment = content["services"]["content-service"].get("environment", {})
+        self.assertNotIn("CONTENT_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64", environment)
+
     def test_content_release_selects_search_dependency_without_product_ops_overlay(self) -> None:
         for environment in ("alpha", "beta", "gamma"):
             with self.subTest(environment=environment), tempfile.TemporaryDirectory() as temporary:

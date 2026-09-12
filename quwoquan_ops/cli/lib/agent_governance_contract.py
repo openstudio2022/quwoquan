@@ -403,6 +403,23 @@ def validate_feature_context_manifest(payload: dict[str, Any]) -> None:
         raise ValueError("feature_context_manifest.evidence_fingerprint.mode 非法")
 
 
+def allowed_delivery_sources(repo_root: Path | None = None) -> set[str]:
+    """交付来源由同一版本化分支政策裁决，Feature owner 不随来源改变。"""
+    rule = contract_section("candidate_evidence_manifest")["delivery_source_policy"]
+    root = repo_root if repo_root is not None else CONTRACT_PATH.parents[2]
+    policy = yaml.safe_load((root / rule["path"]).read_text(encoding="utf-8"))
+    branches = _validate_string_list(policy[rule["allowed_local_field"]], label="delivery branches")
+    integration = policy[rule["integration_field"]]
+    release = policy[rule["excluded_field"]]
+    if integration not in branches or integration == release:
+        raise ValueError("candidate integration source policy 无效")
+    return {
+        branch for branch in branches
+        if branch != release
+        and (branch == integration or branch.startswith(rule["local_branch_prefix"]))
+    }
+
+
 def validate_candidate_evidence_manifest(payload: dict[str, Any]) -> None:
     """Validate exact candidate evidence v3 at every boundary."""
 
@@ -424,8 +441,10 @@ def validate_candidate_evidence_manifest(payload: dict[str, Any]) -> None:
     ):
         if not isinstance(payload[field], str) or not payload[field]:
             raise TypeError(f"candidate_evidence_manifest.{field} 必须为非空字符串")
-    if not payload["delivery_owner"].startswith("lane/") or not payload["lead_lane"].startswith("lane/"):
-        raise ValueError("candidate delivery_owner/lead_lane 必须为逻辑 lane")
+    if payload["delivery_owner"] != payload["lead_lane"]:
+        raise ValueError("candidate delivery_owner/lead_lane 必须一致")
+    if payload["delivery_owner"] not in allowed_delivery_sources():
+        raise ValueError("candidate delivery source 不在版本化分支政策中")
     policy_digests = payload["delivery_policy_digests"]
     if not isinstance(policy_digests, dict):
         raise TypeError("candidate delivery_policy_digests 必须为映射")

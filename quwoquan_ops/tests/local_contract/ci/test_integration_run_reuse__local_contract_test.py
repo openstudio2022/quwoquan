@@ -32,6 +32,43 @@ IMPACT = "sha256:" + "1" * 64
 PROFILE = "integration"
 
 
+@pytest.mark.parametrize("branch,allowed", [
+    ("refs/heads/dev1.0", True), ("refs/heads/lane/engineering", True),
+    ("refs/heads/main", False), ("refs/heads/lane/unknown", False), ("", False),
+])
+def test_acceptance_uses_declared_current_source_branch(monkeypatch, branch, allowed):
+    # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t3
+    monkeypatch.setattr(integration_run, "_git", lambda *args: branch if args[0] == "symbolic-ref" else COMMIT)
+    args = SimpleNamespace(mode="acceptance")
+    if allowed:
+        assert integration_run._readiness_local_ref(args=args, commit=COMMIT) == branch
+    else:
+        with pytest.raises(integration_run.IntegrationRunError):
+            integration_run._readiness_local_ref(args=args, commit=COMMIT)
+
+
+def test_integration_acceptance_does_not_invent_merged_lanes(monkeypatch):
+    monkeypatch.setattr(integration_run.subprocess, "run", lambda *a, **k: pytest.fail("单树验收不查询上游lane"))
+    assert integration_run._merged_lanes(values=[], lane_branch="refs/heads/dev1.0", commit=COMMIT, remote="origin") == []
+
+
+def test_acceptance_rejects_source_head_drift(monkeypatch):
+    monkeypatch.setattr(integration_run, "_git", lambda *args: "refs/heads/dev1.0" if args[0] == "symbolic-ref" else "d" * 40)
+    with pytest.raises(integration_run.IntegrationRunError):
+        integration_run._readiness_local_ref(args=SimpleNamespace(mode="acceptance"), commit=COMMIT)
+
+
+@pytest.mark.parametrize("branch,origins,expected", [
+    ("refs/heads/dev1.0", ["lane/engineering"], (True, False)),
+    ("refs/heads/dev1.0", [], (False, True)),
+    ("refs/heads/lane/engineering", ["lane/ops"], (False, True)),
+])
+def test_integration_multi_worktree_acceptance_executes_both_environments(branch, origins, expected):
+    args = SimpleNamespace(beta=False, reuse=True, merged_lanes=origins)
+    integration_run._apply_acceptance_execution_scope(args, branch)
+    assert (args.beta, args.reuse) == expected
+
+
 def _release_args(store: Path):
     from quwoquan_ops.tests.support.deployment_candidate_manifest_test_support import release_attestation_payload
 
@@ -346,6 +383,18 @@ def test_acceptance_main_reuse_honors_beta_opt_in(acceptance_main, opted_in: boo
     assert summary["reused"]["readiness"] is True
     for name in ("create_publish_admission", "local_git_cas_publish", "_stackctl", "_data_ship"):
         setup.calls[name].assert_not_called()
+
+
+def test_integration_explicit_merge_runs_alpha_beta_without_old_fact_reuse(acceptance_main):
+    setup = acceptance_main
+    setup.calls["_readiness_local_ref"].return_value = integration_run.DEV_REF
+    code = integration_run.main([*setup.argv, "--reuse"])
+    assert code == 0
+    assert [call.kwargs["environment"] for call in setup.calls["_run_environment"].call_args_list] == ["alpha", "beta"]
+    summary = json.loads((setup.store / "runs/policy-reuse/summary.json").read_bytes())
+    assert summary["acceptance"]["betaStatus"] == "passed"
+    assert summary["reused"]["alpha"] is False
+    assert summary["reused"]["beta"] is False
 
 
 def test_existing_candidate_is_used_before_pages_without_claim_or_release(acceptance_main, monkeypatch) -> None:

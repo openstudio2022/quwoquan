@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""「lane 验收 → integration 发布 dev1.0」的 canonical 编排，分两种运行位置：
+"""「本地验收 → integration 发布 dev1.0」的 canonical 两阶段编排：
 
-- `--mode acceptance`：在 lane 工作树（当前分支为该 lane，head 即 candidate）对 exact candidate
+- `--mode acceptance`：在政策允许的 lane 或 integration 分支（head 即 candidate）对 exact candidate
   跑本地 readiness、Alpha（Beta 仅 `--beta` 显式 opt-in，否则以 typed `not_required` 闭合）并签发
   `EnvironmentAcceptanceFact`，终态 `accepted`，不 admit、不 publish；同时把 candidate/claim/
   source fact/EAF 及其全部 exact 证据打成 portable acceptance bundle。Data release 的
-  `ship --handoff-ref` admission 会用当前工作树重算 candidate evidence，因此只能在产出 handoff
-  的 lane 工作树完成；`--baseline` 指定 ImpactPlan/readiness 的 exact parent（默认远端 dev1.0）；
+  `ship --handoff-ref` admission 在当前交付工作树验证 candidate evidence，integration不借用他方身份；
+  `--baseline` 指定 ImpactPlan/readiness 的 exact parent（默认远端 dev1.0）；
   用户显式合并多个 lane head 后验收时用 `--merged-lanes` 记录来源。
 - `--mode integrate`（默认）：在唯一 integration 工作区（分支 dev1.0，HEAD 即 candidate）只消费
   `--acceptance-bundle`：exact bytes 导入本工作树 store（create-once）、验签并复核 candidate 绑定与
@@ -422,16 +422,19 @@ def _impact_plan(*, parent: str, commit: str, run_dir: Path) -> tuple[dict[str, 
 def _readiness_local_ref(*, args: argparse.Namespace, commit: str) -> str:
     """readiness 的 push identity 要求 local ref 精确解析到 candidate。
 
-    integrate 在 integration 工作区，本地 `refs/heads/dev1.0` 就是 candidate；acceptance 在 lane
-    工作树，candidate 是 lane 自己的 branch ref（当前分支且解析到 candidate），不得借用 dev1.0。
+    acceptance可在政策允许的lane或integration来源执行；始终读取实际当前分支并
+    验证其head等于candidate，不借用另一分支或把来源身份当作验收资格。
     """
     if args.mode != "acceptance":
         return DEV_REF
+    from quwoquan_ops.cli.lib.agent_governance_contract import allowed_delivery_sources
+
     branch_ref = _git("symbolic-ref", "--quiet", "HEAD")
-    if not branch_ref.startswith("refs/heads/lane/") or _git("rev-parse", branch_ref) != commit:
+    allowed_refs = {f"refs/heads/{name}" for name in allowed_delivery_sources(ROOT)}
+    if branch_ref not in allowed_refs or _git("rev-parse", branch_ref) != commit:
         raise IntegrationRunError(
             "INTEGRATION_RUN.LANE_IDENTITY_INVALID",
-            f"acceptance must run on a lane branch whose head is the candidate (branch={branch_ref or 'detached'})",
+            f"acceptance requires a declared source branch whose head is the candidate (branch={branch_ref or 'detached'})",
         )
     return branch_ref
 
@@ -1174,11 +1177,12 @@ def _report_fact_refs(*, store: Path, fact: Mapping[str, Any]) -> list[dict[str,
 def _merged_lanes(*, values: Sequence[str], lane_branch: str, commit: str, remote: str) -> list[dict[str, str]]:
     """记录本次验收 candidate 合并了哪些 lane head：每个 lane 解析为 exact commit 且必须是 candidate 的祖先。
 
-    这是多工作树合并验收的显式来源记录（用户明确指定），不是自动发现；缺省只记录 lane 自身。
+    这是多工作树合并验收的显式来源记录，不自动发现；lane缺省记录自身，integration单树缺省为空。
     """
     entries: list[dict[str, str]] = []
     seen: set[str] = set()
-    for raw in [lane_branch, *values]:
+    local_sources = [] if lane_branch == DEV_REF else [lane_branch]
+    for raw in [*local_sources, *values]:
         name = str(raw or "").strip().removeprefix("refs/heads/")
         if not name.startswith("lane/"):
             raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"--merged-lanes expects lane/<name> (got {name or '-'})")
@@ -1197,6 +1201,13 @@ def _merged_lanes(*, values: Sequence[str], lane_branch: str, commit: str, remot
         seen.add(name)
         entries.append({"branch": f"refs/heads/{name}", "commit": resolved})
     return entries
+
+
+def _apply_acceptance_execution_scope(args: argparse.Namespace, source_ref: str) -> None:
+    """本树显式多树合并必须真跑Alpha/Beta，不把单树复用带入该模式。"""
+    if source_ref == DEV_REF and args.merged_lanes:
+        args.beta = True
+        args.reuse = False
 
 
 def _write_acceptance_bundle(*, run_dir: Path, candidate_ref: Mapping[str, str], source_ref: Mapping[str, str],
@@ -1384,7 +1395,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--candidate-ref", default="", help="acceptance：复用已冻结 candidate 的 store ref=sha256:digest，不重新 acquire claim")
     parser.add_argument("--mode", choices=("integrate", "acceptance"), default="integrate",
                         help="integrate=integration 工作区消费 acceptance bundle 并 admit/publish；"
-                             "acceptance=lane 工作树跑 readiness + Alpha（--beta 时含 Beta）并签发事实与 bundle")
+                             "acceptance=本地 lane/integration 跑 readiness + Alpha（--beta 时含 Beta）并签发事实与 bundle")
     parser.add_argument("--baseline", default="",
                         help="acceptance 专用：ImpactPlan/readiness 的 exact parent commit；缺省取远端 dev1.0 head，"
                              "candidate 已等于远端 dev1.0 时必须显式给出上一个已验收基线")
@@ -1557,6 +1568,7 @@ def main(argv: list[str] | None = None) -> int:
 
         lane_branch = _readiness_local_ref(args=args, commit=identity["commit"])
         merged_lanes = _merged_lanes(values=args.merged_lanes, lane_branch=lane_branch, commit=identity["commit"], remote=args.remote)
+        _apply_acceptance_execution_scope(args, lane_branch)
         summary["laneBranch"] = lane_branch
         summary["mergedLanes"] = merged_lanes
         plan, plan_path = phases.run("impact-plan", lambda: _impact_plan(parent=identity["parent"], commit=identity["commit"], run_dir=run_dir))

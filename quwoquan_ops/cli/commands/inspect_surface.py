@@ -346,23 +346,18 @@ def _local_log_report(target_name: str) -> dict[str, Any]:
 
     if target_name == "prod-hosted":
         return {"paths": [], "runtimeDiagnostics": {"availability": "unavailable", "reason": "hosted logs require an exact remote log reader; local runtime logs are not hosted evidence"}}
-    candidates: dict[str, Path] = {
-        "alpha-state": _stackctl.target_process_dir("alpha-local"),
-        "beta-state": _stackctl.target_process_dir("beta-local"),
-        "beta-manual": _stackctl.target_process_dir("beta-local") / "app-beta-manual",
-        "app-instances": _stackctl.repo_local_dir("app-instances"),
-        "local-gamma": _stackctl.target_process_dir("gamma-local"),
-        "release-state": _stackctl._release_state_dir(),
-    }
+    # 只读取请求 target；其他环境的旧回执不能阻断本环境的只读诊断。
     hits = []
-    for name, path in candidates.items():
-        if path.exists():
-            hits.append({"name": name, "path": _stackctl.relpath(path)})
-    extra: dict[str, Any] = {}
     try:
+        process = _stackctl.target_process_dir(target_name)
+        if process.exists():
+            hits.append({"name": f"{target_name}-state", "path": _stackctl.relpath(process)})
         runtime_root = _stackctl._local_runtime_log_root(target_name)
-    except RuntimeError:
-        runtime_root = None
+    except (OSError, RuntimeError, ValueError) as error:
+        return {"paths": hits, "runtimeDiagnostics": {
+            "availability": "unavailable", "recordCount": 0, "reason": str(error),
+        }}
+    extra: dict[str, Any] = {}
     if runtime_root is not None:
         extra["runtimeDiagnostics"] = _stackctl._runtime_log_evidence_report(runtime_root)
     else:
@@ -371,8 +366,6 @@ def _local_log_report(target_name: str) -> dict[str, Any]:
             "recordCount": 0,
             "reason": "local runtime observability root is unavailable",
         }
-    if target_name == "prod-hosted":
-        extra["prodReleaseState"] = _stackctl._load_release_state(_stackctl.PROD_RELEASE_UNIT)
     return {"paths": hits, **extra}
 
 

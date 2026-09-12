@@ -724,14 +724,16 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
 
     def test_acceptance_readiness_identity_is_the_lane_branch_itself(self) -> None:
         # readiness 的 push identity 要求 local ref 精确解析到 candidate：integrate 用 refs/heads/dev1.0，
-        # acceptance 用 lane 自己的 branch ref，且必须是当前分支的 head；detached/非 lane/漂移一律拒绝。
+        # acceptance 用政策允许的lane/integration当前branch ref；main、detached与head漂移仍拒绝。
         commit = "1" * 40
         integrate = SimpleNamespace(mode="integrate")
         self.assertEqual(integration_run._readiness_local_ref(args=integrate, commit=commit), "refs/heads/dev1.0")
         acceptance = SimpleNamespace(mode="acceptance")
         with mock.patch.object(integration_run, "_git", side_effect=lambda *a: {"symbolic-ref": "refs/heads/lane/product-mainline", "rev-parse": commit}[a[0]]):
             self.assertEqual(integration_run._readiness_local_ref(args=acceptance, commit=commit), "refs/heads/lane/product-mainline")
-        for branch, head in (("refs/heads/dev1.0", commit), ("", commit), ("refs/heads/lane/product-mainline", "2" * 40)):
+        with mock.patch.object(integration_run, "_git", side_effect=lambda *a: {"symbolic-ref": "refs/heads/dev1.0", "rev-parse": commit}[a[0]]):
+            self.assertEqual(integration_run._readiness_local_ref(args=acceptance, commit=commit), "refs/heads/dev1.0")
+        for branch, head in (("refs/heads/main", commit), ("", commit), ("refs/heads/lane/product-mainline", "2" * 40)):
             with self.subTest(branch=branch, head=head[:4]), \
                     mock.patch.object(integration_run, "_git", side_effect=lambda *a, b=branch, h=head: {"symbolic-ref": b, "rev-parse": h}[a[0]]), \
                     self.assertRaises(integration_run.IntegrationRunError) as blocked:

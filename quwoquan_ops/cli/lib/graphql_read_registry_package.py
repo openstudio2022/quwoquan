@@ -15,6 +15,7 @@ import json
 import os
 import re
 import stat
+import shutil
 import subprocess
 import tempfile
 from collections.abc import Mapping
@@ -131,6 +132,27 @@ def _generate_payload(
     timeout_seconds: float = 120.0,
     scratch_root: Path | None = None,
 ) -> bytes:
+    if scratch_root is None:
+        return _generate_payload_in_repository(repo_root, candidate_digest, timeout_seconds=timeout_seconds)
+    # 冻结capsule不可写；私有执行副本只读其字节，生成物留在副本的.qwq_output。
+    scratch_root = Path(scratch_root)
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="source-", dir=scratch_root) as temporary:
+        execution_root = Path(temporary) / "repo"
+        shutil.copytree(repo_root, execution_root, symlinks=True,
+                        ignore=shutil.ignore_patterns(".qwq_output", ".git"))
+        for directory in (execution_root, *execution_root.rglob("*")):
+            if directory.is_dir() and not directory.is_symlink():
+                os.chmod(directory, 0o700)
+        return _generate_payload_in_repository(execution_root, candidate_digest, timeout_seconds=timeout_seconds)
+
+
+def _generate_payload_in_repository(
+    repo_root: Path,
+    candidate_digest: str,
+    *,
+    timeout_seconds: float,
+) -> bytes:
     if _DIGEST.fullmatch(candidate_digest) is None:
         raise ValueError("GraphQL registry candidate digest must be canonical sha256")
     service_root = repo_root / "quwoquan_service"
@@ -138,16 +160,13 @@ def _generate_payload(
     metadata = repo_root / METADATA_SOURCE
     _regular_file(schema, label="GraphQL schema source")
     _regular_file(metadata, label="GraphQL query metadata source")
-    contract_view_cache = (
-        Path(scratch_root)
-        if scratch_root is not None
-        else repo_root / ".qwq_output/env/repo/local/graphql-read-registry/cache"
-    )
+    # Go provenance从最近的.qwq_output反解源码根；view必须属于本次冻结投影。
+    contract_view_cache = repo_root / ".qwq_output/env/repo/local/graphql-read-registry/cache"
     contract_view_cache.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
         prefix="view-", dir=contract_view_cache
     ) as contract_view, tempfile.TemporaryDirectory(
-        prefix="qwq-graphql-registry-"
+        prefix="qwq-graphql-registry-", dir=contract_view_cache
     ) as temporary:
         view_argv = [
             "python3",
@@ -156,10 +175,6 @@ def _generate_payload(
             "--output",
             contract_view,
         ]
-        if scratch_root is not None:
-            view_argv.extend(
-                ["--external-output-root", str(contract_view_cache)]
-            )
         view_result = subprocess.run(
             view_argv,
             cwd=service_root,

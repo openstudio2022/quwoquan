@@ -29,6 +29,24 @@ from quwoquan_ops.tests.support.orphan_compose_teardown_test_support import (
 )
 
 
+@pytest.mark.parametrize("failure,admitted", [
+    ("receipt-bound Compose model rendering failed: error while interpolating: required variable X missing", True),
+    ("Docker daemon unavailable", False),
+])
+def test_real_compose_interpolation_failure_is_distinct_from_unknown_daemon(monkeypatch, failure, admitted):
+    from quwoquan_ops.cli.commands import down_domain
+    from quwoquan_ops.cli.commands.repair_runtime_recovery import _receipt_compose_interpolation_failure
+    startup = {"attemptId": "actual-attempt", "workload": "full"}
+    monkeypatch.setattr(down_domain, "_bind_local_teardown_runtime", lambda **k: ({}, "runtime-receipt", PROJECT, False))
+    monkeypatch.setattr(stackctl, "load_startup_attempt", lambda target: startup)
+    monkeypatch.setattr(down_domain, "_receipt_bound_local_compose_model", lambda **k: (_ for _ in ()).throw(RuntimeError(failure)))
+    if admitted:
+        assert "interpolation" in _receipt_compose_interpolation_failure("gamma-local", startup)
+    else:
+        with pytest.raises(RuntimeError, match="daemon unavailable"):
+            _receipt_compose_interpolation_failure("gamma-local", startup)
+
+
 def _sealed_workload_projection(
     tmp_path: Path,
     services: dict[str, dict[str, object]],
@@ -65,6 +83,7 @@ def test_normal_down_impossibility_is_named_only_for_ungated_imageless_services(
     出口绕过它。
     """
 
+    monkeypatch.setattr(stackctl, "load_candidate_manifest", lambda *a, **k: {})
     projection = _sealed_workload_projection(tmp_path, services)
     monkeypatch.setattr(
         stackctl,
@@ -136,6 +155,7 @@ def test_unreadable_candidate_topology_is_named_rather_than_swallowed(
         RuntimeTopologyPackageError,
     )
 
+    monkeypatch.setattr(stackctl, "load_candidate_manifest", lambda *a, **k: {})
     present = tmp_path / "candidate"
     present.mkdir()
     monkeypatch.setattr(

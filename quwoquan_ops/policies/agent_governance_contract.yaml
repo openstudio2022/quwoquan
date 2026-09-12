@@ -34,6 +34,13 @@ candidate_evidence_manifest:
   required_fields: [schema_version, owner_identity_ref, owner_identity_canonical_bytes_sha256, delivery_owner, lead_lane, delivery_policy_digests, target, resolved_owner, path_set_identity, workspace_digests, context_snapshots, impact_plan_identity, evidence_fingerprint]
   owner_identity_ref_semantics: primary_delivery_predecessor
   delivery_identity_source: current_branch_validated_by_branch_and_lane_ownership_policies
+  delivery_source_policy:
+    path: quwoquan_ops/policies/branch_policy.yaml
+    allowed_local_field: allowed_local_branches
+    integration_field: integration_branch
+    excluded_field: release_branch
+    local_branch_prefix: lane/
+    identity_fields_equal: true
   owner_chain_fields: [level, node_id, path]
   impacted_owner_group_fields: [owner_identity, paths]
   impacted_owner_identity_fields: [resolved_owner, owner_chain_digest]

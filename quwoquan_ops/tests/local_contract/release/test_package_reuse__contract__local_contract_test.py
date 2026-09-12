@@ -459,6 +459,7 @@ class PackageReuseContractTest(unittest.TestCase):
         self.assertIn("quwoquan_service/generated/contract_graph.json", roots)
         self.assertIn("quwoquan_service/contracts/metadata", roots)
         self.assertIn("quwoquan_service/tools/codegen_graphql_read_registry", roots)
+        self.assertIn("quwoquan_ops/tests/acceptance", roots)
         self.assertIn(
             "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml",
             roots,

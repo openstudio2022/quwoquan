@@ -91,6 +91,31 @@ def test_detached_github_pull_request_uses_reviewed_head_lane(
     assert candidate["lead_lane"] == "lane/engineering"
 
 
+@pytest.mark.parametrize("branch,allowed", [
+    ("dev1.0", True), ("lane/engineering", True),
+    ("main", False), ("lane/undeclared", False), ("topic/test", False),
+])
+def test_delivery_source_uses_declared_integration_or_lane(monkeypatch, branch, allowed):
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t5
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a[0], 0, branch + "\n", ""))
+    if allowed:
+        owner, source, digests = _delivery_identity(repo_root=ROOT)
+        assert owner == source == branch
+        assert set(digests) == {"branch_policy_digest", "lane_ownership_digest"}
+    else:
+        with pytest.raises(CandidateEvidenceError) as failure:
+            _delivery_identity(repo_root=ROOT)
+        assert failure.value.code == "CANDIDATE.OWNER_DRIFT"
+
+
+def test_candidate_validator_rejects_different_delivery_sources():
+    candidate = build_candidate_evidence(_owner_ref(), CHANGED, repo_root=ROOT)
+    candidate["delivery_owner"] = "lane/engineering"
+    candidate["lead_lane"] = "lane/ops"
+    with pytest.raises(ValueError, match="一致"):
+        validate_candidate_evidence_manifest(candidate)
+
+
 def test_detached_non_pull_request_still_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -129,7 +154,8 @@ def test_cross_owner_candidate_is_one_atomic_review_identity() -> None:
     # 最小 v2 中 delivery owner 与 lead lane 同为 current logical lane；hosted
     # PR job 与本地 lane worktree 都可能是六条 lane 中任一条，断言不得钉死某条 lane。
     current_lane, current_lead, _ = _delivery_identity(repo_root=ROOT)
-    assert current_lane.startswith("lane/") and current_lane == current_lead
+    assert current_lane == current_lead
+    assert current_lane == "dev1.0" or current_lane.startswith("lane/")
     assert candidate["delivery_owner"] == current_lane
     assert candidate["lead_lane"] == current_lane
     assert "changed_paths" not in candidate

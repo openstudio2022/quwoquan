@@ -544,10 +544,10 @@ def target_local_dir(target: str) -> Path:
 
 
 def archived_worktree_startup_paths(target: str) -> tuple[Path, Path, Path]:
-    """仅供显式 Alpha reconciliation 使用；不改变普通 process guard。"""
-    if target != "alpha-local" or os.environ.get("QWQ_OUTPUT_ROOT"):
-        raise ValueError("worktree startup reconciliation requires alpha-local without QWQ_OUTPUT_ROOT")
-    process = ROOT / ".qwq_output/env/alpha/local/alpha-local/process"
+    """仅供本地三环境的显式 reconciliation；不改变普通 process guard。"""
+    if target not in {"alpha-local", "beta-local", "gamma-local"} or os.environ.get("QWQ_OUTPUT_ROOT"):
+        raise ValueError("worktree startup reconciliation requires alpha-local, beta-local or gamma-local without QWQ_OUTPUT_ROOT")
+    process = ROOT / ".qwq_output/env" / env_for_target(target) / "local" / target / "process"
     return (
         process / "startup_attempt.json",
         process / "workloads/full/startup_attempt.json",
