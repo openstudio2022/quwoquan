@@ -205,6 +205,9 @@ def materialize_ios_pod_projection(
     user_home.mkdir(mode=0o700)
     (user_home / ".config").mkdir(mode=0o700)
     (user_home / ".cache").mkdir(mode=0o700)
+    # SwiftPM 在这些路径缺失时会创建指向系统用户缓存的链接；预建真实私有目录。
+    for relative in (".config/swiftpm/cache", ".config/swiftpm/security", "Library/Caches/org.swift.swiftpm"):
+        (user_home / relative).mkdir(parents=True, mode=0o700)
     copy_ios_pod_component(
         snapshot,
         component="pods",

@@ -25,6 +25,9 @@
 
 ## 4. 关键决策
 
+- 构建派生物封印与离线交互验收遵循 [`environment-topology-and-packaging` REQ-008/GWT-007](./environment-topology-and-packaging/spec.md#gwt-007)：iOS registrant 仅按精确路径从工具链模板及锁定插件声明验证完整字节，源 capsule CAS 与派生清单摘要分别绑定；SwiftPM 缓存预建在 private projection 内，不添加外部 symlink 例外。未知字节或路径越界终止，保留首错并由新 candidate/fresh projection 恢复，不修改依赖锁或全局缓存。
+- 页面证据只由外部原生 test host 对生产 App 执行真实点击/滑动并观察；首页推荐视频与视频书分格，Tab 往返用控件实际坐标证明固定及恢复，不在 AUT 注入状态或路由。local_contract 验证篡改拒绝与步骤/观察完整性，双平台 user_acceptance 验证实际行为；未执行设备证据不提升为通过。
+
 <a id="dec-001"></a>
 ### DEC-001 三环境内容验收以可恢复窗口编排原始 CaseResult
 - 决策：Beta/Gamma Remote App 在同一次安装的正向读回后验证受控 Edge 恢复；独立 Alpha API gate 验证服务端 Edge 与 empty/replay lifecycle，Alpha 离线 App 则证明同一故障期间继续读取快照。两类 source 证据不互换；窗口只在目标维护租约与精确 receipt-bound runtime 内执行并恢复，不停止其他 target。

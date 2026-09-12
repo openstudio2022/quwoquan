@@ -203,6 +203,11 @@ def test_exact_capsule_roundtrip_and_private_projection(tmp_path: Path) -> None:
     )
     assert projection.pods_root == ios_root / "Pods"
     assert (projection.pods_root / "Framework/Headers").resolve().is_dir()
+    for relative in (".config/swiftpm/cache", ".config/swiftpm/security", "Library/Caches/org.swift.swiftpm"):
+        cache_directory = projection.private_home / relative
+        assert cache_directory.is_dir(), relative
+        assert not cache_directory.is_symlink()
+        assert cache_directory.resolve().is_relative_to(projection.projection_root)
     proxy_keys = {
         "ALL_PROXY",
         "all_proxy",

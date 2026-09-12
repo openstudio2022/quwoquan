@@ -5,7 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import stat
+from urllib.parse import unquote, urljoin, urlparse
+
+import yaml
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -188,7 +192,10 @@ def _load_policy(policy_path: Path, policy_id: str) -> _Policy:
     reject = _policy_path_list(selected.get("reject"), label="reject")
     for admitted in [*(path for path, _kinds in exact), *subtrees]:
         if any(_under(admitted, denied) for denied in reject):
-            raise ValueError("App build projection policy admit/reject overlap")
+            if not (policy_id == FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID
+                    and admitted in _IOS_REGISTRANTS and admitted not in subtrees
+                    and dict(exact)[admitted] == ("file",)):
+                raise ValueError("App build projection policy admit/reject overlap")
     projection = {
         "schema": _POLICY_SCHEMA,
         "policyId": policy_id,
@@ -387,6 +394,12 @@ def _admit(policy: _Policy, node: _Node) -> None:
             and _is_parent(node.path, _PATROL_IOS_INTEGRATION_TEST_SYMLINK)
         ):
             return
+    # 仅允许 policy 精确声明的两个文件；内容来源在 seal 中独立验证。
+    if (policy.policy_id == FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID
+            and node.path in _IOS_REGISTRANTS and node.path in dict(policy.exact)):
+        if node.kind != "file":
+            raise ValueError(f"App build projection derived output kind rejected by policy: {node.path}")
+        return
     if any(_under(node.path, denied) for denied in policy.reject):
         raise ValueError(
             f"App build projection derived output rejected by policy: {node.path}"
@@ -440,6 +453,105 @@ def _valid_digest(value: str) -> bool:
     return True
 
 
+_IOS_REGISTRANTS = {
+    "quwoquan_app/ios/Runner/GeneratedPluginRegistrant.h": "Header",
+    "quwoquan_app/ios/Runner/GeneratedPluginRegistrant.m": "Implementation",
+}
+
+
+def _verify_ios_registrants(projection: Path, capsule: Path, manifest: Mapping[str, Any]) -> None:
+    """只读重放 SDK 模板；插件声明必须来自 source CAS 或封存的 Pub 依赖。"""
+    if not any((projection / path).exists() for path in _IOS_REGISTRANTS):
+        return
+    app = projection / "quwoquan_app"
+    read = lambda path: _read_regular_nofollow(path, label="iOS registrant input")
+    dependencies = json.loads(read(capsule / "dependencies/dart-pub-cache-manifest.json"))
+    identity = resolved_flutter_identity(dict(os.environ))
+    if (dependencies["flutterVersion"] != identity["flutterVersion"]
+            or dependencies["flutterCommandResolutionDigest"] != identity["commandResolutionDigest"]):
+        raise ValueError("iOS registrant Flutter toolchain drifted")
+    sdk = Path(identity["executable"]).resolve(strict=True).parent.parent
+    templates = read(sdk / "packages/flutter_tools/lib/src/flutter_plugins.dart").decode()
+    locked = yaml.safe_load(read(app / "pubspec.lock"))["packages"]
+    graph = json.loads(read(app / ".flutter-plugins-dependencies"))["plugins"]["ios"]
+    selected = {row["name"]: row for row in graph}
+    if len(selected) != len(graph):
+        raise ValueError("iOS registrant duplicate plugin")
+    config_path = app / ".dart_tool/package_config.json"
+    packages = json.loads(read(config_path))["packages"]
+    dependency_files = {row["path"]: row["sha256"] for row in dependencies["dependency"]["entries"]}
+    source_files = {row["logicalPath"]: row["digest"] for row in manifest["entries"] if row["kind"] == "file"}
+    if not set(locked).issubset({package["name"] for package in packages}):
+        raise ValueError("iOS registrant package config omits locked dependency")
+    plugins = []
+    declared_native = set()
+    for package in packages:
+        name = package["name"]
+        if name not in locked:
+            continue
+        uri = urlparse(urljoin(config_path.as_uri(), package["rootUri"]))
+        root = Path(unquote(uri.path)).resolve(strict=True)
+        if uri.scheme != "file" or not root.is_relative_to(projection):
+            if locked[name]["source"] == "sdk":
+                continue
+            raise ValueError("iOS registrant package escapes projection")
+        pubspec = root / "pubspec.yaml"
+        raw = read(pubspec)
+        relative = pubspec.relative_to(projection).as_posix()
+        cache = app / ".dart_tool/qwq_pub_cache"
+        expected = (dependency_files.get(pubspec.relative_to(cache).as_posix())
+                    if pubspec.is_relative_to(cache) else source_files.get(relative))
+        if expected != _DIGEST_PREFIX + hashlib.sha256(raw).hexdigest():
+            raise ValueError("iOS registrant plugin declaration differs from capsule")
+        declaration = yaml.safe_load(raw)
+        lock = locked[name]
+        if declaration.get("name") != name or str(declaration.get("version")) != lock["version"]:
+            raise ValueError("iOS registrant plugin identity differs from lock")
+        if lock["source"] == "path":
+            expected_root = (app / lock["description"]["path"]).resolve(strict=True)
+        elif lock["source"] == "hosted":
+            host = urlparse(lock["description"]["url"]).hostname
+            expected_root = cache / "hosted" / str(host) / (name + "-" + lock["version"])
+        else:
+            raise ValueError("iOS registrant unsupported plugin source")
+        if root != expected_root:
+            raise ValueError("iOS registrant package location differs from lock")
+        ios = declaration.get("flutter", {}).get("plugin", {}).get("platforms", {}).get("ios", {})
+        plugin_class = ios.get("pluginClass")
+        if plugin_class or ios.get("ffiPlugin"):
+            declared_native.add(name)
+        if not plugin_class:
+            continue
+        row = selected.get(name)
+        if (row is None or not row.get("native_build")
+                or Path(row["path"]).resolve(strict=True) != root
+                or name in {"patrol", "integration_test"}
+                or not re.fullmatch(r"[a-z][a-z0-9_]*", name)
+                or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", plugin_class)):
+            raise ValueError("iOS registrant plugin graph differs from locked declarations")
+        plugins.append({"name": name, "class": plugin_class, "prefix": ""})
+    native_names = {row["name"] for row in graph if row.get("native_build")}
+    # FFI-only 插件不注册 method channel，不能误当可执行 registrant 声明。
+    if declared_native != native_names:
+        raise ValueError("iOS registrant plugin set drifted")
+    for path, template_name in _IOS_REGISTRANTS.items():
+        match = re.search(r"const _objcPluginRegistry" + template_name + r"Template = '''\n(.*?)''';", templates, re.S)
+        if match is None:
+            raise ValueError("iOS registrant SDK template unavailable")
+        rendered = match[1].replace("{{framework}}", "Flutter")
+        def section(match: re.Match[str]) -> str:
+            values = []
+            for plugin in sorted(plugins, key=lambda item: item["name"]):
+                value = match[1]
+                for key, replacement in plugin.items():
+                    value = value.replace("{{" + key + "}}", replacement)
+                values.append(value)
+            return "".join(values)
+        rendered = re.sub(r"{{#methodChannelPlugins}}\n(.*?){{/methodChannelPlugins}}\n", section, rendered, flags=re.S)
+        if "{{" in rendered or read(projection / path) != rendered.encode():
+            raise ValueError("iOS registrant exact generated bytes drifted: " + path)
+
+
 def seal_projection_build(
     manifest_path: Path,
     projection_root: Path,
@@ -475,6 +587,8 @@ def seal_projection_build(
     )
     policy = _load_policy(projection / _POLICY_RELATIVE_PATH, policy_id)
     inventory = _inventory(projection, policy_id=policy_id)
+    if policy_id == FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID:
+        _verify_ios_registrants(projection, manifest_ref.parent, manifest)
     indexed = {node.path: node for node in inventory}
     for path, kind in source.items():
         node = indexed.get(path)

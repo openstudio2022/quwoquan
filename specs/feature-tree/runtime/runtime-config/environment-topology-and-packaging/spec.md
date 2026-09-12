@@ -184,6 +184,7 @@
 - 首页消费推荐 Post items，视频书消费 canonical premium 精选；离线快照封存选择与频道清单，不把普通 video 等同 premium、不复制在线推荐引擎。未支持登录、写入和私有访问返回 typed capability unavailable，不假写成功、不跨环境回放。
 - 离线快照身份证明制品绑定的 source/version/digest，不证明服务端 active release、账号授权或 activation receipt。只收录具有公开离线再分发许可的内容，永久离线不承诺即时撤权；需要即时撤权的内容不得进入快照。Alpha API gate 可独立运行，但不能要求 Alpha App 走 Remote，也不能用离线 App 结果签服务环境或晋级资格。
 - `app-content-uat` 根据 canonical launch metadata 的 source 选择前置与套件。离线页面验收只消费 exact candidate、实际安装启动的制品、签名离线文档、快照及设备绑定，不请求在线 preflight、登录身份、Provider readiness 或服务 activation；Remote 保留全部原有约束。离线登录、写入和私有访问按 typed capability unavailable 验收，不伪造登录成功。
+- 受控 iOS 构建只允许精确声明的 `GeneratedPluginRegistrant.h/.m` 派生产物，须从已验证工具链模板、锁定插件依赖清单及插件声明重建并比对完整字节；不得放行整个 Runner 或任意注册代码。SwiftPM 配置与缓存使用构建私有 projection 内的真实目录，外部 symlink、未知生成文件或来源漂移仍阻断；失败保留原日志并从 fresh projection 恢复，不改锁、不清全局缓存。
 - Alpha 准出须同时消费 Android 与 iOS 的 required 离线页面 raw `ReadinessCaseResult`，逐项绑定同一 candidate、各自实际制品、快照、启动 attempt、设备和执行证据。缺平台、缺 case、失败、身份漂移或只有启动日志/服务查询均阻断；模拟器结果保持 `rehearsal/nonPromotable`。离线页面与 Alpha 服务/API 是独立必需证据，二者均通过后才可签发同一候选的 acceptance bundle。
 - Alpha bootstrap 使用独立 signed offline document 绑定 bundle 完整性与许可，和在线 endpoint 配置共用同一 activation/CAS/receipt/read chain，不直接绕过 active pointer 读 bundle，不伪造 HTTPS。离线文档不继承在线配置 24 小时有效期；不能通过忽略在线 expiry 实现离线，Beta/Gamma/Prod 的签名、有效期和信任域完整保留。source 类型及映射由 canonical launch metadata 冻结，组合根消费 AppContentSource typed 值，不自持 wire 副本。在线配置提前刷新验证后原子激活，失败保留尚有效旧配置，到期 fail closed。
 - Alpha 是独立隔离制品，只有该制品的源依赖闭包、构建资源和组合根可包含 canonical 离线 snapshot、bundle loader 与 Alpha adapter；不得因同属 nonprod 信任域而将这些字节放入 Beta/Gamma 用户 App。Beta/Gamma/Prod 复用同一真实业务与 Remote 实现，差异只由 URL、配置和既有信任域承担。包身份与 trust envelope 仍消费 canonical metadata，不新增环境包名或绕过签名/activation 合同。
@@ -322,6 +323,7 @@
 - THEN Alpha 各入口通过独立 signed offline document 的同一 activation/CAS/read chain 读取同一快照，在在线配置 24 小时到期前、恰到期及之后仍可浏览推荐 items、premium、详情和播放/seek；坏签名/摘要或缺媒体阻断制品/激活并保留已验证旧快照，不忽略在线 expiry、不造 HTTPS 或 server active identity。
 - THEN 同 cohort 的离线/Remote 参数化合同证明身份、过滤、详情、空态和分页边界等价；Beta/Gamma/Prod 的源依赖、pubspec 资源、原生插件/装配与最终制品均不包含 Alpha adapter/bundle、fixture、Mock 或 test runner，不能仅以 runtime if/tree shaking 为证。在线签名过期仍阻断，页面不按 source/profile 分支；Beta/Gamma 同包切配置重建上下文，Alpha 使用独立隔离制品。
 - THEN 在线缺媒体、精选/必要查询未 ready 或 CAS race 保持旧版本；CAS 结果未知与 60 秒回读失败先查权威 pointer，再显式 rollback，5 分钟内恢复或明确阻断，首次无 previous 不猜旧版本；读会话和媒体不混版本。
+- AND required 页面矩阵单独包含首页推荐视频 Post 的真实点击 → immersive 播放进度推进/完整播放，以及首页 Tab 向中部横向滑动时推荐保持左侧可见、反向回首段时关注恢复且推荐归位的实际几何观察；视频书入口、直接路由、状态赋值或首帧均不能替代。首页图片点击后真实 decode 继续独立验收。新增格与其他格同样记录 exact candidate/artifact/device/plan、逐步原生观察、截图和 raw result，缺格即阻断。
 - THEN 报告将声明库存、激活闭包、详情、推荐窗口、premium 和媒体成功分开，不可达为未知；服务 SLO 口径冲突及未测设备/生产故障域保持 OPEN，不以离线成功、首屏数量或旧 receipt 计为 Remote 健康。
 
 ## 6. 依赖
