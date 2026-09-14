@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 8bc420c9a9344d65edb779c4bcb10f4945d9fa42c7325ac903755ce4b2915dea
+// ContractGraph SHA256: 493dc4d68d70ef1b4b1dcc34bfa39f2facc3891ca600d9263d68724d1ba1ba02
 
 part of '../../../content/content_operation_contracts.g.dart';
 
@@ -2997,7 +2997,8 @@ final class SubmitContentPostPublicationCommand {
     Iterable<PostSemanticMention> semanticMentions = const [],
     Iterable<String> mediaAssetIds = const [],
     String? articleMarkdown,
-    String? markdownDialect,
+    DocumentEnvelope? semanticDocument,
+    SemanticDocumentMarkdownDialect? markdownDialect,
     PostArticleAssetManifestInput? articleAssetManifest,
     PostArticleRenderProfile? articleRenderProfile,
     String? coverStrategy,
@@ -3035,6 +3036,7 @@ final class SubmitContentPostPublicationCommand {
          deduplicate: false,
        ),
        articleMarkdown = articleMarkdown,
+       semanticDocument = semanticDocument,
        markdownDialect = markdownDialect,
        articleAssetManifest = articleAssetManifest,
        articleRenderProfile = articleRenderProfile,
@@ -3085,7 +3087,8 @@ final class SubmitContentPostPublicationCommand {
   final List<PostSemanticMention> semanticMentions;
   final List<String> mediaAssetIds;
   final String? articleMarkdown;
-  final String? markdownDialect;
+  final DocumentEnvelope? semanticDocument;
+  final SemanticDocumentMarkdownDialect? markdownDialect;
   final PostArticleAssetManifestInput? articleAssetManifest;
   final PostArticleRenderProfile? articleRenderProfile;
   final String? coverStrategy;
@@ -3125,6 +3128,7 @@ final class SubmitContentPostPublicationCommand {
       "semanticMentions",
       "mediaAssetIds",
       "articleMarkdown",
+      "semanticDocument",
       "markdownDialect",
       "articleAssetManifest",
       "articleRenderProfile",
@@ -3221,12 +3225,23 @@ final class SubmitContentPostPublicationCommand {
               map["articleMarkdown"],
               '$path.articleMarkdown',
             ),
+      semanticDocument: map["semanticDocument"] == null
+          ? null
+          : documentEnvelopeFromWire(
+              _generatedRequestObject(
+                map["semanticDocument"],
+                '$path.semanticDocument',
+              ),
+              '$path.semanticDocument',
+            ),
       markdownDialect: map["markdownDialect"] == null
           ? null
-          : _generatedRequestString(
-              map["markdownDialect"],
-              '$path.markdownDialect',
-            ),
+          : switch (map["markdownDialect"]) {
+              "qwq-rich-md" => SemanticDocumentMarkdownDialect.qwqRichMd,
+              _ => throw FormatException(
+                '$path.markdownDialect' + ' has an invalid enum value',
+              ),
+            },
       articleAssetManifest: map["articleAssetManifest"] == null
           ? null
           : PostArticleAssetManifestInput.fromWire(
@@ -3407,7 +3422,10 @@ final class SubmitContentPostPublicationCommand {
           .map((value) => value)
           .toList(growable: false),
     if (this.articleMarkdown != null) "articleMarkdown": this.articleMarkdown!,
-    if (this.markdownDialect != null) "markdownDialect": this.markdownDialect!,
+    if (this.semanticDocument != null)
+      "semanticDocument": documentEnvelopeToWire(this.semanticDocument!),
+    if (this.markdownDialect != null)
+      "markdownDialect": this.markdownDialect!.wireName,
     if (this.articleAssetManifest != null)
       "articleAssetManifest": this.articleAssetManifest!.toWire(),
     if (this.articleRenderProfile != null)
@@ -3974,8 +3992,10 @@ encodeContentPostSubmitPostPublicationGeneratedRequest(
             .toList(growable: false),
       if (request.articleMarkdown != null)
         "articleMarkdown": request.articleMarkdown!,
+      if (request.semanticDocument != null)
+        "semanticDocument": documentEnvelopeToWire(request.semanticDocument!),
       if (request.markdownDialect != null)
-        "markdownDialect": request.markdownDialect!,
+        "markdownDialect": request.markdownDialect!.wireName,
       if (request.articleAssetManifest != null)
         "articleAssetManifest": request.articleAssetManifest!.toWire(),
       if (request.articleRenderProfile != null)

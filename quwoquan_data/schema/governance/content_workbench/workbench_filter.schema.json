@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/governance/content_workbench/workbench_filter.schema.json",
+  "title": "WorkbenchFilter",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contentFormIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "sources": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "tagRefs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "versions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "R0",
+          "R1",
+          "R2"
+        ]
+      }
+    },
+    "reviewStates": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "pending_review",
+          "qualified",
+          "unqualified"
+        ]
+      }
+    },
+    "poolStates": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "published",
+          "offline_candidate"
+        ]
+      }
+    },
+    "query": {
+      "type": "string"
+    },
+    "tagMatch": {
+      "enum": [
+        "direct",
+        "subtree"
+      ],
+      "default": "subtree"
+    },
+    "sort": {
+      "enum": [
+        "updated_desc",
+        "title_asc",
+        "form_asc",
+        "object_asc"
+      ],
+      "default": "updated_desc"
+    },
+    "page": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "pageSize": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 20
+    },
+    "readToken": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "captureCoverages": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "semanticParseCoverages": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "revisions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "captureMethods": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "dialectVersions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "semanticFingerprints": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "lossSeverities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "carrierMismatches": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "true",
+          "false"
+        ]
+      }
+    },
+    "modelBatches": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "reviewGates": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

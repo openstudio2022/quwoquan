@@ -331,6 +331,8 @@ func responseFieldDartType(field fieldDef) (string, bool, error) {
 		}
 	case "json", "jsonb":
 		result = "Map<String, Object?>"
+	case "semantic_document":
+		result = "DocumentEnvelope"
 	default:
 		if strings.HasPrefix(metaType, "[]") {
 			itemType, _, err := responseFieldDartType(
@@ -582,6 +584,8 @@ func responseFieldDecodeExpression(
 		return "_requiredObject(" + access + ", " + path + ")", nil
 	case "json", "jsonb":
 		return "_requiredObject(" + access + ", " + path + ")", nil
+	case "semantic_document":
+		return "documentEnvelopeFromWire(_requiredObject(" + access + ", " + path + "), " + path + ")", nil
 	default:
 		if strings.HasPrefix(metaType, "[]") {
 			item := responseFieldListItem(field)
@@ -711,6 +715,8 @@ func responseFieldEncodeExpression(field fieldDef, access string) (string, error
 		return nonNullAccess + ".toUtc().toIso8601String()", nil
 	case "enum":
 		return nonNullAccess + ".wireName", nil
+	case "semantic_document":
+		return "documentEnvelopeToWire(" + nonNullAccess + ")", nil
 	case "object":
 		if strings.TrimSpace(field.ObjectRef) == "" {
 			return nonNullAccess, nil

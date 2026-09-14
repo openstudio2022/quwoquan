@@ -108,6 +108,16 @@ class _MarkdownBlockView extends StatelessWidget {
         ),
         QwqMarkdownBlockKind.callout => _CalloutBlock(block: block),
         QwqMarkdownBlockKind.card => _CardBlock(block: block),
+        QwqMarkdownBlockKind.table => _TableBlock(block: block),
+        QwqMarkdownBlockKind.groupedDirectory => _GroupedDirectoryBlock(
+          block: block,
+        ),
+        QwqMarkdownBlockKind.definitionList => _DefinitionListBlock(
+          block: block,
+        ),
+        QwqMarkdownBlockKind.footnote => Text(
+          '[${block.footnote?.label}] ${block.footnote?.text ?? block.text}',
+        ),
         QwqMarkdownBlockKind.horizontalRule => const SizedBox(
           height: AppSpacing.lg,
         ),
@@ -214,9 +224,8 @@ class _CalloutBlock extends StatelessWidget {
         children: [
           Text(
             title,
-            style: CupertinoTheme.of(
-              context,
-            ).textTheme.textStyle.copyWith(fontWeight: FontWeight.w600),
+            style: CupertinoTheme.of(context).textTheme.textStyle
+                .copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.six),
           Text(block.text),
@@ -247,9 +256,8 @@ class _CardBlock extends StatelessWidget {
         children: [
           Text(
             title,
-            style: CupertinoTheme.of(
-              context,
-            ).textTheme.textStyle.copyWith(fontWeight: FontWeight.w600),
+            style: CupertinoTheme.of(context).textTheme.textStyle
+                .copyWith(fontWeight: FontWeight.w600),
           ),
           if (block.text.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.six),
@@ -259,4 +267,56 @@ class _CardBlock extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TableBlock extends StatelessWidget {
+  const _TableBlock({required this.block});
+  final QwqMarkdownBlock block;
+  @override
+  Widget build(BuildContext context) => Table(
+    children: <TableRow>[
+      for (final row in block.table?.logicalGrid ?? const <List<String>>[])
+        TableRow(
+          children: <Widget>[
+            for (final cell in row)
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.six),
+                child: Text(cell),
+              ),
+          ],
+        ),
+    ],
+  );
+}
+
+class _GroupedDirectoryBlock extends StatelessWidget {
+  const _GroupedDirectoryBlock({required this.block});
+  final QwqMarkdownBlock block;
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      for (final entry
+          in block.groupedDirectory?.groups.entries ??
+              const <MapEntry<String, List<String>>>[]) ...<Widget>[
+        Text(entry.key, style: const TextStyle(fontWeight: FontWeight.w600)),
+        for (final item in entry.value) Text('• $item'),
+      ],
+    ],
+  );
+}
+
+class _DefinitionListBlock extends StatelessWidget {
+  const _DefinitionListBlock({required this.block});
+  final QwqMarkdownBlock block;
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      for (final item in block.definitions) ...<Widget>[
+        Text(item.term, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(item.definition),
+      ],
+    ],
+  );
 }

@@ -50,6 +50,7 @@ func publicArticleDetail() postports.PostDetailSlice {
 		Summary:           "从五彩池到雪宝顶的徒步摄影路线。",
 		CoverURL:          "https://cdn.example.test/cover.webp",
 		AuthorDisplayName: "山野摄影师",
+		MarkdownDialect:   "qwq-rich-md",
 		ArticleMarkdown: "---\n" +
 			"title: 黄龙秋色两日路线\n" +
 			"markdownDialect: qwq-rich-md\n" +

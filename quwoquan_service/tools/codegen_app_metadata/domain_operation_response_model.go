@@ -330,7 +330,7 @@ func responseFieldReference(field fieldDef) string {
 		"int", "int32", "int64", "long",
 		"float", "float32", "float64", "double",
 		"bool", "boolean", "timestamp", "datetime", "date",
-		"enum", "object", "json", "jsonb":
+		"enum", "object", "json", "jsonb", "semantic_document":
 		return ""
 	default:
 		return typeName

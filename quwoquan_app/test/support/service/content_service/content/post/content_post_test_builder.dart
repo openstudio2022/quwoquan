@@ -146,8 +146,11 @@ ContentPostDetailPayload contentPostDetailPayloadBuilder({
   String? articleMarkdown,
   List<PostArticleAsset> articleAssets = const <PostArticleAsset>[],
 }) {
-  final markdown = articleMarkdown?.trim();
-  final hasMarkdown = markdown != null && markdown.isNotEmpty;
+  final rawMarkdown = articleMarkdown?.trim();
+  final hasMarkdown = rawMarkdown != null && rawMarkdown.isNotEmpty;
+  final markdown = hasMarkdown && !rawMarkdown!.startsWith('---\n')
+      ? '---\nmarkdownDialect: qwq-rich-md\n---\n$rawMarkdown'
+      : rawMarkdown;
   final updatedAt = post.updatedAt ?? post.createdAt;
   return ContentPostDetailPayload.fromWire(
     ContentPostDetailSlice(

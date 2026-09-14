@@ -118,8 +118,12 @@ asset://cover
       );
 
       expect(doc.html, isNot(contains('<script>')));
-      expect(doc.html, contains('&lt;script&gt;alert(1)&lt;/script&gt;'));
-      expect(doc.html, contains('&lt;img src=x onerror=alert(1)&gt;'));
+      expect(
+        doc.html,
+        isEmpty,
+        reason: 'raw HTML diagnostics 必须 fail closed，不得降级渲染',
+      );
+      expect(doc.indexable, isFalse);
       expect(doc.html, isNot(contains('javascript:alert')));
     });
 
@@ -214,9 +218,8 @@ coverImage: asset://cover
 
 ![封面](asset://cover)
 ''';
-      File(
-        '${postDir.path}/article.md',
-      ).writeAsStringSync(article, encoding: utf8);
+      File('${postDir.path}/article.md')
+          .writeAsStringSync(article, encoding: utf8);
       File('${postDir.path}/assets/cover.jpg')
         ..createSync(recursive: true)
         ..writeAsStringSync('fake-cover', encoding: utf8);
@@ -285,23 +288,20 @@ coverImage: asset://海螺沟_cover_01
 ![封面](asset://海螺沟_cover_01)
 ![细节](asset://海螺沟_detail_02)
 ''';
-      File(
-        '${postDir.path}/article.md',
-      ).writeAsStringSync(article, encoding: utf8);
+      File('${postDir.path}/article.md')
+          .writeAsStringSync(article, encoding: utf8);
       final declaredAssets = <Map<String, Object?>>[
         <String, Object?>{
           'assetId': '海螺沟_cover_01',
           'fileName': '海螺沟_cover_01.jpg',
           'sourceAssetRef': 'source/海螺沟_cover_01.jpg',
-          'publicSliceKey':
-              'media/image/s/runtime-preview/topic-layout-sample/v1/cover-01.jpg',
+          'publicSliceKey': 'media/image/s/runtime-preview/topic-layout-sample/v1/cover-01.jpg',
         },
         <String, Object?>{
           'assetId': '海螺沟_detail_02',
           'fileName': '海螺沟_detail_02.jpg',
           'sourceAssetRef': 'source/海螺沟_detail_02.jpg',
-          'publicSliceKey':
-              'media/image/s/runtime-preview/topic-layout-sample/v1/detail-02.jpg',
+          'publicSliceKey': 'media/image/s/runtime-preview/topic-layout-sample/v1/detail-02.jpg',
         },
       ];
       for (final asset in declaredAssets) {

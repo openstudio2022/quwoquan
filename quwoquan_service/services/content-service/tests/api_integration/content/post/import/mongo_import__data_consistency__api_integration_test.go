@@ -22,6 +22,7 @@ import (
 
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
+	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
 func writeImportFixtureFile(t *testing.T, path, content string) {
@@ -31,6 +32,7 @@ func writeImportFixtureFile(t *testing.T, path, content string) {
 		strings.Contains(content, `"contentType"`) {
 		prefix := `{"contentId":"fixture-` + fmt.Sprintf("%x", len(path)) + `","version":1,"sourceType":"data","variantPurpose":"original","admission":{"processResult":"completed","qualityResult":"passed","usageScope":"research","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:` + strings.Repeat("a", 64) + `"},"status":"active","contentIdentity":"work",`
 		content = strings.Replace(content, "{", prefix, 1)
+		content = semanticfixture.AddToManifestJSON(t, content)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)

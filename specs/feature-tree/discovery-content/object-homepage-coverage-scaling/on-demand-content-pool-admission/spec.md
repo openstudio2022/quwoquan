@@ -99,6 +99,14 @@
 - `sources` 先选择来源；`1.download` 才取得 bytes/CAS、冻结 MIME/digest/probe/rights hard facts 并执行素材出处裁决。被排除素材保留 `policyExcluded` 处置与稳定 `reason`，不倒写 candidate；处置由该阶段 result refs 与 receipt 冻结。
 - OCR 像素检测仍是主检测器。文件身份层的补充判据只关闭「角标低于 OCR 置信阈值但文件身份写明高风险托管源」这一漏检类，它与出处类别裁决共用同一高风险平台闭集，不构成第二套判据。
 
+<a id="req-005"></a>
+### REQ-005 semantic disposition 与人工决策边界
+
+- source acquisition、mapping、author self-check 与 independent review 对同一 exact semantic revision 产生的不可映射、来源漂移、布局歧义、百科忠实度或文章独立性问题，必须以 typed disposition 绑定对象、节点/来源锚点、protocol version triplet 与 object revision tuple；不得只留日志、自由文本或总分。
+- disposition 至少区分「可继续且无需人工裁决」「必须人工决定后才能形成新 revision」「确定判否」三种语义，具体字段与枚举由 canonical contract owner 单点声明。自动流程不能把需人工决定默认为通过或拒绝，也不能通过调整 renderer 掩盖内容问题。
+- 人工决定只允许选择修订内容、替换/升级来源 revision、选择受治理 layout revision 或放弃对象；决定及理由 create-once 绑定输入 protocol triplet 与 object tuple。任何继续发布的结果都必须形成新的 exact object tuple（协议规则改变时还须绑定新的受支持 protocol triplet）并重新经过独立 review，人工决定本身不是 approval、publish admission 或 canonical mutation，也不能豁免 unknown schema/dialect major、canonicalization mismatch 或 required capability missing。
+- 内容池工作台只负责只读展示 disposition、诊断节点和离线记录人工建议；它不拥有 semantic mapper、节点分类、百科忠实度、文章独立性、review 或 publish 终态，不得直接改 R0/canonical package。
+
 ## 4. 契约引用
 
 - 历史 source-qualification、media-work-unit、source capsule/admission pre-init 轨与 work-request compile-result execution schema 不构成现役依赖；candidate binding 只承载对象身份，现役来源事实由 `sources` plan、`1.download` source units/source refs/CAS 与后续 stage receipts 承载。
@@ -170,6 +178,16 @@
 - THEN 第三份不被这两条判据判否，独立改写不因与底稿共享专有名词或主题而误判。
 - THEN 两条判否线与参与判定的段落最小字数取自 vertical content supply policy 的显式声明，判据代码内不存在等价数值也不接受省略阈值的调用。
 - THEN 同一份正文与同一份底稿重复自检得到同一组判否事实，段落序号与行号区间逐字一致。
+
+<a id="gwt-007"></a>
+### GWT-007 disposition 不被工作台或人工决定越权改写
+
+- GIVEN 同一 protocol version triplet 与 exact object revision tuple 同时存在一个可继续 diagnostic、一个需人工决定的布局歧义和一个确定判否的来源漂移，并另有 unknown schema/dialect major、canonicalization mismatch 与 required capability missing 负例。
+- WHEN 工作台读取三者并记录人工选择，随后 producer 尝试继续该对象。
+- THEN 三种 disposition 保持可区分且逐项绑定对象、节点/来源锚点、输入 protocol triplet 与 object tuple；两组版本均在场且互不代偿，工作台读写不改变 canonical bytes、review 或 pool eligibility。
+- THEN 三个协议负例各自 fail closed，不能由人工决定、旧 object tuple 或 renderer fallback 放行；同一 `layoutRevision` 在不同 viewport 下保持相同节点集合、结构与阅读顺序。
+- THEN 未作人工决定时需人工项 fail closed；人工决定后只有重新物化新 tuple 并完成独立 review 的对象可进入单对象事务，旧 tuple 与原 disposition 保持可读。
+- THEN 确定判否不能被人工标记、renderer fallback 或新 layout revision直接改为通过；必须修正其 owner 事实并产生新 revision。
 
 ## 6. 依赖
 
@@ -277,3 +295,12 @@
 - 尚缺实现：需要由当前宿主单轨从 identity-only image/video candidate bindings 创建 execution，并直接证明 `targetObjectCount`、`targetEntityCount`、`approvedQuota` 三值分离，brief/content object 共用同一 candidate identity，以及 `sources|1.download` 的来源/字节失败只影响对应对象。尚缺验收证据为上述行为的逐子句 local_contract/api_integration；不得以 pre-init admission、平行运行身份或批量写入器满足验收。
 - 完成判定：[`GWT-003.t1`](#gwt-003) 至 [`GWT-003.t7`](#gwt-003) 逐条由硬切后当前实现的 local_contract/api_integration 绑定并实际通过，至少覆盖同一实体多对象、candidate identity/integrity 整体 blocked，以及局部 source/bytes shortfall 下 receipt pass。
 - 依赖：identity-only candidate-backed task init 与 execution 内 media acquisition 的当前边界；fresh 四载体 producer 链路另由 [`multi-carrier-release` OPEN-020](../multi-carrier-release/spec.md#open-020) 跟踪。
+
+<a id="open-011"></a>
+### OPEN-011 semantic disposition canonical contract 与人工闭环待实现
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：[`REQ-005`](#req-005) 的 disposition 分级、protocol triplet + object tuple binding 与人工决定边界尚无 canonical schema、producer/review 接线和端到端证据；工作台现有离线结论不得冒充该协议。
+- 完成判定：canonical contract、producer mapper/self-check、independent review 与单对象事务对同一 disposition/ref/digest 及两组版本绑定 fail closed；local_contract 与 api_integration 覆盖 [`GWT-007`](#gwt-007) 的 unknown major、canonicalization mismatch、required capability missing 和 viewport 同结构负例，并证明工作台 root 与 canonical publish root 隔离、人工决定后必须生成新 object tuple、新 review，协议规则变化时还须绑定受支持的新 protocol triplet。

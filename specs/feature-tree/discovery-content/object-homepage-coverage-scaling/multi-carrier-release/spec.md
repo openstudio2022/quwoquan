@@ -65,7 +65,7 @@
 ### REQ-003 站点、实体与 creator 深挖的文章、图片和视频来源
 
 - 实体口径是「用户感兴趣、愿意去的一切地方」：景区景点、秘境、网红打卡地、古镇、露营地、温泉、观景台、徒步节点、探险探秘地，不限 A 级评定，不设数量上限；实体类型只从 taxonomy `Entity/地点/*` 现有叶子中选取。homepage 主源必须是百科闭集成员：zh.wikipedia 或头条百科（`www.baike.com`，`sourceKind=toutiao_baike`），百度百科对非浏览器访问返回反爬挑战页，属技术性规避，不在闭集。实体发现以携程景点榜（热度分、点评数、「必打卡」标签、类型筛选）、zh.wikipedia 分层类目（5A/4A/3A、一级博物馆、历史文化名镇名村、国家级自然保护区、各省文保单位）与 AI 按地域给出的秘境名单为前沿，逐条以百科页存在与正文厚度核验。
-- Article 的主来源可以是同一实体条目以不同 `publishAngle` 切入，也可以是主题条目页；事实参考可追加携程游记/攻略与景点榜、新闻旅游频道（新华网、中国新闻网）、政府与文旅厅/景区官网公告、磨房户外线路帖、zh.wikivoyage 以及页面为服务端渲染的其它公开旅行 UGC（马蜂窝按 `accessPolicy=robots_disallowed` 记录），全部按 `factual_reference_only` 登记——AI 只取事实、路线、费用与贴士并亲笔原创，不搬运来源表达，来源 URL 全部进入 `sourceUrls`。Article 分类必须覆盖 `摄影`；摄影文章与攻略、游记等使用同一 Post/Article 契约与质量准入，不创建第二套载体。
+- Article 必须拥有可成立的独立主题与读者价值。单实体百科条目仅改标题、措辞、章节顺序、叙述角度或 `publishAngle`，仍是同一语义对象，不得成立为第二篇独立文章；`publishAngle` 只能描述已经由不同问题、路线、时间窗口、受众任务或多来源论证证明独立的文章，不能制造新身份。主题条目页可作为主来源；事实参考可追加携程游记/攻略与景点榜、新闻旅游频道（新华网、中国新闻网）、政府与文旅厅/景区官网公告、磨房户外线路帖、zh.wikivoyage 以及页面为服务端渲染的其它公开旅行 UGC（马蜂窝按 `accessPolicy=robots_disallowed` 记录），全部按 `factual_reference_only` 登记——AI 只取事实、路线、费用与贴士并亲笔原创，不搬运来源表达，来源 URL 全部进入 `sourceUrls`。Article 分类必须覆盖 `摄影`；摄影文章与攻略、游记等使用同一 Post/Article 契约与质量准入，不创建第二套载体。
 - Image 来源矩阵按「综合平台 → 垂类、创作者批量优先」运行：Wikimedia Commons（高产上传者 `allimages&aiuser` 全集与 Quality/Featured/Valued 类目）、Openverse API（Flickr CC 与 Commons 聚合，无 key）、Flickr 官方 API（有 key 时 `people.getPublicPhotos`/`photos.search` CC 筛选）、iNaturalist API（research-grade 且 CC 的自然观察，供自然保护区实体）、图虫（`/rest/tags/<标签>/posts` 与 `/rest/sites/<摄影师>/posts` 对合规 UA 直出 JSON，CDN 原图可下载；版权保留 → `unverified`）、Pinterest（用户/画板 RSS 与检索作发现，`i.pinimg.com/236x/<hash>` 改写为 `/originals/<hash>` 取原图；转载物、原始权利未知 → `unknown`）、头条百科标注 `CC BY-SA` 的自有图片、Unsplash/Pexels/Pixabay 官方 API（自有免费许可 → `unverified`）、archive.org/Europeana 等公有领域历史影像。每个资产的 `sourceUrl`、`creator`、原始资产 `directUrl`、取得方式与 `license`/`licenseUrl` 必须回到作品页、平台条款页或官方 API；500px 只作发现。
 - Video 来源矩阵按「切题实景、可落实体、热度作排序、频道/UP 主批量」运行：Wikimedia Commons 视频类目与 `filetype:video` 全文检索、YouTube（无 key 时经 `yt-dlp` 以 `ytsearch` 发现、频道 `/videos` 批量并读取单条 `license`/互动指标，只下载 Creative Commons 条目；有 Data API v3 key 时以 `videoLicense=creativeCommon` 发现）、Bilibili（经 `yt-dlp` 拉 UP 主全集与逐条元数据；版权保留 → `unverified`）、Dailymotion API（`unverified`）、archive.org 与 Vimeo CC、Pexels/Pixabay 空镜。频道/上传者/UP 主全集是批量发现入口，入池仍逐条按实体落点、相关性与负面主题过滤；无法取得逐作品来源证据时只保留本次命中。
 - 热点信号（携程热度/点评数、维基 pageviews、Flickr interestingness/faves、YouTube/Bilibili views/likes/comments、图虫 favorites/views、创作者粉丝数）与逐载体候选级质量筛选（百科正文厚度与结构化事实、游记长度与实用信息项数与时效、图片分辨率与主体切题与水印类型与长宽比、视频时长与清晰度与实景比例）只作候选排序与可重放的候选级放弃判据，不是 execution 内的门禁，也不落台账。来源层级 `sourceTier`（S1 精选/S2 高产可信创作者/S3 其它开放许可/S4 非白名单许可）与创作者层级 `creatorTier` 同样只记录进 `discoverySignals`，供评分校准回归，不作门。
@@ -75,10 +75,10 @@
 - 视频候选保留 play/like/comment/share/favorite 的真实观测与观测时间，并只在同平台、同主题、同时间桶内按 percentile 排序。缺失项保持缺失并标明不可参与热度排序的原因，不得补零或生成虚假排名。
 - ranking-ineligible 视频可以进入 release；热度信号完整度和 percentile 只作为推荐与供给统计。只有公开可取得、可解码、可播放、无 DRM、未绕过访问控制且通过安全/相关性门的真实视频文件可进入 release。
 - 视频来源字节超过载体预算或容器/编码不在发布闭集（`video/mp4|video/webm`）时，ingest 在下载截面用 ffmpeg 转码为 H.264 mp4 派生体（目标 720p、约 16 MiB，硬上限为载体预算），按派生体重新登记 sha256/mime/尺寸/时长，写 `derivativeBinding` 保留源体摘要，poster 从派生体抽帧；每档都装不进才判否。四载体的来源发现与选材由 AI 按上述来源矩阵决定，Skill 工具只展开显式查询并保留来源证据；发现快照只放 `.qwq_output/data/local/workspace/**`。快照可重新取得不代表外部网页或 AI 判断能逐字节复现，已冻结执行输入不得被其他轮次覆盖。
-- homepage 与 article 的百科来源必须同时从可见正文与结构化信息区取证不可变结构化事实。`source.md` 由 AI 以通用工具把来源正文与信息区原文落盘（维基 API extract 与信息框 wikitext、头条百科页内结构化 JSON 展平、游记页 HTML→text），再由 AI 亲笔附上「信息区取证」段；不要求 AI 逐字转写正文。信息区的字段名与取值只在语义一致时采信，字段名指向的受治理字段与解析出的取值类型不一致时该候选事实作废，不落入其它字段。
+- homepage 与 article 的百科来源必须同时从可见正文与结构化信息区取证不可变结构化事实。Wikipedia 证据必须冻结 exact page/revision identity，并取得该同一 revision 的 wikitext 与 Parsoid HTML；两者的 revision 不一致、任一方漂移或只能取得 latest 时 fail closed，不得把不同 revision 拼成一份来源。wikitext 保留模板、表格与链接的源语义，Parsoid HTML 提供与该 revision 对齐的结构化映射输入；二者共同映射到同一 semantic document/source revision，不互相冒充。其它百科同样冻结其可提供的 exact revision/bytes。`source.md` 由 AI 以通用工具把来源正文与信息区原文落盘（Wikipedia exact wikitext + Parsoid HTML、头条百科页内结构化 JSON 展平、游记页 HTML→text），再由 AI 亲笔附上「信息区取证」段；不要求 AI 逐字转写正文。信息区的字段名与取值只在语义一致时采信，字段名指向的受治理字段与解析出的取值类型不一致时该候选事实作废，不落入其它字段。
 
 - 原生多图作品以来源命名空间与原生作品身份分组，一个作品对应一个 image target，选中的资产保留来源顺序与逐资产权利；部分选择必须显式，不按图片数量拆成多个作品。仅同作者或同日期不足以合并跨页面作品。author 的逐资产说明按 Data author schema 表达，投影到既有 `assets[].caption`，不得改变总 caption、消费字段或已发布字节；同名资产必须能在同一对象内唯一投影。
-- homepage 按移动端模板有据整理，维基优先作骨架，头条百科只补同实体缺失事实；无维基可用另一闭集百科。主源须核对名称、类型与行政区；空章节、冲突或无时效依据的票价不补写。多百科产物显式声明本对象已取得的主源，source catalog、实体头与正文归属使用同一选择，不依赖 source unit 排序；模板、长度与评分只作 advisory。
+- homepage 是对已获许可百科来源的 faithful adaptation，不是「移动端模板、有据整理」或自由改写：必须保留主源的实体范围、关键事实、限定条件、归因、信息层级与可验证语义，只允许为统一 semantic document 做必要的结构映射、去除站点 chrome、可访问布局与有据补充。维基优先作主源，头条百科只补同实体缺失事实；无维基可用另一闭集百科。任何删改若改变事实含义、把不确定写成确定、合并冲突来源或脱离许可要求，必须 typed 判否或进入人工 disposition。主源须核对名称、类型与行政区；空章节、冲突或无时效依据的票价不补写。多百科产物显式声明本对象已取得的主源，source binding、唯一 manifest 与正文归属使用同一选择，不依赖 source unit 排序；视口、长度与评分只作布局/advisory，不生成端专属正文。
 
 <a id="req-006"></a>
 ### REQ-006 零仓内编排与 legacy 硬删除
@@ -220,6 +220,15 @@
 - 文章导入复用 Entity 的 exact 主页映射生成既有 mention 投影，不新增 ID 哈希规则；缺映射保留普通文字而非无动作链接。图集/视频 caption 与实体介绍保持可读名称，不扩建 article-only slice、通用富文本或引用卡片；内部语法不泄露路径。
 - 正文/封面图失败保留文字和局部占位，图集坏一张保留顺序/页码且可继续滑动；视频失败保留可读 poster/caption 并结束有界尝试，已知不存在不自动重试；poster 或字幕单独失败不阻断可用视频。来源网页失效不影响随体成品。
 - 复用当前正/负缓存与错误映射，图集实际加载共享负缓存，视频命中负缓存不续期或再次启动恢复；用户显式重试与成功清理仍服从原语义。不新增引用 TTL、逐图探活、健康注册表、自动修复、跨服务事务或缓存广播。
+
+<a id="req-022"></a>
+### REQ-022 release 交付同一 semantic document、协议版本与对象 revision
+
+- homepage/article 的 producer package 与 release 必须同时引用同一 canonical semantic document 的 protocol version triplet `(schemaVersion, dialectVersion, canonicalizationVersion)` 与 object revision tuple `(contentRevision, sourceRevision, layoutRevision)`；前者版本化 AST envelope/字段、Markdown grammar/节点映射和 canonical bytes/digest，后者版本化对象内容、采用来源和统一布局规则。两组正交且不可互相替代。Service/Web/Android/iOS/工作台只投影这一节点树，端别、视口、入口面与环境不得选择另一份正文。
+- Markdown 与 HTML 仅是来源 mapping type，映射结果共享节点身份、阅读顺序、媒体/caption、mention 与表格分类。表格统一分类为 data/layout：data table 跨端保持同一表头、单元格与可访问顺序，layout table 按同一线性化布局；移动端不得另建模板或重新分类。`layoutRevision` 只版本化这一套跨端统一规则，不同 viewport 不得选择不同节点集合、内容结构或阅读顺序。
+- producer、release 与 reader 必须在解释节点前验证 protocol triplet、canonical digest 和 required capabilities；unknown `schemaVersion`/`dialectVersion` major、`canonicalizationVersion` mismatch 或 required capability missing 均 typed fail closed，不由 object revision、人工 disposition 或 renderer fallback 代偿。
+- Wikipedia source revision 必须把 exact revision 的 wikitext 与 Parsoid HTML 共同绑定到 sourceRevision；homepage faithful adaptation 和 article 独立性由 author self-check 与 independent review 对 exact tuple 裁决。只改标题/角度的单实体百科文章 typed rejected，不得以新 `publishAngle`、contentId 或 layoutRevision 绕过。
+- mapping/adaptation/independence 的 diagnostic 与 disposition 随对象保留并可由工作台只读展示；工作台与端 renderer 都不拥有人工 approval、semantic mutation 或 publish eligibility。人工决定后的继续生产必须产生新 tuple 并重新 review。
 
 ## 4. 契约引用
 
@@ -545,6 +554,17 @@
 - THEN 视频失败保留可用 poster/caption 并有界停止，已知永久缺失不自动重试，poster/字幕单独失败不阻断可用视频。
 - THEN 图集加载跨实例复用既有负缓存，视频缓存命中不延长原 TTL 或重新触发恢复，无逐实体/逐图探活或后台自动修复。
 
+<a id="gwt-045"></a>
+### GWT-045 百科 exact revision、faithful adaptation 与文章独立性同轨验收
+
+- GIVEN 同一 Wikipedia 页面两个 revision 的 wikitext/Parsoid HTML 交叉组合、一个忠实 homepage adaptation、一个改变限定语义的 homepage 改写、两篇只改标题/`publishAngle` 的单实体百科文章，以及 unknown schema/dialect major、canonicalization mismatch、required capability missing 四类协议兼容输入。
+- WHEN producer 映射 semantic document、执行 author self-check、independent review、publish 并由多端读取。
+- THEN 只有同一 exact revision 的 wikitext + Parsoid HTML 可形成 sourceRevision；交叉 revision 与 latest 漂移 typed fail closed，旧 sourceRevision 仍可精确读回。每个对象同时携带独立的 protocol triplet 与 object tuple，任一组不能从另一组推导或省略。
+- THEN unknown schema major、unknown dialect major、canonicalization mismatch 与 required capability missing 分别 typed fail closed，且 object tuple 有效、人工选择或 renderer fallback 均不能代偿。
+- THEN faithful homepage 在各端及不同 viewport 保持同一节点集合、内容结构、事实、归因、表格分类和阅读顺序；`layoutRevision` 只改变同一统一规则允许的尺寸、换行、滚动或线性化，改变限定语义的版本产生可定位 disposition 且不进入 publish。
+- THEN 两篇单实体百科改标题/角度的候选被判为同一语义对象，第二篇不能以新 publishAngle、contentId 或 layoutRevision 取得独立文章资格；真正独立的问题/路线/时间窗口或多来源论证候选才可进入新文章 review。
+- THEN 工作台可展示上述 exact tuple、diagnostic 与人工建议，但不能改变判定；人工修订必须生成新 tuple 并重新 review 后才可能发布。
+
 ## 6. 依赖
 
 - 前置要求：父能力的 execution、review 与 release 契约。
@@ -762,3 +782,13 @@
 - 完成判定：[`GWT-042`](#gwt-042) 五条结果分别有真实 importer→typed query api_integration 与 App 局部失败/缓存 local_contract 绑定；授权环境的实体下线点击返回、单图失败可滑动及视频有界停止另有 fresh UAT，不以局部 PASS 关闭。
 - 最小测试入口：Entity homepage importer、Content release importer 与既有 article mention Widget 测试；App `image_book_canvas`、`video_player_widget`、主页错误展示的现有短 local_contract，测试需直接绑定 `GWT-042.t1` 至 `t5`。Dart 改动按 App 规则热重载，未连设备保持未验证。
 - 依赖：Service/App/Ops 原 owner 与明确环境授权；不是 producer handoff 的前置。
+
+<a id="open-030"></a>
+### OPEN-030 统一语义协议的 producer 到跨端闭环待实现
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：[`REQ-022`](#req-022) 已消除移动端模板、同实体百科换 `publishAngle` 与跨 revision 拼接，并区分 protocol version triplet 与 object revision tuple，但 exact wikitext+Parsoid acquisition、semantic mapper、双版本绑定、faithful adaptation/文章独立性 review 和跨端 reader 尚无同 revision 完整证据。
+- 完成判定：Data canonical contracts、acquire/author/review/publish、Service projection、Web/Android/iOS renderer 与工作台 query 对同一对象逐节点、逐 protocol version、逐 object revision 对账并通过 [`GWT-045`](#gwt-045)；unknown schema/dialect major、canonicalization mismatch、required capability missing、交叉 source revision、非忠实改写、同实体换角度、viewport 内容结构分叉、端专属模板和工作台越权写入均有 fail-closed 反例。
+- 依赖：`content-type-framework` 的 [`DEC-003`](../../content-type-framework/design.md#dec-003) 与 `markdown-article-kernel` 的 [`OPEN-002`](../../content-type-framework/markdown-article-kernel/spec.md#open-002)，以及本层 `DEC-046`。

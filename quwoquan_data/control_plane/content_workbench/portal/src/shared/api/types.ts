@@ -1,0 +1,33 @@
+export type CountFacet = { id: string; label: string; count: number };
+export type HumanState = 'qualified' | 'unqualified' | 'pending_review' | string;
+export type PoolState = 'published' | 'offline_candidate' | string;
+export type VersionRound = 'R0' | 'R1' | 'R2' | string;
+export type TagNode = { ref: string; label: string; count: number; children: TagNode[] };
+export type CaptureMetadata = {
+  captureCoverage: Record<string, unknown> | number | null; semanticParseCoverage: Record<string, unknown> | number | null; revision: string; captureMethod: string;
+  dialectVersions: string[]; semanticFingerprint: string | null; dispositionCounts: Record<string, number>;
+  lossSeverity: string; carrierMismatch: boolean; modelBatch: string; reviewGate: Record<string, unknown>;
+};
+export type WorkSummary = CaptureMetadata & {
+  objectId: string; objectRef: string; objectKey: string; title: string; contentFormId: string;
+  versionId: string; sourcePlatforms: string[]; tagRefs: string[]; humanState: HumanState;
+  poolState: PoolState; businessDigest: string; textBytes: number; mediaBytes: number;
+};
+export type QualitySummary = { contentFormId: string; dimension: string; n: number; mean: number; distribution: Record<string, number> };
+export type Overview = { readToken: string; staleRead: boolean; total: number; contentForms: CountFacet[]; reviewStates: CountFacet[]; sourcePlatforms: CountFacet[]; tags: TagNode[]; volume: { textBytes: number; mediaBytes: number }; qualityScores: QualitySummary[] };
+export type Facets = { readToken?: string; contentForms: CountFacet[]; sourcePlatforms: CountFacet[]; humanStates: CountFacet[]; poolStates: CountFacet[]; versions: CountFacet[]; tags: TagNode[]; captureCoverages: CountFacet[]; semanticParseCoverages: CountFacet[]; revisions: CountFacet[]; captureMethods: CountFacet[]; dialectVersions: CountFacet[]; semanticFingerprints: CountFacet[]; lossSeverities: CountFacet[]; carrierMismatches: CountFacet[]; modelBatches: CountFacet[]; reviewGates: CountFacet[] };
+export type WorksPage = { readToken?: string; staleRead: boolean; total: number; page: number; pageSize: number; items: WorkSummary[] };
+export type EvidenceDescriptor = { evidenceId: string; kind: string; mediaType: string; sha256: string | null; bytes: number; displayMode: 'source-gfm' | 'raw' | 'unavailable'; defaultReason: string | null; readStatus: 'available' | 'missing' | 'unreadable' | 'descriptor_invalid' | 'digest_drift' | 'version_incompatible'; revision: string | number | null };
+export type SourceDescriptor = { sourceUnitId: string; title: string; platform: string; canonicalUrl: string | null; sourceUseMode: string; rightsClue: string; fetchedAt: string; evidenceState: 'available' | 'missing' | 'unreadable'; adopted: boolean; evidence: EvidenceDescriptor[]; defaultEvidenceId: string | null };
+export type SourceEvidence = { readToken: string; staleRead: boolean; sourceUnitId: string; evidenceId: string; kind?: string; mediaType?: string; sha256?: string; bytes: number; truncated: boolean; content: string };
+export type ProductionReview = { reviewer?: string; decision?: string; blockingIssues?: unknown[]; advisories?: unknown[]; draft?: { digest?: string }; qualityScores?: Record<string, number> };
+export type HumanReview = { decision?: string; changes?: string[]; targetState?: string; revision?: number; previousDigest?: string | null; recordDigest?: string };
+export type SemanticValidation = { code: string; detail?: string; publishEligible: boolean };
+export type NodeAlignmentStatus = 'preserved' | 'normalized' | 'degraded' | 'missing' | 'added' | 'unsupported' | 'blocked';
+export type NodeDiff = { alignmentStatus: NodeAlignmentStatus; alignedBy: 'nodeId' | 'sourceAnchor' | 'order' | 'none'; nodeId: string; kind: string; sourceOrder: number | null; targetOrder: number | null; orderingDelta: number | null; sourceFingerprint: string | null; targetFingerprint: string | null; sourceAnchor: Record<string, unknown> | null; losses: Record<string, unknown>[]; diagnostics: Record<string, unknown>[]; sourceNode: Record<string, unknown> | null; targetNode: Record<string, unknown> | null };
+export type AuthorityRecord = Record<string, unknown> & { authority: 'canonical_content_review' | 'canonical_human_decision' | 'workbench_offline_suggestion' };
+export type WorkDetail = WorkSummary & { readToken: string; staleRead: boolean; body?: string; fields: Record<string, unknown>; media: Array<{ url?: string; mime?: string; alt?: string; relativePath?: string }>; sourceDescriptors: SourceDescriptor[]; productionReview?: ProductionReview; humanReview?: HumanReview; lineage: Array<{ versionId?: string; parentVersionId?: string; businessDigest?: string; reviewState?: string }>; qualityScores?: Record<string, number>; sourceSemanticTree?: import('../../generated/semanticDocument.js').DocumentEnvelope | null; semanticTree?: import('../../generated/semanticDocument.js').DocumentEnvelope | null; sourceSemanticValidation: SemanticValidation; semanticValidation: SemanticValidation; nodeDiagnostics: unknown[]; nodeDiff: NodeDiff[]; canonicalDispositions: AuthorityRecord[]; canonicalHumanDecisions: AuthorityRecord[]; offlineSuggestion?: AuthorityRecord; raw?: unknown };
+export type ReviewInput = { objectId: string; versionId: string; businessDigest: string; decision: 'qualified' | 'unqualified'; changes?: string[]; targetState?: string };
+export type ReviewResult = HumanReview & { objectId: string; versionId: string; businessDigest: string };
+export type RefreshResult = { readToken: string; staleRead: boolean; refreshed: boolean };
+export type ApiFailure = Error & { code?: string; status?: number; stale?: boolean };

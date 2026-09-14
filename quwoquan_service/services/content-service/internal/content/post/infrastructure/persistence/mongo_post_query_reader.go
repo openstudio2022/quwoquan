@@ -805,6 +805,7 @@ func PostDetailProjection() bson.D {
 		{Key: "height", Value: 1},
 		{Key: "durationMs", Value: 1},
 		{Key: "articleMarkdown", Value: 1},
+		{Key: "semanticDocument", Value: 1},
 		{Key: "markdownDialect", Value: 1},
 		{Key: "articleMarkdownDigest", Value: 1},
 		{Key: "articleAssetManifest", Value: 1},

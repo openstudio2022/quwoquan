@@ -3,7 +3,9 @@ description: '主页完整介绍页分节。kind 为稳定展示闭集：
 
   overview | keyFacts | timeline | history | relatedPeople | relatedObjects | map | gallery | body | relatedImages。
 
-  端侧按 kind 选择渲染形态，正文仍以 bodyMarkdown 为主，避免 Map 穿透 UI。
+  端侧按 kind 选择渲染形态；canonical semanticDocument 在场时为唯一正文语义来源。
+
+  bodyMarkdown 仅供存量记录 legacy read-only 消费，不得用于新写入或隐式升级 canonical。
 
   body：数据工程 page.md 正文章节投影，bodyMarkdown 可含 `:::figure id="..." caption="..."`
 
@@ -21,6 +23,11 @@ fields:
   type: string
 - name: title
   type: string
+- name: semanticDocument
+  type: semantic_document
+  go_type_ref: semantic_document.DocumentEnvelope
+  go_import: quwoquan_service/services/entity-service/generated/entity_homepage/homepage/semantic_document
+  nullable: true
 - name: bodyMarkdown
   type: string
   nullable: true

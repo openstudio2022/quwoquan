@@ -844,7 +844,7 @@ func BuildCanonicalImportedPostDocument(
 		"body": body, "summary": summary, "mediaUrls": media.MediaURLs,
 		"mediaItems": media.MediaItems, "coverUrl": media.CoverURL,
 		"mediaAssetIds": media.MediaAssetIDs, "articleMarkdown": post.ArticleMarkdown,
-		"articleDigest": post.ArticleDigest, "articleMarkdownDigest": post.ArticleDigest,
+		"semanticDocument": post.SemanticDocument, "articleDigest": post.ArticleDigest, "articleMarkdownDigest": post.ArticleDigest,
 		"articleAssetManifest": ImportedArticleAssetManifest(post.ArticleAssetManifest, accessMode),
 		"createdAt":            post.CreatedAt, "updatedAt": post.UpdatedAt,
 		"publishedAt": post.PublishedAt, "version": opts.ProjectionVersion,

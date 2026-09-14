@@ -30,6 +30,7 @@ from content.release.canonical.object_transaction_environment import (
 from core.control_types import SourcePolicyRevision
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.schema import assert_valid
+from core.semantic_quality_gates import SemanticGateError, assert_review_admissible
 
 _collect_object_keys = collect_object_keys
 
@@ -377,12 +378,19 @@ def _review_binding(object_root: Path, package: Mapping[str, Any]) -> dict[str, 
         raise ObjectTransactionError(str(exc)) from exc
     if content_review.get("decision") != "approved":
         raise ObjectTransactionError("对象未 review-approved")
+    try:
+        assert_review_admissible(content_review)
+    except SemanticGateError as exc:
+        raise ObjectTransactionError(f"semantic admission blocked: {exc}") from exc
     digest = _digest_file(content_review_path)
     return {
         "contentReviewRef": content_review_ref.as_posix(),
         "contentReviewSha256": digest,
         "rightsAuthorityRef": content_review_ref.as_posix(),
         "rightsAuthoritySha256": digest,
+        "protocol": content_review["protocol"],
+        "objectRevision": content_review["objectRevision"],
+        "dispositionsDigest": _digest_bytes(_json_bytes(content_review["dispositions"])),
     }
 
 def _rights_binding(

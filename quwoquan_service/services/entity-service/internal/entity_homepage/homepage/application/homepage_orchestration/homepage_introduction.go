@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	rtobs "quwoquan_service/runtime/observability"
+	semantic_document "quwoquan_service/services/entity-service/generated/entity_homepage/homepage/semantic_document"
 )
 
 // 三段结构 asset role 闭集（projections/homepage_introduction_asset.yaml 同源）。
@@ -26,11 +27,12 @@ type HomepageIntroductionTimelineItem struct {
 }
 
 type HomepageIntroductionSection struct {
-	Kind          string                             `json:"kind"`
-	Title         string                             `json:"title"`
-	BodyMarkdown  string                             `json:"bodyMarkdown,omitempty"`
-	Assets        []HomepageIntroductionAsset        `json:"assets"`
-	TimelineItems []HomepageIntroductionTimelineItem `json:"timelineItems"`
+	Kind             string                              `json:"kind"`
+	Title            string                              `json:"title"`
+	SemanticDocument *semantic_document.DocumentEnvelope `json:"semanticDocument,omitempty"`
+	BodyMarkdown     string                              `json:"bodyMarkdown,omitempty"`
+	Assets           []HomepageIntroductionAsset         `json:"assets"`
+	TimelineItems    []HomepageIntroductionTimelineItem  `json:"timelineItems"`
 }
 
 type HomepageIntroduction struct {

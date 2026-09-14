@@ -16,6 +16,7 @@ import (
 	rthealth "quwoquan_service/runtime/health"
 	rtrec "quwoquan_service/runtime/recommendation"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 	mediaasseterrors "quwoquan_service/services/content-service/generated/media/media_asset"
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	intersectionapp "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
@@ -80,6 +81,7 @@ type postDetailClientWire struct {
 	Height                  int64                                    `json:"height,omitempty"`
 	DurationMS              int64                                    `json:"durationMs,omitempty"`
 	ArticleMarkdown         string                                   `json:"articleMarkdown,omitempty"`
+	SemanticDocument        *semantic.DocumentEnvelope               `json:"semanticDocument,omitempty"`
 	MarkdownDialect         string                                   `json:"markdownDialect,omitempty"`
 	ArticleMarkdownDigest   string                                   `json:"articleMarkdownDigest,omitempty"`
 	ArticleAssetManifest    *postports.PostArticleAssetManifestSlice `json:"articleAssetManifest,omitempty"`
@@ -143,6 +145,7 @@ func ProjectPostDetailForClient(
 		Height:                  detail.Height,
 		DurationMS:              detail.DurationMS,
 		ArticleMarkdown:         detail.ArticleMarkdown,
+		SemanticDocument:        detail.SemanticDocument,
 		MarkdownDialect:         detail.MarkdownDialect,
 		ArticleMarkdownDigest:   detail.ArticleMarkdownDigest,
 		ArticleAssetManifest:    detail.ArticleAssetManifest,

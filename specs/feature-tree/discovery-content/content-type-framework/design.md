@@ -50,6 +50,20 @@
 - 影响 Story：[`creation-mode-and-surface-ia-unification`](./creation-mode-and-surface-ia-unification/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-003"></a>
+### DEC-003 semantic document 是跨端正文与布局意图的唯一协议
+
+- 决策：article 的 canonical 输出是单一 semantic document；Markdown 与 HTML 是显式 mapping type，统一映射到稳定节点身份和节点闭集，Web/Android/iOS/工作台只消费同一节点树。语法原文、端组件树和 renderer 输出均不是第二正文 authority。
+- 协议版本边界：semantic protocol 以 `(schemaVersion, dialectVersion, canonicalizationVersion)` version triplet 分别版本化 AST envelope/字段、Markdown grammar 与节点映射、canonical bytes/digest。reader 先校验 triplet 与 required capabilities；unknown schema/dialect major、canonicalization mismatch 或 capability missing typed fail closed。minor compatibility 只能按 canonical contract 明示，禁止以 best-effort renderer 或字段忽略自行扩兼容。
+- 对象版本边界：对象另以 `(contentRevision, sourceRevision, layoutRevision)` exact tuple 标识可重放事实。content 拥有作者表达，source 拥有采用证据的 exact revision，layout 拥有同一节点树的一套统一响应式/可访问布局规则；三个维度分别推进、create-once，reader 必须读取一个已存在 tuple，不允许 latest-by-dimension 拼装。protocol triplet 与 object tuple 正交且必须同时绑定，均不得替代另一组。
+- 表格与布局：mapper 一次性判定 `data table|layout table`。data table 保留 row/column/header/caption/cell reading order 并跨端使用同一响应式规则；layout table 按受治理顺序线性化且不暴露数据表语义。视口断点只能应用同一 `layoutRevision` 声明的尺寸、换行、滚动或线性化规则，不能选择不同节点、内容结构、阅读顺序或分类。
+- 失败与人工恢复：未知/有损映射、版本缺失或 tuple 漂移返回可定位 node/source 的 typed disposition；自动流程不得猜测。人工可选择修订、替换来源、显式接受受治理降级或放弃，但决定必须由 producer/review owner 形成新 revision 并重新审核，工作台仅展示 diagnostic 与收集离线建议。
+- 被否决方案：每端持有 Markdown/HTML 副本、移动端模板、有据整理后覆盖来源表达、按 renderer 推断表格类型、三个 latest revision 临时拼接、工作台修补 canonical AST。
+- 可测试面：mapper golden/local_contract 锁定节点身份、两类 mapping、protocol triplet 与表格分类；对象 tuple 并发/漂移测试锁定三维 revision 独立性，协议负例锁定 unknown schema/dialect major、canonicalization mismatch 与 required capability missing；跨端 fixture 在多 viewport 逐节点比对结构、语义、阅读顺序与可访问表头，工作台写入 canonical root 必须失败。
+- 关联要求：[`markdown-article-kernel REQ-006`](./markdown-article-kernel/spec.md#req-006)
+- 影响 Story：[`markdown-article-kernel`](./markdown-article-kernel/spec.md)
+- 关联验收：[`GWT-005`](./markdown-article-kernel/spec.md#gwt-005)
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

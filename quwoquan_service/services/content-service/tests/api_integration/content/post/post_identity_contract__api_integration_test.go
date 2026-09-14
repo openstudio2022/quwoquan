@@ -3,11 +3,14 @@
 package api_integration
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
 func TestSubmitPostPublicationPersistsIdentityAndAssistantUsePolicy(t *testing.T) {
@@ -203,17 +206,11 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 	// boundary before proving PromotePost preserves the projected counter.
 	drainReactionOutbox(t)
 
-	promoteReq := httptest.NewRequest(
-		http.MethodPost,
-		"/content/posts/"+postID+":promoteToWork",
-		strings.NewReader(`{
-			"contentType":"article",
-			"title":"升级后的长文",
-			"articleMarkdown":"# 升级后的长文\n\n升级后正文",
-			"markdownDialect":"qwq-rich-md",
-			"articleAssetManifest":{"assets":[]}
-		}`),
-	)
+	promoteBody, err := json.Marshal(map[string]any{"contentType": "article", "title": "升级后的长文", "articleMarkdown": "# 升级后的长文\n\n升级后正文", "markdownDialect": "qwq-rich-md", "semanticDocument": semanticfixture.Map(t), "articleAssetManifest": map[string]any{"assets": []any{}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	promoteReq := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+":promoteToWork", bytes.NewReader(promoteBody))
 	promoteReq.Header.Set("Content-Type", "application/json")
 	promoteReq.Header.Set("X-Client-User-Id", "promote_thread_author")
 	ensureIdempotencyHeader(promoteReq, "promote-thread")

@@ -15,6 +15,7 @@ from governance.coverage.distribution import (
     RightsStatus,
     project_asset_admission,
 )
+from core.schema import assert_valid
 
 _CARRIERS = ("homepage", "article", "image", "video")
 
@@ -24,10 +25,11 @@ def _content_review_approved(root: Path) -> bool:
     if not path.is_file():
         return False
     review = _read_json(path)
-    return bool(
-        review.get("schema") == "quwoquan_data.content_review"
-        and review.get("decision") == "approved"
-    )
+    try:
+        assert_valid(review, "content", "content_review", label=str(path))
+    except ValueError as exc:
+        raise ObjectTransactionError(str(exc)) from exc
+    return review.get("decision") == "approved" and isinstance(review.get("semanticReport"), Mapping)
 
 def _object_rows(
     objects_root: Path,
@@ -168,6 +170,8 @@ def _object_media_is_admissible(row: Mapping[str, Any]) -> bool:
     object_ref = str(row["objectRef"])
     carrier = str(row["carrier"])
     manifest = row["manifest"]
+    if not bool(row.get("contentReviewApproved")):
+        return False
     raw_manifest_assets = manifest.get("assets")
     if not isinstance(raw_manifest_assets, list):
         raise ObjectTransactionError(

@@ -231,6 +231,7 @@ void main() {
         '''
 ---
 title: 元数据透传
+markdownDialect: qwq-rich-md
 ---
 
 ![竖图](asset://a1)
@@ -263,6 +264,7 @@ title: 元数据透传
         '''
 ---
 title: 缺席保元数据
+markdownDialect: qwq-rich-md
 ---
 
 ![缺席图](asset://a1)

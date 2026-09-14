@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/service/content_service/content/post/generated/semantic_document.g.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_asset_manifest_resolver.dart';
 import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
@@ -14,6 +15,26 @@ const MediaAssetManifestResolver _articleAssetManifestResolver =
 /// 云端与数据工程以 QWQ Rich Markdown 作为跨边界真相源；编辑器内部仍使用
 /// [ArticleDocumentData.nodes] 承载交互态结构。本文件负责唯一转换，避免各入口
 /// 各自从 title/body/cards 拼第二套长文。
+class _ReadOnlyOriginEntry {
+  const _ReadOnlyOriginEntry({
+    required this.nodeId,
+    required this.ordinal,
+    required this.rawMarkdown,
+    required this.semanticType,
+    required this.fingerprint,
+  });
+  final String nodeId;
+  final int ordinal;
+  final String rawMarkdown;
+  final String semanticType;
+  final String fingerprint;
+}
+
+class _MarkdownOriginAuthority {
+  const _MarkdownOriginAuthority(this.entries);
+  final List<_ReadOnlyOriginEntry> entries;
+}
+
 class ArticleMarkdownCodec {
   const ArticleMarkdownCodec._();
 
@@ -27,6 +48,7 @@ class ArticleMarkdownCodec {
     String coverAssetId = '',
     String coverImageUrl = '',
   }) {
+    _validateReadOnlyNodes(document);
     final buffer = StringBuffer()
       ..writeln('---')
       ..writeln('title: ${_frontMatterScalar(document.title)}');
@@ -84,16 +106,39 @@ class ArticleMarkdownCodec {
       if (node.isDocumentTitle) {
         continue;
       }
+      final origin = _originForNode(document, node.id);
+      if (origin != null) {
+        buffer
+          ..writeln(origin.rawMarkdown.trimRight())
+          ..writeln();
+        continue;
+      }
       switch (node.type) {
         case ArticleDocumentNodeType.documentTitle:
           break;
         case ArticleDocumentNodeType.headingMajor:
           orderedIndex = 0;
-          _writeTextBlock(buffer, '##', node.text, spans: node.spans);
+          _writeTextBlock(
+            buffer,
+            '#' *
+                (node.headingLevel.clamp(1, 6) == 1
+                    ? 1
+                    : node.headingLevel.clamp(1, 6)),
+            node.text,
+            spans: node.spans,
+          );
           break;
         case ArticleDocumentNodeType.headingMinor:
           orderedIndex = 0;
-          _writeTextBlock(buffer, '###', node.text, spans: node.spans);
+          _writeTextBlock(
+            buffer,
+            '#' *
+                (node.headingLevel.clamp(1, 6) <= 2
+                    ? 3
+                    : node.headingLevel.clamp(1, 6)),
+            node.text,
+            spans: node.spans,
+          );
           break;
         case ArticleDocumentNodeType.paragraph:
           orderedIndex = 0;
@@ -188,14 +233,131 @@ class ArticleMarkdownCodec {
     return buffer.toString().trimRight();
   }
 
+  static _ReadOnlyOriginEntry? _originForNode(
+    ArticleDocumentData document,
+    String nodeId,
+  ) {
+    final authority = document.markdownOriginAuthority;
+    if (authority is! _MarkdownOriginAuthority) return null;
+    for (final origin in authority.entries) {
+      if (origin.nodeId == nodeId) return origin;
+    }
+    return null;
+  }
+
+  static void _validateReadOnlyNodes(ArticleDocumentData document) {
+    final authority = document.markdownOriginAuthority;
+    if (authority != null && authority is! _MarkdownOriginAuthority) {
+      throw const FormatException('不可信 DTO 试图注入 markdown origin authority。');
+    }
+    final baseline = authority is _MarkdownOriginAuthority
+        ? authority.entries
+        : const <_ReadOnlyOriginEntry>[];
+    if (baseline.isEmpty) {
+      if (document.nodes.any(
+        (node) =>
+            node.isReadOnly ||
+            node.isRichBlock ||
+            node.headingLevel > 3 ||
+            node.rawMarkdown.isNotEmpty ||
+            node.semanticType.isNotEmpty,
+      )) {
+        throw const FormatException(
+          '不可信 DTO 无 canonical markdown origin baseline。',
+        );
+      }
+      return;
+    }
+    final currentReadOnly = document.nodes
+        .where((node) => _originForNode(document, node.id) != null)
+        .toList(growable: false);
+    if (currentReadOnly.length != baseline.length) {
+      throw const FormatException('只读节点被删除或 identity 已改变。');
+    }
+    for (var index = 0; index < baseline.length; index++) {
+      final origin = baseline[index];
+      final node = currentReadOnly[index];
+      if (origin.ordinal != index ||
+          origin.nodeId != node.id ||
+          !node.isReadOnly) {
+        throw const FormatException('只读节点 identity/order 已改变。');
+      }
+      if (origin.semanticType == QwqMarkdownBlockKind.unsupported.name) {
+        throw const FormatException('opaque unsupported 节点尚无安全 serializer。');
+      }
+      final expected = _readOnlyFingerprint(
+        origin.nodeId,
+        origin.semanticType,
+        origin.rawMarkdown,
+      );
+      if (expected != origin.fingerprint || !_rawMatchesNode(node, origin)) {
+        throw const FormatException('只读节点 raw/semantic fingerprint 已改变。');
+      }
+    }
+  }
+
+  static bool _rawMatchesNode(
+    ArticleDocumentNode node,
+    _ReadOnlyOriginEntry origin,
+  ) {
+    final wrapped =
+        '---\nmarkdownDialect: $qwqRichMarkdownVersion\n---\n${origin.rawMarkdown}';
+    final parsed = const QwqMarkdownParser()
+        .parse(wrapped, requireVersion: true)
+        .document;
+    if (parsed.hasBlockingDiagnostics || parsed.blocks.length != 1) {
+      return false;
+    }
+    final block = parsed.blocks.single;
+    final semanticType = block.kind == QwqMarkdownBlockKind.heading
+        ? 'heading${block.level}'
+        : block.kind.name;
+    if (semanticType != origin.semanticType ||
+        block.text != node.text ||
+        node.semanticType != origin.semanticType ||
+        node.rawMarkdown != origin.rawMarkdown) {
+      return false;
+    }
+    if (node.type == ArticleDocumentNodeType.codeBlock &&
+        block.language != node.codeLanguage) {
+      return false;
+    }
+    return true;
+  }
+
+  static String _readOnlyFingerprint(
+    String id,
+    String semanticType,
+    String raw,
+  ) {
+    var hash = 0x811c9dc5;
+    for (final unit in '$id\u0000$semanticType\u0000$raw'.codeUnits) {
+      hash = ((hash ^ unit) * 0x01000193) & 0xffffffff;
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
+  }
+
+  static QwqMarkdownDocument parseMarkdown(String markdown) =>
+      const QwqMarkdownParser().parse(markdown, requireVersion: true).document;
+
   static ArticleDocumentData parseDocument(
     String markdown, {
     Map<String, Object?>? assetManifest,
     MediaAssetManifestResolver assetManifestResolver =
         _articleAssetManifestResolver,
     String Function(String raw)? mediaUrlResolver,
+    List<String> restoredNodeIds = const <String>[],
   }) {
-    final parsed = const QwqMarkdownParser().parse(markdown).document;
+    final parsed = const QwqMarkdownParser()
+        .parse(markdown, requireVersion: true)
+        .document;
+    if (parsed.hasBlockingDiagnostics) {
+      final codes = parsed.diagnostics
+          .where((item) => item.isBlocking)
+          .map((item) => item.code)
+          .join(',');
+      throw FormatException('QWQ Rich Markdown 拒绝解析: $codes');
+    }
     final mediaAssetsById = resolveArticleAssetManifestVariants(
       assetManifest,
       resolver: assetManifestResolver,
@@ -217,28 +379,57 @@ class ArticleMarkdownCodec {
     }
 
     var seed = 0;
+    var readOnlyOrdinal = 0;
+    final readOnlyBaseline = <_ReadOnlyOriginEntry>[];
+    ArticleDocumentNode readOnlyNode(
+      ArticleDocumentNode node,
+      QwqMarkdownBlock block,
+    ) {
+      final raw = block.rawSource;
+      final semanticType = block.kind == QwqMarkdownBlockKind.heading
+          ? 'heading${block.level}'
+          : block.kind.name;
+      final ordinal = readOnlyOrdinal++;
+      readOnlyBaseline.add(
+        _ReadOnlyOriginEntry(
+          nodeId: node.id,
+          ordinal: ordinal,
+          rawMarkdown: raw,
+          semanticType: semanticType,
+          fingerprint: _readOnlyFingerprint(node.id, semanticType, raw),
+        ),
+      );
+      return node.copyWith(
+        isReadOnly: true,
+        rawMarkdown: raw,
+        semanticType: semanticType,
+      );
+    }
+
     for (final block in parsed.blocks) {
       switch (block.kind) {
         case QwqMarkdownBlockKind.heading:
-          final inline = _parseInlineMentions(block.text);
+          final inline = _articleInlineFromBlock(block);
           final text = inline.text.trim();
           if (block.level <= 1 && text == title) {
             break;
           }
+          final headingNode = ArticleDocumentNode(
+            id: block.id.isNotEmpty ? block.id : 'heading_${seed++}',
+            type: block.level >= 3
+                ? ArticleDocumentNodeType.headingMinor
+                : ArticleDocumentNodeType.headingMajor,
+            text: inline.text,
+            spans: inline.spans,
+            headingLevel: block.level,
+          );
           nodes.add(
-            ArticleDocumentNode(
-              id: block.id.isNotEmpty ? block.id : 'heading_${seed++}',
-              type: block.level >= 3
-                  ? ArticleDocumentNodeType.headingMinor
-                  : ArticleDocumentNodeType.headingMajor,
-              text: inline.text,
-              spans: inline.spans,
-            ),
+            block.level > 3 ? readOnlyNode(headingNode, block) : headingNode,
           );
           break;
         case QwqMarkdownBlockKind.paragraph:
         case QwqMarkdownBlockKind.card:
-          final inline = _parseInlineMentions(block.text);
+          final inline = _articleInlineFromBlock(block);
           if (inline.text.trim().isNotEmpty) {
             nodes.add(
               ArticleDocumentNode(
@@ -254,16 +445,19 @@ class ArticleMarkdownCodec {
         // 富块不做有损压缩（GWT-003）：quote/callout/codeBlock 保留块语义。
         case QwqMarkdownBlockKind.quote:
         case QwqMarkdownBlockKind.callout:
-          final inline = _parseInlineMentions(block.text);
+          final inline = _articleInlineFromBlock(block);
           if (inline.text.trim().isNotEmpty) {
             nodes.add(
-              ArticleDocumentNode(
-                id: block.id.isNotEmpty ? block.id : 'rich_${seed++}',
-                type: block.kind == QwqMarkdownBlockKind.quote
-                    ? ArticleDocumentNodeType.quote
-                    : ArticleDocumentNodeType.callout,
-                text: inline.text,
-                spans: inline.spans,
+              readOnlyNode(
+                ArticleDocumentNode(
+                  id: block.id.isNotEmpty ? block.id : 'rich_${seed++}',
+                  type: block.kind == QwqMarkdownBlockKind.quote
+                      ? ArticleDocumentNodeType.quote
+                      : ArticleDocumentNodeType.callout,
+                  text: inline.text,
+                  spans: inline.spans,
+                ),
+                block,
               ),
             );
           }
@@ -271,17 +465,20 @@ class ArticleMarkdownCodec {
         case QwqMarkdownBlockKind.codeBlock:
           if (block.text.trim().isNotEmpty) {
             nodes.add(
-              ArticleDocumentNode(
-                id: block.id.isNotEmpty ? block.id : 'code_${seed++}',
-                type: ArticleDocumentNodeType.codeBlock,
-                text: block.text,
-                codeLanguage: block.language,
+              readOnlyNode(
+                ArticleDocumentNode(
+                  id: block.id.isNotEmpty ? block.id : 'code_${seed++}',
+                  type: ArticleDocumentNodeType.codeBlock,
+                  text: block.text,
+                  codeLanguage: block.language,
+                ),
+                block,
               ),
             );
           }
           break;
         case QwqMarkdownBlockKind.orderedItem:
-          final inline = _parseInlineMentions(block.text);
+          final inline = _articleInlineFromBlock(block);
           nodes.add(
             ArticleDocumentNode(
               id: block.id.isNotEmpty ? block.id : 'ordered_${seed++}',
@@ -293,7 +490,7 @@ class ArticleMarkdownCodec {
           );
           break;
         case QwqMarkdownBlockKind.bulletItem:
-          final inline = _parseInlineMentions(block.text);
+          final inline = _articleInlineFromBlock(block);
           nodes.add(
             ArticleDocumentNode(
               id: block.id.isNotEmpty ? block.id : 'bullet_${seed++}',
@@ -343,6 +540,21 @@ class ArticleMarkdownCodec {
           break;
         case QwqMarkdownBlockKind.section:
         case QwqMarkdownBlockKind.spacer:
+        case QwqMarkdownBlockKind.table:
+        case QwqMarkdownBlockKind.groupedDirectory:
+        case QwqMarkdownBlockKind.definitionList:
+        case QwqMarkdownBlockKind.footnote:
+        case QwqMarkdownBlockKind.unsupported:
+          nodes.add(
+            readOnlyNode(
+              ArticleDocumentNode(
+                id: block.id.isNotEmpty ? block.id : 'readonly_${seed++}',
+                type: ArticleDocumentNodeType.paragraph,
+                text: block.text,
+              ),
+              block,
+            ),
+          );
           break;
       }
     }
@@ -355,8 +567,40 @@ class ArticleMarkdownCodec {
         assetsById[coverAssetId] ??
         resolveContentMediaUrl(parsed.frontMatter.coverImage);
 
+    if (restoredNodeIds.isNotEmpty && restoredNodeIds.length != nodes.length) {
+      throw const FormatException(
+        '撤销快照 node identity 数量与 canonical markdown 不一致。',
+      );
+    }
+    final restoredNodes = restoredNodeIds.isEmpty
+        ? nodes
+        : <ArticleDocumentNode>[
+            for (var index = 0; index < nodes.length; index++)
+              nodes[index].copyWith(id: restoredNodeIds[index]),
+          ];
+    final restoredBaseline = restoredNodeIds.isEmpty
+        ? readOnlyBaseline
+        : <_ReadOnlyOriginEntry>[
+            for (final origin in readOnlyBaseline)
+              _ReadOnlyOriginEntry(
+                nodeId:
+                    restoredNodeIds[nodes.indexWhere(
+                      (node) => node.id == origin.nodeId,
+                    )],
+                ordinal: origin.ordinal,
+                rawMarkdown: origin.rawMarkdown,
+                semanticType: origin.semanticType,
+                fingerprint: _readOnlyFingerprint(
+                  restoredNodeIds[nodes.indexWhere(
+                    (node) => node.id == origin.nodeId,
+                  )],
+                  origin.semanticType,
+                  origin.rawMarkdown,
+                ),
+              ),
+          ];
     return ArticleDocumentData(
-      nodes: nodes,
+      nodes: restoredNodes,
       template: parsed.frontMatter.template.isNotEmpty
           ? parsed.frontMatter.template
           : 'gentle',
@@ -364,6 +608,9 @@ class ArticleMarkdownCodec {
           ? parsed.frontMatter.fontPreset
           : 'clean',
       coverImageUrl: coverImageUrl,
+      markdownOriginAuthority: _MarkdownOriginAuthority(
+        List<_ReadOnlyOriginEntry>.unmodifiable(restoredBaseline),
+      ),
       titleStyle: ArticleDocumentTitleStyle.values.firstWhere(
         (style) => style.name == parsed.frontMatter.titleStyle,
         orElse: () => ArticleDocumentTitleStyle.major,
@@ -371,174 +618,87 @@ class ArticleMarkdownCodec {
     );
   }
 
-  static final RegExp _inlineMentionPattern = RegExp(
-    r'@\[(.+?)\]\((entity|tag):([A-Za-z0-9_:/-]+)\)',
-  );
-
-  static final RegExp _inlineLinkPattern = RegExp(r'\[([^\]]+)\]\(([^)\s]+)\)');
-
-  /// 行内解析（GWT-002）：单遍扫描 mention/link 记号与成对样式记号
-  /// （`***`/`**`/`*`/`++`/`~~`），还原为等价 span；未闭合记号按字面量
-  /// 处理不吞字，病态输入降级为纯文本，不得 crash。链接只接受白名单
-  /// scheme（https/http），恶意 scheme 按字面量输出不产生 span。
-  static _InlineMentionParseResult _parseInlineMentions(String source) {
-    if (!source.contains('@[') &&
-        !source.contains('[') &&
-        !source.contains('*') &&
-        !source.contains('++') &&
-        !source.contains('~~')) {
-      return _InlineMentionParseResult(text: source, spans: const []);
-    }
-    const styleTokens = <String>['***', '**', '*', '++', '~~'];
-    final buffer = StringBuffer();
+  static _InlineMentionParseResult _articleInlineFromBlock(
+    QwqMarkdownBlock block,
+  ) {
+    final parsed = block.inlines.isEmpty
+        ? parseQwqMarkdownInlines(block.text)
+        : block.inlines;
+    final textInline = parsed.firstWhere(
+      (inline) => inline.kind == SemanticInlineKind.text,
+      orElse: () => QwqMarkdownInline(
+        kind: SemanticInlineKind.text,
+        text: block.text,
+        end: block.text.length,
+      ),
+    );
     final spans = <ArticleInlineSpan>[];
-    // token -> (plain-text 开启偏移)。同一 token 不嵌套（qwq dialect 语义）。
-    final openTokens = <String, int>{};
-    var i = 0;
-    while (i < source.length) {
-      final mention = _inlineMentionPattern.matchAsPrefix(source, i);
-      if (mention != null) {
-        final label = mention.group(1) ?? '';
-        final kind = mention.group(2) ?? '';
-        final target = mention.group(3) ?? '';
-        final prefix = '$kind:';
-        final targetId = target.startsWith(prefix) ? target : '$prefix$target';
-        final start = buffer.length;
-        buffer.write(label);
-        if (label.isNotEmpty && kind.isNotEmpty && targetId.isNotEmpty) {
+    for (final inline in parsed) {
+      if (inline.kind == SemanticInlineKind.text ||
+          inline.start >= inline.end) {
+        continue;
+      }
+      if (inline.kind == SemanticInlineKind.link) {
+        if (inline.href.startsWith('/entity/')) {
+          final entityId = articleEntityIdFromPublishRef(inline.href);
+          if (entityId.isNotEmpty) {
+            spans.add(
+              ArticleInlineSpan(
+                start: inline.start,
+                end: inline.end,
+                kind: 'entity',
+                targetType: 'entity',
+                targetId: entityId,
+                displayText: inline.text,
+              ),
+            );
+          }
+        } else if (isArticleLinkTargetAllowed(inline.href)) {
           spans.add(
             ArticleInlineSpan(
-              start: start,
-              end: buffer.length,
-              kind: kind,
-              targetType: kind,
-              targetId: targetId,
-              displayText: label,
+              start: inline.start,
+              end: inline.end,
+              kind: 'link',
+              targetId: inline.href,
+              displayText: inline.text,
             ),
           );
         }
-        i = mention.end;
         continue;
       }
-      // 链接 [text](url)：mention 记号（@[...]）优先，其后才尝试 link。
-      if (source.startsWith('[', i)) {
-        final link = _inlineLinkPattern.matchAsPrefix(source, i);
-        if (link != null) {
-          final label = (link.group(1) ?? '').trim();
-          final url = (link.group(2) ?? '').trim();
-          // 站内实体链接（数据工程供稿 `/entity/...`）转 canonical entity
-          // mention，与 `@[label](entity:...)` 记号同一渲染与跳转通道。
-          if (label.isNotEmpty && url.startsWith('/entity/')) {
-            final entityId = articleEntityIdFromPublishRef(url);
-            if (entityId.isNotEmpty) {
-              final start = buffer.length;
-              buffer.write(label);
-              spans.add(
-                ArticleInlineSpan(
-                  start: start,
-                  end: buffer.length,
-                  kind: 'entity',
-                  targetType: 'entity',
-                  targetId: entityId,
-                  displayText: label,
-                ),
-              );
-              i = link.end;
-              continue;
-            }
-          }
-          if (label.isNotEmpty && isArticleLinkTargetAllowed(url)) {
-            final start = buffer.length;
-            buffer.write(label);
-            spans.add(
-              ArticleInlineSpan(
-                start: start,
-                end: buffer.length,
-                kind: 'link',
-                targetId: url,
-                displayText: label,
-              ),
-            );
-            i = link.end;
-            continue;
-          }
-        }
-      }
-      String? token;
-      for (final candidate in styleTokens) {
-        if (source.startsWith(candidate, i)) {
-          token = candidate;
-          break;
-        }
-      }
-      if (token != null) {
-        final openedAt = openTokens.remove(token);
-        if (openedAt != null) {
-          if (buffer.length > openedAt) {
-            spans.add(
-              ArticleInlineSpan(
-                start: openedAt,
-                end: buffer.length,
-                bold: token == '***' || token == '**',
-                italic: token == '***' || token == '*',
-                underline: token == '++',
-                strikethrough: token == '~~',
-              ),
-            );
-          }
-          i += token.length;
-          continue;
-        }
-        // 只有后文存在同记号闭合时才视为开启；否则按字面量输出，不吞字。
-        if (source.indexOf(token, i + token.length) != -1) {
-          openTokens[token] = buffer.length;
-        } else {
-          buffer.write(token);
-        }
-        i += token.length;
+      if (inline.kind == SemanticInlineKind.mention) {
+        spans.add(
+          ArticleInlineSpan(
+            start: inline.start,
+            end: inline.end,
+            kind: inline.targetType,
+            targetType: inline.targetType,
+            targetId: inline.targetId,
+            displayText: inline.text,
+          ),
+        );
         continue;
       }
-      buffer.write(source[i]);
-      i++;
+      spans.add(
+        ArticleInlineSpan(
+          start: inline.start,
+          end: inline.end,
+          bold: inline.bold,
+          italic: inline.italic,
+          underline: inline.underline,
+          strikethrough: inline.strikethrough,
+          kind: inline.kind == SemanticInlineKind.code ? 'code' : 'text',
+        ),
+      );
     }
-    if (spans.isEmpty && openTokens.isEmpty) {
-      return _InlineMentionParseResult(text: source, spans: const []);
+    return _InlineMentionParseResult(text: textInline.text, spans: spans);
+  }
+
+  static String serializeMarkdownDocument(QwqMarkdownDocument document) {
+    if (!document.canSave) {
+      throw const FormatException('只读或诊断失败的 Markdown 文档禁止保存。');
     }
-    // 未闭合的开启记号（闭合被 mention 等结构消费的病态输入）：按字面量
-    // 插回原开启位置，并平移其后的 span 偏移，保证不吞字。
-    if (openTokens.isNotEmpty) {
-      var text = buffer.toString();
-      final pending = openTokens.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-      for (final entry in pending) {
-        final offset = entry.value.clamp(0, text.length);
-        text = text.substring(0, offset) + entry.key + text.substring(offset);
-        for (var index = 0; index < spans.length; index++) {
-          final span = spans[index];
-          if (span.end <= offset) {
-            continue;
-          }
-          spans[index] = ArticleInlineSpan(
-            start: span.start >= offset
-                ? span.start + entry.key.length
-                : span.start,
-            end: span.end + entry.key.length,
-            bold: span.bold,
-            italic: span.italic,
-            underline: span.underline,
-            strikethrough: span.strikethrough,
-            kind: span.kind,
-            targetType: span.targetType,
-            targetId: span.targetId,
-            displayText: span.displayText,
-          );
-        }
-      }
-      spans.sort((a, b) => a.start.compareTo(b.start));
-      return _InlineMentionParseResult(text: text, spans: spans);
-    }
-    spans.sort((a, b) => a.start.compareTo(b.start));
-    return _InlineMentionParseResult(text: buffer.toString(), spans: spans);
+    return document.source;
   }
 
   static Map<String, String> resolveArticleAssetManifestUrls(

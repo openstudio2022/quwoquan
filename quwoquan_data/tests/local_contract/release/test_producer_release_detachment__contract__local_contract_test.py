@@ -346,6 +346,26 @@ def test_release_asset_admission_allows_identical_asset_reuse_across_objects(
     assert unverified["authorizationRequiredAssetIds"] == ["shared-cover"]
 
 
+def test_release_asset_admission_requires_approved_review_for_every_carrier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from content.release.canonical import release_admission
+
+    objects = [{
+        "objectRef": "posts/article/fixture/1",
+        "carrier": "article",
+        "assets": [],
+        "manifest": {"contentType": "article", "publishMediaMode": "text_only", "assets": []},
+        "contentReviewApproved": False,
+    }]
+    monkeypatch.setattr(release_admission, "_object_rows", lambda *_args, **_kwargs: objects)
+    with pytest.raises(Exception, match="article required media closure GATE_BLOCK"):
+        release_admission.build_release_asset_admission(
+            release_id="review-gate-001", objects_root=tmp_path,
+            desired={"entities": [], "posts": ["article/fixture/1"]},
+        )
+
+
 def test_release_asset_admission_rejects_reused_id_with_identity_drift(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

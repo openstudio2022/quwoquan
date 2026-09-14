@@ -1,0 +1,76 @@
+{
+  "schema": "semantic_document_conformance_cases",
+  "schemaVersion": "1.0.0",
+  "cases": [
+    {
+      "name": "envelope_complete",
+      "inputKind": "semantic_json",
+      "input": {"schemaVersion":"1.0.0","dialectVersion":"1.0.0","canonicalizationVersion":"1.0.0","offsetEncoding":"unicode_scalar_value","nodes":[],"requiredCapabilities":[],"assets":{},"sourceMap":{},"policyVersion":"1.0.0","losses":[],"semanticFingerprint":"sha256:semantic","canonicalDigest":"sha256:document"},
+      "expectedDisposition": "preserved",
+      "publicationDecision": "publish"
+    },
+    {"name":"normalized_markdown","inputKind":"markdown","input":"# 标题","expectedDisposition":"normalized","publicationDecision":"publish"},
+    {"name":"degraded_layout","inputKind":"semantic_json","input":{"kind":"gallery","layout":"unsupported_layout"},"expectedDisposition":"degraded","publicationDecision":"publish_with_losses"},
+    {"name":"metadata_only_head","inputKind":"html","input":"<meta name=description content=x>","expectedDisposition":"metadata_only","publicationDecision":"publish"},
+    {"name":"dropped_invisible_noise","inputKind":"html","input":"<!-- tracking -->","expectedDisposition":"dropped_noise","publicationDecision":"publish"},
+    {
+      "name":"unknown_visible_html_opaque_roundtrip",
+      "inputKind":"html",
+      "input":"<custom-visible data-x=\"1\">保留我</custom-visible>",
+      "expectedDisposition":"unsupported_opaque",
+      "publicationDecision":"publish_with_losses",
+      "expectedNode":{"kind":"unsupportedOpaque","rawSlice":"<custom-visible data-x=\"1\">保留我</custom-visible>","rawSliceFingerprint":"sha256:exact-input-bytes"},
+      "roundTrip":{"mustPreserveRawSlice":true,"mustPreserveFingerprint":true,"destructiveSaveAllowed":false}
+    },
+    {
+      "name":"raw_html_markdown_blocked",
+      "inputKind":"markdown",
+      "input":"<script>alert(1)</script>",
+      "expectedDisposition":"blocked_unsafe",
+      "publicationDecision":"block",
+      "diagnostic":"SEMANTIC_DOCUMENT.UNSAFE.RAW_HTML"
+    },
+    {
+      "name":"html_data_mw_factbox",
+      "inputKind":"html",
+      "input":"<aside data-mw=\"FactBox\"><div>海拔</div></aside>",
+      "expectedDisposition":"normalized",
+      "publicationDecision":"publish",
+      "expectedNode":{"kind":"factBox"}
+    },
+    {
+      "name":"html_span_table",
+      "inputKind":"html",
+      "input":"<table><caption>行程</caption><tr><th scope=\"col\" rowspan=\"2\" data-sort-key=\"place\">地点</th><th scope=\"col\">天数</th></tr><tr><td colspan=\"1\">2</td></tr></table>",
+      "expectedDisposition":"normalized",
+      "publicationDecision":"publish",
+      "expectedNode":{"kind":"table","rowCount":2,"columnCount":2,"cell":{"rowSpan":2,"columnSpan":1,"scope":"col","sortKey":"place"}}
+    },
+    {
+      "name":"missing_formal_node_capability",
+      "inputKind":"semantic_json",
+      "input":{"nodes":[{"kind":"table"}],"availableCapabilities":["parse.html","render.workbench"]},
+      "expectedDisposition":"blocked_unsafe",
+      "publicationDecision":"block",
+      "diagnostic":"SEMANTIC_DOCUMENT.CAPABILITY.MISSING"
+    },
+    {
+      "name":"unknown_schema_major",
+      "inputKind":"semantic_json",
+      "input":{"schemaVersion":"2.0.0"},
+      "expectedDisposition":"blocked_unsafe",
+      "compatibilityDecision":"incompatible",
+      "publicationDecision":"block",
+      "diagnostic":"SEMANTIC_DOCUMENT.INCOMPATIBLE.SCHEMA_MAJOR"
+    },
+    {
+      "name":"canonicalization_mismatch",
+      "inputKind":"semantic_json",
+      "input":{"canonicalizationVersion":"1.1.0"},
+      "expectedDisposition":"blocked_unsafe",
+      "compatibilityDecision":"incompatible",
+      "publicationDecision":"block",
+      "diagnostic":"SEMANTIC_DOCUMENT.INCOMPATIBLE.CANONICALIZATION_VERSION"
+    }
+  ]
+}

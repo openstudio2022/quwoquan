@@ -10,6 +10,7 @@ import (
 
 	runtimemedia "quwoquan_service/runtime/media"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 )
 
 type postManifest struct {
@@ -50,6 +51,7 @@ type postManifest struct {
 	LicenseProofRef       string                             `json:"licenseProofRef"`
 	Template              string                             `json:"template"`
 	ArticleDigest         string                             `json:"articleMarkdownDigest"`
+	SemanticDocument      semantic.DocumentEnvelope          `json:"semanticDocument"`
 	PublishTitle          string                             `json:"publishTitle"`
 	PublishAngle          string                             `json:"publishAngle"`
 	PublishSeq            int                                `json:"publishSeq"`

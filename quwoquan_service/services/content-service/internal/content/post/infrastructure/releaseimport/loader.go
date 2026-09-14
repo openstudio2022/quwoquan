@@ -5,6 +5,8 @@
 package releaseimport
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,6 +18,7 @@ import (
 
 	runtimemedia "quwoquan_service/runtime/media"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 	postsemantic "quwoquan_service/services/content-service/internal/content/post/domain/semantic"
 )
 
@@ -132,6 +135,7 @@ type PostDoc struct {
 	LicenseProof          any                                `json:"licenseProof" bson:"licenseProof"`
 	Template              string                             `json:"template" bson:"template"`
 	ArticleMarkdown       string                             `json:"articleMarkdown" bson:"articleMarkdown"`
+	SemanticDocument      semantic.DocumentEnvelope          `json:"semanticDocument" bson:"semanticDocument"`
 	ArticleDigest         string                             `json:"articleDigest" bson:"articleDigest"`
 	ArticleAssetManifest  *ArticleAssetManifestDoc           `json:"articleAssetManifest" bson:"articleAssetManifest"`
 	CreatedAt             time.Time                          `json:"createdAt" bson:"createdAt"`
@@ -576,6 +580,11 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		if err := ValidateArticleAssetManifest(m.ArticleAssetManifest, postRef); err != nil {
 			return err
 		}
+		if strings.EqualFold(strings.TrimSpace(m.ContentType), "article") {
+			if err := validateImportedSemanticDocument(m.SemanticDocument); err != nil {
+				return fmt.Errorf("%s: %w", postRef, err)
+			}
+		}
 		if strings.EqualFold(strings.TrimSpace(m.ContentType), "image") {
 			if err := validateImageAssets(m.Assets, m.SourceCollectionID, postRef); err != nil {
 				return err
@@ -694,6 +703,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			LicenseProof:          firstSourceFact(m.LicenseProof, m.LicenseProofRef),
 			Template:              m.Template,
 			ArticleMarkdown:       article,
+			SemanticDocument:      m.SemanticDocument,
 			ArticleDigest:         m.ArticleDigest,
 			ArticleAssetManifest:  m.ArticleAssetManifest,
 			CreatedAt:             createdAt,
@@ -837,4 +847,43 @@ func LoadEntities(publishRoot string, filter map[string]bool) ([]EntityDoc, erro
 		)
 	}
 	return docs, nil
+}
+
+func validateImportedSemanticDocument(doc semantic.DocumentEnvelope) error {
+	if strings.TrimSpace(doc.SchemaVersion) == "" {
+		return fmt.Errorf("semanticDocument is required")
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	available := map[semantic.CapabilityID]bool{}
+	for id := range semantic.CapabilityRegistry {
+		available[id] = true
+	}
+	if result := semantic.ValidateEnvelope(fields, available); result.Code != semantic.ValidationOK {
+		return fmt.Errorf("semanticDocument invalid: %s (%s)", result.Code, result.Detail)
+	}
+	claimed := strings.TrimSpace(doc.CanonicalDigest)
+	if !sha256Pattern.MatchString(claimed) {
+		return fmt.Errorf("semanticDocument canonicalDigest must use sha256:<64 lowercase hex>")
+	}
+	if !sha256Pattern.MatchString(strings.TrimSpace(doc.SemanticFingerprint)) {
+		return fmt.Errorf("semanticDocument semanticFingerprint must use sha256:<64 lowercase hex>")
+	}
+	delete(fields, "canonicalDigest")
+	canonical, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(canonical)
+	actual := "sha256:" + hex.EncodeToString(sum[:])
+	if claimed != actual {
+		return fmt.Errorf("semanticDocument canonicalDigest drift: claimed=%s actual=%s", claimed, actual)
+	}
+	return nil
 }

@@ -80,7 +80,7 @@ void main() {
             HomepageIntroductionSection(
               kind: 'overview',
               title: '概况',
-              bodyMarkdown: '西湖景区位于杭州。',
+              bodyMarkdown: '---\nmarkdownDialect: qwq-rich-md\n---\n西湖景区位于杭州。',
               assets: const [],
               timelineItems: const [],
             ),
@@ -150,7 +150,7 @@ void main() {
             HomepageIntroductionSection(
               kind: 'overview',
               title: '概况',
-              bodyMarkdown: '西湖景区位于杭州。',
+              bodyMarkdown: '---\nmarkdownDialect: qwq-rich-md\n---\n西湖景区位于杭州。',
               assets: const [],
               timelineItems: const [],
             ),
@@ -204,6 +204,7 @@ void main() {
               kind: 'body',
               title: '历史沿革',
               bodyMarkdown:
+                  '---\nmarkdownDialect: qwq-rich-md\n---\n'
                   '李冰父子主持修建。\n\n'
                   ':::figure id="fig_01" layout="fullWidth" caption="鱼嘴分水堤"\n'
                   'asset://inline_asset_1\n'
@@ -307,7 +308,7 @@ void main() {
         HomepageIntroductionSection(
           kind: 'overview',
           title: '概况',
-          bodyMarkdown: '西湖景区位于杭州。',
+          bodyMarkdown: '---\nmarkdownDialect: qwq-rich-md\n---\n西湖景区位于杭州。',
           assets: const [],
           timelineItems: const [],
         ),

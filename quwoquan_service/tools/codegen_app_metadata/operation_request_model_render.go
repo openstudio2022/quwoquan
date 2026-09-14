@@ -570,6 +570,8 @@ func requestFieldFromWireExpression(
 			field,
 			enumValues,
 		)
+	case "semantic_document":
+		return "documentEnvelopeFromWire(_generatedRequestObject(" + access + ", " + pathExpression + "), " + pathExpression + ")", nil
 	case "object", "json", "jsonb":
 		if strings.HasPrefix(baseDartType, "Map<") {
 			return "_generatedRequestObject(" + access + ", " + pathExpression + ")", nil
@@ -630,6 +632,8 @@ func requestFieldDartType(field fieldDef) (string, bool, error) {
 			}
 		case "object", "json", "jsonb":
 			dartType = "Map<String, Object?>"
+		case "semantic_document":
+			dartType = "DocumentEnvelope"
 		default:
 			if strings.HasPrefix(field.Type, "[]") {
 				item := field

@@ -144,10 +144,14 @@ class _IntroductionSectionCard extends StatelessWidget {
               color: AppColors.iosLabel(context),
             ),
           ),
-          if ((section.bodyMarkdown ?? '').trim().isNotEmpty) ...<Widget>[
+          if (section.semanticDocument != null ||
+              (section.bodyMarkdown ?? '').trim().isNotEmpty) ...<Widget>[
             SizedBox(height: AppSpacing.intraGroupSm),
-            _MarkdownLite(
-              markdown: section.bodyMarkdown!.trim(),
+            HomepageMarkdownContent(
+              semanticDocument: section.semanticDocument,
+              markdown: section.semanticDocument == null
+                  ? section.bodyMarkdown?.trim()
+                  : null,
               assetsById: assetsById,
             ),
           ],
@@ -169,89 +173,401 @@ class _IntroductionSectionCard extends StatelessWidget {
   }
 }
 
-class _MarkdownLite extends StatelessWidget {
-  const _MarkdownLite({
-    required this.markdown,
+/// Homepage canonical/legacy 正文的单一适配入口。canonical payload 在场时
+/// 必须完整验证；任何失败均 typed unavailable，绝不回退 bodyMarkdown。
+class HomepageMarkdownDocumentAdapter {
+  HomepageMarkdownDocumentAdapter._({required this.document, this.errorCode});
+
+  factory HomepageMarkdownDocumentAdapter.canonical(
+    homepage_semantic.DocumentEnvelope envelope,
+  ) {
+    final wire = homepage_semantic.documentEnvelopeToWire(envelope);
+    final result = homepage_semantic.validateSemanticDocumentEnvelope(
+      wire,
+      const <homepage_semantic.CapabilityId>{
+        'parse.markdown',
+        'parse.html',
+        'serialize.markdown',
+        'serialize.semantic_json',
+        'render.app',
+        'render.web',
+        'render.workbench',
+        'author.create',
+        'author.editContent',
+        'author.editStructure',
+        'author.delete',
+      },
+    );
+    if (result.code != homepage_semantic.SemanticDocumentValidationCode.ok) {
+      return HomepageMarkdownDocumentAdapter._(
+        document: null,
+        errorCode: result.code.name,
+      );
+    }
+    final digest = envelope.canonicalDigest;
+    final fingerprint = envelope.semanticFingerprint;
+    if (!_canonicalSha256.hasMatch(digest) ||
+        !_canonicalSha256.hasMatch(fingerprint)) {
+      return HomepageMarkdownDocumentAdapter._(
+        document: null,
+        errorCode: 'semantic_identity_invalid',
+      );
+    }
+    final digestFields = Map<String, Object?>.from(wire)
+      ..remove('canonicalDigest');
+    final actual =
+        'sha256:${sha256.convert(utf8.encode(jsonEncode(digestFields)))}';
+    if (actual != digest || !_validateNodeFingerprints(envelope.nodes)) {
+      return HomepageMarkdownDocumentAdapter._(
+        document: null,
+        errorCode: 'semantic_identity_drift',
+      );
+    }
+    return HomepageMarkdownDocumentAdapter._(
+      document: QwqMarkdownDocument(
+        source: '',
+        blocks: envelope.nodes.map(_canonicalBlock).toList(growable: false),
+      ),
+    );
+  }
+
+  factory HomepageMarkdownDocumentAdapter.parse(String markdown) {
+    final result = const QwqMarkdownParser().parse(
+      markdown,
+      requireVersion: true,
+    );
+    return HomepageMarkdownDocumentAdapter._(
+      document: result.document.hasBlockingDiagnostics ? null : result.document,
+      errorCode: result.document.hasBlockingDiagnostics
+          ? 'semantic_markdown_unavailable'
+          : null,
+    );
+  }
+
+  factory HomepageMarkdownDocumentAdapter.legacy(String markdown) {
+    final result = const QwqMarkdownParser().parse(
+      markdown,
+      requireVersion: true,
+    );
+    return HomepageMarkdownDocumentAdapter._(
+      document: result.document.hasBlockingDiagnostics ? null : result.document,
+      errorCode: result.document.hasBlockingDiagnostics
+          ? 'legacy_semantic_unavailable'
+          : null,
+    );
+  }
+
+  final QwqMarkdownDocument? document;
+  final String? errorCode;
+  bool get isAvailable => document != null;
+  List<String> get semanticKinds {
+    final envelope = document?.semanticEnvelope;
+    if (envelope != null) {
+      return envelope.nodes
+          .map((node) => node.kind.name)
+          .toList(growable: false);
+    }
+    return document?.blocks
+            .map((block) => semanticNodeKindForQwqBlock(block.kind).name)
+            .toList(growable: false) ??
+        const <String>[];
+  }
+
+  List<String> get semanticTexts =>
+      document?.blocks.map((block) => block.text).toList(growable: false) ??
+      const <String>[];
+  String? get semanticFingerprint =>
+      document?.semanticEnvelope?.semanticFingerprint;
+  List<String> get requiredCapabilities =>
+      document?.semanticEnvelope?.requiredCapabilities ?? const <String>[];
+}
+
+final RegExp _canonicalSha256 = RegExp(r'^sha256:[0-9a-f]{64}$');
+
+bool _validateNodeFingerprints(List<homepage_semantic.SemanticNode> nodes) {
+  for (final node in nodes) {
+    if (!_canonicalSha256.hasMatch(node.semanticFingerprint) ||
+        !_validateNodeFingerprints(node.children)) {
+      return false;
+    }
+    if (node.rawSlice != null) {
+      final expected = 'sha256:${sha256.convert(utf8.encode(node.rawSlice!))}';
+      if (node.rawSliceFingerprint != expected) return false;
+    }
+  }
+  return true;
+}
+
+QwqMarkdownBlock _canonicalBlock(homepage_semantic.SemanticNode node) {
+  final text = node.attributes['text']?.toString() ?? '';
+  final kind = switch (node.kind) {
+    homepage_semantic.SemanticNodeKind.heading => QwqMarkdownBlockKind.heading,
+    homepage_semantic.SemanticNodeKind.list ||
+    homepage_semantic.SemanticNodeKind.listItem =>
+      QwqMarkdownBlockKind.bulletItem,
+    homepage_semantic.SemanticNodeKind.blockquote => QwqMarkdownBlockKind.quote,
+    homepage_semantic.SemanticNodeKind.codeBlock ||
+    homepage_semantic.SemanticNodeKind.preformatted =>
+      QwqMarkdownBlockKind.codeBlock,
+    homepage_semantic.SemanticNodeKind.figure => QwqMarkdownBlockKind.figure,
+    homepage_semantic.SemanticNodeKind.gallery => QwqMarkdownBlockKind.gallery,
+    homepage_semantic.SemanticNodeKind.callout => QwqMarkdownBlockKind.callout,
+    homepage_semantic.SemanticNodeKind.table => QwqMarkdownBlockKind.table,
+    homepage_semantic.SemanticNodeKind.groupedDirectory =>
+      QwqMarkdownBlockKind.groupedDirectory,
+    homepage_semantic.SemanticNodeKind.definitionList =>
+      QwqMarkdownBlockKind.definitionList,
+    homepage_semantic.SemanticNodeKind.footnoteDefinition ||
+    homepage_semantic.SemanticNodeKind.footnoteList ||
+    homepage_semantic.SemanticNodeKind.footnoteReference =>
+      QwqMarkdownBlockKind.footnote,
+    homepage_semantic.SemanticNodeKind.paragraph ||
+    homepage_semantic.SemanticNodeKind.section =>
+      QwqMarkdownBlockKind.paragraph,
+    _ => QwqMarkdownBlockKind.unsupported,
+  };
+  return QwqMarkdownBlock(
+    id: node.nodeId,
+    kind: kind,
+    text: text,
+    level: node.attributes['level'] is int
+        ? node.attributes['level']! as int
+        : 0,
+    rawSource: node.rawSlice ?? '',
+  );
+}
+
+class HomepageMarkdownContent extends StatelessWidget {
+  const HomepageMarkdownContent({
+    super.key,
+    this.semanticDocument,
+    this.markdown,
     this.assetsById = const <String, HomepageIntroductionAsset>{},
   });
 
-  final String markdown;
-
-  /// 正文 `:::figure` 指令中 `asset://<assetId>` 的资产绑定（role=inline）。
+  final homepage_semantic.DocumentEnvelope? semanticDocument;
+  final String? markdown;
   final Map<String, HomepageIntroductionAsset> assetsById;
-
-  static final RegExp _figureCaptionRe = RegExp(r'caption="([^"]*)"');
-  static final RegExp _assetRefRe = RegExp(r'^asset://(\S+)$');
 
   @override
   Widget build(BuildContext context) {
-    final lines = markdown.split('\n');
-    final widgets = <Widget>[];
-    for (var i = 0; i < lines.length; i++) {
-      final line = lines[i].trim();
-      if (line.startsWith(':::figure')) {
-        final caption =
-            _figureCaptionRe.firstMatch(line)?.group(1)?.trim() ?? '';
-        String assetId = '';
-        var j = i + 1;
-        for (; j < lines.length; j++) {
-          final inner = lines[j].trim();
-          if (inner == ':::') {
-            break;
-          }
-          final assetMatch = _assetRefRe.firstMatch(inner);
-          if (assetMatch != null) {
-            assetId = assetMatch.group(1) ?? '';
-          }
-        }
-        i = j;
-        final asset = assetsById[assetId];
-        // signedGrant 资产由 typed 绑定驱动渲染，不依赖 url 在场；
-        // 公开资产维持既有 url 在场判定。
-        if (asset != null &&
-            (asset.url.trim().isNotEmpty ||
-                _declaresSignedGrantIntroAsset(asset))) {
-          widgets.add(_InlineFigure(asset: asset, caption: caption));
-        }
-        continue;
-      }
-      if (line.isEmpty) {
-        widgets.add(SizedBox(height: AppSpacing.intraGroupXs));
-        continue;
-      }
-      if (line.startsWith('- ')) {
-        widgets.add(_BulletLine(text: line.substring(2).trim()));
-      } else if (line.startsWith('#')) {
-        widgets.add(
-          Padding(
-            padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
-            child: Text(
-              line.replaceFirst(RegExp(r'^#+\s*'), ''),
-              style: TextStyle(
-                fontSize: AppTypography.iosNavTitle,
-                fontWeight: AppTypography.semiBold,
-                color: AppColors.iosLabel(context),
-              ),
-            ),
-          ),
-        );
-      } else {
-        widgets.add(
-          Text(
-            line,
-            style: TextStyle(
-              fontSize: AppTypography.iosBody,
-              height: AppTypography.lineHeightRelaxed,
-              color: AppColors.iosLabel(context),
-            ),
-          ),
-        );
-      }
+    final canonical = semanticDocument;
+    final projection = canonical != null
+        ? HomepageMarkdownDocumentAdapter.canonical(canonical)
+        : HomepageMarkdownDocumentAdapter.legacy(markdown ?? '');
+    if (!projection.isAvailable) {
+      return Semantics(
+        identifier: 'homepage_markdown_semantic_unavailable',
+        child: Text(ObjectHomepageText.objectIntroEmptyMessage),
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: widgets,
+      children: <Widget>[
+        for (final block in projection.document!.blocks)
+          _HomepageMarkdownBlock(block: block, assetsById: assetsById),
+      ],
     );
+  }
+}
+
+class _HomepageMarkdownBlock extends StatelessWidget {
+  const _HomepageMarkdownBlock({required this.block, required this.assetsById});
+
+  final QwqMarkdownBlock block;
+  final Map<String, HomepageIntroductionAsset> assetsById;
+
+  @override
+  Widget build(BuildContext context) {
+    final bodyStyle = TextStyle(
+      fontSize: AppTypography.iosBody,
+      height: AppTypography.lineHeightRelaxed,
+      color: AppColors.iosLabel(context),
+    );
+    final child = switch (block.kind) {
+      QwqMarkdownBlockKind.heading => Text(
+        block.text,
+        style: bodyStyle.copyWith(
+          fontSize: block.level <= 1
+              ? AppTypography.iosTitle2
+              : AppTypography.iosTitle3,
+          fontWeight: AppTypography.semiBold,
+        ),
+      ),
+      QwqMarkdownBlockKind.orderedItem => _HomepageListItem(
+        marker: '${block.id.split('_').last}.',
+        text: block.text,
+        depth: block.listDepth,
+      ),
+      QwqMarkdownBlockKind.bulletItem => _HomepageListItem(
+        marker: '•',
+        text: block.text,
+        depth: block.listDepth,
+      ),
+      QwqMarkdownBlockKind.quote => DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: AppColors.primaryColor)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.only(left: AppSpacing.containerXs),
+          child: Text(block.text, style: bodyStyle),
+        ),
+      ),
+      QwqMarkdownBlockKind.codeBlock => DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.iosFill(context),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.containerXs),
+          child: SelectableText(
+            block.text,
+            style: bodyStyle.copyWith(fontFamily: 'monospace'),
+          ),
+        ),
+      ),
+      QwqMarkdownBlockKind.figure ||
+      QwqMarkdownBlockKind.image => _HomepageSemanticFigure(
+        assetRef: block.assetRef,
+        assetsById: assetsById,
+      ),
+      QwqMarkdownBlockKind.gallery => Wrap(
+        spacing: AppSpacing.containerXs,
+        runSpacing: AppSpacing.containerXs,
+        children: <Widget>[
+          for (final assetRef in block.assetRefs)
+            SizedBox(
+              width: _introHorizontalCardWidth,
+              child: _HomepageSemanticFigure(
+                assetRef: assetRef,
+                assetsById: assetsById,
+              ),
+            ),
+        ],
+      ),
+      QwqMarkdownBlockKind.callout => DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.iosFill(context),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.containerXs),
+          child: Text(block.text, style: bodyStyle),
+        ),
+      ),
+      QwqMarkdownBlockKind.table => Table(
+        border: TableBorder.all(color: AppColors.iosSeparator(context)),
+        children: <TableRow>[
+          for (final row in block.table?.logicalGrid ?? const <List<String>>[])
+            TableRow(
+              children: <Widget>[
+                for (final cell in row)
+                  Padding(
+                    padding: EdgeInsets.all(AppSpacing.intraGroupXs),
+                    child: Text(cell, style: bodyStyle),
+                  ),
+              ],
+            ),
+        ],
+      ),
+      QwqMarkdownBlockKind.groupedDirectory => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          for (final group
+              in block.groupedDirectory?.groups.entries ??
+                  const <MapEntry<String, List<String>>>[]) ...<Widget>[
+            Text(
+              group.key,
+              style: bodyStyle.copyWith(fontWeight: AppTypography.semiBold),
+            ),
+            for (final item in group.value)
+              _HomepageListItem(marker: '•', text: item, depth: 0),
+          ],
+        ],
+      ),
+      QwqMarkdownBlockKind.definitionList => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          for (final definition in block.definitions) ...<Widget>[
+            Text(
+              definition.term,
+              style: bodyStyle.copyWith(fontWeight: AppTypography.semiBold),
+            ),
+            Text(definition.definition, style: bodyStyle),
+          ],
+        ],
+      ),
+      QwqMarkdownBlockKind.footnote => Text(
+        '[${block.footnote?.label ?? ''}] ${block.footnote?.text ?? block.text}',
+        style: bodyStyle.copyWith(fontSize: AppTypography.iosFootnote),
+      ),
+      QwqMarkdownBlockKind.horizontalRule => Divider(
+        color: AppColors.iosSeparator(context),
+      ),
+      QwqMarkdownBlockKind.spacer => SizedBox(height: AppSpacing.containerSm),
+      QwqMarkdownBlockKind.paragraph ||
+      QwqMarkdownBlockKind.card ||
+      QwqMarkdownBlockKind.section => Text(block.text, style: bodyStyle),
+      QwqMarkdownBlockKind.unsupported => Semantics(
+        identifier: 'homepage_markdown_node_unavailable',
+        child: Text(
+          ObjectHomepageText.objectIntroEmptyMessage,
+          style: bodyStyle,
+        ),
+      ),
+    };
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
+      child: child,
+    );
+  }
+}
+
+class _HomepageListItem extends StatelessWidget {
+  const _HomepageListItem({
+    required this.marker,
+    required this.text,
+    required this.depth,
+  });
+
+  final String marker;
+  final String text;
+  final int depth;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(left: depth * AppSpacing.containerSm),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SizedBox(width: AppSpacing.containerSm, child: Text(marker)),
+        Expanded(child: Text(text)),
+      ],
+    ),
+  );
+}
+
+class _HomepageSemanticFigure extends StatelessWidget {
+  const _HomepageSemanticFigure({
+    required this.assetRef,
+    required this.assetsById,
+  });
+
+  final QwqMarkdownAssetRef? assetRef;
+  final Map<String, HomepageIntroductionAsset> assetsById;
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = assetRef;
+    final asset = ref == null ? null : assetsById[ref.assetId];
+    if (asset == null ||
+        (asset.url.trim().isEmpty && !_declaresSignedGrantIntroAsset(asset))) {
+      return Semantics(
+        identifier: 'homepage_markdown_asset_unavailable',
+        child: Text(ObjectHomepageText.objectIntroEmptyMessage),
+      );
+    }
+    return _InlineFigure(asset: asset, caption: ref!.caption);
   }
 }
 
@@ -276,8 +592,6 @@ class _InlineFigure extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
             child: AspectRatio(
               aspectRatio: _introInlineFigureAspectRatio,
-              // DEC-033：内嵌图经统一 typed 分流入口；私有与公开两路共用
-              // 同一占位和失败体验，消费面不再手写 accessMode 三元判断。
               child: mediaDeliveryImage(
                 binding: MediaDeliveryBinding(
                   assetId: asset.assetId.trim(),
@@ -309,35 +623,6 @@ class _InlineFigure extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _BulletLine extends StatelessWidget {
-  const _BulletLine({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text('• ', style: TextStyle(color: AppColors.iosLabel(context))),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: AppTypography.iosBody,
-                height: AppTypography.lineHeightRelaxed,
-                color: AppColors.iosLabel(context),
-              ),
-            ),
-          ),
         ],
       ),
     );

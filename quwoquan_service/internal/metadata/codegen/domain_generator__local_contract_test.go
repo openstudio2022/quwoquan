@@ -249,3 +249,17 @@ func TestCollectEnumTypesPrefersObjectLocalEnum(t *testing.T) {
 		t.Fatalf("local enum values = %#v", types)
 	}
 }
+
+func TestFieldGoTypeSupportsExplicitGeneratedSharedType(t *testing.T) {
+	generator := &DomainGenerator{}
+	got, err := generator.fieldGoType(domainField{Type: "semantic_document", GoTypeRef: "semantic_document.DocumentEnvelope", GoImport: "example/semantic_document"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "semantic_document.DocumentEnvelope" {
+		t.Fatalf("got %q", got)
+	}
+	if _, err := generator.fieldGoType(domainField{Type: "semantic_document", GoTypeRef: "semantic_document.DocumentEnvelope"}, nil); err == nil {
+		t.Fatal("missing go_import must fail")
+	}
+}

@@ -1,12 +1,14 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 8bc420c9a9344d65edb779c4bcb10f4945d9fa42c7325ac903755ce4b2915dea
+// ContractGraph SHA256: 493dc4d68d70ef1b4b1dcc34bfa39f2facc3891ca600d9263d68724d1ba1ba02
 
 library;
 
 import '../operation_request_payload.dart';
+import "../entity/semantic_document.g.dart";
 import "../generated/shared_operation_enums.g.dart";
 import "../recommendation/recommendation_operation_contracts.g.dart";
 
+export "../entity/semantic_document.g.dart";
 export "../generated/shared_operation_enums.g.dart";
 export "../recommendation/recommendation_operation_contracts.g.dart";
 
@@ -1250,6 +1252,7 @@ final class HomepageIntroductionSection {
   const HomepageIntroductionSection({
     required this.kind,
     required this.title,
+    this.semanticDocument,
     this.bodyMarkdown,
     required this.assets,
     required this.timelineItems,
@@ -1257,6 +1260,7 @@ final class HomepageIntroductionSection {
 
   final String kind;
   final String title;
+  final DocumentEnvelope? semanticDocument;
   final String? bodyMarkdown;
   final List<HomepageIntroductionAsset> assets;
   final List<HomepageIntroductionTimelineItem> timelineItems;
@@ -1268,6 +1272,7 @@ final class HomepageIntroductionSection {
     _rejectUnknownFields(map, const <String>{
       "kind",
       "title",
+      "semanticDocument",
       "bodyMarkdown",
       "assets",
       "timelineItems",
@@ -1275,6 +1280,15 @@ final class HomepageIntroductionSection {
     return HomepageIntroductionSection(
       kind: _requiredString(map["kind"], '$path.kind'),
       title: _requiredString(map["title"], '$path.title'),
+      semanticDocument: map["semanticDocument"] == null
+          ? null
+          : documentEnvelopeFromWire(
+              _requiredObject(
+                map["semanticDocument"],
+                '$path.semanticDocument',
+              ),
+              '$path.semanticDocument',
+            ),
       bodyMarkdown: map["bodyMarkdown"] == null
           ? null
           : _requiredString(map["bodyMarkdown"], '$path.bodyMarkdown'),
@@ -1306,6 +1320,8 @@ final class HomepageIntroductionSection {
   Map<String, Object?> toWire() => <String, Object?>{
     "kind": kind,
     "title": title,
+    if (semanticDocument != null)
+      "semanticDocument": documentEnvelopeToWire(semanticDocument!),
     if (bodyMarkdown != null) "bodyMarkdown": bodyMarkdown!,
     "assets": assets.map((value) => value.toWire()).toList(growable: false),
     "timelineItems": timelineItems

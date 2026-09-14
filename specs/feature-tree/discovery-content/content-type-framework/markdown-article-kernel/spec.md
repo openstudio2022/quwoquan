@@ -87,6 +87,17 @@
 - 分隔线：`---` 解析为 `divider` 结构节点进入 Document 模型，阅读端渲染
   细分隔线、SEO 端渲染 `<hr>`，序列化原样写回；禁止静默丢弃。
 
+<a id="req-006"></a>
+### REQ-006 跨端统一 semantic document、协议版本与对象 revision
+
+- 同一发布对象只有一份 canonical semantic document；正文节点身份、节点类型、父子关系、阅读顺序、媒体/caption、实体 mention、表格分类与布局意图在 Data、Service、Web、Android、iOS 和工作台间保持同义。端侧只把同一节点树投影到自身组件，不得按端复制正文、重排语义节点或建立移动端模板正文。
+- 输入映射必须显式区分 `Markdown -> semantic document` 与 `HTML -> semantic document` 两种 mapping type；mapping type 描述来源语法与规范化路径，不是新的内容类型。Markdown 保留本 Story 的 `qwq-rich-md` 规则；HTML 只接收经来源 owner 冻结的 exact bytes，并把元素、属性和表格语义确定性映射到同一节点闭集。无法无损映射的结构必须形成 typed diagnostic/disposition，不得静默压成 paragraph。
+- semantic protocol 自身携带正交 version triplet：`schemaVersion` 定义 AST envelope、节点与字段形状，`dialectVersion` 定义 Markdown grammar 及 Markdown/HTML 到节点的映射规则，`canonicalizationVersion` 定义 canonical bytes 与 digest 算法。该 triplet 描述如何解释和校验协议，不描述某个对象改了什么；unknown `schemaVersion`/`dialectVersion` major、`canonicalizationVersion` 不匹配或 reader 缺少文档声明的 required capability 时必须 fail closed，不得 fallback、猜测或静默丢节点。
+- 对象事实另有正交 revision tuple：`contentRevision` 冻结作者表达与节点业务字节，`sourceRevision` 冻结采用来源的 exact revision/evidence binding，`layoutRevision` 冻结同一节点树的统一布局规则。三者组成 exact object revision tuple；任一维变化都产生新 tuple，不能覆写旧 revision。protocol version triplet 与 object revision tuple 必须分别携带、分别校验，任何一组都不能替代、编码或推导另一组。
+- `layoutRevision` 只能版本化同一节点树所用的一套跨端响应式/可访问布局规则；不同 viewport 只能在该规则内改变尺寸、换行、滚动或受治理线性化，不得选择不同内容节点、结构、阅读顺序或端专属正文。
+- 表格先分类为 `data table` 或 `layout table`，分类结论属于 semantic document。`data table` 在所有端消费同一行列、header、caption 与单元格阅读顺序，窄屏只允许统一的横向滚动/分段可访问布局；`layout table` 不暴露数据表语义，按同一受治理线性化顺序投影为普通节点。各端不得自行重新分类或维护不同断点模板。
+- 工作台可以展示 mapping、节点、表格分类、revision tuple 与降级 diagnostic，但不得修补 canonical AST、替端侧选择布局、把 renderer 结果写回正文或签发 publish eligibility；人工处置必须经 producer/review owner 形成新的精确 revision。
+
 ## 4. 契约引用
 
 - 父能力公开契约：[`L2 spec`](../spec.md)。
@@ -128,6 +139,16 @@
 - THEN 列表项 `listDepth` 按缩进还原（最多 2 级），序列化按同一约定写回，
   roundtrip 不丢失嵌套结构；阅读端按级别缩进渲染。
 
+<a id="gwt-005"></a>
+### GWT-005 协议版本与对象 revision 正交且跨端保真
+
+- GIVEN 同一对象同时绑定 protocol version triplet 与 exact object revision tuple，其 semantic document 包含 Markdown 映射节点、HTML 映射节点、data table、layout table、媒体 caption 与实体 mention，并声明 required capabilities。
+- WHEN Data、Service、Web、Android、iOS 与工作台分别读取并投影该 tuple，且依次只改变 content、source、layout 三个 revision 之一。
+- THEN 各端读到相同节点身份、结构、阅读顺序、表格分类与业务内容；视口变化只改变布局投影，窄屏 data table 使用统一可访问布局，layout table 使用同一线性化顺序，不产生端专属正文或移动端模板。
+- THEN protocol triplet 与 object tuple 分别在场且互不代偿；每次对象单维变化只推进对应 revision 并形成新的 exact object tuple，另外两维与 protocol triplet 保持不变；协议规则升级只推进 triplet 的对应维，不伪造 content/source/layout revision。旧 tuple 仍可精确读回，任一端不得拿 latest 的其它维拼接成不存在的版本。
+- THEN unknown schema/dialect major、canonicalization mismatch 或 required capability missing 分别产生 typed fail-closed 结果，任何 renderer、工作台或人工标记都不能降级为成功。
+- THEN viewport 变化仅应用同一 `layoutRevision` 的统一规则，节点集合、结构与阅读顺序逐项相同；不可映射结构产生可定位到来源节点的 typed diagnostic/disposition，工作台只读展示该结果，人工修订通过新的 producer/review revision 返回，不直接改 canonical 字节。
+
 ## 6. 依赖
 
 - 前置要求：[`content-type-framework`](../spec.md) 的范围、要求与 SIT。
@@ -152,3 +173,12 @@
   `article_markdown_codec__local_contract_test.dart` 与
   `article_typography_page_widget__local_contract_test.dart` 绑定闭合。
 - 完成判定：`GWT-001`、`GWT-002`、`GWT-003` 三条对应行为均满足且各自有真实测试 `spec_ref`，且 `GWT-004` 的 4 条结果子句（`gwt-004.t1..t4`）各自被真实测试 `spec_ref` 绑定。`GWT-002` 与 `GWT-003` 必须覆盖 `qwq-rich-md` 的解析—序列化双向等价，不得只断言单向渲染结果。
+
+<a id="open-002"></a>
+### OPEN-002 统一 semantic document 契约与跨端证据尚未落地
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：[`REQ-006`](#req-006) 已冻结单一节点树、HTML/Markdown mapping type、protocol version triplet、object revision tuple 与表格分类，但 canonical schema、mapper、Service wire 和 Web/Android/iOS renderer 尚未证明消费同一语义协议。
+- 完成判定：canonical contract 单点声明 node/mapping/table/disposition、`schemaVersion|dialectVersion|canonicalizationVersion`、required capabilities 与 `contentRevision|sourceRevision|layoutRevision`；local_contract 覆盖两组版本正交、两类映射、对象三维 revision 隔离、unknown major/canonicalization mismatch/capability missing fail closed 与表格线性化，api_integration 覆盖 Data→Service exact bindings，Web/Android/iOS 与工作台测试逐节点对账 [`GWT-005`](#gwt-005)。任何端专属正文、viewport 结构分叉、latest 拼接或 silent paragraph fallback 都必须 fail closed。

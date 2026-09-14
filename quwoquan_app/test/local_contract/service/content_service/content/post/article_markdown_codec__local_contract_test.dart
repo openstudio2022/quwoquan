@@ -21,6 +21,7 @@ void main() {
       final document = ArticleMarkdownCodec.parseDocument(
         '''
 ---
+markdownDialect: qwq-rich-md
 title: 媒体变体正文
 coverImage: asset://cover
 ---
@@ -52,6 +53,7 @@ coverImage: asset://cover
       // 不得包装成看似合法的 asset:// URL 再让加载栈失败。
       final document = ArticleMarkdownCodec.parseDocument('''
 ---
+markdownDialect: qwq-rich-md
 title: 缺席语义
 ---
 # 缺席语义
@@ -61,11 +63,7 @@ title: 缺席语义
 
       final figure = document.nodes.where((node) => node.isFigure).single;
       expect(figure.assetId, 'orphan-asset');
-      expect(
-        figure.imageUrl,
-        isEmpty,
-        reason: '缺席不得伪装为 asset:// URL（结果状态单义）',
-      );
+      expect(figure.imageUrl, isEmpty, reason: '缺席不得伪装为 asset:// URL（结果状态单义）');
       // 缺席不影响资产身份：序列化仍按 assetId 写回 canonical 引用。
       final serialized = ArticleMarkdownCodec.serializeDocument(document);
       expect(serialized, contains('asset://orphan-asset'));
@@ -74,6 +72,7 @@ title: 缺席语义
     test('parses entity labels into structured inline spans', () {
       final document = ArticleMarkdownCodec.parseDocument('''
 ---
+markdownDialect: qwq-rich-md
 title: 杭州一日游
 ---
 # 杭州一日游
@@ -102,6 +101,7 @@ title: 杭州一日游
       () {
         final document = ArticleMarkdownCodec.parseDocument('''
 ---
+markdownDialect: qwq-rich-md
 title: 城市漫步指南
 ---
 # 城市漫步指南
@@ -156,42 +156,292 @@ title: 城市漫步指南
       },
     );
 
-    test(
-      'front matter preserves summary tag refs entity refs and assistant policy',
-      () {
-        final markdown = ArticleMarkdownCodec.serializeDocument(
-          ArticleDocumentData(
-            nodes: <ArticleDocumentNode>[
-              ArticleDocumentNode(
-                id: 'document_title',
-                type: ArticleDocumentNodeType.documentTitle,
-                text: '西湖一日游',
-              ),
-              ArticleDocumentNode(
-                id: 'p1',
-                type: ArticleDocumentNodeType.paragraph,
-                text: '正文内容',
-              ),
-            ],
-          ),
-          summary: '用户确认摘要',
-          tagRefs: const <String>['Topic/旅行/城市漫步'],
-          entityRefs: const <String>['entity:sight:west_lake'],
-          visibility: 'public',
-          assistantUsePolicy: AssistantUsePolicy.exclude,
-        );
+    test('front matter preserves summary tag refs entity refs and assistant policy', () {
+      final markdown = ArticleMarkdownCodec.serializeDocument(
+        ArticleDocumentData(
+          nodes: <ArticleDocumentNode>[
+            ArticleDocumentNode(
+              id: 'document_title',
+              type: ArticleDocumentNodeType.documentTitle,
+              text: '西湖一日游',
+            ),
+            ArticleDocumentNode(
+              id: 'p1',
+              type: ArticleDocumentNodeType.paragraph,
+              text: '正文内容',
+            ),
+          ],
+        ),
+        summary: '用户确认摘要',
+        tagRefs: const <String>['Topic/旅行/城市漫步'],
+        entityRefs: const <String>['entity:sight:west_lake'],
+        visibility: 'public',
+        assistantUsePolicy: AssistantUsePolicy.exclude,
+      );
 
-        expect(markdown, contains('summary: "用户确认摘要"'));
-        expect(markdown, contains('tag_refs:'));
-        expect(markdown, contains('- "Topic/旅行/城市漫步"'));
-        expect(markdown, contains('entity_refs:'));
-        expect(markdown, contains('- "entity:sight:west_lake"'));
-        expect(markdown, contains('assistantUsePolicy: exclude'));
+      expect(markdown, contains('summary: "用户确认摘要"'));
+      expect(markdown, contains('tag_refs:'));
+      expect(markdown, contains('- "Topic/旅行/城市漫步"'));
+      expect(markdown, contains('entity_refs:'));
+      expect(markdown, contains('- "entity:sight:west_lake"'));
+      expect(markdown, contains('assistantUsePolicy: exclude'));
 
-        final parsed = ArticleMarkdownCodec.parseDocument(markdown);
-        expect(parsed.title, '西湖一日游');
-        expect(parsed.body, contains('正文内容'));
-      },
+      final parsed = ArticleMarkdownCodec.parseDocument(markdown);
+      expect(parsed.title, '西湖一日游');
+      expect(parsed.body, contains('正文内容'));
+    });
+  });
+
+  test('版本与 blocking diagnostics 由 codec fail closed', () {
+    expect(
+      () => ArticleMarkdownCodec.parseDocument('# 无版本'),
+      throwsFormatException,
+    );
+    expect(
+      () => ArticleMarkdownCodec.parseDocument('''
+---
+markdownDialect: qwq-rich-md-v2
+---
+# 新版本
+'''),
+      throwsFormatException,
+    );
+    expect(
+      () => ArticleMarkdownCodec.parseDocument('''
+---
+markdownDialect: qwq-rich-md
+---
+<div>bad</div>
+'''),
+      throwsFormatException,
+    );
+  });
+
+  test('已知只读节点与可编辑段落共同保存并 reparse 等价', () {
+    final document = ArticleMarkdownCodec.parseDocument('''
+---
+markdownDialect: qwq-rich-md
+title: 混合文档
+---
+可编辑段落。
+
+#### H4
+
+> 引用
+
+:::callout
+提示
+:::
+
+```dart
+final ok = true;
+```
+
+| A | B |
+| --- | --- |
+| 1 | 2 |
+
+:::groupedDirectory
+## 景点
+- 西湖
+:::
+
+术语
+: 定义内容
+
+[^source]: 来源说明
+''');
+    final editable = document.nodes.firstWhere(
+      (node) =>
+          !node.isReadOnly && node.type == ArticleDocumentNodeType.paragraph,
+    );
+    final changed = document.copyWith(
+      nodes: document.nodes
+          .map(
+            (node) =>
+                node.id == editable.id ? node.copyWith(text: '已编辑段落。') : node,
+          )
+          .toList(),
+    );
+    final serialized = ArticleMarkdownCodec.serializeDocument(changed);
+    expect(serialized, contains('已编辑段落。'));
+    expect(serialized, contains('| A | B |'));
+    final reparsed = ArticleMarkdownCodec.parseDocument(serialized);
+    expect(
+      reparsed.nodes
+          .where((node) => node.isReadOnly)
+          .map((node) => node.semanticType),
+      document.nodes
+          .where((node) => node.isReadOnly)
+          .map((node) => node.semanticType),
+    );
+  });
+
+  test('绕过 mutation 篡改只读语义或 raw 均 fail closed', () {
+    final document = ArticleMarkdownCodec.parseDocument('''
+---
+markdownDialect: qwq-rich-md
+---
+> 原始引用
+''');
+    final node = document.nodes.single;
+    expect(
+      () => ArticleMarkdownCodec.serializeDocument(
+        document.copyWith(
+          nodes: <ArticleDocumentNode>[node.copyWith(text: '篡改')],
+        ),
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => ArticleMarkdownCodec.serializeDocument(
+        document.copyWith(
+          nodes: <ArticleDocumentNode>[node.copyWith(rawMarkdown: '> 篡改')],
+        ),
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => ArticleMarkdownCodec.serializeDocument(
+        document.copyWith(
+          nodes: <ArticleDocumentNode>[node.copyWith(isReadOnly: false)],
+        ),
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('只读节点顺序与 identity 受保护', () {
+    final document = ArticleMarkdownCodec.parseDocument('''
+---
+markdownDialect: qwq-rich-md
+---
+> 第一
+
+```text
+第二
+```
+''');
+    expect(
+      () => ArticleMarkdownCodec.serializeDocument(
+        document.copyWith(nodes: document.nodes.reversed.toList()),
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => ArticleMarkdownCodec.serializeDocument(
+        document.copyWith(nodes: document.nodes.skip(1).toList()),
+      ),
+      throwsFormatException,
+    );
+    final first = document.nodes.first;
+    expect(
+      () => ArticleMarkdownCodec.serializeDocument(
+        document.copyWith(
+          nodes: <ArticleDocumentNode>[
+            first.copyWith(id: 'other'),
+            ...document.nodes.skip(1),
+          ],
+        ),
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('fromMap 注入伪 origin 标记不能升级为可信文档', () {
+    final document = ArticleDocumentData.fromMap(<String, dynamic>{
+      'nodes': <Object?>[
+        <String, Object?>{
+          'id': 'forged',
+          'type': 'quote',
+          'text': '伪造',
+          'isReadOnly': true,
+          'rawMarkdown': '> 伪造',
+          'semanticType': 'quote',
+          'originFingerprint': 'forged',
+          'originOrdinal': 0,
+        },
+      ],
+    });
+    expect(document.nodes.single.isReadOnly, isFalse);
+    expect(document.nodes.single.rawMarkdown, isEmpty);
+    expect(document.toMap().toString(), isNot(contains('originFingerprint')));
+    expect(
+      () => ArticleMarkdownCodec.serializeDocument(document),
+      throwsFormatException,
+    );
+  });
+
+  test('parse 文档经普通 DTO roundtrip 后不能恢复可信 baseline', () {
+    final parsed = ArticleMarkdownCodec.parseDocument('''
+---
+markdownDialect: qwq-rich-md
+---
+| A | B |
+| --- | --- |
+| 1 | 2 |
+''');
+    final persisted = parsed.toMap();
+    expect(persisted['requiresCanonicalMarkdownReparse'], isTrue);
+    expect(persisted.toString(), isNot(contains('originFingerprint')));
+    final restored = ArticleDocumentData.fromMap(persisted);
+    expect(
+      () => ArticleMarkdownCodec.serializeDocument(restored),
+      throwsFormatException,
+    );
+  });
+
+  test('无 canonical baseline 的 rich block 即使未自称只读也禁止保存', () {
+    final document = ArticleDocumentData.fromMap(<String, dynamic>{
+      'nodes': <Object?>[
+        <String, Object?>{'id': 'quote', 'type': 'quote', 'text': '不可信引用'},
+      ],
+    });
+    expect(
+      () => ArticleMarkdownCodec.serializeDocument(document),
+      throwsFormatException,
+    );
+  });
+
+  test('copyWith 同时伪造全部 node 字段仍无法同步文档 baseline', () {
+    final untrusted = ArticleDocumentData(
+      nodes: const <ArticleDocumentNode>[
+        ArticleDocumentNode(
+          id: 'forged',
+          type: ArticleDocumentNodeType.quote,
+          text: '伪造',
+        ),
+      ],
+    );
+    final forged = untrusted.copyWith(
+      nodes: <ArticleDocumentNode>[
+        untrusted.nodes.single.copyWith(
+          isReadOnly: true,
+          rawMarkdown: '> 伪造',
+          semanticType: 'quote',
+        ),
+      ],
+    );
+    expect(
+      () => ArticleMarkdownCodec.serializeDocument(forged),
+      throwsFormatException,
+    );
+  });
+
+  test('unsupported opaque 节点继续阻断', () {
+    final opaque = ArticleDocumentNode(
+      id: 'opaque',
+      type: ArticleDocumentNodeType.paragraph,
+      text: 'opaque',
+      isReadOnly: true,
+      rawMarkdown: 'opaque',
+      semanticType: 'unsupported',
+    );
+    expect(
+      () => ArticleMarkdownCodec.serializeDocument(
+        ArticleDocumentData(nodes: <ArticleDocumentNode>[opaque]),
+      ),
+      throwsFormatException,
     );
   });
 
@@ -253,6 +503,7 @@ title: 城市漫步指南
     test('样式记号与 mention 共存，mention 段原子不被切分', () {
       final document = ArticleMarkdownCodec.parseDocument('''
 ---
+markdownDialect: qwq-rich-md
 title: 混排样式
 ---
 # 混排样式
@@ -266,15 +517,10 @@ title: 混排样式
       final mention = paragraph.spans.singleWhere(
         (span) => span.isInlineMention,
       );
-      expect(
-        paragraph.text.substring(mention.start, mention.end),
-        '灵隐寺',
-      );
+      expect(paragraph.text.substring(mention.start, mention.end), '灵隐寺');
       final bold = paragraph.spans.singleWhere((span) => span.bold);
       expect(paragraph.text.substring(bold.start, bold.end), '强烈推荐');
-      final strike = paragraph.spans.singleWhere(
-        (span) => span.strikethrough,
-      );
+      final strike = paragraph.spans.singleWhere((span) => span.strikethrough);
       expect(paragraph.text.substring(strike.start, strike.end), '不要');
 
       // 再序列化：三种记号原样写回。
@@ -287,6 +533,7 @@ title: 混排样式
     test('未闭合记号按字面量处理不吞字，病态输入不 crash', () {
       final document = ArticleMarkdownCodec.parseDocument('''
 ---
+markdownDialect: qwq-rich-md
 title: 边界输入
 ---
 # 边界输入
@@ -316,6 +563,7 @@ title: 边界输入
       // 同构数据工程供稿形态：quote、callout 指令与 fenced code。
       final document = ArticleMarkdownCodec.parseDocument('''
 ---
+markdownDialect: qwq-rich-md
 title: 富块保真
 ---
 # 富块保真
@@ -355,26 +603,18 @@ void main() { print('hello'); }
       expect(blockTypes, contains(ArticleDocumentBlockType.codeBlock));
       expect(document.body, contains('山不在高'));
 
-      // 序列化原样写回（编辑器加载不降级）。
+      expect(
+        document.nodes
+            .where((node) => node.isRichBlock)
+            .every((node) => node.isReadOnly),
+        isTrue,
+      );
       final serialized = ArticleMarkdownCodec.serializeDocument(document);
       expect(serialized, contains('> 山不在高，有仙则名。'));
       expect(serialized, contains(':::callout'));
       expect(serialized, contains('```dart'));
-      expect(serialized, contains("print('hello')"));
-
-      // 再解析等价（roundtrip 收敛）。
       final reparsed = ArticleMarkdownCodec.parseDocument(serialized);
-      expect(
-        reparsed.nodes
-            .where(
-              (node) =>
-                  node.type == ArticleDocumentNodeType.quote ||
-                  node.type == ArticleDocumentNodeType.callout ||
-                  node.type == ArticleDocumentNodeType.codeBlock,
-            )
-            .length,
-        3,
-      );
+      expect(reparsed.nodes.where((node) => node.isRichBlock).length, 3);
     });
 
     test('分段真相源：样式与 mention 重叠时字符级合成正确', () {
@@ -404,6 +644,7 @@ void main() { print('hello'); }
     test('链接解析为原子 link span，序列化写回 [text](url)', () {
       const markdown = '''
 ---
+markdownDialect: qwq-rich-md
 title: "t"
 ---
 
@@ -418,23 +659,18 @@ title: "t"
       expect(linkSpan.kind, 'link');
       expect(linkSpan.isLink, isTrue);
       expect(linkSpan.targetId, 'https://example.com/guide');
-      expect(
-        paragraph.text.substring(linkSpan.start, linkSpan.end),
-        '官网攻略',
-      );
+      expect(paragraph.text.substring(linkSpan.start, linkSpan.end), '官网攻略');
 
       final reserialized = ArticleMarkdownCodec.serializeDocument(
         ArticleDocumentData(nodes: parsed.nodes),
       );
-      expect(
-        reserialized,
-        contains('[官网攻略](https://example.com/guide)'),
-      );
+      expect(reserialized, contains('[官网攻略](https://example.com/guide)'));
     });
 
     test('恶意 scheme 不产生 link span，按字面量输出', () {
       const markdown = '''
 ---
+markdownDialect: qwq-rich-md
 title: "t"
 ---
 
@@ -451,6 +687,7 @@ title: "t"
     test('链接段与样式段共存：link 段原子不被样式记号切分', () {
       const markdown = '''
 ---
+markdownDialect: qwq-rich-md
 title: "t"
 ---
 
@@ -480,6 +717,7 @@ title: "t"
     test('嵌套列表 roundtrip：两空格/级缩进与 listDepth 互相还原', () {
       const markdown = '''
 ---
+markdownDialect: qwq-rich-md
 title: "t"
 ---
 
@@ -520,8 +758,8 @@ title: "t"
       // [label](/entity/<domain>/<etype>/<name>) 站内链接。
       const markdown = '''
 ---
-title: "杭州西湖攻略"
 markdownDialect: qwq-rich-md
+title: "杭州西湖攻略"
 ---
 
 # [杭州西湖](/entity/地点/景区/杭州西湖)攻略
@@ -555,10 +793,7 @@ markdownDialect: qwq-rich-md
         'entity:景区:杭州西湖',
         reason: '必须与数据工程 canonical 规则一致（跳过 domain 段）',
       );
-      expect(
-        paragraph.text.substring(mention.start, mention.end),
-        '杭州西湖',
-      );
+      expect(paragraph.text.substring(mention.start, mention.end), '杭州西湖');
 
       // 序列化统一写回 canonical mention 记号。
       final reserialized = ArticleMarkdownCodec.serializeDocument(
@@ -571,6 +806,7 @@ markdownDialect: qwq-rich-md
     test('不合形态的站内路径按字面量保留，不产生 span', () {
       const markdown = '''
 ---
+markdownDialect: qwq-rich-md
 title: "t"
 ---
 
@@ -587,6 +823,7 @@ title: "t"
     test('段落对齐 :::align 指令与分隔线 --- roundtrip', () {
       const markdown = '''
 ---
+markdownDialect: qwq-rich-md
 title: "t"
 ---
 
@@ -651,6 +888,7 @@ title: "t"
     test('超深缩进夹紧到 2 级，不产生越界深度', () {
       const markdown = '''
 ---
+markdownDialect: qwq-rich-md
 title: "t"
 ---
 

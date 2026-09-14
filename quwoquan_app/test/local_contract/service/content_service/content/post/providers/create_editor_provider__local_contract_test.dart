@@ -5,6 +5,8 @@ import 'package:quwoquan_app/service/content_service/content/post/domain/article
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_editor_projection.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/create_editor_provider.dart';
+import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_undo_snapshot.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/article_markdown_codec.dart';
 
 void main() {
   test('重排图片后保持新的顺序结果', () {
@@ -296,6 +298,74 @@ void main() {
 
     notifier.redoArticle();
     expect(container.read(createEditorProvider).body, contains('改动后'));
+  });
+
+  test('含 quote/table 的 undo snapshot 由 canonical markdown 恢复可信 baseline', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(createEditorProvider.notifier);
+    final parsed = ArticleMarkdownCodec.parseDocument('''
+---
+markdownDialect: qwq-rich-md
+title: 撤销保真
+---
+普通段落。
+
+> 只读引用
+
+| A | B |
+| --- | --- |
+| 1 | 2 |
+''');
+    notifier.loadArticleDocument(parsed);
+    final paragraph = container
+        .read(createEditorProvider)
+        .articleDocument
+        .nodes
+        .firstWhere(
+          (node) =>
+              !node.isReadOnly &&
+              node.type == ArticleDocumentNodeType.paragraph,
+        );
+    notifier.commitArticleTextEdit();
+    notifier.updateArticleNodeText(paragraph.id, '修改后段落。');
+    notifier.undoArticle();
+    final restored = container.read(createEditorProvider).articleDocument;
+    final markdown = ArticleMarkdownCodec.serializeDocument(restored);
+    expect(markdown, contains('普通段落。'));
+    expect(markdown, contains('> 只读引用'));
+    expect(markdown, contains('| A | B |'));
+    notifier.redoArticle();
+    expect(
+      ArticleMarkdownCodec.serializeDocument(
+        container.read(createEditorProvider).articleDocument,
+      ),
+      contains('修改后段落。'),
+    );
+  });
+
+  test('undo snapshot markdown 被篡改或升级未知版本时 fail closed', () {
+    final base = CreateEditorState.initial();
+    final valid = <String, dynamic>{
+      'articleMarkdown': '---\nmarkdownDialect: qwq-rich-md\n---\n正文',
+      'articleFontPreset': 'clean',
+      'articleTemplate': 'gentle',
+    };
+    expect(
+      () => CreateEditorUndoSnapshot.deserialize(base, <String, dynamic>{
+        ...valid,
+        'articleMarkdown': '---\nmarkdownDialect: future-v9\n---\n正文',
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => CreateEditorUndoSnapshot.deserialize(base, <String, dynamic>{
+        ...valid,
+        'articleMarkdown':
+            '---\nmarkdownDialect: qwq-rich-md\n---\n```dart\nunclosed',
+      }),
+      throwsFormatException,
+    );
   });
 
   test('视频编辑状态会保留原视频路径与裁切静音信息', () {
@@ -628,6 +698,41 @@ void main() {
     );
     expect(paraNode.type, ArticleDocumentNodeType.paragraph);
   });
+
+  test(
+    'read-only rich node mutation fence blocks text type and inline changes',
+    () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(createEditorProvider.notifier);
+      notifier.loadArticleDocument(
+        ArticleDocumentData(
+          nodes: const <ArticleDocumentNode>[
+            ArticleDocumentNode(
+              id: 'readonly_quote',
+              type: ArticleDocumentNodeType.quote,
+              text: '原文',
+              isReadOnly: true,
+            ),
+          ],
+        ),
+      );
+      notifier.updateArticleNodeText('readonly_quote', '篡改');
+      notifier.updateArticleNodeType(
+        'readonly_quote',
+        ArticleDocumentNodeType.paragraph,
+      );
+      notifier.toggleArticleInlineStyle('readonly_quote', 0, 2, bold: true);
+      final node = container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
+          .single;
+      expect(node.text, '原文');
+      expect(node.type, ArticleDocumentNodeType.quote);
+      expect(node.spans, isEmpty);
+    },
+  );
 
   test('updateArticleNodeType 对 figure 和 title 无效', () {
     final container = ProviderContainer();
@@ -998,8 +1103,13 @@ void main() {
 
     notifier.undoArticle();
     expect(
-      container.read(createEditorProvider).articleDocument.nodes.length,
-      nodeCountBefore,
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
+          .where((node) => node.text.trim().isNotEmpty || node.isFigure)
+          .length,
+      1,
     );
 
     notifier.redoArticle();

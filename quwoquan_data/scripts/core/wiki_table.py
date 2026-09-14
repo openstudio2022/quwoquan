@@ -133,97 +133,64 @@ def _consume_table_block(
 
     table_id = group_id
 
-    # 简单矩形表（无行图/无合并单元格/无嵌套/表头齐全）保真为 table block，
-    # source.md 渲染为 GFM 表格；复杂表保持逐行降维，行图 figure 锚定链不变。
-    has_row_files = any(
-        _extract_file_links(cell) for row_cells in rows for cell in row_cells
-    )
+    # 表格始终保留为表格；不得再默认降成事实句。Parsoid 主路径负责精确
+    # rowspan/colspan 网格，旧 wikitext 迁移边界至少保留完整物理行列和复杂标记。
     row_texts = [
         [strip_inline_markup(_strip_file_links(cell)) for cell in row_cells]
         for row_cells in rows
     ]
-    row_texts = [row for row in row_texts if any(cell for cell in row)]
-    simple_rectangular = (
-        len(headers) >= 2
-        and len(row_texts) >= 2
-        and not has_row_files
-        and not has_complex_attrs
-        and not saw_nested_table
-        and all(len(row) <= len(headers) for row in row_texts)
-        and not _TABLE_DROP_HINT_RE.search(caption_text or "")
+    width = max([len(headers), *(len(row) for row in row_texts)], default=0)
+    normalized_headers = list(headers) + [f"column-{pos + 1}" for pos in range(len(headers), width)]
+    normalized_rows = [row + [""] * (width - len(row)) for row in row_texts]
+    logical_grid = [
+        [
+            {"text": value, "row": row_index, "column": column_index,
+             "rowspan": 1, "colspan": 1, "header": row_index == 0,
+             "covered": False}
+            for column_index, value in enumerate(row)
+        ]
+        for row_index, row in enumerate([normalized_headers, *normalized_rows])
+    ]
+    grouped_directory = bool(
+        width >= 2
+        and re.search(r"名称|名录|列表|项目|景点|name|item|site", " ".join(normalized_headers), re.IGNORECASE)
+        and (has_complex_attrs or len(normalized_rows) >= 3)
     )
-    if simple_rectangular:
-        builder.blocks.append(
-            make_table_block(
-                headers=headers,
-                rows=row_texts,
-                caption=caption_text,
-                section_slug=builder.section_slug,
-                table_id=table_id,
-            )
+    builder.blocks.append(
+        make_table_block(
+            headers=normalized_headers,
+            rows=normalized_rows,
+            caption=caption_text,
+            section_slug=builder.section_slug,
+            table_id=table_id,
+            logical_grid=logical_grid,
+            grouped_directory=grouped_directory,
         )
-        builder.tables.append(
-            {
-                "tableId": table_id,
-                "caption": caption_text,
-                "sectionSlug": builder.section_slug,
-                "rowCount": len(row_texts),
-                "columnCount": len(headers),
-                "listItemCount": 0,
-                "figureCount": 0,
-                "mappingDecision": "table",
-                "listGroupId": "",
-            }
-        )
-        return idx
-
-    list_group_id = builder.next_group_id("lst")
-    item_count = 0
+    )
     figure_count = 0
     for row_cells in rows:
-        row_files: list[tuple[str, str]] = []
+        caption_subject = _row_caption_subject(row_cells)
         for cell in row_cells:
             for file_name, params, _s, _e in _extract_file_links(cell):
-                row_files.append((file_name, _caption_from_file_params(params)))
-        sentence = _table_row_sentence(headers, row_cells)
-        # 行图 caption 兜底主语：跳过纯序号首列，取首个有语义的原文字段。
-        caption_subject = _row_caption_subject(row_cells)
-        if sentence:
-            builder.blocks.append(
-                make_list_item_block(
-                    sentence,
-                    builder.section_slug,
-                    list_group_id=list_group_id,
-                    origin="wikitable",
+                builder.add_figure(
+                    file_name=file_name,
+                    caption=_caption_from_file_params(params) or caption_subject,
+                    placement_type="groupMember",
+                    group_id=table_id,
                 )
-            )
-            item_count += 1
-        for file_name, caption in row_files:
-            # 行图 caption 优先原图注，其次「非序号」行主语（原文事实字段）；
-            # 两者皆无则留空（禁止用行号 1/2/3 造假图注）。
-            builder.add_figure(
-                file_name=file_name,
-                caption=caption or caption_subject,
-                placement_type="groupMember",
-                group_id=table_id,
-            )
-            figure_count += 1
-    if _TABLE_DROP_HINT_RE.search(caption_text or "") or (not item_count and not figure_count):
-        decision = "dropped"
-    elif figure_count and not item_count:
-        decision = "gallery"
-    else:
-        decision = "orderedList"
+                figure_count += 1
     builder.tables.append(
         {
             "tableId": table_id,
             "caption": caption_text,
             "sectionSlug": builder.section_slug,
-            "rowCount": len(rows),
-            "listItemCount": item_count,
+            "rowCount": len(normalized_rows),
+            "columnCount": width,
+            "logicalGrid": logical_grid,
             "figureCount": figure_count,
-            "mappingDecision": decision,
-            "listGroupId": list_group_id if item_count else "",
+            "mappingDecision": "groupedDirectory" if grouped_directory else "table",
+            "groupedDirectory": grouped_directory,
+            "legacyComplexStructure": bool(has_complex_attrs or saw_nested_table),
         }
     )
     return idx

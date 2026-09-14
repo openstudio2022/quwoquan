@@ -347,14 +347,27 @@ fields:
     role: authoritative_state
   - name: markdownDialect
     source: markdownDialect
-    type: string
+    type: enum
+    enum_ref: SemanticDocumentMarkdownDialect
     constraints:
       - NULLABLE
     classification: PUBLIC
     log_policy: allow
     api_exposure: read_write
     ops_exposure: read
-    description: Markdown 规范版本，当前为 qwq-rich-md
+    description: Markdown dialect 闭集；当前仅允许 qwq-rich-md，版本语义由共享 semantic_document.yaml 的 dialectVersion 定义
+    role: authoritative_state
+  - name: semanticDocument
+    source: semanticDocument
+    type: semantic_document
+    go_type_ref: semantic_document.DocumentEnvelope
+    go_import: quwoquan_service/services/content-service/generated/content/post/semantic_document
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: metadata_only
+    api_exposure: read_write
+    ops_exposure: read
+    description: canonical semantic document 自包含强类型 AST；新文章 publish/promote 必填，完整 envelope 校验并重算 canonicalDigest，历史记录仅允许只读缺席。
     role: authoritative_state
   - name: articleMarkdownDigest
     source: articleMarkdownDigest
@@ -1129,7 +1142,8 @@ value_objects:
         type: string
         constraints: [NULLABLE]
       - name: markdownDialect
-        type: string
+        type: enum
+        enum_ref: SemanticDocumentMarkdownDialect
         constraints: [NULLABLE]
       - name: articleMarkdownDigest
         type: string
@@ -1427,6 +1441,8 @@ value_objects:
         api_exposure: none
         ops_exposure: read
 enums:
+  SemanticDocumentMarkdownDialect:
+    values: [qwq-rich-md]
   SourceDerivedModification:
     values: [video_frame_extraction, crop, resize, format_conversion]
   SourceWatermarkKind:
@@ -1676,8 +1692,14 @@ types:
         type: string
         constraints:
           - NULLABLE
+      - name: semanticDocument
+        type: semantic_document
+        go_type_ref: semantic_document.DocumentEnvelope
+        go_import: quwoquan_service/services/content-service/generated/content/post/semantic_document
+        constraints: [NULLABLE]
       - name: markdownDialect
-        type: string
+        type: enum
+        enum_ref: SemanticDocumentMarkdownDialect
         constraints:
           - NULLABLE
       - name: articleAssetManifest
@@ -1775,11 +1797,17 @@ types:
         constraints:
           - NULLABLE
         client_dart_type: String?
+      - name: semanticDocument
+        type: semantic_document
+        go_type_ref: semantic_document.DocumentEnvelope
+        go_import: quwoquan_service/services/content-service/generated/content/post/semantic_document
+        constraints: [NULLABLE]
       - name: markdownDialect
-        type: string
+        type: enum
+        enum_ref: SemanticDocumentMarkdownDialect
         constraints:
           - NULLABLE
-        client_dart_type: String?
+        client_dart_type: SemanticDocumentMarkdownDialect?
       - name: articleAssetManifest
         type: PostArticleAssetManifestInput
         constraints:

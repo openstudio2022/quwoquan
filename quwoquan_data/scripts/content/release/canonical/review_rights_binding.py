@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from content.release.canonical.object_transaction_contract import (
@@ -13,6 +13,37 @@ from content.release.canonical.object_transaction_contract import (
     _read_json,
 )
 from core.schema import assert_valid
+
+
+def _safe_relative_ref(value: object, *, label: str) -> str:
+    raw = str(value or "")
+    path = PurePosixPath(raw)
+    if (not raw or path.is_absolute() or path.as_posix() != raw or "\\" in raw
+            or any(part in {"", ".", ".."} for part in path.parts)):
+        raise ObjectTransactionError(f"{label} is not a strict relative path")
+    return raw
+
+
+def _actor_key(actor: Mapping[str, Any]) -> tuple[str, str, str]:
+    invocation = actor.get("invocation") if isinstance(actor.get("invocation"), Mapping) else {}
+    return (str(actor.get("host") or "").strip(), str(actor.get("sessionId") or "").strip(),
+            str(invocation.get("runId") or "").strip())
+
+
+def _verify_candidate_bindings(content_review: Mapping[str, Any], *, candidate_root: Path) -> None:
+    bindings = content_review.get("candidateBindings")
+    if not isinstance(bindings, Mapping):
+        raise ObjectTransactionError("content_review candidateBindings missing")
+    for name in ("page", "manifest", "semanticDocument"):
+        binding = bindings.get(name)
+        if binding is None:
+            continue
+        if not isinstance(binding, Mapping):
+            raise ObjectTransactionError(f"content_review candidateBindings.{name} invalid")
+        ref = _safe_relative_ref(binding.get("ref"), label=f"candidateBindings.{name}.ref")
+        path = candidate_root / ref
+        if path.is_symlink() or not path.is_file() or _digest_file(path) != binding.get("digest"):
+            raise ObjectTransactionError(f"content_review candidate binding drift: {name}")
 
 
 def _normalized_object_ref(value: object) -> str:
@@ -82,6 +113,7 @@ def validate_content_review_document(
     object_aliases: Sequence[str] = (),
     source_assets: Mapping[str, Mapping[str, Any]] | None = None,
     require_approved: bool = False,
+    candidate_root: Path | None = None,
 ) -> None:
     """Recheck identity, exact asset coverage, and recorded source hard facts."""
 
@@ -96,6 +128,16 @@ def validate_content_review_document(
         raise ObjectTransactionError(str(exc)) from exc
     if str(content_review.get("executionId") or "") != execution_id:
         raise ObjectTransactionError("content_review execution binding drift")
+    _safe_relative_ref(content_review.get("objectRef"), label="content_review.objectRef")
+    author = content_review.get("author")
+    reviewer = content_review.get("reviewer")
+    if not isinstance(author, Mapping) or not isinstance(reviewer, Mapping):
+        raise ObjectTransactionError("content_review author/reviewer authority missing")
+    ah, ase, ar = _actor_key(author); rh, rse, rr = _actor_key(reviewer)
+    if (ah, ase) == (rh, rse) or not ar or not rr or ar == rr:
+        raise ObjectTransactionError("content_review reviewer-author conflict")
+    if candidate_root is not None:
+        _verify_candidate_bindings(content_review, candidate_root=candidate_root)
     if not any(
         _object_ref_matches(content_review.get("objectRef"), candidate)
         for candidate in (object_ref, *object_aliases)
@@ -161,6 +203,7 @@ def validate_review_authority(
         ),
         source_assets=source_assets,
         require_approved=require_approved,
+        candidate_root=review_root.parent,
     )
     review_scopes = {str(row.get("usageScope") or "") for row in content_review["assetRights"]}
     usage_scope = "commercial" if review_scopes == {"commercial"} else "research"

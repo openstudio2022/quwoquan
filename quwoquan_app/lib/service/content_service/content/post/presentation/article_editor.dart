@@ -508,7 +508,12 @@ class _ArticleEditorState extends State<ArticleEditor> {
     final node = widget.state.articleDocument.nodes
         .where((n) => n.id == focusedId)
         .firstOrNull;
-    if (node == null || node.isFigure || node.isDocumentTitle) return;
+    if (node == null ||
+        node.isFigure ||
+        node.isDocumentTitle ||
+        node.isReadOnly) {
+      return;
+    }
     final targetType = node.type == type
         ? ArticleDocumentNodeType.paragraph
         : type;

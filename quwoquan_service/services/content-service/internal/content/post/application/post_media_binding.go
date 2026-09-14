@@ -334,11 +334,8 @@ func projectArticleAssetManifest(
 	}
 	manifest := post.ArticleAssetManifest
 	manifest.Schema = "article-asset-manifest"
-	manifest.MarkdownVersion = "qwq-rich-md"
-	manifest.MarkdownDialect = defaultString(
-		strings.TrimSpace(post.MarkdownDialect),
-		"qwq-rich-md",
-	)
+	manifest.MarkdownVersion = strings.TrimSpace(manifest.MarkdownVersion)
+	manifest.MarkdownDialect = strings.TrimSpace(post.MarkdownDialect)
 	manifest.ArticleMarkdownDigest = strings.TrimSpace(post.ArticleMarkdownDigest)
 	manifest.Assets = rows
 	post.ArticleAssetManifest = manifest

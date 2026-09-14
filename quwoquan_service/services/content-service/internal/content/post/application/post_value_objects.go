@@ -1,11 +1,13 @@
 package post
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 )
 
 // DecodeSubmitPostPublicationContent turns the generated publication command
@@ -20,6 +22,12 @@ func DecodeSubmitPostPublicationContent(payload map[string]any) (postmodel.Post,
 	var content postmodel.Post
 	if err := json.Unmarshal(encoded, &content); err != nil {
 		return postmodel.Post{}, err
+	}
+	if raw, exists := payload["semanticDocument"]; exists {
+		content.SemanticDocument, err = decodeSemanticDocument(raw)
+		if err != nil {
+			return postmodel.Post{}, err
+		}
 	}
 	if raw, exists := payload["semanticMentions"]; exists {
 		content.SemanticMentions, err = decodePostSemanticMentions(raw)
@@ -46,6 +54,30 @@ func DecodeSubmitPostPublicationContent(payload map[string]any) (postmodel.Post,
 		}
 	}
 	return content, nil
+}
+
+func decodeSemanticDocument(raw any) (semantic.DocumentEnvelope, error) {
+	if raw == nil {
+		return semantic.DocumentEnvelope{}, nil
+	}
+	if typed, ok := raw.(semantic.DocumentEnvelope); ok {
+		return typed, nil
+	}
+	row, err := objectRow(raw, "semanticDocument")
+	if err != nil {
+		return semantic.DocumentEnvelope{}, err
+	}
+	encoded, err := json.Marshal(row)
+	if err != nil {
+		return semantic.DocumentEnvelope{}, err
+	}
+	var doc semantic.DocumentEnvelope
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&doc); err != nil {
+		return semantic.DocumentEnvelope{}, fmt.Errorf("semanticDocument: %w", err)
+	}
+	return doc, nil
 }
 
 func decodePostSemanticMentions(raw any) ([]postmodel.PostSemanticMention, error) {

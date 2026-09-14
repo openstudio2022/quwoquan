@@ -1,6 +1,5 @@
 import 'article_document_asset.dart';
 
-
 enum ArticleDocumentNodeType {
   documentTitle,
   headingMajor,
@@ -57,6 +56,10 @@ class ArticleDocumentNode {
     this.listDepth = 0,
     this.codeLanguage = '',
     this.spans = const <ArticleInlineSpan>[],
+    this.isReadOnly = false,
+    this.rawMarkdown = '',
+    this.semanticType = '',
+    this.headingLevel = 0,
   });
 
   factory ArticleDocumentNode.fromMap(Map<String, dynamic> map) {
@@ -98,6 +101,8 @@ class ArticleDocumentNode {
       listDepth: (map['listDepth'] as num?)?.toInt() ?? 0,
       codeLanguage: (map['codeLanguage'] ?? '').toString(),
       spans: spans,
+      // 普通 DTO 不承载可信只读来源；canonical markdown 必须重新经 codec 解析。
+      headingLevel: (map['headingLevel'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -105,6 +110,7 @@ class ArticleDocumentNode {
   final ArticleDocumentNodeType type;
   final String text;
   final String assetId;
+
   /// 交付访问模式（PostArticleAsset.accessMode，DEC-033）；空串为契约缺席。
   final String accessMode;
   final String imageUrl;
@@ -121,6 +127,10 @@ class ArticleDocumentNode {
   /// 仅 [ArticleDocumentNodeType.codeBlock] 使用的语言标注（可为空）。
   final String codeLanguage;
   final List<ArticleInlineSpan> spans;
+  final bool isReadOnly;
+  final String rawMarkdown;
+  final String semanticType;
+  final int headingLevel;
 
   bool get hasText => text.trim().isNotEmpty;
   bool get hasImage => imageUrl.trim().isNotEmpty;
@@ -157,6 +167,10 @@ class ArticleDocumentNode {
     int? listDepth,
     String? codeLanguage,
     List<ArticleInlineSpan>? spans,
+    bool? isReadOnly,
+    String? rawMarkdown,
+    String? semanticType,
+    int? headingLevel,
   }) {
     return ArticleDocumentNode(
       id: id ?? this.id,
@@ -173,6 +187,10 @@ class ArticleDocumentNode {
       listDepth: listDepth ?? this.listDepth,
       codeLanguage: codeLanguage ?? this.codeLanguage,
       spans: spans ?? this.spans,
+      isReadOnly: isReadOnly ?? this.isReadOnly,
+      rawMarkdown: rawMarkdown ?? this.rawMarkdown,
+      semanticType: semanticType ?? this.semanticType,
+      headingLevel: headingLevel ?? this.headingLevel,
     );
   }
 
@@ -193,6 +211,8 @@ class ArticleDocumentNode {
       if (codeLanguage.trim().isNotEmpty) 'codeLanguage': codeLanguage,
       if (spans.isNotEmpty)
         'spans': spans.map((span) => span.toMap()).toList(growable: false),
+      // isReadOnly/rawMarkdown/semanticType 是仅进程内展示态，不进入普通 DTO。
+      if (headingLevel > 0) 'headingLevel': headingLevel,
     };
   }
 }
@@ -532,6 +552,7 @@ class ArticleDocumentBlock {
 
   /// figure 节点绑定的 manifest 资产身份；非图片块保持空字符串。
   final String assetId;
+
   /// 交付访问模式（PostArticleAsset.accessMode，DEC-033）；空串为契约缺席。
   final String accessMode;
   final String imageUrl;
@@ -581,6 +602,7 @@ class ArticleDocumentData {
     this.fontPreset = 'clean',
     this.coverImageUrl = '',
     this.titleStyle = ArticleDocumentTitleStyle.major,
+    this.markdownOriginAuthority,
   }) : nodes = _normalizeDocumentNodes(nodes);
 
   /// 从 canonical nodes JSON 构造。
@@ -612,8 +634,20 @@ class ArticleDocumentData {
       orElse: () => ArticleDocumentTitleStyle.major,
     );
 
+    final rawNodes = (map['nodes'] as List?) ?? const <Object?>[];
+    final carriesUntrustedOrigin =
+        map['requiresCanonicalMarkdownReparse'] == true ||
+        rawNodes.whereType<Map>().any(
+          (entry) =>
+              entry.containsKey('isReadOnly') ||
+              entry.containsKey('rawMarkdown') ||
+              entry.containsKey('semanticType') ||
+              entry.containsKey('originFingerprint') ||
+              entry.containsKey('originOrdinal'),
+        );
     return ArticleDocumentData(
       nodes: nodeEntries,
+      markdownOriginAuthority: carriesUntrustedOrigin ? Object() : null,
       template: template,
       fontPreset: fontPreset,
       coverImageUrl: coverImageUrl,
@@ -626,6 +660,10 @@ class ArticleDocumentData {
   final String fontPreset;
   final String coverImageUrl;
   final ArticleDocumentTitleStyle titleStyle;
+
+  /// 仅 ArticleMarkdownCodec 生成的 opaque authority。普通 DTO 不接收或输出；
+  /// serializer 仅信任其私有运行时类型，外部 Object 无法伪造。
+  final Object? markdownOriginAuthority;
 
   /// 从 [nodes] 自动投影的只读属性。不要用这些值反向驱动编辑。
   late final _ArticleDocumentProjection _projection = _projectArticleDocument(
@@ -673,6 +711,7 @@ class ArticleDocumentData {
       fontPreset: fontPreset ?? this.fontPreset,
       coverImageUrl: coverImageUrl ?? this.coverImageUrl,
       titleStyle: titleStyle ?? this.titleStyle,
+      markdownOriginAuthority: markdownOriginAuthority,
     );
   }
 
@@ -683,6 +722,8 @@ class ArticleDocumentData {
       'fontPreset': fontPreset,
       'coverImageUrl': coverImageUrl,
       'titleStyle': titleStyle.name,
+      if (markdownOriginAuthority != null)
+        'requiresCanonicalMarkdownReparse': true,
     };
   }
 }

@@ -37,6 +37,7 @@ export 'src/content/post_reader_queries.dart';
 export 'src/content/report_commands.dart';
 export 'src/content/report_queries.dart';
 export 'src/entity/entity_operation_contracts.g.dart';
+export 'src/entity/semantic_document.g.dart';
 export 'src/generated/operation_contracts.g.dart';
 export 'src/generated/recommendation/intersection_feedback_contracts.g.dart';
 export 'src/generated/recommendation/intersection_contract_vocabulary.g.dart';

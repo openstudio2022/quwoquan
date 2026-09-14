@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/content/semantic_disposition.schema.json",
+  "title": "Canonical semantic disposition and human decision contract",
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "protocolTriplet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "dialectVersion",
+        "canonicalizationVersion"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "#/$defs/semver"
+        },
+        "dialectVersion": {
+          "$ref": "#/$defs/semver"
+        },
+        "canonicalizationVersion": {
+          "$ref": "#/$defs/semver"
+        }
+      }
+    },
+    "objectTuple": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contentRevision",
+        "sourceRevision",
+        "layoutRevision"
+      ],
+      "properties": {
+        "contentRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sourceRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "layoutRevision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actorId",
+        "actorType"
+      ],
+      "properties": {
+        "actorId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "actorType": {
+          "enum": [
+            "producer",
+            "independent_reviewer",
+            "human_operator",
+            "system_gate"
+          ]
+        }
+      }
+    },
+    "sourceAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "origin",
+        "start",
+        "end",
+        "selector"
+      ],
+      "properties": {
+        "origin": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "selector": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issueId",
+        "objectRef",
+        "sourceDigest",
+        "targetDigest",
+        "detectedType",
+        "proposedMapping",
+        "lossFields",
+        "severity",
+        "actor",
+        "reason",
+        "policyVersion",
+        "reviewStatus",
+        "outcome",
+        "processingDisposition",
+        "protocol",
+        "objectRevision"
+      ],
+      "properties": {
+        "issueId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "objectRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nodeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceAnchor": {
+          "$ref": "#/$defs/sourceAnchor"
+        },
+        "sourceDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "targetDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "detectedType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proposedMapping": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lossFields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error",
+            "critical"
+          ]
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policyVersion": {
+          "$ref": "#/$defs/semver"
+        },
+        "reviewStatus": {
+          "enum": [
+            "not_reviewed",
+            "reviewed_confirmed",
+            "reviewed_rejected",
+            "human_decision_pending",
+            "human_decision_recorded"
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "auto_continue",
+            "requires_human_decision",
+            "definitive_reject"
+          ]
+        },
+        "processingDisposition": {
+          "enum": [
+            "preserved",
+            "normalized",
+            "degraded",
+            "metadata_only",
+            "dropped_noise",
+            "unsupported_opaque",
+            "blocked_unsafe"
+          ]
+        },
+        "protocol": {
+          "$ref": "#/$defs/protocolTriplet"
+        },
+        "objectRevision": {
+          "$ref": "#/$defs/objectTuple"
+        }
+      }
+    },
+    "humanDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "decisionId",
+        "issueId",
+        "inputDigest",
+        "decision",
+        "actor",
+        "reason",
+        "inputProtocol",
+        "inputObjectRevision",
+        "resultObjectRevision"
+      ],
+      "properties": {
+        "schema": {
+          "const": "quwoquan_data.semantic_human_decision"
+        },
+        "decisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "issueId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inputDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "decision": {
+          "enum": [
+            "revise_content",
+            "replace_or_upgrade_source_revision",
+            "select_governed_layout_revision",
+            "abandon_object"
+          ]
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inputProtocol": {
+          "$ref": "#/$defs/protocolTriplet"
+        },
+        "inputObjectRevision": {
+          "$ref": "#/$defs/objectTuple"
+        },
+        "resultProtocol": {
+          "$ref": "#/$defs/protocolTriplet"
+        },
+        "resultObjectRevision": {
+          "$ref": "#/$defs/objectTuple"
+        }
+      }
+    }
+  },
+  "$ref": "#/$defs/disposition"
+}

@@ -4,6 +4,7 @@ package post_test
 import (
 	"context"
 	. "quwoquan_service/services/content-service/internal/content/post/application"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	contentgenerated "quwoquan_service/services/content-service/generated/media/media_asset"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
+	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
 func TestSubmitPostPublicationReplayReturnsOriginalPost(t *testing.T) {
@@ -379,4 +381,29 @@ func (r *publicationMediaReader) MaterializePublicSlices(
 ) error {
 	r.materializeCalls++
 	return nil
+}
+
+func TestSubmitArticlePublicationRequiresExplicitMarkdownDialect(t *testing.T) {
+	service := NewPostService(BindDataPorts(testsupport.NewPostStore(nil)), WithPublicationAdmission(testsupport.AllowPublicationRateGate{}, testsupport.FixedPublicationSafetyGate{}))
+	command := testPublicationCommand("intent-article-dialect", "draft-article-dialect")
+	command.Content.ContentType = "article"
+	command.Content.ArticleMarkdown = "# 标题\n\n正文"
+	command.Content.SemanticDocument = semanticfixture.Envelope(t)
+	command.Content.MarkdownDialect = ""
+	_, err := service.SubmitPostPublication(commandmeta.WithIdempotencyKey(context.Background(), command.PublishIntentID), command)
+	if err == nil || !strings.Contains(err.Error(), "markdownDialect is required") {
+		t.Fatalf("missing dialect must fail closed with typed invalid argument: %v", err)
+	}
+}
+
+func TestSubmitArticlePublicationBlocksUntilSemanticWireExists(t *testing.T) {
+	service := NewPostService(BindDataPorts(testsupport.NewPostStore(nil)), WithPublicationAdmission(testsupport.AllowPublicationRateGate{}, testsupport.FixedPublicationSafetyGate{}))
+	command := testPublicationCommand("intent-article-timeline", "draft-article-timeline")
+	command.Content.ContentType = "article"
+	command.Content.ArticleMarkdown = "# 标题\n\n:::timeline\n- 08:00 出发\n:::"
+	command.Content.MarkdownDialect = "qwq-rich-md"
+	_, err := service.SubmitPostPublication(commandmeta.WithIdempotencyKey(context.Background(), command.PublishIntentID), command)
+	if err == nil || !strings.Contains(err.Error(), "semantic envelope or reference is required") {
+		t.Fatalf("legacy-only article must block publication: %v", err)
+	}
 }

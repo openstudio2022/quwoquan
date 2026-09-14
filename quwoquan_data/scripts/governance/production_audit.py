@@ -166,7 +166,19 @@ def handle_quality(args) -> None:
         raise SystemExit(1)
 
 
+def handle_fidelity(args) -> None:
+    from governance.content_fidelity_audit import handle
+
+    handle(args)
+
+
 def register_audit_parser(subparsers) -> None:
+    fidelity = subparsers.add_parser("content-fidelity-audit", help="只读全池 fidelity 扫描与 content-addressed baseline")
+    fidelity.add_argument("--publish-root", required=True, help="只读 canonical publish root")
+    fidelity.add_argument("--output-root", required=True, help="create-once baseline 输出根")
+    fidelity.add_argument("--max-objects", type=int, required=True, help="对象数硬上限，保证有界内存")
+    fidelity.add_argument("--max-file-bytes", type=int, required=True, help="单个 manifest/source/evidence/body 读取上限")
+    fidelity.set_defaults(handler=handle_fidelity)
     quality = subparsers.add_parser("production-audit", help="只读核对显式 executions 的三集合与六维评分")
     quality.add_argument("--execution", action="append", required=True)
     quality.add_argument("--pool-snapshot", required=True)

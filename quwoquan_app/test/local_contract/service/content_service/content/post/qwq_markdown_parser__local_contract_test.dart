@@ -33,11 +33,26 @@ source_urls:
       expect(result.isValid, isTrue);
       final document = result.document;
       expect(document.frontMatter.title, '西湖半日城市漫游');
-      expect(document.frontMatter.entityRefs, contains('trees/entities/地点/西湖.yaml'));
-      expect(document.blocks.map((block) => block.kind), contains(QwqMarkdownBlockKind.heading));
-      expect(document.blocks.map((block) => block.kind), contains(QwqMarkdownBlockKind.orderedItem));
-      expect(document.blocks.map((block) => block.kind), contains(QwqMarkdownBlockKind.bulletItem));
-      expect(document.blocks.map((block) => block.kind), contains(QwqMarkdownBlockKind.quote));
+      expect(
+        document.frontMatter.entityRefs,
+        contains('trees/entities/地点/西湖.yaml'),
+      );
+      expect(
+        document.blocks.map((block) => block.kind),
+        contains(QwqMarkdownBlockKind.heading),
+      );
+      expect(
+        document.blocks.map((block) => block.kind),
+        contains(QwqMarkdownBlockKind.orderedItem),
+      );
+      expect(
+        document.blocks.map((block) => block.kind),
+        contains(QwqMarkdownBlockKind.bulletItem),
+      );
+      expect(
+        document.blocks.map((block) => block.kind),
+        contains(QwqMarkdownBlockKind.quote),
+      );
       expect(document.referencedAssetIds, contains('cover'));
     });
 
@@ -68,6 +83,98 @@ asset://cover
         'street',
         'tea',
       ]);
+    });
+
+    test('H1-H6 与 inline 由单一 parser 解析', () {
+      final result = parser.parse('''
+---
+markdownDialect: qwq-rich-md
+---
+# H1
+###### H6
+
+**粗体** *斜体* `代码` ++下划线++ ~~删除~~ @[西湖](entity:sight:west_lake) [官网](https://example.com)
+''');
+      expect(result.isValid, isTrue);
+      expect(
+        result.document.blocks
+            .where((block) => block.kind == QwqMarkdownBlockKind.heading)
+            .map((block) => block.level),
+        <int>[1, 6],
+      );
+      expect(
+        result.document.blocks.last.inlines.map((inline) => inline.kind),
+        containsAll(<QwqMarkdownInlineKind>[
+          QwqMarkdownInlineKind.bold,
+          QwqMarkdownInlineKind.italic,
+          QwqMarkdownInlineKind.code,
+          QwqMarkdownInlineKind.underline,
+          QwqMarkdownInlineKind.strikethrough,
+          QwqMarkdownInlineKind.mention,
+          QwqMarkdownInlineKind.link,
+        ]),
+      );
+    });
+
+    test('raw HTML 与未闭合 code fence blocking', () {
+      final html = parser.parse('''
+---
+markdownDialect: qwq-rich-md
+---
+正文 <span>bad</span> 尾部
+''');
+      expect(
+        html.document.diagnostics.map((item) => item.code),
+        contains('html_not_allowed'),
+      );
+      final fence = parser.parse('''
+---
+markdownDialect: qwq-rich-md
+---
+```dart
+void main() {}
+''');
+      expect(
+        fence.document.diagnostics.map((item) => item.code),
+        contains('code_fence_unclosed'),
+      );
+    });
+
+    test('typed AST 支持 table directory definition footnote', () {
+      final result = parser.parse('''
+---
+markdownDialect: qwq-rich-md
+---
+| 名称 | 地址 |
+| --- | ---: |
+| 西湖 | 杭州 |
+
+:::groupedDirectory
+## 景点
+- 西湖
+:::
+
+术语
+: 定义内容
+
+[^source]: 来源说明
+''');
+      final table = result.document.blocks.firstWhere(
+        (block) => block.kind == QwqMarkdownBlockKind.table,
+      );
+      expect(table.table!.logicalGrid, <List<String>>[
+        <String>['名称', '地址'],
+        <String>['西湖', '杭州'],
+      ]);
+      expect(
+        result.document.blocks.map((block) => block.kind),
+        containsAll(<QwqMarkdownBlockKind>[
+          QwqMarkdownBlockKind.groupedDirectory,
+          QwqMarkdownBlockKind.definitionList,
+          QwqMarkdownBlockKind.footnote,
+        ]),
+      );
+      expect(result.document.isReadOnly, isTrue);
     });
 
     test('拒绝任意 HTML 和未知富布局指令', () {

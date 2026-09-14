@@ -177,3 +177,17 @@ func TestIntakeHomepageCandidatePersistsIntroductionProjection(t *testing.T) {
 		t.Fatalf("intaken page markdown must project body sections, got %+v", introduction.Sections)
 	}
 }
+
+func TestBuildIntroductionDoesNotUpgradeLegacyMarkdownToCanonical(t *testing.T) {
+	service := newEmptyHomepageService()
+	homepage := intakeThreeSegmentHomepage(t, service)
+	introduction, err := service.GetHomepageIntroduction(t.Context(), homepage.ID)
+	if err != nil {
+		t.Fatalf("introduction failed: %v", err)
+	}
+	for _, section := range introduction.Sections {
+		if section.SemanticDocument != nil {
+			t.Fatalf("legacy markdown must not be implicitly upgraded: %+v", section.SemanticDocument)
+		}
+	}
+}

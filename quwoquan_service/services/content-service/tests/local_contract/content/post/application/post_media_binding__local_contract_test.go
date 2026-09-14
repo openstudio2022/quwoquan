@@ -136,7 +136,8 @@ func TestProjectBoundMediaAssetsRebuildsArticleManifestFromPublicSlices(
 	t *testing.T,
 ) {
 	post := &postmodel.Post{
-		ContentType: "article",
+		ContentType:     "article",
+		MarkdownDialect: "qwq-rich-md",
 		ArticleAssetManifest: postmodel.PostArticleAssetManifest{
 			Assets: []postmodel.PostArticleAsset{
 				{AssetId: "mas_article_cover", Role: "cover"},
@@ -182,5 +183,16 @@ func TestProjectBoundMediaAssetsRebuildsArticleManifestFromPublicSlices(
 	}
 	if rows[1].Layout != "wrapLeft" || rows[1].Caption != "配图" {
 		t.Fatalf("article presentation metadata was lost: %#v", rows[1])
+	}
+}
+
+func TestProjectBoundMediaAssetsDoesNotInventArticleDialectOrVersion(t *testing.T) {
+	post := &postmodel.Post{ContentType: "article", ArticleAssetManifest: postmodel.PostArticleAssetManifest{Assets: []postmodel.PostArticleAsset{{AssetId: "asset", Role: "figure"}}}}
+	err := ProjectBoundMediaAssets(post, map[string]MediaAssetBindingSlice{"asset": {AssetID: "asset", Ready: true, MediaType: "image", PublicSliceKey: "public/asset.webp"}}, []string{"asset"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if post.ArticleAssetManifest.MarkdownDialect != "" || post.ArticleAssetManifest.MarkdownVersion != "" {
+		t.Fatalf("projection invented semantic identity: %+v", post.ArticleAssetManifest)
 	}
 }

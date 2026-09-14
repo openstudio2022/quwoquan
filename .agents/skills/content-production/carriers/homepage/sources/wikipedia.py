@@ -1,6 +1,10 @@
-"""主页百科正文与结构化原文。"""
+"""主页百科 exact-revision 双证据与结构化语义原文。"""
 import inputs
 
 client = inputs.module(inputs.SKILL / "scripts/clients/mediawiki.py", "producer_mediawiki")
-fetch = client.wiki_fetch
-parse = client.wiki_parse
+
+def fetch(request, transport):
+    return client.wiki_fetch(request, transport)
+
+def parse(body, request):
+    return client.wiki_parse(body, {**request, "sourceKind": "home_wikipedia"})

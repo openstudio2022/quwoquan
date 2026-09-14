@@ -82,6 +82,12 @@ mixin _CreateEditorDocumentOperations on Notifier<CreateEditorState> {
     );
   }
 
+  /// 加载已有 canonical 文档；只读节点的 mutation fence 由 node 操作统一执行。
+  void loadArticleDocument(ArticleDocumentData document) {
+    _clearUndoRedo();
+    _applyArticleDocument(document, recordUndoPoint: false);
+  }
+
   /// 仅重算分页，不写撤销栈；由编辑器 LayoutBuilder 在宽度/可视高度变化时调用。
   void reportArticlePaginationLayout({
     required double stageWidth,
@@ -286,6 +292,7 @@ mixin _CreateEditorDocumentOperations on Notifier<CreateEditorState> {
       fontPreset: document.fontPreset,
       coverImageUrl: normalizedCoverImagePath,
       titleStyle: document.titleStyle,
+      markdownOriginAuthority: document.markdownOriginAuthority,
     );
     final imagePaths = extractArticleImagePathsFromDocument(normalizedDocument);
     final pages = buildArticlePagesSnapshotFromDocument(

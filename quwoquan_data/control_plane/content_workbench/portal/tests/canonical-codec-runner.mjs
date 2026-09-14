@@ -1,0 +1,1 @@
+import {readFile} from 'node:fs/promises';import {serializeEnvelope,safeProjection} from '../.test-dist/shared/canonicalSemanticMarkdown.js';const e=JSON.parse(await readFile(process.argv[2],'utf8'));process.stdout.write(process.argv[3]==='safe'?safeProjection(e):serializeEnvelope(e));

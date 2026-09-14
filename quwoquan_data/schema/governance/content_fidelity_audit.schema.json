@@ -1,0 +1,309 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/governance/content_fidelity_audit.schema.json",
+  "title": "Content-addressed canonical pool fidelity audit manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "purpose",
+    "reviewDisclaimer",
+    "baselineDigest",
+    "scanPolicy",
+    "manifestInventory",
+    "reviewScope",
+    "counts",
+    "metrics",
+    "riskLayers",
+    "duplicates",
+    "mechanicalFindings",
+    "semanticReviewQueue",
+    "issues",
+    "objects"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.content_fidelity_audit.v2"
+    },
+    "purpose": {
+      "const": "offline_read_only_mechanical_baseline"
+    },
+    "baselineDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "scanPolicy": {
+      "type": "object"
+    },
+    "manifestInventory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref", "sha256", "bytes"],
+        "properties": {
+          "ref": {"type": "string"},
+          "sha256": {"$ref": "#/$defs/digest"},
+          "bytes": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "reviewScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["grokArticleRefs", "highRiskHomepageRefs", "strata"],
+      "properties": {
+        "grokArticleRefs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "highRiskHomepageRefs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "strata": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "counts": {
+      "type": "object"
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ratio"
+      }
+    },
+    "riskLayers": {
+      "type": "object",
+      "required": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "duplicates": {
+      "type": "object",
+      "required": [
+        "snapshotOrExcerpt",
+        "homepageArticleSameEntity"
+      ]
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/object"
+      }
+    },
+    "reviewDisclaimer": {
+      "const": "scanner_generated_queue_only_semantic_review_not_completed"
+    },
+    "mechanicalFindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "semanticReviewQueue": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reviewQueueItem"
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "ratio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "numerator",
+        "denominator",
+        "rate"
+      ],
+      "properties": {
+        "numerator": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "denominator": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "objectRef",
+        "detail",
+        "facts"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "carrier_mismatch",
+            "source_incomplete",
+            "semantic_fidelity_loss",
+            "table_or_reference_loss",
+            "media_loss",
+            "article_no_independent_intent",
+            "review_false_positive",
+            "rights_gap"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "objectRef": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "facts": {
+          "type": "object"
+        }
+      }
+    },
+    "object": {
+      "type": "object",
+      "required": [
+        "objectRef",
+        "carrier",
+        "identity",
+        "digests",
+        "sources",
+        "coverage",
+        "compression",
+        "format",
+        "generation",
+        "reviewGate",
+        "intentEvidence",
+        "features",
+        "issueCodes"
+      ],
+      "properties": {
+        "objectRef": {
+          "type": "string"
+        },
+        "carrier": {
+          "enum": [
+            "homepage",
+            "article",
+            "image",
+            "video"
+          ]
+        },
+        "identity": {
+          "type": "object"
+        },
+        "digests": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/digest"
+          },
+          "required": [
+            "object",
+            "version",
+            "payload",
+            "source",
+            "review"
+          ]
+        },
+        "sources": {
+          "type": "array"
+        },
+        "coverage": {
+          "type": "object"
+        },
+        "compression": {
+          "type": "object"
+        },
+        "format": {
+          "type": "object"
+        },
+        "generation": {
+          "type": "object"
+        },
+        "reviewGate": {
+          "type": "object"
+        },
+        "features": {
+          "type": "object"
+        },
+        "issueCodes": {
+          "type": "array"
+        },
+        "intentEvidence": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "objectRef",
+        "facts"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "objectRef": {
+          "type": "string"
+        },
+        "facts": {
+          "type": "object"
+        }
+      }
+    },
+    "reviewQueueItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reasons",
+        "objectRef",
+        "status",
+        "signals"
+      ],
+      "properties": {
+        "reasons": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "objectRef": {
+          "type": "string"
+        },
+        "status": {
+          "const": "semantic_review_required"
+        },
+        "signals": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

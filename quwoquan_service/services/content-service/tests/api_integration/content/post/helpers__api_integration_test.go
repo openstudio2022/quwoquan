@@ -11,6 +11,7 @@ import (
 
 	runtimemedia "quwoquan_service/runtime/media"
 	"quwoquan_service/services/content-service/internal/content/post/application/identity"
+	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
 var helperRequestSequence atomic.Uint64
@@ -139,6 +140,9 @@ func completePublicationFixturePrerequisites(
 				"fontPreset": "clean",
 			}
 		}
+	}
+	if contentType == "article" {
+		body["semanticDocument"] = semanticfixture.Map(t)
 	}
 	if (contentType == "image" || contentType == "video") &&
 		len(asTestStringSlice(body["mediaAssetIds"])) == 0 {

@@ -53,6 +53,7 @@ import (
 	reporthttp "quwoquan_service/services/content-service/internal/trust_safety/report/adapters/inbound/http"
 	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
 	feedsupport "quwoquan_service/services/content-service/tests/support"
+	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
 type localAuthorImpactReader struct{}
@@ -956,11 +957,24 @@ func TestSubmitPostPublicationHonorsNonProductionMediaNotReadyInjection(t *testi
 	}
 }
 
+func validSemanticArticleRequest(t *testing.T, intentID, draftID string, extra map[string]any) []byte {
+	t.Helper()
+	payload := map[string]any{"publishIntentId": intentID, "localDraftId": draftID, "contentType": "article", "articleMarkdown": "# test\n\nbody", "markdownDialect": "qwq-rich-md", "semanticDocument": semanticfixture.Map(t), "articleAssetManifest": map[string]any{"assets": []any{}}}
+	for key, value := range extra {
+		payload[key] = value
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
+}
+
 func TestSubmitPostPublicationBodyBindingAcceptsRequestEntityFields(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
 		"/content/posts:publish",
-		bytes.NewBufferString(`{"publishIntentId":"intent-create","localDraftId":"draft-create","contentType":"article","articleMarkdown":"# 测试文章\n\nb","markdownDialect":"qwq-rich-md","articleAssetManifest":{"assets":[]}}`),
+		bytes.NewBuffer(validSemanticArticleRequest(t, "intent-create", "draft-create", nil)),
 	)
 	setActorHeaders(req, "owner_test_create", "sub_test_create")
 	req.Header.Set("Idempotency-Key", "intent-create")
@@ -1121,7 +1135,7 @@ func TestSubmitPostPublicationWithLocationField(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
 		"/content/posts:publish",
-		bytes.NewBufferString(`{"publishIntentId":"intent-location","localDraftId":"draft-location","contentType":"article","location":{"latitude":39.9,"longitude":116.4},"locationName":"Beijing","articleMarkdown":"# loc test\n\nb","markdownDialect":"qwq-rich-md","articleAssetManifest":{"assets":[]}}`),
+		bytes.NewBuffer(validSemanticArticleRequest(t, "intent-location", "draft-location", map[string]any{"location": map[string]any{"latitude": 39.9, "longitude": 116.4}, "locationName": "Beijing"})),
 	)
 	setActorHeaders(req, "owner_test_location", "sub_test_location")
 	req.Header.Set("Idempotency-Key", "intent-location")
@@ -1205,7 +1219,7 @@ func TestDeletePostAndTombstoneLookup(t *testing.T) {
 	createReq := httptest.NewRequest(
 		"POST",
 		"/content/posts:publish",
-		bytes.NewBufferString(`{"publishIntentId":"intent-delete","localDraftId":"draft-delete","contentType":"article","articleMarkdown":"# to delete\n\nb","markdownDialect":"qwq-rich-md","articleAssetManifest":{"assets":[]}}`),
+		bytes.NewBuffer(validSemanticArticleRequest(t, "intent-delete", "draft-delete", nil)),
 	)
 	setActorHeaders(createReq, "u_delete", "u_delete")
 	createReq.Header.Set("Idempotency-Key", "intent-delete")

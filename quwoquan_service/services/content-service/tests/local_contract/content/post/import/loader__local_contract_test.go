@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
+
 	runtimemedia "quwoquan_service/runtime/media"
 	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
 )
@@ -22,6 +24,7 @@ func writeFile(t *testing.T, path, content string) {
 		// pool fields. Negative tests write bytes directly and bypass this helper.
 		prefix := `{"contentId":"fixture-` + fmt.Sprintf("%x", len(path)) + `","version":1,"sourceType":"data","variantPurpose":"original","admission":{"processResult":"completed","qualityResult":"passed","usageScope":"production","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:` + strings.Repeat("a", 64) + `"},"status":"active","contentIdentity":"work",`
 		content = strings.Replace(content, "{", prefix, 1)
+		content = semanticfixture.AddToManifestJSON(t, content)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -57,7 +60,7 @@ func TestLoadPostsRejectsMissingContentIdentity(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(`{
+	if err := os.WriteFile(path, []byte(semanticfixture.AddToManifestJSON(t, `{
 		"contentId":"missing-identity",
 		"version":1,
 		"sourceType":"data",
@@ -71,7 +74,7 @@ func TestLoadPostsRejectsMissingContentIdentity(t *testing.T) {
 		"publishAngle":"攻略",
 		"publishSeq":1,
 		"publishedAt":"2026-07-30T00:00:00Z"
-	}`), 0o644); err != nil {
+	}`)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

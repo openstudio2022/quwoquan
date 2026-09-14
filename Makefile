@@ -143,6 +143,7 @@
 .PHONY: codegen-ops-portal
 .PHONY: codegen-control-plane-runtime
 .PHONY: verify-hosted-human-authority test-hosted-authority-adapter-local-contract test-hosted-integration-ruleset-local-contract test-hosted-human-authority-local-contract test-hosted-human-authority-api-integration test-ops-portal build-ops-portal gate-ops-portal
+.PHONY: content-workbench
 .PHONY: codegen-content-service
 .PHONY: codegen-chat-service
 .PHONY: new-service
@@ -710,6 +711,71 @@ build-ops-portal:
 	trap cleanup_portal_build EXIT; \
 	QWQ_DEPLOY_WORK_ROOT="$$portal_build_root" QWQ_DEPLOY_TARGET=prod-hosted \
 		npm --prefix quwoquan_ops/portal run build
+
+# 本地内容池工作台一键入口：安装锁定前端依赖、构建静态资源并以独立持久目录启动 loopback 服务。
+# canonical publish 根只读；人工复核与离线候选只写入用户本地 Data 工作根。
+content-workbench:
+	@set -eu; \
+	publish_root="$(abspath $(REPO_ROOT)/../publish)"; \
+	workbench_root="$${HOME}/.local/share/quwoquan/content-workbench"; \
+	staging_root="$${HOME}/.local/share/quwoquan/content-workbench-staging"; \
+	run_phase() { \
+		phase_name="$$1"; shift; \
+		phase_started_at="$$(date +%s)"; \
+		echo "[content-workbench] START phase=$$phase_name"; \
+		if "$$@"; then \
+			echo "[content-workbench] DONE phase=$$phase_name durationSeconds=$$(( $$(date +%s) - phase_started_at ))"; \
+		else \
+			phase_status="$$?"; \
+			echo "[content-workbench] GATE_BLOCK phase=$$phase_name status=$$phase_status durationSeconds=$$(( $$(date +%s) - phase_started_at ))" >&2; \
+			return "$$phase_status"; \
+		fi; \
+	}; \
+	test -f "$$publish_root/repository.json" || { echo "GATE_BLOCK: canonical publish repository missing: $$publish_root" >&2; exit 2; }; \
+	mkdir -p "$$workbench_root" "$$staging_root"; \
+	run_phase frontend-install npm --prefix quwoquan_data/control_plane/content_workbench/portal ci --ignore-scripts; \
+	run_phase frontend-build npm --prefix quwoquan_data/control_plane/content_workbench/portal run build; \
+	runtime_dir="$$(mktemp -d "$${TMPDIR:-/tmp}/qwq-content-workbench.XXXXXX")"; \
+	service_fifo="$$runtime_dir/service.stdout"; \
+	mkfifo "$$service_fifo"; \
+	service_pid=''; \
+	cleanup_service() { \
+		status="$$?"; \
+		trap - EXIT HUP INT TERM; \
+		if [ -n "$$service_pid" ]; then kill "$$service_pid" 2>/dev/null || true; wait "$$service_pid" 2>/dev/null || true; fi; \
+		rm -rf "$$runtime_dir"; \
+		exit "$$status"; \
+	}; \
+	trap cleanup_service EXIT HUP INT TERM; \
+	phase_started_at="$$(date +%s)"; \
+	echo "[content-workbench] START phase=backend-start-warmup"; \
+	env QWQ_PUBLISH_ROOT="$$publish_root" \
+		QWQ_CONTENT_WORKBENCH_ROOT="$$workbench_root" \
+		QWQ_CONTENT_WORKBENCH_STAGING_ROOT="$$staging_root" \
+		$(DATA_PYTHON) -B quwoquan_data/scripts/cli.py governance content-workbench serve \
+			--static-root quwoquan_data/control_plane/content_workbench/portal/dist --host 127.0.0.1 --port 4319 >"$$service_fifo" & \
+	service_pid="$$!"; \
+	url_seen=0; \
+	while IFS= read -r service_line; do \
+		if [ "$$url_seen" -eq 0 ]; then \
+			case "$$service_line" in \
+				*'"url"'*) \
+					echo "[content-workbench] DONE phase=backend-start-warmup durationSeconds=$$(( $$(date +%s) - phase_started_at ))"; \
+					url_seen=1 \
+					;; \
+			esac; \
+		fi; \
+		printf '%s\n' "$$service_line"; \
+	done <"$$service_fifo"; \
+	set +e; wait "$$service_pid"; service_status="$$?"; set -e; service_pid=''; \
+	if [ "$$service_status" -ne 0 ]; then \
+		echo "[content-workbench] GATE_BLOCK phase=backend-serve status=$$service_status" >&2; \
+		exit "$$service_status"; \
+	fi; \
+	if [ "$$url_seen" -eq 0 ]; then \
+		echo "[content-workbench] GATE_BLOCK phase=backend-start-warmup reason=url-not-emitted" >&2; \
+		exit 2; \
+	fi
 
 gate-ops-portal:
 	@bash quwoquan_ops/gate/gate_repo.sh --scope portal

@@ -1,13 +1,15 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 8bc420c9a9344d65edb779c4bcb10f4945d9fa42c7325ac903755ce4b2915dea
+// ContractGraph SHA256: 493dc4d68d70ef1b4b1dcc34bfa39f2facc3891ca600d9263d68724d1ba1ba02
 
 library;
 
 import '../operation_request_payload.dart';
+import "../entity/semantic_document.g.dart";
 import "../generated/recommendation/intersection_contract_vocabulary.g.dart";
 import "../generated/shared_operation_enums.g.dart";
 import "../recommendation/recommendation_operation_contracts.g.dart";
 
+export "../entity/semantic_document.g.dart";
 export "../generated/recommendation/intersection_contract_vocabulary.g.dart";
 export "../generated/shared_operation_enums.g.dart";
 export "../recommendation/recommendation_operation_contracts.g.dart";
@@ -528,6 +530,21 @@ enum ReportTargetType {
       "circle" => ReportTargetType.circle,
       "gathering" => ReportTargetType.gathering,
       "message" => ReportTargetType.message,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum SemanticDocumentMarkdownDialect {
+  qwqRichMd("qwq-rich-md");
+
+  const SemanticDocumentMarkdownDialect(this.wireName);
+
+  final String wireName;
+
+  static SemanticDocumentMarkdownDialect fromWire(Object? value, String path) {
+    return switch (value) {
+      "qwq-rich-md" => SemanticDocumentMarkdownDialect.qwqRichMd,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -5112,7 +5129,7 @@ final class PostArticleAssetManifest {
 
   final String schema;
   final String? markdownVersion;
-  final String? markdownDialect;
+  final SemanticDocumentMarkdownDialect? markdownDialect;
   final String articleMarkdownDigest;
   final String documentSha256;
   final String assetManifestSha256;
@@ -5140,7 +5157,10 @@ final class PostArticleAssetManifest {
           : _requiredString(map["markdownVersion"], '$path.markdownVersion'),
       markdownDialect: map["markdownDialect"] == null
           ? null
-          : _requiredString(map["markdownDialect"], '$path.markdownDialect'),
+          : SemanticDocumentMarkdownDialect.fromWire(
+              map["markdownDialect"],
+              '$path.markdownDialect',
+            ),
       articleMarkdownDigest: _requiredString(
         map["articleMarkdownDigest"],
         '$path.articleMarkdownDigest',
@@ -5171,7 +5191,7 @@ final class PostArticleAssetManifest {
   Map<String, Object?> toWire() => <String, Object?>{
     "schema": schema,
     if (markdownVersion != null) "markdownVersion": markdownVersion!,
-    if (markdownDialect != null) "markdownDialect": markdownDialect!,
+    if (markdownDialect != null) "markdownDialect": markdownDialect!.wireName,
     "articleMarkdownDigest": articleMarkdownDigest,
     "documentSha256": documentSha256,
     "assetManifestSha256": assetManifestSha256,
