@@ -1,0 +1,360 @@
+schema: semantic_document.authoring
+schemaVersion: 1.0.0
+dialect: qwq-rich-md
+dialectVersion: 1.0.0
+canonicalizationVersion: 1.0.0
+offsetEncoding: unicode_scalar_value
+rawHtmlPolicy: forbidden
+unknownValuePolicy: reject
+implementationStatus:
+  role: authoring_contract
+  metadataValidator: yaml_parse_and_service_contract_reference
+  crossLanguageCodegen: available
+  canonicalMarkdownCodec: available
+  conformanceCorpus: content_post_markdown_block_sequence_cases_v2
+  codegenGap: >-
+    The registered generator emits the single closed node registry, canonical directive grammar,
+    deterministic JSON canonicalization constants, and strict Go, Dart, Python, and TypeScript
+    DocumentEnvelope canonical codecs, strict native-block metadata binding, single-corpus validation,
+    cross-language Markdown and safe-projection differential, and Homepage/editor/workbench/PublicWeb
+    strict read paths are available. Legacy Markdown remains explicit read-only and is never upgraded.
+
+closedSets:
+  processingDispositions:
+    - preserved
+    - normalized
+    - degraded
+    - metadata_only
+    - dropped_noise
+    - unsupported_opaque
+    - blocked_unsafe
+  publicationDecisions: [publish, publish_with_losses, block]
+  compatibilityDecisions: [compatible, migrate_explicitly, incompatible]
+  nodeStatuses: [formal, experimental]
+  diagnosticSeverities: [info, warning, error]
+  diagnosticCodes:
+    - SEMANTIC_DOCUMENT.UNSUPPORTED.NODE
+    - SEMANTIC_DOCUMENT.UNSUPPORTED.INLINE
+    - SEMANTIC_DOCUMENT.UNSAFE.RAW_HTML
+    - SEMANTIC_DOCUMENT.INVALID.ATTRIBUTE
+    - SEMANTIC_DOCUMENT.INVALID.OFFSET_RANGE
+    - SEMANTIC_DOCUMENT.INVALID.TABLE_GRID
+    - SEMANTIC_DOCUMENT.INVALID.FOOTNOTE_GRAPH
+    - SEMANTIC_DOCUMENT.INVALID.SOURCE_ANCHOR
+    - SEMANTIC_DOCUMENT.INVALID.FIELD_TYPE
+    - SEMANTIC_DOCUMENT.INVALID.UNKNOWN_FIELD
+    - SEMANTIC_DOCUMENT.CAPABILITY.MISSING
+    - SEMANTIC_DOCUMENT.EXPERIMENTAL.PUBLISH_FORBIDDEN
+    - SEMANTIC_DOCUMENT.INCOMPATIBLE.SCHEMA_MAJOR
+    - SEMANTIC_DOCUMENT.INCOMPATIBLE.DIALECT_MAJOR
+    - SEMANTIC_DOCUMENT.INCOMPATIBLE.CANONICALIZATION_VERSION
+    - SEMANTIC_DOCUMENT.INCOMPATIBLE.OFFSET_ENCODING
+
+identityAndCanonicalization:
+  nodeId:
+    type: string
+    required: true
+    invariant: stable within one canonical document lineage; unique across envelope.nodes
+    derivation: explicit source identity when available, otherwise canonical hash of sourceAnchor plus kind
+  sourceAnchor:
+    required: true
+    fields: [origin, start, end, selector]
+    invariant: start/end are half-open offsets in offsetEncoding; selector is stable when offsets are unavailable
+  policyVersion:
+    type: semver
+    required: true
+    invariant: identifies the processing policy that chose disposition and losses
+  losses:
+    type: array
+    itemRequired: [code, sourceAnchor, detailKey]
+    invariant: empty means no known semantic loss; source text and PII are forbidden in detailKey
+  semanticFingerprint:
+    type: sha256
+    required: true
+    invariant: SHA-256 of canonical semantic node excluding source bytes, diagnostics and fingerprints
+  canonicalDigest:
+    type: sha256
+    required: true
+    invariant: SHA-256 of the complete canonical envelope excluding canonicalDigest itself
+  rawSliceFingerprint:
+    type: sha256
+    requiredWhen: disposition == unsupported_opaque
+    invariant: SHA-256 of exact rawSlice bytes; serialize must reproduce matching bytes
+
+model:
+  documentEnvelope:
+    additionalProperties: false
+    required:
+      - schemaVersion
+      - dialectVersion
+      - canonicalizationVersion
+      - offsetEncoding
+      - nodes
+      - requiredCapabilities
+      - assets
+      - sourceMap
+      - policyVersion
+      - losses
+      - semanticFingerprint
+      - canonicalDigest
+    fields:
+      nodes: {type: ordered_node_array, invariant: nodeId unique and reference-closed}
+      requiredCapabilities: {type: capability_id_set, invariant: union of every formal node requiredCapabilities}
+      assets: {type: asset_map, invariant: every node asset reference resolves exactly once}
+      sourceMap: {type: node_source_anchor_map, invariant: every nodeId has exactly one sourceAnchor}
+  nodeCommon:
+    additionalProperties: false_unless_registry_attributes
+    required: [nodeId, kind, disposition, policyVersion, requiredCapabilities, losses, semanticFingerprint, sourceAnchor]
+    optional: [diagnostics, rawSlice, rawSliceFingerprint, attributes, children]
+    invariant: kind exists in nodeRegistry; disposition exists in processingDispositions
+  inlineCommon:
+    required: [kind, start, end]
+    invariant: half-open range over containing node plainText using offsetEncoding
+
+capabilityCatalog:
+  dimensions:
+    parse: [markdown, html]
+    serialize: [markdown, semantic_json]
+    render: [app, web, workbench]
+    author: [create, editContent, editStructure, delete]
+  ids:
+    - parse.markdown
+    - parse.html
+    - serialize.markdown
+    - serialize.semantic_json
+    - render.app
+    - render.web
+    - render.workbench
+    - author.create
+    - author.editContent
+    - author.editStructure
+    - author.delete
+  capabilityRequiredFields: [id, allowedOrigins, fallbackPolicy]
+  allowedOrigins: [app_editor, data_pipeline, imported_html, migration, workbench]
+  fallbackPolicies: [fail_closed, preserve_opaque, metadata_only, drop_noise, block_unsafe]
+  formalNodeRule: every formal node declares non-empty requiredCapabilities; any missing capability fails closed with SEMANTIC_DOCUMENT.CAPABILITY.MISSING
+  opaqueMutationRule: clients without matching author capability must preserve rawSlice and rawSliceFingerprint byte-for-byte and cannot save a destructive rewrite
+
+nodeRegistry:
+  documentTitle: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  section: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench, author.editStructure]}
+  paragraph: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench, author.editContent]}
+  heading: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench, author.editContent, author.editStructure]}
+  definitionList: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  epigraph: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  blockquote: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  preformatted: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  codeBlock: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  verse: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  details: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  callout: {status: formal, requiredCapabilities: [parse.markdown, serialize.markdown, render.app, render.web, render.workbench]}
+  divider: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  list: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench, author.editStructure]}
+  listItem: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench, author.editStructure]}
+  factBox: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  factRow: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  groupedDirectory: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench, author.editStructure]}
+  table: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  tableCaption: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  tableRow: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  tableCell: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  footnoteReference: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  footnoteDefinition: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  footnoteList: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  bibliography: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  externalLinks: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  seeAlso: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  hatnote: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  relatedResources: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  figure: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  gallery: {status: formal, requiredCapabilities: [parse.markdown, parse.html, serialize.markdown, render.app, render.web, render.workbench]}
+  unsupportedOpaque: {status: formal, requiredCapabilities: [serialize.semantic_json], fallbackPolicy: preserve_opaque}
+  mathBlock: {status: experimental, requiredCapabilities: [parse.markdown, render.workbench], publicationDecision: block}
+  timeline: {status: experimental, requiredCapabilities: [parse.html, render.workbench], publicationDecision: block}
+  mapEmbed: {status: experimental, requiredCapabilities: [parse.html, render.workbench], publicationDecision: block}
+  interactiveWidget: {status: experimental, requiredCapabilities: [parse.html, render.workbench], publicationDecision: block}
+nodeRegistryPolicy:
+  experimentalRule: experimental nodes are workbench-only and publication is blocked until all parse/serialize/render.app/render.web capabilities close
+
+inlineRegistry:
+  kinds: [text, bold, italic, boldItalic, underline, strikethrough, code, link, mention, footnoteReference, hardBreak]
+  linkAllowedSchemes: [https, http]
+  unsafeLinkDisposition: blocked_unsafe
+  unknownInlineDisposition: unsupported_opaque
+
+canonicalMarkdown:
+  mediaType: text/markdown; variant=qwq-rich-md
+  frontMatter:
+    delimiter: "---"
+    format: canonical_json_object_on_single_line
+    required: [schemaVersion, dialectVersion, canonicalizationVersion, offsetEncoding, semanticFingerprint, canonicalDigest, requiredCapabilities, policyVersion, losses, assets, sourceMap]
+    unknownAttributes: reject
+  metadataBinding:
+    syntax: ":::qwq-meta <kind> <canonical-json-node-metadata>"
+    cardinality: exactly_one_metadata_line_immediately_followed_by_exactly_one_native_or_complex_block
+    replayProtection: node order, kind, derived review body, nodeId and semanticFingerprint must equal bound metadata; orphan, duplicate, reordered or mismatched metadata fails closed
+  nativeKinds: [documentTitle, heading, paragraph, blockquote, preformatted, codeBlock, divider, listItem, definitionList]
+  nativeInlineKinds: [text, bold, italic, boldItalic, underline, strikethrough, code, link, mention, footnoteReference, hardBreak]
+  complexDirectiveKinds: [section, list, callout, factBox, factRow, table, tableCaption, tableRow, tableCell, groupedDirectory, footnoteDefinition, footnoteList, hatnote, externalLinks, seeAlso, relatedResources, figure, gallery]
+  semanticJsonOnlyKinds: [unsupportedOpaque]
+  complexDirectiveBody: canonical human-readable text or compact structural summary derived from attributes; complete normalized structure remains in the typed metadata binding
+  canonicalization:
+    unicode: NFC
+    lineEndings: LF
+    terminalNewline: exactly_one
+    json: UTF-8, sorted object keys, no insignificant whitespace, finite numbers only, slash unescaped
+    digestVerification: semanticFingerprint excludes semanticFingerprint and canonicalDigest; canonicalDigest excludes canonicalDigest; SHA-256 lowercase hex; parser verifies but never fills either value
+  safety:
+    rawHtml: forbidden_in_renderable_fields
+    literalAngleText: ordinary text such as <历史> is allowed because it is not an executable HTML element
+    forbiddenElements: [script, style, iframe, object, embed, form, input, button, meta, link]
+    forbiddenAttributeNames: [on*, style, srcdoc]
+    forbiddenURLSchemes: [javascript, data]
+    sourceEvidenceException: exact non-rendered source evidence strings may remain in semantic JSON metadata and assets but are never injected by Markdown or safe HTML renderers
+    unknownKind: reject
+    unknownDirectiveAttribute: reject
+    unsupportedOpaquePublication: block
+
+markdownToSemantic:
+  rawHtml: {allowed: false, disposition: blocked_unsafe, publicationDecision: block, diagnostic: SEMANTIC_DOCUMENT.UNSAFE.RAW_HTML}
+  mappings:
+    - {syntax: '# title', node: documentTitle}
+    - {syntax: '##..######', node: section}
+    - {syntax: paragraph, node: paragraph}
+    - {syntax: '> paragraph', node: blockquote}
+    - {syntax: fenced_code, node: codeBlock}
+    - {syntax: indented_pre, node: preformatted}
+    - {syntax: '---', node: divider}
+    - {syntax: ordered_or_unordered_list, node: list}
+    - {syntax: definition_list, node: definitionList}
+    - {syntax: pipe_table, node: table}
+    - {syntax: '[^id]/[^id]:', node: footnoteReference_and_definition}
+    - {syntax: ':::figure', node: figure}
+    - {syntax: ':::gallery', node: gallery}
+    - {syntax: ':::directory', node: groupedDirectory}
+  unknownVisibleSyntax: {node: unsupportedOpaque, disposition: unsupported_opaque, preserve: [rawSlice, rawSliceFingerprint]}
+
+htmlToSemantic:
+  inputMediaType: text/html
+  rawHtmlTrust: never
+  parserSecurity:
+    forbiddenElements: [script, style, iframe, object, embed, form, input, button, meta, link]
+    forbiddenAttributes: [on*, style, srcdoc]
+    urlSchemes: [https, http]
+    unsafeDisposition: blocked_unsafe
+    unsafeDecision: block
+  tagMappings:
+    - {tag: h1, node: documentTitle}
+    - {tag: 'h2|h3|h4|h5|h6', node: section, attributes: {level: tag_number}}
+    - {tag: p, node: paragraph}
+    - {tag: blockquote, node: blockquote}
+    - {tag: pre, node: preformatted}
+    - {tag: 'pre>code', node: codeBlock, attributes: {language: class_language_prefix}}
+    - {tag: dl, node: definitionList}
+    - {tag: 'ol|ul', node: list}
+    - {tag: li, node: listItem}
+    - {tag: details, node: details}
+    - {tag: figure, node: figure}
+    - {tag: 'table', node: table}
+    - {tag: caption, node: tableCaption}
+    - {tag: tr, node: tableRow}
+    - {tag: 'th|td', node: tableCell, attributes: {rowSpan: rowspan, columnSpan: colspan, scope: scope, sortKey: data-sort-key}}
+    - {tag: 'sup[data-footnote-ref]', node: footnoteReference, attributes: {identifier: data-footnote-ref}}
+    - {tag: '[data-mw=Epigraph]', node: epigraph}
+    - {tag: '[data-mw=Poem]', node: verse}
+    - {tag: '[data-mw=FactBox]', node: factBox}
+    - {tag: '[data-mw=ExternalLinks]', node: externalLinks}
+    - {tag: '[data-mw=SeeAlso]', node: seeAlso}
+    - {tag: '[data-mw=Hatnote]', node: hatnote}
+  attributeRules:
+    allowedGlobal: [id, lang, dir, title, data-mw]
+    tableCell: {rowspan: positive_integer, colspan: positive_integer, scope: [row, col, rowgroup, colgroup], data-sort-key: string}
+    dataMw: known_value_maps_to_registry_otherwise_opaque
+  unknownVisibleNode:
+    disposition: unsupported_opaque
+    node: unsupportedOpaque
+    preserve: [outerHTML_as_rawSlice, rawSliceFingerprint, sourceAnchor]
+  unknownInvisibleNoise: {disposition: dropped_noise, examples: [comment, empty_tracking_wrapper]}
+
+safeProjection:
+  format: canonical_json_event_sequence
+  eventFields: [order, depth, nodeId, kind, safeTag, text, links, assetIds, tableCells, footnoteEdges]
+  canonicalization: same canonical JSON and NFC rules as canonical Markdown metadata
+  safety: projection contains identities and escaped text only; source raw HTML and evidence strings are never executable
+  safeTags: {documentTitle: h1, heading: heading_level, paragraph: p, blockquote: blockquote, preformatted: pre, codeBlock: code, divider: hr, list: list, listItem: li, definitionList: dl, callout: aside, factBox: aside, factRow: div, table: table, tableCaption: caption, tableRow: tr, tableCell: td_or_th, groupedDirectory: nav, footnoteReference: sup, footnoteDefinition: li, footnoteList: ol, hatnote: aside, externalLinks: section, seeAlso: section, relatedResources: section, figure: figure, gallery: gallery}
+
+semanticToSafeHtml:
+  escaping: all text and attribute values are escaped; source raw HTML is never injected
+  nodeMappings:
+    documentTitle: h1
+    section: section
+    paragraph: p
+    blockquote: blockquote
+    preformatted: pre
+    codeBlock: 'pre>code'
+    definitionList: dl
+    epigraph: blockquote.qwq-epigraph
+    verse: pre.qwq-verse
+    details: details
+    callout: aside.qwq-callout
+    divider: hr
+    list: 'ol|ul'
+    listItem: li
+    factBox: aside.qwq-fact-box
+    factRow: div.qwq-fact-row
+    groupedDirectory: nav.qwq-grouped-directory
+    table: table
+    tableCaption: caption
+    tableRow: tr
+    tableCell: 'th|td'
+    footnoteReference: sup
+    footnoteDefinition: li.qwq-footnote
+    footnoteList: ol.qwq-footnotes
+    bibliography: section.qwq-bibliography
+    externalLinks: section.qwq-external-links
+    seeAlso: section.qwq-see-also
+    hatnote: aside.qwq-hatnote
+    relatedResources: section.qwq-related-resources
+    figure: figure
+    gallery: section.qwq-gallery
+  unsupportedOpaque: {render: escaped_raw_slice_in_pre, neverInjectRawHtml: true}
+  tableCellAttributes: [rowspan, colspan, scope, data-sort-key]
+  linkAttributes: {rel: 'noopener noreferrer'}
+
+structureContracts:
+  table:
+    required: [caption, rows, logicalGrid, rowCount, columnCount]
+    cellRequired: [nodeId, row, column, rowSpan, columnSpan, scope, sortKey, children]
+    scopeValues: [row, col, rowgroup, colgroup, none]
+    invariants:
+      - rowSpan and columnSpan are positive integers
+      - every logical coordinate is covered exactly once after span expansion
+      - spans remain inside rowCount and columnCount
+      - logicalGrid is canonical row-major order and references tableCell nodeIds
+    invalidDecision: block
+    diagnostic: SEMANTIC_DOCUMENT.INVALID.TABLE_GRID
+  footnoteGraph:
+    edges: footnoteReference.identifier -> footnoteDefinition.identifier
+    invariants: [every_reference_resolves_once, definition_identifiers_unique, backlinks_preserve_reference_order]
+    invalidDecision: block
+    diagnostic: SEMANTIC_DOCUMENT.INVALID.FOOTNOTE_GRAPH
+  groupedDirectory:
+    ordering: groups and entries preserve source order
+    targetRule: each targetNodeId references a section in the same envelope
+    groupIdRule: NFC(trim(groupId)) and unique
+
+compatibility:
+  versionSyntax: semver
+  rules:
+    - {condition: supported_schema_and_dialect_same_major_and_exact_canonicalization, compatibilityDecision: compatible, publicationDecision: publish}
+    - {condition: supported_explicit_migration_available, compatibilityDecision: migrate_explicitly, publicationDecision: block}
+    - {condition: unknown_schema_major, compatibilityDecision: incompatible, publicationDecision: block, diagnostic: SEMANTIC_DOCUMENT.INCOMPATIBLE.SCHEMA_MAJOR}
+    - {condition: unknown_dialect_major, compatibilityDecision: incompatible, publicationDecision: block, diagnostic: SEMANTIC_DOCUMENT.INCOMPATIBLE.DIALECT_MAJOR}
+    - {condition: canonicalization_version_mismatch, compatibilityDecision: incompatible, publicationDecision: block, diagnostic: SEMANTIC_DOCUMENT.INCOMPATIBLE.CANONICALIZATION_VERSION}
+    - {condition: offset_encoding_mismatch, compatibilityDecision: incompatible, publicationDecision: block, diagnostic: SEMANTIC_DOCUMENT.INCOMPATIBLE.OFFSET_ENCODING}
+  migration: explicit source-version to target-version only; no dual read/write and no implicit defaults
+
+diagnostics:
+  required: [code, severity, disposition, sourceAnchor, messageKey]
+  additionalProperties: false
+  privacy: messageKey is stable and source-free; rawSlice must not enter logs

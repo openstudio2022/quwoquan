@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/governance/content_workbench/offline_review.schema.json",
+  "title": "OfflineContentReviewLedger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "objectId",
+    "versionId",
+    "businessDigest",
+    "decision",
+    "revision",
+    "recordDigest"
+  ],
+  "properties": {
+    "objectId": {
+      "type": "string"
+    },
+    "versionId": {
+      "enum": [
+        "R0",
+        "R1",
+        "R2"
+      ]
+    },
+    "businessDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "decision": {
+      "enum": [
+        "qualified",
+        "unqualified"
+      ]
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "targetState": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "previousDigest": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "recordDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "unqualified"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "changes",
+          "targetState"
+        ]
+      }
+    }
+  ]
+}

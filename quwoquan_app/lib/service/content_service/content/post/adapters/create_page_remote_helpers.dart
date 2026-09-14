@@ -30,7 +30,8 @@ int paragraphCountForPayload(String text) {
 bool shouldPublishAsArticleForPayload(CreateEditorState state) {
   return (ContentPublicationPolicy.articleWhenTitlePresent &&
           state.title.trim().isNotEmpty) ||
-      state.body.trim().length >= ContentPublicationPolicy.articleBodyMinRunes ||
+      state.body.trim().length >=
+          ContentPublicationPolicy.articleBodyMinRunes ||
       paragraphCountForPayload(state.body) >=
           ContentPublicationPolicy.articleParagraphMinCount;
 }
@@ -853,7 +854,12 @@ submitContentPostPublicationCommandFromPreparedPayload(
   ),
   mediaAssetIds: mediaAssetIds,
   articleMarkdown: _optionalPayloadText(payload['articleMarkdown']),
-  markdownDialect: _optionalPayloadText(payload['markdownDialect']),
+  markdownDialect: payload['markdownDialect'] == null
+      ? null
+      : SemanticDocumentMarkdownDialect.fromWire(
+          payload['markdownDialect'],
+          'SubmitContentPostPublicationCommand.markdownDialect',
+        ),
   articleAssetManifest: _optionalGeneratedWireValue(
     payload['articleAssetManifest'],
     'articleAssetManifest',

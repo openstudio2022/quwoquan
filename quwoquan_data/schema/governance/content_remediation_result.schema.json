@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data.content_remediation_result",
+  "title": "Content remediation request generation result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "status", "audit", "filters", "counts", "requests", "effects"],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "severity": {"enum": ["high", "medium", "low"]}
+  },
+  "properties": {
+    "schema": {"const": "quwoquan_data.content_remediation_result.v1"},
+    "status": {"enum": ["requests_created", "same_replay", "no_matching_issues"]},
+    "audit": {
+      "type": "object", "additionalProperties": false, "required": ["manifestRef", "baselineDigest"],
+      "properties": {"manifestRef": {"type": "string", "minLength": 1}, "baselineDigest": {"$ref": "#/$defs/digest"}}
+    },
+    "filters": {
+      "type": "object", "additionalProperties": false, "required": ["issueCodes", "severities"],
+      "properties": {
+        "issueCodes": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "severities": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/severity"}}
+      }
+    },
+    "counts": {
+      "type": "object", "additionalProperties": false, "required": ["auditedObjects", "selectedObjects", "selectedIssues", "semanticReviewPendingObjects"],
+      "properties": {
+        "auditedObjects": {"type": "integer", "minimum": 0},
+        "selectedObjects": {"type": "integer", "minimum": 0},
+        "selectedIssues": {"type": "integer", "minimum": 0},
+        "semanticReviewPendingObjects": {"type": "integer", "minimum": 0}
+      }
+    },
+    "requests": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["requestId", "objectRef", "requestRef", "requestDigest"],
+        "properties": {
+          "requestId": {"type": "string"}, "objectRef": {"type": "string"},
+          "requestRef": {"type": "string", "pattern": "^requests/content-remediation-[0-9a-f]{32}\\.json$"},
+          "requestDigest": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "effects": {
+      "type": "object", "additionalProperties": false,
+      "required": ["originalObjectsModified", "canonicalPublishInvoked", "retirementExecuted", "authorOrReviewerAsserted"],
+      "properties": {
+        "originalObjectsModified": {"const": false}, "canonicalPublishInvoked": {"const": false},
+        "retirementExecuted": {"const": false}, "authorOrReviewerAsserted": {"const": false}
+      }
+    }
+  }
+}

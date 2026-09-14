@@ -1,0 +1,52 @@
+{
+  "operations": [
+    {
+      "operationId": "overview",
+      "method": "GET",
+      "path": "/api/overview"
+    },
+    {
+      "operationId": "facets",
+      "method": "GET",
+      "path": "/api/facets"
+    },
+    {
+      "operationId": "list",
+      "method": "GET",
+      "path": "/api/items"
+    },
+    {
+      "operationId": "detail",
+      "method": "GET",
+      "path": "/api/items/{objectId}/{versionId}"
+    },
+    {
+      "operationId": "media",
+      "method": "GET",
+      "path": "/api/media/{objectId}/{versionId}/{relativePath}"
+    },
+    {
+      "operationId": "saveReview",
+      "method": "POST",
+      "path": "/api/reviews"
+    },
+    {
+      "operationId": "registerCandidate",
+      "method": "POST",
+      "path": "/api/candidates"
+    },
+    {
+      "operationId": "refresh",
+      "method": "POST",
+      "path": "/api/refresh",
+      "requestSchema": "local_api.schema.json#/$defs/refreshRequest",
+      "responseSchema": "local_api.schema.json#/$defs/refreshResponse"
+    },
+    {
+      "operationId": "sourceEvidence",
+      "method": "GET",
+      "path": "/api/items/{objectId}/{versionId}/sources/{sourceUnitId}/evidence/{evidenceId}",
+      "responseSchema": "read_models.schema.json#/$defs/sourceEvidenceResponse"
+    }
+  ]
+}

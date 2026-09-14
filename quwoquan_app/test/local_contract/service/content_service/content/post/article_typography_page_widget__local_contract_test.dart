@@ -78,6 +78,7 @@ void main() {
     final document = ArticleMarkdownCodec.parseDocument('''
 ---
 title: 富块渲染
+markdownDialect: qwq-rich-md
 ---
 # 富块渲染
 
@@ -134,9 +135,8 @@ print('hi');
     final container = ProviderContainer(
       overrides: [
         ...sealedCloudBoundaryOverrides(),
-        contentFeatureFlagProvider(
-          'enable_article_page_curl',
-        ).overrideWith((ref) => true),
+        contentFeatureFlagProvider('enable_article_page_curl')
+            .overrideWith((ref) => true),
       ],
     );
     addTearDown(container.dispose);
@@ -179,9 +179,8 @@ print('hi');
     final container = ProviderContainer(
       overrides: [
         ...sealedCloudBoundaryOverrides(),
-        contentFeatureFlagProvider(
-          'enable_article_page_curl',
-        ).overrideWith((ref) => true),
+        contentFeatureFlagProvider('enable_article_page_curl')
+            .overrideWith((ref) => true),
       ],
     );
     addTearDown(container.dispose);

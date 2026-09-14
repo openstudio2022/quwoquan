@@ -469,6 +469,8 @@ func requestFieldWireExpression(
 		result = "_encodeGeneratedStructuredValue(" + nonNullAccess + ")"
 	case metaType == "timestamp" || metaType == "datetime" || metaType == "date":
 		result = nonNullAccess + ".toUtc().toIso8601String()"
+	case metaType == "semantic_document":
+		result = "documentEnvelopeToWire(" + nonNullAccess + ")"
 	case metaType == "enum" && baseDartType == "String":
 		result = nonNullAccess
 	case metaType == "enum":

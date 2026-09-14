@@ -91,10 +91,7 @@ func (s *PostService) SubmitPostPublication(
 	post.Visibility = normalizeVisibility(post.Visibility)
 	post.AssistantUsePolicy = normalizeAssistantUsePolicy(post.AssistantUsePolicy)
 	post.SourceType = defaultString(strings.TrimSpace(post.SourceType), "original")
-	post.MarkdownDialect = defaultString(
-		strings.TrimSpace(post.MarkdownDialect),
-		"qwq-rich-md",
-	)
+	post.MarkdownDialect = strings.TrimSpace(post.MarkdownDialect)
 	if err := rejectClientMediaDeliveryReferences(&post); err != nil {
 		return PostPublicationReceipt{}, err
 	}
@@ -121,7 +118,9 @@ func (s *PostService) SubmitPostPublication(
 	); err != nil {
 		return PostPublicationReceipt{}, err
 	}
-	s.syncArticleMarkdownSnapshot(&post)
+	if err := s.syncArticleMarkdownSnapshot(&post); err != nil {
+		return PostPublicationReceipt{}, err
+	}
 	normalizeVideoCoverContract(&post)
 	if err := validatePostPublicationLimits(&post); err != nil {
 		return PostPublicationReceipt{}, err

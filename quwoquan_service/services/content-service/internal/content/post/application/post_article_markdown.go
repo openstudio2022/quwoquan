@@ -3,22 +3,33 @@ package post
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 )
 
-func (s *PostService) syncArticleMarkdownSnapshot(post *postmodel.Post) {
+func (s *PostService) syncArticleMarkdownSnapshot(post *postmodel.Post) error {
 	if post == nil || strings.TrimSpace(post.ContentType) != "article" {
-		return
+		return nil
 	}
 	markdown := strings.TrimSpace(post.ArticleMarkdown)
 	if markdown == "" {
-		return
+		return contentgenerated.AppErrorFromInvalidArgument("articleMarkdown is required")
 	}
-	if strings.TrimSpace(post.MarkdownDialect) == "" {
-		post.MarkdownDialect = "qwq-rich-md"
+	dialect := strings.TrimSpace(post.MarkdownDialect)
+	if dialect == "" {
+		return contentgenerated.AppErrorFromInvalidArgument("article markdownDialect is required")
+	}
+	if dialect != "qwq-rich-md" {
+		return contentgenerated.AppErrorFromInvalidArgument("unsupported article markdownDialect: " + dialect)
+	}
+	if err := validateCanonicalSemanticDocument(&post.SemanticDocument); err != nil {
+		return contentgenerated.AppErrorFromInvalidArgument(err.Error())
 	}
 	post.ArticleMarkdownDigest = markdownDigest(markdown)
 	frontMatter, body := splitArticleMarkdownFrontMatter(markdown)
@@ -47,6 +58,48 @@ func (s *PostService) syncArticleMarkdownSnapshot(post *postmodel.Post) {
 		post.ArticleFontPreset = fontPreset
 	}
 	post.MediaUrls = markdownAssetURIs(markdown)
+	return nil
+}
+
+var canonicalSHA256 = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+func validateCanonicalSemanticDocument(doc *semantic.DocumentEnvelope) error {
+	if doc == nil || strings.TrimSpace(doc.SchemaVersion) == "" {
+		return fmt.Errorf("article semantic envelope or reference is required: semanticDocument is required")
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		return fmt.Errorf("semanticDocument encode: %w", err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return fmt.Errorf("semanticDocument decode: %w", err)
+	}
+	available := map[semantic.CapabilityID]bool{}
+	for id := range semantic.CapabilityRegistry {
+		available[id] = true
+	}
+	if result := semantic.ValidateEnvelope(fields, available); result.Code != semantic.ValidationOK {
+		return fmt.Errorf("semanticDocument invalid: %s (%s)", result.Code, result.Detail)
+	}
+	if !canonicalSHA256.MatchString(doc.SemanticFingerprint) {
+		return fmt.Errorf("semanticDocument semanticFingerprint must use sha256:<64 lowercase hex>")
+	}
+	claimed := doc.CanonicalDigest
+	if !canonicalSHA256.MatchString(claimed) {
+		return fmt.Errorf("semanticDocument canonicalDigest must use sha256:<64 lowercase hex>")
+	}
+	delete(fields, "canonicalDigest")
+	canonical, err := json.Marshal(fields)
+	if err != nil {
+		return fmt.Errorf("semanticDocument canonicalize: %w", err)
+	}
+	sum := sha256.Sum256(canonical)
+	actual := "sha256:" + hex.EncodeToString(sum[:])
+	if claimed != actual {
+		return fmt.Errorf("semanticDocument canonicalDigest drift: claimed=%s actual=%s", claimed, actual)
+	}
+	return nil
 }
 
 func markdownDigest(markdown string) string {

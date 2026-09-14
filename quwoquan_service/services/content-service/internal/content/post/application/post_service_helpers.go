@@ -106,6 +106,7 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"title":                     post.Title,
 		"body":                      post.Body,
 		"summary":                   post.Summary,
+		"semanticDocument":          post.SemanticDocument,
 		"mediaUrls":                 post.MediaUrls,
 		"coverUrl":                  post.CoverUrl,
 		"thumbnailUrl":              post.ThumbnailUrl,

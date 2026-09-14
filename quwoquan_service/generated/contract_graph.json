@@ -50712,6 +50712,7 @@
         "assets",
         "bodyMarkdown",
         "kind",
+        "semanticDocument",
         "timelineItems",
         "title"
       ],
@@ -57830,6 +57831,7 @@
               "mediaAssetIds",
               "articleMarkdown",
               "markdownDialect",
+              "semanticDocument",
               "articleMarkdownDigest",
               "contentVertical",
               "captureDisclosure",
@@ -113339,7 +113341,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/query.go",
-            "sha256": "7300c3a93a269b542f8279f6dff6f80c2714d9b83acd12313a598193506ce8a3"
+            "sha256": "2caba8ba026c62fa69a7046a73569e64c4077a48070951c2e6fc497779e664b4"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/semantic/mentions.go",
@@ -113425,7 +113427,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_post_query_reader.go",
-            "sha256": "ac5ca380b37a2953132126d2b66db8e9ce9331061c5b2226db608c081b11d043"
+            "sha256": "e33b61fd8eda83c06b500b7de3fc16a4f8ed286413f545d42f6d0afd3f472cd4"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_post_store.go",
@@ -113521,11 +113523,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/loader.go",
-            "sha256": "eecbb4099d39ecd651057b761fcab939be1e9b39c162e502d1b82bb0681e5a3e"
+            "sha256": "65b0aee4f12e62ef371feafa2949cfc3eb282aef4b8d1a046df4fb5cfec09838"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/post_manifest_validation.go",
-            "sha256": "e655a1c0029888c67b636d53ec89736542fb77da15896380a5f40cb93693bb7e"
+            "sha256": "bfa2ae23e8b2591c11e7632de8a6f4c52a0d76f2fa237ec30ffde32a1c64eab2"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/prior_release_state_migration.go",
@@ -113541,7 +113543,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime.go",
-            "sha256": "27361a777b4433a58dd1168733fdcba7c5ece86f4d5d8324c5b112ec8b09ae96"
+            "sha256": "5a4f9fcb5f47e6e5dd9b556eadb56c96da930a873699b0f92e07cc236979cc75"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_discovery_feed.go",
@@ -113617,6 +113619,14 @@
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/authorimpact/author_impact_language.go",
             "sha256": "09fa071ce5f89edd4e7b598016462c9edc4840a5461bc539a0b5190008d325e8"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/internal/content/post/application/canonical_semantic_markdown.go",
+            "sha256": "dd16036ef302ca157d7eb4ce05ab7c04543647f81aab6e0672da6b8c46a3f1d5"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/internal/content/post/application/cmd/canonicalcodec/main.go",
+            "sha256": "3d92e3f21b82a829e510397e148be88f2a546d9edace2614056285e871748203"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/comment_count_projection_handler.go",
@@ -113696,7 +113706,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_article_markdown.go",
-            "sha256": "bfded41ac814fc5503104dc6878df65d0552c2d509757141974bd845bfdc0594"
+            "sha256": "f90d1614b1912533ca903d2a2b744f6ef38061f4c34a28fc69ca510a94dd631d"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_capture_metadata.go",
@@ -113704,11 +113714,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_commit.go",
-            "sha256": "96fdaeeada7e4ec591f1c67167ba2176c70b4ac1d5416941f3b9be21e4758625"
+            "sha256": "42ee64b9e2d66c9a5f21471ecea13d4818460931c0f3560184c3fae7d44c31ac"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_media_binding.go",
-            "sha256": "c12cd09b0b7af98c1b3cd6d501e41eaf939c1a4f5bb6535142abe1fd5774b816"
+            "sha256": "2c524511c6e612bcdc6c62415bcef4248a7aa5e7e916a6e46d84df93d21c4352"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_moderation.go",
@@ -113716,7 +113726,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_publication.go",
-            "sha256": "724101a6c6fd5c708a6105bb30aaac2884b51ca649e9aa86d352e1bb4a5ef431"
+            "sha256": "b0c7263ff714685e15fdd415e099737e50d20e837053a8dae89bd23c4692332f"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_publication_admission.go",
@@ -113740,11 +113750,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_service_helpers.go",
-            "sha256": "f00ccce3e9046afadfea97304b471106b796f17d6e98074aea263bc473d4845a"
+            "sha256": "9b37349d767d9823679468c1aabc35417430c9ad17ae641d9f43da5f003a08fc"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_service_lifecycle.go",
-            "sha256": "75bc473dc6d31182e73884168d66b2039574b0ddb72f58fb6c8f9c51e2ee4a85"
+            "sha256": "76bdb7b52054d285d3440ce1ee800fb74a594351b48c6464ee22cd66ef0aa2b5"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_service_projection_governance.go",
@@ -113756,7 +113766,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_value_objects.go",
-            "sha256": "efa63bb6b9e2daf3dc065cadd5ce94eb8f4a8fc0da6fb9aafc4532703584d084"
+            "sha256": "532ca0383102a049519ada29157d35d9a6cdfaaac1eca17a591376efd899e395"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/public/active_release_fence.go",
@@ -113786,7 +113796,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/content_handler.go",
-            "sha256": "34215c2f0c25df6ec953a852d1aae5b80cfe67c21c43fba837bf4f519783f0e3"
+            "sha256": "093be2ce89b16470044a5944707925eafb17121a2241db0c198015df67e0b980"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/content_handler_article_summary.go",
@@ -113822,11 +113832,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb/markdown_body.go",
-            "sha256": "cbad362e6b783f296405862460b47e87ec2c924f069e539c91bcca82e22580a8"
+            "sha256": "8bc285905c2348638aaa5f0436e5768d3f899526ecdafad32841b52147b793f0"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb/public_web_handler.go",
-            "sha256": "d09349ea8c04af4380b1925516a0bc7f0054c7e65831c3ae50e5b9d3f17ce73f"
+            "sha256": "42658b69a3565129a4ba049905fb8354aaab875a12587e18848af112de1f5bc7"
           }
         ],
         "localContract": [
@@ -113844,7 +113854,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go",
-            "sha256": "33ee734608909dc2d7778a96748790a8ee5973d6af8d1ab2b780323fa3c143db"
+            "sha256": "6d6f0e35e4298e0d71b24f4affa28765ff0474f8827221e30e4d9f35474bdab1"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler_helpers__security__local_contract_test.go",
@@ -113872,11 +113882,15 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/publicweb/markdown_block_sequence_parity__local_contract_test.go",
-            "sha256": "6c3d5dbbf3262146ab5867a5781a5a48a364aa8e41bcc4824bae6bbd9b450843"
+            "sha256": "155556649b7078d49b4900aa14e5d95c6486786c7159b39a57ddb6fcf24fa776"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/publicweb/public_web_handler__local_contract_test.go",
-            "sha256": "74fd667431ab5cdd807f74e89fee23a028ec0a2c13fd90ce555ca862d2ec5415"
+            "sha256": "12d5577ffa1ce9145520aa70af35eee1fde1890e099b52135db657f4d82d9898"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/publicweb/semantic_document_render__local_contract_test.go",
+            "sha256": "8d7c9639161ebb8b41f639b63b8ff05b502b8939fce17738cf9edfa7dff9e8ab"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/app_config__contract__local_contract_test.go",
@@ -113885,6 +113899,10 @@
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/authorimpact/author_impact_travel__local_contract_test.go",
             "sha256": "94fe5e450149cd529effeaad28cb102958750ec03db3c083562caa582f8b594b"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/canonical_semantic_markdown__local_contract_test.go",
+            "sha256": "c7ec67a2c6a9cfd98c2cf739d7879ab87df938eb7f62f51d4c46bbe3a2e8802f"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/comment_count_projection_handler__local_contract_test.go",
@@ -113980,7 +113998,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/post_media_binding__local_contract_test.go",
-            "sha256": "86d08677837fb522f8dbe25d07ab4418a6869379d6f66acdf7a2bc3b196c2c9a"
+            "sha256": "046b6eb8790e294dcfecf49593146d99a00d555b2cbb6387447afef86e76a5eb"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/post_object_anchor_normalization__local_contract_test.go",
@@ -113988,7 +114006,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/post_publication__local_contract_test.go",
-            "sha256": "6e3fe74ebffda78b8e47e855ae8a52503eb610576d220f5cedf2c4574dc663f0"
+            "sha256": "a36cea420ba98d93bf563dc5a134765a2f1a3804ba81ea3a48553d81492839a8"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/post_publication_admission__local_contract_test.go",
@@ -114100,11 +114118,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/entity_mentions__local_contract_test.go",
-            "sha256": "14a5771507220e86357ca386eafee89719bed6235101b87b6f1b304b4f01a167"
+            "sha256": "dfcd5da99d45bb4a8970c5eace5d83354220809c21706a2733952f1c6b69b964"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/loader__local_contract_test.go",
-            "sha256": "e11b56d8e07e9c7688c7117fa2d654190feaaf4d9a9b3ce69f38142d1d59c1d4"
+            "sha256": "fdfe20618abd089408734239d7b3c6563680b497d6c7dd50059af80a84c65e91"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/media_delivery_binding__local_contract_test.go",
@@ -114359,6 +114377,10 @@
             "sha256": "2d79b61808942f480d9053145119a27e961e0a2c08de9d32c6cc76eeb2f306c6"
           },
           {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/semantic_document/semantic_document_contract__local_contract_test.go",
+            "sha256": "7ebb153670c0673ddc81164868766e4a06529a169a859094b6542df4a8b603b2"
+          },
+          {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/test_directory_inventory__local_contract_test.go",
             "sha256": "0ff63e496f3ae21ded43ff64937b1fd30a71fd624c7a348c551474ab305cdf9d"
           },
@@ -114426,7 +114448,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/helpers__api_integration_test.go",
-            "sha256": "ddba690cbf3956a9a9e8d74118e0ad7aef4a2a73aeadbaf44acfe2e9d95af97d"
+            "sha256": "ef30f9bda3d1fb3830745119a72ac11e027c5546b2188c47f732184149df0e01"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/hls_cmaf_object_storage__api_integration_test.go",
@@ -114434,7 +114456,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/import/mongo_import__data_consistency__api_integration_test.go",
-            "sha256": "0b7d3f4917436a333c3eb529ca47f617fd8310229280924ff3259397686620f2"
+            "sha256": "974f723a999e5cccb3c7f47e79c2b588e8177a7794cbcda3bb6a54e2cf76d295"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/import/prior_release_state_migration__data_consistency__api_integration_test.go",
@@ -114454,7 +114476,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/internal_graphql/get_post_internal_graphql__api_integration_test.go",
-            "sha256": "12070b87efbd673aeb1941263894d7dddbf59a95726bc3f104884f5c99b1a10c"
+            "sha256": "4204be304bb9e34bff26ed172c5385f8ef24b954eff1dfb34ec07f0bfc2efcbf"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/intersection_watermark_store_contract__api_integration_test.go",
@@ -114530,7 +114552,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/post_identity_contract__api_integration_test.go",
-            "sha256": "9190f2b78246bde54af212a1e2616e1d19a780fcad83fb879357501a2fa9ff52"
+            "sha256": "40aeb385e681f8e72e92433135c2e454aaa211d03514f8bd3aa0dce1ec77923a"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/post_lifecycle_stream__api_integration_test.go",
@@ -114646,7 +114668,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/domain/create_editor_undo_snapshot.dart",
-            "sha256": "25548311fc6e54cb094823084831264e3da74cced8bc247d276ad5e0b186c107"
+            "sha256": "3768dfd617c8f4e482f0320236f46049ed4fad5a50bee05924df91ab91de129a"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/domain/create_entry_arguments.dart",
@@ -114720,7 +114742,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/create_editor_provider_document_operations.dart",
-            "sha256": "2f9655c51040c6568d511dd1b210e6dbc7d34a64526d42592c2be6917ee9aa97"
+            "sha256": "2fc6683ea60e74ad09a1d650f252246f96abe34a3cf94e10838528d21c7e307a"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/create_editor_provider_media_operations.dart",
@@ -114728,7 +114750,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/create_editor_provider_node_editing_operations.dart",
-            "sha256": "335a404c7694af9ffc5e022a9a444efb8102b1778728e9d1f55095fbe821fd61"
+            "sha256": "bc6457262173affdb0443d56fc630a3f6b751e582b1e547151e2b3926e17bf14"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/create_editor_provider_node_structure_operations.dart",
@@ -114816,7 +114838,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/article_document_models.dart",
-            "sha256": "791acd8ab965a7cb2b9048109bd89c75b3e06ec6e7df4fd6cf7b88dd6169a5de"
+            "sha256": "d7008eb907e5367b4c358974ce3c34e3a268fc3ccc4062f5694fa24d7fe68b76"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/article_presentation_values.dart",
@@ -114982,7 +115004,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/create_page_remote_helpers.dart",
-            "sha256": "ebce3430deaf8086ae9b38a903db67849fb9f56d14be5b432bb7c7bce9224b46"
+            "sha256": "aecf31f4b0f2df9da920ca11b983f4473f34a56f041845451a27f5cca456013f"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/create_page_remote_payload_helpers.part.dart",
@@ -115114,11 +115136,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_get_post_hydration_contract__local_contract_test.dart",
-            "sha256": "e5222b8eb8bd5ea2ff6cf15b6815be2c5dec17c26b49c8f8d98d3590c133583f"
+            "sha256": "e1899982f7c865a5fe77287e0a70e63ed0010a4ebece68c01756cc89a82add62"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_image_metadata_geometry__local_contract_test.dart",
-            "sha256": "0d424c065cdeee7db8b3a7f25f8f9f01aaa4965eb5669b894fbb11e370f466ce"
+            "sha256": "eeaaa90850c897d38149377eb870a75dda0bb3178f607d3ad3125787e0e0b8a1"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_image_signed_delivery_binding__local_contract_test.dart",
@@ -115142,7 +115164,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_markdown_codec__local_contract_test.dart",
-            "sha256": "c3e3003b76b85d4263c66d93e62b7557669ce3b64c2068671647592d3b6562c3"
+            "sha256": "6f5f7065f59fa9f45fbedc15d844fc2f57d9ac7bfa53b5363d70c7bda40338f8"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_pagination_engine__local_contract_test.dart",
@@ -115158,7 +115180,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_typography_page_widget__local_contract_test.dart",
-            "sha256": "187141a01d490b29a24c7a7359d6f030667632e3819f1e89ccf813187124d314"
+            "sha256": "300e9f04165c9fcc7e2b6109095c5371fee03ef44466a47dce7d11801deccea1"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_wrap_geometry_consistency__local_contract_test.dart",
@@ -115179,6 +115201,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/canonical_intersection_post_roundtrip__local_contract_test.dart",
             "sha256": "aa8f74b8b8ed62b768d657d041d7c5976b8e463320e63df85e064fc4053a3269"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/content_service/content/post/canonical_semantic_markdown_codec__local_contract_test.dart",
+            "sha256": "9d29fe403fbf780d62e89984478923e891d33922eb47744563213e19658e9667"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/capture_photography_tag_deriver__local_contract_test.dart",
@@ -115470,7 +115496,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/markdown_seo_html_renderer__local_contract_test.dart",
-            "sha256": "354604446451c7a782154bac8434d2c64f339d78f27e98c6353de5bd8072c3f0"
+            "sha256": "c9ca3bee70214c862eb76cd1c3d3031bd592cb41aefedae84db413c345e85230"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/more_action_popup__functional__local_contract_test.dart",
@@ -115566,7 +115592,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/providers/create_editor_provider__local_contract_test.dart",
-            "sha256": "dede854d283316a0181c71eb4e6245b7550da51d948be07471b195ee4e0637ba"
+            "sha256": "67ebff77e66358e59ecb0c00d1b138f6dd2f1d5ec291db76e3d11ef8f0b0fb61"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/publish_capture_disclosure__local_contract_test.dart",
@@ -115610,7 +115636,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/qwq_markdown_parser__local_contract_test.dart",
-            "sha256": "cc6bb43abc43cb2bece804d19e579b1543afb6aa3edcfb122503d6095eb4f472"
+            "sha256": "db0dc19aaaac30e2710429f75597f3e63ddd6108c0f883854af900d3d08f6c46"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/share_template_by_identity_widget__local_contract_test.dart",
@@ -116500,7 +116526,7 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_introduction.go",
-            "sha256": "479fb89625f603955bc694f7ddc82c75fb7dd506445bce8593aa3b8afa336038"
+            "sha256": "cd066c10ef3e4a4ee077c589a1bb85a1e7900b60e326e0b744df740c9de4ed9f"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_lifecycle_projectors.go",
@@ -116660,7 +116686,7 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/internal/application/homepage_introduction__local_contract_test.go",
-            "sha256": "484635aa9816554d83c3b6a86b5a640b6f1d37b945f188be39b4ecfde60e751a"
+            "sha256": "268931c2cbc2b7ac969d3e74842809b6a06be0674f4861910449eb18eeb4b76e"
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/internal/application/homepage_introduction_media_binding__local_contract_test.go",
@@ -116812,7 +116838,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/entity_service/entity_homepage/homepage/presentation/homepage_introduction_page.dart",
-            "sha256": "5ece5114962785a55b4a69923b662c44336058d56e71bc3fa0667321b763cfe6"
+            "sha256": "6ff2e920c0cc4b4044a4e4e4fc971e7ee6f2910d28e24e79c1be11016c3f569f"
           },
           {
             "path": "quwoquan_app/lib/service/entity_service/entity_homepage/homepage/presentation/homepage_maintenance_page.dart",
@@ -116846,7 +116872,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_detail_page_widget__local_contract_test.dart",
-            "sha256": "68adb09579924467a2a1879ceb59b70fbb1d3bf9e3474836551eb8b94f46fe02"
+            "sha256": "2838c4ba7701a880379603d04268c46f2f55ccbcb5a6114cd554e733eaafd949"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_detail_record_navigation__functional__local_contract_test.dart",
@@ -116870,15 +116896,19 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_introduction_page_widget__local_contract_test.dart",
-            "sha256": "33875576df4e2ac9f27728a362d53b78329a6c5d101e9da6825dd568c7d125e7"
+            "sha256": "7c63fd49bd1cd4a0c28770cd13fabe1a580ff4b379836a3d4f8b262cf4ecfe37"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_introduction_signed_delivery_routing__local_contract_test.dart",
-            "sha256": "439c75abec7fc6cc16cc54dd2daba9a6063895038bbd44f7b03cca94eafee84f"
+            "sha256": "aa2493dbfae3713b4aae3c36b33c99375f0c64b9b218eef8f6a8a42840f32dd1"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_maintenance_page_widget__local_contract_test.dart",
             "sha256": "127c51937b648445103b664cd3378e669132883c931afe045c98991eafce1b81"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_markdown_semantic_adapter__local_contract_test.dart",
+            "sha256": "789cbfaf0e7f4fa5646c06a8f4a62f8a47b0fc18edeba8991d32faa65197b85d"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_operation_contract__contract__local_contract_test.dart",
@@ -116907,6 +116937,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_review_section_widget__local_contract_test.dart",
             "sha256": "55abb214042ab47222c3066e069b2b2efb4af6e5c96837f3598a59fe4da78256"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_semantic_document_adapter__local_contract_test.dart",
+            "sha256": "a4605c58ae09caad4f1a1d2d78f3620e90673b8dcbbd4ffa6a7721aea39f384c"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_type_labels__local_contract_test.dart",
@@ -130125,7 +130159,7 @@
     },
     {
       "path": "_schemas/fields.schema.json",
-      "sha256": "eed94051d20f51de5284125a2467ae1ec4b944eba46f2ad7b8a02a16230ee249"
+      "sha256": "86ed181d059aaaa15f0d6b73051bf62597d432627b19a830dc8d74895ac88354"
     },
     {
       "path": "_schemas/journey_readiness_receipt.schema.json",
@@ -130149,7 +130183,7 @@
     },
     {
       "path": "_schemas/projection.schema.json",
-      "sha256": "525c50c32e2c5c21353680a74878ca8ac2569de6d1c841a1530e3004fa7ce008"
+      "sha256": "908d54c2d438f93fd40ea6feee7812a5f61e57d5debf2ee9ae6970a6942d8c90"
     },
     {
       "path": "_schemas/quiesced_storage_migration_plan.schema.json",
@@ -130250,6 +130284,10 @@
     {
       "path": "_shared/search_objects.yaml",
       "sha256": "fc632c2602fc39d2b2a6529dbfe0b72fa058df9e5f051613dd72e226b62a27bb"
+    },
+    {
+      "path": "_shared/semantic_document.yaml",
+      "sha256": "a364a78495d2b1a7eeae0b13fdb5f3d2d0183fe7cb7b614dd8880bfb9016ca9f"
     },
     {
       "path": "_shared/test_fixtures/media/media/video/s/media-canary-hour-boundary-3595s/v1/descriptor.json",
@@ -131637,11 +131675,11 @@
     },
     {
       "path": "content/content/post/fields.yaml",
-      "sha256": "131883284e8d531f0966311fbddb042129012747bb81e01442da820bf9cf5e51"
+      "sha256": "944455087ec4edc9acd8ce6626006f97f76e7875ce5f0a85c9c9e8deed9d5fdb"
     },
     {
       "path": "content/content/post/markdown_block_sequence_cases.json",
-      "sha256": "88288274ec6eb527483bb052ba7f5e32aa6b3063840085cfcd8f3e292aa8d5c9"
+      "sha256": "f5fdac6135a92ef3788a1bc8ed626402567d2f7189e658155d9f48bf622772ed"
     },
     {
       "path": "content/content/post/object.yaml",
@@ -132157,7 +132195,7 @@
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_section.yaml",
-      "sha256": "4adb3620d2d6ce1870abf1d3ef2698fa4253ff0c405d2506334beaa996a09e93"
+      "sha256": "734ba5f3cf337b7930002b849e254dc0a624314123b5ad72788b9cb076fb6f64"
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_timeline_item.yaml",
@@ -148335,6 +148373,1222 @@
             "title": "用户"
           }
         ]
+      }
+    },
+    {
+      "path": "_shared/semantic_document.yaml",
+      "sha256": "a364a78495d2b1a7eeae0b13fdb5f3d2d0183fe7cb7b614dd8880bfb9016ca9f",
+      "mediaType": "application/yaml",
+      "content": {
+        "canonicalMarkdown": {
+          "canonicalization": {
+            "digestVerification": "semanticFingerprint excludes semanticFingerprint and canonicalDigest; canonicalDigest excludes canonicalDigest; SHA-256 lowercase hex; parser verifies but never fills either value",
+            "json": "UTF-8, sorted object keys, no insignificant whitespace, finite numbers only, slash unescaped",
+            "lineEndings": "LF",
+            "terminalNewline": "exactly_one",
+            "unicode": "NFC"
+          },
+          "complexDirectiveBody": "canonical human-readable text or compact structural summary derived from attributes; complete normalized structure remains in the typed metadata binding",
+          "complexDirectiveKinds": [
+            "section",
+            "list",
+            "callout",
+            "factBox",
+            "factRow",
+            "table",
+            "tableCaption",
+            "tableRow",
+            "tableCell",
+            "groupedDirectory",
+            "footnoteDefinition",
+            "footnoteList",
+            "hatnote",
+            "externalLinks",
+            "seeAlso",
+            "relatedResources",
+            "figure",
+            "gallery"
+          ],
+          "frontMatter": {
+            "delimiter": "---",
+            "format": "canonical_json_object_on_single_line",
+            "required": [
+              "schemaVersion",
+              "dialectVersion",
+              "canonicalizationVersion",
+              "offsetEncoding",
+              "semanticFingerprint",
+              "canonicalDigest",
+              "requiredCapabilities",
+              "policyVersion",
+              "losses",
+              "assets",
+              "sourceMap"
+            ],
+            "unknownAttributes": "reject"
+          },
+          "mediaType": "text/markdown; variant=qwq-rich-md",
+          "metadataBinding": {
+            "cardinality": "exactly_one_metadata_line_immediately_followed_by_exactly_one_native_or_complex_block",
+            "replayProtection": "node order, kind, derived review body, nodeId and semanticFingerprint must equal bound metadata; orphan, duplicate, reordered or mismatched metadata fails closed",
+            "syntax": ":::qwq-meta \u003ckind\u003e \u003ccanonical-json-node-metadata\u003e"
+          },
+          "nativeInlineKinds": [
+            "text",
+            "bold",
+            "italic",
+            "boldItalic",
+            "underline",
+            "strikethrough",
+            "code",
+            "link",
+            "mention",
+            "footnoteReference",
+            "hardBreak"
+          ],
+          "nativeKinds": [
+            "documentTitle",
+            "heading",
+            "paragraph",
+            "blockquote",
+            "preformatted",
+            "codeBlock",
+            "divider",
+            "listItem",
+            "definitionList"
+          ],
+          "safety": {
+            "forbiddenAttributeNames": [
+              "on*",
+              "style",
+              "srcdoc"
+            ],
+            "forbiddenElements": [
+              "script",
+              "style",
+              "iframe",
+              "object",
+              "embed",
+              "form",
+              "input",
+              "button",
+              "meta",
+              "link"
+            ],
+            "forbiddenURLSchemes": [
+              "javascript",
+              "data"
+            ],
+            "literalAngleText": "ordinary text such as \u003c历史\u003e is allowed because it is not an executable HTML element",
+            "rawHtml": "forbidden_in_renderable_fields",
+            "sourceEvidenceException": "exact non-rendered source evidence strings may remain in semantic JSON metadata and assets but are never injected by Markdown or safe HTML renderers",
+            "unknownDirectiveAttribute": "reject",
+            "unknownKind": "reject",
+            "unsupportedOpaquePublication": "block"
+          },
+          "semanticJsonOnlyKinds": [
+            "unsupportedOpaque"
+          ]
+        },
+        "canonicalizationVersion": "1.0.0",
+        "capabilityCatalog": {
+          "allowedOrigins": [
+            "app_editor",
+            "data_pipeline",
+            "imported_html",
+            "migration",
+            "workbench"
+          ],
+          "capabilityRequiredFields": [
+            "id",
+            "allowedOrigins",
+            "fallbackPolicy"
+          ],
+          "dimensions": {
+            "author": [
+              "create",
+              "editContent",
+              "editStructure",
+              "delete"
+            ],
+            "parse": [
+              "markdown",
+              "html"
+            ],
+            "render": [
+              "app",
+              "web",
+              "workbench"
+            ],
+            "serialize": [
+              "markdown",
+              "semantic_json"
+            ]
+          },
+          "fallbackPolicies": [
+            "fail_closed",
+            "preserve_opaque",
+            "metadata_only",
+            "drop_noise",
+            "block_unsafe"
+          ],
+          "formalNodeRule": "every formal node declares non-empty requiredCapabilities; any missing capability fails closed with SEMANTIC_DOCUMENT.CAPABILITY.MISSING",
+          "ids": [
+            "parse.markdown",
+            "parse.html",
+            "serialize.markdown",
+            "serialize.semantic_json",
+            "render.app",
+            "render.web",
+            "render.workbench",
+            "author.create",
+            "author.editContent",
+            "author.editStructure",
+            "author.delete"
+          ],
+          "opaqueMutationRule": "clients without matching author capability must preserve rawSlice and rawSliceFingerprint byte-for-byte and cannot save a destructive rewrite"
+        },
+        "closedSets": {
+          "compatibilityDecisions": [
+            "compatible",
+            "migrate_explicitly",
+            "incompatible"
+          ],
+          "diagnosticCodes": [
+            "SEMANTIC_DOCUMENT.UNSUPPORTED.NODE",
+            "SEMANTIC_DOCUMENT.UNSUPPORTED.INLINE",
+            "SEMANTIC_DOCUMENT.UNSAFE.RAW_HTML",
+            "SEMANTIC_DOCUMENT.INVALID.ATTRIBUTE",
+            "SEMANTIC_DOCUMENT.INVALID.OFFSET_RANGE",
+            "SEMANTIC_DOCUMENT.INVALID.TABLE_GRID",
+            "SEMANTIC_DOCUMENT.INVALID.FOOTNOTE_GRAPH",
+            "SEMANTIC_DOCUMENT.INVALID.SOURCE_ANCHOR",
+            "SEMANTIC_DOCUMENT.INVALID.FIELD_TYPE",
+            "SEMANTIC_DOCUMENT.INVALID.UNKNOWN_FIELD",
+            "SEMANTIC_DOCUMENT.CAPABILITY.MISSING",
+            "SEMANTIC_DOCUMENT.EXPERIMENTAL.PUBLISH_FORBIDDEN",
+            "SEMANTIC_DOCUMENT.INCOMPATIBLE.SCHEMA_MAJOR",
+            "SEMANTIC_DOCUMENT.INCOMPATIBLE.DIALECT_MAJOR",
+            "SEMANTIC_DOCUMENT.INCOMPATIBLE.CANONICALIZATION_VERSION",
+            "SEMANTIC_DOCUMENT.INCOMPATIBLE.OFFSET_ENCODING"
+          ],
+          "diagnosticSeverities": [
+            "info",
+            "warning",
+            "error"
+          ],
+          "nodeStatuses": [
+            "formal",
+            "experimental"
+          ],
+          "processingDispositions": [
+            "preserved",
+            "normalized",
+            "degraded",
+            "metadata_only",
+            "dropped_noise",
+            "unsupported_opaque",
+            "blocked_unsafe"
+          ],
+          "publicationDecisions": [
+            "publish",
+            "publish_with_losses",
+            "block"
+          ]
+        },
+        "compatibility": {
+          "migration": "explicit source-version to target-version only; no dual read/write and no implicit defaults",
+          "rules": [
+            {
+              "compatibilityDecision": "compatible",
+              "condition": "supported_schema_and_dialect_same_major_and_exact_canonicalization",
+              "publicationDecision": "publish"
+            },
+            {
+              "compatibilityDecision": "migrate_explicitly",
+              "condition": "supported_explicit_migration_available",
+              "publicationDecision": "block"
+            },
+            {
+              "compatibilityDecision": "incompatible",
+              "condition": "unknown_schema_major",
+              "diagnostic": "SEMANTIC_DOCUMENT.INCOMPATIBLE.SCHEMA_MAJOR",
+              "publicationDecision": "block"
+            },
+            {
+              "compatibilityDecision": "incompatible",
+              "condition": "unknown_dialect_major",
+              "diagnostic": "SEMANTIC_DOCUMENT.INCOMPATIBLE.DIALECT_MAJOR",
+              "publicationDecision": "block"
+            },
+            {
+              "compatibilityDecision": "incompatible",
+              "condition": "canonicalization_version_mismatch",
+              "diagnostic": "SEMANTIC_DOCUMENT.INCOMPATIBLE.CANONICALIZATION_VERSION",
+              "publicationDecision": "block"
+            },
+            {
+              "compatibilityDecision": "incompatible",
+              "condition": "offset_encoding_mismatch",
+              "diagnostic": "SEMANTIC_DOCUMENT.INCOMPATIBLE.OFFSET_ENCODING",
+              "publicationDecision": "block"
+            }
+          ],
+          "versionSyntax": "semver"
+        },
+        "diagnostics": {
+          "additionalProperties": false,
+          "privacy": "messageKey is stable and source-free; rawSlice must not enter logs",
+          "required": [
+            "code",
+            "severity",
+            "disposition",
+            "sourceAnchor",
+            "messageKey"
+          ]
+        },
+        "dialect": "qwq-rich-md",
+        "dialectVersion": "1.0.0",
+        "htmlToSemantic": {
+          "attributeRules": {
+            "allowedGlobal": [
+              "id",
+              "lang",
+              "dir",
+              "title",
+              "data-mw"
+            ],
+            "dataMw": "known_value_maps_to_registry_otherwise_opaque",
+            "tableCell": {
+              "colspan": "positive_integer",
+              "data-sort-key": "string",
+              "rowspan": "positive_integer",
+              "scope": [
+                "row",
+                "col",
+                "rowgroup",
+                "colgroup"
+              ]
+            }
+          },
+          "inputMediaType": "text/html",
+          "parserSecurity": {
+            "forbiddenAttributes": [
+              "on*",
+              "style",
+              "srcdoc"
+            ],
+            "forbiddenElements": [
+              "script",
+              "style",
+              "iframe",
+              "object",
+              "embed",
+              "form",
+              "input",
+              "button",
+              "meta",
+              "link"
+            ],
+            "unsafeDecision": "block",
+            "unsafeDisposition": "blocked_unsafe",
+            "urlSchemes": [
+              "https",
+              "http"
+            ]
+          },
+          "rawHtmlTrust": "never",
+          "tagMappings": [
+            {
+              "node": "documentTitle",
+              "tag": "h1"
+            },
+            {
+              "attributes": {
+                "level": "tag_number"
+              },
+              "node": "section",
+              "tag": "h2|h3|h4|h5|h6"
+            },
+            {
+              "node": "paragraph",
+              "tag": "p"
+            },
+            {
+              "node": "blockquote",
+              "tag": "blockquote"
+            },
+            {
+              "node": "preformatted",
+              "tag": "pre"
+            },
+            {
+              "attributes": {
+                "language": "class_language_prefix"
+              },
+              "node": "codeBlock",
+              "tag": "pre\u003ecode"
+            },
+            {
+              "node": "definitionList",
+              "tag": "dl"
+            },
+            {
+              "node": "list",
+              "tag": "ol|ul"
+            },
+            {
+              "node": "listItem",
+              "tag": "li"
+            },
+            {
+              "node": "details",
+              "tag": "details"
+            },
+            {
+              "node": "figure",
+              "tag": "figure"
+            },
+            {
+              "node": "table",
+              "tag": "table"
+            },
+            {
+              "node": "tableCaption",
+              "tag": "caption"
+            },
+            {
+              "node": "tableRow",
+              "tag": "tr"
+            },
+            {
+              "attributes": {
+                "columnSpan": "colspan",
+                "rowSpan": "rowspan",
+                "scope": "scope",
+                "sortKey": "data-sort-key"
+              },
+              "node": "tableCell",
+              "tag": "th|td"
+            },
+            {
+              "attributes": {
+                "identifier": "data-footnote-ref"
+              },
+              "node": "footnoteReference",
+              "tag": "sup[data-footnote-ref]"
+            },
+            {
+              "node": "epigraph",
+              "tag": "[data-mw=Epigraph]"
+            },
+            {
+              "node": "verse",
+              "tag": "[data-mw=Poem]"
+            },
+            {
+              "node": "factBox",
+              "tag": "[data-mw=FactBox]"
+            },
+            {
+              "node": "externalLinks",
+              "tag": "[data-mw=ExternalLinks]"
+            },
+            {
+              "node": "seeAlso",
+              "tag": "[data-mw=SeeAlso]"
+            },
+            {
+              "node": "hatnote",
+              "tag": "[data-mw=Hatnote]"
+            }
+          ],
+          "unknownInvisibleNoise": {
+            "disposition": "dropped_noise",
+            "examples": [
+              "comment",
+              "empty_tracking_wrapper"
+            ]
+          },
+          "unknownVisibleNode": {
+            "disposition": "unsupported_opaque",
+            "node": "unsupportedOpaque",
+            "preserve": [
+              "outerHTML_as_rawSlice",
+              "rawSliceFingerprint",
+              "sourceAnchor"
+            ]
+          }
+        },
+        "identityAndCanonicalization": {
+          "canonicalDigest": {
+            "invariant": "SHA-256 of the complete canonical envelope excluding canonicalDigest itself",
+            "required": true,
+            "type": "sha256"
+          },
+          "losses": {
+            "invariant": "empty means no known semantic loss; source text and PII are forbidden in detailKey",
+            "itemRequired": [
+              "code",
+              "sourceAnchor",
+              "detailKey"
+            ],
+            "type": "array"
+          },
+          "nodeId": {
+            "derivation": "explicit source identity when available, otherwise canonical hash of sourceAnchor plus kind",
+            "invariant": "stable within one canonical document lineage; unique across envelope.nodes",
+            "required": true,
+            "type": "string"
+          },
+          "policyVersion": {
+            "invariant": "identifies the processing policy that chose disposition and losses",
+            "required": true,
+            "type": "semver"
+          },
+          "rawSliceFingerprint": {
+            "invariant": "SHA-256 of exact rawSlice bytes; serialize must reproduce matching bytes",
+            "requiredWhen": "disposition == unsupported_opaque",
+            "type": "sha256"
+          },
+          "semanticFingerprint": {
+            "invariant": "SHA-256 of canonical semantic node excluding source bytes, diagnostics and fingerprints",
+            "required": true,
+            "type": "sha256"
+          },
+          "sourceAnchor": {
+            "fields": [
+              "origin",
+              "start",
+              "end",
+              "selector"
+            ],
+            "invariant": "start/end are half-open offsets in offsetEncoding; selector is stable when offsets are unavailable",
+            "required": true
+          }
+        },
+        "implementationStatus": {
+          "canonicalMarkdownCodec": "available",
+          "codegenGap": "The registered generator emits the single closed node registry, canonical directive grammar, deterministic JSON canonicalization constants, and strict Go, Dart, Python, and TypeScript DocumentEnvelope canonical codecs, strict native-block metadata binding, single-corpus validation, cross-language Markdown and safe-projection differential, and Homepage/editor/workbench/PublicWeb strict read paths are available. Legacy Markdown remains explicit read-only and is never upgraded.",
+          "conformanceCorpus": "content_post_markdown_block_sequence_cases_v2",
+          "crossLanguageCodegen": "available",
+          "metadataValidator": "yaml_parse_and_service_contract_reference",
+          "role": "authoring_contract"
+        },
+        "inlineRegistry": {
+          "kinds": [
+            "text",
+            "bold",
+            "italic",
+            "boldItalic",
+            "underline",
+            "strikethrough",
+            "code",
+            "link",
+            "mention",
+            "footnoteReference",
+            "hardBreak"
+          ],
+          "linkAllowedSchemes": [
+            "https",
+            "http"
+          ],
+          "unknownInlineDisposition": "unsupported_opaque",
+          "unsafeLinkDisposition": "blocked_unsafe"
+        },
+        "markdownToSemantic": {
+          "mappings": [
+            {
+              "node": "documentTitle",
+              "syntax": "# title"
+            },
+            {
+              "node": "section",
+              "syntax": "##..######"
+            },
+            {
+              "node": "paragraph",
+              "syntax": "paragraph"
+            },
+            {
+              "node": "blockquote",
+              "syntax": "\u003e paragraph"
+            },
+            {
+              "node": "codeBlock",
+              "syntax": "fenced_code"
+            },
+            {
+              "node": "preformatted",
+              "syntax": "indented_pre"
+            },
+            {
+              "node": "divider",
+              "syntax": "---"
+            },
+            {
+              "node": "list",
+              "syntax": "ordered_or_unordered_list"
+            },
+            {
+              "node": "definitionList",
+              "syntax": "definition_list"
+            },
+            {
+              "node": "table",
+              "syntax": "pipe_table"
+            },
+            {
+              "node": "footnoteReference_and_definition",
+              "syntax": "[^id]/[^id]:"
+            },
+            {
+              "node": "figure",
+              "syntax": ":::figure"
+            },
+            {
+              "node": "gallery",
+              "syntax": ":::gallery"
+            },
+            {
+              "node": "groupedDirectory",
+              "syntax": ":::directory"
+            }
+          ],
+          "rawHtml": {
+            "allowed": false,
+            "diagnostic": "SEMANTIC_DOCUMENT.UNSAFE.RAW_HTML",
+            "disposition": "blocked_unsafe",
+            "publicationDecision": "block"
+          },
+          "unknownVisibleSyntax": {
+            "disposition": "unsupported_opaque",
+            "node": "unsupportedOpaque",
+            "preserve": [
+              "rawSlice",
+              "rawSliceFingerprint"
+            ]
+          }
+        },
+        "model": {
+          "documentEnvelope": {
+            "additionalProperties": false,
+            "fields": {
+              "assets": {
+                "invariant": "every node asset reference resolves exactly once",
+                "type": "asset_map"
+              },
+              "nodes": {
+                "invariant": "nodeId unique and reference-closed",
+                "type": "ordered_node_array"
+              },
+              "requiredCapabilities": {
+                "invariant": "union of every formal node requiredCapabilities",
+                "type": "capability_id_set"
+              },
+              "sourceMap": {
+                "invariant": "every nodeId has exactly one sourceAnchor",
+                "type": "node_source_anchor_map"
+              }
+            },
+            "required": [
+              "schemaVersion",
+              "dialectVersion",
+              "canonicalizationVersion",
+              "offsetEncoding",
+              "nodes",
+              "requiredCapabilities",
+              "assets",
+              "sourceMap",
+              "policyVersion",
+              "losses",
+              "semanticFingerprint",
+              "canonicalDigest"
+            ]
+          },
+          "inlineCommon": {
+            "invariant": "half-open range over containing node plainText using offsetEncoding",
+            "required": [
+              "kind",
+              "start",
+              "end"
+            ]
+          },
+          "nodeCommon": {
+            "additionalProperties": "false_unless_registry_attributes",
+            "invariant": "kind exists in nodeRegistry; disposition exists in processingDispositions",
+            "optional": [
+              "diagnostics",
+              "rawSlice",
+              "rawSliceFingerprint",
+              "attributes",
+              "children"
+            ],
+            "required": [
+              "nodeId",
+              "kind",
+              "disposition",
+              "policyVersion",
+              "requiredCapabilities",
+              "losses",
+              "semanticFingerprint",
+              "sourceAnchor"
+            ]
+          }
+        },
+        "nodeRegistry": {
+          "bibliography": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "blockquote": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "callout": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "codeBlock": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "definitionList": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "details": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "divider": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "documentTitle": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "epigraph": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "externalLinks": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "factBox": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "factRow": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "figure": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "footnoteDefinition": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "footnoteList": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "footnoteReference": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "gallery": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "groupedDirectory": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench",
+              "author.editStructure"
+            ],
+            "status": "formal"
+          },
+          "hatnote": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "heading": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench",
+              "author.editContent",
+              "author.editStructure"
+            ],
+            "status": "formal"
+          },
+          "interactiveWidget": {
+            "publicationDecision": "block",
+            "requiredCapabilities": [
+              "parse.html",
+              "render.workbench"
+            ],
+            "status": "experimental"
+          },
+          "list": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench",
+              "author.editStructure"
+            ],
+            "status": "formal"
+          },
+          "listItem": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench",
+              "author.editStructure"
+            ],
+            "status": "formal"
+          },
+          "mapEmbed": {
+            "publicationDecision": "block",
+            "requiredCapabilities": [
+              "parse.html",
+              "render.workbench"
+            ],
+            "status": "experimental"
+          },
+          "mathBlock": {
+            "publicationDecision": "block",
+            "requiredCapabilities": [
+              "parse.markdown",
+              "render.workbench"
+            ],
+            "status": "experimental"
+          },
+          "paragraph": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench",
+              "author.editContent"
+            ],
+            "status": "formal"
+          },
+          "preformatted": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "relatedResources": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "section": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench",
+              "author.editStructure"
+            ],
+            "status": "formal"
+          },
+          "seeAlso": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "table": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "tableCaption": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "tableCell": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "tableRow": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          },
+          "timeline": {
+            "publicationDecision": "block",
+            "requiredCapabilities": [
+              "parse.html",
+              "render.workbench"
+            ],
+            "status": "experimental"
+          },
+          "unsupportedOpaque": {
+            "fallbackPolicy": "preserve_opaque",
+            "requiredCapabilities": [
+              "serialize.semantic_json"
+            ],
+            "status": "formal"
+          },
+          "verse": {
+            "requiredCapabilities": [
+              "parse.markdown",
+              "parse.html",
+              "serialize.markdown",
+              "render.app",
+              "render.web",
+              "render.workbench"
+            ],
+            "status": "formal"
+          }
+        },
+        "nodeRegistryPolicy": {
+          "experimentalRule": "experimental nodes are workbench-only and publication is blocked until all parse/serialize/render.app/render.web capabilities close"
+        },
+        "offsetEncoding": "unicode_scalar_value",
+        "rawHtmlPolicy": "forbidden",
+        "safeProjection": {
+          "canonicalization": "same canonical JSON and NFC rules as canonical Markdown metadata",
+          "eventFields": [
+            "order",
+            "depth",
+            "nodeId",
+            "kind",
+            "safeTag",
+            "text",
+            "links",
+            "assetIds",
+            "tableCells",
+            "footnoteEdges"
+          ],
+          "format": "canonical_json_event_sequence",
+          "safeTags": {
+            "blockquote": "blockquote",
+            "callout": "aside",
+            "codeBlock": "code",
+            "definitionList": "dl",
+            "divider": "hr",
+            "documentTitle": "h1",
+            "externalLinks": "section",
+            "factBox": "aside",
+            "factRow": "div",
+            "figure": "figure",
+            "footnoteDefinition": "li",
+            "footnoteList": "ol",
+            "footnoteReference": "sup",
+            "gallery": "gallery",
+            "groupedDirectory": "nav",
+            "hatnote": "aside",
+            "heading": "heading_level",
+            "list": "list",
+            "listItem": "li",
+            "paragraph": "p",
+            "preformatted": "pre",
+            "relatedResources": "section",
+            "seeAlso": "section",
+            "table": "table",
+            "tableCaption": "caption",
+            "tableCell": "td_or_th",
+            "tableRow": "tr"
+          },
+          "safety": "projection contains identities and escaped text only; source raw HTML and evidence strings are never executable"
+        },
+        "schema": "semantic_document.authoring",
+        "schemaVersion": "1.0.0",
+        "semanticToSafeHtml": {
+          "escaping": "all text and attribute values are escaped; source raw HTML is never injected",
+          "linkAttributes": {
+            "rel": "noopener noreferrer"
+          },
+          "nodeMappings": {
+            "bibliography": "section.qwq-bibliography",
+            "blockquote": "blockquote",
+            "callout": "aside.qwq-callout",
+            "codeBlock": "pre\u003ecode",
+            "definitionList": "dl",
+            "details": "details",
+            "divider": "hr",
+            "documentTitle": "h1",
+            "epigraph": "blockquote.qwq-epigraph",
+            "externalLinks": "section.qwq-external-links",
+            "factBox": "aside.qwq-fact-box",
+            "factRow": "div.qwq-fact-row",
+            "figure": "figure",
+            "footnoteDefinition": "li.qwq-footnote",
+            "footnoteList": "ol.qwq-footnotes",
+            "footnoteReference": "sup",
+            "gallery": "section.qwq-gallery",
+            "groupedDirectory": "nav.qwq-grouped-directory",
+            "hatnote": "aside.qwq-hatnote",
+            "list": "ol|ul",
+            "listItem": "li",
+            "paragraph": "p",
+            "preformatted": "pre",
+            "relatedResources": "section.qwq-related-resources",
+            "section": "section",
+            "seeAlso": "section.qwq-see-also",
+            "table": "table",
+            "tableCaption": "caption",
+            "tableCell": "th|td",
+            "tableRow": "tr",
+            "verse": "pre.qwq-verse"
+          },
+          "tableCellAttributes": [
+            "rowspan",
+            "colspan",
+            "scope",
+            "data-sort-key"
+          ],
+          "unsupportedOpaque": {
+            "neverInjectRawHtml": true,
+            "render": "escaped_raw_slice_in_pre"
+          }
+        },
+        "structureContracts": {
+          "footnoteGraph": {
+            "diagnostic": "SEMANTIC_DOCUMENT.INVALID.FOOTNOTE_GRAPH",
+            "edges": "footnoteReference.identifier -\u003e footnoteDefinition.identifier",
+            "invalidDecision": "block",
+            "invariants": [
+              "every_reference_resolves_once",
+              "definition_identifiers_unique",
+              "backlinks_preserve_reference_order"
+            ]
+          },
+          "groupedDirectory": {
+            "groupIdRule": "NFC(trim(groupId)) and unique",
+            "ordering": "groups and entries preserve source order",
+            "targetRule": "each targetNodeId references a section in the same envelope"
+          },
+          "table": {
+            "cellRequired": [
+              "nodeId",
+              "row",
+              "column",
+              "rowSpan",
+              "columnSpan",
+              "scope",
+              "sortKey",
+              "children"
+            ],
+            "diagnostic": "SEMANTIC_DOCUMENT.INVALID.TABLE_GRID",
+            "invalidDecision": "block",
+            "invariants": [
+              "rowSpan and columnSpan are positive integers",
+              "every logical coordinate is covered exactly once after span expansion",
+              "spans remain inside rowCount and columnCount",
+              "logicalGrid is canonical row-major order and references tableCell nodeIds"
+            ],
+            "required": [
+              "caption",
+              "rows",
+              "logicalGrid",
+              "rowCount",
+              "columnCount"
+            ],
+            "scopeValues": [
+              "row",
+              "col",
+              "rowgroup",
+              "colgroup",
+              "none"
+            ]
+          }
+        },
+        "unknownValuePolicy": "reject"
       }
     },
     {
@@ -261016,7 +262270,7 @@
     },
     {
       "path": "content/content/post/fields.yaml",
-      "sha256": "131883284e8d531f0966311fbddb042129012747bb81e01442da820bf9cf5e51",
+      "sha256": "944455087ec4edc9acd8ce6626006f97f76e7875ce5f0a85c9c9e8deed9d5fdb",
       "mediaType": "application/yaml",
       "content": {
         "description": "内容主体（聚合根）",
@@ -261059,6 +262313,11 @@
               "new_candidate_hint",
               "negative_feedback_removal",
               "refresh_suggestion"
+            ]
+          },
+          "SemanticDocumentMarkdownDialect": {
+            "values": [
+              "qwq-rich-md"
             ]
           },
           "SourceDerivedModification": {
@@ -261504,13 +262763,30 @@
             "constraints": [
               "NULLABLE"
             ],
-            "description": "Markdown 规范版本，当前为 qwq-rich-md",
+            "description": "Markdown dialect 闭集；当前仅允许 qwq-rich-md，版本语义由共享 semantic_document.yaml 的 dialectVersion 定义",
+            "enum_ref": "SemanticDocumentMarkdownDialect",
             "log_policy": "allow",
             "name": "markdownDialect",
             "ops_exposure": "read",
             "role": "authoritative_state",
             "source": "markdownDialect",
-            "type": "string"
+            "type": "enum"
+          },
+          {
+            "api_exposure": "read_write",
+            "classification": "PUBLIC",
+            "constraints": [
+              "NULLABLE"
+            ],
+            "description": "canonical semantic document 自包含强类型 AST；新文章 publish/promote 必填，完整 envelope 校验并重算 canonicalDigest，历史记录仅允许只读缺席。",
+            "go_import": "quwoquan_service/services/content-service/generated/content/post/semantic_document",
+            "go_type_ref": "semantic_document.DocumentEnvelope",
+            "log_policy": "metadata_only",
+            "name": "semanticDocument",
+            "ops_exposure": "read",
+            "role": "authoritative_state",
+            "source": "semanticDocument",
+            "type": "semantic_document"
           },
           {
             "api_exposure": "read",
@@ -263491,8 +264767,18 @@
                 "constraints": [
                   "NULLABLE"
                 ],
+                "go_import": "quwoquan_service/services/content-service/generated/content/post/semantic_document",
+                "go_type_ref": "semantic_document.DocumentEnvelope",
+                "name": "semanticDocument",
+                "type": "semantic_document"
+              },
+              {
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "enum_ref": "SemanticDocumentMarkdownDialect",
                 "name": "markdownDialect",
-                "type": "string"
+                "type": "enum"
               },
               {
                 "constraints": [
@@ -263630,12 +264916,22 @@
                 "type": "string"
               },
               {
-                "client_dart_type": "String?",
                 "constraints": [
                   "NULLABLE"
                 ],
+                "go_import": "quwoquan_service/services/content-service/generated/content/post/semantic_document",
+                "go_type_ref": "semantic_document.DocumentEnvelope",
+                "name": "semanticDocument",
+                "type": "semantic_document"
+              },
+              {
+                "client_dart_type": "SemanticDocumentMarkdownDialect?",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "enum_ref": "SemanticDocumentMarkdownDialect",
                 "name": "markdownDialect",
-                "type": "string"
+                "type": "enum"
               },
               {
                 "constraints": [
@@ -264055,8 +265351,9 @@
                 "constraints": [
                   "NULLABLE"
                 ],
+                "enum_ref": "SemanticDocumentMarkdownDialect",
                 "name": "markdownDialect",
-                "type": "string"
+                "type": "enum"
               },
               {
                 "constraints": [
@@ -264914,9 +266211,24 @@
     },
     {
       "path": "content/content/post/markdown_block_sequence_cases.json",
-      "sha256": "88288274ec6eb527483bb052ba7f5e32aa6b3063840085cfcd8f3e292aa8d5c9",
+      "sha256": "f5fdac6135a92ef3788a1bc8ed626402567d2f7189e658155d9f48bf622772ed",
       "mediaType": "application/json",
       "content": {
+        "canonicalCodec": {
+          "crossLanguage": [
+            "python",
+            "go",
+            "dart",
+            "typescript"
+          ],
+          "directive": ":::qwq \u003ckind\u003e \u003ccanonical-json-node-metadata\u003e",
+          "frontMatter": "single-line canonical JSON",
+          "rawHtml": "forbidden",
+          "semanticJsonOnly": [
+            "unsupportedOpaque"
+          ]
+        },
+        "canonicalizationVersion": "1.0.0",
         "cases": [
           {
             "assets": [
@@ -265003,7 +266315,234 @@
             "name": "rich_article_body"
           }
         ],
-        "schema": "content_post_markdown_block_sequence_cases"
+        "conformanceCases": [
+          {
+            "covers": [
+              "text",
+              "bold",
+              "italic",
+              "boldItalic",
+              "underline",
+              "strikethrough",
+              "code",
+              "link",
+              "mention",
+              "footnoteReference",
+              "hardBreak"
+            ],
+            "expectedDecision": "publish",
+            "expectedDiagnostics": [],
+            "expectedDisposition": "normalized",
+            "expectedDocument": {
+              "children": [
+                {
+                  "inlineKinds": [
+                    "text",
+                    "bold",
+                    "italic",
+                    "boldItalic",
+                    "underline",
+                    "strikethrough",
+                    "code",
+                    "link",
+                    "mention",
+                    "footnoteReference",
+                    "hardBreak"
+                  ],
+                  "kind": "paragraph"
+                }
+              ],
+              "kind": "document"
+            },
+            "markdown": "正文 **粗体** *斜体* ***粗斜体*** ++下划线++ ~~删除~~ `代码` [链接](https://example.test) @[西湖](entity:景区:杭州西湖)[^n]  \n换行",
+            "name": "complete_inline"
+          },
+          {
+            "covers": [
+              "list",
+              "listItem"
+            ],
+            "expectedDecision": "publish",
+            "expectedDiagnostics": [],
+            "expectedDisposition": "normalized",
+            "expectedDocument": {
+              "children": [
+                {
+                  "depths": [
+                    0,
+                    1,
+                    2
+                  ],
+                  "kind": "list",
+                  "listKind": "unordered"
+                }
+              ],
+              "kind": "document"
+            },
+            "markdown": "- 顶层\n  - 一级\n    1. 二级",
+            "name": "nested_lists"
+          },
+          {
+            "covers": [
+              "groupedDirectory"
+            ],
+            "expectedDecision": "publish",
+            "expectedDiagnostics": [],
+            "expectedDisposition": "normalized",
+            "expectedDocument": {
+              "children": [
+                {
+                  "groups": [
+                    {
+                      "entries": [
+                        {
+                          "label": "第一章",
+                          "level": 2,
+                          "targetNodeId": "chapter-1"
+                        }
+                      ],
+                      "groupId": "journey",
+                      "label": "行程"
+                    },
+                    {
+                      "entries": [
+                        {
+                          "label": "装备",
+                          "level": 2,
+                          "targetNodeId": "gear"
+                        }
+                      ],
+                      "groupId": "notes",
+                      "label": "提示"
+                    }
+                  ],
+                  "kind": "groupedDirectory"
+                }
+              ],
+              "kind": "document"
+            },
+            "markdown": ":::directory\ngroup:journey label=\"行程\"\n- [第一章](#chapter-1)\ngroup:notes label=\"提示\"\n- [装备](#gear)\n:::",
+            "name": "grouped_directory"
+          },
+          {
+            "covers": [
+              "table"
+            ],
+            "expectedDecision": "publish",
+            "expectedDiagnostics": [],
+            "expectedDisposition": "normalized",
+            "expectedDocument": {
+              "children": [
+                {
+                  "columnCount": 2,
+                  "kind": "table",
+                  "logicalGrid": [
+                    {
+                      "alignment": "start",
+                      "cellId": "r0c0",
+                      "column": 0,
+                      "columnSpan": 1,
+                      "header": true,
+                      "row": 0,
+                      "rowSpan": 1
+                    },
+                    {
+                      "alignment": "end",
+                      "cellId": "r0c1",
+                      "column": 1,
+                      "columnSpan": 1,
+                      "header": true,
+                      "row": 0,
+                      "rowSpan": 1
+                    },
+                    {
+                      "alignment": "start",
+                      "cellId": "r1c0",
+                      "column": 0,
+                      "columnSpan": 1,
+                      "header": false,
+                      "row": 1,
+                      "rowSpan": 1
+                    },
+                    {
+                      "alignment": "end",
+                      "cellId": "r1c1",
+                      "column": 1,
+                      "columnSpan": 1,
+                      "header": false,
+                      "row": 1,
+                      "rowSpan": 1
+                    }
+                  ],
+                  "rowCount": 2
+                }
+              ],
+              "kind": "document"
+            },
+            "markdown": "| 地点 | 天数 |\n| :--- | ---: |\n| 西湖 | 2 |",
+            "name": "table_logical_grid"
+          },
+          {
+            "covers": [
+              "footnoteReference",
+              "footnoteDefinition"
+            ],
+            "expectedDecision": "publish",
+            "expectedDiagnostics": [],
+            "expectedDisposition": "normalized",
+            "expectedDocument": {
+              "children": [
+                {
+                  "inlineKinds": [
+                    "text",
+                    "footnoteReference",
+                    "text"
+                  ],
+                  "kind": "paragraph"
+                },
+                {
+                  "identifier": "route",
+                  "kind": "footnoteDefinition"
+                }
+              ],
+              "kind": "document"
+            },
+            "markdown": "正文脚注[^route]。\n\n[^route]: 路线说明。",
+            "name": "footnote"
+          },
+          {
+            "covers": [
+              "unsupported",
+              "SEMANTIC_DOCUMENT.UNSUPPORTED.NODE"
+            ],
+            "expectedDecision": "publish_with_losses",
+            "expectedDiagnostics": [
+              {
+                "code": "SEMANTIC_DOCUMENT.UNSUPPORTED.NODE",
+                "disposition": "preserve",
+                "messageKey": "semantic_document.unsupported.node",
+                "severity": "warning"
+              }
+            ],
+            "expectedDisposition": "unsupported_opaque",
+            "expectedDocument": {
+              "children": [
+                {
+                  "kind": "unsupported",
+                  "rawSource": ":::timeline\n- 08:00 出发\n:::",
+                  "sourceKind": "timeline"
+                }
+              ],
+              "kind": "document"
+            },
+            "markdown": ":::timeline\n- 08:00 出发\n:::",
+            "name": "unsupported_typed_diagnostic"
+          }
+        ],
+        "dialectVersion": "1.0.0",
+        "offsetEncoding": "unicode_scalar_value",
+        "schema": "content_post_markdown_block_sequence_cases",
+        "schemaVersion": "1.0.0"
       }
     },
     {
@@ -300554,13 +302093,13 @@
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_section.yaml",
-      "sha256": "4adb3620d2d6ce1870abf1d3ef2698fa4253ff0c405d2506334beaa996a09e93",
+      "sha256": "734ba5f3cf337b7930002b849e254dc0a624314123b5ad72788b9cb076fb6f64",
       "mediaType": "application/yaml",
       "content": {
         "consumers": [
           "app"
         ],
-        "description": "主页完整介绍页分节。kind 为稳定展示闭集：\noverview | keyFacts | timeline | history | relatedPeople | relatedObjects | map | gallery | body | relatedImages。\n端侧按 kind 选择渲染形态，正文仍以 bodyMarkdown 为主，避免 Map 穿透 UI。\nbody：数据工程 page.md 正文章节投影，bodyMarkdown 可含 `:::figure id=\"...\" caption=\"...\"`\n块级内嵌图指令（上图下文 + 单行原图注），assets 提供 role=inline 的图片绑定。\nrelatedImages：page.md 页尾「相关图片」小节投影，assets 全部 role=related。\n",
+        "description": "主页完整介绍页分节。kind 为稳定展示闭集：\noverview | keyFacts | timeline | history | relatedPeople | relatedObjects | map | gallery | body | relatedImages。\n端侧按 kind 选择渲染形态；canonical semanticDocument 在场时为唯一正文语义来源。\nbodyMarkdown 仅供存量记录 legacy read-only 消费，不得用于新写入或隐式升级 canonical。\nbody：数据工程 page.md 正文章节投影，bodyMarkdown 可含 `:::figure id=\"...\" caption=\"...\"`\n块级内嵌图指令（上图下文 + 单行原图注），assets 提供 role=inline 的图片绑定。\nrelatedImages：page.md 页尾「相关图片」小节投影，assets 全部 role=related。\n",
         "fields": [
           {
             "name": "kind",
@@ -300569,6 +302108,13 @@
           {
             "name": "title",
             "type": "string"
+          },
+          {
+            "go_import": "quwoquan_service/services/entity-service/generated/entity_homepage/homepage/semantic_document",
+            "go_type_ref": "semantic_document.DocumentEnvelope",
+            "name": "semanticDocument",
+            "nullable": true,
+            "type": "semantic_document"
           },
           {
             "name": "bodyMarkdown",

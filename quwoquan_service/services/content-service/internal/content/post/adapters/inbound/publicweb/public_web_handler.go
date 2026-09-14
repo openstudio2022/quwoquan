@@ -7,6 +7,7 @@ import (
 	"time"
 
 	rtweb "quwoquan_service/runtime/publicweb"
+	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
@@ -116,9 +117,24 @@ func (h *Handler) handlePostHTML(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) renderBodyHTML(detail postports.PostDetailSlice) string {
+	if detail.SemanticDocument != nil {
+		available := map[semantic.CapabilityID]bool{}
+		for id := range semantic.CapabilityRegistry {
+			available[id] = true
+		}
+		rendered, err := RenderSemanticDocumentBodyHTML(*detail.SemanticDocument, available, h.bodyAssetsFor(detail))
+		if err != nil {
+			return `<p class="qwq-content-unavailable">正文语义版本不兼容，暂不可展示。</p>`
+		}
+		return rendered
+	}
 	markdown := strings.TrimSpace(detail.ArticleMarkdown)
 	if markdown != "" {
-		return RenderQwqMarkdownBodyHTML(markdown, h.bodyAssetsFor(detail))
+		rendered, err := RenderLegacyReadOnlyMarkdownBodyHTML(markdown, detail.MarkdownDialect, h.bodyAssetsFor(detail))
+		if err != nil {
+			return `<p class="qwq-content-unavailable">正文语义版本不兼容，暂不可展示。</p>`
+		}
+		return rendered
 	}
 	body := strings.TrimSpace(detail.Body)
 	if body == "" {

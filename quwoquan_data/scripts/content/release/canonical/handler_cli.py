@@ -68,6 +68,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pool_query.add_argument("--json", dest="json_output", help="把完整结果写到该路径；stdout 只打印计数")
     pool_query.set_defaults(handler=_load_pool_query)
     _register_pool_cutover(commands)
+    _register_governed_remediation(commands)
 
     acceptance_lease = commands.add_parser(
         "acceptance-lease",
@@ -175,6 +176,47 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     reset_canonical.set_defaults(handler=_load_reset_canonical)
 
+
+
+def _register_governed_remediation(commands) -> None:
+    parser = commands.add_parser("governed-remediation", help="有限的 canonical replacement + retirement 对象事务")
+    actions = parser.add_subparsers(dest="remediation_action", required=True)
+    prepare = actions.add_parser("prepare")
+    prepare.add_argument("--publish-root", required=True)
+    prepare.add_argument("--attempt-root", required=True)
+    prepare.add_argument("--run-root", required=True)
+    prepare.add_argument("--owner-identity", required=True)
+    prepare.add_argument("--owner-identity-digest", required=True)
+    prepare.add_argument("--release-root", action="append", default=[])
+    prepare.add_argument("--environment-binding", action="append", default=[])
+    prepare.set_defaults(handler=_load_governed_remediation)
+    apply = actions.add_parser("apply")
+    apply.add_argument("--run-root", required=True)
+    apply.add_argument("--attestation-digest", required=True)
+    apply.set_defaults(handler=_load_governed_remediation)
+
+
+def _load_governed_remediation(args: argparse.Namespace) -> None:
+    import json
+    from pathlib import Path
+    from content.release.canonical import governed_remediation
+    try:
+        if args.remediation_action == "prepare":
+            result = governed_remediation.prepare(
+                publish_root=Path(args.publish_root).expanduser().absolute(),
+                attempt_root=Path(args.attempt_root).expanduser().absolute(),
+                run_root=Path(args.run_root).expanduser().absolute(),
+                owner_identity={"ref": str(Path(args.owner_identity).expanduser().absolute()), "digest": args.owner_identity_digest},
+                release_roots=[Path(value).expanduser().absolute() for value in args.release_root],
+                environment_bindings=[Path(value).expanduser().absolute() for value in args.environment_binding],
+            )
+        else:
+            result = governed_remediation.apply(run_root=Path(args.run_root).expanduser().absolute(), expected_attestation=args.attestation_digest)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
+        code = str(error).split(":", 1)[0]
+        print(json.dumps({"status": "blocked", "code": code, "message": str(error)}, ensure_ascii=False))
+        raise SystemExit(1) from error
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
 
 def _register_pool_cutover(commands) -> None:
     parser = commands.add_parser("pool-cutover", help="显式全池盘点/预验/原子切换；不转换或批准对象，不自动恢复")

@@ -3,7 +3,7 @@
 只有 acquire(1.download)、author(4.draft)、review(5.review) 三步有 receipt。seal 自己完成
 schema/引用/摘要/媒体硬事实检查并冻结产物 exact bytes；不再有 stage-open、宿主 verifierFacts、
 跨阶段回扫。review 步骤额外把 content_review.json 的机械字段（schema/stage/executionId/objectRef/
-draft/assetRights 权利转录）从 execution 与 source meta 补齐，AI 只写判断字段。
+candidateBindings/author/reviewer/assetRights 权利转录）从 execution 与 source meta 补齐，AI 只写判断字段。
 """
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ from core.control_types import (
     carrier_of_target_ref,
 )
 from core.schema import assert_valid
+from core.semantic_quality_gates import SemanticGateError, assert_review_admissible
 
 STAGES: tuple[str, ...] = tuple(stage.value for stage in RECEIPT_STAGE_SEQUENCE)
 RECEIPT_DIRECTORY = "_shared/receipts"
@@ -296,6 +297,80 @@ def _assert_quality_scores_match_carrier(review: dict[str, Any], *, target_ref: 
         raise SealError(f"qualityScores 维度不属于该载体闭集：{target_ref} unknown={unknown}")
 
 
+_SEMANTIC_COUNT_CAPABILITY = {
+    "title": "title",
+    "heading": "heading",
+    "paragraph": "paragraph",
+    "list": "list",
+    "tableLogicalCell": "table_logical_grid",
+    "footnote": "footnote",
+    "media": "media_order",
+}
+
+
+def _assert_semantic_report_closes(
+    root: Path, review: dict[str, Any], *, target_ref: str
+) -> None:
+    """只验证 reviewer 已提交的语义摘要闭包；不解析正文，也不生成语义判断。"""
+
+    if review.get("decision") != "approved":
+        return
+    try:
+        assert_review_admissible(review)
+    except SemanticGateError as exc:
+        raise SealError(str(exc)) from exc
+    report = review.get("semanticReport")
+    if not isinstance(report, dict):
+        raise SealError(f"approved review 缺 semanticReport：{target_ref}")
+    carrier = carrier_of_target_ref(target_ref)
+    if report.get("reviewedCarrier") != carrier or report.get("carrierCompatible") is not True:
+        raise SealError(f"semanticReport 载体不匹配：{target_ref}")
+    issues = report.get("issues")
+    if not isinstance(issues, list) or issues:
+        raise SealError(f"approved semanticReport 不得有未决 issue：{target_ref}")
+
+    refs_doc = _read_json(root / f"{target_ref}/1.download/source_refs.json", label="source_refs")
+    expected = {str(row.get("sourceRef") or "") for row in refs_doc.get("sources") or []}
+    rows = report.get("sources")
+    if not isinstance(rows, list):
+        raise SealError(f"semanticReport.sources 必须是数组：{target_ref}")
+    declared = [str(row.get("sourceRef") or "") for row in rows if isinstance(row, dict)]
+    if len(declared) != len(rows) or len(declared) != len(set(declared)) or set(declared) != expected:
+        raise SealError(
+            f"semanticReport.sources 必须恰好覆盖采用来源：{target_ref} "
+            f"missing={sorted(expected - set(declared))} extra={sorted(set(declared) - expected)}"
+        )
+    for row in rows:
+        source_ref = _safe_ref(str(row["sourceRef"]), label="semanticReport.sourceRef")
+        if row.get("sourceDigest") != sha256(_regular(root / source_ref, label=source_ref).read_bytes()):
+            raise SealError(f"semanticReport 来源摘要漂移：{source_ref}")
+        if row.get("parseStatus") != "complete":
+            raise SealError(f"semanticReport 仍有未决 parseStatus：{source_ref}")
+        capabilities = set(row.get("capabilities") or [])
+        source_counts = row.get("sourceCounts") or {}
+        draft_counts = row.get("draftCounts") or {}
+        if source_counts != draft_counts:
+            raise SealError(f"semanticReport 语义计数不守恒：{source_ref}")
+        missing_capabilities = sorted(
+            capability
+            for count_name, capability in _SEMANTIC_COUNT_CAPABILITY.items()
+            if int(source_counts.get(count_name) or 0) > 0 and capability not in capabilities
+        )
+        if missing_capabilities:
+            raise SealError(f"semanticReport capability 覆盖不闭合：{source_ref} missing={missing_capabilities}")
+        if row.get("sourceSequenceDigest") != row.get("draftSequenceDigest"):
+            raise SealError(f"semanticReport 节点顺序不守恒：{source_ref}")
+
+    if carrier == "homepage":
+        fidelity = report.get("homepageFidelity") or {}
+        if not fidelity or not all(value is True for value in fidelity.values()):
+            raise SealError(f"homepage 保真报告未闭合：{target_ref}")
+    if carrier == "article":
+        intent = report.get("articleIntent") or {}
+        if intent.get("independent") is not True:
+            raise SealError(f"article 缺少独立 intent：{target_ref}")
+
+
 def _object_source_assets(root: Path, target_ref: str) -> dict[str, dict[str, Any]]:
     """对象全部 source unit 的资产行，键为 execution 相对路径 sources/<unit>/assets/<fileName>。"""
 
@@ -348,6 +423,8 @@ def _complete_review(
     execution_id: str,
     target_ref: str,
     root: Path,
+    author: dict[str, Any],
+    reviewer: dict[str, Any],
 ) -> dict[str, Any]:
     """reviewer 只写 decision/blockingIssues/advisories（可选 safety、assetRights[].issues）；
     assetRights 按对象实际引用的资产机械补齐，dimensions 缺省为单维。"""
@@ -397,7 +474,14 @@ def _complete_review(
         "stage": "5.review",
         "executionId": execution_id,
         "objectRef": target_ref,
-        "draft": {"ref": f"4.draft/{PurePosixPath(draft_ref).name}", "digest": draft_digest},
+        "author": author,
+        "reviewer": reviewer,
+        "candidateBindings": {
+            "origin": "execution_draft",
+            "page": {"ref": f"4.draft/{PurePosixPath(draft_ref).name}", "digest": draft_digest},
+            "manifest": None,
+            "semanticDocument": None,
+        },
         "dimensions": dimensions,
         "blockingIssues": blocking,
         "advisories": advisories,
@@ -446,7 +530,11 @@ def _seal_review(
         path = root / review_ref
         judgement = reviews.get(target_ref) or reviews.get(f"/{target_ref}") or {}
         _assert_quality_scores_match_carrier(judgement, target_ref=target_ref)
-        completed = _complete_review(dict(judgement), execution_id=execution_id, target_ref=target_ref, root=root)
+        _assert_semantic_report_closes(root, judgement, target_ref=target_ref)
+        completed = _complete_review(
+            dict(judgement), execution_id=execution_id, target_ref=target_ref, root=root,
+            author=dict(author), reviewer=dict(reviewer),
+        )
         try:
             assert_valid(completed, "content", "content_review", label=review_ref)
         except ValueError as exc:

@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/service/content_service/content/post/generated/semantic_document.g.dart';
 import 'package:quwoquan_app/runtime/transport/links/app_public_content_links.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_asset_url_resolver.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/qwq_markdown_ast.dart';
@@ -82,6 +83,18 @@ class MarkdownSeoHtmlRenderer {
     }
 
     final parsed = _parser.parse(input.articleMarkdown).document;
+    if (parsed.hasBlockingDiagnostics) {
+      return SeoHtmlDocument(
+        html: '',
+        title: input.title.trim(),
+        description: '',
+        canonicalUrl: canonicalUrl,
+        openGraph: const <String, String>{},
+        jsonLd: const <String, Object?>{},
+        referencedAssetUrls: const <String>[],
+        indexable: false,
+      );
+    }
     final assetsById = _assetUrlResolver.resolveManifestUrls(
       input.articleAssetManifest,
     );
@@ -185,6 +198,20 @@ class MarkdownSeoHtmlRenderer {
         return '<div class="qwq-spacer"></div>';
       case QwqMarkdownBlockKind.horizontalRule:
         return '<hr>';
+      case QwqMarkdownBlockKind.table:
+        final rows = block.table?.logicalGrid ?? const <List<String>>[];
+        return '<table>${rows.map((row) => '<tr>${row.map((cell) => '<td>${_escape(cell)}</td>').join()}</tr>').join()}</table>';
+      case QwqMarkdownBlockKind.groupedDirectory:
+        final groups =
+            block.groupedDirectory?.groups.entries ??
+            const <MapEntry<String, List<String>>>[];
+        return '<nav>${groups.map((entry) => '<section><h2>${_escape(entry.key)}</h2><ul>${entry.value.map((item) => '<li>${_escape(item)}</li>').join()}</ul></section>').join()}</nav>';
+      case QwqMarkdownBlockKind.definitionList:
+        return '<dl>${block.definitions.map((item) => '<dt>${_escape(item.term)}</dt><dd>${_escape(item.definition)}</dd>').join()}</dl>';
+      case QwqMarkdownBlockKind.footnote:
+        return '<aside class="qwq-footnote">${_escape(block.footnote?.text ?? block.text)}</aside>';
+      case QwqMarkdownBlockKind.unsupported:
+        return '<p>${_escape(block.text)}</p>';
     }
   }
 
@@ -221,15 +248,27 @@ class MarkdownSeoHtmlRenderer {
   String _renderInline(QwqMarkdownInline inline) {
     final text = _escape(inline.text);
     switch (inline.kind) {
-      case QwqMarkdownInlineKind.text:
+      case SemanticInlineKind.text:
         return text;
-      case QwqMarkdownInlineKind.emphasis:
+      case SemanticInlineKind.italic:
         return '<em>$text</em>';
-      case QwqMarkdownInlineKind.strong:
+      case SemanticInlineKind.bold:
         return '<strong>$text</strong>';
-      case QwqMarkdownInlineKind.code:
+      case SemanticInlineKind.boldItalic:
+        return '<strong><em>$text</em></strong>';
+      case SemanticInlineKind.footnoteReference:
+        return '<sup>$text</sup>';
+      case SemanticInlineKind.hardBreak:
+        return '<br>';
+      case SemanticInlineKind.code:
         return '<code>$text</code>';
-      case QwqMarkdownInlineKind.link:
+      case SemanticInlineKind.mention:
+        return text;
+      case SemanticInlineKind.underline:
+        return '<u>$text</u>';
+      case SemanticInlineKind.strikethrough:
+        return '<del>$text</del>';
+      case SemanticInlineKind.link:
         final href = inline.href.trim();
         if (!_isSafeUrl(href)) return text;
         return '<a href="${_escapeAttribute(href)}" rel="nofollow ugc">$text</a>';

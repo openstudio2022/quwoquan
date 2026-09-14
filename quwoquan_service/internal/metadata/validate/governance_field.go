@@ -14,7 +14,7 @@ func validateFieldTypes(contractGraph *graph.ContractGraph) []Issue {
 		"float", "float32", "float64", "double", "timestamp", "datetime",
 		"date", "time", "ObjectId", "object", "array", "json", "jsonb",
 		"embedded_list", "tag_ref", "bytes", "decimal", "duration", "url",
-		"uuid",
+		"uuid", "semantic_document",
 	} {
 		primitives[primitive] = struct{}{}
 	}

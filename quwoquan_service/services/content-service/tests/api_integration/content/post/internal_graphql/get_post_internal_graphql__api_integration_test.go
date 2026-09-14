@@ -23,6 +23,7 @@ import (
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	postimport "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
+	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
 func TestInternalGraphQLRequiresVerifiedAPIEdgeCredentialAndReadsPostSlice(t *testing.T) {
@@ -280,7 +281,7 @@ func TestImportedArticleEntityMappingReachesTypedGraphQL(t *testing.T) {
 	postPath := "posts/article/导览/p0001/同名公园/1"
 	write(postPath+"/manifest.json", map[string]any{
 		"contentId": "same-name-parks", "version": 1, "sourceType": "data", "variantPurpose": "original", "status": "active", "contentIdentity": "work", "contentType": "article",
-		"publishTitle": "同名公园", "publishedAt": "2026-09-09T00:00:00Z",
+		"publishTitle": "同名公园", "publishedAt": "2026-09-09T00:00:00Z", "semanticDocument": semanticfixture.Map(t),
 		"admission": map[string]any{"processResult": "completed", "qualityResult": "passed", "usageScope": "production", "evidenceRef": "review.json", "evidenceDigest": binding.ManifestDigest},
 	})
 	markdown := "🙂@[人民公园](entity:park-cd)，[人民公园](/entity/guangzhou-park)，@[未收录](entity:absent)"

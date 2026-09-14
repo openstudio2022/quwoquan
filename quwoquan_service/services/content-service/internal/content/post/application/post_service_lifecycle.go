@@ -138,11 +138,15 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	if articleMarkdown, exists := payload["articleMarkdown"]; exists {
 		post.ArticleMarkdown = strings.TrimSpace(asString(articleMarkdown))
 	}
+	if semanticDocument, exists := payload["semanticDocument"]; exists {
+		decoded, err := decodeSemanticDocument(semanticDocument)
+		if err != nil {
+			return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "语义文档格式不合法", err.Error())
+		}
+		post.SemanticDocument = decoded
+	}
 	if markdownDialect, exists := payload["markdownDialect"]; exists {
-		post.MarkdownDialect = defaultString(
-			strings.TrimSpace(asString(markdownDialect)),
-			"qwq-rich-md",
-		)
+		post.MarkdownDialect = strings.TrimSpace(asString(markdownDialect))
 	}
 	if articleAssetManifest, exists := payload["articleAssetManifest"]; exists {
 		decoded, err := decodePostArticleAssetManifest(articleAssetManifest)
@@ -175,7 +179,9 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	if err := applyPostSettingsPayload(post, promoteSettingsPayload(payload)); err != nil {
 		return nil, err
 	}
-	s.syncArticleMarkdownSnapshot(post)
+	if err := s.syncArticleMarkdownSnapshot(post); err != nil {
+		return nil, err
+	}
 	normalizeVideoCoverContract(post)
 	now := time.Now().UTC()
 	post.UpdatedAt = now

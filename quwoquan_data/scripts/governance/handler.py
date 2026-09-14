@@ -50,6 +50,20 @@ def handle_governance(args: argparse.Namespace) -> None:
             raise SystemExit(1)
         print(f"[governance creators] OK profiles={len(registry.creators)}")
         return
+    if cmd == "semantic-differential":
+        from core.run_canonical_semantic_differential import run_differential
+
+        result = run_differential(args.source, args.output_root)
+        print(json.dumps(result, ensure_ascii=False))
+        return
+    if cmd == "content-remediation":
+        from governance.content_remediation import handle_content_remediation
+        handle_content_remediation(args)
+        return
+    if cmd == "content-workbench":
+        from governance.content_workbench.cli import handle_content_workbench
+        handle_content_workbench(args)
+        return
     if cmd == "taxonomy":
         from governance.taxonomy.handler import handle_taxonomy
 
@@ -187,6 +201,22 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Attest that the selected source crop depicts no identifiable person",
     )
     register_taxonomy_parser(sub)
+    from governance.content_workbench.cli import register_content_workbench_parser
+    register_content_workbench_parser(sub)
+    differential = sub.add_parser(
+        "semantic-differential",
+        help="执行 canonical semantic 跨语言确定性差分验证",
+    )
+    differential.add_argument("--source", required=True, type=Path)
+    differential.add_argument("--output-root", required=True, type=Path)
+    remediation = sub.add_parser(
+        "content-remediation",
+        help="从 content fidelity audit typed issues 生成隔离的 create-once remediation requests",
+    )
+    remediation.add_argument("--audit-manifest", required=True)
+    remediation.add_argument("--output-root", required=True)
+    remediation.add_argument("--issue-code", action="append", default=[], help="可重复；仅选择该 typed issue code")
+    remediation.add_argument("--severity", action="append", choices=("high", "medium", "low"), default=[], help="可重复；仅选择该 severity")
     live_import = sub.add_parser(
         "public-cli-live-import-zero",
         help="隔离导入全部 public CLI command modules 并证明旧五家族零加载",

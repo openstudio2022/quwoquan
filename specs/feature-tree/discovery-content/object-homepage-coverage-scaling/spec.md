@@ -39,6 +39,7 @@
 - [`source-discovery-scale-reliability`](./source-discovery-scale-reliability/spec.md)：来源发现由宿主 AI 原生串并行，仓内 worker/slot/heartbeat 控制面退役。
 - [`multi-carrier-release`](./multi-carrier-release/spec.md)：每个发布对象必须闭合 creator、tag、entity、media 与 source 引用，运行 receipt 只能写入输出目录、不得回写静态真相源；immutable release handoff 是 producer 终点；环境导入与 App 消费由下游环境 owner 只读 handoff 后独立闭合。
 - [`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md)：invalid canonical identity 只通过显式对象治理 query/command 收敛，不成为内容生产自动恢复。
+- [`content-pool-workbench`](./content-pool-workbench/spec.md)：生产结束后在本地只读查看 canonical 内容池全貌与元数据，并以独立文件台账完成精确版本人工复核和 R1/R2 离线返工回读，不修改发布仓或触发发布。
 
 ## 5. 能力要求
 

@@ -132,6 +132,15 @@ class MarkdownPaginationEngine {
       QwqMarkdownBlockKind.section => 3,
       QwqMarkdownBlockKind.spacer => 1,
       QwqMarkdownBlockKind.horizontalRule => 1,
+      QwqMarkdownBlockKind.table => (block.table?.rows.length ?? 1) + 2,
+      QwqMarkdownBlockKind.groupedDirectory =>
+        block.groupedDirectory?.groups.length ?? 1,
+      QwqMarkdownBlockKind.definitionList => block.definitions.length.clamp(
+        1,
+        12,
+      ),
+      QwqMarkdownBlockKind.footnote => textUnits,
+      QwqMarkdownBlockKind.unsupported => textUnits,
     };
   }
 

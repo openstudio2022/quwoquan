@@ -16,6 +16,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_view_projection.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
@@ -204,8 +205,7 @@ void main() {
         'title': '分发标题',
         'body': '分发摘要正文',
         'coverUrl': 'https://example.com/cover.jpg',
-        'articleMarkdown':
-            '---\ntitle: 水合后标题\n---\n\n# 水合后标题\n\n## 水合章节\n\n水合后正文第一段。\n\n水合后正文第二段。\n',
+        'articleMarkdown': '---\ntitle: 水合后标题\nmarkdownDialect: qwq-rich-md\n---\n\n# 水合后标题\n\n## 水合章节\n\n水合后正文第一段。\n\n水合后正文第二段。\n',
         'markdownDialect': 'qwq-rich-md',
         'articleAssetManifest': <String, dynamic>{'assets': []},
         'articleRenderProfile': <String, dynamic>{'template': 'journal'},

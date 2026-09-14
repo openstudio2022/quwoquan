@@ -1021,7 +1021,8 @@ class _RecordingHomepageIntroductionRepository
         HomepageIntroductionSection(
           kind: 'overview',
           title: '概况',
-          bodyMarkdown: '真实 introduction summary',
+          bodyMarkdown:
+              '---\nmarkdownDialect: qwq-rich-md\n---\n真实 introduction summary',
           assets: const [],
           timelineItems: const [],
         ),

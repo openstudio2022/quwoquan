@@ -13,7 +13,8 @@
     "target",
     "closure",
     "review",
-    "objectClosureDigest"
+    "objectClosureDigest",
+    "semanticBinding"
   ],
   "properties": {
     "transactionId": {
@@ -119,7 +120,10 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": {"type": "string", "pattern": "^sources/[A-Za-z0-9_-]+/source\\.json$"}
+          "items": {
+            "type": "string",
+            "pattern": "^sources/[A-Za-z0-9_-]+/source\\.json$"
+          }
         },
         "casRefs": {
           "type": "array",
@@ -199,6 +203,27 @@
     },
     "schema": {
       "const": "quwoquan_data.object_transaction_package"
+    },
+    "semanticBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "objectRevision",
+        "dispositionsDigest"
+      ],
+      "properties": {
+        "protocol": {
+          "$ref": "../content/semantic_disposition.schema.json#/$defs/protocolTriplet"
+        },
+        "objectRevision": {
+          "$ref": "../content/semantic_disposition.schema.json#/$defs/objectTuple"
+        },
+        "dispositionsDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
     }
   },
   "allOf": [
@@ -218,7 +243,10 @@
           "target": {
             "properties": {
               "objectKind": {
-                "enum": ["posts", "entities"]
+                "enum": [
+                  "posts",
+                  "entities"
+                ]
               }
             },
             "required": [

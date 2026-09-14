@@ -58,7 +58,10 @@ func TestPublicWebMarkdownMatchesSharedSemanticBlockSequence(t *testing.T) {
 					Caption: asset.Caption,
 				}
 			}
-			rendered := publicweb.RenderQwqMarkdownBodyHTML(fixtureCase.Markdown, assets)
+			rendered, err := publicweb.RenderLegacyReadOnlyMarkdownBodyHTML(fixtureCase.Markdown, "qwq-rich-md", assets)
+			if err != nil {
+				t.Fatalf("render: %v", err)
+			}
 			observed := semanticBlocksFromHTML(t, rendered)
 
 			if !reflect.DeepEqual(observed, fixtureCase.ExpectedSequence) {
@@ -71,14 +74,13 @@ func TestPublicWebMarkdownMatchesSharedSemanticBlockSequence(t *testing.T) {
 	}
 }
 
-func TestPublicWebMarkdownClosesCalloutAtEOF(t *testing.T) {
-	rendered := publicweb.RenderQwqMarkdownBodyHTML(
-		":::callout type=\"tip\"\n未闭合提示仍需生成有效 HTML。",
-		nil,
+func TestPublicWebMarkdownRejectsUnclosedCallout(t *testing.T) {
+	rendered, err := publicweb.RenderLegacyReadOnlyMarkdownBodyHTML(
+		":::callout type=\"tip\"\n未闭合提示。",
+		"qwq-rich-md", nil,
 	)
-	const expected = `<aside class="qwq-callout"><p>未闭合提示仍需生成有效 HTML。</p></aside>`
-	if rendered != expected {
-		t.Fatalf("unclosed callout html=%q want=%q", rendered, expected)
+	if err == nil || rendered != "" || !strings.Contains(err.Error(), "UNCLOSED_DIRECTIVE") {
+		t.Fatalf("unclosed callout must fail closed: html=%q err=%v", rendered, err)
 	}
 }
 

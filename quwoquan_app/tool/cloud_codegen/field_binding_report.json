@@ -1,6 +1,6 @@
 {
   "generator": "app-only-emitter",
-  "contractGraphSha256": "8bc420c9a9344d65edb779c4bcb10f4945d9fa42c7325ac903755ce4b2915dea",
+  "contractGraphSha256": "493dc4d68d70ef1b4b1dcc34bfa39f2facc3891ca600d9263d68724d1ba1ba02",
   "bindings": [
     {
       "generatedPath": "lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",
@@ -1786,6 +1786,17 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "PostArticleAssetManifest",
+      "dartField": "markdownDialect",
+      "dartType": "SemanticDocumentMarkdownDialect?",
+      "enumRef": "SemanticDocumentMarkdownDialect",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
       "dartClass": "PostDeletionReceipt",
       "dartField": "status",
       "dartType": "PostStatus",
@@ -3355,6 +3366,17 @@
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
+      "dartClass": "SubmitContentPostPublicationCommand",
+      "dartField": "markdownDialect",
+      "dartType": "SemanticDocumentMarkdownDialect?",
+      "enumRef": "SemanticDocumentMarkdownDialect",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "SemanticDocumentMarkdownDialect?",
       "typed": true
     },
     {

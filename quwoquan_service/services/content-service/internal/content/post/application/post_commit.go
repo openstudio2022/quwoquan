@@ -12,6 +12,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
@@ -114,6 +115,7 @@ func postContentDigest(post *postmodel.Post) string {
 		Summary          string
 		MediaAssetIDs    []string
 		ArticleMarkdown  string
+		SemanticDocument semantic.DocumentEnvelope
 		SemanticMentions []postmodel.PostSemanticMention
 	}{
 		ContentType:      post.ContentType,
@@ -122,6 +124,7 @@ func postContentDigest(post *postmodel.Post) string {
 		Summary:          post.Summary,
 		MediaAssetIDs:    append([]string(nil), post.MediaAssetIds...),
 		ArticleMarkdown:  post.ArticleMarkdown,
+		SemanticDocument: post.SemanticDocument,
 		SemanticMentions: post.SemanticMentions,
 	})
 	digest := sha256.Sum256(contentJSON)

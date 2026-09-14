@@ -43,6 +43,8 @@ type fieldDef struct {
 	ClientWireName      string            `yaml:"client_wire_name"`
 	ClientOmitEmpty     bool              `yaml:"client_omit_empty"`
 	ClientSpreadBody    bool              `yaml:"client_spread_body"`
+	GoTypeRef           string            `yaml:"go_type_ref"`
+	GoImport            string            `yaml:"go_import"`
 	ItemEntity          string            `yaml:"item_entity"`
 	ObjectRef           string            `yaml:"object_ref"`
 	MaxUTF8Bytes        int               `yaml:"max_utf8_bytes"`
@@ -145,11 +147,11 @@ type serviceFile struct {
 // ── {domain}/{entity}/projections/*.yaml ─────────────────────────────────────
 
 type projectionFieldDef struct {
-	Name        string `yaml:"name"`
-	WireName    string `yaml:"wire_name"`
-	DartType    string `yaml:"dart_type"`
-	WireType    string `yaml:"type"`
-	EnumRef     string `yaml:"enum_ref"`
+	Name         string `yaml:"name"`
+	WireName     string `yaml:"wire_name"`
+	DartType     string `yaml:"dart_type"`
+	WireType     string `yaml:"type"`
+	EnumRef      string `yaml:"enum_ref"`
 	Nullable     bool   `yaml:"nullable"`
 	Source       string `yaml:"source"`
 	Default      string `yaml:"default"`

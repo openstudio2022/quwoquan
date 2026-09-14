@@ -493,6 +493,7 @@ def build_post_object_transaction_package(
             },
             "closure": closure,
             "review": review,
+            "semanticBinding": {key: review_binding[key] for key in ("protocol", "objectRevision", "dispositionsDigest")},
             "objectClosureDigest": closure_digest,
         }
         _write_json(staging / "object_transaction_package.json", package)

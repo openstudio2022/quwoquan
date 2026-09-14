@@ -104,7 +104,7 @@ const List<HomepageIntroductionSection> _minimalBodySections =
       HomepageIntroductionSection(
         kind: 'body',
         title: '概况',
-        bodyMarkdown: '接线验证正文段落。',
+        bodyMarkdown: '---\nmarkdownDialect: qwq-rich-md\n---\n接线验证正文段落。',
         assets: <HomepageIntroductionAsset>[],
         timelineItems: [],
       ),
@@ -180,7 +180,8 @@ void main() {
             HomepageIntroductionSection(
               kind: 'body',
               title: '矛盾内嵌图',
-              bodyMarkdown: '正文没有可引用的 asset id。',
+              bodyMarkdown:
+                  '---\nmarkdownDialect: qwq-rich-md\n---\n正文没有可引用的 asset id。',
               assets: <HomepageIntroductionAsset>[
                 HomepageIntroductionAsset(
                   assetId: '',
@@ -257,6 +258,7 @@ void main() {
               kind: 'body',
               title: '失败正文图',
               bodyMarkdown:
+                  '---\nmarkdownDialect: qwq-rich-md\n---\n'
                   ':::figure id="fig_failed" caption="失败内嵌图"\n'
                   'asset://inline_failed_1\n'
                   ':::',
@@ -321,6 +323,7 @@ void main() {
               kind: 'body',
               title: '历史沿革',
               bodyMarkdown:
+                  '---\nmarkdownDialect: qwq-rich-md\n---\n'
                   '正文段落。\n\n'
                   ':::figure id="fig_signed" caption="私有内嵌图"\n'
                   'asset://inline_signed_1\n'

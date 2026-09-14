@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 	"strings"
 	"time"
 )
@@ -414,6 +415,7 @@ type PostDetailSlice struct {
 	Height                  int64                          `json:"height,omitempty" bson:"height,omitempty"`
 	DurationMS              int64                          `json:"durationMs,omitempty" bson:"durationMs,omitempty"`
 	ArticleMarkdown         string                         `json:"articleMarkdown,omitempty" bson:"articleMarkdown,omitempty"`
+	SemanticDocument        *semantic.DocumentEnvelope     `json:"semanticDocument,omitempty" bson:"semanticDocument,omitempty"`
 	MarkdownDialect         string                         `json:"markdownDialect,omitempty" bson:"markdownDialect,omitempty"`
 	ArticleMarkdownDigest   string                         `json:"articleMarkdownDigest,omitempty" bson:"articleMarkdownDigest,omitempty"`
 	ArticleAssetManifest    *PostArticleAssetManifestSlice `json:"articleAssetManifest,omitempty" bson:"articleAssetManifest,omitempty"`

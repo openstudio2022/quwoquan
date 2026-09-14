@@ -4,14 +4,16 @@
 同一 IR schema，落盘 `sources/{unit}/source.layout.json`，供 source.md 渲染、
 主页 page.md 组装、封面选择与质量门共同消费。
 
-块类型收敛为六种通用块（不建 galleryIR 专用复杂结构）：
+块类型以保真为先，已识别语义块之外的可见结构必须进入 unsupportedOpaque：
 
 - ``heading``   章节标题（level/text/sectionSlug）
 - ``paragraph`` 正文段落
-- ``listItem``  列表项（含复杂 wikitable 逐行降维的事实句，带 listGroupId/origin）
-- ``table``     简单矩形表格矩阵（headers/rows/caption/tableId），source.md 渲染为 GFM 表格
+- ``listItem``  列表项/定义项（带 listGroupId/origin/depth）
+- ``table``     完整逻辑网格（含 rowspan/colspan covered cells）及 groupedDirectory 判定
 - ``figure``    图片占位（sourceOrder/sectionSlug/groupId/caption/fileTitle/placementType）
 - ``factRow``   信息框键值行（key/value）
+- ``footnoteRef`` 脚注引用
+- ``unsupportedOpaque`` 白名单外可见结构的原文保留块
 
 figure 附加语义字段：
 
@@ -21,8 +23,8 @@ figure 附加语义字段：
 - ``groupId``: 宫格（gallery）/表格行图共享组 id，仅用于页尾相关图片保序。
 
 表格映射策略在 IR 层记录 ``tables[].mappingDecision``：
-``table``（矩形简单表保真为 GFM）| ``summary`` | ``orderedList`` | ``cards`` |
-``gallery`` | ``dropped``。含行图/结构复杂的表仍逐行降维，保证行图 figure 锚定链不变。
+``table`` | ``groupedDirectory`` | ``unsupportedOpaque``。表格不得默认降为事实句；
+Parsoid 主路径展开完整逻辑网格，旧 wikitext 只作为明确迁移边界。
 """
 from __future__ import annotations
 
@@ -35,9 +37,9 @@ from core.io import read_json, write_json
 SOURCE_LAYOUT_SCHEMA_VERSION = "quwoquan_data.source_layout"
 SOURCE_LAYOUT_FILE = "source.layout.json"
 
-BLOCK_TYPES = frozenset({"heading", "paragraph", "listItem", "table", "figure", "factRow"})
+BLOCK_TYPES = frozenset({"heading", "paragraph", "listItem", "table", "figure", "factRow", "footnoteRef", "footnoteDefinition", "footnoteList", "hatnote", "unsupportedOpaque"})
 PLACEMENT_TYPES = frozenset({"lead", "infoboxLead", "locatorMap", "inline", "groupMember"})
-TABLE_MAPPING_DECISIONS = frozenset({"table", "summary", "orderedList", "cards", "gallery", "dropped"})
+TABLE_MAPPING_DECISIONS = frozenset({"table", "groupedDirectory", "unsupportedOpaque"})
 
 # 地图/定位/示意类图片：只可做辅助信息，不可做封面（plan §1/§4）。
 _MAP_LIKE_RE = re.compile(
@@ -111,6 +113,8 @@ def make_table_block(
     caption: str = "",
     section_slug: str = "",
     table_id: str = "",
+    logical_grid: list[list[dict[str, Any]]] | None = None,
+    grouped_directory: bool = False,
 ) -> dict[str, Any]:
     """简单矩形表格矩阵块：cell 均为已剥离 wiki 标记的纯文本。"""
     return {
@@ -120,6 +124,8 @@ def make_table_block(
         "headers": [str(h or "").strip() for h in headers],
         "rows": [[str(c or "").strip() for c in row] for row in rows],
         "sectionSlug": str(section_slug or ""),
+        "logicalGrid": list(logical_grid or []),
+        "groupedDirectory": bool(grouped_directory),
     }
 
 
@@ -169,6 +175,11 @@ def build_layout(
     parse_status: str = "ok",
     reject_reason: str = "",
     image_evidence: Mapping[str, Any] | None = None,
+    capture_coverage: Mapping[str, Any] | None = None,
+    semantic_parse_coverage: Mapping[str, Any] | None = None,
+    dispositions: list[dict[str, Any]] | None = None,
+    losses: list[dict[str, Any]] | None = None,
+    source_profile: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """组装完整 IR 文档（source.layout.json 顶层结构）。
 
@@ -186,6 +197,11 @@ def build_layout(
         "blocks": list(blocks),
         "figureCount": len(figures),
         "tables": list(tables or []),
+        "captureCoverage": dict(capture_coverage or {}),
+        "semanticParseCoverage": dict(semantic_parse_coverage or {}),
+        "dispositions": list(dispositions or []),
+        "losses": list(losses or []),
+        "sourceProfile": dict(source_profile or {}),
     }
     if image_evidence is not None:
         payload["imageEvidence"] = dict(image_evidence)
@@ -310,6 +326,12 @@ def render_source_markdown(
             lines.append(f"- {block.get('text')}")
         elif btype == "table":
             lines.extend(["", *_render_gfm_table(block), ""])
+        elif btype == "hatnote":
+            lines.extend([str(block.get("text") or ""), ""])
+        elif btype == "unsupportedOpaque":
+            lines.extend([str(block.get("text") or ""), ""])
+        elif btype == "footnoteRef":
+            lines.extend([str(block.get("text") or ""), ""])
         elif btype == "figure" and figure_placeholder:
             order = int(block.get("sourceOrder") or 0)
             caption = str(block.get("caption") or "").strip().replace("\n", " ")

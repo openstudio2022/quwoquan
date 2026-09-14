@@ -112,7 +112,10 @@
       "required": [
         "decision",
         "blockingIssues",
-        "advisories"
+        "advisories",
+        "protocol",
+        "objectRevision",
+        "dispositions"
       ],
       "properties": {
         "decision": {
@@ -287,8 +290,312 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 2000
+        },
+        "semanticReport": {
+          "description": "独立 reviewer 提交的语义保真报告；seal 仅核对来源/草稿摘要、覆盖计数闭包、顺序摘要守恒和状态闭包，不自行作语义判断。",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reviewedCarrier",
+            "carrierCompatible",
+            "sources",
+            "issues"
+          ],
+          "properties": {
+            "reviewedCarrier": {
+              "enum": [
+                "homepage",
+                "article",
+                "image",
+                "video"
+              ]
+            },
+            "carrierCompatible": {
+              "type": "boolean"
+            },
+            "sources": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sourceRef",
+                  "sourceDigest",
+                  "parseStatus",
+                  "dialect",
+                  "dialectVersion",
+                  "capabilities",
+                  "sourceCounts",
+                  "draftCounts",
+                  "sourceSequenceDigest",
+                  "draftSequenceDigest"
+                ],
+                "properties": {
+                  "sourceRef": {
+                    "type": "string",
+                    "pattern": "^sources/.+/source\\.md$"
+                  },
+                  "sourceDigest": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  },
+                  "parseStatus": {
+                    "enum": [
+                      "complete",
+                      "degraded",
+                      "unsupported_opaque"
+                    ]
+                  },
+                  "dialect": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "dialectVersion": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capabilities": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "title",
+                        "heading",
+                        "paragraph",
+                        "list",
+                        "table_logical_grid",
+                        "footnote",
+                        "media_order"
+                      ]
+                    }
+                  },
+                  "sourceCounts": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "title",
+                      "heading",
+                      "paragraph",
+                      "list",
+                      "tableLogicalCell",
+                      "footnote",
+                      "media"
+                    ],
+                    "properties": {
+                      "title": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "heading": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "paragraph": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "list": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "tableLogicalCell": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "footnote": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "media": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
+                  },
+                  "draftCounts": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "title",
+                      "heading",
+                      "paragraph",
+                      "list",
+                      "tableLogicalCell",
+                      "footnote",
+                      "media"
+                    ],
+                    "properties": {
+                      "title": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "heading": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "paragraph": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "list": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "tableLogicalCell": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "footnote": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "media": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
+                  },
+                  "sourceSequenceDigest": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  },
+                  "draftSequenceDigest": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  }
+                }
+              }
+            },
+            "homepageFidelity": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "title",
+                "headingTree",
+                "paragraphOrder",
+                "links",
+                "nestedLists",
+                "tableLogicalGrid",
+                "footnotes",
+                "mediaCaptionOrder"
+              ],
+              "properties": {
+                "title": {
+                  "type": "boolean"
+                },
+                "tableLogicalGrid": {
+                  "type": "boolean"
+                },
+                "footnotes": {
+                  "type": "boolean"
+                },
+                "headingTree": {
+                  "type": "boolean"
+                },
+                "paragraphOrder": {
+                  "type": "boolean"
+                },
+                "links": {
+                  "type": "boolean"
+                },
+                "nestedLists": {
+                  "type": "boolean"
+                },
+                "mediaCaptionOrder": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "articleIntent": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "independent",
+                "intent",
+                "rationale"
+              ],
+              "properties": {
+                "independent": {
+                  "type": "boolean"
+                },
+                "intent": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "rationale": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "issues": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "SEMANTIC_PARSE_INCOMPLETE",
+                      "SEMANTIC_COVERAGE_GAP",
+                      "STRUCTURE_ORDER_DRIFT",
+                      "HOMEPAGE_FIDELITY_LOSS",
+                      "CARRIER_MISMATCH",
+                      "ARTICLE_INTENT_NOT_INDEPENDENT"
+                    ]
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "protocol": {
+          "$ref": "../content/semantic_disposition.schema.json#/$defs/protocolTriplet"
+        },
+        "objectRevision": {
+          "$ref": "../content/semantic_disposition.schema.json#/$defs/objectTuple"
+        },
+        "dispositions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "../content/semantic_disposition.schema.json#/$defs/disposition"
+          }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "approved"
+              }
+            },
+            "required": [
+              "decision"
+            ]
+          },
+          "then": {
+            "required": [
+              "semanticReport"
+            ]
+          }
+        }
+      ]
     },
     "typedIssue": {
       "type": "object",

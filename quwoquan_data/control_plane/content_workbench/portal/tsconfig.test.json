@@ -1,0 +1,1 @@
+{"compilerOptions":{"target":"ES2022","module":"NodeNext","moduleResolution":"NodeNext","strict":true,"skipLibCheck":true,"rootDir":"src","outDir":".test-dist","jsx":"react-jsx"},"include":["src/shared/api/**/*.ts","src/shared/filters.ts","src/shared/renderers.ts","src/shared/semanticRenderer.tsx","src/generated/semanticDocument.ts","src/shared/canonicalSemanticMarkdown.ts"]}

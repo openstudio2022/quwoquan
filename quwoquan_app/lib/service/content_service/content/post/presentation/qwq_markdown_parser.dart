@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:yaml/yaml.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_page_text_constants.dart';
+import 'package:quwoquan_app/service/content_service/content/post/generated/semantic_document.g.dart';
 
 import 'qwq_markdown_ast.dart';
 
@@ -16,10 +17,30 @@ class QwqMarkdownParseResult {
 class QwqMarkdownParser {
   const QwqMarkdownParser();
 
-  QwqMarkdownParseResult parse(String source) {
+  QwqMarkdownParseResult parse(String source, {bool requireVersion = false}) {
     final normalized = source.replaceAll('\r\n', '\n');
     final split = _splitFrontMatter(normalized);
     final diagnostics = <QwqMarkdownDiagnostic>[...split.diagnostics];
+    final dialect = split.markdownDialect;
+    if (dialect.isEmpty && requireVersion) {
+      diagnostics.add(
+        const QwqMarkdownDiagnostic(
+          code: 'markdown_version_missing',
+          message: '缺少 markdownDialect 版本声明。',
+          line: 1,
+          isBlocking: true,
+        ),
+      );
+    } else if (dialect.isNotEmpty && dialect != qwqRichMarkdownVersion) {
+      diagnostics.add(
+        QwqMarkdownDiagnostic(
+          code: 'markdown_version_unsupported',
+          message: '不支持的 markdownDialect: $dialect',
+          line: 1,
+          isBlocking: true,
+        ),
+      );
+    }
     final blocks = <QwqMarkdownBlock>[];
     final assetRefs = <QwqMarkdownAssetRef>[];
     final lines = split.body.split('\n');
@@ -51,7 +72,7 @@ class QwqMarkdownParser {
             id: nextId('paragraph'),
             kind: QwqMarkdownBlockKind.paragraph,
             text: trimmed,
-            inlines: _parseInlines(trimmed),
+            inlines: parseQwqMarkdownInlines(trimmed),
             sourceStartLine: lineNumber,
             sourceEndLine: lineNumber,
           ),
@@ -82,11 +103,70 @@ class QwqMarkdownParser {
           nextId,
         );
         blocks.add(parsedCode.block);
+        diagnostics.addAll(parsedCode.diagnostics);
         index = parsedCode.nextIndex;
         continue;
       }
 
-      final headingMatch = RegExp(r'^(#{1,3})\s+(.+)$').firstMatch(trimmed);
+      if (_isTableStart(lines, index)) {
+        final parsedTable = _parseTable(
+          lines,
+          index,
+          split.bodyStartLine,
+          nextId,
+        );
+        blocks.add(parsedTable.block);
+        index = parsedTable.nextIndex;
+        continue;
+      }
+
+      final footnoteMatch = RegExp(r'^\[\^([^\]]+)\]:\s*(.+)$')
+          .firstMatch(trimmed);
+      if (footnoteMatch != null) {
+        final footnote = QwqMarkdownFootnote(
+          label: footnoteMatch.group(1)!,
+          text: footnoteMatch.group(2)!,
+        );
+        blocks.add(
+          QwqMarkdownBlock(
+            id: nextId('footnote'),
+            kind: QwqMarkdownBlockKind.footnote,
+            text: footnote.text,
+            footnote: footnote,
+            inlines: parseQwqMarkdownInlines(footnote.text),
+            rawSource: line,
+            isReadOnly: true,
+            sourceStartLine: lineNumber,
+            sourceEndLine: lineNumber,
+          ),
+        );
+        index += 1;
+        continue;
+      }
+
+      if (index + 1 < lines.length &&
+          RegExp(r'^:\s+.+$').hasMatch(lines[index + 1].trim())) {
+        final definition = QwqMarkdownDefinition(
+          term: trimmed,
+          definition: lines[index + 1].trim().substring(1).trim(),
+        );
+        blocks.add(
+          QwqMarkdownBlock(
+            id: nextId('definition'),
+            kind: QwqMarkdownBlockKind.definitionList,
+            text: '${definition.term}: ${definition.definition}',
+            definitions: <QwqMarkdownDefinition>[definition],
+            rawSource: '$line\n${lines[index + 1]}',
+            isReadOnly: true,
+            sourceStartLine: lineNumber,
+            sourceEndLine: lineNumber + 1,
+          ),
+        );
+        index += 2;
+        continue;
+      }
+
+      final headingMatch = RegExp(r'^(#{1,6})\s+(.+)$').firstMatch(trimmed);
       if (headingMatch != null) {
         final text = headingMatch.group(2)!.trim();
         blocks.add(
@@ -95,7 +175,9 @@ class QwqMarkdownParser {
             kind: QwqMarkdownBlockKind.heading,
             text: text,
             level: headingMatch.group(1)!.length,
-            inlines: _parseInlines(text),
+            inlines: parseQwqMarkdownInlines(text),
+            rawSource: line,
+            isReadOnly: headingMatch.group(1)!.length > 3,
             sourceStartLine: lineNumber,
             sourceEndLine: lineNumber,
           ),
@@ -117,9 +199,8 @@ class QwqMarkdownParser {
         continue;
       }
 
-      final imageMatch = RegExp(
-        r'^!\[([^\]]*)\]\(([^)]+)\)$',
-      ).firstMatch(trimmed);
+      final imageMatch = RegExp(r'^!\[([^\]]*)\]\(([^)]+)\)$')
+          .firstMatch(trimmed);
       if (imageMatch != null) {
         final asset = QwqMarkdownAssetRef.fromAssetUri(
           imageMatch.group(2)!,
@@ -152,7 +233,7 @@ class QwqMarkdownParser {
             kind: QwqMarkdownBlockKind.orderedItem,
             text: text,
             listDepth: listDepth,
-            inlines: _parseInlines(text),
+            inlines: parseQwqMarkdownInlines(text),
             sourceStartLine: lineNumber,
             sourceEndLine: lineNumber,
           ),
@@ -170,7 +251,7 @@ class QwqMarkdownParser {
             kind: QwqMarkdownBlockKind.bulletItem,
             text: text,
             listDepth: listDepth,
-            inlines: _parseInlines(text),
+            inlines: parseQwqMarkdownInlines(text),
             sourceStartLine: lineNumber,
             sourceEndLine: lineNumber,
           ),
@@ -186,7 +267,9 @@ class QwqMarkdownParser {
             id: nextId('quote'),
             kind: QwqMarkdownBlockKind.quote,
             text: text,
-            inlines: _parseInlines(text),
+            inlines: parseQwqMarkdownInlines(text),
+            rawSource: line,
+            isReadOnly: true,
             sourceStartLine: lineNumber,
             sourceEndLine: lineNumber,
           ),
@@ -203,7 +286,7 @@ class QwqMarkdownParser {
         if (next.isEmpty ||
             next.startsWith(':::') ||
             next.startsWith('```') ||
-            RegExp(r'^(#{1,3})\s+').hasMatch(next) ||
+            RegExp(r'^(#{1,6})\s+').hasMatch(next) ||
             RegExp(r'^!\[[^\]]*\]\([^)]+\)$').hasMatch(next) ||
             RegExp(r'^\d+\.\s+').hasMatch(next) ||
             RegExp(r'^[-*+]\s+').hasMatch(next) ||
@@ -220,20 +303,40 @@ class QwqMarkdownParser {
           id: nextId('paragraph'),
           kind: QwqMarkdownBlockKind.paragraph,
           text: text,
-          inlines: _parseInlines(text),
+          inlines: parseQwqMarkdownInlines(text),
           sourceStartLine: startLine,
           sourceEndLine: split.bodyStartLine + index - 1,
         ),
       );
     }
 
+    final envelope = buildQwqSemanticEnvelope(
+      source: normalized,
+      blocks: blocks,
+      assetRefs: assetRefs,
+    );
+    final validation = validateSemanticDocumentEnvelope(
+      semanticEnvelopeValidationMap(envelope),
+      semanticDocumentCapabilityIds,
+    );
+    if (validation.code != SemanticDocumentValidationCode.ok) {
+      diagnostics.add(
+        QwqMarkdownDiagnostic(
+          code: 'semantic_${validation.code.name}',
+          message: validation.detail ?? validation.code.name,
+          isBlocking: true,
+        ),
+      );
+    }
     return QwqMarkdownParseResult(
       document: QwqMarkdownDocument(
         source: normalized,
+        version: dialect.isEmpty ? qwqRichMarkdownVersion : dialect,
         frontMatter: split.frontMatter,
         blocks: blocks,
         assetRefs: assetRefs,
         diagnostics: diagnostics,
+        semanticEnvelope: envelope,
       ),
     );
   }
@@ -245,12 +348,14 @@ class _FrontMatterSplit {
     required this.body,
     required this.bodyStartLine,
     required this.diagnostics,
+    required this.markdownDialect,
   });
 
   final QwqMarkdownFrontMatter frontMatter;
   final String body;
   final int bodyStartLine;
   final List<QwqMarkdownDiagnostic> diagnostics;
+  final String markdownDialect;
 }
 
 _FrontMatterSplit _splitFrontMatter(String source) {
@@ -260,6 +365,7 @@ _FrontMatterSplit _splitFrontMatter(String source) {
       body: source,
       bodyStartLine: 1,
       diagnostics: const <QwqMarkdownDiagnostic>[],
+      markdownDialect: '',
     );
   }
   final closing = source.indexOf('\n---', 4);
@@ -268,6 +374,7 @@ _FrontMatterSplit _splitFrontMatter(String source) {
       frontMatter: const QwqMarkdownFrontMatter(),
       body: source,
       bodyStartLine: 1,
+      markdownDialect: '',
       diagnostics: const <QwqMarkdownDiagnostic>[
         QwqMarkdownDiagnostic(
           code: 'front_matter_unclosed',
@@ -295,12 +402,14 @@ _FrontMatterSplit _splitFrontMatter(String source) {
       body: body,
       bodyStartLine: bodyStartLine,
       diagnostics: const <QwqMarkdownDiagnostic>[],
+      markdownDialect: _stringValue(map['markdownDialect']),
     );
   } catch (_) {
     return _FrontMatterSplit(
       frontMatter: const QwqMarkdownFrontMatter(),
       body: body,
       bodyStartLine: bodyStartLine,
+      markdownDialect: '',
       diagnostics: <QwqMarkdownDiagnostic>[
         QwqMarkdownDiagnostic(
           code: 'front_matter_invalid',
@@ -348,9 +457,8 @@ _ParsedDirective _parseDirective(
 ) {
   final opener = lines[startIndex].trim();
   final openerLine = bodyStartLine + startIndex;
-  final match = RegExp(
-    r'^(:{3,})([A-Za-z][A-Za-z0-9_-]*)(.*)$',
-  ).firstMatch(opener);
+  final match = RegExp(r'^(:{3,})([A-Za-z][A-Za-z0-9_-]*)(.*)$')
+      .firstMatch(opener);
   if (match == null) {
     return _ParsedDirective(
       block: QwqMarkdownBlock(
@@ -385,6 +493,7 @@ _ParsedDirective _parseDirective(
   final closed = index < lines.length && lines[index].trim() == fence;
   final nextIndex = closed ? index + 1 : lines.length;
   final endLine = closed ? bodyStartLine + index : bodyStartLine + startIndex;
+  final rawSource = lines.sublist(startIndex, nextIndex).join('\n');
   final diagnostics = <QwqMarkdownDiagnostic>[
     if (!closed)
       QwqMarkdownDiagnostic(
@@ -455,8 +564,10 @@ _ParsedDirective _parseDirective(
         block: QwqMarkdownBlock(
           id: nextId('callout'),
           kind: QwqMarkdownBlockKind.callout,
+          rawSource: rawSource,
+          isReadOnly: true,
           text: text,
-          inlines: _parseInlines(text),
+          inlines: parseQwqMarkdownInlines(text),
           attributes: attributes,
           sourceStartLine: openerLine,
           sourceEndLine: endLine,
@@ -493,8 +604,35 @@ _ParsedDirective _parseDirective(
           kind: QwqMarkdownBlockKind.paragraph,
           text: alignText,
           textAlign: alignValue,
-          inlines: _parseInlines(alignText),
+          inlines: parseQwqMarkdownInlines(alignText),
           attributes: attributes,
+          sourceStartLine: openerLine,
+          sourceEndLine: endLine,
+        ),
+        assetRefs: const <QwqMarkdownAssetRef>[],
+        diagnostics: diagnostics,
+        nextIndex: nextIndex,
+      );
+    case 'groupedDirectory':
+      final groups = <String, List<String>>{};
+      String current = '';
+      for (final raw in content) {
+        final value = raw.trim();
+        if (value.startsWith('## ')) {
+          current = value.substring(3).trim();
+          groups.putIfAbsent(current, () => <String>[]);
+        } else if (current.isNotEmpty && RegExp(r'^[-*+]\s+').hasMatch(value)) {
+          groups[current]!.add(value.replaceFirst(RegExp(r'^[-*+]\s+'), ''));
+        }
+      }
+      return _ParsedDirective(
+        block: QwqMarkdownBlock(
+          id: nextId('directory'),
+          kind: QwqMarkdownBlockKind.groupedDirectory,
+          text: content.join('\n').trim(),
+          groupedDirectory: QwqMarkdownGroupedDirectory(groups: groups),
+          rawSource: lines.sublist(startIndex, nextIndex).join('\n'),
+          isReadOnly: true,
           sourceStartLine: openerLine,
           sourceEndLine: endLine,
         ),
@@ -507,6 +645,8 @@ _ParsedDirective _parseDirective(
         block: QwqMarkdownBlock(
           id: nextId('section'),
           kind: QwqMarkdownBlockKind.section,
+          rawSource: rawSource,
+          isReadOnly: true,
           text: content.join('\n').trim(),
           attributes: attributes,
           sourceStartLine: openerLine,
@@ -521,6 +661,8 @@ _ParsedDirective _parseDirective(
         block: QwqMarkdownBlock(
           id: nextId('spacer'),
           kind: QwqMarkdownBlockKind.spacer,
+          rawSource: rawSource,
+          isReadOnly: true,
           attributes: attributes,
           sourceStartLine: openerLine,
           sourceEndLine: endLine,
@@ -575,10 +717,14 @@ QwqMarkdownImageLayout _imageLayout(Object? value) {
 }
 
 class _ParsedCodeBlock {
-  const _ParsedCodeBlock({required this.block, required this.nextIndex});
-
+  const _ParsedCodeBlock({
+    required this.block,
+    required this.nextIndex,
+    required this.diagnostics,
+  });
   final QwqMarkdownBlock block;
   final int nextIndex;
+  final List<QwqMarkdownDiagnostic> diagnostics;
 }
 
 _ParsedCodeBlock _parseCodeBlock(
@@ -602,49 +748,194 @@ _ParsedCodeBlock _parseCodeBlock(
       kind: QwqMarkdownBlockKind.codeBlock,
       text: content.join('\n'),
       language: language,
+      rawSource: lines
+          .sublist(startIndex, closed ? index + 1 : lines.length)
+          .join('\n'),
+      isReadOnly: true,
       sourceStartLine: bodyStartLine + startIndex,
       sourceEndLine: closed
           ? bodyStartLine + index
           : bodyStartLine + startIndex,
     ),
     nextIndex: closed ? index + 1 : lines.length,
+    diagnostics: <QwqMarkdownDiagnostic>[
+      if (!closed)
+        QwqMarkdownDiagnostic(
+          code: 'code_fence_unclosed',
+          message: '代码围栏未闭合。',
+          line: bodyStartLine + startIndex,
+          isBlocking: true,
+        ),
+    ],
   );
 }
 
-List<QwqMarkdownInline> _parseInlines(String text) {
-  final result = <QwqMarkdownInline>[];
-  final linkPattern = RegExp(r'\[([^\]]+)\]\(([^)]+)\)');
-  var cursor = 0;
-  for (final match in linkPattern.allMatches(text)) {
-    if (match.start > cursor) {
-      result.addAll(
-        _parseSimpleInlineText(text.substring(cursor, match.start)),
-      );
+List<QwqMarkdownInline> parseQwqMarkdownInlines(String source) {
+  final plain = StringBuffer();
+  final spans = <QwqMarkdownInline>[];
+  final open = <String, int>{};
+  const tokens = <String>['***', '**', '~~', '++', '*', '`'];
+  final mentionPattern = RegExp(r'@\[([^\]]+)\]\((entity|tag):([^\)]+)\)');
+  final linkPattern = RegExp(r'\[([^\]]+)\]\(([^\)\s]+)\)');
+  var index = 0;
+  while (index < source.length) {
+    final mention = mentionPattern.matchAsPrefix(source, index);
+    final link = source.startsWith('[', index)
+        ? linkPattern.matchAsPrefix(source, index)
+        : null;
+    if (mention != null || link != null) {
+      final match = mention ?? link!;
+      final label = match.group(1) ?? '';
+      final target = mention != null
+          ? '${match.group(2)}:${match.group(3)}'
+          : (match.group(2) ?? '');
+      final validEntityLink =
+          target.startsWith('/entity/') &&
+          target.split('/').where((part) => part.isNotEmpty).length >= 4;
+      final validLink =
+          mention != null ||
+          validEntityLink ||
+          Uri.tryParse(target)?.scheme.toLowerCase() == 'http' ||
+          Uri.tryParse(target)?.scheme.toLowerCase() == 'https';
+      if (validLink) {
+        final start = plain.length;
+        plain.write(label);
+        spans.add(
+          QwqMarkdownInline(
+            kind: mention != null
+                ? SemanticInlineKind.mention
+                : SemanticInlineKind.link,
+            text: label,
+            href: mention == null ? target : '',
+            targetType: mention?.group(2) ?? '',
+            targetId: target,
+            start: start,
+            end: plain.length,
+          ),
+        );
+        index = match.end;
+        continue;
+      }
     }
-    result.add(
+    String? token;
+    for (final candidate in tokens) {
+      if (source.startsWith(candidate, index)) {
+        token = candidate;
+        break;
+      }
+    }
+    if (token != null) {
+      final opened = open.remove(token);
+      if (opened != null) {
+        spans.add(
+          QwqMarkdownInline(
+            kind: token == '`'
+                ? SemanticInlineKind.code
+                : token == '++'
+                ? SemanticInlineKind.underline
+                : token == '~~'
+                ? SemanticInlineKind.strikethrough
+                : token == '*'
+                ? SemanticInlineKind.italic
+                : SemanticInlineKind.bold,
+            text: plain.toString().substring(opened),
+            start: opened,
+            end: plain.length,
+            bold: token == '**' || token == '***',
+            italic: token == '*' || token == '***',
+            underline: token == '++',
+            strikethrough: token == '~~',
+          ),
+        );
+      } else if (source.indexOf(token, index + token.length) >= 0) {
+        open[token] = plain.length;
+      } else {
+        plain.write(token);
+      }
+      index += token.length;
+      continue;
+    }
+    plain.write(source[index++]);
+  }
+  if (open.isNotEmpty) {
+    return <QwqMarkdownInline>[
       QwqMarkdownInline(
-        kind: QwqMarkdownInlineKind.link,
-        text: match.group(1) ?? '',
-        href: match.group(2) ?? '',
+        kind: SemanticInlineKind.text,
+        text: source,
+        end: source.length,
       ),
-    );
-    cursor = match.end;
+    ];
   }
-  if (cursor < text.length) {
-    result.addAll(_parseSimpleInlineText(text.substring(cursor)));
-  }
-  return result;
-}
-
-List<QwqMarkdownInline> _parseSimpleInlineText(String text) {
-  if (text.isEmpty) {
-    return const <QwqMarkdownInline>[];
-  }
+  spans.sort((a, b) => a.start.compareTo(b.start));
   return <QwqMarkdownInline>[
-    QwqMarkdownInline(kind: QwqMarkdownInlineKind.text, text: text),
+    QwqMarkdownInline(
+      kind: SemanticInlineKind.text,
+      text: plain.toString(),
+      end: plain.length,
+    ),
+    ...spans,
   ];
 }
 
-bool _looksLikeHtml(String trimmed) {
-  return RegExp(r'^</?[A-Za-z][\s\S]*>$').hasMatch(trimmed);
+class _ParsedTable {
+  const _ParsedTable(this.block, this.nextIndex);
+  final QwqMarkdownBlock block;
+  final int nextIndex;
 }
+
+bool _isTableStart(List<String> lines, int index) =>
+    index + 1 < lines.length &&
+    lines[index].contains('|') &&
+    RegExp(r'^\s*\|?\s*:?-{3,}').hasMatch(lines[index + 1]);
+
+_ParsedTable _parseTable(
+  List<String> lines,
+  int start,
+  int bodyStartLine,
+  String Function(String) nextId,
+) {
+  List<String> cells(String line) => line
+      .trim()
+      .replaceFirst(RegExp(r'^\|'), '')
+      .replaceFirst(RegExp(r'\|$'), '')
+      .split('|')
+      .map((e) => e.trim())
+      .toList(growable: false);
+  final rows = <List<String>>[cells(lines[start])];
+  final alignment = cells(lines[start + 1])
+      .map(
+        (cell) => cell.startsWith(':') && cell.endsWith(':')
+            ? 'center'
+            : cell.endsWith(':')
+            ? 'right'
+            : 'left',
+      )
+      .toList(growable: false);
+  var index = start + 2;
+  while (index < lines.length &&
+      lines[index].trim().isNotEmpty &&
+      lines[index].contains('|')) {
+    rows.add(cells(lines[index++]));
+  }
+  final table = QwqMarkdownTable(rows: rows, alignment: alignment);
+  return _ParsedTable(
+    QwqMarkdownBlock(
+      id: nextId('table'),
+      kind: QwqMarkdownBlockKind.table,
+      text: rows.expand((e) => e).join(' '),
+      table: table,
+      rawSource: lines.sublist(start, index).join('\n'),
+      isReadOnly: true,
+      sourceStartLine: bodyStartLine + start,
+      sourceEndLine: bodyStartLine + index - 1,
+    ),
+    index,
+  );
+}
+
+bool _looksLikeHtml(String trimmed) {
+  return RegExp(r'<\s*/?\s*[A-Za-z][^>]*>').hasMatch(trimmed) ||
+      RegExp(r'<!--|-->|<!DOCTYPE', caseSensitive: false).hasMatch(trimmed);
+}
+
+String _stringValue(Object? value) => value?.toString().trim() ?? '';

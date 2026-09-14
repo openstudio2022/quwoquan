@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/governance/content_workbench/offline_candidate.schema.json",
+  "title": "OfflineContentCandidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "objectId",
+    "versionId",
+    "parentVersionId",
+    "businessDigest",
+    "candidateRef",
+    "reviewState",
+    "revision",
+    "recordDigest"
+  ],
+  "properties": {
+    "objectId": {
+      "type": "string"
+    },
+    "versionId": {
+      "enum": [
+        "R1",
+        "R2"
+      ]
+    },
+    "parentVersionId": {
+      "enum": [
+        "R0",
+        "R1"
+      ]
+    },
+    "businessDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "candidateRef": {
+      "type": "string",
+      "pattern": "^candidates/[^/]+/R[12]$"
+    },
+    "reviewState": {
+      "const": "pending_review"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "previousDigest": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "recordDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

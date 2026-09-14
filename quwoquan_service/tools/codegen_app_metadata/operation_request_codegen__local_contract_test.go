@@ -1328,3 +1328,28 @@ func TestGeneratedOperationRequestsRejectsEmptyGreen(t *testing.T) {
 		t.Fatalf("error = %v, want empty-green failure", err)
 	}
 }
+
+func TestSemanticDocumentRequestFieldUsesCanonicalEnvelopeCodec(t *testing.T) {
+	field := fieldDef{Name: "semanticDocument", Type: "semantic_document", Constraints: []string{"NULLABLE"}}
+	dartType, nullable, err := requestFieldDartType(field)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dartType != "DocumentEnvelope?" || !nullable {
+		t.Fatalf("semantic document type = %q nullable=%v", dartType, nullable)
+	}
+	decoded, err := requestFieldFromWireExpression(`map["semanticDocument"]`, `'$path.semanticDocument'`, field, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(decoded, "documentEnvelopeFromWire(") || strings.Contains(decoded, "semantic_document.fromWire") {
+		t.Fatalf("semantic document decoder = %q", decoded)
+	}
+	encoded, err := requestFieldWireExpression("request.semanticDocument", field, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if encoded != "documentEnvelopeToWire(request.semanticDocument!)" {
+		t.Fatalf("semantic document encoder = %q", encoded)
+	}
+}

@@ -75,8 +75,34 @@ func generateDomainOperationContracts(
 	if err := externalizeCanonicalDomainModels(specs); err != nil {
 		return nil, err
 	}
+	for owner, spec := range specs {
+		for _, model := range spec.Models {
+			for _, field := range model.Fields {
+				if strings.TrimSpace(field.Type) == "semantic_document" {
+					spec.ExternalImports[semanticDocumentImportFor(owner)] = struct{}{}
+					spec.ExternalExports[semanticDocumentImportFor(owner)] = struct{}{}
+				}
+			}
+		}
+	}
 	if err := externalizeSharedDomainModels(specs); err != nil {
 		return nil, err
+	}
+	for owner, spec := range specs {
+		for _, operation := range groups[owner] {
+			request, dependencies, err := loadOperationRequestModel(operation, operation.RequestEntity)
+			if err != nil {
+				return nil, err
+			}
+			for _, model := range append([]requestModelSpec{request}, mapRequestModels(dependencies)...) {
+				for _, field := range model.Fields {
+					if strings.TrimSpace(field.Type) == "semantic_document" {
+						spec.ExternalImports[semanticDocumentImportFor(owner)] = struct{}{}
+						spec.ExternalExports[semanticDocumentImportFor(owner)] = struct{}{}
+					}
+				}
+			}
+		}
 	}
 	owners = owners[:0]
 	for owner := range specs {
@@ -117,6 +143,12 @@ func generateDomainOperationContracts(
 const sharedDomainOperationEnumsImport = "../generated/shared_operation_enums.g.dart"
 
 const sharedDomainOperationTypesImport = "../generated/shared_operation_types.g.dart"
+
+func semanticDocumentImportFor(owner string) string {
+	relative := strings.TrimPrefix(strings.TrimSpace(owner), "../")
+	depth := len(strings.Split(filepath.ToSlash(relative), "/")) - 1
+	return strings.Repeat("../", depth) + "entity/semantic_document.g.dart"
+}
 
 const sharedRealtimeEventCatalogImport = "../generated/realtime/realtime_event_catalog.g.dart"
 

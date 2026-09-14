@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/content/content_review.schema.json",
-  "description": "review 每对象唯一内容裁决。AI 只写 decision/blockingIssues/advisories（可选 safety 与 assetRights[].{assetRef,issues}）；dimensions、assetRights 逐资产行及其权利转录字段（sourceUrl/license/termsUrl/authorizationProof/usageScope）与 schema/stage/executionId/objectRef/draft 由 task seal 从产物实际引用的资产补齐。assetRights[].decision/issues 是权利记录事实，不牵连对象 decision。 qualityScores/qualityNotes 为 reviewer 可选申报的只记录字段，不参与 decision、admission 或 cohort。",
+  "description": "review 每对象唯一内容裁决。独立 reviewer 提交语义保真报告与判断；seal 只补齐机械字段、核对摘要/覆盖/顺序闭包，不生成语义事实。既有安全、事实与逐资产权利记录语义保持不变。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -10,10 +10,15 @@
     "executionId",
     "objectRef",
     "decision",
-    "draft",
+    "author",
+    "reviewer",
+    "candidateBindings",
     "dimensions",
     "blockingIssues",
-    "assetRights"
+    "assetRights",
+    "protocol",
+    "objectRevision",
+    "dispositions"
   ],
   "properties": {
     "schema": {
@@ -27,8 +32,9 @@
       "minLength": 1
     },
     "objectRef": {
+      "description": "Opaque canonical logical identity; locator depth is not identity semantics.",
       "type": "string",
-      "pattern": "^(?:entities/[^/]+/[^/]+/[^/]+|posts/(?:article|image|video)/[^/]+/[^/]+/[1-9][0-9]*)$"
+      "pattern": "^(?:entities/(?!\\.{1,2}(?:/|$))[^/]+(?:/(?!\\.{1,2}(?:/|$))[^/]+)*/[1-9][0-9]*|posts/(?:article|image|video)/(?!\\.{1,2}(?:/|$))[^/]+(?:/(?!\\.{1,2}(?:/|$))[^/]+)*/[1-9][0-9]*)$"
     },
     "decision": {
       "enum": [
@@ -128,7 +134,10 @@
             "pattern": "^https://"
           },
           "usageScope": {
-            "enum": ["research", "commercial"]
+            "enum": [
+              "research",
+              "commercial"
+            ]
           },
           "decision": {
             "enum": [
@@ -143,24 +152,6 @@
               "minLength": 1
             }
           }
-        }
-      }
-    },
-    "draft": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "ref",
-        "digest"
-      ],
-      "properties": {
-        "ref": {
-          "type": "string",
-          "pattern": "^4\\.draft/(?:page\\.md|draft\\.article\\.md|image_work\\.json|video_script\\.json)$"
-        },
-        "digest": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
         }
       }
     },
@@ -281,6 +272,480 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 2000
+    },
+    "semanticReport": {
+      "description": "独立 reviewer 提交的语义保真报告；seal 仅核对来源/草稿摘要、覆盖计数闭包、顺序摘要守恒和状态闭包，不自行作语义判断。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewedCarrier",
+        "carrierCompatible",
+        "sources",
+        "issues"
+      ],
+      "properties": {
+        "reviewedCarrier": {
+          "enum": [
+            "homepage",
+            "article",
+            "image",
+            "video"
+          ]
+        },
+        "carrierCompatible": {
+          "type": "boolean"
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "sourceRef",
+              "sourceDigest",
+              "parseStatus",
+              "dialect",
+              "dialectVersion",
+              "capabilities",
+              "sourceCounts",
+              "draftCounts",
+              "sourceSequenceDigest",
+              "draftSequenceDigest"
+            ],
+            "properties": {
+              "sourceRef": {
+                "type": "string",
+                "pattern": "^sources/.+/source\\.md$"
+              },
+              "sourceDigest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "parseStatus": {
+                "enum": [
+                  "complete",
+                  "degraded",
+                  "unsupported_opaque"
+                ]
+              },
+              "dialect": {
+                "type": "string",
+                "minLength": 1
+              },
+              "dialectVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "capabilities": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "title",
+                    "heading",
+                    "paragraph",
+                    "list",
+                    "table_logical_grid",
+                    "footnote",
+                    "media_order"
+                  ]
+                }
+              },
+              "sourceCounts": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "title",
+                  "heading",
+                  "paragraph",
+                  "list",
+                  "tableLogicalCell",
+                  "footnote",
+                  "media"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "heading": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "paragraph": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "list": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "tableLogicalCell": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "footnote": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "media": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "draftCounts": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "title",
+                  "heading",
+                  "paragraph",
+                  "list",
+                  "tableLogicalCell",
+                  "footnote",
+                  "media"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "heading": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "paragraph": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "list": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "tableLogicalCell": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "footnote": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "media": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "sourceSequenceDigest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "draftSequenceDigest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "homepageFidelity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "title",
+            "headingTree",
+            "paragraphOrder",
+            "links",
+            "nestedLists",
+            "tableLogicalGrid",
+            "footnotes",
+            "mediaCaptionOrder"
+          ],
+          "properties": {
+            "title": {
+              "type": "boolean"
+            },
+            "tableLogicalGrid": {
+              "type": "boolean"
+            },
+            "footnotes": {
+              "type": "boolean"
+            },
+            "headingTree": {
+              "type": "boolean"
+            },
+            "paragraphOrder": {
+              "type": "boolean"
+            },
+            "links": {
+              "type": "boolean"
+            },
+            "nestedLists": {
+              "type": "boolean"
+            },
+            "mediaCaptionOrder": {
+              "type": "boolean"
+            }
+          }
+        },
+        "articleIntent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "independent",
+            "intent",
+            "rationale"
+          ],
+          "properties": {
+            "independent": {
+              "type": "boolean"
+            },
+            "intent": {
+              "type": "string",
+              "minLength": 1
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "enum": [
+                  "SEMANTIC_PARSE_INCOMPLETE",
+                  "SEMANTIC_COVERAGE_GAP",
+                  "STRUCTURE_ORDER_DRIFT",
+                  "HOMEPAGE_FIDELITY_LOSS",
+                  "CARRIER_MISMATCH",
+                  "ARTICLE_INTENT_NOT_INDEPENDENT"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ref": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "protocol": {
+      "$ref": "semantic_disposition.schema.json#/$defs/protocolTriplet"
+    },
+    "objectRevision": {
+      "$ref": "semantic_disposition.schema.json#/$defs/objectTuple"
+    },
+    "dispositions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "semantic_disposition.schema.json#/$defs/disposition"
+      }
+    },
+    "objectIdentity": {
+      "description": "Optional business identity carried by the manifest; never substituted for objectRef.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entityId",
+        "entityRef"
+      ],
+      "properties": {
+        "entityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entityRef": {
+          "type": "string",
+          "pattern": "^/entity/(?!\\.{1,2}(?:/|$))[^/]+(?:/(?!\\.{1,2}(?:/|$))[^/]+)*$"
+        }
+      }
+    },
+    "author": {
+      "$ref": "../execution/seal_input.schema.json#/$defs/actor"
+    },
+    "reviewer": {
+      "$ref": "../execution/seal_input.schema.json#/$defs/actor"
+    },
+    "candidateBindings": {
+      "description": "Single-track exact candidate closure. execution_draft binds its 4.draft artifact; immutable_remediation_artifact additionally requires manifest and semantic document.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "origin",
+        "page",
+        "manifest",
+        "semanticDocument"
+      ],
+      "properties": {
+        "origin": {
+          "enum": [
+            "execution_draft",
+            "immutable_remediation_artifact"
+          ]
+        },
+        "page": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ref",
+            "digest"
+          ],
+          "properties": {
+            "ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        "manifest": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ref",
+                "digest"
+              ],
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "digest": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "semanticDocument": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ref",
+                "digest"
+              ],
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "digest": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "const": "execution_draft"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "properties": {
+              "page": {
+                "properties": {
+                  "ref": {
+                    "pattern": "^4\\.draft/(?:page\\.md|draft\\.article\\.md|image_work\\.json|video_script\\.json)$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "const": "immutable_remediation_artifact"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "properties": {
+              "manifest": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "ref",
+                  "digest"
+                ],
+                "properties": {
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "digest": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  }
+                }
+              },
+              "semanticDocument": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "ref",
+                  "digest"
+                ],
+                "properties": {
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "digest": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "allOf": [
@@ -308,6 +773,136 @@
                 },
                 "issues": {
                   "maxItems": 0
+                }
+              }
+            }
+          },
+          "semanticReport": {
+            "properties": {
+              "carrierCompatible": {
+                "const": true
+              },
+              "issues": {
+                "maxItems": 0
+              },
+              "sources": {
+                "items": {
+                  "properties": {
+                    "parseStatus": {
+                      "const": "complete"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "dispositions": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "semantic_disposition.schema.json#/$defs/disposition"
+                },
+                {
+                  "properties": {
+                    "outcome": {
+                      "const": "auto_continue"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "approved"
+          },
+          "objectRef": {
+            "pattern": "^entities/"
+          }
+        },
+        "required": [
+          "decision",
+          "objectRef"
+        ]
+      },
+      "then": {
+        "properties": {
+          "semanticReport": {
+            "required": [
+              "homepageFidelity"
+            ],
+            "properties": {
+              "reviewedCarrier": {
+                "const": "homepage"
+              },
+              "homepageFidelity": {
+                "properties": {
+                  "title": {
+                    "const": true
+                  },
+                  "headingTree": {
+                    "const": true
+                  },
+                  "paragraphOrder": {
+                    "const": true
+                  },
+                  "links": {
+                    "const": true
+                  },
+                  "nestedLists": {
+                    "const": true
+                  },
+                  "tableLogicalGrid": {
+                    "const": true
+                  },
+                  "footnotes": {
+                    "const": true
+                  },
+                  "mediaCaptionOrder": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "approved"
+          },
+          "objectRef": {
+            "pattern": "^posts/article/"
+          }
+        },
+        "required": [
+          "decision",
+          "objectRef"
+        ]
+      },
+      "then": {
+        "properties": {
+          "semanticReport": {
+            "required": [
+              "articleIntent"
+            ],
+            "properties": {
+              "reviewedCarrier": {
+                "const": "article"
+              },
+              "articleIntent": {
+                "properties": {
+                  "independent": {
+                    "const": true
+                  }
                 }
               }
             }

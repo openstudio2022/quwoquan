@@ -107,14 +107,48 @@ def execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
-def _seal(root: Path, stage: str, actor: dict, verdict: str = "pass", reviews: dict | None = None) -> dict:
+def _seal(root: Path, stage: str, actor: dict, verdict: str = "pass", reviews: dict | None = None, typed_issues: list | None = None) -> dict:
     seal_input = root.parent / f"{stage}.seal.json"
     payload: dict = {"actor": actor, "verdict": verdict}
     if reviews is not None:
         payload["reviews"] = reviews
+    if typed_issues is not None:
+        payload["typedIssues"] = typed_issues
     _write(seal_input, _canonical(payload))
     return seal_module.seal_stage(execution_id=EXECUTION_ID, stage=stage, input_path=seal_input)
 
+
+def _semantic_report(root: Path, *, carrier: str = "article") -> dict:
+    source_ref = "sources/zh_wikipedia__abc/source.md"
+    zero_counts = {"title": 0, "heading": 0, "paragraph": 1, "list": 0, "tableLogicalCell": 0, "footnote": 0, "media": 0}
+    sequence = "sha256:" + "2" * 64
+    report = {
+        "reviewedCarrier": carrier,
+        "carrierCompatible": True,
+        "sources": [{
+            "sourceRef": source_ref,
+            "sourceDigest": _sha((root / source_ref).read_bytes()),
+            "parseStatus": "complete",
+            "dialect": "mediawiki",
+            "dialectVersion": "1",
+            "capabilities": ["paragraph"],
+            "sourceCounts": zero_counts,
+            "draftCounts": zero_counts,
+            "sourceSequenceDigest": sequence,
+            "draftSequenceDigest": sequence,
+        }],
+        "issues": [],
+    }
+    if carrier == "article":
+        report["articleIntent"] = {"independent": True, "intent": "游客决策", "rationale": "围绕游览时段作独立取舍"}
+    return report
+
+
+def _semantic_bindings(target_ref: str = TARGET_REF) -> dict:
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
+    revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    disposition = {"issueId": "semantic-exact", "objectRef": target_ref, "sourceAnchor": {"origin": "source", "start": 0, "end": 1, "selector": "document"}, "sourceDigest": "sha256:" + "3" * 64, "targetDigest": "sha256:" + "4" * 64, "detectedType": "SEMANTIC_EXACT", "proposedMapping": None, "lossFields": [], "severity": "info", "actor": {"actorId": "reviewer", "actorType": "independent_reviewer"}, "reason": "no semantic loss", "policyVersion": "1.0.0", "reviewStatus": "reviewed_confirmed", "outcome": "auto_continue", "processingDisposition": "preserved", "protocol": protocol, "objectRevision": revision}
+    return {"protocol": protocol, "objectRevision": revision, "dispositions": [disposition]}
 
 def test_three_seals_form_chain_and_seal_completes_review_fields(execution: Path) -> None:
     acquire = _seal(execution, "1.download", AUTHOR)
@@ -136,6 +170,7 @@ def test_three_seals_form_chain_and_seal_completes_review_fields(execution: Path
         "safety": "ok",
         "advisories": ["标题可更具体"],
         "assetRights": [{"assetRef": "001_xihu.png", "issues": ["署名建议写全名"]}],
+        "semanticReport": _semantic_report(execution), **_semantic_bindings(),
     }
     review_path = execution / TARGET_REF / "5.review/content_review.json"
     assert not review_path.exists()
@@ -148,14 +183,19 @@ def test_three_seals_form_chain_and_seal_completes_review_fields(execution: Path
     assert completed["stage"] == "5.review"
     assert completed["executionId"] == EXECUTION_ID
     assert completed["objectRef"] == TARGET_REF
-    assert completed["draft"]["ref"] == "4.draft/draft.article.md"
+    assert completed["candidateBindings"]["origin"] == "execution_draft"
+    assert completed["candidateBindings"]["page"]["ref"] == "4.draft/draft.article.md"
+    assert completed["candidateBindings"]["manifest"] is None
+    assert completed["candidateBindings"]["semanticDocument"] is None
+    assert completed["author"] == AUTHOR
+    assert completed["reviewer"] == REVIEWER
     assert completed["dimensions"] == [{"name": "overall", "decision": "approved", "issues": []}]
     assert len(completed["assetRights"]) == 1
     rights = completed["assetRights"][0]
     assert rights["assetRef"] == "sources/zh_wikipedia__abc/assets/001_xihu.png"
     assert rights["decision"] == "approved"
     assert rights["issues"] == ["署名建议写全名"]
-    assert rights["usageScope"] == "production"
+    assert rights["usageScope"] == "research"
     assert rights["sourceUrl"] == "https://commons.wikimedia.org/wiki/File:Xihu.png"
     assert rights["license"] == "CC BY-SA 4.0"
     assert rights["termsUrl"].startswith("https://")
@@ -178,7 +218,7 @@ def test_review_rejects_same_actor_as_author_and_out_of_order_seal(execution: Pa
     _seal(execution, "1.download", AUTHOR)
     _write(execution / TARGET_REF / "4.draft/draft.article.md", "# 西湖速览\n\n正文。\n")
     _seal(execution, "4.draft", AUTHOR)
-    judgement = {"decision": "approved", "blockingIssues": [], "advisories": []}
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": _semantic_report(execution), **_semantic_bindings()}
     with pytest.raises(seal_module.SealError, match="同一 host/sessionId"):
         _seal(execution, "5.review", AUTHOR, reviews={TARGET_REF: judgement})
     with pytest.raises(ReceiptChainError):
@@ -189,7 +229,7 @@ def test_review_seal_requires_reviews_covering_exactly_the_target_set(execution:
     _seal(execution, "1.download", AUTHOR)
     _write(execution / TARGET_REF / "4.draft/draft.article.md", "# 西湖速览\n\n正文。\n")
     _seal(execution, "4.draft", AUTHOR)
-    judgement = {"decision": "approved", "blockingIssues": [], "advisories": []}
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": _semantic_report(execution), **_semantic_bindings()}
     with pytest.raises(seal_module.SealError, match="需要 execution 级 reviews"):
         _seal(execution, "5.review", REVIEWER)
     with pytest.raises(seal_module.SealError, match="恰好覆盖"):
@@ -202,3 +242,38 @@ def test_acquire_seal_rejects_asset_digest_drift(execution: Path) -> None:
     (execution / "sources/zh_wikipedia__abc/assets/001_xihu.png").write_bytes(b"tampered")
     with pytest.raises(seal_module.SealError, match="资产字节或摘要漂移"):
         _seal(execution, "1.download", AUTHOR)
+
+
+def test_review_seal_blocks_unresolved_semantic_parse_and_summary_drift(execution: Path) -> None:
+    _seal(execution, "1.download", AUTHOR)
+    _write(execution / TARGET_REF / "4.draft/draft.article.md", "# 西湖速览\n\n正文。\n")
+    _seal(execution, "4.draft", AUTHOR)
+    base = {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": _semantic_report(execution), **_semantic_bindings()}
+
+    degraded = json.loads(json.dumps(base))
+    degraded["semanticReport"]["sources"][0]["parseStatus"] = "degraded"
+    with pytest.raises(seal_module.SealError, match="未决 parseStatus"):
+        _seal(execution, "5.review", REVIEWER, reviews={TARGET_REF: degraded})
+
+    drift = json.loads(json.dumps(base))
+    drift["semanticReport"]["sources"][0]["draftCounts"]["paragraph"] = 0
+    with pytest.raises(seal_module.SealError, match="语义计数不守恒"):
+        _seal(execution, "5.review", REVIEWER, reviews={TARGET_REF: drift})
+
+    opaque_rejected = json.loads(json.dumps(base))
+    opaque_rejected.update(decision="rejected", blockingIssues=["来源 dialect 不受支持"])
+    opaque_rejected["semanticReport"]["sources"][0]["parseStatus"] = "unsupported_opaque"
+    opaque_rejected["semanticReport"]["issues"] = [{"code": "SEMANTIC_PARSE_INCOMPLETE", "message": "无法完整解析来源"}]
+    sealed = _seal(execution, "5.review", REVIEWER, verdict="blocked", reviews={TARGET_REF: opaque_rejected}, typed_issues=[{"code": "DATA.SEAL.REVIEW_BLOCKED", "message": "语义解析未闭合", "ref": TARGET_REF}])
+    assert sealed["resultRefs"] == 1
+
+
+def test_review_seal_rejects_article_without_independent_intent(execution: Path) -> None:
+    _seal(execution, "1.download", AUTHOR)
+    _write(execution / TARGET_REF / "4.draft/draft.article.md", "# 西湖速览\n\n正文。\n")
+    _seal(execution, "4.draft", AUTHOR)
+    report = _semantic_report(execution)
+    report["articleIntent"]["independent"] = False
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": report, **_semantic_bindings()}
+    with pytest.raises(seal_module.SealError, match="缺少独立 intent"):
+        _seal(execution, "5.review", REVIEWER, reviews={TARGET_REF: judgement})

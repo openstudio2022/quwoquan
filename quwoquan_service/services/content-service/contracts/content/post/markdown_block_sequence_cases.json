@@ -22,23 +22,310 @@
         }
       ],
       "expectedSequence": [
-        {"type": "paragraph", "assetId": ""},
-        {"type": "heading2", "assetId": ""},
-        {"type": "heading3", "assetId": ""},
-        {"type": "orderedItem", "assetId": ""},
-        {"type": "orderedItem", "assetId": ""},
-        {"type": "bulletItem", "assetId": ""},
-        {"type": "bulletItem", "assetId": ""},
-        {"type": "quote", "assetId": ""},
-        {"type": "callout", "assetId": ""},
-        {"type": "codeBlock", "assetId": ""},
-        {"type": "divider", "assetId": ""},
-        {"type": "image", "assetId": "hero"},
-        {"type": "image", "assetId": "gallery-a"},
-        {"type": "image", "assetId": "gallery-b"},
-        {"type": "paragraph", "assetId": ""}
+        {
+          "type": "paragraph",
+          "assetId": ""
+        },
+        {
+          "type": "heading2",
+          "assetId": ""
+        },
+        {
+          "type": "heading3",
+          "assetId": ""
+        },
+        {
+          "type": "orderedItem",
+          "assetId": ""
+        },
+        {
+          "type": "orderedItem",
+          "assetId": ""
+        },
+        {
+          "type": "bulletItem",
+          "assetId": ""
+        },
+        {
+          "type": "bulletItem",
+          "assetId": ""
+        },
+        {
+          "type": "quote",
+          "assetId": ""
+        },
+        {
+          "type": "callout",
+          "assetId": ""
+        },
+        {
+          "type": "codeBlock",
+          "assetId": ""
+        },
+        {
+          "type": "divider",
+          "assetId": ""
+        },
+        {
+          "type": "image",
+          "assetId": "hero"
+        },
+        {
+          "type": "image",
+          "assetId": "gallery-a"
+        },
+        {
+          "type": "image",
+          "assetId": "gallery-b"
+        },
+        {
+          "type": "paragraph",
+          "assetId": ""
+        }
       ],
       "expectedFingerprint": "33941ececdc770248dbbf3c583f92f0c1397efcba79b9106d1a9dff921e4898f"
     }
-  ]
+  ],
+  "schemaVersion": "1.0.0",
+  "dialectVersion": "1.0.0",
+  "canonicalizationVersion": "1.0.0",
+  "offsetEncoding": "unicode_scalar_value",
+  "conformanceCases": [
+    {
+      "name": "complete_inline",
+      "covers": [
+        "text",
+        "bold",
+        "italic",
+        "boldItalic",
+        "underline",
+        "strikethrough",
+        "code",
+        "link",
+        "mention",
+        "footnoteReference",
+        "hardBreak"
+      ],
+      "markdown": "正文 **粗体** *斜体* ***粗斜体*** ++下划线++ ~~删除~~ `代码` [链接](https://example.test) @[西湖](entity:景区:杭州西湖)[^n]  \n换行",
+      "expectedDecision": "publish",
+      "expectedDisposition": "normalized",
+      "expectedDiagnostics": [],
+      "expectedDocument": {
+        "kind": "document",
+        "children": [
+          {
+            "kind": "paragraph",
+            "inlineKinds": [
+              "text",
+              "bold",
+              "italic",
+              "boldItalic",
+              "underline",
+              "strikethrough",
+              "code",
+              "link",
+              "mention",
+              "footnoteReference",
+              "hardBreak"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "nested_lists",
+      "covers": [
+        "list",
+        "listItem"
+      ],
+      "markdown": "- 顶层\n  - 一级\n    1. 二级",
+      "expectedDecision": "publish",
+      "expectedDisposition": "normalized",
+      "expectedDiagnostics": [],
+      "expectedDocument": {
+        "kind": "document",
+        "children": [
+          {
+            "kind": "list",
+            "listKind": "unordered",
+            "depths": [
+              0,
+              1,
+              2
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "grouped_directory",
+      "covers": [
+        "groupedDirectory"
+      ],
+      "markdown": ":::directory\ngroup:journey label=\"行程\"\n- [第一章](#chapter-1)\ngroup:notes label=\"提示\"\n- [装备](#gear)\n:::",
+      "expectedDecision": "publish",
+      "expectedDisposition": "normalized",
+      "expectedDiagnostics": [],
+      "expectedDocument": {
+        "kind": "document",
+        "children": [
+          {
+            "kind": "groupedDirectory",
+            "groups": [
+              {
+                "groupId": "journey",
+                "label": "行程",
+                "entries": [
+                  {
+                    "targetNodeId": "chapter-1",
+                    "label": "第一章",
+                    "level": 2
+                  }
+                ]
+              },
+              {
+                "groupId": "notes",
+                "label": "提示",
+                "entries": [
+                  {
+                    "targetNodeId": "gear",
+                    "label": "装备",
+                    "level": 2
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "table_logical_grid",
+      "covers": [
+        "table"
+      ],
+      "markdown": "| 地点 | 天数 |\n| :--- | ---: |\n| 西湖 | 2 |",
+      "expectedDecision": "publish",
+      "expectedDisposition": "normalized",
+      "expectedDiagnostics": [],
+      "expectedDocument": {
+        "kind": "document",
+        "children": [
+          {
+            "kind": "table",
+            "rowCount": 2,
+            "columnCount": 2,
+            "logicalGrid": [
+              {
+                "cellId": "r0c0",
+                "row": 0,
+                "column": 0,
+                "rowSpan": 1,
+                "columnSpan": 1,
+                "header": true,
+                "alignment": "start"
+              },
+              {
+                "cellId": "r0c1",
+                "row": 0,
+                "column": 1,
+                "rowSpan": 1,
+                "columnSpan": 1,
+                "header": true,
+                "alignment": "end"
+              },
+              {
+                "cellId": "r1c0",
+                "row": 1,
+                "column": 0,
+                "rowSpan": 1,
+                "columnSpan": 1,
+                "header": false,
+                "alignment": "start"
+              },
+              {
+                "cellId": "r1c1",
+                "row": 1,
+                "column": 1,
+                "rowSpan": 1,
+                "columnSpan": 1,
+                "header": false,
+                "alignment": "end"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "footnote",
+      "covers": [
+        "footnoteReference",
+        "footnoteDefinition"
+      ],
+      "markdown": "正文脚注[^route]。\n\n[^route]: 路线说明。",
+      "expectedDecision": "publish",
+      "expectedDisposition": "normalized",
+      "expectedDiagnostics": [],
+      "expectedDocument": {
+        "kind": "document",
+        "children": [
+          {
+            "kind": "paragraph",
+            "inlineKinds": [
+              "text",
+              "footnoteReference",
+              "text"
+            ]
+          },
+          {
+            "kind": "footnoteDefinition",
+            "identifier": "route"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unsupported_typed_diagnostic",
+      "covers": [
+        "unsupported",
+        "SEMANTIC_DOCUMENT.UNSUPPORTED.NODE"
+      ],
+      "markdown": ":::timeline\n- 08:00 出发\n:::",
+      "expectedDecision": "publish_with_losses",
+      "expectedDisposition": "unsupported_opaque",
+      "expectedDiagnostics": [
+        {
+          "code": "SEMANTIC_DOCUMENT.UNSUPPORTED.NODE",
+          "severity": "warning",
+          "disposition": "preserve",
+          "messageKey": "semantic_document.unsupported.node"
+        }
+      ],
+      "expectedDocument": {
+        "kind": "document",
+        "children": [
+          {
+            "kind": "unsupported",
+            "sourceKind": "timeline",
+            "rawSource": ":::timeline\n- 08:00 出发\n:::"
+          }
+        ]
+      }
+    }
+  ],
+  "canonicalCodec": {
+    "frontMatter": "single-line canonical JSON",
+    "directive": ":::qwq <kind> <canonical-json-node-metadata>",
+    "rawHtml": "forbidden",
+    "semanticJsonOnly": [
+      "unsupportedOpaque"
+    ],
+    "crossLanguage": [
+      "python",
+      "go",
+      "dart",
+      "typescript"
+    ]
+  }
 }

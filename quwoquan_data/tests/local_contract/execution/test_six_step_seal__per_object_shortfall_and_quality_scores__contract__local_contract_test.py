@@ -138,6 +138,20 @@ def _receipt(root: Path, name: str) -> dict:
     return json.loads((root / "_shared/receipts" / name).read_bytes())
 
 
+def _semantic_report(root: Path, target_ref: str) -> dict:
+    index = TARGETS.index(target_ref)
+    source_ref = f"sources/zh_wikipedia__{index:016x}/source.md"
+    counts = {"title": 0, "heading": 0, "paragraph": 1, "list": 0, "tableLogicalCell": 0, "footnote": 0, "media": 0}
+    digest = "sha256:" + "2" * 64
+    return {"reviewedCarrier": "article", "carrierCompatible": True, "sources": [{"sourceRef": source_ref, "sourceDigest": _sha((root / source_ref).read_bytes()), "parseStatus": "complete", "dialect": "mediawiki", "dialectVersion": "1", "capabilities": ["paragraph"], "sourceCounts": counts, "draftCounts": counts, "sourceSequenceDigest": digest, "draftSequenceDigest": digest}], "articleIntent": {"independent": True, "intent": "导览决策", "rationale": "提供独立游览取舍"}, "issues": []}
+
+
+def _semantic_bindings(target_ref: str) -> dict:
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
+    revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    disposition = {"issueId": "semantic-exact", "objectRef": target_ref, "sourceAnchor": {"origin": "source", "start": 0, "end": 1, "selector": "document"}, "sourceDigest": "sha256:" + "3" * 64, "targetDigest": "sha256:" + "4" * 64, "detectedType": "SEMANTIC_EXACT", "proposedMapping": None, "lossFields": [], "severity": "info", "actor": {"actorId": "reviewer", "actorType": "independent_reviewer"}, "reason": "no semantic loss", "policyVersion": "1.0.0", "reviewStatus": "reviewed_confirmed", "outcome": "auto_continue", "processingDisposition": "preserved", "protocol": protocol, "objectRevision": revision}
+    return {"protocol": protocol, "objectRevision": revision, "dispositions": [disposition]}
+
 def test_author_seal_retires_invalid_objects_and_reports_all_violations_at_once(execution: Path) -> None:
     _seal(execution, "1.download", AUTHOR)
     _write_drafts(execution)
@@ -197,7 +211,7 @@ def test_review_coverage_follows_author_result_refs_and_retired_objects_cannot_p
     _seal(execution, "1.download", AUTHOR)
     _write_drafts(execution)
     _seal(execution, "4.draft", AUTHOR)
-    judgement = {"decision": "approved", "blockingIssues": [], "advisories": []}
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": _semantic_report(execution, GOOD), **_semantic_bindings(GOOD)}
 
     # 多出退轮对象 → fail closed；漏评合规对象 → fail closed。
     with pytest.raises(seal_module.SealError, match="恰好覆盖 002-4.draft 合规对象集合"):
@@ -230,8 +244,9 @@ def test_quality_scores_pass_through_verbatim_without_touching_decision(executio
         "advisories": [],
         "qualityScores": {dimension: 1 for dimension in QUALITY_DIMENSIONS_BY_CARRIER["article"]},
         "qualityNotes": "评分只记录，不改变 rejected。",
+        **_semantic_bindings(GOOD),
     }
-    unscored = {"decision": "approved", "blockingIssues": [], "advisories": []}
+    unscored = {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": _semantic_report(execution, BAD_TAG), **_semantic_bindings(BAD_TAG)}
     _seal(execution, "5.review", REVIEWER, reviews={GOOD: scored, BAD_TAG: unscored})
 
     good_review = json.loads((execution / GOOD / "5.review/content_review.json").read_bytes())
@@ -249,7 +264,7 @@ def test_quality_scores_outside_closed_set_are_rejected(execution: Path) -> None
     _write(execution / BAD_TAG / "4.draft/draft.article.md", "")
     _write(execution / EMPTY / "4.draft/draft.article.md", "")
     _seal(execution, "4.draft", AUTHOR)
-    base = {"decision": "approved", "blockingIssues": [], "advisories": []}
+    base = {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": _semantic_report(execution, GOOD), **_semantic_bindings(GOOD)}
 
     # 分值越界与未知维度名由 seal_input schema 拒绝；跨载体维度与空对象由 seal 按载体闭集拒绝。
     with pytest.raises(ValueError, match="seal input"):

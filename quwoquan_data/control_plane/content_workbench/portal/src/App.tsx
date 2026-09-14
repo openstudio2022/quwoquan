@@ -1,0 +1,2 @@
+import { createBrowserRouter,RouterProvider } from 'react-router-dom';import { Layout } from './components/Layout.js';import { OverviewPage } from './pages/OverviewPage.js';import { ExplorePage } from './pages/ExplorePage.js';import { WorkDetailPage } from './pages/WorkDetailPage.js';
+const router=createBrowserRouter([{path:'/',element:<Layout/>,children:[{index:true,element:<OverviewPage/>},{path:'explore',element:<ExplorePage/>},{path:'works/:objectKey',element:<WorkDetailPage/>}]}]);export default function App(){return <RouterProvider router={router}/>}

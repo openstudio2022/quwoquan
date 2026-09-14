@@ -382,3 +382,35 @@ def test_query_rejects_retired_pointer_even_with_manifest_assets(tmp_path: Path,
     _write(tmp_path / "manifest.json", manifest)
     with pytest.raises(ObjectTransactionError, match="retired sidecar pointer"):
         _content_library_bindings(tmp_path, manifest)
+
+
+
+def test_homepage_review_fidelity_is_a_blocking_contract() -> None:
+    counts = {"title": 1, "heading": 1, "paragraph": 1, "list": 1, "tableLogicalCell": 1, "footnote": 1, "media": 1}
+    sequence = "sha256:" + "2" * 64
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
+    revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    disposition = {"issueId": "semantic-exact", "objectRef": "entities/travel/cn/scenic", "sourceAnchor": {"origin": "source", "start": 0, "end": 1, "selector": "document"}, "sourceDigest": "sha256:" + "3" * 64, "targetDigest": "sha256:" + "4" * 64, "detectedType": "SEMANTIC_EXACT", "proposedMapping": None, "lossFields": [], "severity": "info", "actor": {"actorId": "reviewer", "actorType": "independent_reviewer"}, "reason": "no loss", "policyVersion": "1.0.0", "reviewStatus": "reviewed_confirmed", "outcome": "auto_continue", "processingDisposition": "preserved", "protocol": protocol, "objectRevision": revision}
+    report = {
+        "reviewedCarrier": "homepage", "carrierCompatible": True,
+        "sources": [{"sourceRef": "sources/wiki/source.md", "sourceDigest": "sha256:" + "3" * 64,
+                     "parseStatus": "complete", "dialect": "mediawiki", "dialectVersion": "1",
+                     "capabilities": ["title", "heading", "paragraph", "list", "table_logical_grid", "footnote", "media_order"],
+                     "sourceCounts": counts, "draftCounts": counts,
+                     "sourceSequenceDigest": sequence, "draftSequenceDigest": sequence}],
+        "homepageFidelity": {"title": True, "headingTree": True, "paragraphOrder": True, "links": True,
+                             "nestedLists": True, "tableLogicalGrid": True, "footnotes": True, "mediaCaptionOrder": True},
+        "issues": [],
+    }
+    review = {
+        "schema": "quwoquan_data.content_review", "stage": "5.review", "executionId": EXECUTION_ID,
+        "objectRef": "entities/travel/cn/scenic", "decision": "approved",
+        "draft": {"ref": "4.draft/page.md", "digest": "sha256:" + "1" * 64},
+        "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
+        "blockingIssues": [], "assetRights": [], "semanticReport": report,
+        "protocol": protocol, "objectRevision": revision, "dispositions": [disposition],
+    }
+    assert_valid(review, "content", "content_review")
+    degraded = json.loads(json.dumps(review)); degraded["semanticReport"]["homepageFidelity"]["tableLogicalGrid"] = False
+    with pytest.raises(ValueError, match="homepageFidelity"):
+        assert_valid(degraded, "content", "content_review")

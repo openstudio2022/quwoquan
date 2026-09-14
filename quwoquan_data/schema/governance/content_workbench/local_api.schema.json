@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/governance/content_workbench/local_api.schema.json",
+  "title": "ContentPoolWorkbenchLocalApi",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operations"
+  ],
+  "properties": {
+    "operations": {
+      "type": "array",
+      "minItems": 9,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operationId",
+          "method",
+          "path"
+        ],
+        "properties": {
+          "operationId": {
+            "enum": [
+              "overview",
+              "facets",
+              "list",
+              "detail",
+              "media",
+              "saveReview",
+              "registerCandidate",
+              "refresh",
+              "sourceEvidence"
+            ]
+          },
+          "method": {
+            "enum": [
+              "GET",
+              "POST"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^/api/"
+          },
+          "requestSchema": {
+            "type": "string",
+            "minLength": 1
+          },
+          "responseSchema": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "operationId": {
+                  "const": "refresh"
+                }
+              },
+              "required": [
+                "operationId"
+              ]
+            },
+            "then": {
+              "required": [
+                "requestSchema",
+                "responseSchema"
+              ],
+              "properties": {
+                "method": {
+                  "const": "POST"
+                },
+                "path": {
+                  "const": "/api/refresh"
+                },
+                "requestSchema": {
+                  "const": "local_api.schema.json#/$defs/refreshRequest"
+                },
+                "responseSchema": {
+                  "const": "local_api.schema.json#/$defs/refreshResponse"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "operationId": {
+                  "const": "sourceEvidence"
+                }
+              },
+              "required": [
+                "operationId"
+              ]
+            },
+            "then": {
+              "required": [
+                "responseSchema"
+              ],
+              "properties": {
+                "method": {
+                  "const": "GET"
+                },
+                "path": {
+                  "const": "/api/items/{objectId}/{versionId}/sources/{sourceUnitId}/evidence/{evidenceId}"
+                },
+                "responseSchema": {
+                  "const": "read_models.schema.json#/$defs/sourceEvidenceResponse"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "uniqueItems": true,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "operationId",
+              "method",
+              "path",
+              "requestSchema",
+              "responseSchema"
+            ],
+            "properties": {
+              "operationId": {
+                "const": "refresh"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "operationId",
+              "method",
+              "path",
+              "responseSchema"
+            ],
+            "properties": {
+              "operationId": {
+                "const": "sourceEvidence"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "refreshRequest": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "refreshResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "readToken",
+        "stale_read",
+        "refreshed"
+      ],
+      "properties": {
+        "readToken": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "stale_read": {
+          "const": false
+        },
+        "refreshed": {
+          "const": true
+        }
+      }
+    }
+  }
+}

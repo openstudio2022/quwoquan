@@ -15,7 +15,9 @@ mixin _CreateEditorNodeEditingOperations
 
     final nextNodes = doc.nodes
         .map((node) {
-          if (node.id == id) return node.copyWith(text: value);
+          if (node.id == id && !node.isReadOnly) {
+            return node.copyWith(text: value);
+          }
           return node;
         })
         .toList(growable: false);
@@ -102,6 +104,7 @@ mixin _CreateEditorNodeEditingOperations
     final nextNodes = doc.nodes
         .map((node) {
           if (node.id == id &&
+              !node.isReadOnly &&
               node.type == ArticleDocumentNodeType.paragraph) {
             return node.copyWith(textAlign: normalized);
           }
@@ -178,7 +181,12 @@ mixin _CreateEditorNodeEditingOperations
         type: ArticleDocumentNodeType.paragraph,
       ),
     );
-    if (node.id.isEmpty || node.isFigure || node.isDocumentTitle) return;
+    if (node.id.isEmpty ||
+        node.isFigure ||
+        node.isDocumentTitle ||
+        node.isReadOnly) {
+      return;
+    }
     if (node.type == type) return;
     final newId = _nextArticleTextNodeId(type);
     final nextNodes = doc.nodes
@@ -245,7 +253,12 @@ mixin _CreateEditorNodeEditingOperations
         type: ArticleDocumentNodeType.paragraph,
       ),
     );
-    if (node.id.isEmpty || node.isFigure || node.isDocumentTitle) return;
+    if (node.id.isEmpty ||
+        node.isFigure ||
+        node.isDocumentTitle ||
+        node.isReadOnly) {
+      return;
+    }
     final clampedStart = start.clamp(0, node.text.length);
     final clampedEnd = end.clamp(clampedStart, node.text.length);
     if (clampedStart >= clampedEnd) return;
@@ -295,7 +308,12 @@ mixin _CreateEditorNodeEditingOperations
         type: ArticleDocumentNodeType.paragraph,
       ),
     );
-    if (node.id.isEmpty || node.isFigure || node.isDocumentTitle) return;
+    if (node.id.isEmpty ||
+        node.isFigure ||
+        node.isDocumentTitle ||
+        node.isReadOnly) {
+      return;
+    }
     final clampedStart = start.clamp(0, node.text.length);
     final clampedEnd = end.clamp(clampedStart, node.text.length);
     if (clampedStart >= clampedEnd) return;
