@@ -1,7 +1,6 @@
 """记录资产真实权利事实；取得媒体不代表商用授权。
 
-`DistributionDecision` 是 canonical 字节中的逐资产记录，不选择 release 类别。
-保持冻结的 research/commercial 权利词汇；取得成功不等于授权，合法限制不阻断发布。
+对象级分发分类已退役；本模块只保留权利事实校验与 release 资产投影。
 """
 from __future__ import annotations
 
@@ -31,12 +30,6 @@ class RightsStatus(StrEnum):
     UNVERIFIED = "unverified"
     RESTRICTED = "restricted"
     UNKNOWN = "unknown"
-
-
-class DistributionDecision(StrEnum):
-    RESEARCH_ALLOWED = "research_allowed"
-    COMMERCIAL_ALLOWED = "commercial_allowed"
-    BLOCKED = "blocked"
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,50 +192,6 @@ def load_content_distribution_policy(
     )
 
 
-def distribution_decision(
-    *,
-    acquisition_status: AcquisitionStatus,
-    rights_status: RightsStatus,
-    authorization_proof: str,
-) -> DistributionDecision:
-    if acquisition_status is not AcquisitionStatus.ACQUIRED:
-        return DistributionDecision.BLOCKED
-    # 保留原对象权利记录语义；下游发布不以此记录选择类别或拒绝对象。
-    if rights_status is RightsStatus.RESTRICTED:
-        return DistributionDecision.BLOCKED
-    if rights_status is RightsStatus.VERIFIED and authorization_proof.strip():
-        return DistributionDecision.COMMERCIAL_ALLOWED
-    return DistributionDecision.RESEARCH_ALLOWED
-
-
-def image_distribution_decision(
-    *,
-    acquisition_status: AcquisitionStatus,
-    rights_status: RightsStatus,
-    authorization_proof: str,
-    usage_scope: str,
-    model_release_status: str,
-) -> DistributionDecision:
-    """按实际使用范围保守记录权利，不决定 release 准入。"""
-
-    base = distribution_decision(
-        acquisition_status=acquisition_status,
-        rights_status=rights_status,
-        authorization_proof=authorization_proof,
-    )
-    if base is DistributionDecision.BLOCKED:
-        return base
-    normalized_scope = usage_scope.strip()
-    normalized_release = model_release_status.strip()
-    if normalized_scope not in {"internal_reference", "app_publish", "editorial"}:
-        return DistributionDecision.BLOCKED
-    if normalized_release not in {"not_required", "obtained", "editorial_only", "verified", "unverified"}:
-        return DistributionDecision.BLOCKED
-    if normalized_scope != "app_publish" or normalized_release in {"editorial_only", "unverified"}:
-        return DistributionDecision.RESEARCH_ALLOWED
-    return base
-
-
 def asset_contract_missing_fields(asset: Mapping[str, Any]) -> list[str]:
     """Return missing/invalid fields from the lifecycle-neutral asset contract."""
     missing: list[str] = []
@@ -250,7 +199,6 @@ def asset_contract_missing_fields(asset: Mapping[str, Any]) -> list[str]:
     rights_status = str(
         asset.get("rightsStatus") or asset.get("rightsAuditStatus") or ""
     ).strip()
-    decision = str(asset.get("distributionDecision") or "").strip()
     content_sha256 = str(
         asset.get("contentSha256") or asset.get("sha256") or ""
     ).strip()
@@ -261,8 +209,6 @@ def asset_contract_missing_fields(asset: Mapping[str, Any]) -> list[str]:
         missing.append("acquisitionStatus")
     if rights_status not in {status.value for status in RightsStatus}:
         missing.append("rightsStatus")
-    if decision not in {item.value for item in DistributionDecision}:
-        missing.append("distributionDecision")
     if not str(asset.get("sourceUrl") or "").startswith("https://"):
         missing.append("sourceUrl")
     for field, value in (
@@ -294,9 +240,7 @@ def project_asset_admission(
     object_ref: str,
 ) -> dict[str, Any]:
     if "distributionDecision" in asset:
-        declared = str(asset["distributionDecision"])
-        if declared not in {item.value for item in DistributionDecision}:
-            raise ValueError(f"{object_ref}: invalid distributionDecision: {declared!r}")
+        raise ValueError(f"{object_ref}: retired distributionDecision field")
     raw_rights_status = str(
         asset.get("rightsStatus") or asset.get("rightsAuditStatus") or "unknown"
     ).strip()
@@ -316,26 +260,6 @@ def project_asset_admission(
         AcquisitionStatus.ACQUIRED if acquired else AcquisitionStatus.FAILED
     )
     authorization_proof = str(asset.get("authorizationProof") or "").strip()
-    physical_mime = str(
-        physical.get("mimeType") if isinstance(physical, Mapping) else ""
-    ).strip()
-    decision = (
-        image_distribution_decision(
-            acquisition_status=acquisition_status,
-            rights_status=rights_status,
-            authorization_proof=authorization_proof,
-            usage_scope=str(asset.get("usageScope") or ""),
-            model_release_status=str(asset.get("modelReleaseStatus") or ""),
-        )
-        if physical_mime.startswith("image/")
-        else distribution_decision(
-            acquisition_status=acquisition_status,
-            rights_status=rights_status,
-            authorization_proof=authorization_proof,
-        )
-    )
-    if "distributionDecision" in asset:
-        decision = DistributionDecision(str(asset["distributionDecision"]))
     source_url = str(
         asset.get("sourceUrl")
         or asset.get("originalAssetUrl")
@@ -372,7 +296,6 @@ def project_asset_admission(
         "authorizationRequired": (
             rights_status is not RightsStatus.VERIFIED or not authorization_proof
         ),
-        "distributionDecision": decision.value,
         "sourceUrl": source_url,
         "platform": str(asset.get("platform") or asset.get("sourceKind") or "unknown").strip(),
         "creator": str(asset.get("creator") or asset.get("author") or "unknown").strip(),
@@ -399,11 +322,8 @@ __all__ = [
     "POLICY_PATH",
     "AcquisitionStatus",
     "ContentDistributionPolicy",
-    "DistributionDecision",
     "RightsStatus",
     "asset_contract_missing_fields",
-    "distribution_decision",
-    "image_distribution_decision",
     "load_content_distribution_policy",
     "project_asset_admission",
 ]

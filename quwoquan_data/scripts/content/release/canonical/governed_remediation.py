@@ -159,7 +159,7 @@ def _canonical_homepage(*, candidate: Path, old_root: Path, destination: Path, r
     source_identity["identityDigest"] = source_identity_digest(source_identity)
     manifest["sourceIdentity"] = source_identity
     review_digest = _digest_file(review_receipt)
-    manifest["admission"] = {"processResult":"completed","qualityResult":"passed","usageScope":"commercial","rightsResult":"passed",
+    manifest["admission"] = {"processResult":"completed","qualityResult":"passed","rightsResult":"passed",
                              "rightsAuthorityRef": f"{HOME}/content_review.json", "rightsAuthorityDigest": review_digest,
                              "evidenceRef":"content_review.json","evidenceDigest":review_digest}
     destination.mkdir(parents=True)

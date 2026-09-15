@@ -42,24 +42,15 @@ def _content_review(tmp_path: Path) -> Path:
 
 def _commercial_manifest() -> dict[str, object]:
     return {
-        "contentId": "travel_panda_base_guide",
-        "version": 2,
-        "variantPurpose": "commercial_variant",
-        "admission": {"usageScope": "commercial"},
-        "sourceAttribution": {
-            **_source_attribution(),
-            "publicationAdmission": "commercial_release",
-            "commercialAuthorizationStatus": "verified",
-            "authorizationProofUrl": "https://example.test/proof",
-            "termsUrl": "https://example.test/terms",
-        },
+        "contentId": "travel_panda_base_guide", "version": 2,
+        "contentIdentity": "work",
+        "sourceAttribution": _source_attribution(),
     }
 
 
 def _commercial_rights() -> list[dict[str, object]]:
     return [
         {
-            "distributionDecision": "commercial_allowed",
             "rightsAuditStatus": "verified",
             "authorizationProof": "https://example.test/proof",
             "licenseUrl": "https://example.test/terms",
@@ -76,12 +67,10 @@ def _reserved_identity(content_id: str, version: int) -> dict[str, object]:
 def _rights_authority(
     *,
     canonical_ref: str = "article/test",
-    usage_scope: str = "commercial",
 ) -> dict[str, str]:
     return {
         "ref": f"posts/{canonical_ref}/content_review.json",
         "digest": "sha256:" + "9" * 64,
-        "usageScope": usage_scope,
     }
 
 
@@ -95,7 +84,6 @@ def _source_attribution() -> dict[str, object]:
         "attributionText": "Research Creator / Research Media",
         "rightsBasis": "public research reference",
         "commercialAuthorizationStatus": "unverified",
-        "publicationAdmission": "commercial_release",
         "watermarkStatus": "absent",
         "audioRightsStatus": "no_audio",
         "modelReleaseStatus": "not_required",
@@ -149,7 +137,6 @@ def _pre_contract_record(root: Path, *, migration_identity: bool) -> None:
         "rightsResult": "passed",
         "rightsAuthorityRef": "posts/article/test/content_review.json",
         "rightsAuthorityDigest": "sha256:" + "9" * 64,
-        "usageScope": "commercial",
         "evidenceRef": evidence_ref,
         "evidenceDigest": evidence_digest,
         "payloadDigest": pool_payload_digest(root),
@@ -202,7 +189,6 @@ def _pre_rights_canonical_record(
         "processResult": "completed",
         "qualityResult": "passed",
         "eligibilityResult": "passed",
-        "usageScope": "commercial",
         "evidenceRef": evidence_ref,
         "evidenceDigest": evidence_digest,
         "payloadDigest": payload_digest,
@@ -229,7 +215,6 @@ def _legacy_author_record(*, payload_digest: str) -> dict[str, object]:
         "processResult": "completed",
         "qualityResult": "passed",
         "eligibilityResult": "passed",
-        "usageScope": None,
         "evidenceRef": "evidence/system_builtin_author_admission.json",
         "evidenceDigest": "sha256:" + "e" * 64,
         "payloadDigest": payload_digest,
@@ -280,159 +265,34 @@ def _write_author_history(
         )
 
 
-@pytest.mark.parametrize("scope", ["production", "internal_reference"])
-def test_pool_writer_rejects_retired_scope_instead_of_normalizing(scope: str) -> None:
-    from content.release.canonical.content_pool_record import pool_usage_scope
-
-    manifest = _commercial_manifest()
-    manifest["admission"] = {"usageScope": scope}
-    with pytest.raises(ObjectTransactionError, match="RECORD_USAGE_SCOPE_INVALID"):
-        pool_usage_scope(manifest, _commercial_rights())
-
-
-def test_valid_source_has_single_commercial_scope(tmp_path: Path) -> None:
-    source_manifest = {"contentId": "content-a", "version": 1, "variantPurpose": "original", "sourceAttribution": _source_attribution()}
-    fields = build_content_pool_fields(
-        source_manifest=source_manifest,
-        canonical_ref="article/guide/a/1",
-        source_task_id="task-1",
-        content_review_path=_content_review(tmp_path),
-        rights_authority=_rights_authority(canonical_ref="article/guide/a/1"),
-        publish_root=tmp_path / "publish",
-        rights_rows=[],
-        reserved_identity=_reserved_identity("content-a", 1),
-    )
-    assert fields["version"] == 1
-    assert fields["admission"]["usageScope"] == "commercial"
-    assert fields["variantPurpose"] == "original"
-
-
-def test_content_pool_fields_project_original_only_for_explicit_work(
-    tmp_path: Path,
-) -> None:
-    source_manifest = _commercial_manifest()
-    source_manifest.pop("variantPurpose")
-    source_manifest["contentIdentity"] = "work"
-
-    fields = build_content_pool_fields(
-        source_manifest=source_manifest,
-        canonical_ref="article/guide/a/1",
-        source_task_id="task-1",
-        content_review_path=_content_review(tmp_path),
-        rights_authority=_rights_authority(canonical_ref="article/guide/a/1"),
-        publish_root=tmp_path / "publish",
-        rights_rows=_commercial_rights(),
-        reserved_identity=_reserved_identity("travel_panda_base_guide", 2),
-    )
-
-    assert fields["sourceType"] == "data"
-    assert fields["variantPurpose"] == "original"
-    assert fields["admission"]["processResult"] == "completed"
-    assert fields["admission"]["qualityResult"] == "passed"
-    assert fields["admission"]["rightsResult"] == "passed"
-    assert fields["admission"]["usageScope"] == "commercial"
-    assert fields["status"] == "active"
-
-
-@pytest.mark.parametrize(
-    "source_manifest",
-    [
-        {"contentId": "content-a", "version": 1},
-        {"contentId": "content-a", "version": 1, "contentIdentity": ""},
-        {
-            "contentId": "content-a",
-            "version": 1,
-            "contentIdentity": "commercial_variant",
-        },
-    ],
-)
-def test_missing_variant_purpose_requires_unambiguous_work_identity(
-    tmp_path: Path, source_manifest: dict[str, object]
-) -> None:
-    source_manifest["sourceAttribution"] = _source_attribution()
-    with pytest.raises(ObjectTransactionError, match="VARIANT_PURPOSE_AMBIGUOUS"):
+@pytest.mark.parametrize("patch", [
+    {"variantPurpose": "commercial_variant"},
+    {"admission": {"usageScope": "research"}},
+    {"sourceAttribution": {**_source_attribution(), "publicationAdmission": "research_release"}},
+])
+def test_pool_writer_rejects_retired_classification(tmp_path: Path, patch: dict[str, object]) -> None:
+    manifest = {**_commercial_manifest(), **patch}
+    with pytest.raises(ObjectTransactionError, match="RETIRED_CLASSIFICATION_FIELD"):
         build_content_pool_fields(
-            source_manifest=source_manifest,
-            canonical_ref="article/guide/a/1",
-            source_task_id="task-1",
+            source_manifest=manifest, canonical_ref="article/guide/a/1", source_task_id="task-1",
             content_review_path=_content_review(tmp_path),
             rights_authority=_rights_authority(canonical_ref="article/guide/a/1"),
-            publish_root=tmp_path / "publish",
-            rights_rows=[],
-            reserved_identity=_reserved_identity("content-a", 1),
-        )
-
-
-@pytest.mark.parametrize("variant_purpose", ["", "commercial", " original ", None, 1])
-def test_invalid_explicit_variant_purpose_fails_closed(
-    tmp_path: Path, variant_purpose: object
-) -> None:
-    with pytest.raises(ObjectTransactionError, match="variantPurpose is invalid"):
-        build_content_pool_fields(
-            source_manifest={
-                "contentId": "content-a",
-                "version": 1,
-                "contentIdentity": "work",
-                "variantPurpose": variant_purpose,
-                "sourceAttribution": _source_attribution(),
-            },
-            canonical_ref="article/guide/a/1",
-            source_task_id="task-1",
-            content_review_path=_content_review(tmp_path),
-            rights_authority=_rights_authority(canonical_ref="article/guide/a/1"),
-            publish_root=tmp_path / "publish",
-            rights_rows=[],
-            reserved_identity=_reserved_identity("content-a", 1),
-        )
-
-
-def test_ai_research_scope_caps_commercial_hard_facts(tmp_path: Path) -> None:
-    manifest = _commercial_manifest()
-    manifest["variantPurpose"] = "original"
-    fields = build_content_pool_fields(
-        source_manifest=manifest,
-        canonical_ref="article/guide/ai-research/1",
-        source_task_id="task-ai-research",
-        content_review_path=_content_review(tmp_path),
-        rights_authority=_rights_authority(canonical_ref="article/guide/ai-research/1", usage_scope="commercial"),
-        publish_root=tmp_path / "publish",
-        rights_rows=_commercial_rights(),
-        reserved_identity=_reserved_identity("travel_panda_base_guide", 2),
-    )
-    assert fields["admission"]["usageScope"] == "commercial"
-
-
-def test_retired_review_scope_is_rejected(tmp_path: Path) -> None:
-    with pytest.raises(ObjectTransactionError, match="RIGHTS_AUTHORITY_INVALID"):
-        build_content_pool_fields(
-            source_manifest=_commercial_manifest(),
-            canonical_ref="article/guide/ai-research-commercial/1",
-            source_task_id="task-ai-research-commercial",
-            content_review_path=_content_review(tmp_path),
-            rights_authority=_rights_authority(canonical_ref="article/guide/ai-research-commercial/1", usage_scope="production"),
-            publish_root=tmp_path / "publish",
-            rights_rows=_commercial_rights(),
+            publish_root=tmp_path / "publish", rights_rows=_commercial_rights(),
             reserved_identity=_reserved_identity("travel_panda_base_guide", 2),
         )
 
 
-def test_commercial_variant_requires_publication_proof(tmp_path: Path) -> None:
-    manifest = _commercial_manifest()
-    manifest.pop("admission")
-    manifest["sourceAttribution"] = {}
-    with pytest.raises(ObjectTransactionError, match="SOURCE_ATTRIBUTION_INCOMPLETE"):
-        build_content_pool_fields(
-            source_manifest=manifest,
-            canonical_ref="article/guide/a-commercial/1",
-            source_task_id="task-2",
-            content_review_path=_content_review(tmp_path),
-            rights_authority=_rights_authority(canonical_ref="article/guide/a-commercial/1"),
-            publish_root=tmp_path / "publish",
-            rights_rows=_commercial_rights(),
-            reserved_identity=_reserved_identity(
-                "travel_panda_base_guide", 2
-            ),
-        )
+def test_valid_source_omits_object_classification(tmp_path: Path) -> None:
+    fields = build_content_pool_fields(
+        source_manifest=_commercial_manifest(), canonical_ref="article/guide/a/1", source_task_id="task-1",
+        content_review_path=_content_review(tmp_path),
+        rights_authority=_rights_authority(canonical_ref="article/guide/a/1"),
+        publish_root=tmp_path / "publish", rights_rows=_commercial_rights(),
+        reserved_identity=_reserved_identity("travel_panda_base_guide", 2),
+    )
+    assert "variantPurpose" not in fields
+    assert "usageScope" not in fields["admission"]
+    assert fields["admission"]["rightsResult"] == "passed"
 
 
 def test_existing_version_requires_exact_next_append(tmp_path: Path) -> None:
@@ -453,7 +313,7 @@ def test_existing_version_requires_exact_next_append(tmp_path: Path) -> None:
         reserved_identity=_reserved_identity("travel_panda_base_guide", 2),
     )
     assert fields["version"] == 2
-    assert fields["admission"]["usageScope"] == "commercial"
+    assert "usageScope" not in fields["admission"]
 
 
 def test_pre_sequence_record_blocks_identity_scan(tmp_path: Path) -> None:
@@ -632,7 +492,6 @@ def test_non_legacy_malformed_records_still_block_collision_scan(
             source_manifest={
                 "contentId": "unrelated-content",
                 "version": 1,
-                "variantPurpose": "original",
             },
             canonical_ref="article/unrelated/1",
             source_task_id="unrelated-task",
@@ -680,8 +539,7 @@ def test_modern_record_requires_complete_matching_manifest_identity(
             "rightsResult": "passed",
             "rightsAuthorityRef": "posts/article/test/content_review.json",
             "rightsAuthorityDigest": "sha256:" + "9" * 64,
-            "usageScope": "commercial",
-            "evidenceRef": evidence_ref,
+                "evidenceRef": evidence_ref,
             "evidenceDigest": evidence_digest,
             "payloadDigest": payload_digest,
             "canonicalObjectDigest": payload_digest,
@@ -692,7 +550,7 @@ def test_modern_record_requires_complete_matching_manifest_identity(
 
     with pytest.raises(ObjectTransactionError, match="IDENTITY_INVALID"):
         build_content_pool_fields(
-            source_manifest={"contentId": "modern-content", "version": 1, "variantPurpose": "original", "sourceAttribution": _source_attribution()},
+            source_manifest={"contentId": "modern-content", "version": 1, "contentIdentity": "work", "sourceAttribution": _source_attribution()},
             canonical_ref="article/modern/1",
             source_task_id="modern-task",
             content_review_path=_content_review(tmp_path),
@@ -729,8 +587,7 @@ def test_complete_manifest_identity_must_match_pool_record(tmp_path: Path) -> No
             "rightsResult": "passed",
             "rightsAuthorityRef": "posts/article/test/content_review.json",
             "rightsAuthorityDigest": "sha256:" + "9" * 64,
-            "usageScope": "commercial",
-            "evidenceRef": evidence_ref,
+                "evidenceRef": evidence_ref,
             "evidenceDigest": evidence_digest,
             "payloadDigest": payload_digest,
             "canonicalObjectDigest": payload_digest,
@@ -741,7 +598,7 @@ def test_complete_manifest_identity_must_match_pool_record(tmp_path: Path) -> No
 
     with pytest.raises(ObjectTransactionError, match="manifest/pool record identity drift"):
         build_content_pool_fields(
-            source_manifest={"contentId": "modern-content", "version": 1, "variantPurpose": "original", "sourceAttribution": _source_attribution()},
+            source_manifest={"contentId": "modern-content", "version": 1, "contentIdentity": "work", "sourceAttribution": _source_attribution()},
             canonical_ref="article/modern/1",
             source_task_id="modern-task",
             content_review_path=_content_review(tmp_path),
@@ -798,8 +655,7 @@ def test_explicit_content_record_uses_content_identity_not_author_identity(
                 "admission": {
                     "processResult": "completed",
                     "qualityResult": "passed",
-                    "usageScope": "commercial",
-                    "rightsResult": "passed",
+                                "rightsResult": "passed",
                     "rightsAuthorityRef": "posts/article/work/1/content_review.json",
                     "rightsAuthorityDigest": review_digest,
                     "evidenceRef": "content_review.json",
@@ -829,7 +685,7 @@ def _versioned_history(root: Path, versions: tuple[int, ...] = (1, 2)) -> None:
     root.mkdir(parents=True)
     evidence_ref, evidence_digest = _pool_evidence(root)
     identity, _ = _source_identity("version-history-execution")
-    attribution = {**_source_attribution(), "publicationAdmission": "research_release"}
+    attribution = _source_attribution()
     for version in versions:
         manifest = {
             "contentId": "history-content", "version": version,
@@ -838,7 +694,7 @@ def _versioned_history(root: Path, versions: tuple[int, ...] = (1, 2)) -> None:
             "sourceAttribution": attribution,
             "admission": {
                 "processResult": "completed", "qualityResult": "passed",
-                "usageScope": "research", "rightsResult": "passed",
+                "rightsResult": "passed",
                 "rightsAuthorityRef": "posts/article/history/1/content_review.json",
                 "rightsAuthorityDigest": evidence_digest,
                 "evidenceRef": evidence_ref, "evidenceDigest": evidence_digest,
@@ -852,11 +708,10 @@ def _versioned_history(root: Path, versions: tuple[int, ...] = (1, 2)) -> None:
 
 def _allocate_after_history(tmp_path: Path, content_id: str, version: int) -> dict:
     return build_content_pool_fields(
-        source_manifest={"contentId": content_id, "version": version,
-                         "variantPurpose": "original", "admission": {"usageScope": "research"}},
+        source_manifest={"contentId": content_id, "version": version, "contentIdentity": "work", "sourceAttribution": _source_attribution()},
         canonical_ref="article/new/1", source_task_id="new-execution",
         content_review_path=_content_review(tmp_path),
-        rights_authority=_rights_authority(canonical_ref="article/new/1", usage_scope="research"),
+        rights_authority=_rights_authority(canonical_ref="article/new/1"),
         publish_root=tmp_path / "publish", rights_rows=[],
         reserved_identity=_reserved_identity(content_id, version),
     )

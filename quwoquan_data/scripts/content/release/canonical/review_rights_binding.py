@@ -205,15 +205,12 @@ def validate_review_authority(
         require_approved=require_approved,
         candidate_root=review_root.parent,
     )
-    review_scopes = {str(row.get("usageScope") or "") for row in content_review["assetRights"]}
-    usage_scope = "commercial" if review_scopes == {"commercial"} else "research"
     normalized_object_ref = _normalized_object_ref(object_ref)
     if object_kind == "posts" and not normalized_object_ref.startswith("posts/"):
         normalized_object_ref = "posts/" + normalized_object_ref
     return {
         "ref": f"{normalized_object_ref}/{CANONICAL_CONTENT_REVIEW_REF}",
         "digest": _digest_file(review_path),
-        "usageScope": usage_scope,
     }
 
 

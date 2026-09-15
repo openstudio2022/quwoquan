@@ -32,8 +32,6 @@ class PoolCandidate:
     version: int
     content_type: str
     author_id: str
-    variant_purpose: str
-    usage_scope: str
     selection_identity_digest: str
     canonical_object_digest: str
     content_library_binding_digest: str
@@ -87,8 +85,6 @@ def _candidate(publish_root: Path, post_ref: str) -> PoolCandidate | None:
         version=handoff.content_version,
         content_type=handoff.carrier,
         author_id=handoff.author_id,
-        variant_purpose=handoff.variant_purpose,
-        usage_scope=handoff.usage_scope,
         selection_identity_digest=handoff.selection_identity_digest,
         canonical_object_digest=handoff.canonical_object_digest,
         content_library_binding_digest=handoff.content_library_binding_digest,
@@ -212,8 +208,6 @@ def explicit_cohort_digest(candidates: Sequence[PoolCandidate]) -> str:
             "version": row.version,
             "contentType": row.content_type,
             "authorId": row.author_id,
-            "variantPurpose": row.variant_purpose,
-            "usageScope": row.usage_scope,
             "selectionIdentityDigest": row.selection_identity_digest,
             "canonicalObjectDigest": row.canonical_object_digest,
             "contentLibraryBindingDigest": row.content_library_binding_digest,

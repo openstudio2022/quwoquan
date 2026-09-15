@@ -26,7 +26,7 @@
             "required": [
               "schema", "objectType", "objectId", "objectRef", "recordSequence", "contentVersion",
               "status", "processResult", "qualityResult", "eligibilityResult",
-              "usageScope", "evidenceRef", "evidenceDigest", "payloadDigest"
+"evidenceRef", "evidenceDigest", "payloadDigest"
             ],
             "properties": {
               "schema": {"const": "quwoquan_data.pool_object_record"},
@@ -39,8 +39,7 @@
               "processResult": {"enum": ["completed", "failed"]},
               "qualityResult": {"enum": ["passed", "failed"]},
               "eligibilityResult": {"enum": ["passed", "pending", "failed"]},
-              "usageScope": {"type": ["string", "null"], "enum": ["research", "commercial", null]},
-              "evidenceRef": {"type": "string", "minLength": 1},
+                        "evidenceRef": {"type": "string", "minLength": 1},
               "evidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
               "payloadDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
               "canonicalObjectDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},

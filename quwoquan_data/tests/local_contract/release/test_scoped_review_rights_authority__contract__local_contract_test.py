@@ -41,20 +41,44 @@ def _rights_row(*, passed: bool = True, issues: list[str] | None = None) -> dict
         "license": "CC BY 4.0",
         "termsUrl": "https://example.test/terms",
         "authorizationProof": "https://example.test/proof",
-        "usageScope": "production",
         "decision": "approved" if passed else "rejected",
         "issues": list(issues or []),
     }
 
 
+def _actor(session_id: str) -> dict[str, object]:
+    return {"host": "cursor", "modelFamily": "gpt", "sessionId": session_id,
+            "invocation": {"provider": "openai", "model": "gpt-5", "runId": session_id + "-run"}}
+
+
+def _review_fields(*, object_ref: str = TARGET_REF, draft_ref: str = "4.draft/image_work.json", draft_digest: str | None = None) -> dict[str, object]:
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
+    revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    digest = draft_digest or "sha256:" + "1" * 64
+    return {
+        "author": _actor("author"), "reviewer": _actor("reviewer"),
+        "candidateBindings": {"origin": "execution_draft", "page": {"ref": draft_ref, "digest": digest},
+                              "manifest": None, "semanticDocument": None},
+        "protocol": protocol, "objectRevision": revision,
+        "dispositions": [{"issueId": "semantic-exact", "objectRef": object_ref,
+            "sourceDigest": digest, "targetDigest": digest, "detectedType": "SEMANTIC_EXACT",
+            "proposedMapping": None, "lossFields": [], "severity": "info",
+            "actor": {"actorId": "reviewer", "actorType": "independent_reviewer"},
+            "reason": "fixture preserves reviewed work", "policyVersion": "1.0.0",
+            "reviewStatus": "reviewed_confirmed", "outcome": "auto_continue",
+            "processingDisposition": "preserved", "protocol": protocol, "objectRevision": revision}],
+    }
+
+
 def _review(root: Path, *, extra_rows: list[dict[str, object]] | None = None) -> dict[str, object]:
+    draft = _write(root / "4.draft/image_work.json", {"title": "fixture"})
     review = {
         "schema": "quwoquan_data.content_review",
         "stage": "5.review",
         "executionId": EXECUTION_ID,
         "objectRef": TARGET_REF,
         "decision": "approved",
-        "draft": {"ref": "4.draft/image_work.json", "digest": "sha256:" + "1" * 64},
+        **_review_fields(draft_digest=_digest(draft)),
         "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
         "blockingIssues": [],
         "assetRights": [_rights_row(), *(extra_rows or [])],
@@ -71,7 +95,7 @@ def test_approved_content_review_keeps_asset_rights_issues_as_recorded_facts() -
         "executionId": EXECUTION_ID,
         "objectRef": TARGET_REF,
         "decision": "approved",
-        "draft": {"ref": "4.draft/image_work.json", "digest": "sha256:" + "1" * 64},
+        **_review_fields(),
         "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
         "blockingIssues": [],
         "assetRights": [_rights_row(passed=False, issues=["unresolved rights"])],
@@ -99,7 +123,7 @@ def test_review_authority_requires_exact_unique_asset_set_and_digest(tmp_path: P
         source_assets={ASSET_REF: source_asset},
     )
     assert binding["digest"] == _digest(tmp_path / "5.review/content_review.json")
-    assert binding["usageScope"] == "production"
+    assert "usageScope" not in binding
 
     duplicate = _rights_row()
     duplicate_review = {**content_review, "assetRights": [_rights_row(), duplicate]}
@@ -116,10 +140,11 @@ def test_review_authority_requires_exact_unique_asset_set_and_digest(tmp_path: P
 
 
 def test_text_only_article_allows_explicit_empty_rights_set(tmp_path: Path) -> None:
+    draft = _write(tmp_path / "4.draft/draft.article.md", {"body": "fixture"})
     _write(tmp_path / "5.review/content_review.json", {
         "schema": "quwoquan_data.content_review", "stage": "5.review",
         "executionId": EXECUTION_ID, "objectRef": TARGET_REF, "decision": "approved",
-        "draft": {"ref": "4.draft/draft.article.md", "digest": "sha256:" + "1" * 64},
+        **_review_fields(draft_ref="4.draft/draft.article.md", draft_digest=_digest(draft)),
         "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
         "blockingIssues": [], "assetRights": [],
     })
@@ -129,7 +154,7 @@ def test_text_only_article_allows_explicit_empty_rights_set(tmp_path: Path) -> N
         object_kind="posts", execution_id=EXECUTION_ID, object_ref=TARGET_REF,
         source_assets={},
     )
-    assert binding["usageScope"] == "production"
+    assert "usageScope" not in binding
 
 
 def _attribution() -> dict[str, object]:
@@ -137,7 +162,7 @@ def _attribution() -> dict[str, object]:
         "isOriginal": False, "originalCreatorName": "Creator", "platform": "Commons",
         "sourcePostUrl": "https://example.test/post", "originalAssetUrl": "https://example.test/asset",
         "attributionText": "Creator / Commons", "rightsBasis": "CC BY 4.0",
-        "commercialAuthorizationStatus": "verified", "publicationAdmission": "production_release",
+        "commercialAuthorizationStatus": "verified",
         "watermarkStatus": "absent", "audioRightsStatus": "no_audio",
         "modelReleaseStatus": "not_required", "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-09-03T00:00:00Z", "takedownPolicy": "notice_and_takedown",
@@ -213,14 +238,14 @@ def test_content_pool_query_projects_complete_asset_hard_facts(tmp_path: Path) -
         "derivativeBinding": derivative,
     }]
     _write(root / "manifest.json", {
-        "contentId": "content-asset-facts", "version": 1,
+        "objectRef": "image/asset-facts/1", "contentId": "content-asset-facts", "version": 1,
         "executionId": EXECUTION_ID, "contentType": "image", "generator": "agent",
-        "creatorProfileId": "creator", "variantPurpose": "original", "status": "active",
+        "creatorProfileId": "creator", "status": "active",
         "tagRefs": [], "assets": assets,
         "sourceIdentity": {**identity, "identityDigest": source_identity_digest(identity)},
         "sourceAttribution": _attribution(),
         "admission": {
-            "processResult": "completed", "qualityResult": "passed", "usageScope": "production",
+            "processResult": "completed", "qualityResult": "passed",
             "rightsResult": "passed", "rightsAuthorityRef": f"posts/image/asset-facts/1/content_review.json",
             "rightsAuthorityDigest": _digest(review), "evidenceRef": "content_review.json",
             "evidenceDigest": _digest(review),
@@ -321,13 +346,13 @@ def test_pool_record_and_query_project_bound_rights_authority(tmp_path: Path) ->
         "acquisitionReceiptRefs": ["receipts/acquired.json"],
     }]
     manifest = {
-        "contentId": "content-rights", "version": 1, "executionId": EXECUTION_ID, "contentType": "image", "generator": "agent",
-        "creatorProfileId": "creator", "variantPurpose": "original", "status": "active",
+        "objectRef": "image/rights/1", "contentId": "content-rights", "version": 1, "executionId": EXECUTION_ID, "contentType": "image", "generator": "agent",
+        "creatorProfileId": "creator", "status": "active",
         "tagRefs": [], "assets": assets,
         "sourceIdentity": {**identity, "identityDigest": source_identity_digest(identity)},
         "sourceAttribution": _attribution(),
         "admission": {
-            "processResult": "completed", "qualityResult": "passed", "usageScope": "production",
+            "processResult": "completed", "qualityResult": "passed",
             "rightsResult": "passed", "rightsAuthorityRef": "posts/image/rights/1/content_review.json",
             "rightsAuthorityDigest": _digest(review_path), "evidenceRef": "content_review.json", "evidenceDigest": _digest(review_path),
         },
@@ -404,11 +429,10 @@ def test_homepage_review_fidelity_is_a_blocking_contract() -> None:
     }
     review = {
         "schema": "quwoquan_data.content_review", "stage": "5.review", "executionId": EXECUTION_ID,
-        "objectRef": "entities/travel/cn/scenic", "decision": "approved",
-        "draft": {"ref": "4.draft/page.md", "digest": "sha256:" + "1" * 64},
+        "objectRef": "entities/travel/cn/scenic/1", "decision": "approved",
+        **_review_fields(object_ref="entities/travel/cn/scenic/1", draft_ref="4.draft/page.md"),
         "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
         "blockingIssues": [], "assetRights": [], "semanticReport": report,
-        "protocol": protocol, "objectRevision": revision, "dispositions": [disposition],
     }
     assert_valid(review, "content", "content_review")
     degraded = json.loads(json.dumps(review)); degraded["semanticReport"]["homepageFidelity"]["tableLogicalGrid"] = False

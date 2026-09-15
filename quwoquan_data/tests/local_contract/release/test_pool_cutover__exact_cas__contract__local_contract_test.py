@@ -568,7 +568,7 @@ def _refresh_stage(case: dict) -> None:
     _authorize(case)
 
 
-@pytest.mark.parametrize("field,value,code", [("usageScope", "research", "RECORD_USAGE_SCOPE_INVALID"), ("rightsResult", "failed", "RECORD_RIGHTS_INVALID"), ("payloadDigest", "sha256:" + "f" * 64, "CANONICAL_DIGEST_DRIFT")])
+@pytest.mark.parametrize("field,value,code", [("usageScope", "research", "RETIRED_CLASSIFICATION_FIELD"), ("rightsResult", "failed", "RECORD_RIGHTS_INVALID"), ("payloadDigest", "sha256:" + "f" * 64, "CANONICAL_DIGEST_DRIFT")])
 def test_new_staging_schema_and_rights_reject_old_or_forged_records(case: dict, field: str, value: str, code: str) -> None:
     record_path = case["stage"] / HOME / "_pool/versions/1.json"
     record = _read_json(record_path)
@@ -606,11 +606,11 @@ def test_sources_and_asset_order_cannot_drift_even_when_after_is_exact(case: dic
 
 def test_migration_source_digest_normalizes_only_structural_aliases() -> None:
     # manifest 单源转换不应把 singular→plural 机械归一误判为来源漂移。
-    original = {"sourceAttribution": {"publicationAdmission": "research_release", "riskAcceptanceId": None},
+    original = {"sourceAttribution": {"riskAcceptanceId": None},
                 "assets": [{"assetId": "stable", "sha256": "sha256:" + "1" * 64,
                             "collectionPageUrl": "https://example.org/work", "sourceAssetRef": "sources/a/assets/a.jpg"}]}
     converted = copy.deepcopy(original)
-    converted["sourceAttribution"] = {"publicationAdmission": "production_release"}
+    converted["sourceAttribution"] = {"riskAcceptanceId": None}
     converted["assets"][0]["sourceAssetRefs"] = [converted["assets"][0].pop("sourceAssetRef")]
     assert subject._source_digest(original) == subject._source_digest(converted)
     for field, value in (("sourceAssetRefs", ["sources/other/assets/a.jpg"]),

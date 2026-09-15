@@ -51,7 +51,6 @@
         "attributionText",
         "rightsBasis",
         "commercialAuthorizationStatus",
-        "publicationAdmission",
         "watermarkStatus",
         "audioRightsStatus",
         "modelReleaseStatus",
@@ -71,9 +70,6 @@
         "attributionText": { "type": "string", "minLength": 1 },
         "rightsBasis": { "type": "string", "minLength": 1 },
         "commercialAuthorizationStatus": { "enum": ["verified", "unverified"] },
-        "publicationAdmission": {
-          "enum": ["research_release", "commercial_release"]
-        },
         "authorizationProofUrl": { "type": ["string", "null"] },
         "termsUrl": { "type": ["string", "null"] },
         "watermarkStatus": {
@@ -131,7 +127,6 @@
       }
     },
     "payloadDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "variantPurpose": {"enum": ["original", "commercial_variant"]},
     "admission": {"$ref": "pool_admission.schema.json#/$defs/contentAdmission"},
     "status": {"enum": ["active", "retired", "deleted"]},
     "vertical": { "type": "string", "minLength": 1 },
@@ -216,7 +211,6 @@
           "license": { "$ref": "#/$defs/sourceFact" },
           "termsUrl": { "$ref": "#/$defs/optionalRightsFact" },
           "authorizationProof": { "$ref": "#/$defs/optionalRightsFact" },
-          "distributionDecision": {"enum": ["research_allowed", "commercial_allowed", "blocked"]},
           "usageScope": {"enum": ["internal_reference", "app_publish", "editorial"]},
           "commercialAuthorizationStatus": {"enum": ["verified", "unverified"]},
           "modelReleaseStatus": {"enum": ["not_required", "obtained", "editorial_only", "verified", "unverified"]},
@@ -296,7 +290,7 @@
         "properties": {"schema": {"const": "quwoquan_data.post_object"}}
       },
       "then": {
-        "required": ["contentId", "version", "sourceType", "sourceIdentity", "payloadDigest", "variantPurpose", "admission", "status", "creatorProfileId", "assets"],
+        "required": ["contentId", "version", "sourceType", "sourceIdentity", "payloadDigest", "admission", "status", "creatorProfileId", "assets"],
         "properties": {
           "assets": {
             "items": {

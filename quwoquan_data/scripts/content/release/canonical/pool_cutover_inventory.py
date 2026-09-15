@@ -35,12 +35,38 @@ def _evidence(path: Path) -> dict:
     return {"ref": str(path), "digest": _digest_file(path)}
 
 
+def _remove_retired_classification(value: dict, key: str, allowed: set[str], path: str) -> None:
+    """迁移专用旧解析：只删除已知历史枚举；正向 reader 不调用。"""
+    if key not in value:
+        return
+    retired = value[key]
+    if not isinstance(retired, str) or retired not in allowed:
+        _fail("RETIRED_CLASSIFICATION_VALUE_INVALID", f"{path}={retired!r}")
+    del value[key]
+
+
+def _convert_asset_classification(rows: object, path: str) -> None:
+    if not isinstance(rows, list):
+        return
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        _remove_retired_classification(
+            row, "distributionDecision", {"research_allowed", "commercial_allowed", "blocked"},
+            f"{path}[].distributionDecision",
+        )
+        scope = row.get("usageScope")
+        if isinstance(scope, str) and scope in {"research", "commercial"}:
+            _remove_retired_classification(row, "usageScope", {"research", "commercial"}, f"{path}[].usageScope")
+        elif "usageScope" in row and (not isinstance(scope, str)
+                                      or scope not in {"internal_reference", "app_publish", "editorial"}):
+            _fail("RETIRED_CLASSIFICATION_VALUE_INVALID", f"{path}[].usageScope={scope!r}")
+
+
 def convert_review_document(original: dict) -> dict:
-    """只验证并复制冻结权利记录，不重命名 usageScope 或签发新 review。"""
+    """隔离 migration-only 转换；保留审核判断，仅机械删除闭集旧分类字段。"""
     converted = copy.deepcopy(original)
-    for row in converted.get("assetRights", []):
-        if row.get("usageScope") not in {"research", "commercial"}:
-            _fail("REVIEW_SCOPE_UNSUPPORTED", row.get("usageScope"))
+    _convert_asset_classification(converted.get("assetRights"), "content_review.assetRights")
     assert_valid(converted, "content", "content_review", label="offline converted review")
     return converted
 

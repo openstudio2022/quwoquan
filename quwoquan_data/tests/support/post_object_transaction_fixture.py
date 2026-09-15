@@ -108,7 +108,6 @@ def _source_attribution() -> dict[str, object]:
         "attributionText": "Fixture Photographer / CC BY 4.0",
         "rightsBasis": "CC BY 4.0",
         "commercialAuthorizationStatus": "unverified",
-        "publicationAdmission": "research_release",
         "watermarkStatus": "absent",
         "audioRightsStatus": "no_audio",
         "modelReleaseStatus": "not_required",
@@ -198,6 +197,9 @@ def _fixture(
             {
                 "name": "西湖",
                 "entityType": "地点/景区",
+                "entityRef": "/entity/地点/景区/西湖",
+                "entityId": "entity:fixture:西湖",
+                "region": "中国/浙江省/杭州市",
                 "publishAngle": "西湖",
                 "publishTitle": "光影",
                 "publishSeq": 1,
@@ -295,16 +297,19 @@ def _fixture(
                     "fetchedAt": "2026-07-18T04:00:00Z",
                     "usageScope": "app_publish",
                     "modelReleaseStatus": "not_required",
-                    "distributionDecision": "research_allowed",
                 }
             ]
         },
     )
+    source_evidence = execution / "sources/commons/source.md"
+    source_evidence.write_text("Fixture source evidence.\n", encoding="utf-8")
     _write_json(
         execution / "sources/commons/meta.json",
         {
             "sourceUseMode": "licensed_adaptation",
             "carrier": "image",
+            "fetchedAt": "2026-07-18T04:00:00Z",
+            "sourceMarkdownSha256": _file_digest(source_evidence),
         },
     )
     _write_json(
@@ -316,10 +321,12 @@ def _fixture(
             "contentIdentity": "work",
             "contentId": "qwq_data_west_lake_image_fixture",
             "version": 1,
-            "variantPurpose": "original",
             "contentType": "image",
             "carrier": "image",
             "title": "西湖光影",
+            "publishAngle": "西湖",
+            "publishTitle": "光影",
+            "publishSeq": 1,
             "caption": "湖岸与长桥的光影",
             "creatorProfileId": CREATOR_REF,
             "sourceAttribution": _source_attribution(),
@@ -341,7 +348,6 @@ def _fixture(
                     "modelReleaseStatus": "not_required",
                     "rightsAuditStatus": "verified",
                     "rightsAuditIssues": [],
-                    "distributionDecision": "research_allowed",
                     "sha256": digest,
                 }
             ],
@@ -358,6 +364,11 @@ def _fixture(
             ]
         },
     )
+    draft_path = post / "4.draft/image_work.json"
+    _write_json(draft_path, {"title": "西湖光影", "caption": "湖岸与长桥的光影", "assetRefs": ["sources/commons/assets/cover.jpg"]})
+    draft_digest = _file_digest(draft_path)
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
+    revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
     _write_json(
         post / "5.review/content_review.json",
         {
@@ -366,9 +377,14 @@ def _fixture(
             "executionId": EXECUTION_ID,
             "objectRef": f"posts/{POST_REF}",
             "decision": "approved",
-            "draft": {"ref": "4.draft/image_work.json", "digest": "sha256:" + "1" * 64},
+            "author": {"host": "cursor", "modelFamily": "gpt", "sessionId": "author", "invocation": {"provider": "openai", "model": "gpt-5", "runId": "author-run"}},
+            "reviewer": {"host": "cursor", "modelFamily": "gpt", "sessionId": "reviewer", "invocation": {"provider": "openai", "model": "gpt-5", "runId": "reviewer-run"}},
+            "candidateBindings": {"origin": "execution_draft", "page": {"ref": "4.draft/image_work.json", "digest": draft_digest}, "manifest": None, "semanticDocument": None},
             "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
             "blockingIssues": [],
+            "protocol": protocol,
+            "objectRevision": revision,
+            "dispositions": [{"issueId": "semantic-exact", "objectRef": f"posts/{POST_REF}", "sourceDigest": digest, "targetDigest": draft_digest, "detectedType": "SEMANTIC_EXACT", "proposedMapping": None, "lossFields": [], "severity": "info", "actor": {"actorId": "reviewer", "actorType": "independent_reviewer"}, "reason": "fixture preserves reviewed work", "policyVersion": "1.0.0", "reviewStatus": "reviewed_confirmed", "outcome": "auto_continue", "processingDisposition": "preserved", "protocol": protocol, "objectRevision": revision}],
             "assetRights": [
                 {
                     "assetRef": "sources/commons/assets/cover.jpg",
@@ -376,7 +392,6 @@ def _fixture(
                     "license": "CC BY 4.0",
                     "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
                     "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
-                    "usageScope": "research",
                     "decision": "approved",
                     "issues": [],
                 }
@@ -385,8 +400,11 @@ def _fixture(
     )
     _write_json(post / "5.review/evidence_index.json", {"evidence": []})
     publish = tmp_path / "publish"
-    for relative in ("creators", "entities", "posts", "tags"):
+    for relative in (".git", "creators", "entities", "posts", "tags"):
         (publish / relative).mkdir(parents=True, exist_ok=True)
+    _write_json(publish / "repository.json", {"schema": "quwoquan_data.publish_repository.v2", "repositoryId": "post-fixture", "layoutVersion": 2})
+    from content.release.canonical import post_transaction
+    post_transaction.PUBLISH_ROOT = publish
     _seed_creator_avatar_holding(monkeypatch)
     package = execution / "evidence/object-transactions" / transaction_id
     return execution, package, publish, transaction_id

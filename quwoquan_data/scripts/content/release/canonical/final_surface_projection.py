@@ -312,7 +312,6 @@ def _text_attribution(
         "attributionText": "原创表达；事实来源见 source catalog。",
         "rightsBasis": "original_expression_with_factual_reference_only",
         "commercialAuthorizationStatus": "unverified",
-        "publicationAdmission": "research_release",
         "authorizationProofUrl": None,
         "termsUrl": None,
         "watermarkStatus": "absent",

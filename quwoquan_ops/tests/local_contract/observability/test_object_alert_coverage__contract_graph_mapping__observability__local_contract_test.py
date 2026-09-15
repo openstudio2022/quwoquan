@@ -49,6 +49,17 @@ def operation(
 
 
 class ObjectAlertCoverageContractTest(unittest.TestCase):
+    def test_alerts_exclude_retired_research_release_readback(self) -> None:
+        alerts_root = ROOT / "quwoquan_ops/observability/monitoring/alerts"
+        for path in (
+            alerts_root / "content_contract/post.yaml",
+            alerts_root / "contract_pending_commercial_coverage.yaml",
+        ):
+            source = path.read_text(encoding="utf-8")
+            yaml.safe_load(source)
+            self.assertNotIn("GetResearchReleaseReadback", source, path)
+            self.assertNotIn("content_research_release_readback", source, path)
+
     def setUp(self) -> None:
         self._directory = tempfile.TemporaryDirectory()
         self.root = Path(self._directory.name)

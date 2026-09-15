@@ -28,10 +28,7 @@ from core.content_source_registry import (
     resolve_homepage_source_role,
     verify_content_source_registry,
 )
-from core.video_source_admission import (
-    assert_video_acquisition_path_allowed,
-    assert_video_distribution_use_allowed,
-)
+from core.video_source_admission import assert_video_acquisition_path_allowed
 
 
 def test_content_source_registry_is_valid_and_covers_all_lanes():
@@ -190,106 +187,43 @@ def test_registry_rejects_dropping_the_narrative_guard():
     assert any("allowedSourceClasses" in issue for issue in issues)
 
 
-def test_reference_only_video_sources_preserve_rights_records_and_manual_acquisition():
+def test_video_sources_preserve_acquisition_policy_without_object_classification():
     data = load_content_source_registry()
-    matrix = {
-        row["sourceId"]: row
-        for row in data["lanePolicies"]["video"]["publicationAdmissionMatrix"]
-    }
-    video_sources = {
-        row["sourceId"]: row
-        for row in data["common"]["video"]
-    }
+    policy = data["lanePolicies"]["video"]
+    assert "publicationAdmissionMatrix" not in policy
+    video_sources = {row["sourceId"]: row for row in data["common"]["video"]}
     for source_id in ("youtube", "vimeo", "bilibili"):
         source = video_sources[source_id]
         assert source["defaultRole"] == "reference_only"
         assert source["fetchMode"] == "platform_reference"
         assert source["acquisitionPaths"] == ["manual_file"]
-        assert matrix[source_id]["publicationAdmissions"] == ["research_release", "commercial_release"]
         assert_video_acquisition_path_allowed(
-            data,
-            source_id=source_id,
-            source_kind="tourism_video_site",
+            data, source_id=source_id, source_kind="tourism_video_site",
             acquisition_path="manual_file",
         )
         with pytest.raises(ValueError, match="public_direct is not allowed"):
             assert_video_acquisition_path_allowed(
-                data,
-                source_id=source_id,
-                source_kind="tourism_video_site",
+                data, source_id=source_id, source_kind="tourism_video_site",
                 acquisition_path="public_direct",
             )
-        # 权利词汇是记录事实；两种合法取值都不放宽上面的来源访问限制。
-        for publication in ("research_release", "commercial_release"):
-            assert_video_distribution_use_allowed(
-                data,
-                source_id=source_id,
-                source_kind="tourism_video_site",
-                publication_admission=publication,
-            )
-        with pytest.raises(ValueError, match="invalid publication admission record"):
-            assert_video_distribution_use_allowed(
-                data, source_id=source_id, source_kind="tourism_video_site",
-                publication_admission="invented_publication",
-            )
 
 
-def test_cctv_public_video_preserves_rights_records_and_public_acquisition():
+def test_cctv_public_video_preserves_public_acquisition_without_classification():
     data = load_content_source_registry()
-    source = next(
-        row
-        for row in data["verticals"]["travel"]["video"]
-        if row["sourceId"] == "cctv_video"
-    )
-    matrix = next(
-        row
-        for row in data["lanePolicies"]["video"]["publicationAdmissionMatrix"]
-        if row["sourceId"] == "cctv_video"
-    )
-
+    source = next(row for row in data["verticals"]["travel"]["video"] if row["sourceId"] == "cctv_video")
     assert source["platform"] == "央视网"
     assert source["acquisitionPaths"] == ["public_direct", "manual_file"]
-    assert matrix["publicationAdmissions"] == ["research_release", "commercial_release"]
     assert_video_acquisition_path_allowed(
-        data,
-        source_id="cctv_video",
-        source_kind="tourism_video_site",
+        data, source_id="cctv_video", source_kind="tourism_video_site",
         acquisition_path="public_direct",
     )
-    for publication in ("research_release", "commercial_release"):
-        assert_video_distribution_use_allowed(
-            data,
-            source_id="cctv_video",
-            source_kind="tourism_video_site",
-            publication_admission=publication,
-        )
-    with pytest.raises(ValueError, match="invalid publication admission record"):
-        assert_video_distribution_use_allowed(
-            data,
-            source_id="cctv_video",
-            source_kind="tourism_video_site",
-            publication_admission="invented_publication",
-        )
 
 
-def test_registry_typed_gate_blocks_reference_only_video_configuration_conflicts():
+def test_registry_rejects_retired_publication_matrix():
     data = load_content_source_registry()
-    matrix = data["lanePolicies"]["video"]["publicationAdmissionMatrix"]
-    next(row for row in matrix if row["sourceId"] == "bilibili")[
-        "publicationAdmissions"
-    ] = ["research_release", "commercial_release", "invented_publication"]
-    bilibili = next(
-        row for row in data["common"]["video"] if row["sourceId"] == "bilibili"
-    )
-    bilibili["acquisitionPaths"] = ["public_direct"]
-
+    data["lanePolicies"]["video"]["publicationAdmissionMatrix"] = []
     issues = verify_content_source_registry(data)
-
-    assert (
-        "video source bilibili: acquisition paths must equal "
-        "['manual_file']"
-    ) in issues
-    assert "video matrix bilibili: invalid publicationAdmissions" in issues
+    assert "lanePolicies.video.publicationAdmissionMatrix is retired" in issues
 
 
 def test_registry_rejects_retired_keys_even_beside_active_contract():

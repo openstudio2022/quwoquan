@@ -57,12 +57,14 @@ def _admit_referenced_homepage(publish: Path, package: Path) -> None:
     })
     _write_json(root / "content_review.json", {"decision": "approved"})
     review_digest = "sha256:" + hashlib.sha256((root / "content_review.json").read_bytes()).hexdigest()
+    entity_facts = json.loads((root / "_entity.json").read_text(encoding="utf-8"))
     _write_json(root / "manifest.json", {
-        "entityId": "entity:fixture:西湖", "entityRef": "/entity/地点/景区/西湖", "version": 1,
-        "contentType": "homepage", "assets": [], "executionId": EXECUTION_ID, "sourceIdentity": post["sourceIdentity"],
-        "sourceAttribution": post["sourceAttribution"],
+        **entity_facts, "schema": "quwoquan_data.entity_object",
+        "entityId": "entity:fixture:西湖", "version": 1, "contentType": "homepage",
+        "geographyMode": "administrative", "sourceRefs": ["sources/wiki/source.json"],
+        "finalContentRef": "page.md", "assets": [], "sourceIdentity": post["sourceIdentity"],
         "admission": {"processResult": "completed", "qualityResult": "passed", "rightsResult": "passed",
-            "usageScope": "production", "evidenceRef": "content_review.json", "evidenceDigest": review_digest,
+"evidenceRef": "content_review.json", "evidenceDigest": review_digest,
             "rightsAuthorityRef": "entities/地点/景区/西湖/content_review.json", "rightsAuthorityDigest": review_digest},
     })
     append_pool_record(object_root=root, record=build_canonical_pool_record(
@@ -74,7 +76,7 @@ def test_post_transaction_resolves_independently_admitted_creator(
     tmp_path: Path,
 ) -> None:
     execution, package, publish, transaction_id = _fixture(tmp_path)
-    assert transaction_id.endswith("--content-review-v1")
+    assert transaction_id.endswith("--self-contained-v2")
     transaction = build_post_object_transaction_package(
         execution_root=execution,
         object_ref=POST_REF,
@@ -135,7 +137,7 @@ def test_fresh_reviewed_work_without_variant_publishes_as_original(
     make_text_only_article(execution)
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest.pop("variantPurpose")
+    assert "variantPurpose" not in manifest
     manifest.update(
         generator="agent",
         createdAt="2026-09-05T12:00:00Z",
@@ -143,7 +145,7 @@ def test_fresh_reviewed_work_without_variant_publishes_as_original(
     )
     assert manifest["contentIdentity"] == "work"
     assert manifest["contentType"] == "article"
-    assert manifest["sourceAttribution"]["publicationAdmission"] == "production_release"
+    assert "publicationAdmission" not in manifest["sourceAttribution"]
     _write_json(manifest_path, manifest)
 
     build_post_object_transaction_package(
@@ -158,11 +160,11 @@ def test_fresh_reviewed_work_without_variant_publishes_as_original(
     )
     assert canonical["contentIdentity"] == "work"
     assert canonical["sourceType"] == "data"
-    assert canonical["variantPurpose"] == "original"
+    assert "variantPurpose" not in canonical
     assert canonical["admission"]["processResult"] == "completed"
     assert canonical["admission"]["qualityResult"] == "passed"
     assert canonical["admission"]["rightsResult"] == "passed"
-    assert canonical["admission"]["usageScope"] == "production"
+    assert "usageScope" not in canonical["admission"]
     assert canonical["status"] == "active"
     assert_valid(canonical, "content", "post_manifest")
     for field in ("assetRefsRef", "creatorRefsRef", "tagRefsRef"):
@@ -170,73 +172,27 @@ def test_fresh_reviewed_work_without_variant_publishes_as_original(
             assert_valid({**canonical, field: "old.json"}, "content", "post_manifest")
 
 
-def test_post_transaction_caps_commercial_facts_at_ai_research_scope(
-    tmp_path: Path,
-) -> None:
+@pytest.mark.parametrize("field_path", ["variantPurpose", "publicationAdmission", "distributionDecision", "reviewUsageScope"])
+def test_post_transaction_rejects_retired_classification(field_path: str, tmp_path: Path) -> None:
     execution, package, _publish, transaction_id = _fixture(tmp_path)
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["sourceAttribution"].update(
-        publicationAdmission="production_release",
-        commercialAuthorizationStatus="verified",
-        authorizationProofUrl="https://example.test/proof",
-        termsUrl="https://example.test/terms",
-    )
-    manifest["assets"][0]["distributionDecision"] = "production_allowed"
+    if field_path == "variantPurpose":
+        manifest["variantPurpose"] = "commercial_variant"
+    elif field_path == "publicationAdmission":
+        manifest["sourceAttribution"]["publicationAdmission"] = "commercial_release"
+    elif field_path == "distributionDecision":
+        manifest["assets"][0]["distributionDecision"] = "commercial_allowed"
+    else:
+        review_path = execution / "posts" / POST_REF / "5.review/content_review.json"
+        review = json.loads(review_path.read_text(encoding="utf-8"))
+        review["assetRights"][0]["usageScope"] = "research"
+        _write_json(review_path, review)
     _write_json(manifest_path, manifest)
-    source_index_path = execution / "sources/commons/assets/index.json"
-    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
-    source_index["assets"][0]["distributionDecision"] = "production_allowed"
-    _write_json(source_index_path, source_index)
-    review_path = execution / "posts" / POST_REF / "5.review/content_review.json"
-    review = json.loads(review_path.read_text(encoding="utf-8"))
-    review["assetRights"][0]["usageScope"] = "production"
-    _write_json(review_path, review)
-
-    build_post_object_transaction_package(
-        execution_root=execution,
-        object_ref=POST_REF,
-        transaction_id=transaction_id,
-        package_root=package,
-    )
-    canonical = json.loads(
-        (package / "object/manifest.json").read_text(encoding="utf-8")
-    )
-    assert canonical["admission"]["usageScope"] == "production"
-
-
-def test_post_transaction_rejects_ai_research_commercial_variant(
-    tmp_path: Path,
-) -> None:
-    execution, package, _publish, transaction_id = _fixture(tmp_path)
-    manifest_path = execution / "posts" / POST_REF / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["variantPurpose"] = "commercial_variant"
-    manifest["sourceAttribution"].update(
-        publicationAdmission="production_release",
-        commercialAuthorizationStatus="verified",
-        authorizationProofUrl="https://example.test/proof",
-        termsUrl="https://example.test/terms",
-    )
-    manifest["assets"][0]["distributionDecision"] = "production_allowed"
-    _write_json(manifest_path, manifest)
-    source_index_path = execution / "sources/commons/assets/index.json"
-    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
-    source_index["assets"][0]["distributionDecision"] = "production_allowed"
-    _write_json(source_index_path, source_index)
-    review_path = execution / "posts" / POST_REF / "5.review/content_review.json"
-    review = json.loads(review_path.read_text(encoding="utf-8"))
-    review["assetRights"][0]["usageScope"] = "production"
-    _write_json(review_path, review)
-
-    review["assetRights"][0]["usageScope"] = "research"
-    _write_json(review_path, review)
-    with pytest.raises(ObjectTransactionError, match="usageScope"):
+    with pytest.raises((ObjectTransactionError, ValueError), match="RETIRED_CLASSIFICATION_FIELD|schema violation|distributionDecision|usageScope|variantPurpose|publicationAdmission"):
         build_post_object_transaction_package(
-            execution_root=execution,
-            object_ref=POST_REF,
-            transaction_id=transaction_id,
-            package_root=package,
+            execution_root=execution, object_ref=POST_REF,
+            transaction_id=transaction_id, package_root=package,
         )
 
 

@@ -195,7 +195,7 @@ def test_three_seals_form_chain_and_seal_completes_review_fields(execution: Path
     assert rights["assetRef"] == "sources/zh_wikipedia__abc/assets/001_xihu.png"
     assert rights["decision"] == "approved"
     assert rights["issues"] == ["署名建议写全名"]
-    assert rights["usageScope"] == "research"
+    assert "usageScope" not in rights
     assert rights["sourceUrl"] == "https://commons.wikimedia.org/wiki/File:Xihu.png"
     assert rights["license"] == "CC BY-SA 4.0"
     assert rights["termsUrl"].startswith("https://")
@@ -297,7 +297,7 @@ def test_review_accepts_grok_bot_host_when_session_and_run_differ(execution: Pat
     _seal(execution, "1.download", author)
     _write(execution / TARGET_REF / "4.draft/draft.article.md", "# 西湖速览\n\n正文。\n")
     _seal(execution, "4.draft", author)
-    judgement = {"decision": "approved", "blockingIssues": [], "advisories": []}
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": _semantic_report(execution), **_semantic_bindings()}
     with pytest.raises(seal_module.SealError, match="同一 host/sessionId"):
         _seal(
             execution,

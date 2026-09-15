@@ -129,8 +129,7 @@ def pool_candidate_digest(candidates: Sequence[PoolCandidate]) -> str:
         {
             "postRef": row.post_ref, "contentId": row.content_id,
             "version": row.version, "contentType": row.content_type,
-            "authorId": row.author_id, "variantPurpose": row.variant_purpose,
-            "usageScope": row.usage_scope,
+            "authorId": row.author_id,
             "selectionIdentityDigest": row.selection_identity_digest,
             "canonicalObjectDigest": row.canonical_object_digest,
             "contentLibraryBindingDigest": row.content_library_binding_digest,

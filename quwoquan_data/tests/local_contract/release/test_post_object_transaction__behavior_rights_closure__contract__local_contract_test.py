@@ -47,7 +47,6 @@ def test_travel_unverified_asset_is_rejected_without_downgrade(
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     asset = manifest["assets"][0]
-    asset["distributionDecision"] = "production_allowed"
     asset["creator"] = ""
     asset["license"] = ""
     asset["termsUrl"] = ""
@@ -61,7 +60,6 @@ def test_travel_unverified_asset_is_rejected_without_downgrade(
     source_index_path = execution / "sources/commons/assets/index.json"
     source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
     source_asset = source_index["assets"][0]
-    source_asset["distributionDecision"] = "production_allowed"
     source_asset["authorizationProof"] = ""
     source_asset["termsUrl"] = ""
     source_asset["creator"] = ""
@@ -90,14 +88,12 @@ def test_unverified_asset_publishes_with_rights_recorded_not_enforced(
     asset = manifest["assets"][0]
     asset["rightsAuditStatus"] = "unverified"
     asset["rightsAuditIssues"] = list(issues)
-    asset["distributionDecision"] = "production_allowed"
     _write_json(manifest_path, manifest)
     source_index_path = execution / "sources/commons/assets/index.json"
     source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
     source_asset = source_index["assets"][0]
     source_asset["rightsAuditStatus"] = "unverified"
     source_asset["rightsAuditIssues"] = list(issues)
-    source_asset["distributionDecision"] = "production_allowed"
     _write_json(source_index_path, source_index)
 
     build_post_object_transaction_package(
@@ -111,7 +107,6 @@ def test_unverified_asset_publishes_with_rights_recorded_not_enforced(
     recorded = rights["assets"][0]
     assert recorded["rightsAuditStatus"] == "unverified"
     assert recorded["rightsAuditIssues"] == issues
-    assert recorded["distributionDecision"] == "production_allowed"
     assert_valid(rights, "release", "asset_rights_closure")
 
 
@@ -192,7 +187,6 @@ def test_unverified_collection_page_is_rejected_without_downgrade(
     manifest["sourceUrls"] = ["https://content.example.test/article/landscape"]
     asset = manifest["assets"][0]
     asset.pop("sourceAssetId", None)
-    asset["distributionDecision"] = "production_allowed"
     asset["collectionPageUrl"] = "https://travel.example.test/article/landscape"
     asset["creator"] = ""
     asset["license"] = ""
@@ -215,7 +209,6 @@ def test_unverified_collection_page_is_rejected_without_downgrade(
             "authorizationProof": "",
             "termsUrl": "",
             "creator": "",
-            "distributionDecision": "production_allowed",
             "license": "",
             "rightsAuditStatus": "unverified",
             "rightsAuditIssues": ["imageRights: source terms not yet verified"],
@@ -264,7 +257,6 @@ def test_canonical_source_catalog_preserves_factual_reference_only_truth(
         (package / "object/rights.json").read_text(encoding="utf-8")
     )
     assert rights["assets"][0]["sourceUseMode"] == "factual_reference_only"
-    assert rights["assets"][0]["distributionDecision"] == "production_allowed"
     assert_valid(rights, "release", "asset_rights_closure")
     assert validate_result(rights, "release", "asset_rights_closure") == []
 

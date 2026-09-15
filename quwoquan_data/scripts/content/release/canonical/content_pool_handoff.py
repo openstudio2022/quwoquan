@@ -87,8 +87,6 @@ class ContentPoolHandoffQuery:
     rights_result: str
     rights_authority_ref: str
     rights_authority_digest: str
-    usage_scope: str
-    variant_purpose: str
     evidence_ref: str
     evidence_digest: str
     payload_digest: str
@@ -134,10 +132,6 @@ class ContentPoolHandoffQuery:
                 "rightsAuthorityDigest": self.rights_authority_digest,
                 "evidenceRef": self.evidence_ref,
                 "evidenceDigest": self.evidence_digest,
-            },
-            "scope": {
-                "usageScope": self.usage_scope,
-                "variantPurpose": self.variant_purpose,
             },
             "digests": {
                 "payloadDigest": self.payload_digest,
@@ -338,10 +332,19 @@ def project_content_pool_handoff(
         raise ObjectTransactionError(
             f"DATA.POOL.RIGHTS_FAILED: {kind}/{normalized_ref}"
         )
-    usage_scope = str(record.get("usageScope") or "").strip()
-    if usage_scope not in {"research", "commercial"}:
+    retired = [key for key in ("variantPurpose",) if key in manifest]
+    admission = manifest.get("admission")
+    if isinstance(admission, Mapping) and "usageScope" in admission:
+        retired.append("manifest.admission.usageScope")
+    if "usageScope" in record:
+        retired.append("record.usageScope")
+    attribution = manifest.get("sourceAttribution")
+    if isinstance(attribution, Mapping) and "publicationAdmission" in attribution:
+        retired.append("sourceAttribution.publicationAdmission")
+    if retired:
         raise ObjectTransactionError(
-            f"DATA.POOL.USAGE_SCOPE_INVALID: {kind}/{normalized_ref}"
+            f"DATA.POOL.RETIRED_CLASSIFICATION_FIELD: {kind}/{normalized_ref}: "
+            + ", ".join(retired)
         )
     if normalized_type == "content":
         carrier = str(manifest.get("contentType") or "").strip()
@@ -354,16 +357,10 @@ def project_content_pool_handoff(
             raise ObjectTransactionError(
                 f"DATA.POOL.GENERATOR_PROVENANCE_INVALID: {normalized_ref}"
             )
-        variant_purpose = str(manifest.get("variantPurpose") or "").strip()
-        if variant_purpose not in {"original", "commercial_variant"}:
-            raise ObjectTransactionError(
-                f"DATA.POOL.VARIANT_INVALID: {normalized_ref}"
-            )
     else:
         carrier = "homepage"
         _creator_ref(manifest)
         author_id = None
-        variant_purpose = "not_applicable"
 
     payload_digest = str(record.get("payloadDigest") or "").strip()
     canonical_object_digest = str(record.get("canonicalObjectDigest") or "").strip()
@@ -399,8 +396,6 @@ def project_content_pool_handoff(
         "rightsResult": rights_result,
         "rightsAuthorityRef": rights_authority_ref,
         "rightsAuthorityDigest": rights_authority_digest,
-        "usageScope": usage_scope,
-        "variantPurpose": variant_purpose,
         "contentLibraryBindingDigest": binding_digest,
     }
     result = ContentPoolHandoffQuery(
@@ -418,8 +413,6 @@ def project_content_pool_handoff(
         rights_result=rights_result,
         rights_authority_ref=rights_authority_ref,
         rights_authority_digest=rights_authority_digest,
-        usage_scope=usage_scope,
-        variant_purpose=variant_purpose,
         evidence_ref=evidence_ref,
         evidence_digest=evidence_digest,
         payload_digest=payload_digest,

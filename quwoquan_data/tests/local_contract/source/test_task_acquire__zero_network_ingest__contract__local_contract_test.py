@@ -225,10 +225,10 @@ def test_declared_rights_are_preserved_without_authorization_upgrade(execution: 
     assert asset["rightsIssues"] == ["授权范围待核实"]
     assert asset["usageScope"] == "internal_reference"
     assert asset["license"] == "CC BY-NC 4.0"
-    assert asset["distributionDecision"] == ("blocked" if rights_status == "restricted" else "research_allowed")
+    assert "distributionDecision" not in asset
     assert asset["authorizationProof"] == "" and asset["authorizationRequired"] is True
     attribution = asset["sourceAttribution"]
-    assert attribution["publicationAdmission"] == "research_release"
+    assert "publicationAdmission" not in attribution
     assert attribution["authorizationProofUrl"] is None
     assert attribution["commercialAuthorizationStatus"] == "unverified"
     assert attribution["audioRightsStatus"] == "unverified"

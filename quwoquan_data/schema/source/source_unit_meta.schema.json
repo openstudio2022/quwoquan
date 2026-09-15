@@ -148,7 +148,6 @@
     "sourceDiscoveryProfileDigest": {
       "type": "string", "pattern": "^sha256:[0-9a-f]{64}$"
     },
-    "articlePublicationAdmission": {"enum": ["research_release", "commercial_release"]},
     "publishMediaMode": {
       "enum": ["illustrated", "text_only", "attributed_external_video"]
     },
@@ -179,7 +178,7 @@
     {
       "required": [
         "carrier", "articleSiteId", "sourceDiscoveryProfileDigest",
-        "articlePublicationAdmission", "publishMediaMode", "sourceRole"
+        "publishMediaMode", "sourceRole"
       ],
       "properties": {
         "carrier": {"const": "article"},
@@ -190,8 +189,7 @@
         "policyRevision": {"const": "article-source-registry-v1"},
         "sourceUseMode": {"const": "factual_reference_only"},
         "rightsMode": {"const": "factual_reference_only"},
-        "articlePublicationAdmission": {"enum": ["research_release", "commercial_release"]},
-        "publishMediaMode": {"enum": ["illustrated", "text_only"]}
+            "publishMediaMode": {"enum": ["illustrated", "text_only"]}
       }
     },
     {

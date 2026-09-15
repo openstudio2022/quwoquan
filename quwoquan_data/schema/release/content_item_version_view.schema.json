@@ -6,7 +6,7 @@
   "type": "object",
   "required": [
     "schema", "projectorVersion", "specRef", "identity", "version", "quality",
-    "eligibility", "delivery", "usageScope", "holder"
+    "eligibility", "delivery", "holder"
   ],
   "additionalProperties": false,
   "properties": {
@@ -100,7 +100,6 @@
         }
       }
     },
-    "usageScope": {"enum": ["research", "commercial", null]},
     "holder": {"const": "content_library"}
   },
   "$defs": {

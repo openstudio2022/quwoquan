@@ -112,7 +112,6 @@ def _inline_author_record(object_root: Path) -> dict[str, Any] | None:
             "processResult": str(admission.get("processResult") or "failed"),
             "qualityResult": str(admission.get("qualityResult") or "failed"),
             "eligibilityResult": "passed",
-            "usageScope": None,
             "evidenceRef": str(admission.get("evidenceRef") or ""),
             "evidenceDigest": str(admission.get("evidenceDigest") or ""),
             "payloadDigest": pool_payload_digest(object_root),
@@ -170,10 +169,6 @@ def is_pool_record_admitted(record: Mapping[str, Any] | None) -> bool:
                 and bool(str(record.get("rightsAuthorityRef") or "").strip())
                 and str(record.get("rightsAuthorityDigest") or "").startswith("sha256:")
             )
-        )
-        and (
-            record.get("objectType") == "author"
-            or record.get("usageScope") in {"research", "commercial"}
         )
     )
 
@@ -292,7 +287,6 @@ def build_canonical_pool_record(
             "rightsResult": "passed",
             "rightsAuthorityRef": rights_authority_ref,
             "rightsAuthorityDigest": rights_authority_digest,
-            "usageScope": str(admission.get("usageScope") or "").strip() or None,
             "evidenceRef": evidence_ref,
             "evidenceDigest": evidence_digest,
             "payloadDigest": payload_digest,
@@ -377,25 +371,6 @@ def _known_versions(publish_root: Path, content_id: str) -> list[int]:
     return sorted(versions)
 
 
-def pool_usage_scope(
-    source_manifest: Mapping[str, Any], rights_rows: list[dict[str, Any]]
-) -> str:
-    """保留对象显式权利范围；缺席时只按已冻结事实作保守记录，不作为准入门。"""
-    admission = source_manifest.get("admission")
-    if isinstance(admission, Mapping) and "usageScope" in admission:
-        scope = admission["usageScope"]
-        if scope not in {"research", "commercial"}:
-            raise ObjectTransactionError("DATA.POOL.RECORD_USAGE_SCOPE_INVALID")
-        return str(scope)
-    if not source_attribution_complete(source_manifest):
-        raise ObjectTransactionError("DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE")
-    attribution = source_manifest["sourceAttribution"]
-    commercial = attribution.get("publicationAdmission") == "commercial_release" and all(
-        row.get("distributionDecision") == "commercial_allowed" for row in rights_rows
-    )
-    return "commercial" if commercial else "research"
-
-
 def _plan_content_pool_identity(
     *,
     source_manifest: Mapping[str, Any],
@@ -469,40 +444,32 @@ def build_content_pool_fields(
             "DATA.POOL.VERSION_GAP: "
             f"contentId={content_id} expected={known_versions[-1] + 1} actual={version}"
         )
-    review_usage_scope = str(rights_authority.get("usageScope") or "").strip()
     expected_authority_ref = f"posts/{canonical_ref}/{CANONICAL_CONTENT_REVIEW_REF}"
     if (
         str(rights_authority.get("ref") or "") != expected_authority_ref
         or not str(rights_authority.get("digest") or "").startswith("sha256:")
-        or review_usage_scope not in {"research", "commercial"}
     ):
         raise ObjectTransactionError("DATA.POOL.RIGHTS_AUTHORITY_INVALID")
-    usage_scope = pool_usage_scope(source_manifest, rights_rows)
-    raw_variant_purpose = source_manifest.get("variantPurpose")
-    if "variantPurpose" not in source_manifest:
-        if source_manifest.get("contentIdentity") != "work":
-            raise ObjectTransactionError(
-                "DATA.POOL.VARIANT_PURPOSE_AMBIGUOUS: "
-                "missing variantPurpose requires explicit contentIdentity=work"
-            )
-        variant_purpose = "original"
-    else:
-        variant_purpose = (
-            raw_variant_purpose if isinstance(raw_variant_purpose, str) else ""
+    retired = [key for key in ("variantPurpose",) if key in source_manifest]
+    admission = source_manifest.get("admission")
+    if isinstance(admission, Mapping) and "usageScope" in admission:
+        retired.append("admission.usageScope")
+    attribution = source_manifest.get("sourceAttribution")
+    if isinstance(attribution, Mapping) and "publicationAdmission" in attribution:
+        retired.append("sourceAttribution.publicationAdmission")
+    if any("distributionDecision" in row for row in rights_rows if isinstance(row, Mapping)):
+        retired.append("rights[].distributionDecision")
+    if retired:
+        raise ObjectTransactionError(
+            "DATA.POOL.RETIRED_CLASSIFICATION_FIELD: " + ", ".join(retired)
         )
-        if variant_purpose not in {"original", "commercial_variant"}:
-            raise ObjectTransactionError(
-                f"content variantPurpose is invalid: {raw_variant_purpose!r}"
-            )
     return {
         "contentId": content_id,
         "version": version,
         "sourceType": "data",
-        "variantPurpose": variant_purpose,
         "admission": {
             "processResult": "completed",
             "qualityResult": "passed",
-            "usageScope": usage_scope,
             "rightsResult": "passed",
             "rightsAuthorityRef": str(rights_authority["ref"]),
             "rightsAuthorityDigest": str(rights_authority["digest"]),
@@ -525,7 +492,6 @@ __all__ = [
     "iter_pool_records",
     "latest_pool_record",
     "plan_content_pool_identity",
-    "pool_usage_scope",
     "pool_payload_digest",
     "pool_source_identity_digest",
     "preflight_pool_record_append",

@@ -22,7 +22,7 @@ func writeFile(t *testing.T, path, content string) {
 		strings.Contains(content, `"contentType"`) {
 		// Canonical release fixtures always carry admitted content identity and
 		// pool fields. Negative tests write bytes directly and bypass this helper.
-		prefix := `{"contentId":"fixture-` + fmt.Sprintf("%x", len(path)) + `","version":1,"sourceType":"data","variantPurpose":"original","admission":{"processResult":"completed","qualityResult":"passed","usageScope":"production","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:` + strings.Repeat("a", 64) + `"},"status":"active","contentIdentity":"work",`
+		prefix := `{"contentId":"fixture-` + fmt.Sprintf("%x", len(path)) + `","version":1,"sourceType":"data","admission":{"processResult":"completed","qualityResult":"passed","rightsResult":"passed","rightsAuthorityRef":"content_review.json","rightsAuthorityDigest":"sha256:` + strings.Repeat("b", 64) + `","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:` + strings.Repeat("a", 64) + `"},"status":"active","contentIdentity":"work",`
 		content = strings.Replace(content, "{", prefix, 1)
 		content = semanticfixture.AddToManifestJSON(t, content)
 	}
@@ -31,6 +31,38 @@ func writeFile(t *testing.T, path, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+func TestLoadPostsRejectsRetiredObjectClassificationFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		fragment string
+		want     string
+	}{
+		{name: "variant purpose", fragment: `,"variantPurpose":"commercial_variant"`, want: "variantPurpose"},
+		{name: "release class", fragment: `,"releaseClass":"research"`, want: "releaseClass"},
+		{name: "product lifecycle", fragment: `,"productLifecycleState":"production"`, want: "productLifecycleState"},
+		{name: "admission usage scope", fragment: `,"admission":{"usageScope":"commercial"}`, want: "admission.usageScope"},
+		{name: "publication admission", fragment: `,"sourceAttribution":{"publicationAdmission":"research_release"}`, want: "sourceAttribution.publicationAdmission"},
+		{name: "asset distribution decision", fragment: `,"assets":[{"distributionDecision":"commercial"}]`, want: "assets[0].distributionDecision"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "posts/article/攻略/退休分类/1/manifest.json")
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			raw := `{"contentType":"article"` + test.fragment + `}`
+			if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("retired field %s must fail closed, got %v", test.want, err)
+			}
+		})
 	}
 }
 
@@ -64,8 +96,7 @@ func TestLoadPostsRejectsMissingContentIdentity(t *testing.T) {
 		"contentId":"missing-identity",
 		"version":1,
 		"sourceType":"data",
-		"variantPurpose":"original",
-		"admission":{"processResult":"completed","qualityResult":"passed","usageScope":"production","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		"admission":{"processResult":"completed","qualityResult":"passed","rightsResult":"passed","rightsAuthorityRef":"content_review.json","rightsAuthorityDigest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 		"status":"active",
 		"contentType":"article",
 		"entityRefs":[],
@@ -233,7 +264,6 @@ func TestLoadVideoPreservesSourceAttribution(t *testing.T) {
 				"takedownPolicy":"notice_and_takedown",
 				"attributionText":"Liuxingy — CC BY-SA 4.0",
 				"rightsBasis":"CC BY-SA 4.0",
-				"publicationAdmission":"production_release",
 				"derivedModifications":["resize", "format_conversion"],
 				"watermarkKind":"author_signature",
 				"watermarkNote":"保留原作者签名"
@@ -250,37 +280,23 @@ func TestLoadVideoPreservesSourceAttribution(t *testing.T) {
 	}
 	attribution := posts[0].SourceAttribution
 	if attribution.OriginalCreatorName != "Liuxingy" ||
-		attribution.PublicationAdmission != "production_release" ||
 		strings.Join(attribution.DerivedModifications, ",") != "resize,format_conversion" ||
 		attribution.WatermarkKind != "author_signature" || attribution.WatermarkNote != "保留原作者签名" {
 		t.Fatalf("sourceAttribution drifted: %#v", attribution)
 	}
 }
 
-func TestImportedPostBindingsAreCompleteAndDeterministic(t *testing.T) {
+func TestLoadPostsDoesNotMapRetiredClassification(t *testing.T) {
 	posts, err := LoadPosts(fixturePublish(t), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bindings, err := ImportedPostBindings(posts[:1])
-	if err != nil {
-		t.Fatal(err)
+	if len(posts) == 0 {
+		t.Fatal("fixture posts were not loaded")
 	}
-	if len(bindings) != 1 {
-		t.Fatalf("binding count mismatch: got=%d want=1", len(bindings))
-	}
-	for index, binding := range bindings {
-		if binding.PostRef == "" || binding.PostID == "" || binding.ContentType == "" || binding.AuthorID == "" {
-			t.Fatalf("binding %d is incomplete: %+v", index, binding)
-		}
-		if strings.HasPrefix(binding.PostRef, "posts/") {
-			t.Fatalf("binding %d must emit object-relative postRef without posts/ prefix: %+v", index, binding)
-		}
-		if binding.PostID != RuntimePostID(binding.ContentID) {
-			t.Fatalf("binding %d runtime identity drift: %+v", index, binding)
-		}
-		if index > 0 && bindings[index-1].PostRef >= binding.PostRef {
-			t.Fatalf("bindings are not sorted by canonical postRef: %+v", bindings)
+	for _, post := range posts {
+		if post.VariantPurpose != "" || post.Admission.UsageScope != "" {
+			t.Fatalf("retired classification was synthesized: %+v", post.Admission)
 		}
 	}
 }

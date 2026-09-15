@@ -455,7 +455,6 @@ def _complete_review(
                 **{k: v for k, v in row.items() if k not in _RIGHTS_TRANSCRIPTION_FIELDS},
                 "assetRef": ref,
                 "decision": row.get("decision") or "approved",
-                "usageScope": row.get("usageScope") or "research",
                 "issues": row.get("issues") if isinstance(row.get("issues"), list) else [],
                 "sourceUrl": source.get("sourceUrl") or source.get("url"),
                 "license": source.get("license"),

@@ -48,20 +48,20 @@
 - `003-5.review` receipt 所绑定的 `content_review.json` 判定 approved 后，publish AI 对对象逐个调用 canonical 单对象事务（无 plan/apply 双跑）；不存在独立 review receipt、drain/process manager 或 execution 级 publish。canonical object package + append-only pool record 是 producer 内部 publish→release 的持久事实；release ref/digest、explicit cohort ref/digest、milestone、carrier counts、content-pool handoff refs/digests、producer baseline revision 与 producer contract digest 组成唯一 immutable producer handoff，handoff 以 canonical publish proof 为凭而不内嵌 execution receipt 链。运行身份不进入 consumer identity、eligibility、release cohort 或 App DTO。
 - release selection 只接受显式 create-once pool record、完整 admission、随体来源/媒体与 canonical identity。逐对象失败只排除该对象，成功对象继续。content library 用于采集复用；最终对象包和 release 的完整消费不依赖原 execution 或 library 在场，release 仍只作分发物化。
 - 每个 execution 的 `approvedQuota`、candidate count 与 workUnitCount 三值分离；宿主并发能力不进入三值、对象判据或仓内配置。
-- article/image/video Post manifest 必须显式 `contentIdentity=work`；新增对象必须有稳定 `contentId`、递增 `version`、`sourceType=data`、`variantPurpose`、`admission`、`usageScope` 与 `status`，只有 `completed + passed + active` 可被 release 选择。
+- article/image/video Post manifest 必须显式 `contentIdentity=work`；新增对象必须有稳定 `contentId`、递增 `version`、`sourceType=data` 与 `status`，并通过既有 process/quality、引用闭包和 active 状态校验后才可被 release 选择。新增对象不得写入 `variantPurpose=commercial_variant` 或任何替代发布类别。
 
 <a id="req-002"></a>
 ### REQ-002 默认单一发布消费链与权利只记录
 
 - acquisition、semantic、review、canonical pool、发布和消费默认沿同一链路推进，不存在发布类别、运行类别或命名消费轨道，也不以常量标签替代这些维度。immutable release 与 producer handoff 不携带环境策略；环境差异只由环境 owner 的显式配置表达，切换环境不要求重新分类、构建内容或改写已封存字节。导入、激活、验证和回滚仍是独立生命周期动作，不是类别。媒体按公开交付 slice 物化，不存在按发布类别分流的私有交付。
-- 每个实体头像/主页媒体、文章图、图片作品与视频资产都必须记录 `acquisitionStatus`、`rightsStatus=verified|unverified|restricted|unknown`、`authorizationRequired`、`distributionDecision=research_allowed|commercial_allowed|blocked` 以及 `sourceUrl/platform/creator/capturedAt/contentSha256/license/termsUrl/authorizationProof/rightsIssues`，以保留真实 rights hard facts。`rightsStatus` 由 acquire 按来源 license 机械派生：开放许可白名单（CC0/CC BY/CC BY-SA/PD）为 `verified`，其它可读 license 为 `unverified` 且 `rightsIssues` 写明 license 原文，license 不可读为 `unknown`；这些取值是对象级记录事实，与 release 类别无关，已发布对象字节中的历史取值保持合法。
-- 权利只记录不阻断：acquire 不因 license 拒绝下载，publish 事务不因 `rightsStatus` 非 verified、`rightsIssues` 非空或 `distributionDecision=blocked` 拒绝对象，release build 只把 `restricted`/`blocked` 资产计入统计。未取得、生成素材、缺来源字段、不可播放视频与安全/隐私问题仍阻断。
+- 每个实体头像/主页媒体、文章图、图片作品与视频资产都必须记录 `acquisitionStatus`、`rightsStatus=verified|unverified|restricted|unknown`、`authorizationRequired` 以及 `commercialAuthorizationStatus`、`sourceUrl/platform/creator/capturedAt/contentSha256/license/termsUrl/authorizationProof/rightsIssues` 等真实 rights hard facts；水印与 `accessPolicy` 事实继续保留。`rightsStatus` 由 acquire 按来源 license 机械派生：开放许可白名单（CC0/CC BY/CC BY-SA/PD）为 `verified`，其它可读 license 为 `unverified` 且 `rightsIssues` 写明 license 原文，license 不可读为 `unknown`。
+- 权利只记录不阻断 producer 入池：acquire 不因 license 拒绝下载，publish 事务不因 `rightsStatus` 非 verified、`rightsIssues` 非空、`authorizationRequired=true` 或商用授权未取得而拒绝对象；release build 只汇总 `restricted`、需授权及相应权利事实。`blocked` 不再是 `distributionDecision`，限制事实由 `rightsStatus=restricted`、`authorizationRequired`、`commercialAuthorizationStatus` 与 typed rights issues 表达。未取得、生成素材、缺来源字段、不可播放视频与安全/隐私问题仍阻断。
 - immutable release 必须冻结权利状态计数、精确 authorization-required asset IDs、四载体 accepted 计数、逐来源 assets funnel 和 `containsUnverifiedAssets`，供下游只读消费，不以公开展示倒推权利已验证。当前非商用开发验证阶段，四环境使用同一消费链并统一开放：四入口与公开媒体直链不因缺少授权记录而隐藏或拒绝，不新增运营审批或放行开关；既有认证、账号权限、内容安全、隐私、恶意文件与环境访问边界不因此取消。商用前的运营可见性治理由 [`OPEN-026`](#open-026) 承接，不是本阶段开发验收或 producer 完成的前置。
 - 访问政策只记录不阻断：每条 ingest 来源行可申报 `accessPolicy=open|robots_disallowed|tos_restricted`（来源站点 robots 与服务条款对自动访问的态度，由 AI 读站点声明后申报），acquire 原样透传到该 source unit 的 `meta.json` 与资产行，publish 事务转录到 canonical 资产记录，release header 把非 `open` 的资产汇总为 `accessRestrictedAssetIds`；缺席即缺席，不补 `open`，任何取值不改变 admission、pool eligibility 或 cohort。
 - 水印只记录不阻断，且只由看过像素的 AI 申报：每个媒体资产携带 `watermarkStatus=absent|present|unknown`、`watermarkKind=none|author_signature|platform_logo|stock_agency|other|unknown` 与可选 `watermarkNote`，采集与投影代码只搬运，缺席只能记 `unknown`、不得假定 `absent`；作者签名与平台/图库标识分开记，因为运营结论相反（前者通常可用且不得抹去，后者往往指向非自由来源或预览件）。release admission 与 header 把 `present` 的资产汇总为 `watermarkedAssetIds`，与 `authorizationRequiredAssetIds` 并列供运营逐条审核。不去水印、不给发布物烧制水印。
 - 采集代码无法核实、只能按 producer 政策统一申明的资产级记录常量唯一声明位是 `content_distribution.policy.yaml`；`derivedModifications` 写实际发生的降采样、转码与抽帧，空数组只能表示确实无修改。Data、Service、App、Ops 对来源归属和逐图说明消费同一契约，不丢水印或派生修改事实、不以 title 代替 caption；删除旧风险接受字段与按发布类别推断授权的条件分支。
-- 删除 `releaseClass`、`productLifecycleState`、`readinessPhase` 及其参数、枚举、默认值、指纹投影与专用 research 身份，范围覆盖 Data/Service/App/Ops，不以 Data-only 或单一 production 常量代替无类别。对象级 `distributionDecision`、`publicationAdmission` 与 `usageScope` 的原权利词汇仍合法，不为删除类别改名或重写旧对象身份。
-- 包布局和重复旁车的转换只通过 [`canonical-content-identity-recovery`](../canonical-content-identity-recovery/spec.md) 的显式新版本或授权退役完成；保留原权利值、原 review 结论/对象摘要与历史 record，历史 receipt/release 原字节不改写且只离线审计。声明侧先于 codegen，当前正向读写不得双读双写或隐式接受旧 release 类别；格式转换不等于取得授权或重新审核。
+- 删除 `releaseClass`、`productLifecycleState`、`readinessPhase` 及其参数、枚举、默认值、指纹投影与专用 research 身份，范围覆盖 Data/Service/App/Ops，不以 Data-only、`production`、`default` 或其它常量替代无类别。pool/review/canonical 的对象级分类维同样退役：新 writer 不得写 `usageScope=research|commercial`、`publicationAdmission=research_release|commercial_release`、`distributionDecision=research_allowed|commercial_allowed` 或 `variantPurpose=commercial_variant`；另一套资产用途 `usageScope=internal_reference|app_publish|editorial` 保留，不得与已退役分类维混同。
+- 新 reader 遇上述旧对象级枚举必须 fail closed，不映射为缺省值、权利状态或资产用途。历史 release、receipt、review 与对象版本保持原字节并只作隔离审计；活跃 canonical 对象按 [`DEC-023`](../design.md#dec-023) 以覆盖全部目标的显式清单 cutover，删除退役字段并产生递增版本和新 `payloadDigest`，保留原 review 结论、对象摘要及全部权利事实。这是新版本转换而非原地篡改或重新审核；正向读写不得 dual-read/dual-write，也不得由旧 reader 兜底。
 
 <a id="req-003"></a>
 ### REQ-003 站点、实体与 creator 深挖的文章、图片和视频来源
@@ -358,7 +358,8 @@
 - GIVEN 四载体对象共享同一 source revision/digest/entity catalog digest，素材已取得且完整记录来源与权利事实（含 `unverified`/`unknown`/`restricted` 资产）。
 - WHEN 不选择任何类别生成 immutable release，并由下游环境按自身配置导入和消费。
 - THEN 发布、导入、激活和消费不携带或要求类别选择；同一 immutable release 在不同环境保持相同内容身份与媒体字节，环境差异只由显式环境配置生效；每条媒体引用均可按同一公开交付契约读取。
-- THEN 权利状态只进入 header 的权利计数、`authorizationRequiredAssetIds` 与 `containsUnverifiedAssets`，不排除任一对象；未取得、生成素材、缺来源字段与不可播放视频仍被阻断；文章批次配图率只写入统计，单篇 illustrated 文章只要求恰好一张封面且全部配图来源可追溯，配图张数不设下限。
+- THEN 权利状态只进入 header 的权利计数、`authorizationRequiredAssetIds` 与 `containsUnverifiedAssets`，不排除任一对象；`blocked` 仅由 `rightsStatus=restricted`、`authorizationRequired` 等权利事实表达，不作为 `distributionDecision`；未取得、生成素材、缺来源字段与不可播放视频仍被阻断；文章批次配图率只写入统计，单篇 illustrated 文章只要求恰好一张封面且全部配图来源可追溯，配图张数不设下限。
+- THEN 新 writer 不产生对象级 `research|commercial` usageScope、`research_release|commercial_release` publicationAdmission、`research_allowed|commercial_allowed` distributionDecision 或 `commercial_variant` variantPurpose；`usageScope=internal_reference|app_publish|editorial` 资产用途仍可读写。新 reader 对旧分类枚举 fail closed；历史原件摘要不变，活跃 canonical 对象只经 `DEC-023` 显式清单形成删除字段的新版本和新 `payloadDigest`，原 review 与权利事实逐字节绑定且不触发重审。
 - THEN 环境 readiness 以 fresh guest 证据闭合，不要求隔离证明、白名单账号或 attestation；Alpha/Beta/Gamma 的 Environment Ops scheduler request 绑定同一 exact integration candidate，Prod acceptance 另走 RC Qualification package acceptance、`ReleaseTagAdmissionFact`、`ProdActivationAdmissionFact` 与 hosted facts，不生成 Prod EAF。
 - THEN 当前非商用开发验证中，四入口与公开媒体 GET/HEAD/Range 不因缺少授权记录而隐藏或拒绝；权利记录与其他认证/环境访问边界仍保留，不新增运营放行开关，不回写 producer release、cohort 或 handoff。类别参数和命名消费轨道不得作为兼容入口，也不得改用另一固定标签；商用治理只由 [`OPEN-026`](#open-026) 跟踪。
 
@@ -992,15 +993,16 @@
 - 依赖：runtime-config `environment-topology-and-packaging` GWT-004（精选池首次激活与 UAT sample plan 消费 owner）；`OPEN-019`/`OPEN-020` 的 producer 复合验收重建。
 
 <a id="open-024"></a>
-### OPEN-024 发布与消费链尚未去除类别维度
+### OPEN-024 发布、消费与对象级分类维尚未完整退役
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：[`REQ-002`](#req-002) 的无类别默认链路尚未实现。Data/Service/App/Ops 的契约、结果、内容绑定和就绪校验仍携带类别字段或常量标签，部分专用身份、读回和私有交付分支尚存；只改成单一枚举值不能满足无类别契约，尚缺跨 owner 的实现及当前验收证据。
-- 尚缺实现：各 owner 按 authoring source、派生产物、实现与测试顺序删除发布类别、运行类别和命名消费轨道，连同参数、字段、枚举、指纹投影、专用身份及路由分支一起收敛；不得填入另一固定标签或增加 dual-read。环境差异只由环境配置表达，保留精确 release/activation/readiness/lease 绑定、普通认证、安全与环境边界。导入、激活、验证、回滚仍是生命周期动作；完整发布验证独立要求 Exit，普通内容启动不以回滚演练为前置。已封存 release/cohort/handoff 与逐对象真实 rights 字节不回写，新契约证据须重新产生。
-- 尚缺验收证据：默认无类别输入可闭合 producer 与下游消费，类别选择参数和字段不能恢复旧轨；同一 release 在四环境仅按环境配置执行且内容身份不变。四入口及公开媒体直链不因缺少授权记录受阻，普通权限、跨 release/环境/lease 错绑仍拒绝；local_contract/api_integration 与 managed/raw/direct 现场证据分别取得，不复用单一命名类别的既有通过结果。
-- 完成判定：[`GWT-002`](#gwt-002) 的默认单链路、环境配置隔离与公开交付结果，以及 [`GWT-044`](#gwt-044) 的专属身份/路由/隔离退役与普通权限保留，均由对应 owner 的静态、local_contract/api_integration 和授权环境证据绑定；[`OPEN-015`](#open-015) 的 fresh 消费和 [`OPEN-017`](#open-017) 的通用 HLS 缺口分别保留，不随旧专属路径删除一并关闭。已有公开媒体、来源署名与逐图 caption 实现仍须 [`GWT-043`](#gwt-043) 的当前证据，不得通过兼容分支或环境名推断内容类别关闭本 OPEN。
+- 影响或价值：[`REQ-002`](#req-002) 的无类别默认链路及对象级分类维退役尚未实现。Data/Service/App/Ops 的契约、结果、对象绑定和就绪校验仍可能携带类别字段、旧 enum 或常量标签；新 reader 兼容旧值、只改成单一枚举值或以 `production/default` 代替都不满足单轨契约。
+- 尚缺实现：各 owner 按 authoring source、派生产物、实现与测试顺序删除发布/运行类别、命名消费轨道，以及 pool/review/canonical 中 `research|commercial` usageScope、`research_release|commercial_release` publicationAdmission、`research_allowed|commercial_allowed|blocked` distributionDecision 和 `commercial_variant` variantPurpose；保留 rightsStatus、commercialAuthorizationStatus、authorizationProof、license、水印、accessPolicy 与资产用途 `internal_reference|app_publish|editorial`。新 reader 对旧 enum fail closed，不得 dual-read、补默认值或恢复旧轨。
+- cutover：历史 release/receipt/review/对象版本原字节不改；活跃 canonical 对象按 `DEC-023` 的全量显式清单产生删除字段的新版本与新 `payloadDigest`，保留原 review 结论、对象摘要和权利事实，不原地改摘要、不伪造重审。环境差异只由环境配置表达，精确 release/activation/readiness/lease 绑定及普通认证、安全边界继续保留。
+- 尚缺验收证据：静态与 local_contract 证明新 writer 零退役字段/enum、资产用途仍可用、新 reader 对每个旧 enum fail closed、`restricted + authorizationRequired` 可表达限制；迁移测试证明 before 历史字节不变、after 版本与 digest 递增且 review/rights 等价。api_integration 与 managed/raw/direct 证据证明同一 release 只按环境配置消费，四入口及公开媒体不因缺授权记录受阻，跨 release/环境/lease 错绑仍拒绝。
+- 完成判定：[`GWT-002`](#gwt-002) 的对象级退役、`DEC-023` cutover、默认单链路、环境配置隔离与公开交付，以及 [`GWT-044`](#gwt-044) 的专属身份/路由/隔离退役与普通权限保留，均由对应 owner 当前证据绑定；[`OPEN-015`](#open-015)、[`OPEN-017`](#open-017) 与 [`GWT-043`](#gwt-043) 的独立缺口不被本 OPEN 代替。
 - 依赖：Data 发布契约与 producer owner、`lane/product-mainline`（Service/App）、`lane/ops`（消费控制面和环境配置）；不把下游运行证据加入 producer 完成条件。
 
 <a id="open-026"></a>
@@ -1010,10 +1012,10 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：当前非商用开发验证按 [`REQ-002`](#req-002) 统一开放，公开可读取不等于取得商用授权；素材的真实权利记录必须持续保留。
-- 尚缺实现：商用前由下游内容与运营 owner 冻结公众可见性、授权证据、撤回与审计策略，四入口和媒体直链共享同一决定；不得改写 immutable producer facts 或恢复 release 双类别。
-- 尚缺验收证据：商用策略冻结后的 local_contract/api_integration 与真实入口、媒体直链联动验证；本 OPEN 不要求本阶段部署运营放行机制，也不阻断开发验证。
-- 完成判定：[`GWT-002`](#gwt-002) 的权利事实保留与开发期公开交付继续成立；商用策略由其唯一 owner 增补可测试验收并生效，授权缺失、撤回和已授权三类结果有一致读回；不以开发期匿名可读推断授权通过。
-- 依赖：下游内容可见性与运营策略 owner；商用启用须另行获得用户裁定，本次不包含实际 Prod 部署授权。
+- 唯一 owner：由 `product-ops-growth`（若仓内 owner registry 使用等价名称，则为其中唯一的下游内容可见性与运营 owner）承接。商用时只读 producer 的 `rightsStatus`、`commercialAuthorizationStatus`、`authorizationProof`、`license`、水印、`accessPolicy` 等权利事实，并结合运营政策与目标环境配置决定公众可见性、撤回和审计；不得回写 immutable producer facts，也不得恢复 producer/release 的 research/commercial 双类别。
+- 尚缺验收证据：该 owner 冻结策略后的 local_contract/api_integration 与真实入口、媒体直链联动验证；证明同一权利事实加不同受治理运营/环境配置得到可解释结果，且 producer 对象、release 与 handoff 字节不变。本 OPEN 不要求本阶段部署运营放行机制，也不阻断开发验证。
+- 完成判定：[`GWT-002`](#gwt-002) 的权利事实保留与开发期公开交付继续成立；唯一 owner 增补可测试验收并生效，授权缺失、撤回和已授权三类结果有一致读回；不以开发期匿名可读推断授权通过，不向 producer 写回分类标签或恢复双类别。
+- 依赖：`product-ops-growth`（或 owner registry 中唯一等价的下游内容可见性与运营 owner）；商用启用须另行获得用户裁定，本次不包含实际 Prod 部署授权。
 
 <a id="open-025"></a>
 ### OPEN-025 最小随体对象包与跨端单源消费尚未闭合

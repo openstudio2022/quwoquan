@@ -11,7 +11,6 @@ from typing import Any
 from content.release.canonical.content_pool_record import (
     append_pool_record,
     build_canonical_pool_record,
-    pool_usage_scope,
 )
 from content.release.canonical.entity_transaction_sources import (
     safe_asset_id as _safe_asset_id,
@@ -293,19 +292,6 @@ def build_entity_object_transaction_package(
                 raise ObjectTransactionError(
                     f"asset {asset_id} 缺 canonical modelReleaseStatus"
                 )
-            distribution_decision = str(
-                raw.get("distributionDecision")
-                or source_asset.get("distributionDecision")
-                or ""
-            ).strip()
-            if distribution_decision not in {
-                "research_allowed",
-                "commercial_allowed",
-                "blocked",
-            }:
-                raise ObjectTransactionError(
-                    f"asset {asset_id} 缺 canonical distributionDecision"
-                )
             # 权利状态只作记录事实写入 rights.json：非 verified、有审计问题或缺 https 证明
             # 都不拒绝对象，公众可见性由下游运营运行时配置按这些事实决定。
             rights_row = {
@@ -347,7 +333,6 @@ def build_entity_object_transaction_package(
                     "height": height,
                 },
                 "authorizationProof": authorization_proof,
-                "distributionDecision": distribution_decision,
                 "rightsAuditStatus": rights_audit_status.value,
                 "rightsAuditIssues": rights_audit_issues,
                 "modelReleaseStatus": model_release_status,
@@ -452,9 +437,6 @@ def build_entity_object_transaction_package(
                 "admission": {
                     "processResult": "completed",
                     "qualityResult": "passed",
-                    "usageScope": pool_usage_scope(
-                        {"sourceAttribution": source_attribution}, rights_rows,
-                    ),
                     "rightsResult": "passed",
                     "rightsAuthorityRef": review_authority["ref"],
                     "rightsAuthorityDigest": review_authority["digest"],

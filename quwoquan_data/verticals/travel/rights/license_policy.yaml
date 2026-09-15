@@ -36,7 +36,6 @@ recordedRightsFields:
   - propertyReleaseStatus
   - audioRightsStatus
   - commercialAuthorizationStatus
-  - publicationAdmission
 allowedAuthorizationBases:
   - attribution_no_watermark
 attributionNoWatermarkRequiredFields:

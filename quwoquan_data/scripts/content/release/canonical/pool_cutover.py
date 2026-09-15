@@ -120,7 +120,8 @@ def _source_digest(document: Mapping[str, Any]) -> str:
     # 只比较原始身份/来源事实；结构别名仅在离线 cutover 快照归一，不授予资格。
     from content.release.canonical.post_transaction_assets import source_binding_refs
     attribution = dict(document.get("sourceAttribution") or {})
-    attribution.pop("publicationAdmission", None)
+    if "publicationAdmission" in attribution:
+        _fail("RETIRED_CLASSIFICATION_FIELD", "sourceAttribution.publicationAdmission")
     if attribution.get("riskAcceptanceId") is None:
         attribution.pop("riskAcceptanceId", None)
     asset_keys = ("assetId", "sha256", "sourceUrl", "collectionPageUrl", "originalAssetUrl", "sourceAssetId", "creator", "license", "termsUrl", "authorizationProof")

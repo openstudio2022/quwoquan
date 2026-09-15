@@ -83,8 +83,6 @@ CONTROLLED_EDGE_FAULT_COPY_KEYS = frozenset(
 )
 RELEASE_APP_UAT_DEFINES = (
     ("data_release_id", "DATA_RELEASE_ID"),
-    ("data_release_class", "DATA_RELEASE_CLASS"),
-    ("product_lifecycle_state", "PRODUCT_LIFECYCLE_STATE"),
     ("data_release_homepage_id", "DATA_RELEASE_HOMEPAGE_ID"),
     ("data_release_homepage_title", "DATA_RELEASE_HOMEPAGE_TITLE"),
     ("data_release_article_work_id", "DATA_RELEASE_ARTICLE_WORK_ID"),

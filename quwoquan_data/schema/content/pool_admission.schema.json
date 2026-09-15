@@ -10,7 +10,6 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
-    "usageScope": {"enum": ["research", "commercial"]},
     "evidence": {
       "type": "object",
       "additionalProperties": false,
@@ -36,7 +35,6 @@
       "required": [
         "processResult",
         "qualityResult",
-        "usageScope",
         "rightsResult",
         "rightsAuthorityRef",
         "rightsAuthorityDigest",
@@ -46,7 +44,6 @@
       "properties": {
         "processResult": {"$ref": "#/$defs/processResult"},
         "qualityResult": {"$ref": "#/$defs/qualityResult"},
-        "usageScope": {"$ref": "#/$defs/usageScope"},
         "rightsResult": {"const": "passed"},
         "rightsAuthorityRef": {"type": "string", "minLength": 1},
         "rightsAuthorityDigest": {"$ref": "#/$defs/evidenceDigest"},

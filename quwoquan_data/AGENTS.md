@@ -20,7 +20,7 @@
 - 硬事实为 HTTPS 来源、申报 sha1（有则）与本地字节一致、bytes/sha256 精确、必填权利字段在场、独立 author/reviewer、schema/ref 与 create-once 对象身份闭包，以及显式 cohort 达到里程碑计数。权利取值、真实派生修改、水印、热度与质量评分如实记录，不伪造事实或增设质量准入门；字段与枚举只以 `schema/content/` 单一说明为准。
 - 每对象只留一个 carrier 主产物（`page.md|draft.article.md|image_work.json|video_script.json`），标题/tagRefs/creatorProfileId 由产物自身声明。author seal 校验引用与 homepage 百科主源；每对象只保留一份 seal 生成的 `content_review.json`，不允许脚本生成语义判断。
 - 单对象违规保留 typed issue，不伪造整 execution 成功或覆盖 blocked receipt。approved 对象必须由宿主逐个点名调用单对象原子 canonical 事务；release cohort 与 milestone 必须显式，禁止 all-publishable；排序、canonical 化与 `expectedCarrierCounts` 派生由 finalize 完成。
-- release 默认单链路，不携带发布类别或命名就绪轨道，环境差异只由显式环境配置表达，媒体按公开 slice 交付；对象级权利词汇（`distributionDecision`、`publicationAdmission`、pool `usageScope`）是已冻结在 canonical 字节中的记录事实，保持现有取值，不据此拒绝对象。商用级权利字段只记录不要求，文章配图张数不设下限；里程碑计数与完成证据只按 Skill。
+- release 默认单链路，不携带发布类别或命名就绪轨道，环境差异只由显式环境配置表达，媒体按公开 slice 交付；新写入禁止对象级分类维 `usageScope=research|commercial`、`publicationAdmission=research_release|commercial_release`、`distributionDecision=research_allowed|commercial_allowed|blocked` 与 `variantPurpose=commercial_variant`，不得以 `production/default` 替代。只保留 `rightsStatus`、`commercialAuthorizationStatus`、`authorizationProof`、`license`、水印、`accessPolicy`、`authorizationRequired` 等权利事实，以及另一套资产用途 `usageScope=internal_reference|app_publish|editorial`；历史原件不改，活跃对象只按 `DEC-023` 显式新版本 cutover。商用级权利字段只记录不要求，文章配图张数不设下限；里程碑计数与完成证据只按 Skill。
 
 ## 持久性与工程卫生
 

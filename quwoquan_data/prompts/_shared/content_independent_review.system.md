@@ -21,7 +21,7 @@
 - decision：approved 或 rejected；
 - dimensions：数组，每项 `{"name","decision","issues"}`；
 - blockingIssues：字符串数组，approved 时为空；
-- assetRights：数组，每项 `{"assetRef","decision","issues","usageScope":"research"}`，assetRef 取自 `assets/index.json` 的 fileName（`assets/<fileName>`）；纯文本无资产时为空数组；
+- assetRights：数组，每项 `{"assetRef","decision","issues"}`，assetRef 取自 `assets/index.json` 的 fileName（`assets/<fileName>`）；纯文本无资产时为空数组；
 - safety：ok 或 concern；
 - semanticReport：对象级语义报告：
   - reviewedCarrier 与目标载体一致，carrierCompatible 如实填写；

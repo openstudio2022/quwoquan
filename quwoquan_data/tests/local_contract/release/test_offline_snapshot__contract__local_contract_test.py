@@ -89,8 +89,7 @@ def _fixture_review(ref, execution_id, draft_ref, raw):
 def _bind_review(manifest, ref, review_raw):
     manifest["admission"] = {"evidenceDigest": digest_bytes(review_raw), "evidenceRef": "content_review.json",
                              "processResult": "completed", "qualityResult": "passed", "rightsResult": "passed",
-                             "rightsAuthorityDigest": digest_bytes(review_raw), "rightsAuthorityRef": ref + "/content_review.json",
-                             "usageScope": "research"}
+                             "rightsAuthorityDigest": digest_bytes(review_raw), "rightsAuthorityRef": ref + "/content_review.json"}
 
 
 def _media_asset(root, asset_id, kind):
@@ -119,7 +118,7 @@ def _fixture_sources(root, assets):
                 "sourceUrl": "https://example.org/offline-test-double", "sourceUseMode": "factual_reference_only",
                 "fetchedAt": STAMP, "metadata": {"testDouble": True, "productionAdmission": False},
                 "assets": [{**{key: row[key] for key in ("assetId", "sha256", "bytes", "mimeType")},
-                            "attribution": "合成测试媒体，不代表第三方版权许可", "distributionDecision": "research_allowed"} for row in assets],
+                            "attribution": "合成测试媒体，不代表第三方版权许可"} for row in assets],
                 "evidence": [{"path": "evidence.json", "sha256": digest_bytes(evidence), "bytes": len(evidence), "kind": "source_excerpt"}]}
     assert_valid(document, "publish", "source")
     _put(root / "sources/fixture/source.json", document)
@@ -348,7 +347,7 @@ def test_current_schema_cohort_complete_and_deterministic(tmp_path, current_sour
         assert source_attribution["document"] == _json(CanonicalSource(current_source).object_path(ref) / "manifest.json")["sourceAttribution"]
     video = bundle["posts"][2]["detail"]
     assert video["sourceAttribution"]["commercialAuthorizationStatus"] == "unverified"
-    assert video["sourceAttribution"]["publicationAdmission"] == "research_release"
+    assert "publicationAdmission" not in video["sourceAttribution"]
     assert all(m["canonicalReference"].startswith("media/") and "://" not in m["canonicalReference"] for m in bundle["media"])
     result = export_bundle(first, tmp_path / "alpha")
     assert export_bundle(first, tmp_path / "alpha", check=True) == result
