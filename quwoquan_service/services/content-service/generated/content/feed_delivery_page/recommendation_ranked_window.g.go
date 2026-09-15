@@ -25,11 +25,13 @@ type ReleasePinnedQueryFence struct {
 }
 
 type CreateRankedRecommendationWindowCommand struct {
-	ContentFence   ReleasePinnedQueryFence `json:"contentFence"`
-	IdempotencyKey string                  `json:"idempotencyKey"`
-	SubjectId      string                  `json:"subjectId"`
-	Scenario       string                  `json:"scenario"`
-	Limit          int                     `json:"limit"`
+	ContentFence    ReleasePinnedQueryFence `json:"contentFence"`
+	IdempotencyKey  string                  `json:"idempotencyKey"`
+	SubjectId       string                  `json:"subjectId"`
+	Scenario        string                  `json:"scenario"`
+	Limit           int                     `json:"limit"`
+	ViewportProfile *string                 `json:"viewportProfile,omitempty"`
+	DeviceClass     *string                 `json:"deviceClass,omitempty"`
 }
 
 type GetRankedRecommendationPageQuery struct {
@@ -68,6 +70,7 @@ type RankedRecommendationPage struct {
 	ModelChannel          *string                    `json:"modelChannel,omitempty"`
 	ModelReleaseId        *string                    `json:"modelReleaseId,omitempty"`
 	PolicyDigest          string                     `json:"policyDigest"`
+	ContextDigest         string                     `json:"contextDigest"`
 	RankingSnapshotDigest string                     `json:"rankingSnapshotDigest"`
 	FeatureSnapshotAt     time.Time                  `json:"featureSnapshotAt"`
 	UserFeatureSnapshot   map[string]any             `json:"userFeatureSnapshot"`
@@ -111,8 +114,10 @@ type ReleaseQueryReadinessProof struct {
 }
 
 type CreateRankedRecommendationWindowRequestBody struct {
-	ContentFence ReleasePinnedQueryFence `json:"contentFence"`
-	SubjectId    string                  `json:"subjectId"`
-	Scenario     string                  `json:"scenario"`
-	Limit        int                     `json:"limit"`
+	ContentFence    ReleasePinnedQueryFence `json:"contentFence"`
+	SubjectId       string                  `json:"subjectId"`
+	Scenario        string                  `json:"scenario"`
+	Limit           int                     `json:"limit"`
+	ViewportProfile *string                 `json:"viewportProfile,omitempty"`
+	DeviceClass     *string                 `json:"deviceClass,omitempty"`
 }

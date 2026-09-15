@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/config/app_content_source.dart';
 import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
+import 'package:quwoquan_app/runtime/auth/rehearsal_auth_port.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/runtime/codec/cloud_json_body_decoder.dart';
 import 'package:quwoquan_app/runtime/codec/cloud_response_decoder.dart';
@@ -780,6 +781,9 @@ class CloudHttpClient {
       }
     }
     if (token == null || token.isEmpty) return sanitizedHeaders;
+    if (isRehearsalCredential(token)) {
+      throw contentCapabilityUnavailable('remote_transport');
+    }
     return <String, String>{
       ...sanitizedHeaders,
       'Authorization': 'Bearer $token',

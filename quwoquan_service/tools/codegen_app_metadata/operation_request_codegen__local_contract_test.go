@@ -1292,8 +1292,12 @@ func TestCurrentSourcePaginationPublishesPerRequestLimits(t *testing.T) {
 				expected.maximumItem,
 			)
 		}
+		enumValues, err := loadCanonicalRequestEnumValues()
+		if err != nil {
+			t.Fatalf("load canonical request enums: %v", err)
+		}
 		var rendered strings.Builder
-		if err := renderRequestModel(&rendered, model, nil); err != nil {
+		if err := renderRequestModel(&rendered, model, enumValues); err != nil {
 			t.Fatalf("render %s request model: %v", operation.CanonicalOperationID, err)
 		}
 		for _, constant := range []string{

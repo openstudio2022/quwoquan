@@ -40,6 +40,7 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
   @override
   Widget build(BuildContext context) {
     final destination = widget.currentDestination;
+    final mediaHidden = ref.watch(bottomNavHiddenProvider).mediaHidden;
     return DefaultTextStyle.merge(
       style: const TextStyle(
         decoration: TextDecoration.none,
@@ -56,7 +57,7 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
               slivers: [
                 SliverToBoxAdapter(
                   child: SizedBox(
-                    height: heroHeight,
+                    height: mediaHidden ? 0 : heroHeight,
                     child: _WebWelcomeHero(
                       scrollProgress: _toolbarProgress,
                       onEnter: () => _enterWebHome(heroHeight),
@@ -67,6 +68,7 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
                   pinned: true,
                   delegate: _WebToolbarHeaderDelegate(
                     progress: _toolbarProgress,
+                    hidden: mediaHidden,
                     child: SafeArea(
                       top: false,
                       bottom: false,

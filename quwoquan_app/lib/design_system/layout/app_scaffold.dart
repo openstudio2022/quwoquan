@@ -30,14 +30,24 @@ class AppScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      navigationBar: navigationBar,
-      backgroundColor: backgroundColor,
-      resizeToAvoidBottomInset: resizeToAvoidBottomInset,
-      // Several pages render Material-style text/actions inside a Cupertino
-      // scaffold. A transparent Material host avoids debug-mode fallback text
-      // emphasis/underline artifacts on those pages.
-      child: Material(type: MaterialType.transparency, child: child ?? body!),
+    final media = MediaQuery.of(context);
+    final bottomInset = media.viewInsets.bottom;
+    // Cupertino 骨架直接将底部 inset 用作 Padding；在唯一消费边界
+    // 排除非法窗口几何，合法键盘高度保持原值，不关闭键盘避让。
+    final safeMedia = bottomInset.isFinite && bottomInset >= 0
+        ? media
+        : media.copyWith(viewInsets: media.viewInsets.copyWith(bottom: 0));
+    return MediaQuery(
+      data: safeMedia,
+      child: CupertinoPageScaffold(
+        navigationBar: navigationBar,
+        backgroundColor: backgroundColor,
+        resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+        // Several pages render Material-style text/actions inside a Cupertino
+        // scaffold. A transparent Material host avoids debug-mode fallback text
+        // emphasis/underline artifacts on those pages.
+        child: Material(type: MaterialType.transparency, child: child ?? body!),
+      ),
     );
   }
 }

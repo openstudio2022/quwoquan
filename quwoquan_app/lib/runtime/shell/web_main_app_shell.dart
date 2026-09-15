@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:quwoquan_app/runtime/shell/shell_immersive_providers.dart';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -112,16 +114,18 @@ class _WebToolbarHeaderDelegate extends SliverPersistentHeaderDelegate {
   const _WebToolbarHeaderDelegate({
     required this.child,
     required this.progress,
+    this.hidden = false,
   });
 
   final Widget child;
   final double progress;
+  final bool hidden;
 
   @override
-  double get minExtent => AppSpacing.webPcHeaderHeight;
+  double get minExtent => hidden ? 0 : AppSpacing.webPcHeaderHeight;
 
   @override
-  double get maxExtent => AppSpacing.webPcHeaderHeight;
+  double get maxExtent => hidden ? 0 : AppSpacing.webPcHeaderHeight;
 
   @override
   Widget build(
@@ -129,6 +133,7 @@ class _WebToolbarHeaderDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
+    if (hidden) return const SizedBox.shrink();
     final showShadow = progress > AppSpacing.zero || overlapsContent;
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -148,7 +153,9 @@ class _WebToolbarHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(_WebToolbarHeaderDelegate oldDelegate) {
-    return oldDelegate.child != child || oldDelegate.progress != progress;
+    return oldDelegate.child != child ||
+        oldDelegate.progress != progress ||
+        oldDelegate.hidden != hidden;
   }
 }
 

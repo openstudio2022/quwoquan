@@ -18,7 +18,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from quwoquan_ops.cli.commands.app_preflight_uat_offline import OFFLINE_REQUIRED_CASES, OFFLINE_SPEC_REF
+from quwoquan_ops.cli.commands.app_preflight_uat_offline import (
+    OFFLINE_REQUIRED_CASES, OFFLINE_SPEC_REF, offline_case_spec_ref, offline_case_blocker,
+)
 from quwoquan_ops.cli.lib.readiness_case_result import (
     validate_readiness_case_result, write_create_once_json, write_readiness_case_result,
 )
@@ -33,7 +35,14 @@ RUNNER_SOURCE = "quwoquan_ops/cli/commands/app_preflight_uat_offline_pages.py"
 RUNNER_IDENTITY = "stackctl.offline-native-pages.v1"
 ANDROID_PAGE_METHOD = "executesOfflinePageCaseInCanonicalProductionProcess"
 IOS_PAGE_METHOD = "testExecutesOfflinePageCaseInCanonicalProductionProcess"
-OPERATIONS = frozenset({"visible", "tap", "scroll", "seek", "playback", "back", "reveal", "tab-roundtrip"})
+OPERATIONS = frozenset({"visible", "tap", "scroll", "seek", "playback", "back", "reveal", "tab-roundtrip", "input-otp"})
+
+
+def require_executable_page_plan(plan: Mapping[str, Any]) -> None:
+    validate_page_plan(plan)
+    if plan["executionBlocker"]:
+        raise ValueError(plan["executionBlocker"])
+
 
 
 def document_digest(value: Mapping[str, Any]) -> str:
@@ -46,7 +55,14 @@ def validate_page_plan(plan: Mapping[str, Any]) -> None:
             or plan.get("caseId") not in OFFLINE_REQUIRED_CASES
             or plan.get("planDigest") != document_digest({k: v for k, v in plan.items() if k != "planDigest"})):
         raise ValueError("APP.UAT.page_plan_invalid: offline page plan identity drifted")
+    if (plan.get("specRef") != offline_case_spec_ref(plan["caseId"])
+            or plan.get("executionBlocker") != offline_case_blocker(plan["caseId"])):
+        raise ValueError("APP.UAT.page_plan_invalid: case acceptance or required blocker drifted")
     _validate_page_steps(plan.get("steps"))
+    if plan["executionBlocker"]:
+        return
+    if any(step["operation"] == "input-otp" for step in plan["steps"]):
+        raise ValueError("APP.UAT.page_plan_invalid: authorized rehearsal input plan is not available")
     operations = [step["operation"] for step in plan["steps"]]
     case_id = plan["caseId"]
     required = {"visible"}
@@ -78,15 +94,11 @@ def _validate_identity_journey(plan: Mapping[str, Any]) -> None:
         if (steps[-1]["operation"] != "tab-roundtrip" or len(labels) != 2 or not all(labels)
                 or steps[-2] != {"operation": "visible", "selector": labels[1]} or plan.get("route") != "/"):
             raise ValueError("APP.UAT.page_plan_invalid: tab roundtrip requires original following and geometry")
-    terminal = {
-        "login-unavailable": "capability-unavailable:account_authentication:profileTab",
-        "write-unavailable": "capability-unavailable:like",
-        "private-unavailable": "capability-unavailable:account_authentication:openChat",
-    }.get(case_id)
-    if terminal is not None and steps[-1] != {"operation": "visible", "selector": terminal}:
-        raise ValueError("APP.UAT.page_plan_invalid: typed capability terminal is required")
-    if case_id in {"login-unavailable", "private-unavailable"} and plan.get("route") != "/login":
-        raise ValueError("APP.UAT.page_plan_invalid: refused entry must record the login terminal route")
+    if case_id == "login-cancel":
+        if (plan.get("route") != "/" or len(steps) < 5
+                or [step["operation"] for step in steps[-5:]] != ["tap", "visible", "tap", "visible", "visible"]
+                or steps[-5]["selector"] != steps[-1]["selector"]):
+            raise ValueError("APP.UAT.page_plan_invalid: cancellation requires login entry and guest return observation")
     if case_id == "creator-avatar":
         selector = steps[-1]["selector"]
         persona = selector.removeprefix("creator-profile-avatar:")
@@ -94,12 +106,6 @@ def _validate_identity_journey(plan: Mapping[str, Any]) -> None:
                 or plan.get("route") != "/user/" + persona):
             raise ValueError("APP.UAT.page_plan_invalid: decoded creator identity is required")
         action = "creator-avatar:" + persona
-    elif case_id == "write-unavailable":
-        actions = [step["selector"] for step in steps if step["operation"] == "tap"
-                   and step["selector"].startswith("post-like:") and step["selector"] != "post-like:"]
-        if len(actions) != 1 or plan.get("route") != "/":
-            raise ValueError("APP.UAT.page_plan_invalid: write refusal requires a real feed like action")
-        action = actions[0]
     else:
         return
     reveal = {"operation": "reveal", "selector": action}
@@ -120,6 +126,13 @@ def _validate_page_steps(steps: object) -> None:
 def _validate_page_step(step: object) -> None:
     if not isinstance(step, Mapping) or step.get("operation") not in OPERATIONS:
         raise ValueError("APP.UAT.page_plan_invalid: unknown or unsafe operation")
+    if step["operation"] == "input-otp":
+        if (set(step) != {"operation", "selector", "sourceSelector", "mode"}
+                or step.get("mode") not in {"correct", "incorrect"}
+                or any(not isinstance(step.get(key), str) or not step[key].strip()
+                       or step[key].startswith("text-prefix:") for key in ("selector", "sourceSelector"))):
+            raise ValueError("APP.UAT.page_plan_invalid: OTP input requires exact UI source and closed mode, never literal values")
+        return
     if set(step) != {"operation", "selector"} or not isinstance(step["selector"], str) or not step["selector"].strip():
         raise ValueError("APP.UAT.page_plan_invalid: an exact observation selector is required")
     if step["selector"].startswith("text-prefix:") and (
@@ -190,6 +203,10 @@ def _validate_playback_observation(operation: str, observed: str) -> None:
 def _validate_step_observation(step: Mapping[str, Any], observation: object) -> None:
     if not isinstance(observation, dict) or observation.get("operation") != step.get("operation"):
         raise ValueError("offline native page step order drifted")
+    if step["operation"] == "input-otp":
+        if observation != {"operation": "input-otp", "selector": step["selector"], "observed": "input-redacted"}:
+            raise ValueError("offline native input observation must be redacted")
+        return
     if (set(observation) != {"operation", "selector", "observed"}
             or observation.get("selector") != step.get("selector")
             or not isinstance(observation.get("observed"), str)
@@ -216,7 +233,7 @@ def _validate_step_observation(step: Mapping[str, Any], observation: object) -> 
 
 def validate_native_page_result(output: str, *, plan: Mapping[str, Any], launch: Mapping[str, Any]) -> dict[str, Any]:
     """只接受本次原生命令的一条终态，拒绝旧日志、代理进程或不完整步骤。"""
-    validate_page_plan(plan)
+    require_executable_page_plan(plan)
     if any(plan.get(key) != launch.get(key) for key in (
         "candidateDigest", "artifactDigest", "deviceId", "applicationId", "canonicalProcessId", "platform", "launchAttemptId",
     )):
@@ -299,8 +316,10 @@ def _offline_binding_index(bindings: Sequence[Mapping[str, Any]],
 
 def _validate_offline_result_binding(result: Mapping[str, Any], *, binding: Mapping[str, Any],
                                      candidate: Mapping[str, Any]) -> None:
+    if offline_case_blocker(str(result["caseId"])):
+        raise ValueError("APP.UAT.page_artifact_binding_missing: unsupported required case cannot carry a passed result")
     expected = {
-        "contentSource": "bundled_snapshot", "status": "passed", "specRef": OFFLINE_SPEC_REF,
+        "contentSource": "bundled_snapshot", "status": "passed", "specRef": offline_case_spec_ref(str(result["caseId"])),
         "commitSha": candidate["commit"], "candidateDigest": candidate["candidateId"],
         "platform": binding["platform"], "deviceIdentity": binding["device"]["identity"],
         "deviceRegistered": binding["device"]["registered"], "runnerIdentity": binding["runner"]["identity"],
@@ -450,23 +469,21 @@ def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
         ("video-seek", "video", route("videoBook"), [*open_video, step("seek", progress)], exit_video),
         ("empty-state", "homepage", route("home"), [*base, tap(empty_channel), visible(completed)], []),
         ("pagination-end", "homepage", route("home"), [*base, reveal(completed), visible(completed)], []),
-        ("login-unavailable", "homepage", route("loginPathTemplate"),
+        ("login-cancel", "homepage", route("home"),
          [tap(text("ui_text_constants_foundation", "bottomNavGuestProfile")),
-          visible("capability-unavailable:account_authentication:profileTab")], [step("back", home)]),
-        # 离线禁止远端写入，不禁止本地创作；点赞从推荐流触发真实 typed 拒绝。
-        ("write-unavailable", "homepage", route("home"),
-         [*base, reveal("post-like:" + article["postId"]), tap("post-like:" + article["postId"]),
-          visible("capability-unavailable:like")], [step("back", home)]),
-        # 联系人入口停在登录拒绝页，不能把未进入的 chat 路由记录为已观察。
-        ("private-unavailable", "homepage", route("loginPathTemplate"),
-         [tap(text("chat_text_constants", "chatPrimaryContacts")),
-          visible("capability-unavailable:account_authentication:openChat")], []),
+          visible(text("ui_text_constants_foundation", "loginDismissSemanticLabel")),
+          tap(text("ui_text_constants_foundation", "loginDismissSemanticLabel")),
+          visible(home), visible(text("ui_text_constants_foundation", "bottomNavGuestProfile"))], []),
     ]
+    # 仍生成所有 required 格；缺 seam 的格只携带阻断，不执行虚构步骤或产出 raw PASS。
+    for case_id in OFFLINE_REQUIRED_CASES[len(cases):]:
+        cases.append((case_id, "homepage", route("home"), [visible(home)], []))
     plans: list[dict[str, Any]] = []
     restore: list[dict[str, str]] = []
     for case_id, carrier, route_path, steps, next_restore in cases:
         plan = {
             "schema": "quwoquan_ops.offline_page_case.v1", "caseId": case_id,
+            "specRef": offline_case_spec_ref(case_id), "executionBlocker": offline_case_blocker(case_id),
             "candidateDigest": launch["candidateDigest"], "artifactDigest": launch["artifactDigest"],
             "deviceId": launch["deviceId"], "applicationId": launch["applicationId"],
             "canonicalProcessId": launch["canonicalProcessId"], "platform": launch["platform"],
@@ -641,7 +658,10 @@ def _read_driver_binding(context: Mapping[str, Any]) -> dict[str, Any]:
 def _execute_native_page(*, plan: Mapping[str, Any], launch: Mapping[str, Any],
                          context: Mapping[str, Any], case_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     from quwoquan_ops.cli.smoke.environment_patrol_smoke.external_aut_driver_artifact import _ios_runner_configuration
-    validate_page_plan(plan)
+    require_executable_page_plan(plan)
+    if any(plan.get(key) != launch.get(key) for key in (
+            "candidateDigest", "artifactDigest", "deviceId", "applicationId", "canonicalProcessId", "platform", "launchAttemptId")):
+        raise ValueError("APP.UAT.page_artifact_binding_missing: native input launch binding drifted")
     screenshot_path = case_dir / "screenshot.png"
     if screenshot_path.exists() or screenshot_path.is_symlink():
         raise ValueError("APP.UAT.page_artifact_binding_missing: native screenshot path must be fresh")
@@ -767,7 +787,8 @@ def _write_offline_case_result(*, plan: Mapping[str, Any], candidate: Mapping[st
                                binding: Mapping[str, Any], evidence_ref: Mapping[str, str], started: str,
                                case_dir: Path, output_root: Path, receipt: dict[str, Any]) -> dict[str, Any]:
     completed = datetime.now(timezone.utc).isoformat()
-    raw = {"objectId": "app_runtime", "specRef": OFFLINE_SPEC_REF, "caseId": plan["caseId"],
+    require_executable_page_plan(plan)
+    raw = {"objectId": "app_runtime", "specRef": plan["specRef"], "caseId": plan["caseId"],
         "producer": "app", "layer": "user_acceptance", "status": "passed", "contentSource": "bundled_snapshot",
         "target": {"kind": "page", "id": plan["route"]}, "commitSha": candidate["commit"],
         "contractGraphSourceHash": launch["contractGraphDigest"].removeprefix("sha256:"),
@@ -831,7 +852,11 @@ def execute_offline_page_cases(*, args: argparse.Namespace, candidate: Mapping[s
                                          report_dir=report_dir, output_root=output_root, device=device)
         binding = _write_offline_run_bindings(candidate=candidate, launch=launch, root=root, context=context,
             report_dir=report_dir, output_root=output_root, receipt=receipt)
+        receipt["blockedCases"] = [{"caseId": plan["caseId"], "specRef": plan["specRef"],
+                                    "firstBlocker": plan["executionBlocker"]}
+                                   for plan in plans if plan["executionBlocker"]]
         for plan in plans:
+            require_executable_page_plan(plan)
             case_dir = report_dir / "pages" / plan["caseId"]
             evidence_ref, started = _collect_offline_page_evidence(plan=plan, launch=launch, projection=projection,
                 artifact=artifact, context=context, device=device, case_dir=case_dir, output_root=output_root, receipt=receipt)

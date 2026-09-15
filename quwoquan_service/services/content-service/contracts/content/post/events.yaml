@@ -23,7 +23,7 @@ events:
   payload_entity: Post
   payload_fields: [postId, publishIntentId, localDraftId, authorId, contentType, contentIdentity, status, moderationStatus, contentDigest, createdAt]
 - name: PostPublished
-  description: 真实对象发布的canonical公开快照，不承担Data activation通知。sourceVersion等于envelope aggregateVersion；ordinary来源显式null，Data完整源tuple，releaseDigest仅审计；所有字段按源payload严格解码，不猜来源或默认补值。
+  description: 真实对象发布的canonical公开快照，不承担Data activation通知。sourceVersion等于envelope aggregateVersion；ordinary来源显式null，Data完整源tuple，releaseDigest仅审计；所有字段按源payload严格解码，不猜来源或默认补值。 一次性 PublishIntent 被接受并完成发布；引用发布时 payload 自包含 sourcePostId 与源帖作者（sourcePostAuthorId），"被引用"通知由此驱动，不设第二个 PostQuoted 事实。现有 width/height 依 fields.yaml#width 携带同一 image/video 主媒体正数对或同时 null；图片取 canonical 第一媒体身份，视频取视频资产而非封面，不新增 primaryMedia 字段。
   delivery_semantics: transactional_outbox
   wire_event_type: PostPublished
   payload_entity: PostLifecycleProjectionPayload
@@ -37,21 +37,21 @@ events:
   payload_shape: exact
   payload_fields: [postId, authorId, contentType, contentIdentity, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
 - name: PostUpdated
-  description: PostService projectionPayloadForPost产生的完整公开更新快照。
+  description: PostService projectionPayloadForPost产生的完整公开更新快照。 内容更新；携带 Circle/Search/Recommendation 可重建读投影所需的当前公开 Post 快照。现有 width/height 遵循 fields.yaml#width 主媒体规则；替换/移除或缺尺寸时完整快照同时清空两维，禁止省略保留旧尺寸。
   delivery_semantics: transactional_outbox
   wire_event_type: PostUpdated
   payload_entity: PostLifecycleProjectionPayload
   payload_shape: exact
   payload_fields: [postId, authorId, contentType, contentIdentity, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
 - name: PostSettingsUpdated
-  description: 设置变更使用同一projectionPayloadForPost，保留Homepage/媒体/引用及权限字段。
+  description: 设置变更使用同一projectionPayloadForPost，保留Homepage/媒体/引用及权限字段。 发布后可变设置更新（可见性 / 小趣排除 / Homepage 引用）；现有 width/height 仍携带同一当前 Post 完整快照，遵循 fields.yaml#width 的 image/video 主媒体身份、成对正数及同时清空规则。
   delivery_semantics: transactional_outbox
   wire_event_type: PostSettingsUpdated
   payload_entity: PostLifecycleProjectionPayload
   payload_shape: exact
   payload_fields: [postId, authorId, contentType, contentIdentity, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
 - name: PostPromotedToWork
-  description: 点滴升级作品后的当前完整快照；producer不发fromIdentity/toIdentity/previousContentType/promotedAt，不把不存在字段写入聚合。
+  description: 点滴升级作品后的当前完整快照；producer不发fromIdentity/toIdentity/previousContentType/promotedAt，不把不存在字段写入聚合。 点滴原地升级为作品；现有 width/height 携带升级后 image/video 主媒体完整尺寸快照，依 fields.yaml#width 原子重投影；类型改变或主媒体不可用时两维同时 null，不沿用升级前尺寸。
   delivery_semantics: transactional_outbox
   wire_event_type: PostPromotedToWork
   payload_entity: PostLifecycleProjectionPayload

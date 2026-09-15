@@ -25,7 +25,12 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot;
 
   void _requireRemoteAuthentication() {
-    if (_offlineContent) {
+    if (_store.isIsolated) {
+      throw contentCapabilityUnavailable(
+        'remote_authentication_in_isolated_space',
+      );
+    }
+    if (_offlineContent && !rehearsalAuthInstalled) {
       throw contentCapabilityUnavailable('account_authentication');
     }
   }
@@ -34,7 +39,10 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   AuthSessionState build() {
     _store; // 在作用域活跃时固定授权存储，不在旧请求晚到时解析新环境。
     _offlineContent;
-    ref.onDispose(_cancelStartupRestore);
+    ref.onDispose(() {
+      _cancelStartupRestore();
+      if (_store.isIsolated) _store.dispose();
+    });
     final restoreGateOpen = ref.watch(startupAuthRestoreGateProvider);
     if (restoreGateOpen && !_restoreStarted) {
       _restoreStarted = true;
@@ -61,12 +69,28 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   Future<void> _performRestore() async {
     try {
       final stored = await _readStoredSessionWithinStartupBudget();
-      _syncDeviceActorId(stored.installId);
       if (!ref.mounted) {
         return;
       }
+      _store.requireCurrentStorage();
+      _syncDeviceActorId(stored.installId);
+      if (_store.isIsolated) {
+        state = _syntheticState(stored);
+        return;
+      }
       if (_offlineContent) {
-        // 安装标识不是授权；离线不恢复旧 bearer、账号摘要或发起匿名账号创建。
+        final rehearsal = installedRehearsalAuth;
+        if (rehearsal != null) {
+          final restored = await rehearsal.restore(installId: stored.installId);
+          if (!ref.mounted) {
+            return;
+          }
+          if (restored != null) {
+            state = restored;
+            return;
+          }
+        }
+        // 安装标识不是授权；无演练身份时保持 guest，不恢复旧 bearer。
         state = AuthSessionState(
           status: AuthSessionStatus.guest,
           promptReason: AuthPromptReason.firstRun,
@@ -102,12 +126,103 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     }
   }
 
+  /// UI显式意图捕获会话代际；logout/cancel后同request不得复活授权。
+  void Function() beginSyntheticLoginIntent() {
+    final generation = ++_explicitLoginGeneration;
+    _store.requireCurrentStorage();
+    if (!_store.isIsolated) {
+      throw contentCapabilityUnavailable('synthetic_session');
+    }
+    return () {
+      if (!ref.mounted || generation != _explicitLoginGeneration) {
+        throw const CloudOperationCancelledException();
+      }
+      _store.requireCurrentStorage();
+    };
+  }
+
+  void cancelSyntheticLoginIntent() {
+    _explicitLoginGeneration++;
+  }
+
+  /// 仅接收本地 typed 端口已持久提交的结果；不进入 Remote grant 流程。
+  Future<void> applySyntheticSession(
+    SyntheticSessionResult result, {
+    void Function()? requireIntent,
+  }) async {
+    if (!ref.mounted) throw const CloudOperationCancelledException();
+    _store.requireCurrentStorage();
+    if (!_store.isIsolated || !_offlineContent) {
+      throw contentCapabilityUnavailable('synthetic_session');
+    }
+    requireIntent?.call();
+    final generation = requireIntent == null
+        ? ++_explicitLoginGeneration
+        : _explicitLoginGeneration;
+    await _runSessionMutation<void>(() async {
+      requireIntent?.call();
+      final stored = await _store.read();
+      if (!ref.mounted || generation != _explicitLoginGeneration) {
+        throw const CloudOperationCancelledException();
+      }
+      _store.requireCurrentStorage();
+      requireIntent?.call();
+      try {
+        await _store.saveSyntheticSession(
+          result,
+          fence: () {
+            requireIntent?.call();
+            if (!ref.mounted || generation != _explicitLoginGeneration) {
+              throw const CloudOperationCancelledException();
+            }
+          },
+        );
+        requireIntent?.call();
+        if (!ref.mounted || generation != _explicitLoginGeneration) {
+          throw const CloudOperationCancelledException();
+        }
+      } catch (_) {
+        // 同一队列内撤销已取消意图的auth提交；空间已切换则store fence拒绝清理。
+        if (ref.mounted && generation != _explicitLoginGeneration) {
+          await _store.clearSession(manualLogout: true);
+        }
+        rethrow;
+      }
+      _store.requireCurrentStorage();
+      state = AuthSessionState(
+        status: AuthSessionStatus.authenticated,
+        ownerId: result.accountId,
+        rehearsalIdentityId: result.accountId,
+        activePersonaId: result.personaId,
+        installId: stored.installId,
+        accountState: 'rehearsal',
+        identityOrigin: 'synthetic',
+      );
+    });
+  }
+
+  AuthSessionState _syntheticState(StoredAuthSession stored) =>
+      AuthSessionState(
+        status: stored.ownerId.isEmpty
+            ? AuthSessionStatus.guest
+            : AuthSessionStatus.authenticated,
+        ownerId: stored.ownerId,
+        rehearsalIdentityId: stored.ownerId,
+        activePersonaId: stored.activePersonaId,
+        installId: stored.installId,
+        accountState: stored.accountState,
+        identityOrigin: stored.identityOrigin,
+      );
+
   /// 为普通 Remote 请求提供可信 bearer。
   ///
   /// 安全启动面不等待该 Future；业务请求会等待既有 session restore 或一次
   /// `LoginAnonymous`。bootstrap 失败会把同一结构化错误交给请求链，而不是退回裸
   /// `X-Client-Device-Actor-Id` 后得到伪成功空列表。
   Future<String?> accessTokenForRequest() async {
+    if (_offlineContent) {
+      return null;
+    }
     _requireRemoteAuthentication();
     final restore = _restoreInFlight;
     if (restore != null) {
@@ -141,6 +256,9 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   /// 首次安装、会话清理或匿名 token 失效后的单飞 bootstrap。
   Future<bool> ensureTrustedGuestSession({StoredAuthSession? knownStored}) {
     if (_offlineContent) {
+      if (rehearsalAuthInstalled) {
+        return Future<bool>.value(true);
+      }
       return Future<bool>.error(
         contentCapabilityUnavailable('account_authentication'),
       );
@@ -298,6 +416,12 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     _requireRemoteAuthentication();
     _explicitLoginGeneration += 1;
     await _runSessionMutation<void>(() async {
+      final rehearsal = installedRehearsalAuth;
+      if (_offlineContent && rehearsal != null) {
+        final stored = await _store.read();
+        state = await rehearsal.applyGrant(result, installId: stored.installId);
+        return;
+      }
       await _store.saveLoginGrant(result);
       final stored = await _store.read();
       _syncDeviceActorId(stored.installId);
@@ -484,6 +608,16 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   /// 有效期内（云端下发，默认 30 天）再次打开登录页可一键免验证码快速登录。
   /// 调用方（settings）须保证不向远端吊销 refresh token。
   Future<void> softLogout() async {
+    cancelSyntheticLoginIntent();
+    if (_store.isIsolated) {
+      await _runSessionMutation<void>(() async {
+        await _store.softLogout();
+      });
+      final stored = await _store.read();
+      if (ref.mounted) state = _syntheticState(stored);
+      return;
+    }
+    if (!_store.isIsolated) await installedRehearsalAuth?.clear();
     await _store.softLogout();
     final stored = await _store.read();
     if (!ref.mounted) {
@@ -504,6 +638,16 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   /// 彻底退出：清除本机全部登录凭证。调用方负责向远端吊销 refresh token。
   /// 下次登录必须重新验证（无可用快速登录凭证）。
   Future<void> hardLogout() async {
+    cancelSyntheticLoginIntent();
+    if (_store.isIsolated) {
+      await _runSessionMutation<void>(() async {
+        await _store.clearSession(manualLogout: true);
+      });
+      final stored = await _store.read();
+      if (ref.mounted) state = _syntheticState(stored);
+      return;
+    }
+    if (!_store.isIsolated) await installedRehearsalAuth?.clear();
     await _store.clearSession(manualLogout: true);
     final stored = await _store.read();
     if (!ref.mounted) {

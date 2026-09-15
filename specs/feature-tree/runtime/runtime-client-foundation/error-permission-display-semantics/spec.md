@@ -143,8 +143,10 @@
 | `noAccess` | 当前不能查看 | 你的账号暂时不能查看此内容。 | 返回 |
 | `contentGone` | 内容已不可用 | 内容已被删除或下架。 | 返回 |
 | `contentUnavailable` | 当前内容无法使用 | 你还可以继续查看其他内容。 | 返回 |
+| `capabilityUnavailable` | 当前功能暂不可用 | 当前暂不支持此功能，这不表示内容已被删除。 | 返回 |
 
 - 不透明 404 只能进入 `contentUnavailable`；只有明确 tombstone、删除或下架事实才进入 `contentGone`。
+- 明确能力原因（`client_platform_capability_unavailable` 或 `content_source_capability_unavailable`）进入 `capabilityUnavailable`，不得与内容不存在共用文案。其它 `unsupported` 保持原映射。
 - `updateApp` 只有在最低版本不满足且官方更新入口已验证时可用；普通 404 不得猜测为版本问题。
 - 标题描述结果、说明解释已确认的原因类别、动作只描述下一步；说明不得包含主动作完整文案，整页错误不得出现品牌名称或圈子跳转次级动作。
 - `connectionUnavailable`、`requestTimedOut`、`serviceUnavailable` 三组是已确认的服务侧失败，标题与说明必须直白告知用户这是我们的系统问题、不是用户网络或操作导致，三组标题与说明各不相同；不得用"暂时无法访问服务"一类不归因的模糊表述替代。
@@ -157,7 +159,7 @@
 - 页面和区块使用共享低疲劳占位；视频保留同源封面，300ms 后显示紧凑进度，3 秒显示慢提示，6 秒进入恢复组终态。
 - cancel、supersede、返回与 dispose 必须终止旧 generation，旧结果不得回写。
 - 关键首屏无内容时只显示一个整页状态。有缓存时保留内容并显示一个非阻断提示。一个可选区块失败由区块呈现。两个以上失败由页面合并。
-- 多恢复组同时失败时只显示最高优先级：`updateApp → loginAgain/guestSessionUnavailable → enablePermission → connectNetwork → connectionUnavailable → requestTimedOut → serviceUnavailable → invalidContent → waitThenReload → reloadLater → noAccess/contentUnavailable`；页面级状态可见时隐藏子区块 loading/error。
+- 多恢复组同时失败时只显示最高优先级：`updateApp → loginAgain/guestSessionUnavailable → enablePermission → connectNetwork → connectionUnavailable → requestTimedOut → serviceUnavailable → invalidContent → waitThenReload → reloadLater → noAccess/capabilityUnavailable/contentUnavailable`；页面级状态可见时隐藏子区块 loading/error。
 
 ## 4. 契约引用
 
@@ -247,6 +249,13 @@
 - GIVEN 用户在沉浸式深色上下文（视频书、通话、媒体查看器）遇到加载或播放失败。
 - WHEN 页面呈现该失败或其等待态。
 - THEN 沉浸失败内容由共享沉浸失败组件渲染且前景与等待指示色全部经 `AppColors.immersiveForeground` 语义 token 声明，不存在裸写固定白色的旁路失败面。
+
+<a id="gwt-018"></a>
+### GWT-018 能力不可用与内容不存在分开呈现
+
+- GIVEN 用户遇到明确能力不可用（平台能力或内容源能力）而非 404/tombstone。
+- WHEN 页面呈现该失败。
+- THEN 恢复组为 `capabilityUnavailable`，文案不声称内容丢失；认证失败、权限拒绝、内容不存在与服务失败仍使用各自原组。
 
 ## 6. 依赖
 

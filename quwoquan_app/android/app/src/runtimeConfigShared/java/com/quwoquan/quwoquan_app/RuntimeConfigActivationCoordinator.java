@@ -194,8 +194,6 @@ final class RuntimeConfigActivationCoordinator {
       if (!isDigest(expectedRequestDigest)) {
         throw new ActivationFailure("runtime_config_activation_request_digest_invalid");
       }
-      previousActiveDigest = store.readCurrentActiveDigest();
-      previousActiveDigestKnown = true;
       JsonObject requestDocument =
           requestDocumentReader.read(
               stateFile(REQUEST_FILE_NAME, false),
@@ -207,23 +205,70 @@ final class RuntimeConfigActivationCoordinator {
       if (!constantTimeEquals(requestDigest, expectedRequestDigest)) {
         throw new ActivationFailure("runtime_config_activation_request_digest_mismatch");
       }
+      boolean previousLayoutPredecessorCandidate = false;
+      try {
+        previousActiveDigest = store.readCurrentActiveDigest();
+        previousActiveDigestKnown = true;
+      } catch (RuntimeConfigPackageStore.RuntimeConfigException error) {
+        if (!"runtime_config_schema_mismatch".equals(error.code)) {
+          throw error;
+        }
+        previousLayoutPredecessorCandidate = true;
+      }
       List<String> requestIssues = validateRequest(requestDocument);
       if (!requestIssues.isEmpty()) {
         throw new ActivationFailure(requestIssues.get(0), requestIssues);
       }
-      if (isAlreadyActivated(request, requestDigest)) {
+      byte[] alreadyActivatedReceipt =
+          readCanonicalAlreadyActivatedReceipt(request, requestDigest);
+      if (alreadyActivatedReceipt != null) {
+        try {
+          publishLaunchReceipt(alreadyActivatedReceipt);
+        } catch (RuntimeConfigPackageStore.RuntimeConfigException error) {
+          logFailure(error.code, error);
+          return ConsumeResult.failed(error.code, List.of(error.code));
+        }
         deletePendingRequestBestEffort();
         return ConsumeResult.activated();
       }
 
+      String verifiedPreviousLayoutPredecessorDigest = null;
+      byte[] verifiedPreviousLayoutReceipt = null;
+      if (previousLayoutPredecessorCandidate) {
+        verifiedPreviousLayoutPredecessorDigest =
+            store.readCanonicalActivationPreviousLayoutPredecessorDigest();
+        if (!"canonical_launcher".equals(
+                effectiveManifestStringMapValue(request, "launchProvenance"))
+            || !"external_runtime_package".equals(
+                effectiveManifestStringMapValue(request, "runtimeConfigSupplyMode"))) {
+          throw new ActivationFailure("runtime_config_activation_identity_mismatch");
+        }
+        verifiedPreviousLayoutReceipt = Files.readAllBytes(
+            stateFile(ACTIVE_RECEIPT_FILE_NAME, false).toPath());
+        JsonObject previousLayoutReceiptDocument = readStreamDocument(
+            new java.io.ByteArrayInputStream(verifiedPreviousLayoutReceipt),
+            "runtime_config_activation_receipt_malformed");
+        validateActiveReceiptDocument(previousLayoutReceiptDocument);
+        if (!MessageDigest.isEqual(
+                verifiedPreviousLayoutReceipt,
+                RuntimeConfigPackageStore.canonicalJsonBytes(previousLayoutReceiptDocument))
+            || !previousLayoutReceiptMatchesRequest(
+                objectMap(previousLayoutReceiptDocument), request, verifiedPreviousLayoutPredecessorDigest)) {
+          throw new ActivationFailure("runtime_config_activation_receipt_mismatch");
+        }
+        previousActiveDigest = verifiedPreviousLayoutPredecessorDigest;
+        previousActiveDigestKnown = true;
+      }
       JsonObject packageDocument = requestDocument.getAsJsonObject("package");
       Map<String, Object> finalRequest = request;
       String finalRequestDigest = requestDigest;
-      store.activate(
+      store.activateCanonical(
               packageDocument,
               (String) request.get("packageDigest"),
               (String) request.get("trustEnvelopeDigest"),
               (String) request.get("expectedActiveDigest"),
+              verifiedPreviousLayoutPredecessorDigest,
+              verifiedPreviousLayoutReceipt,
               result ->
                   commitActivationReceipts(
                       buildReceipt(
@@ -593,47 +638,72 @@ final class RuntimeConfigActivationCoordinator {
     try {
       Map<String, Object> receipt = readActiveReceipt();
       Map<String, Object> state = store.readStateEnvelope();
-      return "present".equals(state.get("state"))
-          && receiptMatchesActiveState(receipt, state)
-          && requestDigest.equals(receipt.get("requestDigest"))
-          && stringMapValue(request, "packageDigest").equals(receipt.get("packageDigest"))
-          && stringMapValue(request, "trustEnvelopeDigest")
-              .equals(receipt.get("trustEnvelopeDigest"))
-          && stringMapValue(request, "effectiveLaunchManifestDigest")
-              .equals(receipt.get("effectiveLaunchManifestDigest"))
-          && effectiveManifestStringMapValue(request, "launchProvenance")
-              .equals(receipt.get("launchProvenance"))
-          && effectiveManifestStringMapValue(request, "runtimeConfigSupplyMode")
-              .equals(receipt.get("runtimeConfigSupplyMode"));
+      return alreadyActivatedMatches(request, requestDigest, receipt, state);
     } catch (RuntimeConfigPackageStore.RuntimeConfigException error) {
       return false;
     }
   }
 
+  private byte[] readCanonicalAlreadyActivatedReceipt(
+      Map<String, Object> request, String requestDigest) {
+    try {
+      byte[] receiptBytes =
+          Files.readAllBytes(stateFile(ACTIVE_RECEIPT_FILE_NAME, false).toPath());
+      JsonObject receiptDocument =
+          readStreamDocument(
+              new java.io.ByteArrayInputStream(receiptBytes),
+              "runtime_config_activation_receipt_malformed");
+      validateActiveReceiptDocument(receiptDocument);
+      if (!MessageDigest.isEqual(
+          receiptBytes, RuntimeConfigPackageStore.canonicalJsonBytes(receiptDocument))) {
+        throw new RuntimeConfigPackageStore.RuntimeConfigException(
+            "runtime_config_activation_receipt_mismatch");
+      }
+      Map<String, Object> receipt = objectMap(receiptDocument);
+      Map<String, Object> state = store.readStateEnvelope();
+      return alreadyActivatedMatches(request, requestDigest, receipt, state)
+          ? receiptBytes
+          : null;
+    } catch (IOException
+        | RuntimeException
+        | RuntimeConfigPackageStore.RuntimeConfigException error) {
+      return null;
+    }
+  }
+
+  private boolean alreadyActivatedMatches(
+      Map<String, Object> request,
+      String requestDigest,
+      Map<String, Object> receipt,
+      Map<String, Object> state) {
+    return "present".equals(state.get("state"))
+        && receiptMatchesActiveState(receipt, state)
+        && requestDigest.equals(receipt.get("requestDigest"))
+        && stringMapValue(request, "packageDigest").equals(receipt.get("packageDigest"))
+        && stringMapValue(request, "trustEnvelopeDigest")
+            .equals(receipt.get("trustEnvelopeDigest"))
+        && stringMapValue(request, "effectiveLaunchManifestDigest")
+            .equals(receipt.get("effectiveLaunchManifestDigest"))
+        && effectiveManifestStringMapValue(request, "launchProvenance")
+            .equals(receipt.get("launchProvenance"))
+        && effectiveManifestStringMapValue(request, "runtimeConfigSupplyMode")
+            .equals(receipt.get("runtimeConfigSupplyMode"));
+  }
+
   private Map<String, Object> readActiveReceipt()
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    return objectMap(readActiveReceiptDocument());
+  }
+
+  private JsonObject readActiveReceiptDocument()
       throws RuntimeConfigPackageStore.RuntimeConfigException {
     try {
       JsonObject receipt =
           readDocument(
               stateFile(ACTIVE_RECEIPT_FILE_NAME, false),
               "runtime_config_activation_receipt_malformed");
-      if (!exactFields(receipt, RECEIPT_FIELDS)
-          || !RECEIPT_SCHEMA.equals(stringValue(receipt, "schema"))
-          || !ACTIVATED_STATUS.equals(stringValue(receipt, "status"))
-          || !"".equals(stringValue(receipt, "errorCode"))
-          || !AppLaunchContract.LAUNCH_PROVENANCES.contains(
-              stringValue(receipt, "launchProvenance"))
-          || !AppLaunchContract.RUNTIME_CONFIG_SUPPLY_MODES.contains(
-              stringValue(receipt, "runtimeConfigSupplyMode"))) {
-        throw new RuntimeConfigPackageStore.RuntimeConfigException(
-            "runtime_config_activation_receipt_mismatch");
-      }
-      JsonElement rawIssues = receipt.get("validationIssues");
-      if (rawIssues == null || !rawIssues.isJsonArray() || rawIssues.getAsJsonArray().size() != 0) {
-        throw new RuntimeConfigPackageStore.RuntimeConfigException(
-            "runtime_config_activation_receipt_mismatch");
-      }
-      return objectMap(receipt);
+      validateActiveReceiptDocument(receipt);
+      return receipt;
     } catch (FileNotFoundException error) {
       throw new RuntimeConfigPackageStore.RuntimeConfigException(
           "runtime_config_activation_receipt_missing", error);
@@ -644,6 +714,45 @@ final class RuntimeConfigActivationCoordinator {
       throw new RuntimeConfigPackageStore.RuntimeConfigException(
           "runtime_config_activation_receipt_malformed", error);
     }
+  }
+
+  private void validateActiveReceiptDocument(JsonObject receipt)
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    if (!exactFields(receipt, RECEIPT_FIELDS)
+        || !RECEIPT_SCHEMA.equals(stringValue(receipt, "schema"))
+        || !ACTIVATED_STATUS.equals(stringValue(receipt, "status"))
+        || !"".equals(stringValue(receipt, "errorCode"))
+        || !AppLaunchContract.LAUNCH_PROVENANCES.contains(
+            stringValue(receipt, "launchProvenance"))
+        || !AppLaunchContract.RUNTIME_CONFIG_SUPPLY_MODES.contains(
+            stringValue(receipt, "runtimeConfigSupplyMode"))) {
+      throw new RuntimeConfigPackageStore.RuntimeConfigException(
+          "runtime_config_activation_receipt_mismatch");
+    }
+    JsonElement rawIssues = receipt.get("validationIssues");
+    if (rawIssues == null || !rawIssues.isJsonArray()
+        || rawIssues.getAsJsonArray().size() != 0) {
+      throw new RuntimeConfigPackageStore.RuntimeConfigException(
+          "runtime_config_activation_receipt_mismatch");
+    }
+  }
+
+  private boolean previousLayoutReceiptMatchesRequest(
+      Map<String, Object> receipt,
+      Map<String, Object> request,
+      String previousLayoutPackageDigest) {
+    return "alpha".equals(receipt.get("environment"))
+        && "nonprod".equals(receipt.get("buildProfile"))
+        && "alpha-local".equals(receipt.get("target"))
+        && AppLaunchContract.LAUNCH_PROVENANCES.contains(
+            stringMapValue(receipt, "launchProvenance"))
+        && AppLaunchContract.RUNTIME_CONFIG_SUPPLY_MODES.contains(
+            stringMapValue(receipt, "runtimeConfigSupplyMode"))
+        && previousLayoutPackageDigest.equals(receipt.get("packageDigest"))
+        && previousLayoutPackageDigest.equals(receipt.get("activePackageDigest"))
+        && stringMapValue(request, "trustEnvelopeDigest")
+            .equals(receipt.get("trustEnvelopeDigest"))
+        && previousLayoutPackageDigest.equals(stringMapValue(request, "expectedActiveDigest"));
   }
 
   private boolean receiptMatchesActiveState(
@@ -725,9 +834,18 @@ final class RuntimeConfigActivationCoordinator {
   private void writeReceipt(String fileName, Map<String, Object> receipt)
       throws RuntimeConfigPackageStore.RuntimeConfigException {
     JsonElement document = GSON.toJsonTree(receipt);
+    publishReceipt(fileName, RuntimeConfigPackageStore.canonicalJsonBytes(document));
+  }
+
+  private void publishLaunchReceipt(byte[] canonicalActiveReceipt)
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    publishReceipt(RECEIPT_FILE_NAME, canonicalActiveReceipt);
+  }
+
+  private void publishReceipt(String fileName, byte[] payload)
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
     try {
-      receiptWriter.write(
-          stateFile(fileName, true), RuntimeConfigPackageStore.canonicalJsonBytes(document));
+      receiptWriter.write(stateFile(fileName, true), payload);
     } catch (IOException error) {
       throw new RuntimeConfigPackageStore.RuntimeConfigException(
           "runtime_config_activation_receipt_write_failed", error);

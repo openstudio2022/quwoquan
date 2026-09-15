@@ -258,6 +258,8 @@ class _HomeFeedVideoPlaybackState {
 
 class _HomeFeedVideoAutoPlayGate extends StatefulWidget {
   const _HomeFeedVideoAutoPlayGate({
+    super.key,
+    this.now = DateTime.now,
     required this.videoId,
     required this.scrollSignal,
     required this.hasPlayableSource,
@@ -268,6 +270,7 @@ class _HomeFeedVideoAutoPlayGate extends StatefulWidget {
   /// 卡片在单活跃视频协调器中的唯一标识（用 post id）。
   final String videoId;
   final ValueListenable<_HomeFeedVideoScrollSignal> scrollSignal;
+  final DateTime Function() now;
   final bool hasPlayableSource;
   final ValueChanged<Map<String, Object?>> onFastScrollSuppressed;
   final Widget Function(_HomeFeedVideoPlaybackState playback) builder;
@@ -400,6 +403,7 @@ class _HomeArticlePostCard extends StatelessWidget {
     return _ArticleTextBlock(
       item: item,
       reason: reason,
+      onTap: onTap,
       onSpanTap: onSpanTap,
       onFallbackTap: onFallbackTap,
     );
@@ -411,6 +415,7 @@ class _HomeArticlePostCard extends StatelessWidget {
       children: [
         _ArticleTextBlock(
           item: item,
+          onTap: onTap,
           reason: reason,
           onSpanTap: onSpanTap,
           onFallbackTap: onFallbackTap,
@@ -465,7 +470,9 @@ class _HomeArticlePostCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _ArticleBodyPreview(text: body)),
+                  Expanded(
+                    child: _ArticleBodyPreview(text: body, onTap: onTap),
+                  ),
                   const SizedBox(width: AppSpacing.containerSm),
                   SizedBox(
                     key: const ValueKey('home-article-side-thumb'),
@@ -522,11 +529,13 @@ class _HomeArticlePostCard extends StatelessWidget {
 class _ArticleTextBlock extends StatelessWidget {
   const _ArticleTextBlock({
     required this.item,
+    required this.onTap,
     required this.reason,
     required this.onSpanTap,
     required this.onFallbackTap,
   });
 
+  final VoidCallback onTap;
   final ContentPostViewData item;
   final IntersectionReason? reason;
   final void Function(IntersectionTextSpan span)? onSpanTap;
@@ -557,7 +566,7 @@ class _ArticleTextBlock extends StatelessWidget {
         if (title.isNotEmpty) _PostTitle(title: title, maxLines: 1),
         if (body.isNotEmpty) ...[
           if (title.isNotEmpty) const SizedBox(height: AppSpacing.intraGroupSm),
-          _ArticleBodyPreview(text: body),
+          _ArticleBodyPreview(text: body, onTap: onTap),
         ],
         if (intersectionRow != null) ...[
           if (title.isNotEmpty || body.isNotEmpty)
@@ -570,47 +579,19 @@ class _ArticleTextBlock extends StatelessWidget {
 }
 
 class _ArticleBodyPreview extends StatelessWidget {
-  const _ArticleBodyPreview({required this.text});
+  const _ArticleBodyPreview({required this.text, required this.onTap});
 
   final String text;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final style = _articleSummaryTextStyle(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final painter = TextPainter(
-          text: TextSpan(text: text, style: style),
-          maxLines: 3,
-          textDirection: TextDirection.ltr,
-        )..layout(maxWidth: constraints.maxWidth);
-        final overflowed = painter.didExceedMaxLines;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              text,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: style,
-            ),
-            if (overflowed) ...[
-              const SizedBox(height: AppSpacing.intraGroupXs),
-              Text(
-                key: const ValueKey('home-article-full-text'),
-                '${CommunityText.ellipsis}${CommunityText.fullText}',
-                style: TextStyle(
-                  fontSize: AppTypography.iosFootnote,
-                  color: AppColors.iosAccent(context),
-                  fontWeight: AppTypography.medium,
-                ),
-              ),
-            ],
-          ],
-        );
-      },
-    );
-  }
+  Widget build(BuildContext context) => _HomeInlineTextAction(
+    text: text,
+    maxLines: 3,
+    style: _articleSummaryTextStyle(context),
+    actionKey: const ValueKey('home-article-full-text'),
+    onTap: onTap,
+  );
 }
 
 class _PostTitle extends StatelessWidget {
@@ -819,6 +800,140 @@ Widget _mediaPlaceholder(bool isDark) {
   );
 }
 
+/// 首页两种全文动作共用真实行内排版；热区占位参与测量，不覆盖正文。
+class _HomeInlineTextAction extends StatelessWidget {
+  const _HomeInlineTextAction({
+    required this.text,
+    required this.maxLines,
+    required this.style,
+    required this.actionKey,
+    required this.onTap,
+    this.expanded = false,
+  });
+
+  final String text;
+  final int maxLines;
+  final TextStyle style;
+  final Key actionKey;
+  final VoidCallback onTap;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final direction = Directionality.of(context);
+      final scaler = MediaQuery.textScalerOf(context);
+      final locale = Localizations.maybeLocaleOf(context);
+      final effectiveStyle = DefaultTextStyle.of(context).style.merge(style);
+      final actionStyle = effectiveStyle.copyWith(
+        color: AppColors.iosAccent(context),
+        fontWeight: AppTypography.semiBold,
+      );
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: effectiveStyle),
+        maxLines: maxLines,
+        textDirection: direction,
+        textScaler: scaler,
+        locale: locale,
+      )..layout(maxWidth: constraints.maxWidth);
+      final overflowed = painter.didExceedMaxLines;
+      painter.dispose();
+      if (!overflowed) return Text(text, style: effectiveStyle);
+
+      final label = expanded
+          ? CommunityText.collapse
+          : '${CommunityText.ellipsis}${CommunityText.fullText}';
+      final labelPainter = TextPainter(
+        text: TextSpan(text: label, style: actionStyle),
+        textDirection: direction,
+        textScaler: scaler,
+        locale: locale,
+      )..layout();
+      final actionSize = Size(
+        max(AppSpacing.minInteractiveSize, labelPainter.width.ceilToDouble()),
+        max(AppSpacing.minInteractiveSize, labelPainter.height.ceilToDouble()),
+      );
+      labelPainter.dispose();
+      // RichText 会按占位 span 字号再次缩放 WidgetSpan；子树只测/缩放一次。
+      final fontSize = effectiveStyle.fontSize!;
+      final placeholderScale = scaler.scale(fontSize) / fontSize;
+      final action = WidgetSpan(
+        alignment: PlaceholderAlignment.bottom,
+        child: SizedBox(
+          width: actionSize.width / placeholderScale,
+          height: actionSize.height / placeholderScale,
+          child: CupertinoButton(
+            key: actionKey,
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            alignment: AlignmentDirectional.bottomStart,
+            onPressed: onTap,
+            child: Text(
+              label,
+              style: actionStyle,
+              textScaler: TextScaler.noScaling,
+              maxLines: 1,
+            ),
+          ),
+        ),
+      );
+      TextSpan span(String prefix) => TextSpan(
+        style: effectiveStyle,
+        children: [
+          TextSpan(text: prefix),
+          action,
+        ],
+      );
+      var prefix = text;
+      if (!expanded) {
+        // 评论已有字素二分思路；此处测量真实 WidgetSpan 的完整热区，
+        // 并纳入缩放/RTL，两个首页消费者不复制算法。
+        final graphemes = text.characters.toList(growable: false);
+        final boundaries = <int>[0];
+        for (final grapheme in graphemes) {
+          boundaries.add(boundaries.last + grapheme.length);
+        }
+        var low = 0;
+        var high = graphemes.length;
+        prefix = '';
+        while (low <= high) {
+          final mid = (low + high) >> 1;
+          final candidate = text.substring(0, boundaries[mid]).trimRight();
+          final probe =
+              TextPainter(
+                text: span(candidate),
+                maxLines: maxLines,
+                textDirection: direction,
+                textScaler: scaler,
+                locale: locale,
+              )..setPlaceholderDimensions([
+                PlaceholderDimensions(
+                  size: actionSize,
+                  alignment: PlaceholderAlignment.bottom,
+                ),
+              ]);
+          probe.layout(maxWidth: constraints.maxWidth);
+          final fits = !probe.didExceedMaxLines;
+          probe.dispose();
+          if (fits) {
+            prefix = candidate;
+            low = mid + 1;
+          } else {
+            high = mid - 1;
+          }
+        }
+      }
+      return Text.rich(
+        span(prefix),
+        textDirection: direction,
+        textScaler: scaler,
+        locale: locale,
+        maxLines: expanded ? null : maxLines,
+      );
+    },
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 可展开文字
 // ─────────────────────────────────────────────────────────────────────────────
@@ -851,45 +966,15 @@ class _ExpandableText extends StatelessWidget {
       letterSpacing: -0.18,
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final tp = TextPainter(
-          text: TextSpan(text: text, style: textStyle),
-          maxLines: maxLines,
-          textDirection: TextDirection.ltr,
-        )..layout(maxWidth: constraints.maxWidth);
-        final isOverflow = tp.didExceedMaxLines;
-
-        if (!isOverflow) {
-          return Text(text, style: textStyle);
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              text,
-              style: textStyle,
-              maxLines: expanded ? null : maxLines,
-              overflow: expanded ? null : TextOverflow.ellipsis,
-            ),
-            SizedBox(height: AppSpacing.intraGroupXs),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.zero,
-              onPressed: onToggle,
-              child: Text(
-                expanded ? CommunityText.collapse : CommunityText.fullText,
-                style: TextStyle(
-                  fontSize: AppTypography.iosFootnote,
-                  color: AppColors.iosAccent(context),
-                  fontWeight: AppTypography.semiBold,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+    return _HomeInlineTextAction(
+      text: text,
+      maxLines: maxLines,
+      style: textStyle,
+      expanded: expanded,
+      actionKey: ValueKey(
+        expanded ? 'home-post-collapse' : 'home-post-full-text',
+      ),
+      onTap: onToggle,
     );
   }
 }

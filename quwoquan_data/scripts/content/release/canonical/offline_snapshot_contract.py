@@ -52,8 +52,7 @@ def validate_selection(selection: dict) -> None:
     for row in channels:
         if not set(row["orderedObjectRefs"]) <= selected:
             raise OfflineSnapshotError("OFFLINE.CHANNEL_OUTSIDE_COHORT")
-        if row["channelId"] == "premium" and any(not ref.startswith("posts/video/") for ref in row["orderedObjectRefs"]):
-            raise OfflineSnapshotError("OFFLINE.PREMIUM_ENGINEERING_VIDEO_REQUIRED")
+        # 频道是显式工程选集，不是视频类型过滤器，也不授予生产精选资格。
 
 
 class PublicContractValidator:
@@ -98,6 +97,11 @@ class PublicContractValidator:
         primitives = {"string": "string", "timestamp": "string", "int": "integer", "int64": "integer", "bool": "boolean", "float64": "number", "decimal": "number", "object": "object", "json": "object"}
         if name in primitives:
             return {"type": primitives[name]}
+        if name == "semantic_document":
+            # 结构与 canonical digest 由共享 semantic_document authoring/codecs 校验；
+            # 离线 projection 在此只复用公开 wire 的 object 边界，不复制节点注册表。
+            self.load("quwoquan_service/contracts/metadata/_shared/semantic_document.yaml")
+            return {"type": "object"}
         if name == "enum":
             enum = self.enums.get(enum_ref)
             if enum is None:

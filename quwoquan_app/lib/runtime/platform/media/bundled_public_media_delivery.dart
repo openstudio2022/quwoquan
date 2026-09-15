@@ -16,12 +16,26 @@ import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.da
 
 /// 仅由 Alpha composition root 导入，不进入在线依赖闭包。
 final class BundledPublicMediaDelivery implements PublicMediaDeliveryPort {
+  BundledPublicMediaDelivery({
+    this.loadBundle = OfflineContentBundle.load,
+    this.checkScope,
+  });
+  final Future<OfflineContentBundle> Function() loadBundle;
+  final void Function()? checkScope;
+  final Object _imageSourceIdentity = Object();
   Future<OfflineContentBundle>? _loading;
-  Future<OfflineContentBundle> _bundle() =>
-      _loading ??= OfflineContentBundle.load().catchError((Object error) {
-        _loading = null;
-        throw error;
-      });
+  Future<OfflineContentBundle> _bundle() async {
+    checkScope?.call();
+    final result = await (checkScope != null
+        ? loadBundle()
+        : _loading ??= loadBundle().catchError((Object error) {
+            _loading = null;
+            throw error;
+          }));
+    checkScope?.call();
+    return result;
+  }
+
   @override
   MediaEndpointConfig? get endpoints => null;
   @override
@@ -94,6 +108,8 @@ final class BundledPublicMediaDelivery implements PublicMediaDeliveryPort {
       reference: reference,
       digest: offlineContentManifestDigest,
       loadBundle: _bundle,
+      sourceIdentity: _imageSourceIdentity,
+      checkScope: checkScope,
     );
   }
 
@@ -117,18 +133,22 @@ final class BundledPublicMediaDelivery implements PublicMediaDeliveryPort {
         delivery.url != reference ||
         asset == null ||
         asset.kind != 'video' ||
-        delivery.version != asset.version ||
+        (delivery.version != 0 && delivery.version != asset.version) ||
         (delivery.sha256 != null && delivery.sha256 != asset.digest)) {
       throw const OfflineContentFailure('bundle_video_reference_invalid');
     }
     final path = await asset.materializeVideo();
+    checkScope?.call();
     return [
       PlayableVideoSource(
         label: 'cache',
-        createController: () => AppVideoPlayerControllerFactory.localFilePath(
-          path,
-          viewType: viewType,
-        ),
+        createController: () {
+          checkScope?.call();
+          return AppVideoPlayerControllerFactory.localFilePath(
+            path,
+            viewType: viewType,
+          );
+        },
       ),
     ];
   }
@@ -146,7 +166,8 @@ final class BundledPublicMediaDelivery implements PublicMediaDeliveryPort {
         (binding.sha256 != null && binding.sha256 != asset.digest)) {
       throw const OfflineContentFailure('bundle_manifest_reference_invalid');
     }
-    return jsonDecode(utf8.decode(await asset.readVerifiedBytes()))
-        as Map<String, dynamic>;
+    final bytes = await asset.readVerifiedBytes();
+    checkScope?.call();
+    return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
   }
 }

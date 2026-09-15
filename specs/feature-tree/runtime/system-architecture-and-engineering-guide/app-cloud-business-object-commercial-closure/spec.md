@@ -90,7 +90,9 @@
 - 每个 `commercial.status=blocked` 的 operation 只由其 `commercial.targetStory` 指向的节点拥有；本 Story 不代持其他节点的商用缺口。
 - 本 Story 拥有的只有两类：领域模型治理类 gapId，以及 targetStory 指向本 Story 的同一候选四环境证据类 gapId。
 - 领域模型治理类缺口靠对象与 operation 建模裁决关闭，四环境证据类缺口靠同一不可变候选上的真实环境、Provider 与 user_acceptance 回执关闭，两类不得互相替代。
-- 缺真实四环境、Provider 或 user_acceptance 回执时，`commercial.status` 不得从 blocked 改为 ready，readiness 派生也不得把该 operation 计入 commercial-ready。
+- 三条资格轴统一遵循 [领域引导验收治理 REQ-004](../../runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md#req-004)：operation ready 由自身实现与真实运行证据决定，对象 commercial-ready 由当前结果派生，环境/App/UAT/release 另行准入。缺四环境或 UAT 不得提升对象/发布资格，也不得把自身 conformance 未完成的 operation 改 ready；不再以对象 commercial-ready 反向锁死 operation 取证。
+- 已有以四环境、Provider 或 UAT 缺口声明 blocked 的 operation 不因规则统一自动翻牌。唯一 targetStory owner 必须逐项区分 operation 实现缺口与对象/环境/发布缺口，在最低可关闭节点保留等强 OPEN、验收与结果门约束；缺口尚未完成该归属裁决时仍保持原 blocked，禁止批量撤销 gap 或用 baseline 吸收。
+- 仅当 operation 自身真实 conformance 已满足且其他缺口的准出约束未丢失，owner 才能单独裁决该 operation ready；四环境证据类 OPEN 仍只能由真实同候选回执关闭。私有测试 ready Source、旧 REST/Mongo 通过和正式生成成功均不构成新 GraphQL runtime、对象或 release 完成。
 
 <a id="req-010"></a>
 ### REQ-010 App typed client 由 ui_surfaces 与 response_entity 单轨派生
@@ -208,6 +210,14 @@
 - THEN 每个文件均有唯一对象或横切 owner，必需层与页面 source owner/participants 完整且没有占位层。
 - AND 层间与跨对象依赖只经过公开边界和唯一 composition root，旧业务大桶、私有跨对象 import、barrel、shim、双轨路径与 compatibility fallback 均不存在。
 
+<a id="gwt-008"></a>
+### GWT-008 存量 blocked 缺口分轴裁决不丢失准出义务
+
+- GIVEN operation 的 gap 由唯一 targetStory 拥有，当前同时存在实现运行缺口与对象/四环境/Provider/UAT 结果缺口。
+- WHEN owner 按 REQ-009 分类并在自身最低可关闭节点保留等强 OPEN、验收及结果门约束，再逐 operation 审核自身 conformance。
+- THEN 未分类或自身 conformance 未满足的 operation 保持 blocked；满足的 operation 不连带提升对象、环境或发布资格，也不提升其他 operation。
+- AND 四环境类缺口缺同候选真实回执仍不关闭；旧 REST/Mongo、测试私有 ready Source、codegen 成功或 baseline 变更不能替代新 GraphQL 或 release 证据。
+
 ## 6. 依赖
 
 - 前置要求：[`system-architecture-and-engineering-guide`](../spec.md) 的范围、要求与 SIT。
@@ -230,7 +240,8 @@
 - 本 OPEN 只关闭领域模型与工程治理；`commercial.targetStory` 指向其他节点的产品行为、Provider、四环境和 UAT 缺口仍由其唯一目标节点关闭，不得在本 OPEN 内代持，也不得用目录迁移替代。
 - canonical 对象与 context 集合只从同一 ContractGraph 候选实时派生，不维护固定数量、对象 registry、迁移清单或第二套 readiness 台账。
 - 上述任一结构、依赖、测试、覆盖率或证据边界未闭环时，本 OPEN 不得删除，也不得声明 `MODEL_GOVERNANCE_READY`。
-- 完成判定：`GWT-001` 与 `GWT-007` 对应行为满足且真实测试 `spec_ref` 有效。
+- 规则统一尚不等于存量缺口分轴完成：REQ-009 的逐 targetStory 分类、等强准出约束保留与禁止批量翻牌仍缺 `GWT-008` 直接证据；私有 ready Source 或 codegen 通过不关闭本 OPEN。
+- 完成判定：`GWT-001`、`GWT-007` 与 `GWT-008` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-003"></a>
 ### OPEN-003 服务端从可信 principal 执行 operation 与对象授权

@@ -11,6 +11,89 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final runtime = AppStartupRuntime.instance;
 
+  test('attempt确认只来自本轮原生调用关联，getter不I/O且reset废弃旧回应', () async {
+    runtime.markBootstrapStarted();
+    var calls = 0;
+    final oldReply = Completer<NativeStartupProcessSegments?>();
+    String? firstId;
+    AppStartupRuntime.overrideNativeTimingsBridgeForTesting(
+      _CallbackTimingBridge((id) {
+        calls++;
+        firstId = id;
+        return oldReply.future;
+      }),
+    );
+    final old = runtime.beginNativeStartupAttempt();
+    expect(runtime.confirmedStartupAttempt, isNull);
+    runtime.resetForTesting();
+    runtime.markBootstrapStarted();
+    AppStartupRuntime.overrideNativeTimingsBridgeForTesting(
+      _CallbackTimingBridge((id) async {
+        calls++;
+        return NativeStartupProcessSegments(
+          startupAttemptId: id,
+          attemptKind: 'cold',
+          deadlineOrigin: 'nativeProcess',
+          elapsedSinceProcessStartMs: 12,
+          elapsedSinceAttemptStartMs: 12,
+        );
+      }),
+    );
+    await runtime.beginNativeStartupAttempt();
+    final current = runtime.confirmedStartupAttempt!;
+    oldReply.complete(
+      NativeStartupProcessSegments(
+        startupAttemptId: firstId,
+        attemptKind: 'cold',
+        deadlineOrigin: 'nativeProcess',
+        elapsedSinceProcessStartMs: 8,
+        elapsedSinceAttemptStartMs: 8,
+      ),
+    );
+    await old;
+    expect(identical(runtime.confirmedStartupAttempt, current), isTrue);
+    expect(current.isCurrent, isTrue);
+    expect(calls, 2);
+    runtime.resetForTesting();
+    expect(current.isCurrent, isFalse);
+    expect(runtime.confirmedStartupAttempt, isNull);
+  });
+
+  test('任意格式合法回显、无时钟及超时不产生confirmed attempt', () async {
+    for (final reply in [
+      const NativeStartupProcessSegments(
+        startupAttemptId: 'different_12345678901234567890',
+        attemptKind: 'cold',
+        deadlineOrigin: 'nativeProcess',
+        elapsedSinceProcessStartMs: 1,
+        elapsedSinceAttemptStartMs: 1,
+      ),
+      const NativeStartupProcessSegments(),
+    ]) {
+      runtime.resetForTesting();
+      runtime.markBootstrapStarted();
+      AppStartupRuntime.overrideNativeTimingsBridgeForTesting(
+        _FakeNativeTimingBridge(Future.value(reply)),
+      );
+      await runtime.beginNativeStartupAttempt();
+      expect(runtime.confirmedStartupAttempt, isNull);
+    }
+    runtime.resetForTesting();
+    runtime.markBootstrapStarted();
+    final pending = Completer<NativeStartupProcessSegments?>();
+    AppStartupRuntime.overrideNativeTimingsBridgeForTesting(
+      _FakeNativeTimingBridge(pending.future),
+    );
+    await expectLater(
+      runtime.beginNativeStartupAttempt(
+        budget: const Duration(milliseconds: 1),
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
+    expect(runtime.confirmedStartupAttempt, isNull);
+    pending.complete(null);
+  });
+
   tearDown(() {
     runtime.resetForTesting();
     AppStartupRuntime.resetNativeTimingsBridgeForTesting();
@@ -267,6 +350,14 @@ void main() {
 const MethodChannel _startupTimingsChannel = MethodChannel(
   'quwoquan/startup/timings',
 );
+
+final class _CallbackTimingBridge implements StartupTimingsNativeBridge {
+  _CallbackTimingBridge(this.callback);
+  final Future<NativeStartupProcessSegments?> Function(String) callback;
+  @override
+  Future<NativeStartupProcessSegments?> beginStartupAttempt(String id) =>
+      callback(id);
+}
 
 final class _FakeNativeTimingBridge implements StartupTimingsNativeBridge {
   const _FakeNativeTimingBridge(this._result);

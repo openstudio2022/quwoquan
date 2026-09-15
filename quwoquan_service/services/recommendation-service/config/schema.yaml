@@ -36,6 +36,17 @@ configs:
   rollout: progressive
   risk_level: high
   ui_editable: true
+- key: ops.reco.discovery.rank.context_landscape_media_boost
+  type: float
+  owner: recommendation
+  default: 1.0
+  minimum: 1.0
+  maximum: 1.25
+  scope: environment
+  reload: hot
+  rollout: progressive
+  risk_level: medium
+  ui_editable: true
 - key: ops.reco.discovery.rank.author_diversity_weight
   type: float
   owner: recommendation

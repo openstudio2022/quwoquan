@@ -69,10 +69,14 @@ class RuntimeRecoveryHost extends StatefulWidget {
     required this.childBuilder,
     this.reentryDeadline = const Duration(seconds: 8),
     this.clientUpgradeControllerFactory,
+    this.createReadGeneration,
+    this.readSourceIdentity,
   });
 
   final Widget Function(Key generationKey, bool isRuntimeReentry) childBuilder;
   final Duration reentryDeadline;
+  final VoidCallback Function()? createReadGeneration;
+  final Object? readSourceIdentity;
   final StartupRecoveryController Function()? clientUpgradeControllerFactory;
 
   @override
@@ -88,6 +92,23 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
   String _failureSource = 'runtime_boundary';
   Timer? _reentryTimer;
   late Widget _generationChild;
+  VoidCallback? _disposeReadGeneration;
+
+  void _releaseReadGeneration() {
+    final dispose = _disposeReadGeneration;
+    _disposeReadGeneration = null;
+    dispose?.call();
+  }
+
+  @override
+  void didUpdateWidget(covariant RuntimeRecoveryHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.readSourceIdentity != widget.readSourceIdentity) {
+      _releaseReadGeneration();
+      _generation++;
+      if (_childMounted) _generationChild = _buildGenerationChild();
+    }
+  }
 
   @override
   void initState() {
@@ -97,6 +118,7 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
   }
 
   Widget _buildGenerationChild() {
+    _disposeReadGeneration = widget.createReadGeneration?.call();
     final generationKey = ValueKey<int>(_generation);
     return KeyedSubtree(
       key: generationKey,
@@ -106,6 +128,7 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
 
   @override
   void dispose() {
+    _releaseReadGeneration();
     RuntimeRecoveryCoordinator.instance._detach(this);
     _reentryTimer?.cancel();
     _controller?.dispose();
@@ -123,6 +146,7 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
       if (controller.snapshot.phase == RecoveryPhase.runtimeReentering) {
         _reentryTimer?.cancel();
         setState(() {
+          _releaseReadGeneration();
           _childMounted = false;
           controller.markRuntimeReentryFailed();
         });
@@ -130,6 +154,7 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
       return;
     }
     setState(() {
+      _releaseReadGeneration();
       _childMounted = false;
       _failureCode = '';
       _failureSource = source;
@@ -161,6 +186,7 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
           requiredUpdateOnly: true,
         );
     setState(() {
+      _releaseReadGeneration();
       _childMounted = false;
       _failureCode = failureCode;
       _failureSource = source;
@@ -188,6 +214,7 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
         return;
       }
       setState(() {
+        _releaseReadGeneration();
         _childMounted = false;
         controller?.markRuntimeReentryFailed();
       });

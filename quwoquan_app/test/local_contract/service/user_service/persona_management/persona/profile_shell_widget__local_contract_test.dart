@@ -9,7 +9,7 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t3
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t4
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t5
-// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t8
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-009
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-001.t4
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-002.t1
@@ -844,6 +844,41 @@ void main() {
           const ValueKey<String>('profile-shell-compact-avatar-image'),
         ),
         findsOneWidget,
+      );
+    });
+
+    testWidgets('非空初始 URL 不遮蔽 profile 完整头像绑定', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          userId: 'fixture_user_current',
+          initialAvatarUrl: 'https://cdn.example/stale-avatar.png',
+          profileQuery: const _ResolvedAvatarProfileRepository(),
+        ),
+      );
+      await _pumpFrames(tester, count: 20);
+
+      expect(
+        tester
+            .widget<MediaDeliveryImage>(
+              find.byKey(const ValueKey<String>('profile-header-avatar-image')),
+            )
+            .binding
+            .publicUrl,
+        _ResolvedAvatarProfileRepository.resolvedAvatar,
+      );
+      expect(
+        tester
+            .widget<MediaDeliveryImage>(
+              find.byKey(const ValueKey<String>('profile-header-avatar-image')),
+            )
+            .binding
+            .accessMode,
+        MediaDeliveryAccessMode.public,
       );
     });
 

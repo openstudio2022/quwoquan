@@ -17,6 +17,13 @@ def command_app_content_uat(args: argparse.Namespace) -> dict[str, Any]:
     ]
     device_id = str(getattr(args, "device_id", "") or "").strip()
     dry_run = bool(getattr(args, "dry_run", False))
+    isolated = bool(getattr(args, "isolated_rehearsal", False))
+    instance = str(getattr(args, "rehearsal_instance_id", "") or "")
+    if (isolated or instance) and (not isolated or not instance or targets != ["alpha-local"]):
+        return {"status": "gate_block", "exitCode": 2, "targets": targets,
+                "firstBlocker": "APP.LAUNCH.receipt_invalid",
+                "details": ["isolated request requires an explicit instance and only alpha-local"],
+                "summary": "App content UAT isolated selection is GATE_BLOCK", "reportDir": ""}
     from quwoquan_ops.cli.commands.app_preflight_uat_orchestration import APP_CONTENT_UAT_TARGETS
     # 非法/重复目标交领域入口给出 typed 拒绝，不能先占用任何本地 runtime。
     if (dry_run or not targets or not device_id or len(targets) != len(set(targets))

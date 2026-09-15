@@ -107,10 +107,11 @@ def _execution_review(execution: Path, ref: str, cache: dict) -> tuple[dict, dic
     digest = _digest_file(review_path)
     _bound(chain, 3, ref + "/5.review/content_review.json", digest)
     converted = convert_review_document(review)
-    draft_ref = ref + "/" + _relative(review["draft"]["ref"])
+    page_binding = review["candidateBindings"]["page"]
+    draft_ref = ref + "/" + _relative(page_binding["ref"])
     draft_path = _file(execution, draft_ref)
     draft_digest = _digest_file(draft_path)
-    if draft_digest != review["draft"]["digest"]:
+    if draft_digest != page_binding["digest"]:
         _fail("ORIGINAL_DRAFT_DRIFT", ref)
     _bound(chain, 2, draft_ref, draft_digest)
     if converted["decision"] != "approved":
@@ -224,7 +225,7 @@ def _inspect_content(root: Path, execution: Path, ref: str, manifest: dict, cach
     validate_content_review_document(converted, execution_id=execution.name, object_ref=ref,
                                     required_asset_refs=required_review_asset_refs(manifest, object_kind=ref.split("/")[0]),
                                     source_assets=assets, require_approved=True)
-    draft = _file(execution, ref + "/" + converted["draft"]["ref"])
+    draft = _file(execution, ref + "/" + converted["candidateBindings"]["page"]["ref"])
     text = draft.suffix == ".md"
     if text and _file(root, manifest["finalContentRef"]).read_bytes() != draft.read_bytes():
         _fail("ORIGINAL_REVIEWED_SURFACE_DRIFT", ref)

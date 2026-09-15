@@ -18,8 +18,31 @@ OFFLINE_SPEC_REF = "specs/feature-tree/runtime/runtime-config/environment-topolo
 OFFLINE_REQUIRED_CASES = (
     "default-entry", "homepage-recommendation", "premium-video-book", "article-detail",
     "image-detail", "homepage-video-playback", "homepage-tab-roundtrip", "creator-avatar", "video-complete", "video-seek",
-    "empty-state", "pagination-end", "login-unavailable", "write-unavailable", "private-unavailable",
+    "empty-state", "pagination-end", "login-cancel", "login-success", "login-error",
+    "private-continuation", "local-write", "otp-expiry", "identity-restart",
+    "network-refusal", "otp-refusal", "push-refusal", "remote-refusal", "outbox-refusal",
 )
+
+
+def offline_case_spec_ref(case_id: str) -> str:
+    if case_id not in OFFLINE_REQUIRED_CASES:
+        raise ValueError("APP.UAT.page_plan_invalid: unknown required case")
+    return OFFLINE_SPEC_REF if OFFLINE_REQUIRED_CASES.index(case_id) < OFFLINE_REQUIRED_CASES.index("login-cancel") else OFFLINE_SPEC_REF.replace("#gwt-007", "#gwt-008")
+
+
+def offline_case_blocker(case_id: str) -> str:
+    """缺真实接缝仍留在同一 required 集合，绝不以观察截图签发成功。"""
+    if case_id in {"login-success", "login-error"}:
+        return "APP.UAT.page_artifact_binding_missing: authorized rehearsal identity input source is absent"
+    if case_id in {"private-continuation", "local-write"}:
+        return "APP.UAT.page_artifact_binding_missing: local action query/readback seam is absent"
+    if case_id == "otp-expiry":
+        return "APP.UAT.page_artifact_binding_missing: real 300-second challenge observation is absent"
+    if case_id == "identity-restart":
+        return "APP.UAT.page_artifact_binding_missing: cross-process launch attempt and identity binding is absent"
+    if case_id.endswith("-refusal"):
+        return "APP.UAT.page_artifact_binding_missing: actual external side-effect refusal observation is absent"
+    return ""
 
 
 def content_source_for_target(target: str) -> str:
@@ -112,6 +135,41 @@ def _prepare_launch(candidate: Mapping[str, Any], report_dir: Path, output_root:
     return runtime, projection
 
 
+def _isolated_selection(args: argparse.Namespace, runtime: Mapping[str, Any],
+                        projection: Mapping[str, Any]) -> dict[str, str] | None:
+    """只投影已获准调用的选择；pin来自已验证capsule，不签发授权或信任。"""
+    requested = getattr(args, "isolated_rehearsal", False)
+    instance = getattr(args, "rehearsal_instance_id", "")
+    if type(requested) is not bool or not isinstance(instance, str):
+        raise ValueError("APP.LAUNCH.receipt_invalid: invalid isolated request")
+    if not requested:
+        if instance:
+            raise ValueError("APP.LAUNCH.receipt_invalid: instance requires explicit isolated request")
+        return None
+    from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
+    from quwoquan_ops.cli.lib.app_launch_manifest_schema import _validate_schema_value
+    from quwoquan_ops.cli.commands.app_preflight_uat_launch import verify_app_content_launch_projection
+    contract = load_launch_manifest_contract()
+    schema = contract["app_content_uat_launch_control"]["selection"]["fields"]["instanceId"]
+    if instance == "default" or _validate_schema_value(instance, schema, field_path="instanceId", contract=contract):
+        raise ValueError("APP.LAUNCH.receipt_invalid: isolated instance must be explicit and non-default")
+    if (runtime.get("environment"), runtime.get("target"), runtime.get("contentSource")) != ("alpha", "alpha-local", "bundled_snapshot"):
+        raise ValueError("APP.LAUNCH.receipt_invalid: isolated selection requires offline Alpha")
+    root = Path(projection["sourceProjectionRoot"])
+    evidence = verify_app_content_launch_projection(
+        projection_root=root, evidence_path=Path(projection["sourceProjectionEvidenceRef"]), reject_unmanifested=True,
+    )
+    for field in ("candidateDigest", "sourceRevision", "sourceCapsuleDigest", "contentSource"):
+        if not runtime.get(field) or evidence.get(field) != runtime[field]:
+            raise ValueError("APP.LAUNCH.receipt_invalid: isolated source identity drifted: " + field)
+    manifest = root / "quwoquan_app/assets/content/alpha/manifest.json"
+    identity = manifest.with_name("bundle_identity.json")
+    pin = _sha(manifest)
+    if json.loads(identity.read_bytes()).get("manifestDigest") != pin:
+        raise ValueError("APP.LAUNCH.receipt_invalid: isolated snapshot identity drifted")
+    return {"mode": "isolated", "instanceId": instance, "snapshotDigest": pin}
+
+
 def _launch(args: argparse.Namespace, runtime: Mapping[str, Any], projection: Mapping[str, Any],
             report_dir: Path, output_root: Path) -> dict[str, Any]:
     from quwoquan_ops.cli.commands.app_preflight_uat_launch import (
@@ -122,6 +180,7 @@ def _launch(args: argparse.Namespace, runtime: Mapping[str, Any], projection: Ma
     from quwoquan_ops.cli.commands.app_preflight_uat_support import _app_content_canonical_launch_command
     import quwoquan_ops.cli.stackctl as stackctl
 
+    selection = _isolated_selection(args, runtime, projection)
     attempt = report_dir / "attempt-1" / "attempt.json"
     report = attempt.with_name("report.json")
     policy = FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID if args.platform == "android" else FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID
@@ -131,7 +190,20 @@ def _launch(args: argparse.Namespace, runtime: Mapping[str, Any], projection: Ma
         terminal_receipt_path=attempt.with_name("startup-terminal.json"), platform=args.platform,
         device_id=args.device_id, build_projection_policy_id=policy,
         build_projection_seal_path=attempt.with_name("build-projection-seal.json"), expected_build_projection_digest=None,
+        rehearsal_space_selection=selection,
     )
+    if selection is not None:
+        from quwoquan_app.scripts.device.build_launcher_handoff import verified_rehearsal_selection
+        verified = verified_rehearsal_selection(
+            control_ref=control["controlRef"], control_digest=control["controlDigest"], output_root=str(output_root),
+            source_root=Path(projection["sourceProjectionRoot"]), environment="alpha", target="alpha-local",
+            device_id=args.device_id, candidate_digest=runtime["candidateDigest"],
+            attempt_ref=str(attempt.absolute()), report_ref=str(report.absolute()),
+            capsule_ref=projection["sourceCapsuleManifestRef"], source_revision=runtime["sourceRevision"],
+            source_digest=runtime["sourceCapsuleDigest"], require_isolated=True,
+        )
+        if verified != selection:
+            raise ValueError("APP.LAUNCH.receipt_invalid: isolated selection forwarding drifted")
     app_root = Path(projection["sourceProjectionRoot"]) / "quwoquan_app"
     command, environment = _app_content_canonical_launch_command(
         environment="alpha", target="alpha-local", device_id=args.device_id,
@@ -167,10 +239,17 @@ def run_offline_app_content_uat(*, args: argparse.Namespace, report_dir: Path, o
             raise ValueError(issues[0])
         if args.platform not in {"android", "ios-simulator"}:
             raise ValueError("APP.LAUNCH.receipt_invalid: offline UAT requires a rehearsal simulator/emulator")
+        receipt["blockedCases"] = [{"caseId": case, "specRef": offline_case_spec_ref(case),
+                                    "firstBlocker": offline_case_blocker(case)}
+                                   for case in OFFLINE_REQUIRED_CASES if offline_case_blocker(case)]
+        if getattr(args, "dry_run", False) and receipt["blockedCases"]:
+            raise ValueError(receipt["blockedCases"][0]["firstBlocker"])
         if not getattr(args, "dry_run", False):
             candidate = _candidate(args, stackctl.ROOT)
             runtime, projection = _prepare_launch(candidate, report_dir, output_root)
             binding = _launch(args, runtime, projection, report_dir, output_root)
+            if getattr(args, "isolated_rehearsal", False):
+                raise ValueError("APP.UAT.page_artifact_binding_missing: isolated AUT three-storage consumption observation is absent; native input remains blocked")
             from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import execute_offline_page_cases
             receipt.update(execute_offline_page_cases(
                 args=args, candidate=candidate, launch=binding, projection=projection,

@@ -2,6 +2,7 @@ package httpadapter
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -50,6 +51,19 @@ func ownerProxyCancellationContext(ctx context.Context) (context.Context, bool) 
 	}
 	parent, ok := ctx.Value(ownerProxyCancellationContextKey{}).(context.Context)
 	return parent, ok && parent != nil
+}
+
+// VerifiedSourceAccessCredential 仅在认证后的组合调用中转交原用户凭据给 authority。
+func VerifiedSourceAccessCredential(ctx context.Context) (string, error) {
+	p, ok := rtauth.PrincipalFromContext(ctx)
+	if !ok || p.Actor.AccountID == "" || p.Actor.PersonaID == "" || strings.HasPrefix(p.Actor.AccountID, "service:") {
+		return "", errors.New("verified user identity required")
+	}
+	credential, ok := ctx.Value(credentialContextKey{}).(verifiedCredential)
+	if !ok || credential.deviceTicket != "" || !strings.HasPrefix(credential.authorization, "Bearer ") {
+		return "", errors.New("source access credential unavailable")
+	}
+	return strings.TrimPrefix(credential.authorization, "Bearer "), nil
 }
 
 func restoreVerifiedCredential(request *http.Request) {

@@ -1,9 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/generated/user_profile_ui_config.g.dart';
-import 'package:quwoquan_app/design_system/media/app_media_image.dart';
 import 'package:quwoquan_app/design_system/object_page/object_page_sections.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
     show MediaDeliveryKind;
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
@@ -121,23 +119,16 @@ class ProfileHeader extends StatelessWidget {
                   height: avatarRadius * 2,
                   fit: BoxFit.cover,
                   absentWidget: fallback,
-                  publicBuilder: (context, publicUrl) =>
-                      isLocalFileImageSource(publicUrl)
-                      ? AppMediaImage(
-                          imageSource: publicUrl,
-                          fit: BoxFit.cover,
-                          errorWidget: fallback,
-                        )
-                      : AppAvatarImage(
-                          imageUrl: publicUrl,
-                          successSemanticIdentifier:
-                              (personaId?.isNotEmpty ?? false)
-                              ? 'creator-profile-avatar:$personaId'
-                              : null,
-                          size: avatarRadius * 2,
-                          fit: BoxFit.cover,
-                          errorWidget: fallback,
-                        ),
+                  publicBuilder: (context, publicUrl) => AppAvatarImage(
+                    imageUrl: publicUrl,
+                    successSemanticIdentifier:
+                        (personaId?.isNotEmpty ?? false)
+                        ? 'creator-profile-avatar:$personaId'
+                        : null,
+                    size: avatarRadius * 2,
+                    fit: BoxFit.cover,
+                    errorWidget: fallback,
+                  ),
                 )
               : fallback,
         ),

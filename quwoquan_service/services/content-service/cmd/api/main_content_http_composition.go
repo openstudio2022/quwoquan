@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	rthealth "quwoquan_service/runtime/health"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtrecpolicy "quwoquan_service/runtime/recpolicy"
@@ -43,6 +44,7 @@ import (
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/feedmetrics"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 	taxonomyvalidationinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/taxonomyvalidation"
+	collectiongraphql "quwoquan_service/services/content-service/internal/content/post_collection/adapters/inbound/graphql"
 	profileactivityhttp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/adapters/inbound/http"
 	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/application"
 	profilereadfacthttp "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/adapters/inbound/http"
@@ -64,6 +66,8 @@ import (
 )
 
 type contentHTTPHandlerInput struct {
+	collectionAuthority          collectiongraphql.Authority
+	collectionDB                 *mongo.Database
 	ctx                          context.Context
 	workers                      *workerRegistry
 	logger                       *slog.Logger
@@ -426,9 +430,13 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) (contentHTTPHandlers
 			},
 		).Routes()
 	}
+	collectionHandler, collectionService, err := buildPostCollectionHandler(input.collectionDB, postQueryService, mediaService, contentHandler)
+	if err != nil {
+		return contentHTTPHandlers{}, fmt.Errorf("PostCollection composition: %w", err)
+	}
 	return contentHTTPHandlers{
-		business:        contentHandler,
-		internalGraphQL: internalGraphQLHandler,
+		business:        collectionHandler,
+		internalGraphQL: wrapCollectionGraphQL(collectionService, input.collectionAuthority, input.contractGraphSHA256, internalGraphQLHandler),
 		publicWeb:       publicWebHandler,
 	}, nil
 }

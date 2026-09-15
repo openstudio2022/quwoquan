@@ -67,6 +67,7 @@ public class MainActivity extends FlutterFragmentActivity {
   private CellularNetworkProbePlugin cellularNetworkProbePlugin;
   private AssistantDeviceActionPlugin assistantDeviceActionPlugin;
   private VideoEditingBridgePlugin videoEditingBridgePlugin;
+  private final NativeOrientationReader nativeOrientationReader = new NativeOrientationReader();
   private SmsRetrieverOtpPlugin smsRetrieverOtpPlugin;
   private RecoveryFailureEncryptedStore recoveryFailureEncryptedStore;
   private ScheduledFuture<?> flutterFirstFrameWatchdog;
@@ -189,8 +190,13 @@ public class MainActivity extends FlutterFragmentActivity {
             flutterEngine.getDartExecutor().getBinaryMessenger(),
             "quwoquan/video_editing")
         .setMethodCallHandler(
-            (MethodCall call, MethodChannel.Result result) ->
-                videoEditingBridgePlugin().handle(call, result));
+            (MethodCall call, MethodChannel.Result result) -> {
+              if (NativeOrientationContract.method.equals(call.method)) {
+                result.success(nativeOrientationReader.read(this, appInForeground));
+              } else {
+                videoEditingBridgePlugin().handle(call, result);
+              }
+            });
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
             RUNTIME_CRASH_MARKER_CHANNEL)
@@ -694,6 +700,7 @@ public class MainActivity extends FlutterFragmentActivity {
 
   @Override
   protected void onPause() {
+    nativeOrientationReader.invalidate();
     if (appInForeground && !flutterFirstFrameConfirmed) {
       consumeForegroundFirstFrameBudget(SystemClock.elapsedRealtime());
     }

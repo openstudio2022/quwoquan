@@ -14,6 +14,8 @@
 
 - 照片选择/拍摄、纯端侧像素编辑、MediaAsset 上传与发布回流。
 - 内容详情、沉浸式内容和个人主页评论入口组合验证。
+- 作者管理跨视频、图片和文章 Post 的有序合集，读侧保持成员权限与下架过滤。
+- 内容关联以真实话题、新闻事件、地点主页与参与活动的类型化摘要交付展示层，不混淆事实所有者。
 - 评论提交、回复、展开、赞踩与 post interaction 计数最终一致。
 - Comment metadata、App Remote Facet、content-service contract 与 user_acceptance typed operation recipe 对齐；运行环境不读取 seed manifest。
 
@@ -50,6 +52,8 @@
 - [`filter-catalog-release`](./filter-catalog-release/spec.md)：Mongo 真实引擎 contract 覆盖 digest 幂等、状态机和单 active CAS。
 - [`image-editing`](./image-editing/spec.md)：全仓无占位符号；工具确认路径全部经 ImageEditorExportEngine 烘焙。
 - [`post-create-update`](./post-create-update/spec.md)：从拍摄得到的图片可进入图片选择器底部缩略条或创作编辑器图片列表，并参与排序、编辑和发布。
+- [`ordered-post-collection`](./ordered-post-collection/spec.md)：作者管理跨视频、图片与文章作品的独立有序合集，分页与计数不泄露受限成员。
+- [`typed-post-associations`](./typed-post-associations/spec.md)：以 canonical 类型化摘要区分话题、新闻事件、真实地点与参与活动，不用媒体项伪造合集。
 - [`reaction-state-counter`](./reaction-state-counter/spec.md)：定义“互动状态状态计数”的可观察主路径、失败语义及父能力交接。
 - [`text-post-commercial-publication`](./text-post-commercial-publication/spec.md)：micro 与 article 两种确认结果均有 widget 与 payload 合同证据。
 

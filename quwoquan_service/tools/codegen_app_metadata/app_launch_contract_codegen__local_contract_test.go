@@ -10,6 +10,50 @@ import (
 
 const appLaunchContractTestMetadataDir = "../../contracts/metadata"
 
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-008
+func TestAppLaunchRehearsalSpaceRequiresExplicitBoundSelection(t *testing.T) {
+	contract, err := loadAppLaunchContract(appLaunchContractTestMetadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(contract.SchemaRequiredFields["offline_bootstrap_document"], ","), "rehearsalSpace") {
+		t.Fatal("空间缺席不能解释为普通启动")
+	}
+	if err := requireExactStringSet("space", contract.OfflineRehearsalSpaceFields, []string{"mode", "snapshotDigest", "instanceId"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range contract.SchemaRequiredFields["runtime_config_package"] {
+		if key == "rehearsalSpace" {
+			t.Fatal("在线文档不得取得演练空间能力")
+		}
+	}
+	for _, mutation := range []struct{ name, before, after string }{
+		{"mode", "allowed_values: [standard, isolated]", "allowed_values: [standard, isolated, fallback]"},
+		{"snapshot", "snapshotDigest: { type: string, format: sha256_identity }", "snapshotDigest: { type: string }"},
+		{"instance", "instanceId: { type: string, format: rehearsal_instance_id }", "instanceId: { type: string }"},
+		{"missing", "required_fields: [mode, snapshotDigest, instanceId]", "required_fields: [mode, snapshotDigest]"},
+	} {
+		t.Run(mutation.name, func(t *testing.T) {
+			metadataDir := copyAppLaunchContractTestSources(t, t.TempDir())
+			path := filepath.Join(metadataDir, appLaunchContractMetadataRelativePath)
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			changed := strings.Replace(string(raw), mutation.before, mutation.after, 1)
+			if changed == string(raw) {
+				t.Fatal("负例未命中真相源")
+			}
+			if err := os.WriteFile(path, []byte(changed), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := loadAppLaunchContract(metadataDir); err == nil {
+				t.Fatal("非法空间合同被接受")
+			}
+		})
+	}
+}
+
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
 func TestAppLaunchOfflineDocumentPolicyProjectsWithoutEndpointAuthority(t *testing.T) {
 	contract, err := loadAppLaunchContract(appLaunchContractTestMetadataDir)

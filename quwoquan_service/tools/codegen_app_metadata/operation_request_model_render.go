@@ -844,6 +844,21 @@ func renderRequestFieldValidation(
 	name := requestFieldDartName(field)
 	access := "this." + name
 	nullable := hasRequestConstraint(field, "NULLABLE")
+	if field.Pattern != "" || field.ConstValue != nil {
+		if field.Type != "string" || field.ClientNormalization != "" {
+			return fmt.Errorf("%s.%s exact string constraint requires unnormalized string", modelName, name)
+		}
+		guard := ""
+		if nullable {
+			guard = access + " != null && "
+		}
+		if field.Pattern != "" {
+			fmt.Fprintf(output, "    if (%sRegExp(%s).matchAsPrefix(%s)?.end != %s.length) { throw ArgumentError('invalid %s.%s'); }\n", guard, strings.ReplaceAll(strconv.Quote(field.Pattern), "$", "\\$"), access, access, modelName, name)
+		}
+		if field.ConstValue != nil {
+			fmt.Fprintf(output, "    if (%s%s != %q) { throw ArgumentError('invalid %s.%s'); }\n", guard, access, *field.ConstValue, modelName, name)
+		}
+	}
 	validatedAccess := access
 	if nullable {
 		validatedAccess += "!"

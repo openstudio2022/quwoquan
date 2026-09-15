@@ -82,6 +82,19 @@ _PRODUCT_CONFIG_JSON = r'''{
       "ui_editable": true
     },
     {
+      "default": 1,
+      "key": "ops.reco.discovery.rank.context_landscape_media_boost",
+      "maximum": 1.25,
+      "minimum": 1,
+      "owner": "recommendation",
+      "reload": "hot",
+      "risk_level": "medium",
+      "rollout": "progressive",
+      "scope": "environment",
+      "type": "float",
+      "ui_editable": true
+    },
+    {
       "default": false,
       "key": "ops.reco.discovery.recall.whitelist_enabled",
       "owner": "recommendation",

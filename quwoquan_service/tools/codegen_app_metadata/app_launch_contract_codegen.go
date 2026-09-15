@@ -146,6 +146,7 @@ type appLaunchSchemaContract struct {
 }
 
 type appLaunchSchemas struct {
+	RehearsalStorageObservation    appLaunchSchemaContract `yaml:"rehearsal_storage_observation"`
 	RuntimeConfigTrustEnvelope     appLaunchSchemaContract `yaml:"runtime_config_trust_envelope"`
 	RuntimeConfigPackage           appLaunchSchemaContract `yaml:"runtime_config_package"`
 	OfflineBootstrapDocument       appLaunchSchemaContract `yaml:"offline_bootstrap_document"`
@@ -176,6 +177,8 @@ type appLaunchMetadata struct {
 	RuntimeValueKeys              map[string]appLaunchRuntimeValueKey   `yaml:"runtime_value_keys"`
 	LaunchBlockers                map[string]string                     `yaml:"launch_blockers"`
 	RuntimeConfigErrorCodes       map[string]string                     `yaml:"runtime_config_error_codes"`
+	RehearsalStorageReadback      yaml.Node                             `yaml:"rehearsal_storage_readback"`
+	AppContentUATLaunchControl    yaml.Node                             `yaml:"app_content_uat_launch_control"`
 	Schemas                       appLaunchSchemas                      `yaml:"schemas"`
 }
 
@@ -193,6 +196,8 @@ type appLaunchContract struct {
 	ContentSourcePolicy                map[string]string
 	RuntimeDocumentContentSources      map[string]string
 	OfflineBootstrapRuntimeFields      []string
+	OfflineRehearsalSpaceFields        []string
+	OfflineRehearsalSpaceModes         []string
 	LocalTransportTargets              []string
 	BuildProfileEnvironments           map[string][]string
 	BuildProfileLaunchPolicies         map[string]string
@@ -359,6 +364,8 @@ func loadAppLaunchContract(metadataDir string) (appLaunchContract, error) {
 		ContentSourcePolicy:                cloneStringMap(launchMetadata.ContentSourcePolicy),
 		RuntimeDocumentContentSources:      cloneStringMap(launchMetadata.RuntimeDocumentContentSources),
 		OfflineBootstrapRuntimeFields:      append([]string(nil), launchMetadata.Schemas.OfflineBootstrapDocument.Fields["runtime"].RequiredFields...),
+		OfflineRehearsalSpaceFields:        append([]string(nil), launchMetadata.Schemas.OfflineBootstrapDocument.Fields["rehearsalSpace"].RequiredFields...),
+		OfflineRehearsalSpaceModes:         append([]string(nil), launchMetadata.Schemas.OfflineBootstrapDocument.Fields["rehearsalSpace"].Fields["mode"].AllowedValues...),
 		LocalTransportTargets:              append([]string(nil), launchMetadata.LocalTransportTargets...),
 		BuildProfileEnvironments:           appLaunchBuildProfileEnvironments(artifactMetadata.BuildProfiles),
 		BuildProfileLaunchPolicies:         appLaunchBuildProfileLaunchPolicies(artifactMetadata.BuildProfiles),

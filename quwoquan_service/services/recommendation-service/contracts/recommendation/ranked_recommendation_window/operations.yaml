@@ -1,5 +1,10 @@
 commercial_defaults: {status: blocked, block_reason: 未声明的排序窗口操作默认阻断；只允许窗口创建与稳定续页两个内部操作。, gap_id: RANKED_RECOMMENDATION_WINDOW_UNDECLARED_OPERATION, target_story: app-cloud-business-object-commercial-closure}
-description: 排序窗口创建与稳定续页的唯一内部接口。
+description: >-
+  排序窗口创建与稳定续页的唯一内部接口。Create 的 viewportProfile/deviceClass 与 ContentDiscoveryFeedQuery 引用同一共享 enum，缺失/null 在 admission 归一 unknown，非法值拒绝。
+  contextDigest/requestDigest/rankingSnapshotDigest、幂等重放与窗口绑定遵循 object.yaml；timeBucket、profileRevision 和 policy/model/feature identity 由服务端冻结，Create 不接受客户端伪造这些字段或完整 requestContext。
+  当前无推荐用途地域同意权威来源，Create 不开放 coarseRegion，显式传入按 ranked_window_invalid_argument 拒绝；内部仅冻结 unknown，不认为 service 认证等于地域授权。
+  response 仅交付 contextDigest，不交付 requestContext；Content 将摘要用于 scope/cache/cursor AEAD 绑定，不转发用户画像或原地域。嵌套敏感字段按最严分类处理，不记录整个请求/响应或画像，telemetry 保持既有低基数白名单。
+  Get 仅按 subjectId/windowId/fromOrdinal 读取冻结窗口，不能接受新 viewport/device/timeBucket/profileRevision 重排；摘要缺失/不匹配 fail-closed，禁止旧窗口 fallback。
 api_routes:
 - method: POST
   path: /internal/recommendation/release-readiness:query
@@ -36,7 +41,7 @@ api_routes:
   response_entity: RankedRecommendationPage
   reliability: {timeout_ms: 800, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
   error_codes: [RECOMMENDATION.USER.ranked_window_unauthorized, RECOMMENDATION.USER.ranked_window_forbidden, RECOMMENDATION.USER.ranked_window_invalid_argument, RECOMMENDATION.USER.ranked_window_conflict, RECOMMENDATION.USER.ranked_window_subject_closed, RECOMMENDATION.SYSTEM.ranked_window_failed]
-  privacy: {request_classification: SENSITIVE, response_classification: INTERNAL, log_policy: metadata_only}
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
   telemetry: {metric: recommendation_ranked_window_create, trace: true, attributes: [scenario, outcome, replayed]}
   slo: {latency_p95_ms: 500, availability_percent: 99.9}
   authorization: {principal: service, scopes: [recommendation.ranked_page], ownership_policy: recommendation_internal_page}
@@ -55,7 +60,7 @@ api_routes:
   response_entity: RankedRecommendationPage
   reliability: {timeout_ms: 300, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
   error_codes: [RECOMMENDATION.USER.ranked_window_unauthorized, RECOMMENDATION.USER.ranked_window_forbidden, RECOMMENDATION.USER.ranked_window_invalid_argument, RECOMMENDATION.USER.ranked_window_not_found, RECOMMENDATION.USER.ranked_window_conflict, RECOMMENDATION.USER.ranked_window_subject_closed, RECOMMENDATION.SYSTEM.ranked_window_failed]
-  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
   telemetry: {metric: recommendation_ranked_window_read, trace: true, attributes: [scenario, outcome]}
   slo: {latency_p95_ms: 200, availability_percent: 99.9}
   authorization: {principal: service, scopes: [recommendation.ranked_page], ownership_policy: recommendation_internal_page}

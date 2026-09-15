@@ -10,23 +10,25 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrCreatorSearchInvalidCandidate     = errors.New("USER.CREATOR_SEARCH.invalid_candidate")
-	ErrCreatorSearchUnavailable          = errors.New("USER.CREATOR_SEARCH.unavailable")
-	ErrUserNotFound                      = errors.New("USER.USER.not_found")
-	ErrUnauthorized                      = errors.New("USER.USER.unauthorized")
-	ErrForbidden                         = errors.New("USER.USER.forbidden")
-	ErrInvalidArgument                   = errors.New("USER.USER.invalid_argument")
-	ErrAccountEnforcementDecisionInvalid = errors.New("USER.ACCOUNT.enforcement_decision_invalid")
-	ErrAccountStateConflict              = errors.New("USER.ACCOUNT.state_conflict")
-	ErrInternalError                     = errors.New("USER.SYSTEM.internal_error")
-	ErrProfileInvalidRegion              = errors.New("USER.PROFILE.invalid_region")
-	ErrProfileInvalidTagRef              = errors.New("USER.PROFILE.invalid_tag_ref")
-	ErrProfileTaxonomyReleaseConflict    = errors.New("USER.PROFILE.taxonomy_release_conflict")
-	ErrProfileVersionConflict            = errors.New("USER.PROFILE.version_conflict")
-	ErrProfileIdempotencyConflict        = errors.New("USER.PROFILE.idempotency_conflict")
-	ErrProfileInvalidMediaAsset          = errors.New("USER.PROFILE.invalid_media_asset")
-	ErrProfileQrTokenInvalid             = errors.New("USER.PROFILE.qr_token_invalid")
-	ErrProfileQrTokenExpired             = errors.New("USER.PROFILE.qr_token_expired")
+	ErrCreatorSearchInvalidCandidate       = errors.New("USER.CREATOR_SEARCH.invalid_candidate")
+	ErrCreatorSearchUnavailable            = errors.New("USER.CREATOR_SEARCH.unavailable")
+	ErrCollectionQueryDenied               = errors.New("USER.AUTH.collection_query_denied")
+	ErrCollectionQueryAuthorityUnavailable = errors.New("USER.AUTH.collection_query_authority_unavailable")
+	ErrUserNotFound                        = errors.New("USER.USER.not_found")
+	ErrUnauthorized                        = errors.New("USER.USER.unauthorized")
+	ErrForbidden                           = errors.New("USER.USER.forbidden")
+	ErrInvalidArgument                     = errors.New("USER.USER.invalid_argument")
+	ErrAccountEnforcementDecisionInvalid   = errors.New("USER.ACCOUNT.enforcement_decision_invalid")
+	ErrAccountStateConflict                = errors.New("USER.ACCOUNT.state_conflict")
+	ErrInternalError                       = errors.New("USER.SYSTEM.internal_error")
+	ErrProfileInvalidRegion                = errors.New("USER.PROFILE.invalid_region")
+	ErrProfileInvalidTagRef                = errors.New("USER.PROFILE.invalid_tag_ref")
+	ErrProfileTaxonomyReleaseConflict      = errors.New("USER.PROFILE.taxonomy_release_conflict")
+	ErrProfileVersionConflict              = errors.New("USER.PROFILE.version_conflict")
+	ErrProfileIdempotencyConflict          = errors.New("USER.PROFILE.idempotency_conflict")
+	ErrProfileInvalidMediaAsset            = errors.New("USER.PROFILE.invalid_media_asset")
+	ErrProfileQrTokenInvalid               = errors.New("USER.PROFILE.qr_token_invalid")
+	ErrProfileQrTokenExpired               = errors.New("USER.PROFILE.qr_token_expired")
 )
 
 // AppErrorFromCreatorSearchInvalidCandidate returns *AppError for USER.CREATOR_SEARCH.invalid_candidate (user_message from errors.yaml).
@@ -39,6 +41,18 @@ func AppErrorFromCreatorSearchInvalidCandidate(debugMessage string) *rerrors.App
 func AppErrorFromCreatorSearchUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCreatorSearchUnavailable.Error()))
 	return rerrors.NewAppError(code, "创作者候选读取暂时不可用", debugMessage).WithMetadata("unavailable", 503).WithRecoveryDirective("retry", "snackbar", 5)
+}
+
+// AppErrorFromCollectionQueryDenied returns *AppError for USER.AUTH.collection_query_denied (user_message from errors.yaml).
+func AppErrorFromCollectionQueryDenied(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrCollectionQueryDenied.Error()))
+	return rerrors.NewAppError(code, "查询授权已失效，请重新登录后重试", debugMessage).WithMetadata("collection_query_denied", 403).WithRecoveryDirective("surface", "permissionCard", 0)
+}
+
+// AppErrorFromCollectionQueryAuthorityUnavailable returns *AppError for USER.AUTH.collection_query_authority_unavailable (user_message from errors.yaml).
+func AppErrorFromCollectionQueryAuthorityUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrCollectionQueryAuthorityUnavailable.Error()))
+	return rerrors.NewAppError(code, "暂时无法验证查询权限，请稍后重试", debugMessage).WithMetadata("collection_query_authority_unavailable", 503).WithRecoveryDirective("retry", "inlineCard", 0)
 }
 
 // AppErrorFromUserNotFound returns *AppError for USER.USER.not_found (user_message from errors.yaml).

@@ -9,11 +9,22 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:quwoquan_app/runtime/alpha_rehearsal/alpha_rehearsal_install.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/rehearsal_storage_namespace.dart';
+
+import '../../../../runtime/auth/auth_session_store__local_contract_test.dart'
+    as auth_fixture;
+import '../../../../runtime/alpha_rehearsal/alpha_rehearsal_synthetic_login__local_contract_test.dart'
+    as synthetic_fixture;
+import '../../../../../support/runtime/config/runtime_package_test_hydration.dart';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 
@@ -25,6 +36,8 @@ import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
+import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/runtime/di/login_dependencies.dart';
 import 'package:quwoquan_app/runtime/platform/native_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/one_tap_login_native_bridge.dart';
@@ -96,6 +109,7 @@ void main() {
     );
   });
 
+  // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-018
   // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
   for (final composed in [true, false]) {
     testWidgets('登录 unavailable 可见可退出且不假成功 composed=$composed', (tester) async {
@@ -126,10 +140,36 @@ void main() {
         ),
         findsOneWidget,
       );
+      final errorState = tester.widget<AppPageErrorState>(
+        find.byType(AppPageErrorState),
+      );
       expect(
-        find.text(SearchText.recoveryContentUnavailableTitle),
+        errorState.semantic.userRecoveryGroup,
+        AppUserRecoveryGroup.capabilityUnavailable,
+      );
+      expect(errorState.semantic.copyKey, 'recovery.capabilityUnavailable');
+      expect(
+        errorState.semantic.primaryAction?.type,
+        UiErrorActionType.dismiss,
+      );
+      expect(
+        errorState.semantic.primaryAction?.label,
+        SearchText.recoveryReturnAction,
+      );
+      expect(
+        find.text(SearchText.recoveryCapabilityUnavailableTitle),
         findsOneWidget,
       );
+      expect(
+        find.text(SearchText.recoveryCapabilityUnavailableMessage),
+        findsOneWidget,
+      );
+      expect(find.text(SearchText.recoveryReturnAction), findsOneWidget);
+      expect(
+        find.text(SearchText.recoveryContentUnavailableTitle),
+        findsNothing,
+      );
+      expect(find.text(SearchText.recoveryContentGoneTitle), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('loginPhoneField')),
         findsNothing,
@@ -151,6 +191,516 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
+
+  // spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-005
+  // spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-005.t1
+  // spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-005.t2
+  // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-018
+  for (final source in [
+    'platformCapability',
+    'contentSourceCapability',
+    'unsupported',
+    '404',
+  ]) {
+    testWidgets('登录错误呈现只将明确能力原因映射为能力不可用 source=$source', (tester) async {
+      final isCapability =
+          source == 'platformCapability' || source == 'contentSourceCapability';
+      final failure = RuntimeFailure(
+        code: source == 'platformCapability'
+            ? RuntimeFailureCodes.clientPlatformCapabilityUnavailable
+            : 'APP.SYSTEM.test_failure',
+        semanticReason: source == 'contentSourceCapability'
+            ? 'content_source_capability_unavailable'
+            : '',
+        origin: RuntimeFailureOrigin.localClient,
+        kind: source == '404'
+            ? RuntimeFailureKind.notFound
+            : RuntimeFailureKind.unsupported,
+        nature: RuntimeFailureNature.permanent,
+        location: const RuntimeFailureLocation(
+          businessObject: 'account_session',
+          functionModule: 'login_error_presentation',
+        ),
+        context: const RuntimeFailureContext(),
+        recovery: const RuntimeRecoveryDirective.none(),
+      );
+      final error = CloudException(
+        type: source == '404'
+            ? CloudErrorType.notFound
+            : CloudErrorType.unknown,
+        statusCode: source == '404' ? 404 : null,
+        message: 'test-only failure',
+        runtimeFailure: failure,
+      );
+      var returned = 0;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: sealedCloudBoundaryOverrides(),
+          child: CupertinoApp(
+            home: Builder(
+              builder: (context) => AppScaffold(
+                child: AppPageErrorState(
+                  semantic: UiErrorSemanticResolver.resolve(
+                    context,
+                    error: error,
+                    category: UiErrorCategory.pageLoad,
+                    scope: UiErrorScope.page,
+                  ),
+                  onRecovery: (action) async {
+                    expect(action.type, UiErrorActionType.dismiss);
+                    returned++;
+                    return UiRecoveryOutcome.cancelled;
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final semantic = tester
+          .widget<AppPageErrorState>(find.byType(AppPageErrorState))
+          .semantic;
+      expect(
+        semantic.userRecoveryGroup,
+        isCapability
+            ? AppUserRecoveryGroup.capabilityUnavailable
+            : AppUserRecoveryGroup.contentUnavailable,
+      );
+      expect(
+        semantic.copyKey,
+        isCapability
+            ? 'recovery.capabilityUnavailable'
+            : 'recovery.contentUnavailable',
+      );
+      expect(
+        find.text(
+          isCapability
+              ? SearchText.recoveryCapabilityUnavailableTitle
+              : SearchText.recoveryContentUnavailableTitle,
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          isCapability
+              ? SearchText.recoveryCapabilityUnavailableMessage
+              : SearchText.recoveryContentUnavailableMessage,
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          isCapability
+              ? SearchText.recoveryContentUnavailableTitle
+              : SearchText.recoveryCapabilityUnavailableTitle,
+        ),
+        findsNothing,
+      );
+      expect(find.text(SearchText.recoveryContentGoneTitle), findsNothing);
+      expect(find.text(SearchText.recoveryUpdateAppTitle), findsNothing);
+      expect(semantic.primaryAction?.type, UiErrorActionType.dismiss);
+      expect(find.text(SearchText.recoveryReturnAction), findsOneWidget);
+      await tester.tap(find.text(SearchText.recoveryReturnAction));
+      await tester.pump();
+      expect(returned, 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  group('OTP 几何回归', () {
+    for (final bottom in [-37.3, double.nan, double.infinity]) {
+      testWidgets('AppScaffold 拒绝非法键盘 inset $bottom', (tester) async {
+        await tester.pumpWidget(
+          CupertinoApp(
+            home: MediaQuery(
+              data: MediaQueryData(viewInsets: EdgeInsets.only(bottom: bottom)),
+              child: const AppScaffold(child: SizedBox.expand()),
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+        final scaffoldContext = tester.element(
+          find.byType(CupertinoPageScaffold),
+        );
+        expect(MediaQuery.viewInsetsOf(scaffoldContext).bottom, 0);
+      });
+    }
+
+    for (final resize in [true, false]) {
+      testWidgets('导航栏骨架保持合法小数inset与避让开关 resize=$resize', (tester) async {
+        const bodyKey = ValueKey<String>('geometry-body');
+        await tester.pumpWidget(
+          CupertinoApp(
+            home: MediaQuery(
+              data: const MediaQueryData(
+                padding: EdgeInsets.only(top: 24),
+                viewInsets: EdgeInsets.only(bottom: 137.3),
+              ),
+              child: AppScaffold(
+                resizeToAvoidBottomInset: resize,
+                navigationBar: const CupertinoNavigationBar(middle: Text('登录')),
+                child: const SizedBox.expand(key: bodyKey),
+              ),
+            ),
+          ),
+        );
+        final scaffoldContext = tester.element(
+          find.byType(CupertinoPageScaffold),
+        );
+        expect(MediaQuery.viewInsetsOf(scaffoldContext).bottom, 137.3);
+        final bodyContext = tester.element(find.byKey(bodyKey));
+        expect(MediaQuery.viewInsetsOf(bodyContext).bottom, resize ? 0 : 137.3);
+        expect(
+          tester.getSize(find.byKey(bodyKey)).height,
+          closeTo(
+            tester.getSize(find.byType(AppScaffold)).height -
+                (resize ? 137.3 : 0),
+            0.001,
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('完整登录骨架消费负 inset 并保留合法键盘避让', (tester) async {
+      final media = ValueNotifier(
+        const MediaQueryData(
+          size: Size(402, 874),
+          devicePixelRatio: 3,
+          padding: EdgeInsets.only(top: 62, bottom: 71.3),
+          viewPadding: EdgeInsets.only(top: 62, bottom: 34),
+          viewInsets: EdgeInsets.only(bottom: -37.3),
+        ),
+      );
+      addTearDown(media.dispose);
+      await tester.binding.setSurfaceSize(const Size(402, 874));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpHost(tester, auth: _RecordingAuthFacets(), media: media);
+      expect(tester.takeException(), isNull);
+      expect(find.byType(AppScaffold), findsOneWidget);
+      final height = tester.getSize(find.byType(LoginFrame)).height;
+      media.value = media.value.copyWith(
+        padding: const EdgeInsets.only(top: 62),
+        viewInsets: const EdgeInsets.only(bottom: 300),
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(LoginFrame)).height, height - 300);
+      final context = tester.element(find.byType(LoginFrame));
+      expect(MediaQuery.viewInsetsOf(context).bottom, 0);
+      media.value = media.value.copyWith(viewInsets: EdgeInsets.zero);
+      await tester.pump();
+      expect(tester.getSize(find.byType(LoginFrame)).height, height);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('正文最小高度扣除完整滚动 padding 且短窗口非负', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpFrame(
+        tester,
+        state: const LoginFlowState(step: LoginStep.otp, flowId: 'geometry'),
+        setSurfaceSize: false,
+        safePadding: EdgeInsets.zero,
+      );
+      expect(tester.takeException(), isNull);
+      final scroll = find.byKey(const ValueKey<String>('loginMainScroll'));
+      final box = tester.widget<ConstrainedBox>(
+        find
+            .descendant(
+              of: scroll,
+              matching: find.byWidgetPredicate(
+                (widget) =>
+                    widget is ConstrainedBox &&
+                    widget.constraints.maxWidth ==
+                        AppSpacing.loginFrameMaxWidth,
+              ),
+            )
+            .first,
+      );
+      expect(
+        box.constraints.minHeight,
+        max(0, tester.getSize(scroll).height - AppSpacing.md - AppSpacing.lg),
+      );
+      await tester.binding.setSurfaceSize(const Size(320, 180));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('小屏键盘展开后错误焦点和恢复动作仍可滚动到达', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 568));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final media = ValueNotifier(
+        const MediaQueryData(
+          size: Size(320, 568),
+          padding: EdgeInsets.only(top: 24),
+          viewPadding: EdgeInsets.only(top: 24),
+        ),
+      );
+      addTearDown(media.dispose);
+      final auth = _RecordingAuthFacets(
+        phoneLoginError: _cloudError(UserErrorCode.otpMismatch),
+      );
+      await _pumpHost(tester, auth: auth, media: media);
+      await _reachOtp(tester);
+      media.value = media.value.copyWith(
+        viewInsets: const EdgeInsets.only(bottom: 220),
+      );
+      await tester.pump();
+      final input = find.byKey(const ValueKey<String>('loginOtpHiddenField'));
+      await tester.ensureVisible(input);
+      await tester.enterText(input, '123456');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.widget<CupertinoTextField>(input).focusNode!.hasFocus,
+        isTrue,
+      );
+      final changePhone = find.byKey(
+        const ValueKey<String>('loginChangePhone'),
+      );
+      await tester.ensureVisible(changePhone);
+      await tester.tap(changePhone);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('loginPhoneField')),
+        findsOneWidget,
+      );
+      expect(auth.phoneLoginCalls, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  });
+
+  // spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-013
+  group('真实合成composition表单', () {
+    for (final scenario in [
+      'success',
+      'mismatch',
+      'cancel',
+      'authFailureRetry',
+      'logout',
+      'runtimeChanged',
+      'cancelInFlight',
+      'logoutInFlight',
+      'invalidIdentity',
+      'invalidConfirmation',
+    ]) {
+      testWidgets('私有signed isolated共享Provider与UI $scenario', (tester) async {
+        await auth_fixture.hydrateIsolatedStorageRuntime();
+        final space = CloudRuntimeConfig.rehearsalSpace!;
+        final disk = synthetic_fixture.PrivateStorage();
+        final composition = createAlphaRehearsalComposition(
+          space: space,
+          currentSpace: () => CloudRuntimeConfig.rehearsalSpace,
+          gatewayFactory: () => disk,
+        );
+        final capability = SyntheticLoginCapability(
+          space: space,
+          currentSpace: () => CloudRuntimeConfig.rehearsalSpace,
+          challengePort: composition.challengePort!,
+          sessionPort: composition.sessionPort!,
+          createIdentityLabel: composition.synthetic!.createIdentityLabel,
+          createRequestKey: composition.synthetic!.createRequestKey,
+        );
+        final secure = auth_fixture.PrivateAuthStorage();
+        final store = AuthSessionStore.isolated(
+          namespace: RehearsalStorageNamespace(space),
+          currentSpace: () => CloudRuntimeConfig.rehearsalSpace,
+          secureStorage: secure,
+        );
+        var completed = 0;
+        var cancelled = 0;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              ...sealedCloudBoundaryOverrides(),
+              syntheticLoginCapabilityProvider.overrideWithValue(capability),
+              authSessionStoreProvider.overrideWithValue(store),
+            ],
+            child: CupertinoApp(
+              home: LoginFrameHost(
+                dismissPolicy: LoginDismissPolicy.hostControlledClose,
+                onLoggedIn: () => completed++,
+                onDismiss: () => cancelled++,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(LoginFrameHost)),
+        );
+        final controller = container.read(
+          authSessionControllerProvider.notifier,
+        );
+        try {
+          expect(find.byKey(const ValueKey('loginPhoneField')), findsNothing);
+          final identity = tester
+              .widget<CupertinoTextField>(
+                find.byKey(const ValueKey('syntheticLoginIdentity')),
+              )
+              .controller!
+              .text;
+          expect(identity, matches(RegExp(r'^alpha-synthetic:[a-f0-9]{32}$')));
+          if (scenario == 'invalidIdentity') {
+            await tester.enterText(
+              find.byKey(const ValueKey('syntheticLoginIdentity')),
+              '$identity-extra',
+            );
+            await tester.tap(
+              find.byKey(const ValueKey('syntheticLoginSubmit')),
+            );
+            await tester.pumpAndSettle();
+            expect(
+              find.text(FoundationText.syntheticLoginInvalid),
+              findsOneWidget,
+            );
+            expect(disk.calls.where((c) => c.startsWith('write:')), isEmpty);
+            expect(completed, 0);
+            return;
+          }
+          await tester.tap(find.byKey(const ValueKey('syntheticLoginSubmit')));
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('syntheticLoginHint')),
+            findsOneWidget,
+          );
+          final hint = tester
+              .widget<Text>(find.byKey(const ValueKey('syntheticLoginHint')))
+              .data!;
+          if (scenario == 'invalidConfirmation') {
+            final writes = disk.calls
+                .where((c) => c.startsWith('write:'))
+                .length;
+            await tester.enterText(
+              find.byKey(const ValueKey('syntheticLoginConfirmation')),
+              '$hint-extra',
+            );
+            await tester.tap(
+              find.byKey(const ValueKey('syntheticLoginSubmit')),
+            );
+            await tester.pumpAndSettle();
+            expect(
+              find.text(FoundationText.syntheticLoginInvalid),
+              findsOneWidget,
+            );
+            expect(
+              disk.calls.where((c) => c.startsWith('write:')).length,
+              writes,
+            );
+            expect(completed, 0);
+            return;
+          }
+          if (scenario == 'cancel') {
+            await tester.tap(find.byKey(const ValueKey('syntheticLoginBack')));
+            await tester.pumpAndSettle();
+            expect(cancelled, 1);
+            expect(completed, 0);
+            expect((await store.read()).ownerId, isEmpty);
+          } else {
+            await tester.enterText(
+              find.byKey(const ValueKey('syntheticLoginConfirmation')),
+              scenario == 'mismatch' ? 'alpha-rehearsal-reject' : hint,
+            );
+            if (scenario == 'authFailureRetry' ||
+                scenario == 'logout' ||
+                scenario == 'runtimeChanged') {
+              secure.failWrite = true;
+            }
+            final inFlight =
+                scenario == 'cancelInFlight' || scenario == 'logoutInFlight';
+            if (inFlight) {
+              disk.entered = Completer<void>();
+              disk.release = Completer<void>();
+            }
+            await tester.tap(
+              find.byKey(const ValueKey('syntheticLoginSubmit')),
+            );
+            if (inFlight) {
+              await tester.pump();
+              await disk.entered!.future;
+              if (scenario == 'cancelInFlight') {
+                await tester.tap(
+                  find.byKey(const ValueKey('syntheticLoginBack')),
+                );
+              } else {
+                await controller.hardLogout();
+              }
+              disk.release!.complete();
+            }
+            await tester.pumpAndSettle();
+            if (inFlight) {
+              expect(completed, 0);
+              expect(
+                container.read(authSessionControllerProvider).isAuthenticated,
+                isFalse,
+              );
+              expect((await store.read()).ownerId, isEmpty);
+            } else if (scenario == 'mismatch') {
+              expect(
+                find.text(FoundationText.syntheticLoginMismatch),
+                findsOneWidget,
+              );
+              expect(completed, 0);
+              expect((await store.read()).ownerId, isEmpty);
+            } else if (scenario != 'success') {
+              expect(completed, 0);
+              expect(
+                container.read(authSessionControllerProvider).isAuthenticated,
+                isFalse,
+              );
+              secure.failWrite = false;
+              final committedWrites = disk.calls
+                  .where((c) => c.startsWith('write:'))
+                  .length;
+              if (scenario == 'logout') await controller.hardLogout();
+              if (scenario == 'runtimeChanged') {
+                await auth_fixture.hydrateIsolatedStorageRuntime(
+                  instance: 'space-b',
+                );
+              }
+              await tester.tap(
+                find.byKey(const ValueKey('syntheticLoginSubmit')),
+              );
+              await tester.pumpAndSettle();
+              expect(
+                disk.calls.where((c) => c.startsWith('write:')).length,
+                committedWrites,
+              );
+              expect(completed, scenario == 'authFailureRetry' ? 1 : 0);
+            }
+            if (scenario == 'success' || scenario == 'authFailureRetry') {
+              expect(completed, 1);
+              expect(
+                container.read(authSessionControllerProvider).isAuthenticated,
+                isTrue,
+              );
+              expect(
+                container.read(authSessionControllerProvider).hasTrustedSession,
+                isFalse,
+              );
+              expect((await store.read()).ownerId, isNotEmpty);
+              await tester.pump();
+              expect(completed, 1);
+            }
+          }
+          expect(
+            secure.calls.where(
+              (key) => key == 'auth.install_id' || key.contains('alpha-local'),
+            ),
+            isEmpty,
+          );
+          expect(tester.takeException(), isNull);
+        } finally {
+          await tester.pumpWidget(const SizedBox.shrink());
+          composition.dispose();
+          await hydrateRuntimePackageForTests(environment: 'beta');
+        }
+      });
+    }
+  });
 
   group('状态与错误合同', () {
     test('terminal latch 只允许一个完成方取得终态', () {
@@ -953,6 +1503,136 @@ void main() {
       expect(find.text('重新获取'), findsNothing);
     });
 
+    for (final paste in [false, true]) {
+      testWidgets('六位输入或粘贴重复通知只请求一次 paste=$paste', (tester) async {
+        final response = Completer<AuthSessionGrant>();
+        final auth = _RecordingAuthFacets(
+          phoneLoginHandler: () => response.future,
+        );
+        final store = _MutableAuthStore();
+        var loggedIn = 0;
+        await _pumpHost(
+          tester,
+          auth: auth,
+          store: store,
+          onLoggedIn: () => loggedIn++,
+        );
+        await _reachOtp(tester);
+        final input = find.byKey(const ValueKey<String>('loginOtpHiddenField'));
+        if (!paste) {
+          await tester.enterText(input, '28641');
+          await tester.pump();
+          expect(auth.phoneLoginCalls, 0);
+        }
+        await tester.enterText(input, '286419');
+        tester.testTextInput.updateEditingValue(
+          const TextEditingValue(
+            text: '286419',
+            selection: TextSelection.collapsed(offset: 6),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(auth.phoneLoginCalls, 1);
+        expect(tester.widget<CupertinoTextField>(input).enabled, isFalse);
+        response.complete(_grant());
+        await tester.pump();
+        await tester.pump();
+        expect(loggedIn, 1);
+        expect(store.saveLoginGrantCalls, 1);
+        await tester.pumpWidget(const SizedBox.shrink());
+      });
+    }
+
+    testWidgets('验证中快速返回不接受迟到会话且只请求一次', (tester) async {
+      final response = Completer<AuthSessionGrant>();
+      final auth = _RecordingAuthFacets(
+        phoneLoginHandler: () => response.future,
+      );
+      final store = _MutableAuthStore();
+      var loggedIn = 0;
+      var dismissed = 0;
+      await _pumpHost(
+        tester,
+        auth: auth,
+        store: store,
+        onLoggedIn: () => loggedIn++,
+        onDismiss: () => dismissed++,
+      );
+      await _reachOtp(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('loginOtpHiddenField')),
+        '286419',
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(auth.phoneLoginCalls, 1);
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      response.complete(_grant());
+      await tester.pump();
+      await tester.pump();
+      expect(loggedIn, 0);
+      expect(dismissed, 1);
+      expect(store.saveLoginGrantCalls, 0);
+      expect(auth.phoneLoginCalls, 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('过期恢复重发连点只发送一次', (tester) async {
+      final response = Completer<OtpChallengeIssueResult>();
+      final auth = _RecordingAuthFacets(
+        phoneLoginError: _cloudError(UserErrorCode.otpExpired),
+        sendOtpHandler: (call, key) async => call == 1
+            ? OtpChallengeIssueResult(
+                maskedPhone: _SyntheticLoginIdentity.maskedPhone,
+                expiresInSeconds: 300,
+                deliveryStatus: OtpDeliveryStatus.sentUnconfirmed,
+                retryAfterSeconds: 60,
+                requestId: 'request-1',
+                challengeId: 'challenge-1',
+              )
+            : response.future,
+      );
+      await _pumpHost(tester, auth: auth);
+      await _reachOtp(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('loginOtpHiddenField')),
+        '286419',
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      final resend = find.byKey(
+        const ValueKey<String>('loginOtpRecovery-resend'),
+      );
+      await tester.tap(resend);
+      await tester.tap(resend);
+      await tester.pump();
+      expect(auth.sendOtpCalls, 2);
+      response.complete(
+        OtpChallengeIssueResult(
+          maskedPhone: _SyntheticLoginIdentity.maskedPhone,
+          expiresInSeconds: 300,
+          deliveryStatus: OtpDeliveryStatus.sentUnconfirmed,
+          retryAfterSeconds: 60,
+          requestId: 'request-2',
+          challengeId: 'challenge-2',
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(auth.sendOtpCalls, 2);
+      final input = tester.widget<CupertinoTextField>(
+        find.byKey(const ValueKey<String>('loginOtpHiddenField')),
+      );
+      expect(input.controller!.text, isEmpty);
+      expect(input.focusNode!.hasFocus, isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
     testWidgets('输入第六位后自动验证，不出现多余登录按钮', (tester) async {
       final auth = _RecordingAuthFacets();
       var loggedIn = 0;
@@ -1375,6 +2055,7 @@ Future<void> _pumpHost(
   String? reason,
   bool disableAnimations = false,
   PendingOtpAttemptStore? pendingStore,
+  ValueNotifier<MediaQueryData>? media,
 }) async {
   final authStore = store ?? _MutableAuthStore();
   final credential = credentialWriter ?? _RecordingCredentialWriter();
@@ -1409,9 +2090,19 @@ Future<void> _pumpHost(
       ],
       child: CupertinoApp(
         builder: (context, child) {
-          final media = MediaQuery.of(context);
+          final data = MediaQuery.of(context);
+          if (media != null) {
+            return ValueListenableBuilder<MediaQueryData>(
+              valueListenable: media,
+              builder: (context, value, child) => MediaQuery(
+                data: value.copyWith(disableAnimations: disableAnimations),
+                child: child!,
+              ),
+              child: child,
+            );
+          }
           return MediaQuery(
-            data: media.copyWith(disableAnimations: disableAnimations),
+            data: data.copyWith(disableAnimations: disableAnimations),
             child: child!,
           );
         },
@@ -1612,6 +2303,7 @@ class _RecordingAuthFacets
     implements AccountSessionWriter, AuthenticationChallengeWriter {
   _RecordingAuthFacets({
     this.phoneLoginError,
+    this.phoneLoginHandler,
     this.socialError,
     this.readinessError,
     this.readinessAvailability = OtpDeliveryReadinessAvailability.ready,
@@ -1637,6 +2329,7 @@ class _RecordingAuthFacets
            );
 
   final Object? phoneLoginError;
+  final Future<AuthSessionGrant> Function()? phoneLoginHandler;
   final Object? socialError;
   final Object? readinessError;
   final OtpDeliveryReadinessAvailability readinessAvailability;
@@ -1680,6 +2373,7 @@ class _RecordingAuthFacets
   Future<AuthSessionGrant> loginWithPhone(LoginWithPhoneCommand command) async {
     phoneLoginCalls += 1;
     lastPhoneLogin = command;
+    if (phoneLoginHandler case final handler?) return handler();
     final error = phoneLoginError;
     if (error != null) throw error;
     return _grant();

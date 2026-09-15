@@ -65,9 +65,8 @@ void main() {
       );
       addTearDown(httpClient.close);
 
-      await HttpCloudJsonTransport(
-        httpClient,
-      ).send(_request(authMode: 'required'));
+      await HttpCloudJsonTransport(httpClient)
+          .send(_request(authMode: 'required'));
 
       expect(authorization, 'Bearer refreshed-token');
     });
@@ -84,11 +83,44 @@ void main() {
       );
       addTearDown(httpClient.close);
 
-      await HttpCloudJsonTransport(
-        httpClient,
-      ).send(_request(authMode: 'optional'));
+      await HttpCloudJsonTransport(httpClient)
+          .send(_request(authMode: 'optional'));
 
       expect(requestCount, 1);
+    });
+
+    // spec_ref: specs/feature-tree/gateway-orchestrator-foundation/spec.md#dom-001
+    test('public operation 保留已有 Bearer', () async {
+      final provider = _MutableTokenProvider()..token = 'existing-public-token';
+      final seen = <String?>[];
+      final client = CloudHttpClient(
+        client: MockClient((request) async {
+          seen.add(request.headers['authorization']);
+          return http.Response('{}', 200);
+        }),
+        authTokenProvider: provider,
+      );
+      addTearDown(client.close);
+      await HttpCloudJsonTransport(client).send(_request(authMode: 'public'));
+      expect(seen, ['Bearer existing-public-token']);
+    });
+
+    test('public operation 无效 Bearer 被拒绝，不匿名重发', () async {
+      final provider = _MutableTokenProvider()..token = 'invalid-public-token';
+      final seen = <String?>[];
+      final client = CloudHttpClient(
+        client: MockClient((request) async {
+          seen.add(request.headers['authorization']);
+          return http.Response('{"code":"USER.USER.unauthorized"}', 401);
+        }),
+        authTokenProvider: provider,
+      );
+      addTearDown(client.close);
+      await expectLater(
+        HttpCloudJsonTransport(client).send(_request(authMode: 'public')),
+        throwsA(isA<CloudException>()),
+      );
+      expect(seen, ['Bearer invalid-public-token']);
     });
 
     test('未知 auth mode 不得降级为 public', () async {
@@ -103,9 +135,9 @@ void main() {
       addTearDown(httpClient.close);
 
       expect(
-        () => HttpCloudJsonTransport(
-          httpClient,
-        ).send(_request(authMode: 'unsupported')),
+        () =>
+            HttpCloudJsonTransport(httpClient)
+                .send(_request(authMode: 'unsupported')),
         throwsA(isA<CloudException>()),
       );
       expect(requestCount, 0);

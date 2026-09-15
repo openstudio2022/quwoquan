@@ -14,6 +14,7 @@ import (
 type QueryExecutorRouter struct {
 	contentPost *ContentPostQueryExecutor
 	searchPage  *SearchPageQueryExecutor
+    collection *PostCollectionQueryExecutor
 }
 
 func NewQueryExecutorRouter(
@@ -35,6 +36,8 @@ func (router *QueryExecutorRouter) Execute(
 		return application.ExecutionResult{}, errors.New("GraphQL owner executor router is nil")
 	}
 	switch entry.ExecutorKey {
+    case CollectionExecutorKey:
+        if router.collection==nil{return application.ExecutionResult{},errors.New("collection executor missing")};return router.collection.Execute(ctx,entry,variables)
 	case contentPostExecutorKey:
 		return router.contentPost.Execute(ctx, entry, variables)
 	case searchPageExecutorKey:
@@ -44,8 +47,11 @@ func (router *QueryExecutorRouter) Execute(
 	}
 }
 
+func(router *QueryExecutorRouter)WithCollection(executor *PostCollectionQueryExecutor)*QueryExecutorRouter{router.collection=executor;return router}
+
 func ValidateExecutableEntry(entry domain.Entry) error {
 	switch entry.ExecutorKey {
+    case CollectionExecutorKey:return ValidateCollectionEntry(entry)
 	case contentPostExecutorKey:
 		return ValidateContentPostBundleEntry(entry)
 	case searchPageExecutorKey:

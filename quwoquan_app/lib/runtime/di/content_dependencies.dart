@@ -186,18 +186,26 @@ final class ContentProductionComposition {
   })?
   _postReaders;
 
-  static void installReadComposition({
+  static Object? _readInstallation;
+
+  static void Function() installReadComposition({
     required AppContentConfigReader config,
     required ContentDiscoveryFeedQuery feed,
     required ContentPostDetailReader detail,
     required ContentAuthorPostsReader authorPosts,
   }) {
+    final token = Object();
+    _readInstallation = token;
     _configReader = config;
     _feedReader = feed;
     _postReaders = (detail: detail, authorPosts: authorPosts);
+    return () {
+      if (identical(_readInstallation, token)) useRemoteReadComposition();
+    };
   }
 
   static void useRemoteReadComposition() {
+    _readInstallation = null;
     _configReader = null;
     _feedReader = null;
     _postReaders = null;

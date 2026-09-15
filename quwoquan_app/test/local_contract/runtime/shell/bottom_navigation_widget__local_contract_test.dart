@@ -133,16 +133,25 @@ void main() {
                 of: buttons.at(2),
                 matching: find.byType(Container),
               );
-              expect(tester.getSize(pill), const Size(56, 40));
+              expect(
+                tester.getSize(pill),
+                const Size(
+                  AppSpacing.primaryActionPillWidth,
+                  AppSpacing.primaryActionPillHeight,
+                ),
+              );
               expect(tester.getCenter(pill), centers[2]);
               final decoration =
                   tester.widget<Container>(pill).decoration! as BoxDecoration;
               expect(decoration.color, AppColors.primaryColor);
-              expect(decoration.borderRadius, BorderRadius.circular(12));
+              expect(
+                decoration.borderRadius,
+                BorderRadius.circular(AppSpacing.primaryActionPillRadius),
+              );
               expect(decoration.boxShadow, isNull);
               expect(
                 tester.widget<Icon>(find.byIcon(CupertinoIcons.plus)).size,
-                22,
+                AppSpacing.bottomNavPrimaryActionIconSize,
               );
               expect(find.byType(AppVideoBookIcon), findsOneWidget);
               expect(find.byIcon(CupertinoIcons.book), findsNothing);

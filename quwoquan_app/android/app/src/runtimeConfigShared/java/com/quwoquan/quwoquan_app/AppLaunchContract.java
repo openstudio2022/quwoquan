@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class AppLaunchContract {
-  public static final String SOURCE_DIGEST = "sha256:3060c668589ff5bc24da05a355b395a73f02903f578ca89705b36c578d45d73f";
+  public static final String SOURCE_DIGEST = "sha256:de6827d5b1ee327eb67c40db3af9cc92c79f16472321794b56aa2e33a12d87a4";
   public static final List<String> ENVIRONMENTS = Collections.unmodifiableList(Arrays.asList(
       "alpha",
       "beta",
@@ -173,6 +173,7 @@ public final class AppLaunchContract {
       {"app_launcher_handoff", "app-launcher-handoff"},
       {"app_managed_preparation", "quwoquan_ops.app_managed_preparation.v1"},
       {"offline_bootstrap_document", "app-offline-bootstrap-document"},
+      {"rehearsal_storage_observation", "rehearsal-storage-observation"},
       {"runtime_config_activation_receipt", "app-runtime-config-activation-receipt"},
       {"runtime_config_activation_request", "app-runtime-config-activation-request"},
       {"runtime_config_package", "app-runtime-config-package"},
@@ -280,6 +281,7 @@ public final class AppLaunchContract {
       "target",
       "launchPolicy",
       "contentSource",
+      "rehearsalSpace",
       "sourceGitSha",
       "sourceTreeDigest",
       "trustEnvelopeDigest",
@@ -289,6 +291,15 @@ public final class AppLaunchContract {
       "signatureKeyId",
       "trustedPublicKeys",
       "signature"
+  ));
+  public static final List<String> REHEARSAL_STORAGE_OBSERVATION_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
+      "schema",
+      "status",
+      "configurationState",
+      "startupAttemptId",
+      "generation",
+      "bindingDigest",
+      "consumers"
   ));
   public static final List<String> RUNTIME_CONFIG_ACTIVATION_RECEIPT_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
       "schema",
@@ -420,5 +431,7 @@ public final class AppLaunchContract {
     return Collections.unmodifiableMap(values);
   }
 
+  public static final String REHEARSAL_STORAGE_OBSERVATION_CHANNEL = "quwoquan/startup/timings";
+  public static final String REHEARSAL_STORAGE_OBSERVATION_METHOD = "readRehearsalStorageObservation";
   private AppLaunchContract() {}
 }

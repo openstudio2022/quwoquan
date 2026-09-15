@@ -1,0 +1,15 @@
+read_model: PostCollectionPage
+description: 当前 viewer 权限内的合集详情及有序成员分页，计数不包括任何不可读 Post。
+source_entities: [PostCollection, Post]
+consumers: [app]
+fields:
+- {name: collectionId, type: string, nullable: false}
+- {name: ownerPersonaId, type: string, nullable: false}
+- {name: name, type: string, nullable: false}
+- {name: coverAssetId, type: string, nullable: true}
+- {name: visibility, type: enum, enum_ref: PostCollectionVisibility, nullable: false}
+- {name: version, type: int64, nullable: false}
+- {name: members, type: '[]PostCollectionMemberSummary', nullable: false}
+- {name: visibleCount, type: int, nullable: false}
+- {name: nextCursor, type: string, nullable: true}
+- {name: canManage, type: bool, nullable: false}

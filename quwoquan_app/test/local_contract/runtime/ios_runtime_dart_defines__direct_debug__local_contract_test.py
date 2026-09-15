@@ -58,9 +58,10 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
             "DART_DEFINES",
         ):
             environment.pop(key, None)
-        environment["CONFIGURATION"] = "Debug-nonprod"
+        environment["CONFIGURATION"] = "Debug-alpha"
         environment["PLATFORM_NAME"] = "iphoneos"
         environment["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
+        environment["BUILT_PRODUCTS_DIR"] = str(artifact_root / "products")
         environment["TARGET_BUILD_DIR"] = str(artifact_root / "build")
         environment["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
         return environment
@@ -107,6 +108,36 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
                     self.assertEqual(handoff["environment"], environment_name)
                     self.assertIn("embeddedRuntimePackage=0", result.stderr)
 
+    def test_remote_debug_and_profile_never_self_supply_or_accept_alpha_entrypoint(self) -> None:
+        from quwoquan_ops.cli.lib.app_identity import resolve_app_identity
+        for name in ("beta", "gamma"):
+            for mode in ("debug", "profile"):
+                with self.subTest(environment=name, mode=mode), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    environment = self._environment(root)
+                    _install_direct_handoff(environment, name, root)
+                    identity = resolve_app_identity(platform="ios", environment=name, build_mode=mode)
+                    environment["CONFIGURATION"] = identity.configuration
+                    environment["PRODUCT_BUNDLE_IDENTIFIER"] = identity.application_id
+                    command = ["bash", str(SCRIPT)]
+                    good = subprocess.run(command, cwd=APP_DIR, env=environment, capture_output=True, text=True)
+                    self.assertEqual(good.returncode, 0, good.stderr)
+                    self.assertIn("selfSupplyRequest=0", good.stderr)
+                    if mode == "profile":
+                        absent_target = {key: value for key, value in environment.items() if key != "FLUTTER_TARGET"}
+                        blocked = subprocess.run(command, cwd=APP_DIR, env=absent_target, capture_output=True, text=True)
+                        self.assertEqual(blocked.returncode, 2, blocked.stderr)
+                        self.assertIn("Profile requires explicit", blocked.stderr)
+                    environment["FLUTTER_TARGET"] = "lib/main_alpha.dart"
+                    wrong = subprocess.run(command, cwd=APP_DIR, env=environment, capture_output=True, text=True)
+                    self.assertEqual(wrong.returncode, 2, wrong.stderr)
+                    self.assertIn("conflicts with canonical environment", wrong.stderr)
+                    environment.pop("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH")
+                    missing = subprocess.run(command, cwd=APP_DIR, env=environment, capture_output=True, text=True)
+                    self.assertEqual(missing.returncode, 2, missing.stderr)
+                    self.assertIn("trust envelope is required", missing.stderr)
+                    self.assertNotIn("runtimeConfigSupplyMode=build_time_self_supply", missing.stderr)
+
     def test_direct_debug_rejects_runtime_environment_define_without_bundle_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -131,9 +162,8 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             for configuration in (
-                "Debug-alpha",
-                "Debug-beta",
-                "Debug-gamma",
+                "Debug-nonprod",
+                "Profile-nonprod",
                 "Debug-prod",
                 "Profile-prod",
             ):
@@ -162,8 +192,8 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
                     )
 
     def test_xcode_wrapper_stops_before_backend_without_trust_envelope(self) -> None:
-        # 非 Debug-nonprod 配置 trust 缺席必须在 backend 之前停下，且不物化任何
-        # runtime config 资源（REQ-003：自供给只服务 Debug-nonprod）。
+        # 非 Debug-alpha 配置 trust 缺席必须在 backend 之前停下，且不物化任何
+        # runtime config 资源（REQ-003：自供给只服务 Debug-alpha）。
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             flutter_root = root / "flutter"
@@ -182,7 +212,7 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
             )
             for configuration, build_profile in (
                 ("Release-nonprod", "nonprod"),
-                ("Profile-nonprod", "nonprod"),
+                ("Profile-alpha", "nonprod"),
                 ("Release-prod", "prod"),
             ):
                 with self.subTest(configuration=configuration):
@@ -205,8 +235,11 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
                         (root / "build/Runner.app/qwq_runtime").exists()
                     )
 
-    def test_xcode_wrapper_self_supplies_debug_nonprod_then_invokes_backend(self) -> None:
-        # Debug-nonprod 无外部 handoff：构建阶段现场签发 alpha trust + 自供给激活请求，
+    def test_xcode_wrapper_self_supplies_debug_alpha_then_invokes_backend(self) -> None:
+        # 共享工作树可能已有其他构建产物；只验证本次没有新增源码落点。
+        source_roots = tuple(APP_DIR / name for name in ("ios", "android", "lib", "scripts", "assets"))
+        before = {path for source in source_roots for path in source.glob("**/runtime-config-self-supply-request.json")}
+        # Debug-alpha 无外部 handoff：构建阶段现场签发 alpha trust + 自供给激活请求，
         # 嵌入资源后才进入 backend；raw `flutter run` 由此不再依赖 PATH facade。
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -225,7 +258,7 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
                 encoding="utf-8",
             )
             environment = self._environment(root)
-            environment["CONFIGURATION"] = "Debug-nonprod"
+            environment["CONFIGURATION"] = "Debug-alpha"
             environment["QWQ_APP_BUILD_PROFILE"] = "nonprod"
             environment["FLUTTER_ROOT"] = str(flutter_root)
             environment.pop("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH", None)
@@ -257,15 +290,8 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
             )
             self.assertEqual(request["expectedActiveDigest"], "")
             # 自供给材料不落源码目录（build/ 产物除外），且构建阶段私有临时目录已清理。
-            for source_dir in ("ios", "android", "lib", "scripts", "assets"):
-                self.assertFalse(
-                    any(
-                        (APP_DIR / source_dir).glob(
-                            "**/runtime-config-self-supply-request.json"
-                        )
-                    ),
-                    source_dir,
-                )
+            after = {path for source in source_roots for path in source.glob("**/runtime-config-self-supply-request.json")}
+            self.assertEqual(after, before)
 
     def test_xcode_wrapper_invokes_backend_after_trust_materialization(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -308,7 +334,7 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
             )
             self.assertEqual(
                 marker.read_text(encoding="utf-8").strip(),
-                "1|lib/main_prod.dart",
+                "1|lib/main_alpha.dart",
             )
             self.assertTrue(
                 (root / "build/Runner.app/qwq_runtime/runtime-config-trust.json").is_file()
@@ -325,6 +351,23 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
         canonical_executor = source.index('scripts/device/run_app_instance.py"')
         self.assertLess(build_handoff, export_handoff)
         self.assertLess(export_handoff, canonical_executor)
+
+    def test_package_probe_selects_environment_configuration_and_entrypoint(self) -> None:
+        from unittest import mock
+        from startup_environment_matrix import package_probe
+
+        def handoff(name, *, trust_output):
+            environment = {}
+            return _apply_handoff_identity(environment, name,
+                                           artifact_root=Path(trust_output).parent,
+                                           runtime_python=self.runtime_python)
+
+        with mock.patch.object(package_probe, "_launcher_handoff", side_effect=handoff):
+            for name in ("alpha", "beta", "gamma", "prod"):
+                with self.subTest(environment=name):
+                    self.assertEqual(package_probe._ios_compile_defines(name), {})
+                    self.assertEqual(package_probe._xcode_configuration(name),
+                                     "Release-prod" if name == "prod" else f"Debug-{name}")
 
     def test_runtime_evidence_requires_one_correlated_safe_terminal(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

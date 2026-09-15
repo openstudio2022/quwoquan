@@ -370,9 +370,6 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                   shareCount: shareCount,
                   commentCount: postInteraction.commentCount,
                   likeCtrl: _likeCtrl,
-                  onWishlist: _wishlistHomepageIdForItem(item) == null
-                      ? null
-                      : () => _onWishlistTap(item),
                   onLike: () {
                     HapticFeedback.lightImpact();
                     // 任务 A · 动效尊重「减少动态效果」无障碍设置：仅在未禁用动画时播放点赞缩放。
@@ -395,36 +392,6 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
 
   String _buildMetaLine(BuildContext context) {
     return _timeAgo(context, widget.item.createdAt);
-  }
-
-  /// 想去锚点门控：内容经 list wire 的 primaryHomepageId/Type 绑定到支持想去
-  /// 的实体主页时才提供动作；锚点缺失不渲染、不做本地推断（与沉浸栏同门）。
-  String? _wishlistHomepageIdForItem(ContentPostViewData item) {
-    final homepageId = item.primaryHomepageId?.trim() ?? '';
-    final homepageType = item.primaryHomepageType?.trim() ?? '';
-    if (homepageId.isEmpty ||
-        !HomepageUIConfig.wishlistHomepageTypes.contains(homepageType)) {
-      return null;
-    }
-    return homepageId;
-  }
-
-  void _onWishlistTap(ContentPostViewData item) {
-    final homepageId = _wishlistHomepageIdForItem(item);
-    if (homepageId == null) {
-      return;
-    }
-    HapticFeedback.lightImpact();
-    unawaited(
-      runEntityWishlistAddAction(
-        context,
-        ref,
-        homepageId: homepageId,
-        sourceSurfaceId: AppUiSurfaces.homeFeed.id,
-        continuationOwnerToken: 'home-feed-wishlist:$homepageId',
-        referralSource: ReferralSource.organicFeed,
-      ),
-    );
   }
 
   void _showIntersectionEvidence(

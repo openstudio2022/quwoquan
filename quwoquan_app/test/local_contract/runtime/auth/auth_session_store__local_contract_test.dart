@@ -1,8 +1,158 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart' as crypto;
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/config/rehearsal_storage_namespace.dart';
+import 'package:quwoquan_app/runtime/config/rehearsal_storage_observer.dart';
+import 'package:quwoquan_app/runtime/config/generated/app_launch_contract.g.dart';
+import 'package:quwoquan_app/runtime/config/runtime_package_resolver.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/generated/offline_content_bundle_identity.g.dart';
+import 'package:quwoquan_app/runtime/platform/native_runtime_config_bridge.dart';
+import 'package:quwoquan_cloud_contracts/generated/values/user/account/account_session.values.dart';
+
+import '../alpha_rehearsal/alpha_rehearsal_synthetic_login__local_contract_test.dart'
+    as signed;
+import '../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../support/runtime/config/runtime_package_test_hydration.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+// 文件内私有持久double；跨store实例保留数据，从不调用平台Keychain。
+class PrivateAuthStorage extends FlutterSecureStorage {
+  final values = <String, String>{
+    'auth.install_id': 'sentinel-install',
+    'auth.alpha-local%7Calpha.access_token': 'sentinel-token',
+  };
+  final calls = <String>[];
+  int writes = 0;
+  bool failWrite = false;
+  bool failRead = false;
+  bool failDelete = false;
+  Completer<void>? readRelease;
+  String? delayReadKey;
+  Completer<void>? writeRelease;
+  Completer<void>? deleteRelease;
+  @override
+  Future<String?> read({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    calls.add(key);
+    if (readRelease != null && (delayReadKey == null || delayReadKey == key)) {
+      await readRelease!.future;
+    }
+    if (failRead) throw StateError('private read failure');
+    return values[key];
+  }
+
+  @override
+  Future<void> write({
+    required String key,
+    required String? value,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    calls.add(key);
+    if (writeRelease != null) await writeRelease!.future;
+    if (failWrite) throw StateError('private storage failure');
+    writes++;
+    if (value == null) {
+      values.remove(key);
+    } else {
+      values[key] = value;
+    }
+  }
+
+  @override
+  Future<void> delete({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    calls.add(key);
+    if (deleteRelease != null) await deleteRelease!.future;
+    if (failDelete) throw StateError('private delete failure');
+    values.remove(key);
+  }
+}
+
+// 私有确定性owner身份，仅本地测试，不能作为生产startup绑定。
+class StorageObservationFixture {
+  StorageObservationFixture(this.space) : current = space {
+    observer = RehearsalStorageObserver(
+      space: space,
+      currentSpace: () => current,
+      startupAttemptId: attempt,
+      generation: generation,
+      currentStartupAttemptId: () => attempt,
+      currentGeneration: () => generation,
+    );
+  }
+  final VerifiedRehearsalSpace space;
+  VerifiedRehearsalSpace? current;
+  String? attempt = 'private-attempt-1';
+  String? generation = '1';
+  late final RehearsalStorageObserver observer;
+}
+
+class _StorageRuntimeChannel implements RuntimeConfigChannelClient {
+  _StorageRuntimeChannel(this.envelope);
+  final Map<String, Object?> envelope;
+  @override
+  Future<Object?> invokeMethod(String method) async => envelope;
+}
+
+Future<void> hydrateIsolatedStorageRuntime({
+  String instance = 'space-a',
+}) async {
+  final runtime = await signed.signedRuntime(
+    instance: instance,
+    expectedSnapshot: offlineContentManifestDigest,
+    mutate: (doc) => (doc['rehearsalSpace'] as Map)['snapshotDigest'] =
+        offlineContentManifestDigest,
+  );
+  final doc = runtime.package;
+  await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+    // fixture在签名前绑定同一制品pin；expected绝不从待验文档反取。
+    expectedOfflineSnapshotDigest: offlineContentManifestDigest,
+    bridge: NativeRuntimeConfigBridge(
+      client: _StorageRuntimeChannel({
+        'package': {...doc.signedPayloadMap(), 'signature': doc.signature},
+        'trustedBuildProfile': 'nonprod',
+        'trustedTarget': 'alpha-local',
+        'trustedPublicKeys': doc.trustedPublicKeys,
+        'runtimeConfigPackageDigest':
+            'sha256:${crypto.sha256.convert(utf8.encode(canonicalJsonEncode({...doc.signedPayloadMap(), 'signature': doc.signature})))}',
+        'runtimeConfigTrustEnvelopeDigest': (doc
+            .signedPayloadMap()['trustEnvelopeDigest']),
+        'effectiveLaunchManifestDigest': 'sha256:${'c' * 64}',
+        'launchProvenance': 'canonical_launcher',
+        'runtimeConfigSupplyMode': 'external_runtime_package',
+      }),
+      maxAttempts: 1,
+    ),
+  );
+}
 
 // 不可拨打的合成标识：只验证完整字符串的持久化，不涉及手机号校验。
 const String _syntheticPhoneIdentifier = '00000000000';
@@ -39,6 +189,477 @@ AuthSessionGrant _grant(Map<String, dynamic> overrides) {
 
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-003
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-008
+  group('auth真实IO观察', () {
+    test('构造与纯read不访问存储，auth和install独立记录且旧实例不伤新attach', () async {
+      final f = StorageObservationFixture(
+        (await signed.signedRuntime()).rehearsalSpace!,
+      );
+      final storage = PrivateAuthStorage();
+      final ns = RehearsalStorageNamespace(f.space);
+      AuthSessionStore create() => AuthSessionStore.isolated(
+        namespace: ns,
+        currentSpace: () => f.current,
+        secureStorage: storage,
+        observer: f.observer,
+        prefsFactory: () => throw StateError('不得加载全局prefs'),
+      );
+      expect(
+        f.observer.read().auth.state,
+        RehearsalConsumerObservationState.notObserved,
+      );
+      final store = create();
+      expect(
+        f.observer.read().auth.state,
+        RehearsalConsumerObservationState.constructed,
+      );
+      expect(
+        f.observer.read().installId.state,
+        RehearsalConsumerObservationState.constructed,
+      );
+      expect(
+        f.observer.read().pending.state,
+        RehearsalConsumerObservationState.notObserved,
+      );
+      expect(storage.calls, isEmpty);
+      await store.read();
+      expect(f.observer.read().installId.successfulOperations, [
+        RehearsalSuccessfulOperation.write,
+      ]);
+      expect(f.observer.read().auth.successfulOperations, isEmpty);
+      final result = SyntheticSessionResult(
+        accountId: 'alpha-account:${'a' * 32}',
+        personaId: 'alpha-persona:${'b' * 32}',
+      );
+      await store.saveSyntheticSession(result);
+      await store.read();
+      await store.clearSession(manualLogout: true);
+      await store.clearSession(manualLogout: true);
+      expect(
+        f.observer.read().auth.successfulOperations,
+        containsAll(RehearsalSuccessfulOperation.values),
+      );
+      expect(
+        f.observer.read().installId.successfulOperations,
+        containsAll([
+          RehearsalSuccessfulOperation.read,
+          RehearsalSuccessfulOperation.write,
+        ]),
+      );
+      final calls = storage.calls.length;
+      f.observer.read();
+      f.observer.read();
+      expect(storage.calls.length, calls);
+      store.dispose();
+      expect(f.observer.read().auth.namespaceDigest, isEmpty);
+      final next = create();
+      store.dispose();
+      expect(
+        f.observer.read().auth.state,
+        RehearsalConsumerObservationState.constructed,
+      );
+      await next.read();
+      expect(
+        storage.calls.where(
+          (k) => k == 'auth.install_id' || k.contains('alpha-local'),
+        ),
+        isEmpty,
+      );
+      expect(storage.values['auth.install_id'], 'sentinel-install');
+      next.dispose();
+    });
+
+    for (final operation in RehearsalSuccessfulOperation.values) {
+      for (final failure in [
+        'storage',
+        'space',
+        'attempt',
+        'generation',
+        'dispose',
+        'intent',
+      ]) {
+        test('$operation失败或迟到$failure不记录成功', () async {
+          final f = StorageObservationFixture(
+            (await signed.signedRuntime()).rehearsalSpace!,
+          );
+          final ns = RehearsalStorageNamespace(f.space);
+          final storage = PrivateAuthStorage();
+          storage.values[ns.installIdKey] = 'private-install';
+          final store = AuthSessionStore.isolated(
+            namespace: ns,
+            currentSpace: () => f.current,
+            secureStorage: storage,
+            observer: f.observer,
+          );
+          var intent = true;
+          final release = Completer<void>();
+          if (failure == 'storage') {
+            storage.failRead = operation == RehearsalSuccessfulOperation.read;
+            storage.failWrite = operation == RehearsalSuccessfulOperation.write;
+            storage.failDelete =
+                operation == RehearsalSuccessfulOperation.delete;
+          } else {
+            if (operation == RehearsalSuccessfulOperation.read) {
+              storage.readRelease = release;
+            }
+            if (operation == RehearsalSuccessfulOperation.write) {
+              storage.writeRelease = release;
+            }
+            if (operation == RehearsalSuccessfulOperation.delete) {
+              storage.deleteRelease = release;
+            }
+          }
+          final result = SyntheticSessionResult(
+            accountId: 'alpha-account:${'a' * 32}',
+            personaId: 'alpha-persona:${'b' * 32}',
+          );
+          Future<void> run() async {
+            if (operation == RehearsalSuccessfulOperation.read) {
+              await store.read();
+            }
+            if (operation == RehearsalSuccessfulOperation.write) {
+              await store.saveSyntheticSession(
+                result,
+                fence: () {
+                  if (!intent) throw StateError('cancelled intent');
+                },
+              );
+            }
+            if (operation == RehearsalSuccessfulOperation.delete) {
+              await store.clearSession(manualLogout: true);
+            }
+          }
+
+          final pending = run();
+          final rejected = expectLater(pending, throwsA(isA<Object>()));
+          await Future<void>.delayed(Duration.zero);
+          if (failure == 'space') f.current = null;
+          if (failure == 'attempt') f.attempt = 'private-attempt-2';
+          if (failure == 'generation') f.generation = '2';
+          if (failure == 'dispose') store.dispose();
+          if (failure == 'intent') {
+            intent = false;
+            if (operation != RehearsalSuccessfulOperation.write) {
+              store.dispose();
+            }
+          }
+          if (failure != 'storage') release.complete();
+          await rejected;
+          expect(f.observer.read().auth.successfulOperations, isEmpty);
+          expect(f.observer.read().installId.successfulOperations, isEmpty);
+          expect(
+            storage.calls.where(
+              (k) => k == 'auth.install_id' || k.contains('alpha-local'),
+            ),
+            isEmpty,
+          );
+          store.dispose();
+        });
+      }
+    }
+
+    test('auth payload读取晚到时不报告read，install成功事实独立失效', () async {
+      final f = StorageObservationFixture(
+        (await signed.signedRuntime()).rehearsalSpace!,
+      );
+      final ns = RehearsalStorageNamespace(f.space);
+      final storage = PrivateAuthStorage();
+      storage.values[ns.installIdKey] = 'private-install';
+      final store = AuthSessionStore.isolated(
+        namespace: ns,
+        currentSpace: () => f.current,
+        secureStorage: storage,
+        observer: f.observer,
+      );
+      await store.saveSyntheticSession(
+        SyntheticSessionResult(
+          accountId: 'alpha-account:${'a' * 32}',
+          personaId: 'alpha-persona:${'b' * 32}',
+        ),
+      );
+      store.dispose();
+      final next = AuthSessionStore.isolated(
+        namespace: ns,
+        currentSpace: () => f.current,
+        secureStorage: storage,
+        observer: f.observer,
+      );
+      final release = Completer<void>();
+      storage.delayReadKey =
+          'auth.${Uri.encodeComponent(ns.authNamespace)}.synthetic_session';
+      storage.readRelease = release;
+      final rejected = expectLater(next.read(), throwsA(isA<Object>()));
+      await Future<void>.delayed(Duration.zero);
+      expect(f.observer.read().installId.successfulOperations, [
+        RehearsalSuccessfulOperation.read,
+      ]);
+      expect(f.observer.read().auth.successfulOperations, isEmpty);
+      f.attempt = 'private-attempt-2';
+      release.complete();
+      await rejected;
+      expect(f.observer.read().auth.namespaceDigest, isEmpty);
+      expect(f.observer.read().installId.namespaceDigest, isEmpty);
+      next.dispose();
+    });
+
+    test('缺attempt/generation仍可正常IO但观察unavailable，标准store不注册', () async {
+      final space = (await signed.signedRuntime()).rehearsalSpace!;
+      final observer = RehearsalStorageObserver(
+        space: space,
+        currentSpace: () => space,
+        startupAttemptId: null,
+        generation: null,
+        currentStartupAttemptId: () => null,
+        currentGeneration: () => null,
+      );
+      final store = AuthSessionStore.isolated(
+        namespace: RehearsalStorageNamespace(space),
+        currentSpace: () => space,
+        secureStorage: PrivateAuthStorage(),
+        observer: observer,
+      );
+      await store.read();
+      expect(observer.read().status, RehearsalObservationStatus.unavailable);
+      expect(observer.read().auth.successfulOperations, isEmpty);
+      store.dispose();
+      final container = ProviderContainer(
+        overrides: [
+          rehearsalStorageObserverProvider.overrideWithValue(observer),
+        ],
+      );
+      expect(container.read(authSessionStoreProvider).isIsolated, isFalse);
+      expect(observer.read().auth.namespaceDigest, isEmpty);
+      container.dispose();
+    });
+  });
+
+  test('isolated auth仅逐键访问新空间，无全局prefs加载或旧installId访问', () async {
+    final space = (await signed.signedRuntime()).rehearsalSpace!;
+    final namespace = RehearsalStorageNamespace(space);
+    final storage = PrivateAuthStorage();
+    final store = AuthSessionStore.isolated(
+      namespace: namespace,
+      currentSpace: () => space,
+      secureStorage: storage,
+      prefsFactory: () => throw StateError('禁止全局prefs读取'),
+    );
+    final result = SyntheticSessionResult(
+      accountId: 'alpha-account:${'a' * 32}',
+      personaId: 'alpha-persona:${'b' * 32}',
+    );
+    final first = await store.read();
+    await store.saveSyntheticSession(result);
+    final restored = await store.read();
+    expect(restored.ownerId, result.accountId);
+    expect(restored.accessToken, isEmpty);
+    expect(restored.refreshToken, isEmpty);
+    expect(restored.installId, first.installId);
+    final restarted = (await signed.signedRuntime()).rehearsalSpace!;
+    final next = AuthSessionStore.isolated(
+      namespace: RehearsalStorageNamespace(restarted),
+      currentSpace: () => restarted,
+      secureStorage: storage,
+    );
+    expect((await next.read()).ownerId, result.accountId);
+    final other = (await signed.signedRuntime(instance: 'space-b'))
+        .rehearsalSpace!;
+    final isolated = AuthSessionStore.isolated(
+      namespace: RehearsalStorageNamespace(other),
+      currentSpace: () => other,
+      secureStorage: storage,
+    );
+    expect((await isolated.read()).ownerId, isEmpty);
+    await next.clearSession(manualLogout: true);
+    expect((await next.read()).ownerId, isEmpty);
+    expect(storage.values['auth.install_id'], 'sentinel-install');
+    expect(
+      storage.values['auth.alpha-local%7Calpha.access_token'],
+      'sentinel-token',
+    );
+    expect(
+      storage.calls.where(
+        (key) => key == 'auth.install_id' || key.contains('alpha-local'),
+      ),
+      isEmpty,
+    );
+  });
+
+  test('isolated auth在await后切space或dispose不再执行下一I/O', () async {
+    final space = (await signed.signedRuntime()).rehearsalSpace!;
+    VerifiedRehearsalSpace? current = space;
+    final storage = PrivateAuthStorage()..readRelease = Completer<void>();
+    final store = AuthSessionStore.isolated(
+      namespace: RehearsalStorageNamespace(space),
+      currentSpace: () => current,
+      secureStorage: storage,
+    );
+    final read = store.read();
+    final rejected = expectLater(read, throwsA(isA<Object>()));
+    await Future<void>.delayed(Duration.zero);
+    current = (await signed.signedRuntime()).rehearsalSpace!;
+    storage.readRelease!.complete();
+    await rejected;
+    expect(storage.calls, hasLength(1));
+    expect(storage.writes, 0);
+    final fresh = AuthSessionStore.isolated(
+      namespace: RehearsalStorageNamespace(current),
+      currentSpace: () => current,
+      secureStorage: storage,
+    );
+    fresh.dispose();
+    await expectLater(fresh.read(), throwsA(isA<Object>()));
+    expect(storage.calls, hasLength(1));
+    expect(
+      () => AuthSessionStore.isolated(
+        namespace: RehearsalStorageNamespace(space),
+        currentSpace: () => throw StateError('unhydrated'),
+        secureStorage: storage,
+      ),
+      throwsA(isA<Object>()),
+    );
+    expect(storage.calls, hasLength(1));
+  });
+
+  test('isolated实际provider在restore前绑定，新代可恢复无bearer身份', () async {
+    await hydrateIsolatedStorageRuntime();
+    final storage = PrivateAuthStorage();
+    final space = CloudRuntimeConfig.rehearsalSpace!;
+    final store = AuthSessionStore.isolated(
+      namespace: RehearsalStorageNamespace(space),
+      currentSpace: () => CloudRuntimeConfig.rehearsalSpace,
+      secureStorage: storage,
+    );
+    final container = ProviderContainer(
+      overrides: [
+        ...sealedCloudBoundaryOverrides(),
+        authSessionStoreProvider.overrideWithValue(store),
+      ],
+    );
+    try {
+      final controller = container.read(authSessionControllerProvider.notifier);
+      await controller.restore();
+      final result = SyntheticSessionResult(
+        accountId: 'alpha-account:${'c' * 32}',
+        personaId: 'alpha-persona:${'d' * 32}',
+      );
+      storage.failWrite = true;
+      await expectLater(
+        controller.applySyntheticSession(result),
+        throwsA(isA<StateError>()),
+      );
+      expect(
+        container.read(authSessionControllerProvider).isAuthenticated,
+        isFalse,
+      );
+      storage.failWrite = false;
+      await controller.applySyntheticSession(result);
+      final state = container.read(authSessionControllerProvider);
+      expect(state.isAuthenticated, isTrue);
+      expect(state.hasTrustedSession, isFalse);
+      expect(state.accessToken, isEmpty);
+      expect(state.refreshToken, isEmpty);
+      expect(await controller.accessTokenForRequest(), isNull);
+      await expectLater(
+        controller.applyLoginGrant(
+          _grant({
+            'accessToken': 'remote-access',
+            'refreshToken': 'remote-refresh',
+            'ownerId': 'remote-owner',
+            'activePersona': {'personaId': 'remote-persona'},
+          }),
+        ),
+        throwsA(isA<Object>()),
+      );
+      final restartedStore = AuthSessionStore.isolated(
+        namespace: RehearsalStorageNamespace(space),
+        currentSpace: () => CloudRuntimeConfig.rehearsalSpace,
+        secureStorage: storage,
+      );
+      final restarted = ProviderContainer(
+        overrides: [
+          ...sealedCloudBoundaryOverrides(),
+          authSessionStoreProvider.overrideWithValue(restartedStore),
+        ],
+      );
+      await restarted.read(authSessionControllerProvider.notifier).restore();
+      expect(
+        restarted.read(authSessionControllerProvider).ownerId,
+        result.accountId,
+      );
+      expect(
+        restarted.read(authSessionControllerProvider).isAuthenticated,
+        isTrue,
+      );
+      expect(
+        restarted.read(authSessionControllerProvider).hasTrustedSession,
+        isFalse,
+      );
+      restarted.dispose();
+      final providers = ProviderContainer();
+      final productionStore = providers.read(authSessionStoreProvider);
+      expect(productionStore.isIsolated, isTrue);
+      providers.dispose();
+      expect(productionStore.requireCurrentStorage, throwsA(isA<Object>()));
+    } finally {
+      container.dispose();
+      await hydrateRuntimePackageForTests(environment: 'beta');
+    }
+  });
+
+  test('isolated provider先于任何平台I/O拒绝未水合，standard显式构造拒绝', () async {
+    final runtime = await signed.signedRuntime(
+      mode: 'standard',
+      instance: 'default',
+    );
+    expect(
+      () => RehearsalStorageNamespace(runtime.rehearsalSpace!),
+      throwsA(isA<Object>()),
+    );
+    await expectLater(
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+        bridge: NativeRuntimeConfigBridge(
+          client: _StorageRuntimeChannel({}),
+          maxAttempts: 1,
+        ),
+      ),
+      throwsA(isA<Object>()),
+    );
+    final container = ProviderContainer();
+    expect(
+      () => container.read(authSessionStoreProvider),
+      throwsA(isA<Object>()),
+    );
+    container.dispose();
+    await hydrateRuntimePackageForTests(environment: 'beta');
+  });
+
+  test('isolated controller销毁时迟到restore不生成installId或写身份', () async {
+    await hydrateIsolatedStorageRuntime();
+    final space = CloudRuntimeConfig.rehearsalSpace!;
+    final storage = PrivateAuthStorage()..readRelease = Completer<void>();
+    final store = AuthSessionStore.isolated(
+      namespace: RehearsalStorageNamespace(space),
+      currentSpace: () => CloudRuntimeConfig.rehearsalSpace,
+      secureStorage: storage,
+    );
+    final container = ProviderContainer(
+      overrides: [
+        ...sealedCloudBoundaryOverrides(),
+        authSessionStoreProvider.overrideWithValue(store),
+      ],
+    );
+    final controller = container.read(authSessionControllerProvider.notifier);
+    final restore = controller.restore();
+    await Future<void>.delayed(Duration.zero);
+    container.dispose();
+    storage.readRelease!.complete();
+    await restore;
+    expect(storage.calls, hasLength(1));
+    expect(storage.writes, 0);
+    await hydrateRuntimePackageForTests(environment: 'beta');
+  });
+
   test('target 隔离授权且 installId 保持安装级，旧 token 不迁移', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth.install_id': 'installation-1',
@@ -65,7 +686,10 @@ void main() {
     expect((await sim.read()).installId, 'installation-1');
     expect((await hosted.read()).installId, 'installation-1');
   });
-  setUp(() {
+  setUp(() async {
+    // 每例独立建立真实签名在线前置，避免前例失败留下未水合状态污染头像清理。
+    // isolated/未水合负例仍在自身用例内显式覆盖这一前置。
+    await hydrateRuntimePackageForTests(environment: 'beta');
     SharedPreferences.setMockInitialValues(<String, Object>{});
     FlutterSecureStorage.setMockInitialValues(<String, String>{});
   });

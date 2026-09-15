@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Debug-nonprod 构建期自供给：签发 Alpha 离线文档并物化为可嵌入的激活请求。
+"""Debug-alpha 构建期自供给：签发 Alpha 离线文档并物化为可嵌入的激活请求。
 
-iOS `Debug-nonprod` 与 Android debug/nonprod 的构建阶段在无外部 canonical handoff
+iOS `Debug-alpha` 与 Android debug/nonprod 的构建阶段在无外部 canonical handoff
 时调用本脚本（spec: environment-topology-and-packaging REQ-003 build_time_self_supply）。
 它不自持第二套逻辑：package/trust/manifest 全部经 `build_launcher_handoff.build_handoff`
 与 `app_launch_manifest_contract.build_runtime_config_activation_request` 产出，与
@@ -100,6 +100,14 @@ def _handoff_arguments(trust_output: Path) -> SimpleNamespace:
         source_tree_digest="",
         source_capsule_manifest="",
         transport_required=False,
+        isolated_rehearsal=False,
+        launch_control_ref="",
+        launch_control_digest="",
+        launch_output_root="",
+        launch_device_id="",
+        launch_candidate_digest="",
+        launch_attempt_ref="",
+        launch_report_ref="",
         reverse_expected_ports="",
         reverse_actual_ports="",
         reverse_receipt_digest="",

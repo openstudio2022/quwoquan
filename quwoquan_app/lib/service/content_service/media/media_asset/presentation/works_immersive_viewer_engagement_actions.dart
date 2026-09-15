@@ -2,9 +2,10 @@ part of 'works_immersive_viewer.dart';
 
 extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
   void _openCommentFor(String postId) {
+    _invalidateLandscapeHide();
     _setMountedState(() {
       _commentSplitPostId = postId;
-      _invalidateVideoViewport(resetDurationWindow: false);
+      if (!_pureMediaLandscape) _invalidateVideoViewport();
     });
   }
 
@@ -45,21 +46,25 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       final visibility =
           raw?[ContentMediaPostProjectionKeys.visibility]?.toString() ??
           'public';
-      WorksViewerContentActionsComposition.showShareSheet(
-        ctx,
-        surfaceView: ContentSurfaceViewMapper.fromDto(post, wire: raw),
-        enableIdentityTemplate: enableIdentityTemplate,
-        visibility: visibility,
-        circlePostPlacementWriter: ref.read(
-          workBrowserCirclePostPlacementWriterProvider,
+      unawaited(
+        _withLandscapeModal(
+          () => WorksViewerContentActionsComposition.showShareSheet(
+            ctx,
+            surfaceView: ContentSurfaceViewMapper.fromDto(post, wire: raw),
+            enableIdentityTemplate: enableIdentityTemplate,
+            visibility: visibility,
+            circlePostPlacementWriter: ref.read(
+              workBrowserCirclePostPlacementWriterProvider,
+            ),
+            circleMembershipQuery: ref.read(
+              workBrowserCircleMembershipQueryProvider,
+            ),
+            outboundShareWriter: ref.read(
+              workBrowserContentOutboundShareWriterProvider,
+            ),
+            onActionCompleted: (actionId) => _recordShare(post.id, actionId),
+          ),
         ),
-        circleMembershipQuery: ref.read(
-          workBrowserCircleMembershipQueryProvider,
-        ),
-        outboundShareWriter: ref.read(
-          workBrowserContentOutboundShareWriterProvider,
-        ),
-        onActionCompleted: (actionId) => _recordShare(post.id, actionId),
       );
     });
   }
@@ -633,7 +638,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
   /// Opens the post-level more-options sheet for the currently visible post.
   ///
   /// 作品浏览器：媒体筛选入口在「更多」菜单内（全部作品/图片/视频/文章）。
-  void _showWorksMoreSheet(BuildContext context) {
+  Future<void> _showWorksMoreSheet(BuildContext context) async {
     final posts = _buildFeed();
     final post = posts.isEmpty
         ? null
@@ -683,7 +688,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
               ),
           ]
         : const <WorksViewerMoreActionOption>[];
-    WorksViewerContentActionsComposition.showMoreActions(
+    await WorksViewerContentActionsComposition.showMoreActions(
       context,
       config: WorksViewerMoreActionsConfig(
         onActionInvoked: (actionId) => unawaited(
@@ -701,7 +706,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
         onViewOriginal: originalMediaId == null
             ? null
             : () => _requestOriginalImageAccess(post),
-        filterOptions: filterOptions,
+        filterOptions: _pureMediaLandscape ? const [] : filterOptions,
         selectedFilterIds: _effectiveFilterIds.toList(growable: false),
         onFilterSelectionChanged: _applyFilterSelection,
         readingOptions: readingOptions,

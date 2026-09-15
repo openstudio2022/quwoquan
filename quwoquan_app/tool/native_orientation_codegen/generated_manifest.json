@@ -1,0 +1,32 @@
+{
+  "generator": "tools/codegen_app_metadata --native-orientation-only",
+  "inputs": [
+    {
+      "path": "quwoquan_service/services/content-service/contracts/media/media_asset/native_orientation_contract.yaml",
+      "sha256": "sha256:d7825b466a5ab5e00a8da801058c50d0427d963c180d011bb0d124c71ae845fc"
+    },
+    {
+      "path": "quwoquan_service/contracts/metadata/_schemas/native_orientation_contract.schema.json",
+      "sha256": "sha256:4c24c4417e2eda719a3924d5ccc8fda35782e1ae31c0ac53678f03cc5d86888e"
+    }
+  ],
+  "outputs": [
+    {
+      "bytes": 1297,
+      "path": "quwoquan_app/android/app/src/main/java/com/quwoquan/quwoquan_app/NativeOrientationContract.java",
+      "sha256": "sha256:a3371d870dbd520f40045b951f2830c88756fd71cde5fb438ddf889ac0e17a1f"
+    },
+    {
+      "bytes": 919,
+      "path": "quwoquan_app/ios/Runner/NativeOrientationContract.generated.swift",
+      "sha256": "sha256:4278168d8e69403e0aeeb4da66f23d023697fd6dca29d6f09bcbe3303445e67b"
+    },
+    {
+      "bytes": 2691,
+      "path": "quwoquan_app/lib/runtime/platform/media/generated/native_orientation_contract.g.dart",
+      "sha256": "sha256:eaf1cec91cca09ae14dee3b9133feb1f674c4313cf193dfd965b49f1cd56322d"
+    }
+  ],
+  "schema": "qwq.native-orientation-codegen-manifest",
+  "sourceDigest": "sha256:2037454d3faa05d2de1d47ca8d02cf4fb2d88a671f5a4e1a96c9be0964e45893"
+}

@@ -6,6 +6,8 @@ directive @cost(weight: Int!) on FIELD_DEFINITION
 directive @listCost(argument: String!, defaultValue: Int!, maximumValue: Int!) on FIELD_DEFINITION
 
 type Query {
+  postCollection(collectionId: ID!, first: Int! = 20, after: String): PostCollectionPage!
+  postCollectionManagement(collectionId: ID!): PostCollectionManagementView!
   searchPage(input: SearchPageInput!): SearchPageSlice!
   contentPostDetailBase(postId: ID!): ContentPostDetailBase
   contentPostDetailSemantic(postId: ID!): ContentPostDetailSemantic
@@ -13,6 +15,29 @@ type Query {
   contentPostDetailArticleRenderAssets(postId: ID!): ContentPostDetailArticleRenderAssets
   contentPostDetailArticleEntities(postId: ID!): ContentPostDetailArticleEntities
 }
+
+type PostCollectionPage {
+ collectionId: ID!
+ ownerPersonaId: ID!
+ name: String!
+ coverAssetId: ID
+ visibility: String!
+ version: Int!
+ members(first: Int! = 20): [PostCollectionMemberSummary!]! @listCost(argument: "first", defaultValue: 20, maximumValue: 100)
+ visibleCount: Int!
+ nextCursor: String
+ canManage: Boolean!
+}
+type PostCollectionMemberSummary { postId: ID! contentType: String! title: String! }
+type PostCollectionManagementView {
+ collectionId: ID!
+ name: String!
+ coverAssetId: ID
+ visibility: String!
+ version: Int!
+ members(first: Int! = 100): [PostCollectionManagedMember!]! @listCost(argument: "first", defaultValue: 100, maximumValue: 100)
+}
+type PostCollectionManagedMember { postId: ID! readable: Boolean! title: String }
 
 scalar SearchObjectRef
 scalar SearchCursor

@@ -49,6 +49,7 @@ extension _VideoPlayerWidgetPresentation on _VideoPlayerWidgetState {
   Widget _buildCenteredVideoFrame(Widget child) {
     return VideoPlayerSurfaceBuilder.buildCenteredFrame(
       aspectRatio: _resolvedAspectRatio,
+      fit: widget.fit,
       child: child,
     );
   }

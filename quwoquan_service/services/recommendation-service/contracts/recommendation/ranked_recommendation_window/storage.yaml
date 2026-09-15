@@ -47,7 +47,10 @@ redis_cache:
   global_max_live_records: 32768
   global_max_live_bytes: 34359738368
   create_operation: lua_same_quota_shard_set_nx_with_key_and_byte_admission
-  description: 固化 subject、scenario、模型身份、用户特征、逐项候选特征与对象卡的有界不可变排序窗口；subjectHash 为 subjectId 的 SHA-256 前 128 bit，分片满只拒绝 contender，读取禁止 EXPIRE 续期。
+  description: >-
+    固化 subject、scenario、模型身份、用户特征、逐项候选特征与对象卡的有界不可变排序窗口；subjectHash 为 subjectId 的 SHA-256 前 128 bit，分片满只拒绝 contender，读取禁止 EXPIRE 续期。
+    value 必须保存冻结 requestContext/contextDigest、包含 contextDigest 的 requestDigest/rankingSnapshotDigest，以及绑定实际 boost 参数的 policyDigest。windowId 一经 create-once 即与该 contextDigest 一一绑定，故该 cache key 只代表原冻结上下文，不增设原 region key 或另一份幂等映射。
+    SET NX 命中只允许相同冻结 requestDigest，异上下文必须 conflict，不得覆盖、重排或使用新时间桶/画像/配置续写；读时验证 contextDigest 与规范冻结 context、request/ranking 身份一致。缺失或损坏的旧缓存 fail-closed，不双读。
 - key: rec:ranked_feed_window_index:{rfw-<quotaShard>}
   key_prefix: 'rec:ranked_feed_window_index:'
   hash_tag: rfw-<quotaShard>

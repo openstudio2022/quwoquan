@@ -113,6 +113,29 @@ def _validate_package(
 
 
 class LauncherHandoffMetadataContractTest(unittest.TestCase):
+    def test_real_platform_build_commands_select_canonical_environment_flavors(self) -> None:
+        from run_app_instance import AndroidPlatformDriver, IOSSimulatorPlatformDriver, IOSPhysicalPlatformDriver
+        from quwoquan_ops.cli.lib.app_identity import resolve_app_identity
+        contract = load_launch_manifest_contract()
+        for name in ("alpha", "beta", "gamma"):
+            for driver_type, platform in ((AndroidPlatformDriver, "android"),
+                                          (IOSSimulatorPlatformDriver, "ios"),
+                                          (IOSPhysicalPlatformDriver, "ios")):
+                with self.subTest(environment=name, driver=driver_type.__name__):
+                    identity = resolve_app_identity(platform=platform, environment=name, build_mode="debug")
+                    entrypoint = contract["content_source_entrypoints"][contract["content_source_policy"][name]]
+                    driver = driver_type(device_id="contract-device", application_id=identity.application_id,
+                                         entrypoint=entrypoint)
+                    driver.launch_handoff = {"environment": name, "buildProfile": identity.build_profile}
+                    command = driver.build_command()
+                    self.assertEqual(command[command.index("--flavor") + 1], identity.flavor)
+                    self.assertEqual(command[command.index("--target") + 1], entrypoint)
+                    if platform == "android":
+                        self.assertEqual(driver.artifact_path().name, f"app-{identity.flavor}-debug.apk")
+                    driver.launch_handoff["environment"] = "prod"
+                    with self.assertRaises(ValueError):
+                        driver.build_command()
+
     def test_runtime_consumer_rejects_metadata_override(self) -> None:
         with self.assertRaisesRegex(
             LaunchManifestContractError,
@@ -565,9 +588,15 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         ios = (APP_DIR / "ios/Runner/AppDelegate.swift").read_text(encoding="utf-8")
         # iOS 侧的 runtime config 供给面同样共享给 test host 工程，回执落盘在供给面而非
         # AppDelegate。
-        ios_runtime_config_supply = (
-            APP_DIR / "ios/Runner/NativeRuntimeConfigSupply.swift"
-        ).read_text(encoding="utf-8")
+        ios_runtime_config_supply = "\n".join(
+            (APP_DIR / "ios/Runner" / name).read_text(encoding="utf-8")
+            for name in (
+                "NativeRuntimeConfigSupply.swift",
+                "NativeRuntimeConfigMigrationArchive.swift",
+                "NativeRuntimeConfigActivationCoordinator.swift",
+                "NativeRuntimeConfigChannel.swift",
+            )
+        )
         activation = (
             APP_DIR
             / "scripts/device/canonical_app_instance/activation.py"
@@ -595,6 +624,8 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             "runtime-config-activation-receipt.json",
             ios_runtime_config_supply,
         )
+        self.assertIn("try commitActivationReceipts(receipt)", ios_runtime_config_supply)
+        self.assertIn("try write(receipt, nativeRuntimeActivationReceiptFileName)", ios_runtime_config_supply)
         self.assertIn('self._emit_phase("configuring")', activation)
         self.assertIn('self._emit_phase("configured")', activation)
         self.assertIn('"attach"', attach)
@@ -770,7 +801,8 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         )
 
         signature = deepcopy(package)
-        signature["signature"] = "A" + str(signature["signature"])[1:]
+        original_signature = str(signature["signature"])
+        signature["signature"] = ("B" if original_signature[0] == "A" else "A") + original_signature[1:]
         self.assertTrue(
             any(
                 "signature" in issue

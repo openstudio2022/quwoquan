@@ -77,13 +77,11 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/applicati
 import 'package:quwoquan_app/runtime/observability/trackers/feed_performance_observability.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_tracker_port.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_feed_video_focus_coordinator.dart';
-import 'package:quwoquan_app/service/content_service/content/post/presentation/entity_wishlist_action.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart'
     show GatheringText;
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/feed_realtime_patch_provider.dart';
-import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/generated/homepage_ui_config.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/home_feed_scroll_anchor_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/following_subject_strip.dart';
 part 'home_multi_form_feed_scroll.dart';
@@ -131,6 +129,8 @@ class HomeMultiFormFeed extends ConsumerWidget {
   final void Function(
     String userId, {
     String? avatarUrl,
+    String? avatarAssetId,
+    MediaDeliveryAccessMode? avatarAccessMode,
     String? displayName,
     String? backgroundUrl,
   })
@@ -433,6 +433,8 @@ class HomeMultiFormFeed extends ConsumerWidget {
             onUserTap: (id) => onUserTap(
               id,
               avatarUrl: dto.avatarUrl,
+              avatarAssetId: dto.authorAvatarAssetId,
+              avatarAccessMode: dto.authorAvatarAccessMode,
               displayName: dto.displayName,
               backgroundUrl: dto.authorBackgroundUrl,
             ),

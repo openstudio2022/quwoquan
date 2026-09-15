@@ -64,6 +64,19 @@
 - 理由与被否决方案：空目标集合、最大分区水位、caller 时间/布尔授权、同一个 Post receipt 的两份 hash 都不能证明主体安全完整性。不新增 authority 服务、HTTP command 或业务 collection；受管创建 producer 调用 owner 的创建/readback 端口，Content bootstrap 只消费严格解析及实际身份验证的证据，再绑定现有 PostSafetyAuthority/Manager。
 - 质量与测试 seam：沿用账号 consumer lag/DLQ/readiness 与 Post `query_barrier_not_ready`，仅输出脱敏 outcome/attempt 摘要，缺证据立即拒绝开放；不新增无实测 SLO。隔离 Mongo/Redis/源 producer 测试以同一创建函数验证成功和上述负例，另验普通写后重启；只读材料/类型测试不计 HTTP 闭环。
 - 关联要求：`REQ-003`、`REQ-004`；关联验收：`SIT-003` 及 `account-lifecycle-self-service-account-closure` 的 `GWT-003`、`GWT-004`；影响 Story：账号关闭、账号封禁恢复与普通 Post 发布。字段及 covered collection 闭集仅归工作流 contracts。
+<a id="dec-004"></a>
+### DEC-004 Authority 查询委托短期、逐请求重验且不承诺单会话即时撤销
+
+- 决策：细化 [身份 L1 DEC-002](../design.md#dec-002)，两条合集 query 的 grant TTL 为 60 秒且不得超过源 access credential 剩余有效期；不延长现役 query grant 的硬上限。有效期、clock skew 与源 credential 校验只由 canonical authority 合同表达，不由环境猜测或调用方覆写。
+- 决策：authority 在签发及每次在线验证时都核对当前 account-persona 归属/存续、账号状态与 authEpoch；closed、suspended、账号或 persona 不存在、归属变化、旧 epoch、过期及权威不可用均 fail-closed。不得缓存 active verdict、复用旧成功快照或只靠 TTL/异步事件表达撤权；owner 每次仍重验资源当前权限。
+- 决策：query grant 只允许有效期内同一精确请求的有界重试，不新增 query 单次消费存储，不允许换 operation/resource/body/hash/surface 或转换为 command。每次重试重新验权并受总 deadline 约束；既有 command approval、JTI 单次消费与 Assistant 专属验证不变。
+- 决策：当前 logout 撤销 refresh/session 不等于立即撤销全部 access/grant；本能力不承诺单会话 logout 后立即取消在途 grant。若增加该要求，必须另行冻结 session 绑定与在线会话验证的产品/权限范围，不偷偷以账号级全量撤销替代。
+- 决策：委托专用 signing secret/reference 仅由 user-service authority 持有，API Edge/content 只申请或调用在线验证；服务间凭据与委托 signing secret 分离。配置合同须声明 key identity、轮换、旧验证材料保留至最长有效期加 clock skew、紧急撤销与加载失败拒绝，密钥值不进源码、测试 fixture、日志或响应。设计决定不构成生成、读取、注入、轮换实际密钥或部署的授权，实际操作必须单独取得明确授权。
+- 恢复与回滚：依赖失败返回 canonical 可恢复错误并限制重试，不切匿名、不用旧 grant 成功结果；新链未准出前保持关闭。后续只能回滚受审计签名包/配置并保留受支持 App operation 闭集，不恢复新增 REST、旧 persona scope、双协议或通用 POST 放行。
+- SLO/观测：签发、在线验证、owner 调用全部消耗同一请求预算，进入 canonical 成本/owner-call 计划；身份实现前由 contracts 冻结具体 timeout/SLO、typed 错误与低基数 outcome。观测区分签发拒绝、绑定错误、撤权、过期、authority unavailable 与延迟，不把 account/persona、token、原始 payload 或资源标识作为日志/metric label；超时、错误率及 authority readiness 绑定告警与拒绝路径。
+- 关联要求/验收：`REQ-004`、`SIT-003`；正向 api_integration 覆盖同请求有界重试，负向 local_contract/api_integration 覆盖 TTL 超限/超源有效期、跨身份、撤权/epoch、改目标重放、authority 故障及零私有读取；必须证明 POST 仅在 exact persisted query 解析与 expectation 完整验证后执行，普通 POST/Mutation 始终拒绝。
+- 被否决方案：向 API Edge 授予委托 signing authority、扩展最小 account-security snapshot、依赖缓存 active 结果、把所有 POST 视为 safe-read、伪造 Assistant run/tool tuple，以及把 logout 语义扩大当作无授权实现细节。
+- 实施状态：canonical grant source 与身份 owner 的细化验收/OPEN 由后续身份任务先行补齐；本决定不表示签发、撤权、轮换、真实链路或环境证据已经通过，不关闭现有账号安全与合集准出缺口。
 
 ## 5. 失败与恢复
 

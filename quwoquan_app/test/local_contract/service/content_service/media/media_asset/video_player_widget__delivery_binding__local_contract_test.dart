@@ -20,6 +20,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/
 import 'package:quwoquan_app/service/product_ops_service/product_ops/event_record/adapters/event_record_batch_writer.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_playback_session.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_player_widget.dart';
+import 'package:quwoquan_app/runtime/config/app_video_runtime_budget.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/ops_event_record_dependencies.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/adaptive_video_delivery.dart';
@@ -217,6 +218,158 @@ void main() {
       reason: 'dispose 后不得泄漏控制器槽',
     );
   });
+
+  for (final transition in ['卸载', '停用', '换源', '超时', '正常等槽']) {
+    testWidgets('等槽生命周期立即取消旧 timer 并保持 slot lease（$transition）', (
+      tester,
+    ) async {
+      final previousPlatform = VideoPlayerPlatform.instance;
+      final fakePlatform = FakeVideoPlayerPlatform();
+      VideoPlayerPlatform.instance = fakePlatform;
+      addTearDown(() => VideoPlayerPlatform.instance = previousPlatform);
+      final container = ProviderContainer(overrides: _boundaryOverrides());
+      addTearDown(container.dispose);
+      final slotCount = AppVideoRuntimeBudget.maxConcurrentControllers;
+      final retryTimers = <Timer>[];
+      var showWaitingPlayer = false;
+      var initializeWaitingPlayer = true;
+      var waitingDelivery = delivery;
+      final waitingFailures = <MediaPlaybackFailure>[];
+      var occupiedSlots = slotCount;
+      var waitingPlayerCreated = 0;
+      final waitingKey = GlobalKey();
+      late StateSetter updatePlayers;
+      final widgetTree = UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, _) => CupertinoApp(
+            home: StatefulBuilder(
+              builder: (_, setState) {
+                updatePlayers = setState;
+                return Column(
+                  children: [
+                    for (var index = 0; index < occupiedSlots; index++)
+                      SizedBox(
+                        key: ValueKey('occupied-slot-$index'),
+                        height: 100,
+                        child: VideoPlayerWidget(
+                          deliveryReference: delivery,
+                          autoPlay: false,
+                          showControls: false,
+                        ),
+                      ),
+                    if (showWaitingPlayer)
+                      SizedBox(
+                        height: 220,
+                        child: VideoPlayerWidget(
+                          key: waitingKey,
+                          deliveryReference: waitingDelivery,
+                          initialize: initializeWaitingPlayer,
+                          autoPlay: false,
+                          showControls: false,
+                          onControllerCreated: (_) => waitingPlayerCreated++,
+                          onPlaybackFailed: waitingFailures.add,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(widgetTree);
+      await tester.pumpAndSettle();
+      expect(VideoPlayerWidget.debugActiveControllerCount, slotCount);
+      expect(fakePlatform.createdDataSources.length, slotCount);
+
+      // 记录真实 Widget 创建的 250ms 等槽 timer，不用 debugReset 伪造满槽，
+      // 也不推进时间帮泄漏的 Timer 自然到期。
+      await runZoned(
+        () async {
+          updatePlayers(() => showWaitingPlayer = true);
+          await tester.pump();
+        },
+        zoneSpecification: ZoneSpecification(
+          createTimer: (self, parent, zone, duration, callback) {
+            final timer = parent.createTimer(zone, duration, callback);
+            if (duration == const Duration(milliseconds: 250)) {
+              retryTimers.add(timer);
+            }
+            return timer;
+          },
+        ),
+      );
+      expect(retryTimers.where((timer) => timer.isActive), hasLength(1));
+      expect(VideoPlayerWidget.debugActiveControllerCount, slotCount);
+      expect(waitingPlayerCreated, 0);
+      final waitingState = waitingKey.currentState;
+
+      if (transition == '超时') {
+        // 分段经过首个 retry，保证 deadline 到来时仍有一份后继等槽 Timer。
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(seconds: 6));
+        expect(
+          waitingFailures.single.kind,
+          MediaCandidateFailureKind.initializationTimeout,
+        );
+      } else if (transition != '正常等槽') {
+        updatePlayers(() {
+          if (transition == '卸载') {
+            showWaitingPlayer = false;
+          } else if (transition == '停用') {
+            initializeWaitingPlayer = false;
+          } else {
+            waitingDelivery = adaptiveDelivery;
+          }
+        });
+        await tester.pump();
+      }
+      if (transition != '正常等槽') {
+        expect(
+          retryTimers.where((timer) => timer.isActive),
+          isEmpty,
+          reason: '取消必须立即解除物理等待，不能只靠 while mounted/generation',
+        );
+      }
+      expect(VideoPlayerWidget.debugActiveControllerCount, slotCount);
+      expect(waitingPlayerCreated, 0);
+
+      // 归还一个真实 slot，旧等待不得趁机初始化或释放其他 lease。
+      updatePlayers(() => occupiedSlots--);
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump(const Duration(milliseconds: 250));
+      if (transition == '换源' || transition == '正常等槽') {
+        await tester.pumpAndSettle();
+        expect(waitingKey.currentState, same(waitingState));
+        expect(waitingPlayerCreated, 1);
+        expect(fakePlatform.createdDataSources.length, slotCount + 1);
+        expect(VideoPlayerWidget.debugActiveControllerCount, slotCount);
+        expect(fakePlatform.createdDataSources.last.uri, waitingDelivery.url);
+      } else {
+        expect(VideoPlayerWidget.debugActiveControllerCount, slotCount - 1);
+        expect(fakePlatform.createdDataSources.length, slotCount);
+        expect(waitingPlayerCreated, 0);
+      }
+
+      if (transition == '停用') {
+        expect(waitingKey.currentState, same(waitingState));
+        updatePlayers(() => initializeWaitingPlayer = true);
+        await tester.pumpAndSettle();
+        expect(waitingPlayerCreated, 1);
+        expect(fakePlatform.createdDataSources.length, slotCount + 1);
+        expect(VideoPlayerWidget.debugActiveControllerCount, slotCount);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      expect(VideoPlayerWidget.debugActiveControllerCount, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('有效播放业务回调抛错也必须完成 native dispose 并归还槽位', (tester) async {
     VideoPlayerWidget.debugResetControllerSlots();
@@ -1101,7 +1254,11 @@ void main() {
 
     expect(
       source,
-      contains('isVisible: widget.isActive && index == _currentPage'),
+      matches(
+        RegExp(
+          r'isVisible:\s*widget\.isActive\s*&&\s*index\s*==\s*_currentPage',
+        ),
+      ),
       reason: '离屏或非活动宿主均不得抢占视频槽位',
     );
     expect(source, contains('final shouldPreheat ='));

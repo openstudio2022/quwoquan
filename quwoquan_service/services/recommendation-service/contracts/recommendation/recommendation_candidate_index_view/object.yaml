@@ -37,6 +37,11 @@ business_rules:
 - ProductOps的ReleasePremiumAdmission是Data精品唯一源；A/B同contentId保留独立tuple准入，按原聚合revision阻止旧事件复活，rolled_back/takedown_ejected立即失去资格。普通精品继续原事件来源，不从旧contentId准入推导Data资格。
 - candidate named reader在limit之前过滤Content pin的完整tuple并沿原安全/负反馈/隐藏/拉黑谓词；纯准备readiness不创建session或曝光，不要求active，不跨库或同步调用ProductOps。
 - scenario 与 contentId 唯一定位普通 Post 候选；Gathering 子投影以 gatheringId 作为 sourceKey、aggregateVersion 作为 sourceVersion，任一旧事件都不得覆盖较新状态或复活 tombstone。
+- 候选只由上游 typed 事件构建，不跨库读取 Content、Entity、Circle 或 Tag 私有集合。
+- PostPublished/PostUpdated/PostSettingsUpdated/PostPromotedToWork 已有 width/height；按同一被接受 sourceSequence 的完整快照映射至 primaryMediaWidth/primaryMediaHeight，不新增 primaryMedia 事件字段，不读取 MediaAsset 私有存储。
+- 两维只接受 image/video 的成对正数；缺失/null、非正数、主媒体替换后无尺寸或类型不适用时在同次投影同时清空，方向为 unknown，禁止 patch 省略沿用旧维度。重复/旧事件仍由原有 checkpoint 拒绝，不能复活旧尺寸。
+- mediaOrientation 仅在 ranker 后处理由同一候选尺寸对派生：width>height 为 landscape、width<height 为 portrait、相等为 square，否则 unknown；不作为存储第二真相源，不进入 CandidateInput 或训练特征。
+- scenario 与 contentId 唯一定位 Post 候选；Gathering 子投影以 gatheringId 作为 sourceKey、aggregateVersion 作为 sourceVersion，任一旧事件都不得覆盖较新状态或复活 tombstone。
 - UserSuspended/UserRestored 以 accountVersion 单调维护本地作者限制投影；限制状态必须在候选查询 limit 前过滤，账号关闭后候选与可逆限制原值均不可保留。
 - following 场景只能消费 PersonaFollowStateChanged/PersonaBlocked/PersonaUnblocked 维护的本地关系投影筛选 authorId；不得跨库读取 User 私有关系表，拉黑后不得恢复历史关注。
 - premium pool 和实体标签是同一候选身份的具名索引，不得形成第二候选真相源。

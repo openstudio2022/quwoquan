@@ -2,52 +2,92 @@
   "schema": "qwq.app-identity-codegen-manifest",
   "generator": "tools/codegen_app_metadata --app-identity-only",
   "source": "_shared/app_artifact_manifest.yaml",
-  "sourceSha256": "sha256:248fb394df0712071c15a508ec3067164183a9a90292ae711658418fba7ee49b",
+  "sourceSha256": "sha256:90ab2df96fde9d09aefdab75ce6720ccd2ad217c293ef9005223180999eac124",
   "outputs": [
     {
       "path": "android/app/app_identity.generated.json",
-      "sha256": "sha256:0cdf2f5f67fb6b267e5e7ec1aa7f805d1c823b2ed19e5174f39e910af06d2b02",
-      "bytes": 2491
+      "sha256": "sha256:398dcba3b129e50b19e5aa818e3aff3ca151aadab10a686452175bd659411f85",
+      "bytes": 5361
     },
     {
-      "path": "ios/Flutter/Debug-nonprod.xcconfig",
-      "sha256": "sha256:7d25286e73e1fd2d0e93762ded66bf6bde7358739d333dd23deb9e08fc0cccd4",
-      "bytes": 632
+      "path": "ios/Flutter/Debug-alpha.xcconfig",
+      "sha256": "sha256:c45f6d1198121ef7aafc7296eb46492966c721253eee21853740fd5e24b33c51",
+      "bytes": 383
     },
     {
-      "path": "ios/Flutter/Debug-prod.xcconfig",
-      "sha256": "sha256:32b4af9af396a7cdde568c86793f6601f39d7c68df90ba2b0295a4d787e58442",
-      "bytes": 623
+      "path": "ios/Flutter/Debug-beta.xcconfig",
+      "sha256": "sha256:e1f2188e19a9971734c2fc299830385d6eaae7b069ef68fec43bfae72f83bdec",
+      "bytes": 380
     },
     {
-      "path": "ios/Flutter/Identity/nonprod.xcconfig",
-      "sha256": "sha256:f776dfe6f83a31814092452b3d4ecebfbf1160796664e3ac8aac03885a0c451b",
-      "bytes": 362
+      "path": "ios/Flutter/Debug-gamma.xcconfig",
+      "sha256": "sha256:134ad62677cc3cead422b36e5c18bb2597a91b308e94f8496434a0d060d9fe3c",
+      "bytes": 383
     },
     {
-      "path": "ios/Flutter/Identity/prod.xcconfig",
-      "sha256": "sha256:e669aae1c10f2f9b7e4b7a14d89732007e094971b99aa80278f4042f269e3816",
-      "bytes": 348
+      "path": "ios/Flutter/Identity/alpha-debug.xcconfig",
+      "sha256": "sha256:7275eb3cd1b58ed1aa06b6caea2ca5c30c5480427e2cb85824d191bccebbc152",
+      "bytes": 366
     },
     {
-      "path": "ios/Flutter/Profile-nonprod.xcconfig",
-      "sha256": "sha256:3c0a42bfec98a82f6392af392b7c25766f26eb14917bfdda2a5683823f87089c",
-      "bytes": 642
+      "path": "ios/Flutter/Identity/alpha-profile.xcconfig",
+      "sha256": "sha256:dd5bc9b790ec7237cc4853503eda93639e93d3f42c5dcc18666cedd6d1638e57",
+      "bytes": 368
     },
     {
-      "path": "ios/Flutter/Profile-prod.xcconfig",
-      "sha256": "sha256:84f9c3fbbc1d1d7ad94fc81ef8ca997cdd9aa4496968b19e25841d4182791a5c",
-      "bytes": 633
+      "path": "ios/Flutter/Identity/beta-debug.xcconfig",
+      "sha256": "sha256:f63b04e13559c7c3d917ef1c09ca9f25eeac3647950cfd99602a91308893f54e",
+      "bytes": 363
+    },
+    {
+      "path": "ios/Flutter/Identity/beta-profile.xcconfig",
+      "sha256": "sha256:35dbae78c8a04997927319d0bf07d349cec64b76c311fae6d469100c94036811",
+      "bytes": 365
+    },
+    {
+      "path": "ios/Flutter/Identity/gamma-debug.xcconfig",
+      "sha256": "sha256:015e65582b2733c1af645ce8f7f8d3bfa980cf39a4a277ac31af4287c1122c88",
+      "bytes": 366
+    },
+    {
+      "path": "ios/Flutter/Identity/gamma-profile.xcconfig",
+      "sha256": "sha256:fe499d010517d1a2169bcfb25ee63542982e2046023dd36dce92ab15f48510a0",
+      "bytes": 368
+    },
+    {
+      "path": "ios/Flutter/Identity/nonprod-release.xcconfig",
+      "sha256": "sha256:0cbd0db03e2712d425e4ecdf372871202d725bde4ca1cb3ecde5df6786d472c3",
+      "bytes": 352
+    },
+    {
+      "path": "ios/Flutter/Identity/prod-release.xcconfig",
+      "sha256": "sha256:29c9b2f47c88257e58adf273cda8a12e23049355e922e8bc892ff72eb84a6371",
+      "bytes": 329
+    },
+    {
+      "path": "ios/Flutter/Profile-alpha.xcconfig",
+      "sha256": "sha256:03c4bf649f9ab55a4aa2b7655f52352477e756f894e8e9bb114a01d991100503",
+      "bytes": 393
+    },
+    {
+      "path": "ios/Flutter/Profile-beta.xcconfig",
+      "sha256": "sha256:8affbc091c152d9f988c7710ec2a7c34e6b0ff91765319a9a3e3f80ed83179f1",
+      "bytes": 390
+    },
+    {
+      "path": "ios/Flutter/Profile-gamma.xcconfig",
+      "sha256": "sha256:8ccfb73a38684c8e94b71358b5eb34c7918c5bf6218b63de31a1ad30ee82de2e",
+      "bytes": 393
     },
     {
       "path": "ios/Flutter/Release-nonprod.xcconfig",
-      "sha256": "sha256:61566f2196937ede3ae0a106227a5328b84e1add42ed15b256b38644a0b65565",
-      "bytes": 631
+      "sha256": "sha256:d9b300ea0aec0ac1c8130b7cb9bf9dee50eeac7903e575a75c0c2708b44e4f0f",
+      "bytes": 399
     },
     {
       "path": "ios/Flutter/Release-prod.xcconfig",
-      "sha256": "sha256:acf5a5e46a5c0d50974c035bdfa774f8d303102a3ff55c31bc501de2f1e90130",
-      "bytes": 622
+      "sha256": "sha256:fbc380a9c133898ff6b47fba312091094683ba42be3257740b3c0460942218f8",
+      "bytes": 390
     }
   ]
 }

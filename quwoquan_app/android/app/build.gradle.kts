@@ -16,14 +16,23 @@ plugins {
 data class AppIdentityProjection(
     val applicationId: String,
     val displayName: String,
+    val buildProfile: String,
+    val buildMode: String,
+    val environment: String,
+    val promotable: Boolean,
 )
 
 @Suppress("UNCHECKED_CAST")
 val generatedAppIdentity =
     JsonSlurper().parse(projectDir.resolve("app_identity.generated.json")) as Map<String, Any?>
-val generatedIdentityBuildProfiles =
-    (generatedAppIdentity["buildProfiles"] as? List<*>)
+val generatedAndroidIdentityTargets =
+    (generatedAppIdentity["identityTargets"] as? List<*>)
         ?.map { it.toString() }
+        .orEmpty()
+val generatedIdentityEnvironments =
+    (generatedAppIdentity["environments"] as? List<*>)
+        ?.map { it.toString() }
+        ?.filter { it != "prod" }
         .orEmpty()
 val generatedEnvironmentProfiles =
     (generatedAppIdentity["environmentProfiles"] as? Map<*, *>)
@@ -38,11 +47,27 @@ val generatedAndroidIdentities =
             entry.key.toString() to AppIdentityProjection(
                 applicationId = value["applicationId"].toString(),
                 displayName = value["displayName"].toString(),
+                buildProfile = value["buildProfile"].toString(),
+                buildMode = value["buildMode"].toString(),
+                environment = value["environment"]?.toString().orEmpty(),
+                promotable = value["promotable"] as? Boolean ?: false,
             )
         }
         .orEmpty()
-check(generatedIdentityBuildProfiles == listOf("nonprod", "prod")) {
-    "GATE_BLOCK: generated App identity buildProfile matrix is incomplete"
+check(
+    generatedAndroidIdentityTargets ==
+        listOf(
+            "nonprod/release",
+            "prod/release",
+            "alpha/debug",
+            "alpha/profile",
+            "beta/debug",
+            "beta/profile",
+            "gamma/debug",
+            "gamma/profile",
+        ),
+) {
+    "GATE_BLOCK: generated App identity target matrix is incomplete"
 }
 check(
     generatedEnvironmentProfiles ==
@@ -81,41 +106,25 @@ val releaseKeystorePath = System.getenv("QWQ_ANDROID_RELEASE_KEYSTORE_PATH")?.tr
 val releaseKeystorePassword = System.getenv("QWQ_ANDROID_RELEASE_STORE_PASSWORD")?.trim().orEmpty()
 val releaseKeyAlias = System.getenv("QWQ_ANDROID_RELEASE_KEY_ALIAS")?.trim().orEmpty()
 val releaseKeyPassword = System.getenv("QWQ_ANDROID_RELEASE_KEY_PASSWORD")?.trim().orEmpty()
-fun appIdentity(buildProfile: String, buildMode: String): AppIdentityProjection =
-    generatedAndroidIdentities["$buildProfile/$buildMode"]
+fun appIdentity(identityTarget: String): AppIdentityProjection =
+    generatedAndroidIdentities[identityTarget]
         ?: throw GradleException(
-            "GATE_BLOCK: generated App identity is missing for $buildProfile/$buildMode",
+            "GATE_BLOCK: generated App identity is missing for $identityTarget",
         )
 
-fun generatedModeApplicationIdSuffix(
-    buildProfile: String,
-    buildMode: String,
-): String {
-    val releaseId = appIdentity(buildProfile, "release").applicationId
-    val modeId = appIdentity(buildProfile, buildMode).applicationId
-    check(modeId.startsWith(releaseId)) {
-        "GATE_BLOCK: generated Android $buildProfile/$buildMode identity does not extend release identity"
-    }
-    return modeId.removePrefix(releaseId)
+fun flavorName(identityTarget: String): String {
+    val (target, mode) = identityTarget.split("/", limit = 2)
+    return if (mode == "release") target else target + mode.replaceFirstChar { it.uppercase() }
 }
 
-fun generatedModeDisplayMark(
-    buildProfile: String,
-    buildMode: String,
-): String {
-    val releaseName = appIdentity(buildProfile, "release").displayName
-    val modeName = appIdentity(buildProfile, buildMode).displayName
-    check(modeName.startsWith(releaseName)) {
-        "GATE_BLOCK: generated Android $buildProfile/$buildMode display name does not extend release display name"
+generatedAndroidIdentityTargets.forEach { identityTarget ->
+    val identity = appIdentity(identityTarget)
+    check(identity.buildMode == identityTarget.substringAfter('/')) {
+        "GATE_BLOCK: generated Android identity buildMode mismatch for $identityTarget"
     }
-    return modeName.removePrefix(releaseName)
-}
-
-generatedIdentityBuildProfiles.forEach { buildProfile ->
-    generatedModeApplicationIdSuffix(buildProfile, "debug")
-    generatedModeApplicationIdSuffix(buildProfile, "profile")
-    generatedModeDisplayMark(buildProfile, "debug")
-    generatedModeDisplayMark(buildProfile, "profile")
+    check(identity.promotable == (identityTarget == "prod/release")) {
+        "GATE_BLOCK: only Android prod/release may be promotable"
+    }
 }
 
 val nativeRuntimeDefineKeys =
@@ -218,11 +227,14 @@ tasks.configureEach {
 }
 androidComponents {
     beforeVariants { variantBuilder ->
-        val buildProfile =
+        val targetFlavor =
             variantBuilder.productFlavors
-                .firstOrNull { (dimension, _) -> dimension == "buildProfile" }
+                .firstOrNull { (dimension, _) -> dimension == "identityTarget" }
                 ?.second
-        if (variantBuilder.buildType in setOf("debug", "profile") && buildProfile != "nonprod") {
+        val identityTarget =
+            generatedAndroidIdentityTargets.firstOrNull { flavorName(it) == targetFlavor }
+        val identity = identityTarget?.let(::appIdentity)
+        if (identity == null || identity.buildMode != variantBuilder.buildType) {
             variantBuilder.enable = false
         }
     }
@@ -259,18 +271,14 @@ android {
     // 生产启动路径；隔离成独立目录使宿主能只纳入这一闭包，而不牵入本工程其余依赖。
     sourceSets.getByName("main").java.srcDir("src/runtimeConfigShared/java")
 
-    flavorDimensions += "buildProfile"
+    flavorDimensions += "identityTarget"
     productFlavors {
-        generatedIdentityBuildProfiles.forEach { buildProfile ->
-            create(buildProfile) {
-                dimension = "buildProfile"
-                val releaseIdentity = appIdentity(buildProfile, "release")
-                applicationId = releaseIdentity.applicationId
-                manifestPlaceholders["qwqAppLabel"] = releaseIdentity.displayName
-                manifestPlaceholders["qwqDebugModeLabel"] =
-                    generatedModeDisplayMark(buildProfile, "debug")
-                manifestPlaceholders["qwqProfileModeLabel"] =
-                    generatedModeDisplayMark(buildProfile, "profile")
+        generatedAndroidIdentityTargets.forEach { identityTarget ->
+            create(flavorName(identityTarget)) {
+                dimension = "identityTarget"
+                val identity = appIdentity(identityTarget)
+                applicationId = identity.applicationId
+                manifestPlaceholders["qwqAppLabel"] = identity.displayName
             }
         }
     }
@@ -339,17 +347,15 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = generatedModeApplicationIdSuffix("nonprod", "debug")
-            manifestPlaceholders["qwqModeLabel"] = "\${qwqDebugModeLabel}"
+            manifestPlaceholders["qwqModeLabel"] = ""
         }
         release {
             manifestPlaceholders["qwqModeLabel"] = ""
             signingConfig = signingConfigs.findByName("officialRelease")
         }
-        // Debug/Profile 变体只允许 nonprod；Prod 仅保留 Release。
+        // Debug/Profile 只允许 Alpha/Beta/Gamma 环境 identity；Prod 仅保留 Release。
         findByName("profile")?.apply {
-            applicationIdSuffix = generatedModeApplicationIdSuffix("nonprod", "profile")
-            manifestPlaceholders["qwqModeLabel"] = "\${qwqProfileModeLabel}"
+            manifestPlaceholders["qwqModeLabel"] = ""
         }
     }
 

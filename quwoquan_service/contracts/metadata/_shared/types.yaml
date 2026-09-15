@@ -221,6 +221,8 @@ types:
       - { name: recurrence, type: enum, enum_ref: TagHeatRecurrence }
 
 enums:
+  RecommendationViewportProfile: [landscape, portrait, unknown]
+  RecommendationDeviceClass: [phone, tablet, desktop, unknown]
   TagHeatRecurrence: [once, annual]
   ContentType: [image, video, micro, article]
   IntersectionDimension: [identity, location, content, interest, relationship]

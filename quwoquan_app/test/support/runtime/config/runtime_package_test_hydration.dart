@@ -17,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:cryptography/cryptography.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/generated/offline_content_bundle_identity.g.dart';
 import 'package:quwoquan_app/runtime/config/runtime_package_resolver.dart';
 import 'package:quwoquan_app/runtime/platform/native_runtime_config_bridge.dart';
 
@@ -150,6 +151,12 @@ Future<Map<String, Object?>> buildSignedTrustEnvelopeForTests({
     if (!offline) 'issuedAt': _issuedAt,
     if (offline) 'contentSource': 'bundled_snapshot',
     if (offline) 'trustEnvelopeDigest': trustDigest,
+    if (offline)
+      'rehearsalSpace': <String, String>{
+        'mode': 'standard',
+        'snapshotDigest': offlineContentManifestDigest,
+        'instanceId': 'default',
+      },
     'launchPolicy': runtimePackageTestLiveLaunchPolicy,
     'payloadDigest': '',
     'runtime': offline
@@ -198,6 +205,7 @@ Future<void> hydrateRuntimePackageForTests({String? environment}) async {
     environment: environment,
   );
   await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+    expectedOfflineSnapshotDigest: offlineContentManifestDigest,
     bridge: NativeRuntimeConfigBridge(
       client: _HydrationChannelClient(envelope),
       maxAttempts: 1,

@@ -4,7 +4,12 @@
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001.t6
 import 'dart:io';
 
+import 'package:video_player/video_player.dart' show VideoViewType;
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/domain/signed_media_delivery_lease.dart';
+
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -29,10 +34,7 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/spacing/discovery_feed_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/service/product_ops_service/product_ops/event_record/adapters/event_record_batch_writer.dart';
-import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
-import 'package:quwoquan_app/runtime/transport/cloud_api_query_defaults.dart';
-import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/runtime/di/ops_event_record_dependencies.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart';
 import 'package:quwoquan_app/design_system/layout/app_terminal_viewport.dart';
@@ -47,7 +49,6 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         IntersectionActionHint,
         IntersectionActorEvidence,
         IntersectionEvidenceRow,
-        IntersectionInboxSummary,
         IntersectionReason,
         IntersectionRepresentativeActor,
         IntersectionTarget,
@@ -68,6 +69,114 @@ import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_image.dart';
+
+/// 记录输入后原样委托真实 Remote adapter，不替换解析结果或制造媒体成功。
+class _HomeMediaDeliveryRecorder implements PublicMediaDeliveryPort {
+  _HomeMediaDeliveryRecorder(this.actual);
+  final PublicMediaDeliveryPort actual;
+  final images =
+      <({String source, MediaDeliveryKind kind, CdnImagePreset profile})>[];
+  final resolved =
+      <
+        ({String? source, MediaDeliveryKind kind, String assetId, int version})
+      >[];
+  final videos = <({String source, MediaDeliveryReference? binding})>[];
+
+  @override
+  MediaEndpointConfig? get endpoints => actual.endpoints;
+  @override
+  MediaDeliveryReference? tryResolve(
+    String? reference, {
+    required MediaDeliveryKind kind,
+    String assetId = '',
+    int version = 0,
+    String? sha256,
+  }) {
+    resolved.add((
+      source: reference,
+      kind: kind,
+      assetId: assetId,
+      version: version,
+    ));
+    return actual.tryResolve(
+      reference,
+      kind: kind,
+      assetId: assetId,
+      version: version,
+      sha256: sha256,
+    );
+  }
+
+  @override
+  List<String> candidates(
+    String reference,
+    MediaDeliveryKind kind, {
+    int version = 0,
+  }) => actual.candidates(reference, kind, version: version);
+  @override
+  Future<SignedMediaDeliveryLease> acquireLease(
+    String reference, {
+    required MediaDeliveryBinding binding,
+    required MediaDeliveryKind kind,
+    bool refresh = false,
+  }) => actual.acquireLease(
+    reference,
+    binding: binding,
+    kind: kind,
+    refresh: refresh,
+  );
+  @override
+  Future<ImageProvider<Object>> acquireImage(
+    String reference, {
+    required MediaDeliveryBinding binding,
+    CdnImagePreset profile = CdnImagePreset.none,
+    bool refresh = false,
+  }) => actual.acquireImage(
+    reference,
+    binding: binding,
+    profile: profile,
+    refresh: refresh,
+  );
+  @override
+  ImageProvider<Object> imageProvider(
+    String reference, {
+    CdnImagePreset profile = CdnImagePreset.none,
+    MediaDeliveryKind kind = MediaDeliveryKind.image,
+    String? cacheKey,
+    SignedMediaDeliveryLease? lease,
+  }) {
+    images.add((source: reference, kind: kind, profile: profile));
+    return actual.imageProvider(
+      reference,
+      profile: profile,
+      kind: kind,
+      cacheKey: cacheKey,
+      lease: lease,
+    );
+  }
+
+  @override
+  Future<List<PlayableVideoSource>> playableSources(
+    String reference, {
+    MediaDeliveryReference? binding,
+    SignedMediaDeliveryLease? lease,
+    VideoViewType? viewType,
+  }) {
+    videos.add((source: reference, binding: binding));
+    return actual.playableSources(
+      reference,
+      binding: binding,
+      lease: lease,
+      viewType: viewType,
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> loadJson(
+    String reference, {
+    required MediaDeliveryReference binding,
+  }) => actual.loadJson(reference, binding: binding);
+}
 
 TextSpan _spanByText(RichText richText, String text) {
   TextSpan? result;
@@ -390,6 +499,9 @@ ContentPostViewData _microPost({
   String? videoUrl,
   IntersectionReason? reason,
   String avatarUrl = '',
+  String bodyValue = '川西雪山和校园摄影路线',
+  String? primaryHomepageId,
+  String? primaryHomepageType,
 }) {
   final reasonClass = reason?.intersectionClass ?? 'fact';
   final postId =
@@ -422,12 +534,14 @@ ContentPostViewData _microPost({
     createdAt: DateTime(2026),
     updatedAt: null,
     publishedAt: null,
-    body: '川西雪山和校园摄影路线',
+    body: bodyValue,
     imageUrls: imageUrls,
     videoUrl: videoUrl,
     mediaItems: _publicMediaItems(imageUrls: imageUrls, videoUrl: videoUrl),
     durationMs: null,
     intersectionReasons: <IntersectionReason>[effectiveReason],
+    primaryHomepageId: primaryHomepageId,
+    primaryHomepageType: primaryHomepageType,
   );
 }
 
@@ -470,7 +584,12 @@ ContentPostViewData _photoPost({
   );
 }
 
-ContentPostViewData _videoPost({required int width, required int height}) {
+ContentPostViewData _videoPost({
+  required int width,
+  required int height,
+  String? primaryHomepageId,
+  String? primaryHomepageType,
+}) {
   final postId = 'video_${width}_$height';
   return ContentPostViewData(
     id: postId,
@@ -506,6 +625,8 @@ ContentPostViewData _videoPost({required int width, required int height}) {
     updatedAt: null,
     publishedAt: null,
     intersectionReasons: <IntersectionReason>[_reason(postId: postId)],
+    primaryHomepageId: primaryHomepageId,
+    primaryHomepageType: primaryHomepageType,
   );
 }
 
@@ -517,6 +638,8 @@ ContentPostViewData _articleLayoutPost({
   required String id,
   String bodyValue = '正文第一行，正文第二行，正文第三行，正文第四行会被折叠进全文入口。',
   String coverUrlValue = '',
+  String? primaryHomepageId,
+  String? primaryHomepageType,
 }) {
   return ContentPostViewData(
     id: id,
@@ -540,6 +663,8 @@ ContentPostViewData _articleLayoutPost({
     shareCount: 3,
     createdAt: DateTime(2026),
     intersectionReasons: <IntersectionReason>[_reason(postId: id)],
+    primaryHomepageId: primaryHomepageId,
+    primaryHomepageType: primaryHomepageType,
   );
 }
 
@@ -605,6 +730,8 @@ final MediaEndpointConfig _testMediaEndpointConfig = MediaEndpointConfig(
 Widget _buildFeed(
   ContentPostViewData post, {
   ContentBehaviorTracker? tracker,
+  TextScaler textScaler = TextScaler.noScaling,
+  TextDirection textDirection = TextDirection.ltr,
   bool authenticated = false,
   List<Override> extraOverrides = const <Override>[],
   void Function(
@@ -635,13 +762,26 @@ Widget _buildFeed(
       home: ScreenUtilInit(
         designSize: const Size(390, 844),
         child: MediaQuery(
-          data: const MediaQueryData(size: Size(390, 844)),
-          child: HomeMultiFormFeed(
-            isDark: false,
-            channelId: 'recommend',
-            template: 'single_column_multiform',
-            onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
-            onPostTap: onPostTap,
+          data: MediaQueryData(
+            size: const Size(390, 844),
+            textScaler: textScaler,
+          ),
+          child: Directionality(
+            textDirection: textDirection,
+            child: HomeMultiFormFeed(
+              isDark: false,
+              channelId: 'recommend',
+              template: 'single_column_multiform',
+              onUserTap: (
+                _, {
+                avatarUrl,
+                avatarAssetId,
+                avatarAccessMode,
+                backgroundUrl,
+                displayName,
+              }) {},
+              onPostTap: onPostTap,
+            ),
           ),
         ),
       ),
@@ -685,6 +825,8 @@ Widget _buildRealProviderFeed() {
 
 void _noopUserTap(
   String userId, {
+  String? avatarAssetId,
+  MediaDeliveryAccessMode? avatarAccessMode,
   String? avatarUrl,
   String? displayName,
   String? backgroundUrl,
@@ -776,95 +918,141 @@ void main() {
     );
   });
 
-  testWidgets('推荐卡片把头像、图片、视频统一投影为注入媒体端点', (tester) async {
+  testWidgets('推荐卡片向真实获取器原样传递头像图片视频及typed kind绑定', (tester) async {
+    // spec_ref: specs/feature-tree/runtime/runtime-media/spec.md#sit-003
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(
-      _buildFeed(
-        _microPost(
-          avatarUrl: 'media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
-        ),
-      ),
+    final delivery = _HomeMediaDeliveryRecorder(
+      RemotePublicMediaDelivery(_testMediaEndpointConfig),
     );
+    final overrides = [publicMediaDeliveryProvider.overrideWithValue(delivery)];
+    final post = _microPost(
+      avatarUrl: 'media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+    );
+    await tester.pumpWidget(_buildFeed(post, extraOverrides: overrides));
     await tester.pump();
 
-    final avatarImages = tester
-        .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
-        .where((widget) => widget.cdnPreset == CdnImagePreset.avatar)
-        .toList(growable: false);
-    expect(avatarImages, hasLength(1));
-    final avatarCandidates =
-        avatarImages.single.imageUrlCandidates ?? const <String>[];
-    expect(avatarCandidates, <String>[
-      'https://cdn.alpha.quwoquan.com:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
-    ]);
-
-    final contentImages = tester
-        .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
-        .where((widget) => widget.cdnPreset != CdnImagePreset.avatar)
-        .toList(growable: false);
-    expect(contentImages, isNotEmpty);
+    final bindings = tester.widgetList<MediaDeliveryImage>(
+      find.byType(MediaDeliveryImage),
+    );
+    final avatarBinding = bindings
+        .singleWhere((widget) => widget.kind == MediaDeliveryKind.avatar)
+        .binding;
+    expect(avatarBinding.publicUrl, post.avatarUrl);
+    expect(avatarBinding.assetId, post.authorAvatarAssetId ?? '');
+    expect(avatarBinding.accessMode, post.authorAvatarAccessMode);
+    final imageSource = post.mediaImageUrls.single;
+    final imageBinding = bindings
+        .singleWhere((widget) => widget.binding.publicUrl == imageSource)
+        .binding;
+    expect(imageBinding.accessMode, MediaDeliveryAccessMode.public);
+    expect(imageBinding.assetId, post.mediaItems.single.mediaAssetId ?? '');
     expect(
-      contentImages.any(
-        (widget) =>
-            widget.imageUrlCandidates?.contains(
-              'https://cdn.alpha.quwoquan.com:17100/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
-            ) ??
-            false,
-      ),
-      isTrue,
+      delivery.images,
+      contains((
+        source: imageSource,
+        kind: MediaDeliveryKind.image,
+        profile: CdnImagePreset.thumbnail,
+      )),
     );
+    final avatarCalls = delivery.images
+        .where((call) => call.profile == CdnImagePreset.avatar)
+        .toList();
 
-    await tester.pumpWidget(_buildFeed(_videoPost(width: 1080, height: 1920)));
+    final videoPost = _videoPost(width: 1080, height: 1920);
+    await tester.pumpWidget(_buildFeed(videoPost, extraOverrides: overrides));
     await tester.pump();
-
     final player = tester.widget<VideoPlayerWidget>(
       find.byType(VideoPlayerWidget),
     );
+    final videoBinding = player.deliveryReference!;
+    expect(videoBinding.sourceReference, videoPost.mediaVideoUrl);
+    expect(videoBinding.kind, MediaDeliveryKind.video);
     expect(
-      player.deliveryReference!.url,
-      'https://cdn.alpha.quwoquan.com:17100/media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
+      delivery.resolved,
+      contains((
+        source: videoPost.mediaVideoUrl,
+        kind: MediaDeliveryKind.video,
+        assetId: videoPost.mediaAssetId ?? '',
+        version: videoPost.mediaAssetVersion ?? 0,
+      )),
     );
-    expect(player.deliveryReference!.url, isNot(contains('https://10.0.2.2')));
+    expect(player.thumbnailBinding.publicUrl, videoPost.mediaVideoCoverUrl);
+    expect(player.thumbnailBinding.accessMode, MediaDeliveryAccessMode.public);
+    // feed 未聚焦时不启动平台 controller；直接消费播放器的 exact binding 验证真实获取器。
+    final sources = await delivery.playableSources(
+      videoBinding.sourceReference,
+      binding: videoBinding,
+    );
+    expect(sources.map((source) => source.label), ['network']);
+    expect(delivery.videos.single.source, videoPost.mediaVideoUrl);
+    expect(identical(delivery.videos.single.binding, videoBinding), isTrue);
+    // 此断言不得放宽成 endpoint URL 或用 profile 代替 kind。
+    expect(
+      avatarCalls,
+      everyElement((
+        source: post.avatarUrl,
+        kind: MediaDeliveryKind.avatar,
+        profile: CdnImagePreset.avatar,
+      )),
+    );
+    expect(avatarCalls, isNotEmpty);
   });
 
   testWidgets('首页推荐瀑布流不会把图片 cover 当成视频源初始化', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
+    // spec_ref: specs/feature-tree/runtime/runtime-media/spec.md#sit-003
     const coverObjectKey =
         'media/image/s/archived-image/post/fixture_photo_002/v1/cover.png';
+    final delivery = _HomeMediaDeliveryRecorder(
+      RemotePublicMediaDelivery(_testMediaEndpointConfig),
+    );
+    final post = _microPost(
+      imageUrls: const [coverObjectKey],
+      videoUrl: coverObjectKey,
+    );
     await tester.pumpWidget(
       _buildFeed(
-        _microPost(
-          imageUrls: const <String>[coverObjectKey],
-          videoUrl: coverObjectKey,
-        ),
+        post,
+        extraOverrides: [
+          publicMediaDeliveryProvider.overrideWithValue(delivery),
+        ],
       ),
     );
     await tester.pump();
 
     expect(find.byType(VideoPlayerWidget), findsNothing);
-    final contentImages = tester
-        .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
-        .where((widget) => widget.cdnPreset != CdnImagePreset.avatar)
-        .toList(growable: false);
+    expect(delivery.videos, isEmpty);
+    // 投影声明为 video 的错误引用允许交给统一边界判否，业务不检查扩展名。
+    // 获取器必须拒绝它成为视频绑定，且绝不进入 playableSources/controller。
     expect(
-      contentImages.any(
-        (widget) =>
-            widget.imageUrlCandidates?.contains(
-              'https://cdn.alpha.quwoquan.com:17100/$coverObjectKey',
-            ) ??
-            false,
-      ),
-      isTrue,
+      delivery.actual.tryResolve(coverObjectKey, kind: MediaDeliveryKind.video),
+      isNull,
     );
+    expect(
+      delivery.images,
+      contains((
+        source: coverObjectKey,
+        kind: MediaDeliveryKind.image,
+        profile: CdnImagePreset.cover,
+      )),
+    );
+    final image = tester.widget<MediaDeliveryImage>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is MediaDeliveryImage &&
+            widget.binding.publicUrl == coverObjectKey,
+      ),
+    );
+    expect(image.kind, MediaDeliveryKind.image);
+    expect(image.binding.publicUrl, coverObjectKey);
+    expect(image.binding.accessMode, MediaDeliveryAccessMode.public);
+    expect(image.binding.assetId, post.mediaItems.last.mediaAssetId ?? '');
   });
 
-  testWidgets('默认 Provider 加载最小 typed post 时保留作者头像 media candidates', (
-    tester,
-  ) async {
+  testWidgets('默认 Provider 加载最小 typed post 时保留作者头像原始引用与kind', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     SharedPreferences.setMockInitialValues(const <String, Object>{});
@@ -886,9 +1074,9 @@ void main() {
         .where((widget) => widget.cdnPreset == CdnImagePreset.avatar)
         .toList(growable: false);
     expect(avatarImages, isNotEmpty);
-    expect(avatarImages.first.imageUrlCandidates, <String>[
-      'https://cdn.alpha.quwoquan.com:17100/$testContentAvatarUrl',
-    ]);
+    expect(avatarImages.first.imageUrl, testContentAvatarUrl);
+    expect(avatarImages.first.mediaKind, MediaDeliveryKind.avatar);
+    expect(avatarImages.first.imageUrlCandidates, isNull);
   });
 
   testWidgets('任务B·分层强度：推测型交集证据行弱于事实型', (tester) async {
@@ -1940,7 +2128,76 @@ void main() {
     );
   });
 
+  for (final direction in TextDirection.values) {
+    testWidgets('末行全文字素与独立热区支持放大文字 ${direction.name}', (tester) async {
+      // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-unified-feed/spec.md#gwt-003
+      await tester.binding.setSurfaceSize(const Size(320, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final body = List.filled(8, '你好👨‍👩‍👧‍👦👍🏽e\u0301 مرحبا ').join();
+      var opens = 0;
+      await tester.pumpWidget(
+        _buildFeed(
+          _microPost(
+            id: 'inline-${direction.name}',
+            bodyValue: body,
+            imageUrls: const [],
+          ),
+          textScaler: const TextScaler.linear(1.6),
+          textDirection: direction,
+          onPostTap: (_, _, {feedPosts}) => opens++,
+        ),
+      );
+      await tester.pump();
+      final action = find.byKey(const ValueKey('home-post-full-text'));
+      expect(action, findsOneWidget);
+      final rich = find
+          .ancestor(of: action, matching: find.byType(RichText))
+          .first;
+      final widget = tester.widget<RichText>(rich);
+      var prefix = '';
+      widget.text.visitChildren((span) {
+        if (span is TextSpan && span.text != null) prefix += span.text!;
+        return true;
+      });
+      expect(
+        body.characters.take(prefix.characters.length).toString().trimRight(),
+        prefix,
+      );
+      expect(widget.textDirection, direction);
+      expect(widget.textScaler.scale(10), 16);
+      final paragraph = tester.renderObject<RenderParagraph>(rich);
+      final actionRect = tester.getRect(action);
+      expect(actionRect.width, greaterThanOrEqualTo(44));
+      expect(actionRect.height, greaterThanOrEqualTo(44));
+      final boxes = paragraph.getBoxesForSelection(
+        TextSelection(baseOffset: 0, extentOffset: prefix.length),
+      );
+      final origin = tester.getTopLeft(rich);
+      final lastBox = boxes.last.toRect().shift(origin);
+      expect(lastBox.bottom, closeTo(actionRect.bottom, 4));
+      for (final box in boxes) {
+        expect(
+          box.toRect().shift(origin).overlaps(actionRect.deflate(0.1)),
+          isFalse,
+        );
+      }
+      await tester.tap(action);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('home-post-collapse')), findsOneWidget);
+      expect(opens, 0);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('home-post-collapse')),
+      );
+      await tester.tap(find.byKey(const ValueKey('home-post-collapse')));
+      await tester.pump();
+      expect(action, findsOneWidget);
+      expect(opens, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('文章整卡与全文入口点击进入同一沉浸 pageflip 打开链路', (tester) async {
+    // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-unified-feed/spec.md#gwt-003
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -1960,7 +2217,27 @@ void main() {
     await tester.pump();
     expect(opened.map((post) => post.id), <String>['article_open']);
 
-    await tester.tap(find.byKey(const ValueKey('home-article-full-text')));
+    final articleAction = find.byKey(const ValueKey('home-article-full-text'));
+    final paragraphFinder = find
+        .ancestor(of: articleAction, matching: find.byType(RichText))
+        .first;
+    final paragraph = tester.renderObject<RenderParagraph>(paragraphFinder);
+    final text = paragraph.text.toPlainText(includePlaceholders: false);
+    final prefixBoxes = paragraph.getBoxesForSelection(
+      TextSelection(baseOffset: 0, extentOffset: text.length),
+    );
+    final origin = tester.getTopLeft(paragraphFinder);
+    final actionRect = tester.getRect(articleAction);
+    expect(actionRect.width, greaterThanOrEqualTo(44));
+    expect(actionRect.height, greaterThanOrEqualTo(44));
+    expect(prefixBoxes.last.bottom + origin.dy, closeTo(actionRect.bottom, 4));
+    for (final box in prefixBoxes) {
+      expect(
+        box.toRect().shift(origin).overlaps(actionRect.deflate(0.1)),
+        isFalse,
+      );
+    }
+    await tester.tap(articleAction);
     await tester.pump();
     expect(opened.map((post) => post.id), <String>[
       'article_open',
@@ -2051,180 +2328,45 @@ void main() {
     expect(clicks, isEmpty);
   });
 
-  // ── 首页卡想去动作（意图环 L0 氛围层，B10 三表面之三）──
-  // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-006
-
-  testWidgets('无实体锚点的内容卡不渲染想去动作，不做本地推断', (tester) async {
+  testWidgets('合法主页锚点的图片、视频、文章首页卡均不暴露想去动作或语义', (tester) async {
+    // spec_ref: specs/feature-tree/discovery-content/spec.md#req-002
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(_buildFeed(_microPost()));
-    await tester.pump();
-
-    expect(find.byKey(_kHomeCardWishlistKey), findsNothing);
-  });
-
-  testWidgets('实体锚点内容卡渲染想去动作；游客点击设置双目标续接不静默丢失', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    final behaviorRepo = RecordingContentBehaviorRepository();
-    final tracker = ContentBehaviorTracker(
-      reporter: behaviorRepo,
-      maxBatchSize: 1,
-      enablePeriodicFlush: false,
-    );
-    addTearDown(tracker.dispose);
-
-    late final ProviderContainer container;
-    await tester.pumpWidget(
-      _routedFeed(
-        _wishlistAnchoredPost(),
-        tracker: tracker,
-        extraOverrides: <Override>[
-          intersectionRepositoryProvider.overrideWithValue(
-            _EmptyObjectIntersectionRepository(),
-          ),
-        ],
+    final anchoredPosts = <ContentPostViewData>[
+      _microPost(
+        id: 'anchored-image',
+        primaryHomepageId: 'homepage-image',
+        primaryHomepageType: 'sight',
       ),
-    );
-    await tester.pump();
-    container = ProviderScope.containerOf(
-      tester.element(find.byType(HomeMultiFormFeed)),
-    );
-
-    final wishlistAction = find.byKey(_kHomeCardWishlistKey);
-    expect(wishlistAction, findsOneWidget);
-
-    await tester.ensureVisible(wishlistAction);
-    await tester.tap(wishlistAction, warnIfMissed: false);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    final pending = container.read(authContinuationProvider);
-    expect(pending, isA<WishlistHomepageContinuation>());
-    expect(
-      (pending! as WishlistHomepageContinuation).homepageId,
-      'homepage-wish-card-1',
-    );
-    expect(
-      behaviorRepo.recorded.where(
-        (event) => event.action == BehaviorEventType.wishlistAdd,
+      _videoPost(
+        width: 1080,
+        height: 1920,
+        primaryHomepageId: 'homepage-video',
+        primaryHomepageType: 'sight',
       ),
-      isEmpty,
-      reason: '未登录不得发出 wishlist 行为事实',
-    );
-  });
-
-  testWidgets('登录后点击想去 → wishlist 行为事实上报并诚实确认（无交集不伪造）', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    final behaviorRepo = RecordingContentBehaviorRepository();
-    final tracker = ContentBehaviorTracker(
-      reporter: behaviorRepo,
-      maxBatchSize: 1,
-      enablePeriodicFlush: false,
-    );
-    addTearDown(tracker.dispose);
-
-    await tester.pumpWidget(
-      _routedFeed(
-        _wishlistAnchoredPost(),
-        tracker: tracker,
-        authenticated: true,
-        extraOverrides: <Override>[
-          intersectionRepositoryProvider.overrideWithValue(
-            _EmptyObjectIntersectionRepository(),
-          ),
-        ],
+      _articleLayoutPost(
+        id: 'anchored-article',
+        primaryHomepageId: 'homepage-article',
+        primaryHomepageType: 'sight',
       ),
-    );
-    await tester.pump();
+    ];
 
-    final wishlistAction = find.byKey(_kHomeCardWishlistKey);
-    await tester.ensureVisible(wishlistAction);
-    await tester.tap(wishlistAction, warnIfMissed: false);
-    for (var i = 0; i < 8; i += 1) {
-      await tester.pump(const Duration(milliseconds: 60));
+    for (final post in anchoredPosts) {
+      await tester.pumpWidget(_buildFeed(post));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('home-card-wishlist-action')),
+        findsNothing,
+        reason: '${post.displayFormat} 首页卡不得保留想去点击入口',
+      );
+      expect(
+        find.bySemanticsLabel(ObjectHomepageText.homepageWishlistAction),
+        findsNothing,
+        reason: '${post.displayFormat} 首页卡不得暴露想去可访问性动作',
+      );
     }
-
-    final wishlistEvents = behaviorRepo.recorded
-        .where((event) => event.action == BehaviorEventType.wishlistAdd)
-        .toList(growable: false);
-    expect(wishlistEvents, hasLength(1));
-    expect(wishlistEvents.single.contentId, 'homepage-wish-card-1');
-    expect(
-      find.text(ObjectHomepageText.wishlistAddedFeedback),
-      findsOneWidget,
-      reason: '无交集时只确认动作本身，不伪造社会证明',
-    );
-    // 排空 toast 自动消失 Timer，避免测试结束时残留计时器。
-    await tester.pump(const Duration(seconds: 4));
   });
-}
-
-const _kHomeCardWishlistKey = ValueKey<String>('home-card-wishlist-action');
-
-/// 锚定到支持想去类型实体主页（sight）的内容卡 fixture。
-ContentPostViewData _wishlistAnchoredPost() {
-  return ContentPostViewData(
-    id: 'post_wishlist_card_1',
-    type: 'image',
-    identity: 'work',
-    displayFormat: 'image',
-    assistantUsePolicy: AssistantUsePolicy.inherit,
-    authorId: 'user_wish_author',
-    displayName: '风光摄影师',
-    avatarUrl: '',
-    authorBackgroundUrl: null,
-    authorRoleLabel: '',
-    authorIdentityTags: const <String>[],
-    authorVerified: false,
-    body: '黄龙五彩池的秋天',
-    imageUrls: const <String>[
-      'media/image/s/archived-image/post/fixture_wish_001/v1/cover.png',
-    ],
-    mediaItems: _publicMediaItems(
-      imageUrls: const <String>[
-        'media/image/s/archived-image/post/fixture_wish_001/v1/cover.png',
-      ],
-    ),
-    likeCount: 3,
-    commentCount: 1,
-    shareCount: 0,
-    createdAt: DateTime(2026),
-    primaryHomepageId: 'homepage-wish-card-1',
-    primaryHomepageType: 'sight',
-  );
-}
-
-/// 对象级 typed double：对象交集恒为空（诚实空态分支）。
-final class _EmptyObjectIntersectionRepository
-    implements IntersectionRepository {
-  @override
-  Future<IntersectionInboxSummary> getMyIntersectionSummary() {
-    throw StateError('该 contract 不应读取交集收件箱摘要');
-  }
-
-  @override
-  Future<List<IntersectionReason>> listMyIntersections({
-    String? dimension,
-    String? filter,
-    String? sourceRef,
-    String? timeBucket,
-    String? cursor,
-    int limit = CloudApiQueryDefaults.intersectionListLimit,
-  }) {
-    throw StateError('该 contract 不应列出我的交集');
-  }
-
-  @override
-  Future<List<IntersectionReason>> getObjectIntersections({
-    required String objectId,
-    required String objectType,
-    int limit = CloudApiQueryDefaults.objectIntersectionsLimit,
-  }) async => const <IntersectionReason>[];
 }
 
 /// N6：带 GoRouter 的 feed 宿主，使交集 span 点击的 `context.push` 可达，
@@ -2249,7 +2391,14 @@ Widget _routedFeed(
               isDark: false,
               channelId: 'recommend',
               template: 'single_column_multiform',
-              onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
+              onUserTap: (
+                _, {
+                avatarUrl,
+                avatarAssetId,
+                avatarAccessMode,
+                backgroundUrl,
+                displayName,
+              }) {},
               onPostTap: null,
             ),
           ),
@@ -2648,7 +2797,14 @@ Widget _buildFeedScope({
             isDark: false,
             channelId: channelId,
             template: 'single_column_multiform',
-            onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
+            onUserTap: (
+              _, {
+              avatarUrl,
+              avatarAssetId,
+              avatarAccessMode,
+              backgroundUrl,
+              displayName,
+            }) {},
           ),
         ),
       ),

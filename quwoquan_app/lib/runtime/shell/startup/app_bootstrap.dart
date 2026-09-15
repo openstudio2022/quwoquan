@@ -1,4 +1,8 @@
 import 'dart:async';
+
+import 'package:quwoquan_app/runtime/platform/media/media_orientation_policy.dart';
+
+import 'dart:collection';
 import 'dart:isolate';
 import 'dart:ui';
 
@@ -34,6 +38,152 @@ bool _bootstrapRecoveryMounted = false;
 bool _bootstrapRecoveryScheduled = false;
 List<Override> _bootstrapProviderScopeOverrides = const <Override>[];
 VoidCallback? _configureContentComposition;
+VoidCallback Function()? _createReadGeneration;
+StartupScopeComposition Function()? _createStartupScope;
+final Object _startupLifecycleZoneKey = Object();
+int _startupGeneration = 0;
+
+/// 仅在同步创建 composition 期间可捕获；不改变现有零参 factory，不提供 setter。
+StartupScopeLifecycle? get installingStartupScopeLifecycle {
+  final lifecycle =
+      Zone.current[_startupLifecycleZoneKey] as StartupScopeLifecycle?;
+  return lifecycle?._installing == true ? lifecycle : null;
+}
+
+/// 启动scope本地代际，不是read-generation、持久版本或设备资格。
+final class StartupScopeLifecycle {
+  StartupScopeLifecycle._(this.generation, this._runtimeIdentity)
+    : _attemptId = AppStartupRuntime.instance.startupAttemptId;
+  final int generation;
+  final String _runtimeIdentity;
+  final String _attemptId;
+  bool _active = true;
+  bool _installing = true;
+  bool get isCurrent {
+    if (!_active) return false;
+    try {
+      return CloudRuntimeConfig.runtimeConfigPackageDigest ==
+              _runtimeIdentity &&
+          AppStartupRuntime.instance.startupAttemptId == _attemptId;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  ConfirmedStartupAttempt? get confirmedAttempt =>
+      isCurrent ? AppStartupRuntime.instance.confirmedStartupAttempt : null;
+  void requireCurrent() {
+    if (!isCurrent) throw StateError('Startup scope is no longer current');
+  }
+}
+
+/// 制品入口提供typed overrides与释放句柄，共享启动层不依赖隔离实现。
+final class StartupScopeComposition {
+  StartupScopeComposition({
+    List<Override> overrides = const [],
+    required this.dispose,
+  }) : overrides = List.unmodifiable(overrides);
+  final List<Override> overrides;
+  final VoidCallback dispose;
+}
+
+/// 合并基础与启动级 overrides，同一 provider 只保留最后声明的现役装配。
+List<Override> mergeStartupScopeOverrides(
+  Iterable<Override> base,
+  Iterable<Override> startup,
+) {
+  final seen = HashSet<Object>.identity();
+  return <Override>[...base, ...startup].reversed
+      .where(
+        (override) => seen.add(
+          // Riverpod 3拒绝同container重复origin；这里是组合根去重所需身份。
+          // ignore: invalid_use_of_visible_for_testing_member
+          override.origin,
+        ),
+      )
+      .toList(growable: false)
+      .reversed
+      .toList(growable: false);
+}
+
+void configureAppStartupScope(StartupScopeComposition Function() create) {
+  _createStartupScope = create;
+}
+
+/// 生命周期高于业务read-generation；R0/R1不重复安装启动级store/auth。
+class AppStartupScope extends StatefulWidget {
+  const AppStartupScope({
+    super.key,
+    required this.runtimeIdentity,
+    required this.childBuilder,
+  });
+  final String runtimeIdentity;
+  final Widget Function(List<Override> overrides) childBuilder;
+  @override
+  State<AppStartupScope> createState() => _AppStartupScopeState();
+}
+
+class _AppStartupScopeState extends State<AppStartupScope> {
+  StartupScopeComposition? _composition;
+  StartupScopeLifecycle? _lifecycle;
+  @override
+  void initState() {
+    super.initState();
+    _install();
+  }
+
+  void _install() {
+    if (widget.runtimeIdentity !=
+        CloudRuntimeConfig.runtimeConfigPackageDigest) {
+      throw StateError('Startup scope must match verified runtime identity');
+    }
+    final lifecycle = StartupScopeLifecycle._(
+      ++_startupGeneration,
+      widget.runtimeIdentity,
+    );
+    _lifecycle = lifecycle;
+    try {
+      _composition = runZoned(
+        () => _createStartupScope?.call(),
+        zoneValues: {_startupLifecycleZoneKey: lifecycle},
+      );
+    } catch (_) {
+      lifecycle._active = false;
+      rethrow;
+    } finally {
+      lifecycle._installing = false;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AppStartupScope oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.runtimeIdentity != widget.runtimeIdentity) {
+      final previous = _composition;
+      _lifecycle?._active = false;
+      _composition = null;
+      previous?.dispose();
+      _install();
+    }
+  }
+
+  @override
+  void dispose() {
+    _lifecycle?._active = false;
+    _composition?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => KeyedSubtree(
+    key: ValueKey(widget.runtimeIdentity),
+    child: widget.childBuilder(_composition?.overrides ?? const []),
+  );
+}
+
+void configureAppReadGeneration(VoidCallback Function() create) {
+  _createReadGeneration = create;
+}
 
 /// 由制品入口登记装配，在可信运行配置水合后、任何业务 Provider 创建前执行。
 /// recovery 重入复用同一入口装配，不在共享启动层导入隔离 adapter。
@@ -50,6 +200,7 @@ Zone? _bootstrapZone;
 
 /// 共享启动：默认入口 [main] 与 [main_prod] 均经此函数，后者可注入 [providerScopeOverrides]。
 Future<void> runQuwoquanApp({
+  String? expectedOfflineSnapshotDigest,
   List<Override> providerScopeOverrides = const [],
   bool autoCompleteStartupWelcomeForTest = false,
 }) {
@@ -57,6 +208,7 @@ Future<void> runQuwoquanApp({
   if (existingZone != null) {
     return existingZone.run(
       () => _runQuwoquanAppInBootstrapZone(
+        expectedOfflineSnapshotDigest: expectedOfflineSnapshotDigest,
         providerScopeOverrides: providerScopeOverrides,
         autoCompleteStartupWelcomeForTest: autoCompleteStartupWelcomeForTest,
       ),
@@ -69,6 +221,7 @@ Future<void> runQuwoquanApp({
       _bootstrapZone = Zone.current;
       unawaited(
         _runQuwoquanAppInBootstrapZone(
+          expectedOfflineSnapshotDigest: expectedOfflineSnapshotDigest,
           providerScopeOverrides: providerScopeOverrides,
           autoCompleteStartupWelcomeForTest: autoCompleteStartupWelcomeForTest,
         ).then<void>(
@@ -100,6 +253,7 @@ Future<void> runQuwoquanApp({
 }
 
 Future<void> _runQuwoquanAppInBootstrapZone({
+  required String? expectedOfflineSnapshotDigest,
   required List<Override> providerScopeOverrides,
   required bool autoCompleteStartupWelcomeForTest,
 }) async {
@@ -112,8 +266,17 @@ Future<void> _runQuwoquanAppInBootstrapZone({
   _installRootIsolateErrorListener();
   AppStartupRuntime.instance.markBootstrapStarted();
   try {
+    if (!_bootstrapLifecycleObserverInstalled) {
+      WidgetsBinding.instance.addObserver(MediaOrientationPolicy.instance);
+      WidgetsBinding.instance.addObserver(_AppExceptionLifecycleObserver());
+      _bootstrapLifecycleObserverInstalled = true;
+    }
+    // 原生启动声明与 Flutter 共用正向竖屏；配置失败恢复也不放开方向。
+    await MediaOrientationPolicy.instance.enforcePortraitUp();
     unawaited(_hydrateNativeStartupTimingForBootstrap());
-    await CloudRuntimeConfig.hydrateFromNativeRuntimePackage();
+    await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+      expectedOfflineSnapshotDigest: expectedOfflineSnapshotDigest,
+    );
     _configureContentComposition?.call();
     if (CloudRuntimeConfig.networkAccessAllowed) {
       registerFirebaseIncomingCallBackgroundHandler();
@@ -144,31 +307,26 @@ Future<void> _runQuwoquanAppInBootstrapZone({
     SystemChrome.setSystemUIOverlayStyle(
       AppTheme.systemUiOverlayStyleFor(Brightness.light),
     );
-    unawaited(
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]),
-    );
-
-    if (!_bootstrapLifecycleObserverInstalled) {
-      WidgetsBinding.instance.addObserver(_AppExceptionLifecycleObserver());
-      _bootstrapLifecycleObserverInstalled = true;
-    }
     AppStartupRuntime.instance.markRunAppCalled();
     runApp(
-      RuntimeRecoveryHost(
-        childBuilder: (generationKey, isRuntimeReentry) => ProviderScope(
-          key: generationKey,
-          overrides: providerScopeOverrides,
-          child: QuWoQuanAppRoot(
-            autoCompleteStartupWelcomeForTest:
-                autoCompleteStartupWelcomeForTest,
-            skipStartupWelcome: isRuntimeReentry,
-            postFirstFrameTasks: _hydratePostFirstFrameStartupState,
-            authNetworkPrerequisites: null,
+      AppStartupScope(
+        runtimeIdentity: CloudRuntimeConfig.runtimeConfigPackageDigest,
+        childBuilder: (startupOverrides) => RuntimeRecoveryHost(
+          createReadGeneration: _createReadGeneration,
+          readSourceIdentity: CloudRuntimeConfig.runtimeConfigPackageDigest,
+          childBuilder: (generationKey, isRuntimeReentry) => ProviderScope(
+            key: generationKey,
+            overrides: mergeStartupScopeOverrides(
+              providerScopeOverrides,
+              startupOverrides,
+            ),
+            child: QuWoQuanAppRoot(
+              autoCompleteStartupWelcomeForTest:
+                  autoCompleteStartupWelcomeForTest,
+              skipStartupWelcome: isRuntimeReentry,
+              postFirstFrameTasks: _hydratePostFirstFrameStartupState,
+              authNetworkPrerequisites: null,
+            ),
           ),
         ),
       ),

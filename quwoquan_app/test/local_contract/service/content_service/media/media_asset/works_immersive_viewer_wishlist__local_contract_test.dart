@@ -264,7 +264,7 @@ WorksImmersiveViewer _viewer(
         _photoRaw(post, homepageId: homepageId, homepageType: homepageType),
       ),
     },
-    onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+    onUserTap: (_, {avatarUrl, avatarAssetId, avatarAccessMode, displayName, backgroundUrl}) {},
     onAssistantTap: () {},
   );
 }
@@ -336,7 +336,7 @@ void main() {
               'primaryHomepageSnapshot': <String, Object?>{'title': '都江堰'},
             }),
           },
-          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onUserTap: (_, {avatarUrl, avatarAssetId, avatarAccessMode, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
         overrides: <Override>[

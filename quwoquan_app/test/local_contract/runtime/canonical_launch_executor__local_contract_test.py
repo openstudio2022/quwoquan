@@ -91,6 +91,12 @@ class _FakePlatformDriver:
         self.events.append("write-request")
         self.request = json.loads(payload)
 
+    def prepare_activation_receipt_observation(self, request_digest: str) -> None:
+        self.events.append("prepare-receipt-observation")
+        self.files[executor.RECEIPT_FILE_NAME] = (
+            activation.activation_receipt_observation_marker(request_digest)
+        )
+
     def launch_activation(self, request_digest: str) -> None:
         self.events.append("launch-activation")
         assert self.request is not None
@@ -252,6 +258,10 @@ class CanonicalLaunchExecutorContractTest(
         )
         self.assertLess(
             driver.events.index("write-request"),
+            driver.events.index("prepare-receipt-observation"),
+        )
+        self.assertLess(
+            driver.events.index("prepare-receipt-observation"),
             driver.events.index("launch-activation"),
         )
         self.assertLess(
@@ -405,40 +415,156 @@ class CanonicalLaunchExecutorContractTest(
         self.assertNotIn("launch-activation", driver.events)
         self.assertNotIn("launch-application", driver.events)
 
+    def _install_failed_activation_receipt(
+        self,
+        driver: _FakePlatformDriver,
+        request_digest: str,
+        *,
+        identity: str = "matching",
+    ) -> None:
+        assert driver.request is not None
+        request = driver.request
+        receipt = {
+            "schema": "app-runtime-config-activation-receipt",
+            "status": "failed",
+            "requestDigest": request_digest,
+            "environment": request["environment"],
+            "buildProfile": request["buildProfile"],
+            "target": request["target"],
+            "packageDigest": request["packageDigest"],
+            "trustEnvelopeDigest": request["trustEnvelopeDigest"],
+            "effectiveLaunchManifestDigest": request[
+                "effectiveLaunchManifestDigest"
+            ],
+            "launchProvenance": request["effectiveLaunchManifest"][
+                "launchProvenance"
+            ],
+            "runtimeConfigSupplyMode": request["effectiveLaunchManifest"][
+                "runtimeConfigSupplyMode"
+            ],
+            "previousActiveDigest": request["expectedActiveDigest"],
+            "activePackageDigest": request["expectedActiveDigest"],
+            "errorCode": "runtime_config_active_digest_conflict",
+            "validationIssues": [
+                "runtime_config_active_digest_conflict",
+            ],
+        }
+        if identity == "empty":
+            for field in activation.REQUEST_IDENTITY_FIELDS:
+                receipt[field] = ""
+        elif identity == "partial-empty":
+            receipt["environment"] = ""
+        elif identity == "partial-wrong":
+            receipt["environment"] = "beta"
+        driver.files[executor.RECEIPT_FILE_NAME] = executor.canonical_json_bytes(
+            receipt
+        )
+
+    def test_observation_marker_waits_without_decoding_receipt_schema(self) -> None:
+        handoff, _ = self._handoff()
+        driver = _FakePlatformDriver()
+        driver.launch_activation = lambda request_digest: driver.events.append(
+            "launch-activation"
+        )
+
+        with mock.patch.object(
+            activation.time,
+            "monotonic",
+            side_effect=(0.0, 0.1, 2.0),
+        ), mock.patch.object(activation.time, "sleep"):
+            with self.assertRaisesRegex(
+                executor.CanonicalExecutorError,
+                "did not replace the observation marker",
+            ):
+                activation.activate_runtime_config(
+                    handoff=handoff,
+                    platform_driver=driver,
+                    activation_timeout_seconds=1.0,
+                )
+
+        marker = driver.files[executor.RECEIPT_FILE_NAME]
+        self.assertEqual(
+            json.loads(marker),
+            {
+                "requestDigest": runtime_config_activation_request_digest(
+                    driver.request
+                ),
+                "schema": activation.ACTIVATION_OBSERVATION_SCHEMA,
+            },
+        )
+        with self.assertRaisesRegex(
+            executor.CanonicalExecutorError,
+            "activation receipt fields are invalid",
+        ):
+            activation.decode_activation_receipt(
+                marker,
+                label="activation receipt",
+            )
+
+    def test_prepare_observation_failure_blocks_activation_launch(self) -> None:
+        handoff, _ = self._handoff()
+        driver = _FakePlatformDriver()
+        driver.prepare_activation_receipt_observation = mock.Mock(
+            side_effect=executor.CanonicalExecutorError(
+                "unable to prepare activation receipt observation"
+            )
+        )
+
+        with self.assertRaisesRegex(
+            executor.CanonicalExecutorError,
+            "unable to prepare activation receipt observation",
+        ):
+            activation.activate_runtime_config(
+                handoff=handoff,
+                platform_driver=driver,
+                activation_timeout_seconds=1.0,
+            )
+
+        self.assertIn("write-request", driver.events)
+        self.assertNotIn("launch-activation", driver.events)
+
+    def test_exact_activated_receipt_republication_is_accepted_as_fresh(self) -> None:
+        handoff, _ = self._handoff()
+        driver = _FakePlatformDriver()
+        original_launch_activation = driver.launch_activation
+
+        def write_matching_old_receipt(payload: bytes) -> None:
+            driver.events.append("write-request")
+            driver.request = json.loads(payload)
+            original_launch_activation(
+                runtime_config_activation_request_digest(driver.request)
+            )
+            driver.events.remove("launch-activation")
+
+        driver.write_activation_request = write_matching_old_receipt
+
+        receipt = activation.activate_runtime_config(
+            handoff=handoff,
+            platform_driver=driver,
+            activation_timeout_seconds=1.0,
+        )
+
+        self.assertEqual(receipt["status"], "activated")
+        self.assertEqual(
+            driver.events,
+            [
+                f"read:{executor.ACTIVE_RECEIPT_FILE_NAME}",
+                "write-request",
+                "prepare-receipt-observation",
+                "launch-activation",
+                f"read:{executor.RECEIPT_FILE_NAME}",
+                f"read:{executor.ACTIVE_RECEIPT_FILE_NAME}",
+            ],
+        )
+
     def test_failed_activation_receipt_never_advances_to_configured(self) -> None:
         handoff, _ = self._handoff()
         driver = _FakePlatformDriver()
         phases: list[str] = []
 
         def fail_activation(request_digest: str) -> None:
-            assert driver.request is not None
-            request = driver.request
             driver.events.append("launch-activation")
-            driver.files[executor.RECEIPT_FILE_NAME] = executor.canonical_json_bytes(
-                {
-                    "schema": "app-runtime-config-activation-receipt",
-                    "status": "failed",
-                    "requestDigest": request_digest,
-                    "environment": request["environment"],
-                    "buildProfile": request["buildProfile"],
-                    "target": request["target"],
-                    "packageDigest": request["packageDigest"],
-                    "trustEnvelopeDigest": request["trustEnvelopeDigest"],
-                    "effectiveLaunchManifestDigest": request[
-                        "effectiveLaunchManifestDigest"
-                    ],
-                    "launchProvenance": request["effectiveLaunchManifest"][
-                        "launchProvenance"
-                    ],
-                    "runtimeConfigSupplyMode": request["effectiveLaunchManifest"][
-                        "runtimeConfigSupplyMode"
-                    ],
-                    "previousActiveDigest": request["expectedActiveDigest"],
-                    "activePackageDigest": request["expectedActiveDigest"],
-                    "errorCode": "runtime_config_active_digest_conflict",
-                    "validationIssues": ["runtime_config_active_digest_conflict"],
-                }
-            )
+            self._install_failed_activation_receipt(driver, request_digest)
 
         driver.launch_activation = fail_activation
         launch = executor.CanonicalLaunchExecutor(
@@ -458,6 +584,63 @@ class CanonicalLaunchExecutorContractTest(
 
         self.assertNotIn("QWQ_APP_LAUNCH_PHASE status=configured", phases)
         self.assertNotIn("launch-application", driver.events)
+
+    def test_pre_identity_failed_receipt_reports_native_typed_failure(self) -> None:
+        handoff, _ = self._handoff()
+        driver = _FakePlatformDriver()
+
+        def fail_before_identity(request_digest: str) -> None:
+            driver.events.append("launch-activation")
+            self._install_failed_activation_receipt(
+                driver,
+                request_digest,
+                identity="empty",
+            )
+
+        driver.launch_activation = fail_before_identity
+        with self.assertRaisesRegex(
+            executor.CanonicalExecutorError,
+            "native runtime configuration activation failed: "
+            "errorCode=runtime_config_active_digest_conflict; "
+            "validationIssues=runtime_config_active_digest_conflict",
+        ) as raised:
+            activation.activate_runtime_config(
+                handoff=handoff,
+                platform_driver=driver,
+                activation_timeout_seconds=1.0,
+            )
+
+        self.assertNotIn("does not match request", str(raised.exception))
+
+    def test_partial_failed_receipt_identity_reports_corruption(self) -> None:
+        handoff, _ = self._handoff()
+
+        for identity in ("partial-empty", "partial-wrong"):
+            with self.subTest(identity=identity):
+                driver = _FakePlatformDriver()
+
+                def fail_with_partial_identity(request_digest: str) -> None:
+                    driver.events.append("launch-activation")
+                    self._install_failed_activation_receipt(
+                        driver,
+                        request_digest,
+                        identity=identity,
+                    )
+
+                driver.launch_activation = fail_with_partial_identity
+                with self.assertRaisesRegex(
+                    executor.CanonicalExecutorError,
+                    "native activation receipt identity is corrupt",
+                ) as raised:
+                    activation.activate_runtime_config(
+                        handoff=handoff,
+                        platform_driver=driver,
+                        activation_timeout_seconds=1.0,
+                    )
+
+                self.assertNotIn("alpha", str(raised.exception))
+                self.assertNotIn("beta", str(raised.exception))
+                self.assertNotIn("does not match request", str(raised.exception))
 
     def test_stale_activation_receipt_times_out_without_launching_application(self) -> None:
         handoff, _ = self._handoff()
@@ -656,7 +839,9 @@ class CanonicalLaunchExecutorContractTest(
                         executor,
                         "APP_DIR",
                         projected_app_dir,
-                    ), mock.patch.object(
+                    ), mock.patch(
+                        "quwoquan_app.scripts.device.app_source_isolation.audit_source_closure"
+                    ) as audit_source_closure, mock.patch.object(
                         activation,
                         "validate_cocoapods_child_environment",
                         side_effect=validate_cocoapods,
@@ -682,6 +867,11 @@ class CanonicalLaunchExecutorContractTest(
                             projected_app_dir / artifact_relative_path,
                         )
 
+                    audit_source_closure.assert_called_once_with(
+                        projected_app_dir,
+                        "lib/main_prod.dart",
+                        alpha=False,
+                    )
                     validate.assert_called_once()
                     child = run_checked.call_args.kwargs["environment"]
                     expected_build_settings = {

@@ -134,6 +134,10 @@ def _validate_schema_value(
         value != "" and not is_digest_identity(value, contract)
     ):
         issues.append(f"{field_path} must be empty or a canonical digest identity")
+    elif format_name == "rehearsal_instance_id" and (
+        not isinstance(value, str) or re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", value) is None
+    ):
+        issues.append(f"{field_path} must be a canonical rehearsal instance")
     elif format_name == "git_object_sha" and (
         not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40}", value) is None
     ):
@@ -164,6 +168,7 @@ def _validate_schema_value(
         None,
         "sha256_identity",
         "optional_sha256_identity",
+        "rehearsal_instance_id",
         "git_object_sha",
         "git_tree_digest",
         "rfc3339_utc",

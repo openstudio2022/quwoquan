@@ -203,6 +203,12 @@ func TestEveryAppSurfaceOperationHasOneSourceDerivedTypedOwner(t *testing.T) {
 		if operation.RequestBindings != nil {
 			bindings = *operation.RequestBindings
 		}
+		if operation.Transport == "graphql" && strings.TrimSpace(operation.RequestBodyKind) == "none" {
+			if _, persistedErr := loadGraphQLRequestSpec(operation, model); persistedErr != nil {
+				failures = append(failures, persistedErr.Error())
+			}
+			continue
+		}
 		for _, validate := range []func() error{
 			func() error {
 				return validateRequestModelCanonicalEnums(

@@ -1,26 +1,5 @@
 part of 'works_immersive_viewer.dart';
 
-enum _WorksInternalFeedTerminal {
-  loading,
-  content,
-  canonicalEmpty,
-  blockingError,
-}
-
-final class _WorksInternalFeedAggregate {
-  const _WorksInternalFeedAggregate({
-    required this.terminal,
-    required this.posts,
-    this.blockingError,
-    this.emptyReason,
-  });
-
-  final _WorksInternalFeedTerminal terminal;
-  final List<ContentPostViewData> posts;
-  final Object? blockingError;
-  final ContentFeedEmptyReason? emptyReason;
-}
-
 extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   List<ContentPostViewData> _buildFeed() {
     if (_usesExternalFeed) {
@@ -540,6 +519,26 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     ];
   }
 
+  List<double?> _imageAspectRatiosForPost(ContentPostViewData post) {
+    final urls = _imageUrlsForPost(post);
+    final imageItems = _workItemFor(post).mediaItems
+        .where((media) => media.kind == 'image' && media.url.trim().isNotEmpty)
+        .toList(growable: false);
+    return <double?>[
+      for (var index = 0; index < urls.length; index++)
+        if (index < imageItems.length &&
+            (imageItems[index].width ?? 0) > 0 &&
+            (imageItems[index].height ?? 0) > 0)
+          imageItems[index].width! / imageItems[index].height!
+        else if (urls.length == 1 &&
+            (post.width ?? 0) > 0 &&
+            (post.height ?? 0) > 0)
+          post.width! / post.height!
+        else
+          null,
+    ];
+  }
+
   String? _originalMediaIdFor(ContentPostViewData post, int imageIndex) {
     final item = _workItemFor(post);
     final imageItems = item.mediaItems
@@ -657,6 +656,13 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
             accessMode: item.accessMode,
             publicUrl: item.coverUrl ?? '',
           ),
+          aspectRatio: (item.width ?? 0) > 0 && (item.height ?? 0) > 0
+              ? item.width! / item.height!
+              : sources.length == 1 &&
+                    (post.width ?? 0) > 0 &&
+                    (post.height ?? 0) > 0
+              ? post.width! / post.height!
+              : 0,
           verifiedDuration: item.durationMs == null
               ? null
               : Duration(milliseconds: item.durationMs!),
@@ -711,24 +717,6 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       trackVersion: trackVersion,
       manifestReference: reference,
     );
-  }
-
-  void _applyFilterSelection(Set<String> selectedIds) {
-    final nextIds = selectedIds.isEmpty || selectedIds.contains('all')
-        ? <String>{'all'}
-        : selectedIds;
-    _setMountedState(() {
-      _selectedWorkFilterIds = nextIds;
-      _currentPage = 0;
-      _invalidateVideoViewport(resetDurationWindow: false);
-      _pageController.jumpToPage(0);
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _retainPostLocalStateAround(_buildFeed(), _currentPage);
-    });
   }
 
   Map<String, Object?>? _rawPostById(String postId) {
@@ -799,8 +787,11 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     ContentPostViewData? post,
   ) {
     return _WorksTopChromeTheme(
-      overlayStyle: const SystemUiOverlayStyle(
-        statusBarColor: AppColors.black,
+      overlayStyle: SystemUiOverlayStyle(
+        statusBarColor:
+            post != null && (_isImageLikePost(post) || _isVideoLikePost(post))
+            ? AppColors.transparent
+            : AppColors.black,
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
         systemNavigationBarColor: AppColors.black,
@@ -924,17 +915,8 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   }
 
   bool _shouldMediaInvadeStatusBar(ContentPostViewData post) {
-    if (_isVideoLikePost(post)) {
-      return true;
-    }
-    if (!_isImageLikePost(post)) {
-      return false;
-    }
-    final aspectRatio = post.aspectRatio;
-    if (aspectRatio == null || aspectRatio <= AppSpacing.zero) {
-      return false;
-    }
-    return aspectRatio <= AppSpacing.immersiveStatusBarMaxAspectRatio;
+    // 媒体画布保留整视口，是否覆盖状态栏只由共享整栏几何决定。
+    return _isVideoLikePost(post) || _isImageLikePost(post);
   }
 
   bool _isCaptionExpanded(String postId) {
@@ -942,6 +924,11 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   }
 
   void _toggleCaptionExpanded(String postId) {
+    final post = _postById(_buildFeed(), postId);
+    if (post != null && (_isImageLikePost(post) || _isVideoLikePost(post))) {
+      _showMediaCaptionSheet(post);
+      return;
+    }
     _setMountedState(() {
       _rememberPostLocalState(postId);
       if (_expandedCaptionPostIds.contains(postId)) {

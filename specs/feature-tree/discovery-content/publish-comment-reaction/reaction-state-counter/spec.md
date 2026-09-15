@@ -28,6 +28,7 @@
 ### REQ-001 互动状态状态计数
 
 - “互动状态状态计数”必须通过父能力公开契约交付可观察结果；失败时返回 canonical failure，不写入成功事实。
+- Alpha 经对象级本地 adapter 执行同一 command/query 合同并读回计数；Beta/Gamma/Prod 仍只经 production Remote。游客点赞与需登录动作按现役 authMode 分别验证。
 
 <a id="req-002"></a>
 ### REQ-002 服务本地契约引用边界

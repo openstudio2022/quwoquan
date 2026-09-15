@@ -2166,6 +2166,21 @@ HANDOFF_CMD=(
   --launch-policy test_live
   --runtime-config-trust-output "$RUNTIME_CONFIG_TRUST_PATH"
 )
+if [[ -n "$CANONICAL_LAUNCH_CONTROL" && "$CONTENT_SOURCE" == "bundled_snapshot" ]]; then
+  HANDOFF_CMD+=(
+    --source-capsule-manifest "$QWQ_PACKAGE_SOURCE_CAPSULE_MANIFEST"
+    --launch-control-ref "$CANONICAL_LAUNCH_CONTROL"
+    --launch-control-digest "$CANONICAL_LAUNCH_CONTROL_DIGEST"
+    --launch-output-root "$QWQ_OUTPUT_ROOT"
+    --launch-device-id "$DEVICE_ID"
+    --launch-candidate-digest "$QWQ_CANONICAL_CANDIDATE_DIGEST"
+    --launch-attempt-ref "$LAUNCH_RECEIPT"
+    --launch-report-ref "$TEST_LIVE_REPORT_OVERRIDE"
+  )
+  if [[ "${QWQ_CANONICAL_REHEARSAL_MODE:-}" == "isolated" ]]; then
+    HANDOFF_CMD+=(--isolated-rehearsal)
+  fi
+fi
 if [[ -n "$ANDROID_LOCAL_GATEWAY_BASE_URL" ]]; then
   HANDOFF_CMD+=(--gateway-base-url "$ANDROID_LOCAL_GATEWAY_BASE_URL")
 fi
@@ -2204,27 +2219,7 @@ if ! HANDOFF_JSON="$("${HANDOFF_CMD[@]}")"; then
   exit 2
 fi
 HANDOFF_EXPORTS="$(
-  python3 - "$HANDOFF_JSON" <<'PY'
-import json
-import shlex
-import sys
-
-handoff = json.loads(sys.argv[1])
-print("ENTRYPOINT=" + shlex.quote(handoff["entrypoint"]))
-print("LAUNCH_PROVENANCE=" + shlex.quote(handoff["launchProvenance"]))
-print("RUNTIME_CONFIG_SUPPLY_MODE=" + shlex.quote(
-    handoff["runtimeConfigSupplyMode"]
-))
-print("RUNTIME_CONFIG_PACKAGE_DIGEST=" + shlex.quote(
-    handoff["runtimeConfigPackageDigest"]
-))
-print("RUNTIME_CONFIG_TRUST_ENVELOPE_DIGEST=" + shlex.quote(
-    handoff["runtimeConfigTrustEnvelopeDigest"]
-))
-print("EFFECTIVE_LAUNCH_MANIFEST_DIGEST=" + shlex.quote(
-    handoff["effectiveLaunchManifestDigest"]
-))
-PY
+  python3 "$APP_DIR/scripts/device/build_launcher_handoff.py" --handoff-shell-exports "$HANDOFF_JSON"
 )" || {
   echo "[run] GATE_BLOCK: failed to parse launcher handoff." >&2
   exit 2

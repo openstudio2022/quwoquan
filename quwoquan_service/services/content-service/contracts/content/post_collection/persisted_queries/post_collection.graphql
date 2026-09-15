@@ -1,0 +1,14 @@
+query PostCollection($collectionId: ID!, $first: Int! = 20, $after: String) {
+  postCollection(collectionId: $collectionId, first: $first, after: $after) {
+    collectionId
+    ownerPersonaId
+    name
+    coverAssetId
+    visibility
+    version
+    members(first: $first) { postId contentType title }
+    visibleCount
+    nextCursor
+    canManage
+  }
+}

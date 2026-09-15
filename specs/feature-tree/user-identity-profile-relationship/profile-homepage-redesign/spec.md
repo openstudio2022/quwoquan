@@ -137,6 +137,13 @@
 - 防卡死纪律：以上模块加载失败或缓慢均不阻塞主页首屏与滚动（骨架有界、错误态带 inline retry）。已读水位与埋点失败不阻断展示。
 - 同屏最多一处交集模块的 UX 阶梯约束不被破坏（「我的行动」「共同经历」是行动/经历资产面，不是第二处交集推荐模块）。
 
+<a id="req-009"></a>
+### REQ-009 作者头像完整 typed 绑定在导航交接中不丢失
+
+- 首页、评论、搜索、消息与视频书作者入口向他人主页传递完整 typed 头像引用（assetId、accessMode、URL），不得只传裸 URL。
+- ProfileShell 在资料 query 成功后以 profile 绑定为权威值；无完整绑定的初始 URL 只作加载占位，不推断为 public，资料到达后原子替换整份绑定，禁止旧 URL 与新 asset/accessMode 混搭。
+- 主头像与吸顶头像使用同一选择规则；`kind` 表达资源类型，profile 缩放不得改写资源类型。草稿图走独立 typed draft 入口，Header 不得对 URL 做本地文件猜测。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`user-identity-profile-relationship`](../spec.md) 声明的领域入口。
@@ -231,6 +238,14 @@
 - THEN 影响力面「成行力」行消费 creator 锚点社会证明两级诚实计数，成形为 0 或读取失败不渲染。
 - AND 任一模块读取失败均呈现可恢复错误态且不阻塞主页首屏，负例是读取失败不得伪造"暂无行动/暂无经历"空态。
 
+<a id="sit-009"></a>
+### SIT-009 作者主页头像完整绑定与吸顶解码
+
+- GIVEN 首页 Post 声明完整作者头像绑定，用户点击作者进入他人主页。
+- WHEN 主页加载期间展示初始头像，随后 profile query 成功。
+- THEN 主头像与吸顶头像均使用 profile 权威绑定实际解码；初始 URL 不持续遮蔽完整绑定，也不被推断为 public。
+- AND 从评论、搜索或消息作者入口进入时使用同一选择规则。
+
 ## 8. 开放事项
 
 <a id="open-005"></a>
@@ -262,3 +277,12 @@
 - 影响或价值：尚缺 gamma 真实环境证据——`REQ-008` 的端侧实现与 `SIT-008` local_contract 层已闭合（可约分组/入口、我的行动私有读面四分组、共同经历资产行、成行力行均有 widget/domain/服务端契约测试 `spec_ref`），host 公开与私有读面的 App api_integration runner 与 `profile_journey` UAT 交集资产面断言段均已就位。执行入口为 `stackctl app-domain-api-integration --target gamma-local`（topology 投影注入，无手写 URL）。gamma-local 收口权已正式移交环境编排主线：三轮攻坚中 package 尝试均命中其 runtime 互斥锁，且观察到主线多轮 down→package→up→health 循环仍失败于同一根因（`startup Provider runtime identity is not current`，最新证据 `.qwq_output/env/gamma/runs/20260813T041624056444Z-*-health-gamma-local`）。attestation 输入已定位（`content-gamma-research-pool-20260811-001` + 回滚基线）。
 - 目标：gamma 恢复后执行 `gathering_list_by_host_remote__api_integration_test.dart`（含 `ListMyHostedGatherings` 诚实空页断言）与 `profile_journey__user_acceptance_test.dart` 的交集资产面断言段（经历交集出现、资产行渲染、我的行动分组页回读）。
 - 完成判定：`SIT-008` 的 api_integration 与 user_acceptance 层在 gamma 通过且真实测试 `spec_ref` 有效
+
+<a id="open-010"></a>
+### OPEN-010 作者头像完整绑定与吸顶解码证据待旅程闭合
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`SIT-009` 的 local_contract 已证明非空初始 URL 不遮蔽 profile 权威绑定；主/吸顶真实解码、评论/搜索/消息入口同一选择规则的双端旅程尚未闭合。
+- 完成判定：`SIT-009` 由子句级 spec_ref 与双端旅程直接绑定。

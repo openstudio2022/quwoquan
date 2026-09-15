@@ -14,6 +14,7 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/h
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_multi_form_feed.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/my_profile_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// WebMainAppShell 的 production composition root。
 ///
@@ -48,6 +49,8 @@ final webMainAppShellDependenciesProvider =
                   (
                     userId, {
                     String? avatarUrl,
+                    String? avatarAssetId,
+                    MediaDeliveryAccessMode? avatarAccessMode,
                     String? displayName,
                     String? backgroundUrl,
                   }) {
@@ -56,6 +59,8 @@ final webMainAppShellDependenciesProvider =
                       extra: UserProfileRouteExtra(
                         personaId: userId,
                         avatarUrl: avatarUrl,
+                        avatarAssetId: avatarAssetId,
+                        avatarAccessMode: avatarAccessMode,
                         displayName: displayName,
                         backgroundImage: backgroundUrl,
                       ),

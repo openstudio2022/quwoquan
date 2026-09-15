@@ -12,10 +12,6 @@ final videoPreviewTrackQueryProvider = Provider<VideoPreviewTrackQuery>((ref) {
   if (CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot) {
     return const BundledVideoPreviewTrackQuery();
   }
-  final endpointConfig = ref.watch(mediaEndpointConfigProvider);
-  if (endpointConfig == null) {
-    throw StateError('视频预览轨缺少 package-bound media endpoint config');
-  }
   return RemoteVideoPreviewTrackQuery(
     mediaDelivery: ref.watch(publicMediaDeliveryProvider),
     telemetry: ref.watch(appTelemetryReporterProvider),

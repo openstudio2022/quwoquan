@@ -2,15 +2,6 @@ part of 'works_immersive_viewer.dart';
 
 extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
   Widget _buildViewer(BuildContext context) {
-    ref.listen<AuthSessionState>(authSessionControllerProvider, (
-      AuthSessionState? previous,
-      AuthSessionState next,
-    ) {
-      if (next.isAuthenticated &&
-          (previous == null || !previous.isAuthenticated)) {
-        _scheduleAuthContinuationResume();
-      }
-    });
     if (ref.watch(authSessionControllerProvider).isAuthenticated) {
       _scheduleAuthContinuationResume();
     }
@@ -57,7 +48,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
     final commentSplitPost = _commentSplitPostId == null
         ? null
         : _postById(posts, _commentSplitPostId!);
-    if (commentSplitPost != null) {
+    if (commentSplitPost != null && !_pureMediaLandscape) {
       final interaction = ref.watch(postInteractionStateProvider);
       final splitPostId = commentSplitPost.id;
       // 评论分屏复用沉浸式状态栏样式（透明 + 浅色图标），避免回落为白底。
@@ -101,7 +92,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
             onClose: () {
               _setMountedState(() {
                 _commentSplitPostId = null;
-                _invalidateVideoViewport(resetDurationWindow: false);
+                _invalidateVideoViewport();
               });
             },
           ),
@@ -126,11 +117,20 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
         ? null
         : _primaryIntersectionReasonFor(currentPost);
     final showContentIntersection = intersectionReason != null;
+    final landscapeAspectRatio = currentPost == null
+        ? 0.0
+        : _landscapeAspectRatioForPost(currentPost);
+    final landscapeGeometry = _pureMediaLandscape
+        ? ImmersiveLandscapeGeometry(
+            size: MediaQuery.sizeOf(context),
+            safeInsets: MediaQuery.viewPaddingOf(context),
+            aspectRatio: landscapeAspectRatio,
+          )
+        : null;
     // - 图片多图：点指示器（● ● ○ ● ●，最多 6 点）
     // - 视频：由统一 bottom chrome 装配视频集进度、caption 与时间轴
     Widget? captionHeader;
     Widget? videoBottomChrome;
-    Widget? videoIntersection;
     if (currentPost != null) {
       if (_isImageLikePost(currentPost) && progress.total > 1) {
         captionHeader = _WorksPageIndicator(
@@ -138,621 +138,554 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
           current: progress.current,
         );
       } else if (_isVideoLikePost(currentPost)) {
-        final sharedTimelineEnabled = ref.watch(
-          contentFeatureFlagProvider('enable_shared_video_timeline'),
-        );
-        final previewEnabled = ref.watch(
-          contentFeatureFlagProvider('enable_video_timeline_preview'),
-        );
-        final videoItems = _videoItemsFor(currentPost);
-        final activeVideoIndex = _videoIndexFor(currentPost.id, videoItems);
-        final activeVideoItem =
-            activeVideoIndex >= 0 && activeVideoIndex < videoItems.length
-            ? videoItems[activeVideoIndex]
-            : null;
-        final activeVideoIdentity = activeVideoItem?.identity;
-        final activeBinding = _activeVideoBinding;
-        videoIntersection = intersectionReason == null
-            ? null
-            : HomeFeedCrossObjectComposition.immersiveIntersectionStatement(
-                key: const ValueKey<String>(
-                  'works-caption-intersection-reason',
-                ),
-                reason: intersectionReason,
-                contextObjectName: currentPost.normalizedTitle.trim().isNotEmpty
-                    ? currentPost.normalizedTitle.trim()
-                    : currentPost.normalizedBody.trim(),
-                contextObjectTarget: _postIntersectionContextTarget(
-                  currentPost,
-                ),
-                onSpanTap: (_) => _showIntersectionDetail(context, currentPost),
-                onFallbackTap: () =>
-                    _showIntersectionDetail(context, currentPost),
-              );
-        videoBottomChrome = _WorksVideoBottomChrome(
-          key: ValueKey<String>(
-            'works-video-chrome-${currentPost.id}-'
-            '${activeVideoIdentity ?? 'unresolved'}-'
-            '$_videoDurationWindowRevision',
-          ),
-          layoutSpec: currentLayoutSpec,
-          intersection: videoIntersection,
-          title: overlayTitle,
-          caption: overlayBody,
-          sourceAttribution: currentPost.sourceAttribution,
-          isExpanded: _isCaptionExpanded(currentPost.id),
-          onToggleCaption: () => _toggleCaptionExpanded(currentPost.id),
-          session:
-              activeVideoIdentity != null &&
-                  activeBinding?.postId == currentPost.id &&
-                  activeBinding?.episodeIdentity == activeVideoIdentity &&
-                  activeBinding?.episodeIndex == activeVideoIndex &&
-                  activeBinding?.viewportEpoch == _videoViewportEpoch
-              ? activeBinding?.session
-              : null,
-          durationWindowActive: _videoDurationWindowActive,
-          sharedTimelineEnabled: sharedTimelineEnabled,
-          previewTrackDescriptor: previewEnabled
-              ? activeVideoItem?.previewTrackDescriptor
-              : null,
-          previewTrackQuery: ref.watch(videoPreviewTrackQueryProvider),
-          episodeCurrent: progress.current,
-          episodeTotal: progress.total,
-        );
+        // 视频的媒体与 chrome 在分集内同一次布局完成，不再覆盖第二层。
+        videoBottomChrome = const SizedBox.shrink();
       }
     }
-    // 与 welcome_screen 一致：阻断 MaterialApp 默认 TextStyle 合并带来的误装饰（黄下划线等）。
-    return DefaultTextStyle.merge(
-      style: const TextStyle(
-        decoration: TextDecoration.none,
-        decorationThickness: 0,
-      ),
-      child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: topChromeTheme.overlayStyle,
-        child: GestureDetector(
-          behavior: HitTestBehavior.deferToChild,
-          onTap: () {
-            if (!widget.showWorksToolbar) widget.onHideSystemNav?.call();
-          },
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Listener(
-                  onPointerDown: _handleImmersivePointerDown,
-                  onPointerMove: _handleImmersivePointerMove,
-                  onPointerUp: (_) {
-                    _handleImmersivePointerEnd();
-                  },
-                  onPointerCancel: (_) {
-                    _gestureIntentController.cancel();
-                  },
-                  child: PageView.builder(
-                    key: TestKeys.worksImmersivePager,
-                    controller: _pageController,
-                    scrollDirection: Axis.vertical,
-                    physics: WorksImmersiveVerticalPagePhysics(
-                      currentPage: () => _currentPage,
-                      holdVerticalScroll: () =>
-                          _gestureIntentController.shouldHoldVerticalScroll,
-                    ),
-                    itemCount: posts.isEmpty
-                        ? 1
-                        : posts.length + (showLoadMoreSentinel ? 1 : 0),
-                    onPageChanged: (index) {
-                      if (_currentPage != index) {
-                        // Flush dwell time for the previous post
-                        if (posts.isNotEmpty && _currentPage < posts.length) {
-                          final prevPost =
-                              posts[_currentPage.clamp(0, posts.length - 1)];
-                          _flushDwell(prevPost, trackSkip: true);
-                        }
-
-                        final nextIsSentinel =
-                            showLoadMoreSentinel && index >= posts.length;
-                        _setMountedState(() {
-                          _currentPage = index;
-                          _awaitingPrefetchedReveal = nextIsSentinel;
-                          _invalidateVideoViewport(resetDurationWindow: true);
-                          _retainPostLocalStateAround(posts, index);
-                        });
-                        _feedPerformanceObservability
-                            .recordActiveVideoControllerCount(
-                              surfaceId: 'works_immersive_viewer',
-                              activeCount: 0,
-                            );
-                        if (nextIsSentinel) {
-                          _articleHydrationAdmission.retainOnly(null);
-                          _pageEnterTime = null;
-                          _schedulePrefetch(
-                            visibleIndex: index,
-                            postsLength: posts.length,
-                            force: true,
-                          );
-                          return;
-                        }
-                        widget.onPostIndexChanged?.call(index);
-                        final newPost = posts[index.clamp(0, posts.length - 1)];
-                        _trackImpressionForPost(newPost, position: index);
-                      }
-                    },
-                    itemBuilder: (context, index) {
-                      if (posts.isEmpty) {
-                        if (_usesExternalFeed && _externalEmptyTimedOut) {
-                          return AppPageErrorState(
-                            key: const ValueKey<String>(
-                              'works-external-empty-exit',
-                            ),
-                            semantic: AppUserRecoveryContract.semanticFor(
-                              group: AppUserRecoveryGroup.contentUnavailable,
-                              category: UiErrorCategory.notFound,
-                              scope: UiErrorScope.page,
-                              presentation: UiErrorPresentation.emptyPage,
-                              appearanceMode: UiErrorAppearanceMode.dark,
-                            ),
-                            onRecovery: (_) async {
-                              _dismissViewer();
-                              return UiRecoveryOutcome.handedOff;
-                            },
-                          );
-                        }
-                        if (internalFeed != null) {
-                          return _buildInternalFeedTerminal(
-                            context,
-                            internalFeed,
-                          );
-                        }
-                        return AppRequestFeedback.section();
-                      }
-                      if (showLoadMoreSentinel && index >= posts.length) {
-                        return _buildLoadMoreSentinel(
-                          isLoading: isLoadingMore,
-                          error: loadMoreError,
-                          onRetry: () => _schedulePrefetch(
-                            visibleIndex: index,
-                            postsLength: posts.length,
-                            force: true,
-                          ),
-                        );
-                      }
-                      final post = posts[index];
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          top: _statusBarContentInsetFor(post),
-                        ),
-                        child: KeyedSubtree(
-                          key: ValueKey<String>(
-                            'works-status-content-canvas-${post.id}',
-                          ),
-                          child: _buildPostCanvas(
-                            post,
-                            enableArticlePageCurl: enableArticlePageCurl,
-                            isVisible: widget.isActive && index == _currentPage,
-                            videoViewportEpoch: _videoViewportEpoch,
-                          ),
-                        ),
-                      );
-                    },
+    // BACK 在查看器内只关闭一层；物理页面方向不参与导航状态。
+    return PopScope(
+      canPop:
+          !_pureMediaLandscape &&
+          !_landscapeTransitionInFlight &&
+          widget.onTapBack == null &&
+          widget.onDismissed == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          if (_commentSplitPostId != null) {
+            _closeLandscapeComment();
+          } else if (_pureMediaLandscape || _landscapeTransitionInFlight) {
+            unawaited(_exitPureMediaLandscape());
+          } else {
+            _dismissViewer();
+          }
+        }
+      },
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(
+          decoration: TextDecoration.none,
+          decorationThickness: 0,
+        ),
+        child: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: topChromeTheme.overlayStyle,
+          child: GestureDetector(
+            behavior: HitTestBehavior.deferToChild,
+            onTap: _pureMediaLandscape ? _handleLandscapeCanvasTap : null,
+            onLongPress: _pureMediaLandscape ? () {} : null,
+            child: Listener(
+              onPointerDown: _landscapePointerDown,
+              onPointerUp: _landscapePointerEnd,
+              onPointerCancel: _landscapePointerEnd,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const Positioned.fill(
+                    child: ColoredBox(color: AppColors.black),
                   ),
-                ),
-              ),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Listener(
+                      onPointerDown: _handleImmersivePointerDown,
+                      onPointerMove: _handleImmersivePointerMove,
+                      onPointerUp: (_) {
+                        _handleImmersivePointerEnd();
+                      },
+                      onPointerCancel: (_) {
+                        _gestureIntentController.cancel();
+                      },
+                      child: PageView.builder(
+                        key: TestKeys.worksImmersivePager,
+                        controller: _pageController,
+                        scrollDirection: Axis.vertical,
+                        physics: _pureMediaLandscape
+                            ? const NeverScrollableScrollPhysics()
+                            : WorksImmersiveVerticalPagePhysics(
+                                currentPage: () => _currentPage,
+                                holdVerticalScroll: () =>
+                                    _gestureIntentController
+                                        .shouldHoldVerticalScroll,
+                              ),
+                        itemCount: posts.isEmpty
+                            ? 1
+                            : posts.length + (showLoadMoreSentinel ? 1 : 0),
+                        onPageChanged: (index) {
+                          if (_currentPage != index) {
+                            // Flush dwell time for the previous post
+                            if (posts.isNotEmpty &&
+                                _currentPage < posts.length) {
+                              final prevPost =
+                                  posts[_currentPage.clamp(
+                                    0,
+                                    posts.length - 1,
+                                  )];
+                              _flushDwell(prevPost, trackSkip: true);
+                            }
 
-              _buildEdgeDismissHotzone(TabSwipeDirection.previous),
-              _buildEdgeDismissHotzone(TabSwipeDirection.next),
-
-              if (currentPost != null &&
-                  _isArticleLikePost(currentPost) &&
-                  widget.topChromeSafeInset > AppSpacing.zero)
-                Positioned(
-                  key: const ValueKey<String>('works-article-status-bar-scrim'),
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: widget.topChromeSafeInset,
-                  child: const ColoredBox(color: AppColors.black),
-                ),
-
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Padding(
-                  padding: EdgeInsets.only(top: widget.topChromeSafeInset),
-                  child: _WorksPrimaryTopBar(
-                    layoutSpec: currentLayoutSpec,
-                    foregroundColor: topChromeTheme.foregroundColor,
-                    onTapClose: _dismissViewer,
-                    onTapMore: () => _showWorksMoreSheet(context),
-                    onHorizontalDragEnd: _handlePrimaryTabSwipeDragEnd,
-                  ),
-                ),
-              ),
-
-              if (currentPost != null &&
-                  videoBottomChrome == null &&
-                  _showsCaptionOverlay(currentPost))
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: WorksImmersiveContentLayout.overlayBottomClearance(
-                    context,
-                    includeIntersection: showContentIntersection,
-                    gap: AppSpacing.containerSm,
-                  ),
-                  child: MediaCaptionBlock(
-                    layoutSpec: currentLayoutSpec,
-                    railKey: const ValueKey<String>('works-caption-rail'),
-                    header: captionHeader,
-                    title: overlayTitle,
-                    caption: overlayBody,
-                    isExpanded: _isCaptionExpanded(currentPost.id),
-                    onToggle: () => _toggleCaptionExpanded(currentPost.id),
-                  ),
-                ),
-
-              if (currentPost != null && videoBottomChrome != null)
-                Positioned.fill(child: videoBottomChrome),
-
-              // 文章页码：正文下方、作者工具栏上方（`‹ 1 / 6 ›`，chevron 可点切页）。
-              if (currentPost != null && _isArticleLikePost(currentPost))
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: WorksImmersiveContentLayout.overlayBottomClearance(
-                    context,
-                    includeIntersection: showContentIntersection,
-                    gap: AppSpacing.intraGroupSm,
-                  ),
-                  child: Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _WorksArticlePageChevron(
-                          key: const ValueKey<String>(
-                            'works-article-page-prev',
-                          ),
-                          icon: CupertinoIcons.chevron_back,
-                          enabled: progress.current > 1,
-                          color: topChromeTheme.mutedForegroundColor,
-                          onTap: () => _stepArticlePage(currentPost, -1),
-                        ),
-                        SizedBox(width: AppSpacing.intraGroupXs),
-                        Text(
-                          UITextConstants.workArticlePageProgress(
-                            progress.current,
-                            progress.total,
-                          ),
-                          key: const ValueKey<String>(
-                            'works-article-page-progress',
-                          ),
-                          style: TextStyle(
-                            color: topChromeTheme.mutedForegroundColor,
-                            fontSize: AppTypography.xs,
-                            fontWeight: AppTypography.medium,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                        SizedBox(width: AppSpacing.intraGroupXs),
-                        _WorksArticlePageChevron(
-                          key: const ValueKey<String>(
-                            'works-article-page-next',
-                          ),
-                          icon: CupertinoIcons.chevron_forward,
-                          enabled: progress.current < progress.total,
-                          color: topChromeTheme.mutedForegroundColor,
-                          onTap: () => _stepArticlePage(currentPost, 1),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-              // 经历溯源轻标（L0）：与交集陈述互斥占位（同屏最多一处交集类模块）。
-              if (currentPost != null &&
-                  intersectionReason == null &&
-                  videoBottomChrome == null &&
-                  widget.showWorksToolbar)
-                _buildProvenanceBadgeLayer(
-                  context,
-                  currentPost,
-                  currentEngagementLayoutSpec,
-                ),
-
-              if (currentPost != null &&
-                  intersectionReason != null &&
-                  videoBottomChrome == null)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom:
-                      WorksImmersiveContentLayout.intersectionBottomClearance(
-                        context,
-                      ),
-                  child: ImmersiveViewerLayout.alignToRail(
-                    context: context,
-                    layoutSpec: currentEngagementLayoutSpec,
-                    child: SizedBox(
-                      key: const ValueKey<String>(
-                        'works-caption-intersection-reason',
-                      ),
-                      width: double.infinity,
-                      child:
-                          HomeFeedCrossObjectComposition.immersiveIntersectionStatement(
-                            reason: intersectionReason,
-                            contextObjectName:
-                                currentPost.normalizedTitle.trim().isNotEmpty
-                                ? currentPost.normalizedTitle.trim()
-                                : currentPost.normalizedBody.trim(),
-                            contextObjectTarget: _postIntersectionContextTarget(
-                              currentPost,
-                            ),
-                            onSpanTap: (_) =>
-                                _showIntersectionDetail(context, currentPost),
-                            onFallbackTap: () =>
-                                _showIntersectionDetail(context, currentPost),
-                          ),
-                    ),
-                  ),
-                ),
-
-              if (currentPost != null && widget.showWorksToolbar)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Builder(
-                    builder: (context) {
-                      final wishlistAnchor = _wishlistAnchorForPost(
-                        currentPost,
-                      );
-                      if (wishlistAnchor != null) {
-                        _ensureWishlistStateLoaded(wishlistAnchor.homepageId);
-                      }
-                      return ImmersiveEngagementBar(
-                        layoutSpec: currentEngagementLayoutSpec,
-                        avatarUrl: currentPost.avatarUrl,
-                        avatarBinding: contentPostAuthorAvatarBinding(
-                          currentPost,
-                        ),
-                        displayName: currentPost.displayName,
-                        authorBadge:
-                            _workItemFor(currentPost).authorBadge ?? '',
-                        showWishlistButton: wishlistAnchor != null,
-                        isWishlisted:
-                            wishlistAnchor != null &&
-                            (_wishlistStateByHomepageId[wishlistAnchor
-                                    .homepageId] ??
-                                false),
-                        onWishlistTap: wishlistAnchor == null
-                            ? null
-                            : () => _toggleWishlistForPost(currentPost),
-                        likeCount: effectivePostLikeCount(
-                          ref,
-                          currentPost.id,
-                          fallback: currentPost.likeCount,
-                        ),
-                        shareCount: effectivePostShareCount(
-                          ref,
-                          currentPost.id,
-                          fallback: currentPost.shareCount,
-                        ),
-                        commentCount: effectivePostCommentCount(
-                          ref,
-                          currentPost.id,
-                          fallback: currentPost.commentCount,
-                        ),
-                        isLiked: effectivePostLiked(ref, currentPost.id),
-                        isFollowing: effectiveProfileFollowing(
-                          ref,
-                          currentPost.personaId,
-                        ),
-                        onUserTap: () {
-                          // §7.3 旅程无断点：携该作品的最强证据组 kind 跳作者主页高亮。
-                          ref
-                              .read(
-                                intersectionHighlightIntentProvider.notifier,
-                              )
-                              .primeFromReasons(
-                                currentPost.personaId,
-                                currentPost.intersectionReasons,
+                            final nextIsSentinel =
+                                showLoadMoreSentinel && index >= posts.length;
+                            _setMountedState(() {
+                              _currentPage = index;
+                              _awaitingPrefetchedReveal = nextIsSentinel;
+                              _invalidateVideoViewport();
+                              _retainPostLocalStateAround(posts, index);
+                            });
+                            _feedPerformanceObservability
+                                .recordActiveVideoControllerCount(
+                                  surfaceId: 'works_immersive_viewer',
+                                  activeCount: 0,
+                                );
+                            if (nextIsSentinel) {
+                              _articleHydrationAdmission.retainOnly(null);
+                              _pageEnterTime = null;
+                              _schedulePrefetch(
+                                visibleIndex: index,
+                                postsLength: posts.length,
+                                force: true,
                               );
-                          widget.onUserTap(
-                            currentPost.personaId,
-                            avatarUrl: currentPost.avatarUrl,
-                            displayName: currentPost.displayName,
-                            backgroundUrl: currentPost.authorBackgroundUrl,
+                              return;
+                            }
+                            widget.onPostIndexChanged?.call(index);
+                            final newPost =
+                                posts[index.clamp(0, posts.length - 1)];
+                            _trackImpressionForPost(newPost, position: index);
+                          }
+                        },
+                        itemBuilder: (context, index) {
+                          if (posts.isEmpty) {
+                            if (_usesExternalFeed && _externalEmptyTimedOut) {
+                              return AppPageErrorState(
+                                key: const ValueKey<String>(
+                                  'works-external-empty-exit',
+                                ),
+                                semantic: AppUserRecoveryContract.semanticFor(
+                                  group:
+                                      AppUserRecoveryGroup.contentUnavailable,
+                                  category: UiErrorCategory.notFound,
+                                  scope: UiErrorScope.page,
+                                  presentation: UiErrorPresentation.emptyPage,
+                                  appearanceMode: UiErrorAppearanceMode.dark,
+                                ),
+                                onRecovery: (_) async {
+                                  _dismissViewer();
+                                  return UiRecoveryOutcome.handedOff;
+                                },
+                              );
+                            }
+                            if (internalFeed != null) {
+                              return _buildInternalFeedTerminal(
+                                context,
+                                internalFeed,
+                              );
+                            }
+                            return AppRequestFeedback.section();
+                          }
+                          if (showLoadMoreSentinel && index >= posts.length) {
+                            return _buildLoadMoreSentinel(
+                              isLoading: isLoadingMore,
+                              error: loadMoreError,
+                              onRetry: () => _schedulePrefetch(
+                                visibleIndex: index,
+                                postsLength: posts.length,
+                                force: true,
+                              ),
+                            );
+                          }
+                          final post = posts[index];
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              top: _pureMediaLandscape
+                                  ? AppSpacing.zero
+                                  : _statusBarContentInsetFor(post),
+                            ),
+                            child: KeyedSubtree(
+                              key: ValueKey<String>(
+                                'works-status-content-canvas-${post.id}',
+                              ),
+                              child: _buildPostCanvas(
+                                post,
+                                viewportContext: context,
+                                enableArticlePageCurl: enableArticlePageCurl,
+                                isVisible:
+                                    widget.isActive && index == _currentPage,
+                                videoViewportEpoch: _videoViewportEpoch,
+                              ),
+                            ),
                           );
                         },
-                        onFollowTap: () => _onFollow(currentPost),
-                        onLikeTap: () => _onLike(currentPost),
-                        onCommentTap: () => _openCommentFor(currentPost.id),
-                        onShareTap: () => _sharePost(
-                          context,
-                          currentPost,
-                          enableIdentityTemplate: ref.read(
-                            contentFeatureFlagProvider(
-                              'enable_identity_share_template',
-                            ),
-                          ),
-                        ),
-                        onRevealSystemNav: widget.onRevealSystemNav,
-                      );
-                    },
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 经历溯源轻标：回顾内容（wire gatheringRef）→「来自一次共同行动」；
-  /// 种草内容（content 锚点成形级 > 0）→「他们从这条内容出发，一起去了」。
-  /// 两者都不成立时返回空占位，不伪造。
-  Widget _buildProvenanceBadgeLayer(
-    BuildContext context,
-    ContentPostViewData currentPost,
-    ImmersiveViewerStageLayoutSpec layoutSpec,
-  ) {
-    final recapRef = _recapGatheringRefFor(currentPost);
-    String label;
-    VoidCallback onTap;
-    if (recapRef.isNotEmpty) {
-      label = GatheringText.provenanceRecapBadge;
-      onTap = () => _openRecapProvenance(recapRef);
-    } else {
-      _ensureSeedProvenanceLoaded(currentPost);
-      if (_seedProvenanceByPostId[currentPost.id] != true) {
-        return const SizedBox.shrink();
-      }
-      label = GatheringText.provenanceSeedBadge;
-      onTap = () => _openSeedProvenance(currentPost);
-    }
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: WorksImmersiveContentLayout.intersectionBottomClearance(context),
-      child: ImmersiveViewerLayout.alignToRail(
-        context: context,
-        layoutSpec: layoutSpec,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Semantics(
-            button: true,
-            label: label,
-            child: GestureDetector(
-              key: const ValueKey<String>('works-provenance-badge'),
-              behavior: HitTestBehavior.opaque,
-              onTap: onTap,
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.containerSm,
-                  vertical: AppSpacing.intraGroupXs,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.worksBackground.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(
-                      CupertinoIcons.person_2,
-                      size: AppTypography.sm,
-                      color: AppColors.worksAccent,
-                    ),
-                    SizedBox(width: AppSpacing.intraGroupXs),
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.worksBodyText,
-                        fontSize: AppTypography.sm,
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+                  ),
 
-  Widget _buildInternalFeedTerminal(
-    BuildContext context,
-    _WorksInternalFeedAggregate feed,
-  ) {
-    switch (feed.terminal) {
-      case _WorksInternalFeedTerminal.loading:
-        return ColoredBox(
-          key: const ValueKey<String>('works-internal-feed-loading'),
-          color: AppColors.black,
-          child: AppRequestFeedback.page(),
-        );
-      case _WorksInternalFeedTerminal.canonicalEmpty:
-        final reason = feed.emptyReason!;
-        return ColoredBox(
-          key: ValueKey<String>('works-internal-feed-empty-${reason.wireName}'),
-          color: AppColors.black,
-          child: Center(
-            child: Padding(
-              padding: EdgeInsets.all(AppSpacing.containerLg),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    DiscoveryText.webPcFeedEmpty,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.white,
-                      fontSize: AppTypography.iosTitle3,
-                      fontWeight: AppTypography.semiBold,
+                  if (_pureMediaLandscape) ..._landscapeShadeLayers(context),
+                  if (!_pureMediaLandscape) ...<Widget>[
+                    _buildEdgeDismissHotzone(TabSwipeDirection.previous),
+                    _buildEdgeDismissHotzone(TabSwipeDirection.next),
+                  ],
+
+                  if (!_pureMediaLandscape &&
+                      currentPost != null &&
+                      _isArticleLikePost(currentPost) &&
+                      widget.topChromeSafeInset > AppSpacing.zero)
+                    Positioned(
+                      key: const ValueKey<String>(
+                        'works-article-status-bar-scrim',
+                      ),
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: widget.topChromeSafeInset,
+                      child: const ColoredBox(color: AppColors.black),
+                    ),
+
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: _landscapeChrome(
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: _pureMediaLandscape
+                              ? MediaQuery.viewPaddingOf(context).top
+                              : widget.topChromeSafeInset,
+                        ),
+                        child: _WorksPrimaryTopBar(
+                          layoutSpec: currentLayoutSpec,
+                          title: _pureMediaLandscape && currentPost != null
+                              ? _titleForPost(currentPost)
+                              : '',
+                          landscape: _pureMediaLandscape,
+                          landscapeGeometry: landscapeGeometry,
+                          foregroundColor: topChromeTheme.foregroundColor,
+                          onTapClose: _pureMediaLandscape
+                              ? _exitPureMediaLandscape
+                              : _dismissViewer,
+                          onTapMore: () => _withLandscapeModal(
+                            () => _showWorksMoreSheet(context),
+                          ),
+                          onHorizontalDragEnd: _pureMediaLandscape
+                              ? (_) {}
+                              : _handlePrimaryTabSwipeDragEnd,
+                        ),
+                      ),
                     ),
                   ),
-                  SizedBox(height: AppSpacing.intraGroupSm),
-                  Text(
-                    DiscoveryFeedText.contentLoadingCompleted,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.white.withValues(alpha: 0.72),
-                      fontSize: AppTypography.iosSubheadline,
+
+                  if (!_pureMediaLandscape &&
+                      currentPost != null &&
+                      videoBottomChrome == null &&
+                      !_isImageLikePost(currentPost) &&
+                      _showsCaptionOverlay(currentPost))
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom:
+                          WorksImmersiveContentLayout.overlayBottomClearance(
+                            context,
+                            includeIntersection: showContentIntersection,
+                            gap: AppSpacing.containerSm,
+                          ),
+                      child: MediaCaptionBlock(
+                        layoutSpec: currentLayoutSpec,
+                        railKey: const ValueKey<String>('works-caption-rail'),
+                        header: captionHeader,
+                        title: overlayTitle,
+                        caption: overlayBody,
+                        isExpanded: _isCaptionExpanded(currentPost.id),
+                        onToggle: () => _toggleCaptionExpanded(currentPost.id),
+                      ),
                     ),
-                  ),
+
+                  if (!_pureMediaLandscape &&
+                      currentPost != null &&
+                      videoBottomChrome != null)
+                    Positioned.fill(child: videoBottomChrome),
+
+                  // 文章页码：正文下方、作者工具栏上方（`‹ 1 / 6 ›`，chevron 可点切页）。
+                  if (!_pureMediaLandscape &&
+                      currentPost != null &&
+                      _isArticleLikePost(currentPost))
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom:
+                          WorksImmersiveContentLayout.overlayBottomClearance(
+                            context,
+                            includeIntersection: showContentIntersection,
+                            gap: AppSpacing.intraGroupSm,
+                          ),
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _WorksArticlePageChevron(
+                              key: const ValueKey<String>(
+                                'works-article-page-prev',
+                              ),
+                              icon: CupertinoIcons.chevron_back,
+                              enabled: progress.current > 1,
+                              color: topChromeTheme.mutedForegroundColor,
+                              onTap: () => _stepArticlePage(currentPost, -1),
+                            ),
+                            SizedBox(width: AppSpacing.intraGroupXs),
+                            Text(
+                              UITextConstants.workArticlePageProgress(
+                                progress.current,
+                                progress.total,
+                              ),
+                              key: const ValueKey<String>(
+                                'works-article-page-progress',
+                              ),
+                              style: TextStyle(
+                                color: topChromeTheme.mutedForegroundColor,
+                                fontSize: AppTypography.xs,
+                                fontWeight: AppTypography.medium,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: AppSpacing.intraGroupXs),
+                            _WorksArticlePageChevron(
+                              key: const ValueKey<String>(
+                                'works-article-page-next',
+                              ),
+                              icon: CupertinoIcons.chevron_forward,
+                              enabled: progress.current < progress.total,
+                              color: topChromeTheme.mutedForegroundColor,
+                              onTap: () => _stepArticlePage(currentPost, 1),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // 经历溯源轻标（L0）：与交集陈述互斥占位（同屏最多一处交集类模块）。
+                  if (!_pureMediaLandscape &&
+                      currentPost != null &&
+                      intersectionReason == null &&
+                      videoBottomChrome == null &&
+                      widget.showWorksToolbar)
+                    _buildProvenanceBadgeLayer(
+                      context,
+                      currentPost,
+                      currentEngagementLayoutSpec,
+                    ),
+
+                  if (!_pureMediaLandscape &&
+                      currentPost != null &&
+                      intersectionReason != null &&
+                      videoBottomChrome == null &&
+                      !_isImageLikePost(currentPost))
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom:
+                          WorksImmersiveContentLayout.intersectionBottomClearance(
+                            context,
+                          ),
+                      child: ImmersiveViewerLayout.alignToRail(
+                        context: context,
+                        layoutSpec: currentEngagementLayoutSpec,
+                        child: SizedBox(
+                          key: const ValueKey<String>(
+                            'works-caption-intersection-reason',
+                          ),
+                          width: double.infinity,
+                          child:
+                              HomeFeedCrossObjectComposition.immersiveIntersectionStatement(
+                                reason: intersectionReason,
+                                contextObjectName:
+                                    currentPost.normalizedTitle
+                                        .trim()
+                                        .isNotEmpty
+                                    ? currentPost.normalizedTitle.trim()
+                                    : currentPost.normalizedBody.trim(),
+                                contextObjectTarget:
+                                    _postIntersectionContextTarget(currentPost),
+                                onSpanTap: (_) => _showIntersectionDetail(
+                                  context,
+                                  currentPost,
+                                ),
+                                onFallbackTap: () => _showIntersectionDetail(
+                                  context,
+                                  currentPost,
+                                ),
+                              ),
+                        ),
+                      ),
+                    ),
+
+                  if (currentPost != null && widget.showWorksToolbar)
+                    Positioned(
+                      left: _pureMediaLandscape
+                          ? landscapeGeometry?.visibleMediaRect.left ?? 0
+                          : 0,
+                      right: _pureMediaLandscape
+                          ? MediaQuery.sizeOf(context).width -
+                                (landscapeGeometry?.visibleMediaRect.right ??
+                                    MediaQuery.sizeOf(context).width)
+                          : 0,
+                      bottom: 0,
+                      child: _landscapeChrome(
+                        Builder(
+                          builder: (context) {
+                            final wishlistAnchor = _wishlistAnchorForPost(
+                              currentPost,
+                            );
+                            if (wishlistAnchor != null) {
+                              _ensureWishlistStateLoaded(
+                                wishlistAnchor.homepageId,
+                              );
+                            }
+                            return ImmersiveEngagementBar(
+                              layoutSpec: currentEngagementLayoutSpec,
+                              avatarUrl: currentPost.avatarUrl,
+                              avatarBinding: contentPostAuthorAvatarBinding(
+                                currentPost,
+                              ),
+                              displayName: currentPost.displayName,
+                              isSelfPost:
+                                  currentPost.personaId ==
+                                  ref
+                                      .read(authSessionControllerProvider)
+                                      .activePersonaId,
+                              authorBadge:
+                                  _workItemFor(currentPost).authorBadge ?? '',
+                              showWishlistButton: wishlistAnchor != null,
+                              isWishlisted:
+                                  wishlistAnchor != null &&
+                                  (_wishlistStateByHomepageId[wishlistAnchor
+                                          .homepageId] ??
+                                      false),
+                              onWishlistTap: wishlistAnchor == null
+                                  ? null
+                                  : () => _toggleWishlistForPost(currentPost),
+                              likeCount: effectivePostLikeCount(
+                                ref,
+                                currentPost.id,
+                                fallback: currentPost.likeCount,
+                              ),
+                              shareCount: effectivePostShareCount(
+                                ref,
+                                currentPost.id,
+                                fallback: currentPost.shareCount,
+                              ),
+                              commentCount: effectivePostCommentCount(
+                                ref,
+                                currentPost.id,
+                                fallback: currentPost.commentCount,
+                              ),
+                              isLiked: effectivePostLiked(ref, currentPost.id),
+                              isFollowing: effectiveProfileFollowing(
+                                ref,
+                                currentPost.personaId,
+                              ),
+                              onUserTap: () {
+                                // §7.3 旅程无断点：携该作品的最强证据组 kind 跳作者主页高亮。
+                                ref
+                                    .read(
+                                      intersectionHighlightIntentProvider
+                                          .notifier,
+                                    )
+                                    .primeFromReasons(
+                                      currentPost.personaId,
+                                      currentPost.intersectionReasons,
+                                    );
+                                widget.onUserTap(
+                                  currentPost.personaId,
+                                  avatarUrl: currentPost.avatarUrl,
+                                  avatarAssetId:
+                                      currentPost.authorAvatarAssetId,
+                                  avatarAccessMode:
+                                      currentPost.authorAvatarAccessMode,
+                                  displayName: currentPost.displayName,
+                                  backgroundUrl:
+                                      currentPost.authorBackgroundUrl,
+                                );
+                              },
+                              onFollowTap: () => _onFollow(currentPost),
+                              onLikeTap: () => _onLike(currentPost),
+                              onCommentTap: () =>
+                                  _openCommentFor(currentPost.id),
+                              onShareTap: () => _sharePost(
+                                context,
+                                currentPost,
+                                enableIdentityTemplate: ref.read(
+                                  contentFeatureFlagProvider(
+                                    'enable_identity_share_template',
+                                  ),
+                                ),
+                              ),
+                              onRevealSystemNav: null,
+                              transparentBackground: true,
+                              horizontalInsetOverride: _pureMediaLandscape
+                                  ? AppSpacing.zero
+                                  : null,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+
+                  if (_pureMediaLandscape) ...[
+                    if (!_landscapeControlsVisible)
+                      Positioned.fill(
+                        child: Semantics(
+                          button: true,
+                          label: AppLocalizations.of(context)
+                              .media_showControls,
+                          onTap: _revealLandscapeChrome,
+                          onDismiss: _exitPureMediaLandscape,
+                          child: GestureDetector(
+                            key: const ValueKey('works-landscape-reveal'),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _handleLandscapeCanvasTap,
+                            onLongPress: () {},
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      bottom:
+                          MediaQuery.viewPaddingOf(context).bottom +
+                          AppSpacing.immersiveBottomChromeLift,
+                      left: landscapeGeometry?.rightControlSlot.left,
+                      child: _landscapeChrome(
+                        Semantics(
+                          label: AppLocalizations.of(context)
+                              .media_exitFullscreen,
+                          child: ImmersiveToolbarIconButton(
+                            key: const ValueKey(
+                              'works-media-landscape-collapse',
+                            ),
+                            icon: CupertinoIcons.arrow_down_right_arrow_up_left,
+                            onPressed: _exitPureMediaLandscape,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (commentSplitPost != null)
+                      _buildLandscapeCommentPanel(context, commentSplitPost),
+                  ],
                 ],
               ),
             ),
           ),
-        );
-      case _WorksInternalFeedTerminal.blockingError:
-        final semantic = runtime_error_display.ensureRetryUiErrorSemantic(
-          runtime_error_display.runtimeErrorSemantic(
-            context,
-            error: feed.blockingError!,
-            category: UiErrorCategory.pageLoad,
-            scope: UiErrorScope.page,
-            presentation: UiErrorPresentation.emptyPage,
-            appearanceMode: UiErrorAppearanceMode.dark,
-            sourceRouteId: AppUiSurfaces.workBrowser.routeId,
-            sourceSurfaceId: AppUiSurfaces.workBrowser.id,
-            sourceOperationId: AppCloudOperationIds.contentPostGetFeed,
-          ),
-          retryLabel: SearchText.reload,
-        );
-        return AppPageErrorState(
-          key: const ValueKey<String>('works-internal-feed-error'),
-          semantic: semantic,
-          onRecovery: (action) async {
-            if (action.type == UiErrorActionType.retry ||
-                action.type == UiErrorActionType.resubmit) {
-              return _retryTrackedFeeds();
-            }
-            if (action.type == UiErrorActionType.dismiss) {
-              _dismissViewer();
-              return UiRecoveryOutcome.handedOff;
-            }
-            return UiRecoveryOutcome.cancelled;
-          },
-        );
-      case _WorksInternalFeedTerminal.content:
-        return const SizedBox.shrink();
-    }
+        ),
+      ),
+    );
   }
 
   Widget _buildPostCanvas(
     ContentPostViewData post, {
+    BuildContext? viewportContext,
     required bool enableArticlePageCurl,
     required bool isVisible,
     required int videoViewportEpoch,
   }) {
     return _buildTypedCanvas(
+      viewportContext ?? context,
       post,
       enableArticlePageCurl: enableArticlePageCurl,
       isVisible: isVisible,
@@ -761,40 +694,14 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
   }
 
   Widget _buildTypedCanvas(
+    BuildContext context,
     ContentPostViewData post, {
     required bool enableArticlePageCurl,
     required bool isVisible,
     required int videoViewportEpoch,
   }) {
     if (_isImageLikePost(post)) {
-      return ImageBookCanvas(
-        deliveries: _imageDeliveriesForPost(post),
-        initialIndex: _photoInnerIndex[post.id] ?? _defaultImageIndexFor(post),
-        gestureIntentController: _gestureIntentController,
-        onImageChanged: (index) => _setMountedState(() {
-          _rememberPostLocalState(post.id);
-          _photoInnerIndex[post.id] = index;
-        }),
-        onPageflipMotion: (event) => _trackImagePageflipMotion(post, event),
-        onMediaLoad: (event) {
-          ref
-              .read(pageLifecycleObservabilityProvider)
-              .recordMediaLoad(
-                mediaType: 'image',
-                result: event.result,
-                pageName: PageNames.workBrowser,
-                surfaceId: AppUiSurfaces.workBrowser.id,
-                objectType: 'contentPost',
-                objectId: post.id,
-                copyKey: event.result == 'failure' ? 'imageLoadFailed' : null,
-                error: event.error,
-                durationMs: event.durationMs,
-                candidatesTried: event.candidatesTried,
-              );
-        },
-        onOverflowPrevious: null,
-        onOverflowNext: null,
-      );
+      return _buildImageStage(context, post);
     }
     if (_isVideoLikePost(post)) {
       final videoItems = _videoItemsFor(post);
@@ -806,6 +713,62 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
         items: videoItems,
         initialEpisodeIndex: _videoIndexFor(post.id, videoItems),
         isVisible: isVisible,
+        landscape: _pureMediaLandscape,
+        onMediaTap: _handleLandscapeCanvasTap,
+        composeStage: (item, session, media, isActive) => _WorksVideoBottomChrome(
+          isActive: isActive,
+          association: widget.videoAssociationBuilder?.call(context, post),
+          key: ValueKey(
+            'works-video-chrome-${post.id}-${item.identity}-$videoViewportEpoch',
+          ),
+          layoutSpec: _layoutSpecForPost(post),
+          media: media,
+          aspectRatio: item.aspectRatio,
+          topInset:
+              widget.topChromeSafeInset +
+              AppSpacing.appChromeTopBarHeight(context),
+          toolbarHeight: widget.showWorksToolbar
+              ? ImmersiveEngagementBar.reservedHeight(context)
+              : 0,
+          intersection: _primaryIntersectionReasonFor(post) != null
+              ? HomeFeedCrossObjectComposition.immersiveIntersectionStatement(
+                  key: const ValueKey('works-caption-intersection-reason'),
+                  reason: _primaryIntersectionReasonFor(post)!,
+                  contextObjectName: post.normalizedTitle.trim().isNotEmpty
+                      ? post.normalizedTitle.trim()
+                      : post.normalizedBody.trim(),
+                  contextObjectTarget: _postIntersectionContextTarget(post),
+                  onSpanTap: (_) => _showIntersectionDetail(context, post),
+                  onFallbackTap: () => _showIntersectionDetail(context, post),
+                )
+              : null,
+          title: _overlayTitleForPost(post),
+          caption: _overlayBodyForPost(post),
+          sourceAttribution: post.sourceAttribution,
+          isExpanded: _isCaptionExpanded(post.id),
+          onToggleCaption: () => _toggleCaptionExpanded(post.id),
+          session: session,
+          sharedTimelineEnabled: ref.watch(
+            contentFeatureFlagProvider('enable_shared_video_timeline'),
+          ),
+          previewTrackDescriptor:
+              ref.watch(
+                contentFeatureFlagProvider('enable_video_timeline_preview'),
+              )
+              ? item.previewTrackDescriptor
+              : null,
+          previewTrackQuery: ref.watch(videoPreviewTrackQueryProvider),
+          episodeCurrent: videoItems.indexOf(item) + 1,
+          episodeTotal: videoItems.length,
+          onEnterLandscape:
+              !_pureMediaLandscape &&
+                  MediaQuery.sizeOf(context).height >
+                      MediaQuery.sizeOf(context).width
+              ? _enterPureMediaLandscape
+              : null,
+          pureMediaMode: _pureMediaLandscape,
+          controlsVisible: _landscapeControlsVisible,
+        ),
         onEpisodeChanged: (idx, episodeIdentity) => _handleVideoEpisodeChanged(
           postId: post.id,
           episodeIndex: idx,

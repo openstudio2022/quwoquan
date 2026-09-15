@@ -2,27 +2,92 @@
   "schema": "quwoquan.offline_operator_selection",
   "version": 1,
   "purpose": "alpha_offline_engineering",
-  "selectedAt": "2026-09-10T16:43:00+08:00",
+  "selectedAt": "2026-09-12T18:13:00+08:00",
   "authority": {
     "kind": "explicit_user_selection",
-    "evidence": "用户批准 small-fix Alpha 完整资格与 dev1.0 合入计划，授权以已核验现役 M1 四载体闭包替换旧西湖样本。本次显式选择三峡文章、图片和视频及其主页、作者依赖；视频仅用作 Alpha 离线工程视频书样本，不授予生产 premium 资格，不修改原审核及版权事实。",
+    "evidence": "用户批准内容供给整改，授权只读现役独立publish池并显式选择Alpha离线工程cohort。原22个对象保留，追加真实地点关联且正式build_bundle闭包预检通过的安图长白山北坡看天池（二）（H264/MP4，406×720、11.783秒竖短视频）。按用户明确要求将（一）的VP8/WebM从本任务正常双端候选中移出，不退役或修改publish原件、不改变权利准入、不转码。推荐为18图片、1文章、3视频共22项；premium为19图片、3视频共22个不同作品，是混合工程频道而非视频类型过滤。总cohort23个对象，两频道均跨真实pageSize=20，不复制补数或把文章当图片。长白山自然景观类型按现役在线importer显式映射为natural_landscape，不改canonical实体或默认成sight；保持地点内容范围，不接纳无实体视频、不放宽release准入。剩余H264视频仍待双端实际播放、fast-start与关键帧等交付证据，不能仅凭源码或容器判ready。保留原审核、来源与权利事实，不授予生产premium资格，不创建或发布内容。",
     "grantsProductionPremium": false,
     "changesRightsFacts": false
   },
   "objectRefs": [
-    "posts/article/攻略/三峡大坝：从水利工程到观景现场的阅读指南/1",
+    "posts/video/风光/三峡大坝2020年泄洪影像记录/1",
     "posts/image/风光/三峡工程截流水泥三角锥/1",
-    "posts/video/风光/三峡大坝2020年泄洪影像记录/1"
+    "posts/article/攻略/三峡大坝：从水利工程到观景现场的阅读指南/1",
+    "posts/image/建筑/八达岭长城蜿蜒山脊/1",
+    "posts/image/风光/阳朔翠屏全景/1",
+    "posts/video/风光/嘉峪关城南望祁连山/1",
+    "posts/image/建筑/丰都鬼城天子殿/1",
+    "posts/image/风光/九曲溪竹筏/1",
+    "posts/image/建筑/司马台长城残墙/1",
+    "posts/image/风光/四姑娘山景区山谷/1",
+    "posts/image/风光/桃花潭晨光/1",
+    "posts/image/风光/九乡洞中瀑布/1",
+    "posts/image/风光/龙宫暗河洞厅/1",
+    "posts/image/风光/永宁门夜景灯光秀/1",
+    "posts/image/建筑/七曲山大庙庙前/1",
+    "posts/image/街巷/宽窄巷子街景/1",
+    "posts/image/人文/傣族园佛寺金塔广场/1",
+    "posts/image/人文/傣族园佛寺/1",
+    "posts/image/风光/龙脊梯田村寨/1",
+    "posts/image/风光/橘子洲头铜像群/1",
+    "posts/image/风光/雾中峰林/1",
+    "posts/image/风光/桃花潭怀仙阁/1",
+    "posts/video/风光/安图长白山北坡看天池（二）/1"
   ],
   "channels": [
     {
       "channelId": "recommend",
       "orderedObjectRefs": [
-        "posts/article/攻略/三峡大坝：从水利工程到观景现场的阅读指南/1",
+        "posts/video/风光/三峡大坝2020年泄洪影像记录/1",
         "posts/image/风光/三峡工程截流水泥三角锥/1",
-        "posts/video/风光/三峡大坝2020年泄洪影像记录/1"
+        "posts/article/攻略/三峡大坝：从水利工程到观景现场的阅读指南/1",
+        "posts/image/建筑/八达岭长城蜿蜒山脊/1",
+        "posts/image/风光/阳朔翠屏全景/1",
+        "posts/video/风光/嘉峪关城南望祁连山/1",
+        "posts/image/建筑/丰都鬼城天子殿/1",
+        "posts/image/风光/九曲溪竹筏/1",
+        "posts/image/建筑/司马台长城残墙/1",
+        "posts/image/风光/四姑娘山景区山谷/1",
+        "posts/image/风光/桃花潭晨光/1",
+        "posts/image/风光/九乡洞中瀑布/1",
+        "posts/image/风光/龙宫暗河洞厅/1",
+        "posts/image/风光/永宁门夜景灯光秀/1",
+        "posts/image/建筑/七曲山大庙庙前/1",
+        "posts/image/街巷/宽窄巷子街景/1",
+        "posts/image/人文/傣族园佛寺金塔广场/1",
+        "posts/image/人文/傣族园佛寺/1",
+        "posts/image/风光/龙脊梯田村寨/1",
+        "posts/image/风光/橘子洲头铜像群/1",
+        "posts/image/风光/雾中峰林/1",
+        "posts/video/风光/安图长白山北坡看天池（二）/1"
       ]
     },
-    {"channelId": "premium", "orderedObjectRefs": ["posts/video/风光/三峡大坝2020年泄洪影像记录/1"]}
+    {
+      "channelId": "premium",
+      "orderedObjectRefs": [
+        "posts/video/风光/三峡大坝2020年泄洪影像记录/1",
+        "posts/image/风光/三峡工程截流水泥三角锥/1",
+        "posts/image/建筑/八达岭长城蜿蜒山脊/1",
+        "posts/image/风光/阳朔翠屏全景/1",
+        "posts/video/风光/嘉峪关城南望祁连山/1",
+        "posts/image/建筑/丰都鬼城天子殿/1",
+        "posts/image/风光/九曲溪竹筏/1",
+        "posts/image/建筑/司马台长城残墙/1",
+        "posts/image/风光/四姑娘山景区山谷/1",
+        "posts/image/风光/桃花潭晨光/1",
+        "posts/image/风光/九乡洞中瀑布/1",
+        "posts/image/风光/龙宫暗河洞厅/1",
+        "posts/image/风光/永宁门夜景灯光秀/1",
+        "posts/image/建筑/七曲山大庙庙前/1",
+        "posts/image/街巷/宽窄巷子街景/1",
+        "posts/image/人文/傣族园佛寺金塔广场/1",
+        "posts/image/人文/傣族园佛寺/1",
+        "posts/image/风光/龙脊梯田村寨/1",
+        "posts/image/风光/橘子洲头铜像群/1",
+        "posts/image/风光/雾中峰林/1",
+        "posts/image/风光/桃花潭怀仙阁/1",
+        "posts/video/风光/安图长白山北坡看天池（二）/1"
+      ]
+    }
   ]
 }

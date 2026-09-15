@@ -106,6 +106,16 @@ final class StartupPhaseSnapshot {
   };
 }
 
+/// AUT 当前 Dart/native 启动关联，不是 candidate/device 授权或密码学证明。
+/// 只能在本轮 begin 调用返回匹配 ID 与合法原生时钟后创建。
+final class ConfirmedStartupAttempt {
+  ConfirmedStartupAttempt._(this.attemptId, this.attemptKind, this._isCurrent);
+  final String attemptId;
+  final String attemptKind;
+  final bool Function() _isCurrent;
+  bool get isCurrent => _isCurrent();
+}
+
 /// 记录冷启动关键节点，并在首帧后异步预热非关键链路。
 final class AppStartupRuntime {
   AppStartupRuntime._();
@@ -125,6 +135,12 @@ final class AppStartupRuntime {
   String _startupFailureCode = '';
   AppTelemetryRecorder? _productTelemetry;
   Future<void>? _nativeSegmentsHydration;
+  Object _attemptFence = Object();
+  ConfirmedStartupAttempt? _confirmedAttempt;
+
+  /// 纯内存读取；未确认/超时/重置时为空，不能触发桥接或存储。
+  ConfirmedStartupAttempt? get confirmedStartupAttempt =>
+      _confirmedAttempt?.isCurrent == true ? _confirmedAttempt : null;
 
   int? _runAppMs;
   int? _firstFrameMs;
@@ -161,6 +177,8 @@ final class AppStartupRuntime {
 
   @visibleForTesting
   void resetForTesting() {
+    _attemptFence = Object();
+    _confirmedAttempt = null;
     _stopwatch
       ..stop()
       ..reset();
@@ -200,6 +218,8 @@ final class AppStartupRuntime {
       return;
     }
     _bootstrapStarted = true;
+    _attemptFence = Object();
+    _confirmedAttempt = null;
     _startupAttemptId = StartupTelemetrySupport.randomUrlSafeToken(24);
     _stopwatch.start();
     final platformElapsed = tryReadPlatformStartupElapsedMs();
@@ -339,12 +359,41 @@ final class AppStartupRuntime {
     Duration budget, {
     Future<void>? cancellationSignal,
   }) async {
+    final fence = _attemptFence;
+    final requestedAttempt = _startupAttemptId;
+    _confirmedAttempt = null;
     try {
       final segments = await _readNativeSegmentsWithBudget(
         budget,
         cancellationSignal: cancellationSignal,
       );
+      if (!identical(fence, _attemptFence)) return;
       if (segments != null) {
+        final process = segments.elapsedSinceProcessStartMs;
+        final attempt = segments.elapsedSinceAttemptStartMs;
+        final cold =
+            segments.attemptKind == 'cold' &&
+            segments.deadlineOrigin == 'nativeProcess';
+        final hot =
+            segments.attemptKind == 'hotRestart' &&
+            segments.deadlineOrigin == 'dartHotRestart';
+        if (_bootstrapStarted &&
+            StartupTelemetrySupport.isValidAttemptId(requestedAttempt) &&
+            segments.startupAttemptId == requestedAttempt &&
+            (cold || hot) &&
+            process != null &&
+            attempt != null &&
+            process >= 0 &&
+            attempt >= 0 &&
+            attempt <= process) {
+          _confirmedAttempt = ConfirmedStartupAttempt._(
+            requestedAttempt,
+            segments.attemptKind!,
+            () =>
+                identical(fence, _attemptFence) &&
+                _startupAttemptId == requestedAttempt,
+          );
+        }
         final deadlineBeforeHydration =
             deadlineElapsedSinceProcessStart.inMilliseconds;
         final dartElapsedAtHydration = _elapsedMs;
@@ -359,7 +408,8 @@ final class AppStartupRuntime {
           _attemptKind = nativeAttemptKind;
         }
         final nativeAttemptId = segments.startupAttemptId?.trim() ?? '';
-        if (StartupTelemetrySupport.isValidAttemptId(nativeAttemptId)) {
+        if (nativeAttemptId == requestedAttempt &&
+            StartupTelemetrySupport.isValidAttemptId(nativeAttemptId)) {
           _startupAttemptId = nativeAttemptId;
         }
         final nativeDeadline = segments.elapsedSinceAttemptStartMs;
@@ -378,7 +428,10 @@ final class AppStartupRuntime {
       }
       _nativeSegmentsHydrated = true;
     } catch (_) {
-      _nativeSegmentsHydrated = false;
+      if (identical(fence, _attemptFence)) {
+        _nativeSegmentsHydrated = false;
+        _confirmedAttempt = null;
+      }
       rethrow;
     }
   }

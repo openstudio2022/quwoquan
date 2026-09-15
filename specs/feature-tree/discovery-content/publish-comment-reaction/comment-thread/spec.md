@@ -77,7 +77,7 @@
 <a id="req-008"></a>
 ### REQ-008 四环境数据源和三层证据无 Mock 污染
 
-- alpha/beta/gamma/prod App 均使用 Remote Facet；测试树 typed double 与环境 artifact 物理隔离，发布证据必须绑定同一 commit 与 ContractGraph 摘要。
+- alpha 由隔离组合根注入对象级本地 adapter；beta/gamma/prod App 使用 Remote Facet。测试树 typed double 与环境 artifact 物理隔离，发布证据必须绑定同一 commit 与 ContractGraph 摘要。
 
 <a id="req-009"></a>
 ### REQ-009 个人评论与互动深链使用 typed Facet
@@ -178,7 +178,7 @@
 
 - GIVEN alpha、beta、gamma、prod 使用各自正式 composition
 - WHEN 执行 package purity、环境 verify 与 Comment Journey
-- THEN alpha/beta/gamma/prod 只使用 Remote Facet，四环境 kernel/UAT support 均不可达 mock/fixture。
+- THEN alpha 使用隔离本地演练 Facet，beta/gamma/prod 使用 Remote Facet；四环境 kernel/UAT support 均不可达 mock/fixture。
 - THEN typed double 只存在测试树，不作为环境 Journey 证据。
 
 <a id="gwt-009"></a>

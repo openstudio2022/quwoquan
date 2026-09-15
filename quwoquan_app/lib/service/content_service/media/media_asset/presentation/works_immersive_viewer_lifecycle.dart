@@ -1,22 +1,15 @@
 part of 'works_immersive_viewer.dart';
 
 extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
-  void _invalidateVideoViewport({required bool resetDurationWindow}) {
+  void _invalidateVideoViewport() {
     _videoViewportEpoch += 1;
     _videoEpisodeCallbackGeneration += 1;
     _activeVideoSessionCallbackGeneration += 1;
     _activeVideoBinding = null;
-    if (!resetDurationWindow) {
-      return;
-    }
-    _videoDurationWindowTimer?.cancel();
-    _videoDurationWindowTimer = null;
-    _videoDurationStageKey = null;
-    _videoDurationWindowActive = false;
-    _videoDurationWindowRevision += 1;
   }
 
   void _suspendInactiveSurface() {
+    unawaited(_exitPureMediaLandscape());
     final activePost = _activeTrackedPost;
     final activeSession = _activeVideoBinding?.session;
 
@@ -27,7 +20,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     }
     _articleHydrationAdmission.retainOnly(null);
     _prefetchScheduled = false;
-    _invalidateVideoViewport(resetDurationWindow: true);
+    _invalidateVideoViewport();
     _feedPerformanceObservability.recordActiveVideoControllerCount(
       surfaceId: 'works_immersive_viewer',
       activeCount: 0,
@@ -442,36 +435,15 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
           viewportEpoch != _videoViewportEpoch) {
         return;
       }
-      final stageKey = '$postId|$episodeIdentity';
-      final episodeChanged =
-          _videoInnerIndex[postId] != episodeIndex ||
-          _videoInnerIdentity[postId] != episodeIdentity;
-      final durationStageChanged = _videoDurationStageKey != stageKey;
-      if (!episodeChanged && !durationStageChanged) {
+      if (_videoInnerIndex[postId] == episodeIndex &&
+          _videoInnerIdentity[postId] == episodeIdentity) {
         return;
-      }
-      if (durationStageChanged) {
-        _videoDurationWindowTimer?.cancel();
       }
       _setMountedState(() {
         _rememberPostLocalState(postId);
         _videoInnerIndex[postId] = episodeIndex;
         _videoInnerIdentity[postId] = episodeIdentity;
-        if (durationStageChanged) {
-          _videoDurationStageKey = stageKey;
-          _videoDurationWindowActive = true;
-          _videoDurationWindowRevision += 1;
-        }
       });
-      if (durationStageChanged) {
-        final revision = _videoDurationWindowRevision;
-        _videoDurationWindowTimer = Timer(const Duration(seconds: 5), () {
-          if (!mounted || revision != _videoDurationWindowRevision) {
-            return;
-          }
-          _setMountedState(() => _videoDurationWindowActive = false);
-        });
-      }
     });
   }
 
@@ -516,6 +488,10 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
                 session: session,
               ),
       );
+      if (_pureMediaLandscape) {
+        _observeLandscapeSession(session);
+        _scheduleLandscapeHide();
+      }
     });
     _feedPerformanceObservability.recordActiveVideoControllerCount(
       surfaceId: 'works_immersive_viewer',

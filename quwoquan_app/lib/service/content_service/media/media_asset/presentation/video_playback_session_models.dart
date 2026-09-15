@@ -108,8 +108,9 @@ class VideoSourceSwitchSeekResult {
   };
 }
 
-typedef VideoNativeSignalObserver =
-    FutureOr<void> Function(VideoNativePlaybackSignal signal);
+typedef VideoNativeSignalObserver = FutureOr<void> Function(
+  VideoNativePlaybackSignal signal,
+);
 
 /// seek 命令生命周期。
 ///
@@ -225,8 +226,11 @@ class VideoPlaybackSnapshot {
     this.runtimeFailure,
     this.lastSeekLifecycleEvent,
     this.lastSourceSwitchSeekResult,
+    this.mediaAspectRatio,
   });
 
+  /// 已初始化媒体的实际展示比例；缺席不是默认横屏。
+  final double? mediaAspectRatio;
   final VideoPlaybackTransport transport;
   final VideoPlaybackIntent intent;
   final VideoPlaybackControlsVisibility controlsVisibility;

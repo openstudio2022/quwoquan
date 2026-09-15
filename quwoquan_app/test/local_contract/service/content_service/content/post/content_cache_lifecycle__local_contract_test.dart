@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/di/feed_session_provider.dart';
@@ -82,6 +84,112 @@ void main() {
       activationIdentity: cacheIdentity.activationIdentity,
     );
   }
+
+  // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-003
+  test('异步session迟到在dispose后不得清除新generation缓存', () async {
+    final ready = Completer<AuthSessionState>();
+    final oldSession = session(accountId: 'old', personaId: 'old');
+    coordinator.handleSessionChange(null, oldSession);
+    final delayed = ready.future.then(
+      (next) => coordinator.handleSessionChange(oldSession, next),
+    );
+    coordinator.dispose();
+    seedRebuildableCaches(identity(releaseA));
+    final epoch = queryStore.requestEpoch;
+    ready.complete(session(accountId: 'late', personaId: 'late'));
+    await delayed;
+    coordinator.handleActivationIdentity(releaseA);
+    coordinator.handleActivationIdentity(releaseB);
+    coordinator.clearRebuildableContent();
+    expect(postCache.projectionCount, 1);
+    expect(queryStore.count, 1);
+    expect(queryStore.requestEpoch, epoch);
+    expect(signedMediaClears, 0);
+    expect(identityClears, 0);
+    final fresh = ContentCacheLifecycleCoordinator(
+      postCache: postCache,
+      querySnapshotStore: queryStore,
+      clearSignedMediaDelivery: () => signedMediaClears++,
+      clearIsolationIdentity: () => identityClears++,
+    );
+    fresh.handleSessionChange(
+      oldSession,
+      session(accountId: 'new', personaId: 'new'),
+    );
+    expect(postCache.projectionCount, 0);
+    expect(queryStore.count, 0);
+    expect(signedMediaClears, 1);
+    expect(identityClears, 1);
+  });
+
+  test('同步reset回调销毁协调器后不得访问后续Ref闭包', () {
+    var laterCalls = 0;
+    late ContentCacheLifecycleCoordinator lifecycle;
+    lifecycle = ContentCacheLifecycleCoordinator(
+      postCache: postCache,
+      querySnapshotStore: queryStore,
+      resetFeedSession: () => lifecycle.dispose(),
+      clearMediaDownloads: () async {
+        laterCalls++;
+      },
+      clearSignedMediaDelivery: () => laterCalls++,
+      clearIsolationIdentity: () => laterCalls++,
+    );
+    lifecycle.clearRebuildableContent();
+    expect(laterCalls, 0);
+    lifecycle.dispose();
+    lifecycle.clearRebuildableContent();
+    expect(laterCalls, 0);
+  });
+
+  test('provider同步失效在dispose回调前也停止后续Ref访问', () {
+    var mounted = true;
+    var accesses = 0;
+    final lifecycle = ContentCacheLifecycleCoordinator(
+      postCache: postCache,
+      querySnapshotStore: queryStore,
+      isCurrent: () => mounted,
+      resetFeedSession: () => mounted = false,
+      clearSignedMediaDelivery: () => accesses++,
+      clearIsolationIdentity: () => accesses++,
+      clearMediaDownloads: () async {
+        accesses++;
+      },
+    );
+    lifecycle.clearRebuildableContent();
+    expect(accesses, 0);
+    seedRebuildableCaches(identity(releaseA));
+    lifecycle.handleSessionChange(
+      session(accountId: 'a', personaId: 'a'),
+      session(accountId: 'b', personaId: 'b'),
+    );
+    expect(postCache.projectionCount, 1);
+    expect(queryStore.count, 1);
+    expect(accesses, 0);
+  });
+
+  test('已开始媒体清理允许完成但旧代后续通知不影响新代', () async {
+    final finished = Completer<void>();
+    var clears = 0;
+    final old = ContentCacheLifecycleCoordinator(
+      postCache: postCache,
+      querySnapshotStore: queryStore,
+      clearSignedMediaDelivery: () {},
+      clearIsolationIdentity: () {},
+      clearMediaDownloads: () {
+        clears++;
+        return finished.future;
+      },
+    );
+    old.clearRebuildableContent();
+    old.dispose();
+    seedRebuildableCaches(identity(releaseA));
+    finished.complete();
+    await finished.future;
+    old.clearRebuildableContent();
+    expect(clears, 1);
+    expect(postCache.projectionCount, 1);
+  });
 
   // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-003
   test('同账号 A-B-A 使旧 epoch 永久失效，清理同步触发媒体与归因', () {

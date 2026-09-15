@@ -23,11 +23,15 @@ fields:
       - NOT_NULL
     role: authoritative_state
   - name: destinationHash
+    classification: SENSITIVE
+    log_policy: drop
     type: string
     constraints:
       - NULLABLE
     role: authoritative_state
   - name: secretRef
+    classification: SECRET
+    log_policy: drop
     type: string
     constraints:
       - NOT_NULL
@@ -101,6 +105,30 @@ enums:
     - ready
     - temporarily_unavailable
 types:
+  SyntheticIdentityLabel:
+    client_value: true
+    description: 'Alpha isolated 本地非认证标识；value 完整匹配 ^alpha-synthetic:[a-f0-9]{32}$（ASCII、区分大小写、不 trim/折叠、不接受任何别名）。32 位后缀由本地安全随机 128-bit 生成，不从真实 phone/email/name 派生。唯一键为已验证 source/snapshot/instance 加 value；请求不能自报空间。尚无本地端口生成器时仅为值合同，不是可运行认证入口。'
+    fields:
+      - {name: value, type: string, pattern: '^alpha-synthetic:[a-f0-9]{32}$', constraints: [NOT_BLANK], max_utf8_bytes: 48, classification: PUBLIC, log_policy: drop, api_exposure: none, ops_exposure: drop}
+  BeginSyntheticChallenge:
+    client_value: true
+    description: '仅由已验证 isolated composition 的本地端口消费，非 HTTP operation；requestKey 为随机128-bit lowercase hex，重复同payload幂等、跨payload冲突。identity 不得借用 SendOtp.phone。'
+    fields:
+      - {name: identity, type: SyntheticIdentityLabel, constraints: [NOT_NULL], classification: INTERNAL, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: requestKey, type: string, pattern: '^[a-f0-9]{32}$', constraints: [NOT_BLANK], max_utf8_bytes: 32, classification: INTERNAL, log_policy: drop, api_exposure: none, ops_exposure: drop}
+  SyntheticChallengeView:
+    client_value: true
+    description: 'challengeId 完整匹配 ^alpha-challenge:[a-f0-9]{32}$，绑定空间/identity/到期/消费状态。confirmationHint 唯一值 alpha-rehearsal-confirm，仅用于确认UI步骤，没有真实认证能力，不是OTP/秘密，不进入真实SMS或AutoFill。expiresInSeconds为1..300，最多5次错误锁定。'
+    fields:
+      - {name: challengeId, type: string, pattern: '^alpha-challenge:[a-f0-9]{32}$', constraints: [NOT_BLANK], classification: INTERNAL, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: confirmationHint, type: string, const: alpha-rehearsal-confirm, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: expiresInSeconds, type: int, constraints: [NOT_NULL, MIN_1, MAX_300], classification: INTERNAL, log_policy: drop, api_exposure: none, ops_exposure: drop}
+  SyntheticLoginEvidence:
+    client_value: true
+    description: '仅限已校验isolated Alpha的私有plan/screenshots/native活动产物：仅identityLabel完整匹配 ^alpha-synthetic:[a-f0-9]{32}$ 且confirmationHint精确等于alpha-rehearsal-confirm。必须来自本地typed流程，不接受自由文本或额外字段。PUBLIC只说明不含真实主体/认证秘密，普通日志仍drop。空间未验证、unknown类别、任何真实phone/OTP/credential/内部ID或收集器无法隔离屏幕/键盘/剪贴板/活动输入时一律拒绝且不执行native输入。该值合同不提供采集授权。'
+    fields:
+      - {name: identityLabel, type: string, pattern: '^alpha-synthetic:[a-f0-9]{32}$', constraints: [NOT_BLANK], max_utf8_bytes: 48, classification: PUBLIC, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: confirmationHint, type: string, const: alpha-rehearsal-confirm, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: drop, api_exposure: none, ops_exposure: drop}
   OtpDeliveryReadinessQuery:
     fields: []
   SendOtpCommand:

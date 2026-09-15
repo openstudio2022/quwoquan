@@ -11,7 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from quwoquan_ops.cli.commands.app_preflight_uat_offline import OFFLINE_REQUIRED_CASES, OFFLINE_SPEC_REF
+from quwoquan_ops.cli.commands.app_preflight_uat_offline import OFFLINE_REQUIRED_CASES, OFFLINE_SPEC_REF, offline_case_spec_ref
+from quwoquan_ops.cli.commands import app_preflight_uat_offline as offline
+from quwoquan_ops.cli.commands import app_preflight_uat_offline_pages as pages
 from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import (
     offline_case_outcome, validate_native_page_result, validate_offline_page_coverage,
 )
@@ -22,6 +24,43 @@ _CANDIDATE = {"candidateId": _DIGEST, "commit": "b" * 40, "tree": "c" * 40}
 _TIME = "2026-09-10T02:00:00Z"
 _SCREENSHOT = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9o0AAAAASUVORK5CYII=")
 _SCREENSHOT_DIGEST = "sha256:" + hashlib.sha256(_SCREENSHOT).hexdigest()
+
+
+@pytest.fixture
+def supported_offline_producer(monkeypatch):
+    """仅 local_contract 模拟未来 producer 支持；不替换任何证据 consumer/validator。
+
+    所有文件由 pytest tmp_path 承载，不签名、不连接设备、不调用 publisher。
+    生产默认 blocked 由独立不使用本 fixture 的测试覆盖。
+    """
+    original_builder = pages.build_offline_page_plans
+    original_blocker = pages.offline_case_blocker
+
+    def supported_plans(**kwargs):
+        # 原生产 builder 先按当前真实支持范围生成并验证，随后才模拟 future producer。
+        with monkeypatch.context() as current_producer:
+            current_producer.setattr(pages, "offline_case_blocker", original_blocker)
+            plans = original_builder(**kwargs)
+        for plan in plans:
+            if original_blocker(plan["caseId"]):
+                plan["executionBlocker"] = ""
+                plan["steps"] = [
+                    {"operation": "tap", "selector": "local-contract-action"},
+                    {"operation": "visible", "selector": "local-contract-readback"},
+                ]
+                plan["planDigest"] = pages.document_digest({key: value for key, value in plan.items() if key != "planDigest"})
+            pages.validate_page_plan(plan)
+        return plans
+
+    monkeypatch.setattr(offline, "offline_case_blocker", lambda case: "")
+    monkeypatch.setattr(pages, "offline_case_blocker", lambda case: "")
+    monkeypatch.setattr(pages, "build_offline_page_plans", supported_plans)
+
+
+def test_current_unsupported_required_cases_reject_even_complete_claimed_passes():
+    results, bindings = _matrix()
+    with pytest.raises(ValueError, match="unsupported required case"):
+        validate_offline_page_coverage(results=results, bindings=bindings, candidate=_CANDIDATE)
 
 
 def _matrix():
@@ -41,7 +80,7 @@ def _matrix():
         bindings.append(binding)
         for case in OFFLINE_REQUIRED_CASES:
             results.append({
-                "objectId": "app_runtime", "specRef": OFFLINE_SPEC_REF, "caseId": case,
+                "objectId": "app_runtime", "specRef": offline_case_spec_ref(case), "caseId": case,
                 "producer": "app", "layer": "user_acceptance", "status": "passed",
                 "target": {"kind": "page", "id": "home"}, "commitSha": _CANDIDATE["commit"],
                 "contractGraphSourceHash": "d" * 64, "deploymentTarget": "alpha-local", "environment": "alpha",
@@ -57,7 +96,7 @@ def _matrix():
     return results, bindings
 
 
-def test_dual_platform_required_matrix_passes_only_with_all_exact_cases():
+def test_dual_platform_required_matrix_passes_only_with_all_exact_cases(supported_offline_producer):
     results, bindings = _matrix()
     validate_offline_page_coverage(results=results, bindings=bindings, candidate=_CANDIDATE)
     with pytest.raises(ValueError, match="incomplete"):
@@ -71,8 +110,9 @@ def test_dual_platform_required_matrix_passes_only_with_all_exact_cases():
 @pytest.mark.parametrize("field,value", [
     ("commitSha", "e" * 40), ("candidateDigest", "sha256:" + "f" * 64),
     ("artifactSha256", "0" * 64), ("deviceIdentity", "another-device"), ("observedOutcome", "empty"),
+    ("specRef", OFFLINE_SPEC_REF.replace("gwt-007", "gwt-008")),
 ])
-def test_matrix_rejects_cross_candidate_artifact_device_and_outcome(field, value):
+def test_matrix_rejects_cross_candidate_artifact_device_and_outcome(field, value, supported_offline_producer):
     results, bindings = _matrix()
     results[0][field] = value
     with pytest.raises(ValueError):
@@ -82,6 +122,7 @@ def test_matrix_rejects_cross_candidate_artifact_device_and_outcome(field, value
 def test_native_terminal_requires_exact_process_plan_and_step_coverage():
     from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import document_digest
     plan = {"schema": "quwoquan_ops.offline_page_case.v1", "caseId": "default-entry",
+            "specRef": OFFLINE_SPEC_REF, "executionBlocker": "",
             "steps": [{"operation": "visible", "selector": "qwq.surface.home"}]}
     launch = {"platform": "android", "applicationId": "com.example.app", "canonicalProcessId": 123,
               "candidateDigest": _DIGEST, "artifactDigest": _DIGEST, "deviceId": "android-device", "launchAttemptId": "android"}
@@ -188,7 +229,7 @@ def _receipt_matrix(root):
     return receipts, write
 
 
-def test_acceptance_consumes_actual_dual_platform_raw_closure(tmp_path):
+def test_acceptance_consumes_actual_dual_platform_raw_closure(tmp_path, supported_offline_producer):
     from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
     receipts, _ = _receipt_matrix(tmp_path)
     evidence = offline_receipt_evidence(root=tmp_path, receipts=receipts, candidate=_CANDIDATE,
@@ -198,21 +239,16 @@ def test_acceptance_consumes_actual_dual_platform_raw_closure(tmp_path):
     assert all(result["nonPromotable"] for result in evidence["results"])
     assert not any("packageDigest" in result for result in evidence["results"])
     for result in evidence["results"]:
-        if result["caseId"] in {"login-unavailable", "private-unavailable"}:
-            assert result["target"]["id"] == "/login"
-        elif result["caseId"] == "write-unavailable":
-            assert result["target"]["id"] == "/"
+        assert result["specRef"] == offline_case_spec_ref(result["caseId"])
     for platform in ("android", "ios"):
-        plan = json.loads((tmp_path / platform / "private-unavailable/plan.json").read_bytes())
-        assert plan["steps"][-1]["selector"] == "capability-unavailable:account_authentication:openChat"
-        plan = json.loads((tmp_path / platform / "write-unavailable/plan.json").read_bytes())
-        assert plan["steps"][-2]["selector"].startswith("post-like:")
-        assert plan["steps"][-1]["selector"] == "capability-unavailable:like"
+        plan = json.loads((tmp_path / platform / "local-write/plan.json").read_bytes())
+        assert plan["steps"][-1]["selector"] == "local-contract-readback"
+        assert plan["specRef"].endswith("#gwt-008")
 
 
 @pytest.mark.parametrize("damage", ["planned", "dry-run", "failed", "raw-missing", "raw-drift", "device", "execution",
                                     "screenshot-rehashed", "native-screenshot-absent"])
-def test_acceptance_rejects_nonexecuted_incomplete_or_drifted_offline_receipts(tmp_path, damage):
+def test_acceptance_rejects_nonexecuted_incomplete_or_drifted_offline_receipts(tmp_path, damage, supported_offline_producer):
     from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
     receipts, write = _receipt_matrix(tmp_path)
     exact = receipts["android"]
@@ -248,7 +284,7 @@ def test_acceptance_rejects_nonexecuted_incomplete_or_drifted_offline_receipts(t
         offline_receipt_evidence(root=tmp_path, receipts=receipts, candidate=_CANDIDATE, devices=devices)
 
 
-def test_integration_offline_orchestration_forwards_exact_candidate_and_devices(tmp_path, monkeypatch):
+def test_integration_offline_orchestration_forwards_exact_candidate_and_devices(tmp_path, monkeypatch, supported_offline_producer):
     from argparse import Namespace
     from quwoquan_ops.cli import integration_run as subject
     receipts, _ = _receipt_matrix(tmp_path)

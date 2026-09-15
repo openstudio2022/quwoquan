@@ -28,7 +28,7 @@ data_lifecycle:
     strategy: hard_delete
   deletion_on_user_request: true
   retention_days: 3650
-description: 'UserAccount 账号与只读公开资料投影的隐私与安全策略。
+description: 'UserAccount 账号与只读公开资料投影的隐私与安全策略。窄合集委托的源凭据、grant 和 binding 仅在受限服务请求内存中处理，不记录、不持久化、不进入事件；类型字段分类和 drop 策略由 fields.yaml 声明，不能冒充聚合根字段。
 
   app_log_policy.classification 是 App 日志的有效分类，只能等于或严于 fields.yaml 字段基线；
 

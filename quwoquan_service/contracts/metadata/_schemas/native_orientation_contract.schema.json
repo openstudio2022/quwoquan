@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "channel", "method", "response_schema"],
+  "properties": {
+    "schema": {"const": "content_native_orientation_contract"},
+    "channel": {"type": "string", "minLength": 1},
+    "method": {"type": "string", "pattern": "^[a-z][A-Za-z0-9]+$"},
+    "response_schema": {"$ref": "https://json-schema.org/draft/2020-12/schema"}
+  }
+}

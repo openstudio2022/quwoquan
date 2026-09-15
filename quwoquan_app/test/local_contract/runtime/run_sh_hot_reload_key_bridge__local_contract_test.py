@@ -71,6 +71,12 @@ class HotReloadKeyBridgeContractTest(unittest.TestCase):
         self.assertIn(
             "stdin=subprocess.PIPE if interactive_tty else None", source
         )
+        self.assertIn(
+            "non-TTY session: keyboard commands r/R/q are unavailable", source
+        )
+        self.assertIn(
+            "SIGINT/SIGTERM/SIGHUP still stop and reclaim", source
+        )
         # cbreak 保留 ISIG，Ctrl-C 收尾路径不变；退出时恢复 termios。
         self.assertIn("tty.setcbreak(0)", source)
         self.assertIn("termios.tcsetattr(0, termios.TCSADRAIN, stdin_termios)", source)

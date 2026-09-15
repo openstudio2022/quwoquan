@@ -48,6 +48,7 @@ enum AppUserRecoveryGroup {
   noAccess,
   contentGone,
   contentUnavailable,
+  capabilityUnavailable,
 }
 
 enum UiErrorActionType {

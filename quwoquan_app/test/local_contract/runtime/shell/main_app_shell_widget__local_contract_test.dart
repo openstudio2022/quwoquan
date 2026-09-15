@@ -1345,7 +1345,7 @@ void main() {
                     showWorksToolbar: true,
                     showTopNavigation: false,
                     externalPosts: [post],
-                    onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+                    onUserTap: (_, {avatarUrl, avatarAssetId, avatarAccessMode, displayName, backgroundUrl}) {},
                     onAssistantTap: () {},
                   ),
                 ),

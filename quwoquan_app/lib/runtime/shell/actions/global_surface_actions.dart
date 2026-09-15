@@ -119,6 +119,7 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
     this.surface = AppChromeSurface.standard,
     this.showAssistantLabel = true,
     this.hintFontSize,
+    this.assistantForegroundColor,
   });
 
   final String hint;
@@ -126,6 +127,7 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
   final AppChromeSurface surface;
   final bool showAssistantLabel;
   final double? hintFontSize;
+  final Color? assistantForegroundColor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -210,6 +212,7 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
         GlobalAssistantEntryButton(
           semanticLabel: DiscoveryText.globalXiaoquSearchAsk,
           showLabel: showAssistantLabel,
+          foregroundColor: assistantForegroundColor,
           surface: surface,
           onTap: () => GlobalAssistantLauncher.open(context, ref),
         ),
@@ -374,12 +377,14 @@ class GlobalAssistantEntryButton extends StatelessWidget {
                     fontSize: AppTypography.xs,
                     fontWeight: AppTypography.medium,
                     height: AppSpacing.textLineHeightDense,
-                    color: elevatedSurface
-                        ? AppColors.white
-                        : AppColorsFunctional.getColor(
-                            isDark,
-                            ColorType.foregroundPrimary,
-                          ),
+                    color:
+                        foregroundColor ??
+                        (elevatedSurface
+                            ? AppColors.white
+                            : AppColorsFunctional.getColor(
+                                isDark,
+                                ColorType.foregroundPrimary,
+                              )),
                   ),
                 ),
               ],

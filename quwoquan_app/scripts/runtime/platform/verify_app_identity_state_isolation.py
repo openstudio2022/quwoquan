@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""阻断共享可写 App identity 状态与退役环境 flavor。
+"""验证静态身份矩阵及消费者单轨，阻断共享可写 App identity 状态。
 
-触发范围：App identity metadata/codegen、Android/iOS 原生配置、Flutter 启动入口。
-阻断条件：退役共享状态或环境 flavor 仍存在、启动入口未选择 buildProfile、生成矩阵缺失。
-修复方式：删除共享状态和环境 flavor，恢复 nonprod/prod 静态 flavor/scheme，运行
-`make codegen-app-identity` 后重跑两道 App identity 门禁。
+Debug/Profile 使用 canonical 环境身份，Release 使用信任域身份；Prod 不可调试。
+AST 校验命令与 resolver、内容源和缓存键的接线，不执行被检查的启动脚本。
+此源码门不证明真实编译、安装或设备启动；生成物正确性另由 verify-app-identity 验证。
 """
 
 from __future__ import annotations
@@ -37,38 +36,117 @@ def _read_required(path: Path, root: Path, issues: list[str]) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _executor_nonprod_build_drivers(source: str) -> set[str]:
+def _contains(node: ast.AST, code: str) -> bool:
+    """比较语法节点而非文本：注释、字符串中的伪接线不算代码。"""
+    expected = ast.parse(code).body[0]
+    if isinstance(expected, ast.Expr):
+        expected = expected.value
+    shape = ast.dump(expected, include_attributes=False)
+    return any(ast.dump(child, include_attributes=False) == shape for child in ast.walk(node))
+
+
+def _function(node: ast.AST, name: str) -> ast.AST:
+    matches = [child for child in ast.walk(node)
+               if isinstance(child, ast.FunctionDef) and child.name == name]
+    return matches[0] if len(matches) == 1 else ast.Module(body=[], type_ignores=[])
+
+
+def _flavor_values(node: ast.AST) -> list[str]:
+    values = []
+    for child in ast.walk(node):
+        if isinstance(child, (ast.List, ast.Tuple)):
+            for index, item in enumerate(child.elts):
+                if isinstance(item, ast.Constant) and item.value == "--flavor":
+                    values.append(ast.unparse(child.elts[index + 1]) if index + 1 < len(child.elts) else "")
+    return values
+
+
+def _executor_uses_canonical_identity(source: str) -> bool:
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return set()
-    expected = {
-        "AndroidPlatformDriver",
-        "IOSSimulatorPlatformDriver",
-        "IOSPhysicalPlatformDriver",
-    }
-    compliant: set[str] = set()
-    for class_node in tree.body:
-        if not isinstance(class_node, ast.ClassDef) or class_node.name not in expected:
+        return False
+    identity = _function(tree, "build_identity")
+    required = (
+        "from quwoquan_ops.cli.lib.app_identity import resolve_app_identity",
+        'identity = resolve_app_identity(platform=platform, environment=str(handoff["environment"]), build_profile=str(handoff["buildProfile"]), build_mode="debug")',
+        'expected = contract["content_source_entrypoints"][contract["content_source_policy"][identity.environment]]',
+        'if identity.application_id != self.application_id:\n    raise CanonicalExecutorError("application id conflicts with canonical build identity")',
+        'if self.entrypoint != expected:\n    raise CanonicalExecutorError("entrypoint conflicts with canonical environment content source")',
+        "return identity",
+    )
+    if not all(_contains(identity, code) for code in required):
+        return False
+    if not _contains(tree, "driver.launch_handoff = handoff"):
+        return False
+    for name in ("AndroidPlatformDriver", "IOSSimulatorPlatformDriver", "IOSPhysicalPlatformDriver"):
+        classes = [child for child in tree.body if isinstance(child, ast.ClassDef) and child.name == name]
+        if len(classes) != 1:
+            return False
+        command = _function(classes[0], "build_command")
+        if _flavor_values(command) != ["self.build_identity().flavor"]:
+            return False
+        # 真正返回的构建命令必须消费这个表达式，不能只放在未使用列表里。
+        returns = [child for child in ast.walk(command) if isinstance(child, ast.Return)]
+        if len(returns) != 1 or _flavor_values(returns[0]) != ["self.build_identity().flavor"]:
+            return False
+    return True
+
+
+def _matrix_uses_canonical_identity(source: str) -> bool:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return False
+    identity = _function(tree, "_build_identity")
+    required = (
+        "from quwoquan_ops.cli.lib.app_identity import resolve_app_identity",
+        'mode = str(handoff.get("buildMode") or ("release" if handoff["environment"] == "prod" else "debug"))',
+        'return resolve_app_identity(platform=platform, environment=str(handoff["environment"]), build_profile=str(handoff["buildProfile"]), build_mode=mode)',
+    )
+    command = _function(tree, "_build_command")
+    key = _function(tree, "_build_key")
+    compile_env = _function(tree, "_compile_environment")
+    keys = [node.value for node in ast.walk(_function(tree, "main"))
+            if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "key" for target in node.targets)]
+    if not keys or any(ast.unparse(value) != "_build_key(platform, handoff)" for value in keys):
+        return False
+    return (all(_contains(identity, code) for code in required)
+            and _flavor_values(command) == ["identity.flavor"]
+            and _contains(command, "identity = _build_identity(platform, handoff)")
+            and _contains(command, 'expected = contract["content_source_entrypoints"][contract["content_source_policy"][handoff["environment"]]]')
+            and _contains(command, 'if handoff["entrypoint"] != expected:\n    raise ValueError("entrypoint conflicts with canonical environment content source")')
+            and _contains(command, 'command.extend(["apk" if platform == "android" else "ios", "--" + identity.build_mode, "--flavor", identity.flavor])')
+            and _contains(command, "return command")
+            and _contains(key, "identity = _build_identity(platform, handoff)")
+            and _contains(key, 'selector = f"{identity.flavor}/{identity.build_mode}"')
+            and _contains(key, 'return selector + ":" + str(handoff["entrypoint"]), platform')
+            and _contains(compile_env, 'if build_profile_for_environment(runtime_environment) != build_profile:\n    raise ValueError("compile environment/build profile mismatch")')
+            and _contains(_function(tree, "main"), "key = _build_key(platform, handoff)")
+            and _contains(_function(tree, "main"), "existing = compiled.get(key)")
+            and _contains(_function(tree, "main"), 'process_env = _compile_environment(build_profile=str(handoff["buildProfile"]), platform=platform, runtime_environment=environment, ios_simulator_id=args.ios_simulator_id)'))
+
+
+def _ios_uses_canonical_configuration(source: str) -> bool:
+    # 只解析 shell 中独立的 Python heredoc，不 eval shell、不运行启动器。
+    for block in source.split("<<'PY'\n")[1:]:
+        try:
+            tree = ast.parse(block.split("\nPY\n", 1)[0])
+        except SyntaxError:
             continue
-        profiles: set[str] = set()
-        for method in class_node.body:
-            if not isinstance(method, ast.FunctionDef) or method.name != "build_command":
-                continue
-            for child in ast.walk(method):
-                if not isinstance(child, (ast.List, ast.Tuple)):
-                    continue
-                values = [
-                    item.value
-                    for item in child.elts
-                    if isinstance(item, ast.Constant) and isinstance(item.value, str)
-                ]
-                for index, value in enumerate(values[:-1]):
-                    if value == "--flavor":
-                        profiles.add(values[index + 1])
-        if profiles == {"nonprod"}:
-            compliant.add(class_node.name)
-    return compliant
+        if all(_contains(tree, code) for code in (
+            "from quwoquan_ops.cli.lib.app_identity import resolve_ios_configuration",
+            "identity = resolve_ios_configuration(sys.argv[1])",
+            'key + "=" + shlex.quote(value)',
+        )):
+            fields = [node for node in ast.walk(tree) if isinstance(node, ast.Dict)]
+            required = {"BUILD_PROFILE": "identity.build_profile", "BUILD_MODE": "identity.build_mode",
+                        "BUILD_ENVIRONMENT": "identity.environment or ''", "EXPECTED_BUNDLE_ID": "identity.application_id"}
+            return any({key.value: ast.unparse(value) for key, value in zip(node.keys, node.values)
+                        if isinstance(key, ast.Constant)} == required for node in fields)
+    return False
+
 
 
 def collect_issues(root: Path) -> list[str]:
@@ -116,14 +194,8 @@ def collect_issues(root: Path) -> list[str]:
         issues.append("run.sh must not own a second Flutter buildProfile selection")
     if '--flavor "$QWQ_APP_RUNTIME_ENV"' in launcher_behavior:
         issues.append("run.sh must not select flavor from the runtime environment")
-    if _executor_nonprod_build_drivers(executor) != {
-        "AndroidPlatformDriver",
-        "IOSSimulatorPlatformDriver",
-        "IOSPhysicalPlatformDriver",
-    }:
-        issues.append(
-            "canonical executor Android/iOS build drivers must select only nonprod"
-        )
+    if not _executor_uses_canonical_identity(executor):
+        issues.append("canonical executor drivers must bind flavor, profile and source through canonical identity")
 
     app_instance = sources[app / "scripts/device/run_app_instance.sh"]
     if 'bash "$APP_DIR/run.sh"' not in app_instance or "flutter run" in app_instance:
@@ -132,26 +204,20 @@ def collect_issues(root: Path) -> list[str]:
         )
 
     matrix = sources[app / "scripts/device/build_startup_environment_matrix.py"]
-    if "--flavor" in matrix:
-        if '"--flavor", str(handoff["environment"])' in matrix:
-            issues.append(
-                "startup matrix must not select flavor from the runtime environment"
-            )
-        if '"--flavor", str(handoff["buildProfile"])' not in matrix:
-            issues.append(
-                "startup matrix must select flavor from the handoff buildProfile"
-            )
+    if not _matrix_uses_canonical_identity(matrix):
+        issues.append("startup matrix must bind canonical flavor, mode, source and isolated cache key")
+    prepare = sources[app / "scripts/ios/build_prepare_dart_defines.sh"]
+    if not _ios_uses_canonical_configuration(prepare):
+        issues.append("iOS configuration must resolve canonical profile, environment and bundle identity")
 
     schemes = app / "ios/Runner.xcodeproj/xcshareddata/xcschemes"
     if (schemes / "Runner.xcscheme").exists():
         issues.append("unflavored shared Runner scheme must not remain selectable")
     for environment in ("alpha", "beta", "gamma"):
-        if (schemes / f"{environment}.xcscheme").exists():
-            issues.append(f"retired environment scheme must not exist: {environment}")
+        if not (schemes / f"{environment}.xcscheme").exists():
+            issues.append(f"canonical development environment scheme is missing: {environment}")
 
-    pubspec = _read_required(app / "pubspec.yaml", root, issues)
-    if "  default-flavor: nonprod\n" not in pubspec:
-        issues.append("pubspec.yaml must make nonprod the deterministic default flavor")
+    _read_required(app / "pubspec.yaml", root, issues)
 
     identity_source = _read_required(
         app / "android/app/app_identity.generated.json", root, issues
@@ -175,14 +241,24 @@ def collect_issues(root: Path) -> list[str]:
             for platform in ("android", "ios"):
                 identities = (identity.get("identities") or {}).get(platform) or {}
                 expected_keys = {
-                    f"{profile}/{mode}"
-                    for profile in ("nonprod", "prod")
-                    for mode in ("debug", "profile", "release")
+                    "nonprod/release",
+                    "prod/release",
+                    "alpha/debug",
+                    "alpha/profile",
+                    "beta/debug",
+                    "beta/profile",
+                    "gamma/debug",
+                    "gamma/profile",
                 }
                 if set(identities) != expected_keys:
                     issues.append(
-                        f"generated {platform} identity keys must be buildProfile/buildMode"
+                        f"generated {platform} identity keys must match canonical release/development targets"
                     )
+                if any(key.startswith("prod/") and key != "prod/release" for key in identities):
+                    issues.append(f"generated {platform} identity must not expose Prod Debug/Profile")
+                for key, value in identities.items():
+                    if key.endswith(("/debug", "/profile")) and value.get("promotable") is not False:
+                        issues.append(f"generated {platform} development identity must be non-promotable: {key}")
 
     return issues
 

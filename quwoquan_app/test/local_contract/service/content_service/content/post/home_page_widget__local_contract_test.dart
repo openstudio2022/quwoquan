@@ -474,7 +474,7 @@ void main() {
       },
     );
 
-    testWidgets('展示七个首页文本频道并在频道条右侧保留全局搜索与小趣入口', (tester) async {
+    testWidgets('展示七个首页文本频道并在上方保留大搜索框与带字小趣', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pump(const Duration(milliseconds: 300));
@@ -494,12 +494,13 @@ void main() {
       );
       // 首页是发现主入口，AppRoot REQ-001 的统一搜索入口与 REQ-008 的首页小趣入口
       // 必须与聊天页、个人页同源；缺任一入口即为 Journey 断点。
-      expect(find.byType(GlobalTopActions), findsOneWidget);
+      // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-unified-feed/spec.md#gwt-002
+      expect(find.byType(GlobalXiaoquSearchBar), findsOneWidget);
       expect(find.byKey(TestKeys.globalSearchLauncherButton), findsOneWidget);
       expect(find.byKey(TestKeys.globalAssistantEntryMark), findsOneWidget);
     });
 
-    testWidgets('首页文本频道栏避开安全区且状态栏跟随主题', (tester) async {
+    testWidgets('首页搜索蓝底覆盖安全区且浅色状态栏与中性Tab分离', (tester) async {
       _suppressExpectedErrors();
       _setPhoneSize(tester);
       tester.view.viewPadding = const FakeViewPadding(top: 59, bottom: 34);
@@ -523,8 +524,22 @@ void main() {
             )
             .first,
       );
-      expect(overlay.value.statusBarIconBrightness, Brightness.dark);
-      expect(overlay.value.statusBarBrightness, Brightness.light);
+      // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-unified-feed/spec.md#gwt-002
+      expect(overlay.value.statusBarIconBrightness, Brightness.light);
+      expect(overlay.value.statusBarBrightness, Brightness.dark);
+      final blue = find.byKey(const ValueKey('home-search-blue-chrome'));
+      final tabs = find.byKey(const ValueKey('home-primary-tab-chrome'));
+      expect(tester.getTopLeft(blue).dy, 0);
+      expect(tester.getBottomLeft(blue).dy, tester.getTopLeft(tabs).dy);
+      expect(
+        tester.getTopLeft(find.byType(GlobalXiaoquSearchBar)).dy,
+        safeTop + AppSpacing.intraGroupXs,
+      );
+      expect(tester.widget<Container>(blue).color, AppColors.brandBlue700);
+      final assistantLabel = tester.widget<Text>(
+        find.text(DiscoveryText.globalXiaoquSearchAsk),
+      );
+      expect(assistantLabel.style?.color, AppColors.white);
     });
 
     testWidgets('浅色首页一级 Tab 选中 label 和下划线使用蓝色', (tester) async {
@@ -1058,17 +1073,31 @@ void main() {
           HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId),
         ),
       );
-      expect(travel.center.dx, closeTo(viewport.center.dx, 0.1));
-      expect(
-        find.byKey(HomePrimaryTabStrip.channelKey('following')).hitTestable(),
-        findsNothing,
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byKey(HomePrimaryTabStrip.stripKey),
+          matching: find.byType(Scrollable),
+        ),
       );
-      expect(
-        tester
-            .getRect(find.byKey(HomePrimaryTabStrip.channelKey('recommend')))
-            .left,
-        closeTo(viewport.left, 0.1),
+      final offset = scrollable.position.pixels;
+      final contentCenterX = travel.center.dx - viewport.left + offset;
+      final expectedOffset = (contentCenterX - viewport.width / 2).clamp(
+        0.0,
+        scrollable.position.maxScrollExtent,
       );
+      expect(offset, closeTo(expectedOffset, 0.1));
+      if (offset > 0) {
+        expect(
+          find.byKey(HomePrimaryTabStrip.channelKey('following')).hitTestable(),
+          findsNothing,
+        );
+        expect(
+          tester
+              .getRect(find.byKey(HomePrimaryTabStrip.channelKey('recommend')))
+              .left,
+          closeTo(viewport.left, 0.1),
+        );
+      }
     });
 
     // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-002

@@ -12,6 +12,7 @@ from internal.recommendation.ranked_recommendation_window.domain.model import (
     MAX_WINDOW_ITEMS,
     WINDOW_TTL,
     RecommendationObjectCard,
+    RecommendationRequestContext,
     RankedCandidate,
     RankedRecommendationWindow,
     RankingResult,
@@ -128,6 +129,8 @@ def test_ranked_window_has_fixed_expiry_and_stable_ordinals() -> None:
         window_id="window-001",
         subject_id="persona-001",
         scenario="content_feed",
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
+        context_digest="3b84dcc0252ec0f7ae082ef47c6ad3cf9ec96806e82ec472fa49b6ef450b9d52",
         request_digest="request-digest-001",
         ranking=RankingResult(
             experiment_bucket="model",
@@ -284,7 +287,9 @@ def test_ranked_window_rejects_duplicate_or_unbounded_candidates() -> None:
             window_id="window-duplicate",
             subject_id="persona-001",
             scenario="content_feed",
-            request_digest="request-digest-001",
+            request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
+        context_digest="3b84dcc0252ec0f7ae082ef47c6ad3cf9ec96806e82ec472fa49b6ef450b9d52",
+        request_digest="request-digest-001",
             ranking=RankingResult(
                 experiment_bucket="rule",
                 model_bucket="rule",
@@ -306,7 +311,9 @@ def test_ranked_window_rejects_duplicate_or_unbounded_candidates() -> None:
             window_id="window-unbounded",
             subject_id="persona-001",
             scenario="content_feed",
-            request_digest="request-digest-001",
+            request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
+        context_digest="3b84dcc0252ec0f7ae082ef47c6ad3cf9ec96806e82ec472fa49b6ef450b9d52",
+        request_digest="request-digest-001",
             ranking=_ranking(MAX_WINDOW_ITEMS + 1),
         )
 
@@ -328,6 +335,8 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
         window_id="window-object-card",
         subject_id="persona-001",
         scenario="content_feed",
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
+        context_digest="3b84dcc0252ec0f7ae082ef47c6ad3cf9ec96806e82ec472fa49b6ef450b9d52",
         request_digest="request-object-card",
         ranking=RankingResult(
             experiment_bucket=ranking.experiment_bucket,
@@ -358,6 +367,8 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
         window_id="window-gathering-card",
         subject_id="persona-001",
         scenario="content_feed",
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
+        context_digest="3b84dcc0252ec0f7ae082ef47c6ad3cf9ec96806e82ec472fa49b6ef450b9d52",
         request_digest="request-gathering-card",
         ranking=RankingResult(
             experiment_bucket=ranking.experiment_bucket,
@@ -384,7 +395,9 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
                 window_id="window-invalid-object-card",
                 subject_id="persona-001",
                 scenario="content_feed",
-                request_digest="request-invalid-object-card",
+                request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
+        context_digest="3b84dcc0252ec0f7ae082ef47c6ad3cf9ec96806e82ec472fa49b6ef450b9d52",
+        request_digest="request-invalid-object-card",
                 ranking=RankingResult(
                     experiment_bucket=ranking.experiment_bucket,
                     model_bucket=ranking.model_bucket,
@@ -398,3 +411,72 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
                     object_cards=invalid_cards,
                 ),
             )
+
+# spec_ref: specs/feature-tree/recommendation-platform/spec.md
+class _CheckpointRanker(_Ranker):
+    def rank(self, **kwargs):
+        result = super().rank(**kwargs)
+        return RankingResult(
+            experiment_bucket=result.experiment_bucket,
+            model_bucket=result.model_bucket,
+            model_channel=result.model_channel,
+            model_release_id=result.model_release_id,
+            policy_digest=result.policy_digest,
+            feature_snapshot_at=result.feature_snapshot_at,
+            ranking_snapshot_digest=result.ranking_snapshot_digest,
+            user_feature_snapshot=result.user_feature_snapshot,
+            candidates=result.candidates,
+            object_cards=result.object_cards,
+            profile_revision="42",
+        )
+
+
+def test_request_context_is_canonical_frozen_and_replayed_across_clock_change() -> None:
+    clock = [datetime(2026, 7, 31, 23, 59, tzinfo=timezone.utc)]
+    store = _Store()
+    facade = Facade(
+        store=store,
+        ranker=_CheckpointRanker(),
+        subject_closures=_Closures(),
+        exclusion_profiles=_ExclusionProfiles(),
+        window_id_factory=lambda _key: "window-context",
+        now=lambda: clock[0],
+    )
+    first = facade.create_window(
+        content_fence=_fence(),
+        idempotency_key="request-context",
+        subject_id="persona-001",
+        scenario="content_feed",
+        limit=2,
+        viewport_profile=None,
+        device_class="tablet",
+    )
+    assert store.window.request_context == RecommendationRequestContext(
+        "unknown", "tablet", "unknown", "h23", "42"
+    )
+    assert len(first.context_digest) == 64
+    assert first.context_digest == store.window.context_digest
+
+    clock[0] = datetime(2026, 8, 1, 0, 1, tzinfo=timezone.utc)
+    replay = facade.create_window(
+        content_fence=_fence(),
+        idempotency_key="request-context",
+        subject_id="persona-001",
+        scenario="content_feed",
+        limit=2,
+        viewport_profile=None,
+        device_class="tablet",
+    )
+    assert replay == first
+    assert store.window.request_context.time_bucket == "h23"
+
+    with pytest.raises(IdempotencyConflictError):
+        facade.create_window(
+            content_fence=_fence(),
+            idempotency_key="request-context",
+            subject_id="persona-001",
+            scenario="content_feed",
+            limit=2,
+            viewport_profile="landscape",
+            device_class="tablet",
+        )

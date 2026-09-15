@@ -396,7 +396,7 @@ def operation_snapshots(
                 "actorRequirement": str(
                     operation.get("actorRequirement", "")
                 ),
-                "authMode": auth_mode(route),
+                "authMode": str(operation["authMode"]) if operation.get("transport") == "graphql" else auth_mode(route),
                 "principal": str(operation.get("principal", "")),
                 "scopes": list(operation.get("scopes", [])),
                 "permissions": list(operation.get("permissions", [])),

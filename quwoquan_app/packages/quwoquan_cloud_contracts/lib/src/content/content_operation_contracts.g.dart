@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: f6058929d12b4eee312cd457c4084450df8d955d035bbda8b9063ca76f9a5cc6
 
 library;
 
@@ -407,6 +407,40 @@ enum OutboundShareDestinationKind {
   }
 }
 
+enum PostCollectionStatus {
+  active("active"),
+  deleted("deleted");
+
+  const PostCollectionStatus(this.wireName);
+
+  final String wireName;
+
+  static PostCollectionStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "active" => PostCollectionStatus.active,
+      "deleted" => PostCollectionStatus.deleted,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum PostCollectionVisibility {
+  public("public"),
+  private("private");
+
+  const PostCollectionVisibility(this.wireName);
+
+  final String wireName;
+
+  static PostCollectionVisibility fromWire(Object? value, String path) {
+    return switch (value) {
+      "public" => PostCollectionVisibility.public,
+      "private" => PostCollectionVisibility.private,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
 enum PostSourceType {
   original("original"),
   repost("repost"),
@@ -459,6 +493,46 @@ enum ProfileInteractionReadState {
     return switch (value) {
       "seen" => ProfileInteractionReadState.seen,
       "read" => ProfileInteractionReadState.read,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum RecommendationDeviceClass {
+  phone("phone"),
+  tablet("tablet"),
+  desktop("desktop"),
+  unknown("unknown");
+
+  const RecommendationDeviceClass(this.wireName);
+
+  final String wireName;
+
+  static RecommendationDeviceClass fromWire(Object? value, String path) {
+    return switch (value) {
+      "phone" => RecommendationDeviceClass.phone,
+      "tablet" => RecommendationDeviceClass.tablet,
+      "desktop" => RecommendationDeviceClass.desktop,
+      "unknown" => RecommendationDeviceClass.unknown,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum RecommendationViewportProfile {
+  landscape("landscape"),
+  portrait("portrait"),
+  unknown("unknown");
+
+  const RecommendationViewportProfile(this.wireName);
+
+  final String wireName;
+
+  static RecommendationViewportProfile fromWire(Object? value, String path) {
+    return switch (value) {
+      "landscape" => RecommendationViewportProfile.landscape,
+      "portrait" => RecommendationViewportProfile.portrait,
+      "unknown" => RecommendationViewportProfile.unknown,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -5315,6 +5389,257 @@ final class PostArticleRenderProfile {
   };
 }
 
+final class PostCollectionCommandResult {
+  const PostCollectionCommandResult({
+    required this.collectionId,
+    required this.version,
+    required this.status,
+  });
+
+  final String collectionId;
+  final int version;
+  final PostCollectionStatus status;
+
+  factory PostCollectionCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostCollectionCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "collectionId",
+      "version",
+      "status",
+    }, path);
+    return PostCollectionCommandResult(
+      collectionId: _requiredString(map["collectionId"], '$path.collectionId'),
+      version: _requiredInt(map["version"], '$path.version'),
+      status: PostCollectionStatus.fromWire(map["status"], '$path.status'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "collectionId": collectionId,
+    "version": version,
+    "status": status.wireName,
+  };
+}
+
+final class PostCollectionManagedMember {
+  const PostCollectionManagedMember({
+    required this.postId,
+    required this.readable,
+    this.title,
+  });
+
+  final String postId;
+  final bool readable;
+  final String? title;
+
+  factory PostCollectionManagedMember.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostCollectionManagedMember",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "postId",
+      "readable",
+      "title",
+    }, path);
+    return PostCollectionManagedMember(
+      postId: _requiredString(map["postId"], '$path.postId'),
+      readable: _requiredBool(map["readable"], '$path.readable'),
+      title: map["title"] == null
+          ? null
+          : _requiredString(map["title"], '$path.title'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "postId": postId,
+    "readable": readable,
+    if (title != null) "title": title!,
+  };
+}
+
+final class PostCollectionManagementView {
+  const PostCollectionManagementView({
+    required this.collectionId,
+    required this.name,
+    this.coverAssetId,
+    required this.visibility,
+    required this.version,
+    required this.members,
+  });
+
+  final String collectionId;
+  final String name;
+  final String? coverAssetId;
+  final PostCollectionVisibility visibility;
+  final int version;
+  final List<PostCollectionManagedMember> members;
+
+  factory PostCollectionManagementView.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostCollectionManagementView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "collectionId",
+      "name",
+      "coverAssetId",
+      "visibility",
+      "version",
+      "members",
+    }, path);
+    return PostCollectionManagementView(
+      collectionId: _requiredString(map["collectionId"], '$path.collectionId'),
+      name: _requiredString(map["name"], '$path.name'),
+      coverAssetId: map["coverAssetId"] == null
+          ? null
+          : _requiredString(map["coverAssetId"], '$path.coverAssetId'),
+      visibility: PostCollectionVisibility.fromWire(
+        map["visibility"],
+        '$path.visibility',
+      ),
+      version: _requiredInt(map["version"], '$path.version'),
+      members: List<PostCollectionManagedMember>.unmodifiable(
+        _requiredList(map["members"], '$path.members').asMap().entries.map(
+          (entry) => PostCollectionManagedMember.fromWire(
+            _requiredObject(entry.value, '$path.members' + '[${entry.key}]'),
+            '$path.members' + '[${entry.key}]',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "collectionId": collectionId,
+    "name": name,
+    if (coverAssetId != null) "coverAssetId": coverAssetId!,
+    "visibility": visibility.wireName,
+    "version": version,
+    "members": members.map((value) => value.toWire()).toList(growable: false),
+  };
+}
+
+final class PostCollectionMemberSummary {
+  const PostCollectionMemberSummary({
+    required this.postId,
+    required this.contentType,
+    required this.title,
+  });
+
+  final String postId;
+  final String contentType;
+  final String title;
+
+  factory PostCollectionMemberSummary.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostCollectionMemberSummary",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "postId",
+      "contentType",
+      "title",
+    }, path);
+    return PostCollectionMemberSummary(
+      postId: _requiredString(map["postId"], '$path.postId'),
+      contentType: _requiredString(map["contentType"], '$path.contentType'),
+      title: _requiredString(map["title"], '$path.title'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "postId": postId,
+    "contentType": contentType,
+    "title": title,
+  };
+}
+
+final class PostCollectionPage {
+  const PostCollectionPage({
+    required this.collectionId,
+    required this.ownerPersonaId,
+    required this.name,
+    this.coverAssetId,
+    required this.visibility,
+    required this.version,
+    required this.members,
+    required this.visibleCount,
+    this.nextCursor,
+    required this.canManage,
+  });
+
+  final String collectionId;
+  final String ownerPersonaId;
+  final String name;
+  final String? coverAssetId;
+  final PostCollectionVisibility visibility;
+  final int version;
+  final List<PostCollectionMemberSummary> members;
+  final int visibleCount;
+  final String? nextCursor;
+  final bool canManage;
+
+  factory PostCollectionPage.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostCollectionPage",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "collectionId",
+      "ownerPersonaId",
+      "name",
+      "coverAssetId",
+      "visibility",
+      "version",
+      "members",
+      "visibleCount",
+      "nextCursor",
+      "canManage",
+    }, path);
+    return PostCollectionPage(
+      collectionId: _requiredString(map["collectionId"], '$path.collectionId'),
+      ownerPersonaId: _requiredString(
+        map["ownerPersonaId"],
+        '$path.ownerPersonaId',
+      ),
+      name: _requiredString(map["name"], '$path.name'),
+      coverAssetId: map["coverAssetId"] == null
+          ? null
+          : _requiredString(map["coverAssetId"], '$path.coverAssetId'),
+      visibility: PostCollectionVisibility.fromWire(
+        map["visibility"],
+        '$path.visibility',
+      ),
+      version: _requiredInt(map["version"], '$path.version'),
+      members: List<PostCollectionMemberSummary>.unmodifiable(
+        _requiredList(map["members"], '$path.members').asMap().entries.map(
+          (entry) => PostCollectionMemberSummary.fromWire(
+            _requiredObject(entry.value, '$path.members' + '[${entry.key}]'),
+            '$path.members' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      visibleCount: _requiredInt(map["visibleCount"], '$path.visibleCount'),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      canManage: _requiredBool(map["canManage"], '$path.canManage'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "collectionId": collectionId,
+    "ownerPersonaId": ownerPersonaId,
+    "name": name,
+    if (coverAssetId != null) "coverAssetId": coverAssetId!,
+    "visibility": visibility.wireName,
+    "version": version,
+    "members": members.map((value) => value.toWire()).toList(growable: false),
+    "visibleCount": visibleCount,
+    if (nextCursor != null) "nextCursor": nextCursor!,
+    "canManage": canManage,
+  };
+}
+
 final class PostDeletionReceipt {
   const PostDeletionReceipt({
     required this.postId,
@@ -6783,6 +7108,26 @@ OutboundShareFactResult decodeOutboundShareFactResult(Object? response) =>
     OutboundShareFactResult.fromWire(
       _requiredObject(response, "OutboundShareFactResult"),
       "OutboundShareFactResult",
+    );
+
+PostCollectionCommandResult decodePostCollectionCommandResult(
+  Object? response,
+) => PostCollectionCommandResult.fromWire(
+  _requiredObject(response, "PostCollectionCommandResult"),
+  "PostCollectionCommandResult",
+);
+
+PostCollectionManagementView decodePostCollectionManagementView(
+  Object? response,
+) => PostCollectionManagementView.fromWire(
+  _requiredObject(response, "PostCollectionManagementView"),
+  "PostCollectionManagementView",
+);
+
+PostCollectionPage decodePostCollectionPage(Object? response) =>
+    PostCollectionPage.fromWire(
+      _requiredObject(response, "PostCollectionPage"),
+      "PostCollectionPage",
     );
 
 PostDeletionReceipt decodePostDeletionReceipt(Object? response) =>

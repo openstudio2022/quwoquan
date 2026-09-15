@@ -64,7 +64,9 @@ def _ios_compile_defines(environment: str) -> dict[str, str]:
         )
         process_env = dict(os.environ)
         process_env["QWQ_APP_BUILD_PROFILE"] = str(handoff["buildProfile"])
-        process_env["CONFIGURATION"] = _xcode_configuration(str(handoff["buildProfile"]))
+        process_env["CONFIGURATION"] = _xcode_configuration(environment)
+        process_env["FLUTTER_TARGET"] = str(handoff["entrypoint"])
+        process_env.pop("QWQ_APP_RUNTIME_ENV", None)
         process_env["QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH"] = str(trust_path)
         process_env["TARGET_BUILD_DIR"] = str(artifact_root / "build")
         process_env["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
@@ -94,12 +96,10 @@ def _ios_compile_defines(environment: str) -> dict[str, str]:
     return values
 
 
-def _xcode_configuration(build_profile: str) -> str:
-    if build_profile == "nonprod":
-        return "Debug-nonprod"
-    if build_profile == "prod":
-        return "Release-prod"
-    raise RuntimeError(f"unsupported iOS build profile: {build_profile}")
+def _xcode_configuration(environment: str) -> str:
+    from quwoquan_ops.cli.lib.app_identity import resolve_app_identity
+    return resolve_app_identity(platform="ios", environment=environment,
+                                build_mode="release" if environment == "prod" else "debug").configuration
 
 
 def _launcher_handoff(

@@ -25,6 +25,7 @@ class LoginFrame extends StatelessWidget {
     required this.onCancelSocial,
     required this.onAccountRestrictionSupport,
     required this.accountRestrictionSupportBusy,
+    this.showRehearsalOtpHint = false,
     this.dismissPolicy = LoginDismissPolicy.popPrevious,
     this.isInline = false,
   });
@@ -51,6 +52,7 @@ class LoginFrame extends StatelessWidget {
   final VoidCallback onCancelSocial;
   final VoidCallback onAccountRestrictionSupport;
   final bool accountRestrictionSupportBusy;
+  final bool showRehearsalOtpHint;
   final LoginDismissPolicy dismissPolicy;
   final bool isInline;
 
@@ -98,7 +100,11 @@ class LoginFrame extends StatelessWidget {
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
                           maxWidth: AppSpacing.loginFrameMaxWidth,
-                          minHeight: constraints.maxHeight - AppSpacing.lg,
+                          minHeight:
+                              (constraints.maxHeight -
+                                      AppSpacing.md -
+                                      AppSpacing.lg)
+                                  .clamp(0.0, double.infinity),
                         ),
                         child: Align(
                           alignment: Alignment.topCenter,
@@ -182,6 +188,7 @@ class LoginFrame extends StatelessWidget {
           onResend: onResendOtp,
           onRetryVerify: onRetryOtpVerify,
           onChangePhone: onChangePhone,
+          showRehearsalHint: showRehearsalOtpHint,
         ),
         LoginStep.socialAuthorizing => _SocialAuthorizingStep(
           state: state,
@@ -463,6 +470,7 @@ class _OtpLoginStep extends StatelessWidget {
     required this.onRetryVerify,
     required this.onChangePhone,
     this.showProvider = false,
+    this.showRehearsalHint = false,
   });
 
   final LoginFlowState state;
@@ -472,6 +480,7 @@ class _OtpLoginStep extends StatelessWidget {
   final VoidCallback onRetryVerify;
   final VoidCallback onChangePhone;
   final bool showProvider;
+  final bool showRehearsalHint;
 
   @override
   Widget build(BuildContext context) {
@@ -490,6 +499,17 @@ class _OtpLoginStep extends StatelessWidget {
           enabled: !state.isBusy,
           onChangePhone: onChangePhone,
         ),
+        if (showRehearsalHint) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            FoundationText.loginRehearsalOtpHint,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.sm,
+              color: AppColors.iosSecondaryLabel(context),
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.lg),
         OtpCodeBoxes(
           controller: controller,
@@ -898,7 +918,8 @@ class _BlockedLoginStep extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         // 具体错误原因与副标题同句时不重复渲染，避免同屏两遍同一句话。
-        if (state.feedback case final feedback? when feedback.message != subtitle)
+        if (state.feedback case final feedback?
+            when feedback.message != subtitle)
           _LoginFeedbackText(feedback: feedback),
         const SizedBox(height: AppSpacing.lg),
         if (isAccountSuspended) ...<Widget>[

@@ -1,13 +1,14 @@
-"""BuildProfile × BuildMode 的 App 包身份推导。
+"""消费 canonical metadata 派生的 App 包身份矩阵。
 
-唯一真相源是 canonical metadata `app_artifact_manifest.yaml` 的
-`build_profiles` 与 `application_identity`；运行环境先映射到信任域 profile，
-再推导原生身份，禁止任何消费者复制 environment→profile 映射。
+Release 按信任域，Debug/Profile 按明确环境；只读取 codegen 投影并校验
+当前 authoring/输出摘要，不复制生成器的身份拼接算法或环境映射。
 """
 
 from __future__ import annotations
 
 import sys
+import hashlib
+import json
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -39,6 +40,16 @@ class AppIdentity:
     display_name: str
     # Prod 正式 ID 是否已取得已登记外部事实；False 时 store 渠道必须阻断。
     registered: bool
+    environment: str | None = None
+    promotable: bool = False
+
+    @property
+    def flavor(self) -> str:
+        return self.environment if self.environment is not None else self.build_profile
+
+    @property
+    def configuration(self) -> str:
+        return f"{self.build_mode.title()}-{self.flavor}"
 
 
 @dataclass(frozen=True)
@@ -76,16 +87,24 @@ def _artifact_contract() -> dict[str, Any]:
         raise AppIdentityError("environments metadata is missing")
     if not isinstance(web_application_id, str) or not web_application_id.strip():
         raise AppIdentityError("web_application_id metadata is missing")
-    for key in (
-        "display_name_base",
-        "base_application_ids",
-        "build_profile_suffixes",
-        "build_profile_display_marks",
-        "build_mode_suffixes",
-        "build_mode_display_marks",
-    ):
-        if key not in identity:
-            raise AppIdentityError(f"application_identity.{key} is missing")
+    # 包身份只读 canonical codegen 投影，不在 Python 复制 Go 生成器的 suffix 算法。
+    projection_path = _ROOT / "quwoquan_app/android/app/app_identity.generated.json"
+    try:
+        projection_bytes = projection_path.read_bytes()
+        projection = json.loads(projection_bytes)
+        manifest = json.loads((_ROOT / "quwoquan_app/tool/app_identity_codegen/generated_manifest.json").read_bytes())
+    except (OSError, ValueError) as error:
+        raise AppIdentityError("canonical App identity projection is unavailable") from error
+    source_digest = "sha256:" + hashlib.sha256(ARTIFACT_METADATA_PATH.read_bytes()).hexdigest()
+    outputs = [item for item in manifest.get("outputs", [])
+               if item.get("path") == "android/app/app_identity.generated.json"]
+    if (manifest.get("sourceSha256") != source_digest or len(outputs) != 1
+            or outputs[0].get("sha256") != "sha256:" + hashlib.sha256(projection_bytes).hexdigest()):
+        raise AppIdentityError("canonical App identity projection digest mismatch")
+    if (projection.get("schema") != "qwq.app-identity-generated"
+            or projection.get("source") != "_shared/app_artifact_manifest.yaml"
+            or projection.get("sourceSha256") != source_digest):
+        raise AppIdentityError("canonical App identity projection is stale or invalid")
 
     canonical_environments = tuple(str(value) for value in environments)
     environment_profiles: dict[str, str] = {}
@@ -121,14 +140,9 @@ def _artifact_contract() -> dict[str, Any]:
         raise AppIdentityError(
             "build_profiles must own every canonical environment exactly once"
         )
-    if set(identity["build_profile_suffixes"]) != set(normalized_profiles):
-        raise AppIdentityError(
-            "application_identity.build_profile_suffixes must match build_profiles"
-        )
-    if set(identity["build_profile_display_marks"]) != set(normalized_profiles):
-        raise AppIdentityError(
-            "application_identity.build_profile_display_marks must match build_profiles"
-        )
+    if (projection.get("environmentProfiles") != environment_profiles
+            or set(projection.get("buildProfiles", [])) != set(normalized_profiles)):
+        raise AppIdentityError("canonical App identity projection profile mapping mismatch")
 
     known_distribution_classes = set(distribution_classes)
     normalized_products: dict[str, dict[str, str]] = {}
@@ -165,6 +179,7 @@ def _artifact_contract() -> dict[str, Any]:
 
     return {
         "identity": identity,
+        "projection": projection,
         "profiles": normalized_profiles,
         "build_products": normalized_products,
         "environments": canonical_environments,
@@ -254,7 +269,7 @@ def supported_build_profiles() -> tuple[str, ...]:
 
 
 def supported_build_modes() -> tuple[str, ...]:
-    return tuple(_identity_contract()["build_mode_suffixes"])
+    return tuple(_artifact_contract()["projection"]["buildModes"])
 
 
 def build_profile_for_environment(environment: str) -> str:
@@ -309,38 +324,34 @@ def resolve_app_identity(
     if resolved_profile not in supported_build_profiles():
         raise AppIdentityError(f"unsupported build profile: {resolved_profile!r}")
 
-    contract = _identity_contract()
-    bases = contract["base_application_ids"]
-    if platform not in bases:
-        raise AppIdentityError(f"unsupported identity platform: {platform!r}")
-    mode_suffixes = contract["build_mode_suffixes"]
-    if build_mode not in mode_suffixes:
-        raise AppIdentityError(f"unsupported build mode: {build_mode!r}")
-
-    base = bases[platform]
-    base_id = base.get("value") if isinstance(base, dict) else None
-    registered = bool(base.get("registered")) if isinstance(base, dict) else False
-    if not isinstance(base_id, str) or not base_id:
-        raise AppIdentityError(f"base application id missing for {platform!r}")
-
-    profile_suffixes = contract["build_profile_suffixes"]
-    profile_marks = contract["build_profile_display_marks"]
-    application_id = (
-        f"{base_id}{profile_suffixes[resolved_profile]}{mode_suffixes[build_mode]}"
-    )
-    display_name = (
-        f"{contract['display_name_base']}"
-        f"{profile_marks[resolved_profile]}"
-        f"{contract['build_mode_display_marks'][build_mode]}"
-    )
+    if build_mode != "release" and environment is None:
+        raise AppIdentityError("Debug/Profile identity requires explicit environment")
+    selector = resolved_profile if build_mode == "release" else environment
+    projection = _artifact_contract()["projection"]
+    value = projection.get("identities", {}).get(platform, {}).get(f"{selector}/{build_mode}")
+    if not isinstance(value, dict):
+        raise AppIdentityError(f"unsupported App identity: {platform}/{selector}/{build_mode}")
+    if (value.get("buildProfile") != resolved_profile
+            or value.get("buildMode") != build_mode
+            or value.get("environment") != (None if build_mode == "release" else environment)):
+        raise AppIdentityError("canonical App identity dimensions mismatch")
     return AppIdentity(
-        platform=platform,
-        build_profile=resolved_profile,
-        build_mode=build_mode,
-        application_id=application_id,
-        display_name=display_name,
-        registered=registered,
+        platform=platform, build_profile=resolved_profile, build_mode=build_mode,
+        application_id=value["applicationId"], display_name=value["displayName"],
+        registered=value["registered"], environment=value.get("environment"),
+        promotable=value["promotable"],
     )
+
+
+def resolve_ios_configuration(configuration: str) -> AppIdentity:
+    """配置名只接受 canonical 投影中的身份，不提供旧配置别名。"""
+    for key, value in _artifact_contract()["projection"]["identities"]["ios"].items():
+        selector, mode = key.split("/")
+        if configuration == f"{mode.title()}-{selector}":
+            return resolve_app_identity(platform="ios", build_mode=mode,
+                                        build_profile=value["buildProfile"],
+                                        environment=value.get("environment"))
+    raise AppIdentityError(f"unsupported iOS configuration: {configuration!r}")
 
 
 def application_id_for(platform: str, environment: str, build_mode: str) -> str:

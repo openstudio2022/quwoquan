@@ -94,6 +94,8 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   bool _holdingControllerSlot = false;
   int _nextControllerSlotLeaseId = 0;
   int? _controllerSlotLeaseId;
+  Timer? _controllerSlotRetryTimer;
+  Completer<void>? _controllerSlotRetryCompletion;
   VoidCallback? _controllerErrorListener;
   int? _reportedNativeErrorGeneration;
   bool _qoeReportedForController = false;
@@ -358,6 +360,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
 
   void _invalidateVideoInitialization() {
     _videoInitGeneration += 1;
+    _cancelControllerSlotRetry();
     _initializationWaitController.cancel();
     _compactProgressTimer?.cancel();
     _compactProgressTimer = null;
@@ -560,8 +563,8 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   }
 
   Future<void> _initializeVideo() async {
-    final generation = _videoInitGeneration + 1;
-    _videoInitGeneration = generation;
+    _invalidateVideoInitialization();
+    final generation = _videoInitGeneration;
     _beginInitializationWait(generation);
     _qoeReportedForController = false;
     final cachedFailure = MediaLoadFailureCache.instance.activeFailure(
@@ -620,9 +623,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
       },
       onTimeout: (_) {
         if (!mounted || videoGeneration != _videoInitGeneration) return;
-        _videoInitGeneration += 1;
-        _compactProgressTimer?.cancel();
-        _compactProgressTimer = null;
+        _invalidateVideoInitialization();
         final slotLeaseId = _controllerSlotLeaseId;
         _releaseControllerSlot(leaseId: slotLeaseId);
         unawaited(

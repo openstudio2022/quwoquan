@@ -1,0 +1,9 @@
+backend: mongodb
+role: authoritative
+collections:
+  post_collections:
+    entity: PostCollection
+    role: authoritative
+    publication_role: not_published
+    description: 独立合集权威状态与删除墓碑；整个编排以版本 CAS 单文档原子替换。
+description: Mongo 单文档替换以 _id、ownerPersonaId、version 和 active 状态为原子条件，不涉及跨集合事务；删除仅保存本聚合墓碑。

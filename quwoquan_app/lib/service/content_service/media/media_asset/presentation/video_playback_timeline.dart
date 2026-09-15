@@ -13,14 +13,13 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 enum VideoPlaybackTimelineProfile { inlineFeed, workBrowser }
 
 /// 时间轴视觉层级；尺寸与透明度只能从该语义层级解析。
-enum VideoTimelineVisualLevel { normal, paused, scrubbing }
+enum VideoTimelineVisualLevel { normal, paused, scrubbing, ended }
 
-typedef VideoTimelinePreviewBuilder =
-    Widget? Function(
-      BuildContext context,
-      VideoPlaybackSnapshot snapshot,
-      Duration target,
-    );
+typedef VideoTimelinePreviewBuilder = Widget? Function(
+  BuildContext context,
+  VideoPlaybackSnapshot snapshot,
+  Duration target,
+);
 
 String formatVideoPlaybackDuration(Duration duration) {
   final totalSeconds = duration.inSeconds.clamp(0, 359999);
@@ -43,7 +42,35 @@ final class VideoTimelineVisualTokens {
     required this.progressAlpha,
   });
 
-  factory VideoTimelineVisualTokens.resolve(VideoTimelineVisualLevel level) {
+  static const longVideoThreshold = Duration(milliseconds: 30000);
+
+  factory VideoTimelineVisualTokens.resolve(
+    VideoTimelineVisualLevel level, {
+    bool mutedWorkVideo = false,
+  }) {
+    if (level == VideoTimelineVisualLevel.ended) {
+      return const VideoTimelineVisualTokens._(
+        trackHeight: AppSpacing.xs,
+        handleSize: AppSpacing.sm,
+        trackAlpha: 0.46,
+        progressAlpha: 1,
+      );
+    }
+    if (mutedWorkVideo) {
+      return level == VideoTimelineVisualLevel.scrubbing
+          ? const VideoTimelineVisualTokens._(
+              trackHeight: AppSpacing.sm,
+              handleSize: AppSpacing.md,
+              trackAlpha: 0.52,
+              progressAlpha: 1,
+            )
+          : const VideoTimelineVisualTokens._(
+              trackHeight: AppSpacing.two,
+              handleSize: AppSpacing.zero,
+              trackAlpha: 0.20,
+              progressAlpha: 0.38,
+            );
+    }
     return switch (level) {
       VideoTimelineVisualLevel.normal => const VideoTimelineVisualTokens._(
         trackHeight: AppSpacing.two,
@@ -63,6 +90,9 @@ final class VideoTimelineVisualTokens {
         trackAlpha: 0.52,
         progressAlpha: 1,
       ),
+      VideoTimelineVisualLevel.ended => throw StateError(
+        'ended tokens are resolved before profile-specific tokens',
+      ),
     };
   }
 
@@ -70,6 +100,28 @@ final class VideoTimelineVisualTokens {
   final double handleSize;
   final double trackAlpha;
   final double progressAlpha;
+}
+
+/// 长作品拖动时只隐藏 chrome 投影，保留测量尺寸与子树状态。
+/// 所有 slot 消费宿主同一快照，不创建局部计时器或播放状态。
+class VideoPlaybackChromeVisibility extends StatelessWidget {
+  const VideoPlaybackChromeVisibility({
+    required this.snapshot,
+    required this.child,
+    super.key,
+  });
+
+  final VideoPlaybackSnapshot snapshot;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Visibility(
+    visible: !snapshot.isScrubbing,
+    maintainState: true,
+    maintainAnimation: true,
+    maintainSize: true,
+    child: child,
+  );
 }
 
 /// 共享视频时间轴。
@@ -85,6 +137,8 @@ class VideoPlaybackTimeline extends StatefulWidget {
     this.showDuration = true,
     this.showScrubTime = true,
     this.showVisuals = true,
+    this.externallyControlledVisibility = false,
+    this.isActive = true,
     this.durationKey,
     this.scrubTimeKey,
     super.key,
@@ -96,10 +150,15 @@ class VideoPlaybackTimeline extends StatefulWidget {
   final bool showDuration;
   final bool showScrubTime;
   final bool showVisuals;
+
+  /// 横向查看器统一持有显隐计时；时间轴不得再启动局部五秒窗口。
+  final bool externallyControlledVisibility;
+  final bool isActive;
   final Key? durationKey;
   final Key? scrubTimeKey;
 
-  bool get interactive => profile == VideoPlaybackTimelineProfile.workBrowser;
+  bool get interactive =>
+      isActive && profile == VideoPlaybackTimelineProfile.workBrowser;
 
   @override
   State<VideoPlaybackTimeline> createState() => _VideoPlaybackTimelineState();
@@ -108,10 +167,92 @@ class VideoPlaybackTimeline extends StatefulWidget {
 class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
   static const Duration _keyboardSeekStep = Duration(seconds: 10);
   bool _gestureScrubbing = false;
+  bool _interactionVisible = false;
+  bool _pointerHeld = false;
+  Offset? _pointerOrigin;
+  bool _verticalIntent = false;
+  Timer? _idleTimer;
+  int _interactionGeneration = 0;
+  final _sessionRevision = ValueNotifier<int>(0);
+  bool _sessionRefreshScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.session.addListener(_sessionChanged);
+  }
+
+  void _sessionChanged() {
+    if (_sessionRefreshScheduled) return;
+    _sessionRefreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sessionRefreshScheduled = false;
+      if (mounted) _sessionRevision.value++;
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  void _reveal() {
+    if (!widget.interactive) return;
+    _idleTimer?.cancel();
+    _interactionGeneration++;
+    if (!_interactionVisible) setState(() => _interactionVisible = true);
+  }
+
+  void _scheduleHide() {
+    _idleTimer?.cancel();
+    if (widget.externallyControlledVisibility) return;
+    final generation = ++_interactionGeneration;
+    _idleTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted ||
+          generation != _interactionGeneration ||
+          _pointerHeld ||
+          _gestureScrubbing) {
+        return;
+      }
+      setState(() => _interactionVisible = false);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant VideoPlaybackTimeline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.session, widget.session)) {
+      oldWidget.session.removeListener(_sessionChanged);
+      widget.session.addListener(_sessionChanged);
+    }
+    if (!identical(oldWidget.session, widget.session) ||
+        oldWidget.profile != widget.profile ||
+        oldWidget.externallyControlledVisibility !=
+            widget.externallyControlledVisibility ||
+        oldWidget.isActive != widget.isActive) {
+      _idleTimer?.cancel();
+      _interactionGeneration++;
+      if (_gestureScrubbing) {
+        unawaited(oldWidget.session.endScrub(commit: false));
+      }
+      _gestureScrubbing = false;
+      _pointerHeld = false;
+      _interactionVisible = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _idleTimer?.cancel();
+    _interactionGeneration++;
+    widget.session.removeListener(_sessionChanged);
+    _sessionRevision.dispose();
+    if (_gestureScrubbing) unawaited(widget.session.endScrub(commit: false));
+    super.dispose();
+  }
 
   VideoTimelineVisualLevel _visualLevel(VideoPlaybackSnapshot snapshot) {
     if (snapshot.isScrubbing) {
       return VideoTimelineVisualLevel.scrubbing;
+    }
+    if (snapshot.isEnded) {
+      return VideoTimelineVisualLevel.ended;
     }
     if (!snapshot.isPlaying) {
       return VideoTimelineVisualLevel.paused;
@@ -123,9 +264,11 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
     if (!widget.interactive ||
         width <= 0 ||
         _gestureScrubbing ||
+        _verticalIntent ||
         !widget.session.snapshot.canSeek) {
       return;
     }
+    _reveal();
     _gestureScrubbing = true;
     unawaited(widget.session.beginScrub());
     _updateTarget(dx, width);
@@ -152,6 +295,7 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
     }
     _gestureScrubbing = false;
     unawaited(widget.session.endScrub(commit: commit));
+    _scheduleHide();
   }
 
   KeyEventResult _handleKeyEvent(FocusNode _, KeyEvent event) {
@@ -161,6 +305,11 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.arrowRight) {
+      _reveal();
+      _scheduleHide();
+    }
     if (key == LogicalKeyboardKey.arrowLeft) {
       unawaited(widget.session.seekRelative(-_keyboardSeekStep));
       return KeyEventResult.handled;
@@ -175,10 +324,10 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: widget.session,
+      animation: _sessionRevision,
       builder: (context, _) {
         final snapshot = widget.session.snapshot;
-        if (snapshot.duration <= Duration.zero) {
+        if (snapshot.duration <= Duration.zero && !widget.interactive) {
           return const SizedBox.shrink();
         }
         return KeyedSubtree(
@@ -202,7 +351,7 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
     final currentText = formatVideoPlaybackDuration(current);
     final durationText = formatVideoPlaybackDuration(snapshot.duration);
     final semanticsValue = '$currentText / $durationText';
-    final child = widget.showVisuals
+    final child = widget.showVisuals || widget.interactive
         ? LayoutBuilder(
             builder: (context, constraints) =>
                 _buildTimeline(context, snapshot, constraints.maxWidth),
@@ -300,8 +449,15 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
     BuildContext context,
     VideoPlaybackSnapshot snapshot,
   ) {
-    final level = _visualLevel(snapshot);
-    final tokens = VideoTimelineVisualTokens.resolve(level);
+    final level = snapshot.isScrubbing
+        ? VideoTimelineVisualLevel.scrubbing
+        : _interactionVisible
+        ? _visualLevel(snapshot)
+        : VideoTimelineVisualLevel.normal;
+    final tokens = VideoTimelineVisualTokens.resolve(
+      level,
+      mutedWorkVideo: _isLongWorkVideo(snapshot),
+    );
     final visualExtent = _trackVisualExtent(tokens);
     final scrubLabel = _buildScrubLabel(snapshot);
     return SizedBox(
@@ -323,16 +479,17 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
               },
             ),
           ),
-          Positioned(
-            right: 0,
-            bottom: visualExtent + AppSpacing.xs,
-            child: _buildDurationLabel(
-              snapshot,
-              stableKey: const ValueKey<String>(
-                'works-video-transient-duration',
+          if (widget.showDuration && snapshot.duration > Duration.zero)
+            Positioned(
+              right: 0,
+              bottom: visualExtent + AppSpacing.xs,
+              child: _buildDurationLabel(
+                snapshot,
+                stableKey: const ValueKey<String>(
+                  'works-video-transient-duration',
+                ),
               ),
             ),
-          ),
           if (snapshot.isScrubbing)
             Positioned(
               left: 0,
@@ -346,7 +503,7 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
               right: 0,
               bottom:
                   AppSpacing.minInteractiveSize +
-                  AppTypography.base * AppSpacing.textLineHeightBody +
+                  _scrubFontSize(snapshot) * AppSpacing.textLineHeightBody +
                   AppSpacing.interGroupSm,
               child:
                   widget.previewBuilder!(
@@ -367,33 +524,74 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
     double width,
     VideoTimelineVisualTokens tokens,
   ) {
-    return GestureDetector(
-      key: const ValueKey<String>('video-playback-timeline-hit-area'),
-      behavior: HitTestBehavior.opaque,
-      onTapDown: widget.interactive
-          ? (details) => _startScrub(details.localPosition.dx, width)
-          : null,
-      onTapUp: widget.interactive ? (_) => _finishScrub(commit: true) : null,
-      onTapCancel: widget.interactive
-          ? () => _finishScrub(commit: false)
-          : null,
-      onHorizontalDragStart: widget.interactive
-          ? (details) => _startScrub(details.localPosition.dx, width)
-          : null,
-      onHorizontalDragUpdate: widget.interactive
-          ? (details) => _updateTarget(details.localPosition.dx, width)
-          : null,
-      onHorizontalDragEnd: widget.interactive
-          ? (_) => _finishScrub(commit: true)
-          : null,
-      onHorizontalDragCancel: widget.interactive
-          ? () => _finishScrub(commit: false)
-          : null,
-      child: SizedBox(
-        height: AppSpacing.minInteractiveSize,
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: _buildTrackSurface(context, snapshot, width, tokens),
+    return Listener(
+      onPointerDown: (event) {
+        _pointerHeld = true;
+        _pointerOrigin = event.localPosition;
+        _verticalIntent = false;
+        _reveal();
+      },
+      onPointerMove: (event) {
+        final delta =
+            event.localPosition - (_pointerOrigin ?? event.localPosition);
+        if (!_gestureScrubbing &&
+            delta.dy.abs() > AppSpacing.interGroupSm &&
+            delta.dy.abs() > delta.dx.abs()) {
+          _verticalIntent = true;
+        }
+      },
+      onPointerUp: (_) {
+        _pointerHeld = false;
+        _scheduleHide();
+      },
+      onPointerCancel: (_) {
+        _pointerHeld = false;
+        _finishScrub(commit: false);
+        _scheduleHide();
+      },
+      child: GestureDetector(
+        key: const ValueKey<String>('video-playback-timeline-hit-area'),
+        behavior: HitTestBehavior.opaque,
+        onTapUp: widget.interactive
+            ? (details) {
+                _startScrub(details.localPosition.dx, width);
+                _finishScrub(commit: true);
+              }
+            : null,
+        onTapCancel: widget.interactive
+            ? () => _finishScrub(commit: false)
+            : null,
+        onHorizontalDragStart: widget.interactive
+            ? (details) => _startScrub(details.localPosition.dx, width)
+            : null,
+        onHorizontalDragUpdate: widget.interactive
+            ? (details) => _updateTarget(details.localPosition.dx, width)
+            : null,
+        onHorizontalDragEnd: widget.interactive
+            ? (_) => _finishScrub(commit: true)
+            : null,
+        onHorizontalDragCancel: widget.interactive
+            ? () => _finishScrub(commit: false)
+            : null,
+        child: SizedBox(
+          height: AppSpacing.minInteractiveSize,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: widget.showVisuals
+                ? Opacity(
+                    key: const ValueKey('video-playback-timeline-visibility'),
+                    opacity:
+                        widget.externallyControlledVisibility ||
+                            snapshot.duration >
+                                VideoTimelineVisualTokens.longVideoThreshold ||
+                            _interactionVisible ||
+                            snapshot.isScrubbing
+                        ? 1
+                        : 0,
+                    child: _buildTrackSurface(context, snapshot, width, tokens),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ),
       ),
     );
@@ -417,12 +615,16 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
         ? Duration.zero
         : const Duration(milliseconds: 180);
     final visualExtent = _trackVisualExtent(tokens);
+    // visual extent 整体贴底；内部轨道、进度和 thumb 共用中心线。
+    // token 增高时只向上占用既有 44pt 热区，不把整条轨迁到热区中心。
+    const trackAlignment = Alignment.centerLeft;
+    final showProgress = !_isLongWorkVideo(snapshot) || progress > 0;
     return SizedBox(
       width: width,
       height: visualExtent,
       child: Stack(
         clipBehavior: Clip.none,
-        alignment: Alignment.bottomLeft,
+        alignment: trackAlignment,
         children: [
           AnimatedContainer(
             key: const ValueKey<String>('video-playback-timeline-track'),
@@ -435,30 +637,33 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
               ),
             ),
           ),
-          Align(
-            alignment: Alignment.bottomLeft,
-            child: SizedBox(
-              width: width * progress,
-              child: AnimatedContainer(
-                key: const ValueKey<String>('video-playback-timeline-progress'),
-                duration: animationDuration,
-                height: tokens.trackHeight,
-                decoration: BoxDecoration(
-                  color: AppColors.white.withValues(
-                    alpha: tokens.progressAlpha,
+          if (showProgress)
+            Align(
+              alignment: trackAlignment,
+              child: SizedBox(
+                width: width * progress,
+                child: AnimatedContainer(
+                  key: const ValueKey<String>(
+                    'video-playback-timeline-progress',
                   ),
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.circularBorderRadius,
+                  duration: animationDuration,
+                  height: tokens.trackHeight,
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withValues(
+                      alpha: tokens.progressAlpha,
+                    ),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.circularBorderRadius,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          if (tokens.handleSize > 0)
+          if (tokens.handleSize > 0 && (showProgress || snapshot.isScrubbing))
             Positioned(
               left: (width * progress - tokens.handleSize / AppSpacing.two)
                   .clamp(0.0, (width - tokens.handleSize).clamp(0.0, width)),
-              bottom: 0,
+              top: (visualExtent - tokens.handleSize) / AppSpacing.two,
               child: AnimatedContainer(
                 key: const ValueKey<String>('video-playback-timeline-handle'),
                 duration: animationDuration,
@@ -474,6 +679,13 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
       ),
     );
   }
+
+  bool _isLongWorkVideo(VideoPlaybackSnapshot snapshot) =>
+      widget.profile == VideoPlaybackTimelineProfile.workBrowser &&
+      snapshot.duration > VideoTimelineVisualTokens.longVideoThreshold;
+
+  double _scrubFontSize(VideoPlaybackSnapshot snapshot) =>
+      _isLongWorkVideo(snapshot) ? AppTypography.lg : AppTypography.base;
 
   double _trackVisualExtent(VideoTimelineVisualTokens tokens) {
     return tokens.handleSize > tokens.trackHeight
@@ -512,7 +724,8 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
         child: Text(
           '${formatVideoPlaybackDuration(snapshot.effectivePosition)} / '
           '${formatVideoPlaybackDuration(snapshot.duration)}',
-          style: _durationStyle(scrubbing: true),
+          style: _durationStyle(scrubbing: true)
+              .copyWith(fontSize: _scrubFontSize(snapshot)),
         ),
       ),
     );

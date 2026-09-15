@@ -12,24 +12,30 @@ import CoreFoundation
 import Flutter
 import Foundation
 
-private let nativeRuntimePackageFileName = "runtime-config-package.json"
-private let nativeRuntimeTrustFileName = "runtime-config-trust.json"
-private let nativeRuntimeActivationRequestFileName = "runtime-config-activation-request.json"
-private let nativeRuntimeActivationReceiptFileName = "runtime-config-activation-receipt.json"
-private let nativeRuntimeActiveReceiptFileName = "runtime-config-active-receipt.json"
+let nativeRuntimePackageFileName = "runtime-config-package.json"
+let nativeRuntimeTrustFileName = "runtime-config-trust.json"
+let nativeRuntimeActivationRequestFileName = "runtime-config-activation-request.json"
+let nativeRuntimeActivationReceiptFileName = "runtime-config-activation-receipt.json"
+let nativeRuntimeActiveReceiptFileName = "runtime-config-active-receipt.json"
 // Debug-nonprod 构建期自供给（REQ-003 build_time_self_supply）随制品嵌入的激活请求。
-private let nativeRuntimeSelfSupplyRequestFileName = "runtime-config-self-supply-request.json"
-private let nativeRuntimeSelfSupplyMode = "build_time_self_supply"
-private let nativeRuntimeActivationRequestDigestArgument =
+let nativeRuntimeSelfSupplyRequestFileName = "runtime-config-self-supply-request.json"
+let nativeRuntimeSelfSupplyMode = "build_time_self_supply"
+let nativeRuntimeActivationRequestDigestArgument =
   "--qwq-runtime-config-activation-request-digest"
-private let nativeRuntimeConfigDirectory = "qwq_runtime"
-private let nativeRuntimeConfigMaximumBytes = 1024 * 1024
+let nativeRuntimeConfigDirectory = "qwq_runtime"
+let nativeRuntimeMigrationHistoryDirectory = "migration-history"
+let nativeRuntimePreviousLayoutPackageArchiveFileName = "historical-package.json"
+let nativeRuntimePreviousLayoutReceiptArchiveFileName = "historical-active-receipt.json"
+let nativeRuntimePreviousLayoutAuditArchiveFileName = "migration-audit.json"
+let nativeRuntimePreviousLayoutAuditSchema =
+  "quwoquan.ios.runtime_config_previousLayout_migration_audit.v1"
+let nativeRuntimeConfigMaximumBytes = 1024 * 1024
 
-private func nativeSHA256Identity(_ data: Data) -> String {
+func nativeSHA256Identity(_ data: Data) -> String {
   "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 }
 
-private func nativeRuntimeConfigInternalFailure(
+func nativeRuntimeConfigInternalFailure(
   context: String,
   error: Error
 ) -> NativeRuntimeConfigReadError {
@@ -218,6 +224,13 @@ enum NativeRuntimeConfigStore {
   private static let runtimeFields = Set(
     AppLaunchContract.runtimeConfigPackageRuntimeRequiredFields
   )
+  // 唯一可迁移的历史形状：现行 Alpha 离线文档的直接 predecessor，
+  // 只比当前闭集少 rehearsalSpace。不得由普通 reader 或 self-supply 使用。
+  static let previousLayoutOfflinePredecessorFields = Set(
+    AppLaunchContract.offlineBootstrapDocumentRequiredFields.filter {
+      $0 != "rehearsalSpace"
+    }
+  )
   private static let websocketRuntimeFields = Set([
     "realtimeBaseUrl",
     "rtcMediaConnectionUrl",
@@ -239,7 +252,7 @@ enum NativeRuntimeConfigStore {
     return AppLaunchContract.runtimeDocumentContentSources[active.package["schema"] as? String ?? ""] == "remote"
   }
 
-  private static func loadActivePackage(
+  static func loadActivePackage(
     allowStaleIdentity: Bool = false
   ) -> NativeRuntimeConfigReadState {
     do {
@@ -320,6 +333,7 @@ enum NativeRuntimeConfigStore {
     expectedPackageDigest: String,
     expectedTrustEnvelopeDigest: String,
     expectedActiveDigest: String,
+    allowPreviousLayoutOfflinePredecessor: Bool = false,
     commit: ((NativeRuntimeConfigActivationResult) throws -> Void)? = nil
   ) throws -> NativeRuntimeConfigActivationResult {
     guard digestIdentity(expectedPackageDigest) != nil else {
@@ -337,15 +351,21 @@ enum NativeRuntimeConfigStore {
         throw NativeRuntimeConfigReadError.trustDigestMismatch
       }
       // CAS 前值只需要身份：时间窗过期的旧包必须仍可被替换，不得死锁激活。
-      let currentState = loadActivePackage(allowStaleIdentity: true)
+      let previousLayoutPredecessor = allowPreviousLayoutOfflinePredecessor
+        ? try loadPreviousLayoutOfflinePredecessorArchive()
+        : nil
       let currentDigest: String
-      switch currentState {
-      case .present(let active):
-        currentDigest = active.packageDigest
-      case .absent:
-        currentDigest = ""
-      case .failure(let error):
-        throw error
+      if let previousLayoutPredecessor {
+        currentDigest = previousLayoutPredecessor.active.packageDigest
+      } else {
+        switch loadActivePackage(allowStaleIdentity: true) {
+        case .present(let active):
+          currentDigest = active.packageDigest
+        case .absent:
+          currentDigest = ""
+        case .failure(let error):
+          throw error
+        }
       }
       guard currentDigest == expectedActiveDigest else {
         throw NativeRuntimeConfigReadError.activeDigestConflict
@@ -358,6 +378,14 @@ enum NativeRuntimeConfigStore {
         expectedPackageDigest: expectedPackageDigest
       )
       let previousActivePackage = try readCurrentActivePackageData()
+      if let previousLayoutPredecessor {
+        try archivePreviousLayoutMigrationHistory(
+          packageData: previousLayoutPredecessor.packageData,
+          receiptData: previousLayoutPredecessor.receiptData,
+          packageDigest: previousLayoutPredecessor.active.packageDigest,
+          baseDirectory: try runtimeConfigDirectoryURL(createDirectory: true)
+        )
+      }
       do {
         try atomicallyActivate(packageData)
         let activatedState = loadActivePackage()
@@ -389,7 +417,7 @@ enum NativeRuntimeConfigStore {
     }
   }
 
-  private static func loadTrustEnvelope() throws -> NativeRuntimeConfigTrustProjection {
+  static func loadTrustEnvelope() throws -> NativeRuntimeConfigTrustProjection {
     guard let trustURL = bundledTrustURL() else {
       throw NativeRuntimeConfigReadError.trustMissing
     }
@@ -422,17 +450,20 @@ enum NativeRuntimeConfigStore {
     )
   }
 
-  private static func validatePackage(
+  static func validatePackage(
     _ package: [String: Any],
     packageData: Data,
     trust: NativeRuntimeConfigTrustProjection,
     expectedPackageDigest: String?,
-    allowStaleIdentity: Bool = false
+    allowStaleIdentity: Bool = false,
+    requiredFields: Set<String>? = nil
   ) throws -> NativeRuntimeConfigActiveProjection {
     let schema = package["schema"] as? String ?? ""
     let offline = schema == AppLaunchContract.schemaValues["offline_bootstrap_document"]
-    let fields = offline ? Set(AppLaunchContract.offlineBootstrapDocumentRequiredFields) : packageFields
-    guard Set(package.keys) == fields,
+    let fields = requiredFields
+      ?? (offline ? Set(AppLaunchContract.offlineBootstrapDocumentRequiredFields) : packageFields)
+    guard requiredFields == nil || offline,
+          Set(package.keys) == fields,
           offline || schema == AppLaunchContract.schemaValues["runtime_config_package"]
     else {
       throw NativeRuntimeConfigReadError.schemaMismatch
@@ -534,6 +565,8 @@ enum NativeRuntimeConfigStore {
       trustEnvelopeDigest: trust.trustEnvelopeDigest
     )
   }
+
+
 
   // allowStaleIdentity 只供激活流程读取 CAS 前值：豁免 expiresAt 时间窗，
   // 结构/生命周期上限/未来偏移校验保留；消费路径必须走严格默认值
@@ -646,7 +679,7 @@ enum NativeRuntimeConfigStore {
     return keyring
   }
 
-  private static func canonicalJSONData(_ document: [String: Any]) throws -> Data {
+  static func canonicalJSONData(_ document: [String: Any]) throws -> Data {
     guard JSONSerialization.isValidJSONObject(document) else {
       throw NativeRuntimeConfigReadError.packageMalformed
     }
@@ -758,7 +791,7 @@ enum NativeRuntimeConfigStore {
     }
   }
 
-  private static func runtimePackageURL(createDirectory: Bool) throws -> URL? {
+  static func runtimePackageURL(createDirectory: Bool) throws -> URL? {
     let packageURL = try runtimePackageDestinationURL(createDirectory: createDirectory)
     return FileManager.default.fileExists(atPath: packageURL.path) ? packageURL : nil
   }
@@ -775,6 +808,39 @@ enum NativeRuntimeConfigStore {
       ).standardizedFileURL
     } catch {
       throw NativeRuntimeConfigReadError.packagePathInvalid
+    }
+    let directory = try runtimeConfigDirectoryURL(
+      createDirectory: createDirectory,
+      supportRoot: supportRoot
+    )
+    let packageURL = directory
+      .appendingPathComponent(nativeRuntimePackageFileName, isDirectory: false)
+      .standardizedFileURL
+    guard packageURL.path.hasPrefix(directory.path + "/") else {
+      throw NativeRuntimeConfigReadError.packagePathInvalid
+    }
+    return packageURL
+  }
+
+  static func runtimeConfigDirectoryURL(
+    createDirectory: Bool,
+    supportRoot providedSupportRoot: URL? = nil
+  ) throws -> URL {
+    let fileManager = FileManager.default
+    let supportRoot: URL
+    if let providedSupportRoot {
+      supportRoot = providedSupportRoot
+    } else {
+      do {
+        supportRoot = try fileManager.url(
+          for: .applicationSupportDirectory,
+          in: .userDomainMask,
+          appropriateFor: nil,
+          create: createDirectory
+        ).standardizedFileURL
+      } catch {
+        throw NativeRuntimeConfigReadError.packagePathInvalid
+      }
     }
     let directory = supportRoot
       .appendingPathComponent(nativeRuntimeConfigDirectory, isDirectory: true)
@@ -793,13 +859,7 @@ enum NativeRuntimeConfigStore {
         throw NativeRuntimeConfigReadError.activationWriteFailed
       }
     }
-    let packageURL = directory
-      .appendingPathComponent(nativeRuntimePackageFileName, isDirectory: false)
-      .standardizedFileURL
-    guard packageURL.path.hasPrefix(directory.path + "/") else {
-      throw NativeRuntimeConfigReadError.packagePathInvalid
-    }
-    return packageURL
+    return directory
   }
 
   private static func atomicallyActivate(_ packageData: Data) throws {
@@ -850,7 +910,7 @@ enum NativeRuntimeConfigStore {
     }
   }
 
-  private static func synchronizeDirectory(_ directory: URL) throws {
+  static func synchronizeDirectory(_ directory: URL) throws {
     let directoryHandle = open(directory.path, O_RDONLY)
     guard directoryHandle >= 0 else {
       throw NativeRuntimeConfigReadError.activationWriteFailed
@@ -869,7 +929,7 @@ enum NativeRuntimeConfigStore {
     )
   }
 
-  private static func digestIdentity(_ value: Any?) -> String? {
+  static func digestIdentity(_ value: Any?) -> String? {
     guard let digest = nonEmptyString(value),
           digest.range(
             of: "^sha256:[0-9a-f]{64}$",

@@ -76,13 +76,26 @@ extension _ProfileShellBuilders on _ProfileShellState {
   /// 关注：游客显示「未关注」，点击先登记续接再引导登录；已登录直接 toggle。
   void _gatedToggleFollow(BuildContext context, ProfileNotifier notifier) {
     if (ref.read(authSessionControllerProvider).isAuthenticated) {
-      unawaited(notifier.toggleFollow());
+      unawaited(_toggleFollowWithFeedback(context, notifier));
       return;
     }
     ref
         .read(authContinuationProvider.notifier)
         .set(FollowProfileContinuation(personaId: widget.userId));
     unawaited(requireLogin(ref, context, AuthGateReason.follow));
+  }
+
+  Future<void> _toggleFollowWithFeedback(
+    BuildContext context,
+    ProfileNotifier notifier,
+  ) async {
+    try {
+      await notifier.toggleFollow();
+    } catch (_) {
+      if (context.mounted) {
+        AppToast.show(context, ContentText.operationFailedRetry);
+      }
+    }
   }
 
   /// 私信：按关系能力位分流——可开正式会话直接进入聊天详情；
@@ -267,7 +280,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
       return;
     }
     if (!ref.read(profileNotifierProvider(widget.userId)).isFollowing) {
-      unawaited(notifier.toggleFollow());
+      unawaited(_toggleFollowWithFeedback(context, notifier));
     }
   }
 
@@ -534,9 +547,9 @@ extension _ProfileShellBuilders on _ProfileShellState {
           bottom: -_ProfileShellState._profileSurfaceBridge,
           child: backgroundUrl != null && backgroundUrl.isNotEmpty
               ? (isLocalFileImageSource(backgroundUrl)
-                    // 本地选取（未上传）封面经 FileImage 直显（alpha 保存后即时回显）。
-                    ? AppMediaImage(
-                        imageSource: backgroundUrl,
+                    // 本地选取（未上传）封面走 typed draft 入口，不把 URL 猜成公开交付。
+                    ? AppDraftImage(
+                        source: DraftImageFile(backgroundUrl),
                         fit: BoxFit.cover,
                         errorWidget: _buildProfileBackgroundFallback(
                           backgroundColor: backgroundColor,
@@ -817,55 +830,28 @@ extension _ProfileShellBuilders on _ProfileShellState {
                                                     height:
                                                         AppSpacing.avatarUserSm,
                                                     fit: BoxFit.cover,
-                                                    publicBuilder: (context, publicUrl) =>
-                                                        isLocalFileImageSource(
+                                                    publicBuilder:
+                                                        (
+                                                          context,
                                                           publicUrl,
-                                                        )
-                                                        ? AppMediaImage(
-                                                            key:
-                                                                const ValueKey<
-                                                                  String
-                                                                >(
-                                                                  'profile-shell-compact-avatar-image',
-                                                                ),
-                                                            imageSource:
-                                                                publicUrl,
-                                                            fit: BoxFit.cover,
-                                                            errorWidget: ColoredBox(
+                                                        ) => AppAvatarImage(
+                                                          imageUrl: publicUrl,
+                                                          size: AppSpacing
+                                                              .avatarUserSm,
+                                                          fit: BoxFit.cover,
+                                                          errorWidget: ColoredBox(
+                                                            color:
+                                                                actionBackground,
+                                                            child: Icon(
+                                                              CupertinoIcons
+                                                                  .person_crop_circle_fill,
+                                                              size: AppSpacing
+                                                                  .iconMedium,
                                                               color:
-                                                                  actionBackground,
-                                                              child: Icon(
-                                                                CupertinoIcons
-                                                                    .person_crop_circle_fill,
-                                                                size: AppSpacing
-                                                                    .iconMedium,
-                                                                color:
-                                                                    compactForeground,
-                                                              ),
-                                                            ),
-                                                          )
-                                                        : AppCachedNetworkImage(
-                                                            key:
-                                                                const ValueKey<
-                                                                  String
-                                                                >(
-                                                                  'profile-shell-compact-avatar-image',
-                                                                ),
-                                                            imageUrl: publicUrl,
-                                                            fit: BoxFit.cover,
-                                                            errorWidget: ColoredBox(
-                                                              color:
-                                                                  actionBackground,
-                                                              child: Icon(
-                                                                CupertinoIcons
-                                                                    .person_crop_circle_fill,
-                                                                size: AppSpacing
-                                                                    .iconMedium,
-                                                                color:
-                                                                    compactForeground,
-                                                              ),
+                                                                  compactForeground,
                                                             ),
                                                           ),
+                                                        ),
                                                   )
                                                 : ColoredBox(
                                                     color: actionBackground,

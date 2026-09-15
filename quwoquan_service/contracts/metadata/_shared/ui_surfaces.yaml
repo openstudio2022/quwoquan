@@ -534,6 +534,13 @@ surfaces:
       - ReportEventBatch
       - ReportRuntimeLogBatch
 
+  - id: postCollection
+    owner: content
+    route_id: postCollection
+    path_template: /collections/{collectionId}
+    description: 跨作品合集详情与 owner 有序编排管理
+    operation_ids: [GetPostCollection, GetPostCollectionManagement, SavePostCollection, DeletePostCollection, ListUserPosts]
+
   - id: videoBook
     owner: content
     route_id: videoBook

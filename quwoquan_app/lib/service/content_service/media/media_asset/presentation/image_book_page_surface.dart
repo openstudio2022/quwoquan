@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_page_flip_book.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -17,20 +18,27 @@ class ImageBookPageSurfaceFactory {
     required ui.Image image,
     required Size pageSize,
     required double pixelRatio,
+    double? canonicalAspectRatio,
+    double mediaTopInset = 0,
+    double mediaBottomInset = 0,
+    double landscapeEntryExtent = 0,
+    bool usePortraitBands = false,
   }) async {
+    final geometry = geometryForImage(
+      image,
+      _safePageSize(pageSize),
+      canonicalAspectRatio: canonicalAspectRatio,
+      mediaTopInset: mediaTopInset,
+      mediaBottomInset: mediaBottomInset,
+      landscapeEntryExtent: landscapeEntryExtent,
+      usePortraitBands: usePortraitBands,
+    );
     final front = await _rasterize(
       pageSize: pageSize,
       pixelRatio: pixelRatio,
       semanticSurfaceKind: 'image_book.success.front',
       paint: (canvas, logicalRect) {
-        canvas.drawImageRect(
-          image,
-          coverSourceRect(image, logicalRect.size),
-          logicalRect,
-          ui.Paint()
-            ..isAntiAlias = false
-            ..filterQuality = FilterQuality.medium,
-        );
+        paintImage(canvas, image, geometry);
       },
     );
     final back = await _rasterize(
@@ -38,7 +46,7 @@ class ImageBookPageSurfaceFactory {
       pixelRatio: pixelRatio,
       semanticSurfaceKind: 'image_book.success.back',
       paint: (canvas, logicalRect) {
-        _paintMirroredBackImage(canvas, logicalRect, image);
+        _paintMirroredBackImage(canvas, logicalRect, image, geometry: geometry);
       },
     );
     return MediaPageFlipTexturePair(front: front, back: back);
@@ -67,22 +75,60 @@ class ImageBookPageSurfaceFactory {
     return MediaPageFlipTexturePair(front: front, back: back);
   }
 
-  Rect coverSourceRect(ui.Image image, Size pageSize) {
-    final sourceWidth = image.width.toDouble();
-    final sourceHeight = image.height.toDouble();
-    if (sourceWidth <= 0 || sourceHeight <= 0 || pageSize.isEmpty) {
-      return Rect.fromLTWH(0, 0, sourceWidth, sourceHeight);
-    }
-    final sourceAspect = sourceWidth / sourceHeight;
-    final targetAspect = pageSize.width / pageSize.height;
-    if (sourceAspect > targetAspect) {
-      final cropWidth = sourceHeight * targetAspect;
-      final left = (sourceWidth - cropWidth) / 2;
-      return Rect.fromLTWH(left, 0, cropWidth, sourceHeight);
-    }
-    final cropHeight = sourceWidth / targetAspect;
-    final top = (sourceHeight - cropHeight) / 2;
-    return Rect.fromLTWH(0, top, sourceWidth, cropHeight);
+  Rect containDestinationRect(
+    ui.Image image,
+    Size pageSize, {
+    double? canonicalAspectRatio,
+  }) => geometryForImage(
+    image,
+    pageSize,
+    canonicalAspectRatio: canonicalAspectRatio,
+  ).contentRect;
+
+  ImmersiveMediaGeometry geometryForImage(
+    ui.Image image,
+    Size pageSize, {
+    double? canonicalAspectRatio,
+    double mediaTopInset = 0,
+    double mediaBottomInset = 0,
+    double landscapeEntryExtent = 0,
+    bool usePortraitBands = false,
+  }) {
+    final ratio =
+        canonicalAspectRatio != null &&
+            canonicalAspectRatio.isFinite &&
+            canonicalAspectRatio > 0
+        ? canonicalAspectRatio
+        : image.width / image.height;
+    return ImmersiveMediaGeometry(
+      size: pageSize,
+      aspectRatio: ratio,
+      topInset: mediaTopInset,
+      bottomInset: mediaBottomInset,
+      entryExtent: landscapeEntryExtent,
+      fullscreen: !usePortraitBands,
+    );
+  }
+
+  /// 静态页与 front texture 共用同一绘制入口；back 仅增加镜像和材质滤镜。
+  void paintImage(
+    ui.Canvas canvas,
+    ui.Image image,
+    ImmersiveMediaGeometry geometry, {
+    ui.ColorFilter? colorFilter,
+  }) {
+    canvas.save();
+    canvas.clipRect(geometry.viewportRect);
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      geometry.contentRect,
+      ui.Paint()
+        ..isAntiAlias = false
+        ..filterQuality = FilterQuality.medium
+        ..colorFilter = colorFilter,
+    );
+    canvas.restore();
   }
 
   Future<MediaPageFlipTextureSnapshot> _rasterize({
@@ -97,7 +143,7 @@ class ImageBookPageSurfaceFactory {
     final canvas = ui.Canvas(recorder);
     final logicalRect = Offset.zero & safeSize;
     canvas.scale(safePixelRatio, safePixelRatio);
-    canvas.drawRect(logicalRect, ui.Paint()..color = AppColors.worksBackground);
+    canvas.drawRect(logicalRect, ui.Paint()..color = AppColors.black);
     paint(canvas, logicalRect);
     final picture = recorder.endRecording();
     final raster = await picture.toImage(
@@ -144,50 +190,50 @@ class ImageBookPageSurfaceFactory {
   void _paintMirroredBackImage(
     ui.Canvas canvas,
     Rect logicalRect,
-    ui.Image image,
-  ) {
+    ui.Image image, {
+    required ImmersiveMediaGeometry geometry,
+  }) {
     canvas.save();
+    // 洗色和纸张渐变只覆盖媒体本身，不染亮 contain/裁剪窗口外的黑边。
+    canvas.clipRect(geometry.viewportRect.intersect(geometry.contentRect));
     canvas.translate(logicalRect.width, 0);
     canvas.scale(-1, 1);
-    canvas.drawImageRect(
+    paintImage(
+      canvas,
       image,
-      coverSourceRect(image, logicalRect.size),
-      logicalRect,
-      ui.Paint()
-        ..isAntiAlias = false
-        ..filterQuality = FilterQuality.medium
-        ..colorFilter = const ui.ColorFilter.matrix(<double>[
-          0.44,
-          0.14,
-          0.14,
-          0,
-          0,
-          0.14,
-          0.44,
-          0.14,
-          0,
-          0,
-          0.14,
-          0.14,
-          0.44,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0.88,
-          0,
-        ]),
+      geometry,
+      colorFilter: const ui.ColorFilter.matrix(<double>[
+        0.46,
+        0.24,
+        0.24,
+        0,
+        0,
+        0.24,
+        0.46,
+        0.24,
+        0,
+        0,
+        0.24,
+        0.24,
+        0.46,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.88,
+        0,
+      ]),
     );
-    canvas.restore();
     _paintBackFaceWash(canvas, logicalRect);
+    canvas.restore();
   }
 
   void _paintBackFaceWash(ui.Canvas canvas, Rect logicalRect) {
     canvas.drawRect(
       logicalRect,
       ui.Paint()
-        ..color = AppColors.imageBookBackFaceWash.withValues(alpha: 0.08),
+        ..color = AppColors.imageBookBackFaceWash.withValues(alpha: 0.28),
     );
     canvas.drawRect(
       logicalRect,

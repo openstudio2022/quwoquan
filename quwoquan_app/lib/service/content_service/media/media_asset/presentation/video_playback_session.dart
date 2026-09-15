@@ -55,7 +55,6 @@ class VideoPlaybackSession extends ChangeNotifier {
       VideoPlaybackControlsVisibility.hidden;
   VideoPlaybackPauseReason? _pauseReason;
   Duration? _scrubTarget;
-  bool _wasPlayingBeforeScrub = false;
   bool _isVisible = true;
   bool _isForeground = true;
   bool _autoEligible = false;
@@ -136,6 +135,10 @@ class VideoPlaybackSession extends ChangeNotifier {
       runtimeFailure: _runtimeFailure,
       lastSeekLifecycleEvent: _lastSeekLifecycleEvent,
       lastSourceSwitchSeekResult: _lastSourceSwitchSeekResult,
+      mediaAspectRatio:
+          initialized && value!.size.width > 0 && value.size.height > 0
+          ? value.aspectRatio
+          : null,
     );
   }
 
@@ -243,7 +246,6 @@ class VideoPlaybackSession extends ChangeNotifier {
     _controller = null;
     _lastKnownPlaying = false;
     _scrubTarget = null;
-    _wasPlayingBeforeScrub = false;
     _lastStablePosition = Duration.zero;
     _runtimeFailure = null;
     _lastSeekLifecycleEvent = null;
@@ -442,12 +444,10 @@ class VideoPlaybackSession extends ChangeNotifier {
       return;
     }
     _settleEffectivePlaybackInterval();
-    _wasPlayingBeforeScrub = current.isPlaying;
     _scrubTarget = current.position;
     _runtimeFailure = null;
     _controlsTimer?.cancel();
     _controlsVisibility = VideoPlaybackControlsVisibility.pinned;
-    await _controller?.pause();
     _notify();
   }
 
@@ -473,12 +473,9 @@ class VideoPlaybackSession extends ChangeNotifier {
 
   Future<void> endScrub({bool commit = true}) async {
     final target = _scrubTarget;
-    final shouldResume =
-        _wasPlayingBeforeScrub && _intent != VideoPlaybackIntent.manualPause;
     final controller = _controller;
     final generation = _generation;
     _scrubTarget = null;
-    _wasPlayingBeforeScrub = false;
     if (commit && target != null && controller != null) {
       _supersedePendingSeek();
       final seekRequestId = ++_nextSeekRequestId;
@@ -662,12 +659,9 @@ class VideoPlaybackSession extends ChangeNotifier {
           }
       }
     }
-    if (shouldResume &&
-        _isForeground &&
-        _isVisible &&
-        (_autoEligible || _intent == VideoPlaybackIntent.manualPlay)) {
-      await controller?.play();
-    }
+    // Scrub 期间 controller 不停播；清除虚拟 target 且 seek 命令终结后，
+    // 显式恢复 effective-play 计时，不能再依赖一次多余的 play() 通知。
+    _startEffectivePlaybackIntervalIfEligible();
     if (snapshot.isPlaying) {
       showTransientControls();
     } else {

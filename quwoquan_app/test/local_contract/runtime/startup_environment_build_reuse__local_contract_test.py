@@ -15,6 +15,8 @@ from unittest import mock
 
 APP_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = APP_ROOT / "scripts/device/build_startup_environment_matrix.py"
+sys.path.insert(0, str(APP_ROOT / "scripts/device"))
+sys.path.insert(0, str(APP_ROOT.parent))
 
 
 def _load_module():
@@ -35,7 +37,7 @@ def _handoff(environment: str) -> dict[str, object]:
         "environment": environment,
         "target": f"{environment}-local" if profile == "nonprod" else "prod-hosted",
         "buildProfile": profile,
-        "entrypoint": "lib/main_prod.dart",
+        "entrypoint": "lib/main_alpha.dart" if environment == "alpha" else "lib/main_prod.dart",
         "launchProvenance": "canonical_launcher",
         "runtimeConfigSupplyMode": "external_runtime_package",
         "runtimeConfigPackageDigest": "sha256:" + environment[0] * 64,
@@ -44,7 +46,17 @@ def _handoff(environment: str) -> dict[str, object]:
 
 
 class StartupEnvironmentBuildReuseContractTest(unittest.TestCase):
-    def test_matrix_compiles_five_products_and_reuses_nonprod_bytes(self) -> None:
+    def test_identity_keys_isolate_debug_and_reuse_only_matching_release_composition(self) -> None:
+        module = _load_module()
+        for platform in ("ios", "android"):
+            beta, gamma = _handoff("beta"), _handoff("gamma")
+            self.assertNotEqual(module._build_key(platform, beta), module._build_key(platform, gamma))
+            beta["buildMode"] = gamma["buildMode"] = "release"
+            self.assertEqual(module._build_key(platform, beta), module._build_key(platform, gamma))
+            alpha = {**_handoff("alpha"), "buildMode": "release", "entrypoint": "lib/main_alpha.dart"}
+            self.assertNotEqual(module._build_key(platform, alpha), module._build_key(platform, beta))
+
+    def test_matrix_compiles_isolated_development_products(self) -> None:
         module = _load_module()
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -91,15 +103,16 @@ class StartupEnvironmentBuildReuseContractTest(unittest.TestCase):
                         env,
                     )
                     self.assertNotIn("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH", env)
-                artifact = module._artifact_path(artifact_platform, profile)
+                mode = "release" if "--release" in command else "debug"
+                artifact = module._artifact_path(artifact_platform, profile, mode)
                 if artifact_platform in {"ios", "web"}:
                     artifact.mkdir(parents=True, exist_ok=True)
                     (artifact / "payload").write_bytes(
-                        f"{profile}:{artifact_platform}".encode()
+                        f"{profile}:{artifact_platform}:{command[-1]}".encode()
                     )
                 else:
                     artifact.parent.mkdir(parents=True, exist_ok=True)
-                    artifact.write_bytes(f"{profile}:{artifact_platform}".encode())
+                    artifact.write_bytes(f"{profile}:{artifact_platform}:{command[-1]}".encode())
                 return mock.Mock(returncode=0)
 
             argv = [
@@ -145,11 +158,11 @@ class StartupEnvironmentBuildReuseContractTest(unittest.TestCase):
             ):
                 self.assertEqual(module.main(), 0)
 
-            self.assertEqual(len(calls), 5)
+            self.assertEqual(len(calls), 10)
             report = json.loads(
                 (output_root / "fixed/report.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(report["compileExecutions"], 5)
+            self.assertEqual(report["compileExecutions"], 10)
             self.assertEqual(len(report["builds"]), 12)
             for platform in ("android", "ios", "web"):
                 nonprod = [
@@ -160,14 +173,14 @@ class StartupEnvironmentBuildReuseContractTest(unittest.TestCase):
                 ]
                 self.assertEqual(
                     len({item["artifact"] for item in nonprod}),
-                    1,
+                    2 if platform == "web" else 3,
                 )
                 self.assertEqual(
                     len({item["artifactSha256"] for item in nonprod}),
-                    1,
+                    2 if platform == "web" else 3,
                 )
             web = [item for item in report["builds"] if item["platform"] == "web"]
-            self.assertEqual(len({item["artifact"] for item in web}), 1)
+            self.assertEqual(len({item["artifact"] for item in web}), 2)
 
 
 if __name__ == "__main__":

@@ -23,6 +23,50 @@ from canonical_app_instance.activation import CanonicalExecutorError
 ATTACH_SIGNAL_GRACE_SECONDS = 5.0
 
 
+def supervise_foreground_command(command: Sequence[str]) -> int:
+    """在独立进程组运行前台命令，并完整转发终止信号后等待回收。"""
+    if not command:
+        raise ValueError("supervised command is required")
+    process: subprocess.Popen[bytes] | None = None
+    previous_signal_handlers: dict[int, signal.Handlers] = {}
+    forwarded_signal: int | None = None
+
+    def forward_signal(signum: int, _frame: object) -> None:
+        nonlocal forwarded_signal
+        # 终端会同时通知同一前台进程组；外层 shell 再显式转发时只处理首个信号。
+        if forwarded_signal is not None:
+            return
+        forwarded_signal = signum
+        if process is not None and process.poll() is None:
+            try:
+                os.killpg(process.pid, signum)
+            except ProcessLookupError:
+                pass
+
+    try:
+        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            previous_signal_handlers[signum] = signal.signal(signum, forward_signal)
+        process = subprocess.Popen(list(command), start_new_session=True)
+        # 覆盖 handler 安装后、child session 建立前到达信号的窄窗口。
+        if forwarded_signal is not None and process.poll() is None:
+            try:
+                os.killpg(process.pid, forwarded_signal)
+            except ProcessLookupError:
+                pass
+        return_code = process.wait()
+    finally:
+        for signum, previous_handler in previous_signal_handlers.items():
+            signal.signal(signum, previous_handler)
+        if process is not None:
+            if process.poll() is None:
+                terminate_attach_process_group(process, initial_signal=signal.SIGTERM)
+            else:
+                process.wait()
+    if forwarded_signal is not None:
+        return 128 + forwarded_signal
+    return 128 - return_code if return_code < 0 else return_code
+
+
 class AttachPlatformDriver(Protocol):
     device_id: str
     application_id: str
@@ -129,6 +173,13 @@ def attach_command_platform_driver(
             f"unable to start flutter attach: {error}"
         ) from error
     assert process.stdout is not None
+    if not interactive_tty:
+        print(
+            "[run-instance] non-TTY session: keyboard commands r/R/q are unavailable; "
+            "SIGINT/SIGTERM/SIGHUP still stop and reclaim the attach process group.",
+            file=sys.stderr,
+            flush=True,
+        )
     output: queue.Queue[str | None] = queue.Queue()
 
     def read_output() -> None:
@@ -296,3 +347,25 @@ def attach_command_platform_driver(
         )
     driver.validate_vm_service_info_file()
     return exit_code
+
+
+def _main() -> int:
+    if sys.argv[1:2] != ["--supervise-command"]:
+        print(
+            "attach_session.py requires --supervise-command <command> [...]",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        return supervise_foreground_command(sys.argv[2:])
+    except (OSError, ValueError) as error:
+        print(
+            "[run-instance] GATE_BLOCK: unable to supervise source projection: "
+            f"{error}",
+            file=sys.stderr,
+        )
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())

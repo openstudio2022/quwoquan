@@ -176,6 +176,9 @@ func renderRequestEncoder(
 	model requestModelSpec,
 	enumValues map[string][]string,
 ) error {
+	if operation.Persisted != nil {
+		return renderGraphQLRequestEncoder(output, operation, model, enumValues)
+	}
 	fields := make(map[string]fieldDef, len(model.Fields))
 	for _, field := range model.Fields {
 		fields[field.Name] = field

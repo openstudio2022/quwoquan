@@ -597,6 +597,34 @@ def verify_app_launch_mode_input_boundary() -> None:
         )
 
 
+def verify_native_orientation_manifest() -> None:
+    manifest = load_json(APP / "tool/native_orientation_codegen/generated_manifest.json")
+    if manifest.get("schema") != "qwq.native-orientation-codegen-manifest" or manifest.get("generator") != "tools/codegen_app_metadata --native-orientation-only":
+        raise AssertionError("native orientation manifest identity mismatch")
+    expected_inputs = {
+        "quwoquan_service/services/content-service/contracts/media/media_asset/native_orientation_contract.yaml",
+        "quwoquan_service/contracts/metadata/_schemas/native_orientation_contract.schema.json",
+    }
+    expected_outputs = {
+        "quwoquan_app/lib/runtime/platform/media/generated/native_orientation_contract.g.dart",
+        "quwoquan_app/android/app/src/main/java/com/quwoquan/quwoquan_app/NativeOrientationContract.java",
+        "quwoquan_app/ios/Runner/NativeOrientationContract.generated.swift",
+    }
+    for key, expected in (("inputs", expected_inputs), ("outputs", expected_outputs)):
+        entries = manifest.get(key, [])
+        if len(entries) != len(expected) or {entry.get("path") for entry in entries} != expected:
+            raise AssertionError(f"native orientation {key} boundary mismatch")
+        for entry in entries:
+            data = (ROOT / entry["path"]).read_bytes()
+            if entry.get("sha256") != "sha256:" + hashlib.sha256(data).hexdigest():
+                raise AssertionError(f"native orientation stale: {entry['path']}")
+            if key == "outputs" and entry.get("bytes") != len(data):
+                raise AssertionError("native orientation output length mismatch")
+    encoded = json.dumps(manifest["inputs"], sort_keys=True, separators=(",", ":")).encode()
+    if manifest.get("sourceDigest") != "sha256:" + hashlib.sha256(encoded).hexdigest():
+        raise AssertionError("native orientation source digest mismatch")
+
+
 def verify_emitter_boundary() -> None:
     main_text = (GENERATOR_ROOT / "main.go").read_text(encoding="utf-8")
     service_makefile = (SERVICE / "Makefile").read_text(encoding="utf-8")
@@ -630,6 +658,7 @@ def verify_emitter_boundary() -> None:
             "contract_graph_source.go",
             "shell_navigation_codegen.go",
             "app_identity_codegen.go",
+            "native_orientation_codegen.go",
             "app_launch_contract_codegen.go",
             "app_launch_contract_render.go",
             "app_launch_contract_validation.go",
@@ -660,6 +689,7 @@ def verify_emitter_boundary() -> None:
 
 
 def main() -> int:
+    verify_native_orientation_manifest()
     lock = load_json(LOCK)
     if digest(GRAPH) != lock.get("contractGraph", {}).get("sha256"):
         raise AssertionError("ContractGraph bundle 与 App lock hash 不一致")

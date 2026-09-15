@@ -54,12 +54,36 @@ PY
 # 不给 live pubspec 加资产，也不让在线制品读到 Alpha adapter 源文件。
 if [[ -e "$ROOT_DIR/.git" ]]; then
   SOURCE_PROJECTION_BASE="$(mktemp -d "${TMPDIR:-/tmp}/qwq-source-composition.XXXXXX")"
-  trap 'rm -rf -- "$SOURCE_PROJECTION_BASE"' EXIT
+  SOURCE_PROJECTION_CHILD_PID=""
+  cleanup_source_projection() {
+    rm -rf -- "$SOURCE_PROJECTION_BASE"
+  }
+  forward_source_projection_signal() {
+    local signame="$1"
+    [[ -n "$SOURCE_PROJECTION_CHILD_PID" ]] || return 0
+    kill -s "$signame" "$SOURCE_PROJECTION_CHILD_PID" 2>/dev/null || true
+  }
+  trap cleanup_source_projection EXIT
+  trap 'forward_source_projection_signal INT' INT
+  trap 'forward_source_projection_signal TERM' TERM
+  trap 'forward_source_projection_signal HUP' HUP
   SOURCE_ENTRYPOINT="$(python3 -c 'import sys; from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract; print(load_launch_manifest_contract()["content_source_entrypoints"][sys.argv[1]])' "$CONTENT_SOURCE")"
   python3 "$APP_DIR/scripts/device/app_source_isolation.py" --repository "$ROOT_DIR" \
     --destination "$SOURCE_PROJECTION_BASE/repo" --entrypoint "$SOURCE_ENTRYPOINT" >/dev/null
-  bash "$SOURCE_PROJECTION_BASE/repo/quwoquan_app/scripts/device/dev_launch.sh" "${ORIGINAL_ARGUMENTS[@]}"
-  exit $?
+  log "source projection: fresh isolated snapshot; APP.LAUNCH.source_projection_live_sync_unavailable: hot reload reads projection bytes only; rerun run.sh to capture live workspace changes."
+  python3 -m canonical_app_instance.attach_session --supervise-command bash "$SOURCE_PROJECTION_BASE/repo/quwoquan_app/scripts/device/dev_launch.sh" "${ORIGINAL_ARGUMENTS[@]}" <&0 &
+  SOURCE_PROJECTION_CHILD_PID=$!
+  SOURCE_PROJECTION_STATUS=0
+  while true; do
+    if wait "$SOURCE_PROJECTION_CHILD_PID"; then
+      SOURCE_PROJECTION_STATUS=0
+      break
+    fi
+    SOURCE_PROJECTION_STATUS=$?
+    kill -0 "$SOURCE_PROJECTION_CHILD_PID" 2>/dev/null || break
+  done
+  SOURCE_PROJECTION_CHILD_PID=""
+  exit "$SOURCE_PROJECTION_STATUS"
 fi
 if [[ "$CONTENT_SOURCE" == "remote" ]]; then
 PREFLIGHT_PURPOSE="$(python3 - "$RUN_MODE" <<'PY'
@@ -238,7 +262,7 @@ fi
 ENTRYPOINT="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["entrypoint"])' "$HANDOFF_JSON")"
 APP_ID="$(python3 -c 'import sys
 from quwoquan_ops.cli.lib.app_identity import resolve_app_identity
-print(resolve_app_identity(platform=sys.argv[1], build_profile="nonprod", build_mode="debug").application_id)' "$PLATFORM")"
+print(resolve_app_identity(platform=sys.argv[1], environment=sys.argv[2], build_mode="debug").application_id)' "$PLATFORM" "$ENVIRONMENT")"
 # 旧 active 只允许原生显式 CAS activation 迁移；启动器不得删除配置或 receipt 绕过验证。
 export QWQ_ENVIRONMENT="$ENVIRONMENT" QWQ_APP_RUNTIME_ENV="$ENVIRONMENT"
 export QWQ_LAUNCH_TARGET="${ENVIRONMENT}-local" QWQ_APP_RUN_MODE="$RUN_MODE"

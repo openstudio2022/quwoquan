@@ -35,7 +35,7 @@
 - `publicBases` 只能由 target resolver 生成；子网四平面与 `urlRoles` 的声明要求见 [`system-topology-and-networking` REQ-002](../../system-topology-and-networking/spec.md#req-002)。
 - 云侧四环境保持同构 schema/网络平面（归 [`system-topology-and-networking` REQ-002](../../system-topology-and-networking/spec.md#req-002)）；App 只在组合根选择 Alpha canonical 离线快照或 Beta/Gamma/Prod Remote，详见 [`REQ-008`](#req-008)。其余环境差异限于容量、endpoint、访问控制、内容版本和第三方 sandbox 策略，不形成不同业务页面。
 - App / Service env package 都必须携带 canonical unversioned schema identity、artifact policy 摘要与机器可读报告。
-- App 产品支持面固定为 Android、iOS 与 Web；未持有平台工程、包身份、签名和真实安装启动证据的平台不得进入 metadata、schema、CI 或发布矩阵。
+- App 产品支持面固定为 Android、iOS 与 Web；未持有平台工程、包身份、签名和真实安装启动证据的平台不得进入 metadata、schema、CI 或发布矩阵。Android/iOS 的 Prod Release 安装身份固定为 `com.leadwise.quwoquan`，nonprod Release 固定为 `com.leadwise.quwoquan.nonprod`；仅不可提升的 Alpha/Beta/Gamma Debug/Profile 可使用 `com.leadwise.quwoquan.<env>.<mode>` 独立安装身份，且全部必须 `nonPromotable=true`。Prod Debug/Profile 不属于有效构建或启动矩阵，必须不可达。上述冻结字符串不等于 Apple Developer/App Store Connect 已登记事实；iOS 正式 Bundle ID 在外部平台逐渠道 readback 前继续阻断正式分发。
 - Android 与 iOS 可执行制品必须由 `stackctl package` 从同一只读 source capsule 按 `buildProfile(nonprod|prod)` 构建，Web 只生成一份共享 bundle；每次组件构建必须显式选择 build product，并在写 manifest 前回读包身份、签名、artifact digest 与生产纯度。AppArtifact 以 build-profile 级 trust envelope 隔离 nonprod/prod；Alpha 离线装配另外按 REQ-008 在构建依赖与资源面隔离，不能将 nonprod 信任域等同 Alpha 资产许可。Beta/Gamma 在线签名配置在安装后经 canonical activation 写入同一在线 nonprod App 私有容器，二者切环境不触发重编、重签或改变制品摘要；Beta/Gamma/Prod 均不携带 Alpha 实现与离线资产。
 - production App 的 pub/plugin/Pod/registrant/linker/filelist/SBOM 与最终 APK/AAB/IPA 可达图不得含 Patrol、integration_test、PatrolJUnitRunner、XCTest 或其他 test runner；设备 UAT 只能由物理隔离的 test host 单向依赖 production App。
 - 日常与 CI 构建只消费已锁定依赖；Dart lock、Flutter plugin podspec、Podfile.lock、Pods/Manifest.lock 与 CocoaPods executable/version 任一漂移时在编译前返回 typed blocker，启动路径不得自动 update 锁定声明或联网修复。唯一有界例外是依赖 staleness 的交互式同步恢复：live worktree 的外层 hermetic launcher 在创建 private workspace projection 前检出 active dependency bundle 与当前 source/toolchain identity 漂移时，先输出 canonical `APP.DEPENDENCY.bundle_stale`（detail 只携带白名单字段名，如 `field=nativeResolutionInputDigest`）；仅当 stdin 与 stderr 均为 TTY、处于 live workspace 且同一次 launcher 调用内尚未执行过同步时，才允许自动执行一次 canonical `stackctl app-dependency-sync`，成功且 active readback 与本次 sync attempt 一致后仅重试一次 projection。同步失败、activation ambiguous、第二次 stale、非交互/CI/UAT 或 private projection 内一律 fail-closed，首个 stale blocker 必须先输出且不得被替换；该例外绝不更新任何锁定声明。direct/lightweight 路径不创建 private projection，只对本次直接执行所需的 pub 输入负责。
@@ -86,8 +86,8 @@
 - 设备选择：`run.sh` 未给 `-d` 时委托 canonical device authority——唯一可用移动设备自动选择，多台且 stdin/stderr 均为 TTY 时显示 canonical 数字列表并接受一次交互选择，任一流非 TTY 时以 typed blocker 要求显式 `-d`，不得按最近使用猜测设备；显式 `-d` 必须按 exact device identity 保留并校验。`workspace_ide_debug` 由 profile 的显式设备选择或同一 canonical authority 解析；受管字面 `flutter run` 的设备选择同样由 canonical device authority 裁决——单设备自动、多设备双 TTY 数字选择、非 TTY typed block、显式 `-d` 按 exact device identity 校验。
 - 终端注入必须可凭受版本控制真相源重建且可逆：具名激活入口向 Cursor terminal profiles 与显式 opt-in 的 user-zsh managed source block 注入同一受管 PATH bin 目录（含 launcher `flutter` dispatcher）与钉定的 Flutter SDK/CocoaPods/Python 身份，不改 ZDOTDIR、不生成 terminal receipt；dispatcher 只对本 App 工作区的 `run` 子命令进入 managed 入口，其余子命令与其他项目 exact 透传真实 SDK。新终端自动生效，既有 shell 只能通过显式 source 刷新接入；移除注入并重载、或移除 user-zsh managed block 即完全回退，不得要求修改 Flutter 安装或遗留第二 launcher。
 - `run.sh` 前台会话与并发语义：TTY 下 r/R/q 分别桥接为同一 attach 会话的 hot reload、hot restart 与停止，非 TTY 保持无键盘面。跨设备并行 canonical run 互不阻塞——deploy work state 按 run/设备隔离；direct/lightweight 不执行 `adb reverse`，managed/hermetic 控制面的 Android `adb reverse` 必须幂等且只清理本 invocation 新建的映射，不清理预存或他会话映射；同设备重复启动复用同一受控绑定；显式跨环境切换先结束旧会话并冷启动或重建完整 ProviderScope，旧 lease 不得解绑新会话。
-- canonical launcher 固定选择 nonprod build profile，默认 Alpha 离线，显式 Beta/Gamma 只选择各自在线签名配置；它禁止选择 Prod 或直接覆盖 URL、密钥、target、manifest 与 release。
-- 环境选择器不选择原生包身份或直接决定页面行为；Beta/Gamma 只选择在线运行配置，不进入 Flutter 编译输入。Alpha 选择独立的 source composition/资源投影，而不是在同一编译图内注入环境 define。
+- canonical launcher 固定选择 nonprod build profile，默认 Alpha 离线，显式 Beta/Gamma 只选择各自在线签名配置；它禁止选择 Prod 或直接覆盖 URL、密钥、target、manifest 与 release。不可提升 Debug/Profile 可按环境选择 `com.leadwise.quwoquan.<env>.<mode>` 以支持并存调试，但环境选择器只能消费 canonical 身份映射，不得拼接包名；nonprod Release 始终为 `com.leadwise.quwoquan.nonprod`。
+- 环境选择器不自行派生原生包身份或直接决定页面行为；Beta/Gamma 只选择在线运行配置，不进入 Flutter 编译输入。Alpha 选择独立的 source composition/资源投影，而不是在同一编译图内注入环境 define。包身份仅由 canonical build product 映射决定：Release 按 nonprod/prod 二分，且不可提升 Debug/Profile 才允许按 `env + mode` 独立。
 - `workspace_ide_debug` surface 没有自建的 mode 协议；run mode 与环境同构，经 `QWQ_RUN_MODE`（`content-live|ui-only`，默认 `content-live`）选择并交同一 canonical 执行体校验，IDE profile 只投影同一输入，非法值 fail closed。受管字面 `flutter run` 不参与 mode 选择协议：managed 入口固定 alpha/content-live，任何非 alpha 的 ambient 环境或 mode 选择器对字面命令 typed 拒绝。
 - canonical Debug 按 REQ-008 选择 Alpha 隔离制品或 Beta/Gamma 共用在线 nonprod AppArtifact；默认 Alpha 的独立 signed offline document 与在线目标签名配置均经同一原生 coordinator 验证、CAS 激活与 read chain，再按文档类型读取 source。冷启动与 Hot Restart 都只消费该 canonical 解析结果，Dart 不读取 endpoint define、环境变量或第二 keyring；配置变化不重编/重签，实际环境在握手后成立，换环境前结束旧会话并重建 scope。
 - App 构建不得读取或改写共享的“当前环境”文件，Beta/Gamma 在线 nonprod 组件只编译一次，Alpha 构建投影与产物另行隔离。
@@ -182,18 +182,38 @@
 
 - 未显式选择环境时，raw SDK、受管 `flutter run`、IDE 与 `run.sh` 均默认 Alpha 包内快照；首装断网且无后端/预热缓存仍可浏览首页推荐 Post 与视频书 premium、详情、头像/图片/封面和完整视频。快照从 canonical 出库按 exact release/cohort 确定性派生，包含完整引用与媒体字节及许可，不手写演示内容、不导入 test doubles、不做 Remote fallback。
 - Beta/Gamma/Prod 仍只走 Remote，四环境共用页面与 typed ports；Alpha 与在线分别由隔离构建的组合根装配 adapter，不在共享 production 图中按 runtime source/profile 选择两套实现。成功/空/失败、稳定对象身份、详情引用、过滤、分页终止/去重/取消/重试及媒体播放/seek 的可观察合同相同；同 canonical cohort 参数化验证，在线个性化排序、账号权限和新鲜度属于明确能力差异，不要求在线各环境永久同量同序。
-- 首页消费推荐 Post items，视频书消费 canonical premium 精选；离线快照封存选择与频道清单，不把普通 video 等同 premium、不复制在线推荐引擎。未支持登录、写入和私有访问返回 typed capability unavailable，不假写成功、不跨环境回放。
+- 首页消费推荐 Post items，视频书消费 canonical premium 精选；离线快照封存选择与频道清单，不把普通 video 等同 premium、不复制在线推荐引擎。canonical 快照保持只读；App 可达 query/command/stream/GraphQL/媒体与必需平台能力由 Alpha-only 本地演练 adapters 经同一 typed ports 闭环，不连接真实后端、不发送真实短信/推送、不产生外部业务副作用，也不把演练凭据交给 Remote transport。网络、真实 OTP/push、在线 outbox 与跨环境遥测仍 typed 拒绝，不假写远程成功、不跨环境回放。
 - 离线快照身份证明制品绑定的 source/version/digest，不证明服务端 active release、账号授权或 activation receipt。只收录具有公开离线再分发许可的内容，永久离线不承诺即时撤权；需要即时撤权的内容不得进入快照。Alpha API gate 可独立运行，但不能要求 Alpha App 走 Remote，也不能用离线 App 结果签服务环境或晋级资格。
-- `app-content-uat` 根据 canonical launch metadata 的 source 选择前置与套件。离线页面验收只消费 exact candidate、实际安装启动的制品、签名离线文档、快照及设备绑定，不请求在线 preflight、登录身份、Provider readiness 或服务 activation；Remote 保留全部原有约束。离线登录、写入和私有访问按 typed capability unavailable 验收，不伪造登录成功。
+- `app-content-uat` 根据 canonical launch metadata 的 source 选择前置与套件。离线页面验收只消费 exact candidate、实际安装启动的制品、签名离线文档、快照及设备绑定，不请求在线 preflight、真实登录身份、Provider readiness 或服务 activation；Remote 保留全部原有约束。Alpha 本地演练登录/写入按 [`REQ-009`](#req-009) 验收，界面明确标注本地演练，不得伪造可发往真实 transport 的 bearer 或真实账号迁入。
 - 受控 iOS 构建只允许精确声明的 `GeneratedPluginRegistrant.h/.m` 派生产物，须从已验证工具链模板、锁定插件依赖清单及插件声明重建并比对完整字节；不得放行整个 Runner 或任意注册代码。SwiftPM 配置与缓存使用构建私有 projection 内的真实目录，外部 symlink、未知生成文件或来源漂移仍阻断；失败保留原日志并从 fresh projection 恢复，不改锁、不清全局缓存。
 - Alpha 准出须同时消费 Android 与 iOS 的 required 离线页面 raw `ReadinessCaseResult`，逐项绑定同一 candidate、各自实际制品、快照、启动 attempt、设备和执行证据。缺平台、缺 case、失败、身份漂移或只有启动日志/服务查询均阻断；模拟器结果保持 `rehearsal/nonPromotable`。离线页面与 Alpha 服务/API 是独立必需证据，二者均通过后才可签发同一候选的 acceptance bundle。
 - Alpha bootstrap 使用独立 signed offline document 绑定 bundle 完整性与许可，和在线 endpoint 配置共用同一 activation/CAS/receipt/read chain，不直接绕过 active pointer 读 bundle，不伪造 HTTPS。离线文档不继承在线配置 24 小时有效期；不能通过忽略在线 expiry 实现离线，Beta/Gamma/Prod 的签名、有效期和信任域完整保留。source 类型及映射由 canonical launch metadata 冻结，组合根消费 AppContentSource typed 值，不自持 wire 副本。在线配置提前刷新验证后原子激活，失败保留尚有效旧配置，到期 fail closed。
-- Alpha 是独立隔离制品，只有该制品的源依赖闭包、构建资源和组合根可包含 canonical 离线 snapshot、bundle loader 与 Alpha adapter；不得因同属 nonprod 信任域而将这些字节放入 Beta/Gamma 用户 App。Beta/Gamma/Prod 复用同一真实业务与 Remote 实现，差异只由 URL、配置和既有信任域承担。包身份与 trust envelope 仍消费 canonical metadata，不新增环境包名或绕过签名/activation 合同。
+- Alpha 是独立隔离制品，只有该制品的源依赖闭包、构建资源和组合根可包含 canonical 离线 snapshot、bundle loader 与 Alpha adapter；不得因同属 nonprod 信任域而将这些字节放入 Beta/Gamma 用户 App。Beta/Gamma/Prod 复用同一真实业务与 Remote 实现，差异只由 URL、配置和既有信任域承担。包身份与 trust envelope 仍消费 canonical metadata；Release 不新增环境包名，只有明确 `nonPromotable=true` 的 Alpha/Beta/Gamma Debug/Profile 可使用冻结的环境+模式身份，且不得绕过签名/activation 合同。
 - 隔离必须由构建前入口的传递 import/export/part 闭包（含 conditional URI）、本地 path package、pubspec 资产声明、插件/原生装配输入及最终制品审计分别证明；runtime if、未消费资源或 tree shaking 不构成不存在的证明。用户 App 闭包禁止 test runner、fixture、Mock、Alpha adapter 与离线 bundle。任一闭包不明或残留必须 fail closed，不签发纯度通过。
 - Alpha 与在线制品之间切换允许更换制品，不能继续要求相同 AppArtifact digest；Beta/Gamma 仍共享在线 nonprod 制品，仅按原有已验证 activation 切换配置。跨 source 切换结束旧进程或重建完整 ProviderScope，不在旧 client 动态换 endpoint；缓存与认证隔离消费 [`local-cache-architecture` REQ-004](../../runtime-client-foundation/local-cache-architecture/spec.md#req-004)。
 - 在线内容更新须在完整媒体、四域 candidate 与首页/premium/必要详情查询闭包全部 ready 后，按 [`runtime-data-engineering` DEC-003](../../runtime-data-engineering/design.md#dec-003) 单 CAS 可见；失败保旧，结果不明先回读 exact pointer，再按现役授权显式 rollback，不用客户端旧缓存或第二 active flag 伪造更新成功。
 - 可用性分别报告离线启动/浏览、在线推荐/premium、头像/图片、视频首帧/持续播放/seek、stale 比例及恢复时长。沿用前台读取与媒体准备 6 秒总预算、在线 operation 的 timeout/retry 合同，以及 CAS 后 60 秒回读与显式 rollback 后 5 分钟恢复目标；这些是合同目标，未有 fresh 证据不得声明已达成。库存未知不得填 0，首屏、推荐窗口、声明对象数、激活闭包、详情可读和媒体可播放分别计数并说明遍历边界。
+- 离线读取缓存按业务 read-generation 显式拥有；根恢复、切 source 和 root disposal 释放本代读取资源，不重跑启动级 rehearsal/auth/store/platform 初始化。目录成功复用须保持 runtime identity、manifest pin、AssetBundle identity 与 generation 一致且每次命中先校验 fence；首次完整验证 6 秒预算、失败不缓存成功及媒体消费实际 hash 均不因目录复用而放宽。生命周期设计归 [`DEC-006`](../design.md#dec-006)，验收归 [`GWT-009`](#gwt-009)。
 - 在线 Feed SLO 必须由 Content owner 统一 canonical operation 与 observability 的指标范围、分母、窗口及告警派生；目前 99.9%/500ms 与 99.5%/200ms 的冲突不能择宽判绿，首刷/续页与端到端媒体不混算。生产跨故障域可用性不由本地单实例结果证明。
+
+<a id="req-009"></a>
+### REQ-009 Alpha 对 App 可达能力提供全量本地演练且与在线制品隔离
+
+- App 可达能力闭包由 `ui_surfaces.yaml`、ContractGraph `clientContract`、persisted GraphQL、realtime event catalog 与 `PlatformCapabilities` 实际 native gateway 并集派生；工具只汇总，映射由所属 object owner 维护。新增 App 操作无 Alpha 或在线对应实现时门禁失败。
+- 共享页面/application 只消费领域 typed ports；Alpha-only composition 注入对象级本地 adapters，Beta/Gamma/Prod 注入同一个 Remote 实现。禁止按字符串 operation ID 返回任意 Map 的万能模拟执行器，也禁止把演练字段塞进在线 wire。
+- 演练身份与 Remote bearer 分离：本地账号/分身可建立、选择、切换和恢复，OTP 只经演练 UI 通道显示；不伪造真实手机号授权、canonical creator 所有权或可发往 HTTP 的 token。多个演练账号共享同一演练空间的业务事实，查询按权限各自投影。
+- 本地 overlay 分共享演练空间（source + snapshot digest + rehearsal instance）与 actor 私有分区。command 将状态、幂等记录和待发布本地事件原子提交后 query 可读回；写盘失败不得展示成功，损坏不得静默重置。显式重置区分当前 actor 与整个演练空间，后者须二次确认；换快照创建新空间。本地终态不得进入未来联网 outbox。
+- 显式 isolated Alpha 验收只允许独立演练空间及合成身份创建/持久化，不触达已安装 App 既有空间、真实手机号/用户/creator。空间绑定必须沿既有 canonical launch/config source 在 auth、pending OTP、rehearsal 任意读取、写入或删除前完成，同一绑定派生全部 namespace；缺失/错配不得回退 default 或旧键。普通 Alpha 未请求 isolated 时保留既有默认空间启动行为，不因验收隔离要求破坏普通启动。AUT 空间观察必须来自实际消费的绑定而非回显 runner 字段；不新增授权台账/receipt、不把内部授权理由写入业务 wire。
+- 受管 isolated 选择复用现役 `quwoquan_ops.app_content_uat_launch_control.v1`，不新建授权 receipt、台账或 registry；空间选择仅表达已批准的 mode/instanceId/snapshotDigest，candidate/device/attempt 沿用原 control 的身份绑定。未请求 isolated 的普通 Alpha 继续 standard/default，不要求普通无 control 的开发启动携带验收 control；显式 isolated 请求缺 control/选择、空间错配或用于在线 source 时拒绝且不回退普通启动。
+- 在准备 signing material 和文档签名之前，必须验证私有 control ref/digest，并交叉核对实际调用 target/device/attempt 与 control 的 candidate/source revision/capsule/projection evidence 所代表的同一身份和精确引用/摘要。control 与 projection 各自 hash 自洽不足以通过。snapshot pin 必须来自可信 source projection/capsule 的制品输入，不从待签文档或 runner 期望值反向自证；签名 App 文档只携带已批准 rehearsalSpace 形状，不附人类理由。control 不是新人工授权 authority，空间创建许可仍来自既有用户授权和受管调用边界，不能靠 authorized=true 等自报字段扩权。control 字段闭集由唯一 writer 纳入 canonical authoring，本 Story 不自持第二份 schema。
+- 存储使用观察仅为当前实例的非资格性、无 I/O 只读投影：配置未观察/已验证/失效与 consumer 未观察/已构造/成功 I/O/失效分别呈现；auth、installId、pending OTP、rehearsal 四类 consumer 绑定同一实际配置和生命周期。观察读取不得触发初始化、exists/read/write/delete 或清坏 pending，不改变启动成功与业务状态；实际操作成功且再次 fence 通过后才记录已观察操作集合，构造、失败和迟到结果不能算成功。当前进程/启动代际/attempt 必须来自实际 owner，不能从 runner expected 或 actor 私有 fence 猜测，缺可靠来源或桥接未装配则不可用，失效不能把旧摘要充当当前事实。
+- namespace/binding 摘要为 INTERNAL 而非 PUBLIC，普通日志/遥测默认 drop，仅限受控 isolated 私有设备证据；摘要按用途隔离且输入不含账户、真实 installId、完整 key/path，未知键、自由文本、account/persona/challenge/request/session/payload 不进入观察。输出复用现有启动通道的受治理只读能力，与会流入日志/遥测的启动事件记录和 journal 读取隔离；具体方法与模型由 launch authoring 唯一声明，不预设 native 能直接读 Dart。正向观察不能证明历史零旧空间访问，私有 sentinel 与实际 gateway 审计仍是独立 required 证据，不生成 isolationPassed、资格 receipt 或新台账，不扩 SyntheticLoginEvidence 或 reject 白名单。
+- 合成标识使用不能用于真实认证的非电话 namespace；具体语法与 Alpha-only typed challenge port 由登录 owner 冻结，沿同一业务登录流程装配。不放宽在线 phone 校验，不把非法值填入 phone，不伪造 OTP/creator。合成标识与模拟 challenge 的公开证据分类先由 canonical privacy owner 裁决，真实 phone/OTP drop 规则不变；无法安全分类时阻断设计，不放宽日志采集。
+- 本地登录与交互只允许在获准演练空间使用相应标识，通过指定 AUT、case、device、launch attempt 内的真实可访问且可编辑控件输入。OTP 必须由 App 公开 SendOtp 路径发起并从演练 UI 取得，不注入 store、canonical 作者身份、短信 broker 或当前 authoring 未声明的 challengeId。控件不唯一、不可编辑、跨 AUT 或已冻结 plan 漂移时 fail-closed；证据日志不得包含敏感输入原文。
+- 完整 `main_alpha` 装配的登录行为是本地演练成功、错误和取消，不再把旧 login-unavailable 作为其正向结果；仅 content-only composition 保留认证 unavailable。成功登录后只续接原动作一次，并由实际动作的 query/readback 证明；缺少可观察接缝时保持未覆盖，API 调用成功或截图本身不构成旅程成功。
+- OTP 过期、跨进程身份恢复与无外部副作用都是独立 required 行为，不能因三类基础登录旅程通过而删除。300 秒过期须真实有界等待，不改 TTL 或设备时钟；重启须关联前后不同 launch attempt/PID 与同一 artifact、candidate、snapshot 及恢复身份，不复用单进程回执。真实网络、OTP、push、Remote 与联网 outbox 拒绝缺实际观察来源时保持 blocked，不从本地正向结果推断无外部副作用。
+- 小趣使用版本化脚本驱动 session/turn/run/流事件/取消/历史，所有回答明确标注模拟，不编造真实模型、citation 或外部事实。高风险或外部动作只表达演练结果。
+- Alpha 实现、脚本、数据与测试 runner 不得进入 Beta/Gamma/Prod 用户制品；隔离由 source closure、资源、native/plugin 与实际包分别证明。
 
 ## 4. 契约引用
 
@@ -204,6 +224,11 @@
 - `GWT-004` 证据绑定：`local_contract` 覆盖二维矩阵、create-once raw slot、父投影只读无 verdict 与 `nonPromotable`，`api_integration` 覆盖 active CAS/readback、empty baseline、rollback/replay 与 previous release identity，`user_acceptance` 覆盖六个模拟器 raw `ReadinessCaseResult`。
 - `GWT-005` 证据绑定：`local_contract` 覆盖 rehearsal 的 `nonPromotable` 约束、EAF v2 与 RC qualification 的 authority 隔离及 raw result 单轨；`api_integration` 覆盖 RC final material 与 package acceptance/QualificationFact 的 exact binding；`user_acceptance` 覆盖最终签名包的 Android/iOS physical-device raw results。
 - `GWT-006` 证据绑定：`local_contract` 覆盖 EAF v2 的 Alpha/Beta/Gamma 环境闭集、`smoke|integration|release` profile、candidate/ImpactPlan、`caseResultRefs`、八类 named evidence、predecessor、`nonPromotable`、DSSE signer、Beta typed `not_required`、append-only 与父投影不可写回；同时覆盖 J0/J1/J2 projector 的 canonical 类型闭集、exact ref/digest、stage 顺序、stage 100 terminal、released/rollback terminal 排他、terminal/soak 分离、rollback/soak 不生成 Prod EAF 或 terminal `ReleaseEvidenceManifest`，任何 `ReleaseEvidenceManifest` 仅能作为显式 legacy historical/non-promotable history/rehearsal diagnostic snapshot 只读保留，以及 formal J0/J1/J2、Prod activation admission、rollout materialization 对它和其他 legacy snapshot/aggregate/旧 receipt 的拒绝。`api_integration` 覆盖 Alpha→Beta→Gamma predecessor、M1 窄 evidence fail closed，并从 hosted readback 证明同一 activation 下 `ProdStageAttemptFact → ProdReleasedFact|ProdRollbackFact` 与 released 后只读 `PostReleaseSoakFact` 的 exact 引用；`user_acceptance` 只覆盖 EAF `release` profile 的 App raw results，不代替 Prod canonical facts。
+- `GWT-007` 证据绑定：`local_contract` 覆盖同 cohort typed ports、媒体闭包、到期边界、设备绑定与入口等价，`api_integration` 覆盖真实制品派生/安装与 source digest，`user_acceptance` 覆盖无后端首装首页/premium/详情/播放/seek。
+- `GWT-008` 证据绑定：`local_contract` 覆盖 App 可达能力闭包与 Alpha handler 双向比较、演练身份/分区存储/重置、关注点赞评论消息搜索助手的读写回读与取消；Python plan validator 与 Android/iOS 执行面必须消费同一 authoring 的操作参数、失败语义及后续状态观察，覆盖不唯一/不可编辑/跨 AUT/plan 漂移负例与日志脱敏，不在本 spec 新建字段或 operation ID schema。首阶段只补既有受控输入能力，不要求先建设通用 native 脚本框架。现役 launch control 的私有签名材料 local_contract 需覆盖 standard/isolated 正例、普通无 control 开发启动、所有跨身份/ref/digest 错配在准备签名材料前拒绝、在线禁用、显式请求缺选择以及签名后 resolver 匹配；该层不授权真实密钥/设备，也不证明 AUT 存储隔离。
+- `GWT-008` 的 `user_acceptance` 从指定 AUT/case/device/launch attempt 的真实控件执行本地成功、错误、取消三类旅程；步骤与截图 exact 绑定同一运行段的 PID/attempt，API 成功不代替状态观察。认证及本地交互 raw `specRef` 绑定本锚点或真实登录 owner 的对应验收，不再统一绑定仅内容浏览的 `GWT-007`。成功续接须实际动作 readback，缺 seam 不得以截图填 pass。完整 main_alpha 使用上述三类结果，content-only composition unavailable 作为独立负例保留。
+- `GWT-008` 的 OTP 300 秒真实有界等待、跨进程重启恢复、真实网络/OTP/push/Remote/outbox 拒绝仍是 required 缺口：到期不改 TTL/设备时钟；重启分别绑定前后 attempt/PID 并核对同 artifact/candidate/snapshot 和恢复身份，不能复用单进程 receipt；无外部副作用须有实际观测来源，缺失保持 blocked。三类基础旅程通过不得删减这些 required 证据。Alpha 模拟成功不得替代 Beta/Gamma/Prod 真实 command/readback。
+- `GWT-009` 证据绑定：`local_contract` 经真实 RuntimeRecoveryHost 验证 R0/R1/切源/root disposal、factory/disposer 次数、四重身份隔离、消费者取消、失败/timeout、迟到结果与媒体篡改；不得只手工调用 disposer 绕过根接线。`user_acceptance` 单独证明 Android/iOS 真实设备 cold start 和首次完整验证 6 秒预算；本地 fake clock 或缓存命中不替代该层证据。
 
 ## 5. 验收场景
 
@@ -220,6 +245,7 @@
 - AND 同一 release train 的组件从同一 source capsule 按 nonprod/prod 信任域构建；Alpha/Beta/Gamma composition 引用相同 nonprod image digest；Beta/Gamma 共享在线 nonprod App，Alpha 使用 REQ-008 的隔离 App，Prod 引用独立 prod digest；Web 在线 bundle 不含 Alpha 资产。交换信任域 artifact/config/binding、篡改 `APP_ENV` 或挂载不兼容环境配置时均在 listener 或业务 Shell 前失败。
 - AND 多 target 会话可并行生成各自隔离的 compile/launch、告警与 health 结果，不预清理其他 target；单个 runtime health 失败不抹除真实编译结果，也不自动 down 已复用服务。
 - AND Android/iOS 的 production dependency graph、native linker/filelist、SBOM 与最终制品均不含测试插件或 test runner，物理隔离的 UAT test host 枚举全部 canonical 用户验收 case 而不反向进入 production package。
+- AND Android/iOS Prod Release 回读安装身份为 `com.leadwise.quwoquan`，nonprod Release 为 `com.leadwise.quwoquan.nonprod`；Alpha/Beta/Gamma Debug/Profile 若按环境并存则精确回读 `com.leadwise.quwoquan.<env>.<mode>` 并保持不可提升，任何 Prod Debug/Profile build product、scheme、artifact 或启动入口均不可达。iOS 外部渠道只有在 Apple 权威登记 readback 与该字符串一致后才可通过。
 - AND Dart/Pod 跨锁与 CocoaPods executable/version 一致；任一漂移在真实编译前返回 `APP.DEPENDENCY.lock_drift`，且不执行自动 update 或 repo refresh。跨锁范围含物理隔离的 UAT test host：它与生产工程跑同一份 `pubspec.lock` 依赖声明，两侧受版本控制的 `Podfile.lock` 在全部 pubspec 派生插件 pod 上必须同版本，否则验收结果不代表生产行为。test-only pod 与各自独有的 vendored SDK 只存在于一侧，不构成漂移。
 - AND bounded content workload 复用健康 full runtime 后，App preflight 仍读取原 full receipt；独立 bounded runtime 的 receipt 不冒充 full readiness。
 - AND `stackctl status` 在环境未启动、secret 缺失或 Provider 不可用时只返回诊断失败，不创建 secret、不启动或修复任何组件；内容 readiness 只有在 canonical Data receipt 与三个 release-bound exact query 均通过时才返回成功。
@@ -249,7 +275,7 @@
 - AND managed/hermetic stackctl launcher 在构建前让 Android lease 绑定设备、包名、release handoff 与 topology 端口，准备并验证所需 transport receipt；退出时由 stackctl 控制面拥有 teardown obligation，并可由已验证该 obligation 的受管 `run.sh` cleanup 代执行，释放该 lease且只清理本 invocation owned 的 reverse 映射；异常中断后的 lease 由 App 进程 liveness 判为 stale 并等待显式 GC。
 - AND managed/hermetic stackctl launcher 为 iOS Simulator 与已登记 iPhone 获取同一 schema 的 lease，绑定 platform、设备、bundle ID、target 与空 transport ports，并在启动 executor 前将同一 lease 绑定最终 handoff digest；Simulator 通过 user launchd application service 与安装容器 executable 保活，已登记 iPhone 通过 `devicectl` 结构化 App URL 与 process executable 保活。
 - AND consumer lease 的只读状态检查不删除 stale lease。
-- AND Alpha 离线与 Beta/Gamma/Prod Remote 只在组合根选择同一 typed ports，读取身份和能力按 REQ-008 区分；在线消息与个人数据仍只经真实 command/query，离线未支持能力明确不可用，不假成功、不切 Mock/fixture。
+- AND Alpha 离线与 Beta/Gamma/Prod Remote 只在组合根选择同一 typed ports，读取身份和能力按 REQ-008/REQ-009 区分；在线消息与个人数据仍只经真实 command/query，Alpha 本地演练不得连接真实后端或签发在线资格，不切 Mock/fixture。
 - AND target/env 冲突、Prod endpoint/credential 泄露、身份/信任、最小 runtime package、真实编译或 runtime package activation 失败时 App 在进入业务 Shell 前失败；Alpha/Beta/Gamma `test_live` 的两种 App mode 对服务、Provider、内容与观测 readiness 只记录 warning，`content-live` 在启动后以 canonical source outcome 区分可用、合法空态和 typed unavailable。`immutable_candidate`、内容 UAT 与 Prod readiness 对这些依赖继续严格阻断。
 - AND managed/hermetic 与 UAT/evidence 启动回执按 prepared、compiling、compiled、installing、installed、configuring、configured、launching、launched 单向推进；direct/lightweight 不签发该回执。VM attach 只作为 launching 阶段观测。只有同一已安装 `artifactDigest` 的 canonical startup safe terminal 回写 `startupTerminalAttemptId + startupTerminalEvidenceDigest + startupTerminalEvidenceRef` 后才可出现 launched，编译、安装或 activation 失败不得出现 launched，父入口只消费该回执而不自行解释 PID。
 - AND 原生 activation 与 runtime config channel 的可见错误码全部来自 `app_launch_manifest.yaml` 的 `runtime_config_error_codes` 闭集。
@@ -337,6 +363,45 @@
 - THEN Content 权威删除、privacy/purge、审核拒绝、可见性收紧或账号关闭导致源对象安全失效时，所有含该对象的候选均不可 activation/rollback，不静默删减 S 后沿用旧 proof；账号关闭清理/安全事实不足不得当作恢复。suspension 可逆但当前候选 not-ready，只有真实恢复事实后重新核验；精品池撤回与 Content 对象安全撤回分开判定。
 - THEN 消费方拒绝非法或超出获准时钟误差的未来 `verifiedAt`、`validUntil <= verifiedAt`、已过期及 `validUntil` 恰等于或早于实际 commit deadline 的 proof；超出获准界限的跨服务正负 clock skew、无法证明时钟健康、查询耗时耗尽预算或提交前保护失效均阻断。时间上限须按 [DEC-003](../../runtime-data-engineering/design.md#dec-003) 的最后资源观察、policy、premium 最早 expiry 和实际保护期限重验，不延长审批 expiresAt、不凭增大固定秒数过门。所有查询保持零写；时间 authority、Safety 或 GenerationProtection 尚缺真实实现时继续 not-ready。
 - THEN Content单写时间策略经同一封存输入投影到三个owner配置包，三方policyDigest/来源Content config digest一致；篡改派生段、漏项或以caller数字覆盖均拒绝。ClockHealth来自服务实际运行宿主/VM的受管只读adapter，容器到宿主映射、boot/clock identity、单调age、同步状态及保守误差可回读；观测过期、失同步/跳时、未知holdover误差或拿另一宿主样本代填均not-ready，配置/指标在线不冒充同步事实。query携带显式requiredUntil仅请求覆盖，不能延长premium expiresAt或policy寿命；扣完查询耗时、时钟误差及最小提交余量无法覆盖时拒绝。
+
+<a id="gwt-008"></a>
+### GWT-008 Alpha 全量本地演练与在线真实主线隔离
+
+- GIVEN 同一 canonical App 可达能力闭包已从 contracts 派生，Alpha 制品绑定完整快照，Beta/Gamma/Prod 使用同源 Remote 实现。
+- WHEN 用户在 Alpha 建立本地演练身份并执行 App 可达认证、关系、内容互动、消息、搜索与标注为模拟的小趣会话，或在在线环境执行对应真实 command。
+- THEN Alpha 经同一 typed ports 完成 command 原子提交、query 读回、重启恢复与显式重置；网络、真实 OTP/push 与在线 outbox 仍拒绝；界面标明本地演练。
+- AND 每个 surface-bound clientContract 操作在 Alpha 与 Remote 都有对象级实现；缺实现、只返回固定成功或缺反向查询/事件均失败。覆盖集合只能来自实际分发注册，不能复制 contracts keys 自证；未实现操作 fail-closed，完整覆盖门禁保持失败，不将子集成功改称全量。
+- AND 状态、actor + operation + request 幂等结果与本地事件在同一持久事务提交；写入延迟期间 query 不得看到工作副本，写入/decoder 失败保留旧状态，重启只读到完整旧版或新版。取消与 reset generation/fence 阻止迟到工作提交，损坏、版本/instance/snapshot 不符不得静默重置。
+- AND OTP 登录必须匹配已发出的同 owner challenge，逐项验证存在、有效期、未使用及尝试上限；失败尝试可靠记录，消耗与身份建立原子提交，身份跨进程稳定且不使用 hashCode。助手 run 只能由 session owner 读取或取消，中途取消不得继续产生 completed。
+- AND 能力目录分别列举启动绑定、clientContract、GraphQL descriptor、实际 native gateway 与事件声明；localId 歧义显式阻断，不择首项。GraphQL 按生成 descriptor 的名称及摘要分发，未知 descriptor 拒绝，bundle 读取失败不伪装合法空结果；正向搜索必须断言真实命中对象。
+- AND 显式 isolated 请求在任何 auth/pending OTP/rehearsal read/write/delete 前完成空间绑定；三者实际消费同一绑定派生的 namespace，missing/mismatch/default 污染在首次存储调用前拒绝，普通非 isolated Alpha 保留原默认空间行为。
+- AND 普通无 isolated 请求的 Alpha 在无验收 control 时仍正常选择 standard/default；受管 isolated 正向请求只经同一现役 control 选择空间，签名后的 resolver 验证结果与可信制品 snapshot pin 和所选空间一致，在线 source 不接受 isolated。
+- AND candidate、实际 target/device/attempt、snapshot、source revision、capsule/projection evidence 或 private control 的任一引用/摘要错配，及显式 isolated 请求缺选择，均在准备 signing material 与文档签名前拒绝；各文档独立 hash 自洽但跨文档身份不一致仍失败，不从待签文档或 runner 期望补值，不 fallback standard。
+- AND control 只承载既有受管调用的已绑定输入，不以自报授权字段取得创建空间许可；签名成功或 resolver 匹配仅证明配置选择，未经实际 auth/pending/rehearsal 存储 readback 不得宣称 AUT 隔离完成。
+- AND 读取存储使用观察不执行任何初始化或存储 I/O、不清坏 pending、不改变启动或业务状态；配置状态与 auth/installId/pending/rehearsal 各 consumer 的构造、成功操作、失效状态可区分，只有操作完成且当前 fence 再校验通过才出现对应成功观察。
+- AND 观察桥接绑定实际 owner 的同进程、同启动代际/attempt 与配置，未装配、身份来源不可靠或已失效时明确不可用；runner 期望、actor 私有 fence、旧摘要和构造完成不能代填当前成功 I/O。
+- AND 观察的用途隔离摘要保持 INTERNAL、普通日志/遥测 drop，受控私有证据不包含完整 key/path、真实 installId 或账户/凭据/请求/payload；不会借启动事件/journal 或合成证据白名单输出。正向观察不签发隔离资格，不替代独立旧空间 sentinel 与实际 gateway 审计。
+- AND 隔离空间的恢复/清坏记录只作用于自己，旧空间 sentinel 的读取、写入、删除均为零；新进程以同空间/快照恢复身份并有新 attempt/PID。AUT 非敏感空间 readback 来自已消费绑定，不接受 runner 字段回显，只有 rehearsal 局部分区成功不能代填 auth/pending OTP 全链隔离。
+- AND 合成身份/模拟 challenge 仅经登录 owner 的明确非电话 typed 流程产生且不能用于真实认证，公开证据只消费 canonical privacy owner 已冻结分类；在线 phone/OTP 校验及 drop 保持不变，未冻结语法/分类时不启动合成登录或放宽日志收集。
+- AND 指定 AUT/case/device/launch attempt 内只有唯一、真实可访问且可编辑的目标控件接受获准演练标识；OTP 从 App 公开 SendOtp 及演练 UI 完成，不接受 store/作者身份/短信 broker 注入或未声明 challengeId。不唯一、不可编辑、跨 AUT、plan 漂移均在输入前拒绝，证据日志无敏感输入原文。
+- AND Android/iOS 对同一受控输入具有相同操作参数、失败结果及后续状态观察；同一进程运行段的 PID/launch attempt、逐步观察和截图绑定不放宽，只有 API 调用成功不能代替旅程成功。
+- AND 完整 main_alpha 登录成功形成演练身份并且原动作只续接一次，由动作 readback 证明；错误登录不建立身份并可恢复，取消不提交身份、不执行待续动作且返回安全上下文。content-only composition 仍认证 unavailable，不能把该负例套用于完整 Alpha；缺少续接 readback 接缝保持未覆盖，截图不能补成功。
+- AND OTP 发出后经真实有界等待达到 300 秒过期边界，原挑战不能再登录，TTL 与设备时钟均不改变；该到期结果不能由即时错误验证码或基础成功/错误/取消旅程代替。
+- AND App 真正重启后从同一 artifact/candidate/snapshot 恢复演练身份，前后分别拥有不同进程 PID 与 launch attempt 并可关联；单进程回执不能代填跨进程恢复。
+- AND 真实网络、真实 OTP/push、Remote transport 与联网 outbox 的拒绝分别具有实际观察结果；缺任一观测来源则对应 required 能力保持 blocked，不把本地登录或交互成功推断为无外部副作用，也不从 required 集合删去过期、重启或拒绝项。
+- AND 在线环境不包含 Alpha adapter/脚本/数据；真实 command 有 query/readback，401/403/404/unsupported/超时分别恢复。协议替身不得签发真实 provider 可用结论。
+
+<a id="gwt-009"></a>
+### GWT-009 离线目录缓存由真实读取代际拥有并隔离释放
+
+- GIVEN 当前 Alpha 已完成既有启动级初始化，读取 scope 绑定已验证 runtime identity、manifest pin、AssetBundle identity 与业务 generation。
+- WHEN 真实 `RuntimeRecoveryHost` 经 R0 初始创建、R1 恢复、切 source 或根销毁推进读取生命周期，并发生缓存命中、并发 flight、消费者取消、超时或迟到结果。
+- THEN 独立 read-generation factory 每代只构造目录与本代 read adapters 并返回本代 disposer；R1 不复用 R0 adapter，恢复不重跑 bootstrap/rehearsal/auth/store/platform 初始化，根销毁使最终代资源不可再读。
+- THEN catalog 仅在本代完整验证成功后保留且不可变，不保留媒体全集；runtime identity、manifest pin、AssetBundle identity、generation 任一改变均不得复用旧目录，每次缓存命中及 flight 发布/adapter 返回前验证 fence。
+- THEN 旧 disposer 重入与旧 flight 迟到只能作用于旧代，不得清除或污染新代；单个消费者取消不影响其他消费者或成功目录，整代释放使本代所有迟到结果失效。
+- THEN 首次完整校验保持 6 秒总预算，失败/timeout 不保留成功缓存；当前代重试仍执行正常完整性验证，实际媒体消费逐次验证字节 hash，目录命中不得掩盖媒体篡改。
+- THEN 真实根路径的 R0/R1/切源/root disposal 可观察到与代际对应的构造/释放次数、旧 adapter 拒绝及根释放后无遗留；public-media/rehearsal 未注入同 scope 时报告其未覆盖，不把仅 read adapters 结果提升为全量 source 生命周期完成。
+- THEN Android/iOS 真实设备 cold start 与首次完整校验预算保持独立验证；本地缓存命中不替代真实冷启动证据，未测仍保持 OPEN-019。
 
 ## 6. 依赖
 
@@ -566,7 +631,8 @@
 - 集合与时间剩余缺口：按 DEC-003 保留 S/home 全集判定、Content owner required hydration 和真实 premium 子集 P，不新增 exclusion 协议平台。时间供给选择已固定为Content服务config/schema单写 `release_query_time` 四项策略、环境显式值、canonical配置包向Content/Search/Rec派生消费段与policyDigest；Platform Ops仅查看/核对，不另建在线writer。尚缺四项字段的canonical authoring/打包投影、宿主time-sync只读adapter和ClockHealthReader事实、CAS保守执行预算及provider误差/holdover实测，故精确数值尚不得设默认。`requiredUntil`/`policyDigest`须在后续query合同显式声明，不从caller值授予authority。候选安全失效/账号关闭事实完整消费与持续Safety/GenerationProtection仍独立必需。缺策略、摘要错配、时钟健康未知/超限或提交余量不足均not-ready；配置值、node-exporter在线、JWT skew、固定十秒、首尾采样或接口存在都不替代事实。
 - 完成判定：`GWT-007` 由 canonical cohort 参数化 local_contract、真实媒体/四域/query barrier/CAS/recovery api_integration 和 Android/iOS 首装离线及在线页面/播放器 user_acceptance 直接绑定；新增集合/安全/时间子句须由同数量换源ID、完整home、合法premium子集及撤权、future/expiry/equal-deadline/耗时与clock-skew负例、query零写和持续保护的直接证据覆盖。只有文档/契约或局部联合事件段通过不得关闭本 OPEN。
 - 待补能力：离线页面 UAT 使用制品/快照 authority 的 typed binding 与双平台 required case 消费，解除对在线身份与 activation 的错误依赖。Alpha 专用入口及完整构建投影、content/profile/media composition 的源闭包、launch metadata/codegen 的入口约束、原生自供给与最终制品资源/插件纯度须同轮闭合；source entrypoint 必须消费现役 metadata 映射，不能以手写环境入口映射绕过。仅完成合并、契约、闭包门或局部测试不关闭本 OPEN。
-- 完成判定：`GWT-007` 由 canonical cohort 参数化 local_contract、真实媒体/四域/query barrier/CAS/recovery api_integration 和 Android/iOS 首装离线及在线页面/播放器 user_acceptance 直接绑定；源码或局部测试不替代完整证据。
+- 读取代际缺口：真实 RuntimeRecoveryHost 路径已暴露 R0 静态 adapter 未释放、R1 复用旧实例及 root disposal 遗留的确定性 Red；需由独立 read-generation factory/disposer 接线修复，不能重跑启动级初始化或引入 static 永久缓存。public-media/rehearsal 尚未注入同 scope 的部分必须单列未覆盖，真实设备 cold 与 6 秒预算尚未证明。
+- 完成判定：`GWT-007` 由 canonical cohort 参数化 local_contract、真实媒体/四域/query barrier/CAS/recovery api_integration 和 Android/iOS 首装离线及在线页面/播放器 user_acceptance 直接绑定；新增 [`GWT-009`](#gwt-009) 由真实根 R0/R1/切源/root disposal、四重身份隔离、取消/超时/迟到故障注入的 local_contract 与独立设备冷启动 user_acceptance 直接绑定。源码或局部测试不替代完整证据。
 - 依赖：canonical Data producer、Content/Recommendation/Search candidate owner、App 组合根与启动 metadata；规格不新增 wire 字段，未具备 typed 契约前对应实现仍阻断。
 
 <a id="open-020"></a>
@@ -578,3 +644,23 @@
 - 影响或价值：Content operation 的 99.9%/p95 500ms 与 recommendation observability 的 99.5%/p95 200ms 尚未由 owner 证明范围、分母、窗口及告警映射一致；不能分别挑较宽项组成绿灯。离线命中、stale、合法空、请求错误和媒体成功也不能混计。
 - 完成判定：`GWT-007` 的统计结果由 Content owner 冻结唯一 canonical 指标口径，并使同范围 SLO/告警单轨派生；首刷/续页、端侧 6 秒终态与视频播放分开验收，未测目标保持未证实。
 - 依赖：[`Content operations`](../../../../../quwoquan_service/services/content-service/contracts/content/post/operations.yaml) 与 [`recommendation SLO`](../../../../../quwoquan_service/services/content-service/observability/slo/recommendation_slo.yaml) 的 owner 裁决；本节点不自行放宽阈值。
+
+<a id="open-021"></a>
+### OPEN-021 四环境全量 App 可达旅程与真实 provider 证据尚未闭环
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：Alpha 本地演练覆盖、跨环境持久化隔离、双端准确入口旅程以及 Beta/Gamma/Prod 真实 provider/command/readback 尚未形成与当前 candidate 绑定的完整分层证据。协议替身、首屏或旧 receipt 不能冒充当前完成。
+- 本地整改阻断：contracts keys 自证覆盖、默认 response wire/generic 成功、非原子文件覆盖、内存提前可见、分离幂等写入、OTP 无 challenge 约束及助手取消竞态必须由真实故障注入回归修复。全量对象行为、分页/权限、事件消费与实际 native/启动绑定证据未齐前，coverage 门保持真实失败；禁止为判绿扩充空实现或收缩 required 集合。SearchPage 生成 descriptor 当前不在公开 descriptor 注册表，缺受治理的名称/摘要分发接缝前本地搜索 fail-closed，不能手写摘要或把所有 GraphQL 当搜索。
+- isolated 前置阻断：启动级装配已按实际 VerifiedRehearsalSpace 构造同绑定 store/persistence 与 typed composition，standard 保留原 OTP，isolated 不安装标准phone/grant全局端口。真实配置加真实 isolated auth/pending adapters 的私有三存储组合已覆盖旧键 sentinel 零触达、complete 后 auth 写失败重放、新实例恢复及 logout 后 auth 不自动复活；这不是生产 Provider/UI 自动接线或设备证据。组合根仍须持有返回值并向共享登录 Provider 注入 synthetic ports，随启动 scope 释放，不能在 read-generation 重建时重跑初始化；当前父调用若忽略返回值则合成能力仍未开放。真实 AUT readback、跨 attempt/PID 重启与隔离 UAT 未执行，既有 Python 证据不升级设备事实。
+- 只读存储观察缺口：尚须由唯一 launch owner 声明现有通道的只读方法/模型，并由各实际 consumer 提供成功 I/O 后 fence 确认的当前实例投影及同进程/启动代际关联。无 I/O 读取、失效拒绝、INTERNAL 摘要用途隔离/日志drop、未装配不可用与防混入采集均需独立证明；正向观察不替代历史零旧空间访问的私有 sentinel 和实际 gateway 审计 required 证据，不生成资格结论，不关闭 OTP/synthetic/设备分层缺口。
+- 签名前 control 接线缺口：现役 app_content_uat_launch_control 尚缺 isolated 选择及 producer→launcher→签名前消费透传，projection evidence 仅核自身 digest 尚不能证明与实际调用 candidate/device/attempt/source/capsule/snapshot 交叉一致。唯一控制面 writer 须先把现存字段闭集纳入 canonical authoring，再补签名前拒绝与普通无 control 开发启动兼容；私有材料的签名/解析测试不授予使用真实密钥或设备权限，也不代替三存储 readback。该前置与原 OTP、合成登录及设备 required 集合分别保持阻断，不合并或删除。
+- 双提交恢复缺口：synthetic.complete 与 AuthController.applySyntheticSession 是独立持久提交，auth失败只能在原显式意图有效时同request重放再应用；logout只撤销auth会话，不清演练身份和幂等业务事实。isolated启动必须只从auth存储恢复，禁止以synthetic.restore自动补写；UI/auth对logout后的旧意图迟到重试取消尚须实证，不因局部store组合通过而关闭。
+- 合成确认剩余边界：CompleteSyntheticChallenge 已按 canonical 提交约束允许受限 confirm/reject，展示与证据类型仍保持 confirm 常量；正确 identity 的 reject 经真实 typed 端口计数、第五次锁定、错误请求幂等、写失败回滚及新 store 恢复有私有 local_contract 覆盖。该局部结果不证明 UI/auth/pending OTP 三存储已装配、native 输入或设备重启已执行，不能关闭真实六位 OTP/键盘与 300 秒原生过期验收；非法输入及公开证据仍按各自 generated validator 拒绝，不能放宽日志。
+- 原生输入与登录缺口：Python plan validator 与 Android/iOS 的同源操作参数/失败/后续状态观察、指定 AUT/case/device/attempt 下真实控件输入及敏感日志脱敏尚需实现和执行证明。完整 main_alpha 的本地成功/错误/取消三类旅程须替代旧 login-unavailable 预期，content-only unavailable 负例独立保留；认证/交互 raw specRef 归 GWT-008 或真实登录 owner 对应验收，不能继续全部归 GWT-007。
+- 必需未覆盖项：成功续接一次若无实际动作 readback seam 仍未覆盖；OTP 300 秒真实有界等待、前后独立 PID/attempt 的同 artifact/candidate/snapshot 跨进程恢复、真实网络/OTP/push/Remote/outbox 拒绝的实际观测来源仍 required。未实现、未执行或缺来源均保持 blocked，不改 TTL/设备时钟、不复用单进程 receipt、不以截图或三条正向旅程通过关闭这些缺口。
+- 在线输入阻断：Beta 当前候选 manifest 字段不匹配，Gamma active release 缺 readiness receipt，Prod 缺 exact candidate/distribution 输入且凭据尚未核验。这些只读观察证明输入或证据不足，不足以确证服务故障或真实 provider 可用。
+- 尚缺验收证据：`GWT-008` 的双端 Alpha 旅程、Beta/Gamma 受管真实 provider conformance 与 Prod 只读核查。源码侧已切 assistant beta/gamma 的 model/search/weather/finance 为真实 adapter，但凭据缺席不得签发可用；integration map、content embed、user one-tap/federated 仍为 `protocol_fixture`，须按凭据与副作用边界逐项裁决。local_contract 覆盖与 handler 绑定不能替代设备/UAT 与环境 readback。
+- 完成判定：[`GWT-008`](#gwt-008) 由当前 candidate 的分层证据直接绑定；任一 required 旅程失败或真实环境证据缺失保持本 OPEN。
+- 依赖：各对象 owner 的 App 可达 Journey、assistant 非生产真实 provider 凭据与 environment-ops 受管拓扑。

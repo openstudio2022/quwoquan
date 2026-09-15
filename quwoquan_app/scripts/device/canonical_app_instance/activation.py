@@ -37,11 +37,24 @@ from .arguments import CanonicalExecutorError
 
 REQUEST_FILE_NAME = "runtime-config-activation-request.json"
 RECEIPT_FILE_NAME = "runtime-config-activation-receipt.json"
+ACTIVATION_OBSERVATION_SCHEMA = "quwoquan.runtime-config-activation-observation.v1"
 ACTIVE_RECEIPT_FILE_NAME = "runtime-config-active-receipt.json"
 ACTIVE_PACKAGE_FILE_NAME = "runtime-config-package.json"
 MAXIMUM_RUNTIME_DOCUMENT_BYTES = 1024 * 1024
 DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 RECEIPT_FIELDS = frozenset(RUNTIME_CONFIG_ACTIVATION_RECEIPT_REQUIRED_FIELDS)
+REQUEST_IDENTITY_FIELDS = (
+    "environment",
+    "buildProfile",
+    "target",
+    "packageDigest",
+    "trustEnvelopeDigest",
+    "effectiveLaunchManifestDigest",
+)
+REQUEST_IDENTITY_MISMATCH_ISSUES = frozenset(
+    f"activation receipt {field} does not match request"
+    for field in REQUEST_IDENTITY_FIELDS
+)
 
 FORBIDDEN_COMPILE_ENVIRONMENT_KEYS = frozenset(
     {
@@ -87,6 +100,10 @@ class PlatformDriver(Protocol):
     def read_runtime_file(self, file_name: str) -> bytes | None: ...
 
     def write_activation_request(self, payload: bytes) -> None: ...
+
+    def prepare_activation_receipt_observation(
+        self, request_digest: str
+    ) -> None: ...
 
     def launch_activation(self, request_digest: str) -> None: ...
 
@@ -176,11 +193,17 @@ def _wait_for_current_activation_receipt(
     request: dict[str, object],
     request_digest: str,
     activation_timeout_seconds: float,
+    observation_marker: bytes,
 ) -> dict[str, object]:
     deadline = time.monotonic() + activation_timeout_seconds
+    marker_observed = False
     while time.monotonic() < deadline:
         payload = platform_driver.read_runtime_file(RECEIPT_FILE_NAME)
         if payload is None:
+            time.sleep(0.1)
+            continue
+        if payload == observation_marker:
+            marker_observed = True
             time.sleep(0.1)
             continue
         receipt = decode_activation_receipt(
@@ -191,16 +214,44 @@ def _wait_for_current_activation_receipt(
             time.sleep(0.1)
             continue
         issues = validate_runtime_config_activation_receipt(receipt, request)
+        if receipt["status"] == "failed":
+            identity_values = tuple(receipt[field] for field in REQUEST_IDENTITY_FIELDS)
+            identity_matches = all(
+                receipt[field] == request[field] for field in REQUEST_IDENTITY_FIELDS
+            )
+            identity_is_empty = all(value == "" for value in identity_values)
+            if not identity_matches and not identity_is_empty:
+                raise CanonicalExecutorError(
+                    "native activation receipt identity is corrupt"
+                )
+            if identity_is_empty:
+                issues = [
+                    issue
+                    for issue in issues
+                    if issue not in REQUEST_IDENTITY_MISMATCH_ISSUES
+                ]
+            if issues:
+                raise CanonicalExecutorError(
+                    "native activation receipt identity is corrupt"
+                )
+            error_code = str(receipt["errorCode"])
+            validation_issues = ",".join(
+                str(issue) for issue in receipt["validationIssues"]
+            )
+            raise CanonicalExecutorError(
+                "native runtime configuration activation failed: "
+                f"errorCode={error_code}; validationIssues={validation_issues}"
+            )
         if issues:
             raise CanonicalExecutorError(
                 "native activation receipt failed validation: " + "; ".join(issues)
             )
-        if receipt["status"] != "activated":
-            error_code = str(receipt.get("errorCode") or "unknown")
-            raise CanonicalExecutorError(
-                f"native runtime configuration activation failed: {error_code}"
-            )
         return receipt
+    if marker_observed:
+        raise CanonicalExecutorError(
+            "native activation did not replace the observation marker "
+            f"within {activation_timeout_seconds:g}s"
+        )
     raise CanonicalExecutorError(
         "native activation receipt was not bound to the current request "
         f"within {activation_timeout_seconds:g}s"
@@ -226,12 +277,15 @@ def activate_runtime_config(
     )
     request_digest = runtime_config_activation_request_digest(request)
     platform_driver.write_activation_request(canonical_json_bytes(request))
+    observation_marker = activation_receipt_observation_marker(request_digest)
+    platform_driver.prepare_activation_receipt_observation(request_digest)
     platform_driver.launch_activation(request_digest)
     activated_receipt = _wait_for_current_activation_receipt(
         platform_driver,
         request,
         request_digest,
         activation_timeout_seconds,
+        observation_marker,
     )
     active_receipt_payload = platform_driver.read_runtime_file(
         ACTIVE_RECEIPT_FILE_NAME
@@ -265,6 +319,20 @@ def canonical_json_bytes(document: object) -> bytes:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
+
+
+def activation_receipt_observation_marker(request_digest: str) -> bytes:
+    if not _is_digest(request_digest):
+        raise CanonicalExecutorError("activation observation request digest is invalid")
+    return bounded_payload(
+        canonical_json_bytes(
+            {
+                "requestDigest": request_digest,
+                "schema": ACTIVATION_OBSERVATION_SCHEMA,
+            }
+        ),
+        "activation receipt observation marker",
+    )
 
 
 def decode_activation_receipt(

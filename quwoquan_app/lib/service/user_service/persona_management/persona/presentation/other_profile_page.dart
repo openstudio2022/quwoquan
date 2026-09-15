@@ -25,6 +25,8 @@ class OtherProfilePage extends StatefulWidget {
     required this.contentEngagementTracker,
     this.personaId,
     this.initialAvatarUrl,
+    this.initialAvatarAssetId,
+    this.initialAvatarAccessMode,
     this.initialDisplayName,
     this.initialBackgroundImageUrl,
     this.onBack,
@@ -38,6 +40,8 @@ class OtherProfilePage extends StatefulWidget {
   final ContentEngagementTracker contentEngagementTracker;
   final String? personaId;
   final String? initialAvatarUrl;
+  final String? initialAvatarAssetId;
+  final MediaDeliveryAccessMode? initialAvatarAccessMode;
   final String? initialDisplayName;
   final String? initialBackgroundImageUrl;
   final VoidCallback? onBack;
@@ -81,6 +85,8 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
           ? widget.personaId!
           : widget.userHandle,
       initialAvatarUrl: widget.initialAvatarUrl,
+      initialAvatarAssetId: widget.initialAvatarAssetId,
+      initialAvatarAccessMode: widget.initialAvatarAccessMode,
       initialDisplayName: widget.initialDisplayName,
       initialBackgroundUrl: widget.initialBackgroundImageUrl,
       openMessageComposerOnOpen: widget.openMessageComposerOnOpen,

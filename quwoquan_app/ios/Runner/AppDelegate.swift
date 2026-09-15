@@ -485,6 +485,7 @@ private final class RecoveryFailureEncryptedStore {
   private static let recoveryRetention: TimeInterval = 7 * 24 * 60 * 60
   private let processStartUptime = ProcessInfo.processInfo.systemUptime
   private let videoEditingPlugin = VideoEditingPlugin()
+  private let nativeOrientationReader = NativeOrientationReader()
   private let personalAssistantNativeApiPlugin = PersonalAssistantNativeApiPlugin()
   private let assistantDeviceActionPlugin = AssistantDeviceActionPlugin()
   private let commercialAuthPlugin = CommercialAuthPlugin()
@@ -678,6 +679,7 @@ private final class RecoveryFailureEncryptedStore {
   /// Scene delegate 把真实承载 Flutter 的 window 交回：绑定 renderer 首帧回调。不写 AppDelegate.window——
   /// FlutterSceneDelegate 会把非空的 appDelegate.window.rootViewController 视为旧式手动装配并搬进新 window。
   func attachFlutterSceneWindow(_ sceneWindow: UIWindow) {
+    nativeOrientationReader.attach(sceneWindow)
     sceneWindow.backgroundColor = StartupTransitionBackground.color
     sceneWindow.rootViewController?.view.backgroundColor = StartupTransitionBackground.color
     observeNativeFlutterFirstFrame(
@@ -704,12 +706,9 @@ private final class RecoveryFailureEncryptedStore {
 
     NativeRuntimeConfigChannel.register(binaryMessenger: binaryMessenger)
 
-    let videoEditingChannel = FlutterMethodChannel(
-      name: "quwoquan/video_editing",
-      binaryMessenger: binaryMessenger
-    )
-    videoEditingChannel.setMethodCallHandler { [weak self] call, result in
-      self?.videoEditingPlugin.handle(call: call, result: result)
+    nativeOrientationReader.register(binaryMessenger: binaryMessenger) { [weak self] call, result in
+      guard let self = self else { result(FlutterMethodNotImplemented); return }
+      self.videoEditingPlugin.handle(call: call, result: result)
     }
 
     let assistantChannel = FlutterMethodChannel(

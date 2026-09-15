@@ -35,6 +35,7 @@
 - [`device-token-register`](./device-token-register/spec.md)：定义“设备 Token 登记”的可观察主路径、失败语义及父能力交接。
 - [`notification-privacy-settings`](./notification-privacy-settings/spec.md)：定义“通知隐私设置”的可观察主路径、失败语义及父能力交接。
 - [`settings-audit`](./settings-audit/spec.md)：定义“设置审计”的可观察主路径、失败语义及父能力交接。
+- [`collection-query-delegation`](./collection-query-delegation/spec.md)：由 UserAccount authority 签发与逐请求在线验证合集窄身份委托，撤权与故障不放行。
 
 ## 5. 能力要求
 

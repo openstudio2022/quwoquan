@@ -65,7 +65,7 @@
 <a id="req-006"></a>
 ### REQ-006 全局搜索页以 production Remote 组合默认态、联想态与正式结果交接
 
-- 默认态的远端最近搜索、热词、圈子和地点启发，以及输入后的 canonical suggest，必须来自 production Remote composition；本地缓存只承担游客或离线表现，不得冒充云端事实。
+- 默认态的远端最近搜索、热词、圈子和地点启发，以及输入后的 canonical suggest，必须来自 production Remote composition，或 Alpha 对象级本地搜索 adapter；本地缓存只承担游客或离线表现，不得冒充在线云端事实。
 - 本地联想、主页预览和网络结果入口可独立结算；单域失败不得清空其他已确认结果，query 替换、清空、返回或页面销毁后旧响应不得回写。
 - 提交网络搜索时必须携带同一 query/session/referral 上下文进入正式结果页，不得由各入口维护第二套搜索请求或路由语义。
 

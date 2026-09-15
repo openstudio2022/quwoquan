@@ -87,6 +87,21 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
   return element;
 }
 
+- (void)inputOfflineOtp:(NSDictionary *)step app:(XCUIApplication *)app {
+  XCUIElementQuery *fields = [[app descendantsMatchingType:XCUIElementTypeAny]
+      matchingPredicate:[self offlinePredicate:step[@"selector"]]];
+  XCUIElementQuery *sources = [[app descendantsMatchingType:XCUIElementTypeAny]
+      matchingPredicate:[self offlinePredicate:step[@"sourceSelector"]]];
+  XCTAssertEqual(fields.count, 1, @"APP.UAT.page_plan_invalid");
+  XCTAssertEqual(sources.count, 1, @"APP.UAT.page_plan_invalid");
+  XCUIElement *field = fields.element;
+  XCTAssertTrue(field.enabled && field.hittable, @"APP.UAT.page_plan_invalid");
+  XCTAssertTrue(field.elementType == XCUIElementTypeTextField || field.elementType == XCUIElementTypeSecureTextField,
+      @"APP.UAT.page_plan_invalid");
+  // XCTest typeText 会将输入值写入 activity/xcresult；未有脱敏执行接缝前禁止输入。
+  XCTFail(@"APP.UAT.page_artifact_binding_missing: redacted native input execution is unavailable");
+}
+
 - (NSArray<NSNumber *> *)offlinePlaybackTimes:(NSString *)value {
   NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:
       @"(\\d+):(\\d{2})\\s*/\\s*(\\d+):(\\d{2})" options:0 error:nil];
@@ -114,10 +129,19 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
   NSArray *steps = plan[@"steps"];
   XCTAssertTrue([steps isKindOfClass:NSArray.class]);
   XCTAssertTrue(steps.count > 0 && steps.count <= 40);
-  NSSet *operations = [NSSet setWithArray:@[@"visible", @"tap", @"scroll", @"seek", @"playback", @"back", @"reveal", @"tab-roundtrip"]];
+  XCTAssertEqualObjects(plan[@"executionBlocker"], @"", @"APP.UAT.page_plan_invalid");
+  NSSet *operations = [NSSet setWithArray:@[@"visible", @"tap", @"scroll", @"seek", @"playback", @"back", @"reveal", @"tab-roundtrip", @"input-otp"]];
   for (NSDictionary *step in steps) {
     XCTAssertTrue([step isKindOfClass:NSDictionary.class]);
-    XCTAssertEqual(step.count, 2);
+    BOOL input = [step[@"operation"] isEqual:@"input-otp"];
+    XCTAssertEqual(step.count, input ? 4 : 2, @"APP.UAT.page_plan_invalid");
+    if (input) {
+      XCTAssertTrue([@[@"correct", @"incorrect"] containsObject:step[@"mode"]], @"APP.UAT.page_plan_invalid");
+      XCTAssertTrue([step[@"sourceSelector"] isKindOfClass:NSString.class], @"APP.UAT.page_plan_invalid");
+      XCTAssertGreaterThan([step[@"sourceSelector"] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length, 0, @"APP.UAT.page_plan_invalid");
+      XCTAssertFalse([step[@"sourceSelector"] hasPrefix:@"text-prefix:"], @"APP.UAT.page_plan_invalid");
+      XCTAssertFalse([step[@"selector"] hasPrefix:@"text-prefix:"], @"APP.UAT.page_plan_invalid");
+    }
     XCTAssertTrue([operations containsObject:step[@"operation"]]);
     XCTAssertTrue([step[@"selector"] isKindOfClass:NSString.class]);
     XCTAssertGreaterThan([step[@"selector"] length], 0);
@@ -148,6 +172,11 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
       }
     }
     NSString *selector = step[@"selector"];
+    if ([operation isEqual:@"input-otp"]) {
+      [self inputOfflineOtp:step app:app];
+      [observations addObject:@{@"operation": operation, @"selector": selector, @"observed": @"input-redacted"}];
+      continue;
+    }
     if ([operation isEqualToString:@"tab-roundtrip"]) {
       NSArray<NSString *> *labels = [selector componentsSeparatedByString:@"|"];
       XCTAssertEqual(labels.count, 2);

@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -16,7 +17,15 @@ SCRIPT = APP_DIR / "scripts/ios/build_prepare_dart_defines.sh"
 APP_DELEGATE = APP_DIR / "ios/Runner/AppDelegate.swift"
 # runtime config 原生供给面的真相源。生产 Runner 与 Patrol UAT test host 两个 Xcode 工程
 # 编译同一份，宿主读到的取值因此与生产同源。
-RUNTIME_CONFIG_SUPPLY = APP_DIR / "ios/Runner/NativeRuntimeConfigSupply.swift"
+RUNTIME_CONFIG_SOURCES = tuple(
+    APP_DIR / "ios/Runner" / name
+    for name in (
+        "NativeRuntimeConfigSupply.swift",
+        "NativeRuntimeConfigMigrationArchive.swift",
+        "NativeRuntimeConfigActivationCoordinator.swift",
+        "NativeRuntimeConfigChannel.swift",
+    )
+)
 GENERATED_LAUNCH_CONTRACT = APP_DIR / "ios/Runner/AppLaunchContract.generated.swift"
 GENERATED_LAUNCH_CONTRACT_JSON = (
     APP_DIR / "tool/app_launch_contract_codegen/app_launch_contract.generated.json"
@@ -25,6 +34,10 @@ RUNNER_PROJECT = APP_DIR / "ios/Runner.xcodeproj/project.pbxproj"
 PATROL_PROJECT = APP_DIR / "test_host/patrol/ios/Runner.xcodeproj/project.pbxproj"
 PATROL_TRUST_SCRIPT = APP_DIR / "scripts/ios/build_test_host_embed_runtime_config_trust.sh"
 STACKCTL_PYTHON_RESOLVER = APP_DIR / "scripts/ios/build_resolve_stackctl_python.sh"
+
+
+def _runtime_config_source() -> str:
+    return "\n".join(path.read_text(encoding="utf-8") for path in RUNTIME_CONFIG_SOURCES)
 
 
 def _encoded_define(key: str, value: str) -> str:
@@ -56,7 +69,7 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
     def _environment(self) -> dict[str, str]:
         environment = dict(os.environ)
         environment["QWQ_IOS_STACKCTL_PYTHON"] = sys.executable
-        environment["CONFIGURATION"] = "Debug-nonprod"
+        environment["CONFIGURATION"] = "Debug-alpha"
         environment["QWQ_APP_BUILD_PROFILE"] = "nonprod"
         environment["DART_DEFINES"] = _encoded_define("FLUTTER_VERSION", "test")
         return environment
@@ -78,27 +91,20 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
 
     def test_script_uses_build_profile_and_has_no_runtime_package_dual_read(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
-        for configuration in (
-            "Debug-nonprod",
-            "Profile-nonprod",
-            "Release-nonprod",
-            "Release-prod",
-        ):
-            self.assertIn(configuration, source)
+        self.assertIn("resolve_ios_configuration", source)
         self.assertNotIn("QWQ_LAUNCH_HANDOFF_JSON", source)
         self.assertIn("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH", source)
         self.assertNotIn("QWQ_APP_RUNTIME_CONFIG_TRUST_PATH", source)
         for retired in (
-            "Debug-alpha",
-            "Debug-beta",
-            "Debug-gamma",
+            "Debug-nonprod",
+            "Profile-nonprod",
             "QWQNativeRuntime.plist",
             "runtimeDefines",
             "print_app_env_dart_defines.py",
             "QWQ_APP_RUNTIME_TRUSTED_PUBLIC_KEYS_JSON or",
         ):
             self.assertNotIn(retired, source)
-        self.assertIn("Debug-prod|Profile-prod", source)
+        self.assertNotIn("Debug-prod|Profile-prod", source)
         self.assertIn("target runtime package must be activated post-install", source)
         # 构建期默认供给已退役：脚本不得再引用共享默认供给脚本或其分支。
         self.assertNotIn("build_default_debug_supply.py", source)
@@ -223,10 +229,10 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
     def test_missing_or_invalid_trust_envelope_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            # Debug-nonprod 之外的 configuration trust 缺席都 GATE_BLOCK（REQ-003：
-            # 自供给只服务 Debug-nonprod），且错误指引 run.sh 而非已退役的 facade。
+            # Debug-alpha 之外的 configuration trust 缺席都 GATE_BLOCK（REQ-003：
+            # 自供给只服务 Debug-alpha），且错误指引 run.sh 而非已退役的 facade。
             for configuration, build_profile in (
-                ("Profile-nonprod", "nonprod"),
+                ("Profile-alpha", "nonprod"),
                 ("Release-nonprod", "nonprod"),
                 ("Release-prod", "prod"),
             ):
@@ -284,7 +290,7 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
             )
 
     def test_debug_nonprod_missing_trust_self_supplies_without_readable_package(self) -> None:
-        # REQ-003 build_time_self_supply：Debug-nonprod 缺 canonical handoff 时由构建阶段
+        # REQ-003 build_time_self_supply：Debug-alpha 缺 canonical handoff 时由构建阶段
         # 现场签发 alpha trust + 激活请求并嵌入；可读 runtime package 仍不进入产物，
         # 也不再需要 PATH facade 或任何用户级配置。
         with tempfile.TemporaryDirectory() as directory:
@@ -293,7 +299,7 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
             environment.pop("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH", None)
             environment.update(
                 {
-                    "CONFIGURATION": "Debug-nonprod",
+                    "CONFIGURATION": "Debug-alpha",
                     "QWQ_APP_BUILD_PROFILE": "nonprod",
                     "TARGET_BUILD_DIR": str(root / "build"),
                     "UNLOCALIZED_RESOURCES_FOLDER_PATH": "Runner.app",
@@ -419,10 +425,10 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
                     text=True,
                 )
                 self.assertEqual(result.returncode, 2)
-                self.assertIn("supports Release-prod only", result.stderr)
+                self.assertIn("unsupported iOS configuration", result.stderr)
 
     def test_native_reader_and_cold_start_activation_contract_shape(self) -> None:
-        source = RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        source = _runtime_config_source()
         app_delegate_source = APP_DELEGATE.read_text(encoding="utf-8")
         # 退役形态在整个 iOS 原生面都不得复活，因此反向断言同时覆盖 AppDelegate。
         retired_scan = source + app_delegate_source
@@ -522,22 +528,117 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
             source,
         )
 
+    def _assert_shared_source_link(self, project: Path, source: str, name: str) -> None:
+        # 逐边验证 Runner → Sources → PBXBuildFile → PBXFileReference；名字或孤立对象不算编译引用。
+        objects = dict(re.findall(
+            r"^\t\t([A-F0-9]{24})(?: /\* [^\n]*? \*/)? = \{([^\n]*|\n.*?^\t\t)\};",
+            source, flags=re.MULTILINE | re.DOTALL,
+        ))
+        runner_id = "97C146ED1CF9000F007C117D"
+        runner = objects[runner_id]
+        self.assertIn("isa = PBXNativeTarget;", runner)
+        phase_list = re.search(r"buildPhases = \((.*?)\);", runner, re.DOTALL)
+        self.assertIsNotNone(phase_list)
+        phase_ids = re.findall(r"\b[A-F0-9]{24}\b", phase_list.group(1))
+        sources = [objects[key] for key in phase_ids if "isa = PBXSourcesBuildPhase;" in objects[key]]
+        self.assertEqual(len(sources), 1)
+        files = re.search(r"files = \((.*?)\);", sources[0], re.DOTALL)
+        self.assertIsNotNone(files)
+        build_ids = re.findall(r"\b[A-F0-9]{24}\b", files.group(1))
+        compiled_refs = []
+        for build_id in build_ids:
+            build = objects.get(build_id, "")
+            self.assertIn("isa = PBXBuildFile;", build)
+            ref = re.search(r"fileRef = ([A-F0-9]{24})", build)
+            self.assertIsNotNone(ref)
+            compiled_refs.append(ref.group(1))
+        expected_path = ("../../../../ios/Runner/" if project == PATROL_PROJECT else "") + name
+        refs = [key for key, body in objects.items()
+                if "isa = PBXFileReference;" in body
+                and f"path = {expected_path};" in body]
+        self.assertEqual(len(refs), 1, f"缺失共享生产引用: {name}")
+        ref_id = refs[0]
+        self.assertEqual(compiled_refs.count(ref_id), 1, f"Runner Sources 漏挂或重复: {name}")
+        self.assertIn('sourceTree = "<group>";', objects[ref_id])
+        group_id = "97C146F01CF9000F007C117D"
+        group = objects[group_id]
+        self.assertIn("isa = PBXGroup;", group)
+        self.assertIn("path = Runner;", group)
+        self.assertIn('sourceTree = "<group>";', group)
+        children = re.search(r"children = \((.*?)\);", group, re.DOTALL)
+        self.assertIsNotNone(children)
+        self.assertIn(ref_id, re.findall(r"\b[A-F0-9]{24}\b", children.group(1)))
+        project_body = next(body for body in objects.values() if "isa = PBXProject;" in body)
+        main_group = re.search(r"mainGroup = ([A-F0-9]{24})", project_body)
+        self.assertIsNotNone(main_group)
+        root_group = objects[main_group.group(1)]
+        root_children = re.search(r"children = \((.*?)\);", root_group, re.DOTALL)
+        self.assertIsNotNone(root_children)
+        self.assertIn(group_id, re.findall(r"\b[A-F0-9]{24}\b", root_children.group(1)))
+        self.assertNotRegex(root_group, r"\bpath\s*=")
+        self.assertIn('sourceTree = "<group>";', root_group)
+        targets = re.search(r"targets = \((.*?)\);", project_body, re.DOTALL)
+        self.assertIsNotNone(targets)
+        self.assertIn(runner_id, re.findall(r"\b[A-F0-9]{24}\b", targets.group(1)))
+        self.assertIn('projectDirPath = "";', project_body)
+        resolved = (project.parent.parent / "Runner" / expected_path).resolve()
+        self.assertEqual(resolved, (APP_DIR / "ios/Runner" / name).resolve())
+        self.assertTrue(resolved.is_file())
+
     def test_runner_and_patrol_compile_the_same_generated_launch_contract(self) -> None:
         self.assertTrue(GENERATED_LAUNCH_CONTRACT.is_file())
-        runner = RUNNER_PROJECT.read_text(encoding="utf-8")
+        for project in (RUNNER_PROJECT, PATROL_PROJECT):
+            source = project.read_text(encoding="utf-8")
+            for name in (
+                *(path.name for path in RUNTIME_CONFIG_SOURCES),
+                "AppLaunchContract.generated.swift",
+                "NativeRuntimeCanonicalJSON.swift",
+            ):
+                with self.subTest(project=str(project), source=name):
+                    self._assert_shared_source_link(project, source, name)
         patrol = PATROL_PROJECT.read_text(encoding="utf-8")
-        for project in (runner, patrol):
-            self.assertIn("AppLaunchContract.generated.swift in Sources", project)
-            self.assertIn("NativeRuntimeConfigSupply.swift in Sources", project)
-        self.assertIn(
-            "../../../../ios/Runner/AppLaunchContract.generated.swift",
-            patrol,
-        )
         phases = patrol[patrol.index("97C146ED1CF9000F007C117D /* Runner */ = {") :]
         self.assertLess(
             phases.index("Embed Runtime Config Trust"),
             phases.index("9740EEB61CF901F6004384FC /* Run Script */"),
         )
+
+    def test_shared_source_link_rejects_dangling_and_uncompiled_files(self) -> None:
+        # 只变异内存文本，不改共享工程；保留名字仍必须检测出断链。
+        for project in (RUNNER_PROJECT, PATROL_PROJECT):
+            source = project.read_text(encoding="utf-8")
+            for path in RUNTIME_CONFIG_SOURCES:
+                name = re.escape(path.name)
+                mutations = {
+                    "sources_entry": re.sub(
+                        rf"^\s+[A-F0-9]{{24}} /\* {name} in Sources \*/,\n", "", source,
+                        flags=re.MULTILINE,
+                    ),
+                    "build_file": re.sub(
+                        rf"^\s+[A-F0-9]{{24}} /\* {name} in Sources \*/ = [^\n]+\n", "", source,
+                        flags=re.MULTILINE,
+                    ),
+                    "file_reference": re.sub(
+                        rf"^\s+[A-F0-9]{{24}} /\* {name} \*/ = [^\n]+\n", "", source,
+                        flags=re.MULTILINE,
+                    ),
+                    "runner_group": re.sub(
+                        rf"^\s+[A-F0-9]{{24}} /\* {name} \*/,\n", "", source,
+                        flags=re.MULTILINE,
+                    ),
+                    "runner_sources_phase": source.replace(
+                        "97C146EA1CF9000F007C117D /* Sources */,", ""
+                    ),
+                    "copied_source_path": source.replace(
+                        "path = " + ("../../../../ios/Runner/" if project == PATROL_PROJECT else "") + path.name + ";",
+                        f"path = copied/{path.name};",
+                    ),
+                }
+                for mutation, changed in mutations.items():
+                    with self.subTest(project=str(project), source=path.name, mutation=mutation):
+                        self.assertTrue(source != changed, f"变异前引用已缺失: {path.name}/{mutation}")
+                        with self.assertRaises(AssertionError):
+                            self._assert_shared_source_link(project, changed, path.name)
 
     def test_active_receipt_is_the_only_restart_launch_identity_projection(self) -> None:
         contract = json.loads(
@@ -548,7 +649,7 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
         )
         self.assertIn("launchProvenance", receipt_fields)
         self.assertIn("runtimeConfigSupplyMode", receipt_fields)
-        source = RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        source = _runtime_config_source()
         self.assertIn(
             "let identity = try NativeRuntimeConfigActivationCoordinator.readVerifiedIdentity()",
             source,
@@ -594,7 +695,7 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             environment = self._materialization_environment(root, _trust_envelope(root))
-            environment["PRODUCT_BUNDLE_IDENTIFIER"] = "com.example.quwoquanApp.nonprod.debug"
+            environment["PRODUCT_BUNDLE_IDENTIFIER"] = "com.leadwise.quwoquan.alpha.debug"
             result = subprocess.run(
                 ["bash", str(SCRIPT)],
                 cwd=APP_DIR,

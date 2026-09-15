@@ -104,6 +104,7 @@ type productOpsIngestFieldsContract struct {
 }
 
 type requestOperationSpec struct {
+	Persisted            *persistedRequestSpec
 	CanonicalOperationID string
 	RequestType          string
 	RequestBodyKind      string
@@ -177,13 +178,16 @@ func writeGeneratedOperationRequests(
 		if operation.RequestBindings != nil {
 			bindings = *operation.RequestBindings
 		}
-		if err := validateRequestModelBindings(
-			operation.CanonicalOperationID,
-			model,
-			bodyKind,
-			bindings,
-			operation.RequestConstants,
-		); err != nil {
+		var persisted *persistedRequestSpec
+		if operation.Transport == "graphql" && bodyKind == "none" {
+			if operation.RequestBindings != nil || operation.RequestConstants != nil {
+				return nil, fmt.Errorf("%s cannot mix REST bindings and persisted variables", operation.CanonicalOperationID)
+			}
+			persisted, err = loadGraphQLRequestSpec(operation, model)
+			if err != nil {
+				return nil, err
+			}
+		} else if err := validateRequestModelBindings(operation.CanonicalOperationID, model, bodyKind, bindings, operation.RequestConstants); err != nil {
 			return nil, err
 		}
 		if err := validateVersionPreconditionRequestContract(
@@ -262,6 +266,7 @@ func writeGeneratedOperationRequests(
 			constants = *operation.RequestConstants
 		}
 		library.Operations = append(library.Operations, requestOperationSpec{
+			Persisted:            persisted,
 			CanonicalOperationID: operation.CanonicalOperationID,
 			RequestType:          requestType,
 			RequestBodyKind:      bodyKind,

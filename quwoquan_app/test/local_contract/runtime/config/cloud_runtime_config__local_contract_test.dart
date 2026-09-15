@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/generated/offline_content_bundle_identity.g.dart';
 import 'package:quwoquan_app/runtime/config/app_content_source.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/runtime/config/runtime_package_resolver.dart';
@@ -123,7 +124,9 @@ Future<ResolvedRuntimePackage> _resolve(
 );
 
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
-Future<Map<String, Object?>> _signedOffline() async {
+Future<Map<String, Object?>> _signedOffline({
+  void Function(Map<String, Object?>)? beforeSigning,
+}) async {
   final algorithm = Ed25519();
   final key = await algorithm.newKeyPair();
   final publicKey = await key.extractPublicKey();
@@ -146,12 +149,18 @@ Future<Map<String, Object?>> _signedOffline() async {
     'sourceGitSha': 'a' * 40,
     'sourceTreeDigest': 'sha256:${'b' * 64}',
     'trustEnvelopeDigest': digest(trust),
+    'rehearsalSpace': <String, String>{
+      'mode': 'standard',
+      'snapshotDigest': offlineContentManifestDigest,
+      'instanceId': 'default',
+    },
     'runtime': <String, String>{'appRuntimeEnv': 'alpha'},
     'payloadDigest': '',
     'signatureAlgorithm': 'ed25519',
     'signatureKeyId': 'offline',
     'trustedPublicKeys': keys,
   };
+  beforeSigning?.call(document);
   document['payloadDigest'] = digest(document);
   document['signature'] = base64.encode(
     (await algorithm.sign(
@@ -173,9 +182,129 @@ Future<Map<String, Object?>> _signedOffline() async {
 }
 
 void main() {
+  test('离线期望只能由制品调用方提供，缺席或与签名文档不匹配拒绝', () async {
+    for (final expected in <String?>[null, 'invalid', 'sha256:${'e' * 64}']) {
+      final envelope = await _signedOffline();
+      await expectLater(
+        CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+          bridge: NativeRuntimeConfigBridge(client: _EnvelopeClient(envelope)),
+          expectedOfflineSnapshotDigest: expected,
+        ),
+        throwsA(isA<CloudRuntimeConfigurationException>()),
+      );
+      expect(CloudRuntimeConfig.isHydrated, isFalse);
+    }
+    // 伪造签名载荷中的snapshot不能成为它自己的expected。
+    final forged = await _signedOffline(
+      beforeSigning: (document) {
+        (document['rehearsalSpace']! as Map)['snapshotDigest'] =
+            'sha256:${'f' * 64}';
+      },
+    );
+    await expectLater(
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+        bridge: NativeRuntimeConfigBridge(client: _EnvelopeClient(forged)),
+        expectedOfflineSnapshotDigest: offlineContentManifestDigest,
+      ),
+      throwsA(isA<CloudRuntimeConfigurationException>()),
+    );
+  });
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-008
+  test('普通与isolated只消费签名空间；调用方不能改写verified投影', () async {
+    for (final isolated in [false, true]) {
+      final envelope = await _signedOffline(
+        beforeSigning: (document) {
+          if (isolated) {
+            final space = document['rehearsalSpace']! as Map;
+            space['mode'] = 'isolated';
+            space['instanceId'] = 'synthetic-space-A';
+          }
+        },
+      );
+      await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+        expectedOfflineSnapshotDigest: offlineContentManifestDigest,
+        bridge: NativeRuntimeConfigBridge(client: _EnvelopeClient(envelope)),
+      );
+      final space = CloudRuntimeConfig.rehearsalSpace!;
+      expect(space.isIsolated, isolated);
+      expect(space.instanceId, isolated ? 'synthetic-space-A' : 'default');
+      expect(space.snapshotDigest, offlineContentManifestDigest);
+      ((envelope['package']! as Map)['rehearsalSpace']! as Map)['instanceId'] =
+          'changed';
+      expect(space.instanceId, isolated ? 'synthetic-space-A' : 'default');
+    }
+  });
+
+  // 私有调用顺序 sentinel，不声称真实 auth/pending/rehearsal 已接线。
+  test('已签名但missing/mode/default/path/snapshot/source非法均在存储前拒绝', () async {
+    for (final mutate in <void Function(Map<String, Object?>)>[
+      (d) => d.remove('rehearsalSpace'),
+      (d) => (d['rehearsalSpace']! as Map).remove('instanceId'),
+      (d) => (d['rehearsalSpace']! as Map)['mode'] = 'unknown',
+      (d) => (d['rehearsalSpace']! as Map)['mode'] = 'isolated',
+      (d) => (d['rehearsalSpace']! as Map)['instanceId'] = 'other',
+      (d) => (d['rehearsalSpace']! as Map)['instanceId'] = '../old',
+      (d) => (d['rehearsalSpace']! as Map)['snapshotDigest'] =
+          'sha256:${'e' * 64}',
+      (d) => d['contentSource'] = 'remote',
+    ]) {
+      var storageCalls = 0;
+      final envelope = await _signedOffline(beforeSigning: mutate);
+      Future<void> startup() async {
+        await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+          expectedOfflineSnapshotDigest: offlineContentManifestDigest,
+          bridge: NativeRuntimeConfigBridge(client: _EnvelopeClient(envelope)),
+        );
+        storageCalls++;
+      }
+
+      await expectLater(
+        startup(),
+        throwsA(isA<CloudRuntimeConfigurationException>()),
+      );
+      expect(storageCalls, 0);
+      expect(CloudRuntimeConfig.isHydrated, false);
+    }
+  });
+
+  test('空间签名篡改与不受信key拒绝；online不能附加空间字段', () async {
+    for (final tamper in [true, false]) {
+      final envelope = await _signedOffline();
+      if (tamper) {
+        ((envelope['package']! as Map)['rehearsalSpace']!
+                as Map)['snapshotDigest'] =
+            'sha256:${'e' * 64}';
+      } else {
+        envelope['trustedPublicKeys'] = <String, String>{
+          'unknown': base64.encode(List.filled(32, 0)),
+        };
+      }
+      await expectLater(
+        CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+          expectedOfflineSnapshotDigest: offlineContentManifestDigest,
+          bridge: NativeRuntimeConfigBridge(client: _EnvelopeClient(envelope)),
+        ),
+        throwsA(isA<CloudRuntimeConfigurationException>()),
+      );
+    }
+    final online = await _signedPackage();
+    (online['package']! as Map)['rehearsalSpace'] = <String, String>{};
+    await expectLater(
+      _resolve(online),
+      throwsA(isA<RuntimePackageValidationException>()),
+    );
+    final cleanOnline = await _resolve(await _signedPackage());
+    expect(cleanOnline.rehearsalSpace, isNull);
+    final offline = await _signedOffline();
+    await expectLater(
+      _resolve(offline, target: 'alpha-local'),
+      throwsA(isA<RuntimePackageValidationException>()),
+    );
+  });
   test('离线签名文档跨日可用但绝不提供网络 endpoint', () async {
     final envelope = await _signedOffline();
     await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+      expectedOfflineSnapshotDigest: offlineContentManifestDigest,
       bridge: NativeRuntimeConfigBridge(client: _EnvelopeClient(envelope)),
       resolver: RuntimePackageResolver(now: () => DateTime.utc(2040)),
     );
@@ -216,6 +345,7 @@ void main() {
       mutation(envelope['package']! as Map<String, Object?>);
       await expectLater(
         CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+          expectedOfflineSnapshotDigest: offlineContentManifestDigest,
           bridge: NativeRuntimeConfigBridge(client: _EnvelopeClient(envelope)),
         ),
         throwsA(isA<CloudRuntimeConfigurationException>()),
@@ -442,6 +572,7 @@ void main() {
     extraFieldEnvelope['unexpectedTrust'] = 'forbidden';
     await expectLater(
       CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+        expectedOfflineSnapshotDigest: offlineContentManifestDigest,
         bridge: NativeRuntimeConfigBridge(
           client: _EnvelopeClient(extraFieldEnvelope),
           maxAttempts: 1,
@@ -463,6 +594,7 @@ void main() {
     };
     await expectLater(
       CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+        expectedOfflineSnapshotDigest: offlineContentManifestDigest,
         bridge: NativeRuntimeConfigBridge(
           client: _EnvelopeClient(malformedKeyEnvelope),
           maxAttempts: 1,
@@ -517,6 +649,7 @@ void main() {
       trustEnvelope['package']! as Map,
     );
     await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+      expectedOfflineSnapshotDigest: offlineContentManifestDigest,
       bridge: NativeRuntimeConfigBridge(
         client: _EnvelopeClient(runtimePackage),
         maxAttempts: 1,
@@ -551,6 +684,7 @@ void main() {
   test('移动端 manifest digest 只读取原生 verified receipt identity', () async {
     final trustEnvelope = await _signedPackage();
     await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+      expectedOfflineSnapshotDigest: offlineContentManifestDigest,
       bridge: NativeRuntimeConfigBridge(
         client: _EnvelopeClient(trustEnvelope),
         maxAttempts: 1,
@@ -594,6 +728,7 @@ void main() {
 
       await expectLater(
         CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+          expectedOfflineSnapshotDigest: offlineContentManifestDigest,
           bridge: NativeRuntimeConfigBridge(
             client: _EnvelopeClient(trustEnvelope),
             maxAttempts: 1,
@@ -626,6 +761,7 @@ void main() {
       trustEnvelope[field] = 'legacy_unknown_value';
       await expectLater(
         CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+          expectedOfflineSnapshotDigest: offlineContentManifestDigest,
           bridge: NativeRuntimeConfigBridge(
             client: _EnvelopeClient(trustEnvelope),
             maxAttempts: 1,

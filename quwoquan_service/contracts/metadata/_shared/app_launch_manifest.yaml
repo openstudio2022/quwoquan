@@ -222,7 +222,107 @@ runtime_config_error_codes:
   runtime_config_activation_receipt_write_failed: receipt 原子写入失败。
   runtime_config_internal_failure: 原生实现未预期异常的 fail-closed 包装码。
 
+# 现役私有launch control字段唯一声明；不是人工授权receipt。
+app_content_uat_launch_control:
+  schema_value: quwoquan_ops.app_content_uat_launch_control.v1
+  actor: app-content-uat
+  base_fields: [schema, actor, environment, target, platform, deviceId, candidateDigest, packageDigest, sourceRevision, sourceCapsuleDigest, sourceCapsuleManifestDigest, sourceCapsuleManifestRef, sourceProjectionRoot, sourceProjectionEvidenceDigest, sourceProjectionEvidenceRef, buildProjectionPolicyId, buildProjectionSealRef, expectedBuildProjectionDigest, launchAttemptRef, launchReportRef, startupTerminalReceiptRef]
+  offline_replace_field: packageDigest
+  offline_source_field: contentSource
+  selection_field: rehearsalSpaceSelection
+  selection:
+    additional_fields: false
+    required_fields: [mode, instanceId, snapshotDigest]
+    fields:
+      mode: {type: string, allowed_values: [standard, isolated]}
+      instanceId: {type: string, format: rehearsal_instance_id}
+      snapshotDigest: {type: string, format: sha256_identity}
+  constraints:
+    - selection仅离线control可选；旧合法无selection control保持standard，无control普通开发启动保持standard/default。显式isolated请求必须携带完整control与mode=isolated选择，missing/mismatch拒绝而非fallback。
+    - control不签发用户授权；只承载现役app-content-uat受管调用已获准选择。candidate/device/attempt沿用原字段，禁止authorized标志、人工理由或第二批准文档。
+    - signing material准备之前逐项验证control私有ref/digest、实际target/device/attempt/report/candidate/source身份，source projection完整CAS与capsule摘要以及对应身份字段必须交叉一致。snapshotDigest从projection内manifest及identity逐字节校验获得，不信runner值或待签文档自证。
+    - 签名App文档仍仅消费offline_bootstrap_document.rehearsalSpace；线上不接受selection或isolated请求，旧active不自动迁移/清理。
+
+# 只声明专用读取面，实际native桥接由owner实现；绝不进入事件/journal。
+rehearsal_storage_readback:
+  channel: quwoquan/startup/timings
+  method: readRehearsalStorageObservation
+  response_schema: rehearsal_storage_observation
+  classification: INTERNAL
+  log_policy: drop
+  purpose: isolated_private_device_evidence
+  digest_domains:
+    binding: rehearsal-observation-binding
+    namespace: rehearsal-observation-namespace
+  constraints:
+    - 方法只读取当前owner内存投影，不初始化consumer、不触发任何存储I/O；桥接未装配或缺可靠关联返回unavailable形状，不能返回空对象冒成功。
+    - 仅受控isolated私有设备证据读取；禁止recordStartupEvent/readStartupJournal及遥测消费，不签发资格。native不能直接假设可访问Dart，须通过同一生成模型接线。
+    - bindingDigest按digest_contract对[用途域,实际startupAttemptId,实际generation,已验snapshotDigest,已验instanceId]求摘要；namespaceDigest对[用途域,bindingDigest,固定consumer名]求摘要，仅owner确认实例实际namespace匹配该binding后才可提供。不得以真实installId、账户、完整key/path作摘要输入。
+
 schemas:
+  rehearsal_storage_observation:
+    schema_value: rehearsal-storage-observation
+    additional_fields: false
+    required_fields: [schema, status, configurationState, startupAttemptId, generation, bindingDigest, consumers]
+    fields:
+      schema: {type: string, const: rehearsal-storage-observation}
+      status: {type: string, allowed_values: [available, unavailable]}
+      configurationState: {type: string, allowed_values: [not_observed, verified, invalidated]}
+      startupAttemptId: {type: string}
+      generation: {type: string}
+      bindingDigest: {type: string, format: optional_sha256_identity}
+      consumers:
+        type: object
+        additional_fields: false
+        required_fields: [auth, installId, pending, rehearsal]
+        fields:
+          auth:
+            type: object
+            additional_fields: false
+            required_fields: [state, namespaceDigest, successfulOperations]
+            fields:
+              state: {type: string, allowed_values: [not_observed, constructed, io_observed, invalidated]}
+              namespaceDigest: {type: string, format: optional_sha256_identity}
+              successfulOperations:
+                type: array
+                items: {type: string, allowed_values: [read, write, delete]}
+          installId:
+            type: object
+            additional_fields: false
+            required_fields: [state, namespaceDigest, successfulOperations]
+            fields:
+              state: {type: string, allowed_values: [not_observed, constructed, io_observed, invalidated]}
+              namespaceDigest: {type: string, format: optional_sha256_identity}
+              successfulOperations:
+                type: array
+                items: {type: string, allowed_values: [read, write, delete]}
+          pending:
+            type: object
+            additional_fields: false
+            required_fields: [state, namespaceDigest, successfulOperations]
+            fields:
+              state: {type: string, allowed_values: [not_observed, constructed, io_observed, invalidated]}
+              namespaceDigest: {type: string, format: optional_sha256_identity}
+              successfulOperations:
+                type: array
+                items: {type: string, allowed_values: [read, write, delete]}
+          rehearsal:
+            type: object
+            additional_fields: false
+            required_fields: [state, namespaceDigest, successfulOperations]
+            fields:
+              state: {type: string, allowed_values: [not_observed, constructed, io_observed, invalidated]}
+              namespaceDigest: {type: string, format: optional_sha256_identity}
+              successfulOperations:
+                type: array
+                items: {type: string, allowed_values: [read, write, delete]}
+    constraints:
+      - status=available要求configurationState=verified；startupAttemptId完整匹配[A-Za-z0-9_-]{1,128}，generation为实际owner正整数的canonical十进制字符串[1-9][0-9]{0,15}，bindingDigest非空canonical SHA256。身份只来自实际AUT owner，不接受runner expected或actor私有fence。
+      - status=unavailable要求startupAttemptId/generation/bindingDigest全空，四consumer只能not_observed或invalidated；配置可以verified但缺可靠attempt/generation时仍unavailable。configurationState=not_observed时所有consumer为not_observed，invalidated时所有consumer为invalidated。
+      - consumer constructed/io_observed要求available及非空namespaceDigest；constructed不能含成功操作，io_observed至少一种成功操作。not_observed/invalidated必须清空namespaceDigest及成功操作。successfulOperations去重且仅read/write/delete；未知字段、类型、null、任意consumer或敏感混入均拒绝。
+      - 只有当前真实consumer实际I/O成功并再次通过binding/generation fence才可更新集合；构造/失败/迟到不算成功。auth会话与installId独立观察，读取空存储成功可算read但不证明存在会话；读取观察不得自行调用exists/read/write/delete。
+      - 失效清空旧摘要，禁止isolationPassed或历史零访问结论；正向观察不能证明过去未读旧空间，private sentinel与gateway审计仍独立required。所有字段INTERNAL且普通日志/遥测drop，不扩SyntheticLoginEvidence。
+
   runtime_config_trust_envelope:
     schema_value: app-runtime-config-trust
     additional_fields: false
@@ -321,6 +421,7 @@ schemas:
       - target
       - launchPolicy
       - contentSource
+      - rehearsalSpace
       - sourceGitSha
       - sourceTreeDigest
       - trustEnvelopeDigest
@@ -337,6 +438,14 @@ schemas:
       target: { type: string, const: alpha-local }
       launchPolicy: { type: string, const: test_live }
       contentSource: { type: string, const: bundled_snapshot }
+      rehearsalSpace:
+        type: object
+        additional_fields: false
+        required_fields: [mode, snapshotDigest, instanceId]
+        fields:
+          mode: { type: string, allowed_values: [standard, isolated] }
+          snapshotDigest: { type: string, format: sha256_identity }
+          instanceId: { type: string, format: rehearsal_instance_id }
       sourceGitSha: { type: string, format: git_object_sha }
       sourceTreeDigest: { type: string, format: git_tree_digest }
       trustEnvelopeDigest: { type: string, format: sha256_identity }
@@ -352,7 +461,10 @@ schemas:
       trustedPublicKeys: { type: object, value_type: string }
       signature: { type: string, format: strict_base64_ed25519_signature }
     constraints:
-      - 只允许 content_source_policy 与 runtime_document_content_sources 共同指定的 Alpha bundled_snapshot；签名覆盖 contentSource、profile、target、source identity 与 trustEnvelopeDigest。
+      - 只允许 content_source_policy 与 runtime_document_content_sources 共同指定的 Alpha bundled_snapshot；签名覆盖 contentSource、rehearsalSpace、profile、target、source identity 与 trustEnvelopeDigest。
+      - rehearsalSpace 必须显式声明；普通构建供给 mode=standard、instanceId=default，isolated 必须为非 default 的 rehearsal_instance_id（完整匹配 [a-zA-Z0-9_-]{1,80}）。snapshotDigest 必须与制品内固定且已验证的 offline manifest digest 完全一致。缺字段、非法 mode、跨 snapshot/source 或 isolated/default 错配均拒绝，不将缺席解释为 standard，不向在线 package 增加此字段。
+      - canonical launcher 选择 isolated 的授权继续绑定现役 candidate/device/attempt 控制面；签名文档只携带空间选择，不携带审阅理由、合成用户或第二授权记录。普通构建仅生成 standard；不能从环境变量、runner 回显或 APP_INSTANCE_ID 猜 isolated。
+      - resolver 验签与空间校验必须先于业务 auth/pending/rehearsal 存储；仅从已消费的配置投影 mode/snapshotDigest/instanceId。该配置观察不是存储已消费证明；AUT 全链观察仍须由三类存储共同消费绑定后提供，未接线不得报告隔离成功。
       - 使用 runtime_config_package 相同 canonical payloadDigest 与 Ed25519 签名算法及独立制品 trust envelope；trustEnvelopeDigest 必须匹配实际制品 envelope。没有 issuedAt/expiresAt，禁止任何 endpoint 字段（包括空值），不获得网络能力。
       - 通过同一 activation/CAS/active receipt/read 链消费；没有第二 store、在线失败 fallback 或远端 readiness authority。在线 package 的 freshness 不变。
       - 构建期默认自供给只可激活 absent 或更新既有合法 Alpha 离线文档；在线、过期、损坏与 receipt 不匹配的 active 不得自动转离线。旧 Alpha 在线文档只能经显式 canonical activation 迁移。

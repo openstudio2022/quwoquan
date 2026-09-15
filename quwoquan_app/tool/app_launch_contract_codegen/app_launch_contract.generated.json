@@ -1,14 +1,14 @@
 {
   "schema": "qwq.app-launch-contract.generated",
-  "sourceDigest": "sha256:3060c668589ff5bc24da05a355b395a73f02903f578ca89705b36c578d45d73f",
+  "sourceDigest": "sha256:de6827d5b1ee327eb67c40db3af9cc92c79f16472321794b56aa2e33a12d87a4",
   "sources": [
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml",
-      "sha256": "sha256:248fb394df0712071c15a508ec3067164183a9a90292ae711658418fba7ee49b"
+      "sha256": "sha256:90ab2df96fde9d09aefdab75ce6720ccd2ad217c293ef9005223180999eac124"
     },
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml",
-      "sha256": "sha256:453feebc58aba98f507a448c654a49067aa4c4e8ae8dd4c8a56279168d3033a9"
+      "sha256": "sha256:4445f240f7468444ddd865e9787953170330e05ef1561493c3f11169aa6164e0"
     }
   ],
   "environments": [
@@ -168,6 +168,7 @@
     "app_launcher_handoff": "app-launcher-handoff",
     "app_managed_preparation": "quwoquan_ops.app_managed_preparation.v1",
     "offline_bootstrap_document": "app-offline-bootstrap-document",
+    "rehearsal_storage_observation": "rehearsal-storage-observation",
     "runtime_config_activation_receipt": "app-runtime-config-activation-receipt",
     "runtime_config_activation_request": "app-runtime-config-activation-request",
     "runtime_config_package": "app-runtime-config-package",
@@ -276,6 +277,7 @@
       "target",
       "launchPolicy",
       "contentSource",
+      "rehearsalSpace",
       "sourceGitSha",
       "sourceTreeDigest",
       "trustEnvelopeDigest",
@@ -285,6 +287,15 @@
       "signatureKeyId",
       "trustedPublicKeys",
       "signature"
+    ],
+    "rehearsal_storage_observation": [
+      "schema",
+      "status",
+      "configurationState",
+      "startupAttemptId",
+      "generation",
+      "bindingDigest",
+      "consumers"
     ],
     "runtime_config_activation_receipt": [
       "schema",
@@ -440,6 +451,67 @@
     "stopped"
   ],
   "appLaunchManifest": {
+    "app_content_uat_launch_control": {
+      "actor": "app-content-uat",
+      "base_fields": [
+        "schema",
+        "actor",
+        "environment",
+        "target",
+        "platform",
+        "deviceId",
+        "candidateDigest",
+        "packageDigest",
+        "sourceRevision",
+        "sourceCapsuleDigest",
+        "sourceCapsuleManifestDigest",
+        "sourceCapsuleManifestRef",
+        "sourceProjectionRoot",
+        "sourceProjectionEvidenceDigest",
+        "sourceProjectionEvidenceRef",
+        "buildProjectionPolicyId",
+        "buildProjectionSealRef",
+        "expectedBuildProjectionDigest",
+        "launchAttemptRef",
+        "launchReportRef",
+        "startupTerminalReceiptRef"
+      ],
+      "constraints": [
+        "selection仅离线control可选；旧合法无selection control保持standard，无control普通开发启动保持standard/default。显式isolated请求必须携带完整control与mode=isolated选择，missing/mismatch拒绝而非fallback。",
+        "control不签发用户授权；只承载现役app-content-uat受管调用已获准选择。candidate/device/attempt沿用原字段，禁止authorized标志、人工理由或第二批准文档。",
+        "signing material准备之前逐项验证control私有ref/digest、实际target/device/attempt/report/candidate/source身份，source projection完整CAS与capsule摘要以及对应身份字段必须交叉一致。snapshotDigest从projection内manifest及identity逐字节校验获得，不信runner值或待签文档自证。",
+        "签名App文档仍仅消费offline_bootstrap_document.rehearsalSpace；线上不接受selection或isolated请求，旧active不自动迁移/清理。"
+      ],
+      "offline_replace_field": "packageDigest",
+      "offline_source_field": "contentSource",
+      "schema_value": "quwoquan_ops.app_content_uat_launch_control.v1",
+      "selection": {
+        "additional_fields": false,
+        "fields": {
+          "instanceId": {
+            "format": "rehearsal_instance_id",
+            "type": "string"
+          },
+          "mode": {
+            "allowed_values": [
+              "standard",
+              "isolated"
+            ],
+            "type": "string"
+          },
+          "snapshotDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          }
+        },
+        "required_fields": [
+          "mode",
+          "instanceId",
+          "snapshotDigest"
+        ]
+      },
+      "selection_field": "rehearsalSpaceSelection"
+    },
     "app_launch_attempt_forward_states": [
       "prepared",
       "compiling",
@@ -558,6 +630,23 @@
       "prod-sim"
     ],
     "owner": "runtime",
+    "rehearsal_storage_readback": {
+      "channel": "quwoquan/startup/timings",
+      "classification": "INTERNAL",
+      "constraints": [
+        "方法只读取当前owner内存投影，不初始化consumer、不触发任何存储I/O；桥接未装配或缺可靠关联返回unavailable形状，不能返回空对象冒成功。",
+        "仅受控isolated私有设备证据读取；禁止recordStartupEvent/readStartupJournal及遥测消费，不签发资格。native不能直接假设可访问Dart，须通过同一生成模型接线。",
+        "bindingDigest按digest_contract对[用途域,实际startupAttemptId,实际generation,已验snapshotDigest,已验instanceId]求摘要；namespaceDigest对[用途域,bindingDigest,固定consumer名]求摘要，仅owner确认实例实际namespace匹配该binding后才可提供。不得以真实installId、账户、完整key/path作摘要输入。"
+      ],
+      "digest_domains": {
+        "binding": "rehearsal-observation-binding",
+        "namespace": "rehearsal-observation-namespace"
+      },
+      "log_policy": "drop",
+      "method": "readRehearsalStorageObservation",
+      "purpose": "isolated_private_device_evidence",
+      "response_schema": "rehearsal_storage_observation"
+    },
     "runtime_config_error_codes": {
       "runtime_config_activation_identity_mismatch": "request/package/manifest 三方身份不一致。",
       "runtime_config_activation_readback_failed": "写入后 active readback 校验失败。",
@@ -1400,7 +1489,10 @@
       "offline_bootstrap_document": {
         "additional_fields": false,
         "constraints": [
-          "只允许 content_source_policy 与 runtime_document_content_sources 共同指定的 Alpha bundled_snapshot；签名覆盖 contentSource、profile、target、source identity 与 trustEnvelopeDigest。",
+          "只允许 content_source_policy 与 runtime_document_content_sources 共同指定的 Alpha bundled_snapshot；签名覆盖 contentSource、rehearsalSpace、profile、target、source identity 与 trustEnvelopeDigest。",
+          "rehearsalSpace 必须显式声明；普通构建供给 mode=standard、instanceId=default，isolated 必须为非 default 的 rehearsal_instance_id（完整匹配 [a-zA-Z0-9_-]{1,80}）。snapshotDigest 必须与制品内固定且已验证的 offline manifest digest 完全一致。缺字段、非法 mode、跨 snapshot/source 或 isolated/default 错配均拒绝，不将缺席解释为 standard，不向在线 package 增加此字段。",
+          "canonical launcher 选择 isolated 的授权继续绑定现役 candidate/device/attempt 控制面；签名文档只携带空间选择，不携带审阅理由、合成用户或第二授权记录。普通构建仅生成 standard；不能从环境变量、runner 回显或 APP_INSTANCE_ID 猜 isolated。",
+          "resolver 验签与空间校验必须先于业务 auth/pending/rehearsal 存储；仅从已消费的配置投影 mode/snapshotDigest/instanceId。该配置观察不是存储已消费证明；AUT 全链观察仍须由三类存储共同消费绑定后提供，未接线不得报告隔离成功。",
           "使用 runtime_config_package 相同 canonical payloadDigest 与 Ed25519 签名算法及独立制品 trust envelope；trustEnvelopeDigest 必须匹配实际制品 envelope。没有 issuedAt/expiresAt，禁止任何 endpoint 字段（包括空值），不获得网络能力。",
           "通过同一 activation/CAS/active receipt/read 链消费；没有第二 store、在线失败 fallback 或远端 readiness authority。在线 package 的 freshness 不变。",
           "构建期默认自供给只可激活 absent 或更新既有合法 Alpha 离线文档；在线、过期、损坏与 receipt 不匹配的 active 不得自动转离线。旧 Alpha 在线文档只能经显式 canonical activation 迁移。"
@@ -1425,6 +1517,32 @@
           "payloadDigest": {
             "format": "sha256_identity",
             "type": "string"
+          },
+          "rehearsalSpace": {
+            "additional_fields": false,
+            "fields": {
+              "instanceId": {
+                "format": "rehearsal_instance_id",
+                "type": "string"
+              },
+              "mode": {
+                "allowed_values": [
+                  "standard",
+                  "isolated"
+                ],
+                "type": "string"
+              },
+              "snapshotDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              }
+            },
+            "required_fields": [
+              "mode",
+              "snapshotDigest",
+              "instanceId"
+            ],
+            "type": "object"
           },
           "runtime": {
             "additional_fields": false,
@@ -1483,6 +1601,7 @@
           "target",
           "launchPolicy",
           "contentSource",
+          "rehearsalSpace",
           "sourceGitSha",
           "sourceTreeDigest",
           "trustEnvelopeDigest",
@@ -1494,6 +1613,209 @@
           "signature"
         ],
         "schema_value": "app-offline-bootstrap-document"
+      },
+      "rehearsal_storage_observation": {
+        "additional_fields": false,
+        "constraints": [
+          "status=available要求configurationState=verified；startupAttemptId完整匹配[A-Za-z0-9_-]{1,128}，generation为实际owner正整数的canonical十进制字符串[1-9][0-9]{0,15}，bindingDigest非空canonical SHA256。身份只来自实际AUT owner，不接受runner expected或actor私有fence。",
+          "status=unavailable要求startupAttemptId/generation/bindingDigest全空，四consumer只能not_observed或invalidated；配置可以verified但缺可靠attempt/generation时仍unavailable。configurationState=not_observed时所有consumer为not_observed，invalidated时所有consumer为invalidated。",
+          "consumer constructed/io_observed要求available及非空namespaceDigest；constructed不能含成功操作，io_observed至少一种成功操作。not_observed/invalidated必须清空namespaceDigest及成功操作。successfulOperations去重且仅read/write/delete；未知字段、类型、null、任意consumer或敏感混入均拒绝。",
+          "只有当前真实consumer实际I/O成功并再次通过binding/generation fence才可更新集合；构造/失败/迟到不算成功。auth会话与installId独立观察，读取空存储成功可算read但不证明存在会话；读取观察不得自行调用exists/read/write/delete。",
+          "失效清空旧摘要，禁止isolationPassed或历史零访问结论；正向观察不能证明过去未读旧空间，private sentinel与gateway审计仍独立required。所有字段INTERNAL且普通日志/遥测drop，不扩SyntheticLoginEvidence。"
+        ],
+        "fields": {
+          "bindingDigest": {
+            "format": "optional_sha256_identity",
+            "type": "string"
+          },
+          "configurationState": {
+            "allowed_values": [
+              "not_observed",
+              "verified",
+              "invalidated"
+            ],
+            "type": "string"
+          },
+          "consumers": {
+            "additional_fields": false,
+            "fields": {
+              "auth": {
+                "additional_fields": false,
+                "fields": {
+                  "namespaceDigest": {
+                    "format": "optional_sha256_identity",
+                    "type": "string"
+                  },
+                  "state": {
+                    "allowed_values": [
+                      "not_observed",
+                      "constructed",
+                      "io_observed",
+                      "invalidated"
+                    ],
+                    "type": "string"
+                  },
+                  "successfulOperations": {
+                    "items": {
+                      "allowed_values": [
+                        "read",
+                        "write",
+                        "delete"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required_fields": [
+                  "state",
+                  "namespaceDigest",
+                  "successfulOperations"
+                ],
+                "type": "object"
+              },
+              "installId": {
+                "additional_fields": false,
+                "fields": {
+                  "namespaceDigest": {
+                    "format": "optional_sha256_identity",
+                    "type": "string"
+                  },
+                  "state": {
+                    "allowed_values": [
+                      "not_observed",
+                      "constructed",
+                      "io_observed",
+                      "invalidated"
+                    ],
+                    "type": "string"
+                  },
+                  "successfulOperations": {
+                    "items": {
+                      "allowed_values": [
+                        "read",
+                        "write",
+                        "delete"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required_fields": [
+                  "state",
+                  "namespaceDigest",
+                  "successfulOperations"
+                ],
+                "type": "object"
+              },
+              "pending": {
+                "additional_fields": false,
+                "fields": {
+                  "namespaceDigest": {
+                    "format": "optional_sha256_identity",
+                    "type": "string"
+                  },
+                  "state": {
+                    "allowed_values": [
+                      "not_observed",
+                      "constructed",
+                      "io_observed",
+                      "invalidated"
+                    ],
+                    "type": "string"
+                  },
+                  "successfulOperations": {
+                    "items": {
+                      "allowed_values": [
+                        "read",
+                        "write",
+                        "delete"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required_fields": [
+                  "state",
+                  "namespaceDigest",
+                  "successfulOperations"
+                ],
+                "type": "object"
+              },
+              "rehearsal": {
+                "additional_fields": false,
+                "fields": {
+                  "namespaceDigest": {
+                    "format": "optional_sha256_identity",
+                    "type": "string"
+                  },
+                  "state": {
+                    "allowed_values": [
+                      "not_observed",
+                      "constructed",
+                      "io_observed",
+                      "invalidated"
+                    ],
+                    "type": "string"
+                  },
+                  "successfulOperations": {
+                    "items": {
+                      "allowed_values": [
+                        "read",
+                        "write",
+                        "delete"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required_fields": [
+                  "state",
+                  "namespaceDigest",
+                  "successfulOperations"
+                ],
+                "type": "object"
+              }
+            },
+            "required_fields": [
+              "auth",
+              "installId",
+              "pending",
+              "rehearsal"
+            ],
+            "type": "object"
+          },
+          "generation": {
+            "type": "string"
+          },
+          "schema": {
+            "const": "rehearsal-storage-observation",
+            "type": "string"
+          },
+          "startupAttemptId": {
+            "type": "string"
+          },
+          "status": {
+            "allowed_values": [
+              "available",
+              "unavailable"
+            ],
+            "type": "string"
+          }
+        },
+        "required_fields": [
+          "schema",
+          "status",
+          "configurationState",
+          "startupAttemptId",
+          "generation",
+          "bindingDigest",
+          "consumers"
+        ],
+        "schema_value": "rehearsal-storage-observation"
       },
       "runtime_config_activation_receipt": {
         "additional_fields": false,
@@ -1910,12 +2232,12 @@
         },
         "ios": {
           "registered": false,
-          "value": "com.example.quwoquanApp"
+          "value": "com.leadwise.quwoquan"
         }
       },
       "build_mode_display_marks": {
-        "debug": "·D",
-        "profile": "·P",
+        "debug": "·调试",
+        "profile": "·性能",
         "release": ""
       },
       "build_mode_suffixes": {
@@ -1924,7 +2246,7 @@
         "release": ""
       },
       "build_profile_display_marks": {
-        "nonprod": "·N",
+        "nonprod": "·非生产",
         "prod": ""
       },
       "build_profile_suffixes": {

@@ -18,7 +18,7 @@
 
 - “四环境环境商用登录成熟度”的输入、可观察主路径、失败语义以及与父能力的交接。
 - 三类外部依赖防腐接口与分环境 fail-closed 配置。
-- alpha/beta/gamma `ext.sms.local_capture` 随机 OTP 协议替代 Provider 与 prod 正式 Provider 的构建、凭据和运行隔离。
+- Alpha bundled_snapshot 的非电话本地演练身份与 Beta/Gamma `ext.sms.local_capture` 随机 OTP、Prod 正式 Provider 的构建、凭据和运行隔离；历史 Alpha 远端 Provider 材料不构成现役 Alpha 登录入口。
 - 删除任意验证码、debugCode、sandbox phone allowlist 与 pass-through 旁路。
 - LoginWithSocialProvider 微信/支付宝/QQ 票据置换与首登资料同步。
 - LoginWithAlipay / LoginWithQq metadata 契约与 codegen。
@@ -42,7 +42,7 @@
 - application contract 覆盖 provider 失败、正常排队和错误验证码拒绝。
 - API integration 证明 response/outbox 不泄露验证码，provider 只在请求前于内存中解封。
 - 手机号输入可在 UI 保持大陆 11 位展示，但 `SendOtp`、`LoginWithPhone` 与手机号绑定 command 的 wire 值必须在命令边界一次性规范为 E.164；Provider Adapter 只接收同一 canonical recipient，禁止让替代实现双格式兼容。
-- alpha/beta/gamma 的环境专属 Nonprod SMS Provider Workload 只编入 `ext.sms.local_capture`，prod Provider Workload 只编入正式 Provider；第一方 user/integration Service 不包含 Provider Adapter 或运行时 selector。OTP 以目标环境密钥加密、按 challenge TTL 暂存并一次性读取，固定万能码、App `debugCode` 和公开 API 回传均禁止。
+- beta/gamma 的环境专属 Nonprod SMS Provider Workload 只编入 `ext.sms.local_capture`，prod Provider Workload 只编入正式 Provider；第一方 user/integration Service 不包含 Provider Adapter 或运行时 selector。OTP 以目标环境密钥加密、按 challenge TTL 暂存并一次性读取，固定万能码、App `debugCode` 和公开 API 回传均禁止。
 - `POST /v1/debug/sms/otp/latest` 只存在于替代 Provider 内部控制面，要求目标环境 operator/UAT principal，不经 API Edge 暴露；回执、日志、指标与报告不得包含手机号明文或 OTP。
 
 <a id="req-003"></a>
@@ -94,8 +94,9 @@
 <a id="req-009"></a>
 ### REQ-009 四环境端到端与商用纯净证据
 
-- alpha/beta/gamma 复用同一 nonprod AppArtifact 与第一方 Remote user-service composition，由 target-scoped 已签名 runtime package 选择目标环境，并分别通过 `ext.sms.local_capture` 的正式随机 OTP challenge 创建 canonical UserAccount；App package graph 不可达固定码实现、端侧登录 mock 或 Provider 凭据。
-- alpha/beta/gamma 的 SMS Workload artifact/binding 固定为 `ext.sms.local_capture`，prod 固定为正式 Provider Workload；第一方 Service 与 Provider Workload 各自按候选打包，App 不因 nonprod target 重编。运行时只激活并校验已签名绑定，不能切换 Provider 或回退本地认证实现。
+- Alpha 仅消费 signed offline document 的 bundled_snapshot 组合；合成身份是本地业务流程演练，不是电话认证、Provider 替代或 canonical UserAccount 创建，具体约束见 REQ-013。在线制品图不得导入 Alpha 实现，Remote 失败不得回退本地。
+- beta/gamma 复用同一 nonprod AppArtifact 与第一方 Remote user-service composition，由 target-scoped 已签名 runtime package 选择目标环境，并分别通过 `ext.sms.local_capture` 的正式随机 OTP challenge 创建 canonical UserAccount；App package graph 不可达固定码实现、端侧登录 mock 或 Provider 凭据。
+- beta/gamma 的 SMS Workload artifact/binding 固定为 `ext.sms.local_capture`，prod 固定为正式 Provider Workload；第一方 Service 与 Provider Workload 各自按候选打包，App 不因 nonprod target 重编。运行时只激活并校验已签名绑定，不能切换 Provider 或回退本地认证实现。
 - prod 微信、支付宝、QQ 与三网本机号认证均有真实成功证据，且无放通、无验证码回传、无 mock 数据源。
 - 社交首登资料同步真机可见。
 - 配置纯度门禁阻断已退休认证旁路。
@@ -106,10 +107,10 @@
 - 运营商一键：`OneTapPhoneResolver` 使用部署注入的运营商能力；未接入时返回结构化不可用。
 - 端侧 capability 必须区分 `available / notConfigured / clientNotInstalled / probeTimeout / sdkUnavailable / unsupportedPlatform`。未安装客户端或瞬时探测失败时入口保持可发现并就近解释。
 - 明确不支持的平台隐藏。
-- alpha/beta/gamma target-scoped local-capture 配置缺失、或 prod 正式 Provider 配置/SDK 缺失，均由发布门禁阻断，不能靠静默隐藏伪装可用。
-- local-capture 替代 Provider 的证据标记 `nonPromotable=true`：它可证明 Alpha/Beta/Gamma 边界内端云 E2E 与替代协议一致性，但不能提升真实外部 Provider 集成或 Prod readiness。
+- beta/gamma target-scoped local-capture 配置缺失、或 prod 正式 Provider 配置/SDK 缺失，均由发布门禁阻断，不能靠静默隐藏伪装可用。
+- local-capture 替代 Provider 的证据标记 `nonPromotable=true`：它可证明 Beta/Gamma 边界内端云 E2E 与替代协议一致性，但不能提升真实外部 Provider 集成或 Prod readiness。
 - 非生产 OTP 只允许通过当前环境 Binding 与保护身份池产生确定性的非生产账号会话；OTP 和非生产 Provider 材料不得进入仓库、receipt、prod 构建图、SBOM 或运行配置。
-- provider 模式的内部短信提交仅允许 service principal + operation scope：alpha/beta/gamma local-capture 使用 HTTPS、target-scoped bearer 与目标 CA，prod 正式 Provider 使用受保护 mTLS/credential material；各自材料由 Secret Manager/CI 注入，缺失时拒绝装配远端 OTP client。
+- provider 模式的内部短信提交仅允许 service principal + operation scope：beta/gamma local-capture 使用 HTTPS、target-scoped bearer 与目标 CA，prod 正式 Provider 使用受保护 mTLS/credential material；各自材料由 Secret Manager/CI 注入，缺失时拒绝装配远端 OTP client。
 - 端侧文案统一走云端 userMessage 优先 → `UserErrorCode` baseline → 通用兜底；不直接读取原始异常字符串。
 - user-service 客户端响应和日志必须脱敏 OAuth URL、authCode、token、secret 与 provider 原始 body；客户端默认不接收 debugMessage。
 - `SendOtp`、手机号、微信、QQ、支付宝、一键登录与 hint 操作必须在 metadata 同源声明 commercial/security/privacy/reliability/telemetry/SLO；正式 provider 未取得生产凭据、受控 SDK 与真机 UAT 时保持 `blocked`，不得用本地协议测试改写为 ready。
@@ -141,6 +142,17 @@
 - `SendOtpCommand.platform` 必须是 `ios / android / web / acceptance` typed enum。短信 domain、Android app hash 和模板由候选绑定的服务端可信配置选择，客户端不得上传这些值。
 - 模拟器登录只经 typed `PHONE_OTP_LOGIN_TARGET` capability：Android Emulator 通过受管 adapter 注入完整 SMS 并实际经过 Retriever；iOS Simulator 只能由 protected broker 一次性交给 Patrol 输入框，CaseResult 必须标记 `inputMode=protected_harness`，不得冒充 iOS SMS AutoFill。
 
+<a id="req-013"></a>
+### REQ-013 Alpha 非电话合成身份与受限公开证据
+
+- 仅在 runtime-config [DEC-007](../../../runtime/runtime-config/design.md#dec-007) 已验证且三类存储实际消费的 isolated 绑定内，经共享登录状态流程创建/恢复独立本地合成身份。禁止读写既有 default 空间、真实手机号/用户/creator，禁止导入 canonical 作者或签发 Remote bearer；未接线保持 unavailable。
+- 标识必须来自专用非电话 typed 输入，含不可省略的非数字 namespace 与随机 opaque 后缀；不允许自由文本、手机号、邮箱、姓名、数字测试号码或 Unicode 相似字符经规范化进入此类型。不改变 SendOtp.phone / LoginWithPhone.phone、E.164、真实 OTP 或 token 合同。具体语法、字段和错误归 account/authentication_challenge 与 account/account_session canonical authoring。
+- 同一已验证 source/snapshot/instance 内相同合成标识解析为同一本地身份；不同空间互不碰撞/查询，已使用标识不得合并真实账号。新本地 account/persona ID 持久分配且不复用 canonical creator；写盘失败不得产生成功，损坏拒绝恢复而不清其他空间。
+- 发起与完成演练挑战只允许对象级 typed 本地端口：挑战绑定合成标识、空间、随机 request identity、到期及消费状态；错误重试/响应丢失经原子幂等事务处理。演练提示只表达 UI 步骤确认、不证明持有手机号或任何真实凭据；未知、过期、跨标识/空间、失效及重复请求冲突均 typed 拒绝，不走 SendOtp HTTP 或万能 operation Map。
+- 本地演练不套用真实六位 OTP/SMS AutoFill。组合根选择本地或在线能力，UI/controller 共享意图与状态迁移，但业务页面不导入 Alpha implementation、不自行判断环境、不把演练输入写入 phone/otpCode。
+- 仅严格校验后的随机合成标识、非认证演练提示及固定状态文本可作为受限本地测试计划/截图/native 活动产物的候选公开证据；它们不关联真实主体、不给真实认证能力。完整请求/结果、内部 account/persona、challenge/request、session/credential、手机号、真实 OTP、自由文本及未知类别均禁止公开记录。普通日志规则不修改，不能用字段名字或“PUBLIC”标签豁免实际 PII。
+- 公开证据须先由 canonical privacy 合同的语法、source=isolated Alpha、字段级闭集校验器筛选；收集器无法证明非合成数据不混入、原生 typeText/键盘/剪贴板/截图作用域无法限定时仍 GATE_BLOCK，不执行输入或收集，不放宽全局日志。仅有合同分类不意味着 native 自动化安全。
+
 ## 4. 契约引用
 
 - canonical contracts：`quwoquan_service/services/user-service/contracts/account/account_session/operations.yaml` 与 `errors.yaml`，`authentication_challenge/operations.yaml`，`credential_binding/fields.yaml`、`operations.yaml` 与 `errors.yaml`，`user_account/fields.yaml`，以及它们引用的跨服务 metadata。
@@ -168,10 +180,10 @@
 <a id="gwt-009"></a>
 ### GWT-009 四环境端到端与商用纯净证据
 
-- GIVEN alpha、beta、gamma 复用同一 nonprod AppArtifact 并分别激活 target-scoped runtime package，prod 使用独立 Release AppArtifact；第一方 Service 与 Provider Workload 均来自同一候选的目标环境 artifact/binding。
-- WHEN 验证 alpha/beta/gamma local-capture 随机 OTP 的受保护一次性读取、prod 正式 Provider、首登资料同步和失败恢复。
+- GIVEN Alpha 由签名 offline document 选择 bundled_snapshot 本地组合，Beta/Gamma 复用 nonprod Remote AppArtifact 并分别激活 target-scoped runtime package，Prod 使用独立 Release AppArtifact；在线第一方 Service 与 Provider Workload 来自同一候选的目标环境 artifact/binding。
+- WHEN 验证 beta/gamma local-capture 随机 OTP 的受保护一次性读取、prod 正式 Provider、首登资料同步和失败恢复。
 - THEN local-capture workload、凭据、路由、捕获存储与 Adapter package 不进入 Prod App、第一方 Service、Provider Workload、SBOM 和部署图。
-- AND 三测试环境 Green 可由替代边界 E2E 提升，但真实 Provider 集成与 Prod readiness 只由 Prod 正式 Provider Workload 回执和可复验真机证据提升。
+- AND Alpha 本地演练证据仅按 GWT-013 裁定且不创建 canonical UserAccount；Beta/Gamma 可形成替代边界 E2E 证据，但真实 Provider 集成与 Prod readiness 只由 Prod 正式 Provider Workload 回执和可复验真机证据提升。
 
 <a id="gwt-011"></a>
 ### GWT-011 发码响应丢失、Provider 终态与冷启动恢复
@@ -189,6 +201,14 @@
 - THEN 每一时刻页面至多显示一条用户可理解的提示和一组不重复的恢复按钮；依赖不可用不进入验证码页，结果未知不显示黄色警告，验证码错误可立即重输，网络失败可直接重新验证。
 - AND iOS 真机只消费系统验证码建议，Android 真机只消费与当前 requestRef 精确绑定的 Retriever 消息；模拟器证据诚实区分 protected harness 与真实短信 AutoFill，任一路径均只提交一次且不泄露手机号或 OTP。
 
+<a id="gwt-013"></a>
+### GWT-013 合成身份只在已隔离空间形成非认证本地结果
+
+- GIVEN 已验证 isolated source/snapshot/instance 且 auth/pending/store 在首次调用前共同消费此绑定，普通空间中保留私有测试 sentinel。
+- WHEN 用户通过非电话 typed 输入发起并完成演练挑战，再以同空间重启恢复。
+- THEN 同标识恢复同一本地身份，不同空间不能访问；写失败、过期、错标识/空间和未知输入拒绝，旧空间 read/write/delete sentinel 全零且不产生 HTTP 凭据或 canonical creator 归属。
+- AND 公开证据仅含 privacy 合同允许且经语法验证的非认证合成值；真实 phone/OTP/credential、自由文本与跨 source 一律拒绝。native 收集不能限定作用域时不执行，纯合同测试不替代设备事实。
+
 ## 6. 依赖
 
 - 前置要求：[`onboarding-and-identity-entry`](../spec.md) 的范围、要求与 SIT。
@@ -196,6 +216,17 @@
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
 
 ## 7. 开放事项
+
+<a id="open-004"></a>
+### OPEN-004 Alpha 合成登录 typed 生成与受限证据接线
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺正式本地端口生成、三存储生产隔离与 native 受限证据保障，不能安全进行合成登录验收。
+- 当前事实：签名空间配置已有 verified 投影，但三存储生产隔离未接线；现役 App 请求生成只消费 HTTP/GraphQL operation，尚无同源本地 challenge port 生成落点。不能伪造 HTTP route、混入 runtime_entrypoints 或手写第二 DTO。
+- 目标：account owner 的本地 typed 声明经正式生成后供登录 composition/UI 消费；privacy 字段闭集与非电话语法可测，native 输入/收集保持 fail-closed。
+- 完成判定：GWT-013 全部子句成立，真实本地端口与持久化负例、线上制品纯度以及隔离 AUT 证据分别提供；局部 schema/生成测试不关闭本 OPEN 或 runtime OPEN-021。
 
 <a id="open-001"></a>
 ### OPEN-001 社交三方票据置换分环境实现且 prod 使用官方协议
@@ -224,6 +255,6 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺同一候选下 Android 物理设备与 iPhone 的真实账号登录证据。Alpha/Beta/Gamma 未交付逐环境 `local_capture` 随机 OTP、杀进程 session/Persona 恢复与失败回路 physical ResultBundle，Prod 未交付正式 SMS/社交/本机号 Provider、物理纯度和授权 canary 证据；静态 Binding、局部 API、simulator protected harness 与登录 UI 测试不能替代这些结果。
-- 目标：Alpha/Beta/Gamma 复用同一 nonprod AppArtifact，通过各 target 的 Remote user-service 与受管 Provider 正式 OTP challenge 在 Android 物理设备和 iPhone 创建或复用 canonical UserAccount；Prod 使用独立 Release AppArtifact 与正式 Provider。App、第一方 Service 与 Provider Workload package graph 均不可达固定码、端侧登录 mock 或错误环境 Adapter。
-- 完成判定：`GWT-009` 的全部结果子句逐项成立，并由同一 source/candidate/package 的 Android 物理设备与 iPhone ResultBundle 绑定真实 account/session/persona 及目标 Provider receipt。Alpha/Beta/Gamma 结果标记 `nonPromotable=true`，Prod 只由正式 Provider 回执、双端真实账号回读与独立 rollout 授权关闭；Simulator/Emulator 结果只作诊断子集，不能关闭本 OPEN。
+- 影响或价值：尚缺同一候选下 Android 物理设备与 iPhone 的真实账号登录证据。Beta/Gamma 未交付逐环境 `local_capture` 随机 OTP、杀进程 session/Persona 恢复与失败回路 physical ResultBundle，Prod 未交付正式 SMS/社交/本机号 Provider、物理纯度和授权 canary 证据；静态 Binding、局部 API、simulator protected harness 与登录 UI 测试不能替代这些结果。
+- 目标：Beta/Gamma 复用同一 nonprod AppArtifact，通过各 target 的 Remote user-service 与受管 Provider 正式 OTP challenge 在 Android 物理设备和 iPhone 创建或复用 canonical UserAccount；Prod 使用独立 Release AppArtifact 与正式 Provider。App、第一方 Service 与 Provider Workload package graph 均不可达固定码、端侧登录 mock 或错误环境 Adapter。
+- 完成判定：`GWT-009` 的全部结果子句逐项成立，并由同一 source/candidate/package 的 Android 物理设备与 iPhone ResultBundle 绑定真实 account/session/persona 及目标 Provider receipt。Beta/Gamma 结果标记 `nonPromotable=true`，Prod 只由正式 Provider 回执、双端真实账号回读与独立 rollout 授权关闭；Simulator/Emulator 结果只作诊断子集，不能关闭本 OPEN。

@@ -129,8 +129,16 @@ public final class ProductionHomepageExternalAutTest {
         // 在任何点击前校验整个计划，未知动作不能部分执行后才失败。
         for (int index = 0; index < steps.length(); index++) {
             JSONObject step = steps.getJSONObject(index);
-            assertEquals(2, step.length());
-            assertTrue(step.getString("operation").matches("visible|tap|scroll|seek|playback|back|reveal|tab-roundtrip"));
+            assertTrue("APP.UAT.page_plan_invalid", plan.getString("executionBlocker").isEmpty());
+            boolean input = step.getString("operation").equals("input-otp");
+            assertEquals("APP.UAT.page_plan_invalid", input ? 4 : 2, step.length());
+            assertTrue(step.getString("operation").matches("visible|tap|scroll|seek|playback|back|reveal|tab-roundtrip|input-otp"));
+            if (input) {
+                assertTrue("APP.UAT.page_plan_invalid", step.getString("mode").matches("correct|incorrect"));
+                assertFalse("APP.UAT.page_plan_invalid", step.getString("sourceSelector").trim().isEmpty());
+                assertFalse("APP.UAT.page_plan_invalid", step.getString("sourceSelector").startsWith("text-prefix:"));
+                assertFalse("APP.UAT.page_plan_invalid", step.getString("selector").startsWith("text-prefix:"));
+            }
             String selector = step.getString("selector");
             assertFalse(selector.trim().isEmpty());
             if (selector.startsWith("text-prefix:")) {
@@ -147,6 +155,12 @@ public final class ProductionHomepageExternalAutTest {
             String operation = step.getString("operation");
             assertEquals(before, requireSingleRunningPid(automation, target));
             String selector = step.getString("selector");
+            if (operation.equals("input-otp")) {
+                inputOfflineOtp(automation, target, step);
+                observations.put(new JSONObject().put("operation", operation).put("selector", selector)
+                        .put("observed", "input-redacted"));
+                continue;
+            }
             if (operation.equals("tab-roundtrip")) {
                 observations.put(new JSONObject().put("operation", operation).put("selector", selector)
                         .put("observed", observeTabRoundtrip(automation, target, selector)));
@@ -230,6 +244,42 @@ public final class ProductionHomepageExternalAutTest {
         Bundle result = new Bundle();
         result.putString(Instrumentation.REPORT_KEY_STREAMRESULT, "QWQ_OFFLINE_PAGE " + evidence + "\n");
         instrumentation.sendStatus(0, result);
+    }
+
+    // 只从 AUT 的演练提示取码；参数与证据均不携带输入值。
+    private static void inputOfflineOtp(UiAutomation automation, String target, JSONObject step) throws Exception {
+        AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+        assertNotNull("APP.UAT.page_plan_invalid", root);
+        java.util.List<AccessibilityNodeInfo> fields = new java.util.ArrayList<>();
+        java.util.List<AccessibilityNodeInfo> sources = new java.util.ArrayList<>();
+        try {
+            assertEquals("APP.UAT.page_plan_invalid", target, String.valueOf(root.getPackageName()));
+            collectExactNodes(root, target, step.getString("selector"), fields);
+            collectExactNodes(root, target, step.getString("sourceSelector"), sources);
+            assertEquals("APP.UAT.page_plan_invalid", 1, fields.size());
+            assertEquals("APP.UAT.page_plan_invalid", 1, sources.size());
+            AccessibilityNodeInfo field = fields.get(0);
+            assertTrue("APP.UAT.page_plan_invalid", field.isEditable() && field.isEnabled());
+            // 双端尚无同源脱敏输入执行接缝；不可只在 Android 绕过 required 限制。
+            throw new AssertionError("APP.UAT.page_artifact_binding_missing: redacted native input execution is unavailable");
+        } finally {
+            for (AccessibilityNodeInfo node : fields) { node.recycle(); }
+            for (AccessibilityNodeInfo node : sources) { node.recycle(); }
+            root.recycle();
+        }
+    }
+
+    private static void collectExactNodes(AccessibilityNodeInfo node, String target, String selector,
+            java.util.List<AccessibilityNodeInfo> result) {
+        if (node.isVisibleToUser() && target.contentEquals(node.getPackageName() == null ? "" : node.getPackageName())
+                && (selector.equals(node.getViewIdResourceName()) || selectedText(node.getText(), selector)
+                || selectedText(node.getContentDescription(), selector))) {
+            result.add(AccessibilityNodeInfo.obtain(node));
+        }
+        for (int index = 0; index < node.getChildCount(); index++) {
+            AccessibilityNodeInfo child = node.getChild(index);
+            if (child != null) { try { collectExactNodes(child, target, selector, result); } finally { child.recycle(); } }
+        }
     }
 
     private static String sha256(byte[] bytes) throws Exception {

@@ -753,6 +753,7 @@ var AppPageNames = map[string]struct{}{
 	"my_qr_code":                        {},
 	"my_reports":                        {},
 	"object_intersections":              {},
+	"post_collection":                   {},
 	"profile":                           {},
 	"profile_career_interests":          {},
 	"profile_edit":                      {},

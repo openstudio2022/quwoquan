@@ -6,6 +6,8 @@ fields:
 - {name: scenario, source: scenario, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 - {name: contentId, source: contentId, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
 - {name: contentType, source: contentType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: primaryMediaWidth, source: width, type: int, constraints: [NULLABLE, POSITIVE], co_present_with: [primaryMediaHeight], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection, description: 同一 Post lifecycle 快照 width 映射；仅 image/video 的完整正数对有效，否则两维同时清空，方向 unknown。}
+- {name: primaryMediaHeight, source: height, type: int, constraints: [NULLABLE, POSITIVE], co_present_with: [primaryMediaWidth], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection, description: 同一 Post lifecycle 快照 height 映射；不得与旧事件或另一媒体的 width 拼接。}
 - {name: authorId, source: authorId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
 - {name: tagRefs, source: tagRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, tag_ref: true}
 - {name: entityRefs, source: entityRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection}

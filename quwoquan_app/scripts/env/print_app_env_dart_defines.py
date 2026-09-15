@@ -307,13 +307,62 @@ def build_runtime_config_package(
     return package
 
 
+def add_launch_control_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--isolated-rehearsal", action="store_true")
+    for name in ("launch-control-ref", "launch-control-digest", "launch-output-root",
+                 "launch-device-id", "launch-candidate-digest", "launch-attempt-ref", "launch-report-ref"):
+        parser.add_argument("--" + name, default="")
+
+
+def launch_control_input(args: argparse.Namespace) -> dict[str, str]:
+    return {"control_ref": args.launch_control_ref, "control_digest": args.launch_control_digest,
+            "output_root": args.launch_output_root, "device_id": args.launch_device_id,
+            "candidate_digest": args.launch_candidate_digest, "attempt_ref": args.launch_attempt_ref,
+            "report_ref": args.launch_report_ref, "capsule_ref": args.source_capsule_manifest}
+
+
+def validate_rehearsal_control(*, environment: str, target: str, source_git_sha: str,
+                               source_tree_digest: str, launch_control: dict[str, str] | None,
+                               require_isolated: bool) -> dict[str, str] | None:
+    control = launch_control or {}
+    if not control.get("control_ref") and not require_isolated and not any(control.get(k) for k in (
+        "control_digest", "device_id", "candidate_digest", "attempt_ref", "report_ref")):
+        return None
+    # 函数内导入避免launcher/producer模块初始化互相依赖。
+    sys.path.insert(0, str(ROOT / "quwoquan_app/scripts/device"))
+    from build_launcher_handoff import verified_rehearsal_selection
+    return verified_rehearsal_selection(
+        source_root=ROOT, environment=environment, target=target,
+        source_revision=source_git_sha, source_digest=source_tree_digest,
+        require_isolated=require_isolated,
+        **{key: control.get(key, "") for key in ("control_ref", "control_digest", "output_root",
+           "device_id", "candidate_digest", "attempt_ref", "report_ref", "capsule_ref")},
+    )
+
+
 def build_offline_bootstrap_document(
     *, environment: str, target: str, launch_policy: str,
     source_git_sha: str, source_tree_digest: str, signing: Any,
+    launch_control: dict[str, str] | None = None, require_isolated: bool = False,
 ) -> dict[str, Any]:
     contract = load_launch_manifest_contract()
     if (environment, target, launch_policy) != ("alpha", "alpha-local", "test_live"):
         raise ValueError("offline bootstrap is restricted to Alpha/nonprod")
+    selected = validate_rehearsal_control(
+        environment=environment, target=target, source_git_sha=source_git_sha,
+        source_tree_digest=source_tree_digest, launch_control=launch_control,
+        require_isolated=require_isolated,
+    )
+    # 普通供给只绑定当前制品快照，不从 runner/环境变量选 isolated。
+    identity_path = ROOT / "quwoquan_app/assets/content/alpha/bundle_identity.json"
+    manifest_path = ROOT / "quwoquan_app/assets/content/alpha/manifest.json"
+    import hashlib
+    identity = json.loads(identity_path.read_bytes())
+    snapshot_digest = "sha256:" + hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    if identity.get("manifestDigest") != snapshot_digest or (
+        selected is not None and selected["snapshotDigest"] != snapshot_digest
+    ):
+        raise ValueError("offline manifest identity mismatch")
     private_bytes, _, keyring = validate_signing_material(ROOT, signing)
     trust = build_runtime_config_trust_envelope("nonprod", keyring, contract)
     document = {
@@ -322,6 +371,7 @@ def build_offline_bootstrap_document(
         "launchPolicy": launch_policy, "contentSource": contract["content_source_policy"][environment],
         "sourceGitSha": source_git_sha, "sourceTreeDigest": source_tree_digest,
         "trustEnvelopeDigest": runtime_config_trust_envelope_digest(trust, contract),
+        "rehearsalSpace": selected if selected is not None else {"mode": "standard", "snapshotDigest": snapshot_digest, "instanceId": "default"},
         "runtime": {"appRuntimeEnv": environment}, "payloadDigest": "",
         "signatureAlgorithm": "ed25519", "signatureKeyId": signing.key_id,
         "trustedPublicKeys": keyring, "signature": "",
@@ -361,6 +411,7 @@ def main() -> int:
     parser.add_argument("--source-git-sha", default="")
     parser.add_argument("--source-tree-digest", default="")
     parser.add_argument("--source-capsule-manifest", default="")
+    add_launch_control_arguments(parser)
     args = parser.parse_args()
 
     if args.format in {"args", "shell"}:
@@ -429,6 +480,10 @@ def main() -> int:
             source_tree_digest=args.source_tree_digest,
             source_capsule_manifest=args.source_capsule_manifest,
         )
+        control = launch_control_input(args)
+        validate_rehearsal_control(environment=args.env, target=target_name,
+            source_git_sha=source_git_sha, source_tree_digest=source_tree_digest,
+            launch_control=control, require_isolated=args.isolated_rehearsal)
         # 每个 selector 逐个静态读取：覆盖率门禁要按静态 key 建立配置闭包，
         # 循环变量会让签名材料的来源在静态分析里失去 owner。
         explicit_signing_material = (
@@ -443,7 +498,7 @@ def main() -> int:
         identity = dict(environment=args.env, target=target_name,
                         launch_policy=args.launch_policy, source_git_sha=source_git_sha,
                         source_tree_digest=source_tree_digest, signing=signing)
-        package = (build_offline_bootstrap_document(**identity) if offline
+        package = (build_offline_bootstrap_document(**identity, launch_control=control, require_isolated=args.isolated_rehearsal) if offline
                    else build_runtime_config_package(values=values, **identity))
     except (KeyError, OSError, RuntimeError, ValueError) as exc:
         print(f"GATE_BLOCK: {exc}", file=sys.stderr)

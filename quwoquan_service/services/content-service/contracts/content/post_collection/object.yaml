@@ -1,0 +1,53 @@
+kind: aggregate_root
+description: 作者独占管理的跨视频、图片和文章 Post 有序合集；成员 Post 保持独立生命周期和权限。
+identity:
+  fields: [collectionId]
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- name: owner
+  kind: reference
+  cardinality: N:1
+  target_object: user.Persona
+  reference_fields: [ownerPersonaId]
+  access: named_reader
+  consistency: eventual
+  on_delete: tombstone
+- name: posts
+  kind: reference
+  cardinality: N:N
+  target_object: content.Post
+  reference_fields: [postIds]
+  access: named_reader
+  consistency: eventual
+  on_delete: retain
+- name: cover
+  kind: reference
+  cardinality: N:1
+  target_object: content.MediaAsset
+  reference_fields: [coverAssetId]
+  access: named_reader
+  consistency: eventual
+  on_delete: detach
+search_policy:
+  exposed: none
+  not_exposed_reason: 合集通过独立详情读取，未声明搜索消费，不向共享索引泄露受限成员。
+assistant_access:
+  read: {mode: none, scopes: []}
+  cite: {mode: none, scopes: []}
+  write: {mode: none, scopes: []}
+business_rules:
+- 仅经认证 owner 可创建、修改、添加、移除、排序或删除；客户端不能指定 owner
+- postIds 有序且唯一，只引用独立 Post，不表示 PostMediaItem
+- 预期版本 CAS 原子保存全部编排，重复相同命令回读原版本，冲突不覆盖
+- 所有查询按当前调用者 Post 权限过滤后分页和计数，依赖失败不转换为空
+- 删除保留墓碑与版本，不删除成员 Post
+lifecycle:
+  state_field: status
+  states: [active, deleted]
+  optimistic_concurrency: version
+  idempotency: expected_version_and_state

@@ -143,7 +143,7 @@
 ### REQ-002 为端侧首页与内容详情提供统一发现流与内容读取能力，支持按用户画像和行为进行推荐排序
 
 - 为端侧首页与内容详情提供统一发现流与内容读取能力，支持按用户画像和行为进行推荐排序。
-- **四类内容**（文章、微趣、美图、视频）统一支持全量用户反馈：关注作者、赞、想去（内容锚定到支持想去的实体时，见 `publish-comment-reaction/design.md#dec-002`）、转发、评论，以及不感兴趣、不想看此作者、不想看此类内容、举报；反馈端云契约与推荐过滤逻辑见 `feed-orchestration-recommendation/design.md`。
+- **四类内容**（文章、微趣、美图、视频）统一支持关注作者、赞、转发、评论，以及不感兴趣、不想看此作者、不想看此类内容、举报；首页内容 Post 卡不提供「想去」动作，即使 Post 携带合法实体主页锚点也不得派生该入口。实体级「想去」保留在 works 沉浸页与实体主页，领域契约及 `coWishlistedEntity` 交集能力不变（见 `publish-comment-reaction/design.md#dec-002`）；反馈端云契约与推荐过滤逻辑见 `feed-orchestration-recommendation/design.md`。
 - 端侧 UI 必须遵从语义 token（`AppSpacing`/`AppColors`/`AppTypography`），禁止硬编码视觉值。
 - 发现流与内容列表响应统一 `items` + `nextCursor`。
 - 行为事件必须可被 `product-ops` 消费，且可关联 `traceId/requestId/pageId`。

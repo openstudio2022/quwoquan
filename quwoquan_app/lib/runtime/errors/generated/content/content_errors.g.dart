@@ -2,6 +2,54 @@
 // ignore_for_file: constant_identifier_names
 
 enum ContentErrorCode {
+  commentNotFound('CONTENT.USER.comment_not_found', 'surface', 0, 404),
+  commentForbiddenDelete(
+    'CONTENT.USER.comment_forbidden_delete',
+    'surface',
+    0,
+    403,
+  ),
+  commentPinForbidden('CONTENT.USER.comment_pin_forbidden', 'surface', 0, 403),
+  commentPinInvalidTarget(
+    'CONTENT.USER.comment_pin_invalid_target',
+    'surface',
+    0,
+    400,
+  ),
+  commentParentInvalid('CONTENT.USER.comment_parent_invalid', 'retry', 0, 409),
+  commentTooLong('CONTENT.USER.comment_too_long', 'surface', 0, 400),
+  commentRateLimited('CONTENT.USER.comment_rate_limited', 'retry', 60, 429),
+  commentAttachmentLimitExceeded(
+    'CONTENT.USER.comment_attachment_limit_exceeded',
+    'surface',
+    0,
+    400,
+  ),
+  commentAttachmentNotReady(
+    'CONTENT.USER.comment_attachment_not_ready',
+    'retry',
+    3,
+    400,
+  ),
+  commentModerationForbidden(
+    'CONTENT.USER.comment_moderation_forbidden',
+    'surface',
+    0,
+    403,
+  ),
+  commentStatusTransitionInvalid(
+    'CONTENT.USER.comment_status_transition_invalid',
+    'retry',
+    0,
+    409,
+  ),
+  commentSortInvalid('CONTENT.USER.comment_sort_invalid', 'surface', 0, 400),
+  contentReactionTargetNotFound(
+    'CONTENT.USER.content_reaction_target_not_found',
+    'surface',
+    0,
+    404,
+  ),
   contentReleaseQueryBarrierInvalid(
     'CONTENT.RELEASE.query_barrier_invalid',
     'surface',
@@ -66,53 +114,41 @@ enum ContentErrorCode {
   ),
   internalError('CONTENT.SYSTEM.internal_error', 'surface', 0, 500),
   upstreamTimeout('CONTENT.MIDDLEWARE.upstream_timeout', 'retry', 10, 504),
-  commentNotFound('CONTENT.USER.comment_not_found', 'surface', 0, 404),
-  commentForbiddenDelete(
-    'CONTENT.USER.comment_forbidden_delete',
-    'surface',
-    0,
-    403,
-  ),
-  commentPinForbidden('CONTENT.USER.comment_pin_forbidden', 'surface', 0, 403),
-  commentPinInvalidTarget(
-    'CONTENT.USER.comment_pin_invalid_target',
-    'surface',
-    0,
-    400,
-  ),
-  commentParentInvalid('CONTENT.USER.comment_parent_invalid', 'retry', 0, 409),
-  commentTooLong('CONTENT.USER.comment_too_long', 'surface', 0, 400),
-  commentRateLimited('CONTENT.USER.comment_rate_limited', 'retry', 60, 429),
-  commentAttachmentLimitExceeded(
-    'CONTENT.USER.comment_attachment_limit_exceeded',
-    'surface',
-    0,
-    400,
-  ),
-  commentAttachmentNotReady(
-    'CONTENT.USER.comment_attachment_not_ready',
-    'retry',
-    3,
-    400,
-  ),
-  commentModerationForbidden(
-    'CONTENT.USER.comment_moderation_forbidden',
-    'surface',
-    0,
-    403,
-  ),
-  commentStatusTransitionInvalid(
-    'CONTENT.USER.comment_status_transition_invalid',
-    'retry',
-    0,
-    409,
-  ),
-  commentSortInvalid('CONTENT.USER.comment_sort_invalid', 'surface', 0, 400),
-  contentReactionTargetNotFound(
-    'CONTENT.USER.content_reaction_target_not_found',
+  postCollectionUnavailable(
+    'CONTENT.USER.post_collection_unavailable',
     'surface',
     0,
     404,
+  ),
+  postCollectionUnauthorized(
+    'CONTENT.USER.post_collection_unauthorized',
+    'surface',
+    0,
+    401,
+  ),
+  postCollectionInvalidArgument(
+    'CONTENT.USER.post_collection_invalid_argument',
+    'surface',
+    0,
+    400,
+  ),
+  postCollectionVersionConflict(
+    'CONTENT.USER.post_collection_version_conflict',
+    'surface',
+    0,
+    409,
+  ),
+  postCollectionReadFailed(
+    'CONTENT.SYSTEM.post_collection_read_failed',
+    'retry',
+    0,
+    503,
+  ),
+  postCollectionWriteFailed(
+    'CONTENT.SYSTEM.post_collection_write_failed',
+    'surface',
+    0,
+    503,
   ),
   interactionTypeInvalid(
     'CONTENT.USER.interaction_type_invalid',
@@ -232,17 +268,35 @@ enum ContentErrorCode {
     0,
   ),
   mediaSeekFailed('CONTENT.SYSTEM.media_seek_failed', 'retry', 0, 0),
-  originalAccessDenied(
-    'CONTENT.USER.original_access_denied',
+  mediaImageReprocessInvalidArgument(
+    'CONTENT.USER.media_image_reprocess_invalid_argument',
     'surface',
     0,
-    403,
+    400,
   ),
-  originalAccessRateLimited(
-    'CONTENT.USER.original_access_rate_limited',
+  mediaImageReprocessRunNotFound(
+    'CONTENT.USER.media_image_reprocess_run_not_found',
+    'surface',
+    0,
+    404,
+  ),
+  mediaImageReprocessInvalidTransition(
+    'CONTENT.USER.media_image_reprocess_invalid_transition',
     'retry',
-    60,
-    429,
+    0,
+    409,
+  ),
+  mediaImageReprocessVersionConflict(
+    'CONTENT.USER.media_image_reprocess_version_conflict',
+    'retry',
+    0,
+    409,
+  ),
+  mediaImageReprocessStorageUnavailable(
+    'CONTENT.SYSTEM.media_image_reprocess_storage_unavailable',
+    'retry',
+    3,
+    503,
   ),
   mediaFileTooLarge('CONTENT.USER.media_file_too_large', 'surface', 0, 413),
   mediaTypeUnsupported(
@@ -256,6 +310,18 @@ enum ContentErrorCode {
     'retry',
     0,
     409,
+  ),
+  originalAccessDenied(
+    'CONTENT.USER.original_access_denied',
+    'surface',
+    0,
+    403,
+  ),
+  originalAccessRateLimited(
+    'CONTENT.USER.original_access_rate_limited',
+    'retry',
+    60,
+    429,
   ),
   moderationCaseNotFound(
     'CONTENT.USER.moderation_case_not_found',
@@ -304,6 +370,32 @@ enum ContentErrorCode {
 
   static ContentErrorCode fromCode(String code) {
     switch (code) {
+      case 'CONTENT.USER.comment_not_found':
+        return ContentErrorCode.commentNotFound;
+      case 'CONTENT.USER.comment_forbidden_delete':
+        return ContentErrorCode.commentForbiddenDelete;
+      case 'CONTENT.USER.comment_pin_forbidden':
+        return ContentErrorCode.commentPinForbidden;
+      case 'CONTENT.USER.comment_pin_invalid_target':
+        return ContentErrorCode.commentPinInvalidTarget;
+      case 'CONTENT.USER.comment_parent_invalid':
+        return ContentErrorCode.commentParentInvalid;
+      case 'CONTENT.USER.comment_too_long':
+        return ContentErrorCode.commentTooLong;
+      case 'CONTENT.USER.comment_rate_limited':
+        return ContentErrorCode.commentRateLimited;
+      case 'CONTENT.USER.comment_attachment_limit_exceeded':
+        return ContentErrorCode.commentAttachmentLimitExceeded;
+      case 'CONTENT.USER.comment_attachment_not_ready':
+        return ContentErrorCode.commentAttachmentNotReady;
+      case 'CONTENT.USER.comment_moderation_forbidden':
+        return ContentErrorCode.commentModerationForbidden;
+      case 'CONTENT.USER.comment_status_transition_invalid':
+        return ContentErrorCode.commentStatusTransitionInvalid;
+      case 'CONTENT.USER.comment_sort_invalid':
+        return ContentErrorCode.commentSortInvalid;
+      case 'CONTENT.USER.content_reaction_target_not_found':
+        return ContentErrorCode.contentReactionTargetNotFound;
       case 'CONTENT.RELEASE.query_barrier_invalid':
         return ContentErrorCode.contentReleaseQueryBarrierInvalid;
       case 'CONTENT.RELEASE.query_barrier_not_ready':
@@ -352,32 +444,18 @@ enum ContentErrorCode {
         return ContentErrorCode.internalError;
       case 'CONTENT.MIDDLEWARE.upstream_timeout':
         return ContentErrorCode.upstreamTimeout;
-      case 'CONTENT.USER.comment_not_found':
-        return ContentErrorCode.commentNotFound;
-      case 'CONTENT.USER.comment_forbidden_delete':
-        return ContentErrorCode.commentForbiddenDelete;
-      case 'CONTENT.USER.comment_pin_forbidden':
-        return ContentErrorCode.commentPinForbidden;
-      case 'CONTENT.USER.comment_pin_invalid_target':
-        return ContentErrorCode.commentPinInvalidTarget;
-      case 'CONTENT.USER.comment_parent_invalid':
-        return ContentErrorCode.commentParentInvalid;
-      case 'CONTENT.USER.comment_too_long':
-        return ContentErrorCode.commentTooLong;
-      case 'CONTENT.USER.comment_rate_limited':
-        return ContentErrorCode.commentRateLimited;
-      case 'CONTENT.USER.comment_attachment_limit_exceeded':
-        return ContentErrorCode.commentAttachmentLimitExceeded;
-      case 'CONTENT.USER.comment_attachment_not_ready':
-        return ContentErrorCode.commentAttachmentNotReady;
-      case 'CONTENT.USER.comment_moderation_forbidden':
-        return ContentErrorCode.commentModerationForbidden;
-      case 'CONTENT.USER.comment_status_transition_invalid':
-        return ContentErrorCode.commentStatusTransitionInvalid;
-      case 'CONTENT.USER.comment_sort_invalid':
-        return ContentErrorCode.commentSortInvalid;
-      case 'CONTENT.USER.content_reaction_target_not_found':
-        return ContentErrorCode.contentReactionTargetNotFound;
+      case 'CONTENT.USER.post_collection_unavailable':
+        return ContentErrorCode.postCollectionUnavailable;
+      case 'CONTENT.USER.post_collection_unauthorized':
+        return ContentErrorCode.postCollectionUnauthorized;
+      case 'CONTENT.USER.post_collection_invalid_argument':
+        return ContentErrorCode.postCollectionInvalidArgument;
+      case 'CONTENT.USER.post_collection_version_conflict':
+        return ContentErrorCode.postCollectionVersionConflict;
+      case 'CONTENT.SYSTEM.post_collection_read_failed':
+        return ContentErrorCode.postCollectionReadFailed;
+      case 'CONTENT.SYSTEM.post_collection_write_failed':
+        return ContentErrorCode.postCollectionWriteFailed;
       case 'CONTENT.USER.interaction_type_invalid':
         return ContentErrorCode.interactionTypeInvalid;
       case 'CONTENT.USER.interaction_cursor_invalid':
@@ -424,16 +502,26 @@ enum ContentErrorCode {
         return ContentErrorCode.mediaPlaybackUnsupported;
       case 'CONTENT.SYSTEM.media_seek_failed':
         return ContentErrorCode.mediaSeekFailed;
-      case 'CONTENT.USER.original_access_denied':
-        return ContentErrorCode.originalAccessDenied;
-      case 'CONTENT.USER.original_access_rate_limited':
-        return ContentErrorCode.originalAccessRateLimited;
+      case 'CONTENT.USER.media_image_reprocess_invalid_argument':
+        return ContentErrorCode.mediaImageReprocessInvalidArgument;
+      case 'CONTENT.USER.media_image_reprocess_run_not_found':
+        return ContentErrorCode.mediaImageReprocessRunNotFound;
+      case 'CONTENT.USER.media_image_reprocess_invalid_transition':
+        return ContentErrorCode.mediaImageReprocessInvalidTransition;
+      case 'CONTENT.USER.media_image_reprocess_version_conflict':
+        return ContentErrorCode.mediaImageReprocessVersionConflict;
+      case 'CONTENT.SYSTEM.media_image_reprocess_storage_unavailable':
+        return ContentErrorCode.mediaImageReprocessStorageUnavailable;
       case 'CONTENT.USER.media_file_too_large':
         return ContentErrorCode.mediaFileTooLarge;
       case 'CONTENT.USER.media_type_unsupported':
         return ContentErrorCode.mediaTypeUnsupported;
       case 'CONTENT.USER.media_upload_session_expired':
         return ContentErrorCode.mediaUploadSessionExpired;
+      case 'CONTENT.USER.original_access_denied':
+        return ContentErrorCode.originalAccessDenied;
+      case 'CONTENT.USER.original_access_rate_limited':
+        return ContentErrorCode.originalAccessRateLimited;
       case 'CONTENT.USER.moderation_case_not_found':
         return ContentErrorCode.moderationCaseNotFound;
       case 'CONTENT.USER.report_not_found':
@@ -457,6 +545,19 @@ class ContentErrorMessages {
   const ContentErrorMessages._();
 
   static const Map<ContentErrorCode, String> zh = <ContentErrorCode, String>{
+    ContentErrorCode.commentNotFound: '评论不存在或已删除',
+    ContentErrorCode.commentForbiddenDelete: '无权删除此评论',
+    ContentErrorCode.commentPinForbidden: '仅内容作者可置顶评论',
+    ContentErrorCode.commentPinInvalidTarget: '只能置顶一级评论',
+    ContentErrorCode.commentParentInvalid: '回复目标已变更或不属于当前内容',
+    ContentErrorCode.commentTooLong: '评论超出字数限制',
+    ContentErrorCode.commentRateLimited: '评论太频繁，请稍后重试',
+    ContentErrorCode.commentAttachmentLimitExceeded: '评论图片数量超出限制',
+    ContentErrorCode.commentAttachmentNotReady: '评论图片正在处理中，请稍后重试',
+    ContentErrorCode.commentModerationForbidden: '无权执行评论治理操作',
+    ContentErrorCode.commentStatusTransitionInvalid: '评论状态已变更，无法执行该操作',
+    ContentErrorCode.commentSortInvalid: '不支持的评论排序方式',
+    ContentErrorCode.contentReactionTargetNotFound: '互动目标不存在或已失效',
     ContentErrorCode.contentReleaseQueryBarrierInvalid: '内容候选查询证明身份或摘要无效',
     ContentErrorCode.contentReleaseQueryBarrierNotReady: '内容候选尚未完成全部必要查询准备',
     ContentErrorCode.contentReleaseQueryBarrierUnavailable: '内容查询准备依赖暂时不可用',
@@ -482,19 +583,12 @@ class ContentErrorMessages {
     ContentErrorCode.requiredDependencyUnavailable: '内容服务依赖暂时不可用，请稍后重试',
     ContentErrorCode.internalError: '服务异常，请稍后重试',
     ContentErrorCode.upstreamTimeout: '内容服务响应超时，请稍后重试',
-    ContentErrorCode.commentNotFound: '评论不存在或已删除',
-    ContentErrorCode.commentForbiddenDelete: '无权删除此评论',
-    ContentErrorCode.commentPinForbidden: '仅内容作者可置顶评论',
-    ContentErrorCode.commentPinInvalidTarget: '只能置顶一级评论',
-    ContentErrorCode.commentParentInvalid: '回复目标已变更或不属于当前内容',
-    ContentErrorCode.commentTooLong: '评论超出字数限制',
-    ContentErrorCode.commentRateLimited: '评论太频繁，请稍后重试',
-    ContentErrorCode.commentAttachmentLimitExceeded: '评论图片数量超出限制',
-    ContentErrorCode.commentAttachmentNotReady: '评论图片正在处理中，请稍后重试',
-    ContentErrorCode.commentModerationForbidden: '无权执行评论治理操作',
-    ContentErrorCode.commentStatusTransitionInvalid: '评论状态已变更，无法执行该操作',
-    ContentErrorCode.commentSortInvalid: '不支持的评论排序方式',
-    ContentErrorCode.contentReactionTargetNotFound: '互动目标不存在或已失效',
+    ContentErrorCode.postCollectionUnavailable: '合集不存在或不可访问',
+    ContentErrorCode.postCollectionUnauthorized: '请登录后管理合集',
+    ContentErrorCode.postCollectionInvalidArgument: '合集内容或分页参数不合法',
+    ContentErrorCode.postCollectionVersionConflict: '合集已更新，请刷新后重试',
+    ContentErrorCode.postCollectionReadFailed: '暂时无法读取合集，请稍后重试',
+    ContentErrorCode.postCollectionWriteFailed: '合集保存未确认，请刷新查看结果',
     ContentErrorCode.interactionTypeInvalid: '不支持的互动类型',
     ContentErrorCode.interactionCursorInvalid: '列表状态已更新，请刷新后重试',
     ContentErrorCode.interactionOwnerForbidden: '无权查看该互动记录',
@@ -519,11 +613,16 @@ class ContentErrorMessages {
     ContentErrorCode.mediaPlaybackUnavailable: '这条视频暂时无法观看，可以先看看别的内容',
     ContentErrorCode.mediaPlaybackUnsupported: '这条视频暂不支持播放，可以先看看别的内容',
     ContentErrorCode.mediaSeekFailed: '暂时无法跳转到这个位置',
-    ContentErrorCode.originalAccessDenied: '当前内容不支持查看或保存原图',
-    ContentErrorCode.originalAccessRateLimited: '原图访问过于频繁，请稍后再试',
+    ContentErrorCode.mediaImageReprocessInvalidArgument: '图片重处理请求无效',
+    ContentErrorCode.mediaImageReprocessRunNotFound: '图片重处理任务不存在',
+    ContentErrorCode.mediaImageReprocessInvalidTransition: '图片重处理任务当前不能执行此操作',
+    ContentErrorCode.mediaImageReprocessVersionConflict: '图片重处理任务状态已变化，请重试',
+    ContentErrorCode.mediaImageReprocessStorageUnavailable: '图片重处理存储暂不可用',
     ContentErrorCode.mediaFileTooLarge: '文件超过 50 MB，请选择更短或更小的媒体',
     ContentErrorCode.mediaTypeUnsupported: '暂不支持这种媒体格式',
     ContentErrorCode.mediaUploadSessionExpired: '上传凭证已过期，正在重新准备',
+    ContentErrorCode.originalAccessDenied: '当前内容不支持查看或保存原图',
+    ContentErrorCode.originalAccessRateLimited: '原图访问过于频繁，请稍后再试',
     ContentErrorCode.moderationCaseNotFound: '未找到当前内容的审核记录',
     ContentErrorCode.reportNotFound: '举报不存在',
     ContentErrorCode.gatheringSafetyAuthorizationInvalid: '安全处置授权请求无效',
@@ -533,6 +632,28 @@ class ContentErrorMessages {
   };
 
   static const Map<ContentErrorCode, String> en = <ContentErrorCode, String>{
+    ContentErrorCode.commentNotFound: 'Comment not found or deleted',
+    ContentErrorCode.commentForbiddenDelete:
+        'Not allowed to delete this comment',
+    ContentErrorCode.commentPinForbidden:
+        'Only the referenced post author can pin a comment',
+    ContentErrorCode.commentPinInvalidTarget:
+        'Only a top-level comment can be pinned',
+    ContentErrorCode.commentParentInvalid:
+        'The reply target changed or belongs to another post',
+    ContentErrorCode.commentTooLong: 'Comment exceeds the length limit',
+    ContentErrorCode.commentRateLimited:
+        'Too many comments, please retry later',
+    ContentErrorCode.commentAttachmentLimitExceeded: 'Too many comment images',
+    ContentErrorCode.commentAttachmentNotReady:
+        'Comment image is still processing, please retry shortly',
+    ContentErrorCode.commentModerationForbidden:
+        'Not allowed to moderate this comment',
+    ContentErrorCode.commentStatusTransitionInvalid:
+        'Comment state changed; the action is no longer valid',
+    ContentErrorCode.commentSortInvalid: 'Unsupported comment sort',
+    ContentErrorCode.contentReactionTargetNotFound:
+        'The reaction target is missing or unavailable',
     ContentErrorCode.contentReleaseQueryBarrierInvalid:
         'Content candidate query proof identity or digest is invalid',
     ContentErrorCode.contentReleaseQueryBarrierNotReady:
@@ -567,28 +688,16 @@ class ContentErrorMessages {
     ContentErrorCode.internalError: 'Service error, please try again later',
     ContentErrorCode.upstreamTimeout:
         'The content service timed out, please try again later',
-    ContentErrorCode.commentNotFound: 'Comment not found or deleted',
-    ContentErrorCode.commentForbiddenDelete:
-        'Not allowed to delete this comment',
-    ContentErrorCode.commentPinForbidden:
-        'Only the referenced post author can pin a comment',
-    ContentErrorCode.commentPinInvalidTarget:
-        'Only a top-level comment can be pinned',
-    ContentErrorCode.commentParentInvalid:
-        'The reply target changed or belongs to another post',
-    ContentErrorCode.commentTooLong: 'Comment exceeds the length limit',
-    ContentErrorCode.commentRateLimited:
-        'Too many comments, please retry later',
-    ContentErrorCode.commentAttachmentLimitExceeded: 'Too many comment images',
-    ContentErrorCode.commentAttachmentNotReady:
-        'Comment image is still processing, please retry shortly',
-    ContentErrorCode.commentModerationForbidden:
-        'Not allowed to moderate this comment',
-    ContentErrorCode.commentStatusTransitionInvalid:
-        'Comment state changed; the action is no longer valid',
-    ContentErrorCode.commentSortInvalid: 'Unsupported comment sort',
-    ContentErrorCode.contentReactionTargetNotFound:
-        'The reaction target is missing or unavailable',
+    ContentErrorCode.postCollectionUnavailable: 'Collection is unavailable',
+    ContentErrorCode.postCollectionUnauthorized:
+        'Sign in to manage collections',
+    ContentErrorCode.postCollectionInvalidArgument: 'Invalid collection input',
+    ContentErrorCode.postCollectionVersionConflict:
+        'Collection changed; refresh before retrying',
+    ContentErrorCode.postCollectionReadFailed:
+        'Collection read is temporarily unavailable',
+    ContentErrorCode.postCollectionWriteFailed:
+        'Save is unconfirmed; refresh to check the result',
     ContentErrorCode.interactionTypeInvalid: 'Unsupported interaction type',
     ContentErrorCode.interactionCursorInvalid:
         'The list changed, refresh and retry',
@@ -631,16 +740,26 @@ class ContentErrorMessages {
         'This video is not supported. Browse other content.',
     ContentErrorCode.mediaSeekFailed:
         'Unable to seek to this position right now.',
-    ContentErrorCode.originalAccessDenied:
-        'Original media access is not allowed',
-    ContentErrorCode.originalAccessRateLimited:
-        'Too many original media requests, please retry later',
+    ContentErrorCode.mediaImageReprocessInvalidArgument:
+        'The image reprocessing request is invalid.',
+    ContentErrorCode.mediaImageReprocessRunNotFound:
+        'The image reprocessing run was not found.',
+    ContentErrorCode.mediaImageReprocessInvalidTransition:
+        'The image reprocessing run cannot perform this operation now.',
+    ContentErrorCode.mediaImageReprocessVersionConflict:
+        'The image reprocessing run changed. Please retry.',
+    ContentErrorCode.mediaImageReprocessStorageUnavailable:
+        'Image reprocessing storage is temporarily unavailable.',
     ContentErrorCode.mediaFileTooLarge:
         'The file exceeds 50 MB. Choose a shorter or smaller media file.',
     ContentErrorCode.mediaTypeUnsupported:
         'This media format is not supported.',
     ContentErrorCode.mediaUploadSessionExpired:
         'The upload grant expired and will be prepared again.',
+    ContentErrorCode.originalAccessDenied:
+        'Original media access is not allowed',
+    ContentErrorCode.originalAccessRateLimited:
+        'Too many original media requests, please retry later',
     ContentErrorCode.moderationCaseNotFound:
         'No current moderation case was found',
     ContentErrorCode.reportNotFound: 'Report not found',

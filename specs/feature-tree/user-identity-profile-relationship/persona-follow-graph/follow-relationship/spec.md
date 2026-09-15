@@ -53,7 +53,7 @@
 
 - 通讯录发现只允许在端侧完成号码规范化与哈希；原始手机号不得进入联系人发现请求、日志、埋点或结果回执。
 - 联系人发现、账号搜索与二维码解析只负责返回候选主体；是否允许关注必须重新读取 `persona_relationship` 的 canonical relationship capability，候选结果不得自行推导写权限。
-- 关注写入只能由 active persona 经 user-service production Remote 发起；失效二维码、无权限候选、被屏蔽主体或不可见主体不得产生 follow edge。
+- 关注写入只能由 active persona 经 user-service production Remote 或 Alpha 对象级本地演练 adapter 发起；在线环境不得走 Alpha adapter。失效二维码、无权限候选、被屏蔽主体或不可见主体不得产生 follow edge。
 - 页面切换、权限拒绝、网络失败或 canonical failure 不得清空仍可恢复的搜索条件与候选结果，也不得显示伪成功关系态。
 
 <a id="req-005"></a>
@@ -92,7 +92,7 @@
 - WHEN App 对通讯录权限作出允许或拒绝处理；允许时仅提交端侧规范化后的哈希集合，并分别经 `contact_discovery_record`、`user_account` 或二维码解析公开能力取得候选。
 - WHEN App 对选中候选读取 `persona_relationship` 的 relationship capability，并仅在 `canFollow` 成立时提交 follow 命令。
 - THEN 原始手机号、ownerId、二维码 bearer 信息和内部屏蔽原因不进入请求、日志、埋点或结果回执。
-- AND 成功后由 production Remote 读回 canonical 关系态；失效二维码、不可见或被屏蔽候选不得落 follow edge。
+- AND 成功后由 production Remote 或 Alpha 本地演练 adapter 读回 canonical 关系态；失效二维码、不可见或被屏蔽候选不得落 follow edge。
 - AND 权限拒绝、网络失败或 canonical failure 保留可恢复的输入与候选状态并提供重试，不得清空页面或展示伪成功。
 - AND 只有绑定同一 candidate、真实 Provider 与 production Remote 的 Android 物理设备及 iPhone 物理设备 `ReadinessResultBundle` 均通过时，本验收场景才计通过；Widget、模拟器、动态 skip 或 typed double 不计。
 

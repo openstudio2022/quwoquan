@@ -483,6 +483,8 @@ type AuthorPostItemSlice struct {
 	LocationName          string          `json:"-" bson:"locationName,omitempty"`
 	GeoTagRef             string          `json:"-" bson:"geoTagRef,omitempty"`
 	PrimaryHomepageID     string          `json:"primaryHomepageId,omitempty" bson:"primaryHomepageId,omitempty"`
+	PrimaryHomepageType   string          `json:"primaryHomepageType,omitempty" bson:"primaryHomepageType,omitempty"`
+	GatheringRef          string          `json:"gatheringRef,omitempty" bson:"gatheringRef,omitempty"`
 	CanonicalEntityID     string          `json:"-" bson:"canonicalEntityId,omitempty"`
 	Status                PostStatus      `json:"-" bson:"status"`
 	Visibility            PostVisibility  `json:"-" bson:"visibility"`

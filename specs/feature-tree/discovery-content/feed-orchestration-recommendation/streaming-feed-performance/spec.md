@@ -41,7 +41,7 @@
 - content Post、user Persona、tag TagNodeView 与 entity Homepage 是其 ID/ref/title/URL 的单字段 UTF-8 byte/count 上限 owner；`RankedFeedWindow` 与 `FeedDeliveryPage` 编码前按这些 owner contract 准入。2 MiB/64 KiB 聚合门不得替代字段门。
 - Redis keyspace 只读写无协议版本前缀的 canonical `rec:ranked_feed_window:*` / `rec:feed_delivery_page:*` 固定 quota-shard key，payload 与 cursor 均无 schema-version 信封；任何其他形态不得 dual-read 或 shim。生产切换必须使用单候选制受控发布，并把 cursor 刷新终态、回滚窗口与 readback 纳入环境验收。
 - 商用 HotPath composition 必须在构造期要求 Redis pipeline capability；session、硬排除、served/impressed/negative 与 relaxed exposure 过滤只走同一 pipeline，禁止顺序或并行兼容回退。
-- 具名或已验证设备流量按 actor 隔离，无身份公开流量按 session 隔离；续页只按 `(ordinal, contentId)` 读取冻结结果。
+- 具名或已验证设备流量按 actor 隔离，无身份公开流量按 session 隔离；续页只按 `(ordinal, contentId)` 读取冻结结果。请求期 `viewportProfile/deviceClass`、服务端时间桶、用户画像版本、已同意粗 region 与 ranking policy 必须作为 RankedFeedWindow/cursor/cache scope 的冻结输入；窗口形成后旋转或横屏切换不得重排、重召回或改写旧窗。
 - 每个成功下发且仍可继续的页面必须先写入 10 分钟固定 TTL 的不可变 `FeedDeliveryPage`，再返回带 delivery-page 身份的 next cursor。下一页通过 previous cursor 回放已交付 Post identity/顺序与对象卡快照，只做当前可见性 hydration；缺失或不可见 Post 只缩短页面，禁止重新 recall、重排或补替代内容。cursor scope 同时绑定 actor/session/route/pageSize/release/feedRequestId/expiry。
 - discovery feed 的查询过滤、排序、cursor keyset 与 `storage.yaml` 索引完全一致；服务启动与 importer 都执行幂等 `EnsureIndexes`，API integration 以真实 Mongo `explain` 防止全表扫描或内存排序。
 - 召回和 hydration 只读取下发必需的 canonical projection，禁止先解码完整 Post 再丢弃字段；cursor 必须沿用排序 keyset，不得回退到 Mongo `_id` 续接。
@@ -61,6 +61,7 @@
 - 首页频道条初始按配置顺序展示（发布默认“关注、推荐、校园、旅行、摄影、科技、车之家”，默认选中推荐）。全部标签不溢出时切换不移动；溢出时，选中标签的自然中心越过扣除右侧搜索/小趣后的整条频道视区中部，条带滚动使选中项尽量对齐该中部，并进入推荐锚定态：关注仅移出视区，推荐固定最左，其余频道在右侧横向滚动。反向选择回到阈值内或反向拖回起点恢复关注；不得删除频道或绕过关注登录门控。配置未以关注、推荐开头时保持配置顺序并使用普通居中滚动，不重排配置。
 - 页签几何采用当前动态字号、文本缩放、真实标签宽度和设计间距；首尾按滚动范围 clamp，末项必须完整可见。连续点击、正文横向 fling、路由与配置更新均以最后有效 active 频道同步条带，不得因已有动画丢弃最新选择。拖动标签条只滚动标签，不切正文频道。
 - 高频 rebuild 只订阅可见项必需的状态，网格不嵌套多个可滚动容器；每卡定时、JSON 解码、布局与绘制成本必须在 frame 预算内可观测，不把扩大 `cacheExtent` 当成性能修复。
+- 首页视频自动播放资格只由 active 卡片持有：`deactivate` 即停订滚动/焦点、取消重查 timer、失效排队测量并撤回资格，不能等待 `dispose`。同一 State `activate` 后只恢复单份监听，在有效布局后重新计算连续可见驻留，离树时间不计入。几何读取合并到帧后且要求 active、attached、hasSize；滚动开始立即撤销播放意图，迟到 timer/帧回调不得恢复旧资格。焦点撤回同步通知兄弟时，不得对 inactive 卡片或在 build/layout 阶段触发播放态 `setState`。
 
 <a id="req-003"></a>
 ### REQ-003 图片、视频和离线首屏共用一套资源预算
@@ -141,8 +142,10 @@
 - WHEN App 持续续接 feed 并回收非活跃资源。
 - THEN 列表、去重集、频道状态、图片字节和定时器保持在声明上限内，滚动锚点与既有内容不丢失。
 - AND 首屏、刷新和翻页的取消/失败互不污染，旧 generation 不回写。
+- AND 视频卡片已 `deactivate` 尚未 `dispose` 时接收滚动/焦点或迟到 timer/帧回调，无 inactive renderObject 读取或 build/layout `setState`；离树即无监听和播放资格。同一 State 重挂载仅有单份监听，重新连续驻留后可再次播放；离树前排队任务不能跨 generation 恢复旧资格，滚动开始不等待几何评估才撤销播放意图。
 - AND 首页标签在不溢出时切换位置不变；溢出时跨视区中部进入推荐固定最左、关注不可见的锚定态，选中标签尽量居中，反向回阈值内恢复关注。动态字号、窄屏、配置替换均保持首末边界内完整可见，连续点击最后目标胜出，正文 fling 后实际选中频道与条带同步；标签拖动不误切正文，搜索/小趣始终在条带外可见。
 - AND 越过 6 页本地保留边界后可用 previous cursor 原序回到已交付页，再向下时先恢复 trailing、后按原 outbound cursor 访问被淘汰页；全程不重新召回历史页。
+- AND 设备旋转或显式进入/退出横屏只取消未提交的本地 scrub/pageflip，不改变当前 RankedFeedWindow、cursor、resident/leading/trailing cache 或旧窗顺序；新上下文只在下一次首刷/刷新建立。
 
 <a id="gwt-003"></a>
 ### GWT-003 视频 N+1 预热不抢占当前播放

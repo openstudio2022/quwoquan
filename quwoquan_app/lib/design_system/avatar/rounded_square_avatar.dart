@@ -1,16 +1,14 @@
 // ignore_for_file: unnecessary_underscores
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 
 /// 圆角方形头像组件（替代 CircleAvatar）
 ///
 /// 与微信一致的圆角方形头像，支持网络图片、占位首字母、点击回调。
-class RoundedSquareAvatar extends ConsumerWidget {
+class RoundedSquareAvatar extends StatelessWidget {
   const RoundedSquareAvatar({
     super.key,
     required this.size,
@@ -20,7 +18,6 @@ class RoundedSquareAvatar extends ConsumerWidget {
     this.onTap,
     this.backgroundColor,
     this.fallbackIcon,
-    this.mediaEndpointConfig,
   });
 
   final double size;
@@ -30,30 +27,21 @@ class RoundedSquareAvatar extends ConsumerWidget {
   final VoidCallback? onTap;
   final Color? backgroundColor;
   final IconData? fallbackIcon;
-  final MediaEndpointConfig? mediaEndpointConfig;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final radius = borderRadius ?? AppSpacing.contentPreviewCornerRadius;
-    final source = imageUrl?.trim() ?? '';
-    final injectedEndpoints =
-        mediaEndpointConfig ??
-        (_isMediaReference(source)
-            ? ref.watch(mediaEndpointConfigProvider)
-            : null);
-    final imageCandidates = resolveAvatarImageUrlCandidates(
-      imageUrl,
-      endpointConfig: injectedEndpoints,
-    );
-    final hasImage = imageCandidates.isNotEmpty;
+    // 来源是否可获取只由统一边界判断；头像原始引用不预改 endpoint 或候选。
+    final source = imageUrl ?? '';
+    final hasImage = source.isNotEmpty;
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
 
     Widget avatar = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: hasImage
           ? AppCachedNetworkImage(
-              imageUrl: imageCandidates.first,
-              imageUrlCandidates: imageCandidates,
+              imageUrl: source,
+              mediaKind: MediaDeliveryKind.avatar,
               width: size,
               height: size,
               fit: BoxFit.cover,
@@ -109,13 +97,5 @@ class RoundedSquareAvatar extends ConsumerWidget {
   static String _getInitial(String name) {
     if (name.isEmpty) return '?';
     return name[0].toUpperCase();
-  }
-
-  static bool _isMediaReference(String source) {
-    final lower = source.toLowerCase();
-    return lower.startsWith('data:image/') ||
-        lower.startsWith('https://') ||
-        lower.startsWith('media/avatar/') ||
-        lower.startsWith('/media/avatar/');
   }
 }

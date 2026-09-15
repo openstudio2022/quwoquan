@@ -1,6 +1,6 @@
 {
   "candidateDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-  "schemaDigest": "sha256:0574fa46f1ffac1e6a1daa69fc1f083901dfc26881fe3cfb9a5044fcc8a759b9",
+  "schemaDigest": "sha256:f962f78310c9fc8c50a5167e9f4023b37d38b92f7e45186f359a9a8147c429cd",
   "entries": [
     {
       "sha256Hash": "111b715594655786eba342c5cbebe7ea1338a9cf016ed0f35f54096802583478",
@@ -296,6 +296,96 @@
         ],
         "assemblyMappings": []
       }
+    },
+    {
+      "sha256Hash": "a57f5fda7db3268872328cb520504de42bd12fe34e97bff61d804674b112d4db",
+      "operationName": "PostCollectionManagement",
+      "operationType": "query",
+      "canonicalOperationId": "content.post_collection.GetPostCollectionManagement",
+      "objectIds": [
+        "content.post_collection"
+      ],
+      "authorization": {
+        "principal": "persona",
+        "scopes": [],
+        "ownershipPolicy": "collection_owner_only"
+      },
+      "costModelVersion": "graphql-cost-v1",
+      "costPlanDigest": "sha256:ec3bee2322ad96b96a108b46803f83449ef7a39574c9a354368676370ebe0e10",
+      "cost": {
+        "depth": 3,
+        "topLevelFields": 1,
+        "complexity": 308,
+        "variablesMaxBytes": 2048,
+        "pageSizeMax": 100,
+        "maxOwnerCalls": 3,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144,
+        "sloRef": "slo:gateway.graphql_read.detail"
+      },
+      "costPlan": {
+        "baseComplexity": 308,
+        "listMultipliers": [
+          {
+            "variablePath": "first",
+            "coefficient": 3,
+            "defaultValue": 100,
+            "maximumValue": 100
+          }
+        ],
+        "maxOwnerCalls": 3,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144
+      },
+      "paginationVariables": [
+        "first"
+      ],
+      "executorKey": "content.postCollection.query"
+    },
+    {
+      "sha256Hash": "aabadb9772a276ea6c2837d0b04508e7fcbb1d8be5d6194e01ba837a6dee0f5a",
+      "operationName": "PostCollection",
+      "operationType": "query",
+      "canonicalOperationId": "content.post_collection.GetPostCollection",
+      "objectIds": [
+        "content.post_collection"
+      ],
+      "authorization": {
+        "principal": "public",
+        "scopes": [],
+        "ownershipPolicy": "collection_and_member_post_visibility"
+      },
+      "costModelVersion": "graphql-cost-v1",
+      "costPlanDigest": "sha256:3ed386b9da08c48c18eae3b5b2c474e088f2fda1e6f3a7dc56dd8441c2a99014",
+      "cost": {
+        "depth": 3,
+        "topLevelFields": 1,
+        "complexity": 312,
+        "variablesMaxBytes": 2048,
+        "pageSizeMax": 100,
+        "maxOwnerCalls": 3,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144,
+        "sloRef": "slo:gateway.graphql_read.detail"
+      },
+      "costPlan": {
+        "baseComplexity": 72,
+        "listMultipliers": [
+          {
+            "variablePath": "first",
+            "coefficient": 3,
+            "defaultValue": 20,
+            "maximumValue": 100
+          }
+        ],
+        "maxOwnerCalls": 3,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144
+      },
+      "paginationVariables": [
+        "first"
+      ],
+      "executorKey": "content.postCollection.query"
     },
     {
       "sha256Hash": "b425b396c13494d91b0e970d0e9c2328d07d549c492bd76537dace26ea74aa04",

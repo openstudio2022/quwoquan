@@ -377,26 +377,17 @@ func readUserDomainErrors(metadataDir string) (*errorsFile, error) {
 	return readMergedErrors(paths)
 }
 
-// contentDomainErrorsPaths 是 content 域错误码的固定合并顺序：
-// post（域共享 + Post 自有）在前，随后按对象目录字典序。
-// 与 quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py 及
-// quwoquan_service/scripts/verify/consistency/verify_error_recovery_alignment.py 的列表保持一致。
+// 错误 owner 从 ContractGraph source 发现，不维护第二份对象清单。
 func contentDomainErrorsPaths(metadataDir string) []string {
-	return []string{
-		filepath.Join(metadataDir, "content", "content", "post", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "content", "comment", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "content", "content_reaction", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "content", "deleted_post_tombstone", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "content", "profile_interaction_activity_view", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "content", "profile_interaction_read_fact", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "media", "filter_catalog_release", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "media", "media_asset", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "media", "original_access_quota", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "media", "media_upload_session", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "content", "outbound_share_fact", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "trust_safety", "post_moderation_case", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "trust_safety", "report", "errors.yaml"),
+	if activeMetadataSource == nil {
+		panic("content errors require initialized ContractGraph source")
 	}
+	paths := activeMetadataSource.Paths("content/", "/errors.yaml")
+	result := make([]string, 0, len(paths))
+	for _, path := range paths {
+		result = append(result, filepath.Join(metadataDir, path))
+	}
+	return result
 }
 
 func readUIConfig(

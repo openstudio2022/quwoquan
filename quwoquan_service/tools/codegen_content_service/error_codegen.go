@@ -30,25 +30,9 @@ type errorsYAML struct {
 	Errors []errorEntryYAML `yaml:"errors"`
 }
 
-// contentDomainErrorsPaths 与 tools/codegen_app_metadata 的同名列表保持一致。
-// 每份对象 errors.yaml 生成到自己的 generated/<context>/<object>/errors.go。
-func contentDomainErrorsPaths() []string {
-	return []string{
-		"content/content/post/errors.yaml",
-		"content/content/comment/errors.yaml",
-		"content/content/content_reaction/errors.yaml",
-		"content/content/deleted_post_tombstone/errors.yaml",
-		"content/content/profile_interaction_activity_view/errors.yaml",
-		"content/content/profile_interaction_read_fact/errors.yaml",
-		"content/media/filter_catalog_release/errors.yaml",
-		"content/media/media_asset/errors.yaml",
-		"content/media/media_image_reprocess_run/errors.yaml",
-		"content/media/original_access_quota/errors.yaml",
-		"content/media/media_upload_session/errors.yaml",
-		"content/content/outbound_share_fact/errors.yaml",
-		"content/trust_safety/post_moderation_case/errors.yaml",
-		"content/trust_safety/report/errors.yaml",
-	}
+// 每份对象 errors.yaml 从 ContractGraph source 发现，禁止另维护对象名单。
+func contentDomainErrorsPaths(source *contractcodegen.Source) []string {
+	return source.Paths("content/", "/errors.yaml")
 }
 
 func generateErrorConstants(
@@ -56,7 +40,7 @@ func generateErrorConstants(
 	outputRoot string,
 ) error {
 	seen := map[string]string{}
-	for _, errsPath := range contentDomainErrorsPaths() {
+	for _, errsPath := range contentDomainErrorsPaths(source) {
 		if !source.Has(errsPath) {
 			return fmt.Errorf("content errors metadata missing: %s", errsPath)
 		}

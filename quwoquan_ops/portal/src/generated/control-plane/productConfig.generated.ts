@@ -87,6 +87,18 @@ export const productConfig = {
       "sensitive": false
     },
     {
+      "key": "ops.reco.discovery.rank.context_landscape_media_boost",
+      "type": "float",
+      "owner": "recommendation",
+      "default": 1,
+      "scope": "environment",
+      "reload": "hot",
+      "rollout": "progressive",
+      "risk_level": "medium",
+      "ui_editable": true,
+      "sensitive": false
+    },
+    {
       "key": "ops.reco.discovery.recall.whitelist_enabled",
       "type": "bool",
       "owner": "recommendation",

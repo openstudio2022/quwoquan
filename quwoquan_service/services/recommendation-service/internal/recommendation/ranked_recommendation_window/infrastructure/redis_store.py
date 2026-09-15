@@ -13,6 +13,7 @@ from typing import Any, Callable, Protocol
 from ..domain.model import (
     RankedCandidate,
     RankedRecommendationItem,
+    RecommendationRequestContext,
     RecommendationObjectCard,
     RankedRecommendationWindow,
     RankingResult,
@@ -509,6 +510,8 @@ class RedisWindowStore:
             ("modelChannel", window.model_channel),
             ("modelReleaseId", window.model_release_id),
             ("policyDigest", window.policy_digest),
+            ("requestContext", window.request_context.canonical_document()),
+            ("contextDigest", window.context_digest),
             ("requestDigest", window.request_digest),
             ("rankingSnapshotDigest", window.ranking_snapshot_digest),
             ("featureSnapshotAt", window.feature_snapshot_at.isoformat()),
@@ -605,6 +608,8 @@ class RedisWindowStore:
                 window.model_channel,
                 window.model_release_id,
                 window.policy_digest,
+                window.request_context.canonical_document(),
+                window.context_digest,
                 window.request_digest,
                 window.ranking_snapshot_digest,
                 window.user_feature_snapshot,
@@ -660,6 +665,8 @@ class RedisWindowStore:
                     "modelChannel",
                     "modelReleaseId",
                     "policyDigest",
+                    "requestContext",
+                    "contextDigest",
                     "requestDigest",
                     "rankingSnapshotDigest",
                     "featureSnapshotAt",
@@ -675,6 +682,19 @@ class RedisWindowStore:
                 document["objectCards"], list
             ):
                 raise ValueError("ranked window items and objectCards must be arrays")
+            if not isinstance(document["requestContext"], dict):
+                raise ValueError("ranked window requestContext must be an object")
+            self._require_exact_fields(document["requestContext"], {"viewportProfile", "deviceClass", "coarseRegion", "timeBucket", "profileRevision"}, "requestContext")
+            request_context = RecommendationRequestContext(
+                viewport_profile=self._required_text(document["requestContext"]["viewportProfile"], "viewportProfile"),
+                device_class=self._required_text(document["requestContext"]["deviceClass"], "deviceClass"),
+                coarse_region=self._required_text(document["requestContext"]["coarseRegion"], "coarseRegion"),
+                time_bucket=self._required_text(document["requestContext"]["timeBucket"], "timeBucket"),
+                profile_revision=self._required_text(document["requestContext"]["profileRevision"], "profileRevision"),
+            )
+            canonical_context_digest = hashlib.sha256(json.dumps(request_context.canonical_document(), ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")).hexdigest()
+            if document["contextDigest"] != canonical_context_digest:
+                raise ValueError("ranked window contextDigest does not match requestContext")
             if not isinstance(document["userFeatureSnapshot"], dict):
                 raise ValueError("ranked window userFeatureSnapshot must be an object")
             subject_id = self._required_text(document["subjectId"], "subjectId")
@@ -785,6 +805,8 @@ class RedisWindowStore:
                 request_digest=self._required_text(
                     document["requestDigest"], "requestDigest"
                 ),
+                request_context=request_context,
+                context_digest=canonical_context_digest,
                 ranking=ranking,
                 content_fence=ReleasePinnedQueryFence.model_validate(document["contentFence"]),
                 now=created_at,

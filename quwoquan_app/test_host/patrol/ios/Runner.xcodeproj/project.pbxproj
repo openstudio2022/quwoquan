@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D0A140010000000000000011 /* NativeRuntimeConfigMigrationArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A140020000000000000011 /* NativeRuntimeConfigMigrationArchive.swift */; };
+		D0A140030000000000000011 /* NativeRuntimeConfigActivationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A140040000000000000011 /* NativeRuntimeConfigActivationCoordinator.swift */; };
+		D0A140050000000000000011 /* NativeRuntimeConfigChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A140060000000000000011 /* NativeRuntimeConfigChannel.swift */; };
 		10274AC854C772F8BF179E92 /* RunnerUITests.m in Sources */ = {isa = PBXBuildFile; fileRef = BD63CC00E3A6F288507B1522 /* RunnerUITests.m */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		2B47279F39C4A916CF0B2C16 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 19C9737A96B516E34F8F775B /* Foundation.framework */; };
@@ -57,6 +60,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D0A140020000000000000011 /* NativeRuntimeConfigMigrationArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeRuntimeConfigMigrationArchive.swift; path = ../../../../ios/Runner/NativeRuntimeConfigMigrationArchive.swift; sourceTree = "<group>"; };
+		D0A140040000000000000011 /* NativeRuntimeConfigActivationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeRuntimeConfigActivationCoordinator.swift; path = ../../../../ios/Runner/NativeRuntimeConfigActivationCoordinator.swift; sourceTree = "<group>"; };
+		D0A140060000000000000011 /* NativeRuntimeConfigChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeRuntimeConfigChannel.swift; path = ../../../../ios/Runner/NativeRuntimeConfigChannel.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
 		19C9737A96B516E34F8F775B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
@@ -203,6 +209,9 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				A17C8E5A2B2D4F6096A54D12 /* AppLaunchContract.generated.swift */,
 				78AEF66C4B08845F6EE55A8A /* NativeRuntimeConfigSupply.swift */,
+				D0A140020000000000000011 /* NativeRuntimeConfigMigrationArchive.swift */,
+				D0A140040000000000000011 /* NativeRuntimeConfigActivationCoordinator.swift */,
+				D0A140060000000000000011 /* NativeRuntimeConfigChannel.swift */,
 				E8C1035A2F11000200000002 /* NativeRecoveryVersionResponse.swift */,
 				C0A130020000000000000011 /* NativeRuntimeCanonicalJSON.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
@@ -576,6 +585,9 @@
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				A17C8E5A2B2D4F6096A54D11 /* AppLaunchContract.generated.swift in Sources */,
 				F99725A936EB538BC45A7099 /* NativeRuntimeConfigSupply.swift in Sources */,
+				D0A140010000000000000011 /* NativeRuntimeConfigMigrationArchive.swift in Sources */,
+				D0A140030000000000000011 /* NativeRuntimeConfigActivationCoordinator.swift in Sources */,
+				D0A140050000000000000011 /* NativeRuntimeConfigChannel.swift in Sources */,
 				C0A130010000000000000011 /* NativeRuntimeCanonicalJSON.swift in Sources */,
 				E8C1035A2F11000200000001 /* NativeRecoveryVersionResponse.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,

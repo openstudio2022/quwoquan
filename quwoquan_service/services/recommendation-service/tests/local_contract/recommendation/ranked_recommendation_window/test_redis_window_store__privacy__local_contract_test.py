@@ -5,6 +5,7 @@ import pytest
 from internal.recommendation.ranked_recommendation_window.domain.model import (
     ReleasePinnedQueryFence,
     RecommendationObjectCard,
+    RecommendationRequestContext,
     RankedCandidate,
     RankedRecommendationWindow,
     RankingResult,
@@ -28,6 +29,11 @@ def test_window_without_fence_is_rejected_not_upgraded():
     window = _window(window_id="missing-fence", subject_id="persona-fence")
     payload = json.loads(store._encode_window(window))
     del payload["contentFence"]
+    with pytest.raises(WindowStoreError):
+        store._decode_window(json.dumps(payload), expected_subject_id=window.subject_id, expected_window_id=window.window_id)
+
+    payload = json.loads(store._encode_window(window))
+    del payload["contextDigest"]
     with pytest.raises(WindowStoreError):
         store._decode_window(json.dumps(payload), expected_subject_id=window.subject_id, expected_window_id=window.window_id)
 
@@ -156,6 +162,8 @@ def _window(
         window_id=window_id,
         subject_id=subject_id,
         scenario="content_feed",
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
+        context_digest="3b84dcc0252ec0f7ae082ef47c6ad3cf9ec96806e82ec472fa49b6ef450b9d52",
         request_digest=f"request-{window_id}",
         ranking=RankingResult(
             experiment_bucket="model",

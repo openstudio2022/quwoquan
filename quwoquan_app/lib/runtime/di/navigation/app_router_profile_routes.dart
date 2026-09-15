@@ -35,6 +35,7 @@ GoRoute _userProfileRoute(Ref ref) => GoRoute(
       extra = UserProfileRouteExtra(
         personaId: m['personaId']?.toString(),
         avatarUrl: m['avatar']?.toString(),
+        avatarAssetId: m['avatarAssetId']?.toString(),
         displayName: m['displayName']?.toString(),
         backgroundImage: m['backgroundImage']?.toString(),
         openMessageComposer: m['openMessageComposer'] == true,
@@ -48,6 +49,8 @@ GoRoute _userProfileRoute(Ref ref) => GoRoute(
         contentEngagementTracker: ref.read(contentEngagementTrackerProvider),
         personaId: extra?.safePersonaId,
         initialAvatarUrl: extra?.safeAvatarUrl,
+        initialAvatarAssetId: extra?.safeAvatarAssetId,
+        initialAvatarAccessMode: extra?.avatarAccessMode,
         initialDisplayName: extra?.safeDisplayName,
         initialBackgroundImageUrl: extra?.safeBackgroundImage,
         referralSource: ReferralSource.authorProfile,

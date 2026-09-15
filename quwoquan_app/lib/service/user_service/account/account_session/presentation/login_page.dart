@@ -14,6 +14,7 @@ import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_legal_config.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/auth/rehearsal_auth_port.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -22,6 +23,7 @@ import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/di/login_dependencies.dart';
+import 'package:quwoquan_app/service/user_service/account/account_session/presentation/synthetic_login_form.dart';
 import 'package:quwoquan_app/runtime/platform/native_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/one_tap_login_native_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/otp_autofill_gateway.dart';
@@ -109,6 +111,7 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
 
   LoginFlowState get _flow => _flowController.state;
   CloudException? _capabilityFailure;
+  SyntheticLoginCapability? _syntheticCapability;
 
   bool get _isAccountSuspensionEntry =>
       authPromptReasonForName(widget.reason) ==
@@ -142,6 +145,8 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
       });
       return;
     }
+    _syntheticCapability = ref.read(syntheticLoginCapabilityProvider);
+    if (_syntheticCapability != null) return;
     _armStateDwellWatchdog();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -160,7 +165,7 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_capabilityFailure != null) return;
+    if (_capabilityFailure != null || _syntheticCapability != null) return;
     if (state == AppLifecycleState.resumed) {
       _refreshCountdownFromDeadline(trackResume: true);
       if (_flow.step == LoginStep.phoneEntry ||
@@ -194,6 +199,16 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
 
   @override
   Widget build(BuildContext context) {
+    if (_syntheticCapability case final capability?) {
+      final form = SyntheticLoginForm(
+        capability: capability,
+        onCompleted: _completeLogin,
+        onCancelled: _dismissLogin,
+      );
+      return widget.surfaceMode == LoginSurfaceMode.inline
+          ? form
+          : AppScaffold(child: form);
+    }
     final content = PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -246,6 +261,8 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
               onAccountRestrictionSupport: () =>
                   unawaited(_openAccountRestrictionSupport()),
               accountRestrictionSupportBusy: _openingAccountRestrictionSupport,
+              showRehearsalOtpHint:
+                  _capabilityFailure == null && rehearsalAuthInstalled,
             ),
     );
     if (widget.surfaceMode == LoginSurfaceMode.inline) {

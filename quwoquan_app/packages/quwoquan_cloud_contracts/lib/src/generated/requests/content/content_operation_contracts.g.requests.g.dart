@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: f6058929d12b4eee312cd457c4084450df8d955d035bbda8b9063ca76f9a5cc6
 
 part of '../../../content/content_operation_contracts.g.dart';
 
@@ -1027,6 +1027,8 @@ final class ContentDiscoveryFeedQuery {
     String? channelId,
     String? sessionId,
     String? feedRequestId,
+    RecommendationViewportProfile? viewportProfile,
+    RecommendationDeviceClass? deviceClass,
     int limit = 20,
     Iterable<String> blockedKeywords = const <String>[],
   }) : identity = identity,
@@ -1037,6 +1039,8 @@ final class ContentDiscoveryFeedQuery {
        channelId = channelId,
        sessionId = sessionId,
        feedRequestId = feedRequestId,
+       viewportProfile = viewportProfile,
+       deviceClass = deviceClass,
        limit = limit,
        blockedKeywords = List.unmodifiable(blockedKeywords) {
     if (this.limit <= 0) {
@@ -1055,6 +1059,8 @@ final class ContentDiscoveryFeedQuery {
   final String? channelId;
   final String? sessionId;
   final String? feedRequestId;
+  final RecommendationViewportProfile? viewportProfile;
+  final RecommendationDeviceClass? deviceClass;
   final int limit;
   final List<String> blockedKeywords;
 
@@ -1071,6 +1077,8 @@ final class ContentDiscoveryFeedQuery {
       "channelId",
       "sessionId",
       "feedRequestId",
+      "viewportProfile",
+      "deviceClass",
       "limit",
       "X-Blocked-Keywords",
     }, path);
@@ -1102,6 +1110,27 @@ final class ContentDiscoveryFeedQuery {
               map["feedRequestId"],
               '$path.feedRequestId',
             ),
+      viewportProfile: map["viewportProfile"] == null
+          ? null
+          : switch (map["viewportProfile"]) {
+              "landscape" => RecommendationViewportProfile.landscape,
+              "portrait" => RecommendationViewportProfile.portrait,
+              "unknown" => RecommendationViewportProfile.unknown,
+              _ => throw FormatException(
+                '$path.viewportProfile' + ' has an invalid enum value',
+              ),
+            },
+      deviceClass: map["deviceClass"] == null
+          ? null
+          : switch (map["deviceClass"]) {
+              "phone" => RecommendationDeviceClass.phone,
+              "tablet" => RecommendationDeviceClass.tablet,
+              "desktop" => RecommendationDeviceClass.desktop,
+              "unknown" => RecommendationDeviceClass.unknown,
+              _ => throw FormatException(
+                '$path.deviceClass' + ' has an invalid enum value',
+              ),
+            },
       limit: map.containsKey("limit")
           ? _generatedRequestInt(map["limit"], '$path.limit')
           : 20,
@@ -1128,6 +1157,9 @@ final class ContentDiscoveryFeedQuery {
     if (this.channelId != null) "channelId": this.channelId!,
     if (this.sessionId != null) "sessionId": this.sessionId!,
     if (this.feedRequestId != null) "feedRequestId": this.feedRequestId!,
+    if (this.viewportProfile != null)
+      "viewportProfile": this.viewportProfile!.wireName,
+    if (this.deviceClass != null) "deviceClass": this.deviceClass!.wireName,
     "limit": this.limit,
     if (this.blockedKeywords.isNotEmpty)
       "X-Blocked-Keywords": this.blockedKeywords
@@ -1718,6 +1750,50 @@ final class DeleteContentCommentCommand {
   };
 }
 
+final class DeletePostCollectionCommand {
+  DeletePostCollectionCommand({
+    required String collectionId,
+    required int expectedVersion,
+  }) : collectionId = collectionId,
+       expectedVersion = expectedVersion {
+    if (this.collectionId.isEmpty) {
+      throw ArgumentError.value(
+        this.collectionId,
+        "collectionId",
+        'must not be blank',
+      );
+    }
+  }
+
+  final String collectionId;
+  final int expectedVersion;
+
+  factory DeletePostCollectionCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "DeletePostCollectionCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "collectionId",
+      "expectedVersion",
+    }, path);
+    return DeletePostCollectionCommand(
+      collectionId: _generatedRequestString(
+        map["collectionId"],
+        '$path.collectionId',
+      ),
+      expectedVersion: _generatedRequestInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "collectionId": this.collectionId,
+    "expectedVersion": this.expectedVersion,
+  };
+}
+
 final class DeletePostCommand {
   DeletePostCommand({required String postId}) : postId = postId.trim() {
     if (this.postId.isEmpty) {
@@ -2009,6 +2085,89 @@ final class GetObjectIntersectionsQuery {
   Map<String, Object?> toWire() => <String, Object?>{
     "objectId": this.objectId,
     if (this.objectType != null) "objectType": this.objectType!,
+    "limit": this.limit,
+  };
+}
+
+final class GetPostCollectionManagementQuery {
+  GetPostCollectionManagementQuery({required String collectionId})
+    : collectionId = collectionId {
+    if (this.collectionId.isEmpty) {
+      throw ArgumentError.value(
+        this.collectionId,
+        "collectionId",
+        'must not be blank',
+      );
+    }
+  }
+
+  final String collectionId;
+
+  factory GetPostCollectionManagementQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetPostCollectionManagementQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "collectionId",
+    }, path);
+    return GetPostCollectionManagementQuery(
+      collectionId: _generatedRequestString(
+        map["collectionId"],
+        '$path.collectionId',
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "collectionId": this.collectionId,
+  };
+}
+
+final class GetPostCollectionQuery {
+  GetPostCollectionQuery({
+    required String collectionId,
+    String? cursor,
+    required int limit,
+  }) : collectionId = collectionId,
+       cursor = cursor,
+       limit = limit {
+    if (this.collectionId.isEmpty) {
+      throw ArgumentError.value(
+        this.collectionId,
+        "collectionId",
+        'must not be blank',
+      );
+    }
+  }
+
+  final String collectionId;
+  final String? cursor;
+  final int limit;
+
+  factory GetPostCollectionQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetPostCollectionQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "collectionId",
+      "cursor",
+      "limit",
+    }, path);
+    return GetPostCollectionQuery(
+      collectionId: _generatedRequestString(
+        map["collectionId"],
+        '$path.collectionId',
+      ),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: _generatedRequestInt(map["limit"], '$path.limit'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "collectionId": this.collectionId,
+    if (this.cursor != null) "cursor": this.cursor!,
     "limit": this.limit,
   };
 }
@@ -2912,6 +3071,102 @@ final class RequestContentMediaOriginalAccessCommand {
   Map<String, Object?> toWire() => <String, Object?>{
     "mediaId": this.mediaId,
     "purpose": this.purpose.wireName,
+  };
+}
+
+final class SavePostCollectionCommand {
+  SavePostCollectionCommand({
+    required String collectionId,
+    required int expectedVersion,
+    required String name,
+    String? coverAssetId,
+    required PostCollectionVisibility visibility,
+    required List<String> postIds,
+  }) : collectionId = collectionId,
+       expectedVersion = expectedVersion,
+       name = name,
+       coverAssetId = coverAssetId,
+       visibility = visibility,
+       postIds = List.unmodifiable(postIds) {
+    if (this.collectionId.isEmpty) {
+      throw ArgumentError.value(
+        this.collectionId,
+        "collectionId",
+        'must not be blank',
+      );
+    }
+    if (this.name.isEmpty) {
+      throw ArgumentError.value(this.name, "name", 'must not be blank');
+    }
+    if (this.postIds.length > 100) {
+      throw ArgumentError.value(
+        this.postIds,
+        "postIds",
+        "item count exceeds 100",
+      );
+    }
+  }
+
+  final String collectionId;
+  final int expectedVersion;
+  final String name;
+  final String? coverAssetId;
+  final PostCollectionVisibility visibility;
+  final List<String> postIds;
+
+  factory SavePostCollectionCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "SavePostCollectionCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "collectionId",
+      "expectedVersion",
+      "name",
+      "coverAssetId",
+      "visibility",
+      "postIds",
+    }, path);
+    return SavePostCollectionCommand(
+      collectionId: _generatedRequestString(
+        map["collectionId"],
+        '$path.collectionId',
+      ),
+      expectedVersion: _generatedRequestInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
+      name: _generatedRequestString(map["name"], '$path.name'),
+      coverAssetId: map["coverAssetId"] == null
+          ? null
+          : _generatedRequestString(map["coverAssetId"], '$path.coverAssetId'),
+      visibility: switch (map["visibility"]) {
+        "public" => PostCollectionVisibility.public,
+        "private" => PostCollectionVisibility.private,
+        _ => throw FormatException(
+          '$path.visibility' + ' has an invalid enum value',
+        ),
+      },
+      postIds: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["postIds"],
+          '$path.postIds',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.postIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "collectionId": this.collectionId,
+    "expectedVersion": this.expectedVersion,
+    "name": this.name,
+    if (this.coverAssetId != null) "coverAssetId": this.coverAssetId!,
+    "visibility": this.visibility.wireName,
+    "postIds": this.postIds.map((value) => value).toList(growable: false),
   };
 }
 
@@ -3881,6 +4136,10 @@ CloudOperationRequestPayload encodeContentPostGetFeedGeneratedRequest(
       if (request.sessionId != null) "sessionId": request.sessionId!,
       if (request.feedRequestId != null)
         "feedRequestId": request.feedRequestId!,
+      if (request.viewportProfile != null)
+        "viewportProfile": (request.viewportProfile!.wireName).toString(),
+      if (request.deviceClass != null)
+        "deviceClass": (request.deviceClass!.wireName).toString(),
       "limit": (request.limit).toString(),
     },
     headers: <String, String>{
@@ -4038,6 +4297,75 @@ encodeContentPostSubmitPostPublicationGeneratedRequest(
         "authorAvatarUrlSnapshot": request.authorAvatarUrlSnapshot!,
       if (request.personaContextVersion != null)
         "personaContextVersion": request.personaContextVersion!,
+    },
+  );
+}
+
+CloudOperationRequestPayload
+encodeContentPostCollectionDeletePostCollectionGeneratedRequest(
+  DeletePostCollectionCommand request,
+) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{"collectionId": request.collectionId},
+    body: <String, Object?>{"expectedVersion": request.expectedVersion},
+  );
+}
+
+CloudOperationRequestPayload
+encodeContentPostCollectionGetPostCollectionGeneratedRequest(
+  GetPostCollectionQuery request,
+) {
+  return CloudOperationRequestPayload(
+    body: <String, Object?>{
+      'operationName': "PostCollection",
+      'variables': <String, Object?>{
+        if (request.cursor != null) "after": request.cursor!,
+        "collectionId": request.collectionId,
+        "first": request.limit,
+      },
+      'extensions': <String, Object?>{
+        'persistedQuery': <String, Object?>{
+          'version': 1,
+          'sha256Hash': "aabadb9772a276ea6c2837d0b04508e7fcbb1d8be5d6194e01ba837a6dee0f5a",
+        },
+      },
+    },
+  );
+}
+
+CloudOperationRequestPayload
+encodeContentPostCollectionGetPostCollectionManagementGeneratedRequest(
+  GetPostCollectionManagementQuery request,
+) {
+  return CloudOperationRequestPayload(
+    body: <String, Object?>{
+      'operationName': "PostCollectionManagement",
+      'variables': <String, Object?>{
+        "collectionId": request.collectionId,
+        "first": 100,
+      },
+      'extensions': <String, Object?>{
+        'persistedQuery': <String, Object?>{
+          'version': 1,
+          'sha256Hash': "a57f5fda7db3268872328cb520504de42bd12fe34e97bff61d804674b112d4db",
+        },
+      },
+    },
+  );
+}
+
+CloudOperationRequestPayload
+encodeContentPostCollectionSavePostCollectionGeneratedRequest(
+  SavePostCollectionCommand request,
+) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{"collectionId": request.collectionId},
+    body: <String, Object?>{
+      "expectedVersion": request.expectedVersion,
+      "name": request.name,
+      if (request.coverAssetId != null) "coverAssetId": request.coverAssetId!,
+      "visibility": request.visibility.wireName,
+      "postIds": request.postIds.map((value) => value).toList(growable: false),
     },
   );
 }

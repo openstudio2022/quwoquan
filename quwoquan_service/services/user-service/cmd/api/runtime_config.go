@@ -64,7 +64,11 @@ func newUserOperationGuard(
 type config struct {
 	servicekit.BaseConfig `yaml:",inline"`
 
-	Postgres servicekit.PostgresConfig `yaml:"postgres"`
+	Postgres                 servicekit.PostgresConfig `yaml:"postgres"`
+	CollectionQueryAuthority struct {
+		ActiveKeyID      string `yaml:"active_key_id" env:"COLLECTION_QUERY_AUTHORITY_ACTIVE_KEY_ID"`
+		KeyringSecretRef string `yaml:"keyring_secret_ref" env:"COLLECTION_QUERY_AUTHORITY_KEYRING_SECRET_REF"`
+	} `yaml:"collection_query_authority"`
 
 	// MongoDB 不用 servicekit.MongoConfig：那份声明把 uri/database 标为
 	// required，会把 user-service 现有的「未注入 uri 即 8 处功能降级」变成

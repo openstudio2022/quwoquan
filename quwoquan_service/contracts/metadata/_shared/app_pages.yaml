@@ -24,6 +24,8 @@ pages:
 
   - { page_name: video_book, route_id: videoBook, collect_page_access: true }
 
+  - { page_name: post_collection, route_id: postCollection, collect_page_access: true }
+
   - { page_name: chat, route_id: chat, collect_page_access: true }
 
   - { page_name: greeting_inbox, route_id: greetingInbox, collect_page_access: true }

@@ -80,10 +80,27 @@ def _json(path):
 
 
 def _fixture_review(ref, execution_id, draft_ref, raw):
+    actor = lambda role: {"host": "cursor", "modelFamily": "gpt", "sessionId": role,
+                          "invocation": {"provider": "openai", "model": "test-double", "runId": role}}
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
+    revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    page = {"ref": draft_ref, "digest": digest_bytes(raw)}
+    disposition = {"issueId": "offline-fixture", "objectRef": ref,
+                   "sourceAnchor": {"origin": "source", "start": 0, "end": 1, "selector": "document"},
+                   "sourceDigest": digest_bytes(raw), "targetDigest": digest_bytes(raw),
+                   "detectedType": "SEMANTIC_EXACT", "proposedMapping": None, "lossFields": [],
+                   "severity": "info", "actor": {"actorId": "test-reviewer", "actorType": "independent_reviewer"},
+                   "reason": "test fixture preserves exact draft", "policyVersion": "1.0.0",
+                   "reviewStatus": "reviewed_confirmed", "outcome": "auto_continue",
+                   "processingDisposition": "preserved", "protocol": protocol, "objectRevision": revision}
     return {"schema": "quwoquan_data.content_review", "stage": "5.review", "executionId": execution_id,
-            "objectRef": ref, "decision": "approved", "draft": {"ref": draft_ref, "digest": digest_bytes(raw)},
+            "objectRef": ref, "decision": "approved", "author": actor("test-author"),
+            "reviewer": actor("test-reviewer"),
+            "candidateBindings": {"origin": "execution_draft", "page": page,
+                                  "manifest": None, "semanticDocument": None},
             "dimensions": [{"name": "TEST DOUBLE, NOT REAL REVIEW", "decision": "approved", "issues": []}],
-            "blockingIssues": [], "assetRights": []}
+            "blockingIssues": [], "assetRights": [], "protocol": protocol,
+            "objectRevision": revision, "dispositions": [disposition]}
 
 
 def _bind_review(manifest, ref, review_raw):
@@ -292,7 +309,26 @@ def test_operator_selection_is_engineering_only_and_explicit():
     assert value["authority"]["evidence"].strip()
     assert value["authority"]["grantsProductionPremium"] is False
     assert value["authority"]["changesRightsFacts"] is False
+    page_window = ROOT / "quwoquan_app/lib/service/content_service/content/post/domain/discovery_feed_resident_page_window.dart"
+    page_size = int(re.search(r"homeFeedPageItemLimit = (\d+)", page_window.read_text()).group(1))
+    channels = {row["channelId"]: row["orderedObjectRefs"] for row in value["channels"]}
+    for refs in channels.values():
+        assert len(refs) == len(set(refs))
+        assert len(refs) >= page_size + 1
+    assert {ref.split("/")[1] for ref in channels["premium"]} == {"image", "video"}
     value["qualityScore"] = 0.85
+    with pytest.raises(ValueError):
+        validate_selection(value)
+
+
+@pytest.mark.parametrize("premium_refs", [[POST_REFS[1]], [POST_REFS[1], POST_REFS[2]]])
+def test_premium_engineering_selection_accepts_image_and_mixed_works(premium_refs):
+    value = selection()
+    value["channels"][1]["orderedObjectRefs"] = premium_refs
+    validate_selection(value)
+    assert value["authority"]["grantsProductionPremium"] is False
+    assert value["authority"]["changesRightsFacts"] is False
+    value["authority"]["grantsProductionPremium"] = True
     with pytest.raises(ValueError):
         validate_selection(value)
 
@@ -422,6 +458,54 @@ def test_strict_public_projection_rejects_internal_and_unknown_fields():
             validator.validate_projection({**view, key: "forbidden"}, "content_post_projection")
 
 
+@pytest.mark.parametrize("entity_type, expected", [("景区", "sight"), ("自然景观", "natural_landscape"), ("未知类型", None)])
+def test_homepage_type_matches_post_and_homepage_projections(current_source, monkeypatch, entity_type, expected):
+    from content.release.canonical.offline_snapshot_source import capture_closure, capture_media
+    from content.release.canonical.offline_snapshot_projection import project_post, project_homepages
+    source = CanonicalSource(current_source)
+    entities, creators, _ = capture_closure(source, list(POST_REFS))
+    owners = list(POST_REFS) + ["entities/" + ref for ref in entities] + ["creators/" + ref for ref in creators]
+    rows, _ = capture_media(source, owners)
+    media = {row["assetId"]: row for row in rows}
+    read_json = source.json
+
+    def entity_type_fixture(ref):
+        value = read_json(ref)
+        if ref == HOME_REF + "/manifest.json":
+            value["type"] = entity_type
+        return value
+
+    monkeypatch.setattr(source, "json", entity_type_fixture)
+    validator = PublicContractValidator(ROOT)
+    if expected is None:
+        with pytest.raises(OfflineSnapshotError, match="HOMEPAGE_TYPE_UNSUPPORTED"):
+            project_post(source, POST_REFS[2], media, validator)
+        with pytest.raises(OfflineSnapshotError, match="HOMEPAGE_TYPE_UNSUPPORTED"):
+            project_homepages(source, entities, media, STAMP, validator)
+    else:
+        post = project_post(source, POST_REFS[2], media, validator)
+        home = project_homepages(source, entities, media, STAMP, validator)[0]["projection"]
+        assert post["projection"]["primaryHomepageType"] == post["detail"]["primaryHomepageType"] == home["homepageType"] == expected
+
+
+def test_homepage_type_mapping_executes_online_go_declaration(tmp_path):
+    from content.release.canonical.offline_snapshot_projection import ENTITY_ROOT, runtime_homepage_type
+    ref = ENTITY_ROOT + "/infrastructure/homepageimport/loader.go"
+    raw = (ROOT / ref).read_text()
+    declaration = re.search(r"var entityTypeToHomepageType = map\[string\]string\{.*?\n\}", raw, re.S).group()
+    program = 'package main\nimport("encoding/json";"os")\n' + declaration + '\nfunc main(){json.NewEncoder(os.Stdout).Encode(entityTypeToHomepageType)}\n'
+    path = tmp_path / "homepage_type.go"
+    path.write_text(program)
+    env = {**os.environ, "GOCACHE": str(ROOT / ".qwq_output/env/repo/local/offline-go-cache"), "GOTOOLCHAIN": "local", "GOPROXY": "off"}
+    result = subprocess.run(["go", "run", str(path)], capture_output=True, text=True, check=True, env=env)
+    online = json.loads(result.stdout)
+    validator = PublicContractValidator(ROOT)
+    assert {key: runtime_homepage_type(key, validator) for key in online} == online
+    assert validator.files[ref] == (ROOT / ref).read_bytes()
+    with pytest.raises(OfflineSnapshotError, match="HOMEPAGE_TYPE_UNSUPPORTED"):
+        runtime_homepage_type("未知类型", validator)
+
+
 def test_current_homepage_identity_parity(tmp_path):
     source = (ROOT / "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model/homepage.go").read_text()
     functions = [re.search(r"func " + name + r"\(.*?\n\}", source, re.S).group() for name in ("StableID", "CanonicalEntityID", "canonicalSlug")]
@@ -442,14 +526,49 @@ def test_bundle_mutation_never_writes_a_manifest(tmp_path, current_source):
     assert not (tmp_path / "alpha/manifest.json").exists()
 
 
-def test_nonprod_only_asset_registration():
+def test_alpha_projection_registers_snapshot_and_online_excludes_it(tmp_path, current_source):
     import yaml
-    pubspec = yaml.safe_load((ROOT / "quwoquan_app/pubspec.yaml").read_text())
-    registrations = [r for r in pubspec["flutter"]["assets"] if isinstance(r, dict) and r["path"].startswith("assets/content/alpha/")]
-    assert {r["path"] for r in registrations} == {
-        "assets/content/alpha/manifest.json", "assets/content/alpha/bundle_identity.json", "assets/content/alpha/media/",
-    }
-    assert all(r["flavors"] == ["nonprod"] for r in registrations)
+    from quwoquan_app.scripts.device.app_source_isolation import (
+        SourceIsolationError, audit_source_closure, project_source_inputs,
+    )
+    required = {"assets/content/alpha/manifest.json", "assets/content/alpha/bundle_identity.json", "assets/content/alpha/media/"}
+    shared_pubspec = ROOT / "quwoquan_app/pubspec.yaml"
+    shared_before = shared_pubspec.read_bytes()
+    shared_assets = yaml.safe_load(shared_before)["flutter"]["assets"]
+    assert not any((asset["path"] if isinstance(asset, dict) else asset).startswith("assets/content/alpha/") for asset in shared_assets)
+    launch = _json(ROOT / "quwoquan_app/tool/app_launch_contract_codegen/app_launch_contract.generated.json")["appLaunchManifest"]
+    entries = launch["content_source_entrypoints"]
+    # 合成小型App验证真实投影函数，不复制生产App或把测试媒体当设备证据。
+    app = tmp_path / "source"
+    _put(app / "pubspec.yaml", b"name: quwoquan_app\ndependencies: {}\nflutter:\n  assets: []\n")
+    _put(app / entries["bundled_snapshot"], b"import 'reader_bundled.dart';\nvoid main() {}\n")
+    _put(app / "lib/reader_bundled.dart", b"class BundledReader {}\n")
+    _put(app / entries["remote"], b"void main() {}\n")
+    bundle = build_bundle(repo=ROOT, publish_root=current_source, selection=selection(), source_revision=REVISION)
+    export_bundle(bundle, app / "assets/content/alpha")
+    before = (app / "pubspec.yaml").read_bytes()
+    alpha, online = tmp_path / "alpha", tmp_path / "online"
+    alpha_report = project_source_inputs(app, alpha, entrypoint=entries["bundled_snapshot"], alpha=True)
+    online_report = project_source_inputs(app, online, entrypoint=entries["remote"])
+    assert set(yaml.safe_load((alpha / "pubspec.yaml").read_bytes())["flutter"]["assets"]) == required
+    expected_files = {path.relative_to(app) for path in (app / "assets/content/alpha").rglob("*") if path.is_file()}
+    actual_files = {path.relative_to(alpha) for path in (alpha / "assets/content/alpha").rglob("*") if path.is_file()}
+    assert actual_files == expected_files
+    for relative in expected_files:
+        assert (alpha / relative).read_bytes() == (app / relative).read_bytes()
+    assert (alpha / "lib/reader_bundled.dart").is_file()
+    assert not (online / "assets/content/alpha").exists()
+    assert not (online / "lib/reader_bundled.dart").exists()
+    assert not (online / entries["bundled_snapshot"]).exists()
+    assert yaml.safe_load((online / "pubspec.yaml").read_bytes())["flutter"]["assets"] == []
+    assert audit_source_closure(online, entries["remote"])["sourceDigests"] == online_report["sourceDigests"]
+    assert not alpha_report["artifactVerified"] and not online_report["artifactVerified"]
+    assert (app / "pubspec.yaml").read_bytes() == before
+    assert shared_pubspec.read_bytes() == shared_before
+    _put(app / entries["remote"], b"import 'reader_bundled.dart';\nvoid main() {}\n")
+    with pytest.raises(SourceIsolationError, match="reader_bundled"):
+        project_source_inputs(app, tmp_path / "invalid-online", entrypoint=entries["remote"])
+    assert not (tmp_path / "invalid-online").exists()
 
 
 def test_cli_registers_downstream_export_without_producer_fields():

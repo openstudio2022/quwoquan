@@ -9,6 +9,10 @@ import (
 )
 
 func main() {
+	var nativeOrientationOnly bool
+	var checkNativeOrientation bool
+	flag.BoolVar(&nativeOrientationOnly, "native-orientation-only", false, "generate only native orientation contract outputs")
+	flag.BoolVar(&checkNativeOrientation, "check-native-orientation", false, "check native orientation contract freshness")
 	var metadataDir string
 	var appDir string
 	var contractGraphPath string
@@ -146,6 +150,18 @@ func main() {
 		assistantRuntimeEnumsGoOutput != "" ||
 			citationDestinationsGoOutput != "" ||
 			realtimeContractsOnly
+	if checkNativeOrientation && !nativeOrientationOnly {
+		exitErr(fmt.Errorf("--check-native-orientation requires --native-orientation-only"))
+	}
+	if nativeOrientationOnly {
+		if appIdentityOnly || appLaunchContractOnly || intersectionMetadataOnly || shellNavigationMetadataOnly || serviceOutputRequested || checkAppIdentity || checkAppLaunchContract || checkShellNavigationMetadata {
+			exitErr(fmt.Errorf("--native-orientation-only cannot be combined with other output modes"))
+		}
+		if err := runNativeOrientationMode(metadataDir, appDir, checkNativeOrientation); err != nil {
+			exitErr(err)
+		}
+		return
+	}
 	if checkShellNavigationMetadata && !shellNavigationMetadataOnly {
 		exitErr(fmt.Errorf(
 			"--check-shell-navigation-metadata requires --shell-navigation-metadata-only",
@@ -271,6 +287,10 @@ func main() {
 		contractGraphPath,
 		contractGraphLockPath,
 	); err != nil {
+		exitErr(err)
+	}
+	// 专用 manifest 与常规 App 链一起生成，但不并入 Cloud handoff 输出清单。
+	if err := runNativeOrientationMode(metadataDir, appDir, false); err != nil {
 		exitErr(err)
 	}
 	beginGeneratedManifest(appDir, activeContractSHA256)
@@ -735,6 +755,9 @@ func main() {
 		exitErr(err)
 	}
 	if err := removeUntrackedGeneratedOutputs(); err != nil {
+		exitErr(err)
+	}
+	if err := generateClientValues(appDir); err != nil {
 		exitErr(err)
 	}
 	if err := formatGeneratedDartOutputs(); err != nil {

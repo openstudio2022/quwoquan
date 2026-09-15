@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:quwoquan_app/runtime/config/app_content_source.dart';
-
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
@@ -47,6 +46,10 @@ abstract final class CloudRuntimeConfig {
   static bool get isHydrated => _resolvedPackage != null;
 
   static AppContentSource get contentSource => _requiredPackage().contentSource;
+
+  /// 已消费的签名配置投影；不是 auth/pending/rehearsal 三存储隔离回执。
+  static VerifiedRehearsalSpace? get rehearsalSpace =>
+      _requiredPackage().rehearsalSpace;
 
   /// 未验证、未水合和离线文档均不授予网络能力。
   static bool get networkAccessAllowed =>
@@ -131,6 +134,8 @@ abstract final class CloudRuntimeConfig {
     NativeRuntimeConfigBridge bridge = const NativeRuntimeConfigBridge(),
     RuntimePackageResolver? resolver,
     String? expectedTarget,
+    // 只能由制品入口供给；离线缺席时 resolver 拒绝，不能从文档自取。
+    String? expectedOfflineSnapshotDigest,
   }) async {
     _clearHydratedState();
     try {
@@ -153,6 +158,7 @@ abstract final class CloudRuntimeConfig {
             expectedTarget: trustedTarget,
             trustedBuildProfile: trustedBuildProfile,
             trustedPublicKeys: trustedPublicKeys,
+            expectedOfflineSnapshotDigest: expectedOfflineSnapshotDigest,
           );
       final verifiedIdentity = _verifiedIdentity(
         runtimeConfig,

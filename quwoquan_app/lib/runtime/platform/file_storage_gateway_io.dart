@@ -8,7 +8,8 @@ import 'package:quwoquan_app/runtime/platform/storage/media_cache_file_storage_g
 ///
 /// This file is allowlisted for direct `dart:io` usage because it IS the
 /// anti-corruption boundary (see verify_lib_dart_io_budget.py).
-class IoFileStorageGateway implements MediaCacheFileStorageGateway {
+class IoFileStorageGateway
+    implements MediaCacheFileStorageGateway, AtomicFileStorageGateway {
   const IoFileStorageGateway();
 
   @override
@@ -59,6 +60,30 @@ class IoFileStorageGateway implements MediaCacheFileStorageGateway {
   @override
   Future<void> writeAsString(String path, String contents) async {
     await File(path).writeAsString(contents);
+  }
+
+  @override
+  Future<void> writeAsStringAtomically(
+    String path,
+    String contents, {
+    void Function()? beforeCommit,
+  }) async {
+    // 临时目录与目标同一文件系统，各 writer 不共享临时名字。
+    final temporary = await File(path).parent.createTemp('.atomic-');
+    final staged = File('${temporary.path}/value');
+    try {
+      await staged.writeAsString(contents, flush: true);
+      beforeCommit?.call();
+      // fence 检查与替换之间不让出 isolate，取消不能穿过提交点。
+      staged.renameSync(path);
+    } finally {
+      // 提交后的清理失败不能把已提交事务伪报为写入失败。
+      try {
+        await temporary.delete(recursive: true);
+      } on FileSystemException {
+        // 残留只在私有临时目录，不影响 active 文件。
+      }
+    }
   }
 
   @override

@@ -10,11 +10,29 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as contracts;
 
+typedef BundledFollowingFeedOverlay = Future<DiscoveryFeedPage> Function({
+  required String category,
+  String? channelId,
+  String? identity,
+  String? type,
+  String? subCategory,
+  required int limit,
+  String? cursor,
+  String sort,
+  String? sessionId,
+  String? feedRequestId,
+  contracts.CloudOperationCancellationSignal? cancellation,
+  DateTime? deadlineAt,
+});
+
+BundledFollowingFeedOverlay? bundledFollowingFeedOverlay;
+
 /// 消费 producer 封存的频道选择；不模拟在线推荐、登录或服务 activation。
 final class BundledContentDiscoveryFeedQuery
     implements ContentDiscoveryFeedQuery {
-  BundledContentDiscoveryFeedQuery({required this.loadBundle});
+  BundledContentDiscoveryFeedQuery({required this.loadBundle, this.checkScope});
   final Future<OfflineContentBundle> Function() loadBundle;
+  final void Function()? checkScope;
   Future<OfflineContentBundle>? _bundle;
 
   @override
@@ -32,6 +50,7 @@ final class BundledContentDiscoveryFeedQuery
     contracts.CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
+    checkScope?.call();
     final readBudgetDeadline = DateTime.now().add(const Duration(seconds: 6));
     final effectiveDeadline =
         deadlineAt == null || deadlineAt.isAfter(readBudgetDeadline)
@@ -44,16 +63,38 @@ final class BundledContentDiscoveryFeedQuery
     if (limit < 1 || limit > 100) {
       throw const OfflineContentFailure('bundle_query_limit_invalid');
     }
-    if (channelId == 'following' ||
-        category == 'following' ||
-        sort != kFeedSortRecommend) {
+    if (channelId == 'following' || category == 'following') {
+      final overlay = bundledFollowingFeedOverlay;
+      if (overlay != null) {
+        final result = await overlay(
+          category: category,
+          channelId: channelId,
+          identity: identity,
+          type: type,
+          subCategory: subCategory,
+          limit: limit,
+          cursor: cursor,
+          sort: sort,
+          sessionId: sessionId,
+          feedRequestId: feedRequestId,
+          cancellation: cancellation,
+          deadlineAt: deadlineAt,
+        );
+        checkScope?.call();
+        return result;
+      }
+      throw contentCapabilityUnavailable('personalized_feed');
+    }
+    if (sort != kFeedSortRecommend) {
       throw contentCapabilityUnavailable('personalized_feed');
     }
     final bundle = await contracts.runCloudOperationPrerequisite(
-      () => _bundle ??= loadBundle().catchError((Object error) {
-        _bundle = null;
-        throw error;
-      }),
+      () => checkScope != null
+          ? loadBundle()
+          : _bundle ??= loadBundle().catchError((Object error) {
+              _bundle = null;
+              throw error;
+            }),
       cancellation: cancellation,
       deadlineAt: effectiveDeadline,
     );
@@ -131,6 +172,7 @@ final class BundledContentDiscoveryFeedQuery
       cancellation: cancellation,
       deadlineAt: effectiveDeadline,
     );
+    checkScope?.call();
     return DiscoveryFeedPage(
       items: page
           .map(const ContentPostProjectionMapper().toDto)

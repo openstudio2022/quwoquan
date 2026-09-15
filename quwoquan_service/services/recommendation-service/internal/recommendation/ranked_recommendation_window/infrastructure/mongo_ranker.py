@@ -330,6 +330,12 @@ class MongoCandidateRanker:
             user_feature_snapshot=user_snapshot,
             candidates=ranked_candidates,
             object_cards=object_cards,
+            profile_revision=(
+                str(profile["checkpoint"])
+                if "checkpoint" in profile and isinstance(profile["checkpoint"], int)
+                and not isinstance(profile["checkpoint"], bool) and profile["checkpoint"] >= 0
+                else "unknown"
+            ),
         )
 
     # 协同召回路的点查上限：collaborativeFeatures 是离线物化的 per-subject

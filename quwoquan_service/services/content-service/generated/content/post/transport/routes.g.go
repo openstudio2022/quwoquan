@@ -145,15 +145,17 @@ func generatedSplitPath(raw string) []string {
 }
 
 type GeneratedGetFeedParams struct {
-	Identity      string
-	Type          string
-	Sort          string
-	Cursor        string
-	SubCategory   string
-	ChannelId     string
-	SessionId     string
-	FeedRequestId string
-	Limit         int
+	Identity        string
+	Type            string
+	Sort            string
+	Cursor          string
+	SubCategory     string
+	ChannelId       string
+	SessionId       string
+	FeedRequestId   string
+	ViewportProfile string
+	DeviceClass     string
+	Limit           int
 }
 
 const (
@@ -172,6 +174,8 @@ func BindGeneratedGetFeedParams(r *http.Request) (GeneratedGetFeedParams, error)
 	out.ChannelId = strings.TrimSpace(q.Get("channelId"))
 	out.SessionId = strings.TrimSpace(q.Get("sessionId"))
 	out.FeedRequestId = strings.TrimSpace(q.Get("feedRequestId"))
+	out.ViewportProfile = strings.TrimSpace(q.Get("viewportProfile"))
+	out.DeviceClass = strings.TrimSpace(q.Get("deviceClass"))
 	rawLimit := strings.TrimSpace(q.Get("limit"))
 	if rawLimit != "" {
 		parsed, err := strconv.Atoi(rawLimit)

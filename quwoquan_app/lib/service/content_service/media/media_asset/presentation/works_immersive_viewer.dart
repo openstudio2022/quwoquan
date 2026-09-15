@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:quwoquan_app/l10n/app_localizations.dart';
+
+import 'package:quwoquan_app/runtime/di/presentation/content_viewer_composition.dart';
 import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 
 import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
@@ -10,9 +13,8 @@ import 'dart:math' show max;
 import 'dart:ui' show FontFeature, ImageFilter;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart' show kLongPressTimeout;
 import 'package:flutter/material.dart' show Theme;
-import 'package:flutter/rendering.dart'
-    show RenderBox, RenderObject, RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart' show LaunchMode, launchUrl;
@@ -68,7 +70,8 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/domain/work_browser_view_data.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide Visibility;
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
@@ -101,6 +104,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_playback_center_glyph.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_playback_timeline.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_player_widget.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_player_surface_builder.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_timeline_preview.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart'
     show ActivePersonaContextViewData;
@@ -125,6 +129,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/works_immersive_viewer_paging.dart';
 part 'works_immersive_viewer_controls.dart';
 part 'works_immersive_viewer_canvas.dart';
+part 'works_immersive_viewer_top_chrome.dart';
 part 'works_immersive_viewer_engagement_actions.dart';
 part 'works_immersive_viewer_feed_terminal.dart';
 part 'works_immersive_viewer_intersection_actions.dart';
@@ -133,6 +138,7 @@ part 'works_immersive_viewer_video_chrome.dart';
 part 'works_immersive_viewer_lifecycle.dart';
 part 'works_immersive_viewer_presentation.dart';
 part 'works_immersive_viewer_build.dart';
+part 'works_immersive_viewer_provenance.dart';
 
 class _WorksTrackingAttribution {
   const _WorksTrackingAttribution({
@@ -163,6 +169,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     this.onHideSystemNav,
     this.showTopNavigation = true,
     this.externalPosts,
+    this.videoAssociationBuilder,
     this.externalPostViews,
     this.initialPostIndex = 0,
     this.initialImageIndex = 0,
@@ -184,6 +191,8 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final void Function(
     String userId, {
     String? avatarUrl,
+    String? avatarAssetId,
+    MediaDeliveryAccessMode? avatarAccessMode,
     String? displayName,
     String? backgroundUrl,
   })
@@ -196,6 +205,10 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final VoidCallback? onHideSystemNav;
   final bool showTopNavigation;
   final List<ContentPostViewData>? externalPosts;
+
+  /// 只注入真实关联展示组件；缺席不占位，不在 viewer 合成关联事实。
+  final Widget? Function(BuildContext context, ContentPostViewData post)?
+  videoAssociationBuilder;
   final List<ContentSurfaceView>? externalPostViews;
   final int initialPostIndex;
   final int initialImageIndex;
@@ -234,6 +247,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   Set<String> _selectedWorkFilterIds = <String>{'all'};
   int _currentPage = 0;
   final Map<String, int> _photoInnerIndex = <String, int>{};
+  final Map<String, ImageBookCurrentMediaState> _imageReadiness = {};
+  final Map<String, ValueChanged<ImageBookCurrentMediaState>>
+  _imageReadinessListeners = {};
   final Map<String, int> _articleInnerIndex = <String, int>{};
   final Map<String, int> _resolvedArticlePageCount = <String, int>{};
   final Map<String, String> _articlePaperThemeOverrides = <String, String>{};
@@ -294,13 +310,36 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   /// 外层作品页切换时失效旧 canvas 的延迟 session 回调。
   int _videoViewportEpoch = 0;
-  String? _videoDurationStageKey;
-  bool _videoDurationWindowActive = false;
-  int _videoDurationWindowRevision = 0;
-  Timer? _videoDurationWindowTimer;
   Timer? _externalEmptyTimer;
   bool _externalEmptyTimedOut = false;
   bool _authContinuationResumeScheduled = false;
+  bool _pureMediaLandscape = false;
+  EdgeInsets? _portraitViewPadding;
+  bool _landscapeTransitionInFlight = false;
+  bool _landscapeControlsVisible = true;
+  bool _landscapeForeground = true;
+  int _systemChromeGeneration = 0;
+  Future<void> _systemChromeQueue = Future<void>.value();
+  late final Future<void> Function(Object, StackTrace)
+  _reportSystemChromeFailure;
+  bool _landscapeControlRefreshScheduled = false;
+  int _landscapeGeneration = 0;
+  int _landscapeChromeEpoch = 0;
+  final Set<int> _landscapeHeldPointers = <int>{};
+  final Map<int, Duration> _landscapePointerDownAt = <int, Duration>{};
+  final Map<int, bool> _landscapeVisibilityAtPointerDown = <int, bool>{};
+  bool? _landscapePendingTapVisibilityAtDown;
+  int _landscapeGestureEpoch = 0;
+  bool _suppressLandscapeCanvasTap = false;
+  int _landscapeModalDepth = 0;
+  Timer? _landscapeControlsTimer;
+  VideoPlaybackSession? _landscapeObservedSession;
+  bool _landscapeWaitingForMedia = false;
+  bool _landscapeAccessibleNavigation = false;
+  bool _landscapeRouteActive = true;
+  int _landscapeRouteGeneration = 0;
+  final ScrollController _landscapeCommentController = ScrollController();
+  VoidCallback? _releasePureMediaNavigation;
   late final FeedPerformanceObservability _feedPerformanceObservability;
   late final ContentBehaviorTrackerPort _contentBehaviorTracker;
   late final ContentEngagementTracker _contentEngagementTracker;
@@ -322,6 +361,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   void _evictPostLocalState(String postId) {
     _articleHydrationAdmission.cancelPost(postId);
     _photoInnerIndex.remove(postId);
+    _imageReadiness.remove(postId);
+    _imageReadinessListeners.remove(postId);
     _articleInnerIndex.remove(postId);
     _resolvedArticlePageCount.remove(postId);
     _articlePaperThemeOverrides.remove(postId);
@@ -357,6 +398,13 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final telemetry = ref.read(exceptionTelemetryPortProvider);
+    _reportSystemChromeFailure = (error, stack) =>
+        telemetry.recordHandledException(
+          source: 'content.works_viewer.system_chrome',
+          error: error,
+          stackTrace: stack,
+        );
     _postStateWindow = WorksViewerPostStateWindow(_evictPostLocalState);
     _gestureIntentController.addListener(_handleGestureIntentChanged);
     _feedPerformanceObservability = ref.read(
@@ -371,6 +419,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     _configureExternalEmptyDeadline();
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       if (!mounted) return;
+      _syncImmersiveNavigation();
       primeMediaViewerInteractionSnapshot(
         ref,
         widget.initialInteractionSnapshot,
@@ -391,7 +440,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             _commentSplitPostId == null) {
           setState(() {
             _commentSplitPostId = posts[initialIndex].id;
-            _invalidateVideoViewport(resetDurationWindow: false);
+            _invalidateVideoViewport();
           });
         }
         // Track impression for the first post only while the host surface is active.
@@ -404,6 +453,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   void didUpdateWidget(covariant WorksImmersiveViewer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isActive != widget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncImmersiveNavigation();
+      });
       if (widget.isActive) {
         _resumeActiveSurfaceTracking();
       } else {
@@ -418,8 +470,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       return;
     }
     // 同一 postId 的 mediaItems 可能被契约水合、替换或重排。缓存必须先失效；
-    // Canvas 再按 media identity 对齐并上报 binding，单纯重排不得误重启五秒窗口。
+    // Canvas 再按 media identity 对齐并上报 binding，单纯重排保留当前媒体身份。
     _workItemCache.clear();
+    _imageReadiness.clear();
+    _imageReadinessListeners.clear();
     _configureExternalEmptyDeadline();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -442,13 +496,36 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _landscapeForeground = state == AppLifecycleState.resumed;
+    if (!_landscapeForeground) {
+      _invalidateLandscapeHide();
+    } else if (_pureMediaLandscape) {
+      _setMountedState(() => _landscapeControlsVisible = true);
+      _scheduleLandscapeHide();
+    }
+  }
+
+  @override
   void dispose() {
+    ++_landscapeGeneration;
+    _invalidateLandscapeHide();
+    if (_pureMediaLandscape) {
+      _setLandscapeSystemChrome(false);
+    }
+    _observeLandscapeSession(null);
+    _landscapeCommentController.dispose();
+    // 释放自己的租约，不回写主壳基础状态；延至帧后避开树卸载期间通知。
+    final releaseNavigation = _releasePureMediaNavigation;
+    _releasePureMediaNavigation = null;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => releaseNavigation?.call(),
+    );
     final activePost = _activeTrackedPost;
     if (activePost != null) {
       _flushDwell(activePost);
     }
     AppToast.dismiss();
-    _videoDurationWindowTimer?.cancel();
     _externalEmptyTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _gestureIntentController.removeListener(_handleGestureIntentChanged);
@@ -459,5 +536,19 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   }
 
   @override
-  Widget build(BuildContext context) => _buildViewer(context);
+  Widget build(BuildContext context) {
+    _landscapeAccessibleNavigation = MediaQuery.of(context)
+        .accessibleNavigation;
+    _scheduleLandscapeRouteVisibility(ModalRoute.isCurrentOf(context) ?? true);
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      previous,
+      next,
+    ) {
+      if (next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated)) {
+        _scheduleAuthContinuationResume();
+      }
+    });
+    return _buildViewport(context);
+  }
 }

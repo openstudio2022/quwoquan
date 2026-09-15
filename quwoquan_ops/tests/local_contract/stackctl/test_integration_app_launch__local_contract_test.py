@@ -278,8 +278,12 @@ class IntegrationAppLaunchContractTest(unittest.TestCase):
             self.assertIn(code, source)
 
 
+# 显式复用 local_contract producer 能力模拟；consumer、签名/字节/闭包检查不替换。
+from quwoquan_ops.tests.local_contract.ci.test_integration_app_offline_uat__local_contract_test import supported_offline_producer
+
+
 @pytest.fixture
-def host_offline(tmp_path, monkeypatch):
+def host_offline(tmp_path, monkeypatch, supported_offline_producer):
     from quwoquan_ops.tests.local_contract.ci.test_integration_app_offline_uat__local_contract_test import (
         _CANDIDATE, _receipt_matrix,
     )

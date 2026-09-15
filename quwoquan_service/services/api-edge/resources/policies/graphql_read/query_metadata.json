@@ -2,6 +2,28 @@
   "schema": "graphql-read-query-metadata",
   "entries": [
     {
+      "document": "persisted_queries/post_collection.graphql",
+      "canonicalOperationId": "content.post_collection.GetPostCollection",
+      "queryClass": "page_composite",
+      "variablesMaxBytes": 2048,
+      "maxOwnerCalls": 3,
+      "maxBatchKeys": 1,
+      "maxResponseBytes": 262144,
+      "sloRef": "slo:gateway.graphql_read.detail",
+      "executorKey": "content.postCollection.query"
+    },
+    {
+      "document": "persisted_queries/post_collection_management.graphql",
+      "canonicalOperationId": "content.post_collection.GetPostCollectionManagement",
+      "queryClass": "page_composite",
+      "variablesMaxBytes": 2048,
+      "maxOwnerCalls": 3,
+      "maxBatchKeys": 1,
+      "maxResponseBytes": 262144,
+      "sloRef": "slo:gateway.graphql_read.detail",
+      "executorKey": "content.postCollection.query"
+    },
+    {
       "document": "persisted_queries/search_page.graphql",
       "canonicalOperationId": "gateway.persisted_query_execution.SearchPage",
       "queryClass": "page_composite",

@@ -12,6 +12,11 @@ description: 'Post 实体隐私与安全策略。
 
   - 字段暴露范围（补充 api_exposure 的精细化 consumer 控制）
 
+  推荐请求仅接收共享闭集 viewportProfile/deviceClass，可记录低基数枚举，禁止记录原始 query、设备型号或 cursor。
+  当前未具备推荐用途粗地域同意对象、purpose scope 与可撤回授权缓存；不开放 coarseRegion 输入，不把 Persona 展示 region、发布 IP 地域、登录 ConsentRecord 或 Assistant SkillConsent 当作推荐同意。
+  RecommendationRequestContext.coarseRegion 仅冻结 unknown；未来非 unknown 必须另行闭合权威同意来源和城市/区域编码边界，缺失/撤回必须 unknown，禁止精确位置和主动请求定位。
+  嵌套 requestContext 按最敏感子字段 SENSITIVE 分类且整对象 drop 日志，只允许摘要进入 scope/cursor/cache；原 region 不进 key、日志、trace、错误或客户端响应。Content 仅接收内部 contextDigest，不转发完整 requestContext。
+
   '
 app_log_policy:
 - field: location

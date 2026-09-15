@@ -5,6 +5,12 @@ import 'dart:developer' as developer;
 import 'package:crypto/crypto.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/config/rehearsal_storage_namespace.dart';
+import 'package:quwoquan_app/runtime/config/rehearsal_storage_observer.dart';
+import 'package:quwoquan_app/runtime/config/generated/app_launch_contract.g.dart';
+import 'package:quwoquan_app/runtime/config/runtime_package_resolver.dart';
+import 'package:quwoquan_cloud_contracts/generated/values/user/account/account_session.values.dart';
+import 'package:quwoquan_app/runtime/auth/rehearsal_auth_port.dart';
 import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -108,6 +114,7 @@ class AuthSessionState {
     this.rememberedDisplayName = '',
     this.rememberedAvatarUrl = '',
     this.rememberedNicknameCustomized = false,
+    this.rehearsalIdentityId = '',
     this.errorMessage,
   });
 
@@ -128,6 +135,7 @@ class AuthSessionState {
   final String rememberedDisplayName;
   final String rememberedAvatarUrl;
   final bool rememberedNicknameCustomized;
+  final String rehearsalIdentityId;
   final String? errorMessage;
 
   bool get isAnonymousSession => accountState.trim() == 'anonymous';
@@ -141,9 +149,11 @@ class AuthSessionState {
       ownerId.trim().isNotEmpty &&
       activePersonaId.trim().isNotEmpty;
 
+  bool get isRehearsalSession => rehearsalIdentityId.trim().isNotEmpty;
+
   bool get isAuthenticated =>
       status == AuthSessionStatus.authenticated &&
-      hasTrustedSession &&
+      (hasTrustedSession || isRehearsalSession) &&
       !isAnonymousSession;
 
   bool get isGuest => status == AuthSessionStatus.guest;
@@ -166,6 +176,7 @@ class AuthSessionState {
     String? rememberedDisplayName,
     String? rememberedAvatarUrl,
     bool? rememberedNicknameCustomized,
+    String? rehearsalIdentityId,
     String? Function()? errorMessage,
   }) {
     return AuthSessionState(
@@ -188,6 +199,7 @@ class AuthSessionState {
       rememberedAvatarUrl: rememberedAvatarUrl ?? this.rememberedAvatarUrl,
       rememberedNicknameCustomized:
           rememberedNicknameCustomized ?? this.rememberedNicknameCustomized,
+      rehearsalIdentityId: rehearsalIdentityId ?? this.rehearsalIdentityId,
       errorMessage: errorMessage != null ? errorMessage() : this.errorMessage,
     );
   }
@@ -273,23 +285,134 @@ class StoredAuthSession {
   bool get isAnonymousSession => accountState.trim() == 'anonymous';
 }
 
+final class _IsolatedAuthSessionStore extends AuthSessionStore {
+  _IsolatedAuthSessionStore({
+    required RehearsalStorageNamespace namespace,
+    required VerifiedRehearsalSpace? Function() currentSpace,
+    FlutterSecureStorage? secureStorage,
+    Future<SharedPreferences> Function()? prefsFactory,
+    RehearsalStorageObserver? observer,
+  }) : super._isolated(
+         namespace,
+         currentSpace,
+         secureStorage,
+         prefsFactory,
+         observer,
+       );
+}
+
+extension AuthSessionStoreIsolation on AuthSessionStore {
+  bool get isIsolated => this is _IsolatedAuthSessionStore;
+  void requireCurrentStorage() {
+    if (isIsolated) _requireCurrentStorage();
+  }
+
+  void dispose() {
+    if (isIsolated) {
+      _disposed = true;
+      _authObserver?.invalidate();
+      _installObserver?.invalidate();
+    }
+  }
+
+  Future<void> saveSyntheticSession(
+    SyntheticSessionResult result, {
+    void Function()? fence,
+  }) {
+    if (!isIsolated) {
+      throw contentCapabilityUnavailable('synthetic_session_storage');
+    }
+    return _saveSyntheticSession(result, fence: fence);
+  }
+}
+
 class AuthSessionStore {
   AuthSessionStore({
     FlutterSecureStorage? secureStorage,
     Future<SharedPreferences> Function()? prefsFactory,
     String storageNamespace = 'unbound',
-  }) : _storageNamespace = storageNamespace.trim(),
+  }) : _currentSpace = null,
+       _storageNamespace = storageNamespace.trim(),
        _secureStorage = secureStorage ?? const FlutterSecureStorage(),
-       _prefsFactory = prefsFactory ?? SharedPreferences.getInstance {
+       _rawPrefsFactory = prefsFactory ?? SharedPreferences.getInstance {
     if (_storageNamespace.isEmpty) {
       throw ArgumentError.value(storageNamespace, 'storageNamespace');
     }
   }
 
-  final String _storageNamespace;
+  factory AuthSessionStore.isolated({
+    required RehearsalStorageNamespace namespace,
+    required VerifiedRehearsalSpace? Function() currentSpace,
+    FlutterSecureStorage? secureStorage,
+    Future<SharedPreferences> Function()? prefsFactory,
+    RehearsalStorageObserver? observer,
+  }) = _IsolatedAuthSessionStore;
 
-  String _scopedKey(String suffix) =>
-      'auth.${Uri.encodeComponent(_storageNamespace)}.$suffix';
+  AuthSessionStore._isolated(
+    RehearsalStorageNamespace namespace,
+    this._currentSpace,
+    FlutterSecureStorage? secureStorage,
+    Future<SharedPreferences> Function()? prefsFactory,
+    RehearsalStorageObserver? observer,
+  ) : _storageNamespace = namespace.authNamespace,
+      _secureStorage = secureStorage ?? const FlutterSecureStorage(),
+      _rawPrefsFactory = prefsFactory ?? SharedPreferences.getInstance,
+      _isolatedNamespace = namespace {
+    requireCurrentStorage();
+    _authObserver = observer?.attach('auth', namespace);
+    try {
+      _installObserver = observer?.attach('installId', namespace);
+    } catch (_) {
+      _authObserver?.invalidate();
+      rethrow;
+    }
+  }
+
+  final String _storageNamespace;
+  RehearsalStorageNamespace? _isolatedNamespace;
+  final VerifiedRehearsalSpace? Function()? _currentSpace;
+  bool _disposed = false;
+  RehearsalConsumerObserver? _authObserver;
+  RehearsalConsumerObserver? _installObserver;
+
+  void _requireCurrentStorage() {
+    if (_disposed) throw contentCapabilityUnavailable('auth_storage_disposed');
+    final namespace = _isolatedNamespace;
+    try {
+      if (namespace != null) namespace.requireCurrent(_currentSpace!());
+      _authObserver?.requireCurrent();
+      _installObserver?.requireCurrent();
+    } catch (_) {
+      _authObserver?.invalidate();
+      _installObserver?.invalidate();
+      rethrow;
+    }
+  }
+
+  void _recordAuth(
+    RehearsalSuccessfulOperation operation, {
+    void Function()? fence,
+  }) {
+    requireCurrentStorage();
+    fence?.call();
+    _authObserver?.recordSuccess(operation, fence: requireCurrentStorage);
+  }
+
+  Future<SharedPreferences> _prefsFactory() async {
+    requireCurrentStorage();
+    // SharedPreferences 首次装载会读全局 getAll；isolated 不允许接触旧缓存。
+    if (isIsolated) {
+      throw contentCapabilityUnavailable('isolated_auth_preferences');
+    }
+    final prefs = await _rawPrefsFactory();
+    requireCurrentStorage();
+    return prefs;
+  }
+
+  String _scopedKey(String suffix) {
+    requireCurrentStorage();
+    return 'auth.${Uri.encodeComponent(_storageNamespace)}.$suffix';
+  }
 
   String get _accessTokenKey => _scopedKey('access_token');
   String get _refreshTokenKey => _scopedKey('refresh_token');
@@ -300,7 +423,11 @@ class AuthSessionStore {
   String get _accountStateKey => _scopedKey('account_state');
   String get _identityOriginKey => _scopedKey('identity_origin');
   // installId 只标识安装，不是授权凭据，不随 target 变化。
-  static const _installIdKey = 'auth.install_id';
+  String get _installIdKey {
+    requireCurrentStorage();
+    return _isolatedNamespace?.installIdKey ?? 'auth.install_id';
+  }
+
   String get _lastRefreshAtKey => _scopedKey('last_refresh_at_epoch_ms');
   String get _lastForegroundAuthCheckAtKey =>
       _scopedKey('last_foreground_auth_check_at_epoch_ms');
@@ -322,9 +449,10 @@ class AuthSessionStore {
       _scopedKey('session_remember_ttl_seconds');
 
   final FlutterSecureStorage _secureStorage;
-  final Future<SharedPreferences> Function() _prefsFactory;
+  final Future<SharedPreferences> Function() _rawPrefsFactory;
 
   Future<StoredAuthSession> read() async {
+    if (isIsolated) return _readIsolatedSession();
     final prefs = await _prefsFactory();
     final installId = await _ensureInstallId(prefs);
     final activePersonaId = prefs.getString(_activePersonaIdKey)?.trim() ?? '';
@@ -367,6 +495,51 @@ class AuthSessionStore {
     );
   }
 
+  Future<StoredAuthSession> _readIsolatedSession() async {
+    final installId = await _ensureIsolatedInstallId();
+    final raw = await _secureStorage.read(key: _scopedKey('synthetic_session'));
+    requireCurrentStorage();
+    if (raw != null) _recordAuth(RehearsalSuccessfulOperation.read);
+    final session = raw == null
+        ? null
+        : SyntheticSessionResult.fromWire(
+            (jsonDecode(raw) as Map).cast<String, Object?>(),
+          );
+    return StoredAuthSession(
+      accessToken: '',
+      refreshToken: '',
+      ownerId: session?.accountId ?? '',
+      activePersonaId: session?.personaId ?? '',
+      accountState: session == null ? '' : 'rehearsal',
+      identityOrigin: session == null ? '' : 'synthetic',
+      installId: installId,
+      manualLoggedOut: false,
+      launchPromptDismissed: false,
+    );
+  }
+
+  /// 单条本地身份记录，无 Remote grant、token 或真实账号摘要。
+  Future<void> _saveSyntheticSession(
+    SyntheticSessionResult result, {
+    void Function()? fence,
+  }) async {
+    requireCurrentStorage();
+    if (!isIsolated) {
+      throw contentCapabilityUnavailable('synthetic_session_storage');
+    }
+    fence?.call();
+    await _secureStorage.write(
+      key: _scopedKey('synthetic_session'),
+      value: jsonEncode(result.toWire()),
+    );
+    _recordAuth(RehearsalSuccessfulOperation.write, fence: fence);
+  }
+
+  void _requireRemoteGrantStorage() {
+    requireCurrentStorage();
+    if (isIsolated) throw contentCapabilityUnavailable('remote_grant_storage');
+  }
+
   Future<void> saveLoginGrant(
     AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
@@ -374,6 +547,7 @@ class AuthSessionStore {
     String? rememberedLoginMaskedIdentifier,
     String? rememberedLoginIdentifier,
   }) async {
+    _requireRemoteGrantStorage();
     // 匿名会话只由服务端 canonical accountState 判定；登录方式仅描述用户动作。
     final isAnonymousSession = result.accountState.trim() == 'anonymous';
     final prefs = await _prefsFactory();
@@ -444,6 +618,7 @@ class AuthSessionStore {
   }
 
   Future<void> saveRefreshGrant(TokenRefreshGrant result) async {
+    _requireRemoteGrantStorage();
     final prefs = await _prefsFactory();
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
     final isAnonymousSession =
@@ -512,6 +687,7 @@ class AuthSessionStore {
   /// 快速登录过期时间戳（now + 有效期）。
   /// 不调用远端吊销由调用方（settings）保证。
   Future<void> softLogout() async {
+    if (isIsolated) return clearSession(manualLogout: true);
     final prefs = await _prefsFactory();
     final refreshToken = await _secureStorage.read(key: _refreshTokenKey) ?? '';
     if (refreshToken.trim().isNotEmpty) {
@@ -534,6 +710,12 @@ class AuthSessionStore {
   }
 
   Future<void> clearSession({required bool manualLogout}) async {
+    if (isIsolated) {
+      await _secureStorage.delete(key: _scopedKey('synthetic_session'));
+      // 幂等delete成功只证明删除调用已完成，不推断原记录存在。
+      _recordAuth(RehearsalSuccessfulOperation.delete);
+      return;
+    }
     final prefs = await _prefsFactory();
     final rememberedAvatarUrl =
         prefs.getString(_rememberedAvatarUrlKey)?.trim() ?? '';
@@ -579,6 +761,11 @@ class AuthSessionStore {
   }
 
   Future<void> markLaunchPromptDismissed() async {
+    if (isIsolated) {
+      await _secureStorage.write(key: _launchPromptDismissedKey, value: 'true');
+      _recordAuth(RehearsalSuccessfulOperation.write);
+      return;
+    }
     final prefs = await _prefsFactory();
     await prefs.setBool(_launchPromptDismissedKey, true);
     await _ensureInstallId(prefs);
@@ -593,13 +780,35 @@ class AuthSessionStore {
     await _ensureInstallId(prefs);
   }
 
+  Future<String> _ensureIsolatedInstallId() async {
+    final existing = await _secureStorage.read(key: _installIdKey);
+    requireCurrentStorage();
+    if (existing != null) {
+      _installObserver?.recordSuccess(
+        RehearsalSuccessfulOperation.read,
+        fence: requireCurrentStorage,
+      );
+    }
+    if (existing != null && existing.trim().isNotEmpty) return existing;
+    final generated = const Uuid().v4();
+    await _secureStorage.write(key: _installIdKey, value: generated);
+    requireCurrentStorage();
+    _installObserver?.recordSuccess(
+      RehearsalSuccessfulOperation.write,
+      fence: requireCurrentStorage,
+    );
+    return generated;
+  }
+
   Future<String> _ensureInstallId(SharedPreferences prefs) async {
     final existing = prefs.getString(_installIdKey);
     if (existing != null && existing.trim().isNotEmpty) {
       return existing;
     }
     final generated = const Uuid().v4();
-    await prefs.setString(_installIdKey, generated);
+    final saved = await prefs.setString(_installIdKey, generated);
+    requireCurrentStorage();
+    if (!saved) throw StateError('install identity persistence failed');
     return generated;
   }
 
@@ -645,11 +854,25 @@ class ProviderBackedCloudAuthTokenProvider implements CloudAuthTokenProvider {
   }
 }
 
+/// 启动owner注入同一纯内存observer；读取它不得构造auth/pending store。
+final rehearsalStorageObserverProvider = Provider<RehearsalStorageObserver?>(
+  (ref) => null,
+);
+
 final authSessionStoreProvider = Provider<AuthSessionStore>((ref) {
-  return AuthSessionStore(
-    storageNamespace:
-        '${CloudRuntimeConfig.launchTarget}|${CloudRuntimeConfig.appEnvironment}',
-  );
+  final space = CloudRuntimeConfig.rehearsalSpace;
+  final store = space?.isIsolated == true
+      ? AuthSessionStore.isolated(
+          namespace: RehearsalStorageNamespace(space!),
+          currentSpace: () => CloudRuntimeConfig.rehearsalSpace,
+          observer: ref.read(rehearsalStorageObserverProvider),
+        )
+      : AuthSessionStore(
+          storageNamespace:
+              '${CloudRuntimeConfig.launchTarget}|${CloudRuntimeConfig.appEnvironment}',
+        );
+  ref.onDispose(store.dispose);
+  return store;
 });
 
 final authSessionControllerProvider =

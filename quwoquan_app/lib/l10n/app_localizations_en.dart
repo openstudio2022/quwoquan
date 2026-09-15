@@ -10,6 +10,32 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get media_enterFullscreen => 'Fullscreen';
+
+  @override
+  String get media_showControls => 'Show media controls';
+
+  @override
+  String get media_exitFullscreen => 'Exit fullscreen';
+
+  @override
+  String get media_play => 'Play';
+
+  @override
+  String get media_pause => 'Pause';
+
+  @override
+  String get media_landscapeRequestFailed =>
+      'Unable to enter landscape mode. Please try again.';
+
+  @override
+  String get media_orientationRestoreFailed =>
+      'Unable to restore the previous orientation. Please try exiting again.';
+
+  @override
+  String get media_orientationRetry => 'Retry';
+
+  @override
   String get home => 'TODO: translate';
 
   @override

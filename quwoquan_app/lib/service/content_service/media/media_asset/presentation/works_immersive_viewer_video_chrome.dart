@@ -1,42 +1,185 @@
 part of 'works_immersive_viewer.dart';
 
-/// 视频 caption 与时间轴共用的底部布局。
-///
-/// 该组件读取实际 RenderParagraph 字形框与时长 RenderBox，避免页面通过字符数
-/// 或整条 rail 包围盒猜测轨道上方时长是否安全可见。
+extension _WorksImageStageComposition on _WorksImmersiveViewerState {
+  double _landscapeAspectRatioForPost(ContentPostViewData post) {
+    if (_isImageLikePost(post)) {
+      final ratios = _imageAspectRatiosForPost(post);
+      final index = (_photoInnerIndex[post.id] ?? _defaultImageIndexFor(post))
+          .clamp(0, max(0, ratios.length - 1))
+          .toInt();
+      final readiness = _imageReadiness[post.id];
+      return (ratios.isEmpty ? null : ratios[index]) ??
+          (readiness?.index == index ? readiness?.aspectRatio : null) ??
+          0.0;
+    }
+    if (_isVideoLikePost(post)) {
+      final items = _videoItemsFor(post);
+      if (items.isEmpty) return 0.0;
+      final index = _videoIndexFor(post.id, items).clamp(0, items.length - 1);
+      final itemRatio = items[index].aspectRatio;
+      return itemRatio > 0
+          ? itemRatio
+          : (_activeVideoBinding?.session.snapshot.mediaAspectRatio ?? 0.0);
+    }
+    return 0.0;
+  }
+
+  Widget _buildImageStage(BuildContext context, ContentPostViewData post) {
+    final ratios = _imageAspectRatiosForPost(post);
+    final imageIndex =
+        (_photoInnerIndex[post.id] ?? _defaultImageIndexFor(post))
+            .clamp(0, max(0, ratios.length - 1))
+            .toInt();
+    final readiness = _imageReadiness[post.id];
+    final ratio =
+        (ratios.isEmpty ? null : ratios[imageIndex]) ??
+        (readiness?.index == imageIndex ? readiness?.aspectRatio : null);
+    final showEntry =
+        !_pureMediaLandscape &&
+        (ratio ?? 0) > 1 &&
+        MediaQuery.sizeOf(context).height > MediaQuery.sizeOf(context).width;
+    final reason = _primaryIntersectionReasonFor(post);
+    return _WorksImageStage(
+      aspectRatio: ratio,
+      fullscreen: _pureMediaLandscape,
+      topInset:
+          widget.topChromeSafeInset + AppSpacing.appChromeTopBarHeight(context),
+      toolbarHeight: widget.showWorksToolbar
+          ? ImmersiveEngagementBar.reservedHeight(context)
+          : 0,
+      caption: MediaCaptionBlock(
+        layoutSpec: _layoutSpecForPost(post),
+        railKey: const ValueKey('works-caption-rail'),
+        header: ratios.length > 1
+            ? _WorksPageIndicator(total: ratios.length, current: imageIndex + 1)
+            : null,
+        title: _overlayTitleForPost(post),
+        caption: _overlayBodyForPost(post),
+        isExpanded: false,
+        onToggle: () => _toggleCaptionExpanded(post.id),
+        footer: reason == null
+            ? null
+            : HomeFeedCrossObjectComposition.immersiveIntersectionStatement(
+                key: const ValueKey('works-caption-intersection-reason'),
+                reason: reason,
+                contextObjectName: post.normalizedTitle,
+                contextObjectTarget: _postIntersectionContextTarget(post),
+                onSpanTap: (_) => _showIntersectionDetail(context, post),
+                onFallbackTap: () => _showIntersectionDetail(context, post),
+              ),
+      ),
+      entry: showEntry
+          ? _MediaLandscapeButton(
+              key: const ValueKey('works-media-landscape-entry'),
+              onPressed:
+                  readiness?.index == imageIndex && readiness?.isReady == true
+                  ? _enterPureMediaLandscape
+                  : null,
+            )
+          : null,
+      mediaBuilder: (bottomInset, entryExtent) {
+        return ImageBookCanvas(
+          deliveries: _imageDeliveriesForPost(post),
+          mediaAspectRatios: ratios,
+          usePortraitBands: !_pureMediaLandscape,
+          mediaTopInset:
+              widget.topChromeSafeInset +
+              AppSpacing.appChromeTopBarHeight(context),
+          mediaBottomInset: bottomInset,
+          landscapeEntryExtent: entryExtent,
+          interactionEnabled: !_pureMediaLandscape,
+          initialIndex:
+              _photoInnerIndex[post.id] ?? _defaultImageIndexFor(post),
+          gestureIntentController: _gestureIntentController,
+          onCurrentMediaStateChanged: _imageReadinessListeners.putIfAbsent(
+            post.id,
+            () {
+              late final ValueChanged<ImageBookCurrentMediaState> listener;
+              listener = (state) {
+                if (identical(_imageReadinessListeners[post.id], listener)) {
+                  _handleImageReadiness(post.id, state);
+                }
+              };
+              return listener;
+            },
+          ),
+          onImageChanged: (index) => _setMountedState(() {
+            _rememberPostLocalState(post.id);
+            _photoInnerIndex[post.id] = index;
+          }),
+          onPageflipMotion: (event) => _trackImagePageflipMotion(post, event),
+          onMediaLoad: (event) => ref
+              .read(pageLifecycleObservabilityProvider)
+              .recordMediaLoad(
+                mediaType: 'image',
+                result: event.result,
+                pageName: PageNames.workBrowser,
+                surfaceId: AppUiSurfaces.workBrowser.id,
+                objectType: 'contentPost',
+                objectId: post.id,
+                copyKey: event.result == 'failure' ? 'imageLoadFailed' : null,
+                error: event.error,
+                durationMs: event.durationMs,
+                candidatesTried: event.candidatesTried,
+              ),
+          onOverflowPrevious: null,
+          onOverflowNext: null,
+        );
+      },
+    );
+  }
+}
+
+/// 媒体与文字在同一次布局中测量并定位，不再以碰撞后隐藏补偿布局。
 class _WorksVideoBottomChrome extends StatefulWidget {
   const _WorksVideoBottomChrome({
     super.key,
     required this.layoutSpec,
+    required this.media,
+    required this.isActive,
+    required this.aspectRatio,
+    required this.topInset,
+    required this.toolbarHeight,
     required this.intersection,
+    this.association,
     required this.title,
     required this.caption,
     required this.sourceAttribution,
     required this.isExpanded,
     required this.onToggleCaption,
     required this.session,
-    required this.durationWindowActive,
     required this.sharedTimelineEnabled,
     required this.previewTrackDescriptor,
     required this.previewTrackQuery,
     required this.episodeCurrent,
     required this.episodeTotal,
+    required this.onEnterLandscape,
+    required this.pureMediaMode,
+    required this.controlsVisible,
   });
 
   final ImmersiveViewerStageLayoutSpec layoutSpec;
+  final Widget media;
+  final bool isActive;
+  final double aspectRatio;
+  final double topInset;
+  final double toolbarHeight;
   final Widget? intersection;
+  final Widget? association;
   final String title;
   final String caption;
   final SourceAttribution? sourceAttribution;
   final bool isExpanded;
   final VoidCallback onToggleCaption;
-  final VideoPlaybackSession? session;
-  final bool durationWindowActive;
+  final VideoPlaybackSession session;
   final bool sharedTimelineEnabled;
   final VideoPreviewTrackDescriptor? previewTrackDescriptor;
   final VideoPreviewTrackQuery previewTrackQuery;
   final int episodeCurrent;
   final int episodeTotal;
+  final VoidCallback? onEnterLandscape;
+  final bool pureMediaMode;
+  final bool controlsVisible;
 
   @override
   State<_WorksVideoBottomChrome> createState() =>
@@ -44,323 +187,559 @@ class _WorksVideoBottomChrome extends StatefulWidget {
 }
 
 class _WorksVideoBottomChromeState extends State<_WorksVideoBottomChrome> {
-  final GlobalKey _captionKey = GlobalKey();
-  final GlobalKey _durationKey = GlobalKey();
-  final GlobalKey _scrubTimeKey = GlobalKey();
-
-  // 先以透明但参与布局的状态完成首帧测量，确认无碰撞后才显示，避免
-  // 高文字缩放或窄视口下先闪现一帧重叠的总时长。
-  bool _durationVisible = false;
-  bool _scrubTimeVisible = false;
-  bool _isScrubbing = false;
-  bool _collisionCheckScheduled = false;
-  ({
-    bool initialized,
-    bool playing,
-    bool scrubbing,
-    VideoPlaybackTransport transport,
-    Duration duration,
-    String scrubTimeText,
-  })?
-  _sessionGeometry;
-  ({Size size, TextScaler textScaler, EdgeInsets viewPadding})? _layoutGeometry;
-
+  final _layoutRevision = ValueNotifier<int>(0);
+  bool _scheduled = false;
   @override
   void initState() {
     super.initState();
-    _bindSession(widget.session);
+    widget.session.addListener(_sessionChanged);
+  }
+
+  void _sessionChanged() {
+    if (_scheduled) return;
+    _scheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduled = false;
+      if (mounted) _layoutRevision.value++;
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   @override
   void didUpdateWidget(covariant _WorksVideoBottomChrome oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.session, widget.session)) {
-      oldWidget.session?.removeListener(_handleSessionChanged);
-      _bindSession(widget.session);
+      oldWidget.session.removeListener(_sessionChanged);
+      widget.session.addListener(_sessionChanged);
     }
-    if (oldWidget.durationWindowActive != widget.durationWindowActive ||
-        oldWidget.title != widget.title ||
-        oldWidget.caption != widget.caption ||
-        oldWidget.sourceAttribution != widget.sourceAttribution ||
-        oldWidget.isExpanded != widget.isExpanded ||
-        !identical(oldWidget.intersection, widget.intersection)) {
-      _durationVisible = false;
-      _scrubTimeVisible = false;
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final geometry = (
-      size: MediaQuery.sizeOf(context),
-      textScaler: MediaQuery.textScalerOf(context),
-      viewPadding: MediaQuery.viewPaddingOf(context),
-    );
-    if (_layoutGeometry == geometry) {
-      return;
-    }
-    _layoutGeometry = geometry;
-    _durationVisible = false;
-    _scrubTimeVisible = false;
   }
 
   @override
   void dispose() {
-    widget.session?.removeListener(_handleSessionChanged);
+    widget.session.removeListener(_sessionChanged);
+    _layoutRevision.dispose();
     super.dispose();
-  }
-
-  void _bindSession(VideoPlaybackSession? session) {
-    final snapshot = session?.snapshot;
-    _isScrubbing = snapshot?.isScrubbing ?? false;
-    _sessionGeometry = snapshot == null ? null : _geometryFor(snapshot);
-    _durationVisible = false;
-    _scrubTimeVisible = false;
-    session?.addListener(_handleSessionChanged);
-  }
-
-  void _handleSessionChanged() {
-    final snapshot = widget.session?.snapshot;
-    final geometry = snapshot == null ? null : _geometryFor(snapshot);
-    if (geometry == _sessionGeometry || !mounted) {
-      return;
-    }
-    setState(() {
-      _sessionGeometry = geometry;
-      _isScrubbing = snapshot?.isScrubbing ?? false;
-      // 播放/暂停、拖动与原生时长修正都会改变标签几何。新几何必须先
-      // 透明测量，再决定是否绘制，不能沿用上一状态的碰撞结论。
-      _durationVisible = false;
-      _scrubTimeVisible = false;
-    });
-  }
-
-  ({
-    bool initialized,
-    bool playing,
-    bool scrubbing,
-    VideoPlaybackTransport transport,
-    Duration duration,
-    String scrubTimeText,
-  })
-  _geometryFor(VideoPlaybackSnapshot snapshot) {
-    return (
-      initialized: snapshot.isInitialized,
-      playing: snapshot.isPlaying,
-      scrubbing: snapshot.isScrubbing,
-      transport: snapshot.transport,
-      duration: snapshot.duration,
-      scrubTimeText: snapshot.isScrubbing
-          ? '${formatVideoPlaybackDuration(snapshot.effectivePosition)} / '
-                '${formatVideoPlaybackDuration(snapshot.duration)}'
-          : '',
-    );
-  }
-
-  Rect? _globalRect(GlobalKey key) {
-    final renderObject = key.currentContext?.findRenderObject();
-    if (renderObject is! RenderBox ||
-        !renderObject.hasSize ||
-        !renderObject.attached) {
-      return null;
-    }
-    return renderObject.localToGlobal(Offset.zero) & renderObject.size;
-  }
-
-  List<Rect>? _globalTextPaintRects(GlobalKey key) {
-    final root = key.currentContext?.findRenderObject();
-    if (root == null || !root.attached) {
-      return null;
-    }
-    final result = <Rect>[];
-    void collect(RenderObject object) {
-      if (object is RenderParagraph && object.attached && object.hasSize) {
-        final textLength = object.text.toPlainText().length;
-        if (textLength > 0) {
-          final boxes = object.getBoxesForSelection(
-            TextSelection(baseOffset: 0, extentOffset: textLength),
-          );
-          for (final box in boxes) {
-            final localRect = box.toRect();
-            result.add(
-              Rect.fromPoints(
-                object.localToGlobal(localRect.topLeft),
-                object.localToGlobal(localRect.bottomRight),
-              ),
-            );
-          }
-        }
-      }
-      object.visitChildren(collect);
-    }
-
-    collect(root);
-    return result;
-  }
-
-  bool? _collidesWithCaption(GlobalKey targetKey) {
-    final targetRect = _globalRect(targetKey);
-    final textRects = _globalTextPaintRects(_captionKey);
-    if (textRects == null || targetRect == null) {
-      return null;
-    }
-    return textRects.any(
-      (rect) => rect.inflate(AppSpacing.intraGroupXs).overlaps(targetRect),
-    );
-  }
-
-  void _scheduleCollisionCheck() {
-    if (_collisionCheckScheduled) {
-      return;
-    }
-    _collisionCheckScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _collisionCheckScheduled = false;
-      if (!mounted) {
-        return;
-      }
-      final durationCollision = _collidesWithCaption(_durationKey);
-      final scrubTimeCollision = _collidesWithCaption(_scrubTimeKey);
-      final nextDurationVisible = durationCollision == false;
-      final nextScrubTimeVisible = !_isScrubbing || scrubTimeCollision == false;
-      if (nextDurationVisible == _durationVisible &&
-          nextScrubTimeVisible == _scrubTimeVisible) {
-        return;
-      }
-      setState(() {
-        _durationVisible = nextDurationVisible;
-        _scrubTimeVisible = nextScrubTimeVisible;
-      });
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    _scheduleCollisionCheck();
-    // 互动栏是底部唯一固定锚点；时间轴紧贴其上沿，交集说明随 caption
-    // 一起向上排布，不得再把文本插入工具栏与时间轴之间。
-    final timelineBottom = ImmersiveEngagementBar.reservedHeight(context);
-    final scrubOverlayReserve = !_isScrubbing
-        ? AppSpacing.zero
-        : AppTypography.base * AppSpacing.textLineHeightBody +
-              AppSpacing.interGroupSm +
-              (widget.previewTrackDescriptor == null
-                  ? AppSpacing.zero
-                  : VideoTimelinePreview.maximumHeight +
-                        AppSpacing.interGroupSm);
-    final captionBottom =
-        timelineBottom +
-        AppSpacing.minInteractiveSize +
-        AppSpacing.intraGroupXs +
-        scrubOverlayReserve;
-    final seriesHeader = widget.episodeTotal > 1
-        ? _WorksVideoSeriesBadge(
-            episodeCurrent: widget.episodeCurrent,
-            episodeTotal: widget.episodeTotal,
-          )
-        : null;
-    final attributionText =
-        widget.sourceAttribution?.attributionText.trim() ?? '';
-    final attributionHeader = attributionText.isEmpty
-        ? null
-        : _WorksVideoSourceAttribution(text: attributionText);
-    final header = switch ((seriesHeader, attributionHeader)) {
-      (null, null) => null,
-      (final Widget series, null) => series,
-      (null, final Widget attribution) => attribution,
-      (final Widget series, final Widget attribution) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          series,
-          SizedBox(height: AppSpacing.intraGroupXs),
-          attribution,
-        ],
-      ),
-    };
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: captionBottom,
-          child: KeyedSubtree(
-            key: _captionKey,
-            child: MediaCaptionBlock(
-              layoutSpec: widget.layoutSpec,
-              railKey: const ValueKey<String>('works-caption-rail'),
-              header: header,
-              title: widget.title,
-              caption: widget.caption,
-              isExpanded: widget.isExpanded,
-              onToggle: widget.onToggleCaption,
-              footer: widget.intersection,
-            ),
+    final session = widget.session;
+    final layoutSpec = widget.layoutSpec;
+    final topInset = widget.topInset;
+    final toolbarHeight = widget.toolbarHeight;
+    final media = widget.media;
+    final isActive = widget.isActive;
+    final title = widget.title;
+    final caption = widget.caption;
+    final intersection = widget.intersection;
+    final isExpanded = widget.isExpanded;
+    final onToggleCaption = widget.onToggleCaption;
+    final episodeTotal = widget.episodeTotal;
+    final episodeCurrent = widget.episodeCurrent;
+    final previewTrackDescriptor = widget.previewTrackDescriptor;
+    final previewTrackQuery = widget.previewTrackQuery;
+    final sharedTimelineEnabled = widget.sharedTimelineEnabled;
+    final attribution = widget.sourceAttribution?.attributionText.trim() ?? '';
+    return AnimatedBuilder(
+      animation: _layoutRevision,
+      builder: (context, _) {
+        final snapshot = session.snapshot;
+        final aspectRatio = widget.aspectRatio > 0
+            ? widget.aspectRatio
+            : (snapshot.mediaAspectRatio ?? 0);
+        final showEntry =
+            !widget.pureMediaMode &&
+            widget.onEnterLandscape != null &&
+            aspectRatio > 1;
+        return CustomMultiChildLayout(
+          delegate: _WorksVideoLayoutDelegate(
+            aspectRatio: aspectRatio,
+            fullscreen: widget.pureMediaMode,
+            fullscreenSafeInsets: MediaQuery.viewPaddingOf(context),
+            topInset: topInset,
+            toolbarHeight: toolbarHeight,
+            inset: layoutSpec.horizontalInset,
+            // 拖动借用已隐藏的说明区，不改变媒体档位或裁剪窗口。
+            scrubHeight: 0,
           ),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: timelineBottom,
-          child: ImmersiveViewerLayout.alignToRail(
-            context: context,
-            layoutSpec: widget.layoutSpec,
-            child: SizedBox(
-              width: double.infinity,
-              child: _WorksVideoControlRow(
-                key: const ValueKey<String>('works-video-timeline'),
-                session: widget.session,
-                sharedTimelineEnabled: widget.sharedTimelineEnabled,
-                previewTrackDescriptor: widget.previewTrackDescriptor,
-                previewTrackQuery: widget.previewTrackQuery,
-                durationVisible:
-                    widget.durationWindowActive && _durationVisible,
-                scrubTimeVisible: _scrubTimeVisible,
-                durationKey: _durationKey,
-                scrubTimeKey: _scrubTimeKey,
+          children: [
+            LayoutId(
+              id: _VideoSlot.media,
+              child: ClipRect(
+                child: LayoutBuilder(
+                  builder: (context, constraints) => OverflowBox(
+                    minWidth: constraints.maxWidth,
+                    maxWidth: constraints.maxWidth,
+                    minHeight: aspectRatio > 0
+                        ? constraints.maxWidth / aspectRatio
+                        : constraints.maxHeight,
+                    maxHeight: aspectRatio > 0
+                        ? constraints.maxWidth / aspectRatio
+                        : constraints.maxHeight,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        media,
+                        if (widget.pureMediaMode &&
+                            snapshot.isInitialized &&
+                            !snapshot.isScrubbing &&
+                            !snapshot.isBuffering &&
+                            snapshot.transport !=
+                                VideoPlaybackTransport.failure)
+                          Center(
+                            child: Visibility(
+                              visible: widget.controlsVisible,
+                              maintainState: true,
+                              maintainAnimation: true,
+                              child: CupertinoButton(
+                                key: const ValueKey(
+                                  'works-landscape-play-toggle',
+                                ),
+                                onPressed: () => unawaited(session.toggle()),
+                                child: Semantics(
+                                  label: snapshot.isPlaying
+                                      ? AppLocalizations.of(context).media_pause
+                                      : AppLocalizations.of(context).media_play,
+                                  child: snapshot.isPlaying
+                                      ? const Icon(
+                                          CupertinoIcons.pause_fill,
+                                          color: AppColors.white,
+                                          size: AppSpacing
+                                              .videoPlayRoundedGlyphSize,
+                                        )
+                                      : const VideoPlaybackCenterPlayGlyph(),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
+            LayoutId(
+              id: _VideoSlot.gradient,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  key: const ValueKey('works-video-local-gradient'),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        AppColors.transparent,
+                        AppColors.black.withValues(alpha: 0.62),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (widget.association != null || intersection != null)
+              LayoutId(
+                id: _VideoSlot.association,
+                child: widget.pureMediaMode
+                    ? const SizedBox.shrink()
+                    : VideoPlaybackChromeVisibility(
+                        snapshot: snapshot,
+                        child: SingleChildScrollView(
+                          key: const ValueKey('works-video-association-slot'),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (widget.association != null)
+                                widget.association!,
+                              if (widget.association != null &&
+                                  intersection != null)
+                                const SizedBox(height: AppSpacing.intraGroupXs),
+                              ?intersection,
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+            LayoutId(
+              id: _VideoSlot.caption,
+              child: widget.pureMediaMode
+                  ? const SizedBox.shrink()
+                  : VideoPlaybackChromeVisibility(
+                      snapshot: snapshot,
+                      child: SingleChildScrollView(
+                        child: MediaCaptionBlock(
+                          layoutSpec: layoutSpec,
+                          railKey: const ValueKey('works-caption-rail'),
+                          header: episodeTotal > 1 || attribution.isNotEmpty
+                              ? Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (episodeTotal > 1)
+                                      _WorksVideoSeriesBadge(
+                                        episodeCurrent: episodeCurrent,
+                                        episodeTotal: episodeTotal,
+                                      ),
+                                    if (attribution.isNotEmpty)
+                                      Text(
+                                        attribution,
+                                        key: const ValueKey(
+                                          'works-video-source-attribution',
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: AppColors.white,
+                                          fontSize: AppTypography.xxs,
+                                        ),
+                                      ),
+                                  ],
+                                )
+                              : null,
+                          title: title,
+                          caption: caption,
+                          isExpanded: isExpanded,
+                          onToggle: onToggleCaption,
+                        ),
+                      ),
+                    ),
+            ),
+            LayoutId(
+              id: _VideoSlot.entry,
+              child: !showEntry
+                  ? const SizedBox.shrink()
+                  : VideoPlaybackChromeVisibility(
+                      snapshot: snapshot,
+                      child: Visibility(
+                        visible:
+                            snapshot.isInitialized && !snapshot.isScrubbing,
+                        maintainState: true,
+                        maintainAnimation: true,
+                        maintainSize: true,
+                        child: _MediaLandscapeButton(
+                          key: const ValueKey('works-video-landscape-entry'),
+                          onPressed: snapshot.isInitialized
+                              ? widget.onEnterLandscape
+                              : null,
+                        ),
+                      ),
+                    ),
+            ),
+            LayoutId(
+              id: _VideoSlot.timeline,
+              child: Visibility(
+                visible: !widget.pureMediaMode || widget.controlsVisible,
+                maintainState: true,
+                maintainAnimation: true,
+                child: VideoPlaybackTimeline(
+                  key: const ValueKey('works-video-control-row'),
+                  session: session,
+                  profile: VideoPlaybackTimelineProfile.workBrowser,
+                  isActive: isActive,
+                  showDuration: false,
+                  externallyControlledVisibility: widget.pureMediaMode,
+                  showVisuals: sharedTimelineEnabled && snapshot.isInitialized,
+                  previewBuilder: previewTrackDescriptor == null
+                      ? null
+                      : (context, snapshot, target) => VideoTimelinePreview(
+                          descriptor: previewTrackDescriptor,
+                          query: previewTrackQuery,
+                          target: target,
+                        ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 先测量说明，再在同一布局阶段构建媒体；不使用晚一帧的几何补偿。
+class _WorksImageStage extends StatelessWidget {
+  const _WorksImageStage({
+    required this.aspectRatio,
+    required this.fullscreen,
+    required this.topInset,
+    required this.toolbarHeight,
+    required this.caption,
+    required this.entry,
+    required this.mediaBuilder,
+  });
+  final double? aspectRatio;
+  final bool fullscreen;
+  final double topInset;
+  final double toolbarHeight;
+  final Widget caption;
+  final Widget? entry;
+  final Widget Function(double, double) mediaBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final measurement = _WorksImageMeasurement();
+    return CustomMultiChildLayout(
+      delegate: _WorksImageLayoutDelegate(
+        measurement: measurement,
+        aspectRatio: aspectRatio ?? double.nan,
+        fullscreen: fullscreen,
+        topInset: topInset,
+        toolbarHeight: toolbarHeight,
+        fullscreenSafeInsets: MediaQuery.viewPaddingOf(context),
+      ),
+      children: [
+        LayoutId(
+          id: _VideoSlot.media,
+          child: LayoutBuilder(
+            builder: (_, _) =>
+                mediaBuilder(measurement.bottomInset, measurement.entryExtent),
           ),
         ),
+        LayoutId(
+          id: _VideoSlot.caption,
+          child: Visibility(
+            visible: !fullscreen,
+            maintainState: true,
+            maintainAnimation: true,
+            child: SingleChildScrollView(child: caption),
+          ),
+        ),
+        LayoutId(id: _VideoSlot.entry, child: entry ?? const SizedBox.shrink()),
       ],
     );
   }
 }
 
-class _WorksVideoSourceAttribution extends StatelessWidget {
-  const _WorksVideoSourceAttribution({required this.text});
+class _WorksImageMeasurement {
+  double bottomInset = 0;
+  double entryExtent = 0;
+}
 
-  final String text;
+class _WorksImageLayoutDelegate extends MultiChildLayoutDelegate {
+  _WorksImageLayoutDelegate({
+    required this.measurement,
+    required this.aspectRatio,
+    required this.fullscreen,
+    required this.topInset,
+    required this.toolbarHeight,
+    required this.fullscreenSafeInsets,
+  });
+  final _WorksImageMeasurement measurement;
+  final double aspectRatio;
+  final bool fullscreen;
+  final double topInset;
+  final double toolbarHeight;
+  final EdgeInsets fullscreenSafeInsets;
 
   @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: text,
-      child: Container(
-        key: const ValueKey<String>('works-video-source-attribution'),
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.intraGroupSm,
-          vertical: AppSpacing.intraGroupXs / 2,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.black.withValues(alpha: 0.28),
-          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-          border: Border.all(color: AppColors.white.withValues(alpha: 0.14)),
-        ),
-        child: Text(
-          text,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: AppColors.white.withValues(alpha: 0.88),
-            fontSize: AppTypography.xxs,
-            fontWeight: AppTypography.medium,
-          ),
+  void performLayout(Size size) {
+    if (fullscreen) {
+      final landscape = ImmersiveLandscapeGeometry(
+        size: size,
+        safeInsets: fullscreenSafeInsets,
+        aspectRatio: aspectRatio,
+      );
+      layoutChild(_VideoSlot.caption, BoxConstraints.tight(Size.zero));
+      layoutChild(_VideoSlot.entry, BoxConstraints.tight(Size.zero));
+      layoutChild(
+        _VideoSlot.media,
+        BoxConstraints.tight(landscape.visibleMediaRect.size),
+      );
+      positionChild(_VideoSlot.media, landscape.visibleMediaRect.topLeft);
+      positionChild(_VideoSlot.caption, Offset.zero);
+      positionChild(_VideoSlot.entry, Offset.zero);
+      return;
+    }
+    final caption = layoutChild(
+      _VideoSlot.caption,
+      BoxConstraints(
+        minWidth: size.width,
+        maxWidth: size.width,
+        maxHeight: max(0, (size.height - topInset - toolbarHeight) * 0.55),
+      ),
+    );
+    final entry = layoutChild(
+      _VideoSlot.entry,
+      BoxConstraints(maxWidth: size.width),
+    );
+    measurement.bottomInset =
+        toolbarHeight +
+        caption.height +
+        (caption.height > 0 ? AppSpacing.containerSm : 0);
+    measurement.entryExtent = entry.height > 0
+        ? entry.height + AppSpacing.intraGroupXs
+        : 0;
+    final geometry = ImmersiveMediaGeometry(
+      size: size,
+      aspectRatio: aspectRatio,
+      topInset: topInset,
+      bottomInset: measurement.bottomInset,
+      entryExtent: measurement.entryExtent,
+      fullscreen: fullscreen,
+    );
+    layoutChild(_VideoSlot.media, BoxConstraints.tight(size));
+    positionChild(_VideoSlot.media, Offset.zero);
+    positionChild(
+      _VideoSlot.caption,
+      Offset(
+        0,
+        max(
+          0,
+          size.height -
+              toolbarHeight -
+              caption.height -
+              (caption.height > 0 ? AppSpacing.containerSm : 0),
         ),
       ),
     );
+    positionChild(
+      _VideoSlot.entry,
+      Offset((size.width - entry.width) / 2, geometry.entryRect.top),
+    );
   }
+
+  @override
+  bool shouldRelayout(covariant _WorksImageLayoutDelegate oldDelegate) => true;
+}
+
+enum _VideoSlot { media, gradient, association, caption, entry, timeline }
+
+class _WorksVideoLayoutDelegate extends MultiChildLayoutDelegate {
+  _WorksVideoLayoutDelegate({
+    required this.aspectRatio,
+    required this.topInset,
+    required this.toolbarHeight,
+    required this.inset,
+    required this.scrubHeight,
+    required this.fullscreen,
+    required this.fullscreenSafeInsets,
+  });
+  final EdgeInsets fullscreenSafeInsets;
+  final bool fullscreen;
+  final double aspectRatio;
+  final double topInset;
+  final double toolbarHeight;
+  final double inset;
+  final double scrubHeight;
+
+  @override
+  void performLayout(Size size) {
+    final railWidth = max(0.0, size.width - inset * 2);
+    if (fullscreen) {
+      final geometry = ImmersiveLandscapeGeometry(
+        size: size,
+        safeInsets: fullscreenSafeInsets,
+        aspectRatio: aspectRatio,
+      );
+      layoutChild(
+        _VideoSlot.media,
+        BoxConstraints.tight(geometry.visibleMediaRect.size),
+      );
+      positionChild(_VideoSlot.media, geometry.visibleMediaRect.topLeft);
+      for (final slot in [
+        _VideoSlot.entry,
+        _VideoSlot.caption,
+        _VideoSlot.association,
+        _VideoSlot.gradient,
+      ]) {
+        if (hasChild(slot)) {
+          layoutChild(slot, BoxConstraints.tight(Size.zero));
+          positionChild(slot, Offset.zero);
+        }
+      }
+      layoutChild(
+        _VideoSlot.timeline,
+        BoxConstraints.tight(
+          Size(geometry.visibleMediaRect.width, AppSpacing.minInteractiveSize),
+        ),
+      );
+      positionChild(
+        _VideoSlot.timeline,
+        Offset(
+          geometry.visibleMediaRect.left,
+          max(
+            geometry.visibleMediaRect.top,
+            geometry.visibleMediaRect.bottom -
+                toolbarHeight -
+                AppSpacing.minInteractiveSize,
+          ),
+        ),
+      );
+      return;
+    }
+    final entry = layoutChild(
+      _VideoSlot.entry,
+      BoxConstraints(maxWidth: railWidth),
+    );
+    // 文本以实际字体测量；极端大字时内部滚动，不侵入时长或控制热区。
+    final available = max(
+      0.0,
+      size.height -
+          topInset -
+          toolbarHeight -
+          AppSpacing.minInteractiveSize -
+          entry.height -
+          scrubHeight -
+          AppSpacing.containerLg,
+    );
+    final association = hasChild(_VideoSlot.association)
+        ? layoutChild(
+            _VideoSlot.association,
+            BoxConstraints.tightFor(width: railWidth)
+                .copyWith(maxHeight: available * 0.25),
+          )
+        : Size.zero;
+    final caption = layoutChild(
+      _VideoSlot.caption,
+      BoxConstraints(
+        maxWidth: size.width,
+        maxHeight: max(0, available * 0.55 - association.height),
+      ),
+    );
+    final geometry = WorksVideoGeometry(
+      size: size,
+      aspectRatio: aspectRatio,
+      topInset: topInset,
+      toolbarHeight: toolbarHeight,
+      captionHeight: caption.height,
+      associationHeight: association.height,
+      entryHeight: entry.height > 0
+          ? entry.height + AppSpacing.intraGroupXs
+          : 0,
+      scrubHeight: scrubHeight,
+      horizontalInset: inset,
+    );
+    layoutChild(
+      _VideoSlot.media,
+      BoxConstraints.tight(geometry.stageRect.size),
+    );
+    positionChild(_VideoSlot.media, geometry.stageRect.topLeft);
+    layoutChild(
+      _VideoSlot.gradient,
+      BoxConstraints.tight(geometry.gradientRect.size),
+    );
+    positionChild(_VideoSlot.gradient, geometry.gradientRect.topLeft);
+    positionChild(_VideoSlot.caption, Offset(0, geometry.captionRect.top));
+    if (hasChild(_VideoSlot.association)) {
+      positionChild(_VideoSlot.association, geometry.associationRect.topLeft);
+    }
+    positionChild(
+      _VideoSlot.entry,
+      Offset((size.width - entry.width) / 2, geometry.entryRect.top),
+    );
+    layoutChild(
+      _VideoSlot.timeline,
+      BoxConstraints.tight(geometry.timelineRect.size),
+    );
+    positionChild(_VideoSlot.timeline, geometry.timelineRect.topLeft);
+  }
+
+  @override
+  bool shouldRelayout(covariant _WorksVideoLayoutDelegate oldDelegate) =>
+      aspectRatio != oldDelegate.aspectRatio ||
+      topInset != oldDelegate.topInset ||
+      toolbarHeight != oldDelegate.toolbarHeight ||
+      inset != oldDelegate.inset ||
+      fullscreen != oldDelegate.fullscreen ||
+      fullscreenSafeInsets != oldDelegate.fullscreenSafeInsets ||
+      scrubHeight != oldDelegate.scrubHeight;
 }

@@ -32,6 +32,13 @@ IOS_PREPARE_SCRIPT = APP_DIR / "scripts/ios/build_prepare_dart_defines.sh"
 IOS_EMBED_SCRIPT = APP_DIR / "scripts/ios/build_embed_runtime_config_trust.py"
 IOS_APP_DELEGATE = APP_DIR / "ios/Runner/AppDelegate.swift"
 IOS_RUNTIME_CONFIG_SUPPLY = APP_DIR / "ios/Runner/NativeRuntimeConfigSupply.swift"
+IOS_RUNTIME_CONFIG_ACTIVATION = APP_DIR / "ios/Runner/NativeRuntimeConfigActivationCoordinator.swift"
+IOS_RUNTIME_CONFIG_SOURCES = (
+    IOS_RUNTIME_CONFIG_SUPPLY,
+    APP_DIR / "ios/Runner/NativeRuntimeConfigMigrationArchive.swift",
+    IOS_RUNTIME_CONFIG_ACTIVATION,
+    APP_DIR / "ios/Runner/NativeRuntimeConfigChannel.swift",
+)
 IOS_CANONICAL_JSON = APP_DIR / "ios/Runner/NativeRuntimeCanonicalJSON.swift"
 ANDROID_STARTUP_GATE = (
     APP_DIR / "android/app/src/main/java/com/quwoquan/quwoquan_app/StartupGateActivity.java"
@@ -67,7 +74,7 @@ class BuildTimeSelfSupplyContractTest(unittest.TestCase):
             path.read_text(encoding="utf-8")
             for path in (
                 IOS_APP_DELEGATE,
-                IOS_RUNTIME_CONFIG_SUPPLY,
+                *IOS_RUNTIME_CONFIG_SOURCES,
                 ANDROID_STARTUP_GATE,
                 ANDROID_COORDINATOR,
                 ANDROID_TRUST_GATE,
@@ -214,7 +221,7 @@ class BuildTimeSelfSupplyContractTest(unittest.TestCase):
 
     def test_ios_prepare_script_self_supplies_only_debug_nonprod(self) -> None:
         source = IOS_PREPARE_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn('"${CONFIGURATION:-}" == "Debug-nonprod"', source)
+        self.assertIn('"${CONFIGURATION:-}" == "Debug-alpha"', source)
         self.assertIn("build_self_supply_request.py", source)
         self.assertIn("--self-supply-request", source)
         # 自供给材料落在源码树外的私有临时目录并在脚本退出时清除。
@@ -224,17 +231,17 @@ class BuildTimeSelfSupplyContractTest(unittest.TestCase):
         self.assertIn("APP.LAUNCH.runtime_config_trust_missing", source)
         self.assertIn("build-profile runtime trust envelope is required", source)
         self.assertLess(
-            source.index('"${CONFIGURATION:-}" == "Debug-nonprod"'),
+            source.index('"${CONFIGURATION:-}" == "Debug-alpha"'),
             source.index("build-profile runtime trust envelope is required"),
         )
         # raw flutter run 不带 --target 时 Xcode 收到 lib/main.dart：接受该纯委托别名并归一。
         self.assertIn('(app_dir / "lib/main.dart").resolve()', source)
-        self.assertIn('mapping = load_launch_manifest_contract()["content_source_entrypoints"]', source)
+        self.assertIn('mapping = contract["content_source_entrypoints"]', source)
         self.assertIn('shlex.quote(allowed[requested_path.resolve()])', source)
 
     def test_ios_native_gate_consumes_self_supply_only_in_debug(self) -> None:
         delegate = IOS_APP_DELEGATE.read_text(encoding="utf-8")
-        supply = IOS_RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        supply = "\n".join(path.read_text(encoding="utf-8") for path in IOS_RUNTIME_CONFIG_SOURCES)
         self.assertIn("consumeBundledSelfSupplyRequest", supply)
         self.assertIn(f'"{SELF_SUPPLY_REQUEST_FILE_NAME}"', supply)
         self.assertIn(f'"{SELF_SUPPLY_MODE}"', supply)
@@ -313,7 +320,7 @@ class NativeCanonicalJSONContractTest(unittest.TestCase):
         )
 
     def test_production_and_test_host_compile_the_shared_canonicalizer(self) -> None:
-        supply = IOS_RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        supply = "\n".join(path.read_text(encoding="utf-8") for path in IOS_RUNTIME_CONFIG_SOURCES)
         self.assertEqual(supply.count("return try NativeRuntimeCanonicalJSON.data(document)"), 2)
         self.assertNotIn(".sortedKeys", supply)
         for project in (
@@ -334,16 +341,19 @@ class NativeCanonicalJSONContractTest(unittest.TestCase):
                 f"HOST_SWIFT_UNAVAILABLE platform={sys.platform}: "
                 "原生 Foundation 字节一致性未执行；纯 Python 契约仍独立运行"
             )
-        source = IOS_RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
-        # 保留生产函数体全部字节，只移除访问限制以便独立调用；缺失/迁移必须显式更新抽取边界。
-        functions = re.findall(
-            r"^  private static func canonicalJSONData\([^\n]+\{\n.*?^  \}",
-            source, flags=re.MULTILINE | re.DOTALL,
-        )
+        # 每个职责文件恰好提取一个生产函数；只移除访问限制，不复制函数体。
+        functions = []
+        for path in (IOS_RUNTIME_CONFIG_SUPPLY, IOS_RUNTIME_CONFIG_ACTIVATION):
+            extracted = re.findall(
+                r"^  (?:(?:private|internal) )?static func canonicalJSONData\([^\n]+\{\n.*?^  \}",
+                path.read_text(encoding="utf-8"), flags=re.MULTILINE | re.DOTALL,
+            )
+            self.assertEqual(len(extracted), 1, f"必须覆盖生产 canonicalizer: {path.name}")
+            functions.extend(extracted)
         self.assertEqual(len(functions), 2, "必须覆盖 store 与 activation coordinator 两条生产路径")
         wrappers = "\n".join(
             f"enum ProductionCanonical{index} {{\n"
-            + function.replace("private static func", "static func", 1)
+            + re.sub(r"\b(?:private|internal) (?=static func)", "", function, count=1)
             + "\n}"
             for index, function in enumerate(functions)
         )

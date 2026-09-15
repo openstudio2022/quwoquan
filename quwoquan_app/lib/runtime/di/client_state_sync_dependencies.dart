@@ -19,6 +19,10 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const String _clientStateSyncOutboxStorageKey = 'client_state_sync_outbox';
 
+/// 启动 scope 授予的本地 command 能力。在线与未装配环境恒为 false；
+/// ProviderScope 销毁后授权随代际一并失效，不使用进程级布尔开关。
+final localCommandExecutionEnabledProvider = Provider<bool>((ref) => false);
+
 final class ClientStateSyncRuntimeDependencies {
   const ClientStateSyncRuntimeDependencies({
     required this.readConfig,
@@ -48,18 +52,21 @@ final clientStateSyncRuntimeDependenciesProvider =
       );
       final storageKey = partition.boxName(_clientStateSyncOutboxStorageKey);
       final networkAllowed = CloudRuntimeConfig.networkAccessAllowed;
+      final localCommandExecution = ref.watch(
+        localCommandExecutionEnabledProvider,
+      );
       return ClientStateSyncRuntimeDependencies(
         readConfig: () =>
             ref.read(contentRuntimeConfigProvider).clientStateSync,
         readPersistedState: () => readPersistedInteractionMap(storageKey),
         writePersistedState: (value) {
-          if (!networkAllowed || !ref.mounted) {
+          if ((!networkAllowed && !localCommandExecution) || !ref.mounted) {
             throw contentCapabilityUnavailable('client_state_sync');
           }
           return writePersistedInteractionMap(storageKey, value);
         },
         executeEntry: (entry) {
-          if (!networkAllowed || !ref.mounted) {
+          if ((!networkAllowed && !localCommandExecution) || !ref.mounted) {
             throw contentCapabilityUnavailable('client_state_sync');
           }
           return _executeClientStateSyncEntry(ref, entry);
@@ -153,19 +160,22 @@ final class ClientStateSyncOutboxNotifier
     extends Notifier<ClientStateSyncOutboxState> {
   late ClientStateSyncOutboxEngine _engine;
 
+  bool get _localCommandExecution =>
+      ref.read(localCommandExecutionEnabledProvider);
+
   bool get _isBundledContent =>
       CloudRuntimeConfig.isHydrated &&
       CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot;
 
   void _requireRemoteWrites() {
-    if (_isBundledContent) {
+    if (_isBundledContent && !_localCommandExecution) {
       throw contentCapabilityUnavailable('client_state_sync');
     }
   }
 
   @override
   ClientStateSyncOutboxState build() {
-    if (_isBundledContent) {
+    if (_isBundledContent && !_localCommandExecution) {
       return const ClientStateSyncOutboxState();
     }
     final dependencies = ref.watch(clientStateSyncRuntimeDependenciesProvider);
@@ -221,14 +231,21 @@ final class ClientStateSyncOutboxNotifier
     required String sourceSurfaceId,
     bool flushImmediately = false,
   }) {
-    _requireRemoteWrites();
-    _engine.enqueueFollow(
-      personaId: personaId,
-      currentFollowing: currentFollowing,
-      shouldFollow: shouldFollow,
-      sourceSurfaceId: sourceSurfaceId,
-      flushImmediately: flushImmediately,
-    );
+    try {
+      _requireRemoteWrites();
+      _engine.enqueueFollow(
+        personaId: personaId,
+        currentFollowing: currentFollowing,
+        shouldFollow: shouldFollow,
+        sourceSurfaceId: sourceSurfaceId,
+        flushImmediately: flushImmediately,
+      );
+    } catch (_) {
+      ref
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowing(personaId, currentFollowing);
+      rethrow;
+    }
   }
 
   void enqueuePostLike({
@@ -247,7 +264,7 @@ final class ClientStateSyncOutboxNotifier
   }
 
   Future<void> flushNow() async {
-    if (_isBundledContent) return;
+    if (_isBundledContent && !_localCommandExecution) return;
     await _engine.flushNow();
   }
 

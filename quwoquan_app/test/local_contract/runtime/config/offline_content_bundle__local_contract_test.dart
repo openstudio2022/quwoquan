@@ -1,12 +1,15 @@
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/config/offline_content_bundle.dart';
+import 'package:quwoquan_app/runtime/platform/media/bundled_public_media_delivery.dart';
 import 'package:quwoquan_app/runtime/config/generated/offline_content_bundle_identity.g.dart';
 import 'package:quwoquan_app/runtime/config/runtime_package_resolver.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
@@ -17,38 +20,472 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/post_
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/adapters/profile_query_bundled.dart';
 
+import '../../../support/runtime/config/runtime_package_test_hydration.dart';
+
+import 'package:quwoquan_app/service/content_service/content/post/domain/discovery_feed_resident_page_window.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('canonical 制品全部媒体与投影可读取，premium 不扩为普通视频', () async {
+  installCanonicalOfflineAssetsForTests();
+
+  test('scope目录跨顺序消费者仅首次验包且销毁后命中拒绝', () async {
+    final assets = _MeasuredFileAssets();
+    final scope = OfflineContentReadScope(assets: assets);
+    final bundle = await scope.load();
+    final creatorId =
+        (bundle.rows('creators').first['projection']!
+                as Map<String, Object?>)['personaId']!
+            as String;
+    final postId =
+        (bundle.rows('posts').first['projection']!
+                as Map<String, Object?>)['postId']!
+            as String;
+    final feed = BundledContentDiscoveryFeedQuery(
+      loadBundle: scope.load,
+      checkScope: scope.check,
+    );
+    final posts = BundledContentPostReader(
+      loadBundle: scope.load,
+      checkScope: scope.check,
+    );
+    final profiles = BundledProfileQuery(
+      loadBundle: scope.load,
+      checkScope: scope.check,
+    );
+    final media = BundledPublicMediaDelivery(
+      loadBundle: scope.load,
+      checkScope: scope.check,
+    );
+    await feed.listDiscoveryFeedPage(
+      category: 'recommended',
+      channelId: 'recommend',
+      limit: 20,
+    );
+    await posts.getPost(postId: postId);
+    await profiles.getUserHomepageBundle(creatorId);
+    await expectLater(
+      media.playableSources('media/video/missing.mp4'),
+      throwsA(isA<OfflineContentFailure>()),
+    );
+    expect(assets.manifestReads, 1);
+    expect(assets.mediaReads, bundle.rows('media').length);
+    expect(identical(bundle, await scope.load()), isTrue);
+    scope.dispose();
+    await expectLater(scope.load(), throwsA(isA<OfflineContentFailure>()));
+    await expectLater(
+      posts.getPost(postId: postId),
+      throwsA(isA<OfflineContentFailure>()),
+    );
+    await expectLater(
+      profiles.getUserHomepageBundle(creatorId),
+      throwsA(isA<OfflineContentFailure>()),
+    );
+    await expectLater(
+      feed.listDiscoveryFeedPage(category: 'recommended', limit: 1),
+      throwsA(isA<OfflineContentFailure>()),
+    );
+    await expectLater(
+      media.playableSources('media/video/missing.mp4'),
+      throwsA(isA<OfflineContentFailure>()),
+    );
+  });
+
+  test('scope失败重读与旧generation迟到不污染新目录', () async {
+    final assets = _GatedFileAssets();
+    final old = OfflineContentReadScope(assets: assets);
+    final oldRead = old.load();
+    final oldCheck = expectLater(
+      oldRead,
+      throwsA(isA<OfflineContentFailure>()),
+    );
+    old.dispose();
+    final fresh = OfflineContentReadScope(assets: assets);
+    final read = fresh.load();
+    assets.gate.complete();
+    await oldCheck;
+    final bundle = await read;
+    old.dispose();
+    expect(identical(bundle, await fresh.load()), isTrue);
+    expect(assets.manifestReads, 2);
+    fresh.dispose();
+    final bad = _GatedFileAssets()..corrupt = true;
+    bad.gate.complete();
+    final retry = OfflineContentReadScope(assets: bad);
+    await expectLater(retry.load(), throwsA(isA<OfflineContentFailure>()));
+    bad.corrupt = false;
+    expect((await retry.load()).digest, offlineContentManifestDigest);
+    expect(bad.manifestReads, 2);
+    retry.dispose();
+  });
+
+  test('计算启动诊断1逐媒体worker内部hash与启动传输', () async {
+    final assets = _MeasuredFileAssets();
+    final manifest = jsonDecode(
+      await File(offlineContentManifestAssetPath).readAsString(),
+    ) as Map<String, dynamic>;
+    var computeMicros = 0;
+    var workerHashMicros = 0;
+    var transportMicros = 0;
+    var ticks = 0;
+    final timer = Timer.periodic(
+      const Duration(milliseconds: 10),
+      (_) => ticks++,
+    );
+    final watch = Stopwatch()..start();
+    try {
+      for (final row
+          in (manifest['media'] as List).cast<Map<String, dynamic>>()) {
+        final data = await assets.load(row['assetPath'] as String);
+        final bytes = data.buffer.asUint8List(
+          data.offsetInBytes,
+          data.lengthInBytes,
+        );
+        final outer = Stopwatch()..start();
+        final result = await compute(_diagnosticHash, bytes);
+        computeMicros += outer.elapsedMicroseconds;
+        workerHashMicros += result['micros']! as int;
+        expect(result['digest'], row['sha256']);
+        outer.reset();
+        expect(await compute(_diagnosticLength, bytes), bytes.length);
+        transportMicros += outer.elapsedMicroseconds;
+      }
+    } finally {
+      timer.cancel();
+      // ignore: avoid_print
+      print(
+        jsonEncode({
+          'diagnostic': 'compute_startup_transfer',
+          'elapsedMicros': watch.elapsedMicroseconds,
+          'computeRoundtripMicros': computeMicros,
+          'workerHashMicros': workerHashMicros,
+          'emptyRoundtripMicros': transportMicros,
+          'mainTimerTicks': ticks,
+          'rssBytes': ProcessInfo.currentRss,
+          ...assets.facts,
+        }),
+      );
+    }
+  });
+
+  test('计算启动诊断2作者链单次与同adapter重复', () async {
+    final assets = _MeasuredFileAssets();
+    final raw = jsonDecode(
+      await File(offlineContentManifestAssetPath).readAsString(),
+    ) as Map<String, dynamic>;
+    final id = raw['posts'][0]['projection']['authorId'] as String;
+    var calls = 0;
+    Future<OfflineContentBundle> load() {
+      calls++;
+      return OfflineContentBundle.load(assets: assets);
+    }
+
+    final profiles = BundledProfileQuery(loadBundle: load);
+    final posts = BundledContentPostReader(loadBundle: load);
+    for (final stage in [
+      'profile_cold',
+      'author_posts_cold',
+      'author_posts_same_adapter_warm',
+    ]) {
+      final watch = Stopwatch()..start();
+      final before = assets.mediaReads;
+      String? failure;
+      try {
+        if (stage == 'profile_cold') {
+          expect(
+            (await profiles.getUserHomepageBundle(id)).profile.personaId,
+            id,
+          );
+        } else {
+          expect(
+            (await posts.listUserPosts(userId: id, limit: 5)).items,
+            isNotEmpty,
+          );
+        }
+      } catch (error) {
+        failure = error.runtimeType.toString();
+        rethrow;
+      } finally {
+        // ignore: avoid_print
+        print(
+          jsonEncode({
+            'diagnostic': stage,
+            'elapsedMicros': watch.elapsedMicroseconds,
+            'loadCalls': calls,
+            'newMediaReads': assets.mediaReads - before,
+            'failure': failure,
+            'rssBytes': ProcessInfo.currentRss,
+            ...assets.facts,
+          }),
+        );
+      }
+    }
+  });
+
+  test('同键完整校验single-flight且AssetBundle身份隔离', () async {
+    final first = _GatedFileAssets();
+    final second = _GatedFileAssets();
+    final a = OfflineContentBundle.load(assets: first);
+    final b = OfflineContentBundle.load(assets: first);
+    final c = OfflineContentBundle.load(assets: second);
+    expect(identical(a, b), isTrue);
+    expect(identical(a, c), isFalse);
+    first.gate.complete();
+    second.gate.complete();
+    final results = await Future.wait([a, b, c]);
+    expect(identical(results[0], results[1]), isTrue);
+    expect(identical(results[0], results[2]), isFalse);
+    expect(first.manifestReads, 1);
+    expect(second.manifestReads, 1);
+  });
+
+  test('失败后重新真实校验，旧scope迟到不删除新flight', () async {
+    final assets = _GatedFileAssets();
+    final old = OfflineContentBundle.load(assets: assets);
+    final oldCheck = expectLater(old, throwsA(isA<OfflineContentFailure>()));
+    OfflineContentBundle.invalidateSourceScope();
+    final fresh = OfflineContentBundle.load(assets: assets);
+    assets.gate.complete();
+    await oldCheck;
+    expect((await fresh).digest, offlineContentManifestDigest);
+    expect(assets.manifestReads, 2);
+    final bad = _GatedFileAssets()..corrupt = true;
+    bad.gate.complete();
+    await expectLater(
+      OfflineContentBundle.load(assets: bad),
+      throwsA(isA<OfflineContentFailure>()),
+    );
+    bad.corrupt = false;
+    expect(
+      (await OfflineContentBundle.load(assets: bad)).digest,
+      offlineContentManifestDigest,
+    );
+    expect(bad.manifestReads, 2);
+  });
+
+  test('超时flight停止后续媒体读取且不缓存迟到成功', () async {
+    final assets = _GatedFileAssets();
+    await expectLater(
+      OfflineContentBundle.load(assets: assets),
+      throwsA(isA<TimeoutException>()),
+    );
+    assets.gate.complete();
+    // 新flight仍执行完整hash，旧flight在manifest读取后检查点停止。
+    final fresh = await OfflineContentBundle.load(assets: assets);
+    expect(assets.manifestReads, 2);
+    expect(assets.mediaReads, fresh.rows('media').length);
+  });
+
+  test('共享真实flight单等待者取消不污染其他adapter', () async {
+    final assets = _GatedFileAssets();
+    Future<OfflineContentBundle> load() =>
+        OfflineContentBundle.load(assets: assets);
+    final first = BundledContentDiscoveryFeedQuery(loadBundle: load);
+    final second = BundledContentDiscoveryFeedQuery(loadBundle: load);
+    final signal = CloudOperationCancellationSignal();
+    final cancelled = first.listDiscoveryFeedPage(
+      category: 'recommended',
+      channelId: 'recommend',
+      limit: 1,
+      cancellation: signal,
+    );
+    final check = expectLater(
+      cancelled,
+      throwsA(isA<CloudOperationCancelledException>()),
+    );
+    final valid = second.listDiscoveryFeedPage(
+      category: 'recommended',
+      channelId: 'recommend',
+      limit: 1,
+    );
+    signal.cancel();
+    assets.gate.complete();
+    await check;
+    expect((await valid).items, hasLength(1));
+    expect(assets.manifestReads, 1);
+  });
+
+  test('性能诊断A真实文件读与hash基线及首次重复完整验证', () async {
+    final assets = _MeasuredFileAssets();
+    final manifestData = await assets.load(offlineContentManifestAssetPath);
+    final manifestBytes = manifestData.buffer.asUint8List(
+      manifestData.offsetInBytes,
+      manifestData.lengthInBytes,
+    );
+    final hashClock = Stopwatch()..start();
+    expect(
+      'sha256:${sha256.convert(manifestBytes)}',
+      offlineContentManifestDigest,
+    );
+    var hashMicros = hashClock.elapsedMicroseconds;
+    final decodeClock = Stopwatch()..start();
+    final manifest =
+        jsonDecode(utf8.decode(manifestBytes)) as Map<String, dynamic>;
+    final decodeMicros = decodeClock.elapsedMicroseconds;
+    final canonicalClock = Stopwatch()..start();
+    final identityBody = Map<String, dynamic>.of(manifest)..remove('bundleId');
+    final canonical = canonicalJsonEncode(identityBody);
+    final canonicalMicros = canonicalClock.elapsedMicroseconds;
+    canonicalClock.reset();
+    expect(
+      'alpha-${sha256.convert(utf8.encode(canonical))}',
+      manifest['bundleId'],
+    );
+    final identityHashMicros = canonicalClock.elapsedMicroseconds;
+    for (final row
+        in (manifest['media'] as List).cast<Map<String, dynamic>>()) {
+      final data = await assets.load(row['assetPath'] as String);
+      final bytes = data.buffer.asUint8List(
+        data.offsetInBytes,
+        data.lengthInBytes,
+      );
+      hashClock.reset();
+      expect('sha256:${sha256.convert(bytes)}', row['sha256']);
+      hashMicros += hashClock.elapsedMicroseconds;
+      expect(bytes.length, row['byteLength']);
+    }
+    // 独立散列基线不在生产load计时内；生产load仍自行读取并完整验证。
+    // ignore: avoid_print
+    print(
+      jsonEncode({
+        'diagnostic': 'file_hash_baseline',
+        ...assets.facts,
+        'hashMicros': hashMicros,
+        'manifestDecodeMicros': decodeMicros,
+        'manifestCanonicalMicros': canonicalMicros,
+        'manifestIdentityHashMicros': identityHashMicros,
+        'rssBytes': ProcessInfo.currentRss,
+      }),
+    );
+    for (final stage in ['fresh_bundle', 'repeat_bundle']) {
+      assets.reset();
+      final watch = Stopwatch()..start();
+      final before = ProcessInfo.currentRss;
+      final bundle = await OfflineContentBundle.load(assets: assets);
+      // ignore: avoid_print
+      print(
+        jsonEncode({
+          'diagnostic': stage,
+          'elapsedMicros': watch.elapsedMicroseconds,
+          'rssBefore': before,
+          'rssAfter': ProcessInfo.currentRss,
+          ...assets.facts,
+        }),
+      );
+      expect(bundle.digest, offlineContentManifestDigest);
+      expect(assets.manifestReads, 1);
+      expect(assets.mediaReads, bundle.rows('media').length);
+    }
+  });
+
+  test('性能诊断B同isolate三adapter并发真实整包校验', () async {
+    final assets = _MeasuredFileAssets();
+    // 仅读取路由身份，不建立或预造bundle，不保留媒体字节。
+    final raw = jsonDecode(
+      await File(offlineContentManifestAssetPath).readAsString(),
+    ) as Map<String, dynamic>;
+    final postId = raw['posts'][0]['projection']['postId'] as String;
+    final personaId = raw['creators'][0]['projection']['personaId'] as String;
+    var loads = 0;
+    final completions = <String>[];
+    final durations = <int>[];
+    Future<OfflineContentBundle> load() async {
+      loads++;
+      final watch = Stopwatch()..start();
+      try {
+        final bundle = await OfflineContentBundle.load(assets: assets);
+        completions.add('passed');
+        return bundle;
+      } catch (error) {
+        completions.add(error.runtimeType.toString());
+        rethrow;
+      } finally {
+        durations.add(watch.elapsedMicroseconds);
+      }
+    }
+
+    final feed = BundledContentDiscoveryFeedQuery(loadBundle: load);
+    final posts = BundledContentPostReader(loadBundle: load);
+    final profiles = BundledProfileQuery(loadBundle: load);
+    final before = ProcessInfo.currentRss;
+    try {
+      await Future.wait<Object?>([
+        feed.listDiscoveryFeedPage(
+          category: 'recommended',
+          channelId: 'recommend',
+          limit: 20,
+        ),
+        posts.getPost(postId: postId),
+        profiles.getPersonaProfile(personaId),
+      ]);
+    } finally {
+      // ignore: avoid_print
+      print(
+        jsonEncode({
+          'diagnostic': 'three_adapters_same_isolate',
+          'loads': loads,
+          'completions': completions,
+          'durationsMicros': durations,
+          'rssBefore': before,
+          'rssAfter': ProcessInfo.currentRss,
+          ...assets.facts,
+        }),
+      );
+    }
+    expect(loads, 3);
+    expect(assets.manifestReads, 1);
+    expect(assets.mediaReads, (raw['media'] as List).length);
+  });
+  test('真实频道跨20分页读取完整终止，premium图片和视频均可达', () async {
     final bundle = await OfflineContentBundle.load();
     final feed = BundledContentDiscoveryFeedQuery(
       loadBundle: () async => bundle,
     );
     final detail = BundledContentPostReader(loadBundle: () async => bundle);
-    final recommendation = await feed.listDiscoveryFeedPage(
-      category: 'recommended',
-      channelId: 'recommend',
-      limit: 20,
-    );
-    expect(recommendation.items, hasLength(bundle.rows('posts').length));
-    expect(recommendation.activationIdentity, isNull);
-    expect(recommendation.nextCursor, isNull);
-    final premium = await feed.listDiscoveryFeedPage(
-      category: 'video',
-      channelId: 'premium',
-      limit: 20,
-    );
-    expect(
-      premium.items.map((post) => post.id),
-      bundle
-          .rows('channels')
-          .singleWhere(
-            (row) => row['channelId'] == 'premium',
-          )['orderedPostIds'],
-    );
-    for (final post in recommendation.items) {
-      final payload = await detail.getPost(postId: post.id);
-      expect(payload, isNotNull);
+    for (final channel in ['recommend', 'premium']) {
+      final expected =
+          (bundle
+                      .rows('channels')
+                      .singleWhere(
+                        (row) => row['channelId'] == channel,
+                      )['orderedPostIds']!
+                  as List)
+              .cast<String>();
+      final ids = <String>[];
+      final cursors = <String>{};
+      final types = <String>{};
+      String? cursor;
+      var pages = 0;
+      do {
+        final page = await feed.listDiscoveryFeedPage(
+          category: channel == 'premium' ? 'video' : 'recommended',
+          channelId: channel,
+          limit: homeFeedPageItemLimit,
+          cursor: cursor,
+        );
+        expect(page.activationIdentity, isNull);
+        expect(page.outcome, ContentFeedOutcome.content);
+        expect(page.items, isNotEmpty);
+        if (pages == 0) {
+          expect(page.items, hasLength(homeFeedPageItemLimit));
+          expect(page.nextCursor, isNotNull);
+        }
+        for (final post in page.items) {
+          expect(ids, isNot(contains(post.id)));
+          ids.add(post.id);
+          types.add(post.type);
+          final payload = await detail.getPost(postId: post.id);
+          expect(payload.post.id, post.id);
+          expect(payload.post.type, post.type);
+        }
+        pages++;
+        cursor = page.nextCursor;
+        if (cursor != null) expect(cursors.add(cursor), isTrue);
+        expect(pages, lessThanOrEqualTo(expected.length));
+      } while (cursor != null);
+      expect(pages, greaterThanOrEqualTo(2));
+      expect(ids.length, greaterThan(homeFeedPageItemLimit));
+      expect(ids, orderedEquals(expected));
+      if (channel == 'premium') expect(types, {'image', 'video'});
     }
   });
 
@@ -81,7 +518,15 @@ void main() {
       }
     } while (cursor != null);
     final bundle = await OfflineContentBundle.load();
-    expect(ids, hasLength(bundle.rows('posts').length));
+    final selected =
+        (bundle
+                    .rows('channels')
+                    .singleWhere(
+                      (row) => row['channelId'] == 'recommend',
+                    )['orderedPostIds']!
+                as List)
+            .cast<String>();
+    expect(ids, selected.toSet());
     final empty = await feed.listDiscoveryFeedPage(
       category: 'work',
       channelId: 'campus',
@@ -426,6 +871,65 @@ void main() {
       );
     }
   });
+}
+
+Map<String, Object> _diagnosticHash(Uint8List bytes) {
+  final watch = Stopwatch()..start();
+  final digest = 'sha256:${sha256.convert(bytes)}';
+  return {'digest': digest, 'micros': watch.elapsedMicroseconds};
+}
+
+int _diagnosticLength(Uint8List bytes) => bytes.length;
+
+final class _GatedFileAssets extends _MeasuredFileAssets {
+  final gate = Completer<void>();
+  bool corrupt = false;
+
+  @override
+  Future<ByteData> load(String key) async {
+    if (key == offlineContentManifestAssetPath) await gate.future;
+    final data = await super.load(key);
+    if (corrupt && key == offlineContentManifestAssetPath) return ByteData(1);
+    return data;
+  }
+}
+
+/// 只记录真实文件读取，不缓存字节，不替换生产时钟或hash。
+class _MeasuredFileAssets extends AssetBundle {
+  int manifestReads = 0;
+  int mediaReads = 0;
+  int byteCount = 0;
+  int manifestReadMicros = 0;
+  int mediaReadMicros = 0;
+
+  Map<String, int> get facts => {
+    'manifestReads': manifestReads,
+    'mediaReads': mediaReads,
+    'bytesRead': byteCount,
+    'manifestReadMicros': manifestReadMicros,
+    'mediaReadMicros': mediaReadMicros,
+  };
+
+  void reset() {
+    manifestReads = mediaReads = byteCount = manifestReadMicros =
+        mediaReadMicros = 0;
+  }
+
+  @override
+  Future<ByteData> load(String key) async {
+    final watch = Stopwatch()..start();
+    final bytes = await File(key).readAsBytes();
+    final micros = watch.elapsedMicroseconds;
+    byteCount += bytes.length;
+    if (key == offlineContentManifestAssetPath) {
+      manifestReads++;
+      manifestReadMicros += micros;
+    } else {
+      mediaReads++;
+      mediaReadMicros += micros;
+    }
+    return ByteData.sublistView(bytes);
+  }
 }
 
 final class _ManifestBundle extends CachingAssetBundle {

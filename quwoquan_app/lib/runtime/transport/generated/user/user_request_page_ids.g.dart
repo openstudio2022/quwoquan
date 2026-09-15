@@ -52,6 +52,7 @@ class UserRequestPageIds {
     'InitiateContactDiscovery': 'user.initiate.contact.discovery',
     'InvalidateDevicePushEndpoint': 'user.invalidate.device.push.endpoint',
     'IssueAccountAppealCredential': 'user.issue.account.appeal.credential',
+    'IssueCollectionQueryGrant': 'user.issue.collection.query.grant',
     'ListBlockedUsers': 'user.block.list',
     'ListCredentials': 'user.list.credentials',
     'ListFollowers': 'user.followers',
@@ -102,6 +103,7 @@ class UserRequestPageIds {
     'UpdatePrivacySettings': 'user.settings.privacy.patch',
     'UpdateUserProfile': 'user.profile.edit',
     'UpsertDevicePushEndpoint': 'user.upsert.device.push.endpoint',
+    'VerifyCollectionQueryGrant': 'user.verify.collection.query.grant',
   };
 
   static const String acceptInvitation = 'user.accept.invitation';
@@ -166,6 +168,8 @@ class UserRequestPageIds {
       'user.invalidate.device.push.endpoint';
   static const String issueAccountAppealCredential =
       'user.issue.account.appeal.credential';
+  static const String issueCollectionQueryGrant =
+      'user.issue.collection.query.grant';
   static const String listBlockedUsers = 'user.block.list';
   static const String listCredentials = 'user.list.credentials';
   static const String listFollowers = 'user.followers';
@@ -227,4 +231,6 @@ class UserRequestPageIds {
   static const String updateUserProfile = 'user.profile.edit';
   static const String upsertDevicePushEndpoint =
       'user.upsert.device.push.endpoint';
+  static const String verifyCollectionQueryGrant =
+      'user.verify.collection.query.grant';
 }
