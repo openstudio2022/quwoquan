@@ -131,6 +131,35 @@ def _read_local_bytes(raw_path: str, *, label: str) -> bytes:
     return body
 
 
+def _source_work_evidence(source: dict[str, Any]) -> tuple[list[dict[str, Any]], list[bytes]]:
+    """取得真实原件并绑定局部运输名；不改变 rawSha256 的历史语义。"""
+    if "sourceWork" not in source:
+        return [], []
+    work = source["sourceWork"]
+    rows = source["sourceWorkEvidence"]
+    ids = [row["id"] for row in rows]
+    if len(ids) != len(set(ids)) or set(ids) != set(work["capture"]["evidenceRefs"]):
+        raise AcquireError("DATA.ACQUIRE.SOURCE_WORK_EVIDENCE_REF_INVALID")
+    if work["identity"]["pageUrl"] != source["sourceUrl"]:
+        raise AcquireError("DATA.ACQUIRE.SOURCE_WORK_IDENTITY_CONFLICT")
+    bindings, bodies = [], []
+    for index, row in enumerate(rows):
+        path = Path(row["inputPath"]).expanduser().absolute()
+        if any(part.is_symlink() for part in (path, *path.parents)) or not path.is_file():
+            raise AcquireError(f"DATA.ACQUIRE.SOURCE_WORK_EVIDENCE_INVALID: {path}")
+        if (source.get("sourceMarkdownPath") and row["kind"] != "source_excerpt"
+                and path.samefile(Path(source["sourceMarkdownPath"]).expanduser())):
+            raise AcquireError("DATA.ACQUIRE.SOURCE_WORK_EXCERPT_MISLABELED")
+        body = _read_local_bytes(str(path), label="sourceWork evidence")
+        if _sha256(body) != row["sha256"] or len(body) != row["bytes"]:
+            raise AcquireError(f"DATA.ACQUIRE.SOURCE_WORK_EVIDENCE_DRIFT: {path}")
+        suffix = path.suffix if re.fullmatch(r"\.[A-Za-z0-9]+", path.suffix) else ".bin"
+        filename = f"evidence{'-' + str(index + 1) if index else ''}{suffix}"
+        bindings.append({key: value for key, value in row.items() if key != "inputPath"} | {"path": filename})
+        bodies.append(body)
+    return bindings, bodies
+
+
 def _sniff_image_mime(body: bytes, *, hint: str) -> str:
     for magic, mime in _IMAGE_MAGIC:
         if body.startswith(magic):
@@ -503,14 +532,24 @@ def _materialize(
     if "extractor" in source:
         # 正文取得方法属于宿主申报事实，不从站点身份覆盖。
         meta["extractor"] = source["extractor"]
+    work_evidence, work_bodies = _source_work_evidence(source)
+    if "sourceWork" in source:
+        meta.update(sourceWork=source["sourceWork"], sourceWorkEvidence=work_evidence)
     assets: list[dict[str, Any]] = []
     receipt_ref = ""
     with _lock(unit.parent / f".{unit_id}.lock"):
         if unit.exists():
             existing = json.loads((unit / "meta.json").read_bytes())
             if (existing.get("rawSha256") != raw_sha or existing.get("targetRef") != target_ref
-                    or existing.get("extractor") != meta.get("extractor")):
+                    or existing.get("extractor") != meta.get("extractor")
+                    or existing.get("sourceWork") != meta.get("sourceWork")
+                    or existing.get("sourceWorkEvidence") != meta.get("sourceWorkEvidence")):
                 raise AcquireError(f"DATA.ACQUIRE.CREATE_ONCE_CONFLICT: {unit_id}")
+            for binding, body in zip(work_evidence, work_bodies):
+                stored = unit / binding["path"]
+                if (any(p.is_symlink() for p in (stored, *stored.parents))
+                        or not stored.is_file() or stored.read_bytes() != body):
+                    raise AcquireError(f"DATA.ACQUIRE.SOURCE_WORK_EVIDENCE_DRIFT: {unit_id}")
             meta = existing
             index_path = unit / "assets/index.json"
             if index_path.is_file():
@@ -604,6 +643,8 @@ def _materialize(
                     _write_create_or_same(unit.parent / receipt_ref, _canonical(receipt))
                 if acquired["snapshot"] is not None:
                     link_bytes_from_library(acquired["snapshot"], temporary / acquired["snapshotName"], kind="source", library_root=library_root)
+                for binding, body in zip(work_evidence, work_bodies):
+                    (temporary / binding["path"]).write_bytes(body)
                 (temporary / "source.md").write_text(source_md, encoding="utf-8")
                 (temporary / "assets/index.json").write_bytes(_canonical({"assets": assets}))
                 assert_valid(meta, "source", "atomic_source_unit_meta", label=unit_id)
@@ -648,7 +689,7 @@ def _materialize(
         "kind": source["kind"],
         "title": acquired["title"],
         "license": acquired["license"],
-        "rightsStatus": acquired["media"]["rightsStatus"] if "media" in acquired else "verified",
+        "rightsStatus": acquired["media"]["rightsStatus"] if "media" in acquired else _rights_record(acquired["license"])[0],
         "watermarkStatus": acquired["media"]["watermarkStatus"] if "media" in acquired else None,
         "assets": [row["fileName"] for row in assets],
         "sourceRef": row["sourceRef"],
@@ -668,7 +709,7 @@ def _ingest_target(*, execution_id: str, target: dict[str, Any], carrier: str, p
     return {"targetRef": target_ref, "status": "ingested", "sources": results}
 
 
-def acquire(*, execution_id: str, request_path: Path) -> dict[str, Any]:
+def acquire(*, execution_id: str, request_path: Path | None = None, submitted_request: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """零网络 ingest 一个 execution 的全部 target；逐 target 独立报告。"""
     execution_id = validate_execution_id(execution_id)
     carrier = parse_execution_id(execution_id).content_type.value
@@ -677,8 +718,15 @@ def acquire(*, execution_id: str, request_path: Path) -> dict[str, Any]:
         raise AcquireError(f"DATA.ACQUIRE.EXECUTION_MISSING: {execution_id}")
     target_set = json.loads((root / "0.plan/target_set.json").read_bytes())
     declared_refs = set(target_set.get("targetRefs") or [])
-    request = json.loads(Path(request_path).expanduser().read_bytes())
-    assert_valid(request, "source", "ingest_manifest", label=str(request_path))
+    if submitted_request is None:
+        if request_path is None:
+            raise AcquireError("request_path 或 submitted_request 必须提供其一")
+        request = json.loads(Path(request_path).expanduser().read_bytes())
+        request_label = str(request_path)
+    else:
+        request = dict(submitted_request)
+        request_label = "submitted ingest manifest"
+    assert_valid(request, "source", "ingest_manifest", label=request_label)
     if request["executionId"] != execution_id:
         raise AcquireError(f"DATA.ACQUIRE.EXECUTION_MISMATCH: manifest={request['executionId']} execution={execution_id}")
     request_bytes = _canonical(request)

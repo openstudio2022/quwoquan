@@ -120,7 +120,7 @@ def _gen_format_内容载体():
 
 def _gen_format_内容角度():
     dim("Format/内容角度", "内容角度", "Content Angle",
-        "内容的创作切入视角，14个互斥视角，每篇内容至少标注一个",
+        "内容的创作切入视角；视角互斥，每篇内容至少标注一个",
         max_depth=3, expected_size=120)
 
     tag("Format/内容角度/攻略", "攻略", "Guide",

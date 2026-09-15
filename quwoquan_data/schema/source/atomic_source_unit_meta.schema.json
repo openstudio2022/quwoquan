@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/source/atomic_source_unit_meta.schema.json",
+  "allOf": [{"if": {"required": ["sourceWork"]}, "then": {"required": ["sourceWorkEvidence"]}, "else": {"not": {"required": ["sourceWorkEvidence"]}}}],
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -79,6 +80,8 @@
       "type": "string",
       "minLength": 1
     },
+    "sourceWork": {"$ref": "source_work.schema.json"},
+    "sourceWorkEvidence": {"$ref": "source_work.schema.json#/$defs/storedEvidence"},
     "extractor": {
       "$ref": "ingest_manifest.schema.json#/$defs/pageSource/properties/extractor"
     },

@@ -1,0 +1,15 @@
+{
+  "label": "城市天际线",
+  "labelEn": "City Skyline",
+  "description": "城市建筑轮廓与天际线主体，不含单栋细部或室内",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:20:16.517586+00:00",
+  "updatedAt": "2026-09-12T01:20:16.517586+00:00"
+}

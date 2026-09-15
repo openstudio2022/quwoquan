@@ -86,6 +86,7 @@
       ]
     },
     "pageSource": {
+      "allOf": [{"if": {"required": ["sourceWork"]}, "then": {"required": ["sourceWorkEvidence"]}, "else": {"not": {"required": ["sourceWorkEvidence"]}}}],
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -99,6 +100,8 @@
         "relevance"
       ],
       "properties": {
+        "sourceWork": {"$ref": "source_work.schema.json"},
+        "sourceWorkEvidence": {"$ref": "source_work.schema.json#/$defs/inputEvidence"},
         "kind": {
           "const": "page"
         },
@@ -175,6 +178,8 @@
         "watermarkKind"
       ],
       "properties": {
+        "sourceWork": {"$ref": "source_work.schema.json"},
+        "sourceWorkEvidence": {"$ref": "source_work.schema.json#/$defs/inputEvidence"},
         "kind": {
           "enum": [
             "image",
@@ -255,6 +260,7 @@
         }
       },
       "allOf": [
+        {"if": {"required": ["sourceWork"]}, "then": {"required": ["sourceWorkEvidence"]}, "else": {"not": {"required": ["sourceWorkEvidence"]}}},
         {
           "if": {"properties": {"directUrl": {"type": "null"}}, "required": ["directUrl"]},
           "then": {"properties": {"kind": {"const": "video"}}, "required": ["acquisition"]},

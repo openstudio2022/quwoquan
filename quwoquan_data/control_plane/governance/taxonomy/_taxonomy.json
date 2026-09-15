@@ -40,7 +40,7 @@
       "id": "Topic/人文社科",
       "group": "Topic",
       "label": "人文社科",
-      "count": 9
+      "count": 11
     },
     {
       "id": "Topic/健康养生",
@@ -118,7 +118,7 @@
       "id": "Topic/宠物动物",
       "group": "Topic",
       "label": "宠物动物",
-      "count": 8
+      "count": 13
     },
     {
       "id": "Topic/三农生活",
@@ -130,7 +130,7 @@
       "id": "Topic/自然风光",
       "group": "Topic",
       "label": "自然风光",
-      "count": 14
+      "count": 21
     },
     {
       "id": "Topic/话题",
@@ -166,7 +166,7 @@
       "id": "Topic/地理",
       "group": "Topic",
       "label": "地理",
-      "count": 4122
+      "count": 4158
     },
     {
       "id": "Topic/购物消费",
@@ -349,14 +349,14 @@
       "count": 15
     }
   ],
-  "totalCount": 5892,
+  "totalCount": 5942,
   "stats": {
     "byGroup": {
-      "Topic": 5016,
+      "Topic": 5066,
       "Audience": 315,
       "Format": 258,
       "Entity": 303
     }
   },
-  "generatedAt": "2026-09-07T16:37:32.168853+00:00"
+  "generatedAt": "2026-09-13T02:03:20.286175+00:00"
 }

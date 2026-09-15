@@ -1,0 +1,15 @@
+{
+  "label": "育雏",
+  "labelEn": "Brooding",
+  "description": "育雏、哺乳或照顾幼体的可见行为",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:20:16.517586+00:00",
+  "updatedAt": "2026-09-12T01:20:16.517586+00:00"
+}

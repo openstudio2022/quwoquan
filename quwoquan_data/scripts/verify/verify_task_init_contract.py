@@ -130,7 +130,8 @@ def _candidate_projection(
             return None
         target = dict(raw)
         target["name"] = str(target.get("name") or "").strip()
-        target["entityType"] = str(target.get("entityType") or "").strip().strip("/")
+        if "entityType" in target:
+            target["entityType"] = str(target.get("entityType") or "").strip().strip("/")
         if carrier != "homepage":
             target["publishAngle"] = str(target.get("publishAngle") or "").strip()
             target["publishTitle"] = str(target.get("publishTitle") or "").strip()

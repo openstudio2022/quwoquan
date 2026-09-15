@@ -62,9 +62,18 @@ def handle_export_offline(args: argparse.Namespace) -> None:
 
 
 def handle_publish_object(args: argparse.Namespace) -> None:
+    from content.coordination.runtime import current_tokens, producer_call
+    from content.coordination.store import CoordinationError
     from content.release.canonical.publish_object import handle_publish_object as handle
+    import sys
 
-    handle(args)
+    try:
+        current_tokens()
+        producer_call(lambda: handle(args), operation="publish",
+                      batches={str(args.execution_id): [str(args.target_ref)]})
+    except CoordinationError as exc:
+        print(f"[release publish-object] GATE_BLOCK {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
 
 
 _CANONICAL_COHORT_NAME = "cohort.json"
@@ -130,7 +139,7 @@ def handle_pool_query(args: argparse.Namespace) -> None:
     print(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True))
 
 
-def handle_release_finalize(args: argparse.Namespace) -> None:
+def _handle_release_finalize_unfenced(args: argparse.Namespace) -> None:
     """pool-build → release-integrity → create-once handoff，一次完成并固定 producer END。"""
 
     from content.release.canonical.aggregate_release import build_pool_release
@@ -229,6 +238,33 @@ def write_versioned_release_copy(*, release_dir: Path, reference_root: Path, rel
         os.replace(temporary, target)
         statuses[name] = "created"
     return {"root": target_dir.as_posix(), **statuses}
+
+
+def handle_release_finalize(args: argparse.Namespace) -> None:
+    from content.coordination.runtime import current_tokens, producer_call
+    from content.coordination.store import CoordinationError
+    from content.release.canonical.aggregate_release_closure import object_root
+    import sys
+
+    try:
+        current_tokens()
+        publish = Path(args.publish_root or PUBLISH_ROOT).resolve()
+        if publish != Path(PUBLISH_ROOT).resolve():
+            raise CoordinationError("COORDINATION.ROOT_BINDING_MISMATCH", "finalize publish_root 不得偏离绑定")
+        output = Path(OUTPUT_ROOT).resolve()
+        if (Path(args.release_root or output / "data/releases").resolve() != output / "data/releases"
+                or Path(args.reference_root or REFERENCE_RELEASES_ROOT).resolve() != publish / "releases"):
+            raise CoordinationError("COORDINATION.ROOT_BINDING_MISMATCH", "release/reference 根不得偏离绑定")
+        cohort = json.loads(Path(args.cohort_file).read_bytes())
+        batches: dict[str, list[str]] = {}
+        for ref in cohort["objectRefs"]:
+            kind, logical = ref.split("/", 1)
+            review = json.loads((object_root(publish, kind, logical) / "content_review.json").read_bytes())
+            batches.setdefault(review["executionId"], []).append(review["objectRef"])
+        producer_call(lambda: _handle_release_finalize_unfenced(args), operation="finalize", batches=batches, require_global_closer=True)
+    except (CoordinationError, OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"[release finalize] GATE_BLOCK {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
 
 
 def handle_handoff_verify(args: argparse.Namespace) -> None:

@@ -16,7 +16,7 @@
 
 - immutable candidate binding 只冻结 target identity；宿主 AI 在 `sources` 为每个冻结 target 选择来源并写计划，在 `1.download` 才按计划取得 source units/source refs 与媒体 bytes/CAS。
 - 每份来源结果绑定唯一 target identity；多个 target 或 execution 的串并行由宿主原生能力承担。
-- 跨会话只读 stage OPEN/CLOSE receipts 与业务 result refs。
+- 跨会话只读三份 create-once seal receipts 与业务 result refs。
 
 ### Out of Scope
 
@@ -29,9 +29,9 @@
 <a id="req-001"></a>
 ### REQ-001 每个 target 的来源计划与取得结果保持单轨
 
-- producer 九阶段 Skill是唯一业务工作说明；candidate binding 不承担来源 admission，`sources` 只写逐 target source plan，`1.download` 才创建 source unit、source ref 与取得字节/CAS。
+- producer 六步 Skill 是唯一业务工作说明；candidate binding 不承担来源 admission，`sources` 只写逐 target source plan，`1.download` 才创建 source unit、source ref 与取得字节/CAS。
 - 宿主可串行或并发调研 target，但每个计划、source unit、typed issue 与 result ref 必须绑定对应 target exact identity，不得因并发丢失、合并或复制 target。
-- OPEN 无 CLOSE 时新会话读取同一冻结输入并重做该 stage；CLOSE blocked 后只新建 execution，不由代码生成 recovery stage。
+- 尚无 create-once receipt 时新会话读取同一冻结输入并按原 actor 可核验规则续做；receipt blocked 后只新建 execution，不由代码生成 recovery stage。
 
 <a id="req-002"></a>
 ### REQ-002 来源失败由宿主 AI 显式裁定且旧控制面保持删除
@@ -77,4 +77,4 @@
 - 影响或价值：旧来源发现编排与进度控制面已物理删除，并由 post-delete architecture/public CLI live-import gates 持续锁定；但当前尚缺硬切后多 target 来源发现的行为证据，不能仅凭删除门宣称逐 target 计划、下载与局部失败隔离已经实现或闭合。
 - 尚缺验收证据：同一 identity-only candidate-backed execution 至少包含一个成功 target 与一个 typed blocked target，直接证明计划先于下载、结果 identity 不串线、局部失败不覆盖其它 target。
 - 完成判定：[`GWT-001.t1`](#gwt-001)、[`GWT-001.t2`](#gwt-001) 与 [`GWT-001.t3`](#gwt-001) 逐条由硬切后 current local_contract/api_integration 绑定并实际通过；fresh 四载体 producer release handoff 由 [`multi-carrier-release` OPEN-020](../multi-carrier-release/spec.md#open-020) 跟踪，下游环境消费不构成本 Story 验收。
-- 依赖：当前 source plan、atomic acquisition 与 stage OPEN/CLOSE 边界；不得恢复旧编排来补证据。
+- 依赖：当前 source plan、atomic acquisition 与 create-once seal 边界；不得恢复旧编排来补证据。

@@ -29,6 +29,7 @@ from content.release.canonical.object_transaction_contract import (
 from content.release.canonical.release_admission import (
     build_release_asset_admission,
 )
+from content.execution.task_init import optional_location_content_type
 from core.media_asset_url import build_release_media_manifest
 
 
@@ -43,7 +44,10 @@ def selected_pool_entity_refs(
             object_root(publish_root, "posts", post_ref) / "manifest.json"
         )
         raw_refs = manifest.get("entityRefs")
-        if not isinstance(raw_refs, list) or not raw_refs:
+        if not isinstance(raw_refs, list) or (
+            not raw_refs
+            and not optional_location_content_type(manifest.get("contentType"))
+        ):
             raise ObjectTransactionError(
                 f"DATA.POOL.REFERENCE_MISSING: posts/{post_ref} has no entityRefs"
             )

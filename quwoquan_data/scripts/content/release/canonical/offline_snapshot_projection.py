@@ -76,59 +76,93 @@ def project_post(source: CanonicalSource, ref: str, media: dict[str, dict], vali
     detail = {**view, "status": "published", "visibility": "public", "viewCount": 0,
               "tagRefs": m["tagRefs"], "entityRefs": m["entityRefs"],
               "sourceAttribution": {f["name"]: m["sourceAttribution"][f["name"]] for f in validator.types["SourceAttribution"]["fields"] if f["name"] in m["sourceAttribution"]}}
-    homepage_ref = m["entityRefs"][0]
-    # 离线主页只支持已登记景区类型；其他实体类型不得猜测映射。
-    entity = source.json("entities/" + homepage_ref.removeprefix("/entity/") + "/manifest.json")
-    if entity["type"] != "景区":
-        raise OfflineSnapshotError("OFFLINE.HOMEPAGE_TYPE_UNSUPPORTED")
-    for target in (view, detail):
-        target.update(primaryHomepageId=runtime_homepage_id(homepage_ref), primaryHomepageType="sight")
-    assets = m["assets"]
+    if m["entityRefs"]:
+        homepage_ref = m["entityRefs"][0]
+        entity = source.json("entities/" + homepage_ref.removeprefix("/entity/") + "/manifest.json")
+        for target in (view, detail):
+            target.update(primaryHomepageId=runtime_homepage_id(homepage_ref), primaryHomepageType=_homepage_type(entity["type"], validator))
+    elif content_type not in {"image", "video"}:
+        raise OfflineSnapshotError("OFFLINE.HOMEPAGE_REFERENCE_MISSING")
     if content_type == "article":
-        markdown = source.read(ref + "/article.md").decode("utf-8")
-        if assets or m.get("publishMediaMode") != "text_only":
-            raise OfflineSnapshotError("OFFLINE.ILLUSTRATED_ARTICLE_NOT_IMPLEMENTED")
-        limit = validator.load(f"{POST_CONTRACT}/publication_policy.yaml")["text_limits"]["summary_max_runes"]
-        profile = m["articleRenderProfile"]
-        manifest = build_article_asset_manifest(markdown, [], render_profile=profile)
-        # Data package 内的 bundle 名称不属于公共 wire；公共合同名为 documentVersionSha256。
-        manifest["documentVersionSha256"] = manifest.pop("documentBundleSha256")
-        for target in (view, detail):
-            target.update(body=markdown, summary=article_summary(markdown, limit), articleTemplate=profile["template"], articleFontPreset=profile["fontPreset"])
-        detail.update(articleMarkdown=markdown, markdownDialect=m["markdownDialect"], articleMarkdownDigest=manifest["articleMarkdownDigest"], articleAssetManifest=manifest, articleRenderProfile=profile)
-    else:
-        sequence = []
-        for asset in assets:
-            if content_type == "video" and asset["kind"] != "video":
-                continue
-            row = media[asset["assetId"]]
-            item = {"kind": row["kind"], "mediaAssetId": row["assetId"], "mediaAssetVersion": 1, "accessMode": "public", "url": row["canonicalReference"]}
-            for key in ("width", "height", "durationMs"):
-                if key in row:
-                    item[key] = row[key]
-            if content_type == "video":
-                poster = media[asset["posterAssetId"]]
-                item.update(coverUrl=poster["canonicalReference"], coverAssetId=poster["assetId"])
-            sequence.append(item)
-        if not sequence or content_type == "video" and len(sequence) != 1:
-            raise OfflineSnapshotError("OFFLINE.POST_MEDIA_CLOSURE_INVALID")
-        first = sequence[0]
-        for target in (view, detail):
-            target["mediaItems"] = sequence
-            target["coverUrl"] = first.get("coverUrl", first["url"])
-            for key in ("width", "height", "durationMs"):
-                if key in first:
-                    target[key] = first[key]
-            if content_type == "image":
-                target.update(body=m["caption"], summary=m["caption"], mediaUrls=[i["url"] for i in sequence])
-            else:
-                # 当前 importer 对无 article.md 的 video body/summary 为空，不擅自用 caption 改线上语义。
-                target.update(body="", summary="", videoUrl=first["url"], thumbnailUrl=first["coverUrl"])
-        detail["mediaAssetIds"] = [i["mediaAssetId"] for i in sequence]
-        view.update(mediaAssetId=first["mediaAssetId"], mediaAssetVersion=1)
+        _project_article(source, ref, m, media, validator, view, detail)
+    if m["assets"] or content_type != "article":
+        _project_media(m, media, validator, view, detail)
     validator.validate_projection(view, "content_post_projection")
     validator.validate_projection(detail, "content_post_detail_slice")
     return {"sourceObjectRef": ref, "projection": view, "detail": detail}
+
+
+def _homepage_type(entity_type: str, validator: PublicContractValidator) -> str:
+    # 从现役 importer 的具名闭集读取，不复制第三份类型映射或默认 sight。
+    ref = f"{ENTITY_ROOT}/infrastructure/homepageimport/loader.go"
+    raw = validator.repo.joinpath(ref).read_bytes()
+    validator.files[ref] = raw
+    block = re.search(r"var entityTypeToHomepageType = map\[string\]string\{(.*?)\n\}", raw.decode(), re.S)
+    if block is None:
+        raise OfflineSnapshotError("OFFLINE.HOMEPAGE_TYPE_CONTRACT_INVALID")
+    mapping = dict(re.findall(r'"([^"]+)":\s*"([^"]+)"', block.group(1)))
+    if entity_type.strip() not in mapping:
+        raise OfflineSnapshotError("OFFLINE.HOMEPAGE_TYPE_UNSUPPORTED")
+    return mapping[entity_type.strip()]
+
+
+def _project_article(source, ref, metadata, media, validator, view, detail):
+    markdown = source.read(ref + "/article.md").decode("utf-8")
+    profile = metadata["articleRenderProfile"]
+    manifest = build_article_asset_manifest(markdown, metadata["assets"], render_profile=profile)
+    manifest["documentVersionSha256"] = manifest.pop("documentBundleSha256")
+    # 摘要继续绑定原始 Data package；wire 资产只从当前公共合同字段投影。
+    public_fields = {field["name"] for field in validator.types["PostArticleAsset"]["fields"]}
+    manifest["assets"] = []
+    for asset in metadata["assets"]:
+        row = media[asset["assetId"]]
+        public = {key: value for key, value in asset.items() if key in public_fields}
+        public.update(accessMode="public", publicSliceKey=row["canonicalReference"])
+        manifest["assets"].append(public)
+    validator.validate_type(manifest, "PostArticleAssetManifest")
+    limit = validator.load(f"{POST_CONTRACT}/publication_policy.yaml")["text_limits"]["summary_max_runes"]
+    for target in (view, detail):
+        target.update(body=markdown, summary=article_summary(markdown, limit), articleTemplate=profile["template"], articleFontPreset=profile["fontPreset"])
+    detail.update(articleMarkdown=markdown, markdownDialect=metadata["markdownDialect"], articleMarkdownDigest=manifest["articleMarkdownDigest"], articleAssetManifest=manifest, articleRenderProfile=profile)
+
+
+def _project_media(metadata, media, validator, view, detail):
+    content_type = metadata["contentType"]
+    public_fields = {field["name"] for field in validator.types["PostMediaItem"]["fields"]}
+    sequence, asset_ids = [], []
+    for asset in metadata["assets"]:
+        if content_type == "video" and asset["kind"] != "video":
+            continue
+        row = media[asset["assetId"]]
+        item = {"kind": row["kind"], "mediaAssetId": row["assetId"], "mediaAssetVersion": 1, "accessMode": "public", "url": row["canonicalReference"]}
+        asset_ids.append(row["assetId"])
+        for key in ("caption", "role"):
+            if asset.get(key):
+                item[key] = asset[key]
+        for key in ("width", "height", "durationMs"):
+            if key in row:
+                item[key] = row[key]
+        if content_type == "video":
+            poster = media[asset["posterAssetId"]]
+            asset_ids.append(poster["assetId"])
+            item.update(coverUrl=poster["canonicalReference"], thumbnailUrl=poster["canonicalReference"], coverAssetId=poster["assetId"],
+                        coverStrategy=asset.get("coverStrategy") or "first_frame", coverFrameTimeMs=asset.get("coverFrameTimeMs", 0))
+        sequence.append({key: value for key, value in item.items() if key in public_fields})
+    if not sequence or content_type == "video" and len(sequence) != 1:
+        raise OfflineSnapshotError("OFFLINE.POST_MEDIA_CLOSURE_INVALID")
+    first = sequence[0]
+    for target in (view, detail):
+        target.update(mediaItems=sequence, coverUrl=first.get("coverUrl", first["url"]), mediaUrls=[i["url"] for i in sequence])
+        for key in ("width", "height", "durationMs"):
+            if key in first:
+                target[key] = first[key]
+        if content_type == "image":
+            target.update(body=metadata["caption"], summary=metadata["caption"])
+        elif content_type == "video":
+            # 无 article.md 的视频保持现役 importer 空 body/summary，不从 caption 发明语义。
+            target.update(body="", summary="", videoUrl=first["url"], thumbnailUrl=first["coverUrl"])
+    detail["mediaAssetIds"] = list(dict.fromkeys(asset_ids))
+    view.update(mediaAssetId=first["mediaAssetId"], mediaAssetVersion=1)
 
 
 def project_configuration(validator: PublicContractValidator) -> dict:
@@ -162,12 +196,11 @@ def project_homepages(source: CanonicalSource, refs: list[str], media: dict[str,
     for ref in refs:
         manifest = source.json(f"entities/{ref}/manifest.json")
         header = manifest
-        if header["type"] != "景区":
-            raise OfflineSnapshotError("OFFLINE.HOMEPAGE_TYPE_UNSUPPORTED")
+        homepage_type = _homepage_type(header["type"], validator)
         markdown = source.read(f"entities/{ref}/page.md").decode("utf-8")
         assets = [{"assetId": a["assetId"], "url": media[a["assetId"]]["canonicalReference"], "accessMode": "public", "caption": a["caption"],
                    "role": {"cover": "cover", "detail": "inline", "inline": "inline", "related": "related"}[a["role"]]} for a in manifest["assets"]]
-        public = {"homepageId": runtime_homepage_id(header["entityRef"]), "displayName": header["label"], "homepageType": "sight",
+        public = {"homepageId": runtime_homepage_id(header["entityRef"]), "displayName": header["label"], "homepageType": homepage_type,
                   "summary": "", "sections": [{"kind": "body", "title": header["label"], "bodyMarkdown": markdown, "assets": assets, "timelineItems": []}],
                   "relatedObjects": [], "primarySource": {field["name"]: header["primarySource"][field["name"]] for field in validator.load(f"{validator.entity_contract}/homepage_source.yaml")["fields"]},
                   "sourceUrls": header["sourceUrls"], "updatedAt": selected_at}

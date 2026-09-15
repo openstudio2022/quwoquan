@@ -1,0 +1,12 @@
+{
+  "label": "两江新区",
+  "labelEn": "两江新区",
+  "description": "重庆市两江新区",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-09-12T15:30:58.904615+00:00",
+  "updatedAt": "2026-09-12T15:30:58.904615+00:00"
+}

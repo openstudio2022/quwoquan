@@ -27,6 +27,7 @@ from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
 )
 
+from content.execution.task_init import optional_location_content_type
 from content.release.canonical.environment_release_candidate import (
     PoolCandidate,
     PoolExclusion,
@@ -87,16 +88,19 @@ def discover_pool_candidates(
                     )
                     continue
             if allowed_entity_refs is not None:
-                manifest = _read_json(
-                    publish_root / "posts" / post_ref / "manifest.json"
-                )
+                from content.release.canonical.aggregate_release_closure import object_root
+                manifest = _read_json(object_root(publish_root, "posts", post_ref) / "manifest.json")
                 raw_refs = manifest.get("entityRefs")
                 entity_refs = (
                     {str(value).removeprefix("/entity/") for value in raw_refs}
                     if isinstance(raw_refs, list)
                     else set()
                 )
-                if not entity_refs or not entity_refs.issubset(allowed_entity_refs):
+                location_omitted = (
+                    optional_location_content_type(manifest.get("contentType"))
+                    and raw_refs == []
+                )
+                if (not entity_refs and not location_omitted) or not entity_refs.issubset(allowed_entity_refs):
                     excluded.append(
                         PoolExclusion(
                             post_ref=post_ref,

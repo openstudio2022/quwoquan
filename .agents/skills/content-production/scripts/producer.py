@@ -136,6 +136,8 @@ def parser():
     preflight.add_argument("--candidate-file", nargs="+", default=[], help="当前载体的 {candidates:[{objectRef,manifest}]} 身份视图")
     preflight.add_argument("--target-ref", action="append", default=[], help="额外点名 canonical 对象，可重复")
     preflight.add_argument("--publish-root", type=Path, help="独立内容仓根；仅只读，缺省 Data QWQ_PUBLISH_ROOT 绑定，不是 execution 工作包路径")
+    stats = commands.add_parser("source-stats", help="只读点名 canonical manifest；单根、零网络、stdout JSON，不扫描或判资格")
+    stats.add_argument("--manifest", nargs="*", required=True, help="workspace 内 manifest.json 相对路径；显式空列表统计零作品")
     lint = commands.add_parser("lint")
     lint.add_argument("carrier")
     lint.add_argument("--draft", required=True, help="只读草稿：轮根相对路径或 exact execution 绝对路径")
@@ -238,6 +240,9 @@ def run(args):
     root = args.workspace.absolute()
     if args.action == "source":
         return source_run(args, root)
+    if args.action == "source-stats":
+        import source_statistics
+        return source_statistics.report(root, args.manifest)
     if args.action == "preflight":
         return inputs.preflight(root, args)
     if args.action == "lint":

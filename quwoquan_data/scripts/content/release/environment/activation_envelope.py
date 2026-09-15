@@ -103,7 +103,7 @@ def build_environment_activation_envelope(
         )
     if milestone is not None:
         if (
-            milestone not in {"M1", "M10", "M100", "M1000", "M10000"}
+            milestone not in {"M1", "M10", "M100", "M1000", "M10000", "M100000"}
             or source_identities is None
             or not source_identity_set_digest
         ):

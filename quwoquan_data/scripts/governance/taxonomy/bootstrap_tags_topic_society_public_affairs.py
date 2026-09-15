@@ -46,6 +46,17 @@ def gen_topic_society_public_affairs():
         ("动物救助", "Animal Rescue", "流浪动物救助领养"),
         ("宠物医疗", "Pet Medical", "宠物健康与医疗"),
     ])
+    # 可见行为聚合；「觅食」已是美食之旅别名，动物取食不得占用该词。
+    tag("Topic/宠物动物/动物行为", "动物行为", "Animal Behavior",
+        "画面中可核验的动物行为，不推断动机、智商或保护等级",
+        collection_channel="creator_chip",
+        consumed_by=["recall", "scorer", "intersection", "search_facet"])
+    tags_list("Topic/宠物动物/动物行为", [
+        ("取食", "Foraging", "动物取食、捕食或觅食动作，不含人类美食或市集"),
+        ("求偶", "Courtship", "可核验的求偶或配对行为，不凭拟人标题推断"),
+        ("筑巢", "Nesting", "筑巢、占巢或巢穴营造行为"),
+        ("育雏", "Brooding", "育雏、哺乳或照顾幼体的可见行为"),
+    ], collection_channel="creator_chip", consumed_by=["recall", "scorer", "intersection", "search_facet"])
 
     # 22. 金融理财
     tag("Topic/金融理财", "金融理财", "Finance & Investment", "金融投资与个人理财内容")

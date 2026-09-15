@@ -1,0 +1,12 @@
+{
+  "label": "和安县",
+  "labelEn": "和安县",
+  "description": "和田地区和安县",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-09-12T15:30:58.904615+00:00",
+  "updatedAt": "2026-09-12T15:30:58.904615+00:00"
+}

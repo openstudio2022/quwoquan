@@ -690,6 +690,217 @@ def test_missing_original_receipts_stop_before_any_staging(tmp_path, legacy_sour
     assert _capture(legacy_source["execution"]) == before_execution
 
 
+def _replace_fixture_media(root, raw, mime, suffix):
+    manifest = _json(root / "manifest.json")
+    asset = manifest["assets"][0]
+    asset.update(path="media/replacement" + suffix, fileName="media/replacement" + suffix,
+                 sha256=digest_bytes(raw), bytes=len(raw), mimeType=mime)
+    _put(root / asset["path"], raw)
+    manifest["sourceRefs"] = _fixture_sources(root, manifest["assets"])
+    _put(root / "manifest.json", manifest)
+    return asset
+
+
+def test_mpo_delivery_reuses_release_mime_without_rewriting_source(current_source):
+    import io
+    from PIL import Image
+    from core.media_asset_url import build_release_media_manifest
+    stream = io.BytesIO()
+    Image.new("RGB", (8, 8), "red").save(stream, format="MPO", save_all=True,
+                                           append_images=[Image.new("RGB", (8, 8), "blue")])
+    raw = stream.getvalue()
+    with Image.open(io.BytesIO(raw)) as image:
+        assert image.format == "MPO" and image.n_frames == 2
+        image.load()
+    root = CanonicalSource(current_source).object_path(HOME_REF)
+    asset = _replace_fixture_media(root, raw, "image/mpo", ".jpg")
+    before = {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    ordinary = build_release_media_manifest(release_id="test-offline-parity", post_refs=[],
+                                           entity_refs=[HOME_REF.removeprefix("entities/")], publish_root=current_source)
+    built = build_bundle(repo=ROOT, publish_root=current_source, selection=selection(), source_revision=REVISION)
+    row = next(row for row in built.manifest["media"] if row["assetId"] == asset["assetId"])
+    authority = next(row for row in ordinary["assets"] if row["assetId"] == asset["assetId"])
+    assert row["mimeType"] == authority["contentType"] == "image/jpeg"
+    assert row["canonicalReference"] == authority["publicSliceKey"]
+    assert built.media_bytes[row["assetPath"]] == raw
+    assert row["redistributionEvidence"]["snapshots"][0]["document"]["assets"][0]["mimeType"] == "image/mpo"
+    assert before == {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("raw,mime,suffix", [(b"broken jpeg", "image/jpeg", ".jpg"),
+                                           (tiny_png_bytes(), "application/unknown", ".unknown"),
+                                           (tiny_png_bytes(), "image/jpeg", ".jpg")])
+def test_delivery_rejects_undecodable_unknown_or_mismatched_media(current_source, raw, mime, suffix):
+    root = CanonicalSource(current_source).object_path(HOME_REF)
+    _replace_fixture_media(root, raw, mime, suffix)
+    with pytest.raises(OfflineSnapshotError, match="OFFLINE\\.(MEDIA_DECODE|PUBLIC_SLICE|MEDIA_CONTENT_TYPE)"):
+        build_bundle(repo=ROOT, publish_root=current_source, selection=selection(), source_revision=REVISION)
+
+
+@pytest.mark.parametrize("entity_type", ["公园", "博物馆", "自然景观", "不存在的类型"])
+def test_homepage_type_uses_current_service_mapping(current_source, entity_type):
+    root = CanonicalSource(current_source).object_path(HOME_REF)
+    manifest = _json(root / "manifest.json")
+    manifest["type"] = entity_type
+    _put(root / "manifest.json", manifest)
+    go = (ROOT / "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport/loader.go").read_text()
+    block = re.search(r"var entityTypeToHomepageType = map\[string\]string\{(.*?)\n\}", go, re.S).group(1)
+    mapping = dict(re.findall(r'"([^"]+)":\s*"([^"]+)"', block))
+    if entity_type not in mapping:
+        with pytest.raises(OfflineSnapshotError, match="HOMEPAGE_TYPE_UNSUPPORTED"):
+            build_bundle(repo=ROOT, publish_root=current_source, selection=selection(), source_revision=REVISION)
+        return
+    built = build_bundle(repo=ROOT, publish_root=current_source, selection=selection(), source_revision=REVISION)
+    assert built.manifest["homepages"][0]["projection"]["homepageType"] == mapping[entity_type]
+    assert all(p["detail"]["primaryHomepageType"] == mapping[entity_type] for p in built.manifest["posts"])
+
+
+def test_illustrated_article_projects_only_public_assets(current_source):
+    root = CanonicalSource(current_source).object_path(POST_REFS[0])
+    manifest = _json(root / "manifest.json")
+    asset = {**_media_asset(root, "fixture-article-image", "image"), "role": "cover"}
+    manifest.update(assets=[asset], publishMediaMode="illustrated")
+    manifest["sourceRefs"] = _fixture_sources(root, [asset])
+    _put(root / "manifest.json", manifest)
+    markdown = "---\ncoverImage: asset://fixture-article-image\n---\n\n# 图文\n\n正文。\n\n![图注](asset://fixture-article-image)\n"
+    _put(root / "article.md", markdown.encode())
+    built = build_bundle(repo=ROOT, publish_root=current_source, selection=selection(), source_revision=REVISION)
+    article = built.manifest["posts"][0]["detail"]
+    wire = article["articleAssetManifest"]
+    assert article["articleMarkdown"] == markdown
+    assert "objectKey" not in json.dumps(wire) and "scope" not in wire["assets"][0]
+    public_asset = wire["assets"][0]
+    assert public_asset["caption"] == asset["caption"] and public_asset["role"] == "cover"
+    assert public_asset["publicSliceKey"] == article["coverUrl"]
+    assert public_asset["accessMode"] == "public"
+    assert article["mediaAssetIds"] == [asset["assetId"]]
+    PublicContractValidator(ROOT).validate_type(wire, "PostArticleAssetManifest")
+
+
+def test_media_caption_role_and_poster_membership_match_importer(current_source, tmp_path):
+    from content.release.canonical.offline_snapshot_projection import IMPORT_ROOT
+    root = CanonicalSource(current_source).object_path(POST_REFS[1])
+    manifest = _json(root / "manifest.json")
+    manifest["assets"][0]["role"] = "cover"
+    _put(root / "manifest.json", manifest)
+    built = build_bundle(repo=ROOT, publish_root=current_source, selection=selection(), source_revision=REVISION)
+    go = (ROOT / IMPORT_ROOT / "runtime_discovery_feed.go").read_text()
+    loader = (ROOT / IMPORT_ROOT / "loader.go").read_text()
+    snippets = [re.search(r"type importedMediaSummary struct \{.*?\n\}", go, re.S).group(),
+                re.search(r"type AssetManifestItem struct \{.*?\n\}", loader, re.S).group()]
+    snippets += [re.search(r"func " + name + r"\(.*?\n\}", go, re.S).group()
+                 for name in ("ImportedMediaFields", "firstNonEmptyString")]
+    program = 'package main\nimport("encoding/json";"os";"strings")\n' + "\n".join(snippets).replace("bson.M", "map[string]any")
+    program += '\nfunc main(){var a []AssetManifestItem; json.NewDecoder(os.Stdin).Decode(&a); json.NewEncoder(os.Stdout).Encode(ImportedMediaFields(a,"public"))}\n'
+    path = tmp_path / "media_parity.go"
+    path.write_text(program)
+    for post in built.manifest["posts"][1:]:
+        detail = post["detail"]
+        source_assets = _json(CanonicalSource(current_source).object_path(post["sourceObjectRef"]) / "manifest.json")["assets"]
+        inputs = []
+        media = {row["assetId"]: row for row in built.manifest["media"]}
+        for asset in source_assets:
+            if detail["contentType"] == "video" and asset["kind"] != "video":
+                continue
+            row = {**asset, "version": 1, "cdnUrl": media[asset["assetId"]]["canonicalReference"]}
+            if "posterAssetId" in asset:
+                row["coverUrl"] = media[asset["posterAssetId"]]["canonicalReference"]
+                row["thumbnailUrl"] = row["coverUrl"]
+            inputs.append(row)
+        result = subprocess.run(["go", "run", str(path)], input=json.dumps(inputs), capture_output=True, text=True, check=True,
+                                env={**os.environ, "GOCACHE": str(ROOT / ".qwq_output/env/repo/local/offline-go-cache"), "GOTOOLCHAIN": "local", "GOPROXY": "off"})
+        oracle = json.loads(result.stdout)
+        public_fields = {field["name"] for field in PublicContractValidator(ROOT).types["PostMediaItem"]["fields"]}
+        assert detail["mediaItems"] == [{key: value for key, value in item.items() if key in public_fields} for item in oracle["MediaItems"]]
+        assert detail["mediaAssetIds"] == oracle["MediaAssetIDs"]
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+@pytest.mark.parametrize("with_place,video_only", [(False, True), (False, False), (True, True)])
+def test_video_optional_homepage_preserves_complete_offline_media(current_source, tmp_path, with_place, video_only):
+    root = CanonicalSource(current_source).object_path(POST_REFS[2])
+    original = _json(root / "manifest.json")
+    original["entityRefs"] = original["entityRefs"] if with_place else []
+    original["tagRefs"] = ["Topic/摄影/风光摄影"]
+    _put(root / "manifest.json", original)
+    _put(current_source / "tags/Topic/摄影/风光摄影/_definition.json", (ROOT / "quwoquan_data/control_plane/governance/taxonomy/Topic/摄影/风光摄影/_definition.json").read_bytes())
+    selected = selection()
+    if video_only:
+        selected["objectRefs"] = [POST_REFS[2]]
+        selected["channels"] = [{"channelId": channel, "orderedObjectRefs": [POST_REFS[2]]} for channel in ("recommend", "premium")]
+    before = {p.relative_to(current_source).as_posix(): p.read_bytes() for p in current_source.rglob("*") if p.is_file()}
+    built = build_bundle(repo=ROOT, publish_root=current_source, selection=selected, source_revision=REVISION)
+    repeated = build_bundle(repo=ROOT, publish_root=current_source, selection=selected, source_revision=REVISION)
+    assert built.manifest == repeated.manifest and built.media_bytes == repeated.media_bytes
+    assert built.manifest["counts"]["posts"] == (1 if video_only else 3)
+    assert built.manifest["counts"]["video"] == 1
+    assert built.manifest["counts"]["homepages"] == int(with_place or not video_only)
+    post = next(post for post in built.manifest["posts"] if post["sourceObjectRef"] == POST_REFS[2])
+    for surface in (post["projection"], post["detail"]):
+        assert ("primaryHomepageId" in surface) is with_place
+        assert ("primaryHomepageType" in surface) is with_place
+        if with_place:
+            assert surface["primaryHomepageId"] == runtime_homepage_id(original["entityRefs"][0])
+            assert surface["primaryHomepageType"] == "sight"
+        video = surface["mediaItems"][0]
+        assert surface["videoUrl"] == video["url"] == surface["mediaUrls"][0]
+        assert surface["coverUrl"] == surface["thumbnailUrl"] == video["coverUrl"] == video["thumbnailUrl"]
+        assert surface["authorId"] == original["authorId"]
+    detail = post["detail"]
+    assert detail["entityRefs"] == original["entityRefs"] and detail["tagRefs"] == original["tagRefs"]
+    assert detail["sourceAttribution"] == original["sourceAttribution"]
+    assert detail["mediaAssetIds"] == ["fixture-video", "fixture-poster"]
+    assert set(built.media_bytes.values()) == {TINY_MP4, tiny_png_bytes()}
+    assert before == {p.relative_to(current_source).as_posix(): p.read_bytes() for p in current_source.rglob("*") if p.is_file()}
+    exported = export_bundle(built, tmp_path / "no-place-offline")
+    assert export_bundle(built, tmp_path / "no-place-offline", check=True) == exported
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+def test_image_optional_homepage_preserves_complete_offline_media(current_source, tmp_path):
+    root = CanonicalSource(current_source).object_path(POST_REFS[1])
+    original = _json(root / "manifest.json")
+    original["entityRefs"] = []
+    original["tagRefs"] = ["Topic/摄影/风光摄影"]
+    _put(root / "manifest.json", original)
+    _put(current_source / "tags/Topic/摄影/风光摄影/_definition.json", (ROOT / "quwoquan_data/control_plane/governance/taxonomy/Topic/摄影/风光摄影/_definition.json").read_bytes())
+    selected = selection()
+    selected["objectRefs"] = [POST_REFS[1], POST_REFS[2]]
+    selected["channels"] = [
+        {"channelId": "recommend", "orderedObjectRefs": [POST_REFS[1], POST_REFS[2]]},
+        {"channelId": "premium", "orderedObjectRefs": [POST_REFS[2]]},
+    ]
+    before = {p.relative_to(current_source).as_posix(): p.read_bytes() for p in current_source.rglob("*") if p.is_file()}
+    built = build_bundle(repo=ROOT, publish_root=current_source, selection=selected, source_revision=REVISION)
+    assert built.manifest["counts"]["posts"] == 2
+    assert built.manifest["counts"]["image"] == 1
+    assert built.manifest["counts"]["video"] == 1
+    assert built.manifest["counts"]["homepages"] == 1
+    post = next(post for post in built.manifest["posts"] if post["sourceObjectRef"] == POST_REFS[1])
+    for surface in (post["projection"], post["detail"]):
+        assert "primaryHomepageId" not in surface
+        assert "primaryHomepageType" not in surface
+        assert surface["authorId"] == original["authorId"]
+        assert surface["mediaItems"]
+    assert post["detail"]["entityRefs"] == [] and post["detail"]["tagRefs"] == original["tagRefs"]
+    assert before == {p.relative_to(current_source).as_posix(): p.read_bytes() for p in current_source.rglob("*") if p.is_file()}
+    exported = export_bundle(built, tmp_path / "no-place-image-offline")
+    assert export_bundle(built, tmp_path / "no-place-image-offline", check=True) == exported
+
+
+@pytest.mark.parametrize("carrier,refs", [("video", ["/entity/missing"]), ("video", ["/entity/地点/景区/测试湖", "/entity/missing"]),
+                                          ("article", []), ("image", ["/entity/missing"])])
+def test_offline_optional_place_does_not_hide_required_dependencies(current_source, carrier, refs):
+    from content.release.canonical.object_transaction_contract import ObjectTransactionError
+    ref = next(ref for ref in POST_REFS if ref.startswith("posts/" + carrier + "/"))
+    root = CanonicalSource(current_source).object_path(ref)
+    manifest = _json(root / "manifest.json")
+    manifest["entityRefs"] = refs
+    _put(root / "manifest.json", manifest)
+    with pytest.raises(ObjectTransactionError, match="REFERENCE_MISSING"):
+        build_bundle(repo=ROOT, publish_root=current_source, selection=selection(), source_revision=REVISION)
+
+
 def test_partial_media_binding_and_wrong_detail_identity_fail_closed(current_source):
     built = build_bundle(repo=ROOT, publish_root=current_source, selection=selection(), source_revision=REVISION, library_root=current_source / "absent-library", carried_root=current_source / "absent-carried")
     validator = PublicContractValidator(ROOT)

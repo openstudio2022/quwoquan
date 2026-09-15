@@ -9,7 +9,8 @@ from content.release.canonical.aggregate_release_closure import reference_closur
 from content.release.canonical.aggregate_release_pool_closure import selected_pool_entity_refs
 from content.release.canonical.offline_snapshot_contract import OfflineSnapshotError, digest_bytes, safe_path
 from core.content_library import library_cas_path
-from core.media_asset_url import build_public_media_slice_key, content_addressed_media_object_key
+from core.media_asset_url import _asset_content_type, build_public_media_slice_key
+from core.image_decode import probe_image_bytes
 from core.paths import LIBRARY_ROOT, carried_media_root
 from core.schema import assert_valid
 
@@ -159,13 +160,31 @@ def _rights(source: CanonicalSource, owner: str, asset: dict, documents: list[di
     return next(iter(attributions)), records[0].get("asset", {}), snapshots
 
 
+def _validate_image_delivery(raw: bytes, mime: str) -> None:
+    import io
+    from PIL import Image
+
+    probe = probe_image_bytes(raw)
+    if not probe.succeeded:
+        raise OfflineSnapshotError("OFFLINE.MEDIA_DECODE_INVALID")
+    # MPO 的主图本身是 JPEG；只允许已验证的这一交付关系，不把未知格式猜成图片。
+    if probe.mime_type != mime and (probe.mime_type, mime) != ("image/mpo", "image/jpeg"):
+        raise OfflineSnapshotError("OFFLINE.MEDIA_CONTENT_TYPE_DRIFT")
+    try:
+        with Image.open(io.BytesIO(raw)) as image:
+            image.load()
+    except (OSError, ValueError) as error:
+        raise OfflineSnapshotError("OFFLINE.MEDIA_DECODE_INVALID") from error
+
+
 def _media_row(source: CanonicalSource, owner: str, metadata: dict, documents: list[dict]) -> tuple[dict, bytes]:
     asset_id, sha256, size = metadata["assetId"], metadata["sha256"], metadata["bytes"]
     relative = metadata["path"]
     if len(Path(relative).parts) != 2 or not relative.startswith("media/"):
         raise OfflineSnapshotError("OFFLINE.MEDIA_PATH_INVALID")
     kind = "avatar" if owner.startswith("creators/") else metadata["kind"]
-    mime = metadata["mimeType"]
+    # 复用普通 release 的现役交付解析；来源声明仍完整封存在 snapshots。
+    mime = _asset_content_type(relative, metadata)
     attribution, dimensions, snapshots = _rights(source, owner, metadata, documents)
     reference = build_public_media_slice_key(asset_id=asset_id, kind=kind, version=1, content_type=mime)
     if not reference:
@@ -177,6 +196,8 @@ def _media_row(source: CanonicalSource, owner: str, metadata: dict, documents: l
         raise OfflineSnapshotError("OFFLINE.MEDIA_MISSING: " + asset_id) from error
     if len(raw) != size or digest_bytes(raw) != sha256:
         raise OfflineSnapshotError("OFFLINE.MEDIA_HASH_OR_SIZE_DRIFT")
+    if kind in {"image", "avatar"}:
+        _validate_image_delivery(raw, mime)
     row = {"assetId": asset_id, "version": 1, "kind": kind, "canonicalReference": reference, "assetPath": asset_path,
            "sha256": sha256, "byteLength": len(raw), "mimeType": mime, "attribution": attribution,
            "redistributionEvidence": {"purpose": "alpha_offline_engineering", "ownerRefs": [owner], "snapshots": snapshots}}

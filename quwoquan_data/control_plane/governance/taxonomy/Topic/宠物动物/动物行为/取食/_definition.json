@@ -1,0 +1,15 @@
+{
+  "label": "取食",
+  "labelEn": "Foraging",
+  "description": "动物取食、捕食或觅食动作，不含人类美食或市集",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:20:16.517586+00:00",
+  "updatedAt": "2026-09-12T01:20:16.517586+00:00"
+}

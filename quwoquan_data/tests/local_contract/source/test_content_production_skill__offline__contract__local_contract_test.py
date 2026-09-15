@@ -32,12 +32,15 @@ def jpeg():
     return result.getvalue()
 
 
-def work():
-    body = {"postList": [{"post_id": "138766711", "url": "https://tuchong.com/26553952/138766711/", "title": "赏秋",
+def work_response():
+    return subject.io.encode({"postList": [{"post_id": "138766711", "url": "https://tuchong.com/26553952/138766711/", "title": "赏秋",
                          "site": {"site_id": 26553952, "name": "和风不语"}, "images": [
                              {"user_id": 1, "img_id": 1271483541, "width": 4096, "height": 3000},
-                             {"user_id": 1, "img_id": 792611521, "width": 4096, "height": 3000}]}]}
-    rows, _ = subject.load("image", "tuchong").parse(json.dumps(body).encode(), {})
+                             {"user_id": 1, "img_id": 792611521, "width": 4096, "height": 3000}]}]})
+
+
+def work():
+    rows, _ = subject.load("image", "tuchong").parse(work_response(), {})
     subject.validate(rows, SKILL / "carriers/image/schemas/candidate.schema.json")
     return rows[0]
 
@@ -101,6 +104,26 @@ def test_selection_missing_explicit_identity_fails_before_sources_or_pool(tmp_pa
         subject.build(tmp_path, [chosen], {carrier: {}}, {})
 
 
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+@pytest.mark.parametrize("carrier", ["image", "video"])
+@pytest.mark.parametrize("located", [False, True])
+def test_selection_preflight_preserves_optional_location(tmp_path, carrier, located):
+    chosen = selection(work())
+    chosen["carrier"] = carrier
+    chosen["executionId"] = chosen["executionId"].replace("-image-", f"-{carrier}-")
+    target = chosen["targets"][0]["target"]
+    target.update(carrier=carrier, name="鸟类摄影", publishAngle="摄影", publishTitle="飞羽瞬间")
+    if not located:
+        for key in ("entityRef", "entityId", "entityType", "region"):
+            target.pop(key, None)
+    subject.io.write(tmp_path / f"{carrier}/selection.json", subject.io.encode(chosen))
+    ref = f"posts/{carrier}/摄影/飞羽瞬间/1"
+    dependencies, targets = subject.preflight_selection(tmp_path, f"{carrier}/selection.json")
+    assert targets == {ref}
+    assert dependencies == ({ref, "entities/travel/sichuan/qiushan"} if located else {ref})
+    assert subject.canonical_target_ref(target) == subject.execution_target_ref(target) == ref
+
+
 def test_same_name_different_regions_preserve_identity_in_round_ingest_and_preflight(tmp_path, monkeypatch):
     page = {"id": "wikipedia:1", "kind": "page", "source": "wikipedia", "sourceUrl": "https://zh.wikipedia.org/wiki/山",
             "title": "山", "sourceMarkdownPath": "homepage/sources/page.md"}
@@ -148,7 +171,8 @@ def test_same_name_different_regions_preserve_identity_in_round_ingest_and_prefl
     assert len(calls) == 1
 
 
-def test_tuchong_work_through_real_acquire_seal_and_manifest(tmp_path, monkeypatch):
+@pytest.mark.parametrize("with_source_work", [False, True])
+def test_tuchong_work_through_real_acquire_seal_and_manifest(tmp_path, monkeypatch, with_source_work):
     from core import paths
     from content.execution import task_init, seal
     from content.source import acquire
@@ -160,6 +184,8 @@ def test_tuchong_work_through_real_acquire_seal_and_manifest(tmp_path, monkeypat
     monkeypatch.setenv("QWQ_LIBRARY_ROOT", str(tmp_path / "library"))
     row = work()
     choose = selection(row)
+    if with_source_work:
+        choice = declare_source_work(tmp_path, row, choose)
     class DifferentImages(Fetch):
         def get(self, url, **kw):
             self.calls.append(url)
@@ -181,6 +207,15 @@ def test_tuchong_work_through_real_acquire_seal_and_manifest(tmp_path, monkeypat
     ref = subject.execution_target_ref(target)
     assets = list(source_assets(root))
     assert len(assets) == 2
+    if with_source_work:
+        for asset_ref in assets:
+            unit = (root / asset_ref).parent.parent
+            meta = subject.io.read_json(unit / "meta.json")
+            assert meta["sourceWork"] == choice["sourceWork"]
+            assert len(meta["sourceWorkEvidence"]) == 1
+            binding = meta["sourceWorkEvidence"][0]
+            assert "inputPath" not in binding
+            assert (unit / binding["path"]).read_bytes() == (tmp_path / row["evidence"]["responsePath"]).read_bytes()
     subject.io.write(subject.io.safe_path(root, ref + "/4.draft/image_work.json"), subject.io.encode({"title": "赏秋", "caption": "同组作品", "assetRefs": assets, "assetCaptions": {assets[0]: "第一图", assets[1]: "第二图"}}))
     author = {"host": "cursor", "sessionId": "test-author", "modelFamily": "test", "invocation": {"provider": "test", "model": "test", "runId": "author"}}
     reviewer = {**author, "sessionId": "test-reviewer", "invocation": {**author["invocation"], "runId": "reviewer"}}
@@ -194,6 +229,101 @@ def test_tuchong_work_through_real_acquire_seal_and_manifest(tmp_path, monkeypat
     result = projection.project_publish_final_surface(execution_root=root, object_dir=root / ref, target_ref=ref, target=target, carrier="image")
     assert [asset["caption"] for asset in result["manifest"]["assets"]] == ["第一图", "第二图"]
     assert len({asset["fileName"] for asset in result["manifest"]["assets"]}) == 2
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-045.t1
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-045.t2
+def declare_source_work(tmp_path, row, chosen, *, carrier="image", body=None):
+    """由测试宿主显式申报，不让生产脚本从响应推断完整性。"""
+    body = body if body is not None else work_response()
+    relative = f"{carrier}/sources/original.raw"
+    subject.io.write(tmp_path / relative, body)
+    row["evidence"] = {"responsePath": relative, "responseSha256": subject.io.digest(body), "request": {}}
+    choice = chosen["targets"][0]["sources"][0]
+    choice["sourceWork"] = {
+        "version": 1, "identity": {"provider": row["source"], "nativeId": row["id"].split(":", 1)[-1], "pageUrl": row["sourceUrl"]},
+        "capture": {"method": "host_response", "coverage": "partial", "scope": "测试宿主只核实采用成员", "evidenceRefs": ["raw"]},
+        "structure": [{"ref": row["id"], "role": "gallery", "members": [a["id"] for a in row["assets"]]},
+                      {"ref": row["assets"][0]["id"], "role": "cover"},
+                      {"ref": "https://example.com/reference", "role": "reference"}],
+    }
+    choice["sourceWorkEvidence"] = [{"id": "raw", "inputPath": relative, "sha256": "sha256:" + subject.io.digest(body), "bytes": len(body), "kind": "source_response"}]
+    return choice
+
+
+def test_source_work_raw_response_and_native_order_are_preserved_without_copy(tmp_path):
+    row, chosen = work(), selection(work())
+    choice = declare_source_work(tmp_path, row, chosen)
+    # 原作还有未出现在当前候选的成员；选择子集不声称捕获完整作品。
+    choice["sourceWork"]["structure"][0]["members"].append("tuchong:unselected-native-asset")
+    choice["assets"] = choice["assets"][1:]
+    pool = {"image": {row["id"]: row}}
+    fetch = Fetch()
+    downloads = producer.download(tmp_path, pool, [chosen], fetch, 100000)
+    before = {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    frozen = subject.io.encode(chosen)
+    sources = subject.build(tmp_path, [chosen], pool, downloads)["image/ingest.json"]["targets"][0]["sources"]
+    assert len(sources) == len(fetch.calls) == 1  # 封面/参考链接不是额外媒体。
+    assert sources[0]["sourceWork"] == choice["sourceWork"]
+    assert sources[0]["sourceWork"]["capture"]["coverage"] == "partial"
+    assert sources[0]["sourceWorkEvidence"] == [{**choice["sourceWorkEvidence"][0], "inputPath": str(tmp_path / row["evidence"]["responsePath"])}]
+    assert subject.io.encode(chosen) == frozen
+    assert {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()} == before
+
+
+@pytest.mark.parametrize("invalid", ["reorder", "member", "cross_carrier", "absolute", "hash", "bytes", "missing", "directory", "symlink", "summary", "unreferenced", "duplicate_id", "page_url", "provider", "work_only", "evidence_only", "split_target"])
+def test_source_work_rejects_invalid_evidence_and_gallery_before_ingest(tmp_path, invalid):
+    row, chosen = work(), selection(work())
+    choice = declare_source_work(tmp_path, row, chosen)
+    record = choice["sourceWorkEvidence"][0]
+    if invalid == "reorder":
+        choice["assets"].reverse()
+    elif invalid == "member":
+        choice["sourceWork"]["structure"][0]["members"] = ["tuchong:unknown"]
+    elif invalid == "cross_carrier":
+        record["inputPath"] = "article/private.raw"
+    elif invalid == "absolute":
+        record["inputPath"] = str(tmp_path / record["inputPath"])
+    elif invalid == "hash":
+        record["sha256"] = "sha256:" + "0" * 64
+    elif invalid == "bytes":
+        record["bytes"] += 1
+    elif invalid == "missing":
+        record["inputPath"] = "image/missing.raw"
+    elif invalid == "directory":
+        record["inputPath"] = "image/sources"
+    elif invalid == "symlink":
+        (tmp_path / "image/link.raw").symlink_to(tmp_path / record["inputPath"])
+        record["inputPath"] = "image/link.raw"
+    elif invalid == "summary":
+        body = b"# source summary only"
+        subject.io.write(tmp_path / "image/source.md", body)
+        record.update(inputPath="image/source.md", sha256="sha256:" + subject.io.digest(body), bytes=len(body), kind="source_snapshot")
+    elif invalid == "unreferenced":
+        choice["sourceWork"]["capture"]["evidenceRefs"] = ["not-raw"]
+    elif invalid == "duplicate_id":
+        choice["sourceWorkEvidence"].append(dict(record))
+    elif invalid in {"page_url", "provider"}:
+        choice["sourceWork"]["identity"]["pageUrl" if invalid == "page_url" else "provider"] = "https://example.com/other"
+    elif invalid == "work_only":
+        del choice["sourceWorkEvidence"]
+    elif invalid == "evidence_only":
+        del choice["sourceWork"]
+    else:
+        another = json.loads(json.dumps(chosen["targets"][0]))
+        another["target"]["publishTitle"] = "同作拆图"
+        chosen["targets"].append(another)
+    with pytest.raises(subject.io.InputError):
+        subject.build(tmp_path, [chosen], {"image": {row["id"]: row}}, {})
+
+
+def test_legacy_image_same_candidate_cannot_split_targets(tmp_path):
+    row, chosen = work(), selection(work())
+    another = json.loads(json.dumps(chosen["targets"][0]))
+    another["target"]["publishTitle"] = "换标题不是新作品"
+    chosen["targets"].append(another)
+    with pytest.raises(subject.io.InputError, match="同一原作"):
+        subject.carrier_ingest(tmp_path, chosen, {row["id"]: row}, {})
 
 
 def test_round_write_is_create_or_same_and_does_not_overwrite(tmp_path):
@@ -305,7 +435,8 @@ def test_cli_source_replay_records_response_binding(tmp_path):
     assert producer.main(command) == 0
 
 
-def test_page_candidates_with_same_identity_stay_carrier_local(tmp_path):
+@pytest.mark.parametrize("with_source_work", [False, True])
+def test_page_candidates_with_same_identity_stay_carrier_local(tmp_path, with_source_work):
     page = {"id": "wikipedia:1", "kind": "page", "source": "wikipedia", "sourceUrl": "https://zh.wikipedia.org/wiki/山", "title": "山"}
     selections, pools = [], {}
     for carrier in ("homepage", "article"):
@@ -315,9 +446,27 @@ def test_page_candidates_with_same_identity_stay_carrier_local(tmp_path):
         target = {"carrier": carrier, "entityType": "地点/景区", "name": "山", "entityId": "entity-shan-sichuan", "entityRef": "/entity/travel/sichuan/shan"}
         target.update({"region": "中国/四川省"} if carrier == "homepage" else {"publishAngle": "风光", "publishTitle": "山景"})
         selections.append({"carrier": carrier, "executionId": f"20260908--travel-{carrier}-work--sichuan-r01--pilot-001", "targets": [{"target": target, "sources": [{"candidateId": page["id"], "role": "primary", "relevance": "同实体", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/", "creator": "条目贡献者"}]}]})
+        if with_source_work:
+            body = b'{"query":{"pages":{"1":{"title":"original response"}}}}'
+            local_row = pools[carrier][page["id"]]
+            raw_path = f"{carrier}/sources/response.json"
+            subject.io.write(tmp_path / raw_path, body)
+            local_row["evidence"] = {"responsePath": raw_path, "responseSha256": subject.io.digest(body), "request": {}}
+            choice = selections[-1]["targets"][0]["sources"][0]
+            choice.update(sourceWork={"version": 1, "identity": {"provider": page["source"], "pageUrl": page["sourceUrl"]},
+                                      "capture": {"method": "api", "coverage": "unknown", "scope": "仅取得响应", "evidenceRefs": ["raw"]},
+                                      "structure": [{"ref": "https://example.com/reference", "role": "reference", "anchor": "段落末"}]},
+                          sourceWorkEvidence=[{"id": "raw", "inputPath": raw_path, "sha256": "sha256:" + subject.io.digest(body), "bytes": len(body), "kind": "source_response"}])
     outputs = subject.build(tmp_path, selections, pools, {})
-    for carrier in ("homepage", "article"):
-        assert f"/{carrier}/sources/" in outputs[f"{carrier}/ingest.json"]["targets"][0]["sources"][0]["sourceMarkdownPath"]
+    for index, carrier in enumerate(("homepage", "article")):
+        source = outputs[f"{carrier}/ingest.json"]["targets"][0]["sources"][0]
+        assert f"/{carrier}/sources/" in source["sourceMarkdownPath"]
+        if with_source_work:
+            choice = selections[index]["targets"][0]["sources"][0]
+            assert source["sourceWork"] == choice["sourceWork"]
+            assert source["sourceWorkEvidence"][0]["inputPath"] == str(tmp_path / choice["sourceWorkEvidence"][0]["inputPath"])
+        else:
+            assert "sourceWork" not in source and "sourceWorkEvidence" not in source
 
 
 def test_source_selection_cannot_rewrite_license(tmp_path):
@@ -605,7 +754,9 @@ def test_selected_asset_authorization_facts_survive_real_ingest_schema(tmp_path)
         subject.build(tmp_path, [chosen], {"image": {row["id"]: row}}, downloads)
 
 
-def test_local_ytdlp_result_mechanically_registered_without_fake_direct(tmp_path):
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+@pytest.mark.parametrize("locationless", [False, True])
+def test_local_ytdlp_result_mechanically_registered_without_fake_direct(tmp_path, locationless):
     from types import SimpleNamespace
     parser = subject.load("video", "youtube")
     metadata = {"id": "v", "title": "山", "webpage_url": "https://www.youtube.com/watch?v=v", "requested_formats": [{"format_id": "137"}, {"format_id": "140"}], "duration": 20}
@@ -620,14 +771,34 @@ def test_local_ytdlp_result_mechanically_registered_without_fake_direct(tmp_path
     assert subject.io.cached_file(tmp_path, "video", {**row["assets"][0], "sourceUrl": row["sourceUrl"]}, stored).exists()
     chosen = selection(row)
     chosen.update(carrier="video", executionId=chosen["executionId"].replace("-image-", "-video-"))
-    chosen["targets"][0]["target"]["carrier"] = "video"
+    target = chosen["targets"][0]["target"]
+    target["carrier"] = "video"
+    if locationless:
+        for key in ("entityRef", "entityId", "entityType", "region"):
+            target.pop(key, None)
     chosen["targets"][0]["sources"][0]["assets"][0]["hasAudio"] = True
     outputs = subject.build(tmp_path, [chosen], {"video": {row["id"]: row}}, {"video": {args.asset_id: stored}})
     source = outputs["video/ingest.json"]["targets"][0]["sources"][0]
+    assert outputs["round.json"]["targets"] == [target]
     assert source["directUrl"] is None and source["sourceUrl"] == metadata["webpage_url"]
     assert source["acquisition"] == {"method": "host_merged", "tool": "yt-dlp", "metadataSha256": stored["metadataSha256"], "formatIds": ["137", "140"]}
+    choice = declare_source_work(tmp_path, row, chosen, carrier="video", body=subject.io.encode(metadata))
+    choice["sourceWork"]["structure"] = [{"ref": row["assets"][0]["id"], "role": "inline"}]
+    with pytest.raises(subject.io.InputError, match="WORK_ORIGINAL_REQUIRED"):
+        subject.build(tmp_path, [chosen], {"video": {row["id"]: row}}, {"video": {args.asset_id: stored}})
+    metadata_record = {"id": "metadata", "inputPath": args.metadata, "sha256": "sha256:" + stored["metadataSha256"],
+                       "bytes": (tmp_path / args.metadata).stat().st_size, "kind": "source_metadata"}
+    choice["sourceWorkEvidence"].append(metadata_record)
+    choice["sourceWork"]["capture"]["evidenceRefs"].append("metadata")
+    preserved = subject.build(tmp_path, [chosen], {"video": {row["id"]: row}}, {"video": {args.asset_id: stored}})["video/ingest.json"]["targets"][0]["sources"][0]
+    assert preserved["sourceWork"] == choice["sourceWork"]
+    assert preserved["sourceWorkEvidence"][1] == {**metadata_record, "inputPath": str(tmp_path / args.metadata)}
+    # 传输格式不参与作品/资产身份；不把 format_id 当第二 workId。
+    changed_formats = {**metadata, "requested_formats": [{"format_id": "new-video"}, {"format_id": "new-audio"}]}
+    other = parser.parse(subject.io.encode(changed_formats), {"url": metadata["webpage_url"]})[0][0]
+    assert (other["id"], other["assets"][0]["id"], other["sourceUrl"]) == (row["id"], args.asset_id, row["sourceUrl"])
     subject.io.write(tmp_path / "video/host/v.info.json", subject.io.encode({**metadata, "title": "changed"}), replace=True)
-    with pytest.raises(ValueError, match="元数据漂移"):
+    with pytest.raises(ValueError, match="WORK_EVIDENCE_DRIFT"):
         subject.build(tmp_path, [chosen], {"video": {row["id"]: row}}, {"video": {args.asset_id: stored}})
 
 
@@ -932,7 +1103,7 @@ def test_preflight_carrier_and_duplicate_candidate_identity_fail_closed(tmp_path
     assert "候选身份重复" in capsys.readouterr().out
 
 
-def acquired_source_fixture(tmp_path, monkeypatch):
+def acquired_source_fixture(tmp_path, monkeypatch, *, locationless=False):
     from core import paths
     monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
     import importlib
@@ -960,6 +1131,9 @@ def acquired_source_fixture(tmp_path, monkeypatch):
         targets = [{"carrier": carrier, **fixture.TARGET, "entityId": "fixture-xihu", "entityRef": "/entity/travel/stable/xihu"}]
         if carrier == "homepage":
             targets = [homepage_targets[ref] for ref in refs]
+        if locationless:
+            assert carrier in {"image", "video"}
+            targets = [{key: value for key, value in target.items() if key not in {"entityRef", "entityId", "entityType", "region"}} for target in targets]
         round_path.write_bytes(subject.io.encode({"schema": "quwoquan_data.round_spec", "executions": {carrier: execution_id}, "targets": targets}))
         initialize_round(round_spec_path=round_path)
         return paths.execution_root(execution_id)
@@ -1029,12 +1203,12 @@ def test_acquired_homepage_preflight_accepts_explicit_empty_assets_without_draft
     assert {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()} == before
 
 
-def acquired_video_fixture(tmp_path, monkeypatch):
+def acquired_video_fixture(tmp_path, monkeypatch, *, locationless=False):
     import shutil
     import subprocess
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         pytest.skip("ffmpeg/ffprobe not on PATH")
-    fixture = acquired_source_fixture(tmp_path, monkeypatch)
+    fixture = acquired_source_fixture(tmp_path, monkeypatch, locationless=locationless)
     ref = fixture.IMAGE_REF.replace("/image/", "/video/")
     execution = fixture._execution("video", [ref])
     video = tmp_path / "source.mp4"
@@ -1049,9 +1223,11 @@ def acquired_video_fixture(tmp_path, monkeypatch):
     return fixture, execution, ref, fixture.source_assets(execution)
 
 
-def test_acquired_video_preflight_binds_exact_poster_without_draft(tmp_path, monkeypatch, capsys, publish_repository):
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+@pytest.mark.parametrize("locationless", [False, True])
+def test_acquired_video_preflight_binds_exact_poster_without_draft(tmp_path, monkeypatch, capsys, publish_repository, locationless):
     from content.release.canonical import pool_query
-    fixture, execution, ref, index = acquired_video_fixture(tmp_path, monkeypatch)
+    fixture, execution, ref, index = acquired_video_fixture(tmp_path, monkeypatch, locationless=locationless)
     videos = sorted(asset_ref for asset_ref, row in index.items() if row["assetRole"] == "video")
     video_ref = videos[0]
     poster_ref = next(asset_ref for asset_ref, row in index.items() if row.get("derivedFromSourceAssetId") == index[video_ref]["sourceAssetId"])
@@ -1071,6 +1247,7 @@ def test_acquired_video_preflight_binds_exact_poster_without_draft(tmp_path, mon
     assert len(calls) == 1
     assert [(r["kind"], r["sha256"]) for r in calls[0][0]["manifest"]["assets"]] == [("video", index[video_ref]["sha256"]), ("image", index[poster_ref]["sha256"])]
     assert calls[0][0]["manifest"]["assets"][1]["perceptualHash"]
+    assert calls[0][0]["manifest"]["entityRefs"] == ([] if locationless else ["/entity/travel/stable/xihu"])
     assert {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()} == before
     chosen["assetRefs"] = [video_ref, other_poster]
     selection_path.write_bytes(subject.io.encode({"executionId": execution.name, "targets": [chosen]}))

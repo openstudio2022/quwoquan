@@ -1,8 +1,9 @@
 """全国行政实体候选投影。
 
 候选只读 ``reference/admin_regions/pca.json`` 与行政区 taxonomy，不物化第二份
-省/市/区县清单。港澳台当前只投影 taxonomy 已声明的省级节点；没有权威下级输入时
-不推断或伪造市县。
+省/市/区县清单。港澳台省级节点来自 taxonomy；下级只投影已声明的法定/检索单元
+（香港十八区、澳门三个地理容器、台湾 NLSC 22 县市），不把地理容器冒充行政区，
+也不推断未映射乡镇叶子。
 """
 from __future__ import annotations
 
@@ -16,6 +17,11 @@ from core.paths import _REPO_DATA_ROOT
 from governance.coverage.entity_type_taxonomy import (
     CONTRACT_TAGS_ROOT,
     entity_type_tag_node_exists,
+)
+from governance.taxonomy.overseas_regions_asia import (
+    HONG_KONG_ADMIN_DISTRICTS,
+    MACAO_RETRIEVAL_CONTAINERS,
+    TAIWAN_NLSC_COUNTIES,
 )
 
 
@@ -175,6 +181,36 @@ def _pca_candidates(pca: dict[str, Any]) -> Iterator[dict[str, Any]]:
                 )
 
 
+def _hmt_retrieval_children(province: str) -> list[dict[str, Any]]:
+    """港澳台检索单元：香港十八区与澳门三容器为县级槽，台湾 22 县市为地级槽。"""
+    allowed: frozenset[str]
+    admin_level: str
+    if province == "香港特别行政区":
+        allowed, admin_level = HONG_KONG_ADMIN_DISTRICTS, "county"
+    elif province == "澳门特别行政区":
+        allowed, admin_level = MACAO_RETRIEVAL_CONTAINERS, "county"
+    elif province == "台湾省":
+        allowed, admin_level = TAIWAN_NLSC_COUNTIES, "prefecture"
+    else:
+        return []
+    province_ref = f"{ADMIN_TAXONOMY_ROOT_REF}/{province}"
+    rows: list[dict[str, Any]] = []
+    for name in sorted(allowed):
+        city = province if admin_level == "county" else name
+        rows.append(
+            _candidate(
+                province=province,
+                city=city,
+                district=name,
+                label=name,
+                lineage=(province, name),
+                admin_level=admin_level,
+                geo_tag_ref=f"{province_ref}/{name}",
+            )
+        )
+    return rows
+
+
 def admin_entity_candidates(
     *,
     provinces: Iterable[str] | None = None,
@@ -216,6 +252,9 @@ def admin_entity_candidates(
                 geo_tag_ref=f"{ADMIN_TAXONOMY_ROOT_REF}/{province}",
             )
         )
+        for child in _hmt_retrieval_children(province):
+            if child["province"] in wanted:
+                candidates.append(child)
     return sorted(
         candidates,
         key=lambda row: (

@@ -68,6 +68,9 @@ def build_entity_object_transaction_package(
     object_ref: str,
     transaction_id: str,
     package_root: Path,
+    version: int = 1,
+    input_payload_digest: str | None = None,
+    publish_root: Path | None = None,
 ) -> dict[str, Any]:
     """Build one production transaction package from an approved execution entity.
 
@@ -75,6 +78,8 @@ def build_entity_object_transaction_package(
     projects one approved entity into a content-addressed, rights-bound transaction
     input without copying runtime stages into canonical content.release.canonical.
     """
+    if type(version) is not int or version < 1:
+        raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: version must be positive")
     manifest_path = execution_root / "execution_manifest.json"
     execution_manifest = _read_json(manifest_path)
     execution_id = _execution_id(str(execution_manifest.get("executionId") or ""))
@@ -144,6 +149,8 @@ def build_entity_object_transaction_package(
         if (
             existing.get("transactionId") == transaction_id
             and existing.get("executionId") == execution_id
+            and existing.get("inputPayloadDigest") == input_payload_digest
+            and _read_json(package_root / "object/manifest.json").get("version") == version
         ):
             return existing
         raise ObjectTransactionError(f"对象事务包已存在且输入不一致：{package_root}")
@@ -431,7 +438,7 @@ def build_entity_object_transaction_package(
                 "schema": "quwoquan_data.entity_object",
                 "entityId": entity_id,
                 "entityRef": str(entity.get("entityRef") or ""),
-                "version": 1,
+                "version": version,
                 "executionId": execution_id,
                 "sourceIdentity": source_identity,
                 "finalContentRef": "page.md",
@@ -486,6 +493,7 @@ def build_entity_object_transaction_package(
         )
         package = {
             "schema": PACKAGE_SCHEMA,
+            **({"inputPayloadDigest": input_payload_digest} if input_payload_digest is not None else {}),
             "transactionId": transaction_id,
             "executionId": execution_id,
             "publishMediaMode": (
@@ -498,7 +506,7 @@ def build_entity_object_transaction_package(
                 "layoutSchema": LAYOUT_SCHEMA,
                 "objectKind": "entities",
                 "objectRef": canonical_ref,
-                "objectPath": allocate_package_path(PUBLISH_ROOT, _read_json(object_root / "manifest.json"), "entities", object_root),
+                "objectPath": allocate_package_path(publish_root or PUBLISH_ROOT, _read_json(object_root / "manifest.json"), "entities", object_root),
                 "objectSchema": "quwoquan_data.entity_object",
                 "packageObjectRef": "object",
             },

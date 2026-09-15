@@ -1,0 +1,15 @@
+{
+  "label": "海岸海岛",
+  "labelEn": "Coast & Island",
+  "description": "海岸线、沙滩与海岛主体，不含内陆湖泊",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:23:06.682317+00:00",
+  "updatedAt": "2026-09-12T01:23:06.682317+00:00"
+}

@@ -42,7 +42,7 @@ def _restore_package_cas(
     package = _read_json(package_root / "object_transaction_package.json")
     closure = package.get("closure")
     rows = closure.get("casRefs") if isinstance(closure, Mapping) else None
-    if not isinstance(rows, list) or not rows:
+    if not isinstance(rows, list):
         raise ObjectTransactionError("DATA.POOL.REPLAY_CAS_CLOSURE_MISSING")
     for raw in rows:
         if not isinstance(raw, Mapping):
@@ -96,25 +96,6 @@ def replay_object_transaction_package(
     target = source_document.get("target")
     if not isinstance(target, Mapping):
         raise ObjectTransactionError("DATA.POOL.REPLAY_TARGET_INVALID")
-    canonical_object = (
-        publish / str(target.get("objectKind") or "") / str(target.get("objectRef") or "")
-    )
-    source_object = source_package / str(target.get("packageObjectRef") or "object")
-    if canonical_object.exists():
-        if not canonical_object.is_dir():
-            raise ObjectTransactionError("DATA.POOL.REPLAY_TARGET_CONFLICT")
-        if target.get("objectKind") in {"posts", "entities"}:
-            from content.release.canonical.content_pool_record import (
-                pool_payload_digest,
-            )
-
-            target_matches = pool_payload_digest(canonical_object) == pool_payload_digest(
-                source_object
-            )
-        else:
-            target_matches = _tree_digest(canonical_object) == _tree_digest(source_object)
-        if not target_matches:
-            raise ObjectTransactionError("DATA.POOL.REPLAY_TARGET_CONFLICT")
     final_root = (
         output
         / "data/local/workspace/object-transaction-replays"
@@ -174,6 +155,26 @@ def replay_object_transaction_package(
             shutil.rmtree(staging, ignore_errors=True)
             raise
 
+    # 每次重入都验证完整随体快照；逻辑 ref 仅标识身份，不再拼作物理路径。
+    verified = _verify_package(
+        package_root, canonical_root=publish, require_target_absent=False,
+    )
+    canonical_object = publish / _safe_rel(verified["objectPath"], label="objectPath")
+    source_object = Path(verified["objectRoot"])
+    if canonical_object.exists():
+        if not canonical_object.is_dir():
+            raise ObjectTransactionError("DATA.POOL.REPLAY_TARGET_CONFLICT")
+        if verified["objectKind"] in {"posts", "entities"}:
+            from content.release.canonical.content_pool_record import pool_payload_digest
+
+            target_matches = pool_payload_digest(canonical_object) == pool_payload_digest(
+                source_object
+            )
+        else:
+            target_matches = _tree_digest(canonical_object) == _tree_digest(source_object)
+        if not target_matches:
+            raise ObjectTransactionError("DATA.POOL.REPLAY_TARGET_CONFLICT")
+
     run_root = output / "data/local/workspace/object-transactions" / transaction_id
     audit_path = run_root / "audit_report.json"
     apply_path = run_root / "apply_report.json"
@@ -204,9 +205,7 @@ def replay_object_transaction_package(
             transaction_id=transaction_id,
             dry_run_attestation_sha256=str(audit["dryRunAttestationSha256"]),
         )
-    if _document_tree_digest(canonical_object) != _document_tree_digest(
-        package_root / "object"
-    ):
+    if _document_tree_digest(canonical_object) != _document_tree_digest(source_object):
         raise ObjectTransactionError("DATA.POOL.REPLAY_READBACK_DRIFT")
     pool_record_repaired = False
     if target["objectKind"] == "posts":

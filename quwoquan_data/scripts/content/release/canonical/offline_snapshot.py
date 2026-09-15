@@ -71,6 +71,9 @@ def build_bundle(*, repo: Path, publish_root: Path, selection: dict, source_revi
               "creators": len(creators), "homepages": len(entities), "tags": len(tags), "media": len(bodies), "mediaBytes": sum(len(b) for b in bodies.values())}
     # importer 身份/投影实现也绑定源字节；禁止构建期悄悄漂移而沿用旧 manifest pin。
     for ref in (f"{IMPORT_ROOT}/runtime.go", f"{IMPORT_ROOT}/loader.go", f"{IMPORT_ROOT}/article_summary_projection.go",
+                f"{IMPORT_ROOT}/runtime_discovery_feed.go", f"{IMPORT_ROOT}/post_manifest_validation.go",
+                "quwoquan_data/scripts/core/image_decode.py", "quwoquan_data/scripts/core/media_processing_policy.py",
+                "quwoquan_data/control_plane/_shared/media_processing.policy.yaml",
                 f"{ENTITY_ROOT}/domain/model/homepage.go", f"{ENTITY_ROOT}/infrastructure/homepageimport/loader.go",
                 "quwoquan_data/schema/release/offline_content_bundle.schema.json", "quwoquan_data/schema/release/offline_operator_selection.schema.json",
                 "quwoquan_data/schema/content/post_manifest.schema.json", "quwoquan_data/scripts/core/article_package.py", "quwoquan_data/scripts/core/media_asset_url.py",

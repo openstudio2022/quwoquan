@@ -101,7 +101,7 @@
       "properties": {
         "posts": {"type": "integer", "minimum": 1}, "article": {"type": "integer", "minimum": 0},
         "image": {"type": "integer", "minimum": 0}, "video": {"type": "integer", "minimum": 0},
-        "creators": {"type": "integer", "minimum": 1}, "homepages": {"type": "integer", "minimum": 1},
+        "creators": {"type": "integer", "minimum": 1}, "homepages": {"type": "integer", "minimum": 0},
         "tags": {"type": "integer", "minimum": 1}, "media": {"type": "integer", "minimum": 1},
         "mediaBytes": {"type": "integer", "minimum": 1}
       }

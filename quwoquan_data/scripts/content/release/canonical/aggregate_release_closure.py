@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,19 +45,48 @@ def normalized_refs(value: object, *, label: str) -> tuple[str, ...]:
     return refs
 
 
+# ContextVar 仅传递当前同步 query 的定位表；结束或异常均 reset，不缓存资格/字节证据。
+_ObjectLocations = dict[str, list[tuple[object, Path]]]
+_object_lookup: ContextVar[tuple[Path, dict[str, _ObjectLocations]] | None] = ContextVar(
+    "canonical_object_lookup", default=None,
+)
+
+
+@contextmanager
+def object_lookup_scope(publish_root: Path) -> Iterator[None]:
+    token = _object_lookup.set((publish_root.resolve(), {}))
+    try:
+        yield
+    finally:
+        _object_lookup.reset(token)
+
+
+def object_locations(publish_root: Path, kind: str) -> _ObjectLocations:
+    """只枚举 manifest 逻辑身份/版本与物理位置；深层 reader 仍独立验证证据。"""
+    from core.publish_layout import logical_object_ref
+
+    active = _object_lookup.get()
+    scoped = active[1] if active is not None and active[0] == publish_root.resolve() else None
+    if scoped is not None and kind in scoped:
+        return scoped[kind]
+    locations: _ObjectLocations = {}
+    # release payload 没有 repository marker，仍按相同 manifest 身份读取，不双读旧布局。
+    for path in (publish_root / kind).rglob("manifest.json"):
+        if {"sources", "records"} & set(path.relative_to(publish_root / kind).parts):
+            continue
+        document = _read_json(path)
+        logical = logical_object_ref(document, kind)
+        locations.setdefault(logical, []).append((document.get("version"), path.parent))
+    if scoped is not None:
+        scoped[kind] = locations
+    return locations
+
+
 def object_root(publish_root: Path, kind: str, ref: str) -> Path:
     logical = _safe_rel(ref, label=f"{kind}Ref").as_posix()
     if kind in {"creators", "tags"}:
         return publish_root / kind / logical
-    from core.publish_layout import logical_object_ref
-    matches = []
-    # release payload 没有 repository marker，仍按相同 manifest 身份读取，不双读旧布局。
-    for path in (publish_root / kind).rglob("manifest.json"):
-        if "sources" in path.relative_to(publish_root / kind).parts or "records" in path.relative_to(publish_root / kind).parts:
-            continue
-        document = _read_json(path)
-        if logical_object_ref(document, kind) == logical:
-            matches.append((int(document["version"]), path.parent))
+    matches = [(int(version), path) for version, path in object_locations(publish_root, kind).get(logical, [])]
     if not matches:
         return publish_root / kind / logical
     latest = max(version for version, _ in matches)
@@ -283,6 +315,8 @@ __all__ = [
     "creator_tag_refs",
     "execution_publish_closure",
     "existing_refs",
+    "object_locations",
+    "object_lookup_scope",
     "object_root",
     "reference_closure",
     "resolve_tag_snapshot",

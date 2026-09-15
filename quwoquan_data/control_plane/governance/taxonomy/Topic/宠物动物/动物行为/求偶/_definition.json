@@ -1,0 +1,15 @@
+{
+  "label": "求偶",
+  "labelEn": "Courtship",
+  "description": "可核验的求偶或配对行为，不凭拟人标题推断",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:20:16.517586+00:00",
+  "updatedAt": "2026-09-12T01:20:16.517586+00:00"
+}

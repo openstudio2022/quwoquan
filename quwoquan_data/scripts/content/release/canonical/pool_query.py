@@ -14,8 +14,7 @@ from content.release.canonical.effective_admission import effective_source_attri
 from content.release.canonical.object_transaction_contract import ObjectTransactionError, _safe_rel
 from content.release.canonical.pool_record_history import read_pool_record_history
 from core.schema import validate_result
-from core.publish_layout import logical_object_ref
-from content.release.canonical.aggregate_release_closure import object_root
+from content.release.canonical.aggregate_release_closure import object_locations, object_lookup_scope, object_root
 
 _CARRIERS = ("homepage", "article", "image", "video")
 
@@ -45,9 +44,7 @@ def _occupied_refs(publish_root: Path) -> list[str]:
     refs: set[str] = set()
     for prefix in ("entities", "posts"):
         root = publish_root / prefix
-        for path in root.rglob("manifest.json"):
-            if not {"sources", "records"} & set(path.relative_to(root).parts):
-                refs.add(prefix + "/" + logical_object_ref(_read_json(path), prefix))
+        refs.update(prefix + "/" + logical for logical in object_locations(publish_root, prefix))
         for path in root.rglob("records"):
             if path.is_dir() and not (path.parent / "manifest.json").is_file():
                 raise ObjectTransactionError("DATA.POOL.MANIFEST_MISSING")
@@ -202,6 +199,11 @@ def _pool_facts(publish_root: Path, refs: Sequence[str]) -> dict[str, dict[str, 
 def query_pool(publish_root: Path, *, target_refs: Sequence[str] | None = None, candidates: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """点名 targets/candidates 时仅查询这些对象及依赖；图片索引只打开一次。"""
     publish_root = publish_root.resolve()
+    with object_lookup_scope(publish_root):
+        return _query_pool(publish_root, target_refs=target_refs, candidates=candidates)
+
+
+def _query_pool(publish_root: Path, *, target_refs: Sequence[str] | None, candidates: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     refs = set(_occupied_refs(publish_root) if target_refs is None and not candidates else map(_canonical_ref, target_refs or ()))
     for candidate in candidates:
         refs.add(_canonical_ref(str(candidate["objectRef"])))

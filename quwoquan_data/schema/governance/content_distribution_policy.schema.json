@@ -191,6 +191,7 @@
         "m100Targets",
         "m1000Targets",
         "m10000Targets",
+        "m100000Targets",
         "requireM100PromotionBeforeM1000",
         "requireM1000PromotionBeforeM10000",
         "milestoneAttainmentRequired",
@@ -211,6 +212,9 @@
           "$ref": "#/$defs/milestoneTargets"
         },
         "m10000Targets": {
+          "$ref": "#/$defs/milestoneTargets"
+        },
+        "m100000Targets": {
           "$ref": "#/$defs/milestoneTargets"
         },
         "requireM100PromotionBeforeM1000": {

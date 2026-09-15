@@ -77,6 +77,11 @@ scaleMilestones:
     article: 10000
     image: 10000
     video: 1000
+  m100000Targets:
+    homepage: 100000
+    article: 100000
+    image: 100000
+    video: 100000
   requireM100PromotionBeforeM1000: false
   requireM1000PromotionBeforeM10000: false
   milestoneAttainmentRequired: true

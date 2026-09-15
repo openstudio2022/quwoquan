@@ -149,14 +149,15 @@ def acquired_asset_identity_view(*, execution_root: Path, selections: list[dict[
         index = _acquired_assets(root, ref)
         _validate_acquire_target(root, ref)
         assets = _selected_identity_rows(root, selection["assetRefs"], index, carrier)
-        entity = targets[ref]["entityRef"]
+        target = targets[ref]
         manifest = {"contentType": carrier, "assets": assets}
         canonical_ref = ref
         if carrier == "homepage":
-            manifest.update(schema="quwoquan_data.entity_object", entityRef=entity, entityId=targets[ref]["entityId"])
+            entity = target["entityRef"]
+            manifest.update(schema="quwoquan_data.entity_object", entityRef=entity, entityId=target["entityId"])
             canonical_ref = "entities/" + entity.removeprefix("/entity/")
         else:
-            manifest["entityRefs"] = [entity]
+            manifest["entityRefs"] = [target["entityRef"]] if "entityRef" in target else []
         candidates.append({"objectRef": canonical_ref, "manifest": manifest})
     return candidates
 

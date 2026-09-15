@@ -87,9 +87,11 @@ def _avatar_rights(
 
 
 def test_entity_creator_profile_id_closes_creator_object(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    seed_system_creator_avatar_holding("qwq_creator_geo_editor_001")
+    seed_system_creator_avatar_holding(
+        "qwq_creator_geo_editor_001", monkeypatch=monkeypatch
+    )
     refs, objects = _project_entity_creator_closure(
         entity={"creatorProfileId": "qwq_creator_geo_editor_001"},
         staging=tmp_path,

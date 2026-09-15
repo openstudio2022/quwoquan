@@ -1,0 +1,15 @@
+{
+  "label": "湿地滩涂",
+  "labelEn": "Wetland & Tidal Flat",
+  "description": "湿地、滩涂与潮间带，不含普通湖岸",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:23:06.682317+00:00",
+  "updatedAt": "2026-09-12T01:23:06.682317+00:00"
+}

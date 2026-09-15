@@ -42,6 +42,16 @@ def gen_topic_nature_history():
         ("雪景", "Snowscape", "降雪与雪景氛围"),
         ("候鸟迁徙", "Bird Migration", "候鸟迁飞与观鸟季"),
     ])
+    # 消费者画面题材。地形地貌生成器未落盘，不把科学地貌词当已有检索入口。
+    tags_list("Topic/自然风光", [
+        ("日照金山", "Golden Mountain Light", "雪山或极高山在日出日落时被低角度阳光染成金色的可核验天象，不含仅有暖色滤镜的城市或平原"),
+        ("河流", "River", "河流与河道主体景观，不含仅有湖泊或海岸的画面"),
+        ("瀑布", "Waterfall", "瀑布跌水主体，不含普通溪流或喷泉"),
+        ("海岸海岛", "Coast & Island", "海岸线、沙滩与海岛主体，不含内陆湖泊"),
+        ("草原", "Grassland", "草原与草甸开阔植被，不含农田或城市绿地"),
+        ("荒漠", "Desertscape", "沙漠、戈壁等干旱地貌风光，不含普通荒地或工地"),
+        ("湿地滩涂", "Wetland & Tidal Flat", "湿地、滩涂与潮间带，不含普通湖岸"),
+    ], collection_channel="creator_chip", consumed_by=["recall", "scorer", "intersection", "search_facet"])
 
     # 2. 历史文化（历史深度层；人文社科另行承载）
     tag("Topic/历史文化", "历史文化", "History & Culture", "人类历史遗迹、传统文化与文明相关主题")
@@ -77,3 +87,8 @@ def gen_topic_nature_history():
         ("纪录片式观察", "Documentary Observation", "纪实镜头和观察式表达"),
         ("文学散记", "Literary Notes", "文学、散文与随笔式人文表达"),
     ])
+    # 城市天际线/夜景是可见画面题材；不建与「城市观察」同义的城市景观父节点。
+    tags_list("Topic/人文社科", [
+        ("城市天际线", "City Skyline", "城市建筑轮廓与天际线主体，不含单栋细部或室内"),
+        ("城市夜景", "City Nightscape", "城市夜间灯火与夜景氛围，不要求曝光参数或夜游玩法标签"),
+    ], collection_channel="creator_chip", consumed_by=["recall", "scorer", "intersection", "search_facet"])

@@ -1,0 +1,15 @@
+{
+  "label": "河流",
+  "labelEn": "River",
+  "description": "河流与河道主体景观，不含仅有湖泊或海岸的画面",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:23:06.682317+00:00",
+  "updatedAt": "2026-09-12T01:23:06.682317+00:00"
+}

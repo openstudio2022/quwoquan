@@ -103,7 +103,8 @@ def _delivery_issue(
     post_ref: str,
     candidate: PoolCandidate,
 ) -> str | None:
-    root = publish_root / "posts" / post_ref
+    from content.release.canonical.aggregate_release_closure import object_root
+    root = object_root(publish_root, "posts", post_ref)
     manifest = _read_json(root / "manifest.json")
     try:
         admission = resolve_effective_admission(
@@ -131,14 +132,18 @@ def _delivery_issue(
             return "DATA.POOL.AUTHOR_NOT_ADMITTED"
         if not creator_ref or not is_pool_record_admitted(author_record):
             return "DATA.POOL.AUTHOR_NOT_ADMITTED"
+    from content.execution.task_init import optional_location_content_type
+
     raw_entity_refs = manifest.get("entityRefs")
-    if not isinstance(raw_entity_refs, list) or not raw_entity_refs:
+    if not isinstance(raw_entity_refs, list) or (
+        not raw_entity_refs and not optional_location_content_type(candidate.content_type)
+    ):
         return "DATA.POOL.REFERENCE_MISSING"
     for raw_ref in raw_entity_refs:
         value = str(raw_ref or "").strip()
         if not value.startswith("/entity/"):
             return "DATA.POOL.REFERENCE_MISSING"
-        entity_root = publish_root / "entities" / value.removeprefix("/entity/")
+        entity_root = object_root(publish_root, "entities", value.removeprefix("/entity/"))
         try:
             entity_manifest = _read_json(entity_root / "manifest.json")
             entity_admission = resolve_effective_admission(

@@ -1,0 +1,15 @@
+{
+  "label": "筑巢",
+  "labelEn": "Nesting",
+  "description": "筑巢、占巢或巢穴营造行为",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:20:16.517586+00:00",
+  "updatedAt": "2026-09-12T01:20:16.517586+00:00"
+}
