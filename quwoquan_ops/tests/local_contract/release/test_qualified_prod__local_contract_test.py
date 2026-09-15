@@ -45,6 +45,7 @@ LIFECYCLE_SCHEMAS = {
     "quwoquan_ops.prod_stage_attempt_fact.v1": ROOT / "quwoquan_ops/environments/evidence/prod_stage_attempt_fact.schema.json",
     "quwoquan_ops.prod_released_fact.v1": ROOT / "quwoquan_ops/environments/evidence/prod_released_fact.schema.json",
     "quwoquan_ops.prod_rollback_fact.v1": ROOT / "quwoquan_ops/environments/evidence/prod_rollback_fact.schema.json",
+    "quwoquan_ops.prod_unactivated_safe_fact.v1": ROOT / "quwoquan_ops/environments/evidence/prod_unactivated_safe_fact.schema.json",
     "quwoquan_ops.post_release_soak_fact.v1": ROOT / "quwoquan_ops/environments/evidence/post_release_soak_fact.schema.json",
 }
 
@@ -98,13 +99,13 @@ def facts(
                 "digest": "sha256:" + "d" * 64,
             },
         },
-        "app": {
+        "web": {
             "ociRef": f"ghcr.io/quwoquan/web@{APP_OCI_DIGEST}",
             "ociDigest": APP_OCI_DIGEST,
             "payloadDigest": "sha256:" + "e" * 64,
             "materialDigest": APP_MATERIAL_DIGEST,
-            "artifactDigests": {"android": "sha256:" + "f" * 64, "ios": "sha256:" + "0" * 64, "web": CURRENT_DIGESTS[1]},
-            "artifactManifests": {"android": {}, "ios": {}, "web": {}},
+            "artifactDigest": CURRENT_DIGESTS[1],
+            "artifactManifest": {},
             "sourceTreeDigest": "sha1:" + "d" * 40,
         },
         "qualificationRequestOciRef": "ghcr.io/quwoquan/request@sha256:" + "1" * 64,
@@ -112,6 +113,7 @@ def facts(
     }
     material_body = {
         "schema": "quwoquan_ops.candidate_material_manifest.v1",
+        "deliveryTargets": ["service"],
         "sourceGitSha": SOURCE_SHA,
         "sourceTree": "d" * 40,
         "artifactBuildNumber": 17,
@@ -122,6 +124,7 @@ def facts(
     material = write(root, "immutable/material/v1.2.3-rc.1.json", material_body)
     qualification_body = {
         "schema": "quwoquan_ops.qualification_fact.v1",
+        "deliveryTargets": ["service"],
         "decision": "qualified",
         "tagName": "v1.2.3-rc.1",
         "sourceGitSha": SOURCE_SHA,
@@ -139,6 +142,7 @@ def facts(
         "immutable/release-tags/v1.2.3.json",
         {
             "schema": "quwoquan_ops.release_tag_admission_fact.v1",
+            "deliveryTargets": ["service"],
             "decision": "admitted",
             "tagKind": "stable",
             "tagName": stable_tag,
@@ -194,7 +198,13 @@ def facts(
             "compatible": True,
         },
     )
+    prior = write(root, "immutable/prod/prior.json", {
+        "state": "present", "target": "prod-hosted", "environment": "prod",
+        "previousReleased": previous, "rollbackReadiness": rollback,
+        "expectedGeneration": 1, "ociDigests": sorted(PREVIOUS_DIGESTS),
+    })
     return {
+        "prior": prior,
         "tag": tag,
         "qualification": qualification,
         "previous": previous,
@@ -208,12 +218,261 @@ def admit(root: Path, source: dict[str, Any] | None = None) -> tuple[Path, dict[
     path = create_prod_activation_admission(
         root=root,
         release_tag_admission_ref=source["tag"],
-        previous_active_released_ledger_ref=source["previous"],
-        rollback_readiness_ref=source["rollback"],
+        prior_ref=source["prior"],
         control_plane_git_sha=CONTROL_SHA,
         admitted_at="2026-09-05T10:00:00Z",
     )
     return path, {"ref": path.relative_to(root).as_posix(), "digest": digest(path)}
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-004
+@pytest.mark.parametrize("targets", [None, [], ["app"], ["app", "service"]])
+def test_prod_rejects_missing_unselected_or_drifted_delivery_scope(tmp_path: Path, targets) -> None:
+    source = facts(tmp_path)
+    tag = facts_by_ref(tmp_path, source["tag"])
+    if targets is None:
+        tag.pop("deliveryTargets")
+    else:
+        tag["deliveryTargets"] = targets
+    source["tag"] = write(tmp_path, "changed-tag.json", tag)
+    with pytest.raises(QualifiedProdError, match="deliveryTargets"):
+        admit(tmp_path, source)
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-005
+def test_admission_requires_explicit_prior_not_legacy_fields(tmp_path: Path) -> None:
+    path, _ = admit(tmp_path)
+    payload = json.loads(path.read_bytes())
+    assert "prior" in payload
+    assert "previousActiveReleasedLedger" not in payload
+    assert "previousOciDigests" not in payload
+    assert "rollbackReadiness" not in payload
+
+
+def test_present_producer_derives_actual_receipt_and_is_idempotent(tmp_path: Path) -> None:
+    from quwoquan_ops.ci.qualified_prod import create_present_prior
+    source = facts(tmp_path)
+    kwargs = dict(root=tmp_path, previous_released_ref=source["previous"], rollback_readiness_ref=source["rollback"])
+    path = create_present_prior(**kwargs)
+    assert path == create_present_prior(**kwargs)
+    prior = json.loads(path.read_bytes())
+    assert prior == facts_by_ref(tmp_path, source["prior"])
+    source["prior"] = {"ref": path.relative_to(tmp_path).as_posix(), "digest": digest(path)}
+    admit(tmp_path, source)
+
+
+def test_present_candidate_self_reference_rejected_before_admission(tmp_path: Path) -> None:
+    source = facts(tmp_path)
+    tag = facts_by_ref(tmp_path, source["tag"])
+    tag["candidateIdentity"] = facts_by_ref(tmp_path, source["previous"])["candidateId"]
+    source["tag"] = write(tmp_path, "self-tag.json", tag)
+    with pytest.raises(QualifiedProdError, match="self-reference"):
+        admit(tmp_path, source)
+
+
+def test_initial_human_cli_runtime_error_is_typed_and_never_queries_provider(tmp_path: Path, capsys) -> None:
+    from quwoquan_ops.ci import release_control
+    from quwoquan_ops.cli.lib import hosted_authority
+    binding = write(tmp_path, "binding.json", {"diagnostic": "runtime-configuration-failure"})
+    with mock.patch.object(hosted_authority, "runtime_from_env", side_effect=RuntimeError("HOSTED_AUTHORITY_EXTERNAL_DEPENDENCY")), mock.patch.object(hosted_authority, "HostedAuthorityHttpClient") as client:
+        result = release_control.main(["--store-root", str(tmp_path), "prod-initial-human-check",
+                                       "--binding", binding["ref"] + "=" + binding["digest"], "--decision-id", "decision/1"])
+    assert result == 1  # release_control统一异常出口；非准入诊断正常结果另为2。
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["terminal"] == "GATE_BLOCK"
+    assert payload["detail"] == "HOSTED_AUTHORITY_EXTERNAL_DEPENDENCY"
+    client.assert_not_called()
+    assert not (tmp_path / "prod").exists()
+
+
+def test_controller_release_locks_do_not_fence_one_remote_target(tmp_path: Path) -> None:
+    """证明现役锁的边界，不能作为target取证保护通过证据。"""
+    from quwoquan_ops.cli import stackctl
+    from quwoquan_ops.cli.commands.repair_runtime_recovery import _prod_release_lock
+    from quwoquan_ops.cli.prod.hosted_release_ledger_lib.ledger_store import _ledger_lock
+    first = tmp_path / "controller-a" / "release-state"
+    second = tmp_path / "controller-b" / "release-state"
+    remote = tmp_path / "remote" / "release-ledger"
+    # 同调用端互斥成立，但另一调用端及远端ledger使用不同真实flock inode。
+    with mock.patch.object(stackctl, "_release_state_dir", return_value=first):
+        with _prod_release_lock():
+            with pytest.raises(RuntimeError, match="release lock is held"):
+                with _prod_release_lock():
+                    pytest.fail("same controller unexpectedly bypassed lock")
+            with mock.patch.object(stackctl, "_release_state_dir", return_value=second):
+                with _prod_release_lock():
+                    with _ledger_lock(remote):
+                        assert (first / ".global-deploy.lock").stat().st_ino != (second / ".global-deploy.lock").stat().st_ino
+                        assert (remote / ".ledger.lock").is_file()
+
+
+def test_target_route_writers_have_no_hosted_ledger_fence_binding() -> None:
+    """源码证据标识尚未接入的writer；未执行任何远端动作。"""
+    import inspect
+    from quwoquan_ops.cli.commands.deploy_domain import command_deploy
+    source = inspect.getsource(command_deploy)
+    assert source.index("_command_prod_prevalidate") < source.index("_prod_release_lock")
+    assert source.index("_command_deploy_distribution") < source.index("_prod_release_lock")
+    sync = (ROOT / "quwoquan_ops/cli/prod/sync_prod_plane_stack.sh").read_text()
+    effect = sync.split('if [[ -n "$source_dir" ]]; then', 1)[1]
+    assert 'tar -xf - -C' in effect
+    assert 'release-ledger' not in effect and 'flock' not in effect
+
+
+def test_initial_human_binding_rejects_missing_recovery_before_provider_query(tmp_path: Path) -> None:
+    from quwoquan_ops.ci import qualified_prod
+    provider = mock.Mock()
+    with pytest.raises(QualifiedProdError, match="binding"):
+        qualified_prod.verify_initial_human_binding(
+            binding={}, provider=provider, verifier=mock.Mock(), receipt_ref="decision/1",
+            now="2026-09-13T00:00:00Z",
+        )
+    provider.readback.assert_not_called()
+
+
+def test_initial_human_exact_binding_uses_real_ed25519_and_never_consumes(tmp_path: Path) -> None:
+    from quwoquan_ops.ci.qualified_prod import verify_initial_human_binding
+    from quwoquan_ops.tests.local_contract.gate import test_hosted_authority_adapter__local_contract_test as authority
+    exact = {"ref": "immutable/evidence.json", "digest": "sha256:" + "a" * 64}
+    binding = {"target": "prod-hosted", "environment": "prod", "deliveryTargets": ["service"],
+               "inventoryDigest": "sha256:" + "b" * 64, "attemptId": "sha256:" + "c" * 64,
+               "candidateDigest": "sha256:" + "d" * 64, "observationDigest": "sha256:" + "e" * 64,
+               "executionOwner": "owner-1", "executionGeneration": 3, "releaseGeneration": 0,
+               "recoveryEffects": ["disable_attempt_units", "stop_attempt_traffic"],
+               "actions": ["observe_initial_prod"], **{field: dict(exact) for field in
+               ("stableAdmission", "candidateMaterialManifest", "serviceMaterial", "webMaterial", "absenceProof", "recoveryResources")}}
+    temporary, private, public = authority.keypair()
+    try:
+        overrides = {"role": "release_owner", "decisionKind": "production_campaign_approval",
+                     "scope": {"increment": binding["attemptId"]}, "evidenceFingerprint": digest(binding),
+                     "actions": binding["actions"]}
+        for failure in (None, "revoked", "consumed", "expired", "role", "scope", "signature", "material", "recovery"):
+            claims = dict(overrides)
+            state = failure if failure in {"revoked", "consumed"} else "available"
+            if failure == "expired": claims["expiresAt"] = "2020-01-01T00:00:00Z"
+            if failure == "role": claims["role"] = "product_owner"
+            if failure == "scope": claims["scope"] = {"increment": "wrong"}
+            raw, headers = authority.wrapper_fixture(private, release_eligible=False, test_key=True,
+                state=state, generation=2 if state != "available" else 1,
+                winner_key="winner" if state != "available" else "",
+                winner_digest=digest(binding) if state != "available" else "", claim_overrides=claims)
+            if failure == "signature":
+                import base64
+                wrapper = json.loads(raw)
+                wrapper["signature"] = base64.b64encode(b"x" * 64).decode().rstrip("=")
+                raw = authority.exact(wrapper)
+            calls = []
+            def opener(request, **kwargs):
+                calls.append(request.get_method())
+                return authority.Response(raw, headers)
+            client = authority.wire_config(opener=opener)
+            provider = authority.HostedAuthorityProvider(client)
+            verifier = authority.HostedAuthorityVerifier(provider, {authority.KEY_ID: public})
+            tested = dict(binding)
+            if failure == "material": tested["serviceMaterial"] = {**exact, "digest": "sha256:" + "d" * 64}
+            if failure == "recovery": tested.pop("recoveryResources")
+            if failure:
+                with pytest.raises(QualifiedProdError):
+                    verify_initial_human_binding(binding=tested, provider=provider, verifier=verifier,
+                        receipt_ref=authority.DECISION_ID, now="2026-09-13T00:00:00Z")
+            else:
+                result = verify_initial_human_binding(binding=tested, provider=provider, verifier=verifier,
+                    receipt_ref=authority.DECISION_ID, now="2026-09-13T00:00:00Z")
+                assert result["humanBindingVerified"] is True
+                assert result["releaseEvidenceEligible"] is False  # 隔离testKey不可冒充hosted。
+                assert result["consumed"] is False and result["admissionEligible"] is False
+            assert calls == ([] if failure == "recovery" else ["GET"])
+    finally:
+        temporary.cleanup()
+
+
+def absent_prior(root: Path, *, candidate: str = "sha256:" + "3" * 64, generation: int = 0) -> dict[str, str]:
+    owner, execution_generation = "owner-1", 7
+    common = {"status": "complete", "target": "prod-hosted", "environment": "prod",
+              "executionOwner": owner, "executionGeneration": execution_generation,
+              "releaseGeneration": generation, "guardsContinuous": True}
+    payloads = {
+        "inventoryObservation": {**common, "completeInventory": True},
+        "ledgerHistoryObservation": {**common, "activeReleased": False, "unexplainedHistory": False},
+        "routeObservation": {**common, "candidateRouted": False},
+        "unitObservation": {**common, "candidateUnitsActive": False},
+        "autoRestartObservation": {**common, "candidateAutoRestartEnabled": False},
+        "inflightObservation": {**common, "inflightActivation": False},
+    }
+    refs = {field: write(root, f"immutable/absence/{field}.json", payload) for field, payload in payloads.items()}
+    observation_digest = digest({field: refs[field] for field in sorted(refs)})
+    attempt = "sha256:" + "c" * 64
+    human_binding_digest = "sha256:" + "d" * 64
+    human = write(root, "immutable/absence/human.json", {"bindingDigest": human_binding_digest,
+        "consumed": True, "winnerAttemptId": attempt, "observationDigest": observation_digest,
+        "candidateDigest": candidate, "target": "prod-hosted", "executionOwner": owner,
+        "executionGeneration": execution_generation, "releaseGeneration": generation})
+    recovery = write(root, "immutable/absence/recovery.json", {"status": "ready", "preservePersistentResources": True})
+    prior = {"state": "absent", "target": "prod-hosted", "environment": "prod",
+             "expectedGeneration": generation, "executionOwner": owner,
+             "executionGeneration": execution_generation, "attemptId": attempt,
+             "observationDigest": observation_digest, "humanAuthority": human,
+             "humanBindingDigest": human_binding_digest, "recoveryResources": recovery, **refs}
+    return write(root, f"immutable/prod/absent-{generation}.json", prior)
+
+
+def test_absent_prior_requires_complete_guarded_observation_and_human_authority(tmp_path: Path) -> None:
+    from quwoquan_ops.ci.qualified_prod import validate_absent_prior
+    prior_ref = absent_prior(tmp_path)
+    prior = facts_by_ref(tmp_path, prior_ref)
+    assert validate_absent_prior(tmp_path, prior, candidate="sha256:" + "3" * 64)["state"] == "absent"
+    source = facts(tmp_path)
+    prior = facts_by_ref(tmp_path, prior_ref); authority = facts_by_ref(tmp_path, prior["humanAuthority"])
+    authority.update({"stableAdmission": source["tag"], "candidateMaterialManifest": source["material"],
+                      "serviceMaterial": {"ref":"immutable/evidence.json","digest":"sha256:"+"a"*64},
+                      "webMaterial": {"ref":"immutable/evidence.json","digest":"sha256:"+"a"*64},
+                      "recoveryResources": prior["recoveryResources"], "recoveryEffects":["stop_attempt_traffic"]})
+    prior["humanAuthority"] = write(tmp_path, "immutable/absence/human-bound.json", authority)
+    source["prior"] = write(tmp_path, "immutable/prod/absent-bound.json", prior)
+    path, _ = admit(tmp_path, source)
+    assert facts_by_ref(tmp_path, {"ref": path.relative_to(tmp_path).as_posix(), "digest": digest(path)})["prior"]["state"] == "absent"
+    for field, key, value in (("inventoryObservation", "completeInventory", False),
+                              ("ledgerHistoryObservation", "status", "unknown"),
+                              ("routeObservation", "guardsContinuous", False)):
+        changed = facts_by_ref(tmp_path, prior[field]); changed[key] = value
+        bad = dict(prior); bad[field] = write(tmp_path, f"bad-{field}.json", changed)
+        with pytest.raises(QualifiedProdError, match="UNKNOWN"):
+            validate_absent_prior(tmp_path, bad, candidate="sha256:" + "3" * 64)
+
+
+def test_state_file_absence_or_query_failure_never_proves_absent(tmp_path: Path) -> None:
+    from quwoquan_ops.ci.qualified_prod import validate_absent_prior
+    prior = facts_by_ref(tmp_path, absent_prior(tmp_path))
+    for payload in ({}, {"status": "unknown", "reason": "permission_denied"},
+                    {"status": "complete", "completeInventory": False}):
+        prior["inventoryObservation"] = write(tmp_path, "bad-inventory.json", payload)
+        with pytest.raises(QualifiedProdError):
+            validate_absent_prior(tmp_path, prior, candidate="sha256:" + "3" * 64)
+
+
+@pytest.mark.parametrize("field,value", [("state", "unknown"), ("target", "gamma-local"),
+    ("environment", "gamma"), ("expectedGeneration", 0), ("expectedGeneration", 2),
+    ("ociDigests", ["sha256:" + "a" * 64])])
+def test_present_prior_wrong_target_generation_or_digest_rejected(tmp_path: Path, field, value) -> None:
+    source = facts(tmp_path)
+    prior = facts_by_ref(tmp_path, source["prior"])
+    prior[field] = value
+    source["prior"] = write(tmp_path, "bad-prior.json", prior)
+    with pytest.raises(QualifiedProdError, match="PROD.PRIOR.INVALID"):
+        admit(tmp_path, source)
+
+
+def test_legacy_admission_fields_are_rejected_even_with_explicit_prior(tmp_path: Path) -> None:
+    from quwoquan_ops.ci.qualified_prod import admission_prior
+    path, _ = admit(tmp_path)
+    admission = json.loads(path.read_bytes())
+    for field in ("previousActiveReleasedLedger", "rollbackReadiness", "previousOciDigests"):
+        changed = dict(admission); changed[field] = {}
+        with pytest.raises(QualifiedProdError, match="retired implicit"):
+            admission_prior(changed)
+    admission.pop("prior")
+    with pytest.raises(QualifiedProdError, match="PROD.PRIOR.INVALID"):
+        admission_prior(admission)
 
 
 def candidate_material_promotion_evidence(
@@ -353,7 +612,7 @@ def append_stage(
         previous = facts_by_ref(root, predecessor)
     else:
         admission_fact = facts_by_ref(root, admission)
-        previous = facts_by_ref(root, admission_fact["previousActiveReleasedLedger"])
+        previous = facts_by_ref(root, admission_fact["prior"]["previousReleased"])
     previous_readback = facts_by_ref(root, previous["hostedReceiptReadback"])
     generation = previous_readback["receipt"]["committedGeneration"]
     resolved_decision = decision or ("continue" if status == "passed" else "pause")
@@ -410,26 +669,27 @@ def test_admission_accepts_only_stable_exact_facts_and_parses_digest_set(tmp_pat
     service_material = write(tmp_path, "immutable/factory/service/manifest.json", {"schema": "quwoquan_ops.service_factory_material", "materialDigest": SERVICE_MATERIAL_DIGEST})
     app_material = write(tmp_path, "immutable/factory/app/manifest.json", {"schema": "quwoquan_ops.app_factory_material", "materialDigest": APP_MATERIAL_DIGEST})
     validated_service = {**facts_by_ref(tmp_path, fact["candidateMaterialManifest"])["factoryOutputs"]["service"]}
-    validated_app = {**facts_by_ref(tmp_path, fact["candidateMaterialManifest"])["factoryOutputs"]["app"]}
+    validated_app = {**facts_by_ref(tmp_path, fact["candidateMaterialManifest"])["factoryOutputs"]["web"]}
     with mock.patch(
         "quwoquan_ops.ci.qualified_prod._validated_factory_actual_materials",
         return_value=(
-            facts_by_ref(tmp_path, service_material),
-            facts_by_ref(tmp_path, app_material),
-            service_material,
-            app_material,
+            {"service": (facts_by_ref(tmp_path, service_material), service_material),
+             "web": (facts_by_ref(tmp_path, app_material), app_material)},
+            {"service": validated_service, "web": validated_app},
         ),
     ):
         materialize_prod_activation_input(
             root=tmp_path,
             admission_ref={"ref": path.relative_to(tmp_path).as_posix(), "digest": digest(path)},
             service_material_ref=service_material,
-            app_material_ref=app_material,
+            web_material_ref=app_material,
+            app_material_ref=None,
             output=activation_input,
         )
     payload = json.loads(activation_input.read_text(encoding="utf-8"))
     assert payload["serviceFactoryMaterial"] == {**{key: validated_service[key] for key in ("ociRef", "ociDigest", "payloadDigest", "materialDigest")}, "materializedManifest": service_material}
-    assert payload["appFactoryMaterial"] == {**{key: validated_app[key] for key in ("ociRef", "ociDigest", "payloadDigest", "materialDigest")}, "materializedManifest": app_material}
+    assert payload["webFactoryMaterial"] == {**{key: validated_app[key] for key in ("ociRef", "ociDigest", "payloadDigest", "materialDigest")}, "materializedManifest": app_material}
+    assert "appFactoryMaterial" not in payload and "appMaterialDigest" not in payload
     assert payload["candidateDigest"] == "sha256:" + "3" * 64
     assert payload["previousCandidateDigest"] == "sha256:" + "7" * 64
     assert "releaseEvidenceRef" not in payload
@@ -741,3 +1001,93 @@ def test_all_lifecycle_schemas_are_strict_and_canonical() -> None:
         schema = json.loads(path.read_text(encoding="utf-8"))
         Draft202012Validator.check_schema(schema)
         assert schema["additionalProperties"] is False
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-005
+def test_absent_and_present_prior_are_mutually_exclusive_schema_forms(tmp_path: Path) -> None:
+    schema = json.loads(SCHEMA.read_bytes())
+    validator = Draft202012Validator({"$ref": "#/$defs/prior", "$defs": schema["$defs"]})
+    absent = facts_by_ref(tmp_path, absent_prior(tmp_path))
+    present = facts_by_ref(tmp_path, facts(tmp_path)["prior"])
+    validator.validate(absent); validator.validate(present)
+    mixed = {**absent, "previousReleased": present["previousReleased"], "rollbackReadiness": present["rollbackReadiness"]}
+    assert list(validator.iter_errors(mixed))
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-005
+def test_human_consume_lost_response_reads_exact_winner_and_rejects_competitor() -> None:
+    from types import SimpleNamespace
+    from quwoquan_ops.ci.qualified_prod import consume_initial_human_authority
+    exact = {"ref": "immutable/evidence.json", "digest": "sha256:" + "a" * 64}
+    binding = {"target": "prod-hosted", "environment": "prod", "deliveryTargets": ["service"],
+        "stableAdmission": exact, "candidateMaterialManifest": exact, "serviceMaterial": exact,
+        "webMaterial": exact, "inventoryDigest": "sha256:" + "b" * 64, "absenceProof": exact,
+        "attemptId": "sha256:" + "c" * 64, "recoveryResources": exact,
+        "candidateDigest": "sha256:" + "d" * 64, "observationDigest": "sha256:" + "e" * 64,
+        "executionOwner": "owner-1", "executionGeneration": 3, "releaseGeneration": 0,
+        "recoveryEffects": ["disable_attempt_units", "stop_attempt_traffic"],
+        "actions": ["authorize_initial_prod"]}
+    command = digest(binding)
+    class Provider:
+        release_evidence_eligible = True
+        consumed = False
+        competitor = False
+        def readback(self, _): return SimpleNamespace(status="present", exact_bytes=b"signed", provider_receipt_ref="provider/1")
+        def consume(self, *_args, **_kwargs): self.consumed = True; raise TimeoutError("lost response")
+    class Verifier:
+        def __init__(self, provider): self.provider = provider
+        def verify(self, *_):
+            state = "consumed" if self.provider.consumed else "available"
+            return {"role":"release_owner", "decision_kind":"production_campaign_approval", "actor_authenticated":True,
+                "scope":{"increment":binding["attemptId"]}, "evidence_fingerprint":command,
+                "actions":binding["actions"], "receipt_state":state, "expires_at":"2027-01-01T00:00:00Z",
+                "receipt_generation":2 if state == "consumed" else 1, "receipt_previous_generation":1 if state == "consumed" else 0,
+                "receipt_etag":"etag-1", "winner_idempotency_key":("competitor" if self.provider.competitor else binding["attemptId"]) if state == "consumed" else "",
+                "winner_command_digest":command if state == "consumed" else ""}
+    provider = Provider(); result = consume_initial_human_authority(binding=binding, provider=provider,
+        verifier=Verifier(provider), receipt_ref="decision/1", now="2026-09-13T00:00:00Z")
+    assert result["winnerAttemptId"] == binding["attemptId"] and result["authorityGeneration"] == 2
+    provider = Provider(); provider.competitor = True
+    with pytest.raises(QualifiedProdError, match="OUTCOME_UNKNOWN|CONFLICT"):
+        consume_initial_human_authority(binding=binding, provider=provider, verifier=Verifier(provider),
+            receipt_ref="decision/1", now="2026-09-13T00:00:00Z")
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-005
+def test_unactivated_safe_terminal_requires_ordered_stop_and_preserves_resources(tmp_path: Path) -> None:
+    from quwoquan_ops.ci.qualified_prod import create_prod_unactivated_safe_fact, validate_prod_unactivated_safe_fact
+    source = facts(tmp_path); prior = facts_by_ref(tmp_path, absent_prior(tmp_path))
+    authority = facts_by_ref(tmp_path, prior["humanAuthority"])
+    authority.update({"stableAdmission": source["tag"], "candidateMaterialManifest": source["material"],
+                      "serviceMaterial": {"ref":"immutable/evidence.json","digest":"sha256:"+"a"*64},
+                      "webMaterial": {"ref":"immutable/evidence.json","digest":"sha256:"+"a"*64},
+                      "recoveryResources": prior["recoveryResources"], "recoveryEffects":["stop_attempt_traffic"]})
+    prior["humanAuthority"] = write(tmp_path, "immutable/absence/human-bound.json", authority)
+    source["prior"] = write(tmp_path, "immutable/prod/absent-bound.json", prior)
+    _, admission = admit(tmp_path, source)
+    admission_body = facts_by_ref(tmp_path, admission)
+    failed = {"schema":"quwoquan_ops.prod_stage_attempt_fact.v1", "admission":admission,
+        "stage":"canary", "attemptNumber":1, "status":"failed", "predecessor":None,
+        "evidence":{k:{"ref":f"e/{k}","digest":"sha256:"+str(i)*64} for i,k in enumerate(("activation","health","slo","placement","readback"),1)},
+        "hostedReceiptReadback":{"ref":"hosted/failure","digest":"sha256:"+"7"*64},
+        "ociDigests":admission_body["ociDigests"], "recordedAt":"2026-09-13T00:01:00Z"}
+    failed["attemptId"] = digest(failed)
+    failed_ref = write(tmp_path, f"prod/rollout/{admission_body['admissionId']}/canary/{failed['attemptId']}.json", failed)
+    recovery = {"schema":"quwoquan_ops.prod_initial_recovery_readback.v1", "status":"passed",
+        "target":"prod-hosted", "environment":"prod", "admission":admission, "attempt":failed_ref,
+        "executionOwner":"owner-1", "executionGeneration":7, "previousGeneration":0, "committedGeneration":1,
+        "trafficStoppedAt":"2026-09-13T00:02:00Z", "trafficReadbackAt":"2026-09-13T00:02:01Z",
+        "unitsStoppedAt":"2026-09-13T00:02:02Z", "autoRestartDisabled":True,
+        "inactiveConfigRemoved":True, "inventoryComplete":True, "candidateExposed":False,
+        "preservedResources":["database","volume","media","backup","recoveryPoints","audit"],
+        "coexistingWorkloadsUnchanged":True, "auditAppended":True}
+    recovery_ref = write(tmp_path, "immutable/recovery/readback.json", recovery)
+    path = create_prod_unactivated_safe_fact(root=tmp_path, admission_ref=admission,
+        failed_attempt_ref=failed_ref, recovery_readback_ref=recovery_ref, recorded_at="2026-09-13T00:03:00Z")
+    safe = validate_prod_unactivated_safe_fact(json.loads(path.read_text()))
+    assert safe["terminal"] == "unactivated_safe" and safe["committedGeneration"] == 1
+    assert not (tmp_path / "prod/released").exists() and not (tmp_path / "prod/rollbacks").exists() and not (tmp_path / "prod/soak").exists()
+    broken = dict(recovery); broken["candidateExposed"] = True
+    with pytest.raises(QualifiedProdError, match="UNKNOWN"):
+        create_prod_unactivated_safe_fact(root=tmp_path, admission_ref=admission,
+            failed_attempt_ref=failed_ref, recovery_readback_ref=write(tmp_path,"immutable/recovery/broken.json",broken),
+            recorded_at="2026-09-13T00:03:00Z")

@@ -1,5 +1,8 @@
 description: 推荐候选与附属索引的统一投影视图。
 fields:
+- {name: sourcePartition, type: string, constraints: [PK, NOT_NULL], role: projection, description: 普通来源固定ordinary，Data为releaseBinding canonical SHA256；不是新业务ID，不是调用方可选值。}
+- {name: releaseSource, type: ReleaseCandidateObjectIdentity, constraints: [NULLABLE], role: projection, description: Data必填完整tuple与source版本，非Data必须null；不得按ID前缀或缺字段猜ordinary。}
+- {name: releaseBinding, type: ReleaseQueryPreparationBinding, constraints: [NULLABLE], role: projection, description: Data recommendation分区，slice必须recommendation；revision不进入此身份。}
 - {name: scenario, source: scenario, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 - {name: contentId, source: contentId, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
 - {name: contentType, source: contentType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
@@ -24,6 +27,32 @@ fields:
 - {name: sourceSequence, source: sourceSequence, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 - {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
 types:
+  CandidateContentFenceReceipt:
+    description: 本owner独立Content fence消费依据，无正文/第二active；同事件或revision不同摘要冲突，迟到必须Content确切提交可证，不从当前revision猜superseded。永久保留最小摘要以支持ACK失败重放，不授予安全资格或activation。
+    fields:
+      - {name: eventDigest, type: string, format: canonical_sha256, constraints: [PK, NOT_NULL]}
+      - {name: scopeDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: revision, type: int64, min: 1, constraints: [NOT_NULL]}
+      - {name: payloadDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: proofEvidenceDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: outcome, type: enum, values: [reconciled, superseded], constraints: [NOT_NULL]}
+      - {name: consumedAt, type: timestamp, constraints: [NOT_NULL]}
+  RecommendationReleaseSourceCheckpoint:
+    description: 原投影checkpoint的release准备分支，不是新准备流程或ready registry。完整snapshot保存规范化源依据供重验，缺写项不推进checkpoint；id为binding摘要。
+    fields:
+    - {name: checkpointId, type: string, format: canonical_sha256, constraints: [PK, NOT_NULL]}
+    - {name: binding, type: ReleaseQueryPreparationBinding, constraints: [NOT_NULL]}
+    - {name: publicationId, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: snapshot, type: ReleasePostCandidateSnapshot, constraints: [NOT_NULL]}
+    - {name: sourceVersion, type: int64, min: 1, constraints: [NOT_NULL]}
+    - {name: sourceEventDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+  RecommendationReleasePremiumProjection:
+    description: ProductOps签发准入的单轨派生索引，不合成审批。唯一key为source完整tuple+objectId，source版本/摘要与Post候选必须一致；归同CandidateIndexView。
+    fields:
+    - {name: admission, type: ReleasePremiumAdmission, constraints: [NOT_NULL]}
+    - {name: sourceEventId, type: string, constraints: [NOT_NULL]}
+    - {name: sourceEventDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
   RecommendationObjectCardCandidate:
     description: 从 Post lifecycle 冻结的可路由 Homepage 公开候选快照；Recommendation 只选择，不回查 Entity 私有存储。
     fields:

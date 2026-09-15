@@ -154,6 +154,36 @@ func (s *CreatorReleaseCandidateStore) ReadVerifiedCandidate(ctx context.Context
 	return state, true, nil
 }
 
+// ReadSearchCandidate 只读取并重验目标候选，不使用active/latest或事件投影。
+func (s *CreatorReleaseCandidateStore) ReadSearchCandidate(ctx context.Context, identity model.ReleaseIdentity) (model.CreatorReleaseCandidateState, []model.CreatorReleaseProjection, bool, error) {
+	state, found, err := s.ReadVerifiedCandidate(ctx, identity)
+	if err != nil || !found {
+		return state, nil, found, err
+	}
+	if state.ExpectedCount > 500 {
+		return state, nil, true, fmt.Errorf("Creator search candidate exceeds 500 objects")
+	}
+	cursor, err := s.projections.Find(ctx, releaseIdentityFilter(identity), options.Find().SetSort(bson.D{{Key: "personaId", Value: 1}}).SetLimit(501))
+	if err != nil {
+		return state, nil, true, err
+	}
+	defer cursor.Close(ctx)
+	rows := []model.CreatorReleaseProjection{}
+	if err = cursor.All(ctx, &rows); err != nil {
+		return state, nil, true, err
+	}
+	if len(rows) != state.ExpectedCount {
+		return state, nil, true, fmt.Errorf("Creator search closure changed")
+	}
+	for _, row := range rows {
+		digest, err := DocumentDigest(row, "documentDigest")
+		if err != nil || digest != row.DocumentDigest || row.ProjectionVersion != state.ProjectionVersion {
+			return state, nil, true, fmt.Errorf("Creator search projection drift")
+		}
+	}
+	return state, rows, true, nil
+}
+
 // FindByExactContentFence is the public-reader seam. Content supplies the
 // authoritative live tuple; this method performs no pointer/latest lookup.
 func (s *CreatorReleaseCandidateStore) FindByExactContentFence(ctx context.Context, identity model.ReleaseIdentity, publicIdentity string) (*model.CreatorRuntimeProfile, bool, error) {

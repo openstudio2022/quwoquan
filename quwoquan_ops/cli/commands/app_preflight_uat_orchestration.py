@@ -15,12 +15,20 @@ from quwoquan_ops.cli.commands.app_preflight_uat_support import (
     APP_CORE_READBACK_UAT_TEST_TARGET,
     CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
     MESSAGE_HOME_UAT_TEST_TARGET,
+    TEXT_PUBLICATION_UAT_TEST_TARGET,
+    HOME_RECOMMENDATION_UAT_TEST_TARGET,
+    CROSS_DOMAIN_SEARCH_UAT_TEST_TARGET,
     PROFILE_JOURNEY_UAT_TEST_TARGET,
     RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET,
 )
 
 
 APP_CONTENT_UAT_TARGETS = frozenset({"alpha-local", "beta-local", "gamma-local"})
+CORE_DIAGNOSTIC_SUITES = frozenset({
+    "identity", "homepage-media", "search-recommendation",
+    "post-write-readback", "chat-send-readback",
+})
+CORE_DIAGNOSTIC_DEFAULT = ("homepage-media", "post-write-readback")
 
 
 def prepare_app_content_uat_context(
@@ -52,6 +60,20 @@ def prepare_app_content_uat_context(
     )
     canonical_output_root = Path(stackctl.output_root()).expanduser().resolve()
     issues = list(initial_issues)
+    target_kind = str(getattr(args, "target_kind", "local") or "local")
+    build_profile = str(getattr(args, "build_profile", "nonprod") or "nonprod")
+    prod_allowlist_ref = str(getattr(args, "prod_user_allowlist_ref", "") or "").strip()
+    verification_purpose = str(getattr(args, "verification_purpose", "formal") or "formal")
+    if target_kind == "prod-hosted":
+        if verification_purpose != "core_diagnostic":
+            issues.append("prod-hosted only supports non-promotable core_diagnostic prevalidation")
+        if build_profile != "prod":
+            issues.append("prod-hosted core diagnostic requires prod buildProfile")
+        if not prod_allowlist_ref:
+            issues.append("prod-hosted core diagnostic requires a real-user allowlist ref")
+        issues.append("prod-hosted core diagnostic is prevalidate-only; device execution is forbidden")
+    elif build_profile != "nonprod" or prod_allowlist_ref:
+        issues.append("local App UAT cannot consume prod buildProfile or prod user allowlist")
     if not targets or len(targets) != len(set(targets)):
         issues.append("--targets must contain unique non-empty targets")
     unsupported = sorted(set(targets) - allowed_targets)
@@ -87,9 +109,11 @@ def app_content_uat_suite_plan(
     *,
     stackctl: Any,
     release_video_work_id: str,
+    verification_purpose: str = "formal",
+    core_suites: str = "",
 ) -> list[tuple[str, str, bool, str]]:
-    """Return the canonical ordered page-UAT suite topology."""
-    return [
+    """Return formal topology or an explicitly bounded diagnostic subset."""
+    formal = [
         (
             "release-sample-matrix",
             RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET,
@@ -118,6 +142,30 @@ def app_content_uat_suite_plan(
             release_video_work_id,
         ),
     ]
+    if verification_purpose == "formal":
+        if core_suites.strip():
+            raise ValueError("--core-suites is only valid for core_diagnostic")
+        return formal
+    if verification_purpose != "core_diagnostic":
+        raise ValueError("unsupported App verification purpose")
+    selected = [item.strip() for item in core_suites.split(",") if item.strip()]
+    if not selected:
+        selected = list(CORE_DIAGNOSTIC_DEFAULT)
+    if len(selected) != len(set(selected)) or set(selected) - CORE_DIAGNOSTIC_SUITES:
+        raise ValueError("--core-suites must be a unique subset of the closed core selectors")
+    if "homepage-media" not in selected or not ({"post-write-readback", "chat-send-readback"} & set(selected)):
+        raise ValueError("core_diagnostic requires homepage-media and post-write-readback or chat-send-readback")
+    topology = {
+        "identity": [("identity", MESSAGE_HOME_UAT_TEST_TARGET, False, "")],
+        "homepage-media": [("homepage-media", stackctl.APP_CORE_READBACK_UAT_TEST_TARGET, True, release_video_work_id)],
+        "search-recommendation": [
+            ("search", CROSS_DOMAIN_SEARCH_UAT_TEST_TARGET, False, ""),
+            ("recommendation", HOME_RECOMMENDATION_UAT_TEST_TARGET, False, ""),
+        ],
+        "post-write-readback": [("post-write-readback", TEXT_PUBLICATION_UAT_TEST_TARGET, False, "")],
+        "chat-send-readback": [("chat-send-readback", MESSAGE_HOME_UAT_TEST_TARGET, False, "")],
+    }
+    return [row for selector in selected for row in topology[selector]]
 
 
 def build_app_uat_patrol_authority(
@@ -209,9 +257,12 @@ def finalize_app_content_uat(
     project_raw_authority: Callable[..., tuple[dict[str, Any], list[str]]],
     build_receipt: Callable[..., dict[str, Any]],
     select_first_blocker: Callable[..., tuple[str, dict[str, Any]]],
+    verification_purpose: str = "formal",
+    selected_suites: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Project raw authority and write the canonical parent receipt."""
     dry_run = bool(getattr(args, "dry_run", False))
+    diagnostic = verification_purpose == "core_diagnostic"
     if not issues and not dry_run and set(launch_bindings) != set(targets):
         issues.append("canonical launch bindings are incomplete for requested targets")
     if dry_run:
@@ -226,7 +277,15 @@ def finalize_app_content_uat(
                 except AppUatRawResultError as exc:
                     issues.append(f"{target}: {exc}")
     try:
-        raw_authority_projection, raw_projection_issues = project_raw_authority(
+        raw_authority_projection, raw_projection_issues = (
+            {
+                "rawResultRefs": {target: [] for target in targets},
+                "rawResultDigests": {target: [] for target in targets},
+                "rawCoverage": {target: {"expected": 0, "present": 0, "missing": 0} for target in targets},
+                "rawGaps": {target: [] for target in targets},
+            },
+            [],
+        ) if diagnostic else project_raw_authority(
             evidence_root=output_root,
             targets=targets,
             raw_results=raw_results,
@@ -249,7 +308,7 @@ def finalize_app_content_uat(
         }
         raw_projection_issues = [str(exc)]
     issues.extend(item for item in raw_projection_issues if item not in issues)
-    status = "gate_block" if issues else ("planned" if dry_run else "complete")
+    status = "gate_block" if issues else ("planned" if dry_run else "diagnostic_complete" if diagnostic else "complete")
     payload = build_receipt(
         status=status,
         targets=targets,
@@ -266,6 +325,8 @@ def finalize_app_content_uat(
         issues=issues,
         dry_run=dry_run,
         canonical_checksum=stackctl._canonical_document_checksum,
+        verification_purpose=verification_purpose,
+        selected_suites=selected_suites,
     )
     first_blocker, first_blocker_audit = select_first_blocker(
         status=status,

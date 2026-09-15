@@ -64,6 +64,23 @@ func nextPhysicalIndex(alias, current string) (string, error) {
 	return prefix + strconv.Itoa(version+1), nil
 }
 
+// VerifyPhysicalNamespace是只读binding核对；缺库、alias分裂或漂移绝不回填。
+func (c *Client) VerifyPhysicalNamespace(ctx context.Context, expected string) error {
+	if expected == "" {
+		return fmt.Errorf("search expected physical namespace required")
+	}
+	for _, alias := range []string{c.IndexName(), c.WriteIndexName()} {
+		actual, err := c.physicalIndexFor(ctx, alias)
+		if err != nil {
+			return err
+		}
+		if actual != expected {
+			return fmt.Errorf("%w: search alias does not match declared physical namespace", ErrIndexSchemaIncompatible)
+		}
+	}
+	return nil
+}
+
 // BeginRebuild creates the next versioned physical index with the current
 // schema and atomically moves the WRITE alias onto it. From this moment every
 // incremental projection lands in the new index, so the follow-up owner

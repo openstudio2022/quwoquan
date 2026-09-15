@@ -120,6 +120,7 @@ class StackctlGammaOperationLockContractTest(
             "QWQ_LOCAL_RELEASE_ENV": "gamma",
             "QWQ_LOCAL_RELEASE_TARGET": "gamma-local",
             "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": "quwoquan_gamma_release_7002_1",
+            "QWQ_STACKCTL_PYTHON": "/ambient/spoof",
         }
         with tempfile.TemporaryDirectory() as temporary_dir:
             report_dir = Path(temporary_dir) / "report"
@@ -223,6 +224,9 @@ class StackctlGammaOperationLockContractTest(
             run.call_args.kwargs["env"][stackctl.PACKAGE_ROOT_OVERRIDE_ENV],
             "",
         )
+        managed_python = run.call_args.kwargs["env"]["QWQ_STACKCTL_PYTHON"]
+        self.assertNotEqual(managed_python, "/ambient/spoof")
+        self.assertTrue(Path(managed_python).is_absolute())
         active_provider.assert_not_called()
         active_observability.assert_not_called()
         load_runtime_composition.assert_not_called()

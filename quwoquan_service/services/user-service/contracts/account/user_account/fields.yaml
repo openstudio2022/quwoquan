@@ -420,6 +420,15 @@ enums:
   UserProfileSearchProjectionOperation:
     values: [upsert, delete]
 types:
+  ReadCreatorSearchCandidateQuery:
+    description: 受信 Content preparation query；完整 tuple 的 wire 值只在共享类型声明。
+    fields:
+      - {name: release, type: ReleaseCandidateBinding, constraints: [NOT_NULL]}
+  CreatorSearchCandidateResult:
+    description: 候选不存在返回 found=false/snapshot=null；存在但未 verified、摘要漂移或超过500个 Creator 必须 typed 失败，禁止部分结果。
+    fields:
+      - {name: found, type: bool, constraints: [NOT_NULL]}
+      - {name: snapshot, type: CreatorSearchCandidateSnapshot, constraints: [NULLABLE]}
   UserSyncHintEventPayload:
     description: durable UserSyncPatch 已提交后的最小实时提示；客户端只使用 latestSyncSeq 触发 typed PullUserSync，不解析业务补丁。
     fields:

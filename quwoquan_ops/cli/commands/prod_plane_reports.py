@@ -11,7 +11,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+
+from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
 
 from pathlib import Path
 from typing import Any
@@ -121,25 +124,68 @@ def _prod_instance_runtime_reports(
     return reports
 
 
+def _placement_identity_findings(runtime: dict, placement: Any, candidate: str) -> list[str]:
+    """读回必须匹配本次已验证渲染物；不由健康状态推导配置身份。"""
+    expected = {
+        "instance": placement.instance, "plane": placement.plane,
+        "hostId": placement.host_id, "replicaId": placement.replica_id,
+        "host": placement.ssh_host, "account": placement.account,
+        "composeRoot": placement.remote_root, "project": placement.project,
+        "candidateDigest": candidate, "configDigest": candidate,
+    }
+    issues = [f"placement identity mismatch: {key}" for key, value in expected.items()
+              if not value or runtime.get(key) != value]
+    if (runtime.get("unit") or {}).get("name") != placement.systemd_unit:
+        issues.append("placement systemd unit identity mismatch")
+    try:
+        root = deployment_render_dir("prod", target="prod-hosted", name=placement.render_name)
+        provenance_path = root / "provenance.json"
+        raw = provenance_path.read_bytes()
+        provenance = json.loads(raw)
+        if provenance.get("candidateDigest") != candidate:
+            issues.append("local render candidate digest mismatch")
+        if runtime.get("provenanceDigest") != hashlib.sha256(raw).hexdigest():
+            issues.append("remote provenance digest mismatch")
+        config_services = provenance["configServices"]
+        if not config_services or len(config_services) != len(set(config_services)):
+            raise ValueError("invalid config services")
+        digests = {service: provenance["configSources"][service]["effectiveConfigDigest"]
+                   for service in config_services}
+        if runtime.get("configFileDigests") != digests:
+            issues.append("remote config bytes digest mismatch")
+    except (OSError, ValueError, KeyError, TypeError):
+        issues.append("verified render config identity unavailable")
+    if placement.plane == "service" and runtime.get("configAck") != {"status": "ready"}:
+        issues.append("service replica config ACK not ready")
+    services = [item.get("composeService") for item in runtime.get("containers", [])]
+    for service in placement.governed_services + placement.support_services:
+        if services.count(service) != 1:
+            issues.append(f"missing or duplicate governed runtime: {service}")
+    return issues
+
+
 def _prod_hosted_placement_coverage_checks(
     report_dir: Path,
     *,
     stage: str,
+    candidate_digest: str,
+    expected_plan: list,
     host: str = "",
     host_id: str = "",
 ) -> list[dict[str, Any]]:
-    """Build one digest-bound postCheck per host/plane/replica placement."""
+    """逐一读取正式 inventory 的当前身份，缺项或重复一律阻断。"""
     import quwoquan_ops.cli.stackctl as _stackctl
 
 
     try:
         instance = _stackctl.prod_hosted_instance_for_stage(stage)
+        access = _stackctl.load_prod_hosted_access_manifest()
+        _stackctl.require_prod_hosted_release_inventory(expected_plan, access)
         plan = _stackctl.resolve_prod_hosted_plan(
-            _stackctl.load_prod_hosted_access_manifest(),
-            instance=instance,
-            host_ids=[host_id] if host_id else None,
+            access, instance=instance, host_ids=[host_id] if host_id else None,
             ssh_host_override=host,
         )
+        _stackctl.require_prod_hosted_release_inventory(plan, access)
     except _stackctl.ProdHostedTopologyError as error:
         return [
             {
@@ -155,47 +201,26 @@ def _prod_hosted_placement_coverage_checks(
         host=host,
         host_id=host_id,
     )
-    runtime_by_key = {
-        (
-            str(item.get("plane") or ""),
-            str(item.get("hostId") or ""),
-            str(item.get("replicaId") or ""),
-        ): item
-        for item in runtimes
-        if isinstance(item, dict)
-    }
+    runtime_by_key: dict[tuple, list] = {}
+    for runtime in runtimes:
+        if isinstance(runtime, dict):
+            key = (runtime.get("plane"), runtime.get("hostId"), runtime.get("replicaId"))
+            runtime_by_key.setdefault(key, []).append(runtime)
+    expected_keys = {(item.plane, item.host_id, item.replica_id) for item in plan}
+    unexpected = set(runtime_by_key) - expected_keys
     checks: list[dict[str, Any]] = []
     for placement in plan:
         key = (placement.plane, placement.host_id, placement.replica_id)
-        runtime = runtime_by_key.get(key)
-        if runtime is None:
-            # Fall back to plane-only match for older inspect payloads.
-            runtime = next(
-                (
-                    item
-                    for item in runtimes
-                    if isinstance(item, dict)
-                    and item.get("plane") == placement.plane
-                    and (
-                        not item.get("hostId")
-                        or item.get("hostId") == placement.host_id
-                    )
-                    and (
-                        not item.get("replicaId")
-                        or item.get("replicaId") == placement.replica_id
-                    )
-                ),
-                None,
-            )
+        matches = runtime_by_key.get(key, [])
+        runtime = matches[0] if len(matches) == 1 else None
         findings = (
             _stackctl._prod_plane_runtime_findings(runtime, plane=placement.plane)
-            if isinstance(runtime, dict)
-            else [f"missing runtime inspect for {placement.plane}/{placement.replica_id}"]
+            + _placement_identity_findings(runtime, placement, candidate_digest)
+            if runtime is not None
+            else [f"missing or duplicate runtime inspect for {key}"]
         )
-        if runtime is None:
-            findings = [
-                f"missing runtime inspect for {placement.plane}/{placement.replica_id}"
-            ]
+        if unexpected:
+            findings.append("unexpected runtime placement identity")
         receipt = {
             "schema": "prod-hosted-placement-receipt",
             "target": "prod-hosted",
@@ -237,7 +262,9 @@ def _prod_hosted_placement_coverage_checks(
             {
                 "name": item["name"],
                 "status": "passed" if item["exitCode"] == 0 else "failed",
-                "receiptDigest": "sha256:" + ("0" * 64),
+                "receiptDigest": "sha256:" + hashlib.sha256(
+                    json.dumps(item["placementReceipt"], sort_keys=True).encode()
+                ).hexdigest(),
             }
             for item in checks
             if item.get("name")

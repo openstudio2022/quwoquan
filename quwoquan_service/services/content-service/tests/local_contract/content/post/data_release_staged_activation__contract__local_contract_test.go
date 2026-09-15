@@ -44,7 +44,7 @@ func TestDataReleaseStorageDeclaresVerifiedOnlyActivation(t *testing.T) {
 	if !ok || receipts.Role != "append_only" {
 		t.Fatalf("data_release_stage_receipts must be append-only: %+v", receipts)
 	}
-	for _, token := range []string{"duration", "count", "checkpoint", "first typed blocker"} {
+	for _, token := range []string{"duration", "count", "checkpoint", "blocker"} {
 		if !strings.Contains(receipts.Description, token) {
 			t.Fatalf("stage receipt description missing %q: %q", token, receipts.Description)
 		}

@@ -27,8 +27,34 @@ _REDACTED_DEPENDENCY_MATERIAL = "[REDACTED dependency trust material]"
 
 
 def dependency_failure_cause(exc: BaseException) -> str:
-    if isinstance(exc, subprocess.TimeoutExpired):
-        return "subprocess_timeout"
+    typed = re.search(
+        r"\bcause=(network_unreachable|network_timeout|process_timeout)\b",
+        str(exc),
+    )
+    if typed is not None:
+        return typed.group(1)
+    output = ""
+    if isinstance(exc, subprocess.CalledProcessError):
+        output = str(exc.stdout or exc.output or exc.stderr or "")
+    elif isinstance(exc, subprocess.TimeoutExpired):
+        output = str(exc.output or exc.stderr or "")
+    lowered = output.casefold()
+    if isinstance(exc, subprocess.TimeoutExpired) or any(
+        marker in lowered
+        for marker in ("timed out", "timeout", "process exceeded")
+    ):
+        return "network_timeout"
+    if any(
+        marker in lowered
+        for marker in (
+            "network is unreachable",
+            "no route to host",
+            "unknownhostexception",
+            "could not resolve host",
+            "name or service not known",
+        )
+    ):
+        return "network_unreachable"
     if isinstance(exc, subprocess.CalledProcessError):
         return "subprocess_nonzero"
     if isinstance(exc, json.JSONDecodeError):
@@ -73,7 +99,11 @@ def redact_dependency_failure_text(
 
 
 def write_private_log(
-    path: Path, value: str, *, sensitive_values: tuple[str, ...] = ()
+    path: Path,
+    value: str,
+    *,
+    sensitive_values: tuple[str, ...] = (),
+    append: bool = False,
 ) -> None:
     value = redact_dependency_failure_text(
         value,
@@ -84,11 +114,11 @@ def write_private_log(
     descriptor = -1
     try:
         os.fchmod(parent, 0o700)
+        flags = os.O_WRONLY | os.O_CREAT
+        flags |= os.O_APPEND if append else os.O_EXCL
         descriptor = os.open(
             path.name,
-            os.O_WRONLY
-            | os.O_CREAT
-            | os.O_EXCL
+            flags
             | getattr(os, "O_NOFOLLOW", 0)
             | getattr(os, "O_CLOEXEC", 0),
             0o600,

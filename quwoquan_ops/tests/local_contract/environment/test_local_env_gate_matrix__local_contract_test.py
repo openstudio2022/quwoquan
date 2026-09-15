@@ -85,7 +85,7 @@ def _matrix_release_inputs(root: Path) -> dict[str, str]:
 def _matrix_data_runner(root: Path, calls: list, *, drift: str = ""):
     """只在临时目录封装 canonical raw result；绝不调用环境 handler。"""
     import hashlib
-    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_data_args
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_phase_args
     from content.release.environment.run_evidence import create_run, write_verification_result
 
     active = {}
@@ -103,7 +103,7 @@ def _matrix_data_runner(root: Path, calls: list, *, drift: str = ""):
             if drift == "query-revision":
                 document["revision"] += 1
             return {"exitCode": 0, "payload": document, "summary": action}
-        args = _parse_data_args(kwargs["argv"][2:])
+        args = _parse_phase_args(kwargs["argv"][2:])
         if args.command == "release":
             if args.release_command == "acceptance-lease":
                 lease_action = "acquire" if action.endswith("acquire") else "revoke"
@@ -619,9 +619,9 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
         self.assertEqual(matrix["executionClass"], "contract-simulation")
         self.assertNotEqual(matrix["claim"], "ALPHA_BETA_GAMMA_LOCAL_GREEN")
         self.assertTrue(matrix["nonPromotable"])
-        from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_data_args
+        from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_phase_args
         for environment in ("alpha", "beta", "gamma"):
-            commands = {call["action"]: _parse_data_args(call["argv"][2:])
+            commands = {call["action"]: _parse_phase_args(call["argv"][2:])
                         for call in data_calls if call["environment"] == environment and call["argv"]}
             exit_args = commands["lifecycle-exit"]
             self.assertEqual(exit_args.original_import_run_id, commands["candidate-activate"].run_id)

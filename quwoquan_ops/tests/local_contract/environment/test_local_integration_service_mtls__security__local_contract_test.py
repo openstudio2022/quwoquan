@@ -122,7 +122,7 @@ class LocalIntegrationServiceMTLSSecurityTest(unittest.TestCase):
         self.assertIn("/opt/homebrew/opt/openssl@3/bin/openssl", resolver)
         self.assertNotIn("_openssl_bin", source)
 
-    def test_stackctl_binds_mtls_before_content_workload_early_return(self) -> None:
+    def test_stackctl_binds_mtls_before_bounded_provider_materialization(self) -> None:
         stackctl = (
             ROOT / "quwoquan_ops/cli/commands/gamma_release_binding.py"
         ).read_text(encoding="utf-8")
@@ -132,10 +132,8 @@ class LocalIntegrationServiceMTLSSecurityTest(unittest.TestCase):
             1,
         )[1]
         mtls_index = bind_fn.index("prepare_local_integration_service_mtls")
-        content_return_index = bind_fn.index(
-            'workload in {"content-release", "content-commercial"}'
-        )
-        self.assertLess(mtls_index, content_return_index)
+        bounded_provider_index = bind_fn.index("selected_provider_roles =")
+        self.assertLess(mtls_index, bounded_provider_index)
 
 
 if __name__ == "__main__":

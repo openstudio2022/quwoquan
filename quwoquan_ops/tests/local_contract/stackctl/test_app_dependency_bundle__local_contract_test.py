@@ -120,6 +120,34 @@ def test_active_bundle_rejects_component_manifest_tamper(
         bundle.load_active_dependency_bundle(repo_root=repo)
 
 
+def test_verified_active_seed_loader_allows_stale_source_but_not_manifest_tamper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, root, _active = _fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        bundle,
+        "_current_source_identity",
+        lambda _root: {
+            "flutterVersion": "3.47.0",
+            "flutterCommandResolutionDigest": "sha256:" + "1" * 64,
+            "productionPubResolutionInputDigest": "sha256:" + "2" * 64,
+            "patrolPubResolutionInputDigest": "sha256:" + "3" * 64,
+            "nativeResolutionInputDigest": "sha256:" + "9" * 64,
+        },
+    )
+    loaded = bundle.load_active_dependency_bundle(
+        repo_root=repo, require_current_source=False
+    )
+    assert loaded.active["nativeResolutionInputDigest"] == "sha256:" + "4" * 64
+
+    manifest = root / "snapshots/abc/androidGradle/manifest.json"
+    manifest.write_text('{"schema":"tampered"}', encoding="utf-8")
+    with pytest.raises(ValueError, match="manifest digest"):
+        bundle.load_active_dependency_bundle(
+            repo_root=repo, require_current_source=False
+        )
+
+
 def test_active_bundle_rejects_source_or_toolchain_drift(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

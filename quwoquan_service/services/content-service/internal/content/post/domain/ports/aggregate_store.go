@@ -6,6 +6,7 @@ import (
 	"time"
 
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	safetywire "quwoquan_service/services/content-service/generated/content/post/contract/safety"
 	tombstonemodel "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/domain/model"
 	tombstoneports "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/domain/ports"
 )
@@ -33,7 +34,13 @@ type PostDeletionTombstone = tombstonemodel.Tombstone
 // Commit 是 PostCommandFacade 交给 PostAggregateStore 的唯一写模型。
 // ExpectedVersion=0 仅用于创建；其余命令必须携带已装载版本。
 // Tombstone 仅在删除命令时非空，与 state/receipt/outbox 同事务追加。
+// SourceMetadataReader读取实际持久来源；不能由外部command字段覆盖。
+type SourceMetadataReader interface {
+	LoadSourceMetadata(context.Context, string) (safetywire.PostSourceCommitMetadata, error)
+}
+
 type Commit struct {
+	SourceMetadata   *safetywire.PostSourceCommitMetadata
 	Post             *postmodel.Post
 	ExpectedVersion  int64
 	IdempotencyKey   string

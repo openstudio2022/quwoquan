@@ -21,8 +21,16 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
 )
 
 
-def _parse_data_args(argv: list[str]) -> argparse.Namespace:
-    """复用 Data 门面及现役 parser，只解析而不调用 handler。"""
+def _parse_content_release_args(argv: list[str]) -> argparse.Namespace:
+    """复用 stackctl 的 Ops-owned content-release parser，只解析不执行。"""
+    from quwoquan_ops.cli.stackctl import build_parser
+
+    return build_parser().parse_args(["content-release", *argv])
+
+
+def _parse_phase_args(argv: list[str]) -> argparse.Namespace:
+    if argv and argv[0] == "content-release":
+        return _parse_content_release_args(argv[1:])
     from quwoquan_data.scripts import cli
 
     parser = argparse.ArgumentParser(prog="qwq-data")
@@ -49,7 +57,7 @@ def _query_active_release(*, environment: str, report_path: Path) -> dict[str, A
             "receiptRef": evidence.ref, "receiptDigest": evidence.digest}
 
 
-def _data_cli_runner(
+def _ops_release_runner(
     *, argv: list[str], report_path: Path, action: str = "", environment: str = "", **_: Any,
 ) -> dict[str, Any]:
     if action == "rollback-active-query":
@@ -230,7 +238,7 @@ def _run_data_phase(
     payload: dict[str, Any] = {}
     try:
         if argv:
-            _parse_data_args(argv[2:])
+            _parse_phase_args(argv[2:])
         payload = data_fn(
             environment=environment,
             action=action,
@@ -295,7 +303,7 @@ def _rollback_source(
 def _run_data_lifecycle(
     *, phases: list[dict[str, Any]], block: dict[str, Any], target: str,
     environment: str, candidate: dict[str, Any], rollback: dict[str, Any],
-    data_ids: dict[str, str], data_fn: DataRunner,
+    data_ids: dict[str, str], data_fn: DataRunner, runtime_candidate_root: Path,
     previous_readiness: dict[str, str] | None = None,
 ) -> tuple[int, str]:
     """只编排 Data 单轨；每步校验 raw result 后再推进，首错即停。"""
@@ -312,8 +320,9 @@ def _run_data_lifecycle(
     )
     for key, action, kind, release, run_key, predecessor in steps:
         readiness = _data_readiness_path(environment, release["releaseId"], data_ids[run_key])
-        argv = ["python3", "quwoquan_data/scripts/cli.py", "ship", kind,
-                *release["admissionArgv"], "--env", environment, "--run-id", data_ids[run_key]]
+        argv = ["python3", "quwoquan_ops/cli/stackctl.py", "content-release", kind,
+                *release["admissionArgv"], "--env", environment, "--run-id", data_ids[run_key],
+                "--runtime-candidate-root", str(runtime_candidate_root)]
         expected = {"environment": environment, "releaseId": release["releaseId"],
                     "manifestDigest": release["releaseDigest"], "runId": data_ids[run_key],
                     "containsUnverifiedAssets": release["containsUnverifiedAssets"],

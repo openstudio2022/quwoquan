@@ -202,10 +202,17 @@ jobs:
           request = json.loads(request_raw)
           admission = json.loads(admission_raw)
           allocation = json.loads(allocation_raw)
+          from quwoquan_ops.ci.release_qualification import validate_delivery_scope, validate_request_authority
+          import subprocess
+          authority = request.get("requestAuthority") or {}
+          authority_root = request_path.parent
+          subprocess.run(["python3", "-B", "quwoquan_ops/ci/promotion_evidence.py", "materialize-oci", "--ref", authority.get("ref", ""), "--output-file", str(authority_root / authority.get("ref", ""))], check=True)
+          validate_request_authority(authority_root, request)
+          validate_delivery_scope(request, effect="service")
           request_keys = {
               "schema", "rcTagAdmission", "mainSourceSeal",
               "integrationQualification", "requestAuthority", "tagName",
-              "sourceGitSha", "sourceTree", "requestedAt", "requestId",
+              "sourceGitSha", "sourceTree", "requestedAt", "requestId", "deliveryTargets",
           }
           admission_keys = {
               "schema", "admissionId", "decision", "tagKind", "tagName",

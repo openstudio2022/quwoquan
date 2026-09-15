@@ -110,7 +110,7 @@ func writeReleaseFixture(
 	root := t.TempDir()
 	writeJSON(t, filepath.Join(root, "payload", "release.json"), map[string]any{
 		"schema": "quwoquan_data.release", "releaseId": releaseID,
-		"sourceOwner": "qwq_data", "releaseKind": releaseKind, "releaseClass": "research",
+		"sourceOwner": "qwq_data", "releaseKind": releaseKind,
 		"canonicalMerkle": "sha256:" + strings.Repeat("b", 64),
 	})
 	writeJSON(
@@ -200,7 +200,7 @@ print(payload_digest(pathlib.Path(sys.argv[2])))
 	}
 	writeJSON(t, filepath.Join(releaseRoot, "attestations", "release.json"), map[string]any{
 		"schema": "quwoquan_data.release_attestation", "releaseId": header.ReleaseID,
-		"sourceOwner": "qwq_data", "releaseKind": header.ReleaseKind, "releaseClass": "research",
+		"sourceOwner": "qwq_data", "releaseKind": header.ReleaseKind,
 		"canonicalMerkle": "sha256:" + strings.Repeat("b", 64),
 		"tagCount":        len(desired.DesiredRefs.Tags), "payloadSha256": strings.TrimSpace(string(digest)),
 	})

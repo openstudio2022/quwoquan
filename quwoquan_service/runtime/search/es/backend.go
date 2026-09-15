@@ -61,6 +61,8 @@ func (b *Backend) Name() string { return "elasticsearch" }
 // explanation (defense in depth, no second score).
 func (b *Backend) Recall(ctx context.Context, plan rtsearch.RetrievePlan) ([]rtsearch.RecallCandidate, error) {
 	body := b.builder.Build(plan)
+	binding := rtsearch.CreatorQueryBinding(ctx)
+	filterCreatorSearch(body, binding)
 	if plan.ReplicaPreference != "" {
 		ctx = WithReplicaPreference(ctx, plan.ReplicaPreference)
 	}

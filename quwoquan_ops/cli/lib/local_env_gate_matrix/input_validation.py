@@ -24,7 +24,7 @@ def _release_admission_binding(
     system_attestation_ref: str, system_attestation_digest: str,
 ) -> dict[str, Any]:
     """Data 拥有准入验证；矩阵额外对账 package 使用的完整 attestation 字节。"""
-    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_data_args
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_content_release_args
     import quwoquan_ops.cli.lib.local_env_gate_matrix as matrix_pkg
 
     argv: list[str] = []
@@ -34,7 +34,7 @@ def _release_admission_binding(
         if value:
             argv.extend((flag, value))
     try:
-        args = _parse_data_args(["ship", "apply", *argv, "--env", "alpha"])
+        args = _parse_content_release_args(["apply", *argv, "--env", "alpha", "--runtime-candidate-root", str(ROOT)])
         from content.release.environment.release_runtime import admit_environment_release
 
         admission = admit_environment_release(

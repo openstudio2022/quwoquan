@@ -1,0 +1,47 @@
+description: 唯一搜索准备状态、命令及query；三类source只通过共享typed判别值区分，无兼容协议或双份存储。
+fields:
+- {name: preparationId, type: string, format: canonical_sha256, constraints: [PK, NOT_NULL], role: authoritative_state}
+- {name: binding, type: ReleaseQueryPreparationBinding, constraints: [NOT_NULL], role: authoritative_state}
+- {name: snapshot, type: SearchReleaseCandidateSnapshot, constraints: [NOT_NULL], role: authoritative_state}
+- {name: creatorIds, type: '[]string', constraints: [NOT_NULL], reference: true, role: authoritative_state}
+- {name: objectIds, type: '[]string', constraints: [NOT_NULL], reference: true, role: authoritative_state}
+- {name: version, type: int64, min: 1, constraints: [NOT_NULL], role: authoritative_state}
+- {name: status, type: enum, enum_ref: SearchReleasePreparationStatus, constraints: [NOT_NULL], role: authoritative_state}
+- {name: verifiedObjectIds, type: '[]string', max_items: 1000, constraints: [NOT_NULL], role: authoritative_state}
+- {name: executionToken, type: string, constraints: [NULLABLE], role: authoritative_state, classification: INTERNAL, log_policy: redact}
+- {name: leaseUntil, type: timestamp, constraints: [NULLABLE], role: authoritative_state}
+- {name: failureCode, type: enum, enum_ref: SearchReleasePreparationFailure, constraints: [NULLABLE], role: authoritative_state}
+- {name: proof, type: ReleaseQueryReadinessProof, constraints: [NULLABLE], role: authoritative_state}
+- {name: updatedAt, type: timestamp, constraints: [NOT_NULL], role: authoritative_state}
+enums:
+  SearchReleasePreparationStatus: [accepted, running, blocked, completed, failed]
+  SearchReleasePreparationFailure: [source_invalid, projection_conflict, provider_unavailable, checkpoint_unavailable, closure_mismatch]
+types:
+  PrepareSearchReleaseCommand:
+    fields:
+    - {name: binding, type: ReleaseQueryPreparationBinding, constraints: [NOT_NULL]}
+    - {name: snapshot, type: SearchReleaseCandidateSnapshot, constraints: [NOT_NULL]}
+    - {name: expectedVersion, type: int64, min: 0, constraints: [NOT_NULL]}
+    - {name: idempotencyKey, type: string, max_utf8_bytes: 128, constraints: [NOT_BLANK]}
+  ReadSearchReleasePreparationQuery:
+    fields:
+    - {name: binding, type: ReleaseQueryPreparationBinding, constraints: [NOT_NULL]}
+    - {name: snapshotDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  SearchReleasePreparationView:
+    description: completed才有proof且query真实重验；不返回snapshot正文或执行token，不由query续跑。
+    fields:
+    - {name: preparationId, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: binding, type: ReleaseQueryPreparationBinding, constraints: [NOT_NULL]}
+    - {name: snapshotDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: version, type: int64, min: 1, constraints: [NOT_NULL]}
+    - {name: status, type: enum, enum_ref: SearchReleasePreparationStatus, constraints: [NOT_NULL]}
+    - {name: failureCode, type: enum, enum_ref: SearchReleasePreparationFailure, constraints: [NULLABLE]}
+    - {name: proof, type: ReleaseQueryReadinessProof, constraints: [NULLABLE]}
+    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+  SearchReleasePreparationReceipt:
+    fields:
+    - {name: receiptKey, type: string, format: canonical_sha256, constraints: [PK, NOT_NULL]}
+    - {name: preparationId, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: commandDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: result, type: SearchReleasePreparationView, constraints: [NOT_NULL]}
+    - {name: createdAt, type: timestamp, constraints: [NOT_NULL]}

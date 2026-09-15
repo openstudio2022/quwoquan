@@ -2283,6 +2283,30 @@ export const platformConfig = {
       "sensitive": false
     },
     {
+      "key": "sys.content-service.creator_search.binding_digest",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.content-service.creator_search.physical_namespace",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
       "key": "sys.content-service.embedding.enabled",
       "type": "bool",
       "owner": "",
@@ -2835,6 +2859,54 @@ export const platformConfig = {
       "sensitive": false
     },
     {
+      "key": "sys.content-service.post_safety.current_binding_ref",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.content-service.post_safety.hmac_secret_ref",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": true
+    },
+    {
+      "key": "sys.content-service.post_safety.material_root",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.content-service.post_safety.recovery_evidence_ref",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
       "key": "sys.content-service.postgres.report_dsn",
       "type": "string",
       "owner": "",
@@ -3015,6 +3087,18 @@ export const platformConfig = {
       "sensitive": false
     },
     {
+      "key": "sys.content-service.redis.general.username",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
       "key": "sys.content-service.redis.realtime.addr",
       "type": "string",
       "owner": "",
@@ -3147,6 +3231,18 @@ export const platformConfig = {
       "sensitive": false
     },
     {
+      "key": "sys.content-service.redis.realtime.username",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
       "key": "sys.content-service.redis.rec.addr",
       "type": "string",
       "owner": "",
@@ -3271,6 +3367,18 @@ export const platformConfig = {
       "type": "bool",
       "owner": "",
       "default": false,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.content-service.redis.rec.username",
+      "type": "string",
+      "owner": "",
+      "default": null,
       "scope": "workload",
       "reload": "restart",
       "rollout": "progressive",
@@ -4071,6 +4179,18 @@ export const platformConfig = {
       "sensitive": false
     },
     {
+      "key": "sys.integration-service.redis.general.username",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
       "key": "sys.integration-service.redis.rec.addr",
       "type": "string",
       "owner": "",
@@ -4195,6 +4315,18 @@ export const platformConfig = {
       "type": "bool",
       "owner": "",
       "default": false,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.integration-service.redis.rec.username",
+      "type": "string",
+      "owner": "",
+      "default": null,
       "scope": "workload",
       "reload": "restart",
       "rollout": "progressive",
@@ -5139,6 +5271,18 @@ export const platformConfig = {
       "sensitive": false
     },
     {
+      "key": "sys.product-ops-service.content_source.base_url",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
       "key": "sys.product-ops-service.mongodb.database",
       "type": "string",
       "owner": "",
@@ -5727,6 +5871,18 @@ export const platformConfig = {
       "sensitive": false
     },
     {
+      "key": "sys.recommendation-service.content_receipt.base_url",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
       "key": "sys.recommendation-service.ranked_window.maximum_live_bytes_per_shard",
       "type": "int",
       "owner": "",
@@ -6027,6 +6183,42 @@ export const platformConfig = {
       "sensitive": false
     },
     {
+      "key": "sys.recommendation-service.release_candidate.binding_digest",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.recommendation-service.release_candidate.mongodb_namespace",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.recommendation-service.release_candidate.schema_generation",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
       "key": "sys.recommendation-service.service.http.addr",
       "type": "string",
       "owner": "",
@@ -6247,6 +6439,30 @@ export const platformConfig = {
       "type": "string",
       "owner": "",
       "default": "http://127.0.0.1:18080",
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.search-service.creator_search.binding_digest",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.search-service.creator_search.physical_namespace",
+      "type": "string",
+      "owner": "",
+      "default": null,
       "scope": "workload",
       "reload": "restart",
       "rollout": "progressive",
@@ -6727,6 +6943,30 @@ export const platformConfig = {
       "type": "int",
       "owner": "",
       "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.tag-service.content_release_fence.base_url",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.tag-service.content_release_fence.timeout_ms",
+      "type": "int",
+      "owner": "",
+      "default": 500,
       "scope": "workload",
       "reload": "restart",
       "rollout": "progressive",
@@ -7411,6 +7651,18 @@ export const platformConfig = {
       "type": "bool",
       "owner": "",
       "default": false,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.user-service.redis.general.username",
+      "type": "string",
+      "owner": "",
+      "default": null,
       "scope": "workload",
       "reload": "restart",
       "rollout": "progressive",

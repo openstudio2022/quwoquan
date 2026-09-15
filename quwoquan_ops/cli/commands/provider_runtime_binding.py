@@ -379,8 +379,8 @@ def _provider_runtime_launch_environment(
         "QWQ_PROVIDER_RUNTIME_COMPOSE_DIGESTS": "",
         "QWQ_PROVIDER_RUNTIME_COMPOSE_PROFILES": "",
     }
-    if workload != "full":
-        return projected
+    if workload not in {"full", "content-release", "content-commercial"}:
+        raise ValueError(f"unsupported Provider runtime workload: {workload}")
     if environment_name == "prod":
         if validated["workloads"]:
             raise ValueError("Prod Provider runtime cannot start local workloads")
@@ -411,14 +411,30 @@ def _provider_runtime_launch_environment(
             raise ValueError("package-bound Provider workload artifact is unsafe")
         artifact_by_role[role] = (compose_path, compose_digest)
 
-    roles = [str(item["role"]) for item in validated["workloads"]]
-    if set(roles) != set(artifact_by_role) or not roles:
-        raise ValueError("nonprod full runtime Provider workload closure is incomplete")
+    all_roles = [str(item["role"]) for item in validated["workloads"]]
+    if set(all_roles) != set(artifact_by_role) or not all_roles:
+        raise ValueError("nonprod Provider workload closure is incomplete")
+    roles = (
+        all_roles
+        if workload == "full"
+        else [
+            role
+            for role in all_roles
+            if role in {"sms-provider-substitute", "provider-protocol-substitute"}
+        ]
+    )
+    if set(roles) != {
+        "sms-provider-substitute",
+        "provider-protocol-substitute",
+    } and workload != "full":
+        raise ValueError("bounded content runtime Integration Provider closure is unavailable")
     images = provider_runtime.get("images")
     if not isinstance(images, Mapping):
         raise TypeError("package-bound Provider image closure is invalid")
-    if require_images and set(images) != set(roles):
+    if require_images and not set(roles).issubset(images):
         raise ValueError("package-bound Provider image closure is incomplete")
+    if require_images and workload == "full" and set(images) != set(roles):
+        raise ValueError("package-bound full Provider image closure is not exact")
     if not require_images and images:
         raise ValueError("unsealed Provider runtime cannot project images")
     if require_images:
@@ -451,6 +467,7 @@ def _provider_runtime_launch_environment(
         {
             str(profile)
             for item in validated["workloads"]
+            if str(item["role"]) in roles
             for profile in item["composeProfiles"]
             if str(profile).strip()
         }

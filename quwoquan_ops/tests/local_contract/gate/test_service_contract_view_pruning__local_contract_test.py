@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+from multiprocessing import get_context
 from pathlib import Path
 import sys
 import time
@@ -100,3 +101,36 @@ def test_outputs_outside_the_runtime_output_root_are_never_touched(tmp_path: Pat
 
     assert builder.prune_sibling_views(current) == []
     assert all(path.is_dir() for path in stale)
+
+
+def _hold_view_lock(output: str, ready, release) -> None:
+    with builder.exclusive_view_build(Path(output)):
+        ready.set()
+        release.wait(timeout=10)
+
+
+def _observe_view_lock(output: str, acquired) -> None:
+    with builder.exclusive_view_build(Path(output)):
+        acquired.set()
+
+
+def test_same_output_builds_are_serialized_across_processes(tmp_path: Path) -> None:
+    """递归 make 共享 CONTRACT_VIEW 时，后来的 builder 不得删除前者的半成品。"""
+    output = cache_dir(tmp_path) / "view-shared"
+    context = get_context("spawn")
+    ready = context.Event()
+    release = context.Event()
+    acquired = context.Event()
+    holder = context.Process(target=_hold_view_lock, args=(str(output), ready, release))
+    observer = context.Process(target=_observe_view_lock, args=(str(output), acquired))
+    holder.start()
+    assert ready.wait(timeout=10)
+    observer.start()
+    time.sleep(0.2)
+    assert not acquired.is_set(), "同一路径的第二个 builder 绕过了进程锁"
+    release.set()
+    holder.join(timeout=10)
+    observer.join(timeout=10)
+    assert holder.exitcode == 0
+    assert observer.exitcode == 0
+    assert acquired.is_set()

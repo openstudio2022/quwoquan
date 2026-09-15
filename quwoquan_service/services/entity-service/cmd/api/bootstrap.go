@@ -180,6 +180,7 @@ func assembleEntityDomain(asm *servicekit.Assembly, cfg *config) error {
 		return err
 	}
 	mongoHomepageStore := homepagepersistence.NewMongoHomepageStore(mongoDatabase)
+	httpadapter.NewReleaseCandidateHandler(homepageapp.NewHomepageReleaseCandidateQueryFacade(mongoHomepageStore, appEnv)).Register(asm.Mux)
 	if err := mongoHomepageStore.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("homepage indexes failed: %w", err)
 	}

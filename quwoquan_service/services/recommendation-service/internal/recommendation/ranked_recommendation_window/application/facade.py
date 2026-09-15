@@ -8,6 +8,8 @@ from uuid import NAMESPACE_URL, uuid5
 
 from ..domain.model import (
     MAX_WINDOW_ITEMS,
+    ReleasePinnedQueryFence,
+    validate_content_fence,
     RankingResult,
     RankedRecommendationItem,
     RecommendationObjectCard,
@@ -35,6 +37,7 @@ class CandidateRanker(Protocol):
         scenario: str,
         session_id: str,
         limit: int,
+        content_fence: ReleasePinnedQueryFence,
     ) -> RankingResult: ...
 
 
@@ -64,6 +67,7 @@ class SubjectClosedError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class RankedRecommendationPage:
+    content_fence: ReleasePinnedQueryFence
     window_id: str
     scenario: str
     experiment_bucket: str
@@ -89,7 +93,9 @@ class Facade:
         subject_closures: SubjectClosureReader,
         exclusion_profiles: ExclusionProfileReader,
         window_id_factory: Callable[[str], str] | None = None,
+        release_readiness=None,
     ) -> None:
+        self._release_readiness = release_readiness
         self._store = store
         self._ranker = ranker
         self._subject_closures = subject_closures
@@ -100,6 +106,12 @@ class Facade:
             )
         )
 
+    def read_release_readiness(self, query):
+        from internal.recommendation.recommendation_candidate_index_view.application.release_candidate import ReleaseNotReady
+        if self._release_readiness is None:
+            raise ReleaseNotReady("release readiness reader is not configured")
+        return self._release_readiness.read_release_readiness(query.binding, query.snapshotDigest)
+
     def create_window(
         self,
         *,
@@ -107,7 +119,9 @@ class Facade:
         subject_id: str,
         scenario: str,
         limit: int,
+        content_fence: ReleasePinnedQueryFence,
     ) -> RankedRecommendationPage:
+        content_fence = validate_content_fence(content_fence)
         if limit <= 0 or limit > 100:
             raise ValueError("limit must be in 1..100")
         normalized_key = idempotency_key.strip()
@@ -124,6 +138,7 @@ class Facade:
         request_digest = hashlib.sha256(
             json.dumps(
                 {
+                    "contentFence": content_fence.model_dump(mode="json"),
                     "subjectId": normalized_subject,
                     "scenario": normalized_scenario,
                     "limit": limit,
@@ -136,7 +151,7 @@ class Facade:
         window_id = self._window_id_factory(normalized_key)
         existing = self._store.get(normalized_subject, window_id)
         if existing is not None:
-            if existing.request_digest != request_digest:
+            if existing.request_digest != request_digest or existing.content_fence != content_fence:
                 raise IdempotencyConflictError(
                     "Idempotency-Key was already used with another request"
                 )
@@ -147,6 +162,7 @@ class Facade:
             scenario=normalized_scenario,
             session_id=window_id,
             limit=MAX_WINDOW_ITEMS,
+            content_fence=content_fence.model_copy(deep=True),
         )
         window = RankedRecommendationWindow.create(
             window_id=window_id,
@@ -154,9 +170,10 @@ class Facade:
             scenario=normalized_scenario,
             request_digest=request_digest,
             ranking=ranking,
+            content_fence=content_fence,
         )
         persisted = self._store.create_or_get(window)
-        if persisted.request_digest != request_digest:
+        if persisted.request_digest != request_digest or persisted.content_fence != content_fence:
             raise IdempotencyConflictError(
                 "Idempotency-Key was concurrently used with another request"
             )
@@ -172,7 +189,9 @@ class Facade:
         window_id: str,
         from_ordinal: int,
         limit: int,
+        content_fence: ReleasePinnedQueryFence,
     ) -> RankedRecommendationPage:
+        content_fence = validate_content_fence(content_fence)
         normalized_subject = subject_id.strip()
         normalized_window = window_id.strip()
         if not normalized_subject or not normalized_window:
@@ -183,6 +202,8 @@ class Facade:
         if self._subject_closures.exists(normalized_subject):
             self._store.erase_subject(normalized_subject)
             raise SubjectClosedError("closed subjects cannot read recommendation windows")
+        if window.content_fence != content_fence:
+            raise IdempotencyConflictError("Content fence changed; restart from first page")
         return self._page(window, from_ordinal=from_ordinal, limit=limit)
 
     def _current_hard_exclusions(
@@ -220,6 +241,7 @@ class Facade:
                 not in hidden_types
             )
         return RankedRecommendationPage(
+            content_fence=window.content_fence.model_copy(deep=True),
             window_id=window.window_id,
             scenario=window.scenario,
             experiment_bucket=window.experiment_bucket,

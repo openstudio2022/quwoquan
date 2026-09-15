@@ -43,6 +43,42 @@ class ReleaseQualificationError(ValueError):
     pass
 
 
+def delivery_targets(value: object) -> list[str]:
+    """现役唯一交付目标契约；缺失/空/重复/未知均不产生默认资格。"""
+    if (not isinstance(value, list) or not value
+            or any(item not in ("service", "app") for item in value)
+            or value != sorted(set(value))):
+        raise ReleaseQualificationError("deliveryTargets must be explicit canonical service/app targets")
+    return list(value)
+
+
+def required_platforms(targets: object) -> set[str]:
+    selected = delivery_targets(targets)
+    # 现役服务部署实际消费 Web 静态包；来源于 App 工厂不等于移动分发资格。
+    return {"web"} | ({"service"} if "service" in selected else set()) | (
+        {"android", "ios"} if "app" in selected else set()
+    )
+
+
+def app_build_product_ids(targets: object) -> tuple[str, ...]:
+    from quwoquan_ops.cli.lib.app_identity import supported_build_products
+    selected = delivery_targets(targets)
+    return tuple(product.build_product_id for product in supported_build_products()
+                 if "app" in selected or product.build_product_id == "web-shared")
+
+
+def validate_delivery_scope(*facts: Mapping[str, Any], effect: str = "") -> list[str]:
+    if not facts:
+        raise ReleaseQualificationError("deliveryTargets facts are absent")
+    targets = delivery_targets(facts[0].get("deliveryTargets"))
+    for fact in facts[1:]:
+        if delivery_targets(fact.get("deliveryTargets")) != targets:
+            raise ReleaseQualificationError("deliveryTargets drifted across exact facts")
+    if effect and effect not in targets:
+        raise ReleaseQualificationError(f"deliveryTargets do not authorize {effect}")
+    return targets
+
+
 def canonical_bytes(value: Mapping[str, Any]) -> bytes:
     return json.dumps(
         dict(value),
@@ -131,13 +167,30 @@ def _exact(root: Path, value: object, field: str) -> tuple[dict[str, Any], dict[
     return payload, normalized
 
 
+def validate_request_authority(root: Path, request: Mapping[str, Any]) -> list[str]:
+    targets = delivery_targets(request.get("deliveryTargets"))
+    unsigned = dict(request)
+    identity = unsigned.pop("requestId", None)
+    if identity != digest(unsigned):
+        raise ReleaseQualificationError("qualification request self digest drifted")
+    authority, _ = _exact(root, request.get("requestAuthority"), "requestAuthority")
+    if (authority.get("status") != "approved"
+            or authority.get("sourceGitSha") != request.get("sourceGitSha")
+            or authority.get("tagName") not in {None, request.get("tagName")}
+            or delivery_targets(authority.get("deliveryTargets")) != targets):
+        raise ReleaseQualificationError("deliveryTargets request authority drifted")
+    return targets
+
+
 def _validate_hosted_allocation(
     *,
     allocation: Mapping[str, Any],
     request: Mapping[str, Any],
     request_exact: Mapping[str, str],
     artifact_build_number: int,
+    request_root: Path,
 ) -> None:
+    validate_request_authority(root=request_root, request=request)
     authority = allocation.get("hostedAuthority")
     if (
         allocation.get("schema") != _ALLOCATION_SCHEMA
@@ -195,7 +248,9 @@ def create_qualification_request(
     integration_qualification_ref: Mapping[str, str],
     requested_by_ref: Mapping[str, str],
     requested_at: str,
+    delivery_target_scope: list[str],
 ) -> Path:
+    targets = delivery_targets(delivery_target_scope)
     root = root.resolve()
     tag, tag_exact = _exact(root, rc_tag_admission_ref, "rcTagAdmission")
     seal, seal_exact = _exact(root, main_source_seal_ref, "mainSourceSeal")
@@ -203,6 +258,8 @@ def create_qualification_request(
         root, integration_qualification_ref, "integrationQualification"
     )
     authority, authority_exact = _exact(root, requested_by_ref, "requestAuthority")
+    if delivery_targets(authority.get("deliveryTargets")) != targets:
+        raise ReleaseQualificationError("deliveryTargets are not approved by request authority")
     tag_name = _text(tag.get("tagName"), "tagName")
     if _RC.fullmatch(tag_name) is None or tag.get("decision") != "admitted":
         raise ReleaseQualificationError("qualification requires admitted RC tag")
@@ -231,6 +288,7 @@ def create_qualification_request(
         raise ReleaseQualificationError("qualification request authority is invalid")
     body: dict[str, Any] = {
         "schema": "quwoquan_ops.release_qualification_request.v1",
+        "deliveryTargets": targets,
         "rcTagAdmission": tag_exact,
         "mainSourceSeal": seal_exact,
         "integrationQualification": integration_exact,
@@ -248,7 +306,7 @@ def create_qualification_request(
 
 
 def _normalize_artifacts(
-    artifacts: Sequence[Mapping[str, str]],
+    artifacts: Sequence[Mapping[str, str]], targets: object,
 ) -> list[dict[str, str]]:
     normalized: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -270,7 +328,7 @@ def _normalize_artifacts(
         normalized.append(
             {"platform": platform, "ociRef": oci, "digest": exact_digest}
         )
-    if seen != {"android", "ios", "service", "web"}:
+    if seen != required_platforms(targets):
         raise ReleaseQualificationError("material platforms are incomplete")
     return sorted(normalized, key=lambda item: item["platform"])
 
@@ -304,6 +362,7 @@ def create_candidate_material_manifest(
         "artifactBuildNumberAllocation",
     )
     _validate_hosted_allocation(
+        request_root=root,
         allocation=allocation,
         request=request,
         request_exact=request_exact,
@@ -325,7 +384,8 @@ def create_candidate_material_manifest(
         "artifactBuildNumber": artifact_build_number,
         "artifactBuildNumberAllocation": allocation_exact,
         "productVersionManifest": version_exact,
-        "artifacts": _normalize_artifacts(artifacts),
+        "artifacts": _normalize_artifacts(artifacts, request.get("deliveryTargets")),
+        "deliveryTargets": delivery_targets(request.get("deliveryTargets")),
         **support,
         "factoryOutputs": dict(factory_outputs or {}),
         "buildPolicy": "build_sign_attest_once",
@@ -645,7 +705,7 @@ def _validate_app_factory_material(
         or allocation_binding.get("ref") != allocation_locator
         or allocation_binding.get("digest") != allocation_transport_digest
         or not isinstance(artifacts, Mapping)
-        or set(artifacts) != {"android", "ios", "web"}
+        or set(artifacts) != required_platforms(request.get("deliveryTargets")) - {"service"}
     ):
         raise ReleaseQualificationError(
             "app factory material authority/build identity drifted"
@@ -666,7 +726,8 @@ def _validate_app_factory_material(
     artifact_manifests: dict[str, dict[str, Any]] = {}
     artifact_digests: dict[str, str] = {}
     expected_build_number = str(allocation.get("artifactBuildNumber"))
-    for platform, product_id in product_ids.items():
+    for platform in sorted(required_platforms(request.get("deliveryTargets")) - {"service"}):
+        product_id = product_ids[platform]
         value = artifacts.get(platform)
         expected_fields = set(ARTIFACT_REQUIRED_FIELDS) | authority_fields
         if platform in {"android", "ios"}:
@@ -731,7 +792,7 @@ def create_candidate_material_from_factory_outputs(
     artifact_build_number_allocation_ref: Mapping[str, str],
     allocation_oci_ref: str,
     product_version_manifest_ref: Mapping[str, str],
-    service_material_ref: Mapping[str, str],
+    service_material_ref: Mapping[str, str] | None,
     service_evidence_ref: str,
     service_source_git_sha: str,
     service_source_tree: str,
@@ -739,7 +800,9 @@ def create_candidate_material_from_factory_outputs(
     service_qualification_request_digest: str,
     service_material_digest: str,
     service_artifact_digest: str,
-    app_material_ref: Mapping[str, str],
+    web_material_ref: Mapping[str, str],
+    web_evidence_ref: str,
+    app_material_ref: Mapping[str, str] | None,
     app_evidence_ref: str,
     app_source_git_sha: str,
     app_source_tree: str,
@@ -769,22 +832,38 @@ def create_candidate_material_from_factory_outputs(
         artifact_build_number_allocation_ref,
         "artifactBuildNumberAllocation",
     )
-    service_material, service_payload_exact = _canonical_material(
-        root, service_material_ref, "serviceFactoryMaterial"
+    targets = delivery_targets(request.get("deliveryTargets"))
+    service_material = service_payload_exact = None
+    if "service" in targets:
+        service_material, service_payload_exact = _canonical_material(
+            root, service_material_ref, "serviceFactoryMaterial"
+        )
+    elif service_material_ref is not None or service_evidence_ref:
+        raise ReleaseQualificationError("unselected service material is not allowed")
+    web_material, web_payload_exact = _canonical_material(
+        root, web_material_ref, "webFactoryMaterial"
     )
-    app_material, app_payload_exact = _canonical_material(
-        root, app_material_ref, "appFactoryMaterial"
-    )
+    if "app" in targets:
+        app_material, app_payload_exact = _canonical_material(
+            root, app_material_ref, "appFactoryMaterial"
+        )
+    elif app_material_ref is not None or app_evidence_ref:
+        raise ReleaseQualificationError("unselected app material is not allowed")
+    else:
+        app_material = app_payload_exact = None
     request_locator, request_transport_digest = _oci(
         request_oci_ref, "qualificationRequestOciRef"
     )
     allocation_locator, allocation_transport_digest = _oci(
         allocation_oci_ref, "artifactBuildNumberAllocationOciRef"
     )
-    service_locator, service_oci_digest = _oci(
-        service_evidence_ref, "serviceEvidenceRef"
-    )
-    app_locator, app_oci_digest = _oci(app_evidence_ref, "appEvidenceRef")
+    service_locator, service_oci_digest = ("", "")
+    if "service" in targets:
+        service_locator, service_oci_digest = _oci(service_evidence_ref, "serviceEvidenceRef")
+    web_locator, web_oci_digest = _oci(web_evidence_ref, "webEvidenceRef")
+    app_locator, app_oci_digest = ("", "")
+    if "app" in targets:
+        app_locator, app_oci_digest = _oci(app_evidence_ref, "appEvidenceRef")
     source = _sha(request.get("sourceGitSha"), "request.sourceGitSha")
     tree = _sha(request.get("sourceTree"), "request.sourceTree")
     build_number = allocation.get("artifactBuildNumber")
@@ -797,57 +876,65 @@ def create_candidate_material_from_factory_outputs(
             "qualification request/build-number allocation drifted"
         )
     _validate_hosted_allocation(
+        request_root=root,
         allocation=allocation,
         request=request,
         request_exact=request_exact,
         artifact_build_number=build_number,
     )
-    service = _validate_service_factory_material(
-        material=service_material,
-        payload_exact=service_payload_exact,
-        locator=service_locator,
-        locator_digest=service_oci_digest,
-        request=request,
-        request_exact=request_exact,
-        request_locator=request_locator,
-        request_transport_digest=request_transport_digest,
-        allocation=allocation,
-        allocation_exact=allocation_exact,
-        allocation_locator=allocation_locator,
-        allocation_transport_digest=allocation_transport_digest,
-        repository_root=repository_root,
-    )
-    app = _validate_app_factory_material(
-        material=app_material,
-        payload_exact=app_payload_exact,
-        locator=app_locator,
-        locator_digest=app_oci_digest,
-        request=request,
-        request_locator=request_locator,
-        request_transport_digest=request_transport_digest,
-        allocation=allocation,
-        allocation_locator=allocation_locator,
+    service = None
+    if "service" in targets:
+        service = _validate_service_factory_material(
+            material=service_material, payload_exact=service_payload_exact,
+            locator=service_locator, locator_digest=service_oci_digest,
+            request=request, request_exact=request_exact, request_locator=request_locator,
+            request_transport_digest=request_transport_digest,
+            allocation=allocation, allocation_exact=allocation_exact,
+            allocation_locator=allocation_locator,
+            allocation_transport_digest=allocation_transport_digest,
+            repository_root=repository_root,
+        )
+    web_full = _validate_app_factory_material(
+        material=web_material, payload_exact=web_payload_exact,
+        locator=web_locator, locator_digest=web_oci_digest, request=request,
+        request_locator=request_locator, request_transport_digest=request_transport_digest,
+        allocation=allocation, allocation_locator=allocation_locator,
         allocation_transport_digest=allocation_transport_digest,
     )
+    web = {**{key: web_full[key] for key in ("ociRef", "ociDigest", "payloadDigest", "materialDigest", "sourceTreeDigest")},
+           "artifactDigest": web_full["artifactDigests"]["web"], "artifactManifest": web_full["artifactManifests"]["web"]}
+    app = None
+    if app_material is not None:
+        app = _validate_app_factory_material(
+            material=app_material, payload_exact=app_payload_exact,
+            locator=app_locator, locator_digest=app_oci_digest, request=request,
+            request_locator=request_locator, request_transport_digest=request_transport_digest,
+            allocation=allocation, allocation_locator=allocation_locator,
+            allocation_transport_digest=allocation_transport_digest,
+        )
 
     scalar_drift = (
-        service_source_git_sha != service_material.get("sourceGitSha")
-        or service_source_tree != service_material.get("sourceTree")
-        or service_qualification_request_ref != request_locator
-        or service_qualification_request_digest != request_transport_digest
-        or service_material_digest != service["materialDigest"]
-        or service_artifact_digest != service["serviceDigest"]
-        or app_source_git_sha != app_material.get("sourceGitSha")
-        or app_source_tree != app_material.get("sourceTreeDigest")
+        (service is not None and (
+            service_source_git_sha != service_material.get("sourceGitSha")
+            or service_source_tree != service_material.get("sourceTree")
+            or service_qualification_request_ref != request_locator
+            or service_qualification_request_digest != request_transport_digest
+            or service_material_digest != service["materialDigest"]
+            or service_artifact_digest != service["serviceDigest"]
+        ))
+        or app_source_git_sha != web_material.get("sourceGitSha")
+        or app_source_tree != web_material.get("sourceTreeDigest")
         or app_qualification_request_ref != request_locator
         or app_qualification_request_digest != request_transport_digest
         or app_artifact_build_number != build_number
         or app_allocation_ref != allocation_locator
         or app_allocation_digest != allocation_transport_digest
-        or app_material_digest != app["materialDigest"]
-        or app_android_artifact_digest != app["artifactDigests"]["android"]
-        or app_ios_artifact_digest != app["artifactDigests"]["ios"]
-        or app_web_artifact_digest != app["artifactDigests"]["web"]
+        or app_material_digest != web["materialDigest"]
+        or app_web_artifact_digest != web["artifactDigest"]
+        or (app is not None and (
+            app_android_artifact_digest != app["artifactDigests"]["android"]
+            or app_ios_artifact_digest != app["artifactDigests"]["ios"]
+        ))
     )
     if scalar_drift:
         raise ReleaseQualificationError(
@@ -857,28 +944,23 @@ def create_candidate_material_from_factory_outputs(
     _, version_exact = _exact_path(
         root, product_version_manifest_ref, "productVersionManifest"
     )
-    artifacts = _normalize_artifacts(
-        (
-            {"platform": "android", "ociRef": app_locator, "digest": app_oci_digest},
-            {"platform": "ios", "ociRef": app_locator, "digest": app_oci_digest},
-            {
-                "platform": "service",
-                "ociRef": service_locator,
-                "digest": service_oci_digest,
-            },
-            {"platform": "web", "ociRef": app_locator, "digest": app_oci_digest},
-        )
-    )
+    artifacts = _normalize_artifacts([
+        {"platform": platform, "ociRef": service_locator if platform == "service" else (web_locator if platform == "web" else app_locator),
+         "digest": service_oci_digest if platform == "service" else (web_oci_digest if platform == "web" else app_oci_digest)}
+        for platform in sorted(required_platforms(targets))
+    ], targets)
     factory_outputs = {
-        "service": service,
-        "app": app,
+        "web": web,
         "qualificationRequestOciRef": request_locator,
         "artifactBuildNumberAllocationOciRef": allocation_locator,
     }
-    exact_artifact_digests = {
-        **app["artifactDigests"],
-        "service": service["serviceDigest"],
-    }
+    exact_artifact_digests = {"web": web["artifactDigest"]}
+    if service is not None:
+        factory_outputs["service"] = service
+        exact_artifact_digests["service"] = service["serviceDigest"]
+    if app is not None:
+        factory_outputs["app"] = app
+        exact_artifact_digests.update({key: app["artifactDigests"][key] for key in ("android", "ios")})
     body: dict[str, Any] = {
         "schema": "quwoquan_ops.candidate_material_manifest.v1",
         "qualificationRequest": request_exact,
@@ -892,7 +974,8 @@ def create_candidate_material_from_factory_outputs(
         "productVersionManifest": version_exact,
         "artifacts": artifacts,
         "factoryOutputs": factory_outputs,
-        "supplyChainSubjects": [app_locator, service_locator],
+        "deliveryTargets": targets,
+        "supplyChainSubjects": sorted({item["ociRef"] for item in artifacts}),
         "artifactByteDigests": exact_artifact_digests,
         "buildPolicy": "build_sign_attest_once",
         "createdAt": _text(created_at, "createdAt"),
@@ -908,11 +991,12 @@ def create_qualification_fact(
     root: Path,
     request_ref: Mapping[str, str],
     material_ref: Mapping[str, str],
-    package_acceptance_ref: Mapping[str, str],
+    package_acceptance_ref: Mapping[str, str] | None,
     provider_fact_ref: Mapping[str, str],
     uat_fact_ref: Mapping[str, str],
     supply_chain_fact_ref: Mapping[str, str],
     qualified_at: str,
+    service_acceptance_ref: Mapping[str, str] | None = None,
 ) -> Path:
     root = root.resolve()
     request, request_exact = _exact(root, request_ref, "request")
@@ -924,17 +1008,34 @@ def create_qualification_fact(
         or material.get("sourceTree") != request.get("sourceTree")
     ):
         raise ReleaseQualificationError("material is not build-once for request")
-    artifacts = _normalize_artifacts(material.get("artifacts") or ())
+    targets = validate_request_authority(root, request)
+    validate_delivery_scope(request, material)
+    artifacts = _normalize_artifacts(material.get("artifacts") or (), targets)
     evidence: dict[str, dict[str, str]] = {}
-    for name, exact in (
-        ("packageAcceptance", package_acceptance_ref),
-        ("provider", provider_fact_ref),
-        ("uat", uat_fact_ref),
-        ("supplyChain", supply_chain_fact_ref),
-    ):
+    required = [("provider", provider_fact_ref), ("uat", uat_fact_ref),
+                ("supplyChain", supply_chain_fact_ref)]
+    if "app" in targets:
+        required.append(("packageAcceptance", package_acceptance_ref))
+    elif package_acceptance_ref is not None:
+        raise ReleaseQualificationError("unselected App package acceptance cannot grant qualification")
+    if "service" in targets:
+        required.append(("serviceAcceptance", service_acceptance_ref))
+    elif service_acceptance_ref is not None:
+        raise ReleaseQualificationError("unselected service acceptance is not allowed")
+    for name, exact in required:
         fact, normalized = _exact(root, exact, name)
+        validate_delivery_scope(request, fact)
+        if name == "serviceAcceptance":
+            for field in ("tests", "environment", "recovery"):
+                predecessor, _ = _exact(root, fact.get(field), f"serviceAcceptance.{field}")
+                if (predecessor.get("status") != "passed"
+                        or predecessor.get("nonPromotable") is True
+                        or predecessor.get("materialId") != material.get("materialId")
+                        or predecessor.get("sourceGitSha") != request.get("sourceGitSha")):
+                    raise ReleaseQualificationError(f"serviceAcceptance.{field} is not passed for material")
         if (
             fact.get("status") != "passed"
+            or fact.get("nonPromotable") is True
             or fact.get("materialId") != material.get("materialId")
             or fact.get("sourceGitSha") != request.get("sourceGitSha")
         ):
@@ -950,6 +1051,7 @@ def create_qualification_fact(
         evidence[name] = normalized
     body: dict[str, Any] = {
         "schema": "quwoquan_ops.qualification_fact.v1",
+        "deliveryTargets": targets,
         "decision": "qualified",
         "qualificationRequest": request_exact,
         "candidateMaterialManifest": material_exact,

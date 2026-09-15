@@ -17,11 +17,10 @@
     "qualification",
     "candidateMaterialManifest",
     "factoryMaterials",
-    "previousActiveReleasedLedger",
-    "rollbackReadiness",
+    "deliveryTargets",
+    "prior",
     "artifacts",
     "ociDigests",
-    "previousOciDigests",
     "createdBeforeStage",
     "admittedAt"
   ],
@@ -57,11 +56,8 @@
     "candidateMaterialManifest": {
       "$ref": "#/$defs/exactRef"
     },
-    "previousActiveReleasedLedger": {
-      "$ref": "#/$defs/exactRef"
-    },
-    "rollbackReadiness": {
-      "$ref": "#/$defs/exactRef"
+    "prior": {
+      "$ref": "#/$defs/prior"
     },
     "artifacts": {
       "type": "array",
@@ -71,14 +67,6 @@
       }
     },
     "ociDigests": {
-      "type": "array",
-      "minItems": 1,
-      "uniqueItems": true,
-      "items": {
-        "$ref": "#/$defs/digest"
-      }
-    },
-    "previousOciDigests": {
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
@@ -96,15 +84,29 @@
     "sourceTree": {
       "$ref": "#/$defs/tree"
     },
+    "deliveryTargets": {
+      "enum": [
+        [
+          "service"
+        ],
+        [
+          "app",
+          "service"
+        ]
+      ]
+    },
     "factoryMaterials": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "service",
-        "app"
+        "web"
       ],
       "properties": {
         "service": {
+          "$ref": "#/$defs/factoryMaterial"
+        },
+        "web": {
           "$ref": "#/$defs/factoryMaterial"
         },
         "app": {
@@ -114,6 +116,234 @@
     }
   },
   "$defs": {
+    "initialHumanBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "environment",
+        "deliveryTargets",
+        "stableAdmission",
+        "candidateMaterialManifest",
+        "serviceMaterial",
+        "webMaterial",
+        "inventoryDigest",
+        "absenceProof",
+        "attemptId",
+        "recoveryResources",
+        "actions",
+        "candidateDigest",
+        "observationDigest",
+        "executionOwner",
+        "executionGeneration",
+        "releaseGeneration",
+        "recoveryEffects"
+      ],
+      "properties": {
+        "target": {
+          "const": "prod-hosted"
+        },
+        "environment": {
+          "const": "prod"
+        },
+        "deliveryTargets": {
+          "enum": [
+            [
+              "service"
+            ],
+            [
+              "app",
+              "service"
+            ]
+          ]
+        },
+        "stableAdmission": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "candidateMaterialManifest": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "serviceMaterial": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "webMaterial": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "inventoryDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "absenceProof": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "attemptId": {
+          "$ref": "#/$defs/digest"
+        },
+        "recoveryResources": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "candidateDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "observationDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "executionOwner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "executionGeneration": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "releaseGeneration": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "recoveryEffects": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "prior": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "target",
+            "environment",
+            "previousReleased",
+            "rollbackReadiness",
+            "expectedGeneration",
+            "ociDigests"
+          ],
+          "properties": {
+            "state": {
+              "const": "present"
+            },
+            "target": {
+              "const": "prod-hosted"
+            },
+            "environment": {
+              "const": "prod"
+            },
+            "previousReleased": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "rollbackReadiness": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "expectedGeneration": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "ociDigests": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/digest"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "target",
+            "environment",
+            "expectedGeneration",
+            "executionOwner",
+            "executionGeneration",
+            "attemptId",
+            "observationDigest",
+            "inventoryObservation",
+            "ledgerHistoryObservation",
+            "routeObservation",
+            "unitObservation",
+            "autoRestartObservation",
+            "inflightObservation",
+            "humanAuthority",
+            "humanBindingDigest",
+            "recoveryResources"
+          ],
+          "properties": {
+            "state": {
+              "const": "absent"
+            },
+            "target": {
+              "const": "prod-hosted"
+            },
+            "environment": {
+              "const": "prod"
+            },
+            "expectedGeneration": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "executionOwner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "executionGeneration": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "attemptId": {
+              "$ref": "#/$defs/digest"
+            },
+            "observationDigest": {
+              "$ref": "#/$defs/digest"
+            },
+            "inventoryObservation": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "ledgerHistoryObservation": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "routeObservation": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "unitObservation": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "autoRestartObservation": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "inflightObservation": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "humanAuthority": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "recoveryResources": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "humanBindingDigest": {
+              "$ref": "#/$defs/digest"
+            }
+          }
+        }
+      ]
+    },
     "digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"

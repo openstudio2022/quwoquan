@@ -1,0 +1,15 @@
+{
+  "generator": "tools/qwq_contract",
+  "outputs": [
+    {
+      "path": "generated/contract_graph.json",
+      "sha256": "c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd",
+      "bytes": 16473763
+    },
+    {
+      "path": "generated/operationsecurity/descriptors.g.go",
+      "sha256": "77e52f3562b4773bf632bcad5ccb49cf8e641456df4b8488ad82a36687df1843",
+      "bytes": 403513
+    }
+  ]
+}

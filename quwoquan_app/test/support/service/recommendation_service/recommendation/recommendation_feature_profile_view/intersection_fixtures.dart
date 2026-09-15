@@ -271,7 +271,7 @@ IntersectionReason intersectionReasonFixture({
   String moment = '',
   String subjectId = '',
   String subjectContext = '',
-  String cohort = 'sha256:fixture-policy',
+  String cohort = 'sha256:e5f8b5273e2b1563b3be9cc5c00680b76b5a2c0a8139044d608a85481c481254',
 }) {
   return IntersectionReason(
     kind: kind,

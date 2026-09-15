@@ -11,31 +11,66 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrContentDeleted                 = errors.New("CONTENT.USER.content_deleted")
-	ErrContentTooLong                 = errors.New("CONTENT.USER.content_too_long")
-	ErrFeedCapacityUnavailable        = errors.New("CONTENT.SYSTEM.feed_capacity_unavailable")
-	ErrForbiddenDelete                = errors.New("CONTENT.USER.forbidden_delete")
-	ErrForbiddenEdit                  = errors.New("CONTENT.USER.forbidden_edit")
-	ErrGatheringParticipationRequired = errors.New("CONTENT.USER.gathering_participation_required")
-	ErrIdempotencyConflict            = errors.New("CONTENT.USER.idempotency_conflict")
-	ErrInternalError                  = errors.New("CONTENT.SYSTEM.internal_error")
-	ErrInvalidArgument                = errors.New("CONTENT.USER.invalid_argument")
-	ErrInvalidContentType             = errors.New("CONTENT.USER.invalid_content_type")
-	ErrPostNotFound                   = errors.New("CONTENT.USER.post_not_found")
-	ErrPublicationRejected            = errors.New("CONTENT.USER.publication_rejected")
-	ErrRateLimited                    = errors.New("CONTENT.USER.rate_limited")
-	ErrRequiredDependencyUnavailable  = errors.New("CONTENT.SYSTEM.required_dependency_unavailable")
-	ErrStorageReadFailed              = errors.New("CONTENT.SYSTEM.storage_read_failed")
-	ErrStorageWriteFailed             = errors.New("CONTENT.SYSTEM.storage_write_failed")
-	ErrUnauthorized                   = errors.New("CONTENT.USER.unauthorized")
-	ErrUpstreamTimeout                = errors.New("CONTENT.MIDDLEWARE.upstream_timeout")
-	ErrVersionConflict                = errors.New("CONTENT.USER.version_conflict")
+	ErrContentDeleted                        = errors.New("CONTENT.USER.content_deleted")
+	ErrContentReleaseActivationAmbiguous     = errors.New("CONTENT.RELEASE.activation_ambiguous")
+	ErrContentReleaseActivationConflict      = errors.New("CONTENT.RELEASE.activation_conflict")
+	ErrContentReleaseQueryBarrierInvalid     = errors.New("CONTENT.RELEASE.query_barrier_invalid")
+	ErrContentReleaseQueryBarrierNotReady    = errors.New("CONTENT.RELEASE.query_barrier_not_ready")
+	ErrContentReleaseQueryBarrierUnavailable = errors.New("CONTENT.RELEASE.query_barrier_unavailable")
+	ErrContentTooLong                        = errors.New("CONTENT.USER.content_too_long")
+	ErrFeedCapacityUnavailable               = errors.New("CONTENT.SYSTEM.feed_capacity_unavailable")
+	ErrForbiddenDelete                       = errors.New("CONTENT.USER.forbidden_delete")
+	ErrForbiddenEdit                         = errors.New("CONTENT.USER.forbidden_edit")
+	ErrGatheringParticipationRequired        = errors.New("CONTENT.USER.gathering_participation_required")
+	ErrIdempotencyConflict                   = errors.New("CONTENT.USER.idempotency_conflict")
+	ErrInternalError                         = errors.New("CONTENT.SYSTEM.internal_error")
+	ErrInvalidArgument                       = errors.New("CONTENT.USER.invalid_argument")
+	ErrInvalidContentType                    = errors.New("CONTENT.USER.invalid_content_type")
+	ErrPostNotFound                          = errors.New("CONTENT.USER.post_not_found")
+	ErrPublicationRejected                   = errors.New("CONTENT.USER.publication_rejected")
+	ErrRateLimited                           = errors.New("CONTENT.USER.rate_limited")
+	ErrRequiredDependencyUnavailable         = errors.New("CONTENT.SYSTEM.required_dependency_unavailable")
+	ErrStorageReadFailed                     = errors.New("CONTENT.SYSTEM.storage_read_failed")
+	ErrStorageWriteFailed                    = errors.New("CONTENT.SYSTEM.storage_write_failed")
+	ErrUnauthorized                          = errors.New("CONTENT.USER.unauthorized")
+	ErrUpstreamTimeout                       = errors.New("CONTENT.MIDDLEWARE.upstream_timeout")
+	ErrVersionConflict                       = errors.New("CONTENT.USER.version_conflict")
 )
 
 // AppErrorFromContentDeleted returns *AppError for CONTENT.USER.content_deleted (user_message from errors.yaml).
 func AppErrorFromContentDeleted(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.content_deleted")
 	return rterr.NewAppError(code, "内容已删除", debugMessage).WithMetadata("content_deleted", 410).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromContentReleaseActivationAmbiguous returns *AppError for CONTENT.RELEASE.activation_ambiguous (user_message from errors.yaml).
+func AppErrorFromContentReleaseActivationAmbiguous(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.RELEASE.activation_ambiguous")
+	return rterr.NewAppError(code, "内容激活结果待确认，须先读取权威指针再显式恢复", debugMessage).WithMetadata("activation_ambiguous", 503).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromContentReleaseActivationConflict returns *AppError for CONTENT.RELEASE.activation_conflict (user_message from errors.yaml).
+func AppErrorFromContentReleaseActivationConflict(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.RELEASE.activation_conflict")
+	return rterr.NewAppError(code, "内容激活版本冲突，请读取当前指针", debugMessage).WithMetadata("activation_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromContentReleaseQueryBarrierInvalid returns *AppError for CONTENT.RELEASE.query_barrier_invalid (user_message from errors.yaml).
+func AppErrorFromContentReleaseQueryBarrierInvalid(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.RELEASE.query_barrier_invalid")
+	return rterr.NewAppError(code, "内容候选查询证明身份或摘要无效", debugMessage).WithMetadata("query_barrier_invalid", 422).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromContentReleaseQueryBarrierNotReady returns *AppError for CONTENT.RELEASE.query_barrier_not_ready (user_message from errors.yaml).
+func AppErrorFromContentReleaseQueryBarrierNotReady(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.RELEASE.query_barrier_not_ready")
+	return rterr.NewAppError(code, "内容候选尚未完成全部必要查询准备", debugMessage).WithMetadata("query_barrier_not_ready", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromContentReleaseQueryBarrierUnavailable returns *AppError for CONTENT.RELEASE.query_barrier_unavailable (user_message from errors.yaml).
+func AppErrorFromContentReleaseQueryBarrierUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.RELEASE.query_barrier_unavailable")
+	return rterr.NewAppError(code, "内容查询准备依赖暂时不可用", debugMessage).WithMetadata("query_barrier_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromContentTooLong returns *AppError for CONTENT.USER.content_too_long (user_message from errors.yaml).

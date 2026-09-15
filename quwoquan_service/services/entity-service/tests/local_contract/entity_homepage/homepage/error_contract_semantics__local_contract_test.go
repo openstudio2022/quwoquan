@@ -27,14 +27,17 @@ func TestEntityErrorContractSemanticsMatchDeclaredCatalog(t *testing.T) {
 
 	expected := map[string]map[string]entityErrorSemantics{
 		"homepage": {
-			"ENTITY.USER.invalid_argument":      {400, "surface"},
-			"ENTITY.USER.homepage_not_found":    {404, "surface"},
-			"ENTITY.USER.homepage_offline":      {410, "surface"},
-			"ENTITY.USER.invalid_homepage_type": {400, "surface"},
-			"ENTITY.USER.permission_denied":     {403, "surface"},
-			"ENTITY.USER.version_conflict":      {409, "retry"},
-			"ENTITY.USER.idempotency_conflict":  {409, "surface"},
-			"ENTITY.SYSTEM.internal_error":      {500, "surface"},
+			"ENTITY.RELEASE.candidate_invalid":     {422, "surface"},
+			"ENTITY.RELEASE.candidate_not_ready":   {409, "surface"},
+			"ENTITY.RELEASE.candidate_unavailable": {503, "surface"},
+			"ENTITY.USER.invalid_argument":         {400, "surface"},
+			"ENTITY.USER.homepage_not_found":       {404, "surface"},
+			"ENTITY.USER.homepage_offline":         {410, "surface"},
+			"ENTITY.USER.invalid_homepage_type":    {400, "surface"},
+			"ENTITY.USER.permission_denied":        {403, "surface"},
+			"ENTITY.USER.version_conflict":         {409, "retry"},
+			"ENTITY.USER.idempotency_conflict":     {409, "surface"},
+			"ENTITY.SYSTEM.internal_error":         {500, "surface"},
 		},
 		"homepage_claim_request": {
 			"ENTITY.USER.claim_material_missing":     {400, "surface"},

@@ -307,6 +307,19 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
             target_name=args.target,
             report_dir=report_dir,
         )
+    if args.fix == "reconcile-gamma-purge-control":
+        if args.target != "gamma-local" or not args.confirm_gamma_purge_control_reconciliation:
+            return {"exitCode":2,"summary":"Gamma purge control reconciliation is GATE_BLOCK","details":["gamma-local and explicit confirmation required"]}
+        import hashlib
+        reference=str(args.purge_report_ref); text,digest=reference.rsplit("=",1); source=Path(text).resolve(); raw=source.read_bytes()
+        if "sha256:"+hashlib.sha256(raw).hexdigest()!=digest: raise ValueError("Gamma purge report digest differs")
+        previous=json.loads(raw)
+        if previous.get("target")!="gamma-local" or previous.get("exitCode")!=0 or not previous.get("destructiveRepairPerformed") or "purge-compose-volumes:quwoquan_gamma_release" not in previous.get("destructiveActions",[]): raise ValueError("Gamma purge report is not admissible")
+        if _stackctl._mutable_test_live_container_ids("quwoquan_gamma_release") or _stackctl._mutable_test_live_resource_names("volume",compose_project="quwoquan_gamma_release"): raise ValueError("Gamma purge resources still exist")
+        transaction=_stackctl._prepare_gamma_purge_control_transaction(target="gamma-local",report_dir=report_dir,receipt=previous["startupAttempt"],compose_project="quwoquan_gamma_release")
+        completed=_stackctl._complete_gamma_purge_control_transaction(transaction)
+        result={"exitCode":0,"summary":"Gamma purge control reconciliation completed","details":[str(transaction)],"archived":completed.get("archived",[])}
+        _stackctl.write_json(report_dir/"report.json",result); return {**result,"reportDir":_stackctl.relpath(report_dir)}
     if args.fix == "reclaim-orphaned-compose":
         return _stackctl._repair_orphaned_compose(
             args,
@@ -805,6 +818,7 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
             "reconcile-output-layout",
             "repair-active-content-release-outbox",
             "repair-media-processing-dead-letter-indexes",
+            "reconcile-gamma-purge-control",
         ],
         required=True,
     )
@@ -927,6 +941,8 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
             "preserved."
         ),
     )
+    repair_parser.add_argument("--purge-report-ref", default="", help="Exact successful Gamma purge report PATH=sha256:DIGEST.")
+    repair_parser.add_argument("--confirm-gamma-purge-control-reconciliation", action="store_true")
     repair_parser.add_argument(
         "--output-layout-action",
         choices=("plan", "apply"),

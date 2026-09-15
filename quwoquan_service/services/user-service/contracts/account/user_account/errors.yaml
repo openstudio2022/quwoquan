@@ -10,6 +10,25 @@ description: 'UserProfile 对象与 user 域共享的通用错误码。格式：
 
   '
 errors:
+- code: USER.CREATOR_SEARCH.invalid_candidate
+  reason: invalid_candidate
+  http_status: 422
+  emitted_by: [{surface: http, operations: [ReadCreatorSearchCandidate]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: creatorSearchInvalidCandidate
+  go_const: ErrCreatorSearchInvalidCandidate
+  user_message: {zh: 创作者候选身份或公开闭包无效, en: Invalid creator candidate identity or public closure}
+- code: USER.CREATOR_SEARCH.unavailable
+  reason: unavailable
+  http_status: 503
+  emitted_by: [{surface: http, operations: [ReadCreatorSearchCandidate]}]
+  recovery_action: retry
+  recovery_after_seconds: 5
+  disruption_level: snackbar
+  dart_const: creatorSearchUnavailable
+  go_const: ErrCreatorSearchUnavailable
+  user_message: {zh: 创作者候选读取暂时不可用, en: Creator candidate read is temporarily unavailable}
 - code: USER.USER.not_found
   reason: not_found
   emitted_by:

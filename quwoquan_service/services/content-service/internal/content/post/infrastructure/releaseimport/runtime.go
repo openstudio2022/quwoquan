@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -27,7 +28,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	runtimemedia "quwoquan_service/runtime/media"
+	postsafety "quwoquan_service/services/content-service/internal/content/post/infrastructure/safety"
 )
 
 // importedModerationStatus is the service-visible review projection for a
@@ -35,6 +39,60 @@ import (
 // the Data review gate, so a release is never materialized as an unreviewed
 // online draft.
 const importedModerationStatus = "approved"
+
+const importerAccountSecurityAuthorityScope = "user.account.security.read"
+
+func loadImporterAccountSecurityAuthority(authEnvRef, issuer, audience, tokenVersion, baseURL string, timeoutMS int) (rtauth.AccountSecurityAuthority, error) {
+	if strings.TrimSpace(authEnvRef) == "" || strings.TrimSpace(baseURL) == "" || timeoutMS <= 0 {
+		return nil, fmt.Errorf("canonical runtime auth locator, authority URL, and positive timeout are required")
+	}
+	info, err := os.Stat(authEnvRef)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+		return nil, fmt.Errorf("canonical runtime auth material is unavailable or not mode 0600")
+	}
+	raw, err := os.ReadFile(authEnvRef)
+	if err != nil {
+		return nil, fmt.Errorf("read canonical runtime auth material: %w", err)
+	}
+	values := map[string]string{}
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) == "" || value == "" {
+			return nil, fmt.Errorf("canonical runtime auth material contains an invalid entry")
+		}
+		values[strings.TrimSpace(key)] = value
+	}
+	provider := runtimeconfig.MapRuntimeConfigProvider{Values: map[string]string{
+		"AUTH_JWT_SECRET":        values["jwt_secret"],
+		"AUTH_JWT_ISSUER":        strings.TrimSpace(issuer),
+		"AUTH_JWT_AUDIENCE":      strings.TrimSpace(audience),
+		"AUTH_JWT_TOKEN_VERSION": strings.TrimSpace(tokenVersion),
+	}}
+	if provider.Values["AUTH_JWT_SECRET"] == "" {
+		provider.Values["AUTH_JWT_SECRET"] = values["AUTH_JWT_SECRET"]
+	}
+	accessConfig, err := rtauth.LoadAccessTokenConfig(provider)
+	clear(raw)
+	if err != nil {
+		return nil, err
+	}
+	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessConfig, "content-service", []string{importerAccountSecurityAuthorityScope},
+	)
+	clear(accessConfig.Secret)
+	if err != nil {
+		return nil, err
+	}
+	timeout := time.Duration(timeoutMS) * time.Millisecond
+	return rtauth.NewHTTPAccountSecurityAuthority(rtauth.HTTPAccountSecurityAuthorityConfig{
+		BaseURL: strings.TrimSpace(baseURL), HTTPClient: &http.Client{Timeout: timeout},
+		Credentials: credentials, Timeout: timeout,
+	})
+}
 
 func Run() {
 	releaseRoot := flag.String("release-root", "", "immutable release root containing payload/desired_state.json (required)")
@@ -46,6 +104,16 @@ func Run() {
 	homepageReport := flag.String("homepage-report", "", "entity-service homepage import report containing entity mapping")
 	homepageCandidateReceipt := flag.String("homepage-candidate-receipt", "", "exact verified homepage candidate authenticating the mapping")
 	postsDB := flag.String("posts-db", "quwoquan_content", "target db for posts")
+	postSafetyMaterialRoot := flag.String("post-safety-material-root", "", "canonical Post safety deployment material root")
+	postSafetyCurrentBindingRef := flag.String("post-safety-current-binding-ref", "", "Post safety current binding relative ref")
+	postSafetyRecoveryEvidenceRef := flag.String("post-safety-recovery-evidence-ref", "", "Post safety recovery fact relative ref")
+	postSafetyHMACSecretRef := flag.String("post-safety-hmac-secret-ref", "", "Post safety HMAC key relative ref")
+	runtimeAuthEnvRef := flag.String("runtime-auth-env-ref", "", "canonical runtime auth environment file locator")
+	runtimeAuthIssuer := flag.String("runtime-auth-issuer", "", "canonical runtime JWT issuer")
+	runtimeAuthAudience := flag.String("runtime-auth-audience", "", "canonical runtime JWT audience")
+	runtimeAuthTokenVersion := flag.String("runtime-auth-token-version", "", "canonical runtime JWT token version")
+	accountSecurityAuthorityBaseURL := flag.String("account-security-authority-base-url", "", "canonical User account security authority URL")
+	accountSecurityAuthorityTimeoutMS := flag.Int("account-security-authority-timeout-ms", 0, "User account security authority timeout in milliseconds")
 	env := flag.String("env", "", "environment label (for logging)")
 	dryRun := flag.Bool("dry-run", false, "load + report only, do not write mongo")
 	activationMode := flag.String("activation-mode", "", "required release action: stage-only|activate")
@@ -305,6 +373,37 @@ func Run() {
 		stageOpts.ActivationMode = "repair-active"
 	}
 	database := client.Database(*postsDB)
+	for name, value := range map[string]string{
+		"--post-safety-material-root":           *postSafetyMaterialRoot,
+		"--post-safety-current-binding-ref":     *postSafetyCurrentBindingRef,
+		"--post-safety-recovery-evidence-ref":   *postSafetyRecoveryEvidenceRef,
+		"--post-safety-hmac-secret-ref":         *postSafetyHMACSecretRef,
+		"--runtime-auth-env-ref":                *runtimeAuthEnvRef,
+		"--runtime-auth-issuer":                 *runtimeAuthIssuer,
+		"--runtime-auth-audience":               *runtimeAuthAudience,
+		"--runtime-auth-token-version":          *runtimeAuthTokenVersion,
+		"--account-security-authority-base-url": *accountSecurityAuthorityBaseURL,
+	} {
+		if strings.TrimSpace(value) == "" {
+			log.Fatalf("%s is required for Content candidate stage", name)
+		}
+	}
+	accountAuthority, err := loadImporterAccountSecurityAuthority(
+		*runtimeAuthEnvRef, *runtimeAuthIssuer, *runtimeAuthAudience,
+		*runtimeAuthTokenVersion, *accountSecurityAuthorityBaseURL,
+		*accountSecurityAuthorityTimeoutMS,
+	)
+	if err != nil {
+		log.Fatalf("initialize account security authority: %v", err)
+	}
+	safetyManager, err := postsafety.OpenRuntimeManager(
+		ctx, database, *env, *postSafetyMaterialRoot, *postSafetyCurrentBindingRef,
+		*postSafetyRecoveryEvidenceRef, *postSafetyHMACSecretRef, accountAuthority,
+	)
+	if err != nil {
+		log.Fatalf("verify canonical Post safety runtime: %v", err)
+	}
+	ctx = WithPostSafety(ctx, safetyManager)
 	applyResult, err := StageImportedPostRelease(
 		ctx,
 		database,

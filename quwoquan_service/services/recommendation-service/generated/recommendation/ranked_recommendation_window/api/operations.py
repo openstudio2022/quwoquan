@@ -2,7 +2,9 @@
 
 """Operation descriptors generated from ContractGraph metadata."""
 
+READ_RECOMMENDATION_RELEASE_READINESS_PATH = "/internal/recommendation/release-readiness:query"
+READ_RECOMMENDATION_RELEASE_READINESS_METHOD = "POST"
 CREATE_RANKED_RECOMMENDATION_WINDOW_PATH = "/internal/recommendation/ranked-pages"
 CREATE_RANKED_RECOMMENDATION_WINDOW_METHOD = "POST"
-GET_RANKED_RECOMMENDATION_PAGE_PATH = "/internal/recommendation/ranked-pages/{windowId}"
-GET_RANKED_RECOMMENDATION_PAGE_METHOD = "GET"
+GET_RANKED_RECOMMENDATION_PAGE_PATH = "/internal/recommendation/ranked-pages/{windowId}:query"
+GET_RANKED_RECOMMENDATION_PAGE_METHOD = "POST"

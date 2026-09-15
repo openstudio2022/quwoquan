@@ -378,8 +378,8 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /internal/recommendation/ranked-pages/{windowId}:
-        get:
+    /internal/recommendation/ranked-pages/{windowId}:query:
+        post:
             operationId: GetRankedRecommendationPage
             x-contract-operation-id: recommendation.ranked_recommendation_window.GetRankedRecommendationPage
             x-object-id: recommendation.ranked_recommendation_window
@@ -396,21 +396,6 @@ paths:
                   required: true
                   schema:
                     type: string
-                - name: subjectId
-                  in: query
-                  required: true
-                  schema:
-                    type: string
-                - name: fromOrdinal
-                  in: query
-                  required: false
-                  schema:
-                    type: string
-                - name: limit
-                  in: query
-                  required: false
-                  schema:
-                    type: string
             requestBody:
                 required: true
                 content:
@@ -424,6 +409,39 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/RankedRecommendationPage'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/recommendation/release-readiness:query:
+        post:
+            operationId: ReadRecommendationReleaseReadiness
+            x-contract-operation-id: recommendation.ranked_recommendation_window.ReadRecommendationReleaseReadiness
+            x-object-id: recommendation.ranked_recommendation_window
+            x-actor: none
+            x-application:
+                kind: query
+                facet: RankedRecommendationWindowQueryFacade
+                method: readReleaseReadiness
+                reader: RecommendationReleaseReadinessReader
+                slice: ReleaseQueryReadinessProof
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReadRecommendationReleaseReadinessQuery'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReleaseQueryReadinessProof'
                 default:
                     description: Runtime failure
                     content:
@@ -601,6 +619,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RankedRecommendationPage
             x-contract-placeholder: true
+        ReadRecommendationReleaseReadinessQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReadRecommendationReleaseReadinessQuery
+            x-contract-placeholder: true
         RecommendationAuthorImpactEvidencePage:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -640,6 +663,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RecommendationObjectIntersectionReasonSlice
+            x-contract-placeholder: true
+        ReleaseQueryReadinessProof:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReleaseQueryReadinessProof
             x-contract-placeholder: true
         StageRecommendationModelReleaseCommand:
             type: object

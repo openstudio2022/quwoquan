@@ -72,6 +72,7 @@ def _parser() -> argparse.ArgumentParser:
     request.add_argument("--integration-qualification", required=True)
     request.add_argument("--request-authority", required=True)
     request.add_argument("--requested-at", required=True)
+    request.add_argument("--delivery-target", choices=("app", "service"), action="append", required=True)
 
     allocation = sub.add_parser("build-number-allocate")
     allocation.add_argument("--request", required=True)
@@ -88,19 +89,22 @@ def _parser() -> argparse.ArgumentParser:
         "request-oci-ref", "allocation-oci-ref", "service-material",
         "service-evidence-ref", "service-source-git-sha", "service-source-tree",
         "service-qualification-request-ref", "service-qualification-request-digest",
-        "service-material-digest", "service-artifact-digest", "app-material",
+        "service-material-digest", "service-artifact-digest", "web-material", "web-evidence-ref", "app-material",
         "app-evidence-ref", "app-source-git-sha", "app-source-tree", "app-qualification-request-ref",
         "app-qualification-request-digest", "app-allocation-ref",
         "app-allocation-digest", "app-material-digest",
         "app-android-artifact-digest", "app-ios-artifact-digest",
         "app-web-artifact-digest", "created-at",
     ):
-        material.add_argument(f"--{name}", required=True)
+        conditional = name.startswith("service-") or name == "app-material" or name in {"app-evidence-ref", "app-android-artifact-digest", "app-ios-artifact-digest"}
+        material.add_argument(f"--{name}", required=not conditional, default="" if conditional else None)
     material.add_argument("--app-artifact-build-number", required=True, type=int)
 
     qualify = sub.add_parser("qualification-finalize")
-    for name in ("request", "material", "package-acceptance", "provider", "uat", "supply-chain"):
+    for name in ("request", "material", "provider", "uat", "supply-chain"):
         qualify.add_argument(f"--{name}", required=True)
+    qualify.add_argument("--package-acceptance")
+    qualify.add_argument("--service-acceptance")
     qualify.add_argument("--qualified-at", required=True)
 
     for kind in ("rc", "stable"):
@@ -160,17 +164,28 @@ def _parser() -> argparse.ArgumentParser:
     mutation.add_argument("--peeled-commit")
     mutation.add_argument("--recorded-at", required=True)
 
+    binding = sub.add_parser("prod-initial-human-check")
+    binding.add_argument("--binding", required=True)
+    binding.add_argument("--decision-id", required=True)
+    consume = sub.add_parser("prod-initial-human-consume")
+    consume.add_argument("--binding", required=True)
+    consume.add_argument("--decision-id", required=True)
+    consume.add_argument("--execution-session", required=True, type=Path)
+    prior = sub.add_parser("prod-prior-present")
+    prior.add_argument("--previous-released", required=True)
+    prior.add_argument("--rollback-readiness", required=True)
+
     prod = sub.add_parser("prod-admit")
     prod.add_argument("--release-tag-admission", required=True)
-    prod.add_argument("--previous-active-released-ledger", required=True)
-    prod.add_argument("--rollback-readiness", required=True)
+    prod.add_argument("--prior", required=True)
     prod.add_argument("--control-plane-git-sha", required=True)
     prod.add_argument("--admitted-at", required=True)
 
     prod_input = sub.add_parser("prod-materialize-input")
     prod_input.add_argument("--admission", required=True)
     prod_input.add_argument("--service-factory-material", required=True)
-    prod_input.add_argument("--app-factory-material", required=True)
+    prod_input.add_argument("--web-factory-material", required=True)
+    prod_input.add_argument("--app-factory-material")
     prod_input.add_argument("--output", required=True, type=Path)
     prod_input.add_argument("--github-output", type=Path)
 
@@ -354,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
                 promotion_ready_at=args.promotion_ready_at,
             )
         elif args.command == "qualification-request":
-            path = create_qualification_request(root=store, rc_tag_admission_ref=_exact(args.rc_admission, "rc-admission"), main_source_seal_ref=_exact(args.main_source_seal, "main-source-seal"), integration_qualification_ref=_exact(args.integration_qualification, "integration-qualification"), requested_by_ref=_exact(args.request_authority, "request-authority"), requested_at=args.requested_at)
+            path = create_qualification_request(root=store, rc_tag_admission_ref=_exact(args.rc_admission, "rc-admission"), main_source_seal_ref=_exact(args.main_source_seal, "main-source-seal"), integration_qualification_ref=_exact(args.integration_qualification, "integration-qualification"), requested_by_ref=_exact(args.request_authority, "request-authority"), requested_at=args.requested_at, delivery_target_scope=args.delivery_target)
         elif args.command == "build-number-allocate":
             path = allocate_hosted_sequence(root=store, request_ref=_exact(args.request, "request"), hosted_run_number=args.hosted_run_number, hosted_run_id=args.hosted_run_id)
         elif args.command == "qualification-material":
@@ -365,7 +380,7 @@ def main(argv: list[str] | None = None) -> int:
                 artifact_build_number_allocation_ref=_exact(args.allocation, "allocation"),
                 allocation_oci_ref=args.allocation_oci_ref,
                 product_version_manifest_ref=_exact(args.product_version_manifest, "product-version-manifest"),
-                service_material_ref=_exact(args.service_material, "service-material"),
+                service_material_ref=_exact(args.service_material, "service-material") if args.service_material else None,
                 service_evidence_ref=args.service_evidence_ref,
                 service_source_git_sha=args.service_source_git_sha,
                 service_source_tree=args.service_source_tree,
@@ -373,7 +388,9 @@ def main(argv: list[str] | None = None) -> int:
                 service_qualification_request_digest=args.service_qualification_request_digest,
                 service_material_digest=args.service_material_digest,
                 service_artifact_digest=args.service_artifact_digest,
-                app_material_ref=_exact(args.app_material, "app-material"),
+                web_material_ref=_exact(args.web_material, "web-material"),
+                web_evidence_ref=args.web_evidence_ref,
+                app_material_ref=_exact(args.app_material, "app-material") if args.app_material else None,
                 app_evidence_ref=args.app_evidence_ref,
                 app_source_git_sha=args.app_source_git_sha,
                 app_source_tree=args.app_source_tree,
@@ -390,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
                 repository_root=args.repository_root,
             )
         elif args.command == "qualification-finalize":
-            path = create_qualification_fact(root=store, request_ref=_exact(args.request, "request"), material_ref=_exact(args.material, "material"), package_acceptance_ref=_exact(args.package_acceptance, "package-acceptance"), provider_fact_ref=_exact(args.provider, "provider"), uat_fact_ref=_exact(args.uat, "uat"), supply_chain_fact_ref=_exact(args.supply_chain, "supply-chain"), qualified_at=args.qualified_at)
+            path = create_qualification_fact(root=store, request_ref=_exact(args.request, "request"), material_ref=_exact(args.material, "material"), package_acceptance_ref=_exact(args.package_acceptance, "package-acceptance") if args.package_acceptance else None, service_acceptance_ref=_exact(args.service_acceptance, "service-acceptance") if args.service_acceptance else None, provider_fact_ref=_exact(args.provider, "provider"), uat_fact_ref=_exact(args.uat, "uat"), supply_chain_fact_ref=_exact(args.supply_chain, "supply-chain"), qualified_at=args.qualified_at)
         elif args.command == "tag-admit-rc-intent":
             path = create_release_candidate_tag_intent(
                 repository=ROOT, evidence_root=store, tag_name=args.tag_name,
@@ -472,22 +489,60 @@ def main(argv: list[str] | None = None) -> int:
                 selector_login=args.selector_login, selected_at=args.selected_at,
                 readback=json.loads(args.selector_readback.read_text(encoding="utf-8")),
             )
+        elif args.command == "prod-initial-human-check":
+            from quwoquan_ops.ci.qualified_prod import _exact as load_exact, verify_initial_human_binding
+            from quwoquan_ops.cli.lib.hosted_authority import EnvironmentTokenProvider, HostedAuthorityHttpClient, runtime_from_env
+            from quwoquan_ops.cli.lib.objective_execution.hosted_provider import HostedAuthorityProvider, HostedAuthorityVerifier
+            binding, _ = load_exact(store, _exact(args.binding, "binding"), "initialHumanBinding")
+            try:
+                runtime = runtime_from_env(ROOT, token_provider=EnvironmentTokenProvider())
+                provider = HostedAuthorityProvider(HostedAuthorityHttpClient(runtime.config, token_provider=runtime.token_provider))
+            except RuntimeError as error:
+                raise ValueError(str(error)) from error
+            from datetime import datetime, timezone
+            result = verify_initial_human_binding(binding=binding, provider=provider,
+                verifier=HostedAuthorityVerifier(provider, runtime.trusted_public_keys),
+                receipt_ref=args.decision_id, now=datetime.now(timezone.utc).isoformat())
+            print(json.dumps(result, sort_keys=True))
+            return 2  # 仅验签诊断，缺target fence和恢复executor不能准入。
+        elif args.command == "prod-initial-human-consume":
+            from quwoquan_ops.ci.qualified_prod import _exact as load_exact, consume_initial_human_authority
+            from quwoquan_ops.cli.lib.hosted_authority import EnvironmentTokenProvider, HostedAuthorityHttpClient, runtime_from_env
+            from quwoquan_ops.cli.lib.objective_execution.hosted_provider import HostedAuthorityProvider, HostedAuthorityVerifier
+            binding, _ = load_exact(store, _exact(args.binding, "binding"), "initialHumanBinding")
+            runtime = runtime_from_env(ROOT, token_provider=EnvironmentTokenProvider())
+            provider = HostedAuthorityProvider(HostedAuthorityHttpClient(runtime.config, token_provider=runtime.token_provider))
+            from datetime import datetime, timezone
+            result = consume_initial_human_authority(binding=binding, provider=provider,
+                verifier=HostedAuthorityVerifier(provider, runtime.trusted_public_keys),
+                receipt_ref=args.decision_id, now=datetime.now(timezone.utc).isoformat())
+            from quwoquan_ops.cli.prod.execution_controller import load_session, save_session
+            payload = json.loads(args.execution_session.read_bytes())
+            session = load_session(args.execution_session)
+            session.bind_human_winner(result, str(binding["observationDigest"]))
+            save_session(args.execution_session, session, payload["placements"])
+            print(json.dumps(result, sort_keys=True))
+            return 0
+        elif args.command == "prod-prior-present":
+            from quwoquan_ops.ci.qualified_prod import create_present_prior
+            path = create_present_prior(root=store, previous_released_ref=_exact(args.previous_released, "previous-released"), rollback_readiness_ref=_exact(args.rollback_readiness, "rollback-readiness"))
         elif args.command == "prod-admit":
             # prod 子命令才需要 jsonschema 依赖；promotion/qualification 路径在 hosted runner 上不得因它 ImportError。
             from quwoquan_ops.ci.qualified_prod import create_prod_activation_admission
 
-            path = create_prod_activation_admission(root=store, release_tag_admission_ref=_exact(args.release_tag_admission, "release-tag-admission"), previous_active_released_ledger_ref=_exact(args.previous_active_released_ledger, "previous-active-released-ledger"), rollback_readiness_ref=_exact(args.rollback_readiness, "rollback-readiness"), control_plane_git_sha=args.control_plane_git_sha, admitted_at=args.admitted_at)
+            path = create_prod_activation_admission(root=store, release_tag_admission_ref=_exact(args.release_tag_admission, "release-tag-admission"), prior_ref=_exact(args.prior, "prior"), control_plane_git_sha=args.control_plane_git_sha, admitted_at=args.admitted_at)
         elif args.command == "prod-materialize-input":
             from quwoquan_ops.ci.qualified_prod import materialize_prod_activation_input
 
-            materialize_prod_activation_input(root=store, admission_ref=_exact(args.admission, "admission"), service_material_ref=_exact(args.service_factory_material, "service-factory-material"), app_material_ref=_exact(args.app_factory_material, "app-factory-material"), output=args.output, repository_root=ROOT)
+            materialize_prod_activation_input(root=store, admission_ref=_exact(args.admission, "admission"), service_material_ref=_exact(args.service_factory_material, "service-factory-material"), web_material_ref=_exact(args.web_factory_material, "web-factory-material"), app_material_ref=_exact(args.app_factory_material, "app-factory-material") if args.app_factory_material else None, output=args.output, repository_root=ROOT)
             path = args.output.resolve()
             if args.github_output:
                 payload = json.loads(path.read_text(encoding="utf-8"))
                 args.github_output.write_text(
                     f"source_git_sha={payload['sourceGitSha']}\n"
                     f"service_factory_oci_ref={payload['serviceFactoryMaterial']['ociRef']}\n"
-                    f"app_factory_oci_ref={payload['appFactoryMaterial']['ociRef']}\n"
+                    f"web_factory_oci_ref={payload['webFactoryMaterial']['ociRef']}\n"
+                    f"app_factory_oci_ref={payload.get('appFactoryMaterial', {}).get('ociRef', '')}\n"
                     f"candidate_digest={payload['candidateDigest']}\n"
                     f"from_candidate_digest={payload['previousCandidateDigest']}\n",
                     encoding="utf-8",

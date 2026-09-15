@@ -79,7 +79,7 @@ def _release_args(store: Path):
             path.write_text(json.dumps(release_attestation_payload(role, "sha256:" + marker * 64)), encoding="utf-8")
         paths.append(path)
     return SimpleNamespace(release_attestation=paths[0], rollback_release_attestation=paths[1], workload="full",
-                           release_handoff_ref="handoff-ref-v1:sha256:" + "a" * 64 + ":sha256:" + "b" * 64)
+                           release_handoff_ref="data/releases/release/producer_release_handoff.json=sha256:" + "b" * 64)
 
 
 def _binding(store: Path):
@@ -387,12 +387,12 @@ def acceptance_main(store: Path, monkeypatch: pytest.MonkeyPatch):
     for name, effect in {"_run_environment": run_environment, "_write_acceptance_bundle": write_bundle}.items():
         calls[name] = mock.Mock(side_effect=effect)
         monkeypatch.setattr(integration_run, name, calls[name])
-    for name in ("create_publish_admission", "local_git_cas_publish", "_stackctl", "_data_ship"):
+    for name in ("create_publish_admission", "local_git_cas_publish", "_stackctl", "_content_release"):
         calls[name] = mock.Mock(side_effect=AssertionError(f"unexpected {name}"))
         monkeypatch.setattr(integration_run, name, calls[name])
     argv = ["--mode", "acceptance", "--run-id", "policy-reuse", "--release-attestation", str(release),
             "--rollback-release-attestation", str(rollback),
-            "--release-handoff-ref", "handoff-ref-v1:sha256:" + "a" * 64 + ":sha256:" + "b" * 64,
+            "--release-handoff-ref", "data/releases/release/producer_release_handoff.json=sha256:" + "b" * 64,
             "--merged-lanes", "lane/engineering"]
     return SimpleNamespace(store=store, candidate_id=candidate_id, argv=argv, calls=calls, merged_lanes=merged_lanes)
 
@@ -434,7 +434,7 @@ def test_acceptance_main_reuse_honors_beta_opt_in(acceptance_main, opted_in: boo
         rendered = (setup.store / "runs/policy-reuse/summary.md").read_text(encoding="utf-8")
         assert "- mergedLanes:" in rendered and "- reused:" in rendered
     assert summary["reused"]["readiness"] is True
-    for name in ("create_publish_admission", "local_git_cas_publish", "_stackctl", "_data_ship"):
+    for name in ("create_publish_admission", "local_git_cas_publish", "_stackctl", "_content_release"):
         setup.calls[name].assert_not_called()
 
 
@@ -580,7 +580,7 @@ def test_real_signed_reuse_requires_exact_release_inputs(signed_release_case, da
         payload["payloadSha256"] = "sha256:" + "e" * 64  # 同 releaseId，不同 exact 内容也必须重跑。
         path.write_text(json.dumps(payload), encoding="utf-8")
     elif damage == "handoff":
-        setup.args.release_handoff_ref = "handoff-ref-v1:sha256:" + "e" * 64 + ":sha256:" + "f" * 64
+        setup.args.release_handoff_ref = "data/releases/release/producer_release_handoff.json=sha256:" + "f" * 64
     elif damage == "roles":
         setup.args.release_attestation, setup.args.rollback_release_attestation = setup.args.rollback_release_attestation, setup.args.release_attestation
     elif damage == "workload":
@@ -634,7 +634,7 @@ def test_signed_bundle_carries_exact_report_closure(signed_release_case, monkeyp
 
 def test_bundle_cannot_relabel_signed_old_acceptance(signed_release_case, monkeypatch: pytest.MonkeyPatch) -> None:
     setup = signed_release_case
-    setup.args.release_handoff_ref = "handoff-ref-v1:sha256:" + "e" * 64 + ":sha256:" + "f" * 64
+    setup.args.release_handoff_ref = "data/releases/release/producer_release_handoff.json=sha256:" + "f" * 64
     monkeypatch.setattr(integration_run, "_store", lambda: setup.store)
     destination = setup.root / "relabelled"
     with pytest.raises(integration_run.IntegrationRunError, match="cannot relabel old acceptance"):
@@ -755,7 +755,7 @@ def test_changed_inputs_rerun_instead_of_reusing_or_blocking(acceptance_main, da
     setup = acceptance_main
     if damage == "handoff":
         index = setup.argv.index("--release-handoff-ref") + 1
-        setup.argv[index] = "handoff-ref-v1:sha256:" + "e" * 64 + ":sha256:" + "f" * 64
+        setup.argv[index] = "data/releases/release/producer_release_handoff.json=sha256:" + "f" * 64
     else:
         path = setup.store / f"{damage}.json"
         payload = json.loads(path.read_bytes())

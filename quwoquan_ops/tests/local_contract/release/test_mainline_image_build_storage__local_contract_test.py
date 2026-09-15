@@ -116,6 +116,19 @@ def test_prod_hosted_build_images_match_their_governed_repositories() -> None:
         assert "--allow-untrusted" not in text, dockerfile
 
 
+
+def test_service_core_packages_content_release_execution_binaries() -> None:
+    dockerfile = (ROOT / "quwoquan_service/cmd/service-core/Dockerfile").read_text(encoding="utf-8")
+    binaries = (
+        "content-import", "tag-import", "creator-import", "homepage-import",
+        "content-release-control", "tag-release-control",
+        "creator-release-control", "homepage-release-control",
+    )
+    for binary in binaries:
+        assert f"-o /out/{binary}" in dockerfile
+        assert f"COPY --from=builder /out/{binary} /usr/local/bin/{binary}" in dockerfile
+    assert "go run" not in dockerfile
+
 def test_runtime_image_owners_keep_environment_identity_out_of_image_bytes() -> None:
     # DEC-005 信任域裁决：镜像字节环境无关，artifact-identity.json 由部署面挂载。
     dockerfiles = [

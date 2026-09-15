@@ -316,8 +316,22 @@ def main() -> int:
     if len(prevalidation_ports) != len(set(prevalidation_ports)):
         errors.append("prevalidation service/edge 目标端口必须全局唯一")
     service_projection = prevalidation_planes.get("service") or {}
-    if service_projection.get("imageAndConfigOnlyServices") != ["integration-service"]:
-        errors.append("prevalidation integration-service 必须且只能 image/config-only")
+    service_startup = set(service_projection.get("startupServices") or [])
+    if "integration-service" not in service_startup or service_projection.get("imageAndConfigOnlyServices"):
+        errors.append("prevalidation integration-service 必须启动且不得保留 image/config-only 旁路")
+    external_secret_refs = prevalidation.get("externalSecretRefs") or {}
+    if not (
+        external_secret_refs.get("envFileRelative") == "prevalidation/runtime.env"
+        and set(external_secret_refs.get("requiredEnvironment") or [])
+        == {"INTEGRATION_SMS_ENDPOINT", "INTEGRATION_SMS_TOKEN"}
+        and set((external_secret_refs.get("requiredFiles") or {}).keys())
+        == {
+            "INTEGRATION_SERVICE_MTLS_CA_FILE",
+            "INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE",
+            "INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE",
+        }
+    ):
+        errors.append("prevalidation integration-service 必须完整声明仓外 SMS 与 mTLS 凭据引用")
     isolated = prevalidation.get("isolatedData") or {}
     if not (
         isolated.get("empty") is True

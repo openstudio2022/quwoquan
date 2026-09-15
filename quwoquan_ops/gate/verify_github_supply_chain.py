@@ -261,6 +261,7 @@ def verify_release_qualification_controls() -> list[str]:
             "source_git_sha",
             "product_version_manifest_ref",
             "package_acceptance_fact_ref",
+            "service_acceptance_fact_ref",
             "provider_fact_ref",
             "uat_fact_ref",
             "supply_chain_fact_ref",
@@ -516,8 +517,7 @@ def verify_production_execution_isolation() -> list[str]:
         text,
         {
             "release_tag_admission_ref",
-            "previous_active_released_ledger_ref",
-            "rollback_readiness_ref",
+            "prior_ref",
         },
     )
     required_prod_runner = "runs-on: [self-hosted, macOS, ARM64]"

@@ -2,10 +2,31 @@ commercial_defaults: {status: blocked, block_reason: 未声明的排序窗口操
 description: 排序窗口创建与稳定续页的唯一内部接口。
 api_routes:
 - method: POST
+  path: /internal/recommendation/release-readiness:query
+  operation: ReadRecommendationReleaseReadiness
+  actor: none
+  commercial: {status: blocked, block_reason: release候选隔离与完整home/premium查询证明尚待实现, gap_id: RECOMMENDATION_RELEASE_QUERY_BARRIER, target_story: environment-topology-and-packaging}
+  application: {kind: query, facet: RankedRecommendationWindowQueryFacade, method: readReleaseReadiness, reader: RecommendationReleaseReadinessReader, slice: ReleaseQueryReadinessProof}
+  authorization: {principal: service, scopes: [recommendation.release.readiness], ownership_policy: content_release_preparation}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
+  request_entity: ReadRecommendationReleaseReadinessQuery
+  request_body_kind: object
+  response_entity: ReleaseQueryReadinessProof
+  error_codes: [RECOMMENDATION.RELEASE.invalid_candidate, RECOMMENDATION.RELEASE.not_ready, RECOMMENDATION.RELEASE.unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: recommendation_release_readiness, trace: true, attributes: [outcome]}
+  slo: {latency_p95_ms: 2500, availability_percent: 99.9}
+  description: >-
+    只接受Content，slice=recommendation且部署Provider/schema匹配；同域named reader重验完整源checkpoint、对象集合和文档摘要。
+    复用home/premium召回与硬过滤纯计算，premium必须exact source/version/digest且approved/global/未过期未下架，非空work+video可播放集合才ready。
+    required_detail只证明来自Content冻结快照的完整引用/媒体依据，Content evaluator还需用自身candidate reader验证权威hydration，不能以此代替Content事实。
+    缺checkpoint/部分投影/缺审批/required空为not_ready409，identity/digest/generation错配422，不可读503；无active可query，不写checkpoint/window/session/exposure或远端库。
+- method: POST
   path: /internal/recommendation/ranked-pages
   operation: CreateRankedRecommendationWindow
   actor: none
-  commercial: {status: ready}
+  commercial: {status: blocked, block_reason: 完整Content fence新增必填值与续页typed wire须同步迁移实现, gap_id: RANKED_WINDOW_RELEASE_FENCE, target_story: environment-topology-and-packaging}
   application: {kind: session, facet: RankedRecommendationWindowSessionFacade, method: create, session_owner: RankedRecommendationWindow}
   request_entity: CreateRankedRecommendationWindowCommand
   request_body_kind: object
@@ -20,19 +41,20 @@ api_routes:
   slo: {latency_p95_ms: 500, availability_percent: 99.9}
   authorization: {principal: service, scopes: [recommendation.ranked_page], ownership_policy: recommendation_internal_page}
   security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
-- method: GET
-  path: /internal/recommendation/ranked-pages/{windowId}
+- method: POST
+  path: /internal/recommendation/ranked-pages/{windowId}:query
   operation: GetRankedRecommendationPage
   actor: none
-  commercial: {status: ready}
+  commercial: {status: blocked, block_reason: 完整Content fence新增必填值与续页typed wire须同步迁移实现, gap_id: RANKED_WINDOW_RELEASE_FENCE, target_story: environment-topology-and-packaging}
   application: {kind: query, facet: RankedRecommendationWindowQueryFacade, method: getPage, reader: RankedRecommendationWindowReader, slice: RankedRecommendationPage}
   request_entity: GetRankedRecommendationPageQuery
+  request_body_kind: object
   request_bindings:
     path: [{name: windowId, field: windowId}]
-    query: [{name: subjectId, field: subjectId, required: true}, {name: fromOrdinal, field: fromOrdinal, required: false}, {name: limit, field: limit, required: false}]
+  description: 显式typed POST query携带Content本请求pin的完整contentFence，替代旧GET续页wire，不dual-read。与窗口tuple/revision/主体/策略不匹配时冲突并要求首刷；仅查询不创建session或续TTL。生成和所有Content消费者同时切换前商业blocked。
   response_entity: RankedRecommendationPage
   reliability: {timeout_ms: 300, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
-  error_codes: [RECOMMENDATION.USER.ranked_window_unauthorized, RECOMMENDATION.USER.ranked_window_forbidden, RECOMMENDATION.USER.ranked_window_invalid_argument, RECOMMENDATION.USER.ranked_window_not_found, RECOMMENDATION.USER.ranked_window_subject_closed, RECOMMENDATION.SYSTEM.ranked_window_failed]
+  error_codes: [RECOMMENDATION.USER.ranked_window_unauthorized, RECOMMENDATION.USER.ranked_window_forbidden, RECOMMENDATION.USER.ranked_window_invalid_argument, RECOMMENDATION.USER.ranked_window_not_found, RECOMMENDATION.USER.ranked_window_conflict, RECOMMENDATION.USER.ranked_window_subject_closed, RECOMMENDATION.SYSTEM.ranked_window_failed]
   privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
   telemetry: {metric: recommendation_ranked_window_read, trace: true, attributes: [scenario, outcome]}
   slo: {latency_p95_ms: 200, availability_percent: 99.9}

@@ -30,8 +30,11 @@ from quwoquan_ops.cli.lib.package_reuse.android_gradle_component import (
     load_android_gradle_component,
     write_android_gradle_component,
 )
+from quwoquan_ops.cli.lib.package_reuse.android_gradle_capsule import (
+    android_gradle_snapshot_matches_current_wrappers,
+)
 from quwoquan_ops.cli.lib.package_reuse.android_gradle_store import (
-    canonical_android_uat_gradle_invocations,
+    canonical_android_dependency_bundle_invocations,
     materialize_pinned_flutter_gradle_wrappers,
     synchronize_android_gradle_dependencies,
 )
@@ -95,6 +98,19 @@ from quwoquan_ops.cli.commands.app_dependency_sync_pub_fallback import (
     PUBLIC_PUB_MIRROR as _PUBLIC_PUB_MIRROR,
     public_pub_origin_archive_fallback as _public_pub_origin_archive_fallback_impl,
 )
+
+
+class BuildContext(Protocol):
+    repo_root: Path
+    attempt_id: str
+    work_root: Path
+    process_root: Path
+    generation_root: Path
+    flutter_identity: Mapping[str, str]
+    source_identity: Mapping[str, str]
+    android_gradle_seed_root: Path | None
+    progress: Any
+    deadline: float
 
 
 def _public_pub_origin_archive_fallback(
@@ -200,14 +216,16 @@ def _run_checked(
     phase: str,
     retry_transient_network: bool = False,
     public_hosted_upstream: bool = False,
+    deadline: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     attempts = _SYNC_NETWORK_MAX_ATTEMPTS if retry_transient_network else 1
-    started_at = time.monotonic()
+    command_deadline = deadline or (time.monotonic() + _SYNC_NETWORK_DEADLINE_SECONDS)
     failures: list[tuple[str, BaseException | None]] = []
     terminal_failure: tuple[str, BaseException | None] | None = None
     log_entries: list[str] = []
+
     for attempt in range(attempts):
-        remaining = _SYNC_NETWORK_DEADLINE_SECONDS - (time.monotonic() - started_at)
+        remaining = command_deadline - time.monotonic()
         if remaining <= 0:
             break
         try:
@@ -260,7 +278,7 @@ def _run_checked(
                 terminal_failure = (output, None)
                 break
         if attempt + 1 < attempts:
-            remaining = _SYNC_NETWORK_DEADLINE_SECONDS - (time.monotonic() - started_at)
+            remaining = command_deadline - time.monotonic()
             delay = min(float(1 << attempt), max(0.0, remaining))
             log_entries.append(
                 retry_event(
@@ -302,6 +320,7 @@ def run_pub_get(
     offline: bool,
     log_path: Path,
     private_home: Path | None = None,
+    deadline: float | None = None,
 ) -> None:
     environment = private_environment(
         home=private_home or app_dir.parent / "flutter-home",
@@ -323,6 +342,7 @@ def run_pub_get(
             public_hosted_upstream=(
                 not offline and hosted_url == _PUBLIC_PUB_MIRROR
             ),
+            deadline=deadline,
         )
     except ValueError as error:
         if (
@@ -593,6 +613,7 @@ def _build_pub_components(
             offline=False,
             log_path=context.process_root / f"{name}-online.log",
             private_home=base / "online-home",
+            deadline=context.deadline,
         )
         _remove_pub_online_transients(online)
         try:
@@ -650,6 +671,7 @@ def _build_pub_components(
             offline=True,
             log_path=context.process_root / f"{name}-offline.log",
             private_home=base / "offline-home",
+            deadline=context.deadline,
         )
         _verify_pub_replay(
             snapshot=snapshot,
@@ -737,6 +759,7 @@ def _build_ios_component(
         log_path=context.process_root / f"{host}-ios-config.log",
         phase=f"{host} iOS Flutter config",
         retry_transient_network=True,
+        deadline=context.deadline,
     )
     context.progress.begin("pods-online-resolution")
     _run_checked(
@@ -746,6 +769,7 @@ def _build_ios_component(
         log_path=context.process_root / f"{host}-pod-online.log",
         phase=f"{host} CocoaPods network sync",
         retry_transient_network=True,
+        deadline=context.deadline,
     )
     _assert_ios_generated_metadata(app_root)
     inputs = ios_pod_resolution_inputs(repo_root=projection_root, dependency_host=host)
@@ -778,7 +802,10 @@ def _build_ios_component(
             projection=projection,
             pod_executable=pod,
             base_environment=environment,
-            timeout_seconds=_SYNC_TIMEOUT_SECONDS,
+            timeout_seconds=max(
+                0.001,
+                min(_SYNC_TIMEOUT_SECONDS, context.deadline - time.monotonic()),
+            ),
         )
     except ValueError as error:
         raise ValueError(
@@ -833,22 +860,65 @@ def _build_android_component(
             "QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT": str(trust_root),
         }
     )
-    invocations = canonical_android_uat_gradle_invocations(projection_root)
+    invocations = canonical_android_dependency_bundle_invocations(projection_root)
     gradle_roots = [item.gradle_root for item in invocations]
     context.progress.begin("gradle-wrapper-bootstrap")
     materialize_pinned_flutter_gradle_wrappers(
         projection_root, gradle_roots, context.flutter_identity
     )
+    verified_seed = None
+    if getattr(context, "android_gradle_seed_root", None) is not None:
+        seed_root = context.android_gradle_seed_root
+        verified_seed = load_android_gradle_component(
+            project_root=projection_root,
+            component_root=seed_root,
+            invocations=invocations,
+            require_current_inputs=False,
+        )
+    seed_wrapper_distribution = (
+        verified_seed is not None
+        and android_gradle_snapshot_matches_current_wrappers(
+            verified_seed,
+            project_root=projection_root,
+            gradle_roots=gradle_roots,
+        )
+    )
+    if verified_seed is not None and not seed_wrapper_distribution:
+        _write_private_log(
+            context.process_root / "android-gradle-seed.log",
+            "verified active Maven modules seeded; wrapper distribution skipped: current wrapper identity is incompatible\n",
+        )
     context.progress.begin("gradle-online-resolution")
     try:
+        initialized_logs: set[Path] = set()
+
+        def persist_gradle_output(phase: str, invocation: Any, chunk: str) -> None:
+            host = invocation.gradle_root.relative_to(projection_root).as_posix()
+            task = ",".join(invocation.tasks)
+            log_path = context.process_root / (
+                f"android-gradle-{phase}-{host.replace('/', '-')}.log"
+            )
+            first_chunk = log_path not in initialized_logs
+            _write_private_log(
+                log_path,
+                (f"host={host} tasks={task}\n" if first_chunk else "") + chunk,
+                sensitive_values=trust_sensitive_values or (str(trust_root),),
+                append=not first_chunk,
+            )
+            initialized_logs.add(log_path)
+
         result = synchronize_android_gradle_dependencies(
             project_root=projection_root,
             online_home=context.work_root / "android/online-home",
+            verified_seed=verified_seed,
+            seed_wrapper_distribution=seed_wrapper_distribution,
             sealed_tree=context.work_root / "android/sealed-tree",
             replay_tree=context.work_root / "android/replay-tree",
             gradle_roots=gradle_roots,
             invocations=invocations,
             environment=environment,
+            deadline=context.deadline,
+            on_output=persist_gradle_output,
         )
     except subprocess.CalledProcessError as exc:
         output = redact_dependency_failure_text(
@@ -877,7 +947,7 @@ def _build_android_component(
                     sensitive_values=trust_sensitive_values or (str(trust_root),),
                 ),
             )
-    original_invocations = canonical_android_uat_gradle_invocations(context.repo_root)
+    original_invocations = canonical_android_dependency_bundle_invocations(context.repo_root)
     return write_android_gradle_component(
         project_root=context.repo_root,
         snapshot=result.snapshot,
@@ -926,7 +996,7 @@ def _verify_components(
     load_android_gradle_component(
         project_root=context.repo_root,
         component_root=roots["androidGradle"],
-        invocations=canonical_android_uat_gradle_invocations(context.repo_root),
+        invocations=canonical_android_dependency_bundle_invocations(context.repo_root),
         upstream_dependency_digests=pub_digests,
     )
 

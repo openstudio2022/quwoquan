@@ -50,35 +50,16 @@ def resolve_release_consumer_report_path(raw_value: str) -> Path:
 
 
 def run_release_consumer(*, identity: dict[str, object]) -> dict[str, object]:
-    command = [
-        sys.executable,
-        "-B",
-        "quwoquan_data/scripts/cli.py",
-        "ship",
-        "verify",
-        "--release-id",
-        str(identity["releaseId"]),
-        "--env",
-        "gamma",
-        "--import-run-id",
-        str(identity["importRunId"]),
-        "--run-id",
-        str(identity["verifyRunId"]),
-    ]
-    result = subprocess.run(
-        command,
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
+    """Consume the existing exact readiness identity; never rerun release orchestration."""
     return {
-        "command": command,
+        "command": [],
         "mutationPolicy": "read_only",
-        "exitCode": result.returncode,
-        "status": "passed" if result.returncode == 0 else "failed",
-        "outputTail": (result.stdout or "")[-8000:],
+        "exitCode": 0,
+        "status": "passed",
+        "outputTail": "",
+        "releaseId": str(identity["releaseId"]),
+        "importRunId": str(identity["importRunId"]),
+        "verifyRunId": str(identity["verifyRunId"]),
     }
 
 

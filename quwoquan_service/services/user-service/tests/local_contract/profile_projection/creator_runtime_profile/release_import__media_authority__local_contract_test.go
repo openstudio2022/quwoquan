@@ -50,7 +50,7 @@ func creatorReleaseFixture(t *testing.T) string {
 	writeReleaseTestFile(
 		t,
 		filepath.Join(creatorRoot, "profile.json"),
-		`{"schema":"quwoquan_data.creator_profile","creatorId":"creator-a","userId":"author-a","authorId":"author-a","personaId":"author-a","displayName":"Creator A","userHandle":"creator_a","avatarAsset":{"assetId":"avatar-a","kind":"avatar","sha256":"`+testAvatarSHA+`"},"assets":[{"assetId":"avatar-a","path":"assets/avatar.jpg","sha256":"`+testAvatarSHA+`","bytes":`+fmt.Sprint(len(testAvatarBytes))+`,"sourceRefs":["sources/avatar/source.json"]}],"headline":"headline","bio":"bio","creatorArchetype":"guide","publicProfileTagRefs":[]}`,
+		`{"schema":"quwoquan_data.creator_profile","creatorId":"creator-a","userId":"author-a","authorId":"author-a","personaId":"author-a","displayName":"Creator A","userHandle":"creator_a","avatarAsset":{"assetId":"avatar-a","kind":"avatar","sha256":"`+testAvatarSHA+`"},"assets":[{"assetId":"avatar-a","path":"media/avatar.jpg","sha256":"`+testAvatarSHA+`","bytes":`+fmt.Sprint(len(testAvatarBytes))+`,"sourceRefs":["sources/avatar/source.json"]}],"headline":"headline","bio":"bio","creatorArchetype":"guide","publicProfileTagRefs":[]}`,
 	)
 	writeReleaseTestFile(t, filepath.Join(creatorRoot, "works.refs.ndjson"), "")
 	publicSlice := runtimemedia.BuildContentMediaPublicSliceKey(
@@ -64,7 +64,7 @@ func creatorReleaseFixture(t *testing.T) string {
 		filepath.Join(root, "payload", "media_manifest.json"),
 		`{"schema":"quwoquan_data.release_media_manifest","releaseId":"release-a","sourceOwner":"qwq_data","assets":[{"assetId":"avatar-a","kind":"avatar","version":1,"contentType":"image/jpeg","publicSliceKey":"`+publicSlice+`","sha256":"`+testAvatarSHA+`","bytes":`+fmt.Sprint(len(testAvatarBytes))+`,"ownerRefs":["creators/creator-a"],"rightsSnapshotRefs":["objects/creators/creator-a/sources/avatar/source.json"]}],"issues":[],"counts":{"assets":1,"issues":0}}`,
 	)
-	writeReleaseTestFile(t, filepath.Join(creatorRoot, "assets/avatar.jpg"), testAvatarBytes)
+	writeReleaseTestFile(t, filepath.Join(creatorRoot, "media/avatar.jpg"), testAvatarBytes)
 	evidence := "creator avatar acquisition evidence"
 	source := map[string]any{
 		"schema": "quwoquan_data.publish_source", "sourceId": "avatar",

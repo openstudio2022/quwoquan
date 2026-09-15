@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
+import os
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -17,6 +20,7 @@ from unittest import mock
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.commands import package_domain, package_runtime
 from quwoquan_ops.cli.lib import package_reuse
+from quwoquan_ops.cli.lib.package_reuse import input_capsule
 
 
 class PackageInputCapsuleSizeContractTest(unittest.TestCase):
@@ -135,6 +139,575 @@ class PackageInputCapsuleSizeContractTest(unittest.TestCase):
                 self._write_manifest(payload)
                 with self.assertRaisesRegex(ValueError, "entry mode is invalid"):
                     package_reuse.verify_package_input_capsule(self.capsule_root)
+
+
+class PackageDependencyCapsuleReuseContractTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.candidates = self.root / "candidates/runtime-full"
+        self.current = self.candidates / ".package-staging-current/input-capsule"
+        self.current.parent.mkdir(parents=True)
+        self.expected = {
+            "dependency:dart-pub-cache-v2": {"schema": "production"},
+            "dependency:patrol-host-dart-pub-cache-v1": {"schema": "patrol"},
+            "dependency:production-ios-cocoapods-v2": {"schema": "production-ios"},
+            "dependency:patrol-host-ios-cocoapods-v2": {"schema": "patrol-ios"},
+            "dependency:android-gradle-v1": {"schema": "android"},
+        }
+
+    def _completed_capsule(self, name: str = "sha256-old") -> Path:
+        candidate = self.candidates / name
+        capsule = candidate / "input-capsule"
+        (capsule / "dependencies").mkdir(parents=True)
+        (capsule / "dependencies/payload").write_bytes(b"dependency")
+        (candidate / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "candidateType": "runtime-full",
+                    "baselineId": "sha256:" + "a" * 64,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (capsule / "manifest.json").write_text("{}\n", encoding="utf-8")
+        return capsule
+
+    def test_same_active_manifests_select_completed_capsule_despite_source_change(self) -> None:
+        old = self._completed_capsule()
+        records = [
+            {"logicalPath": logical, "capsulePath": f"dependencies/{index}.json"}
+            for index, logical in enumerate(self.expected)
+        ]
+        with (
+            mock.patch.object(
+                input_capsule,
+                "_read_capsule_manifest",
+                return_value={
+                    "baselineId": "sha256:" + "a" * 64,
+                    "entries": records,
+                },
+            ),
+            mock.patch.object(
+                input_capsule,
+                "_capsule_dependency_payloads",
+                return_value=self.expected,
+            ),
+            mock.patch.object(
+                package_reuse,
+                "validate_candidate_manifest",
+                return_value={"baselineId": "sha256:" + "a" * 64},
+            ) as validate_candidate,
+        ):
+            selected = input_capsule._matching_dependency_capsules(
+                capsule_root=self.current, expected=self.expected
+            )
+
+        self.assertEqual(selected, [(old, records)])
+        validate_candidate.assert_called_once()
+
+    def test_partial_candidate_manifest_is_rejected(self) -> None:
+        self._completed_capsule()
+        records = [
+            {"logicalPath": logical, "capsulePath": f"dependencies/{index}.json"}
+            for index, logical in enumerate(self.expected)
+        ]
+        with (
+            mock.patch.object(
+                input_capsule,
+                "_read_capsule_manifest",
+                return_value={
+                    "baselineId": "sha256:" + "a" * 64,
+                    "entries": records,
+                },
+            ),
+            mock.patch.object(
+                input_capsule,
+                "_capsule_dependency_payloads",
+                return_value=self.expected,
+            ),
+            mock.patch.object(
+                package_reuse,
+                "validate_candidate_manifest",
+                side_effect=ValueError("deployment candidate manifest fields mismatch"),
+            ),
+            self.assertRaisesRegex(
+                input_capsule.PackageDependencyDonorIntegrityError,
+                "dependency_donor_integrity",
+            ),
+        ):
+            input_capsule._matching_dependency_capsules(
+                capsule_root=self.current, expected=self.expected
+            )
+
+    def test_cocoapods_identity_drift_rejected_before_donor_selection(self) -> None:
+        manifests = dict(self.expected)
+        manifests["dependency:production-ios-cocoapods-v2"] = {
+            "schema": "production-ios",
+            "cocoaPods": {"version": "stale"},
+        }
+        manifests["dependency:patrol-host-ios-cocoapods-v2"] = {
+            "schema": "patrol-ios",
+            "cocoaPods": {"version": "stale"},
+        }
+        with mock.patch.object(
+            input_capsule,
+            "_current_cocoapods_manifest_identity",
+            return_value={"version": "current"},
+        ), self.assertRaisesRegex(ValueError, "cocoapods_mixed"):
+            input_capsule._assert_current_cocoapods_identity(manifests)
+
+    def test_normal_five_component_donor_reuse_dispatches_clone_cas(self) -> None:
+        old = self._completed_capsule()
+        records = [
+            {"logicalPath": logical, "capsulePath": f"dependencies/{index}.json"}
+            for index, logical in enumerate(self.expected)
+        ]
+        staging = self.root / "package-staging-normal"
+        staging.mkdir()
+        marker_bytes = json.dumps({"schema": "marker"}).encode()
+        clone_result = {"records": records}
+        for index in range(len(records)):
+            marker = staging / f"dependencies/{index}.json"
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_bytes(marker_bytes)
+        operations: list[str] = []
+
+        def managed(operation: str, **_kwargs: object) -> dict[str, object]:
+            operations.append(operation)
+            if operation == "load-active":
+                return {"manifests": self.expected}
+            if operation == "clone-verify-dependencies":
+                return clone_result
+            if operation == "verify-full":
+                expected_snapshot = _kwargs["expected_snapshot"]
+                return {
+                    "baselineId": expected_snapshot["baselineId"],
+                    "deploymentInputDigest": expected_snapshot["deploymentInputDigest"],
+                }
+            raise AssertionError(operation)
+
+        with (
+            mock.patch.object(input_capsule, "dependency_required", return_value=True),
+            mock.patch.object(
+                input_capsule,
+                "_enumerated_deployment_inputs",
+                return_value=(["quwoquan_app"], []),
+            ),
+            mock.patch.object(
+                input_capsule,
+                "_matching_dependency_capsules",
+                return_value=[(old, records)],
+            ),
+            mock.patch.object(
+                input_capsule, "_run_capsule_managed_operation", side_effect=managed
+            ),
+            mock.patch.object(input_capsule.tempfile, "mkdtemp", return_value=str(staging)),
+            mock.patch.object(package_reuse, "ROOT", self.root),
+            mock.patch.object(
+                input_capsule.subprocess,
+                "run",
+                side_effect=[
+                    subprocess.CompletedProcess([], 0, "a" * 40 + "\n", ""),
+                    subprocess.CompletedProcess([], 0, b"", b""),
+                ],
+            ),
+        ):
+            manifest = input_capsule.materialize_package_input_capsule(
+                ["quwoquan_app"], capsule_root=self.root / "normal-capsule"
+            )
+
+        self.assertEqual(
+            operations, ["load-active", "clone-verify-dependencies", "verify-full"]
+        )
+        self.assertEqual(
+            len(
+                [
+                    item
+                    for item in manifest["entries"]
+                    if str(item["logicalPath"]).startswith("dependency:")
+                ]
+            ),
+            5,
+        )
+
+    def test_stale_manifest_is_not_reused(self) -> None:
+        self._completed_capsule()
+        with (
+            mock.patch.object(
+                input_capsule,
+                "_read_capsule_manifest",
+                return_value={
+                    "baselineId": "sha256:" + "a" * 64,
+                    "entries": [],
+                },
+            ),
+            mock.patch.object(
+                input_capsule,
+                "_capsule_dependency_payloads",
+                return_value={"dependency:dart-pub-cache-v2": {"schema": "stale"}},
+            ),
+            mock.patch.object(
+                package_reuse,
+                "validate_candidate_manifest",
+                return_value={"baselineId": "sha256:" + "a" * 64},
+            ),
+        ):
+            selected = input_capsule._matching_dependency_capsules(
+                capsule_root=self.current, expected=self.expected
+            )
+
+        self.assertEqual(selected, [])
+
+    def test_incomplete_and_staging_candidates_are_excluded(self) -> None:
+        incomplete = self.candidates / "sha256-incomplete/input-capsule"
+        incomplete.mkdir(parents=True)
+        staging = self.candidates / ".package-staging-failed/input-capsule"
+        staging.mkdir(parents=True)
+
+        self.assertEqual(input_capsule._completed_capsule_candidates(self.current), [])
+
+    def test_matching_donor_tamper_is_typed_fail_closed(self) -> None:
+        old = self._completed_capsule()
+        records = [{"logicalPath": logical} for logical in self.expected]
+        staging = self.root / "package-staging"
+        staging.mkdir()
+        with (
+            mock.patch.object(input_capsule, "dependency_required", return_value=True),
+            mock.patch.object(
+                input_capsule,
+                "_enumerated_deployment_inputs",
+                return_value=(["quwoquan_app"], []),
+            ),
+            mock.patch.object(
+                input_capsule,
+                "_run_capsule_managed_operation",
+                side_effect=[
+                    {"manifests": self.expected},
+                    ValueError("cloned dependency CAS mismatch"),
+                ],
+            ),
+            mock.patch.object(
+                input_capsule,
+                "_matching_dependency_capsules",
+                return_value=[(old, records)],
+            ),
+            mock.patch.object(input_capsule.tempfile, "mkdtemp", return_value=str(staging)),
+            mock.patch.object(package_reuse, "ROOT", self.root),
+            self.assertRaisesRegex(
+                input_capsule.PackageDependencyDonorIntegrityError,
+                "dependency_donor_integrity",
+            ),
+        ):
+            input_capsule.materialize_package_input_capsule(
+                ["quwoquan_app"], capsule_root=self.root / "new-capsule"
+            )
+
+    def test_clone_verifies_new_dependency_bytes_and_rejects_tamper(self) -> None:
+        old = self._completed_capsule()
+        staging = self.root / "tampered-staging"
+        staging.mkdir()
+        request = {
+            "operation": "clone-verify-dependencies",
+            "repoRoot": str(self.root),
+            "staging": str(staging),
+            "sourceCapsule": str(old),
+            "records": [{"logicalPath": "dependency:fixture"}],
+            "resultPath": str(self.root / "tampered-result.json"),
+        }
+
+        request["requestDigest"] = "sha256:" + input_capsule.hashlib.sha256(
+            input_capsule._canonical_json_bytes(request)
+        ).hexdigest()
+
+        def reject_clone(*, capsule_root: Path, manifest_entries: object) -> None:
+            self.assertEqual(capsule_root, staging)
+            self.assertEqual(
+                (capsule_root / "dependencies/payload").read_bytes(), b"dependency"
+            )
+            self.assertEqual(manifest_entries, request["records"])
+            raise ValueError("cloned dependency CAS mismatch")
+
+        with mock.patch.object(
+            input_capsule,
+            "verify_dependency_bundle_capsule",
+            side_effect=reject_clone,
+        ):
+            result = input_capsule._managed_child(request)
+
+        self.assertEqual(result, 2)
+        receipt = json.loads(Path(request["resultPath"]).read_text())
+        self.assertEqual(receipt["status"], "error")
+        self.assertIn("CAS mismatch", receipt["payload"]["detail"])
+
+    def test_clone_accepts_only_after_new_dependency_cas(self) -> None:
+        old = self._completed_capsule()
+        staging = self.root / "verified-staging"
+        staging.mkdir()
+        result_path = self.root / "verified-result.json"
+        request = {
+            "operation": "clone-verify-dependencies",
+            "repoRoot": str(self.root),
+            "staging": str(staging),
+            "sourceCapsule": str(old),
+            "records": [{"logicalPath": "dependency:fixture"}],
+            "resultPath": str(result_path),
+        }
+        request["requestDigest"] = "sha256:" + input_capsule.hashlib.sha256(
+            input_capsule._canonical_json_bytes(request)
+        ).hexdigest()
+        verified = mock.Mock()
+        with mock.patch.object(
+            input_capsule,
+            "verify_dependency_bundle_capsule",
+            return_value=verified,
+        ) as verifier:
+            result = input_capsule._managed_child(request)
+
+        self.assertEqual(result, 0)
+        verifier.assert_called_once()
+        self.assertEqual(json.loads(result_path.read_text())["status"], "ok")
+        self.assertFalse((staging / "repo").exists())
+
+    def test_managed_timeout_kills_and_reaps_blocking_process_group(self) -> None:
+        script = self.root / "blocking.py"
+        child_pid = self.root / "child.pid"
+        fifo = self.root / "blocked-open.fifo"
+        input_capsule.os.mkfifo(fifo)
+        script.write_text(
+            "import os, pathlib\n"
+            f"pathlib.Path({str(child_pid)!r}).write_text(str(os.getpid()))\n"
+            f"open({str(fifo)!r}, 'rb').read()\n",
+            encoding="utf-8",
+        )
+        real_runner = input_capsule.run_managed_subprocess
+        request = mock.patch.object(
+            input_capsule,
+            "run_managed_subprocess",
+            side_effect=lambda *_args, **kwargs: real_runner(
+                [input_capsule.sys.executable, "-B", str(script)],
+                cwd=self.root,
+                env=dict(input_capsule.os.environ),
+                check=False,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=0.2,
+            ),
+        )
+        with request, self.assertRaises(input_capsule.PackageDependencyInputTimeoutError):
+            input_capsule._run_capsule_managed_operation(
+                "verify-full",
+                staging=self.current,
+                expected_snapshot={},
+                timeout=1,
+            )
+        pid = int(child_pid.read_text())
+        with self.assertRaises(ProcessLookupError):
+            input_capsule.os.kill(pid, 0)
+
+
+class ManagedCapsuleRequestFileContractTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.staging = self.root / "attempt-staging"
+        self.staging.mkdir()
+
+    def _request(self, control: Path) -> dict[str, object]:
+        return {
+            "schema": input_capsule._MANAGED_RESULT_SCHEMA,
+            "operation": "verify-full",
+            "repoRoot": str(self.root),
+            "staging": str(self.staging),
+            "sourceCapsule": None,
+            "records": [],
+            "expectedSnapshot": {"baselineId": "sha256:" + "a" * 64},
+            "resultPath": str(control / "result.json"),
+        }
+
+    def _write_request(self, control: Path, request: dict[str, object]) -> tuple[Path, str]:
+        path = control / "request.json"
+        encoded = input_capsule._canonical_json_bytes(request)
+        input_capsule._write_private_managed_request(path, encoded)
+        return path, "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+    def test_large_records_never_enter_argv_and_dispatch_succeeds(self) -> None:
+        records = [{"logicalPath": f"dependency:{index}", "blob": "x" * 4096} for index in range(1024)]
+        observed: dict[str, object] = {}
+
+        def dispatch(command: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            argv = list(command)
+            observed["argv"] = argv
+            request_path = Path(argv[argv.index("--managed-request-path") + 1])
+            control_root = Path(argv[argv.index("--managed-control-root") + 1])
+            digest = argv[argv.index("--managed-request-digest") + 1]
+            request = input_capsule._read_private_managed_request(
+                request_path=request_path,
+                control_root=control_root,
+                declared_digest=digest,
+            )
+            self.assertGreater(len(input_capsule._canonical_json_bytes(request)), 4_000_000)
+            input_capsule._write_managed_result(
+                {**request, "requestDigest": digest},
+                status="ok",
+                payload={"records": records},
+            )
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+        with (
+            mock.patch.object(package_reuse, "ROOT", self.root),
+            mock.patch.object(input_capsule, "run_managed_subprocess", side_effect=dispatch),
+        ):
+            payload = input_capsule._run_capsule_managed_operation(
+                "clone-verify-dependencies",
+                staging=self.staging,
+                source_capsule=self.root / "donor",
+                records=records,
+                timeout=2,
+            )
+        self.assertEqual(payload["records"], records)
+        self.assertLess(sum(len(str(item)) for item in observed["argv"]), 4096)
+        self.assertEqual(list(self.root.glob("*.control")), [])
+
+    def test_request_tamper_is_rejected_and_cleanup_is_possible(self) -> None:
+        control = input_capsule._managed_control_root(self.staging, "verify-full")
+        request = self._request(control)
+        path, digest = self._write_request(control, request)
+        path.write_bytes(path.read_bytes() + b" ")
+        path.chmod(0o600)
+        with self.assertRaisesRegex(ValueError, "digest mismatch"):
+            input_capsule._read_private_managed_request(
+                request_path=path, control_root=control, declared_digest=digest
+            )
+        path.unlink()
+        control.rmdir()
+
+    def test_symlink_escape_and_permissive_mode_are_rejected(self) -> None:
+        for defect in ("symlink", "escape", "mode"):
+            with self.subTest(defect=defect):
+                control = input_capsule._managed_control_root(self.staging, "verify-full")
+                request = self._request(control)
+                path = control / "request.json"
+                encoded = input_capsule._canonical_json_bytes(request)
+                digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
+                if defect == "symlink":
+                    target = control / "target.json"
+                    input_capsule._write_private_managed_request(target, encoded)
+                    path.symlink_to(target)
+                else:
+                    input_capsule._write_private_managed_request(path, encoded)
+                    if defect == "escape":
+                        outside = self.root / "request.json"
+                        path.replace(outside)
+                        path = outside
+                    else:
+                        path.chmod(0o644)
+                with self.assertRaisesRegex(ValueError, "unsafe|escapes|identity mismatch"):
+                    input_capsule._read_private_managed_request(
+                        request_path=path,
+                        control_root=control,
+                        declared_digest=digest,
+                    )
+                if path.exists() or path.is_symlink():
+                    path.unlink()
+                target = control / "target.json"
+                target.unlink(missing_ok=True)
+                control.rmdir()
+
+    def test_attempt_binding_rejects_result_path_drift(self) -> None:
+        control = input_capsule._managed_control_root(self.staging, "verify-full")
+        request = self._request(control)
+        request["resultPath"] = str(self.root / "escaped-result.json")
+        path, digest = self._write_request(control, request)
+        with self.assertRaisesRegex(ValueError, "attempt binding mismatch"):
+            input_capsule._read_private_managed_request(
+                request_path=path, control_root=control, declared_digest=digest
+            )
+        path.unlink()
+        control.rmdir()
+
+
+class ManagedRuntimePackageEntryContractTest(unittest.TestCase):
+    def test_entry_timeout_covers_attestation_open_and_reaps_child(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            script = root / "blocking-package.py"
+            child_pid = root / "child.pid"
+            fifo = root / "attestation.fifo"
+            input_capsule.os.mkfifo(fifo)
+            script.write_text(
+                "import os, pathlib, sys\n"
+                f"pathlib.Path({str(child_pid)!r}).write_text(str(os.getpid()))\n"
+                "print('[package-entry-stage] before release attestation reads', "
+                "file=sys.stderr, flush=True)\n"
+                f"open({str(fifo)!r}, 'rb').read()\n",
+                encoding="utf-8",
+            )
+            args = argparse.Namespace(command="package", kind="runtime")
+            original_argv = list(stackctl.sys.argv)
+            original_executable = stackctl.sys.executable
+            try:
+                stackctl.sys.argv = [str(script)]
+                stackctl.sys.executable = input_capsule.sys.executable
+                with mock.patch.dict(
+                    input_capsule.os.environ,
+                    {"QWQ_PACKAGE_DEPENDENCY_LOAD_TIMEOUT_SECONDS": "1"},
+                ):
+                    payload = package_domain.run_managed_runtime_package_cli(args)
+            finally:
+                stackctl.sys.argv = original_argv
+                stackctl.sys.executable = original_executable
+
+            self.assertEqual(
+                payload["firstBlocker"], package_domain.PACKAGE_ATTEMPT_TIMEOUT_BLOCKER
+            )
+            pid = int(child_pid.read_text())
+            with self.assertRaises(ProcessLookupError):
+                input_capsule.os.kill(pid, 0)
+
+    def test_ambient_managed_child_environment_cannot_bypass_dispatch(self) -> None:
+        args = argparse.Namespace(command="package", kind="runtime")
+        with mock.patch.dict(
+            input_capsule.os.environ,
+            {"QWQ_PACKAGE_MANAGED_CHILD": "1"},
+        ):
+            self.assertTrue(package_domain.should_manage_runtime_package_cli(args))
+
+    def test_real_inherited_capability_prevents_recursive_dispatch(self) -> None:
+        args = argparse.Namespace(command="package", kind="runtime")
+        with mock.patch.object(
+            package_domain, "has_managed_parent_capability", return_value=True
+        ):
+            self.assertFalse(package_domain.should_manage_runtime_package_cli(args))
+
+    def test_entry_normalizes_both_output_format_spellings_to_json(self) -> None:
+        args = argparse.Namespace(command="package", kind="runtime")
+        for supplied in (
+            ["stackctl.py", "--output-format", "text", "package"],
+            ["stackctl.py", "--output-format=text", "package"],
+        ):
+            with self.subTest(argv=supplied):
+                captured: dict[str, object] = {}
+
+                def run(command: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+                    captured["command"] = command
+                    return subprocess.CompletedProcess(
+                        command, 0, stdout='{"exitCode":0}', stderr=""
+                    )
+
+                with (
+                    mock.patch.object(package_domain.sys, "argv", supplied),
+                    mock.patch.object(package_domain, "run_managed_subprocess", side_effect=run),
+                ):
+                    package_domain.run_managed_runtime_package_cli(args)
+                command = list(captured["command"])
+                self.assertEqual(command[3:5], ["--output-format", "json"])
+                self.assertNotIn("text", command)
+                self.assertNotIn("--output-format=text", command)
 
 
 class PackageCapsuleFailureReceiptContractTest(unittest.TestCase):

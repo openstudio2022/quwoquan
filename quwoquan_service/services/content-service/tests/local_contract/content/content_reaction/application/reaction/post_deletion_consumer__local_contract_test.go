@@ -148,6 +148,18 @@ func TestReleaseImportPostDeletionFactPassesStrictConsumerAndAdvancesIndependent
 		events:      append([]postports.OutboxEvent(nil), events...),
 	}
 	for index := range relayStore.events {
+		var payload map[string]any
+		if err := json.Unmarshal(relayStore.events[index].Payload, &payload); err != nil {
+			t.Fatal(err)
+		}
+		payload["environment"] = nil
+		payload["sourceOwner"] = nil
+		payload["releaseId"] = nil
+		payload["manifestDigest"] = nil
+		payload["releaseDigest"] = nil
+		payload["sourceVersion"] = relayStore.events[index].AggregateVersion
+		payload["safetyRevision"] = int64(1)
+		relayStore.events[index].Payload, _ = json.Marshal(payload)
 		relayStore.events[index].Checkpoint = strconv.Itoa(index + 47)
 	}
 	relay := postapp.NewOutboxRelay(
@@ -230,7 +242,13 @@ func postDeletedOutboxEvent(t *testing.T, postID, eventID string) postports.Outb
 		"contentType":     "image",
 		"contentIdentity": "work",
 		"status":          "published",
-		"circleIds":       []string{},
+		"environment":     nil,
+		"sourceOwner":     nil,
+		"releaseId":       nil,
+		"manifestDigest":  nil,
+		"releaseDigest":   nil,
+		"sourceVersion":   int64(2),
+		"safetyRevision":  int64(1),
 		"deletedAt":       now.Format(time.RFC3339Nano),
 	})
 	if err != nil {

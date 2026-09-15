@@ -39,6 +39,22 @@ RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     go build -overlay=/run/qwq-provider-bindings/go.overlay.json ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" \
     -o /out/service-core \
     ./cmd/service-core
+RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
+    --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+    go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" \
+    -o /out/content-import \
+    ./services/content-service/cmd/import
+RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
+    --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+    go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" -o /out/tag-import ./services/tag-service/cmd/import \
+    && go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" -o /out/creator-import ./services/user-service/cmd/release-import \
+    && go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" -o /out/homepage-import ./services/entity-service/cmd/homepage-import \
+    && go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" -o /out/content-release-control ./services/content-service/cmd/release-control \
+    && go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" -o /out/tag-release-control ./services/tag-service/cmd/release-control \
+    && go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" -o /out/creator-release-control ./services/user-service/cmd/creator-release-control \
+    && go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" -o /out/homepage-release-control ./services/entity-service/cmd/homepage-release-control
 
 # 环境身份不烤入镜像：artifact-identity.json 由部署面挂载（DEC-005 信任域裁决），
 # 启动时经 QWQ_ARTIFACT_IDENTITY_FILE 读取并用 APP_ENV 断言校验。
@@ -64,6 +80,14 @@ RUN if command -v apk >/dev/null 2>&1; then \
     fi
 WORKDIR /app
 COPY --from=builder /out/service-core /usr/local/bin/service-core
+COPY --from=builder /out/content-import /usr/local/bin/content-import
+COPY --from=builder /out/tag-import /usr/local/bin/tag-import
+COPY --from=builder /out/creator-import /usr/local/bin/creator-import
+COPY --from=builder /out/homepage-import /usr/local/bin/homepage-import
+COPY --from=builder /out/content-release-control /usr/local/bin/content-release-control
+COPY --from=builder /out/tag-release-control /usr/local/bin/tag-release-control
+COPY --from=builder /out/creator-release-control /usr/local/bin/creator-release-control
+COPY --from=builder /out/homepage-release-control /usr/local/bin/homepage-release-control
 COPY --from=builder /geoip/ /etc/quwoquan/geoip/
 COPY --from=builder /geoip-license/ /usr/share/licenses/ip2region/
 COPY --from=builder /src/services/assistant-service/resources/ /app/resources/

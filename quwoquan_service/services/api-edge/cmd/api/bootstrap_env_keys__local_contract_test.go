@@ -22,6 +22,7 @@ func TestDeclaredEnvKeysCoverRetiredHandwrittenReads(t *testing.T) {
 	expected := []string{
 		"API_EDGE_SERVICE_ADDR",
 		"API_EDGE_USER_ACCOUNT_SECURITY_AUTHORITY_BASE_URL",
+		"API_EDGE_REDIS_USERNAME",
 		"API_EDGE_REDIS_PASSWORD",
 		"API_EDGE_ROLLOUT_ALLOCATION_KEY",
 	}
@@ -37,6 +38,7 @@ func TestDeclaredEnvKeysCoverRetiredHandwrittenReads(t *testing.T) {
 	// environments/prod/config.yaml 的 secretRefs 注入，键名漂移会让密码与
 	// 分配密钥静默变空，进而让准入与 rollout 静默改变行为。
 	for _, key := range []string{
+		"API_EDGE_REDIS_USERNAME",
 		"API_EDGE_REDIS_PASSWORD",
 		"API_EDGE_ROLLOUT_ALLOCATION_KEY",
 	} {

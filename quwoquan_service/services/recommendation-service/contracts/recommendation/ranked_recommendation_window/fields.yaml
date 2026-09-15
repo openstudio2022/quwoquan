@@ -1,5 +1,6 @@
 description: 推荐排序窗口及其稳定条目。
 fields:
+- {name: contentFence, type: ReleasePinnedQueryFence, constraints: [NOT_NULL], role: authoritative_state, description: Content请求开始pin且服务鉴权传递；窗口/续页/cursor精确比较tuple+revision，切换或rollback旧窗口不可续读。}
 - {name: windowId, source: windowId, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: subjectId, source: subjectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
 - {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
@@ -17,6 +18,11 @@ fields:
 - {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
 types:
+  ReadRecommendationReleaseReadinessQuery:
+    description: 受信Content准备/evaluator调用，不接受用户subject，不创建window/session/曝光；不要求binding.release为active。
+    fields:
+    - {name: binding, type: ReleaseQueryPreparationBinding, constraints: [NOT_NULL]}
+    - {name: snapshotDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
   RecommendationObjectCard:
     description: 排序窗口内冻结的个性化对象卡；objectKind 支持 entity_homepage 与 gathering，Content 仅按当前 policy 锚定并随 FeedDeliveryPage 交付。
     fields:
@@ -37,15 +43,17 @@ types:
     - {name: featureSnapshotDigest, source: featureSnapshotDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: itemFeatureSnapshot, source: itemFeatureSnapshot, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
   CreateRankedRecommendationWindowCommand:
-    description: 创建稳定推荐窗口的内部强类型命令。
+    description: 创建稳定推荐窗口的内部强类型命令；Content唯一pin请求fence，Recommendation不自行查询active或接受public提供的fence。
     fields:
+    - {name: contentFence, type: ReleasePinnedQueryFence, constraints: [NOT_NULL]}
     - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
     - {name: subjectId, source: subjectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
     - {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
     - {name: limit, source: limit, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
   GetRankedRecommendationPageQuery:
-    description: 读取稳定窗口页的内部强类型查询；subjectId 只用于推导隐私摘要 key 并校验窗口 owner，不进入响应。
+    description: 读取稳定窗口页的内部强类型查询；subjectId 只用于推导隐私摘要 key 并校验窗口 owner，不进入响应。contentFence由Content本请求重pin，与窗口不等即冲突，要求首刷。
     fields:
+    - {name: contentFence, type: ReleasePinnedQueryFence, constraints: [NOT_NULL]}
     - {name: subjectId, source: subjectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: windowId, source: windowId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
     - {name: fromOrdinal, source: fromOrdinal, type: int, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
@@ -53,6 +61,7 @@ types:
   RankedRecommendationPage:
     description: 稳定窗口的一页排序结果。
     fields:
+    - {name: contentFence, type: ReleasePinnedQueryFence, constraints: [NOT_NULL]}
     - {name: windowId, source: windowId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: experimentBucket, source: experimentBucket, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}

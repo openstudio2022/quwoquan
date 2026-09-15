@@ -323,6 +323,9 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  ReadHomepageReleaseCandidateQuery:
+    fields:
+    - {name: release, type: ReleaseCandidateBinding, constraints: [NOT_NULL]}
   HomepageSearchQuery:
     fields:
       - {name: query, type: string, constraints: [NOT_NULL]}

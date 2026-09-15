@@ -9,6 +9,8 @@ class SearchRequestPageIds {
     'DeleteRecentSearch': 'search.delete.recent.search',
     'ListHotQueries': 'search.list.hot.queries',
     'ListRecentSearches': 'search.list.recent.searches',
+    'PrepareSearchRelease': 'search.prepare.search.release',
+    'ReadSearchReleasePreparation': 'search.read.search.release.preparation',
     'RecoverSearchAccountClosureDeadLetter':
         'search.recover.search.account.closure.dead.letter',
     'ReportSearchFeedback': 'search.report.search.feedback',
@@ -20,6 +22,9 @@ class SearchRequestPageIds {
   static const String deleteRecentSearch = 'search.delete.recent.search';
   static const String listHotQueries = 'search.list.hot.queries';
   static const String listRecentSearches = 'search.list.recent.searches';
+  static const String prepareSearchRelease = 'search.prepare.search.release';
+  static const String readSearchReleasePreparation =
+      'search.read.search.release.preparation';
   static const String recoverSearchAccountClosureDeadLetter =
       'search.recover.search.account.closure.dead.letter';
   static const String reportSearchFeedback = 'search.report.search.feedback';

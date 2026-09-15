@@ -9,6 +9,7 @@ resources:
     role: query_projection
     required: true
 role: runtime
+description: Content生产的contentFence与窗口同一Redis值原子存储；续页完整tuple/revision不一致直接拒绝。旧无fence窗口到期或拒绝，不重构成新世代窗口，不回落旧GET协议。readReleaseReadiness仅查询本域候选和checkpoint，不创建Redis窗口或曝光。
 collections:
   rm_recommendation_experiment_policy:
     entity: RecommendationExperimentPolicyView

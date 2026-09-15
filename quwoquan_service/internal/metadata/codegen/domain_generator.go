@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -26,6 +27,12 @@ type domainGeneratorConfig struct {
 	goFieldIDSuffix     bool
 	businessObjectsOnly bool
 	objectFirstRoot     bool
+	operationRoots      bool
+}
+
+// WithOperationContractRoots将owning operation request/response作为生成根，不增加DTO名册。
+func WithOperationContractRoots() DomainGeneratorOption {
+	return func(config *domainGeneratorConfig) { config.operationRoots = true }
 }
 
 func WithTypedEnums() DomainGeneratorOption {
@@ -286,6 +293,71 @@ func (generator *DomainGenerator) buildObjectTemplateData(
 	if err != nil {
 		return domainTemplateData{}, err
 	}
+	if generator.config.operationRoots {
+		for _, operation := range generator.source.Graph().Operations {
+			if path.Dir(operation.SourcePath) != objectDir {
+				continue
+			}
+			for _, name := range []string{operation.RequestEntity, operation.ResponseEntity} {
+				if name == "" {
+					continue
+				}
+				if _, ok := fields.Entities[name]; ok {
+					continue
+				}
+				entity, ok := fields.Types[name]
+				if !ok {
+					entity, ok = sharedTypes[name]
+				}
+				if !ok {
+					return domainTemplateData{}, fmt.Errorf("CONTRACT.CODEGEN.TYPE_MISSING: %s from %s", name, operation.SourcePath)
+				}
+				fields.Entities[name] = entity
+			}
+		}
+	}
+	if generator.config.operationRoots {
+		states := map[string]int{}
+		var visit func(string) error
+		visit = func(name string) error {
+			name = strings.TrimSpace(strings.TrimPrefix(name, "[]"))
+			if _, err := metadataTypeToGo(name); err == nil {
+				return nil
+			}
+			if states[name] == 1 {
+				return fmt.Errorf("CONTRACT.CODEGEN.TYPE_CYCLE: %s", name)
+			}
+			if states[name] == 2 {
+				return nil
+			}
+			entity, found := fields.Entities[name]
+			if !found {
+				entity, found = fields.Types[name]
+			}
+			if s, ok := sharedTypes[name]; ok {
+				if found && !reflect.DeepEqual(entity, s) {
+					return fmt.Errorf("CONTRACT.CODEGEN.TYPE_CONFLICT: %s", name)
+				}
+				entity, found = s, true
+			}
+			if !found {
+				return fmt.Errorf("CONTRACT.CODEGEN.TYPE_MISSING: %s", name)
+			}
+			states[name] = 1
+			for _, field := range entity.Fields {
+				if err := visit(field.Type); err != nil {
+					return err
+				}
+			}
+			states[name] = 2
+			return nil
+		}
+		for name := range fields.Entities {
+			if err := visit(name); err != nil {
+				return domainTemplateData{}, err
+			}
+		}
+	}
 	referencedValueObjects := includeReferencedOwnedTypes(&fields, sharedTypes)
 
 	data := domainTemplateData{
@@ -354,6 +426,14 @@ func (generator *DomainGenerator) buildObjectTemplateData(
 					path.Join(objectDir, "fields.yaml"),
 					err,
 				)
+			}
+			if generator.config.operationRoots {
+				for _, constraint := range field.Constraints {
+					if constraint == "NULLABLE" {
+						goType = "*" + goType
+						break
+					}
+				}
 			}
 			entityData.Fields = append(
 				entityData.Fields,

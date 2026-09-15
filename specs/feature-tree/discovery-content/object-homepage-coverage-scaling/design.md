@@ -200,6 +200,14 @@
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的下游环境证据。
 - 关联要求与验收：[`REQ-002`](./multi-carrier-release/spec.md#req-002)、[`GWT-002`](./multi-carrier-release/spec.md#gwt-002)、[`GWT-030`](./multi-carrier-release/spec.md#gwt-030)。
 
+<a id="dec-047"></a>
+### DEC-047 核心诊断是 ship verify 的不可提升用途
+
+- 决策：不新增 runner、fact 或 schema；在现有 `ship verify` 增加显式 `core-diagnostic` purpose，并复用同一 admission、apply→activate、四 owner receipt、runtime candidate binding 与现役 consumer verifier。诊断只另写 run 内普通 report，正式 `environment_release_result` 与 readiness schema 不扩展。
+- feature/owner：六项选择闭集固定为 identity、feed/detail、search/recommendation、image/video Range、post write/readback、chat write/readback。Data 只执行前四项并如实投影后两项 `not_executed`；Ops/App 只汇总自身真实执行结果，不把 Data 未执行改写成通过。
+- 安全与恢复：诊断永远不可提升、不写 readiness；Prod 额外要求 prevalidate instance、isolated data mode 与 prod-hosted candidate。任一 selected Data case 缺失或失败写 failed report/result 并保留首错；正式 purpose 完全沿现有 M10/Beta/Exit/premium 门。
+- 关联要求与验收：[`multi-carrier-release REQ-023`](./multi-carrier-release/spec.md#req-023)、[`GWT-046`](./multi-carrier-release/spec.md#gwt-046)。
+
 <a id="dec-040"></a>
 ### DEC-040 typed 媒体契约与有界播放恢复不依赖类别
 

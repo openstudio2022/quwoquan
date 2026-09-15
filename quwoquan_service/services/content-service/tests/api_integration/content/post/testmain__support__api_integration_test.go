@@ -2,10 +2,19 @@ package api_integration
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -22,6 +31,7 @@ import (
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	safetywire "quwoquan_service/services/content-service/generated/content/post/contract/safety"
 	commenthttp "quwoquan_service/services/content-service/internal/content/comment/adapters/inbound/http"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commentmessaging "quwoquan_service/services/content-service/internal/content/comment/infrastructure/messaging"
@@ -48,6 +58,7 @@ import (
 	contentmessaging "quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	postsafety "quwoquan_service/services/content-service/internal/content/post/infrastructure/safety"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 	profileactivityhttp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/adapters/inbound/http"
 	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/application"
@@ -104,6 +115,15 @@ var (
 	testRouter                  *rtredis.Router
 	testPostgresFixture         *testinfra.PostgresFixture
 )
+
+type apiIntegrationAccountSecurityAuthority struct{}
+
+func (apiIntegrationAccountSecurityAuthority) ReadAccountSecurity(_ context.Context, id string) (rtauth.AccountSecuritySnapshot, error) {
+	if strings.TrimSpace(id) == "" {
+		return rtauth.AccountSecuritySnapshot{}, rtauth.ErrAccountSecurityUnavailable
+	}
+	return rtauth.AccountSecuritySnapshot{AccountState: "active", AuthEpoch: 1}, nil
+}
 
 func newMongoPostStore(collection *mongo.Collection) *persistence.MongoPostStore {
 	fence, err := mediareferencefence.New(collection.Database())
@@ -256,6 +276,139 @@ func drainCommentOutboxForHarness(ctx context.Context) error {
 	return nil
 }
 
+func newAPIIntegrationPostSafetyManager(ctx context.Context, db *mongo.Database) (*postsafety.Manager, func(), error) {
+	if err := db.CreateCollection(ctx, postsafety.Collection); err != nil {
+		return nil, nil, err
+	}
+	base := filepath.Join(".qwq_output", "env", "repo", "local", "post-safety-api-integration")
+	if err := os.MkdirAll(base, 0700); err != nil {
+		return nil, nil, err
+	}
+	base, err := filepath.Abs(base)
+	if err != nil {
+		return nil, nil, err
+	}
+	root, err := os.MkdirTemp(base, "runtime-")
+	if err != nil {
+		return nil, nil, err
+	}
+	cleanup := func() { _ = os.RemoveAll(root) }
+	if err = os.Chmod(root, 0700); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	if err = os.Mkdir(filepath.Join(root, "secrets"), 0700); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	write := func(name string, raw []byte) (safetywire.PostSafetyRuntimeEvidence, error) {
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, raw, 0600); err != nil {
+			return safetywire.PostSafetyRuntimeEvidence{}, err
+		}
+		return safetywire.PostSafetyRuntimeEvidence{Ref: name, Digest: apiIntegrationDigest(raw)}, nil
+	}
+	key := []byte(strings.Repeat("s", 32))
+	if _, err = write("secrets/post-safety.key", key); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	physical, err := postsafety.ReadPhysicalSafetyIdentity(ctx, db)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	keyID, err := postsafety.RuntimeKeyIdentity(key)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	binding := safetywire.PostSafetyRuntimeBinding{Environment: "gamma", Target: "gamma-local", CandidateDigest: "sha256:" + strings.Repeat("a", 64), DataPlaneBindingDigest: "sha256:" + strings.Repeat("b", 64), ResourceRef: "api-integration-mongo", Namespace: db.Name(), PhysicalInstanceId: physical, RuntimeGeneration: "api-integration-generation", HmacKeyIdentity: keyID}
+	accountRaw := []byte(`{"accountClosure":"verified"}`)
+	account, err := write("account-closure.json", accountRaw)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	authorization := safetywire.PostSafetyRuntimeAuthorization{Environment: "gamma", Target: "gamma-local", CandidateDigest: binding.CandidateDigest, DataPlaneBindingDigest: binding.DataPlaneBindingDigest, StartupAttemptId: "api-integration-attempt", RuntimeGeneration: binding.RuntimeGeneration, Action: "initialize_post_safety_runtime", IssuedAt: time.Now().UTC(), AuthorityIdentity: "quwoquan-environment-ops-local", EvidencePredecessor: account}
+	authorization.Signature, err = signAPIIntegrationRuntimeAuthorization(authorization)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	authRaw, _ := json.Marshal(authorization)
+	authEvidence, err := write("authorization.json", authRaw)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	safetyDigest := "sha256:" + strings.Repeat("c", 64)
+	creation := safetywire.PostSafetyRuntimeCreationReceipt{Binding: binding, AllocationAttemptId: "api-integration-attempt", PhysicalAllocationId: physical, NamespaceReadback: db.Name(), InitialSafetyRecordCount: 0, InitialSafetyCanonicalDigest: safetyDigest, AllocatedAt: time.Now().UTC()}
+	creationRaw, _ := json.Marshal(creation)
+	creationEvidence, err := write("creation.json", creationRaw)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	fact := safetywire.PostSafetyRuntimeFact{Mode: "new_runtime", Binding: binding, Authorization: authEvidence, Creation: creationEvidence, Closures: []safetywire.PostSafetyRuntimeClosure{{Kind: "account_closure", RecordCount: 0, CanonicalDigest: "sha256:" + strings.Repeat("d", 64), Watermark: "api-account", OwnerEvidence: account}, {Kind: "post_safety", RecordCount: 0, CanonicalDigest: safetyDigest, Watermark: "api-safety", OwnerEvidence: creationEvidence}}, RecordedAt: time.Now().UTC()}
+	factRaw, _ := json.Marshal(fact)
+	factEvidence, err := write("fact.json", factRaw)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	current := safetywire.PostSafetyRuntimeCurrentBinding{Binding: binding, Fact: factEvidence}
+	currentRaw, _ := json.Marshal(current)
+	currentEvidence, err := write("current.json", currentRaw)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	startup := safetywire.PostSafetyDeploymentStartupMaterial{Environment: "gamma", Target: "gamma-local", CandidateDigest: binding.CandidateDigest, DataPlaneBindingDigest: binding.DataPlaneBindingDigest, StartupAttemptId: "api-integration-attempt", RuntimeGeneration: binding.RuntimeGeneration, Authorization: authEvidence, AccountClosureAuthority: safetywire.PostSafetyAccountClosureAuthorityDescriptor{AccountClosureEvidence: account}, PostSafetyCurrent: &currentEvidence}
+	startupRaw, _ := json.Marshal(startup)
+	if _, err = write("startup.json", startupRaw); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	manager, err := postsafety.OpenRuntimeManager(ctx, db, "gamma", root, "current.json", "fact.json", "secrets/post-safety.key", apiIntegrationAccountSecurityAuthority{})
+	if err != nil {
+		cleanup()
+		return nil, nil, fmt.Errorf("open runtime manager root=%s: %w", root, err)
+	}
+	return manager, func() {}, nil
+}
+func apiIntegrationDigest(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+func signAPIIntegrationRuntimeAuthorization(value safetywire.PostSafetyRuntimeAuthorization) (string, error) {
+	raw, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".cache/quwoquan/keys/evidence-signing/quwoquan-environment-ops-local.ed25519.pem"))
+	if err != nil {
+		return "", err
+	}
+	block, _ := pem.Decode(raw)
+	if block == nil {
+		return "", fmt.Errorf("invalid environment authority PEM")
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return "", err
+	}
+	private, ok := parsed.(ed25519.PrivateKey)
+	if !ok {
+		return "", fmt.Errorf("environment authority key is not Ed25519")
+	}
+	encoded, _ := json.Marshal(value)
+	var object map[string]any
+	_ = json.Unmarshal(encoded, &object)
+	delete(object, "signature")
+	payload, _ := json.Marshal(object)
+	typ := "application/vnd.quwoquan.post-safety-runtime-authorization.v1+json"
+	pae := []byte("DSSEv1 " + strconv.Itoa(len(typ)) + " " + typ + " " + strconv.Itoa(len(payload)) + " ")
+	pae = append(pae, payload...)
+	return "ed25519:" + base64.StdEncoding.EncodeToString(ed25519.Sign(private, pae)), nil
+}
+
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
@@ -293,6 +446,20 @@ func TestMain(m *testing.M) {
 	}
 	personaBlockReader := accessinfra.NewPersonaBlockReader(mongoDB)
 	postStore := newMongoPostStore(mongoDB.Collection("posts"))
+	postSafetyManager, postSafetyCleanup, err := newAPIIntegrationPostSafetyManager(ctx, mongoDB)
+	if err != nil {
+		panic("failed to initialize verified Post safety manager: " + err.Error())
+	}
+	defer postSafetyCleanup()
+	if err = postSafetyManager.VerifySource(ctx, "gamma", "content", "api-integration-preflight"); err != nil {
+		panic("failed Post safety preflight: " + err.Error())
+	}
+	if err = postSafetyManager.EnsureIndexes(ctx); err != nil {
+		panic("failed to initialize Post safety indexes: " + err.Error())
+	}
+	if err = postStore.BindSafety(postSafetyManager, "gamma"); err != nil {
+		panic("failed to bind Post safety manager: " + err.Error())
+	}
 	if err := postStore.EnsureIndexes(ctx); err != nil {
 		panic("failed to initialize Post aggregate/outbox indexes: " + err.Error())
 	}

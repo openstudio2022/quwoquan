@@ -658,6 +658,64 @@ class StackctlReceiptBoundImmutableTeardownTest(unittest.TestCase):
 
         run.assert_not_called()
 
+
+    def test_gamma_teardown_redis_locators_override_ambient_without_prepare(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve() / "deploy/gamma-local/secrets/source-allocation-management"
+            root.mkdir(parents=True, mode=0o700)
+            for name, value in (("users.acl", "user default reset off\n"), ("redis-runtime.key", "runtime-secret")):
+                path = root / name
+                path.write_text(value); path.chmod(0o600)
+            environment = {
+                "LOCAL_GAMMA_REDIS_ACL_FILE": "/tmp/fake-acl",
+                "LOCAL_GAMMA_REDIS_RUNTIME_PASSWORD_FILE": "/tmp/fake-key",
+            }
+            from quwoquan_ops.cli.lib import output_paths
+            with (
+                mock.patch.object(output_paths, "deployment_target_path", return_value=root),
+                mock.patch.object(output_paths, "ROOT", Path(temporary)/"repository"),
+            ):
+                stackctl._bind_gamma_teardown_redis_locators(
+                    target_name="gamma-local", environment=environment
+                )
+            self.assertEqual(environment["LOCAL_GAMMA_REDIS_ACL_FILE"], str(root/"users.acl"))
+            self.assertEqual(environment["LOCAL_GAMMA_REDIS_RUNTIME_PASSWORD_FILE"], str(root/"redis-runtime.key"))
+
+    def test_gamma_teardown_missing_redis_material_is_typed_render_blocker(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve() / "deploy/gamma-local/secrets/source-allocation-management"
+            root.mkdir(parents=True, mode=0o700)
+            (root/"users.acl").write_text("user default reset off\n"); (root/"users.acl").chmod(0o600)
+            from quwoquan_ops.cli.lib import output_paths
+            with (
+                mock.patch.object(output_paths, "deployment_target_path", return_value=root),
+                mock.patch.object(output_paths, "ROOT", Path(temporary)/"repository"),
+                self.assertRaises((ValueError, FileNotFoundError)),
+            ):
+                stackctl._bind_gamma_teardown_redis_locators(
+                    target_name="gamma-local", environment={}
+                )
+
+
+    def test_gamma_purge_transaction_archives_exact_control_material_and_resumes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base=Path(temporary).resolve(); deploy=base/"deploy/gamma-local"; report=base/"report"
+            source=deploy/"secrets/source-allocation"; source.mkdir(parents=True,mode=0o700); (source/"journal").write_text("owned")
+            paths=[source,deploy/"secrets/source-allocation-management",deploy/"secrets/post-safety",deploy/"secrets/content-account-closure",deploy/"startup-material/content-service/account-closure",deploy/"startup-material/content-service/post-safety"]
+            receipt={"attemptId":"attempt-1","candidateDigest":"sha256:"+"1"*64}
+            from quwoquan_ops.cli.lib import output_paths
+            def target_path(_target,*segments): return deploy.joinpath(*segments)
+            with (mock.patch.object(stackctl,"_gamma_purge_control_paths",return_value=paths),mock.patch.object(output_paths,"deployment_target_path",side_effect=target_path)):
+                transaction=stackctl._prepare_gamma_purge_control_transaction(target="gamma-local",report_dir=report,receipt=receipt,compose_project="quwoquan_gamma_release")
+                self.assertTrue(source.exists())
+                completed=stackctl._complete_gamma_purge_control_transaction(transaction)
+                self.assertEqual(completed["state"],"completed"); self.assertFalse(source.exists())
+                again=stackctl._complete_gamma_purge_control_transaction(transaction)
+                self.assertEqual(again["state"],"completed")
+
+    def test_non_gamma_purge_never_selects_control_material(self) -> None:
+        self.assertIsNone(stackctl._prepare_gamma_purge_control_transaction(target="alpha-local",report_dir=Path("/unused"),receipt={},compose_project="unused"))
+
     def test_invalid_port_ownership_blocks_down_before_compose_and_transition(
         self,
     ) -> None:

@@ -189,6 +189,11 @@
 - 期望数量不一致、CAS 未命中或事务失败时不得留下部分修复；同一 release 首次精确修复后，以期望零重放必须零写且保持字节幂等。
 - outbox relay 在首次成功扫描前已经发生严格解码或发布失败时，readiness 必须优先返回最新具体失败，不得以“未完成扫描”覆盖可修复首因。
 
+### 内容交付到环境的单一准入
+
+- Environment Ops消费`release finalize`生成的immutable ProducerReleaseHandoff，以显式输出相对ref和canonical bytes digest定位；必须验证repository身份、producer baseline/contract、explicit cohort、逐对象publish/review证明、媒体与release payload完整闭包。缺失、旧schema、symlink、digest/来源漂移必须在环境mutation前拒绝。
+- Data环境消费不再要求通用会话handoff作为第二准入；通用handoff仍用于会话交接，不能替代或重复签发producer完成。导入结果只记录原producer exact身份，不改写对象/审核/handoff原件。正式生产审批、target绑定、环境前驱与回滚门禁不变。此边界由DOM-001约束，未闭合部分登记OPEN-004。
+
 ## 6. 领域验收
 
 <a id="dom-001"></a>
@@ -248,6 +253,15 @@
   - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/journeys/home_recommendation`、`quwoquan_app/test/user_acceptance/journeys/home_video_playback`
 
 ## 8. 开放事项
+
+<a id="open-004"></a>
+### OPEN-004 producer handoff直接消费尚未完成原子切换
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：尚缺Data ship对producer exact ref/digest的唯一消费、调用方/schema同步和Gamma真实import/activate/readback。现行通用会话handoff造成重复准入，且全池审计把非本release对象混入消费前置；不能以忽略检查或伪造通用handoff绕过。
+- 完成判定：`DOM-001` 下直接输入验证完整producer/payload闭包，错误ref/digest/仓身份/审核/媒体全部零mutation拒绝，旧通用ref不再接受；所有调用方只消费单一输入，Gamma内容和iOS真实读回通过。
 
 <a id="open-001"></a>
 ### OPEN-001 discovery content 领域边界验收

@@ -17,6 +17,13 @@ from internal.recommendation.recommendation_candidate_index_view.adapters.inboun
 )
 
 
+from generated.recommendation.recommendation_candidate_index_view.events.content_post_PostReleaseCandidatePrepared import PostReleaseCandidatePrepared
+from generated.recommendation.recommendation_candidate_index_view.events.content_post_PostPublished import PostLifecycleProjectionPayload
+from generated.recommendation.recommendation_candidate_index_view.events.content_post_PostDeleted import PostDeletedPayload
+from generated.recommendation.recommendation_candidate_index_view.events.content_post_PostPrivacyRedacted import PostPrivacyRedactedPayload
+from generated.recommendation.recommendation_candidate_index_view.events.content_post_PostPurged import PostPurgedPayload
+
+PREPARED_STREAM = "events.content.post_release_candidate"
 POST_LIFECYCLE_STREAM = "events.content.post_lifecycle"
 POST_LIFECYCLE_DLQ = "events.content.post_lifecycle.recommendation_candidate.dlq"
 CONSUMER_GROUP = "recommendation-candidate-index"
@@ -68,6 +75,26 @@ def _parse_time(value: Any, *, fallback: datetime | None = None) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def _validate_generated_payload(values: dict[str, str], payload: dict[str, Any], version: int) -> None:
+    event_type = values.get("eventType", "")
+    model = PostLifecycleProjectionPayload if event_type in UPSERT_EVENTS | {"PostModerationRejected"} else {"PostDeleted": PostDeletedPayload, "PostPrivacyRedacted": PostPrivacyRedactedPayload, "PostPurged": PostPurgedPayload}.get(event_type)
+    if model is None:
+        raise ValueError("unsupported or unimplemented Content lifecycle event")
+    source_keys = {"environment", "sourceOwner", "releaseId", "manifestDigest", "releaseDigest", "sourceVersion"}
+    if not source_keys <= payload.keys() or type(payload["sourceVersion"]) is not int or payload["sourceVersion"] != version:
+        raise ValueError("Post source presence/version mismatch")
+    if type(payload.get("safetyRevision")) is not int or payload["safetyRevision"] < 1:
+        raise ValueError("Post safetyRevision must be explicit and positive")
+    model.model_validate_json(json.dumps(payload))
+    if any(payload[key] is not None for key in source_keys - {"sourceVersion"}):
+        raise ValueError("Data lifecycle requires authoritative partition/safety reconciliation")
+    if model is PostLifecycleProjectionPayload:
+        if "publishedAt" not in payload or "visitedAt" not in payload:
+            raise ValueError("Post nullable timestamps must be explicit")
+        if payload["status"] == "published" and payload["publishedAt"] is None:
+            raise ValueError("published Post requires actual publication time")
+
+
 def decode_post_lifecycle(values: dict[str, str]) -> PostLifecycleEvent:
     if values.get("aggregateType", "").strip() != "Post":
         raise ValueError("Post lifecycle aggregateType must be Post")
@@ -80,6 +107,7 @@ def decode_post_lifecycle(values: dict[str, str]) -> PostLifecycleEvent:
     payload = json.loads(values.get("payload", ""))
     if not isinstance(payload, dict):
         raise ValueError("Post lifecycle payload must be an object")
+    _validate_generated_payload(values, payload, version)
     post_id = values.get("aggregateId", "").strip()
     payload_post_id = str(payload.get("postId") or "").strip()
     if not post_id or not payload_post_id or payload_post_id != post_id:
@@ -126,6 +154,11 @@ def _eligible(payload: dict[str, Any]) -> bool:
 
 
 def lifecycle_snapshot(event: PostLifecycleEvent) -> CandidateLifecycleSnapshot | None:
+    # Data只能进入独立候选准备管线，不能写入普通来源；缺来源字段不是ordinary事实。
+    if "sourceOwner" not in event.payload:
+        raise ValueError("Post lifecycle sourceOwner must be explicit")
+    if event.payload["sourceOwner"] is not None:
+        raise ValueError("Data lifecycle requires exact release candidate projection")
     if event.event_type not in UPSERT_EVENTS or not _eligible(event.payload):
         return None
     tag_refs = _string_tuple(event.payload.get("tagRefs"))
@@ -183,7 +216,9 @@ class PostLifecycleConsumer:
         projection: Any,
         subject_closures: Any,
         consumer: str,
+        fence_reconciler=None,
     ) -> None:
+        self._fence_reconciler = fence_reconciler
         self._redis = redis_client
         self._projection = projection
         self._subject_closures = subject_closures
@@ -192,6 +227,7 @@ class PostLifecycleConsumer:
         self._thread: threading.Thread | None = None
         self._last_success: datetime | None = None
         self._last_failure: Exception | None = None
+        self._unresolved_fences: set[str] = set()
 
     def ensure_group(self) -> None:
         try:
@@ -258,7 +294,7 @@ class PostLifecycleConsumer:
                 "eventType": values.get("eventType", ""),
                 "aggregateId": values.get("aggregateId", ""),
                 "attempts": str(attempts),
-                "error": str(error)[:1024],
+                "error": type(error).__name__,
                 "deadLetteredAt": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -266,13 +302,22 @@ class PostLifecycleConsumer:
 
     def _process(self, stream_id: str, values: dict[str, str]) -> None:
         try:
+            if values.get("eventType") == "ContentReleaseFenceChanged":
+                self._unresolved_fences.add(stream_id)
+                if self._fence_reconciler is None:
+                    raise ValueError("Content fence credentials/proof port not configured")
+                self._fence_reconciler.apply(values)
+                self._redis.xack(POST_LIFECYCLE_STREAM, CONSUMER_GROUP, stream_id)
+                self._projection.clear_source_failure(stream_id)
+                self._unresolved_fences.discard(stream_id)
+                return
             event = decode_post_lifecycle(values)
             snapshot = lifecycle_snapshot(event)
             removal = None
             if snapshot is not None and self._subject_closures.exists(snapshot.author_id):
                 snapshot = None
                 removal = ("content_feed", event.post_id, event.post_version)
-            if event.event_type in REMOVAL_EVENTS or (
+            if event.event_type in REMOVAL_EVENTS | {"PostModerationRejected"} or (
                 event.event_type in UPSERT_EVENTS and snapshot is None
             ):
                 removal = ("content_feed", event.post_id, event.post_version)
@@ -285,7 +330,7 @@ class PostLifecycleConsumer:
             attempts = self._projection.record_source_failure(
                 stream_id,
                 values.get("eventId", ""),
-                error,
+                ValueError(type(error).__name__),
             )
             if attempts < MAX_ATTEMPTS:
                 raise
@@ -295,8 +340,8 @@ class PostLifecycleConsumer:
                 attempts=attempts,
                 error=error,
             )
-            self._redis.xack(POST_LIFECYCLE_STREAM, CONSUMER_GROUP, stream_id)
-            self._projection.clear_source_failure(stream_id)
+            # DLQ只是脱敏告警证据，未知/未完成事实仍pending，不能以重试次数授权ACK。
+            raise
             return
         self._redis.xack(POST_LIFECYCLE_STREAM, CONSUMER_GROUP, stream_id)
         self._projection.clear_source_failure(stream_id)
@@ -310,8 +355,40 @@ class PostLifecycleConsumer:
         record_projection_outcome("post_lifecycle", "ok")
         return processed
 
+    def _process_prepared(self) -> int:
+        try:
+            self._redis.xgroup_create(PREPARED_STREAM, CONSUMER_GROUP, id="0-0", mkstream=True)
+        except Exception as error:
+            if "BUSYGROUP" not in str(error):
+                raise
+        claimed = self._redis.xautoclaim(PREPARED_STREAM, CONSUMER_GROUP, self._consumer, min_idle_time=30_000, start_id="0-0", count=50)
+        entries = list(claimed[1]) if isinstance(claimed, (list, tuple)) and len(claimed) > 1 else []
+        for _, rows in self._redis.xreadgroup(CONSUMER_GROUP, self._consumer, {PREPARED_STREAM: ">"}, count=50) or []:
+            entries.extend(rows)
+        seen = set()
+        for raw_id, raw in entries:
+            stream_id = _text(raw_id)
+            if stream_id in seen:
+                continue
+            seen.add(stream_id)
+            values = _values(raw)
+            try:
+                if values.get("eventType") != "PostReleaseCandidatePrepared" or values.get("aggregateType") != "Post":
+                    raise ValueError("candidate envelope differs from owner event")
+                event = PostReleaseCandidatePrepared.model_validate_json(values["payload"])
+                if values.get("eventId") != event.publicationId or values.get("aggregateId") != event.publicationId or int(values["aggregateVersion"]) != event.sourceVersion:
+                    raise ValueError("candidate envelope identity mismatch")
+                self._projection.apply_release_candidate(event)
+            except Exception as error:
+                self._projection.record_source_failure(PREPARED_STREAM + ":" + stream_id, values.get("eventId", ""), error)
+                raise
+            self._redis.xack(PREPARED_STREAM, CONSUMER_GROUP, stream_id)
+            self._projection.clear_source_failure(PREPARED_STREAM + ":" + stream_id)
+        return len(seen)
+
     def _process_once_inner(self) -> int:
         self.ensure_group()
+        prepared = self._process_prepared()
         seen: set[str] = set()
         messages = []
         for stream_id, values in (*self._claimed(), *self._new()):
@@ -319,7 +396,7 @@ class PostLifecycleConsumer:
                 continue
             seen.add(stream_id)
             messages.append((stream_id, values))
-        processed = 0
+        processed = prepared
         first_error: Exception | None = None
         for stream_id, values in messages:
             try:
@@ -336,7 +413,7 @@ class PostLifecycleConsumer:
         return processed
 
     def healthy(self, *, max_staleness_seconds: float = 10.0) -> bool:
-        if self._last_success is None or self._last_failure is not None:
+        if self._last_success is None or self._last_failure is not None or self._unresolved_fences:
             return False
         return (
             datetime.now(timezone.utc) - self._last_success

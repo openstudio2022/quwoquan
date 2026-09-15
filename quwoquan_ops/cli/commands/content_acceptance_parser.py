@@ -43,6 +43,8 @@ def register_content_readiness_parser(
         help="验证指定内容发布 的环境能力，不创建内容工作包",
     )
     content_readiness_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
+    content_readiness_parser.add_argument("--action", choices=("import", "verify"), default="verify",
+                                         help="import只验证导入前运行能力；verify验证完整内容消费，不互相替代")
     content_readiness_parser.add_argument(
         "--env", choices=_stackctl.ENVIRONMENTS, required=True
     )

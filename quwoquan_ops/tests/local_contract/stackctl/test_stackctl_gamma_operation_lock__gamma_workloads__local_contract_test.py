@@ -232,7 +232,7 @@ class StackctlGammaOperationLockContractTest(
                 ),
                 mock.patch.object(
                     stackctl,
-                    "activate_search_experiment_policy",
+                    "activate_search_experiment_policy_via_published_port",
                     return_value={"status": "passed"},
                 ),
                 mock.patch.object(stackctl, "run", side_effect=successful_syntax_check),

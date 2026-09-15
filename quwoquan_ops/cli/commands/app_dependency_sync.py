@@ -6,10 +6,12 @@ import argparse
 import contextlib
 import json
 import os
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from collections.abc import Callable, Mapping
@@ -52,7 +54,9 @@ from quwoquan_ops.cli.lib.package_reuse.dependency_bundle import (
     APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA,
     APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA,
     APP_DEPENDENCY_COMPONENTS,
+    AppDependencyBundleMissingError,
     component_declaration,
+    load_active_dependency_bundle,
     managed_dependency_bundle_root,
 )
 from quwoquan_ops.cli.lib.package_reuse.dependency_bundle_publish import (
@@ -87,6 +91,8 @@ from quwoquan_ops.cli.lib.package_reuse.pub_cache_store import (
 
 _LOCK_TIMEOUT_SECONDS = 10 * 60
 _LOCK_PROGRESS_INTERVAL_SECONDS = 30
+# Fresh five-component sync may spend substantial time in Pub/Pods before Gradle.
+_SYNC_TOTAL_DEADLINE_SECONDS = 90 * 60
 _LOCK_OWNER_WORKTREE = Path(__file__).resolve().parents[3]
 _SOURCE_IDENTITY_FIELDS = {
     "flutterVersion",
@@ -138,7 +144,11 @@ class DependencyComponentBuildContext:
     generation_root: Path
     flutter_identity: Mapping[str, str]
     source_identity: Mapping[str, str]
+    android_gradle_seed_root: Path | None = None
     progress: DependencyBuildProgress = field(default_factory=DependencyBuildProgress)
+    deadline: float = field(
+        default_factory=lambda: time.monotonic() + _SYNC_TOTAL_DEADLINE_SECONDS
+    )
 
 
 ComponentBuilder = Callable[[DependencyComponentBuildContext], Mapping[str, Path]]
@@ -585,6 +595,7 @@ def command_app_dependency_sync(
     active_committed = False
     active_commit_ambiguous = False
     active_commit_cause = ""
+    interrupted_signal: int | None = None
     failed_phase = "initialization"
     failure_cause = ""
     outcome: dict[str, Any] | None = None
@@ -592,6 +603,20 @@ def command_app_dependency_sync(
     sensitive_failure_values: list[str] = []
     output = output_root().expanduser().absolute()
     process_root = output / "env/repo/local/app-dependency-sync/process" / attempt_id
+    deadline = time.monotonic() + _SYNC_TOTAL_DEADLINE_SECONDS
+    previous_handlers: dict[int, Any] = {}
+
+    def interrupt(signum: int, _frame: Any) -> None:
+        nonlocal interrupted_signal
+        if interrupted_signal is not None:
+            return
+        interrupted_signal = signum
+        raise InterruptedError(f"APP.DEPENDENCY.sync_interrupted: signal={signal.Signals(signum).name}")
+
+    if threading.current_thread() is threading.main_thread():
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            previous_handlers[signum] = signal.getsignal(signum)
+            signal.signal(signum, interrupt)
     try:
         process_base = process_root.parent
         process_base.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -660,6 +685,19 @@ def command_app_dependency_sync(
                     flutter_identity=flutter_identity,
                 )
             )
+            android_gradle_seed_root: Path | None = None
+            if component_builder is None:
+                try:
+                    seed_bundle = load_active_dependency_bundle(
+                        repo_root=repo_root, require_current_source=False
+                    )
+                except AppDependencyBundleMissingError:
+                    seed_bundle = None
+                if seed_bundle is not None and all(
+                    seed_bundle.active.get(field) == source_identity[field]
+                    for field in ("flutterVersion", "flutterCommandResolutionDigest")
+                ):
+                    android_gradle_seed_root = seed_bundle.component_root("androidGradle")
             active_root = managed_dependency_bundle_root().absolute()
             active_path = active_root / "active.json"
             work_root = active_root / "work" / attempt_id
@@ -682,7 +720,9 @@ def command_app_dependency_sync(
                 generation_root=generation_root,
                 flutter_identity=dict(flutter_identity),
                 source_identity=source_identity,
+                android_gradle_seed_root=android_gradle_seed_root,
                 progress=progress,
+                deadline=deadline,
             )
             failed_phase = progress.current_phase
             if component_builder is None:
@@ -836,6 +876,7 @@ def command_app_dependency_sync(
             },
         }
     except (
+        InterruptedError,
         OSError,
         RuntimeError,
         TypeError,
@@ -844,7 +885,11 @@ def command_app_dependency_sync(
         json.JSONDecodeError,
         subprocess.SubprocessError,
     ) as exc:
-        failure_cause = _builder.dependency_failure_cause(exc)
+        failure_cause = (
+            f"signal_{signal.Signals(interrupted_signal).name.lower()}"
+            if interrupted_signal is not None
+            else _builder.dependency_failure_cause(exc)
+        )
         if 'progress' in locals() and failed_phase == "component-build":
             failed_phase = progress.current_phase
         seal_failure: BaseException | None = None
@@ -914,4 +959,6 @@ def command_app_dependency_sync(
                 f"cause={_builder.dependency_failure_cause(exc)}"
             )
             outcome.setdefault("details", []).append(result_warning)
+    for signum, previous in previous_handlers.items():
+        signal.signal(signum, previous)
     return outcome

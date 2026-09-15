@@ -1659,6 +1659,24 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
+      "description": "四环境从candidate-owned data-plane-binding.json验证后注入CREATOR_SEARCH_BINDING_DIGEST，直接使用原bindingDigest；与Search同值，无默认或人工摘要，缺失阻断准备装配。",
+      "key": "sys.content-service.creator_search.binding_digest",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "description": "CREATOR_SEARCH_PHYSICAL_NAMESPACE由同一制品的search.objects唯一namespace派生；只读部署身份，不作为active flag或请求selector。",
+      "key": "sys.content-service.creator_search.physical_namespace",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": false,
       "key": "sys.content-service.embedding.enabled",
       "reload": "restart",
@@ -2070,6 +2088,42 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "bool"
     },
     {
+      "description": "material_root内PostSafetyRuntimeCurrentBinding相对file-ref，由环境owner与现役target启动材料一起原子发布并只读挂载。核对当前candidate/data-plane/resource/namespace/真实实例/generation/key identity，不能从待验fact自行推expected值或只信旧startup审计receipt；所有写/read admission校验当前绑定仍相同，切换前停止旧runtime写权，绑定不可读或漂移立即not-ready。",
+      "key": "sys.content-service.post_safety.current_binding_ref",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "description": "Post专用密钥相对file-ref，以post_safety.material_root为唯一受管只读根；仅secrets/post-safety.key形式的locator，不接受内联材料/env值或任意绝对路径。由环境owner显式创建至少32随机字节raw文件，resolver逐级openat+O_NOFOLLOW验证目录/文件身份、常规文件、link数1、owner及0700目录/0600文件，无缺失创建/补键；读后重验inode/size防替换。服务只读挂载，值不入日志/制品/版本控制。与JWT及账号关闭密钥隔离，HMAC challenge核对fact的hmacKeyIdentity；恢复保持原键，不静默轮换。",
+      "key": "sys.content-service.post_safety.hmac_secret_ref",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "description": "受管target专用仓外材料目录在Content容器中的只读挂载点，配置来自当前deployment candidate/startup材料而非请求。host侧位于现役deployment work root的target secrets/evidence受保护子树，不能位于可删除.qwq_output或业务备份；producer独占写，service只读。resolver逐级拒绝symlink和非受信owner/可被其他主体写入的目录，目标私有根0700；无默认home/temp路径。",
+      "key": "sys.content-service.post_safety.material_root",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "description": "PostSafetyRuntimeFact相对file-ref，新建/恢复共用此唯一现役键，无历史别名；在post_safety.material_root内只读解析，exact bytes摘要必须等于PostSafetyRuntimeCurrentBinding.fact.digest且ref相同。fact来源必须具备环境owner写权和实际创建/恢复证据，填写字符串不能启用；按fields/object合同验证成功即允许ordinary原合法创建，不依赖Data source/proof/GenerationProtection。未知恢复状态仍拒绝所有Post写。",
+      "key": "sys.content-service.post_safety.recovery_evidence_ref",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": "",
       "key": "sys.content-service.postgres.report_dsn",
       "reload": "restart",
@@ -2203,6 +2257,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "bool"
     },
     {
+      "description": "当前Redis scene ACL用户名，原样传AUTH，空值仅为明确default用户语义；named认证不得回落default。无首尾空白且不可用于memory，受管source绑定注入，与同scene连接及密码整体解析。",
+      "key": "sys.content-service.redis.general.username",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": "",
       "key": "sys.content-service.redis.realtime.addr",
       "reload": "restart",
@@ -2300,6 +2363,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "bool"
     },
     {
+      "description": "realtime scene独立ACL用户名；空值为明确default语义，named失败不回落，用户名不可使该段误判未声明。",
+      "key": "sys.content-service.redis.realtime.username",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": "",
       "key": "sys.content-service.redis.rec.addr",
       "reload": "restart",
@@ -2395,6 +2467,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "bool"
+    },
+    {
+      "description": "rec scene独立ACL用户名；空值为明确default语义，named失败不回落，用户名不可使该段误判未声明。",
+      "key": "sys.content-service.redis.rec.username",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
     },
     {
       "default": ":18080",
@@ -2987,6 +3068,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "bool"
     },
     {
+      "description": "general scene ACL用户名；空值为明确default语义，named失败不回落，转换至runtime scene必须保留。",
+      "key": "sys.integration-service.redis.general.username",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": "",
       "key": "sys.integration-service.redis.rec.addr",
       "reload": "restart",
@@ -3082,6 +3172,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "bool"
+    },
+    {
+      "description": "rec scene ACL用户名；空值为明确default语义，named失败不回落，转换至runtime scene必须保留。",
+      "key": "sys.integration-service.redis.rec.username",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
     },
     {
       "default": ":18086",
@@ -3769,6 +3868,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "description": "canonical topology注入CONTENT_SERVICE_BASE_URL，仅调用Content候选公开query。",
+      "key": "sys.product-ops-service.content_source.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": "quwoquan_product_ops",
       "key": "sys.product-ops-service.mongodb.database",
       "reload": "restart",
@@ -4196,6 +4304,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
+      "description": "Content receipt/fence受信只读地址，唯一由canonical topology注入CONTENT_SERVICE_BASE_URL，无fallback。使用既有AUTH_JWT服务身份配置签发content.release.fence.read，配置缺失启动失败。",
+      "key": "sys.recommendation-service.content_receipt.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": 134217728,
       "key": "sys.recommendation-service.ranked_window.maximum_live_bytes_per_shard",
       "reload": "restart",
@@ -4417,6 +4534,32 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "bool"
     },
     {
+      "description": "仅由已验证canonical data-plane binding派生，无请求或环境猜测默认。",
+      "key": "sys.recommendation-service.release_candidate.binding_digest",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.recommendation-service.release_candidate.mongodb_namespace",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "description": "候选三集合唯一索引语义摘要，启动与proof读取时核验真实索引。",
+      "key": "sys.recommendation-service.release_candidate.schema_generation",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": ":8000",
       "key": "sys.recommendation-service.service.http.addr",
       "reload": "restart",
@@ -4574,6 +4717,24 @@ _PLATFORM_CONFIG_JSON = r'''{
     {
       "default": "http://127.0.0.1:18080",
       "key": "sys.search-service.contentService.baseUrl",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "description": "四环境均由candidate-owned data-plane-binding.json验证后注入CREATOR_SEARCH_BINDING_DIGEST；值为原canonical bindingDigest，不接受手填或CONFIG_VERSION推导，缺失阻断启动。",
+      "key": "sys.search-service.creator_search.binding_digest",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "description": "同一验证制品的search.objects reader/writers/admin唯一物理namespace，由CREATOR_SEARCH_PHYSICAL_NAMESPACE注入；启动及proof读写重验双alias，不在运行时改写。",
+      "key": "sys.search-service.creator_search.physical_namespace",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -4927,6 +5088,23 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "key": "sys.search-service.user_account_security_authority.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.tag-service.content_release_fence.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 500,
+      "key": "sys.tag-service.content_release_fence.timeout_ms",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -5435,6 +5613,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "bool"
+    },
+    {
+      "description": "当前Redis scene的ACL用户名，原样传入AUTH；空值仅表示Redis明确default用户语义，不从密码推断或named认证失败回落default。非空值必须无首尾空白且不可用于memory；由受管源绑定注入，与同scene密码/地址整体解析，不记录凭据。",
+      "key": "sys.user-service.redis.general.username",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
     },
     {
       "default": ":18081",

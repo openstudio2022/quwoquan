@@ -210,6 +210,8 @@ def write_post_api_verification(
     api_base_url: str,
     media_delivery_base_url: str,
     ssl_cafile: str = "",
+    include_premium_stream: bool = True,
+    validate_report: bool = True,
 ) -> Path:
     """Write schema-validated, release-bound public post API evidence."""
     try:
@@ -236,7 +238,7 @@ def write_post_api_verification(
             # App 视频书唯一消费 premium_stream 池；readiness 必须
             # 证明 premium_stream release-bound 非空读回（environment-topology-
             # and-packaging spec），否则 typed_video 绿会被误当成视频书绿。
-            include_premium_stream=True,
+            include_premium_stream=include_premium_stream,
         )
         creator_rows = [
             _verify_author_profile(client, creator)
@@ -307,10 +309,11 @@ def write_post_api_verification(
         "posts": rows,
         "issues": [],
     }
-    try:
-        assert_valid(payload, "release", "post_api_verification", label="post_api_verification")
-    except (TypeError, ValueError) as exc:
-        raise PostApiVerificationError(str(exc)) from exc
+    if validate_report:
+        try:
+            assert_valid(payload, "release", "post_api_verification", label="post_api_verification")
+        except (TypeError, ValueError) as exc:
+            raise PostApiVerificationError(str(exc)) from exc
     if output_path.exists():
         raise PostApiVerificationError(f"post API verification already exists: {output_path}")
     write_json(output_path, payload)

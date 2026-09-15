@@ -2,6 +2,21 @@
 // ignore_for_file: constant_identifier_names
 
 enum EntityErrorCode {
+  releaseCandidateInvalid(
+    'ENTITY.RELEASE.candidate_invalid',
+    '候选身份或闭包不一致',
+    422,
+  ),
+  releaseCandidateNotReady(
+    'ENTITY.RELEASE.candidate_not_ready',
+    '候选尚未完成验证',
+    409,
+  ),
+  releaseCandidateUnavailable(
+    'ENTITY.RELEASE.candidate_unavailable',
+    '候选读取暂不可用',
+    503,
+  ),
   invalidArgument('ENTITY.USER.invalid_argument', '请求参数有误，请检查后重试', 400),
   homepageNotFound('ENTITY.USER.homepage_not_found', '主页不存在或已下线', 404),
   homepageOffline('ENTITY.USER.homepage_offline', '主页已下线，仅保留记录信息', 410),
@@ -55,6 +70,9 @@ class EntityErrorMessages {
   const EntityErrorMessages._();
 
   static const Map<EntityErrorCode, String> zh = <EntityErrorCode, String>{
+    EntityErrorCode.releaseCandidateInvalid: '候选身份或闭包不一致',
+    EntityErrorCode.releaseCandidateNotReady: '候选尚未完成验证',
+    EntityErrorCode.releaseCandidateUnavailable: '候选读取暂不可用',
     EntityErrorCode.invalidArgument: '请求参数有误，请检查后重试',
     EntityErrorCode.homepageNotFound: '主页不存在或已下线',
     EntityErrorCode.homepageOffline: '主页已下线，仅保留记录信息',
@@ -74,6 +92,10 @@ class EntityErrorMessages {
   };
 
   static const Map<EntityErrorCode, String> en = <EntityErrorCode, String>{
+    EntityErrorCode.releaseCandidateInvalid:
+        'Candidate identity or closure mismatch',
+    EntityErrorCode.releaseCandidateNotReady: 'Candidate is not verified',
+    EntityErrorCode.releaseCandidateUnavailable: 'Candidate read unavailable',
     EntityErrorCode.invalidArgument: 'Request parameters are invalid',
     EntityErrorCode.homepageNotFound: 'Homepage not found or offline',
     EntityErrorCode.homepageOffline:

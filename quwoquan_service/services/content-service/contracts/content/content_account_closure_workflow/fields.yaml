@@ -51,6 +51,81 @@ fields:
   ops_exposure: read
   role: authoritative_state
 types:
+  ContentAccountClosureRuntimeEvidenceRef:
+    description: 当前受管target材料根内的不可变相对file-ref和exact bytes SHA256。拒绝绝对路径、穿越、symlink、硬链接、非独占权限与未知字段；内容解析和当前授权独立验证，摘要不是授权或闭包证明。
+    fields:
+    - {name: ref, type: string, constraints: [NOT_BLANK]}
+    - {name: digest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  ContentAccountClosureRuntimeCollection:
+    description: storage.yaml声明的一个owner集合在停写初始化窗口内的完整readback。按collection排序无重复且必须覆盖全部九个集合；UUID来自listCollections provider结果，禁止以namespace字符串、空集合或Post UUID代替。canonicalDigest为按_id排序的完整记录canonical Extended JSON数组exact UTF-8 bytes SHA256，文档递归键排序、保留BSON类型，无空白；不将含PII记录写入证据。recordCount是实际全量记录数。
+    fields:
+    - {name: collection, type: enum, values: [user_account_closed_inbox, user_account_closed_failures, user_account_closed_search_work, user_account_closed_media_artifact_work, closed_account_subjects, closed_account_subject_tombstones, content_user_account_restrictions, content_user_account_restriction_inbox, content_user_account_restriction_watermarks], constraints: [NOT_NULL]}
+    - {name: physicalInstanceId, type: string, constraints: [NOT_BLANK], description: mongodb-collection-uuid加provider实测16字节UUID的小写hex；绑定本collection而非数据库地址。}
+    - {name: recordCount, type: int64, min: 0, constraints: [NOT_NULL]}
+    - {name: canonicalDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  ContentAccountClosureRuntimeSourcePartition:
+    description: 精确源事件分区及Content订阅初始化readback。全部分区按partition排序，无缺项/重复；Redis单流也必须显式一项。边界来自停写后的XINFO/XRANGE/XPENDING和owner持久化读回，不取caller时间或分区最大值；不得将读取$转换为0-0。appliedThrough为已完成owner投影的连续位置，不是仅已投递位置。
+    fields:
+    - {name: partition, type: string, constraints: [NOT_BLANK]}
+    - {name: firstAvailablePosition, type: string, constraints: [NOT_BLANK]}
+    - {name: frozenThrough, type: string, constraints: [NOT_BLANK]}
+    - {name: deliveredThrough, type: string, constraints: [NOT_BLANK]}
+    - {name: appliedThrough, type: string, constraints: [NOT_BLANK]}
+    - {name: pendingCount, type: int64, min: 0, constraints: [NOT_NULL]}
+    - {name: entryCount, type: int64, min: 0, constraints: [NOT_NULL]}
+    - {name: canonicalDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL], description: 按源位置排序的完整事件记录canonical JSON数组摘要，递归键排序无空白，exact UTF-8 bytes；只保存摘要，不保存payload或原始主体。}
+  ContentAccountClosureRuntimeSourceCreation:
+    description: 环境owner在现役target排他锁内独占创建的managed allocation binding，不宣称PG/Redis提供永久不可复用UUID。两个ManagedAllocationBindingId由create-once受保护配置pin，必须联合核对本次创建动作、PG数据库/角色实际权限、Redis ACL、独立credential identity、candidate中的producer到源绑定及旧凭据拒绝；随机标识或摘要本身不授信。PG system identifier/OID、容器/mount仅辅助定位。admin/root绕行及不可区分的管理员拷贝不在本地非生产信任模型，观察到drift拒绝；已有或部分资源不补发new。User schema仅由环境owner调用User现役初始化机制，Content服务不得跨库创建业务schema。
+    fields:
+    - {name: environment, type: enum, values: [alpha, beta, gamma], constraints: [NOT_NULL]}
+    - {name: target, type: string, constraints: [NOT_BLANK]}
+    - {name: candidateDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: dataPlaneBindingDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: allocationAttemptId, type: string, constraints: [NOT_BLANK]}
+    - {name: producerResourceRef, type: string, constraints: [NOT_BLANK]}
+    - {name: producerNamespace, type: string, constraints: [NOT_BLANK]}
+    - {name: producerManagedAllocationBindingId, type: string, format: canonical_sha256, constraints: [NOT_NULL], description: 规范JSON摘要，键为candidate/dataPlane/publisherToSource/target/resource/namespace/role/credential/superuser/createdb/createrole/replication/otherNonAdminConnectRoles；前四项取现役candidate与完整canonical bindings，credential为实测身份，权限必须逐项实际核验false及其他非管理员CONNECT集合为空。摘要只在核验成功后计算，不单独授信。}
+    - {name: sourceResourceRef, type: string, constraints: [NOT_BLANK]}
+    - {name: sourceNamespace, type: string, constraints: [NOT_BLANK]}
+    - {name: sourceManagedAllocationBindingId, type: string, format: canonical_sha256, constraints: [NOT_NULL], description: 规范JSON摘要，键为candidate/dataPlane/publisherToSource/target/resource/namespace/user/credential/keys/commands/consumerGroup/defaultEnabled/otherNonAdminWriters/selectors；实际核验events.user.account主键及排序ping/xack/xadd/xautoclaim/xgroup/xinfo/xpending/xrange/xreadgroup命令；另一个Redis ACL selector仅允许events.user.account.content-service.dlq键的xadd/expire，不能将expire权限授予源stream。keys/commands摘要包含主规则及该selector完整内容；订阅组固定content-service-user-account-closed，default禁用及其他非管理员writer为空。正常源增长不进入持续身份摘要，权限或producer配置漂移必须拒绝。}
+    - {name: producerBindingDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: producerRole, type: string, constraints: [NOT_BLANK], description: 实际PG数据库owner且非superuser/nocreatedb/nocreaterole/noreplication角色；PUBLIC及其他非管理员角色不得CONNECT。}
+    - {name: sourceAclUser, type: string, constraints: [NOT_BLANK], description: Redis实际ACL用户，主规则限定events.user.account键及现役发布消费/reclaim命令；独立selector仅授DLQ键xadd/expire，主源无expire，禁止管理命令；default及旧非管理员用户不得访问该源。}
+    - {name: producerCredentialIdentity, type: string, format: canonical_sha256, constraints: [NOT_NULL], description: 本次至少32随机字节凭据的域分隔HMAC challenge再SHA256，固定challenge为quwoquan/source-allocation/postgres；不保存密码，读回时以实际凭据认证。}
+    - {name: sourceCredentialIdentity, type: string, format: canonical_sha256, constraints: [NOT_NULL], description: 独立Redis凭据同算法，challenge为quwoquan/source-allocation/redis；不可与PG或JWT共用。}
+    - {name: rejectedProducerRole, type: string, constraints: [NOT_BLANK], description: 实际尝试连接被拒绝的旧非管理员PG角色，不接受只填true。}
+    - {name: rejectedSourceAclUser, type: string, constraints: [NOT_BLANK], description: 实际尝试认证或访问精确源键被拒绝的旧Redis用户；管理员不作为旧业务凭据。}
+    - {name: allocatedAt, type: timestamp, constraints: [NOT_NULL]}
+  ContentAccountClosureRuntimeSource:
+    description: 当前User源事件空间及Content消费组的初始化绑定。new_source必须严格解析sourceCreation为本owner ContentAccountClosureRuntimeSourceCreation并核对实际producer/source资源，recovery必须null；真实初始所有位置为0-0且所有计数为0才成立。replayed_source不得带sourceCreation，必须有完整源owner恢复证据并证明从完整历史连续消费至frozenThrough、pending为0且无清理残留；当前未实现恢复核验时硬拒绝该模式，不能仅验recovery hash开放。两模式均不声称全局User无关闭账号。
+    fields:
+    - {name: mode, type: enum, values: [new_source, replayed_source], constraints: [NOT_NULL]}
+    - {name: resourceRef, type: string, constraints: [NOT_BLANK]}
+    - {name: namespace, type: string, constraints: [NOT_BLANK]}
+    - {name: managedAllocationBindingId, type: string, constraints: [NOT_BLANK]}
+    - {name: stream, type: enum, values: [events.user.account], constraints: [NOT_NULL]}
+    - {name: consumerGroup, type: string, constraints: [NOT_BLANK]}
+    - {name: producerBindingDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: sourceCreation, type: ContentAccountClosureRuntimeEvidenceRef, constraints: [NULLABLE]}
+    - {name: recovery, type: ContentAccountClosureRuntimeEvidenceRef, constraints: [NULLABLE]}
+    - {name: partitions, type: '[]ContentAccountClosureRuntimeSourcePartition', constraints: [NOT_NULL]}
+  ContentAccountClosureRuntimeEvidence:
+    description: ContentAccountClosureWorkflow唯一的本地owner空间创建/闭包内容格式，由受管创建producer在HTTP开放前写入，bootstrap经owner只读验证端口消费；不新增业务对象、HTTP operation或Mongo collection。全部字段显式存在、未知字段拒绝，适用alpha/beta/gamma当前target，Prod拒绝。九个集合必须本attempt独占创建并读回，已有/部分创建/未初始化不得补证。root recordCount为collections计数之和；canonicalDigest为collections的完整排序readback数组canonical JSON SHA256，包含每项UUID/count/digest。source绑定独立源空间和连续已应用位置，不以Mongo为空反推源为空。initializedAt仅审计时间；当前资源身份、权限、candidate来自受管输入，不从待验fact反填expected。
+    fields:
+    - {name: environment, type: enum, values: [alpha, beta, gamma], constraints: [NOT_NULL]}
+    - {name: target, type: string, constraints: [NOT_BLANK]}
+    - {name: candidateDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: dataPlaneBindingDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: resourceRef, type: string, constraints: [NOT_BLANK]}
+    - {name: namespace, type: string, constraints: [NOT_BLANK]}
+    - {name: allocationAttemptId, type: string, constraints: [NOT_BLANK]}
+    - {name: runtimeGeneration, type: string, constraints: [NOT_BLANK]}
+    - {name: subjectHmacKeyIdentity, type: string, format: canonical_sha256, constraints: [NOT_NULL], description: SHA256(HMAC-SHA256(主体关闭独立至少32随机字节key, UTF-8 quwoquan/content.account-closure/runtime/key-identity))；与JWT和Post safety key隔离，由实际key重算，locator摘要不是key identity。}
+    - {name: source, type: ContentAccountClosureRuntimeSource, constraints: [NOT_NULL]}
+    - {name: collections, type: '[]ContentAccountClosureRuntimeCollection', max_items: 9, constraints: [NOT_NULL]}
+    - {name: recordCount, type: int64, min: 0, constraints: [NOT_NULL]}
+    - {name: canonicalDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+    - {name: initializedAt, type: timestamp, constraints: [NOT_NULL]}
   ContentAccountClosureDeadLetterRecoveryRequest:
     description: operator 释放 Content 注销清理 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
     fields:

@@ -14,6 +14,7 @@
     "release",
     "explicitCohort",
     "contentPoolObjects",
+    "artifact",
     "producerBaselineRevision",
     "producerContractDigest"
   ],
@@ -142,6 +143,49 @@
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$",
       "description": "handoff 创建时实际消费的 producer 契约文件 merkle；替代对工作树的 git drift 扫描。"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rootRef",
+        "entries",
+        "treeDigest"
+      ],
+      "properties": {
+        "rootRef": {
+          "$ref": "#/$defs/ref"
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ref",
+              "digest",
+              "bytes"
+            ],
+            "properties": {
+              "ref": {
+                "$ref": "#/$defs/ref"
+              },
+              "digest": {
+                "$ref": "#/$defs/digest"
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "treeDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "description": "handoff 自身之外的完整 release 文件清单；离线校验据此拒绝缺失、额外、链接与摘要漂移。"
     }
   },
   "$defs": {

@@ -255,6 +255,17 @@ sys.exit(17 if service == os.environ["SERVICE_CHECK_FAILURE"] else 0)
 
         self.assertIn('get("L0_static_parallel",120)', source)
         self.assertIn('get("L0_impacted_tests_parallel",160)', source)
+        self.assertRegex(
+            source,
+            r'STATIC_PHASE_BUDGET="\$\{COMMIT_GATE_STATIC_PHASE_BUDGET_SECONDS:-\}"\n'
+            r'TEST_PHASE_BUDGET="\$\{COMMIT_GATE_TEST_PHASE_BUDGET_SECONDS:-\}"\n'
+            r'if \[\[ -z "\$STATIC_PHASE_BUDGET" \]\]; then\n'
+            r'  STATIC_PHASE_BUDGET="\$\(python3 .*get\("L0_static_parallel",120\).*\)"\n'
+            r'fi\n'
+            r'if \[\[ -z "\$TEST_PHASE_BUDGET" \]\]; then\n'
+            r'  TEST_PHASE_BUDGET="\$\(python3 .*get\("L0_impacted_tests_parallel",160\).*\)"\n'
+            r'fi',
+        )
         self.assertIn("STATIC_PHASE_DEADLINE=$((STATIC_STARTED + STATIC_PHASE_BUDGET))", source)
         self.assertIn("TEST_PHASE_DEADLINE=$((TEST_STARTED + TEST_PHASE_BUDGET))", source)
         self.assertIn('[[ "$STATIC_PHASE_DEADLINE" -gt "$HARD_DEADLINE" ]]', source)

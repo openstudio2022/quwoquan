@@ -215,6 +215,36 @@ def test_changed_generated_output_requires_updated_snapshot_manifest(tmp_path: P
     assert report["generatedClassification"]["verification"] == "manifest-output-byte-match-not-regeneration"
 
 
+def test_contract_graph_manifest_trusts_only_exact_graph_and_security_bytes(tmp_path: Path) -> None:
+    import hashlib
+    import json
+    repo, base = init_repo(tmp_path)
+    graph_path = "quwoquan_service/generated/contract_graph.json"
+    security_path = "quwoquan_service/generated/operationsecurity/descriptors.g.go"
+    graph = b'{"schema":"fixture"}\n'
+    security = ("package operationsecurity\n" + "var descriptor = 1\n" * 2001).encode()
+    write(repo, graph_path, graph.decode())
+    write(repo, security_path, security.decode())
+    write(repo, "quwoquan_service/generated/contract_graph_manifest.json", json.dumps({
+        "generator": "tools/qwq_contract",
+        "outputs": [
+            {"path": "generated/contract_graph.json", "sha256": hashlib.sha256(graph).hexdigest()},
+            {"path": "generated/operationsecurity/descriptors.g.go", "sha256": hashlib.sha256(security).hexdigest()},
+        ],
+    }))
+    generated = commit(repo)
+    report = analyze_delta(repo, base=base, head=generated, policy_path=policy_path(repo), mode="fast")
+    assert report["terminal"] == "PASS"
+    assert report["categorySummary"]["generated"]["files"] == 2
+    assert report["generatedClassification"]["sources"][security_path].endswith("contract_graph_manifest.json")
+
+    write(repo, security_path, security.decode() + "var drift = 2\n")
+    drifted = commit(repo)
+    rejected = analyze_delta(repo, base=base, head=drifted, policy_path=policy_path(repo), mode="fast")
+    assert rejected["terminal"] == "GATE_BLOCK"
+    assert rejected["generatedClassification"]["statuses"][security_path]["status"] == "output-digest-mismatch"
+
+
 def test_generated_provenance_requires_output_callback_and_preserves_go_manifest(tmp_path: Path) -> None:
     import hashlib
     import json

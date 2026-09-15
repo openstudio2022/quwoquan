@@ -4,15 +4,18 @@ from datetime import datetime
 import time
 from typing import Any, Protocol
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 from prometheus_client import Counter, Histogram
 from pydantic import ValidationError
 
 from generated.recommendation.ranked_recommendation_window.api.operations import (
+    READ_RECOMMENDATION_RELEASE_READINESS_PATH,
     CREATE_RANKED_RECOMMENDATION_WINDOW_PATH,
     GET_RANKED_RECOMMENDATION_PAGE_PATH,
 )
 from generated.recommendation.ranked_recommendation_window.models.request_response import (
+    ReadRecommendationReleaseReadinessQuery,
+    ReleaseQueryReadinessProof,
     CreateRankedRecommendationWindowCommand,
     GetRankedRecommendationPageQuery,
     RecommendationObjectCard,
@@ -68,6 +71,7 @@ def _http_error(status: int, code: str) -> HTTPException:
 
 def _wire_page(page: DomainPage) -> RankedRecommendationPage:
     return RankedRecommendationPage(
+        contentFence=page.content_fence,
         windowId=page.window_id,
         scenario=page.scenario,
         experimentBucket=page.experiment_bucket,
@@ -146,6 +150,7 @@ def build_router(
                 subject_id=command.subjectId,
                 scenario=command.scenario,
                 limit=command.limit,
+                content_fence=command.contentFence,
             )
             outcome = "ok"
             return _wire_page(page)
@@ -168,31 +173,25 @@ def build_router(
                 time.perf_counter() - started
             )
 
-    @router.get(
+    @router.post(
         GET_RANKED_RECOMMENDATION_PAGE_PATH,
         response_model=RankedRecommendationPage,
     )
     def get_ranked_window_page(
         request: Request,
         windowId: str,
-        subjectId: str = Query(...),
-        fromOrdinal: int = Query(default=0, ge=0),
-        limit: int = Query(default=20, ge=1, le=100),
+        body: Any = Body(...),
         _principal: dict[str, Any] = Depends(require_ranked_window_service),
     ) -> RankedRecommendationPage:
         started = time.perf_counter()
         outcome = "failed"
         try:
-            query = GetRankedRecommendationPageQuery.model_validate(
-                {
-                    "subjectId": subjectId,
-                    "windowId": windowId,
-                    "fromOrdinal": fromOrdinal,
-                    "limit": limit,
-                }
-            )
+            if not isinstance(body, dict) or "windowId" in body:
+                raise ValueError("windowId is path-bound only")
+            query = GetRankedRecommendationPageQuery.model_validate({**body, "windowId": windowId})
             page = facade_provider(request).read_page(
                 subject_id=query.subjectId,
+                content_fence=query.contentFence,
                 window_id=query.windowId,
                 from_ordinal=query.fromOrdinal if query.fromOrdinal is not None else 0,
                 limit=query.limit if query.limit is not None else 20,
@@ -202,6 +201,9 @@ def build_router(
         except (ValidationError, ValueError):
             outcome = "invalid_argument"
             raise _http_error(400, INVALID_ARGUMENT_CODE) from None
+        except IdempotencyConflictError:
+            outcome = "conflict"
+            raise _http_error(409, CONFLICT_CODE) from None
         except LookupError:
             outcome = "not_found"
             raise _http_error(404, NOT_FOUND_CODE) from None
@@ -217,5 +219,24 @@ def build_router(
             _duration_seconds.labels(operation="read", outcome=outcome).observe(
                 time.perf_counter() - started
             )
+
+    @router.post(READ_RECOMMENDATION_RELEASE_READINESS_PATH, response_model=ReleaseQueryReadinessProof)
+    def read_release_readiness(request: Request, body: ReadRecommendationReleaseReadinessQuery):
+        from internal.recommendation.recommendation_candidate_index_view.application.release_candidate import ReleaseNotReady, ReleaseCandidateError
+        try:
+            principal = token_verifier.verify(request.headers.get("Authorization"), required_scope="recommendation.release.readiness")
+            if principal.get("sub") != "service:content-service":
+                raise _http_error(403, FORBIDDEN_CODE)
+            return facade_provider(request).read_release_readiness(body)
+        except AuthorizationFailure as error:
+            raise _http_error(error.status_code, UNAUTHORIZED_CODE if error.status_code == 401 else FORBIDDEN_CODE) from None
+        except ReleaseNotReady:
+            raise _http_error(409, "RECOMMENDATION.RELEASE.not_ready") from None
+        except ReleaseCandidateError:
+            raise _http_error(422, "RECOMMENDATION.RELEASE.invalid_candidate") from None
+        except HTTPException:
+            raise
+        except Exception:
+            raise _http_error(503, "RECOMMENDATION.RELEASE.unavailable") from None
 
     return router

@@ -435,3 +435,22 @@ def internal_role_base_url(manifest: dict[str, Any], role_name: str) -> str:
             f"local topology role has no complete internal endpoint: {role_name}"
         )
     return f"{scheme}://{host}:{port}"
+
+
+def compose_role_base_url(manifest: dict[str, Any], role_name: str) -> str:
+    """由 role 的 canonical Compose publisher 派生同网络服务地址。"""
+    role = manifest.get("roles", {}).get(role_name)
+    if not isinstance(role, dict):
+        raise ValueError(f"local topology role is unavailable: {role_name}")
+    endpoints = role.get("composePublishedEndpoints")
+    ports = {
+        endpoint.get("containerPort")
+        for endpoint in endpoints or []
+        if isinstance(endpoint, dict) and endpoint.get("protocol") == "tcp"
+    }
+    if len(ports) != 1 or not isinstance(next(iter(ports)), int):
+        raise ValueError(f"local topology role has no unique Compose endpoint: {role_name}")
+    host = role_name
+    if re.fullmatch(r"[a-z][a-z0-9-]{1,62}", host) is None:
+        raise ValueError(f"local topology role has unsafe Compose host: {role_name}")
+    return f"http://{host}:{next(iter(ports))}"

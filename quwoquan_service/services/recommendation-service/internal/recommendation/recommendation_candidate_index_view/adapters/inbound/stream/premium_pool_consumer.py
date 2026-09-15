@@ -199,10 +199,14 @@ class PremiumPoolConsumer:
     def _process(self, stream_id: str, values: dict[str, str]) -> None:
         try:
             event = decode_premium_pool_event(values)
-            self._projection.apply_premium_source_event(
-                event_id=event.event_id,
-                snapshot=event.snapshot,
-            )
+            from generated.recommendation.recommendation_candidate_index_view.events.ops_premium_pool_entry_PremiumPoolEntryUpserted import PremiumPoolEntry
+            payload = PremiumPoolEntry.model_validate_json(values["payloadJson"])
+            if payload.releaseAdmissions:
+                self._store.apply_release_premium(event.event_id, payload)
+            else:
+                if payload.supplySource == "qwq_data":
+                    raise ValueError("Data admission members are required")
+                self._projection.apply_premium_source_event(event_id=event.event_id, snapshot=event.snapshot)
         except Exception as error:
             attempts = self._store.record_source_failure(
                 stream_id,

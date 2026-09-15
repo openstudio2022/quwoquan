@@ -2,9 +2,11 @@ package persistence
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	generated "quwoquan_service/services/product-ops-service/generated/product_ops/premium_pool_entry/contract/model"
 	"strings"
 	"time"
 
@@ -14,6 +16,9 @@ import (
 	"quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry/domain/model"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry/domain/ports"
 )
+
+//go:embed migrations/001_release_admissions.sql
+var releaseAdmissionsMigration string
 
 type PostgresStore struct {
 	pool *pgxpool.Pool
@@ -30,6 +35,7 @@ func (store *PostgresStore) EnsureSchema(ctx context.Context) error {
 	_, err := store.pool.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS premium_pool_entries (
   content_id VARCHAR(128) PRIMARY KEY,
+  release_admissions JSONB NOT NULL,
   scope VARCHAR(16) NOT NULL,
   status VARCHAR(32) NOT NULL,
   quality_score DOUBLE PRECISION NOT NULL,
@@ -113,6 +119,16 @@ CREATE TABLE IF NOT EXISTS premium_pool_entry_outbox (
 CREATE INDEX IF NOT EXISTS idx_premium_pool_entry_outbox_ready
   ON premium_pool_entry_outbox(dispatched_at, next_attempt_at, occurred_at);
 `)
+	if err != nil {
+		return err
+	}
+	var present bool
+	if err = store.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='premium_pool_entries' AND column_name='release_admissions')`).Scan(&present); err != nil {
+		return err
+	}
+	if !present {
+		_, err = store.pool.Exec(ctx, releaseAdmissionsMigration)
+	}
 	return err
 }
 
@@ -262,23 +278,27 @@ WHERE content_id=$1 AND payload_digest=$2 AND decision=$3 AND revision=$4
 	}
 
 	entry := change.Entry
+	admissions, err := json.Marshal(append([]generated.ReleasePremiumAdmission{}, entry.ReleaseAdmissions...))
+	if err != nil {
+		return ports.CommitReceipt{}, err
+	}
 	if _, err := tx.Exec(ctx, `
 INSERT INTO premium_pool_entries(
   content_id, scope, status, quality_score, quality_admission,
   supply_source, source_task_id, audit_id, rollback_token,
-  featured_at, expires_at, revision, updated_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+  featured_at, expires_at, revision, updated_at, release_admissions
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 ON CONFLICT (content_id) DO UPDATE SET
   scope=EXCLUDED.scope, status=EXCLUDED.status,
   quality_score=EXCLUDED.quality_score, quality_admission=EXCLUDED.quality_admission,
   supply_source=EXCLUDED.supply_source, source_task_id=EXCLUDED.source_task_id,
   audit_id=EXCLUDED.audit_id, rollback_token=EXCLUDED.rollback_token,
   featured_at=EXCLUDED.featured_at, expires_at=EXCLUDED.expires_at,
-  revision=EXCLUDED.revision, updated_at=EXCLUDED.updated_at`,
+  revision=EXCLUDED.revision, updated_at=EXCLUDED.updated_at, release_admissions=EXCLUDED.release_admissions`,
 		entry.ContentID, entry.Scope, string(entry.Status), entry.QualityScore,
 		entry.QualityAdmission, nullable(entry.SupplySource), nullable(entry.SourceTaskID),
 		entry.AuditID, entry.RollbackToken, entry.FeaturedAt.UTC(), entry.ExpiresAt.UTC(),
-		entry.Revision, entry.UpdatedAt.UTC(),
+		entry.Revision, entry.UpdatedAt.UTC(), admissions,
 	); err != nil {
 		return ports.CommitReceipt{}, err
 	}
@@ -363,7 +383,7 @@ INSERT INTO premium_pool_entry_command_receipts(
 const entrySelect = `
 SELECT content_id, scope, status, quality_score, quality_admission,
        COALESCE(supply_source,''), COALESCE(source_task_id,''), audit_id,
-       rollback_token, featured_at, expires_at, revision, updated_at
+       rollback_token, featured_at, expires_at, revision, updated_at, release_admissions
 FROM premium_pool_entries`
 
 type rowScanner interface {
@@ -373,12 +393,19 @@ type rowScanner interface {
 func scanEntry(row rowScanner) (model.Entry, error) {
 	var entry model.Entry
 	var status string
+	var admissions []byte
 	err := row.Scan(
 		&entry.ContentID, &entry.Scope, &status, &entry.QualityScore,
 		&entry.QualityAdmission, &entry.SupplySource, &entry.SourceTaskID,
 		&entry.AuditID, &entry.RollbackToken, &entry.FeaturedAt,
-		&entry.ExpiresAt, &entry.Revision, &entry.UpdatedAt,
+		&entry.ExpiresAt, &entry.Revision, &entry.UpdatedAt, &admissions,
 	)
+	if err == nil {
+		err = json.Unmarshal(admissions, &entry.ReleaseAdmissions)
+		if err == nil && entry.ReleaseAdmissions == nil {
+			err = fmt.Errorf("release admissions must be explicit array")
+		}
+	}
 	entry.Status = model.Status(status)
 	return entry, err
 }
@@ -450,25 +477,27 @@ func scanReceipt(row rowScanner, idempotencyKey string) (ports.CommitReceipt, bo
 }
 
 type entrySnapshot struct {
-	ContentID        string  `json:"contentId"`
-	Scope            string  `json:"scope"`
-	Status           string  `json:"status"`
-	QualityScore     float64 `json:"qualityScore"`
-	QualityAdmission string  `json:"qualityAdmission"`
-	SupplySource     string  `json:"supplySource,omitempty"`
-	SourceTaskID     string  `json:"sourceTaskId,omitempty"`
-	AuditID          string  `json:"auditId"`
-	RollbackToken    string  `json:"rollbackToken"`
-	FeaturedAt       string  `json:"featuredAt"`
-	ExpiresAt        string  `json:"expiresAt"`
-	TakedownEjected  bool    `json:"takedownEjected"`
-	Revision         int64   `json:"revision"`
-	UpdatedAt        string  `json:"updatedAt"`
+	ReleaseAdmissions []generated.ReleasePremiumAdmission `json:"releaseAdmissions"`
+	ContentID         string                              `json:"contentId"`
+	Scope             string                              `json:"scope"`
+	Status            string                              `json:"status"`
+	QualityScore      float64                             `json:"qualityScore"`
+	QualityAdmission  string                              `json:"qualityAdmission"`
+	SupplySource      string                              `json:"supplySource,omitempty"`
+	SourceTaskID      string                              `json:"sourceTaskId,omitempty"`
+	AuditID           string                              `json:"auditId"`
+	RollbackToken     string                              `json:"rollbackToken"`
+	FeaturedAt        string                              `json:"featuredAt"`
+	ExpiresAt         string                              `json:"expiresAt"`
+	TakedownEjected   bool                                `json:"takedownEjected"`
+	Revision          int64                               `json:"revision"`
+	UpdatedAt         string                              `json:"updatedAt"`
 }
 
 func snapshotFromEntry(entry model.Entry) entrySnapshot {
 	return entrySnapshot{
-		ContentID: entry.ContentID, Scope: entry.Scope,
+		ReleaseAdmissions: append([]generated.ReleasePremiumAdmission{}, entry.ReleaseAdmissions...),
+		ContentID:         entry.ContentID, Scope: entry.Scope,
 		Status: string(entry.Status), QualityScore: entry.QualityScore,
 		QualityAdmission: entry.QualityAdmission, SupplySource: entry.SupplySource,
 		SourceTaskID: entry.SourceTaskID, AuditID: entry.AuditID,
@@ -485,6 +514,9 @@ func entryFromSnapshot(raw []byte) (model.Entry, error) {
 	if err := json.Unmarshal(raw, &snapshot); err != nil {
 		return model.Entry{}, err
 	}
+	if snapshot.ReleaseAdmissions == nil {
+		return model.Entry{}, fmt.Errorf("receipt missing releaseAdmissions")
+	}
 	featuredAt, err := time.Parse(time.RFC3339Nano, snapshot.FeaturedAt)
 	if err != nil {
 		return model.Entry{}, err
@@ -498,7 +530,8 @@ func entryFromSnapshot(raw []byte) (model.Entry, error) {
 		return model.Entry{}, err
 	}
 	return model.Entry{
-		ContentID: snapshot.ContentID, Scope: snapshot.Scope,
+		ReleaseAdmissions: snapshot.ReleaseAdmissions,
+		ContentID:         snapshot.ContentID, Scope: snapshot.Scope,
 		Status: model.Status(snapshot.Status), QualityScore: snapshot.QualityScore,
 		QualityAdmission: snapshot.QualityAdmission, SupplySource: snapshot.SupplySource,
 		SourceTaskID: snapshot.SourceTaskID, AuditID: snapshot.AuditID,

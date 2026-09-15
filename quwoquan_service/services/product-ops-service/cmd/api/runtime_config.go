@@ -64,6 +64,10 @@ type config struct {
 		BatchSize        int `yaml:"batch_size"`
 	} `yaml:"account_enforcement"`
 
+	ContentSource struct {
+		BaseURL string `yaml:"base_url" envAbsolute:"CONTENT_SERVICE_BASE_URL" required:"true"`
+	} `yaml:"content_source"`
+
 	MongoDB  servicekit.MongoConfig    `yaml:"mongodb"`
 	Postgres servicekit.PostgresConfig `yaml:"postgres"`
 

@@ -37,14 +37,14 @@ on:
         required: true
         type: string
     secrets:
-      QWQ_ANDROID_RELEASE_STORE_PASSWORD: {required: true}
-      QWQ_ANDROID_RELEASE_KEY_ALIAS: {required: true}
-      QWQ_ANDROID_RELEASE_KEY_PASSWORD: {required: true}
-      QWQ_ANDROID_RELEASE_KEYSTORE_B64: {required: true}
-      QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256: {required: true}
-      QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON: {required: true}
-      QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON: {required: true}
-      QWQ_APP_RUNTIME_CONFIG_PROD_TRUSTED_PUBLIC_KEYS_JSON: {required: true}
+      QWQ_ANDROID_RELEASE_STORE_PASSWORD: {required: false}
+      QWQ_ANDROID_RELEASE_KEY_ALIAS: {required: false}
+      QWQ_ANDROID_RELEASE_KEY_PASSWORD: {required: false}
+      QWQ_ANDROID_RELEASE_KEYSTORE_B64: {required: false}
+      QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256: {required: false}
+      QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON: {required: false}
+      QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON: {required: false}
+      QWQ_APP_RUNTIME_CONFIG_PROD_TRUSTED_PUBLIC_KEYS_JSON: {required: false}
     outputs:
       app_evidence_ref:
         description: Immutable GHCR OCI digest ref containing all App packages and evidence
@@ -103,31 +103,60 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  select_products:
+    runs-on: ubuntu-latest
+    permissions: {contents: read, packages: read}
+    outputs:
+      matrix: ${{ steps.scope.outputs.matrix }}
+      targets: ${{ steps.scope.outputs.targets }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with: {ref: '${{ inputs.source_git_sha }}', persist-credentials: false}
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with: {version: 1.3.3}
+      - id: scope
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REQUEST_REF: ${{ inputs.qualification_request_ref }}
+          REQUEST_DIGEST: ${{ inputs.qualification_request_digest }}
+        run: |
+          set -euo pipefail
+          test "${REQUEST_REF##*@}" = "$REQUEST_DIGEST"
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          python3 -B quwoquan_ops/ci/promotion_evidence.py materialize-oci --ref "$REQUEST_REF" --output-file "$RUNNER_TEMP/request.json"
+          python3 -B - "$RUNNER_TEMP/request.json" <<'PY' >> "$GITHUB_OUTPUT"
+          import json, sys
+          from pathlib import Path
+          from quwoquan_ops.ci.release_qualification import delivery_targets, app_build_product_ids, digest
+          from quwoquan_ops.cli.lib.app_identity import resolve_build_product
+          request = json.loads(Path(sys.argv[1]).read_bytes())
+          body = dict(request); request_id = body.pop("requestId")
+          if request_id != digest(body): raise SystemExit("GATE_BLOCK: request digest drifted")
+          import subprocess
+          from quwoquan_ops.ci.release_qualification import validate_request_authority
+          root = Path(sys.argv[1]).parent
+          authority = request.get("requestAuthority") or {}
+          subprocess.run(["python3", "-B", "quwoquan_ops/ci/promotion_evidence.py", "materialize-oci", "--ref", authority.get("ref", ""), "--output-file", str(root / authority.get("ref", ""))], check=True, stdout=subprocess.DEVNULL)
+          targets = validate_request_authority(root, request)
+          products = []
+          for product_id in app_build_product_ids(targets):
+              product = resolve_build_product(product_id)
+              products.append({"buildProductId": product_id, "profile": "shared" if product_id == "web-shared" else ("nonprod" if "nonprod" in product_id else "prod"), "format": "web" if product_id == "web-shared" else ("apk" if product_id.startswith("android") else "app")})
+          print("matrix=" + json.dumps({"include": products}, separators=(",", ":")))
+          print("targets=" + json.dumps(targets, separators=(",", ":")))
+          PY
   product:
+    needs: select_products
     name: App package product / ${{ matrix.buildProductId }}
     runs-on: macos-latest
     environment: release-signing
-    timeout-minutes: 30
+    # Fresh dependency sync is bounded at 90m; retain time for setup/package/readback.
+    timeout-minutes: 120
     permissions: {contents: read, packages: write}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - buildProductId: android-nonprod-apk
-            profile: nonprod
-            format: apk
-          - buildProductId: android-prod-apk
-            profile: prod
-            format: apk
-          - buildProductId: ios-nonprod-app
-            profile: nonprod
-            format: app
-          - buildProductId: ios-prod-app
-            profile: prod
-            format: app
-          - buildProductId: web-shared
-            profile: shared
-            format: web
+      matrix: ${{ fromJSON(needs.select_products.outputs.matrix) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -214,10 +243,12 @@ jobs:
           request, request_fact_digest = read_canonical(sys.argv[1])
           admission, admission_fact_digest = read_canonical(sys.argv[2])
           allocation, _ = read_canonical(sys.argv[3])
+          from quwoquan_ops.ci.release_qualification import delivery_targets
+          targets = delivery_targets(request.get("deliveryTargets"))
           request_keys = {
               "schema", "rcTagAdmission", "mainSourceSeal",
               "integrationQualification", "requestAuthority", "tagName",
-              "sourceGitSha", "sourceTree", "requestedAt", "requestId",
+              "sourceGitSha", "sourceTree", "requestedAt", "requestId", "deliveryTargets",
           }
           admission_keys = {
               "schema", "admissionId", "decision", "tagKind", "tagName",
@@ -287,6 +318,9 @@ jobs:
           QWQ_APP_RUNTIME_CONFIG_PROD_TRUSTED_PUBLIC_KEYS_JSON: ${{ secrets.QWQ_APP_RUNTIME_CONFIG_PROD_TRUSTED_PUBLIC_KEYS_JSON }}
         run: |
           set -euo pipefail
+          if [[ "${{ matrix.profile }}" == prod ]]; then
+            python3 quwoquan_ops/gate/require_ci_inputs.py --scope release-signing QWQ_APP_RUNTIME_CONFIG_PROD_TRUSTED_PUBLIC_KEYS_JSON
+          fi
           PACKAGE_ENVIRONMENT=prod
           PACKAGE_TARGET=prod-hosted
           if [ "${{ matrix.profile }}" = nonprod ]; then
@@ -412,7 +446,9 @@ jobs:
 
   aggregate:
     name: App candidate OCI / aggregate
-    needs: [product]
+    needs: [select_products, product]
+    env:
+      DELIVERY_TARGETS: ${{ needs.select_products.outputs.targets }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {contents: read, packages: write, actions: read}
@@ -445,7 +481,8 @@ jobs:
           set -euo pipefail
           printf '%s' "$GITHUB_TOKEN" | oras login "$REGISTRY" --username "${{ github.actor }}" --password-stdin
           trap 'oras logout "$REGISTRY" >/dev/null 2>&1 || true' EXIT
-          python3 quwoquan_ops/ci/app_candidate_oci_transport.py materialize-shards \
+          TARGET_ARGS=(); for target in $(python3 -c 'import json,os; print(" ".join(json.loads(os.environ["DELIVERY_TARGETS"])))'); do TARGET_ARGS+=(--delivery-target "$target"); done
+          python3 quwoquan_ops/ci/app_candidate_oci_transport.py materialize-shards "${TARGET_ARGS[@]}" \
             --bundle-dir "$RUNNER_TEMP/app-candidate-evidence" \
             --repository-prefix "$REGISTRY/$IMAGE_PREFIX" \
             --transport-tag "$SHARD_TRANSPORT_TAG"
@@ -454,7 +491,8 @@ jobs:
         run: |
           set -euo pipefail
           SOURCE_TREE_DIGEST="sha1:$(git rev-parse 'HEAD^{tree}')"
-          python3 quwoquan_ops/ci/render_release_application_package.py validate-bundle \
+          TARGET_ARGS=(); for target in $(python3 -c 'import json,os; print(" ".join(json.loads(os.environ["DELIVERY_TARGETS"])))'); do TARGET_ARGS+=(--delivery-target "$target"); done
+          python3 quwoquan_ops/ci/render_release_application_package.py validate-bundle "${TARGET_ARGS[@]}" \
             --bundle-dir "$RUNNER_TEMP/app-candidate-evidence" \
             --source-git-sha "$SOURCE_GIT_SHA" --source-tree-digest "$SOURCE_TREE_DIGEST"
       - name: Write canonical App factory material
@@ -535,10 +573,12 @@ jobs:
           ):
               raise SystemExit("GATE_BLOCK: App authority locator is invalid")
 
+          from quwoquan_ops.ci.release_qualification import delivery_targets
+          targets = delivery_targets(request.get("deliveryTargets"))
           request_keys = {
               "schema", "rcTagAdmission", "mainSourceSeal",
               "integrationQualification", "requestAuthority", "tagName",
-              "sourceGitSha", "sourceTree", "requestedAt", "requestId",
+              "sourceGitSha", "sourceTree", "requestedAt", "requestId", "deliveryTargets",
           }
           admission_keys = {
               "schema", "admissionId", "decision", "tagKind", "tagName",
@@ -611,8 +651,12 @@ jobs:
               "ios": "ios-prod-app",
               "web": "web-shared",
           }
+          if targets != json.loads(os.environ["DELIVERY_TARGETS"]):
+              raise SystemExit("GATE_BLOCK: product scope drifted from request")
           manifests = {}
-          for platform, product_id in product_ids.items():
+          from quwoquan_ops.ci.release_qualification import required_platforms
+          for platform in sorted(required_platforms(json.loads(os.environ["DELIVERY_TARGETS"])) - {"service"}):
+              product_id = product_ids[platform]
               package = json.loads(
                   (root / "application-packages" / f"{product_id}.json").read_text(
                       encoding="utf-8"
@@ -785,6 +829,7 @@ jobs:
               "ref": os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_REF"],
               "digest": os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST"],
           }
+          from quwoquan_ops.ci.release_qualification import required_platforms
           artifacts = manifest.get("artifacts")
           if (
               set(manifest) != expected_keys
@@ -802,7 +847,7 @@ jobs:
               or manifest.get("artifactBuildNumberAllocation") != allocation
               or claimed_material_digest != calculated_material_digest
               or not isinstance(artifacts, dict)
-              or set(artifacts) != {"android", "ios", "web"}
+              or set(artifacts) != required_platforms(json.loads(os.environ["DELIVERY_TARGETS"])) - {"service"}
           ):
               raise SystemExit("GATE_BLOCK: App factory material identity drifted")
           authority_fields = {
@@ -818,7 +863,9 @@ jobs:
               "web": "web-shared",
           }
           digests = {}
-          for platform, product_id in product_ids.items():
+          from quwoquan_ops.ci.release_qualification import required_platforms
+          for platform in sorted(required_platforms(json.loads(os.environ["DELIVERY_TARGETS"])) - {"service"}):
+              product_id = product_ids[platform]
               candidate = artifacts.get(platform)
               expected_fields = set(ARTIFACT_REQUIRED_FIELDS) | authority_fields
               if platform in {"android", "ios"}:
@@ -859,7 +906,7 @@ jobs:
                       f"GATE_BLOCK: {platform} AppArtifactManifest artifact digest is invalid"
                   )
               digests[platform] = artifact_digest
-          if artifacts["ios"].get("applicationId") == "com.example.quwoquanApp":
+          if "ios" in artifacts and artifacts["ios"].get("applicationId") == "com.example.quwoquanApp":
               raise SystemExit(
                   "GATE_BLOCK: iOS production identity remains externally unregistered"
               )
@@ -869,8 +916,10 @@ jobs:
           print(f"artifact_build_number={manifest['artifactBuildNumber']}")
           print(f"artifact_build_number_allocation_ref={allocation['ref']}")
           print(f"artifact_build_number_allocation_digest={allocation['digest']}")
-          print(f"android_artifact_digest={digests['android']}")
-          print(f"ios_artifact_digest={digests['ios']}")
+          if "android" in digests:
+              print(f"android_artifact_digest={digests['android']}")
+          if "ios" in digests:
+              print(f"ios_artifact_digest={digests['ios']}")
           print(f"web_artifact_digest={digests['web']}")
           print(f"app_material_digest={claimed_material_digest}")
           PY

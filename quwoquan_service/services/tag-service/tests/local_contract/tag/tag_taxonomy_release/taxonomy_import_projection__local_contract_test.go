@@ -238,7 +238,7 @@ func writeReleaseHeader(t *testing.T, releaseRoot, releaseID, releaseKind string
 	merkle := "sha256:" + strings.Repeat("b", 64)
 	writeJSONFile(t, filepath.Join(releaseRoot, "payload", "release.json"), map[string]any{
 		"schema": "quwoquan_data.release", "releaseId": releaseID,
-		"sourceOwner": "qwq_data", "releaseKind": releaseKind, "releaseClass": "research", "canonicalMerkle": merkle,
+		"sourceOwner": "qwq_data", "releaseKind": releaseKind, "canonicalMerkle": merkle,
 	})
 }
 
@@ -256,7 +256,7 @@ print(payload_digest(pathlib.Path(sys.argv[2])))
 	}
 	writeJSONFile(t, filepath.Join(releaseRoot, "attestations", "release.json"), map[string]any{
 		"schema": "quwoquan_data.release_attestation", "releaseId": releaseID,
-		"sourceOwner": "qwq_data", "releaseKind": releaseKind, "releaseClass": "research",
+		"sourceOwner": "qwq_data", "releaseKind": releaseKind,
 		"canonicalMerkle": "sha256:" + strings.Repeat("b", 64),
 		"tagCount":        tagCount, "payloadSha256": strings.TrimSpace(string(digest)),
 	})

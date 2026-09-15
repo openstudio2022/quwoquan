@@ -13,6 +13,15 @@ fields:
 - {name: checkpoint, source: checkpoint, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 - {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
 types:
+  FeatureContentFenceReceipt:
+    description: 本owner独立Content fence消费依据，无正文/第二active；同事件或revision不同摘要冲突，迟到必须Content确切提交可证，不从当前revision猜superseded。只读依赖候选owner公开port，不直接读兄弟私有集合；永久保留摘要不授予安全资格或activation。
+    fields:
+      - {name: eventDigest, type: string, format: canonical_sha256, constraints: [PK, NOT_NULL]}
+      - {name: scopeDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: revision, type: int64, min: 1, constraints: [NOT_NULL]}
+      - {name: payloadDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: proofEvidenceDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: outcome, type: enum, values: [reconciled, superseded], constraints: [NOT_NULL]}
   ListRecommendationSubjectIntersectionsQuery:
     description: 按可信主体与交集类别读取 RecommendationFeatureProfileView 物化的结构化交集理由；channel 是精确分片筛选，未物化该分片时读取 channel 为空的全局快照。
     fields:

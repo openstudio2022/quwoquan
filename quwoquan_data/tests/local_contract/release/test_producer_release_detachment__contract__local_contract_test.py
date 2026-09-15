@@ -168,6 +168,11 @@ def test_producer_release_graph_has_no_consumer_named_selection_model() -> None:
         assert "targetEnvironment" not in source
 
 
+def test_data_requirements_have_no_ops_package_dependency() -> None:
+    requirements = (_DATA_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
+    assert not any("quwoquan_ops" in line or "quwoquan-ops" in line for line in requirements)
+
+
 def test_producer_cli_registration_does_not_load_consumer_modules() -> None:
     source = (_CANONICAL_ROOT / "handler.py").read_text(encoding="utf-8")
 
@@ -410,12 +415,51 @@ def _sealed_handoff_fixture(
 
     execution_id = "20260909--travel-homepage-binding--test--pilot-001"
     digest = "sha256:" + "1" * 64
+    protocol = {
+        "schemaVersion": "1.0.0",
+        "dialectVersion": "1.0.0",
+        "canonicalizationVersion": "1.0.0",
+    }
+    object_revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    sealed_root = root / "payload/objects"
+    object_root = sealed_root / logical_ref
+    draft_path = object_root / "4.draft/page.md"
+    draft_path.parent.mkdir(parents=True)
+    draft_path.write_bytes(b"# Fixture homepage\n")
+    draft_digest = "sha256:" + hashlib.sha256(draft_path.read_bytes()).hexdigest()
+    author = {
+        "host": "cursor", "modelFamily": "GPT-5", "sessionId": "fixture-author",
+        "invocation": {"provider": "openai", "model": "GPT", "runId": "fixture-author-run"},
+    }
+    reviewer = {
+        "host": "cursor", "modelFamily": "GPT-5", "sessionId": "fixture-reviewer",
+        "invocation": {"provider": "openai", "model": "GPT", "runId": "fixture-reviewer-run"},
+    }
     review = {
         "schema": "quwoquan_data.content_review", "stage": "5.review",
         "executionId": execution_id, "objectRef": review_ref, "decision": "approved",
-        "draft": {"ref": "4.draft/page.md", "digest": digest},
+        "author": author, "reviewer": reviewer,
+        "candidateBindings": {
+            "origin": "execution_draft",
+            "page": {"ref": "4.draft/page.md", "digest": draft_digest},
+            "manifest": None,
+            "semanticDocument": None,
+        },
         "dimensions": [{"name": "overall", "decision": "approved", "issues": []}],
         "blockingIssues": [], "assetRights": [],
+        "protocol": protocol,
+        "objectRevision": object_revision,
+        "dispositions": [{
+            "issueId": "homepage-semantic-exact", "objectRef": review_ref,
+            "sourceDigest": digest, "targetDigest": draft_digest,
+            "detectedType": "SEMANTIC_EXACT", "proposedMapping": None,
+            "lossFields": [], "severity": "info",
+            "actor": {"actorId": "fixture-reviewer", "actorType": "independent_reviewer"},
+            "reason": "fixture homepage preserves the reviewed candidate",
+            "policyVersion": "1.0.0", "reviewStatus": "reviewed_confirmed",
+            "outcome": "auto_continue", "processingDisposition": "preserved",
+            "protocol": protocol, "objectRevision": object_revision,
+        }],
     }
     review_raw = json.dumps(review, ensure_ascii=False, sort_keys=True).encode()
     review_digest = "sha256:" + hashlib.sha256(review_raw).hexdigest()
@@ -455,9 +499,6 @@ def _sealed_handoff_fixture(
     ).as_document()
     row = {"objectRef": logical_ref, "carrier": "homepage", "queryDocument": query,
            "queryDigest": canonical_digest(query)}
-    sealed_root = root / "payload/objects"
-    object_root = sealed_root / logical_ref
-    object_root.mkdir(parents=True)
     (object_root / "content_review.json").write_bytes(review_raw)
     _write_handoff_fixture_documents(sealed_root, row, manifest, record)
     return sealed_root, row, manifest, record, review
@@ -471,7 +512,7 @@ def _repository_handoff_fixture(root: Path) -> tuple[Path, dict]:
 
     release_id = "repository-detachment"
     release = root / "data/releases" / release_id
-    logical_ref = "entities/地点/景区/entity-a"
+    logical_ref = "entities/地点/景区/p0001/entity-a/1"
     sealed, row, manifest, _record, _review = _sealed_handoff_fixture(
         release, logical_ref=logical_ref, review_ref=logical_ref,
     )
@@ -514,7 +555,8 @@ def _repository_handoff_fixture(root: Path) -> tuple[Path, dict]:
                     "headerDigest": handoff._digest(header_raw)},
         "explicitCohort": {"scope": "output", "ref": f"data/releases/{release_id}/cohort.json",
                            "digest": handoff._digest(cohort_raw), "document": cohort},
-        "contentPoolObjects": [row], "producerBaselineRevision": cohort["producerBaselineRevision"],
+        "contentPoolObjects": [row], "artifact": handoff._artifact_inventory(release),
+        "producerBaselineRevision": cohort["producerBaselineRevision"],
         "producerContractDigest": digest,
     }
     path = release / "producer_release_handoff.json"
@@ -537,8 +579,66 @@ def test_handoff_repository_identity_is_portable_and_exact(tmp_path: Path) -> No
     # 仓身份匹配不跳过 sealed payload 的真实摘要验证。
     with (path.parent / "payload/objects" / document["contentPoolObjects"][0]["objectRef"] / "manifest.json").open("ab") as stream:
         stream.write(b"\n")
-    with pytest.raises(handoff.ProducerReleaseHandoffError, match="HANDOFF_RELEASE_INTEGRITY_FAILED"):
+    with pytest.raises(handoff.ProducerReleaseHandoffError, match="HANDOFF_ARTIFACT_DIGEST_DRIFT"):
         handoff.read_producer_release_handoff(path, expected_repository_id="test-content", **roots)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code"),
+    (
+        ("missing", "HANDOFF_ARTIFACT_MISSING"),
+        ("extra", "HANDOFF_ARTIFACT_EXTRA"),
+        ("symlink", "HANDOFF_ARTIFACT_SYMLINK"),
+        ("drift", "HANDOFF_ARTIFACT_DIGEST_DRIFT"),
+    ),
+)
+def test_handoff_portable_artifact_failures_are_typed_and_read_only(
+    tmp_path: Path, mutation: str, code: str,
+) -> None:
+    from content.release.canonical import producer_release_handoff as handoff
+    from content.release.canonical.object_transaction_contract import _tree_digest
+
+    path, document = _repository_handoff_fixture(tmp_path)
+    release = path.parent
+    target = release / "cohort.json"
+    before = _tree_digest(release)
+    if mutation == "missing":
+        target.unlink()
+    elif mutation == "extra":
+        (release / "unexpected.txt").write_text("unexpected", encoding="utf-8")
+    elif mutation == "symlink":
+        target.unlink()
+        target.symlink_to(release / "payload/release.json")
+    else:
+        target.write_bytes(target.read_bytes() + b"\n")
+    mutated = None if mutation == "symlink" else _tree_digest(release)
+    with pytest.raises(handoff.ProducerReleaseHandoffError, match=code):
+        handoff.read_producer_release_handoff(
+            path,
+            repo_root=tmp_path / "no-source",
+            output_root=tmp_path / "no-output",
+            release_root=release.parent,
+        )
+    if mutation == "symlink":
+        assert target.is_symlink()
+    else:
+        assert _tree_digest(release) == mutated
+        assert mutated != before
+    assert not (tmp_path / "no-source").exists()
+    assert not (tmp_path / "no-output").exists()
+
+
+def test_handoff_artifact_rejects_path_escape_before_read(tmp_path: Path) -> None:
+    from content.release.canonical import producer_release_handoff as handoff
+
+    path, document = _repository_handoff_fixture(tmp_path)
+    document["artifact"]["entries"][0]["ref"] = "../outside"
+    path.write_bytes(handoff._canonical_bytes(document))
+    with pytest.raises(handoff.ProducerReleaseHandoffError, match="HANDOFF_SCHEMA_INVALID"):
+        handoff.read_producer_release_handoff(
+            path, repo_root=tmp_path / "no-source", output_root=tmp_path / "no-output",
+            release_root=path.parent.parent,
+        )
 
 
 @pytest.mark.parametrize("field,value", [("repositoryId", None), ("repositoryId", "bad/id"), ("producerContractDigest", None)])
@@ -568,6 +668,7 @@ def test_handoff_writer_replay_rejects_another_repository(tmp_path: Path) -> Non
     (path.parent / "cohort.json").write_bytes(cohort_raw)
     document["explicitCohort"]["digest"] = handoff._digest(cohort_raw)
     document["producerBaselineRevision"] = revision
+    document["artifact"] = handoff._artifact_inventory(path.parent)
     path.write_bytes(handoff._canonical_bytes(document))
     publish_root = tmp_path / "publish"
     (publish_root / ".git").mkdir(parents=True)
@@ -618,7 +719,8 @@ def _write_handoff_fixture_documents(sealed_root: Path, row: dict, manifest: dic
 
 @pytest.mark.parametrize("source_identity", [False, True])
 @pytest.mark.parametrize("logical_ref", [
-    "entities/地点/景区/entity-a", "entities/travel/hubei/yichang/three-gorges-dam",
+    "entities/地点/景区/p0001/entity-a/1",
+    "entities/travel/hubei/yichang/p0001/three-gorges-dam/1",
 ])
 def test_handoff_separates_sealed_locator_from_frozen_review_owner(
     tmp_path: Path, logical_ref: str, source_identity: bool,
@@ -627,7 +729,7 @@ def test_handoff_separates_sealed_locator_from_frozen_review_owner(
     from content.release.canonical.producer_release_handoff import _validate_embedded_pool_rows
 
     sealed, row, _manifest, _record, _review = _sealed_handoff_fixture(
-        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/entity-a",
+        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/p0001/entity-a/1",
         source_identity=source_identity,
     )
     before = {path: path.read_bytes() for path in sealed.parent.rglob("*") if path.is_file()}
@@ -650,13 +752,13 @@ def test_handoff_rejects_drift_even_when_query_and_pool_agree(
         ProducerReleaseHandoffError, _validate_embedded_pool_rows,
     )
 
-    logical_ref = "entities/travel/hubei/yichang/three-gorges-dam"
+    logical_ref = "entities/travel/hubei/yichang/p0001/three-gorges-dam/1"
     sealed, row, manifest, record, review = _sealed_handoff_fixture(
-        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/entity-a",
+        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/p0001/entity-a/1",
         source_identity=True,
     )
     admission_mutations = {
-        "wrong_authority_owner": ("rightsAuthorityRef", "entities/地点/景区/other/content_review.json"),
+        "wrong_authority_owner": ("rightsAuthorityRef", "entities/地点/景区/p0001/other/1/content_review.json"),
         "logical_authority_owner": ("rightsAuthorityRef", f"{logical_ref}/content_review.json"),
         "authority_suffix": ("rightsAuthorityRef", "unrelated/content_review.json"),
         "evidence_ref": ("evidenceRef", "other/content_review.json"),
@@ -669,10 +771,10 @@ def test_handoff_rejects_drift_even_when_query_and_pool_agree(
             admission[field] = value
     elif mutation.startswith("source_identity_"):
         field = "objectRef" if mutation.endswith("owner") else "executionId"
-        manifest["sourceIdentity"][field] = "entities/地点/景区/other" if field == "objectRef" else "other-execution"
+        manifest["sourceIdentity"][field] = "entities/地点/景区/p0001/other/1" if field == "objectRef" else "other-execution"
     else:
         if mutation == "review_owner":
-            review["objectRef"] = "entities/地点/景区/other"
+            review["objectRef"] = "entities/地点/景区/p0001/other/1"
         elif mutation == "review_execution":
             review["executionId"] = "other-execution"
         elif mutation == "unapproved":
@@ -703,9 +805,9 @@ def test_handoff_review_locator_keeps_source_and_asset_digest_bindings(
         ProducerReleaseHandoffError, _validate_embedded_pool_rows, canonical_digest,
     )
 
-    logical_ref = "entities/travel/hubei/yichang/three-gorges-dam"
+    logical_ref = "entities/travel/hubei/yichang/p0001/three-gorges-dam/1"
     sealed, row, manifest, record, review = _sealed_handoff_fixture(
-        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/entity-a",
+        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/p0001/entity-a/1",
     )
     source_ref, asset_ref = "sources/s001/source.json", "sources/s001/assets/cover.jpg"
     source_asset = {"sourceUrl": "https://example.test/cover.jpg", "license": "CC BY 4.0",

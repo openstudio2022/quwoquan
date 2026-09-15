@@ -39,11 +39,32 @@ assistant_access:
     mode: none
     scopes: []
 business_rules:
+- ordinary Post唯一增量与重放写入由ContentPostLifecycleConsumer经SearchContentPostInbox/SearchContentPostCheckpoint和ES版本写入完成，Content旧普通Post projector/backfill退役；Content location.place与账号关闭合法写用途不在本次移除。来源字段必须显式null，sourceVersion=同次envelope aggregateVersion，严格拒绝未知/缺字段；Data/fence尚未实现仅error/pending，不设置success或第二active。
+- eventId canonical摘要和完整事件摘要锁定永久去重身份；同event异摘要拒绝，更新/删除同对象checkpoint的事务写锁串行约束所有该consumer实例，ES external版本为写入原子顺序authority。Provider已写而Mongo事务失败不ACK，重放以同版本同摘要收敛。不可逆删除checkpoint和ES墓碑持久保留，不因旧事件或更大重放序号复活；暂时权限隐藏可按更高的合法对象版本恢复，Data跨candidate安全撤回仍独立阻断。
+- Data Creator/Post/Homepage由SearchReleasePreparation同域typed投影port准备，完整release+objectType/objectId+契约/Provider/schema确定隔离文档；projection继续commands:none，不新增HTTP prepare。source事实只来自Content/Entity公开candidate，不跨库。
+- Data候选在result/suggest/retrieval/ids/count/facet/kNN/PIT全部Provider查询前限定Content单次pin的tuple，cursor绑定tuple+revision和既有主体/策略/generation；无active隐藏Data候选，UGC/普通账户继续原来源资格。不存在Creator专用过滤分支，所有Data统一过滤且不补成ordinary。
+- ContentReleaseFenceChanged按Content源专属before/after解码，只读对账after的已准备候选，不首次补写、不墓碑旧candidate、不改变第二active指针。相同eventId/摘要重放幂等，同revision异摘要冲突；迟到事件须有inbox或ReadContentReleaseCommitReceipt可证提交才可superseded，未来/错tuple/缺回执保持pending。事件sourceVersion不与Post对象版本混用，rollback仅读取安全合法保留candidate。
+- 真实PostDeleted/PostPrivacyRedacted/PostPurged及审核拒绝/权限收紧对显式来源canonical对象施加安全失效，覆盖全部保留candidate及未来prepare/rebuild；不只墓碑新tuple，不允许旧upsert或更大Content revision复活。含失效对象的整个candidate/proof不可再activation/rollback，不删减集合重签；privacy派生字节清理优先且保留最小防复活事实，缺owner安全authority保持拒绝。
+- Post源payload只由Content事件owner递归生成，ordinary来源显式null、Data完整environment/sourceOwner/releaseId/manifestDigest，releaseDigest仅审计；唯一sourceVersion等于对象envelope aggregateVersion，未知字段/空串/缺来源拒绝。候选准备及真实lifecycle从Content同一公开mapper生成，同源版本不同摘要拒绝。
 - 索引只消费各 owner 发布的 typed public projection，不跨库读取源集合或补齐私有字段。
-- objectType 与 objectId 唯一定位一条索引文档，版本和 tombstone 必须单调应用。
+- 普通文档以objectType/objectId定位；全部Data文档共用完整release/slice/Provider/schema分区，公开objectId不变。sourceKind区分ordinary与release_candidate，不靠ID前缀或缺字段猜来源，sourceVersion和tombstone在分区内单调应用。
+- SearchReleasePreparation只经本对象application typed candidate投影/查询port准备user.profile/content.post/entity.homepage；本对象保持projection，无prepare HTTP command、无第二runtime entrypoint和active flag，内部投影更新不是调用方业务command。
+- 所有公开result/suggest/retrieval/ids/facet/count/PIT查询先经content.post.ReadActiveReleaseFence单次pin完整tuple+revision，再在Provider请求前限制release_candidate候选；scope content.release.fence.read及500ms上限取Content原operation，不复制其wire，不直读Content Mongo。
+- ordinary分支保持既有账户资格/封禁/隐私；release_candidate分支只允许当前Content tuple且当前Search投影/Provider代际已验证candidate，空pointer不暴露Creator；来源缺失不推断Creator为ordinary，依赖失败不回退旧fence。
+- opaque cursor在既有deployment candidate/query/principal/policy之外绑定Content tuple+revision，切换或回滚revision变化即失效；query前过滤包括facet与分页，不能取回后丢弃补救。
+- stage/replay不覆盖live或previous候选；rollback读取保留分区而不倒退external version。跨来源同公开身份冲突必须阻断，不能由账户事件覆盖Creator或反向覆盖。
 - 搜索排序、权限过滤和稳定分页在 SearchIndexView Reader 内完成，SearchRequestFact 只记录请求事实。
 lifecycle:
   source_events:
+  - content.post.ContentReleaseFenceChanged
+  - content.post.PostPublished
+  - content.post.PostUpdated
+  - content.post.PostSettingsUpdated
+  - content.post.PostPromotedToWork
+  - content.post.PostModerationRejected
+  - content.post.PostDeleted
+  - content.post.PostPrivacyRedacted
+  - content.post.PostPurged
   - ops.experiment.ExperimentPolicyActivated
   - user.user_account.UserProfileSearchProjectionRequested
   - user.user_account.UserSuspended
@@ -53,6 +74,11 @@ lifecycle:
   tombstone: delete_index_document_keep_source_checkpoint
   idempotency: event_id
   event_consumers:
+  - name: ApplyContentPostLifecycle
+    kind: projector
+    facet: ContentPostLifecycleConsumer
+    method: processOnce
+    idempotency: event_id
   - name: ApplySearchExperimentPolicy
     kind: projector
     facet: ExperimentPolicyConsumer

@@ -1,0 +1,55 @@
+kind: process_manager
+description: >-
+  Content 发起的 release Creator/Post/Homepage 统一搜索候选准备；只拥有不可变输入、持久 checkpoint、执行 fence 与查询就绪证明。
+  Provider 已写而 checkpoint 未提交时必须显式恢复；不拥有 release 选择、activation、rollback 或 active pointer。
+identity:
+  fields: [preparationId]
+  version_field: version
+  version_source: checkpoint
+access: {commands: process_facade, queries: named_reader, cross_context: public_contract_only}
+local_identity_reasons:
+  verifiedObjectIds: objectIds已声明canonical relationship，本字段仅保存该不可变集合中已验证子集的checkpoint游标，不产生独立对象身份。
+relationships:
+- name: creatorSource
+  kind: reference
+  target_object: user.CreatorRuntimeProfile
+  cardinality: 'N:N'
+  reference_fields: [creatorIds]
+  access: named_reader
+  consistency: eventual
+  on_delete: retain
+- name: preparedIndex
+  kind: reference
+  target_object: search.SearchIndexView
+  cardinality: 'N:N'
+  reference_fields: [objectIds]
+  access: named_reader
+  consistency: eventual
+  on_delete: retain
+search_policy:
+  exposed: none
+  not_exposed_reason: 准备流程仅承载内部派生查询就绪证明，没有可供用户检索的业务对象语义。
+assistant_access:
+  read: {mode: none, scopes: []}
+  cite: {mode: none, scopes: []}
+  write: {mode: none, scopes: []}
+  denied_reason: 准备操作仅允许受信 Content lifecycle 调用，不对助手或 App 暴露写入与候选选择。
+business_rules:
+- PrepareSearchRelease/ReadSearchReleasePreparation是唯一操作对；Creator/Post/Homepage共用SearchReleaseCandidateSnapshot与ReleaseQueryReadinessProof、一份状态/receipt和一套reader/writer，无版本选择或旧协议兼容。
+- binding.slice与snapshot.kind及恰一source对应，完整release相等，遵循各源的明确上限，不截断；非Creator的creatorIds为空，不伪造User身份。
+- preparationId为ReleaseQueryPreparationBinding的canonical摘要，不含源摘要或Content revision。相同binding不同source冲突；Provider/schema generation只由受管部署验证，environment匹配且sourceOwner=qwq_data。
+- 旧字段/shape/reader/writer不进入新运行，旧completed不得被解释成ready；旧receipt仅离线审计，当前source重新prepare。User/Content/Entity source只经公开typed query，不跨库或伪造账户事件。
+- accepted/running/blocked 不是 ready；只有完整 Provider 查询验证和 completed checkpoint/proof 原子持久化才完成，证明查询还必须只读重验当前 Provider 代际与真实闭包。
+- 准备只调用 SearchIndexView application 投影/候选查询 port；流程不导入兄弟 infrastructure，不直接写 ES，不增加消息流、后台自动重试或独立 active flag。
+- 同一实例通过 version 与 executionToken CAS 取得最长30秒执行权；服务时间推进 leaseUntil，不超过命令 deadline。过期执行者不能提交 checkpoint/proof，迟到 Provider 写按同源版本摘要幂等。
+- 同一幂等键返回已记录命令结果，不能推进；显式续跑使用新命令键与 expectedVersion，但保持同一 preparationId 和完全相同输入。running 未过期拒绝接管，lease失效且CAS成功才恢复。
+- Provider/存储暂时不可用进入 blocked 并保留 verifiedObjectIds；确定的无效源或闭包进入 failed 且不再续跑。输入冲突仅拒绝请求，不修改 existing 实例；修正 immutable 源必须新release candidate。
+- completed/failed 为终态，不因query重写；completed proof与Provider readback不一致时query失败并阻断Content，不伪造新proof或自动回填。
+- candidate物理身份包含完整release tuple与canonical对象且与账户来源隔离；版本化写不覆盖previous live，准备对象无rollback命令。查询closure覆盖新旧同ID、增删作者、数量及摘要，不只比较counts。
+- checkpoint/proof至少保留到对应candidate回滚窗口和活跃读引用结束；无Content保留释放事实不GC，不用TTL删除唯一恢复依据。
+lifecycle:
+  state_field: status
+  states: [accepted, running, blocked, completed, failed]
+  initial: accepted
+  optimistic_concurrency: version
+  idempotency: command_receipt

@@ -28,7 +28,7 @@ from .android_gradle_capsule import (
 from .android_gradle_component import load_android_gradle_component
 from .android_gradle_projection import capsule_android_gradle_snapshot
 from .android_gradle_store import (
-    canonical_android_uat_gradle_invocations,
+    canonical_android_dependency_bundle_invocations,
     write_android_gradle_capsule,
 )
 from .dependency_bundle import AppDependencyBundle, load_active_dependency_bundle
@@ -175,7 +175,7 @@ def load_managed_dependency_snapshots(
         or patrol_ios.manifest != patrol_manifest
     ):
         raise ValueError("App dependency bundle iOS component drifted")
-    invocations = canonical_android_uat_gradle_invocations(repository)
+    invocations = canonical_android_dependency_bundle_invocations(repository)
     android = load_android_gradle_component(
         project_root=repository,
         component_root=bundle.component_root("androidGradle"),
@@ -276,7 +276,7 @@ def copy_dependency_bundle_to_capsule(
             capsule_root=root,
         ),
     ]
-    invocations = canonical_android_uat_gradle_invocations(
+    invocations = canonical_android_dependency_bundle_invocations(
         root / "repo"
     )
     write_android_gradle_capsule(

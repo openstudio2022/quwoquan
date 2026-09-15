@@ -21,7 +21,7 @@ class TrainingSample(BaseModel):
     labels: dict[str, Any] | None = None
     ts: float | None = None
     featureSnapshotAt: float | None = None
-    featureLagSeconds: dict[str, Any] | None = None
+    featureLagSeconds: float | None = None
 
     model_config = ConfigDict(populate_by_name=True)
 

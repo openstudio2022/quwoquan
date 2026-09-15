@@ -21,8 +21,14 @@ fi
 if [[ -z "$HARD_BUDGET" ]]; then
   HARD_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("hardFailSeconds",300)))' "$BUDGETS_JSON")"
 fi
-STATIC_PHASE_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("phaseBudgetsSeconds",{}).get("L0_static_parallel",120)))' "$BUDGETS_JSON")"
-TEST_PHASE_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("phaseBudgetsSeconds",{}).get("L0_impacted_tests_parallel",160)))' "$BUDGETS_JSON")"
+STATIC_PHASE_BUDGET="${COMMIT_GATE_STATIC_PHASE_BUDGET_SECONDS:-}"
+TEST_PHASE_BUDGET="${COMMIT_GATE_TEST_PHASE_BUDGET_SECONDS:-}"
+if [[ -z "$STATIC_PHASE_BUDGET" ]]; then
+  STATIC_PHASE_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("phaseBudgetsSeconds",{}).get("L0_static_parallel",120)))' "$BUDGETS_JSON")"
+fi
+if [[ -z "$TEST_PHASE_BUDGET" ]]; then
+  TEST_PHASE_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("phaseBudgetsSeconds",{}).get("L0_impacted_tests_parallel",160)))' "$BUDGETS_JSON")"
+fi
 if ! [[ "$SOFT_BUDGET" =~ ^[0-9]+$ && "$HARD_BUDGET" =~ ^[1-9][0-9]*$ && "$STATIC_PHASE_BUDGET" =~ ^[1-9][0-9]*$ && "$TEST_PHASE_BUDGET" =~ ^[1-9][0-9]*$ ]]; then
   echo "[commit-gate] FAIL: budgets must be non-negative soft and positive hard/phase integers" >&2
   exit 2

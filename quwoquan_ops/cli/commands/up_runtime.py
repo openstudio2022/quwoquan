@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
+
 def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
     from quwoquan_ops.cli.commands import up_app_launch as _up_app_launch
@@ -453,6 +454,11 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
         # composition.  content-release only narrows runtime probes; it never
         # selects the retired Alpha/Beta build-from-worktree implementations.
         env = _stackctl._gamma_env_from_port_manifest(topology, requested_target)
+        from quwoquan_ops.cli.commands.managed_python import (
+            bind_managed_stackctl_python,
+        )
+
+        bind_managed_stackctl_python(env)
         env[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = ""
         env[_stackctl.RUNTIME_CANDIDATE_ROOT_ENV] = str(
             (fixed_candidate_snapshot or {}).get("candidateDir") or ""
@@ -643,21 +649,15 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
         and requested_target in {"alpha-local", "beta-local", "gamma-local"}
         and args.workload in {"full", "content-commercial"}
     ):
-        product_ops_base_url = str(
-            (_stackctl.get_target(topology, requested_target).get("publicBases") or {}).get(
-                "productOps"
-            )
-            or ""
-        ).strip()
         try:
-            if not product_ops_base_url:
-                raise _stackctl.ExperimentPolicyActivationError(
-                    "target topology lacks Product Ops public base"
-                )
-            policy_receipt = _stackctl.activate_search_experiment_policy(
+            # Local policy activation belongs to Product Ops itself.  The public
+            # Ops host intentionally enters API Edge and therefore inherits its
+            # full aggregate admission; startup activation uses the manifest-
+            # derived loopback port while preserving the same authentication,
+            # generated operation guard, owner handler, transaction and outbox.
+            policy_receipt = _stackctl.activate_search_experiment_policy_via_published_port(
                 environment=env_name,
                 target=requested_target,
-                product_ops_base_url=product_ops_base_url,
             )
             policy_receipt_path = report_dir / "experiment-policy-activation.json"
             _stackctl.write_json(policy_receipt_path, policy_receipt)

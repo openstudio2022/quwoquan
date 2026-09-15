@@ -1,0 +1,490 @@
+{
+  "generator": "tools/codegen_rec_model_python",
+  "outputs": [
+    {
+      "path": "services/content-service/generated/content/feed_delivery_page/recommendation_ranked_window.g.go",
+      "sha256": "a67d63c5563fca9798225bd4ca75ebed7ee34fd108f85fa120bbd50782503738",
+      "bytes": 5623
+    },
+    {
+      "path": "services/content-service/generated/content/post/recommendation_feature_profile.g.go",
+      "sha256": "69f49c4ae2857396663aaf5ebaceee99fb81beae280cb43c61f98f8263df344a",
+      "bytes": 16660
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/ranked_recommendation_window/__init__.py",
+      "sha256": "15b9f7ccb695f2c75e0f2ea253c9b15475c99511c1bfec81a1aeca49be0ba5f5",
+      "bytes": 239
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/ranked_recommendation_window/api/__init__.py",
+      "sha256": "27e26c389161fb8eeb6923f9bfdff745797cd6ef8e3e7e44ff8c658310dedca8",
+      "bytes": 164
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/ranked_recommendation_window/api/operations.py",
+      "sha256": "84458e3723bdf7fce53479cd63709e344651942439b03bdf5efb656ae2ebd43e",
+      "bytes": 561
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/ranked_recommendation_window/api/schemas.py",
+      "sha256": "98fd3c9dbf9f7d6b8da1f82ac7878ec33acde75ed80cbb9ad5496fd192a42623",
+      "bytes": 949
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/ranked_recommendation_window/models/__init__.py",
+      "sha256": "d5aad551679d497daebbf6b0791152add835fd8b342246ccd7eca78251659c20",
+      "bytes": 475
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/ranked_recommendation_window/models/request_response.py",
+      "sha256": "5037127f5ab3f3737637690a638d75b25e3cb907325b37b990caf956fafdd6f3",
+      "bytes": 4950
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/candidate_contracts.py",
+      "sha256": "fa7fd84ac711eb0e72723e566a5df466415a9d3f7ede8db23c2fc9dada8ddd14",
+      "bytes": 7958
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/circle_gathering_GatheringAdmissionControlChanged.py",
+      "sha256": "d33c3d3f92ed3cdf97dcf5bf6641dc4b951ca7bf83644cc18d186dce032ce88d",
+      "bytes": 651
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/circle_gathering_GatheringCancelled.py",
+      "sha256": "f3e076ce1db4e1d9a39c9298e515dad1b2e5adea478ab3149399409aa9f4612e",
+      "bytes": 670
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/circle_gathering_GatheringCompleted.py",
+      "sha256": "4e6ad90a67f8c78c2d5ab21a06fb2efac6e814d579433d270c80389af588ccbc",
+      "bytes": 758
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/circle_gathering_GatheringParticipationChanged.py",
+      "sha256": "641db0c8f562334bcaab0ae815723b0dde2c729345db402f860d29434fad0935",
+      "bytes": 812
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/circle_gathering_GatheringPublished.py",
+      "sha256": "7e0402ef180a5f4711ed07240bf1d858c4c41c3fb953908e1e97aedb8d8addc9",
+      "bytes": 1162
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/circle_gathering_GatheringRevisionAppended.py",
+      "sha256": "e66acaef0e97590d7d8b2c536713f8e5f178fc1bc181c9a96ed879ddf5a05992",
+      "bytes": 722
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/content_post_ContentReleaseFenceChanged.py",
+      "sha256": "a6dd34df473be17704c9ea743c4dd5ac2206078c6351d9bfc734ae96b6724878",
+      "bytes": 1525
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/content_post_PostDeleted.py",
+      "sha256": "1330a4547848a388c7486e0baa3e30af7882a35b0b03eeffad742c19c04f3af3",
+      "bytes": 1159
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/content_post_PostModerationRejected.py",
+      "sha256": "a8bcd40a7f289d4341b6f20082c546dae9d5cae6beb0d92bded2c750774ee42e",
+      "bytes": 4763
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/content_post_PostPrivacyRedacted.py",
+      "sha256": "951b65e7a0f89617917362bdf5a25c5a8155eb3b19fe6530067f2394c56c7948",
+      "bytes": 1101
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/content_post_PostPromotedToWork.py",
+      "sha256": "350182355f64d55f202ca5648a0d34ca983f4b9582ceb24ce23df176cdeeac67",
+      "bytes": 4759
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/content_post_PostPublished.py",
+      "sha256": "ebceb35151f4ba58ef097485d1fffa5460ea12548bb2c9a295965ad0155172ad",
+      "bytes": 4754
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/content_post_PostPurged.py",
+      "sha256": "fe1f565a3e8a459869798da418ba3ebc6264c323e08032f6b547a28fc11da09f",
+      "bytes": 935
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/content_post_PostReleaseCandidatePrepared.py",
+      "sha256": "85c30a8fe188336943fad17bbb8d5e6ae3a41bfe6506f93beee8e67133dab1f3",
+      "bytes": 4458
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/content_post_PostSettingsUpdated.py",
+      "sha256": "2ff2538a04087287c13b5eb439d1c7b81cf97e4d2aecafa993dae179cae4812e",
+      "bytes": 4760
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/content_post_PostUpdated.py",
+      "sha256": "3095da4067e83ab209c2354a94f92fb7967b3c0971599f1a94effc2e64148089",
+      "bytes": 4752
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/ops_premium_pool_entry_PremiumPoolEntryRolledBack.py",
+      "sha256": "526174fc6aa47d3f0c4c25dd461d904460ec90d7f2d7c0e9601df9b87c1b0d59",
+      "bytes": 2084
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/ops_premium_pool_entry_PremiumPoolEntryTakedownEjected.py",
+      "sha256": "f3b92f82062f380448f2027863da47ed9e2fabc369f403801dcd820a170346d9",
+      "bytes": 2089
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/ops_premium_pool_entry_PremiumPoolEntryUpserted.py",
+      "sha256": "7ae31ef50c736a4cd5e03bd3c3a64423534a9f893c40c6e6c950ffca59462766",
+      "bytes": 2082
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/user_persona_relationship_PersonaBlocked.py",
+      "sha256": "f9b89680844feae43e65868dcbbede5658650f5199c3613c973fc988a4fde280",
+      "bytes": 885
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/user_persona_relationship_PersonaFollowStateChanged.py",
+      "sha256": "a6531472eda4fd55e5e960db10090bf13121850e9f928cd4ffbc3eddb152628b",
+      "bytes": 896
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/user_persona_relationship_PersonaUnblocked.py",
+      "sha256": "4113370ca9ef450bf3adf008f667ce53b09c402ded4f6ec1b95f7fba00a83427",
+      "bytes": 887
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/user_user_account_UserRestored.py",
+      "sha256": "7d1c222d90124b8aa7cdd4917c5a78f32bb6588d082239e1bf53ce8a6244e774",
+      "bytes": 623
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_candidate_index_view/events/user_user_account_UserSuspended.py",
+      "sha256": "e2ae25076ed313490c4e811dd9e00278f68eb46202a180c0421277134d9e9ad8",
+      "bytes": 624
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/__init__.py",
+      "sha256": "15b9f7ccb695f2c75e0f2ea253c9b15475c99511c1bfec81a1aeca49be0ba5f5",
+      "bytes": 239
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/api/__init__.py",
+      "sha256": "27e26c389161fb8eeb6923f9bfdff745797cd6ef8e3e7e44ff8c658310dedca8",
+      "bytes": 164
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/api/operations.py",
+      "sha256": "a9342276c386e5c419abd08b974ae355e1527e7a13a0dbf1b78e4e928c380488",
+      "bytes": 1286
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/api/schemas.py",
+      "sha256": "c40888df7998191758831e0adc09ee8d707b4264eef08f73de199035bc8fcb3e",
+      "bytes": 2315
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/candidate_contracts.py",
+      "sha256": "8af9cbd9e787d52024d7526e2eda8008846414513b1c98008e677e063ae4fc3e",
+      "bytes": 29182
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/circle_circle_membership_CircleMembershipApproved.py",
+      "sha256": "412c1b7810588dca84f48b5a0e1069cf2cf57b9880ba95919f1925c09bba2039",
+      "bytes": 1503
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/circle_circle_membership_CircleMembershipJoined.py",
+      "sha256": "2b7e3d90ace9c6b6fff39bd8065867c2d2b70838b4bf5a4205ea2be5c3cee864",
+      "bytes": 1501
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/circle_circle_membership_CircleMembershipLeft.py",
+      "sha256": "3d525f63599189a82dc39f932f1ea361c7e8225ff092bf54d3e10a4e474427bd",
+      "bytes": 1499
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/circle_circle_membership_CircleMembershipRejected.py",
+      "sha256": "1c724168ed5e1f3ff640f84da973707a1f3660a59ba393463a87213bee33cb24",
+      "bytes": 1503
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/circle_circle_membership_CircleMembershipRequested.py",
+      "sha256": "0e711f75e8bc9f53ed53ace0ab6c5e5ea6648b9f83bae8b30d139bcd9d2f3a5b",
+      "bytes": 1504
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/circle_circle_membership_CircleMembershipRoleChanged.py",
+      "sha256": "13addc08d27452de0cdfb87a4f6c22201a7c88164471835f5e3b51cb837ef45b",
+      "bytes": 1506
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/circle_gathering_GatheringParticipationChanged.py",
+      "sha256": "641db0c8f562334bcaab0ae815723b0dde2c729345db402f860d29434fad0935",
+      "bytes": 812
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/circle_gathering_GatheringPublished.py",
+      "sha256": "7e0402ef180a5f4711ed07240bf1d858c4c41c3fb953908e1e97aedb8d8addc9",
+      "bytes": 1162
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/content_content_behavior_fact_ContentBehaviorRecorded.py",
+      "sha256": "1b54572a91c94847f5f15ca3fae855b74701481f4c49ae7d50708d336b3e8bc3",
+      "bytes": 1467
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/content_post_ContentReleaseFenceChanged.py",
+      "sha256": "a6dd34df473be17704c9ea743c4dd5ac2206078c6351d9bfc734ae96b6724878",
+      "bytes": 1525
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/content_post_PostDeleted.py",
+      "sha256": "1330a4547848a388c7486e0baa3e30af7882a35b0b03eeffad742c19c04f3af3",
+      "bytes": 1159
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/content_post_PostModerationRejected.py",
+      "sha256": "a8bcd40a7f289d4341b6f20082c546dae9d5cae6beb0d92bded2c750774ee42e",
+      "bytes": 4763
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/content_post_PostPrivacyRedacted.py",
+      "sha256": "951b65e7a0f89617917362bdf5a25c5a8155eb3b19fe6530067f2394c56c7948",
+      "bytes": 1101
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/content_post_PostPromotedToWork.py",
+      "sha256": "350182355f64d55f202ca5648a0d34ca983f4b9582ceb24ce23df176cdeeac67",
+      "bytes": 4759
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/content_post_PostPublished.py",
+      "sha256": "ebceb35151f4ba58ef097485d1fffa5460ea12548bb2c9a295965ad0155172ad",
+      "bytes": 4754
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/content_post_PostPurged.py",
+      "sha256": "fe1f565a3e8a459869798da418ba3ebc6264c323e08032f6b547a28fc11da09f",
+      "bytes": 935
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/content_post_PostSettingsUpdated.py",
+      "sha256": "2ff2538a04087287c13b5eb439d1c7b81cf97e4d2aecafa993dae179cae4812e",
+      "bytes": 4760
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/content_post_PostUpdated.py",
+      "sha256": "3095da4067e83ab209c2354a94f92fb7967b3c0971599f1a94effc2e64148089",
+      "bytes": 4752
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/search_recommendation_signal_fact_SearchRecommendationSignalPublished.py",
+      "sha256": "88c4783788d24087ab66ec57f9ced9ec0fc7c3cafa9101cbc14ee6ed296e72ed",
+      "bytes": 803
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/tag_tag_feedback_fact_TagFeedbackRecorded.py",
+      "sha256": "17e42d5305bc8bdbc7109afb637f055c54c0d21f9e8dffabceb44b97c19956b3",
+      "bytes": 504
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/user_persona_relationship_PersonaBlocked.py",
+      "sha256": "f9b89680844feae43e65868dcbbede5658650f5199c3613c973fc988a4fde280",
+      "bytes": 885
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/user_persona_relationship_PersonaFollowStateChanged.py",
+      "sha256": "a6531472eda4fd55e5e960db10090bf13121850e9f928cd4ffbc3eddb152628b",
+      "bytes": 896
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/events/user_persona_relationship_PersonaUnblocked.py",
+      "sha256": "4113370ca9ef450bf3adf008f667ce53b09c402ded4f6ec1b95f7fba00a83427",
+      "bytes": 887
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/intersection_policy.py",
+      "sha256": "8cbfe4b48f8d49aee30a82c352e18ddbfcf262e642b99d6143c4884a2aa4a2a5",
+      "bytes": 15311
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/models/__init__.py",
+      "sha256": "05a7afa739c584878b9fa71faf1c4a9dc5fee9b6bf7d368f56b9eb22ae5892ea",
+      "bytes": 1141
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/models/request_response.py",
+      "sha256": "bbfbc5a5f1e643a75adc3fefb7165d0472553115dba6331c042baa34337d32c5",
+      "bytes": 28210
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/__init__.py",
+      "sha256": "15b9f7ccb695f2c75e0f2ea253c9b15475c99511c1bfec81a1aeca49be0ba5f5",
+      "bytes": 239
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/api/__init__.py",
+      "sha256": "27e26c389161fb8eeb6923f9bfdff745797cd6ef8e3e7e44ff8c658310dedca8",
+      "bytes": 164
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/api/operations.py",
+      "sha256": "8dbb0b186a2abfeae493d871b64d0d49bfce8e44000493472da010b9290d72f8",
+      "bytes": 713
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/api/schemas.py",
+      "sha256": "13a6244b47394a03943c71161eddf057bdae17eff0b2a7a875024c5c8d331c54",
+      "bytes": 755
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/content_features.py",
+      "sha256": "ae9849c42e1f6bf637cec51add407fa733f671205a6f8f8c9db9e43a2a11cb90",
+      "bytes": 731
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/contract/event/events.go",
+      "sha256": "a461a082bc421499a721b49e19f8fdf3242da338509dff7f842e142860dfe011",
+      "bytes": 570
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/control_plane/__init__.py",
+      "sha256": "ce46c96db47aa7f351e7c9df06cf9245b483f36a1893628de0ee7e756dc4eea3",
+      "bytes": 502
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/control_plane/platform_config.py",
+      "sha256": "1743575507f6f12a71fc6faae8396a6c6d4f07f89db197518a9e8466bbc84799",
+      "bytes": 151790
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/control_plane/platform_control_plane.py",
+      "sha256": "bc718533be75c3cdbfa7b3557a04c6976b02dc890c4db701df76d10eed488333",
+      "bytes": 18358
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/control_plane/portal_menu.py",
+      "sha256": "f5541302794fc2009e64eb74b426ad669a6d78ac5bc85bab2e14f8bb0f54f774",
+      "bytes": 7449
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/control_plane/portal_shell.py",
+      "sha256": "c41df9984e02a0a6571454ed2ea10519483c5ce55251b67d09a650bfc0165072",
+      "bytes": 654
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/control_plane/product_audit_schema.py",
+      "sha256": "7124b92099b548083eb6b97cc241f5bbbc185f8b60702228f891b2888e1af21d",
+      "bytes": 2305
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/control_plane/product_config.py",
+      "sha256": "1a5d21c6cde97a93174a5babd7bf6091e59a402b19f484e31d1773e5efebdedc",
+      "bytes": 2589
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/control_plane/product_control_plane.py",
+      "sha256": "ca9e58067a52a93ae59b32f50f772c05ccdc745fc7c22c99b837252b08bcbf7b",
+      "bytes": 20000
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/control_plane/product_workflow.py",
+      "sha256": "3647220fa8629351d03c4d16793e925dbbbe6495583e3a694b3f8a293bd6caad",
+      "bytes": 5775
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/control_plane/shared_control_plane.py",
+      "sha256": "8b8e5efb964b69258ed133e80e98483aba11f35dbb6d1b2be2ef863f7886f8ca",
+      "bytes": 3468
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/models/__init__.py",
+      "sha256": "7c6101ab4e8d7d2a4c7c18b44b8ec37a021f6c1f25c652101013486e720bb84f",
+      "bytes": 453
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/models/projections.py",
+      "sha256": "b895999074712445a7c76f0396a8fc9c7db91e98380d7f12b5459bb29482844a",
+      "bytes": 1416
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/models/request_response.py",
+      "sha256": "6060dd616559feb48723a5faac7a213ad4635764ca8731bb08980f2ffd8c97fb",
+      "bytes": 3984
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/training_sample.py",
+      "sha256": "9ddaa79fd13fd451ca2be2bef7aae5566348f98563b1aa57d8190541cb216c06",
+      "bytes": 1109
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/content_post_ContentReleaseFenceChanged/payload.g.go",
+      "sha256": "02bbeccbd63f4b32b63587463071e2765540a0c01bc8706f7ab67097831dbf31",
+      "bytes": 798
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/content_post_PostDeleted/payload.g.go",
+      "sha256": "3cc73475616b35a80f7fa20888db50413634d522f656105ba2318c566b45cb49",
+      "bytes": 841
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/content_post_PostModerationRejected/payload.g.go",
+      "sha256": "f74fe39a618b794c0ea9229a52c3d3d210eddec4c2952746009a647af54e41af",
+      "bytes": 6296
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/content_post_PostPrivacyRedacted/payload.g.go",
+      "sha256": "45e47e6677c27fc6f5ebd3da5a1278558907ee1911f1db4635435885136b347a",
+      "bytes": 755
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/content_post_PostPromotedToWork/payload.g.go",
+      "sha256": "e372f7c5fe9ddd8889040a82ed82e2f8a3c100d853461dce7ba1f836c857dd88",
+      "bytes": 6292
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/content_post_PostPublished/payload.g.go",
+      "sha256": "dec4943d4cc1bd06077ca5afacff60448dcd8a939a8cce1007ca3c4679e7b7b1",
+      "bytes": 6287
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/content_post_PostPurged/payload.g.go",
+      "sha256": "275b6ce813b6b9708f64213ae774d3c47e9b100a5be301e12a21578a25f827a6",
+      "bytes": 641
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/content_post_PostSettingsUpdated/payload.g.go",
+      "sha256": "ab532a5b8e28fce0f7d35866f4997deab6e0d4e8ae6e9f08b4fcef0c0b418d5d",
+      "bytes": 6293
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/content_post_PostUpdated/payload.g.go",
+      "sha256": "41dacd8526b21e397e559067dbc72a87e54998e1530052ddf93e5774ce6c2e34",
+      "bytes": 6285
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/ops_experiment_ExperimentPolicyActivated/payload.g.go",
+      "sha256": "588af0c1b404a2d5ad67f875b5d57da6aabc909ca5f96c234e2334c40cb7fd7b",
+      "bytes": 814
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/user_user_account_UserProfileSearchProjectionRequested/payload.g.go",
+      "sha256": "2f834b15a95220ff9d424af068b4c11463a1a477045ae2026005582ee49733b2",
+      "bytes": 764
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/user_user_account_UserRestored/payload.g.go",
+      "sha256": "0ffdf2777c4f803bbc706b6ed4234b2e4bb3dfab52326143ccd4f04a5dc95ad4",
+      "bytes": 504
+    },
+    {
+      "path": "services/search-service/generated/search/search_index_view/events/user_user_account_UserSuspended/payload.g.go",
+      "sha256": "13329cd02f4ff714f660ffc70ea7268a3bb5faa1b015307cda752b27c451bd89",
+      "bytes": 505
+    }
+  ]
+}

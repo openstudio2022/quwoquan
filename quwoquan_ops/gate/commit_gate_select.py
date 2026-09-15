@@ -650,7 +650,11 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
                     selected.append(path)
         if "/tests/" in path:
             continue
-        if any(path.startswith(prefix) for prefix in DATA_CROSSCUTTING_PREFIXES):
+        # 全局依赖声明影响整个 Data runtime；与横切实现同样交给所属全套合同，
+        # 不按包名或调用方收窄，也不把任意 requirements 近似文件名视为声明。
+        if path == "quwoquan_data/requirements.txt" or any(
+            path.startswith(prefix) for prefix in DATA_CROSSCUTTING_PREFIXES
+        ):
             if DATA_LOCAL_CONTRACT_ROOT not in deferred:
                 deferred.append(DATA_LOCAL_CONTRACT_ROOT)
         for source_prefix, test_targets in source_mappings:

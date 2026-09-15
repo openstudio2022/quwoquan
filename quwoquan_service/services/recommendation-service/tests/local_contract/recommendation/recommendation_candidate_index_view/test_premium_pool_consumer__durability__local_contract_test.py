@@ -15,6 +15,8 @@ from internal.recommendation.recommendation_candidate_index_view.adapters.inboun
 
 def _fields(*, event_type: str = "PremiumPoolEntryUpserted", status: str = "active"):
     payload = {
+        "releaseAdmissions": [],
+        "revision": 1,
         "contentId": "post-001",
         "scope": "global",
         "status": status,

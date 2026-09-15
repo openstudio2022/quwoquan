@@ -658,6 +658,8 @@ def register_runtime_parser(subparsers: Any) -> None:
     actions.add_argument("--prepare-secret-directories", action="store_true",
                          help="仅准备仓外长期秘密输入目录，不生成密钥、不上传或启用服务")
     actions.add_argument("--confirm-runtime-install", action="store_true")
+    actions.add_argument("--confirm-execution-helper-install", action="store_true",
+                         help="为单机 prevalidate 平面账号安装受限 systemd helper；不部署业务")
     actions.add_argument("--confirm-lock-migration", action="store_true",
                          help="迁移已确认仅含 rehearsal 容器的 musl 共享锁，保留所有数据卷")
     actions.add_argument("--verify-health-scheduler", action="store_true",
@@ -1109,6 +1111,84 @@ def _migrate_native_locks(host_id: str) -> dict[str, Any]:
             "releaseEligibility": "GATE_BLOCK"}
 
 
+def _execution_helper_install_script(helper: bytes, contract: bytes) -> str:
+    """以 exact digest create-once 安装 helper；同字节重放幂等，漂移时拒绝覆盖。"""
+    import base64
+    encoded = base64.b64encode(json.dumps({
+        name: {"bytes": base64.b64encode(raw).decode("ascii"),
+               "digest": "sha256:" + hashlib.sha256(raw).hexdigest()}
+        for name, raw in {"execution_guard.py": helper, "contract.py": contract}.items()
+    }, sort_keys=True, separators=(",", ":")).encode()).decode("ascii")
+    source = r"""set -euo pipefail
+python3 -I -B - __PAYLOAD__ <<'PYHELPER'
+import base64,fcntl,hashlib,json,os,pathlib,stat,sys,tempfile
+home=pathlib.Path.home(); lib=home/'.local/lib/quwoquan-execution-guard'; bindir=home/'.local/bin'
+for path in (home/'.local', home/'.local/lib', lib, bindir):
+ path.mkdir(mode=0o700, exist_ok=True); info=path.lstat()
+ if not stat.S_ISDIR(info.st_mode) or info.st_uid!=os.getuid() or info.st_mode & 0o022: raise SystemExit('EXECUTION_HELPER_UNSAFE_DIRECTORY')
+lockfd=os.open(lib/'.install.lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
+try:
+ fcntl.flock(lockfd,fcntl.LOCK_EX|fcntl.LOCK_NB); manifest=json.loads(base64.b64decode(sys.argv[1],validate=True))
+ for name,item in sorted(manifest.items()):
+  raw=base64.b64decode(item['bytes'],validate=True); digest='sha256:'+hashlib.sha256(raw).hexdigest()
+  if digest!=item['digest']: raise SystemExit('EXECUTION_HELPER_SOURCE_DIGEST_INVALID')
+  target=lib/name
+  if target.exists() or target.is_symlink():
+   info=target.lstat()
+   if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.getuid() or info.st_mode & 0o077 or info.st_nlink!=1: raise SystemExit('EXECUTION_HELPER_UNSAFE_EXISTING')
+   if target.read_bytes()!=raw: raise SystemExit('EXECUTION_HELPER_DRIFT')
+  else:
+   fd,tmp=tempfile.mkstemp(prefix='.install-',dir=lib)
+   with os.fdopen(fd,'wb') as out: out.write(raw);os.fchmod(out.fileno(),0o500);out.flush();os.fsync(out.fileno())
+   os.link(tmp,target,follow_symlinks=False);os.unlink(tmp)
+ wrapper=bindir/'quwoquan-plane-execution-guard'; body=b'#!/bin/sh\nexec python3 -I -B "$HOME/.local/lib/quwoquan-execution-guard/execution_guard.py" "$@"\n'
+ if wrapper.exists() or wrapper.is_symlink():
+  info=wrapper.lstat()
+  if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.getuid() or info.st_mode & 0o077 or info.st_nlink!=1 or wrapper.read_bytes()!=body: raise SystemExit('EXECUTION_HELPER_WRAPPER_DRIFT')
+ else:
+  fd,tmp=tempfile.mkstemp(prefix='.install-',dir=bindir)
+  with os.fdopen(fd,'wb') as out: out.write(body);os.fchmod(out.fileno(),0o500);out.flush();os.fsync(out.fileno())
+  os.link(tmp,wrapper,follow_symlinks=False);os.unlink(tmp)
+ import subprocess
+ check=subprocess.run([str(wrapper),'--help'],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True,timeout=15)
+ if check.returncode!=0: raise SystemExit('EXECUTION_HELPER_WRAPPER_SELF_CHECK_FAILED')
+ print(json.dumps({'status':'installed','helperDigest':manifest['execution_guard.py']['digest'],'contractDigest':manifest['contract.py']['digest'],'helperMode':oct(wrapper.stat().st_mode & 0o777),'wrapperSelfCheck':'passed'},sort_keys=True,separators=(',',':')))
+finally: os.close(lockfd)
+PYHELPER
+"""
+    return source.replace("__PAYLOAD__", shlex.quote(encoded))
+
+
+def _install_execution_helper(host_id: str) -> dict[str, Any]:
+    from quwoquan_ops.cli.prod.prod_hosted_topology import resolve_plan
+    plan = resolve_plan(_load_yaml(ACCESS_MANIFEST), instance="prevalidate", host_ids=[host_id])
+    if {item.plane for item in plan} != {"service", "edge"} or len(plan) != 2:
+        return {"exitCode": 2, "summary": "GATE_BLOCK execution helper requires complete single-host prevalidate inventory"}
+    helper = (ROOT / "quwoquan_ops/cli/prod/hosted_release_ledger_lib/execution_guard.py").read_bytes()
+    contract = (ROOT / "quwoquan_ops/cli/prod/hosted_release_ledger_lib/contract.py").read_bytes()
+    script = _execution_helper_install_script(helper, contract)
+    evidence = []
+    for placement in sorted(plan, key=lambda item: item.plane):
+        result = _run_plane_script(placement, script, timeout=60)
+        try: readback = json.loads(result.stdout.strip())
+        except json.JSONDecodeError: readback = {}
+        expected_helper = "sha256:" + hashlib.sha256(helper).hexdigest()
+        expected_contract = "sha256:" + hashlib.sha256(contract).hexdigest()
+        valid = (result.returncode == 0 and readback.get("status") == "installed"
+                 and readback.get("helperDigest") == expected_helper
+                 and readback.get("contractDigest") == expected_contract
+                 and readback.get("helperMode") == "0o500"
+                 and readback.get("wrapperSelfCheck") == "passed")
+        evidence.append({"plane": placement.plane, "account": placement.account,
+                         "status": "installed" if valid else "GATE_BLOCK",
+                         "helperDigest": readback.get("helperDigest", ""),
+                         "contractDigest": readback.get("contractDigest", "")})
+        if not valid:
+            return {"exitCode": 2, "summary": "GATE_BLOCK execution helper install/readback failed",
+                    "details": evidence, "releaseEligibility": "GATE_BLOCK"}
+    return {"exitCode": 0, "summary": "execution helper installed and read back for prevalidate planes",
+            "details": evidence, "nonPromotable": True, "releaseEligibility": "GATE_BLOCK"}
+
 def _runtime_failure(error: Exception) -> dict[str, Any]:
     """subprocess 异常默认含完整 argv；只返回类型和状态，不泄漏 SSH 私钥位置。"""
     if isinstance(error, subprocess.TimeoutExpired):
@@ -1126,7 +1206,8 @@ def _runtime_failure(error: Exception) -> dict[str, Any]:
 def command_runtime_bootstrap(args: argparse.Namespace) -> dict[str, Any]:
     """明确动作独立执行；安装/目录存在均不授予发布或 credentials-ready 资格。"""
     actions = [name for name in ("prepare_secret_directories", "confirm_lock_migration",
-               "verify_health_scheduler", "confirm_runtime_install") if getattr(args, name, False)]
+               "verify_health_scheduler", "confirm_runtime_install", "confirm_execution_helper_install")
+               if getattr(args, name, False)]
     if len(actions) != 1:
         return {"exitCode": 2, "summary": "GATE_BLOCK requires one action and explicit confirmation"}
     action = actions[0]
@@ -1139,6 +1220,8 @@ def command_runtime_bootstrap(args: argparse.Namespace) -> dict[str, Any]:
             return _migrate_native_locks(args.host_id)
         if action == "verify_health_scheduler":
             return _verify_native_scheduler(args.host_id)
+        if action == "confirm_execution_helper_install":
+            return _install_execution_helper(args.host_id)
         return _install_native_runtime(args)
     except (ValueError, RuntimeError, OSError, subprocess.SubprocessError) as error:
         return _runtime_failure(error)

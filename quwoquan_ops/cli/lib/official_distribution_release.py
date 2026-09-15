@@ -89,6 +89,7 @@ def deploy_official_distribution(
     app_factory_root: Path,
     distribution_root: Path,
     expected_current: str = "",
+    guarded_distribution_pointer: Any = None,
 ) -> dict[str, Any]:
     component_key = _component_key(kind)
     graph_root = graph_root.expanduser().resolve()
@@ -113,6 +114,7 @@ def deploy_official_distribution(
             payload_path=payload_path,
             distribution_root=distribution_root,
             expected_current=expected_current,
+            guarded_distribution_pointer=guarded_distribution_pointer,
         )
     else:
         result = _deploy_android(
@@ -121,6 +123,7 @@ def deploy_official_distribution(
             payload_path=payload_path,
             distribution_root=distribution_root,
             expected_current=expected_current,
+            guarded_distribution_pointer=guarded_distribution_pointer,
         )
     receipt = {
         "schema": "client-app.official-distribution.receipt",
@@ -346,7 +349,9 @@ def _deploy_web(
     current = distribution_root / "web" / "current"
     previous = _current_symlink_name(current)
     _require_expected_current(previous, expected_current, label="Web")
-    _atomic_symlink(current, Path("releases") / release_id)
+    if guarded_distribution_pointer is None:
+        raise OfficialDistributionReleaseError("EXECUTION.CONTINUOUS_SESSION_REQUIRED: Web current pointer")
+    guarded_distribution_pointer(kind="web", pointer=current, desired=destination, expected_current=expected_current)
     return {
         "releaseId": release_id,
         "previousReleaseId": previous,
@@ -432,7 +437,9 @@ def _deploy_android(
             "apkSigningCertificateSHA256"
         ],
     }
-    _atomic_json(latest_path, latest)
+    if guarded_distribution_pointer is None:
+        raise OfficialDistributionReleaseError("EXECUTION.CONTINUOUS_SESSION_REQUIRED: Android public pointer")
+    guarded_distribution_pointer(kind="android", pointer=latest_path, desired=latest, expected_current=expected_current)
     product_ops_environment = {
         "PRODUCT_OPS_APP_RELEASE_PUBLIC_ORIGIN": manifest["publicOrigin"],
         "PRODUCT_OPS_ANDROID_LATEST_VERSION": version,
@@ -700,7 +707,14 @@ def _load_official_distribution_material(
     tree = str(stable.get("sourceTree") or "")
     build = material.get("artifactBuildNumber")
     expected_tree_digest = _prefixed_tree_digest(tree)
+    from quwoquan_ops.ci.release_qualification import validate_delivery_scope, required_platforms
+    try:
+        targets = validate_delivery_scope(request, material, qualification, stable, effect="app")
+    except ValueError as exc:
+        raise OfficialDistributionReleaseError(str(exc)) from exc
     stable_artifacts = _formal_artifacts(stable.get("artifacts"), "releaseTagAdmission")
+    if {item["platform"] for item in stable_artifacts} != required_platforms(targets):
+        raise OfficialDistributionReleaseError("deliveryTargets artifact coverage drifted")
     qualification_artifacts = _formal_artifacts(
         qualification.get("artifacts"), "qualification"
     )
@@ -1016,7 +1030,7 @@ def _formal_artifacts(value: Any, label: str) -> list[dict[str, str]]:
             raise OfficialDistributionReleaseError(f"{label} artifact identity drifted")
         seen.add(platform)
         result.append({"platform": platform, "ociRef": locator, "digest": digest})
-    if seen != {"android", "ios", "service", "web"}:
+    if seen not in ({"android", "ios", "web"}, {"android", "ios", "service", "web"}):
         raise OfficialDistributionReleaseError(f"{label} artifact platforms are incomplete")
     return sorted(result, key=lambda item: item["platform"])
 

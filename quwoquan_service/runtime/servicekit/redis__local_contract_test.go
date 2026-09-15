@@ -5,6 +5,41 @@ import (
 	"testing"
 )
 
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/explicit-semantics-no-implicit-inference/spec.md#gwt-001.t1
+func TestNamedACLSceneIsDeclaredAndPreserved(t *testing.T) {
+	var injected struct {
+		General RedisSceneConfig `yaml:"general" envPrefix:"REDIS_GENERAL"`
+	}
+	t.Setenv("FIX_REDIS_GENERAL_USERNAME", "source-owner")
+	if err := ApplyEnvOverrides("FIX", &injected); err != nil {
+		t.Fatal(err)
+	}
+	if injected.General.Username != "source-owner" || injected.General.IsUndeclared() {
+		t.Fatal("named ACL env override lost")
+	}
+	if (RedisSceneConfig{Username: "source-owner"}).IsUndeclared() {
+		t.Fatal("username-only scene was erased")
+	}
+	for _, mode := range []string{RedisModeStandalone, RedisModeCluster} {
+		cfg := RedisSceneConfig{Mode: mode, Username: "source-owner", Password: "isolated-secret"}
+		if mode == RedisModeStandalone {
+			cfg.Addr = "127.0.0.1:6379"
+		} else {
+			cfg.Addrs = []string{"127.0.0.1:6379"}
+		}
+		runtime, err := cfg.SceneConfig()
+		if err != nil || runtime.Username != cfg.Username {
+			t.Fatalf("named ACL lost in %s: %v", mode, err)
+		}
+	}
+	if _, err := (RedisSceneConfig{Mode: RedisModeMemory, Username: "source-owner"}).DeclaredMode(); err == nil {
+		t.Fatal("memory silently ignores named ACL")
+	}
+	if _, err := (RedisSceneConfig{Mode: RedisModeStandalone, Addr: "localhost:6379", Username: " owner "}).DeclaredMode(); err == nil {
+		t.Fatal("username whitespace silently normalized")
+	}
+}
+
 func TestNewRedisRouterRequiresAtLeastOneScene(t *testing.T) {
 	if _, _, err := NewRedisRouter(nil); err == nil {
 		t.Fatal("expected error for empty scene map")

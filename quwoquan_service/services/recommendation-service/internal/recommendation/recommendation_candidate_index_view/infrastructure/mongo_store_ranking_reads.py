@@ -39,6 +39,7 @@ class MongoCandidateRankingReadOps:
     ) -> dict[str, Any]:
         normalized_scenario = scenario.strip()
         query: dict[str, Any] = {
+            "sourcePartition": "ordinary",
             "scenario": "content_feed",
             "accountRestricted": {"$ne": True},
         }
@@ -148,6 +149,7 @@ class MongoCandidateRankingReadOps:
         entity_candidates = list(
             self._candidates.find(
                 {
+                    "sourcePartition": "ordinary",
                     "scenario": "content_feed",
                     "accountRestricted": {"$ne": True},
                     "primaryHomepageId": {"$type": "string", "$ne": ""},

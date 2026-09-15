@@ -63,7 +63,7 @@ func writeSemanticHomepagePackage(t *testing.T, dir string, title string, withMe
 	writeFile(t, filepath.Join(dir, "page.md"),
 		"---\ncoverImage: asset://"+assetID+"\n---\n\n# "+title+"\n\n## 概况\n\n真实正文。\n")
 	assetBytes := "本地 fixture 配图：" + assetID
-	assetPath := "assets/cover.jpg"
+	assetPath := "media/cover.jpg"
 	asset := map[string]any{
 		"assetId": assetID, "caption": "树正寨", "role": "cover",
 		"path": assetPath, "bytes": len(assetBytes),

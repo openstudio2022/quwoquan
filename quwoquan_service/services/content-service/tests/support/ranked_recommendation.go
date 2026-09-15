@@ -125,11 +125,12 @@ type engineRankedGateway struct {
 }
 
 type engineWindow struct {
-	subjectID   string
-	scenario    string
-	metadata    testWindowMetadata
-	items       []rtrec.FeedItem
-	objectCards []transport.RecommendationObjectCard
+	subjectID    string
+	scenario     string
+	contentFence transport.ReleasePinnedQueryFence
+	metadata     testWindowMetadata
+	items        []rtrec.FeedItem
+	objectCards  []transport.RecommendationObjectCard
 }
 
 type testWindowMetadata struct {
@@ -182,6 +183,7 @@ func (gateway *engineRankedGateway) Create(
 		command.Scenario,
 		0,
 		command.Limit,
+		command.ContentFence,
 		metadata,
 		response.Items,
 		gateway.objectCards,
@@ -189,10 +191,11 @@ func (gateway *engineRankedGateway) Create(
 	)
 	gateway.mu.Lock()
 	gateway.windows[windowID] = engineWindow{
-		subjectID: command.SubjectId,
-		scenario:  command.Scenario,
-		metadata:  metadata,
-		items:     append([]rtrec.FeedItem(nil), response.Items...),
+		subjectID:    command.SubjectId,
+		scenario:     command.Scenario,
+		contentFence: command.ContentFence,
+		metadata:     metadata,
+		items:        append([]rtrec.FeedItem(nil), response.Items...),
 		objectCards: cloneRecommendationObjectCards(
 			gateway.objectCards,
 		),
@@ -235,6 +238,7 @@ func (gateway *engineRankedGateway) GetPage(
 		state.scenario,
 		fromOrdinal,
 		limit,
+		state.contentFence,
 		state.metadata,
 		state.items,
 		state.objectCards,
@@ -252,6 +256,7 @@ func testRankedPage(
 	scenario string,
 	fromOrdinal int,
 	limit int,
+	contentFence transport.ReleasePinnedQueryFence,
 	metadata testWindowMetadata,
 	allItems []rtrec.FeedItem,
 	objectCards []transport.RecommendationObjectCard,
@@ -282,6 +287,7 @@ func testRankedPage(
 		})
 	}
 	page := transport.RankedRecommendationPage{
+		ContentFence:          contentFence,
 		WindowId:              windowID,
 		Scenario:              strings.TrimSpace(scenario),
 		ExperimentBucket:      metadata.experimentBucket,

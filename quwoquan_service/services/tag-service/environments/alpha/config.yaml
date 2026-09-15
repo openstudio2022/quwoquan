@@ -1,5 +1,6 @@
 overrides:
-  sys.tag-service.user_account_security_authority.base_url: http://user-service:18081
   sys.tag-service.redis.general.addr: redis:6379
+  sys.tag-service.content_release_fence.base_url: http://content-service:18080
+  sys.tag-service.user_account_security_authority.base_url: http://user-service:18081
 secretRefs: {}
-externalBindings:
+externalBindings: {}

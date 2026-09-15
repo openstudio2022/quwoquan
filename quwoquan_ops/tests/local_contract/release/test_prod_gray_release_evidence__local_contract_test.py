@@ -139,8 +139,7 @@ def test_prod_requires_explicit_activation_admission_not_legacy_eaf_input() -> N
 
     assert inputs == {
         "release_tag_admission_ref",
-        "previous_active_released_ledger_ref",
-        "rollback_readiness_ref",
+        "prior_ref",
     }
     assert "ProdActivationAdmissionFact" in text
     assert "EnvironmentAcceptanceFact" not in text

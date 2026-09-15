@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	contentpostinfra "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/contentpost"
 	"strings"
 	"time"
 
@@ -67,11 +68,23 @@ func DeclaredEnvKeys() ([]string, error) {
 func NewModule() (*servicekit.Module, error) {
 	return servicekit.Bootstrap(serviceName, servicekit.BootstrapSpec[config]{
 		OperationDescriptors: operationsecurity.ForDomain("search"),
+		OperationGuard:       searchOwnerRuntimeGuard,
 		AuthorityScopes:      []string{"user.account.security.read"},
 		SnapshotGuard:        rejectRetiredSearchSnapshotSections,
 		ValidateConfig:       validateSearchConfig,
 		Assemble:             assembleSearchDomain,
 	})
+}
+
+// 仅注册consumer执行健康；15s沿用同服务UserProfile等consumer约定，不声明索引freshness。
+func registerContentPostConsumer(asm *servicekit.Assembly, consumer *searchapplication.ContentPostLifecycleConsumer, logger *slog.Logger) {
+	asm.Health.Register("content-post-consumer-execution", func(context.Context) error {
+		if asm.Context.Err() != nil {
+			return fmt.Errorf("Content Post consumer worker context stopped")
+		}
+		return consumer.Healthy(15 * time.Second)
+	})
+	asm.Workers.Add(func(ctx context.Context) { consumer.Run(ctx, logger) })
 }
 
 func assembleSearchDomain(asm *servicekit.Assembly, cfg *config) error {
@@ -107,6 +120,22 @@ func assembleSearchDomain(asm *servicekit.Assembly, cfg *config) error {
 	if err != nil {
 		return fmt.Errorf("message transport construction failed: %w", err)
 	}
+	postProjection, err := contentpostinfra.New(asm.MongoDB, searchruntimees.NewIndexer(built.Writer, built.Writer.WriteIndexName()))
+	if err != nil {
+		return err
+	}
+	if err = postProjection.EnsureIndexes(ctx); err != nil {
+		return err
+	}
+	postHandler, err := searchapplication.NewContentPostHandler(postProjection)
+	if err != nil {
+		return err
+	}
+	postConsumer, err := searchapplication.NewContentPostLifecycleConsumer(messageTransport, postHandler, "search-content-post", asm.Identity.ServiceName+"-"+asm.Identity.InstanceID)
+	if err != nil {
+		return err
+	}
+	registerContentPostConsumer(asm, postConsumer, logger)
 	// 启动期 ping 与 readiness 上的 redis 检查目的不同：前者不允许一个连不上
 	// Redis 的实例进入 Bind/Start 相位，后者只回答运行期抖动。
 	if err := asm.RedisRouter.PingAll(ctx); err != nil {
@@ -185,11 +214,20 @@ func assembleSearchDomain(asm *servicekit.Assembly, cfg *config) error {
 	}
 
 	routesMux := http.NewServeMux()
+	creatorCredentials, err := asm.Auth.ServiceCredentials("content.release.fence.read")
+	if err != nil {
+		return err
+	}
+	creatorFence, err := RegisterCreatorPreparation(ctx, routesMux, asm.MongoDB, built.Writer, built.Reader, asm.Identity.AppEnv, cfg.CreatorSearch.BindingDigest, cfg.CreatorSearch.PhysicalNamespace, cfg.ContentService.BaseURL, creatorCredentials, postHandler)
+	if err != nil {
+		return fmt.Errorf("Creator preparation assembly: %w", err)
+	}
 	httpadapter.NewHandlerWithConfig(
 		searchSvc,
 		decorator,
 		metricsRecorder,
 		httpadapter.HandlerConfig{
+			CreatorFence:    creatorFence,
 			Intersections:   intersectionAttacher,
 			RequestFacts:    requestFactRecorder,
 			CandidateDigest: strings.TrimSpace(os.Getenv("QWQ_RELEASE_CANDIDATE_DIGEST")),

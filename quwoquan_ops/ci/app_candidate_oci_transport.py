@@ -48,6 +48,7 @@ def _parser() -> argparse.ArgumentParser:
     materialize.add_argument("--bundle-dir", required=True, type=Path)
     materialize.add_argument("--repository-prefix", required=True)
     materialize.add_argument("--transport-tag", required=True)
+    materialize.add_argument("--delivery-target", action="append", required=True, choices=("app", "service"))
     return parser
 
 
@@ -179,8 +180,11 @@ def publish_shard(*, bundle_dir: Path, repository: str, transport_tag: str) -> s
 
 
 def materialize_shards(
-    *, bundle_dir: Path, repository_prefix: str, transport_tag: str
+    *, bundle_dir: Path, repository_prefix: str, transport_tag: str,
+    delivery_target_scope: list[str],
 ) -> dict[str, str]:
+    from quwoquan_ops.ci.release_qualification import app_build_product_ids
+    selected_products = app_build_product_ids(delivery_target_scope)
     if re.fullmatch(r"ghcr\.io/[a-z0-9._/-]+", repository_prefix) is None:
         raise ValueError("App candidate repository prefix is not canonical GHCR")
     bundle = bundle_dir.expanduser().resolve()
@@ -190,7 +194,7 @@ def materialize_shards(
     refs: dict[str, str] = {}
     with tempfile.TemporaryDirectory(prefix="app-candidate-shards-pull-") as directory:
         scratch = Path(directory)
-        for build_product_id in BUILD_PRODUCT_IDS:
+        for build_product_id in selected_products:
             repository = (
                 f"{repository_prefix}/app-candidate-shard-{build_product_id}"
             )
@@ -211,7 +215,7 @@ def materialize_shards(
                 )
             merge_archive(children[0], bundle)
             refs[build_product_id] = exact_ref
-    if tuple(refs) != BUILD_PRODUCT_IDS:
+    if tuple(refs) != selected_products:
         raise ValueError("App candidate build-product shard set is incomplete")
     return refs
 
@@ -233,6 +237,7 @@ def main() -> int:
                     bundle_dir=args.bundle_dir,
                     repository_prefix=args.repository_prefix,
                     transport_tag=args.transport_tag,
+                    delivery_target_scope=args.delivery_target,
                 )
             }
     except (

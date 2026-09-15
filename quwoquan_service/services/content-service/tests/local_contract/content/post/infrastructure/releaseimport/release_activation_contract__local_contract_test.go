@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	wire "quwoquan_service/services/content-service/generated/content/post/contract/releasequery"
+	app "quwoquan_service/services/content-service/internal/content/post/application/public"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
 )
 
@@ -100,36 +102,29 @@ func TestImportOptionsRejectResetSourceAndInvalidCleanupPolicy(t *testing.T) {
 	}
 }
 
-func TestBuildActivationEventsBindsRevisionTargetAndPredecessor(t *testing.T) {
+func TestCommittedFencePayloadBindsRevisionTargetAndPredecessor(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0).UTC()
-	post := releaseimport.PostDoc{
-		ContentID: "content-a", PostRef: "posts/article/a/1", ContentType: "article",
-		ContentIdentity: "work", AuthorID: "author-a", ArticleMarkdown: "# A",
-	}
-	events, err := releaseimport.BuildActivationPostLifecycleEvents(
-		[]releaseimport.PostDoc{post}, nil,
-		releaseimport.ImportOptions{
-			ReleaseID: "release-b", ManifestDigest: "sha256:" + strings.Repeat("b", 64),
-			ReleaseKind: "content", SourceOwner: "qwq_data",
-			ProjectionVersion: 17,
-		}, now,
-		releaseimport.ActiveReleaseBinding{
-			Found: true, SourceOwner: "qwq_data", ReleaseID: "release-a",
-			ManifestDigest: "sha256:" + strings.Repeat("a", 64), Revision: 3,
-		}, 4,
-	)
-	if err != nil || len(events) != 1 || events[0].AggregateVersion != 17 ||
-		!strings.Contains(events[0].EventID, "data-release-activation:4:17:release-b:") ||
-		!strings.Contains(events[0].EventID, "release-a") {
-		t.Fatalf("activation event identity mismatch events=%+v err=%v", events, err)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(events[0].Payload, &payload); err != nil {
+	before := wire.ContentActiveReleaseFence{Found: true, Environment: "alpha", SourceOwner: "qwq_data", ReleaseId: "a", ManifestDigest: "sha256:" + strings.Repeat("a", 64), Revision: 3, ProjectionVersion: 16, ActivatedAt: &now}
+	after := before
+	after.ReleaseId = "b"
+	after.ManifestDigest = "sha256:" + strings.Repeat("b", 64)
+	after.Revision = 4
+	after.ProjectionVersion = 17
+	receipt := wire.ContentReleaseCommitReceipt{Transition: wire.ContentReleaseFenceChangedPayload{Before: before, After: after}}
+	receipt.EventId = app.ReleaseFenceEventID(after)
+	receipt.PayloadDigest = app.ReleaseFencePayloadDigest(receipt.Transition)
+	q := wire.ReadContentReleaseCommitReceiptQuery{Expected: before, Release: wire.ReleaseCandidateBinding{Environment: "alpha", SourceOwner: "qwq_data", ReleaseId: "b", ManifestDigest: after.ManifestDigest}}
+	if err := app.ValidateReleaseCommitReceipt(q, receipt); err != nil {
 		t.Fatal(err)
 	}
-	if payload["sourceOwner"] != "qwq_data" || payload["releaseId"] != "release-b" ||
-		payload["manifestDigest"] != "sha256:"+strings.Repeat("b", 64) ||
-		payload["activationRevision"] != float64(4) {
-		t.Fatalf("activation event tuple is incomplete: %#v", payload)
+	raw, _ := json.Marshal(receipt.Transition)
+	var payload map[string]any
+	_ = json.Unmarshal(raw, &payload)
+	if len(payload) != 2 || payload["before"] == nil || payload["after"] == nil {
+		t.Fatal("fence must only contain before/after")
+	}
+	receipt.Transition.After.Revision++
+	if app.ValidateReleaseCommitReceipt(q, receipt) == nil {
+		t.Fatal("tampered revision accepted")
 	}
 }

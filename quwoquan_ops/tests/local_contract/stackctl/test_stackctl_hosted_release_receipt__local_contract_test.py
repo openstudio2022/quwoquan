@@ -12,6 +12,35 @@ from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.prod import hosted_release_ledger
 
 
+def _execution_install(root: Path, hosts: int = 1):
+    """隔离安装fixture；不初始化真实host，不签hosted资格。"""
+    import hashlib
+    from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution import ExecutionSlot
+    root.mkdir(parents=True)
+    (root / ".ledger.lock").touch()
+    execution = root / "execution"; execution.mkdir()
+    (execution / "history").mkdir()
+    (execution / "slot.json").write_text(json.dumps({"status": "closed", "generation": 0, "revision": 0}))
+    placements = []
+    data = b'{"environment":"prod","fixture":"not-hosted"}'
+    for host in range(hosts):
+        for plane in ("edge", "service"):
+            for instance in ("gray", "prod"):
+                identity = f"host-{host}-{plane}-{instance}"
+                runtime = root / "placements" / identity
+                (runtime / "runtime").mkdir(parents=True)
+                (runtime / "runtime/artifact-identity.json").write_bytes(data)
+                guard = runtime / "process/execution-guard"; guard.mkdir(parents=True)
+                (guard / "guard.lock").touch()
+                (guard / "guard.json").write_text(json.dumps({"status": "closed"}))
+                placements.append({"id": identity, "hostId": f"host-{host}", "plane": plane,
+                    "instance": instance, "replicaId": f"r{host}", "runtimeRoot": str(runtime), "guardRoot": str(guard)})
+    inventory = {"target": "prod-hosted", "environment": "prod", "authorityHostId": "host-0",
+                 "sourceDigest": "sha256:" + "a" * 64, "placements": placements}
+    (execution / "inventory.json").write_text(json.dumps(inventory))
+    return ExecutionSlot(root), "sha256:" + hashlib.sha256(data).hexdigest()
+
+
 class HostedReleaseReceiptContractTest(unittest.TestCase):
     _DIGEST = "sha256:" + "a" * 64
     _FROM_CANDIDATE = "sha256:" + "b" * 64
@@ -27,8 +56,13 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             "adapterDigest": self._DIGEST,
         }
 
-    def _admission(self) -> dict[str, str]:
+    def _admission(self) -> dict:
         return {
+            "deliveryTargets": ["service"],
+            "prior": {"state": "present", "target": "prod-hosted", "environment": "prod",
+                      "previousReleased": {"ref": self._NEXT_CANDIDATE, "digest": self._NEXT_CANDIDATE},
+                      "rollbackReadiness": {"ref": "immutable/rollback.json", "digest": self._DIGEST},
+                      "expectedGeneration": 1, "ociDigests": [self._FROM_CANDIDATE]},
             "prodActivationAdmissionRef": self._DIGEST,
             "prodActivationAdmissionOciDigest": self._DIGEST,
             "prodActivationAdmissionPayloadDigest": self._DIGEST,
@@ -132,6 +166,525 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             },
         )
         return dict(result["state"]), dict(result["receipt"])
+
+    # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-005
+    def test_prior_observation_missing_root_is_unknown_without_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "missing"
+            result = hosted_release_ledger.observe_prior(root, self._SERVICE)
+            self.assertEqual(result["priorState"], "unknown")
+            self.assertFalse(result["admissionEligible"])
+            self.assertFalse(root.exists())
+
+    def test_prior_observation_empty_directory_and_missing_lock_are_not_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            result = hosted_release_ledger.observe_prior(root, self._SERVICE)
+            self.assertEqual(result["priorState"], "unknown")
+            self.assertEqual(list(root.iterdir()), [])
+            (root / ".ledger.lock").touch()
+            (root / "receipts").mkdir()
+            before = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+            result = hosted_release_ledger.observe_prior(root, self._SERVICE)
+            self.assertEqual(result["reason"], "PRIOR.TARGET_ABSENCE_UNPROVEN")
+            self.assertFalse(result["admissionEligible"])
+            self.assertEqual(before, sorted(path.relative_to(root).as_posix() for path in root.rglob("*")))
+
+    def test_prior_observation_current_release_history_and_lost_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self._commit(state_dir=root, stage="100", decision="continue", generation=0)
+            result = hosted_release_ledger.observe_prior(root, self._SERVICE)
+            self.assertEqual(result["priorState"], "present", result)
+            self.assertEqual(result["generation"], 1)
+            self.assertFalse(result["admissionEligible"])
+            before = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
+            self.assertEqual(result, hosted_release_ledger.observe_prior(root, self._SERVICE))
+            self.assertTrue(all(path.read_bytes() == value for path, value in before.items()))
+            (root / f"{self._SERVICE}.state").unlink()
+            result = hosted_release_ledger.observe_prior(root, self._SERVICE)
+            self.assertEqual(result["priorState"], "unknown")
+            self.assertEqual(result["reason"], "PRIOR.ORPHAN_HISTORY")
+            self.assertTrue(result["historyReceiptIds"])
+
+    def test_prior_observation_inflight_or_corrupt_history_is_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self._commit(state_dir=root, stage="canary", decision="continue", generation=0)
+            result = hosted_release_ledger.observe_prior(root, self._SERVICE)
+            self.assertEqual(result["priorState"], "unknown")
+            self.assertEqual(result["reason"], "PRIOR.HISTORY_REQUIRES_RECONCILIATION")
+            (root / "receipts" / "unexpected.json").write_text("{}")
+            result = hosted_release_ledger.observe_prior(root, self._SERVICE)
+            self.assertEqual(result["priorState"], "unknown")
+            self.assertFalse(result["admissionEligible"])
+
+    def test_prior_observation_read_failure_and_symlink_are_not_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / ".ledger.lock").touch()
+            (root / "receipts").mkdir()
+            from quwoquan_ops.cli.prod.hosted_release_ledger_lib import ledger_store
+            with mock.patch.object(ledger_store, "_validated_readback", side_effect=PermissionError("denied")):
+                result = hosted_release_ledger.observe_prior(root, self._SERVICE)
+                self.assertEqual(result["priorState"], "unknown")
+            link = root / "linked"
+            link.symlink_to(root, target_is_directory=True)
+            self.assertEqual(hosted_release_ledger.observe_prior(link, self._SERVICE)["priorState"], "unknown")
+
+    def test_prior_observation_locked_ledger_is_unknown(self) -> None:
+        import fcntl
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "receipts").mkdir()
+            with (root / ".ledger.lock").open("w") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                result = hosted_release_ledger.observe_prior(root, self._SERVICE)
+                self.assertEqual(result["priorState"], "unknown")
+                self.assertFalse(result["admissionEligible"])
+
+    def test_stackctl_prior_query_does_not_promote_empty_readback(self) -> None:
+        from types import SimpleNamespace
+        from quwoquan_ops.cli.commands.inspect_surface import command_inspect
+        args = SimpleNamespace(scope="prior", target="prod-hosted", ssh_host="", host_id="")
+        with tempfile.TemporaryDirectory() as directory:
+            observation = hosted_release_ledger.observe_prior(Path(directory).resolve() / "missing", stackctl.PROD_RELEASE_UNIT)
+        with mock.patch.object(stackctl, "_run_hosted_release_ledger", return_value=observation) as query:
+            result = command_inspect(args)
+        self.assertEqual(result["exitCode"], 2)
+        self.assertFalse(result["priorObservation"]["admissionEligible"])
+        self.assertFalse(result["targetAbsence"]["admissionEligible"])
+        self.assertIn("fence_handoff_to_activation_expected_generation_cas", result["targetAbsence"]["missingAdapters"])
+        query.assert_called_once_with(service=stackctl.PROD_RELEASE_UNIT, action="prior-observe")
+        args.host_id = "subset"
+        with mock.patch.object(stackctl, "_run_hosted_release_ledger") as query:
+            self.assertEqual(command_inspect(args)["exitCode"], 2)
+        query.assert_not_called()
+
+    def test_explicit_prior_ledger_position_and_absent_are_fail_closed(self) -> None:
+        from quwoquan_ops.cli.commands.deploy_release_state import validate_prior_ledger_position
+        identity = self._admission()
+        identity["previousCandidateDigest"] = self._FROM_CANDIDATE
+        state = {"generation": "1", "to_candidate_digest": self._FROM_CANDIDATE,
+                 "stage": "100", "decision": "continue"}
+        validate_prior_ledger_position(identity, state)
+        for change in ({"generation": "2"}, {"stage": "canary"}, {"to_candidate_digest": self._TO_CANDIDATE}):
+            with self.assertRaisesRegex(RuntimeError, "PROD.PRIOR.INVALID"):
+                validate_prior_ledger_position(identity, {**state, **change})
+        resumed = {**state, "generation": "2", "stage": "canary",
+                   "prod_activation_admission_id": identity["prodActivationAdmissionId"],
+                   "previous_released_id": identity["previousReleasedId"]}
+        validate_prior_ledger_position(identity, resumed)
+        identity.pop("prior")
+        with self.assertRaisesRegex(RuntimeError, "PROD.PRIOR.INVALID"):
+            validate_prior_ledger_position(identity, state)
+
+    # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-005
+    def test_execution_kernel_missing_installed_inventory_fails_closed(self) -> None:
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution import ExecutionSlot
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises((ValueError, RuntimeError, OSError)):
+                ExecutionSlot(Path(directory).resolve()).acquire(
+                    attempt_id=self._DIGEST, expected_execution_generation=0,
+                    expected_release_generation=0,
+                )
+
+    def test_execution_kernel_slots_guards_and_exact_steps(self) -> None:
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution import ExecutionSlot, PlaneGuard
+        for hosts in (1, 2):
+            with self.subTest(hosts=hosts), tempfile.TemporaryDirectory() as directory:
+                slot, material = _execution_install(Path(directory).resolve() / "authority", hosts)
+                state = slot.acquire(attempt_id=self._DIGEST, expected_execution_generation=0, expected_release_generation=0)
+                with self.assertRaises(RuntimeError):
+                    ExecutionSlot(slot.root).acquire(attempt_id=self._TO_CANDIDATE, expected_execution_generation=0, expected_release_generation=0)
+                other, _ = _execution_install(Path(directory).resolve() / "other-target-authority")
+                other.acquire(attempt_id=self._TO_CANDIDATE, expected_execution_generation=0, expected_release_generation=0)
+                guards = [PlaneGuard(slot, item["id"]) for item in slot.inventory["placements"]]
+                request = {"schema": "quwoquan.prod.execution-request.v1", "controllerIdentity": "quwoquan-prod-deployment-controller",
+                    "controllerKeyId": "prod-execution-controller-ed25519-k1", "attemptId": self._DIGEST, "executionGeneration": 1, "releaseGeneration": 0,
+                    "inventoryDigest": slot.inventory_digest, "placementId": guards[0].placement["id"],
+                    "guardIncarnation": 1, "sequence": 1, "action": "observe-runtime-identity", "parameters": {"relativePath": "runtime/artifact-identity.json"}, "materialDigest": material}
+                with self.assertRaisesRegex(RuntimeError, "PARTICIPANTS_INCOMPLETE"):
+                    slot.register(request)
+                try:
+                    for guard in guards: guard.prepare(attempt_id=self._DIGEST, generation=state["generation"])
+                    step = slot.register(request)
+                    self.assertEqual(step, slot.register(request))
+                    with self.assertRaisesRegex(RuntimeError, "STEP_CONFLICT"):
+                        slot.register({**request, "materialDigest": self._TO_CANDIDATE})
+                    with self.assertRaises(ValueError): slot.register({**request, "action": "shell"})
+                    result = guards[0].execute(request)
+                    self.assertEqual(result["outputDigest"], material)
+                    self.assertFalse(result["admissionEligible"])
+                    slot.acknowledge({"schema": "quwoquan.prod.execution-result.v1", "requestDigest": step,
+                        "placementId": request["placementId"], "guardIncarnation": request["guardIncarnation"],
+                        "sequence": request["sequence"], "status": "completed", "effectDigest": result["outputDigest"],
+                        "processGroup": result["processGroup"], "returnCode": result["returncode"], "terminal": True, "reconciled": False})
+                    with mock.patch("quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution.subprocess.Popen", side_effect=AssertionError("ACK replay must not spawn")):
+                        self.assertEqual(result, guards[0].execute(request))
+                    with self.assertRaises((RuntimeError, BlockingIOError)):
+                        slot.close(attempt_id=self._DIGEST, generation=1)
+                    for guard in reversed(guards): guard.close()
+                    slot.close(attempt_id=self._DIGEST, generation=1)
+                    self.assertEqual(slot.acquire(attempt_id=self._TO_CANDIDATE, expected_execution_generation=1, expected_release_generation=0)["generation"], 2)
+                finally:
+                    import os
+                    for guard in guards:
+                        if guard.fd is not None: os.close(guard.fd); guard.fd = None
+
+    def test_execution_kernel_lost_ack_and_guard_crash_never_release_slot(self) -> None:
+        import os
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution import PlaneGuard
+        with tempfile.TemporaryDirectory() as directory:
+            slot, _ = _execution_install(Path(directory).resolve() / "authority")
+            slot.acquire(attempt_id=self._DIGEST, expected_execution_generation=0, expected_release_generation=0)
+            guard = PlaneGuard(slot, slot.inventory["placements"][0]["id"])
+            guard.prepare(attempt_id=self._DIGEST, generation=1)
+            os.close(guard.fd); guard.fd = None  # 模拟guard崩溃，flock释放但durable记录未收口。
+            with self.assertRaisesRegex(RuntimeError, "CLOSURE_UNKNOWN"):
+                slot.close(attempt_id=self._DIGEST, generation=1)
+            with self.assertRaises(RuntimeError):
+                slot.acquire(attempt_id=self._TO_CANDIDATE, expected_execution_generation=1, expected_release_generation=0)
+            retry = PlaneGuard(slot, guard.placement["id"])
+            with self.assertRaises(RuntimeError): retry.prepare(attempt_id=self._DIGEST, generation=1)
+            self.assertEqual(slot._state()["status"], "held")
+
+    def test_execution_kernel_cross_process_single_winner_and_orphan_guard(self) -> None:
+        import os
+        import subprocess
+        import sys
+        with tempfile.TemporaryDirectory() as directory:
+            slot, _ = _execution_install(Path(directory).resolve() / "authority")
+            script = """import json,sys
+from pathlib import Path
+from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution import ExecutionSlot,PlaneGuard
+slot=ExecutionSlot(Path(sys.argv[1]))
+print('ready',flush=True)
+sys.stdin.readline()
+try:
+ slot.acquire(attempt_id=sys.argv[2],expected_execution_generation=0,expected_release_generation=0)
+ print('winner',flush=True)
+except (RuntimeError,BlockingIOError):
+ print('blocked',flush=True)
+"""
+            children = [subprocess.Popen([sys.executable, "-B", "-c", script, str(slot.root), attempt], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+                        for attempt in (self._DIGEST, self._TO_CANDIDATE)]
+            try:
+                for child in children: self.assertEqual(child.stdout.readline().strip(), "ready")
+                for child in children: child.stdin.write("go\n"); child.stdin.flush()
+                results = [child.communicate(timeout=10)[0].strip() for child in children]
+                self.assertEqual(sorted(results), ["blocked", "winner"])
+            finally:
+                for child in children:
+                    if child.poll() is None: child.kill(); child.wait()
+            state = slot._state()
+            orphan = """import os,sys
+from pathlib import Path
+from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution import ExecutionSlot,PlaneGuard
+slot=ExecutionSlot(Path(sys.argv[1])); g=PlaneGuard(slot,slot.inventory['placements'][0]['id'])
+g.prepare(attempt_id=sys.argv[2],generation=1)
+os._exit(0)
+"""
+            subprocess.run([sys.executable, "-B", "-c", orphan, str(slot.root), state["attemptId"]], check=True, timeout=10)
+            with self.assertRaisesRegex(RuntimeError, "CLOSURE_UNKNOWN"):
+                slot.close(attempt_id=state["attemptId"], generation=1)
+            with self.assertRaises(RuntimeError):
+                slot.acquire(attempt_id=self._NEXT_CANDIDATE, expected_execution_generation=1, expected_release_generation=0)
+
+    def test_execution_kernel_step_timeout_keeps_durable_unknown(self) -> None:
+        import os
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution import PlaneGuard
+        with tempfile.TemporaryDirectory() as directory:
+            slot, material = _execution_install(Path(directory).resolve() / "authority")
+            slot.acquire(attempt_id=self._DIGEST, expected_execution_generation=0, expected_release_generation=0)
+            guards = [PlaneGuard(slot, item["id"]) for item in slot.inventory["placements"]]
+            try:
+                for guard in guards: guard.prepare(attempt_id=self._DIGEST, generation=1)
+                request = {"schema": "quwoquan.prod.execution-request.v1", "controllerIdentity": "quwoquan-prod-deployment-controller",
+                    "controllerKeyId": "prod-execution-controller-ed25519-k1", "attemptId": self._DIGEST, "executionGeneration": 1, "releaseGeneration": 0, "inventoryDigest": slot.inventory_digest,
+                    "placementId": guards[0].placement["id"], "guardIncarnation": 1, "sequence": 1, "action": "observe-runtime-identity", "parameters": {"relativePath": "runtime/artifact-identity.json"}, "materialDigest": material}
+                slot.register(request)
+                import subprocess
+                with self.assertRaises(subprocess.TimeoutExpired): guards[0].execute(request, timeout_seconds=0)
+                with self.assertRaisesRegex(RuntimeError, "RECONCILE_REQUIRED"): guards[0].close()
+                with self.assertRaises(RuntimeError): guards[0].execute(request)
+                self.assertEqual(slot._state()["status"], "held")
+            finally:
+                for guard in guards:
+                    if guard.fd is not None: os.close(guard.fd); guard.fd = None
+
+    def test_execution_kernel_partial_prepare_reverse_close_and_lock_loss(self) -> None:
+        import os
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution import PlaneGuard
+        with tempfile.TemporaryDirectory() as directory:
+            slot, material = _execution_install(Path(directory).resolve() / "authority")
+            slot.acquire(attempt_id=self._DIGEST, expected_execution_generation=0, expected_release_generation=0)
+            first = PlaneGuard(slot, slot.inventory["placements"][0]["id"])
+            first.prepare(attempt_id=self._DIGEST, generation=1)
+            first.close()
+            slot.close(attempt_id=self._DIGEST, generation=1)
+            slot.acquire(attempt_id=self._TO_CANDIDATE, expected_execution_generation=1, expected_release_generation=0)
+            guards = [PlaneGuard(slot, item["id"]) for item in slot.inventory["placements"]]
+            try:
+                for guard in guards: guard.prepare(attempt_id=self._TO_CANDIDATE, generation=2)
+                request = {"schema": "quwoquan.prod.execution-request.v1", "controllerIdentity": "quwoquan-prod-deployment-controller",
+                           "controllerKeyId": "prod-execution-controller-ed25519-k1", "attemptId": self._TO_CANDIDATE, "executionGeneration": 2, "releaseGeneration": 0, "inventoryDigest": slot.inventory_digest,
+                           "placementId": guards[0].placement["id"], "guardIncarnation": 1, "sequence": 1, "action": "observe-runtime-identity", "parameters": {"relativePath": "runtime/artifact-identity.json"}, "materialDigest": material}
+                slot.register(request)
+                guards[0].lock_path.unlink(); guards[0].lock_path.touch()
+                with self.assertRaisesRegex(RuntimeError, "LOCK_LOST"):
+                    guards[0].execute(request)
+                with self.assertRaises((RuntimeError, BlockingIOError)): slot.close(attempt_id=self._TO_CANDIDATE, generation=2)
+            finally:
+                for guard in guards:
+                    if guard.fd is not None: os.close(guard.fd); guard.fd = None
+
+    def test_execution_kernel_live_descendant_prevents_success_after_leader_exit(self) -> None:
+        import os
+        import select
+        import signal
+        import subprocess
+        import sys
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib import execution
+        # 注入仅在测试中替换Popen；生产动作/argv闭集不变。
+        with tempfile.TemporaryDirectory() as directory:
+            slot, material = _execution_install(Path(directory).resolve() / "authority")
+            slot.acquire(attempt_id=self._DIGEST, expected_execution_generation=0, expected_release_generation=0)
+            guards = [execution.PlaneGuard(slot, item["id"]) for item in slot.inventory["placements"]]
+            ready_r, ready_w = os.pipe()
+            stop_r, stop_w = os.pipe()
+            groups = []
+            real_popen = subprocess.Popen
+            script = """import os,sys
+ready,stop=int(sys.argv[1]),int(sys.argv[2])
+pid=os.fork()
+if pid==0:
+ os.close(1);os.close(2)
+ os.write(ready,(str(os.getpid())+'\\n').encode());os.close(ready)
+ os.read(stop,1);os._exit(0)
+os.close(ready);os.close(stop)
+sys.stdout.buffer.write(open(sys.argv[3],'rb').read());sys.stdout.flush()
+"""
+            def spawn(argv, **kwargs):
+                child = real_popen([sys.executable, "-B", "-c", script, str(ready_w), str(stop_r), argv[-1]],
+                    pass_fds=(ready_w, stop_r), **kwargs)
+                groups.append(child.pid)
+                return child
+            try:
+                for guard in guards: guard.prepare(attempt_id=self._DIGEST, generation=1)
+                request = {"schema": "quwoquan.prod.execution-request.v1", "controllerIdentity": "quwoquan-prod-deployment-controller",
+                    "controllerKeyId": "prod-execution-controller-ed25519-k1", "attemptId": self._DIGEST, "executionGeneration": 1, "releaseGeneration": 0,
+                    "inventoryDigest": slot.inventory_digest, "placementId": guards[0].placement["id"],
+                    "guardIncarnation": 1, "sequence": 1, "action": "observe-runtime-identity", "parameters": {"relativePath": "runtime/artifact-identity.json"}, "materialDigest": material}
+                slot.register(request)
+                with mock.patch.object(execution.subprocess, "Popen", side_effect=spawn):
+                    with self.assertRaisesRegex(RuntimeError, "PROCESS_GROUP_NOT_CLOSED"):
+                        guards[0].execute(request)
+                self.assertTrue(select.select([ready_r], [], [], 5)[0])
+                descendant = int(os.read(ready_r, 100).strip())
+                os.kill(descendant, 0)
+                self.assertEqual(os.getpgid(descendant), groups[0])
+                with self.assertRaisesRegex(RuntimeError, "RECONCILE_REQUIRED"): guards[0].close()
+                with self.assertRaises(RuntimeError):
+                    slot.acquire(attempt_id=self._NEXT_CANDIDATE, expected_execution_generation=1, expected_release_generation=0)
+            finally:
+                for pgid in groups:
+                    try: os.killpg(pgid, signal.SIGKILL)
+                    except ProcessLookupError: pass
+                for fd in (ready_r, ready_w, stop_r, stop_w): os.close(fd)
+                for guard in guards:
+                    if guard.fd is not None: os.close(guard.fd); guard.fd = None
+
+    def test_execution_kernel_guard_parent_exit_with_live_orphan_remains_blocked(self) -> None:
+        import fcntl
+        import os
+        import select
+        import signal
+        import subprocess
+        import sys
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution import ExecutionSlot, PlaneGuard
+        with tempfile.TemporaryDirectory() as directory:
+            slot, material = _execution_install(Path(directory).resolve() / "authority")
+            ready_r, ready_w = os.pipe()
+            stop_r, stop_w = os.pipe()
+            child_script = """import os,sys
+pid=os.fork()
+if pid==0:
+ os.close(1);os.close(2)
+ os.write(int(sys.argv[1]),(str(os.getpid())+'\\n').encode());os.close(int(sys.argv[1]))
+ os.read(int(sys.argv[2]),1);os._exit(0)
+os.close(int(sys.argv[1]));os.close(int(sys.argv[2]))
+sys.stdout.buffer.write(open(sys.argv[3],'rb').read());sys.stdout.flush()
+"""
+            parent_script = """import json,os,sys,subprocess
+from pathlib import Path
+from quwoquan_ops.cli.prod.hosted_release_ledger_lib import execution as e
+slot=e.ExecutionSlot(Path(sys.argv[1]));attempt=sys.argv[2]
+slot.acquire(attempt_id=attempt,expected_execution_generation=0,expected_release_generation=0)
+guards=[e.PlaneGuard(slot,p['id']) for p in slot.inventory['placements']]
+for g in guards:g.prepare(attempt_id=attempt,generation=1)
+request={'schema':'quwoquan.prod.execution-request.v1','controllerIdentity':'quwoquan-prod-deployment-controller','controllerKeyId':'prod-execution-controller-ed25519-k1','attemptId':attempt,'executionGeneration':1,'releaseGeneration':0,'inventoryDigest':slot.inventory_digest,'placementId':guards[0].placement['id'],'guardIncarnation':1,'sequence':1,'action':'observe-runtime-identity','parameters':{'relativePath':'runtime/artifact-identity.json'},'materialDigest':sys.argv[3]}
+slot.register(request)
+real=subprocess.Popen
+class Child:
+ def __init__(self,argv,**kw):
+  self.child=real([sys.executable,'-B','-c',sys.argv[6],sys.argv[4],sys.argv[5],argv[-1]],pass_fds=(int(sys.argv[4]),int(sys.argv[5])),**kw)
+  self.pid=self.child.pid
+ def communicate(self,timeout):
+  self.child.communicate(timeout=timeout)
+  print(json.dumps({'pgid':self.pid,'guardPath':str(guards[0].path)}),flush=True)
+  sys.stdin.readline()
+  os._exit(0)
+e.subprocess.Popen=Child
+guards[0].execute(request)
+"""
+            parent = subprocess.Popen([sys.executable, "-B", "-c", parent_script, str(slot.root), self._DIGEST,
+                material, str(ready_w), str(stop_r), child_script], pass_fds=(ready_w, stop_r),
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            pgid = None
+            try:
+                self.assertTrue(select.select([ready_r], [], [], 10)[0], "descendant startup barrier")
+                descendant = int(os.read(ready_r, 100).strip())
+                pgid = os.getpgid(descendant)  # 精确记录仅由本测试创建的组。
+                self.assertTrue(select.select([parent.stdout], [], [], 10)[0], "durable running barrier")
+                evidence = json.loads(parent.stdout.readline())
+                self.assertEqual(evidence["pgid"], pgid)
+                guard_path = Path(evidence["guardPath"])
+                before = guard_path.read_bytes()
+                self.assertEqual(next(iter(json.loads(before)["steps"].values()))["status"], "running")
+                parent.stdin.write("exit\n"); parent.stdin.flush()
+                parent.wait(timeout=10)
+                os.kill(descendant, 0)
+                with self.assertRaises(ProcessLookupError): os.kill(pgid, 0)  # leader已被guard wait回收。
+                with (guard_path.parent / "guard.lock").open("r+") as lock:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)  # OS锁确实已释放。
+                fresh = ExecutionSlot(slot.root)
+                with self.assertRaisesRegex(RuntimeError, "BUSY_OR_STALE"):
+                    fresh.acquire(attempt_id=self._NEXT_CANDIDATE, expected_execution_generation=1, expected_release_generation=0)
+                with self.assertRaisesRegex(RuntimeError, "RESULTS_INCOMPLETE|CLOSURE_UNKNOWN"):
+                    fresh.close(attempt_id=self._DIGEST, generation=1)
+                with self.assertRaises(RuntimeError):
+                    PlaneGuard(fresh, fresh.inventory["placements"][0]["id"]).prepare(attempt_id=self._DIGEST, generation=1)
+                self.assertEqual(guard_path.read_bytes(), before)
+                # 即便测试精确终止后代，也不替内核伪造reconcile成功或清空记录。
+                os.killpg(pgid, signal.SIGKILL); pgid = None
+                with self.assertRaises(RuntimeError): fresh.close(attempt_id=self._DIGEST, generation=1)
+                self.assertEqual(guard_path.read_bytes(), before)
+            finally:
+                if pgid is not None:
+                    try: os.killpg(pgid, signal.SIGKILL)
+                    except ProcessLookupError: pass
+                if parent.poll() is None: parent.kill(); parent.wait(timeout=10)
+                for stream in (parent.stdin, parent.stdout, parent.stderr): stream.close()
+                for fd in (ready_r, ready_w, stop_r, stop_w): os.close(fd)
+
+    def test_execution_kernel_failed_completion_write_cannot_close_from_memory(self) -> None:
+        import os
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib import execution
+        with tempfile.TemporaryDirectory() as directory:
+            slot, material = _execution_install(Path(directory).resolve() / "authority")
+            slot.acquire(attempt_id=self._DIGEST, expected_execution_generation=0, expected_release_generation=0)
+            guards = [execution.PlaneGuard(slot, p["id"]) for p in slot.inventory["placements"]]
+            try:
+                for guard in guards: guard.prepare(attempt_id=self._DIGEST, generation=1)
+                request = {"schema": "quwoquan.prod.execution-request.v1", "controllerIdentity": "quwoquan-prod-deployment-controller",
+                    "controllerKeyId": "prod-execution-controller-ed25519-k1", "attemptId": self._DIGEST, "executionGeneration": 1, "releaseGeneration": 0,
+                    "inventoryDigest": slot.inventory_digest, "placementId": guards[0].placement["id"],
+                    "guardIncarnation": 1, "sequence": 1, "action": "observe-runtime-identity", "parameters": {"relativePath": "runtime/artifact-identity.json"}, "materialDigest": material}
+                slot.register(request)
+                write = execution._atomic_write
+                def fail_completion(path, raw):
+                    if path == guards[0].path and any(step["status"] == "completed" for step in json.loads(raw)["steps"].values()):
+                        raise OSError("fixture completion persistence failed")
+                    return write(path, raw)
+                with mock.patch.object(execution, "_atomic_write", side_effect=fail_completion):
+                    with self.assertRaisesRegex(OSError, "persistence failed"): guards[0].execute(request)
+                before = guards[0].path.read_bytes()
+                with self.assertRaisesRegex(RuntimeError, "DURABLE_STATE_DRIFT"):
+                    guards[0].close()
+                with mock.patch.object(execution.subprocess, "Popen", side_effect=AssertionError("unknown must not respawn")):
+                    with self.assertRaisesRegex(RuntimeError, "DURABLE_STATE_DRIFT"): guards[0].execute(request)
+                self.assertEqual(guards[0].path.read_bytes(), before)
+            finally:
+                for guard in guards:
+                    if guard.fd is not None: os.close(guard.fd); guard.fd = None
+
+    def test_execution_kernel_rejects_argv_path_and_identity_symlink_without_spawn(self) -> None:
+        import os
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib import execution
+        with tempfile.TemporaryDirectory() as directory:
+            slot, material = _execution_install(Path(directory).resolve() / "authority")
+            slot.acquire(attempt_id=self._DIGEST, expected_execution_generation=0, expected_release_generation=0)
+            guards = [execution.PlaneGuard(slot, p["id"]) for p in slot.inventory["placements"]]
+            try:
+                for guard in guards: guard.prepare(attempt_id=self._DIGEST, generation=1)
+                request = {"schema": "quwoquan.prod.execution-request.v1", "controllerIdentity": "quwoquan-prod-deployment-controller",
+                    "controllerKeyId": "prod-execution-controller-ed25519-k1", "attemptId": self._DIGEST, "executionGeneration": 1, "releaseGeneration": 0,
+                    "inventoryDigest": slot.inventory_digest, "placementId": guards[0].placement["id"],
+                    "guardIncarnation": 1, "sequence": 1, "action": "observe-runtime-identity", "parameters": {"relativePath": "runtime/artifact-identity.json"}, "materialDigest": material}
+                for bad in ({**request, "argv": ["sh", "-c", "true"]}, {**request, "path": "../../escape"}, {**request, "action": "shell"}):
+                    with self.assertRaises(ValueError): slot.register(bad)
+                slot.register(request)
+                identity = Path(guards[0].placement["runtimeRoot"]) / "runtime/artifact-identity.json"
+                outside = Path(directory).resolve() / "outside.json"
+                outside.write_bytes(identity.read_bytes()); identity.unlink(); identity.symlink_to(outside)
+                with mock.patch.object(execution.subprocess, "Popen", side_effect=AssertionError("unsafe path spawned")):
+                    with self.assertRaisesRegex(ValueError, "SYMLINK"): guards[0].execute(request)
+                with self.assertRaisesRegex(ValueError, "PATH_INVALID"):
+                    execution._safe(slot.root / ".." / "outside.json", directory=False)
+            finally:
+                for guard in guards:
+                    if guard.fd is not None: os.close(guard.fd); guard.fd = None
+
+    def test_execution_guard_signed_delivery_lost_ack_and_reconcile_only(self) -> None:
+        import hashlib
+        import os
+        import subprocess
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution_delivery import sign_request
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution_guard import DurablePlaneGuard, verify_envelope
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve(); guard_root = root / "guard"; runtime = root / "runtime"
+            guard_root.mkdir(); runtime.mkdir(); (guard_root / "guard.lock").touch()
+            identity = runtime / "runtime/artifact-identity.json"; identity.parent.mkdir(); identity.write_bytes(b"exact-runtime")
+            private = root / "controller.pem"; public = root / "controller.pub.pem"
+            subprocess.run(["openssl", "genpkey", "-algorithm", "Ed25519", "-out", str(private)], check=True, capture_output=True)
+            private.chmod(0o600)
+            subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)], check=True, capture_output=True)
+            request = {"schema": "quwoquan.prod.execution-request.v1", "controllerIdentity": "quwoquan-prod-deployment-controller",
+                "controllerKeyId": "prod-execution-controller-ed25519-k1", "attemptId": self._DIGEST, "executionGeneration": 1,
+                "releaseGeneration": 0, "inventoryDigest": self._DIGEST, "placementId": "prod-host-01-service-prod-r0",
+                "guardIncarnation": 1, "sequence": 1, "action": "observe-runtime-identity",
+                "parameters": {"relativePath": "runtime/artifact-identity.json"}, "materialDigest": self._DIGEST}
+            envelope = sign_request(request, private_key=private)
+            verified = verify_envelope(envelope, public_key=public, expected_identity=request["controllerIdentity"], expected_key_id=request["controllerKeyId"]); self.assertEqual(verified, request)
+            guard = DurablePlaneGuard(guard_root, runtime)
+            prepare = {**request, "sequence": 1, "action": "guard-prepare", "parameters": {}, "materialDigest": self._DIGEST}
+            guard.submit(prepare)
+            request["sequence"] = 2
+            envelope = sign_request(request, private_key=private)
+            verified = verify_envelope(envelope, public_key=public, expected_identity=request["controllerIdentity"], expected_key_id=request["controllerKeyId"])
+            result = guard.submit(verified)
+            self.assertTrue(result["terminal"]); self.assertEqual(result, guard.submit(verified))  # lost ACK replay
+            journal = json.loads((guard_root / "journal.json").read_bytes()); key = result["requestDigest"]
+            journal["steps"][key] = {"status": "running", "request": request, "processGroup": 99999999}; journal["mode"] = "reconcile-only"
+            (guard_root / "journal.json").write_text(json.dumps(journal))
+            next_request = {**request, "sequence": 3}
+            with self.assertRaisesRegex(RuntimeError, "RECONCILE_ONLY"): guard.submit(next_request)
+            effect = "sha256:" + hashlib.sha256(b"readback").hexdigest()
+            reconciled = guard.reconcile(key, effect_digest=effect); self.assertTrue(reconciled["reconciled"])
+            self.assertEqual(json.loads((guard_root / "journal.json").read_bytes())["mode"], "ready")
+
+    def test_execution_kernel_rejects_symlink_and_partial_inventory(self) -> None:
+        from quwoquan_ops.cli.prod.hosted_release_ledger_lib.execution import ExecutionSlot
+        with tempfile.TemporaryDirectory() as directory:
+            slot, _ = _execution_install(Path(directory).resolve() / "authority")
+            path = slot.inventory_path
+            inventory = json.loads(path.read_bytes()); inventory["placements"].pop()
+            path.write_text(json.dumps(inventory))
+            with self.assertRaisesRegex(ValueError, "INCOMPLETE"):
+                ExecutionSlot(slot.root)
+            link = Path(directory).resolve() / "alias"; link.symlink_to(slot.root, target_is_directory=True)
+            with self.assertRaises(ValueError): ExecutionSlot(link)
 
     def test_gray_carry_on_and_full_receipts_bind_immutable_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -661,6 +1214,10 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
         }
         cached_path = Path("/tmp/hosted-release-receipt.json")
         with (
+            mock.patch(
+                "quwoquan_ops.cli.commands.deploy_release_state.guarded_release_transition",
+                return_value={"terminal": True},
+            ) as guarded_transition,
             mock.patch.object(
                 stackctl,
                 "_run_hosted_release_ledger",
@@ -685,7 +1242,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 stage="canary",
                 decision="continue",
                 candidate_material_id=self._DIGEST,
-                expected_generation=0,
+                expected_generation=1,
                 receipt_id="unused",
                 slo_readback={"sampleCount": 100},
                 candidate_digests=self._candidate(),
@@ -702,11 +1259,9 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
 
         self.assertEqual(result, (committed["state"], cached_path))
         self.assertEqual(run_hosted.call_count, 1)
-        self.assertEqual(run_hosted.call_args.kwargs["action"], "commit")
-        self.assertEqual(
-            run_hosted.call_args.kwargs["request"]["rollbackEvidence"],
-            {"triggered": False},
-        )
+        self.assertEqual(run_hosted.call_args.kwargs["action"], "fetch")
+        guarded_transition.assert_called_once()
+        self.assertEqual(guarded_transition.call_args.kwargs["request"]["rollbackEvidence"], {"triggered": False})
         cache_readback.assert_called_once_with(
             self._SERVICE,
             committed["state"],

@@ -1,0 +1,39 @@
+description: Creator/Post/Homepage唯一有界prepare和只读query，不存在兼容入口。
+commercial_defaults: {status: blocked, block_reason: 单主线runtime及客户端测试同步升级尚未完成, gap_id: SEARCH_RELEASE_PREPARATION_SINGLE_TRACK, target_story: environment-topology-and-packaging}
+api_routes:
+- method: POST
+  path: /internal/search/release-preparations:prepare
+  operation: PrepareSearchRelease
+  actor: none
+  application: {kind: command, facet: SearchReleasePreparationCommandFacet, method: prepare, aggregate_owner: SearchReleasePreparation, mutation_target: SearchReleasePreparation, invariant_target: SearchReleasePreparation}
+  authorization: {principal: service, scopes: [search.release.prepare], ownership_policy: content_release_preparation}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  reliability: {timeout_ms: 30000, cancellation: supported, retry_mode: idempotent, max_attempts: 1, idempotency: required}
+  request_entity: PrepareSearchReleaseCommand
+  request_body_kind: object
+  response_entity: SearchReleasePreparationView
+  error_codes: [SEARCH.PREPARATION.invalid_input, SEARCH.PREPARATION.conflict, SEARCH.PREPARATION.unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: search_release_prepare, trace: true, attributes: [outcome, status]}
+  slo: {latency_p95_ms: 25000, availability_percent: 99.9}
+  description: >-
+    只接受Content。slice=creator_search/post_search/homepage_search与snapshot.kind及恰一source匹配，完整tuple相等；完整source集合摘要不能由count代替。
+    唯一identity为binding摘要，不含兼容版本或source摘要；同identity不同source冲突。accepted/checkpoint/receipt原子持久化，version和执行token CAS、有界30秒lease接管，过期writer不能提交。
+    同键只重放，显式续跑新键与expectedVersion；无active前提，不跨库，IndexView继续commands:none。Provider实际refresh可见及完整集合/文档摘要验证后才completed。
+    旧协议/字段/状态形状拒绝，不从旧completed恢复当前ready；新运行全部重新prepare。
+- method: POST
+  path: /internal/search/release-preparations:query
+  operation: ReadSearchReleasePreparation
+  actor: none
+  application: {kind: query, facet: SearchReleasePreparationQueryFacade, method: read, reader: SearchReleasePreparationReader, slice: SearchReleasePreparationView}
+  authorization: {principal: service, scopes: [search.release.read], ownership_policy: content_release_preparation}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
+  request_entity: ReadSearchReleasePreparationQuery
+  request_body_kind: object
+  response_entity: SearchReleasePreparationView
+  error_codes: [SEARCH.PREPARATION.invalid_input, SEARCH.PREPARATION.not_found, SEARCH.PREPARATION.conflict, SEARCH.PREPARATION.unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: search_release_preparation_read, trace: true, attributes: [outcome, status]}
+  slo: {latency_p95_ms: 1500, availability_percent: 99.9}
+  description: exact binding不存在404；source/provider/schema漂移409，不可读503；completed必须真实只读重验，非完成proof=null。不写checkpoint/Provider，不续跑、不回落旧reader或历史receipt，不默认补字段。

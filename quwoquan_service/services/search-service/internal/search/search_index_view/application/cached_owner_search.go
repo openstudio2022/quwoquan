@@ -173,11 +173,13 @@ func ownerSearchCacheKey(in QueryInput, identity QueryExecutionIdentity, bucket 
 		Boosts       []string `json:"boosts"`
 		Candidate    string   `json:"candidate"`
 		Policy       string   `json:"policy"`
+		ContentFence string   `json:"contentFence"`
 	}{
 		Query: normalizedQuery, ObjectTypes: objectTypes, ContentTypes: contentTypes,
 		Tags: tags, TimeRange: in.TimeRange, Near: in.Near, Limit: in.Limit,
 		Bucket: bucket, Boosts: boosts,
 		Candidate: identity.CandidateDigest, Policy: identity.PolicyDigest,
+		ContentFence: identity.ContentFenceDigest,
 	})
 	digest := sha256.Sum256(payload)
 	return hex.EncodeToString(digest[:])

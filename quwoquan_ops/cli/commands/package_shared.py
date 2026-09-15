@@ -120,6 +120,10 @@ def _build_runtime_shared_package(
         )
         if runtime_topology.get("dataPlaneBinding") != data_plane_binding:
             raise ValueError("hosted runtime topology data-plane binding identity drifted")
+    source_initializer = None
+    if env_name in {"alpha", "beta", "gamma"} and target_name == f"{env_name}-local":
+        from quwoquan_ops.cli.lib.source_initializer_package import build_source_initializer
+        source_initializer = build_source_initializer(package_dir, source_root, env_name, target_name)
     _stackctl.write_json(
         package_dir / "manifest.json",
         {
@@ -140,6 +144,7 @@ def _build_runtime_shared_package(
                 else None
             ),
             "provenance": {"files": files},
+            "sourceInitializer": source_initializer,
         },
     )
     return package_dir

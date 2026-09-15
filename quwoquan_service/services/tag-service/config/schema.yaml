@@ -1,5 +1,18 @@
 description: 该自治边界的运行配置定义与默认值；环境只维护差异和引用。
 configs:
+- key: sys.tag-service.content_release_fence.base_url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.tag-service.content_release_fence.timeout_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 500
 - key: sys.tag-service.user_account_security_authority.base_url
   type: string
   scope: workload

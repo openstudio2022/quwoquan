@@ -61,13 +61,13 @@ def materialized_input(root: Path) -> tuple[Path, dict[str, object]]:
             "serviceDigest": sha("9"),
             "prodRuntimeConfigDeploymentBundle": {"schema": "quwoquan_ops.prod_runtime_config_deployment_bundle.v1", "digest": sha("a")},
         },
-        "app": {
+        "web": {
             "ociRef": artifacts[1]["ociRef"],
             "ociDigest": app_oci,
             "payloadDigest": sha("b"),
             "materialDigest": app_material_digest,
-            "artifactDigests": {"android": sha("c"), "ios": sha("d"), "web": sha("e")},
-            "artifactManifests": {"android": {}, "ios": {}, "web": {}},
+            "artifactDigest": sha("e"),
+            "artifactManifest": {},
             "sourceTreeDigest": "sha1:" + TREE,
         },
         "qualificationRequestOciRef": f"ghcr.io/quwoquan/qualification-request@{sha('1')}",
@@ -75,6 +75,7 @@ def materialized_input(root: Path) -> tuple[Path, dict[str, object]]:
     }
     material_body: dict[str, object] = {
         "schema": "quwoquan_ops.candidate_material_manifest.v1",
+        "deliveryTargets": ["service"],
         "sourceGitSha": SOURCE,
         "sourceTree": TREE,
         "artifactBuildNumber": 17,
@@ -85,6 +86,7 @@ def materialized_input(root: Path) -> tuple[Path, dict[str, object]]:
     material = write_oci(root, "candidate-material", material_body)
     qualification_body: dict[str, object] = {
         "schema": "quwoquan_ops.qualification_fact.v1",
+        "deliveryTargets": ["service"],
         "decision": "qualified",
         "sourceGitSha": SOURCE,
         "sourceTree": TREE,
@@ -96,6 +98,7 @@ def materialized_input(root: Path) -> tuple[Path, dict[str, object]]:
     qualification = write_oci(root, "qualification", qualification_body)
     tag_body: dict[str, object] = {
         "schema": "quwoquan_ops.release_tag_admission_fact.v1",
+        "deliveryTargets": ["service"],
         "decision": "admitted",
         "tagKind": "stable",
         "tagName": "v1.2.3",
@@ -121,6 +124,15 @@ def materialized_input(root: Path) -> tuple[Path, dict[str, object]]:
         "candidateId": PREVIOUS_CANDIDATE,
         "ociDigests": [PREVIOUS_OCI],
     }
+    from quwoquan_ops.tests.local_contract.release.test_qualified_prod__local_contract_test import hosted_stage_readback
+    _, previous_readback = hosted_stage_readback(root, stage="100", generation=0,
+        candidate_id=PREVIOUS_CANDIDATE, previous_candidate_id=sha("8"), verified_at="2026-09-04T10:00:00Z")
+    previous_body.update({
+        "admission": {"ref": "immutable/previous-admission.json", "digest": sha("8")},
+        "stableTag": "v1.1.0", "sourceGitSha": SOURCE, "controlPlaneGitSha": CONTROL,
+        "finalAttempt": {"ref": "immutable/previous-attempt.json", "digest": sha("9")},
+        "hostedReceiptReadback": previous_readback, "releasedAt": "2026-09-04T10:00:00Z",
+    })
     previous_body["releaseId"] = digest(previous_body)
     previous = write_oci(root, "released-prod", previous_body)
     rollback = write_oci(root, "rollback-readiness", {
@@ -133,11 +145,15 @@ def materialized_input(root: Path) -> tuple[Path, dict[str, object]]:
     })
     factory_refs = {
         kind: {key: value[key] for key in ("ociRef", "ociDigest", "payloadDigest", "materialDigest")}
-        for kind, value in (("service", factory_outputs["service"]), ("app", factory_outputs["app"]))
+        for kind, value in (("service", factory_outputs["service"]), ("web", factory_outputs["web"]))
     }
+    prior = {"state": "present", "target": "prod-hosted", "environment": "prod",
+             "previousReleased": previous, "rollbackReadiness": rollback,
+             "expectedGeneration": 1, "ociDigests": [PREVIOUS_OCI]}
     admission_oci_digests = sorted({service_oci, app_oci, service_material_digest, app_material_digest})
     admission_body: dict[str, object] = {
         "schema": "quwoquan_ops.prod_activation_admission_fact.v1",
+        "deliveryTargets": ["service"],
         "decision": "admitted",
         "stableTag": "v1.2.3",
         "tagObjectOid": tag_body["tagObjectOid"],
@@ -148,11 +164,9 @@ def materialized_input(root: Path) -> tuple[Path, dict[str, object]]:
         "qualification": qualification,
         "candidateMaterialManifest": material,
         "factoryMaterials": factory_refs,
-        "previousActiveReleasedLedger": previous,
-        "rollbackReadiness": rollback,
+        "prior": prior,
         "artifacts": artifacts,
         "ociDigests": admission_oci_digests,
-        "previousOciDigests": [PREVIOUS_OCI],
         "createdBeforeStage": "canary",
         "admittedAt": "2026-09-05T10:00:00Z",
     }
@@ -167,9 +181,8 @@ def materialized_input(root: Path) -> tuple[Path, dict[str, object]]:
         "qualification": qualification,
         "candidateMaterialManifest": material,
         "serviceFactoryMaterial": {**factory_refs["service"], "materializedManifest": service_material},
-        "appFactoryMaterial": {**factory_refs["app"], "materializedManifest": app_material},
-        "previousReleased": previous,
-        "rollbackReadiness": rollback,
+        "webFactoryMaterial": {**factory_refs["web"], "materializedManifest": app_material},
+        "prior": prior,
         "stableTag": "v1.2.3",
         "sourceGitSha": SOURCE,
         "sourceTree": TREE,
@@ -179,9 +192,8 @@ def materialized_input(root: Path) -> tuple[Path, dict[str, object]]:
         "candidateDigest": CANDIDATE,
         "previousCandidateDigest": PREVIOUS_CANDIDATE,
         "serviceMaterialDigest": service_material_digest,
-        "appMaterialDigest": app_material_digest,
+        "webMaterialDigest": app_material_digest,
         "ociDigests": admission_oci_digests,
-        "previousOciDigests": [PREVIOUS_OCI],
     }
     path = root / "prod-activation-input.json"
     path.write_bytes(canonical_bytes(envelope) + b"\n")
@@ -200,10 +212,9 @@ def load(root: Path, input_path: Path, graph: dict[str, object]) -> dict[str, st
     with mock.patch(
         "quwoquan_ops.ci.qualified_prod._validated_factory_actual_materials",
         return_value=(
-            graph["servicePayload"],
-            graph["appPayload"],
-            graph["serviceMaterial"],
-            graph["appMaterial"],
+            {"service": (graph["servicePayload"], graph["serviceMaterial"]),
+             "web": (graph["appPayload"], graph["appMaterial"])},
+            {},
         ),
     ):
         identity, _, candidate_material_id, deploy_material = deploy_release_inputs._load_prod_activation_admission(str(input_path))

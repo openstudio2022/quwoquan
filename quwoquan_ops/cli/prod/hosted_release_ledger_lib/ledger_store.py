@@ -5,12 +5,16 @@ import contextlib
 import fcntl
 import json
 import os
+import stat
+import hashlib
 import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
 from .contract import (
     AUTHORITY,
+    PRIOR_OBSERVATION_SCHEMA,
+    _canonical_bytes,
     POSITIVE_INTEGER_RE,
     READBACK_SCHEMA,
     RECEIPT_FIELDS,
@@ -77,6 +81,77 @@ def _load_hosted_soak_receipt(
     ):
         raise RuntimeError("hosted prod soak receipt duration is invalid")
     return receipt
+
+
+def _prior_history(root: Path, service: str) -> list[dict[str, Any]]:
+    """现役receipt逐文件验真；不以state缺失抹去历史。"""
+    directory = root / "receipts"
+    metadata = directory.lstat()
+    if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.getuid():
+        raise RuntimeError("prior history directory is unsafe")
+    receipts = []
+    for path in sorted(directory.iterdir()):
+        if path.suffix != ".json" or not path.is_file() or path.is_symlink():
+            raise RuntimeError("prior history contains unsafe or unknown entry")
+        payload = json.loads(path.read_bytes())
+        if not isinstance(payload, dict) or not isinstance(payload.get("service"), str):
+            raise RuntimeError("prior history receipt cannot be classified")
+        validated = _load_hosted_receipt(root, service=payload["service"], receipt_id=path.stem)
+        if validated["service"] == service:
+            receipts.append(validated)
+    return receipts
+
+
+def observe_prior(root: Path, service: str) -> dict[str, Any]:
+    """不创建目录/锁；只读当前ledger与历史，绝不把空读回签成absent。"""
+    from .contract import SERVICE_RE
+    if SERVICE_RE.fullmatch(service) is None or not root.is_absolute():
+        raise ValueError("prior observation requires exact service and absolute root")
+    result: dict[str, Any] = {
+        "schema": PRIOR_OBSERVATION_SCHEMA, "authority": AUTHORITY,
+        "service": service, "priorState": "unknown", "reason": "PRIOR.OBSERVATION_UNAVAILABLE",
+        "generation": None, "ledgerReadback": None, "historyReceiptIds": [],
+        "historyDigest": None, "admissionEligible": False, "readOnly": True,
+    }
+    descriptor = None
+    try:
+        # 路径分量不能借symlink跳到另一份ledger。打开既有锁，不初始化store。
+        if any(path.is_symlink() for path in (root, *root.parents)):
+            raise RuntimeError("prior root traverses symlink")
+        root_stat = root.lstat()
+        if (not stat.S_ISDIR(root_stat.st_mode) or root_stat.st_uid != os.getuid()
+                or root_stat.st_mode & (stat.S_IWGRP | stat.S_IWOTH)):
+            raise RuntimeError("prior root ownership is unsafe")
+        descriptor = os.open(root / ".ledger.lock", os.O_RDONLY | os.O_NOFOLLOW)
+        lock_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(lock_stat.st_mode) or lock_stat.st_uid != os.getuid():
+            raise RuntimeError("prior lock identity is unsafe")
+        fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        readback = _validated_readback(root, service)
+        history = _prior_history(root, service)
+        result["ledgerReadback"] = readback
+        result["historyReceiptIds"] = [item["receiptId"] for item in history]
+        result["historyDigest"] = "sha256:" + hashlib.sha256(_canonical_bytes(history)).hexdigest()
+        state = readback["state"]
+        if not state:
+            result["reason"] = "PRIOR.ORPHAN_HISTORY" if history else "PRIOR.TARGET_ABSENCE_UNPROVEN"
+            return result
+        result["generation"] = int(state["generation"])
+        current = readback["receipt"]
+        released = [item for item in history if item["stage"] == "100"
+                    and item["decision"] == "continue" and item["rollbackOutcome"] == "not_triggered"]
+        if released and current in released:
+            result["priorState"] = "present"
+            result["reason"] = "PRIOR.ACTIVE_RELEASE_READBACK"
+        else:
+            result["reason"] = "PRIOR.HISTORY_REQUIRES_RECONCILIATION"
+        # 即使present也还需exact ProdReleasedFact/恢复闭包；本观察从不授予admission。
+        return result
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+        return result
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def _load_state(path: Path) -> dict[str, str]:

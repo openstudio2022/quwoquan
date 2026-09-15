@@ -162,6 +162,7 @@ func VersionedTombstoneDocument(
 func DocumentToIndex(doc rtsearch.Document, sourceVersion ...int64) map[string]any {
 	out := map[string]any{
 		"deleted":    false,
+		"sourceKind": "ordinary",
 		"target":     string(rtsearch.TargetForDocument(doc)),
 		"objectType": doc.ObjectType,
 		"objectId":   doc.ObjectID,
@@ -242,6 +243,7 @@ func IndexToDocument(src map[string]any) rtsearch.Document {
 		doc.Geo = &rtsearch.GeoPoint{Lat: asFloat(g["lat"]), Lng: asFloat(g["lon"])}
 	}
 	fields := payloadFields(src["payload"])
+	doc.DeepLink = fields["deepLink"]
 	for _, key := range anchorFieldKeys {
 		if v := asString(src[key]); v != "" {
 			fields[key] = v

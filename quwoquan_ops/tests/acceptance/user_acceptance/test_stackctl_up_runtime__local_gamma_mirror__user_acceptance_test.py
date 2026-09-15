@@ -51,7 +51,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn(
-            "Data CLI ship apply --full-sync owns public slices",
+            "Ops stackctl content-release apply owns public slices",
             script,
         )
         self.assertIn("environment media root contains fixture/mock/seed", script)

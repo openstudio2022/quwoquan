@@ -20,7 +20,7 @@ SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from content.release.environment import _ship_operations, ship_dispatch  # noqa: E402
+from quwoquan_ops.cli.lib.content_release_environment import _ship_operations, ship_dispatch  # noqa: E402
 from content.release.environment.release_runtime import ReleaseAdmission  # noqa: E402
 from content.release.environment.release_runtime import sync_media  # noqa: E402
 from content.release.environment.run_evidence import (  # noqa: E402
@@ -50,7 +50,7 @@ def _admission(release_id: str = "release-a") -> ReleaseAdmission:
         release_id=release_id,
         manifest_digest=_DIGEST_A,
         admission_kind="producer_handoff",
-        handoff_ref=f"handoff-ref-v1:sha256:{'1' * 64}:sha256:{'2' * 64}",
+        handoff_ref="data/releases/release-a/producer_release_handoff.json=sha256:" + "2" * 64,
         handoff_artifact_ref=f".qwq_output/data/releases/{release_id}/producer_release_handoff.json",
         handoff_artifact_digest=_DIGEST_A,
     )
@@ -110,7 +110,7 @@ def _dependencies(
             release_id=release.name,
             manifest_digest=payload_digest(release),
             admission_kind="producer_handoff",
-            handoff_ref=f"handoff-ref-v1:sha256:{'1' * 64}:sha256:{'2' * 64}",
+            handoff_ref="data/releases/release-a/producer_release_handoff.json=sha256:" + "2" * 64,
             handoff_artifact_ref=f".qwq_output/data/releases/{release.name}/producer_release_handoff.json",
             handoff_artifact_digest="sha256:" + "0" * 64,
         ),
@@ -128,6 +128,11 @@ def _dependencies(
         ),
         now_compact=lambda: "20260905T120000Z",
         require_environment_readiness=lambda **_kwargs: None,
+        materialize_content_release=lambda admission, **_kwargs: SimpleNamespace(
+            root=admission.release,
+            ref=f"content-release/releases/{admission.release_id}/sha256-" + "a" * 64,
+            digest=_DIGEST_A,
+        ),
         sync_media=lambda **_kwargs: None,
         run_tag_importer=tag_importer
         or (lambda **kwargs: kwargs["run"] / "tag-import.json"),
@@ -1005,3 +1010,46 @@ def _superseded_rollback_passes_queried_revision_bearing_tuple_to_cas(
     )
     assert result["status"] == "completed"
     assert result["contentPreActiveReceiptDigest"].startswith("sha256:")
+
+# spec_ref: specs/feature-tree/platform-ops-governance/spec.md#req-002
+def test_apply_passes_only_managed_release_root_to_first_importer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release, contract = _release(tmp_path)
+    managed = tmp_path / "deploy/gamma-local/content-release/releases/release-a" / ("sha256-" + "a" * 64)
+    managed.mkdir(parents=True)
+    observed: list[Path] = []
+
+    def _tag(**kwargs: object) -> Path:
+        observed.append(Path(kwargs["release"]))
+        raise RuntimeError("stop after mount assertion")
+
+    dependencies = _dependencies(tmp_path, release, contract, tag_importer=_tag)
+    dependencies.materialize_content_release = lambda _admission, **_kwargs: SimpleNamespace(
+        root=managed,
+        ref="content-release/releases/release-a/sha256-" + "a" * 64,
+        digest=_DIGEST_A,
+    )
+    monkeypatch.setattr(
+        _ship_operations, "scan_release_contract",
+        lambda *_args, **_kwargs: {"status": "passed"},
+    )
+    args = argparse.Namespace(
+        env="gamma", run_id="apply-managed-root", import_to_db=True,
+        full_sync=False, dry_run=True, confirm_prod_apply=False,
+        release_admission=__import__("dataclasses").replace(
+            _admission(), release=release, contract=contract,
+            manifest_digest=payload_digest(release),
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="stop after mount assertion"):
+        _ship_operations.apply_release(args, dependencies=dependencies)
+    assert observed == [managed]
+    result = read_json(
+        tmp_path / "env/gamma/runs/data-release/release-a/apply-managed-root/result.json"
+    )
+    assert result["failedStage"] == "tag_import"
+    assert result["materializedReleaseRef"].startswith("content-release/releases/")
+    assert result["materializedReleaseDigest"] == _DIGEST_A

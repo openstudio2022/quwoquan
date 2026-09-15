@@ -10,16 +10,15 @@ pluginManagement {
 
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
-    // 与 pub 走 pub.flutter-io.cn 同一策略：Google/Maven Central/Plugin Portal 在本地网络会 TLS
-    // 中断，先经国内镜像取同一坐标的同一制品，原始仓库保留兜底。镜像清单与根 build.gradle.kts
-    // 的 allprojects/buildscript 仓库一致。
+    // 官方仓库是坐标权威来源；阿里镜像仅在官方源不可用时兜底。Gradle 按声明顺序
+    // 解析，避免不稳定镜像抢先承接本可由官方源满足的插件请求。
     repositories {
-        maven(url = "https://maven.aliyun.com/repository/google")
-        maven(url = "https://maven.aliyun.com/repository/public")
-        maven(url = "https://maven.aliyun.com/repository/gradle-plugin")
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven(url = "https://maven.aliyun.com/repository/google")
+        maven(url = "https://maven.aliyun.com/repository/public")
+        maven(url = "https://maven.aliyun.com/repository/gradle-plugin")
     }
 }
 

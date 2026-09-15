@@ -17,7 +17,7 @@ from quwoquan_ops.cli.lib.output_paths import deployment_target_path
 from quwoquan_ops.cli.lib.output_paths import remove_deployment_tree
 
 from .constants import OBSERVABILITY_SOURCE_ROOT, PROD_PLANE_ADMIN_PORTS, ROOT
-from .package_inputs import _plane_spec
+from .package_inputs import _plane_spec, _prevalidation_spec
 from .data_plane_wiring import _prevalidation_host_port, _validate_prevalidation_startup
 from .public_hosts import _prod_public_hosts
 
@@ -85,7 +85,16 @@ def _write_env_file(
         )
 
         skill_trust = prepare_rehearsal_assistant_skill_package_keys()
-        # 正式 User OTP 依赖必须由启动前检阻断；不再生成看似凭据的 mTLS 占位物。
+        service_plane = _plane_spec("service")
+        credentials_root = str(service_plane.get("credentialsPath") or "").rstrip("/")
+        external_refs = (_prevalidation_spec().get("externalSecretRefs") or {})
+        required_files = external_refs.get("requiredFiles") or {}
+        if not credentials_root or set(required_files) != {
+            "INTEGRATION_SERVICE_MTLS_CA_FILE",
+            "INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE",
+            "INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE",
+        }:
+            raise SystemExit("FAIL: prevalidation Integration OTP/mTLS secret refs are incomplete")
         lines.extend(
             [
                 "ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON="
@@ -126,6 +135,9 @@ def _write_env_file(
                 ),
                 "QWQ_PUSH_TOKEN_ENCRYPTION_KEY="
                 + auth["QWQ_PUSH_TOKEN_ENCRYPTION_KEY"],
+                "INTEGRATION_EXTERNAL_INTERACTION_BASE_URL=https://integration-service:18086",
+                "INTEGRATION_SERVICE_MTLS_SERVER_NAME=integration-service",
+                *(f"{key}={credentials_root}/{relative}" for key, relative in sorted(required_files.items())),
                 "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET="
                 + auth["CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET"],
                 "RUNTIME_LOG_INGEST_TOKEN=prevalidation-not-release-evidence",
@@ -247,22 +259,30 @@ def _write_runtime_systemd_unit(
         f"WorkingDirectory={remote_root}",
     ]
     if instance != "prevalidate":
-        service_lines.append(
-            f"EnvironmentFile=-{credentials_root.rstrip('/')}/runtime.env"
-        )
+        service_lines.append(f"EnvironmentFile=-{credentials_root.rstrip('/')}/runtime.env")
+    prevalidate_env = ""
+    if instance == "prevalidate" and plane_name == "service":
+        relative = str((_prevalidation_spec().get("externalSecretRefs") or {}).get("envFileRelative") or "")
+        if not relative or Path(relative).is_absolute() or ".." in Path(relative).parts:
+            raise SystemExit("FAIL: prevalidation external secret env ref is invalid")
+        prevalidate_env = f" --env-file {credentials_root.rstrip('/')}/{relative}"
     service_lines.extend(
         [
             (
-                f"ExecStartPre=/usr/bin/podman compose --env-file {env_file} "
+                f"ExecStartPre=/usr/bin/podman compose --env-file {env_file}{prevalidate_env} "
                 f"-f {compose_file} -p {project} config --quiet"
             ),
+            # DEC-015：normal restart只能让长期guard按已登记immutable identity复用；
+            # unit自身不得直接执行可变工作目录中的compose writer。
             (
-                f"ExecStart=/usr/bin/podman compose --env-file {env_file} "
-                f"-f {compose_file} -p {project} up -d --remove-orphans {services}"
+                f"ExecStart=%h/.local/bin/quwoquan-plane-execution-guard runtime-helper "
+                f"restart-admitted --runtime-root {remote_root} --project {project} "
+                f"--compose-file {compose_file} --env-file {env_file}{prevalidate_env} --services {services}"
             ),
             (
-                f"ExecStop=/usr/bin/podman compose --env-file {env_file} "
-                f"-f {compose_file} -p {project} down"
+                f"ExecStop=%h/.local/bin/quwoquan-plane-execution-guard runtime-helper "
+                f"stop-admitted --runtime-root {remote_root} --project {project} "
+                f"--compose-file {compose_file} --env-file {env_file}{prevalidate_env}"
             ),
             "",
             "[Install]",

@@ -5,11 +5,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
 )
 
 func validContract(t *testing.T) contract {
 	t.Helper()
-	c, err := loadContract(filepath.Join("..", "..", "contracts", "metadata", "_shared", "semantic_document.yaml"))
+	metadataRoot := filepath.Join("..", "..", "contracts", "metadata")
+	source, err := contractcodegen.NewDocumentSource(
+		metadataRoot,
+		[]string{"_shared/semantic_document.yaml"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := loadContract(source, "_shared/semantic_document.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

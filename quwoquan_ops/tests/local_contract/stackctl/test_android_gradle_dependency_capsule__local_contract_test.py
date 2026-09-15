@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from quwoquan_ops.cli.lib.package_reuse.android_gradle_capsule import (
     ANDROID_GRADLE_CAPSULE_MANIFEST,
     ANDROID_GRADLE_CAPSULE_TREE,
     ANDROID_GRADLE_LOGICAL_PATH,
+    android_gradle_snapshot_matches_current_wrappers,
     build_android_gradle_snapshot,
     digest_bytes,
     load_android_gradle_snapshot,
@@ -28,7 +30,7 @@ from quwoquan_ops.cli.lib.package_reuse.android_gradle_projection import (
 )
 from quwoquan_ops.cli.lib.package_reuse.android_gradle_store import (
     GradleInvocation,
-    canonical_android_uat_gradle_invocations,
+    canonical_android_dependency_bundle_invocations,
     copy_android_gradle_snapshot,
     materialize_flutter_gradle_wrappers,
     materialize_pinned_flutter_gradle_wrappers,
@@ -549,7 +551,7 @@ def test_online_invocation_retries_only_transient_network_failure_in_same_home(
 
 
 @pytest.mark.parametrize("offline", [False, True])
-def test_both_hosts_capture_online_plugin_resolution_details_without_debug(
+def test_production_host_captures_resolution_details_without_debug(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     offline: bool,
@@ -570,7 +572,7 @@ def test_both_hosts_capture_online_plugin_resolution_details_without_debug(
         return subprocess.CompletedProcess(command, 0, stdout="resolved")
 
     monkeypatch.setattr(gradle_store, "run_managed_subprocess", fake_run)
-    invocations = canonical_android_uat_gradle_invocations(project)
+    invocations = canonical_android_dependency_bundle_invocations(project)
     run_gradle_invocations(
         project_root=project,
         gradle_user_home=home,
@@ -579,7 +581,7 @@ def test_both_hosts_capture_online_plugin_resolution_details_without_debug(
         environment={},
     )
 
-    assert len(calls) == 2
+    assert len(calls) == 1
     for (command, kwargs), invocation in zip(calls, invocations, strict=True):
         assert command[0] == str(invocation.gradle_root / "gradlew")
         assert ("--info" in command) is not offline
@@ -692,7 +694,7 @@ def test_online_invocation_transient_then_deterministic_raises_current_failure(
     assert backoffs == [1.0]
 
 
-def test_online_invocation_exhaustion_raises_first_failure(
+def test_online_invocation_exhaustion_raises_final_actionable_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -712,7 +714,7 @@ def test_online_invocation_exhaustion_raises_first_failure(
     def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
         raise failures.pop(0)
 
-    first_failure = failures[0]
+    final_failure = failures[-1]
     monkeypatch.setattr(gradle_store, "run_managed_subprocess", fake_run)
     backoffs: list[float] = []
     monkeypatch.setattr(
@@ -727,7 +729,7 @@ def test_online_invocation_exhaustion_raises_first_failure(
             offline=False,
             environment={},
         )
-    assert caught.value is first_failure
+    assert caught.value is final_failure
     assert failures == []
     assert backoffs == [1.0, 2.0]
 
@@ -787,7 +789,7 @@ def test_online_invocation_caps_process_timeout_and_total_deadline(
             offline=False,
             environment={},
         )
-    assert caught.value is failures[0]
+    assert caught.value is failures[-1]
     assert timeouts == [4.0, 3.0]
     assert backoffs == [1.0]
 
@@ -951,6 +953,119 @@ def test_explicit_sync_uses_fresh_online_home_then_exact_offline_replay(
     assert any(item.relative == f"home/{policy}" for item in result.snapshot.files)
 
 
+def test_verified_seed_internal_wrapper_tamper_blocks_before_compatibility(
+    tmp_path: Path,
+) -> None:
+    project, gradle_root, sealed, snapshot = _sealed(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_bytes(snapshot.encoded_manifest)
+    embedded = sealed / "wrappers/quwoquan_app/android/gradlew.bat"
+    embedded.chmod(0o644)
+    embedded.write_bytes(b"tampered wrapper")
+    with pytest.raises(ValueError, match="managed snapshot CAS drifted"):
+        load_android_gradle_snapshot(
+            project_root=project,
+            tree_root=sealed,
+            manifest_path=manifest,
+            gradle_roots=None,
+        )
+
+
+def test_verified_seed_wrapper_compatibility_is_separate_from_internal_cas(
+    tmp_path: Path,
+) -> None:
+    project, gradle_root, sealed, snapshot = _sealed(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_bytes(snapshot.encoded_manifest)
+    loaded = load_android_gradle_snapshot(
+        project_root=project, tree_root=sealed, manifest_path=manifest, gradle_roots=None
+    )
+    assert android_gradle_snapshot_matches_current_wrappers(
+        loaded, project_root=project, gradle_roots=[gradle_root]
+    )
+    current_script = gradle_root / "gradlew"
+    current_script.write_text("#!/bin/sh\necho changed\n", encoding="utf-8")
+    current_script.chmod(0o755)
+    assert not android_gradle_snapshot_matches_current_wrappers(
+        loaded, project_root=project, gradle_roots=[gradle_root]
+    )
+
+
+def test_explicit_sync_seeds_verified_snapshot_then_still_runs_online_and_offline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed_project, seed_root, _sealed_root, seed = _sealed(tmp_path / "seed")
+    project = tmp_path / "current-project"
+    gradle_root = _wrapper(project)
+    # Wrapper compatibility is mandatory, while current native source may differ.
+    for relative in (
+        "gradlew",
+        "gradlew.bat",
+        "gradle/wrapper/gradle-wrapper.jar",
+        "gradle/wrapper/gradle-wrapper.properties",
+    ):
+        target = gradle_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((seed_root / relative).read_bytes())
+        target.chmod((seed_root / relative).stat().st_mode & 0o777)
+    calls: list[bool] = []
+
+    def fake_run(**kwargs: object) -> list[object]:
+        calls.append(bool(kwargs["offline"]))
+        home = Path(str(kwargs["gradle_user_home"]))
+        assert (home / "caches/modules-2").is_dir()
+        if not kwargs["offline"]:
+            assert (home / "wrapper/dists").is_dir()
+        return []
+
+    monkeypatch.setattr(gradle_store, "run_gradle_invocations", fake_run)
+    result = synchronize_android_gradle_dependencies(
+        project_root=project,
+        online_home=tmp_path / "online",
+        verified_seed=seed,
+        seed_wrapper_distribution=True,
+        sealed_tree=tmp_path / "sealed",
+        replay_tree=tmp_path / "replay",
+        gradle_roots=[gradle_root],
+        invocations=[GradleInvocation(gradle_root, ("dependencies",))],
+    )
+    assert calls == [False, True]
+    assert result.snapshot.manifest["treeDigest"].startswith("sha256:")
+    assert not (tmp_path / "online/init.d/qwq-offline.gradle").exists()
+    assert (tmp_path / "online/init.d/qwq-plugin-repositories.gradle").is_file()
+
+
+def test_wrapper_drift_still_seeds_modules_without_wrapper_distribution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed_project, _seed_root, _sealed_root, seed = _sealed(tmp_path / "seed")
+    project = tmp_path / "current-project"
+    gradle_root = _wrapper(project, archive=b"current distribution")
+    calls: list[bool] = []
+
+    def fake_run(**kwargs: object) -> list[object]:
+        calls.append(bool(kwargs["offline"]))
+        home = Path(str(kwargs["gradle_user_home"]))
+        assert (home / "caches/modules-2").is_dir()
+        if not kwargs["offline"]:
+            assert not (home / "wrapper/dists").exists()
+            # Simulate current wrapper fetching its own distribution before sealing.
+            shutil.copytree(_raw_home(tmp_path / "current", b"current distribution") / "wrapper/dists", home / "wrapper/dists")
+        return []
+
+    monkeypatch.setattr(gradle_store, "run_gradle_invocations", fake_run)
+    result = synchronize_android_gradle_dependencies(
+        project_root=project, online_home=tmp_path / "online",
+        verified_seed=seed, seed_wrapper_distribution=False,
+        sealed_tree=tmp_path / "sealed", replay_tree=tmp_path / "replay",
+        gradle_roots=[gradle_root],
+        invocations=[GradleInvocation(gradle_root, ("dependencies",))],
+    )
+    assert calls == [False, True]
+    assert result.snapshot.manifest["artifactCount"] == 1
+
+
 def test_repository_policy_changes_native_identity(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1031,22 +1146,20 @@ def test_package_capsule_writer_is_fresh_read_only_and_cas_verified(
         )
 
 
-def test_canonical_uat_sync_covers_production_patrol_and_instrumentation(
+def test_dependency_bundle_sync_covers_only_production_app_package(
     tmp_path: Path,
 ) -> None:
-    invocations = canonical_android_uat_gradle_invocations(tmp_path)
+    invocations = canonical_android_dependency_bundle_invocations(tmp_path)
     assert invocations == (
         GradleInvocation(
             gradle_root=tmp_path / "quwoquan_app/android",
-            tasks=(
-                ":app:assembleNonprodDebug",
-                ":app:assembleNonprodDebugAndroidTest",
-            ),
+            tasks=(":app:assembleNonprodDebug",),
         ),
-        GradleInvocation(
-            gradle_root=tmp_path / "quwoquan_app/test_host/patrol/android",
-            tasks=(":app:assembleDebug", ":app:assembleDebugAndroidTest"),
-        ),
+    )
+    assert all(
+        "AndroidTest" not in task and "test_host" not in str(item.gradle_root)
+        for item in invocations
+        for task in item.tasks
     )
 
 
@@ -1071,3 +1184,136 @@ def test_managed_snapshot_loader_rejects_noncanonical_or_stale_manifest(
             manifest_path=manifest,
             gradle_roots=[gradle_root],
         )
+
+
+def test_gradle_invocations_share_caller_remaining_deadline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    first = project / "first"
+    second = project / "second"
+    for root in (first, second):
+        root.mkdir(parents=True)
+        (root / "gradlew").write_text("#!/bin/sh\n", encoding="ascii")
+    monkeypatch.setattr(gradle_store, "wrapper_identity", lambda **_kwargs: {})
+    observed: list[float] = []
+
+    def fake_run(*, command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        observed.append(float(kwargs["deadline"]))
+        return subprocess.CompletedProcess(command, 0, stdout="")
+
+    monkeypatch.setattr(gradle_store, "_run_gradle_invocation", fake_run)
+    deadline = time.monotonic() + 10
+    run_gradle_invocations(
+        project_root=project,
+        gradle_user_home=tmp_path / "home",
+        invocations=(
+            GradleInvocation(first, ("assemble",)),
+            GradleInvocation(second, ("assembleAndroidTest",)),
+        ),
+        offline=False,
+        deadline=deadline,
+    )
+    assert observed == [deadline, deadline]
+
+
+def test_gradle_output_callback_identifies_host_and_tasks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    root = project / "android"
+    root.mkdir(parents=True)
+    (root / "gradlew").write_text("#!/bin/sh\n", encoding="ascii")
+    monkeypatch.setattr(gradle_store, "wrapper_identity", lambda **_kwargs: {})
+    observed: list[tuple[GradleInvocation, str]] = []
+
+    def fake_managed(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        callback = kwargs["on_stdout"]
+        callback("resolving fixture\n")
+        return subprocess.CompletedProcess(command, 0, stdout="resolving fixture\n")
+
+    monkeypatch.setattr(gradle_store, "run_managed_subprocess", fake_managed)
+    invocation = GradleInvocation(root, (":app:assembleDebug", ":app:assembleDebugAndroidTest"))
+    run_gradle_invocations(
+        project_root=project,
+        gradle_user_home=tmp_path / "home",
+        invocations=(invocation,),
+        offline=False,
+        on_output=lambda current, chunk: observed.append((current, chunk)),
+    )
+    assert observed == [(invocation, "resolving fixture\n")]
+
+
+def test_native_resolution_identity_excludes_patrol_and_android_test_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production = tmp_path / "quwoquan_app/android/settings.gradle.kts"
+    android_test = (
+        tmp_path / "quwoquan_app/android/app/src/androidTest/build.gradle.kts"
+    )
+    patrol = tmp_path / "quwoquan_app/test_host/patrol/android/settings.gradle.kts"
+    for path in (production, android_test, patrol):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(path.as_posix(), encoding="utf-8")
+
+    class Result:
+        returncode = 0
+        stdout = b"\0".join(
+            str(path.relative_to(tmp_path)).encode()
+            for path in (production, android_test, patrol)
+        ) + b"\0"
+
+    monkeypatch.setattr(gradle_store.subprocess, "run", lambda *_args, **_kwargs: Result())
+    from quwoquan_ops.cli.lib.package_reuse import native_dependency_inputs as native
+
+    paths = native.native_resolution_input_paths(tmp_path)
+    assert paths == [production]
+    identity = native.native_resolution_input_identity(tmp_path)
+    assert all("test_host/patrol" not in item["path"] for item in identity["nativeResolutionInputs"])
+    assert all("androidTest" not in item["path"] for item in identity["nativeResolutionInputs"])
+
+
+def test_production_repository_order_prefers_official_and_keeps_mirror_fallback() -> None:
+    repository = Path(__file__).resolve().parents[4]
+    settings = (repository / "quwoquan_app/android/settings.gradle.kts").read_text()
+    build = (repository / "quwoquan_app/android/build.gradle.kts").read_text()
+    native = __import__(
+        "quwoquan_ops.cli.lib.package_reuse.native_dependency_inputs",
+        fromlist=["ANDROID_GRADLE_REPOSITORY_INIT"],
+    )
+    assert settings.index("google()") < settings.index("maven.aliyun.com/repository/google")
+    assert settings.index("mavenCentral()") < settings.index("maven.aliyun.com/repository/public")
+    allprojects = build[build.index("allprojects {"):build.index("val newBuildDir")]
+    assert allprojects.index("google()") < allprojects.index("mirroredMavenRepositories.forEach")
+    assert allprojects.index("mavenCentral()") < allprojects.index("mirroredMavenRepositories.forEach")
+    init = native.ANDROID_GRADLE_REPOSITORY_INIT.decode("utf-8")
+    assert init.index("google()") < init.index("maven.aliyun.com/repository/google")
+    assert init.index("mavenCentral") < init.index("maven.aliyun.com/repository/public")
+
+
+def test_native_resolution_identity_includes_production_repository_order_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quwoquan_ops.cli.lib.package_reuse import native_dependency_inputs as native
+
+    settings = tmp_path / "quwoquan_app/android/settings.gradle.kts"
+    build = tmp_path / "quwoquan_app/android/build.gradle.kts"
+    for path in (settings, build):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("google()\nmavenCentral()\nmirror()\n")
+
+    class Result:
+        returncode = 0
+        stdout = (
+            b"quwoquan_app/android/settings.gradle.kts\0"
+            b"quwoquan_app/android/build.gradle.kts\0"
+        )
+
+    monkeypatch.setattr(native.subprocess, "run", lambda *_args, **_kwargs: Result())
+    identity = native.native_resolution_input_identity(tmp_path)
+    paths = {item["path"] for item in identity["nativeResolutionInputs"]}
+    assert "quwoquan_app/android/settings.gradle.kts" in paths
+    assert "quwoquan_app/android/build.gradle.kts" in paths

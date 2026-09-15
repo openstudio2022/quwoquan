@@ -291,7 +291,7 @@ class NativeCanonicalJSONContractTest(unittest.TestCase):
         return {
             "mixed_case_trust_keys": {
                 "trustedPublicKeys": {"key10": "ten", "key2": "two", "Key": "upper"},
-                "trustEnvelopeDigest": "sha256:test-vector",
+                "trustEnvelopeDigest": "sha256:c5e4c7f2fb7050ab1ca3073da8076e91560b2cc9ac4fe29792a2422e20971302",
             },
             "nested_array_and_escaping": {
                 "z": [True, False, None, 0, 1, -7, 1.25, 9007199254740991],
@@ -307,7 +307,7 @@ class NativeCanonicalJSONContractTest(unittest.TestCase):
         ).encode("utf-8")
         self.assertEqual(
             encoded,
-            b'{"trustEnvelopeDigest":"sha256:test-vector",'
+            b'{"trustEnvelopeDigest":"sha256:c5e4c7f2fb7050ab1ca3073da8076e91560b2cc9ac4fe29792a2422e20971302",'
             b'"trustedPublicKeys":{"Key":"upper","key10":"ten","key2":"two"}}',
         )
 

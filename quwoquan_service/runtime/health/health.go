@@ -90,14 +90,40 @@ type Result struct {
 }
 
 func (c *Checker) Check(ctx context.Context) Result {
+	return c.check(ctx, nil)
+}
+
+// CheckSelected evaluates exactly the named operation dependencies. Unknown
+// names fail closed so a shallow admission declaration cannot silently drift
+// away from the checks registered by the owning service.
+func (c *Checker) CheckSelected(ctx context.Context, names []string) Result {
+	selected := make(map[string]bool, len(names))
+	for _, name := range names {
+		selected[name] = true
+	}
+	return c.check(ctx, selected)
+}
+
+func (c *Checker) check(ctx context.Context, selected map[string]bool) Result {
 	c.mu.RLock()
 	checks := make(map[string]checkDefinition, len(c.checks))
 	for k, v := range c.checks {
-		checks[k] = v
+		if selected == nil || selected[k] {
+			checks[k] = v
+		}
 	}
 	registrationErrors := make(map[string]string, len(c.registrationErrors))
 	for k, v := range c.registrationErrors {
-		registrationErrors[k] = v
+		if selected == nil || selected[k] {
+			registrationErrors[k] = v
+		}
+	}
+	if selected != nil {
+		for name := range selected {
+			if _, registered := c.checks[name]; !registered {
+				registrationErrors[name] = "registration error: selected check is not registered"
+			}
+		}
 	}
 	c.mu.RUnlock()
 

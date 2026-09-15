@@ -697,6 +697,39 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/user/creator-search-candidate:query:
+        post:
+            operationId: ReadCreatorSearchCandidate
+            x-contract-operation-id: user.user_account.ReadCreatorSearchCandidate
+            x-object-id: user.user_account
+            x-actor: none
+            x-application:
+                kind: query
+                facet: CreatorSearchCandidateQueryFacade
+                method: readCreatorSearchCandidate
+                reader: CreatorSearchCandidateReader
+                slice: CreatorSearchCandidateResult
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReadCreatorSearchCandidateQuery'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreatorSearchCandidateResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/user/personas/{personaId}/gathering-host-authority:evaluate:
         post:
             operationId: EvaluatePersonaGatheringHostAuthority
@@ -3495,6 +3528,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CreateProfileUpdateProposalCommand
             x-contract-placeholder: true
+        CreatorSearchCandidateResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CreatorSearchCandidateResult
+            x-contract-placeholder: true
         CredentialBindingCommandResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3754,6 +3792,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PushEndpointSecret
+            x-contract-placeholder: true
+        ReadCreatorSearchCandidateQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReadCreatorSearchCandidateQuery
             x-contract-placeholder: true
         RefreshTokenCommand:
             type: object

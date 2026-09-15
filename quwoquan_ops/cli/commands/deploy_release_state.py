@@ -31,6 +31,25 @@ from pathlib import Path
 from typing import Any
 
 
+def validate_prior_ledger_position(identity: dict[str, Any], state: dict[str, str]) -> None:
+    """首次推进必须精确匹配prior的hosted前值；续跑必须是同一admission。"""
+    from quwoquan_ops.ci.qualified_prod import validate_prior
+    try:
+        prior = validate_prior(identity.get("prior"))
+    except ValueError as error:
+        raise RuntimeError(str(error)) from error
+    generation = int(state.get("generation") or -1)
+    same_attempt = state.get("prod_activation_admission_id") == identity.get("prodActivationAdmissionId")
+    if same_attempt:
+        if (generation < prior["expectedGeneration"]
+                or state.get("previous_released_id") != identity.get("previousReleasedId")):
+            raise RuntimeError("PROD.PRIOR.INVALID: resumed ledger predecessor drifted")
+    elif (generation != prior["expectedGeneration"]
+            or state.get("to_candidate_digest") != identity.get("previousCandidateDigest")
+            or state.get("stage") != "100" or state.get("decision") != "continue"):
+        raise RuntimeError("PROD.PRIOR.INVALID: active ledger no longer matches prior")
+
+
 def _release_state_dir() -> Path:
     # 这里只保存 hosted release ledger 的本机 readback cache；它绝不能作为发布真相。
     # 真实 ledger/receipt 只能经 prod service-plane SSH projection 写入并读回。
@@ -478,6 +497,17 @@ def _run_hosted_release_ledger(
             payload = json.loads(output_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
             raise RuntimeError("hosted release ledger readback is not valid JSON") from error
+    if action == "prior-observe":
+        ledger = _stackctl.hosted_release_ledger
+        if (not isinstance(payload, dict) or set(payload) != ledger.PRIOR_OBSERVATION_FIELDS
+                or payload.get("schema") != ledger.PRIOR_OBSERVATION_SCHEMA
+                or payload.get("authority") != ledger.AUTHORITY
+                or payload.get("service") != service
+                or payload.get("priorState") not in {"present", "unknown"}
+                or payload.get("readOnly") is not True
+                or payload.get("admissionEligible") is not False):
+            raise RuntimeError("hosted prior observation shape or authority is invalid")
+        return payload
     if action == "receipt":
         if (
             not isinstance(payload, dict)
@@ -588,6 +618,29 @@ def _release_check_receipts(
     return receipts
 
 
+
+def guarded_release_transition(*, request: dict[str, Any], action: str, deadline_epoch: int = 0) -> dict[str, Any]:
+    """同一continuous ExecutionSlot owner内执行唯一plane-local ledger CAS。"""
+    import os
+    from quwoquan_ops.cli.prod.execution_controller import load_session, save_session, digest
+    session_path = Path(os.environ.get("QWQ_EXECUTION_SESSION", ""))
+    if not session_path.is_file():
+        raise RuntimeError("EXECUTION.CONTINUOUS_SESSION_REQUIRED")
+    payload = json.loads(session_path.read_bytes()); session = load_session(session_path)
+    placements = payload.get("placements") or []
+    service = next((item for item in placements if item.get("plane") == "service" and item.get("hostId") == session.contract["management"]["defaultHostId"]), None)
+    if service is None: raise RuntimeError("EXECUTION.AUTHORITY_PLACEMENT_MISSING")
+    attempt = session.attempt_id.removeprefix("sha256:"); raw_digest = digest(request)
+    with tempfile.TemporaryDirectory(prefix="qwq-ledger-request-") as directory:
+        source = Path(directory); (source / "request.json").write_bytes(json.dumps(request, ensure_ascii=False, separators=(",",":"), sort_keys=True).encode()+b"\n")
+        command = ["bash", "quwoquan_ops/cli/prod/sync_prod_plane_stack.sh", "--plane", "service", "--host", service["sshHost"], "--source-dir", str(source)]
+        result = _stackctl.run(command, env={"QWQ_EXECUTION_ATTEMPT_ID": session.attempt_id}, timeout_seconds=(_stackctl._remaining_deadline_seconds(deadline_epoch,"execution request staging") if deadline_epoch else None))
+        if result.returncode: raise RuntimeError("EXECUTION.REQUEST_STAGING_FAILED: "+(result.stderr or result.stdout))
+    relative = f"staging/{attempt}/{raw_digest.removeprefix('sha256:')}/request.json"
+    outcome = session.submit(service, action, {"service": request["service"], "stage": request.get("stage", "canary"), "expectedReleaseGeneration": request["expectedGeneration"], "requestRelative": relative} if action != "ledger-activation-cas" else {"service":request["service"],"expectedReleaseGeneration":request["expectedGeneration"],"requestRelative":relative}, raw_digest)
+    save_session(session_path, session, placements)
+    return outcome
+
 def _commit_hosted_release_transition(
     *,
     service: str,
@@ -615,6 +668,15 @@ def _commit_hosted_release_transition(
 ) -> tuple[dict[str, str], Path]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    from quwoquan_ops.ci.release_qualification import validate_delivery_scope
+    # service 的 Web 依赖仍有真实 App factory digest；这不是移动包分发资格。
+    validate_delivery_scope(prod_activation_admission or {}, effect="service")
+    from quwoquan_ops.ci.qualified_prod import validate_prior
+    prior = validate_prior((prod_activation_admission or {}).get("prior"))
+    if (prior["previousReleased"]["ref"] != prod_activation_admission.get("previousReleasedRef")
+            or prior["previousReleased"]["digest"] != prod_activation_admission.get("previousReleasedPayloadDigest")
+            or prior["expectedGeneration"] > expected_generation):
+        raise RuntimeError("PROD.PRIOR.INVALID: ledger projection or generation drifted")
     del receipt_id
     request = {
         "schema": "prod-hosted-release-transition-request",
@@ -653,12 +715,9 @@ def _commit_hosted_release_transition(
         "lastGoodCandidateDigest": last_good_candidate_digest,
         "verifiedAt": _stackctl.utc_now(),
     }
-    committed = _stackctl._run_hosted_release_ledger(
-        service=service,
-        action="commit",
-        request=request,
-        deadline_epoch=deadline_epoch,
-    )
+    guard_action = "ledger-recovery-cas" if rollback_outcome != "not_triggered" else ("ledger-activation-cas" if expected_generation == prior["expectedGeneration"] else "ledger-stage-cas")
+    guarded_release_transition(request=request, action=guard_action, deadline_epoch=deadline_epoch)
+    committed = _stackctl._run_hosted_release_ledger(service=service, action="fetch", deadline_epoch=deadline_epoch)
     # The hosted commit action fsyncs state/receipt and returns its own validated
     # readback. A second network fetch adds no authority and extends the Prod path.
     return _stackctl._cache_hosted_release_readback(

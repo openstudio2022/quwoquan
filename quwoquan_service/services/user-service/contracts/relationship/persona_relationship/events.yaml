@@ -1,38 +1,20 @@
+description: payload实体严格匹配OutboxPayload；eventId/eventName在durable envelope，relay展平不改变payload ownership。
 events:
 - name: PersonaFollowStateChanged
   delivery_semantics: transactional_outbox
   wire_event_type: PersonaFollowStateChanged
-  payload_entity: PersonaRelationship
-  payload_fields:
-  - eventId
-  - pairId
-  - sourcePersonaId
-  - targetPersonaId
-  - following
-  - version
-  - occurredAt
+  payload_entity: PersonaRelationshipEventPayload
+  payload_shape: exact
+  payload_fields: [pairId, sourcePersonaId, targetPersonaId, following, sourceFollowCleared, targetFollowCleared, clearedFollowDirections, version, occurredAt]
 - name: PersonaBlocked
   delivery_semantics: transactional_outbox
   wire_event_type: PersonaBlocked
-  payload_entity: PersonaRelationship
-  payload_fields:
-  - eventId
-  - pairId
-  - sourcePersonaId
-  - targetPersonaId
-  - sourceFollowCleared
-  - targetFollowCleared
-  - clearedFollowDirections
-  - version
-  - occurredAt
+  payload_entity: PersonaRelationshipEventPayload
+  payload_shape: exact
+  payload_fields: [pairId, sourcePersonaId, targetPersonaId, following, sourceFollowCleared, targetFollowCleared, clearedFollowDirections, version, occurredAt]
 - name: PersonaUnblocked
   delivery_semantics: transactional_outbox
   wire_event_type: PersonaUnblocked
-  payload_entity: PersonaRelationship
-  payload_fields:
-  - eventId
-  - pairId
-  - sourcePersonaId
-  - targetPersonaId
-  - version
-  - occurredAt
+  payload_entity: PersonaRelationshipEventPayload
+  payload_shape: exact
+  payload_fields: [pairId, sourcePersonaId, targetPersonaId, following, sourceFollowCleared, targetFollowCleared, clearedFollowDirections, version, occurredAt]

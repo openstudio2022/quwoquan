@@ -7,6 +7,10 @@ import json
 from typing import Any
 
 from .durable_projection_consumer import DurableProjectionConsumer
+from generated.recommendation.recommendation_feature_profile_view.events.content_post_PostPublished import PostLifecycleProjectionPayload
+from generated.recommendation.recommendation_feature_profile_view.events.content_post_PostDeleted import PostDeletedPayload
+from generated.recommendation.recommendation_feature_profile_view.events.content_post_PostPrivacyRedacted import PostPrivacyRedactedPayload
+from generated.recommendation.recommendation_feature_profile_view.events.content_post_PostPurged import PostPurgedPayload
 
 
 POST_LIFECYCLE_STREAM = "events.content.post_lifecycle"
@@ -53,8 +57,8 @@ def _time(value: Any, *, required: bool = True) -> datetime | None:
 
 def decode_post_lifecycle(values: dict[str, str]) -> PostLifecycleEvent | None:
     event_type = values.get("eventType", "").strip()
-    if event_type not in UPSERT_EVENTS | REMOVAL_EVENTS:
-        return None
+    if event_type not in UPSERT_EVENTS | REMOVAL_EVENTS | {"PostModerationRejected"}:
+        raise ValueError("unsupported or unimplemented Content lifecycle event")
     if values.get("aggregateType", "").strip() != "Post":
         raise ValueError("Post lifecycle aggregateType must be Post")
     try:
@@ -67,6 +71,20 @@ def decode_post_lifecycle(values: dict[str, str]) -> PostLifecycleEvent | None:
         raise ValueError("Post lifecycle payload is invalid JSON") from error
     if not isinstance(payload, dict):
         raise ValueError("Post lifecycle payload must be an object")
+    source_keys = {"environment", "sourceOwner", "releaseId", "manifestDigest", "releaseDigest", "sourceVersion"}
+    if not source_keys <= payload.keys() or type(payload["sourceVersion"]) is not int or payload["sourceVersion"] != version:
+        raise ValueError("Post source presence/version mismatch")
+    model = PostLifecycleProjectionPayload if event_type in UPSERT_EVENTS | {"PostModerationRejected"} else {"PostDeleted": PostDeletedPayload, "PostPrivacyRedacted": PostPrivacyRedactedPayload, "PostPurged": PostPurgedPayload}[event_type]
+    if type(payload.get("safetyRevision")) is not int or payload["safetyRevision"] < 1:
+        raise ValueError("Post safetyRevision must be explicit and positive")
+    model.model_validate_json(json.dumps(payload))
+    if any(payload[key] is not None for key in source_keys - {"sourceVersion"}):
+        raise ValueError("Data lifecycle requires authoritative partition/safety reconciliation")
+    if model is PostLifecycleProjectionPayload:
+        if "publishedAt" not in payload or "visitedAt" not in payload:
+            raise ValueError("Post nullable timestamps must be explicit")
+        if payload["status"] == "published" and payload["publishedAt"] is None:
+            raise ValueError("published Post requires actual publication time")
     event_id = values.get("eventId", "").strip()
     post_id = values.get("aggregateId", "").strip()
     if (
@@ -138,8 +156,31 @@ def decode_post_lifecycle(values: dict[str, str]) -> PostLifecycleEvent | None:
 
 
 class PostLifecycleConsumer(DurableProjectionConsumer):
-    def __init__(self, *, redis_client, feature_store, projector, consumer: str) -> None:
+    def _process(self, stream_id: str, event_values: dict[str, str]) -> None:
+        # 本Post流不允许未知/未实现事实经公共consumer的DLQ次数阈值被ACK。
+        failure_id = f"{self._consumer_group}:{stream_id}"
+        if event_values.get("eventType") == "ContentReleaseFenceChanged":
+            self._unresolved_fences.add(stream_id)
+        try:
+            self._handler(event_values)
+        except Exception as error:
+            self._store.record_source_failure(failure_id, event_values.get("eventId", ""), ValueError(type(error).__name__))
+            raise
+        self._redis.xack(self._stream, self._consumer_group, stream_id)
+        self._store.clear_source_failure(failure_id)
+        self._unresolved_fences.discard(stream_id)
+
+    def healthy(self, *, max_staleness_seconds: float = 10.0) -> bool:
+        return not self._unresolved_fences and super().healthy(max_staleness_seconds=max_staleness_seconds)
+
+    def __init__(self, *, redis_client, feature_store, projector, consumer: str, fence_reconciler=None) -> None:
+        self._unresolved_fences: set[str] = set()
         def apply(values: dict[str, str]) -> None:
+            if values.get("eventType") == "ContentReleaseFenceChanged":
+                if fence_reconciler is None:
+                    raise ValueError("Content fence credentials/proof port not configured")
+                fence_reconciler.apply(values)
+                return
             event = decode_post_lifecycle(values)
             if event is not None:
                 projector.project_post_lifecycle(

@@ -265,7 +265,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             "APP.LAUNCH.launch_surface_unsupported",
             "app-debug-preflight runtime mode is invalid",
         )
-    if purpose not in {"runtime", "content_live"}:
+    if purpose not in {"runtime", "content_live", "core_diagnostic"}:
         record_launch_blocker(
             "APP.LAUNCH.launch_surface_unsupported",
             "app-debug-preflight purpose is invalid",
@@ -658,7 +658,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         "readiness": None,
     }
     blocked_content_components: list[str] = []
-    if purpose == "content_live" and runtime_mode == "test_live":
+    if purpose in {"content_live", "core_diagnostic"} and runtime_mode == "test_live":
         # test_live 只做 launch-safe 诊断，不能把商业内容 UAT 变成编译前门。
         # 首页真实 Remote outcome 在启动后观察；这里不把未探测解释为可用。
         content_live_components = {
@@ -675,7 +675,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             for name in ("runtime", "binding")
             if content_live_components[name] is not True
         )
-    elif purpose == "content_live":
+    elif purpose in {"content_live", "core_diagnostic"}:
         try:
             content_preflight = _stackctl.command_app_content_preflight(
                 argparse.Namespace(
@@ -781,17 +781,17 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
     # content-live 的已验证源则是上面的 strict app-content-preflight。两条轨道
     # 不共享存储，但必须向下游投影同一组 release/readiness/App UAT 身份。
     content_payload_source: Mapping[str, Any] = content_binding
-    if runtime_mode == "immutable_candidate" and purpose == "content_live":
+    if runtime_mode == "immutable_candidate" and purpose in {"content_live", "core_diagnostic"}:
         content_payload_source = content_preflight
     content_state = "bound" if content_payload_source else "unbound"
     status = "gate_block" if details else "warning" if warnings else "passed"
     content_live_status = (
         "warning"
-        if purpose == "content_live" and runtime_mode == "test_live" and warnings
+        if purpose in {"content_live", "core_diagnostic"} and runtime_mode == "test_live" and warnings
         else "gate_block"
-        if purpose == "content_live" and blocked_content_components
+        if purpose in {"content_live", "core_diagnostic"} and blocked_content_components
         else "passed"
-        if purpose == "content_live"
+        if purpose in {"content_live", "core_diagnostic"}
         else "not_requested"
     )
     # firstBlocker 只承载 App launch manifest 声明的稳定码。严格 readiness
@@ -812,11 +812,11 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         "environment": environment,
         "purpose": purpose,
         "launchPolicy": runtime_mode,
-        "nonPromotable": runtime_mode == "test_live",
+        "nonPromotable": runtime_mode == "test_live" or purpose == "core_diagnostic",
         "contentLive": content_live_status,
         "contentLiveChecks": {
             "status": content_live_status,
-            "nonPromotable": runtime_mode == "test_live",
+            "nonPromotable": runtime_mode == "test_live" or purpose == "core_diagnostic",
             "components": content_live_components,
             "blockedComponents": blocked_content_components,
         },
@@ -911,17 +911,17 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         "appUatPlanDigest": content_payload_source.get("appUatPlanDigest", ""),
         "contentReadback": (
             content_payload_source.get("contentReadback", {})
-            if purpose == "content_live"
+            if purpose in {"content_live", "core_diagnostic"}
             else {}
         ),
         "contentReadinessReportRef": (
             content_payload_source.get("contentReadinessReportRef", "")
-            if purpose == "content_live"
+            if purpose in {"content_live", "core_diagnostic"}
             else ""
         ),
         "releaseProbe": (
             content_payload_source.get("releaseProbe", {})
-            if purpose == "content_live"
+            if purpose in {"content_live", "core_diagnostic"}
             else {}
         ),
     }

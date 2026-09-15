@@ -600,7 +600,7 @@ def test_android_gradle_failure_log_and_detail_redact_trust_material(
     sensitive_value = "fixturePrivate" + "KeyMaterial"
     leaked = f"{trust} {sensitive_value} /private/key"
     monkeypatch.setattr(
-        sync._builder, "canonical_android_uat_gradle_invocations", lambda _root: ()
+        sync._builder, "canonical_android_dependency_bundle_invocations", lambda _root: ()
     )
     monkeypatch.setattr(
         sync._builder,

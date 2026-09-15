@@ -10,16 +10,8 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import stat
-import sys
 from types import MappingProxyType
 from typing import Any
-
-_OPS_CLI_ROOT = Path(__file__).resolve().parents[5] / "quwoquan_ops" / "cli"
-if str(_OPS_CLI_ROOT) not in sys.path:
-    sys.path.insert(0, str(_OPS_CLI_ROOT))
-
-import handoff_consumer
-from lib import handoff_store
 
 from content.release.canonical.producer_release_handoff import (
     read_producer_release_handoff,
@@ -271,25 +263,28 @@ def _admit_producer_handoff(
     release_root: Path,
 ) -> ReleaseAdmission:
     try:
-        authority_bytes = handoff_store.read(handoff_ref, repo_root=repo_root)
-        authority = handoff_consumer.validate_published_bytes(
-            handoff_ref, authority_bytes, validate_current=True
-        )
-        artifact_ref, artifact_path, artifact_bytes, artifact_digest = (
-            handoff_store.resolve_unique_artifact(
-                authority, repo_root=repo_root,
-                filename=_HANDOFF_FILENAME,
-                schema="quwoquan_data.producer_release_handoff",
-            )
-        )
-    except (OSError, TypeError, ValueError, handoff_store.HandoffStoreError) as exc:
+        artifact_ref, artifact_digest = handoff_ref.rsplit("=", 1)
+        _canonical_expected_digest(artifact_digest, admission_kind="producer_handoff")
+        relative = PurePosixPath(artifact_ref)
+        if (len(relative.parts) != 4 or relative.parts[:2] != ("data", "releases")
+                or relative.parts[-1] != _HANDOFF_FILENAME or relative.as_posix() != artifact_ref
+                or any(part in {"", ".", ".."} for part in relative.parts)):
+            raise ValueError("expected data/releases/<releaseId>/producer_release_handoff.json=sha256:digest")
+        artifact_path = output_root.expanduser().absolute() / relative
+        if artifact_path.parent != release_root.expanduser().absolute() / relative.parts[2]:
+            raise ValueError("producer handoff must belong to the canonical release root")
+        _assert_regular_file_without_symlinks(artifact_path, root=output_root, admission_kind="producer_handoff")
+        artifact_bytes = artifact_path.read_bytes()
+        if "sha256:" + hashlib.sha256(artifact_bytes).hexdigest() != artifact_digest:
+            raise ValueError("producer handoff exact digest mismatch")
+    except (OSError, TypeError, ValueError) as exc:
         raise ValueError(f"DATA.RELEASE.HANDOFF_AUTHORITY_INVALID: {exc}") from exc
     try:
         document = read_producer_release_handoff(
             artifact_path, repo_root=repo_root, output_root=output_root,
             release_root=release_root,
         )
-    except (OSError, TypeError, ValueError) as exc:
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
         raise ValueError(f"DATA.RELEASE.HANDOFF_ARTIFACT_INVALID: {exc}") from exc
     if artifact_path.read_bytes() != artifact_bytes:
         raise ValueError(
@@ -298,8 +293,8 @@ def _admit_producer_handoff(
     release_id = str(document.get("releaseId") or "")
     release = release_root.expanduser().absolute() / release_id
     binding = document.get("release")
-    if not release_id or not isinstance(binding, Mapping):
-        raise ValueError("DATA.RELEASE.HANDOFF_RELEASE_ID_DRIFT: release binding missing")
+    if not release_id or release_id != relative.parts[2] or not isinstance(binding, Mapping):
+        raise ValueError("DATA.RELEASE.HANDOFF_RELEASE_ID_DRIFT: path and release binding differ")
     contract, header, manifest_digest = _release_inputs(
         release, release_id=release_id, failure_prefix="DATA.RELEASE.HANDOFF"
     )
@@ -320,8 +315,7 @@ def _admit_producer_handoff(
             "DATA.RELEASE.HANDOFF_RELEASE_DIGEST_DRIFT: payload identity differs from artifact"
         )
     if (
-        handoff_store.read(handoff_ref, repo_root=repo_root) != authority_bytes
-        or artifact_path.read_bytes() != artifact_bytes
+        artifact_path.read_bytes() != artifact_bytes
         or payload_digest(release) != manifest_digest
     ):
         raise ValueError(

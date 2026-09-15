@@ -1,7 +1,6 @@
 """Ship consults only the target phase; execution creation is environment-free."""
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
@@ -14,11 +13,28 @@ SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from content.release.environment import cli as ship_cli  # noqa: E402
 from content.release.environment import readiness as subject  # noqa: E402
 from content.release.environment.readiness import ShipReadinessAction  # noqa: E402
 from content.release.model import DeploymentEnvironment  # noqa: E402
 from core.io import read_json  # noqa: E402
+
+
+
+def _ops_receipt(tmp_path: Path, payload: dict[str, object]) -> str:
+    report_dir = tmp_path / "canonical-ops-readiness" / str(payload["environment"])
+    report_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "workload": "full",
+        "candidateDigest": "sha256:" + "c" * 64,
+        "providerRuntimeDigest": "sha256:" + "d" * 64,
+        "startupAttemptId": "startup-001",
+        **payload,
+        "reportDir": str(report_dir),
+    }
+    (report_dir / "report.json").write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8"
+    )
+    return json.dumps(payload)
 
 _LIFECYCLE_EXIT_REF = (
     "env/gamma/runs/release-lifecycle-exit/"
@@ -50,13 +66,13 @@ def test_production_readiness__passes_exact_release_identity_to_stackctl(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    observed: list[list[str]] = []
+    observed: list[tuple[list[str], dict[str, object]]] = []
 
-    def run(command: list[str], **_kwargs: object) -> SimpleNamespace:
-        observed.append(command)
+    def run(command: list[str], **kwargs: object) -> SimpleNamespace:
+        observed.append((command, kwargs))
         return SimpleNamespace(
             returncode=0,
-            stdout=json.dumps(
+            stdout=_ops_receipt(tmp_path,
                 {
                     "schema": "quwoquan_ops.ship_readiness_receipt",
                     "action": "verify",
@@ -69,6 +85,12 @@ def test_production_readiness__passes_exact_release_identity_to_stackctl(
         )
 
     monkeypatch.setattr(subject.subprocess, "run", run)
+    for name in (
+        "QWQ_DATA_ROOT", "QWQ_OUTPUT_ROOT", "QWQ_PUBLISH_ROOT",
+        "QWQ_LIBRARY_ROOT", "QWQ_CARRIED_MEDIA_ROOT",
+        "QWQ_DATA_PYTHON", "QWQ_DATA_CLI_BOOTSTRAPPED",
+    ):
+        monkeypatch.setenv(name, f"data-only-{name}")
     run_root = tmp_path / "verify-001"
 
     receipt = subject.require_environment_readiness(
@@ -81,7 +103,18 @@ def test_production_readiness__passes_exact_release_identity_to_stackctl(
     )
 
     assert receipt is not None and receipt.passed
-    command = observed[0]
+    command, kwargs = observed[0]
+    assert "--report-dir" not in command
+    child_env = kwargs["env"]
+    assert isinstance(child_env, dict)
+    assert not any(
+        name in child_env
+        for name in (
+            "QWQ_DATA_ROOT", "QWQ_OUTPUT_ROOT", "QWQ_PUBLISH_ROOT",
+            "QWQ_LIBRARY_ROOT", "QWQ_CARRIED_MEDIA_ROOT",
+            "QWQ_DATA_PYTHON", "QWQ_DATA_CLI_BOOTSTRAPPED",
+        )
+    )
     assert command[command.index("--release-id") + 1] == "pilot-003"
     assert command[command.index("--verify-run-id") + 1] == "verify-001"
     assert command[command.index("--manifest-digest") + 1] == "sha256:" + "a" * 64
@@ -89,6 +122,9 @@ def test_production_readiness__passes_exact_release_identity_to_stackctl(
     evidence = read_json(run_root / "environment-readiness.json")
     assert evidence["action"] == "verify"
     assert evidence["outcome"] == "PASS"
+    assert evidence["opsReceiptRef"].endswith("/report.json")
+    assert evidence["opsReceiptDigest"].startswith("sha256:")
+    assert "opsReportDir" not in evidence
     assert "lifecycleExitRef" not in evidence
 
 
@@ -102,7 +138,7 @@ def test_production_readiness__passes_lifecycle_exit_ref_to_stackctl(
         observed.append(command)
         return SimpleNamespace(
             returncode=0,
-            stdout=json.dumps(
+            stdout=_ops_receipt(tmp_path,
                 {
                     "schema": "quwoquan_ops.ship_readiness_receipt",
                     "action": "verify",
@@ -135,52 +171,6 @@ def test_production_readiness__passes_lifecycle_exit_ref_to_stackctl(
     assert evidence["outcome"] == "PASS"
 
 
-def test_ship_verify_cli__registers_lifecycle_exit_ref_flag() -> None:
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    ship_cli.register_parser(subparsers)
-
-    args = parser.parse_args(
-        [
-            "ship",
-            "verify",
-            "--handoff-ref",
-            "handoff-ref-v1:sha256:" + "a" * 64 + ":sha256:" + "b" * 64,
-            "--env",
-            "gamma",
-            "--import-run-id",
-            "apply-001",
-            "--lifecycle-exit-ref",
-            _LIFECYCLE_EXIT_REF,
-        ]
-    )
-
-    assert args.lifecycle_exit_ref == _LIFECYCLE_EXIT_REF
-    assert not hasattr(args, "readiness_phase")
-
-
-def test_ship_verify_cli__exposes_production_phase_without_weakening_identity_gate() -> None:
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    ship_cli.register_parser(subparsers)
-
-    args = parser.parse_args(
-        [
-            "ship",
-            "verify",
-            "--handoff-ref",
-            "handoff-ref-v1:sha256:" + "a" * 64 + ":sha256:" + "b" * 64,
-            "--env",
-            "alpha",
-            "--import-run-id",
-            "apply-001",
-        ]
-    )
-
-    assert not hasattr(args, "readiness_phase")
-    assert args.lifecycle_exit_ref == ""
-
-
 @pytest.mark.parametrize("environment", tuple(DeploymentEnvironment))
 def test_production_readiness_is_release_bound_in_every_environment(
     monkeypatch: pytest.MonkeyPatch,
@@ -193,7 +183,7 @@ def test_production_readiness_is_release_bound_in_every_environment(
         observed.append(command)
         return SimpleNamespace(
             returncode=0,
-            stdout=json.dumps(
+            stdout=_ops_receipt(tmp_path,
                 {
                     "schema": "quwoquan_ops.ship_readiness_receipt",
                     "action": "verify",

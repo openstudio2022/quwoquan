@@ -12,6 +12,7 @@ import hashlib
 import json
 
 import pytest
+from generated.recommendation.ranked_recommendation_window.models.request_response import ReleasePinnedQueryFence
 from prometheus_client import REGISTRY
 
 from generated.recommendation.recommendation_model_release.models.request_response import (
@@ -187,6 +188,7 @@ def _ranker(
 
 def _rank(ranker: MongoCandidateRanker):
     return ranker.rank(
+        content_fence=ReleasePinnedQueryFence(release=None, revision=0),
         subject_id=SUBJECT,
         scenario="content_feed",
         session_id="window-tuning",

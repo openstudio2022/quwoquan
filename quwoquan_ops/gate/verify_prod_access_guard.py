@@ -25,6 +25,18 @@ DISCOVERED_SURFACE_GLOBS = (
 
 SCRIPT_GLOBS = ("*.py", "*.sh", "*.yml", "*.yaml")
 
+DEC015_WRITER_SURFACES = {
+    "quwoquan_ops/cli/prod/sync_prod_plane_stack.sh": ("QWQ_EXECUTION_ATTEMPT_ID", "staging_root="),
+    "quwoquan_ops/cli/prod/deploy_to_prod.sh": ("execution_controller.py step", "QWQ_EXECUTION_SESSION"),
+    "quwoquan_ops/cli/commands/deploy_rollout.py": ("_deploy_prod_hosted_finalize", "QWQ_EXECUTION_SESSION"),
+    "quwoquan_ops/cli/commands/deploy_prod_finalize.py": ("_commit_hosted_release_transition",),
+    "quwoquan_ops/cli/commands/deploy_release_state.py": ("def guarded_release_transition", "load_session"),
+    "quwoquan_ops/cli/prod/prevalidate_prod_hosted.py": ("execution_controller.py", "candidate-start"),
+    "quwoquan_ops/cli/lib/official_distribution_release.py": ("guarded_distribution_pointer",),
+    "quwoquan_ops/cli/prod/inspect_prod_plane_runtime.py": ("guard-journal-readback",),
+}
+
+
 ACTIVE_AUTH_PATTERNS = {
     r"\bsshpass\b": "禁止在执行面重新引入口令 SSH（sshpass）",
     r"PreferredAuthentications=password": "禁止在执行面强制 password SSH 认证",
@@ -81,6 +93,17 @@ def main() -> int:
     scanned = iter_files(surfaces)
     if not scanned:
         issues.append("执行面扫描结果为空；门禁不得在没有被测文件的情况下通过")
+    for relative, required_calls in DEC015_WRITER_SURFACES.items():
+        path = ROOT / relative
+        if not path.is_file():
+            issues.append(f"DEC-015 writer不存在: {relative}")
+            continue
+        source = path.read_text(encoding="utf-8")
+        for required_call in required_calls:
+            if required_call not in source:
+                issues.append(f"DEC-015 writer缺少真实controller调用 {required_call}: {relative}")
+        if "DEC015_EXECUTION_GUARD_REQUIRED" in source:
+            issues.append(f"DEC-015 writer仍以字符串marker冒充接入: {relative}")
     for path in scanned:
         rel = path.relative_to(ROOT)
         try:

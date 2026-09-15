@@ -18,6 +18,35 @@ from internal.recommendation.ranked_recommendation_window.domain.model import (
 )
 
 
+from generated.recommendation.ranked_recommendation_window.models.request_response import ReleaseCandidateBinding, ReleasePinnedQueryFence
+
+
+def _fence(revision=1):
+    return ReleasePinnedQueryFence(release=ReleaseCandidateBinding(environment="gamma", sourceOwner="qwq_data", releaseId="release-a", manifestDigest="sha256:" + "a" * 64), revision=revision)
+
+
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+def test_window_rejects_changed_revision_and_invalid_empty_fence():
+    facade = Facade(store=_Store(), ranker=_Ranker(), subject_closures=_Closures(), exclusion_profiles=_ExclusionProfiles(), window_id_factory=lambda _: "fixed")
+    page = facade.create_window(idempotency_key="a", subject_id="p", scenario="content_feed", limit=2, content_fence=_fence())
+    assert page.content_fence == _fence()
+    with pytest.raises(IdempotencyConflictError):
+        facade.read_page(subject_id="p", window_id="fixed", from_ordinal=2, limit=2, content_fence=_fence(2))
+    with pytest.raises(ValueError):
+        facade.create_window(idempotency_key="b", subject_id="p", scenario="content_feed", limit=2, content_fence=ReleasePinnedQueryFence(release=None, revision=1))
+
+
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+def test_ordinary_query_requires_explicit_partition_and_data_events_are_not_ordinary():
+    from internal.recommendation.recommendation_candidate_index_view.infrastructure.mongo_store_ranking_reads import MongoCandidateRankingReadOps
+    from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.post_lifecycle_consumer import PostLifecycleEvent, lifecycle_snapshot
+    assert MongoCandidateRankingReadOps.ranking_query("content_feed")["sourcePartition"] == "ordinary"
+    for payload in ({}, {"sourceOwner": "qwq_data"}):
+        event = PostLifecycleEvent("event", "PostPublished", "p", 1, payload, datetime.now(timezone.utc))
+        with pytest.raises(ValueError):
+            lifecycle_snapshot(event)
+
+
 class _Store:
     def __init__(self) -> None:
         self.window = None
@@ -69,7 +98,7 @@ class _Ranker:
     def __init__(self) -> None:
         self.calls = 0
 
-    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int):
+    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int, content_fence: ReleasePinnedQueryFence):
         self.calls += 1
         return _ranking()
 
@@ -95,6 +124,7 @@ class _ExclusionProfiles:
 def test_ranked_window_has_fixed_expiry_and_stable_ordinals() -> None:
     now = datetime(2026, 7, 31, 12, tzinfo=timezone.utc)
     window = RankedRecommendationWindow.create(
+        content_fence=_fence(),
         window_id="window-001",
         subject_id="persona-001",
         scenario="content_feed",
@@ -136,6 +166,7 @@ def test_ranked_window_facade_persists_one_bounded_identity() -> None:
         window_id_factory=lambda _key: "window-fixed",
     )
     page = facade.create_window(
+        content_fence=_fence(),
         idempotency_key="request-001",
         subject_id="persona-001",
         scenario="content_feed",
@@ -145,6 +176,7 @@ def test_ranked_window_facade_persists_one_bounded_identity() -> None:
     assert [item.content_id for item in page.items] == ["post-0", "post-1", "post-2"]
     assert page.next_ordinal == 3
     assert facade.read_page(
+        content_fence=_fence(),
         subject_id="persona-001",
         window_id="window-fixed",
         from_ordinal=3,
@@ -152,6 +184,7 @@ def test_ranked_window_facade_persists_one_bounded_identity() -> None:
     ).next_ordinal is None
 
     replay = facade.create_window(
+        content_fence=_fence(),
         idempotency_key="request-001",
         subject_id="persona-001",
         scenario="content_feed",
@@ -162,6 +195,7 @@ def test_ranked_window_facade_persists_one_bounded_identity() -> None:
 
     with pytest.raises(IdempotencyConflictError):
         facade.create_window(
+        content_fence=_fence(),
             idempotency_key="request-001",
             subject_id="persona-001",
             scenario="content_feed_other",
@@ -180,6 +214,7 @@ def test_ranked_window_future_pages_filter_current_strong_feedback() -> None:
         window_id_factory=lambda _key: "window-fixed",
     )
     first = facade.create_window(
+        content_fence=_fence(),
         idempotency_key="request-001",
         subject_id="persona-001",
         scenario="content_feed",
@@ -192,6 +227,7 @@ def test_ranked_window_future_pages_filter_current_strong_feedback() -> None:
     # 过滤被 dislike 的内容；ordinal 与 next_ordinal 保持窗口原值。
     profiles.profiles["persona-001"] = {"negativeContentIds": ["post-2"]}
     filtered = facade.read_page(
+        content_fence=_fence(),
         subject_id="persona-001",
         window_id="window-fixed",
         from_ordinal=2,
@@ -216,6 +252,7 @@ def test_ranked_window_blocks_closed_subject_creation_and_existing_window_reads(
         window_id_factory=lambda _key: "window-fixed",
     )
     facade.create_window(
+        content_fence=_fence(),
         idempotency_key="request-001",
         subject_id="account-001",
         scenario="content_feed",
@@ -224,6 +261,7 @@ def test_ranked_window_blocks_closed_subject_creation_and_existing_window_reads(
     closures.closed.add("account-001")
     with pytest.raises(SubjectClosedError):
         facade.read_page(
+        content_fence=_fence(),
             subject_id="account-001",
             window_id="window-fixed",
             from_ordinal=0,
@@ -231,6 +269,7 @@ def test_ranked_window_blocks_closed_subject_creation_and_existing_window_reads(
         )
     with pytest.raises(SubjectClosedError):
         facade.create_window(
+        content_fence=_fence(),
             idempotency_key="request-002",
             subject_id="account-001",
             scenario="content_feed",
@@ -241,6 +280,7 @@ def test_ranked_window_blocks_closed_subject_creation_and_existing_window_reads(
 def test_ranked_window_rejects_duplicate_or_unbounded_candidates() -> None:
     with pytest.raises(ValueError):
         RankedRecommendationWindow.create(
+            content_fence=_fence(),
             window_id="window-duplicate",
             subject_id="persona-001",
             scenario="content_feed",
@@ -262,6 +302,7 @@ def test_ranked_window_rejects_duplicate_or_unbounded_candidates() -> None:
         )
     with pytest.raises(ValueError):
         RankedRecommendationWindow.create(
+            content_fence=_fence(),
             window_id="window-unbounded",
             subject_id="persona-001",
             scenario="content_feed",
@@ -283,6 +324,7 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
         recall_path="entity_card_affinity",
     )
     window = RankedRecommendationWindow.create(
+        content_fence=_fence(),
         window_id="window-object-card",
         subject_id="persona-001",
         scenario="content_feed",
@@ -312,6 +354,7 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
         recall_path="gathering_candidate_index",
     )
     gathering_window = RankedRecommendationWindow.create(
+        content_fence=_fence(),
         window_id="window-gathering-card",
         subject_id="persona-001",
         scenario="content_feed",
@@ -337,6 +380,7 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
     ):
         with pytest.raises(ValueError):
             RankedRecommendationWindow.create(
+                content_fence=_fence(),
                 window_id="window-invalid-object-card",
                 subject_id="persona-001",
                 scenario="content_feed",

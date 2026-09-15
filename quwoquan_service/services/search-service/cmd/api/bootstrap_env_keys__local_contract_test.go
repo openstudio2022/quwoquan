@@ -1,9 +1,80 @@
 package bootstrap
 
 import (
+	"context"
+	"errors"
+	"io"
+	"log/slog"
+	"quwoquan_service/runtime/health"
+	messaging "quwoquan_service/runtime/messaging"
+	"quwoquan_service/runtime/servicekit"
+	searchapplication "quwoquan_service/services/search-service/internal/search/search_index_view/application"
 	"strings"
 	"testing"
+	"time"
 )
+
+type postHealthTransport struct {
+	messaging.DurableDeliveryTransport
+	readErr error
+}
+
+func (*postHealthTransport) EnsureDurableConsumerGroup(context.Context, string, string, string) error {
+	return nil
+}
+func (*postHealthTransport) ReclaimDurable(context.Context, string, string, string, time.Duration, string, int64) ([]messaging.StreamDelivery, string, error) {
+	return nil, "0-0", nil
+}
+func (t *postHealthTransport) ReadDurable(context.Context, messaging.StreamReadRequest) ([]messaging.StreamDelivery, error) {
+	return nil, t.readErr
+}
+
+type postHealthHandler struct{}
+
+func (postHealthHandler) ApplyContentPostDelivery(context.Context, messaging.StreamDelivery) error {
+	return nil
+}
+
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-004
+func TestContentPostExecutionHealthRegistration(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	asm := &servicekit.Assembly{Context: ctx, Health: health.NewChecker(), Workers: &servicekit.WorkerRegistry{}}
+	transport := &postHealthTransport{}
+	consumer, err := searchapplication.NewContentPostLifecycleConsumer(transport, postHealthHandler{}, "health", "one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	registerContentPostConsumer(asm, consumer, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	check := func(ready bool) {
+		t.Helper()
+		result := asm.Health.Check(context.Background())
+		value, exists := result.Checks["content-post-consumer-execution"]
+		if !exists || (value == "ok") != ready {
+			t.Fatal(result)
+		}
+	}
+	check(false)
+	if _, err = consumer.ProcessOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	check(true)
+	transport.readErr = errors.New("secret transport detail")
+	if _, err = consumer.ProcessOnce(ctx); err == nil {
+		t.Fatal("read failure lost")
+	}
+	check(false)
+	if strings.Contains(asm.Health.Check(ctx).Checks["content-post-consumer-execution"], "secret") {
+		t.Fatal("health leaked detail")
+	}
+	transport.readErr = nil
+	if _, err = consumer.ProcessOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	check(true)
+	cancel()
+	check(false)
+}
 
 // TestDeclaredEnvKeysCoverHandwrittenOverrides 锁定声明式配置派生的 env 覆盖键
 // 集覆盖迁移前手写 applyESEnvOverrides / applyMongoEnvOverrides /
@@ -81,6 +152,8 @@ func TestValidateSearchConfigRejectsNonPositiveServingBounds(t *testing.T) {
 	newValidConfig := func() *config {
 		cfg := &config{}
 		cfg.ES.Index = "quwoquan_objects"
+		cfg.CreatorSearch.BindingDigest = "sha256:" + strings.Repeat("a", 64)
+		cfg.CreatorSearch.PhysicalNamespace = "quwoquan_objects-v1"
 		cfg.Serving.MaxInflight = 256
 		cfg.Serving.RelatedTermsCacheTTLMs = 2000
 		cfg.Serving.RelatedTermsCacheMax = 1024
@@ -91,6 +164,8 @@ func TestValidateSearchConfigRejectsNonPositiveServingBounds(t *testing.T) {
 		t.Fatalf("rendered snapshot defaults must pass: %v", err)
 	}
 	for name, mutate := range map[string]func(*config){
+		"creator_search.binding_digest":              func(cfg *config) { cfg.CreatorSearch.BindingDigest = "" },
+		"creator_search.physical_namespace":          func(cfg *config) { cfg.CreatorSearch.PhysicalNamespace = "quwoquan_objects" },
 		"es.index":                                   func(cfg *config) { cfg.ES.Index = " " },
 		"serving.max_inflight":                       func(cfg *config) { cfg.Serving.MaxInflight = 0 },
 		"serving.related_terms_cache_ttl_ms":         func(cfg *config) { cfg.Serving.RelatedTermsCacheTTLMs = -1 },

@@ -1,7 +1,7 @@
 kind: projection
 description: 内容、主页、圈子与标签事件构建的推荐候选索引视图，唯一拥有发现候选、premium pool 与实体标签索引。
 identity:
-  fields: [scenario, contentId]
+  fields: [sourcePartition, scenario, contentId]
   version_source: checkpoint
 access:
   commands: none
@@ -27,14 +27,25 @@ assistant_access:
     scopes: []
   denied_reason: "服务内部投影与编排状态不构成小趣可用上下文，只服务所属域自身推进。"
 business_rules:
-- 候选只由上游 typed 事件构建，不跨库读取 Content、Entity、Circle 或 Tag 私有集合。
-- scenario 与 contentId 唯一定位 Post 候选；Gathering 子投影以 gatheringId 作为 sourceKey、aggregateVersion 作为 sourceVersion，任一旧事件都不得覆盖较新状态或复活 tombstone。
+- 候选只由上游typed事件构建，不跨库读Content/Entity/Circle/Tag。Data首次准备只消费PostReleaseCandidatePrepared完整冻结快照，ContentReleaseFenceChanged仅只读对账after对应已准备candidate，不补首次写入、不墓碑previous、不触发premium/实体标签安全删除；不存在第二active状态。
+- ContentReleaseFenceChanged直接消费Content owning-event生成的before/after类型，不复制跨域值；eventId/规范摘要幂等，同revision不同摘要冲突。迟到事件只有inbox或Content ReadContentReleaseCommitReceipt可证提交才记superseded，未来revision/错tuple/未知payload/缺receipt拒绝且pending，不根据较小revision quiet ACK。
+- 真实PostDeleted/privacy/purge/审核拒绝/权限收紧按显式来源canonical对象清理候选和可识别辅助索引、premium资格，并使全部含该对象的保留candidate/proof失效；不把源tuple当唯一删除目标，不允许旧prepare/upsert或更大activation序号复活。不可逆防复活水位覆盖重放和候选保留；合法新candidate重新准备，不能删减原集合沿用proof。owner安全authority缺失不得准入。
+- ordinary lifecycle的environment/sourceOwner/releaseId/manifestDigest/releaseDigest必须显式null，Data完整前四字段且releaseDigest仅审计；sourceVersion唯一且等于envelope aggregateVersion，未知字段/空串来源/缺tuple拒绝。Content源与公开mapper唯一声明，consumer不补默认、不用activationRevision覆盖candidate源版本。
+- Data候选的逻辑身份是releaseBinding与scenario/contentId，普通来源仍为scenario/contentId；releaseBinding/releaseSource在Data同有、普通来源同无，不以空release自动认定普通来源。sourcePartition对普通来源固定ordinary，对Data为releaseBinding canonical摘要；逻辑identity和storage同时包含该分区。旧行必须受管迁移，不默认填ordinary掩盖来源。
+- 原PostLifecycleConsumer消费准备事件时以publicationId+digest inbox幂等，same binding不同snapshot冲突；候选全部条目、完整source checkpoint与inbox在同Mongo事务提交，不另存ready状态，失败不前移checkpoint。
+- 原PremiumPoolConsumer消费PremiumPoolEntry三类事件的完整releaseAdmissions，在原eventId/digest inbox与原聚合revision水位下原子更新Data准入分区；不能使用updatedAt到达顺序或从标量补成员。空集合只对已验证普通来源成立；Data旧wire缺成员必须阻断迁移，不能自动补空。
+- ProductOps的ReleasePremiumAdmission是Data精品唯一源；A/B同contentId保留独立tuple准入，按原聚合revision阻止旧事件复活，rolled_back/takedown_ejected立即失去资格。普通精品继续原事件来源，不从旧contentId准入推导Data资格。
+- candidate named reader在limit之前过滤Content pin的完整tuple并沿原安全/负反馈/隐藏/拉黑谓词；纯准备readiness不创建session或曝光，不要求active，不跨库或同步调用ProductOps。
+- scenario 与 contentId 唯一定位普通 Post 候选；Gathering 子投影以 gatheringId 作为 sourceKey、aggregateVersion 作为 sourceVersion，任一旧事件都不得覆盖较新状态或复活 tombstone。
 - UserSuspended/UserRestored 以 accountVersion 单调维护本地作者限制投影；限制状态必须在候选查询 limit 前过滤，账号关闭后候选与可逆限制原值均不可保留。
 - following 场景只能消费 PersonaFollowStateChanged/PersonaBlocked/PersonaUnblocked 维护的本地关系投影筛选 authorId；不得跨库读取 User 私有关系表，拉黑后不得恢复历史关注。
 - premium pool 和实体标签是同一候选身份的具名索引，不得形成第二候选真相源。
 - 对象卡只能从 Post lifecycle 携带的 canonical Homepage 公开快照或 Circle 签发的裁剪 GatheringPublicCard 选择；不得回查上游私有集合或复制 Participation、申请答案与精确私密地点。
 lifecycle:
   source_events:
+  - content.post.PostReleaseCandidatePrepared
+  - content.post.ContentReleaseFenceChanged
+  - content.post.PostModerationRejected
   - content.post.PostPublished
   - content.post.PostUpdated
   - content.post.PostSettingsUpdated

@@ -30,6 +30,7 @@ from .ledger_store import (
     _load_hosted_soak_receipt,
     _next_stage_receipt_history,
     _validated_readback,
+    observe_prior,
 )
 from .request_validation import _validate_request, _validate_soak_request
 
@@ -333,7 +334,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--root", required=True)
     parser.add_argument(
         "--action",
-        choices=("fetch", "commit", "receipt", "soak-commit", "soak-receipt"),
+        choices=("fetch", "commit", "receipt", "soak-commit", "soak-receipt", "prior-observe", "execution-acquire", "execution-register", "execution-ack", "execution-consume", "execution-close"),
         required=True,
     )
     parser.add_argument("--service", default="")
@@ -348,7 +349,31 @@ def main() -> int:
         root = Path(args.root).expanduser()
         if not root.is_absolute():
             raise ValueError("hosted release ledger root must be absolute")
-        if args.action == "fetch":
+        if args.action.startswith("execution-"):
+            from .execution import ExecutionSlot
+            request = json.loads(base64.b64decode(args.request_base64, validate=True))
+            slot = ExecutionSlot(root)
+            if args.action == "execution-acquire":
+                if set(request) != {"attemptId", "expectedExecutionGeneration", "expectedReleaseGeneration"}:
+                    raise ValueError("EXECUTION.INVALID_ACQUIRE")
+                result = slot.acquire(attempt_id=request["attemptId"], expected_execution_generation=request["expectedExecutionGeneration"], expected_release_generation=request["expectedReleaseGeneration"])
+            elif args.action == "execution-register":
+                result = {"stepDigest": slot.register(request), "admissionEligible": False}
+            elif args.action == "execution-ack":
+                slot.acknowledge(request)
+                result = {"acknowledged": True, "requestDigest": request["requestDigest"], "admissionEligible": False}
+            elif args.action == "execution-consume":
+                if set(request) != {"attemptId", "executionGeneration", "observationDigest", "winnerDigest"}:
+                    raise ValueError("EXECUTION.INVALID_CONSUME")
+                result = slot.consume_human(attempt_id=request["attemptId"], generation=request["executionGeneration"], observation_digest=request["observationDigest"], winner_digest=request["winnerDigest"])
+            else:
+                if set(request) != {"attemptId", "executionGeneration"}:
+                    raise ValueError("EXECUTION.INVALID_CLOSE")
+                slot.close(attempt_id=request["attemptId"], generation=request["executionGeneration"])
+                result = {"closed": True, "admissionEligible": False}
+        elif args.action == "prior-observe":
+            result = observe_prior(root, args.service)
+        elif args.action == "fetch":
             result = fetch(root, args.service)
         elif args.action == "receipt":
             result = fetch_receipt(root, args.service, args.receipt_id)

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,15 +22,15 @@ def test_android_builder_materializes_pinned_flutter_identity_before_sync(
 ) -> None:
     context, projection, replays, digests, trust = android_failure_fixture(tmp_path)
     invocations = (
-        SimpleNamespace(gradle_root=projection / "quwoquan_app/android"),
         SimpleNamespace(
-            gradle_root=projection / "quwoquan_app/test_host/patrol/android"
+            gradle_root=projection / "quwoquan_app/android",
+            tasks=(":app:assembleNonprodDebug",),
         ),
     )
     calls: list[tuple[str, object]] = []
     monkeypatch.setattr(
         sync._builder,
-        "canonical_android_uat_gradle_invocations",
+        "canonical_android_dependency_bundle_invocations",
         lambda root: (
             invocations
             if root == projection
@@ -54,8 +55,16 @@ def test_android_builder_materializes_pinned_flutter_identity_before_sync(
         assert flutter_identity == context.flutter_identity
         return ()
 
-    def synchronize(**_kwargs: object) -> object:
+    def synchronize(**kwargs: object) -> object:
         calls.append(("synchronize", None))
+        assert kwargs["invocations"] == invocations
+        assert kwargs["verified_seed"] is None
+        assert kwargs["seed_wrapper_distribution"] is False
+        assert all(
+            "AndroidTest" not in task and "test_host" not in str(item.gradle_root)
+            for item in kwargs["invocations"]
+            for task in item.tasks
+        )
         return SimpleNamespace(
             snapshot=SimpleNamespace(manifest={}),
             online_results=(),
@@ -88,3 +97,62 @@ def test_android_builder_materializes_pinned_flutter_identity_before_sync(
         ("synchronize", None),
     ]
     assert context.progress.current_phase == "gradle-offline-replay"
+
+
+def test_valid_active_with_current_wrapper_drift_skips_seed_and_runs_fresh_online(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    context, projection, replays, digests, trust = android_failure_fixture(tmp_path)
+    context = replace(
+        context, android_gradle_seed_root=tmp_path / "active/androidGradle"
+    )
+    invocation = SimpleNamespace(
+        gradle_root=projection / "quwoquan_app/android",
+        tasks=(":app:assembleNonprodDebug",),
+    )
+    monkeypatch.setattr(
+        sync._builder,
+        "canonical_android_dependency_bundle_invocations",
+        lambda _root: (invocation,),
+    )
+    monkeypatch.setattr(
+        sync._builder, "materialize_pinned_flutter_gradle_wrappers", lambda *_args: ()
+    )
+    verified = SimpleNamespace(manifest={"wrappers": [{"root": "old"}]})
+    monkeypatch.setattr(
+        sync._builder, "load_android_gradle_component", lambda **_kwargs: verified
+    )
+    monkeypatch.setattr(
+        sync._builder,
+        "android_gradle_snapshot_matches_current_wrappers",
+        lambda *_args, **_kwargs: False,
+    )
+    observed: dict[str, object] = {}
+
+    def synchronize(**kwargs: object) -> object:
+        observed.update(kwargs)
+        return SimpleNamespace(
+            snapshot=SimpleNamespace(manifest={}),
+            online_results=(),
+            offline_results=(),
+        )
+
+    monkeypatch.setattr(
+        sync._builder, "synchronize_android_gradle_dependencies", synchronize
+    )
+    monkeypatch.setattr(
+        sync._builder,
+        "write_android_gradle_component",
+        lambda **_kwargs: context.generation_root / "androidGradle",
+    )
+    sync._builder._build_android_component(
+        context=context, projection_root=projection, pub_replays=replays,
+        pub_digests=digests, trust_root=trust,
+    )
+    assert observed["verified_seed"] is verified
+    assert observed["seed_wrapper_distribution"] is False
+    diagnostic = context.process_root / "android-gradle-seed.log"
+    assert diagnostic.stat().st_mode & 0o777 == 0o600
+    detail = diagnostic.read_text()
+    assert "Maven modules seeded" in detail
+    assert "wrapper distribution skipped" in detail

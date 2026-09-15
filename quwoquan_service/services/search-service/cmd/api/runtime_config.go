@@ -2,6 +2,10 @@ package bootstrap
 
 import (
 	"fmt"
+	"net/http"
+	"quwoquan_service/generated/operationsecurity"
+	"quwoquan_service/runtime/auth"
+	"regexp"
 	"strings"
 
 	"quwoquan_service/runtime/servicekit"
@@ -18,7 +22,11 @@ import (
 type config struct {
 	servicekit.BaseConfig `yaml:",inline"`
 
-	ES searchbackend.ESConfig `yaml:"es"`
+	ES            searchbackend.ESConfig `yaml:"es"`
+	CreatorSearch struct {
+		BindingDigest     string `yaml:"binding_digest" envAbsolute:"CREATOR_SEARCH_BINDING_DIGEST" required:"true"`
+		PhysicalNamespace string `yaml:"physical_namespace" envAbsolute:"CREATOR_SEARCH_PHYSICAL_NAMESPACE" required:"true"`
+	} `yaml:"creator_search"`
 
 	// Mongo 是 query log、feedback、搜索词热力读模型、RecentSearchState 与账号
 	// 处置投影的权威存储；四环境使用同一套完整生产组合，缺 uri/database 由
@@ -49,6 +57,11 @@ type config struct {
 	} `yaml:"serving"`
 }
 
+// Search是owner运行边界，商业准出仍由api-edge public guard拥有；认证/scope/幂等/deadline不变。
+func searchOwnerRuntimeGuard(servicekit.Identity) (func(http.Handler) http.Handler, error) {
+	return auth.EnforceRuntimeOperationContract(operationsecurity.ForDomain("search")), nil
+}
+
 // retiredSnapshotSections 是已被 BaseConfig 标准段取代的配置顶层键。CONFIG_VERSION
 // 钉住的是配置包，一个仍带旧段的快照被挂进来时，新代码只会读到零值；显式拒收
 // 才能让「注入的快照 = 代码读取的形状」保持单轨。
@@ -74,6 +87,10 @@ func rejectRetiredSearchSnapshotSections(raw []byte) error {
 // validateSearchConfig 施加搜索领域的配置下界。它在骨架的 required 校验之后、
 // 任何观测栈与基础设施连接之前执行，因此非法配置不会产生外部副作用。
 func validateSearchConfig(cfg *config) error {
+	if !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(cfg.CreatorSearch.BindingDigest) || !regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]*-v[1-9][0-9]*$`).MatchString(cfg.CreatorSearch.PhysicalNamespace) {
+		return fmt.Errorf("Creator search requires canonical data-plane binding and physical namespace")
+	}
+
 	// 索引名迁移前由启动期默认值兜底，那会让「快照没渲染出索引名」这种注入
 	// 缺口伪装成一次正常启动，并把文档写进一个没人查询的别名。
 	if strings.TrimSpace(cfg.ES.Index) == "" {

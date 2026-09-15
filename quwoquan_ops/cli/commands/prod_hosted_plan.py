@@ -35,11 +35,11 @@ def register_parser(
     hosted_plan_parser.add_argument("--host-id", action="append", default=[])
     hosted_plan_parser.add_argument("--ssh-host", default="")
     hosted_plan_parser.add_argument(
-        "--require-release-redundancy",
+        "--require-release-inventory",
         action="store_true",
         help=(
             "GATE_BLOCK unless the complete formal gray/prod service+edge "
-            "inventory has two real hosts and replicas per plane"
+            "inventory exactly matches canonical placements"
         ),
     )
 
@@ -60,8 +60,8 @@ def command_prod_hosted_plan(args: argparse.Namespace) -> dict[str, Any]:
         argv.extend(["--host-id", host_id])
     if args.ssh_host:
         argv.extend(["--ssh-host", args.ssh_host])
-    if args.require_release_redundancy:
-        argv.append("--require-release-redundancy")
+    if args.require_release_inventory:
+        argv.append("--require-release-inventory")
     result = _stackctl.run(argv)
     timing = _stackctl._finish_timing(started_monotonic, started_at)
     if result.returncode != 0:

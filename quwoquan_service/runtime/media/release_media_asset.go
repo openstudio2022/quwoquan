@@ -371,7 +371,7 @@ func validateReleaseRightsBinding(
 			continue
 		}
 		if asset.SHA256 != expectedSHA256 || asset.Bytes <= 0 ||
-			!canonicalReleasePayloadRef(asset.Path) || !strings.HasPrefix(asset.Path, "assets/") {
+			!canonicalReleasePayloadRef(asset.Path) || !strings.HasPrefix(asset.Path, "media/") {
 			return fmt.Errorf("owner %q does not bind MediaAsset identity", owner)
 		}
 		seen := make(map[string]bool, len(asset.SourceRefs))

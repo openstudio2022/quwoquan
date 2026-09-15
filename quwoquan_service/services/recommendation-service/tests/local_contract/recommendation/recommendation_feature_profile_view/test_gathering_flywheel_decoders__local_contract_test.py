@@ -22,8 +22,11 @@ from internal.recommendation.recommendation_feature_profile_view.adapters.inboun
 def _participation_values(**overrides) -> dict[str, str]:
     payload = {
         "gatheringId": "gathering-001",
+        "aggregateVersion": 7,
+        "lifecycleStatus": "published",
         "participantPersonaId": "persona-b",
         "participationState": "active",
+        "occurredAt": "2026-08-12T12:00:00Z",
     }
     payload.update(overrides.pop("payload", {}))
     values = {
@@ -86,10 +89,16 @@ def _post_values(**overrides) -> dict[str, str]:
         "visibility": "public",
         "moderationStatus": "approved",
         "primaryHomepageId": "",
-        "visitedAt": "",
+        "visitedAt": None,
+        "contentType": "article", "contentIdentity": "work", "title": "回顾", "body": "内容", "summary": "摘要", "coverUrl": "", "thumbnailUrl": "", "videoUrl": "", "width": 0, "height": 0, "durationMs": 0, "contentVertical": "travel",
+        "createdAt": "2026-08-12T12:30:00Z", "updatedAt": "2026-08-12T12:30:00Z", "publishedAt": "2026-08-12T12:30:00Z",
+        "environment": None, "sourceOwner": None, "releaseId": None, "manifestDigest": None, "releaseDigest": None, "sourceVersion": 1, "safetyRevision": 1,
         "gatheringRef": "gathering-001",
     }
     payload.update(overrides.pop("payload", {}))
+    if overrides.get("eventType") == "PostDeleted":
+        payload = {key: payload[key] for key in ["postId", "authorId", "contentType", "contentIdentity", "environment", "sourceOwner", "releaseId", "manifestDigest", "releaseDigest", "sourceVersion", "safetyRevision"]}
+        payload.update(status="published", deletedAt="2026-08-12T12:30:00Z")
     values = {
         "eventId": "evt-post-1",
         "eventType": "PostPublished",

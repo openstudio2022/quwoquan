@@ -6,6 +6,23 @@ externalDependencies:
     operations: [appendDurable, consumeDurable]
     scenes: [general]
 api_routes:
+  - method: POST
+    path: /internal/homepages/release-candidates:query
+    operation: ReadHomepageReleaseCandidate
+    actor: none
+    commercial: {status: blocked, block_reason: exact verified源公开快照与真实transport尚待实现, gap_id: ENTITY_RELEASE_CANDIDATE_QUERY, target_story: environment-topology-and-packaging}
+    application: {kind: query, facet: HomepageReleaseCandidateQueryFacade, method: read, reader: HomepageReleaseCandidateReader, slice: ReleaseHomepageCandidateSnapshot}
+    authorization: {principal: service, scopes: [entity.release.source.read], ownership_policy: content_release_preparation}
+    security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+    reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
+    request_entity: ReadHomepageReleaseCandidateQuery
+    request_body_kind: object
+    response_entity: ReleaseHomepageCandidateSnapshot
+    error_codes: [ENTITY.RELEASE.candidate_invalid, ENTITY.RELEASE.candidate_not_ready, ENTITY.RELEASE.candidate_unavailable]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: entity_release_candidate_read, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 2500, availability_percent: 99.9}
+    description: 只接受content-service，部署环境和sourceOwner必须匹配。缺verified源409，身份/摘要/映射错配422，存储读取失败503；无active仍可查，零写入，不接受截断集合或latest fallback。
   - method: GET
     path: /homepages/search
     operation: SearchHomepages

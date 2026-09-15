@@ -3,61 +3,33 @@ package releaseimport
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
-	"time"
-
+	events "quwoquan_service/services/content-service/generated/content/post/contract/event"
+	wire "quwoquan_service/services/content-service/generated/content/post/contract/releasequery"
+	app "quwoquan_service/services/content-service/internal/content/post/application/public"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
-// BuildActivationPostLifecycleEvents 把 import 期生成的 Post lifecycle 事件绑定到
-// 本次 activation 的完整 release tuple 与单调 activationRevision，供 Search /
-// Recommendation 等异步消费者按 Content active fence 追平；tuple 或 revision 缺失
-// 一律 fail closed，不生成可分叉的 activation 事件。
-func BuildActivationPostLifecycleEvents(
-	posts []PostDoc,
-	deletedPosts []ImportedPostDeletionSnapshot,
-	opts ImportOptions,
-	occurredAt time.Time,
-	predecessor ActiveReleaseBinding,
-	activationRevision int64,
-) ([]postports.OutboxEvent, error) {
-	opts = NormalizeImportOptions(opts)
-	if strings.TrimSpace(opts.SourceOwner) == "" ||
-		strings.TrimSpace(opts.ReleaseID) == "" ||
-		!sha256Pattern.MatchString(strings.TrimSpace(opts.ManifestDigest)) ||
-		activationRevision <= 0 {
-		return nil, fmt.Errorf("activation lifecycle release tuple is incomplete")
+func releaseWireFence(f ActiveReleaseBinding) wire.ContentActiveReleaseFence {
+	result := wire.ContentActiveReleaseFence{Found: f.Found, Environment: f.Environment, SourceOwner: f.SourceOwner, ReleaseId: f.ReleaseID, ManifestDigest: f.ManifestDigest, Revision: f.Revision, ProjectionVersion: f.ProjectionVersion}
+	if f.Found {
+		t := f.ActivatedAt.UTC()
+		result.ActivatedAt = &t
 	}
-	events, err := BuildImportedPostLifecycleEvents(posts, deletedPosts, opts, occurredAt)
+	return result
+}
+
+// 只产生已提交候选切换的控制事实；不把Post从live退出解释成作者删除。
+func buildReleaseFenceEvent(before, after ActiveReleaseBinding) (postports.OutboxEvent, wire.ContentReleaseCommitReceipt, error) {
+	receipt := wire.ContentReleaseCommitReceipt{Transition: wire.ContentReleaseFenceChangedPayload{Before: releaseWireFence(before), After: releaseWireFence(after)}}
+	receipt.EventId = app.ReleaseFenceEventID(receipt.Transition.After)
+	receipt.PayloadDigest = app.ReleaseFencePayloadDigest(receipt.Transition)
+	q := wire.ReadContentReleaseCommitReceiptQuery{Expected: receipt.Transition.Before, Release: wire.ReleaseCandidateBinding{Environment: after.Environment, SourceOwner: after.SourceOwner, ReleaseId: after.ReleaseID, ManifestDigest: after.ManifestDigest}}
+	if err := app.ValidateReleaseCommitReceipt(q, receipt); err != nil {
+		return postports.OutboxEvent{}, receipt, fmt.Errorf("invalid fence transition: %w", err)
+	}
+	raw, err := json.Marshal(receipt.Transition)
 	if err != nil {
-		return nil, err
+		return postports.OutboxEvent{}, receipt, err
 	}
-	predecessorIdentity := "empty"
-	if predecessor.Found {
-		predecessorIdentity = strings.Join([]string{
-			predecessor.SourceOwner, predecessor.ReleaseID,
-			predecessor.ManifestDigest, fmt.Sprint(predecessor.Revision),
-		}, ":")
-	}
-	for index := range events {
-		var payload map[string]any
-		if err := json.Unmarshal(events[index].Payload, &payload); err != nil {
-			return nil, fmt.Errorf("decode activation lifecycle payload: %w", err)
-		}
-		payload["sourceOwner"] = opts.SourceOwner
-		payload["releaseId"] = opts.ReleaseID
-		payload["manifestDigest"] = opts.ManifestDigest
-		payload["activationRevision"] = activationRevision
-		encoded, err := json.Marshal(payload)
-		if err != nil {
-			return nil, fmt.Errorf("encode activation lifecycle payload: %w", err)
-		}
-		events[index].Payload = encoded
-		events[index].EventID = fmt.Sprintf(
-			"data-release-activation:%d:%d:%s:%s:%s:%s",
-			activationRevision, opts.ProjectionVersion, opts.ReleaseID,
-			predecessorIdentity, events[index].AggregateID, events[index].EventType,
-		)
-	}
-	return events, nil
+	return postports.OutboxEvent{EventID: receipt.EventId, EventType: events.ContentReleaseFenceChanged, AggregateType: "Post", AggregateID: after.Environment + "/" + after.SourceOwner, AggregateVersion: after.Revision, OccurredAt: after.ActivatedAt, Payload: raw}, receipt, nil
 }

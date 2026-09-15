@@ -88,6 +88,16 @@ PY
     DATA_PLANE_BINDING="$EXPECTED_DATA_PLANE_BINDING"
   fi
 fi
+if [[ "$DRY_RUN" != "true" && ( -z "${QWQ_EXECUTION_SESSION:-}" || ! -s "${QWQ_EXECUTION_SESSION}" ) ]]; then
+  echo "::error::真实发布必须消费连续持有的 QWQ_EXECUTION_SESSION" >&2
+  exit 2
+fi
+
+execution_step() {
+  local plane="$1" host_id="$2" instance="$3" replica_id="$4" action="$5" parameters="$6" material="$7"
+  python3 -B quwoquan_ops/cli/prod/execution_controller.py step --session "$QWQ_EXECUTION_SESSION" --plane "$plane" --host-id "$host_id" --instance "$instance" --replica-id "$replica_id" --effect "$action" --parameters "$parameters" --material-digest "$material"
+}
+
 if [[ "$DRY_RUN" != "true" ]]; then
   if [[ "$DATA_PLANE_BINDING" != "$EXPECTED_DATA_PLANE_BINDING" || ! -f "$DATA_PLANE_BINDING" || -L "$DATA_PLANE_BINDING" ]]; then
     echo "::error::真实发布必须使用 candidate-owned data-plane binding: $EXPECTED_DATA_PLANE_BINDING" >&2
@@ -157,27 +167,7 @@ resolve_plane_ssh() {
   return 1
 }
 
-run_remote_bash() {
-  local account="$1"
-  local secret_name="$2"
-  local host="$3"
-  local remote_cmd="$4"
-  resolve_plane_ssh "$secret_name" "$account"
-  if [[ "$RESOLVED_SSH_USE_AGENT" == "true" ]]; then
-    printf '%s\n' "$remote_cmd" | ssh \
-      -o StrictHostKeyChecking=accept-new \
-      -o BatchMode=yes \
-      "${account}@${host}" \
-      "bash -s"
-    return $?
-  fi
-  printf '%s\n' "$remote_cmd" | ssh \
-    -i "$RESOLVED_SSH_KEY_FILE" \
-    -o StrictHostKeyChecking=accept-new \
-    -o BatchMode=yes \
-    "${account}@${host}" \
-    "bash -s"
-}
+
 
 # 解析本 stage 的 host / deployment instance / replica 计划。输出只包含
 # SSH credential 逻辑 id，不包含私钥或 Secret Bundle。
@@ -186,9 +176,8 @@ plan_args=(
   --stage "$ROLLOUT_STAGE"
   --format tsv
 )
-if [[ "$ROLLOUT_STAGE" != "canary" ]]; then
-  plan_args+=(--require-release-redundancy)
-fi
+# 全部正式阶段共用完整 inventory 门，canary 不例外。
+plan_args+=(--require-release-inventory)
 if [[ -n "$SERVICE_FILTER" ]]; then
   plan_args+=(--service-filter "$SERVICE_FILTER")
 fi
@@ -196,6 +185,15 @@ if [[ -n "$PROD_SSH_HOST" ]]; then
   plan_args+=(--ssh-host "$PROD_SSH_HOST")
 fi
 PLANE_PLAN="$("${plan_args[@]}")"
+
+assert_inventory_unchanged() {
+  local current_plan
+  current_plan="$("${plan_args[@]}")" || return 2
+  if [[ "$current_plan" != "$PLANE_PLAN" ]]; then
+    echo 'GATE_BLOCK: canonical inventory changed during rollout' >&2
+    return 2
+  fi
+}
 
 if [[ -z "$PLANE_PLAN" ]]; then
   echo "FAIL: stage=$ROLLOUT_STAGE 未解析出任何读写平面（检查 $ACCESS_MANIFEST）" >&2
@@ -422,11 +420,19 @@ echo \"[plane ${plane}] rollout ok project=${project} unit=\$unit services=[${st
     return 0
   fi
 
-  if ! run_remote_bash "$account" "$secret_name" "$ssh_host" "$remote_cmd"; then
-    echo "::error::plane=${plane} 发布失败；由 stackctl 全平面事务统一回滚" >&2
-    return 2
-  fi
-  echo "[plane ${plane}] deploy ok"
+  params="$(python3 -B - "$systemd_unit" <<'PY'
+import json,sys
+print(json.dumps({"sourceRelative":"staging/current/systemd/"+sys.argv[1],"unitName":sys.argv[1]},separators=(",",":")))
+PY
+)"
+  execution_step "$plane" "$host_id" "$INSTANCE_SUFFIX" "$replica_id" promote-systemd-unit "$params" "$CANDIDATE_DIGEST"
+  params="$(python3 -B - "$systemd_unit" "$ROLLOUT_STAGE" <<'PY'
+import json,sys
+print(json.dumps({"unitName":sys.argv[1],"service":"prod-stack","stage":sys.argv[2]},separators=(",",":")))
+PY
+)"
+  execution_step "$plane" "$host_id" "$INSTANCE_SUFFIX" "$replica_id" candidate-start "$params" "$CANDIDATE_DIGEST"
+  echo "[plane ${plane}] guarded deploy ok"
 }
 
 deploy_observability_replica() {
@@ -586,7 +592,12 @@ echo \"[plane service] observability stack ready project=${project}\""
     echo "$remote_cmd"
     return 0
   fi
-  run_remote_bash "$service_account" "$service_secret" "$ssh_host" "$remote_cmd"
+  route_params="$(python3 -B - <<'PY'
+import json,os
+print(json.dumps({"relativePath":"runtime/Caddyfile","expectedDigest":os.environ["PREVIOUS_CANDIDATE_DIGEST"],"desiredDigest":os.environ["CANDIDATE_DIGEST"],"desiredRelative":"staging/current/runtime/Caddyfile"},separators=(",",":")))
+PY
+)"
+  execution_step service "$host_id" prod "$replica_id" route-current-cas "$route_params" "$CANDIDATE_DIGEST"
 }
 
 update_stable_gray_router_replica() {
@@ -627,12 +638,13 @@ PY
     --host "$ssh_host" \
     --source-dir "$render_dir" \
     --root-suffix "instances/prod/${replica_id}"
-  local remote_cmd="set -euo pipefail
-cd '${service_root}'
-podman compose --env-file stack.env -f docker-compose.prod-hosted.yaml -p quwoquan-service-prod-${replica_id} restart gamma-proxy
-podman compose --env-file stack.env -f docker-compose.prod-hosted.yaml -p quwoquan-service-prod-${replica_id} ps gamma-proxy
-echo '[plane service] stable Caddy gray routing updated for ${ROLLOUT_STAGE}'"
-  run_remote_bash "$service_account" "$service_secret" "$ssh_host" "$remote_cmd"
+  local route_params
+  route_params="$(python3 -B - <<'PY'
+import json,os
+print(json.dumps({"relativePath":"runtime/Caddyfile","expectedDigest":os.environ["PREVIOUS_CANDIDATE_DIGEST"],"desiredDigest":os.environ["CANDIDATE_DIGEST"],"desiredRelative":"staging/current/runtime/Caddyfile"},separators=(",",":")))
+PY
+)"
+  execution_step service "$host_id" prod "$replica_id" route-current-cas "$route_params" "$CANDIDATE_DIGEST"
 }
 
 cleanup_gray_stacks() {
@@ -647,12 +659,18 @@ if systemctl --user list-unit-files \"\$unit\" --no-legend 2>/dev/null | grep -q
   systemctl --user disable --now \"\$unit\"
 fi
 echo '[plane ${plane}] removed completed gray stack ${project}'"
-    run_remote_bash "$account" "$secret_name" "$ssh_host" "$remote_cmd"
+    stop_params="$(python3 -B - "$unit" <<'PY'
+import json,sys
+print(json.dumps({"unitName":sys.argv[1],"service":"prod-stack","stage":"canary"},separators=(",",":")))
+PY
+)"
+    execution_step "$plane" "$host_id" gray "$replica_id" candidate-stop "$stop_params" "$CANDIDATE_DIGEST"
   done <<< "$PLANE_PLAN"
 }
 
 while IFS=$'\t' read -r plane account compose_root secret_name governed_csv support_csv credentials_root host_id ssh_host replica_id replica_count remote_root project systemd_unit render_name; do
   [[ -z "$plane" ]] && continue
+  assert_inventory_unchanged
   deploy_plane "$plane" "$account" "$compose_root" "$secret_name" "$governed_csv" "$support_csv" "$credentials_root" "$host_id" "$ssh_host" "$replica_id" "$replica_count" "$remote_root" "$project" "$systemd_unit" "$render_name"
 done <<< "$PLANE_PLAN"
 
@@ -675,6 +693,7 @@ if [[ "$DRY_RUN" != "true" && "$ROLLOUT_STAGE" == "100" ]]; then
   cleanup_gray_stacks
 fi
 
+assert_inventory_unchanged
 placement_count="$(printf '%s\n' "$PLANE_PLAN" | awk 'NF {c++} END {print c+0}')"
 host_count="$(printf '%s\n' "$PLANE_PLAN" | awk -F'\t' 'NF {print $8}' | sort -u | awk 'NF {c++} END {print c+0}')"
 echo "[deploy] placementCoverage hosts=${host_count} planeReplicas=${placement_count} instance=${INSTANCE_SUFFIX}"

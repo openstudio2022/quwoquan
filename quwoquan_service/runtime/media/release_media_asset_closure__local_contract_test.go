@@ -113,7 +113,7 @@ func releaseMediaClosureFixture(
 		}
 		ownerAssets[asset.Owner] = append(ownerAssets[asset.Owner], map[string]any{
 			"assetId": asset.AssetID, "sha256": asset.SHA256,
-			"bytes": 1, "path": "assets/" + asset.AssetID + ".bin",
+			"bytes": 1, "path": "media/" + asset.AssetID + ".bin",
 			"sourceRefs": []string{sourceRef},
 		})
 		rows = append(rows, map[string]any{
@@ -244,6 +244,8 @@ func TestReleaseMediaAuthorityRejectsBrokenRightsClosure(t *testing.T) {
 		{"source-path-escape", "media_manifest.json", func(d map[string]any) {
 			firstReleaseMediaClosureAsset(d)["rightsSnapshotRefs"] = []string{"objects/creators/creator-a/sources/../creator-avatar/source.json"}
 		}},
+		{"retired-assets-path", profile, func(d map[string]any) { firstReleaseMediaClosureAsset(d)["path"] = "assets/avatar.bin" }},
+		{"media-path-escape", profile, func(d map[string]any) { firstReleaseMediaClosureAsset(d)["path"] = "media/../avatar.bin" }},
 		{"profile-asset-drift", profile, func(d map[string]any) { firstReleaseMediaClosureAsset(d)["assetId"] = "other" }},
 		{"manifest-asset-drift", entityManifest, func(d map[string]any) { firstReleaseMediaClosureAsset(d)["assetId"] = "other" }},
 		{"profile-digest-drift", profile, func(d map[string]any) {

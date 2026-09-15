@@ -66,6 +66,20 @@ fields:
       - NOT_NULL
     role: authoritative_state
 types:
+  CircleMembershipLifecyclePayload:
+    description: 六类membership事件共同的owner公开载荷，由membershipEventPayload一次序列化，不从聚合_id推导wire别名。id为真实membership身份且等于envelope aggregateId，version为同次提交版本且等于aggregateVersion；role/state沿用本owner枚举。id/version/circleId/personaId/role/state/joinedAt/createdAt/updatedAt必须存在。joinedAt未实际加入为显式null，不以createdAt或当前时间补造；首次Requested/Rejected可为null，再次申请保留真实历史加入时间。leftAt仅真实退出时出现，否则省略；circleOwnerPersonaId仅事务内读到非空圈主时出现，否则省略；这两个可选字段允许null解码但producer不发null或空字符串。createdAt/updatedAt来自已验证ChangeSet的非零UTC时间，额外字段拒绝。
+    fields:
+      - {name: id, type: string, constraints: [NOT_NULL]}
+      - {name: version, type: int64, min: 1, constraints: [NOT_NULL]}
+      - {name: circleId, type: ObjectId, constraints: [NOT_NULL]}
+      - {name: personaId, type: string, constraints: [NOT_NULL]}
+      - {name: role, type: enum, enum_ref: CircleMemberRole, constraints: [NOT_NULL]}
+      - {name: state, type: enum, enum_ref: CircleMembershipState, constraints: [NOT_NULL]}
+      - {name: joinedAt, type: timestamp, constraints: [NULLABLE]}
+      - {name: createdAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: leftAt, type: timestamp, constraints: [NULLABLE]}
+      - {name: circleOwnerPersonaId, type: string, constraints: [NULLABLE]}
   CircleMembershipCommandResult:
     description: Membership 命令的稳定提交回执。
     fields:

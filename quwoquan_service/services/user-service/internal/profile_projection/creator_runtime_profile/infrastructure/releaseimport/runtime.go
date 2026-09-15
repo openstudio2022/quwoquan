@@ -85,9 +85,9 @@ type importReport struct {
 	ManifestDigest     string                               `json:"manifestDigest"`
 	ActivationMode     string                               `json:"activationMode"`
 	ProjectionDatabase string                               `json:"projectionDatabase"`
-	ProjectionVersion  int64                                `json:"projectionVersion,omitempty"`
-	ClosureDigest      string                               `json:"closureDigest,omitempty"`
-	VerifiedAt         *time.Time                           `json:"verifiedAt,omitempty"`
+	ProjectionVersion  int64                                `json:"projectionVersion"`
+	ClosureDigest      string                               `json:"closureDigest"`
+	VerifiedAt         *time.Time                           `json:"verifiedAt"`
 	Counts             counts                               `json:"counts"`
 	AuthorIDs          []string                             `json:"authorIds"`
 	ProfileDigests     []model.CreatorProfileDigestBinding  `json:"profileDigests"`

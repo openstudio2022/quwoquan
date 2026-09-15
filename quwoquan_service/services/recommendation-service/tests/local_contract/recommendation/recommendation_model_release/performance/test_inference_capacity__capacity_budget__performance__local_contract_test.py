@@ -68,6 +68,7 @@ def test_microbatcher_coalesces_duplicate_concurrent_requests() -> None:
     batcher = MicroBatcher(window_ms=20)
     calls = 0
     lock = threading.Lock()
+    entrants = threading.Barrier(4)
 
     def compute() -> ModelScoreResponse:
         nonlocal calls
@@ -76,6 +77,7 @@ def test_microbatcher_coalesces_duplicate_concurrent_requests() -> None:
         return ModelScoreResponse(scores=[CandidateScore(contentId="c1", score=1.0)])
 
     def run_once() -> ModelScoreResponse:
+        entrants.wait()
         return batcher.run(
             key="same-request",
             scenario="content_feed",

@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -116,7 +118,17 @@ func main() {
 	flag.BoolVar(&check, "check", false, "fail when generated outputs drift")
 	flag.Parse()
 
-	c, err := loadContract(source)
+	contractSource, err := contractcodegen.NewDocumentSource(
+		filepath.Dir(filepath.Dir(source)),
+		[]string{filepath.ToSlash(filepath.Join("_shared", filepath.Base(source)))},
+	)
+	if err != nil {
+		fatal(err)
+	}
+	c, err := loadContract(
+		contractSource,
+		filepath.ToSlash(filepath.Join("_shared", filepath.Base(source))),
+	)
 	if err != nil {
 		fatal(err)
 	}
@@ -178,8 +190,8 @@ func fatal(err error) {
 	os.Exit(1)
 }
 
-func loadContract(path string) (contract, error) {
-	data, err := os.ReadFile(path)
+func loadContract(source *contractcodegen.Source, relativePath string) (contract, error) {
+	data, err := source.Content(relativePath)
 	if err != nil {
 		return contract{}, err
 	}

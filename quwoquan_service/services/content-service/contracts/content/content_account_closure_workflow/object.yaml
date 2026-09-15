@@ -30,6 +30,11 @@ business_rules:
 - Mongo、Search 与媒体公开切片全部完成后才能推进 completedAt 并 ACK source PEL。
 - 失败按有限重试收敛；terminal marker 不设 TTL，只能由受控恢复操作释放。
 - 防复活 tombstone 只存独立密钥 HMAC-SHA256(subjectId)，禁止保存 userId/personaId 原值且永久保留。
+- ContentAccountClosureRuntimeEvidence及其嵌套类型是本owner唯一内部创建/闭包格式；Post仅以account_closure.ownerEvidence引用其exact bytes，不得复制字段或用PostSafetyRuntimeCreationReceipt代替。该证据不替代User同步安全authority、不授予旧账号重新发布资格，不依赖Data release proof。
+- 非生产新空间由环境owner持有现役target锁，从批准candidate/data-plane/资源输入独占创建storage.yaml九个集合及source绑定；依次读回每个collection真实UUID与完整摘要，源码producer和bootstrap共用owner创建/readback及私有验证函数，不接受fixture成功receipt或VerifyRecovery布尔放行。部分创建失败不产证据、不删已有资源、不覆盖材料，重试只能使用重新批准的独立资源attempt。
+- new_source须验证同次隔离创建的User持久化/outbox与Redis事件空间managed allocation binding、实际权限/凭据拒绝读回及生产者绑定；不要求provider永久不可复用UUID，随机ID或摘要本身不授信，明确旧实例/旧outbox/旧备份无新源写路；只创建空stream或只读Content空表不构成证明。复用已有源仅允许完整恢复并连续消费所有分区至冻结边界，无缺失源历史/待处理工作；当前replayed_source或Prod核验未实现时明确拒绝，禁止改名new_source。
+- 创建证据的collections精确覆盖storage.yaml九项，按collection排序无重复；recordCount为九项之和，canonicalDigest含所有UUID与记录摘要。Post闭包复制此count/digest，watermark取ownerEvidence exact digest而非时间或任意字符串。主体关闭key独立至少32随机字节且身份实测，不用JWT或Post key。
+- 只在受管初始化停写窗口比对初始闭包；正常写入后重启只验证同一现役candidate/generation/source资源/collection物理身份及key绑定，不能重新要求初始空集合。身份变化、旧证据复制、材料损坏或源初始化未知均query_barrier_not_ready，不复用旧receipt。
 lifecycle:
   state_field: state
   states:

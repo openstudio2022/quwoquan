@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,11 +23,13 @@ func TestGenerateAndCheckAreIdempotent(t *testing.T) {
 		t.Fatalf("generate OpenAPI fixture: %v", err)
 	}
 	output := filepath.Join(t.TempDir(), "contract_graph.json")
+	generatedRoot := t.TempDir()
 	securityOutput := filepath.Join(
-		t.TempDir(),
+		generatedRoot,
 		"operationsecurity",
 		"descriptors.g.go",
 	)
+	manifestOutput := filepath.Join(generatedRoot, "contract_graph_manifest.json")
 
 	args := []string{
 		"generate",
@@ -33,6 +38,7 @@ func TestGenerateAndCheckAreIdempotent(t *testing.T) {
 		"--profile", "baseline",
 		"--output", output,
 		"--go-security-output", securityOutput,
+		"--generated-manifest", manifestOutput,
 	}
 	if err := run(args, &bytes.Buffer{}); err != nil {
 		t.Fatalf("first generate: %v", err)
@@ -66,6 +72,29 @@ func TestGenerateAndCheckAreIdempotent(t *testing.T) {
 	} {
 		if !bytes.Contains(securitySource, []byte(token)) {
 			t.Fatalf("generated operation security misses %q", token)
+		}
+	}
+
+	manifestBytes, err := os.ReadFile(manifestOutput)
+	if err != nil {
+		t.Fatalf("read generated provenance manifest: %v", err)
+	}
+	var manifest generatedManifestDocument
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode generated provenance manifest: %v", err)
+	}
+	if manifest.Generator != "tools/qwq_contract" || len(manifest.Outputs) != 2 {
+		t.Fatalf("unexpected generated provenance manifest: %+v", manifest)
+	}
+	wantBodies := map[string][]byte{filepath.ToSlash(output): first, filepath.ToSlash(securityOutput): securitySource}
+	for _, current := range manifest.Outputs {
+		body, ok := wantBodies[current.Path]
+		if !ok {
+			t.Fatalf("manifest registered unexpected output %q", current.Path)
+		}
+		wantDigest := fmt.Sprintf("%x", sha256.Sum256(body))
+		if current.SHA256 != wantDigest || current.Bytes != len(body) {
+			t.Fatalf("manifest output %q does not bind exact bytes: %+v", current.Path, current)
 		}
 	}
 

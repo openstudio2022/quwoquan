@@ -909,6 +909,35 @@ def test_data_scope_without_affected_tests_fails_closed_instead_of_verify_only()
         build_impact_plan(["quwoquan_data/schema/unknown.schema.json"], level="scope")
 
 
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002
+@pytest.mark.parametrize("with_ops_focused", [False, True])
+def test_data_requirements_keep_full_suite_even_with_ops_focused(with_ops_focused: bool) -> None:
+    paths = ["quwoquan_data/requirements.txt"]
+    focused = "quwoquan_ops/tests/local_contract/gate/test_commit_gate_select__local_contract_test.py"
+    if with_ops_focused:
+        paths.append(focused)
+    suite = "quwoquan_data/tests/local_contract"
+    fast = build_impact_plan(paths, level="fast")
+    assert {"scope": "data", "work": suite} in fast["deferred"]
+    for level in ("scope", "release"):
+        plan = build_impact_plan(paths, level=level)
+        assert plan["deferred"] == []
+        assert "quwoquan_data/requirements.txt" in plan["lockfiles"]
+        checks = {check["id"]: check for check in plan["checks"]}
+        if level == "scope":
+            assert checks["scope_build:data-local-contract"]["command"] == [
+                "env", "GATE_DATA_PHASE=local_contract", "bash",
+                "quwoquan_ops/gate/gate_repo.sh", "--scope", "data",
+            ]
+        else:
+            assert checks["release:data"]["command"] == [
+                "bash", "quwoquan_ops/gate/gate_repo.sh", "--scope", "data",
+            ]
+        if with_ops_focused:
+            assert focused in checks["focused:python"]["command"]
+        assert all(suite not in check["command"] for check in plan["checks"] if check["id"] == "focused:python")
+
+
 def test_selector_deferred_directories_stay_explicit_and_out_of_managed_pytest() -> None:
     source = "quwoquan_data/scripts/content/execution/handler.py"
     target = "quwoquan_data/tests/local_contract/execution"

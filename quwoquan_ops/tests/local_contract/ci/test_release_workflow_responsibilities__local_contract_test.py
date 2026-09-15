@@ -41,7 +41,7 @@ def test_release_workflows_have_three_separate_responsibilities() -> None:
     assert set(q[True]) == {"workflow_dispatch"}
     assert set(q[True]["workflow_dispatch"]["inputs"]) == {
         "rc_tag_admission_ref", "qualification_request_ref", "source_git_sha",
-        "product_version_manifest_ref", "package_acceptance_fact_ref",
+        "product_version_manifest_ref", "package_acceptance_fact_ref", "service_acceptance_fact_ref",
         "provider_fact_ref", "uat_fact_ref", "supply_chain_fact_ref",
     }
     assert q["jobs"]["allocate_build_number"]["environment"] == "release-qualification"
@@ -63,8 +63,7 @@ def test_release_workflows_have_three_separate_responsibilities() -> None:
     assert "verified-pre-push-local-admission" not in selection
     assert set(p[True]) == {"workflow_dispatch"}
     assert set(p[True]["workflow_dispatch"]["inputs"]) == {
-        "release_tag_admission_ref", "previous_active_released_ledger_ref",
-        "rollback_readiness_ref",
+        "release_tag_admission_ref", "prior_ref",
     }
     assert "push:" not in prod and "latestQualified" not in prod and "RELEASED_RELEASE_EVIDENCE_REF" not in prod
     assert 'release_control.py --store-root "$STORE" prod-admit' in prod
@@ -168,27 +167,34 @@ def test_prod_tag_materialization_separates_transport_and_fact_bytes(
     assert tag_path.read_bytes() == original
 
 
-@pytest.mark.parametrize("field", ["releaseTagAdmission", "qualification", "candidateMaterialManifest", "previousActiveReleasedLedger", "rollbackReadiness"])
+@pytest.mark.parametrize("field", ["releaseTagAdmission", "qualification", "candidateMaterialManifest", "previousReleased", "rollbackReadiness"])
 def test_prod_activation_predecessor_digest_is_payload_digest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], field: str,
 ) -> None:
-    fields = ("releaseTagAdmission", "qualification", "candidateMaterialManifest", "previousActiveReleasedLedger", "rollbackReadiness")
-    fact = {name: _oci_fact({"field": name})[0] for name in fields}
+    from quwoquan_ops.ci.qualified_prod import QualifiedProdError
+    fields = ("releaseTagAdmission", "qualification", "candidateMaterialManifest", "previousReleased", "rollbackReadiness")
+    refs = {name: _oci_fact({"field": name})[0] for name in fields}
+    fact = {name: refs[name] for name in fields[:3]}
+    fact["deliveryTargets"] = ["service"]
+    fact["prior"] = {"state": "present", "target": "prod-hosted", "environment": "prod", "expectedGeneration": 1,
+                     "ociDigests": ["sha256:" + "a" * 64], **{name: refs[name] for name in fields[3:]}}
     factory = _oci_fact({"factory": True})[0]
     fact["factoryMaterials"] = {
         kind: {"ociRef": factory["ref"], "ociDigest": factory["ref"].rsplit("@", 1)[1],
                "payloadDigest": factory["digest"], "materialDigest": factory["digest"]}
-        for kind in ("service", "app")
+        for kind in ("service", "web")
     }
     path = tmp_path / "admission.json"
     code = _prod_inline("prod_rollout", "activation_input", "factoryMaterials")
     monkeypatch.setattr(sys, "argv", ["-", str(path)])
     path.write_text(json.dumps(fact))
     exec(compile(code, "prod-activation-predecessors", "exec"), {})
-    assert f"authority\t{fact[field]['ref']}\t{fact[field]['digest']}\n" in capsys.readouterr().out
-    for bad in ({**fact[field], "ref": "ghcr.io/contract/fact:latest"}, {**fact[field], "digest": "not-a-digest"}, {**fact[field], "extra": True}):
-        path.write_text(json.dumps({**fact, field: bad}))
-        with pytest.raises(SystemExit, match="exact OCI-bound evidence"):
+    assert f"authority\t{refs[field]['ref']}\t{refs[field]['digest']}\n" in capsys.readouterr().out
+    for bad in ({**refs[field], "ref": "ghcr.io/contract/fact:latest"}, {**refs[field], "digest": "not-a-digest"}, {**refs[field], "extra": True}):
+        changed = json.loads(json.dumps(fact))
+        (changed["prior"] if field in fields[3:] else changed)[field] = bad
+        path.write_text(json.dumps(changed))
+        with pytest.raises((SystemExit, QualifiedProdError), match="exact OCI-bound evidence|PROD.PRIOR.INVALID"):
             exec(compile(code, "prod-activation-predecessors", "exec"), {})
     fact["factoryMaterials"]["service"]["ociDigest"] = factory["digest"]
     path.write_text(json.dumps(fact))

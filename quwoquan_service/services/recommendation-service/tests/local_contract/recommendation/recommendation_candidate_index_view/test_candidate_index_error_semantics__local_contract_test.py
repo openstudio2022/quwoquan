@@ -44,20 +44,24 @@ def _declared(code: str) -> dict:
 
 def _fields(*, valid_identity: bool = True) -> dict[bytes, bytes]:
     payload = {
-        "postId": "post-001",
-        "authorId": "persona-001",
-        "contentType": "article",
-        "status": "published",
-        "visibility": "public",
-        "moderationStatus": "approved",
+        "sourceOwner": None, "environment": None, "releaseId": None,
+        "manifestDigest": None, "releaseDigest": None, "sourceVersion": 4,
+        "safetyRevision": 1,
+        "contentIdentity": "work", "title": "旅行", "body": "正文",
+        "summary": "摘要", "authorDisplayNameSnapshot": "作者",
+        "authorAvatarUrlSnapshot": "", "coverUrl": "", "thumbnailUrl": "",
+        "videoUrl": "", "width": 0, "height": 0, "durationMs": 0,
+        "contentVertical": "travel", "createdAt": "2026-07-31T10:00:00Z",
+        "visitedAt": None,
+        "postId": "post-001", "authorId": "persona-001",
+        "contentType": "article", "status": "published",
+        "visibility": "public", "moderationStatus": "approved",
         "publishedAt": "2026-07-31T10:00:00Z",
         "updatedAt": "2026-07-31T11:00:00Z",
-        "tagRefs": ["Topic/旅行"],
-        "entityRefs": [],
+        "tagRefs": ["Topic/旅行"], "entityRefs": [],
         "primaryHomepageId": "homepage-001",
         "primaryHomepageSnapshot": {
-            "canonicalEntityId": "地点/景区/色达",
-            "title": "色达",
+            "canonicalEntityId": "地点/景区/色达", "title": "色达",
             "subtitle": "川西高原目的地",
             "coverUrl": "https://cdn.example/homepage-001.jpg",
         },
@@ -88,6 +92,7 @@ class _Redis:
         return True
 
     def xautoclaim(self, *_args, **_kwargs):
+        if _args[0] != POST_LIFECYCLE_STREAM: return ("0-0", [], [])
         if self.pending:
             return (
                 "0-0",
@@ -97,6 +102,7 @@ class _Redis:
         return ("0-0", [], [])
 
     def xreadgroup(self, *_args, **_kwargs):
+        if POST_LIFECYCLE_STREAM not in _args[2]: return []
         if not self.deliver:
             return []
         self.deliver = False
@@ -170,16 +176,13 @@ def test_source_event_invalid_is_absorbed_into_the_object_dlq() -> None:
     redis = _Redis(valid_identity=False)
     projection = _Projection()
     consumer = _consumer(redis, projection)
-    for attempt in range(1, 6):
-        if attempt < 5:
-            with pytest.raises(ValueError, match="identity mismatch"):
-                consumer.process_once()
-        else:
-            assert consumer.process_once() == 1
+    for _attempt in range(1, 6):
+        with pytest.raises(ValueError, match="extra_forbidden"):
+            consumer.process_once()
     assert projection.events == []
     assert redis.dead_letters[0][0] == POST_LIFECYCLE_DLQ
     assert redis.dead_letters[0][1]["attempts"] == "5"
-    assert redis.acked == [(POST_LIFECYCLE_STREAM, CONSUMER_GROUP, "1000-0")]
+    assert redis.acked == []
 
 
 def test_projection_unavailable_keeps_the_message_pending_until_storage_recovers() -> None:

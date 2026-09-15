@@ -105,6 +105,14 @@ def test_path_resolver_honors_custom_root_and_orthogonal_scopes(
     assert output_paths.target_cache_dir("gamma-local") == (
         root / "env/gamma/local/gamma-local/cache"
     )
+    assert output_paths.post_safety_startup_material_path("gamma-local") == (
+        deploy_root / "gamma-local/startup-material/content-service/post-safety/startup.json"
+    ).resolve()
+    assert output_paths.post_safety_startup_material_descriptor("gamma-local") == {
+        "owner": "deployment-control",
+        "path": str((deploy_root / "gamma-local/startup-material/content-service/post-safety/startup.json").resolve()),
+        "relativeRef": "startup.json",
+    }
     assert output_paths.repo_runs_root() == root / "env/repo/runs"
     assert output_paths.data_tasks_root() == root / "data/tasks"
     assert output_paths.data_releases_root() == root / "data/releases"

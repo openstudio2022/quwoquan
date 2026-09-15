@@ -1,4 +1,4 @@
-description: RecommendationCandidateIndexView 仅通过对象 Reader 供排序管线读取。
+description: RecommendationCandidateIndexView 仅通过对象 Reader 供排序管线读取。原PostLifecycleConsumer同时消费PostReleaseCandidatePrepared的Data准备分支，原inbox/checkpoint负责原子进度；不增加HTTP command、session或第二流程对象。
 api_routes: []
 # 入口绑定 object.yaml lifecycle.event_consumers 的主 handler（PostLifecycleConsumer）；
 # 五个上游流消费者在实现侧共用指标 recommendation_candidate_index_projection，

@@ -17,6 +17,39 @@ import time
 from typing import Any
 
 
+def _validate_inventory_before_commit(scope: dict[str, Any]) -> None:
+    """成功聚合前复核原始完整 inventory 与每条真实 receipt。"""
+    from quwoquan_ops.cli.commands.prod_plane_reports import _placement_identity_findings
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    access = _stackctl.load_prod_hosted_access_manifest()
+    if access != scope.get("release_inventory"):
+        raise ValueError("canonical inventory changed during rollout")
+    plan = scope.get("release_plan") or []
+    _stackctl.require_prod_hosted_release_inventory(plan, access)
+    checks = scope["post_deploy_checks"]
+    issues = _stackctl.validate_prod_hosted_host_coverage(checks, plan)
+    by_name = {_stackctl.prod_hosted_placement_check_name(item): item for item in plan}
+    for check in checks:
+        name = check.get("name")
+        if name not in by_name:
+            continue
+        receipt = check.get("placementReceipt") or {}
+        placement = by_name[name]
+        if receipt.get("stage") != scope["rollout_stage"]:
+            issues.append("placement receipt stage drifted")
+        for field, value in {"instance": placement.instance, "plane": placement.plane,
+                             "hostId": placement.host_id, "replicaId": placement.replica_id,
+                             "sshHost": placement.ssh_host}.items():
+            if receipt.get(field) != value:
+                issues.append(f"placement receipt {field} drifted")
+        issues.extend(_placement_identity_findings(
+            receipt.get("runtime") or {}, placement, scope["args"].to_candidate_digest,
+        ))
+    if issues:
+        raise ValueError("; ".join(issues))
+
+
 def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
     """prod-hosted 部署收尾: SLO 决策、回滚收敛与 release receipt 提交。
 
@@ -65,6 +98,16 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
     slo_readback = scope["slo_readback"]
     to_service_factory_oci_digest = scope["to_service_factory_oci_digest"]
     to_app_factory_oci_digest = scope["to_app_factory_oci_digest"]
+
+    if not dry_run_requested and final_exit_code == 0:
+        try:
+            _validate_inventory_before_commit(scope)
+        except (ValueError, RuntimeError) as exc:
+            final_exit_code = 1
+            blocker = {"name": "inventory-before-commit", "exitCode": 2,
+                       "summary": f"GATE_BLOCK: {exc}"}
+            post_deploy_checks.append(blocker)
+            post_deploy_failures.append(blocker["summary"])
 
     stdout_combined = "\n".join(filter(None, [result.stdout, result.stderr]))
     slo_decision, slo_reason = _stackctl._decision_from_slo_output(
@@ -285,6 +328,8 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
                 deadline_epoch=promotion_deadline_epoch,
             )
     elif final_exit_code == 0 and not dry_run_requested:
+        # 回滚/决策处理期间也可能发生变化，紧邻成功 CAS 再验一次。
+        _validate_inventory_before_commit(scope)
         committed_last_good_candidate_digest = (
             args.to_candidate_digest
             if rollout_stage == "100"

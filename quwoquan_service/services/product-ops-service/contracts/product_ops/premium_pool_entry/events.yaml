@@ -6,8 +6,8 @@ events:
   topic: events.ops.premium_pool_entry
   payload_entity: PremiumPoolEntry
   payload_fields:
-  - id
   - contentId
+  - releaseAdmissions
   - scope
   - status
   - qualityScore
@@ -28,8 +28,8 @@ events:
   topic: events.ops.premium_pool_entry
   payload_entity: PremiumPoolEntry
   payload_fields:
-  - id
   - contentId
+  - releaseAdmissions
   - scope
   - status
   - qualityScore
@@ -50,8 +50,8 @@ events:
   topic: events.ops.premium_pool_entry
   payload_entity: PremiumPoolEntry
   payload_fields:
-  - id
   - contentId
+  - releaseAdmissions
   - scope
   - status
   - qualityScore

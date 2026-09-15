@@ -10,6 +10,52 @@ description: 'Post 对象与 content 域共享的结构化错误码声明。格�
 
   '
 errors:
+- code: CONTENT.RELEASE.query_barrier_invalid
+  reason: query_barrier_invalid
+  http_status: 422
+  emitted_by: [{surface: http, operations: [ActivateContentReleaseAtSearchBarrier, ReadPostReleaseCandidate, PreparePostReleaseQueries, ReadRequiredReleaseQueries, ReadContentReleaseCommitReceipt, ReadPostCandidateSafety]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: contentReleaseQueryBarrierInvalid
+  go_const: ErrContentReleaseQueryBarrierInvalid
+  user_message: {zh: 内容候选查询证明身份或摘要无效, en: Content candidate query proof identity or digest is invalid}
+- code: CONTENT.RELEASE.query_barrier_not_ready
+  reason: query_barrier_not_ready
+  http_status: 409
+  emitted_by: [{surface: http, operations: [ActivateContentReleaseAtSearchBarrier, ReadPostReleaseCandidate, PreparePostReleaseQueries, ReadRequiredReleaseQueries, ReadContentReleaseCommitReceipt, ReadPostCandidateSafety]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: contentReleaseQueryBarrierNotReady
+  go_const: ErrContentReleaseQueryBarrierNotReady
+  user_message: {zh: 内容候选尚未完成全部必要查询准备, en: Required content candidate queries are not ready}
+- code: CONTENT.RELEASE.query_barrier_unavailable
+  reason: query_barrier_unavailable
+  http_status: 503
+  emitted_by: [{surface: http, operations: [ActivateContentReleaseAtSearchBarrier, ReadPostReleaseCandidate, PreparePostReleaseQueries, ReadRequiredReleaseQueries, ReadContentReleaseCommitReceipt, ReadPostCandidateSafety]}]
+  recovery_action: retry
+  recovery_after_seconds: 5
+  disruption_level: snackbar
+  dart_const: contentReleaseQueryBarrierUnavailable
+  go_const: ErrContentReleaseQueryBarrierUnavailable
+  user_message: {zh: 内容查询准备依赖暂时不可用, en: Content query preparation dependency is unavailable}
+- code: CONTENT.RELEASE.activation_conflict
+  reason: activation_conflict
+  http_status: 409
+  emitted_by: [{surface: http, operations: [ActivateContentReleaseAtSearchBarrier]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: contentReleaseActivationConflict
+  go_const: ErrContentReleaseActivationConflict
+  user_message: {zh: 内容激活版本冲突，请读取当前指针, en: Content activation version conflict; read the current pointer}
+- code: CONTENT.RELEASE.activation_ambiguous
+  reason: activation_ambiguous
+  http_status: 503
+  emitted_by: [{surface: http, operations: [ActivateContentReleaseAtSearchBarrier]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: contentReleaseActivationAmbiguous
+  go_const: ErrContentReleaseActivationAmbiguous
+  user_message: {zh: 内容激活结果待确认，须先读取权威指针再显式恢复, en: Content activation outcome unknown; read the authoritative pointer before recovery}
 - code: CONTENT.USER.content_deleted
   reason: content_deleted
   http_status: 410
@@ -161,6 +207,7 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - ReadActiveReleaseFence
     - GetFeed
     - SubmitPostPublication
     - ListUserPosts
@@ -419,6 +466,7 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - ReadActiveReleaseFence
     - GetFeed
     - ListUserPosts
     - ListPostsByGathering

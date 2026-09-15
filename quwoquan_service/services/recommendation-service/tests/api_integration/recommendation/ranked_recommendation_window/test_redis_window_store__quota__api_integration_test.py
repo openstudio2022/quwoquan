@@ -7,6 +7,7 @@ import pytest
 from redis import Redis
 
 from internal.recommendation.ranked_recommendation_window.domain.model import (
+    ReleasePinnedQueryFence,
     RankedCandidate,
     RankedRecommendationWindow,
     RankingResult,
@@ -25,6 +26,7 @@ from tests.support.recommendation_redis import real_redis, real_redis_cluster
 def _window(window_id: str, subject_id: str) -> RankedRecommendationWindow:
     now = datetime.now(timezone.utc)
     return RankedRecommendationWindow.create(
+        content_fence=ReleasePinnedQueryFence(release=None, revision=0),
         window_id=window_id,
         subject_id=subject_id,
         scenario="content_feed",

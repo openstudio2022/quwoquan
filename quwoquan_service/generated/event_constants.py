@@ -60,6 +60,7 @@ CONTENT_MEDIA_UPLOAD_SESSION_MEDIA_UPLOAD_ABORTED = "content.media_upload.aborte
 CONTENT_MEDIA_UPLOAD_SESSION_MEDIA_UPLOAD_COMPLETED = "content.media_upload.completed"
 CONTENT_MEDIA_UPLOAD_SESSION_MEDIA_UPLOAD_INITIALIZED = "content.media_upload.initialized"
 CONTENT_OUTBOUND_SHARE_FACT_OUTBOUND_SHARE_RECORDED = "OutboundShareRecorded"
+CONTENT_POST_CONTENT_RELEASE_FENCE_CHANGED = "ContentReleaseFenceChanged"
 CONTENT_POST_POST_DELETED = "PostDeleted"
 CONTENT_POST_POST_IMPORTED = "PostImported"
 CONTENT_POST_POST_MODERATION_REJECTED = "PostModerationRejected"
@@ -67,6 +68,7 @@ CONTENT_POST_POST_PRIVACY_REDACTED = "PostPrivacyRedacted"
 CONTENT_POST_POST_PROMOTED_TO_WORK = "PostPromotedToWork"
 CONTENT_POST_POST_PUBLISHED = "PostPublished"
 CONTENT_POST_POST_PURGED = "PostPurged"
+CONTENT_POST_POST_RELEASE_CANDIDATE_PREPARED = "PostReleaseCandidatePrepared"
 CONTENT_POST_POST_SETTINGS_UPDATED = "PostSettingsUpdated"
 CONTENT_POST_POST_SUBMITTED_FOR_REVIEW = "PostSubmittedForReview"
 CONTENT_POST_POST_UPDATED = "PostUpdated"
@@ -181,6 +183,7 @@ EVENT_TYPES_BY_REF = {
 	"content.media_upload_session.MediaUploadCompleted": CONTENT_MEDIA_UPLOAD_SESSION_MEDIA_UPLOAD_COMPLETED,
 	"content.media_upload_session.MediaUploadInitialized": CONTENT_MEDIA_UPLOAD_SESSION_MEDIA_UPLOAD_INITIALIZED,
 	"content.outbound_share_fact.OutboundShareRecorded": CONTENT_OUTBOUND_SHARE_FACT_OUTBOUND_SHARE_RECORDED,
+	"content.post.ContentReleaseFenceChanged": CONTENT_POST_CONTENT_RELEASE_FENCE_CHANGED,
 	"content.post.PostDeleted": CONTENT_POST_POST_DELETED,
 	"content.post.PostImported": CONTENT_POST_POST_IMPORTED,
 	"content.post.PostModerationRejected": CONTENT_POST_POST_MODERATION_REJECTED,
@@ -188,6 +191,7 @@ EVENT_TYPES_BY_REF = {
 	"content.post.PostPromotedToWork": CONTENT_POST_POST_PROMOTED_TO_WORK,
 	"content.post.PostPublished": CONTENT_POST_POST_PUBLISHED,
 	"content.post.PostPurged": CONTENT_POST_POST_PURGED,
+	"content.post.PostReleaseCandidatePrepared": CONTENT_POST_POST_RELEASE_CANDIDATE_PREPARED,
 	"content.post.PostSettingsUpdated": CONTENT_POST_POST_SETTINGS_UPDATED,
 	"content.post.PostSubmittedForReview": CONTENT_POST_POST_SUBMITTED_FOR_REVIEW,
 	"content.post.PostUpdated": CONTENT_POST_POST_UPDATED,

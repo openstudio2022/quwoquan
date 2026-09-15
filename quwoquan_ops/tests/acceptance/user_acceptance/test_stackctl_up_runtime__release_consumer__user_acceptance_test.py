@@ -60,33 +60,19 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             self.assertNotIn(retired, source)
         self.assertIn("load_release_content_identity", source)
         self.assertIn("load_gamma_execution_identity", source)
-        self.assertIn("write_passed_case_result", source)
+        self.assertIn("load_target_uat_binding", source)
+        self.assertNotIn("write_passed_case_result", source)
 
-    def test_local_gamma_video_seed_preserves_work_browser_projection_fields(
-        self,
-    ) -> None:
-        completed = subprocess.CompletedProcess(
-            ["quwoquan_data/scripts/cli.py"],
-            0,
-            stdout="release verification passed",
+    def test_local_gamma_release_consumer_uses_exact_readiness_identity(self) -> None:
+        result = local_gamma_release_consumer.run_release_consumer(
+            identity=_gamma_release_identity(),
         )
-        with mock.patch.object(
-            local_gamma_release_consumer.subprocess,
-            "run",
-            return_value=completed,
-        ) as run:
-            result = local_gamma_release_consumer.run_release_consumer(
-                identity=_gamma_release_identity(),
-            )
-
-        command = run.call_args.args[0]
         self.assertEqual(result["status"], "passed")
-        self.assertIn("ship", command)
-        self.assertIn("verify", command)
-        self.assertEqual(command[command.index("--release-id") + 1], "release-gamma-a")
-        self.assertEqual(command[command.index("--import-run-id") + 1], "import-gamma-a")
-        self.assertEqual(command[command.index("--run-id") + 1], "verify-gamma-a")
-        self.assertNotIn("fixture", " ".join(command))
+        self.assertEqual(result["mutationPolicy"], "read_only")
+        self.assertEqual(result["releaseId"], "release-gamma-a")
+        self.assertEqual(result["importRunId"], "import-gamma-a")
+        self.assertEqual(result["verifyRunId"], "verify-gamma-a")
+        self.assertEqual(result["command"], [])
 
     def test_local_gamma_relationship_seed_uses_running_stack_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -102,6 +88,24 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     "load_release_content_identity",
                     return_value=_gamma_release_identity(),
                 ) as load_identity,
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "resolve_gamma_evidence_path",
+                    side_effect=lambda raw, label: report_path if "report" in label else Path(raw),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "load_target_uat_binding",
+                    return_value=({"releaseId": "release-gamma-a", "releaseDigest": f"sha256:{'1' * 64}", "provider": {"identity": "provider-gamma"}}, "sha256:" + "9" * 64),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "target_uat_binding_digest",
+                    return_value="sha256:" + "9" * 64,
+                ),
+                mock.patch.object(
+                    Path, "read_bytes", return_value=b"{}"
+                ),
                 mock.patch.object(
                     local_gamma_release_consumer,
                     "load_gamma_execution_identity",
@@ -133,6 +137,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                         "run_local_gamma_release_consumer_api.py",
                         "--release-readiness",
                         "env/gamma/release-readiness.json",
+                        "--target-uat-binding",
+                        "env/gamma/runs/release-consumer/target-uat-binding.json",
                         "--report",
                         str(report_path),
                     ],
@@ -161,6 +167,24 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     local_gamma_release_consumer,
                     "load_release_content_identity",
                     return_value=_gamma_release_identity(),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "resolve_gamma_evidence_path",
+                    side_effect=lambda raw, label: report_path if "report" in label else Path(raw),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "load_target_uat_binding",
+                    return_value=({"releaseId": "release-gamma-a", "releaseDigest": f"sha256:{'1' * 64}", "provider": {"identity": "provider-gamma"}}, "sha256:" + "9" * 64),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "target_uat_binding_digest",
+                    return_value="sha256:" + "9" * 64,
+                ),
+                mock.patch.object(
+                    Path, "read_bytes", return_value=b"{}"
                 ),
                 mock.patch.object(
                     local_gamma_release_consumer,
@@ -195,6 +219,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                         "--release-readiness",
                         "env/gamma/runs/data-release/release-gamma-a/"
                         "verify-gamma-a/release-readiness.json",
+                        "--target-uat-binding",
+                        "env/gamma/runs/release-consumer/target-uat-binding.json",
                         "--report",
                         str(report_path),
                     ],
@@ -204,16 +230,12 @@ class StackctlUpRuntimeTest(unittest.TestCase):
 
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(set(report), verify_local_gamma_mirror.CASE_RESULT_FIELDS)
-        self.assertEqual(report["status"], "passed")
-        self.assertEqual(report["baselineId"], _gamma_candidate_identity()["baselineId"])
-        self.assertEqual(report["attemptId"], _gamma_candidate_identity()["attemptId"])
-        self.assertEqual(report["executed"], 1)
-        self.assertEqual(report["skipped"], 0)
-        self.assertEqual(report["failed"], 0)
-        self.assertNotIn("release", report)
-        self.assertNotIn("auth", report)
-        self.assertNotIn("domainSeeds", report)
+        self.assertEqual(report["schema"], "quwoquan.gamma-release-consumer-diagnostic.v1")
+        self.assertEqual(report["mutationPolicy"], "read_only")
+        self.assertEqual(report["exitCode"], 0)
+        self.assertEqual(report["releaseId"], "release-gamma-a")
+        self.assertNotIn("status", report)
+        self.assertNotIn("baselineId", report)
 
     def test_local_gamma_seed_only_persists_user_profile_for_authenticated_probes(
         self,
@@ -227,6 +249,24 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     side_effect=local_gamma_release_consumer.ReleaseVideoDeliveryError(
                         "DATA_RELEASE_READINESS_RECEIPT is required"
                     ),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "resolve_gamma_evidence_path",
+                    side_effect=lambda raw, label: report_path if "report" in label else Path(raw),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "load_target_uat_binding",
+                    return_value=({"releaseId": "release-gamma-a", "releaseDigest": f"sha256:{'1' * 64}", "provider": {"identity": "provider-gamma"}}, "sha256:" + "9" * 64),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "target_uat_binding_digest",
+                    return_value="sha256:" + "9" * 64,
+                ),
+                mock.patch.object(
+                    Path, "read_bytes", return_value=b"{}"
                 ),
                 mock.patch.object(
                     local_gamma_release_consumer,
@@ -244,6 +284,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     "argv",
                     [
                         "run_local_gamma_release_consumer_api.py",
+                        "--target-uat-binding",
+                        "env/gamma/runs/release-consumer/target-uat-binding.json",
                         "--report",
                         str(report_path),
                     ],
@@ -252,19 +294,14 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 self.assertEqual(local_gamma_release_consumer.main(), 2)
 
             consumer.assert_not_called()
-            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertFalse(report_path.exists())
 
-        self.assertEqual(report["status"], "gate_block")
-        self.assertIn("DATA_RELEASE_READINESS_RECEIPT is required", report["reason"])
-
-    def test_local_gamma_content_probe_methods_come_from_contract_graph(self) -> None:
+    def test_local_gamma_consumer_does_not_rerun_release_orchestration(self) -> None:
         source = Path(local_gamma_release_consumer.__file__).read_text(encoding="utf-8")
-
-        self.assertIn('"quwoquan_data/scripts/cli.py"', source)
-        self.assertIn('"ship"', source)
-        self.assertIn('"verify"', source)
-        self.assertNotIn("content_route_methods", source)
-        self.assertNotIn("/content/comments", source)
+        self.assertNotIn('"quwoquan_data/scripts/cli.py"', source)
+        self.assertNotIn('"ship"', source)
+        self.assertIn("load_release_content_identity", source)
+        self.assertIn("load_target_uat_binding", source)
 
     def test_local_gamma_blocked_operation_requires_metadata_enforced_403(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -284,6 +321,24 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 ),
                 mock.patch.object(
                     local_gamma_release_consumer,
+                    "resolve_gamma_evidence_path",
+                    side_effect=lambda raw, label: report_path if "report" in label else Path(raw),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "load_target_uat_binding",
+                    return_value=({"releaseId": "release-gamma-a", "releaseDigest": f"sha256:{'1' * 64}", "provider": {"identity": "provider-gamma"}}, "sha256:" + "9" * 64),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "target_uat_binding_digest",
+                    return_value="sha256:" + "9" * 64,
+                ),
+                mock.patch.object(
+                    Path, "read_bytes", return_value=b"{}"
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
                     "load_gamma_execution_identity",
                     return_value=_gamma_candidate_identity(),
                 ),
@@ -300,6 +355,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                         "run_local_gamma_release_consumer_api.py",
                         "--release-readiness",
                         "env/beta/release-readiness.json",
+                        "--target-uat-binding",
+                        "env/gamma/runs/release-consumer/target-uat-binding.json",
                         "--report",
                         str(report_path),
                     ],
@@ -307,55 +364,27 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             ):
                 status = local_gamma_release_consumer.main()
 
-            report = json.loads(report_path.read_text(encoding="utf-8"))
-
         self.assertEqual(status, 2)
         consumer.assert_not_called()
-        self.assertEqual(report["status"], "gate_block")
-        self.assertIn("expected 'gamma'", report["reason"])
+        self.assertFalse(report_path.exists())
 
-    def test_local_gamma_blocked_operation_fails_if_it_unexpectedly_accepts(self) -> None:
-        failed = subprocess.CompletedProcess(
-            ["quwoquan_data/scripts/cli.py"],
-            1,
-            stdout="GATE_BLOCK: import receipt mismatch",
-        )
-        with mock.patch.object(
-            local_gamma_release_consumer.subprocess,
-            "run",
-            return_value=failed,
-        ):
+    def test_local_gamma_existing_readiness_is_not_reexecuted(self) -> None:
+        with mock.patch.object(local_gamma_release_consumer.subprocess, "run") as run:
             result = local_gamma_release_consumer.run_release_consumer(
                 identity=_gamma_release_identity(),
             )
+        run.assert_not_called()
+        self.assertEqual(result["status"], "passed")
 
-        self.assertEqual(result["status"], "failed")
-        self.assertEqual(result["exitCode"], 1)
-        self.assertIn("import receipt mismatch", result["outputTail"])
-
-    def test_local_gamma_runtime_refs_keep_owner_and_persona_ids_distinct(self) -> None:
-        with (
-            mock.patch.dict(
-                os.environ,
-                {
-                    "QWQ_DATA_RELEASE_ID": "parallel-release",
-                    "QWQ_GAMMA_IMPORT_RUN_ID": "parallel-import",
-                },
-                clear=False,
-            ),
-            mock.patch.object(
-                local_gamma_release_consumer.subprocess,
-                "run",
-                return_value=subprocess.CompletedProcess(["ship"], 0, stdout="ok"),
-            ) as run,
+    def test_local_gamma_runtime_refs_ignore_environment_aliases(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {"QWQ_DATA_RELEASE_ID": "parallel-release", "QWQ_GAMMA_IMPORT_RUN_ID": "parallel-import"},
+            clear=False,
         ):
-            local_gamma_release_consumer.run_release_consumer(identity=_gamma_release_identity())
-
-        command = run.call_args.args[0]
-        self.assertIn("release-gamma-a", command)
-        self.assertIn("import-gamma-a", command)
-        self.assertNotIn("parallel-release", command)
-        self.assertNotIn("parallel-import", command)
+            result = local_gamma_release_consumer.run_release_consumer(identity=_gamma_release_identity())
+        self.assertEqual(result["releaseId"], "release-gamma-a")
+        self.assertEqual(result["importRunId"], "import-gamma-a")
 
     def test_local_gamma_comment_setup_uses_current_command_contract(self) -> None:
         source = Path(local_gamma_release_consumer.__file__).read_text(encoding="utf-8")
@@ -385,29 +414,20 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("compose_command", source)
         self.assertNotIn("mongodb", source)
         self.assertNotIn("mongosh", source)
-        self.assertIn("quwoquan_data/scripts/cli.py", source)
+        self.assertNotIn("quwoquan_data/scripts/cli.py", source)
 
-    def test_local_gamma_release_consumer_endpoint_checks_marks_scope_externals_out_of_scope(self) -> None:
-        long_output = "discarded-prefix" + ("x" * 9000)
-        with mock.patch.object(
-            local_gamma_release_consumer.subprocess,
-            "run",
-            return_value=subprocess.CompletedProcess(["ship"], 1, stdout=long_output),
-        ):
-            result = local_gamma_release_consumer.run_release_consumer(
-                identity=_gamma_release_identity(),
-            )
-
-        self.assertEqual(len(result["outputTail"]), 8000)
-        self.assertNotIn("discarded-prefix", result["outputTail"])
-        self.assertEqual(result["status"], "failed")
+    def test_local_gamma_release_consumer_has_no_subprocess_output_channel(self) -> None:
+        result = local_gamma_release_consumer.run_release_consumer(identity=_gamma_release_identity())
+        self.assertEqual(result["outputTail"], "")
+        self.assertEqual(result["command"], [])
 
     def test_local_gamma_release_consumer_strict_endpoint_checks_uses_scope_runtime_refs(self) -> None:
         with (
             mock.patch.object(
                 local_gamma_release_consumer.sys,
                 "argv",
-                ["run_local_gamma_release_consumer_api.py", "--enabled-domain", "content"],
+                ["run_local_gamma_release_consumer_api.py", "--enabled-domain", "content",
+                 "--target-uat-binding", "env/gamma/runs/release-consumer/target-uat-binding.json"],
             ),
             self.assertRaises(SystemExit) as raised,
         ):

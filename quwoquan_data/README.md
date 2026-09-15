@@ -70,7 +70,7 @@ publish/                                      # 独立内容仓，实际初始�
 - `manifest.json` 是身份/版本/实体事实/正文引用/有序媒体/业务依赖单源；采用来源的事实与必要原件随体，不保留重复 refs/source catalog/rights 旁车或生成式授权证明。review 原件与 records 各自保留，迁移只追加原件 binding/新版本事实，不伪造重新审核。生成公共 attribution 由 importer 从唯一 source/manifest 投影。
 - content library（默认 `~/.local/share/quwoquan/content_library`，`QWQ_LIBRARY_ROOT`）只负责采集复用；完整作品和 release 物化不要求原库在场，不跨包 symlink。final media 按 manifest 的相对 path/sha256/bytes/mime 对账，纯搬家不转码、不伪造字幕。来源站失效不影响本地成品。
 - golden media（默认 `~/.local/share/quwoquan/golden_media`，`QWQ_CARRIED_MEDIA_ROOT`）独立保护副本继续保留，不准 gc/hygiene 触碰既有保护根及任何保留作品/release 引用摘要。普通 Git 不跟踪媒体，忽略规则/硬链接不算备份，同卷完整拷贝不证明抗盘损坏；无异卷/远端恢复证据时明确该层耐久性未建立，见 [耐久性 OPEN-002](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/spec.md#open-002)。
-- verify/消费只读，不隐式下载、回填 library 或修复对象；媒体根不可达、单文件缺失、摘要损坏与来源证据缺失分开报告。恢复须显式操作并验证独立副本的 exact bytes，来源 URL 不保证重建转码字节。旧 `verify all` 的隐式回填尚未退役前不能当作纯只读入口，本说明不宣称相关实现已完成。
+- verify/消费只读，不隐式下载、回填 library 或修复对象；媒体根不可达、单文件缺失、摘要损坏与来源证据缺失分开报告。恢复须显式操作并验证独立副本的 exact bytes，来源 URL 不保证重建转码字节。`verify all` 与 `release handoff-verify` 都是纯只读入口：不下载、不回填 library、不修复对象。handoff 逐项绑定完整 release 文件清单，并对缺失、额外、symlink、path escape 与摘要漂移 typed fail；历史 release/receipt 只作 audit 原件，不被验证入口改写。
 - finalize 只保存既有 cohort/handoff 两份 terminal 事实，绑定工程 baseline/实际契约摘要与内容仓身份、所选 ID/版本/包摘要/定位清单的 exact 快照；只有匹配实际字节才记内容 commit，不新增两次提交门槛。历史 `reference/releases`、bundle、review 与 receipts 保留原字节；可重建范围必须有固定时间/cohort/exact build 输入和测试支持，不能承诺重建 AI 判断或外部网页。
 - 实际搬迁、旧树删除、init/clone、commit/push、备份外写与环境激活各须精确授权；一个 lane 的配置不证明全局已切换。在飞工作区不自动清理，删除运行证据会失去该次执行审计。
 
@@ -94,7 +94,7 @@ releases/    环境无关 immutable release 与 handoff 事实
 local/       cache/ runs/ workspace/；生产输入放 workspace/content-production/<shard>/rounds/<round>/
 ```
 
-删除 `.qwq_output/` 不得损失依赖声明、recipe、prompt、template、schema、policy 或部署规则。组合验证入口仍为下列命令；目标契约要求纯只读，隐式恢复退役及新随体回归通过前不要把旧实现当作纯检查运行。显式恢复命令由现有 CLI 的实际帮助与 schema 确认，不在文档虚构新入口：
+删除 `.qwq_output/` 不得损失依赖声明、recipe、prompt、template、schema、policy 或部署规则。组合验证入口仍为下列命令；入口只做纯离线只读校验，不承担下载、回填、修复或环境消费。显式恢复命令由现有 CLI 的实际帮助与 schema 确认，不在文档虚构新入口：
 
 ```bash
 python3 quwoquan_data/scripts/cli.py verify all

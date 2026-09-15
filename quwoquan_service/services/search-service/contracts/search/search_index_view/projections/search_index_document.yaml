@@ -1,14 +1,19 @@
 read_model: SearchIndexDocument
 description: >-
-  统一搜索索引的 Elasticsearch 文档契约（search-service 拥有读面；content / circle / entity 各自的写入者只经 runtime/search/es VersionedWriter 写入同一形状）。所有写入按 sourceVersion 严格更新、删除为带版本 tombstone、rebuild 为 upsert 重放；读面固定过滤 deleted=false。
+  统一搜索索引的 Elasticsearch 文档契约（search-service 拥有读面；content / circle / entity 各自的写入者只经 runtime/search/es VersionedWriter 写入同一形状）。所有写入按 sourceVersion 严格更新、删除为带版本 tombstone、rebuild 为 owner 显式重投。公开读仅接受当前完整形状：target/objectType/objectId/visibility/sourceKind 为非空合法值，sourceVersion 为正 int64，sourceDigest 为 sha256: 加 64 位小写十六进制，deleted 为显式 false；任一必需字段缺失、null、非法值均不可见。词项、向量、ids、count、facet 与 PIT 在 Provider 查询前使用同一门禁，不以旧形状或对象种类增加豁免；普通来源与 Data fence 另按来源字段约束同时过滤。历史 bytes 仅离线审计，不由查询补字段或触发迁移。
 source_entities:
 - SearchIndexView
 storage_backend: elasticsearch
 fields:
+- {name: releaseSliceBinding, type: ReleaseQueryPreparationBinding, nullable: true, description: 所有Data候选统一绑定，mapping需显式exact字段，不能enabled=false而失去fence过滤。}
+- {name: releaseSourceIdentity, type: ReleaseCandidateObjectIdentity, nullable: true, description: Data完整源tuple与版本摘要；同objectId不同release不得覆盖。}
 - {name: target, type: string, nullable: false, description: 统一 AI target（由 objectType/contentType 派生），读面据此分流 typed slice。}
 - {name: objectType, type: string, nullable: false}
 - {name: objectId, type: string, nullable: false}
-- {name: sourceVersion, type: int64, nullable: false, description: 权威对象自身的单调版本；Elasticsearch 在分片内原子比较，只接受严格更新的写入。}
+- {name: sourceKind, type: string, nullable: false, description: 显式闭集 ordinary 或 release_candidate；所有普通对象由共同生产 mapper 写 ordinary，Data Creator/Post/Homepage 写 release_candidate 并携带完整 releaseSliceBinding/releaseSourceIdentity/releaseBindingId，不能由缺字段或ID前缀猜普通来源。}
+- {name: releaseBindingId, type: string, nullable: true, description: Data 候选必须为完整 releaseSliceBinding 的规范身份摘要，普通来源不得携带候选绑定；与完整 tuple/provider/schema fence 同时核验。}
+- {name: sourceVersion, type: int64, nullable: false, description: 权威对象自身的正整数单调版本，必须大于零且禁止默认补 1；Elasticsearch 在分片内原子比较，只接受严格更新的写入。}
+- {name: sourceDigest, type: string, nullable: false, description: '生产 VersionedWriter 对除本字段外全部规范 source 事实计算的 SHA-256，格式为 sha256: 加 64 位小写十六进制；同版本同摘要才是 replay，异摘要拒绝，不由读面重算或补值。'}
 - {name: deleted, type: bool, nullable: false, description: 带版本 tombstone 标记；删除不做物理 DELETE，读面按 deleted=false 过滤。}
 - {name: title, type: string, nullable: true}
 - {name: summary, type: string, nullable: true}

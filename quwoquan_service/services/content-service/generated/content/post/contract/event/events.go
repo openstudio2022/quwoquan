@@ -3,16 +3,18 @@ package event
 
 // Event type constants for Post.
 const (
-	PostSubmittedForReview = "PostSubmittedForReview"
-	PostPublished          = "PostPublished"
-	PostModerationRejected = "PostModerationRejected"
-	PostUpdated            = "PostUpdated"
-	PostSettingsUpdated    = "PostSettingsUpdated"
-	PostPromotedToWork     = "PostPromotedToWork"
-	PostDeleted            = "PostDeleted"
-	PostPrivacyRedacted    = "PostPrivacyRedacted"
-	PostPurged             = "PostPurged"
-	PostImported           = "PostImported"
+	ContentReleaseFenceChanged   = "ContentReleaseFenceChanged"
+	PostReleaseCandidatePrepared = "PostReleaseCandidatePrepared"
+	PostSubmittedForReview       = "PostSubmittedForReview"
+	PostPublished                = "PostPublished"
+	PostModerationRejected       = "PostModerationRejected"
+	PostUpdated                  = "PostUpdated"
+	PostSettingsUpdated          = "PostSettingsUpdated"
+	PostPromotedToWork           = "PostPromotedToWork"
+	PostDeleted                  = "PostDeleted"
+	PostPrivacyRedacted          = "PostPrivacyRedacted"
+	PostPurged                   = "PostPurged"
+	PostImported                 = "PostImported"
 )
 
 // ClientRealtimeWireTypes contains only events explicitly exposed by

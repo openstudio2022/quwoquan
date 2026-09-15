@@ -664,12 +664,17 @@ def materialize_runtime_topology_package(
             *bindings_by_service.get(service, ()),
             binding,
         )
+    # user-service 的 User database 由 source allocator 独占创建、授权并初始化。
+    # 通用 postgres-init 只能预建其余 runtime namespace，否则冷启动在 allocator
+    # 取得 authority 前就制造了“未知既存资源”，且不能安全收养。
     postgres_namespaces = tuple(
         sorted(
             {
                 binding["namespace"]
                 for binding in data_plane_payload["bindings"].values()
-                if binding["engine"] == "postgres" and binding["required"] is True
+                if binding["engine"] == "postgres"
+                and binding["required"] is True
+                and binding["service"] != "user-service"
             }
         )
     )

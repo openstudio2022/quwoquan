@@ -10,6 +10,8 @@ second tracked metadata tree.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 from pathlib import Path
@@ -126,6 +128,59 @@ def safe_output(
 
 def sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def reusable_view(root: Path, output: Path) -> bool:
+    """仅复用与当前 canonical source 和投影字节完全一致的完整视图。"""
+    provenance_path = output / PROVENANCE_FILENAME
+    if output.is_symlink() or not provenance_path.is_file():
+        return False
+    try:
+        manifest = json.loads(provenance_path.read_text(encoding="utf-8"))
+        if manifest.get("format") != PROVENANCE_FORMAT:
+            return False
+        sources = manifest.get("sources")
+        files = manifest.get("files")
+        if not isinstance(sources, list) or not sources or not isinstance(files, list) or not files:
+            return False
+        for source in sources:
+            path = root / source["path"]
+            if path.is_symlink() or sha256_bytes(path.read_bytes()) != source["sha256"]:
+                return False
+        expected_files: list[str] = []
+        digest = hashlib.sha256()
+        for entry in files:
+            relative = entry["path"]
+            target = output / relative
+            if target.is_symlink() or sha256_bytes(target.read_bytes()) != entry["sha256"]:
+                return False
+            expected_files.append(relative)
+            digest.update(relative.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(entry["sha256"].encode("ascii"))
+            digest.update(b"\n")
+        actual_files = sorted(
+            path.relative_to(output).as_posix()
+            for path in output.rglob("*")
+            if path.is_file() and path.name != PROVENANCE_FILENAME
+        )
+        return (
+            expected_files == sorted(expected_files)
+            and actual_files == expected_files
+            and digest.hexdigest() == manifest.get("viewDigest")
+        )
+    except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+
+
+@contextmanager
+def exclusive_view_build(output: Path):
+    """串行化同一路径构建，避免递归 make 删除另一个消费者的完整视图。"""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = output.parent / f".{output.name}.build.lock"
+    with lock_path.open("a+b") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        yield
 
 
 class ContractViewSnapshot:
@@ -379,66 +434,69 @@ def build(
         output,
         external_output_root=external_output_root,
     )
-    if output.exists() or output.is_symlink():
-        if output.is_symlink():
-            output.unlink()
-        else:
-            shutil.rmtree(output)
-    output.mkdir(parents=True)
-    snapshot = ContractViewSnapshot(root, output)
+    with exclusive_view_build(output):
+        if reusable_view(root, output):
+            return output
+        if output.exists() or output.is_symlink():
+            if output.is_symlink():
+                output.unlink()
+            else:
+                shutil.rmtree(output)
+        output.mkdir(parents=True)
+        snapshot = ContractViewSnapshot(root, output)
 
-    try:
-        foundation = root / "quwoquan_service/contracts/metadata"
-        for name in ("_schemas", "_shared", "_control_plane", "_vectors", "platform"):
-            source = foundation / name
-            if source.is_dir():
-                snapshot.copy_tree(source, output / name)
-        for source in sorted(foundation.glob("*.yaml")):
-            snapshot.copy_file(source, output / source.name)
+        try:
+            foundation = root / "quwoquan_service/contracts/metadata"
+            for name in ("_schemas", "_shared", "_control_plane", "_vectors", "platform"):
+                source = foundation / name
+                if source.is_dir():
+                    snapshot.copy_tree(source, output / name)
+            for source in sorted(foundation.glob("*.yaml")):
+                snapshot.copy_file(source, output / source.name)
 
-        roots = contract_roots(root)
-        owners: dict[tuple[str, str], Path] = {}
-        for contracts in roots:
-            domain = load_domain(contracts / "domain.yaml", snapshot)
-            domain_output = output / domain
-            domain_output.mkdir(exist_ok=True)
-            for child in sorted(contracts.iterdir()):
-                if child.name == "domain.yaml":
-                    continue
-                if child.name == "_shared":
-                    for shared_child in sorted(child.iterdir()):
-                        if shared_child.is_dir():
-                            # Historical domain-owned support contracts are not
-                            # bounded contexts and remain direct compiler inputs.
-                            snapshot.copy_tree(shared_child, domain_output / shared_child.name)
-                        else:
-                            snapshot.copy_file(
-                                shared_child,
-                                domain_output / "_shared" / shared_child.name,
-                            )
-                    continue
-                owner_key = (domain, child.name)
-                if owner_key in owners:
-                    raise ValueError(
-                        f"context {domain}.{child.name} has multiple contract owners: "
-                        f"{owners[owner_key]} and {contracts}"
-                    )
-                owners[owner_key] = contracts
-                snapshot.copy_tree(child, domain_output / child.name)
+            roots = contract_roots(root)
+            owners: dict[tuple[str, str], Path] = {}
+            for contracts in roots:
+                domain = load_domain(contracts / "domain.yaml", snapshot)
+                domain_output = output / domain
+                domain_output.mkdir(exist_ok=True)
+                for child in sorted(contracts.iterdir()):
+                    if child.name == "domain.yaml":
+                        continue
+                    if child.name == "_shared":
+                        for shared_child in sorted(child.iterdir()):
+                            if shared_child.is_dir():
+                                # Historical domain-owned support contracts are not
+                                # bounded contexts and remain direct compiler inputs.
+                                snapshot.copy_tree(shared_child, domain_output / shared_child.name)
+                            else:
+                                snapshot.copy_file(
+                                    shared_child,
+                                    domain_output / "_shared" / shared_child.name,
+                                )
+                        continue
+                    owner_key = (domain, child.name)
+                    if owner_key in owners:
+                        raise ValueError(
+                            f"context {domain}.{child.name} has multiple contract owners: "
+                            f"{owners[owner_key]} and {contracts}"
+                        )
+                    owners[owner_key] = contracts
+                    snapshot.copy_tree(child, domain_output / child.name)
 
-            generated_openapi = contracts.parent / "generated" / "openapi.yaml"
-            if generated_openapi.is_file():
-                snapshot.copy_file(generated_openapi, domain_output / "openapi.yaml")
+                generated_openapi = contracts.parent / "generated" / "openapi.yaml"
+                if generated_openapi.is_file():
+                    snapshot.copy_file(generated_openapi, domain_output / "openapi.yaml")
 
-        if not owners:
-            raise ValueError("no service-owned contracts found")
-        build_config_views(root, output, roots, snapshot)
-        snapshot.write_provenance()
-        prune_sibling_views(output)
-        return output
-    except Exception:
-        shutil.rmtree(output, ignore_errors=True)
-        raise
+            if not owners:
+                raise ValueError("no service-owned contracts found")
+            build_config_views(root, output, roots, snapshot)
+            snapshot.write_provenance()
+            prune_sibling_views(output)
+            return output
+        except Exception:
+            shutil.rmtree(output, ignore_errors=True)
+            raise
 
 
 def main() -> int:

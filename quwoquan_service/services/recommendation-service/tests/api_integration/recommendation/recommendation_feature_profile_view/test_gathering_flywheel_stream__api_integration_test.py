@@ -91,8 +91,11 @@ def _emit_participation(real_redis, *, gathering_id: str, persona_id: str) -> No
             "payload": json.dumps(
                 {
                     "gatheringId": gathering_id,
+                    "aggregateVersion": 3,
+                    "lifecycleStatus": "published",
                     "participantPersonaId": persona_id,
                     "participationState": "active",
+                    "occurredAt": "2026-08-10T09:00:00Z",
                 }
             ),
         },
@@ -113,9 +116,12 @@ def _emit_publication(
     ).hexdigest()
     payload: dict = {
         "gatheringId": gathering_id,
+        "aggregateVersion": 2,
         "actorPersonaId": organizer_id,
         "lifecycleStatus": "published",
+        "roomBindingStatus": "bound",
         "sourceRefs": source_refs or [],
+        "occurredAt": "2026-08-10T08:00:00Z",
     }
     if max_participants:
         payload["maxParticipants"] = max_participants
@@ -164,9 +170,31 @@ def _emit_recap_post(
                     "visibility": "public",
                     "moderationStatus": "approved",
                     "primaryHomepageId": "",
-                    "visitedAt": "",
-                    "gatheringRef": gathering_id,
+                    "visitedAt": None,
+                    "gatheringRef": gathering_id or None,
                     "tagRefs": tag_refs or [],
+                    "contentType": "article",
+                    "contentIdentity": "work",
+                    "title": "活动回顾",
+                    "body": "公开活动回顾内容",
+                    "summary": "活动回顾摘要",
+                    "coverUrl": "",
+                    "thumbnailUrl": "",
+                    "videoUrl": "",
+                    "width": 0,
+                    "height": 0,
+                    "durationMs": 0,
+                    "contentVertical": "travel",
+                    "createdAt": occurred_at,
+                    "updatedAt": occurred_at,
+                    "publishedAt": occurred_at,
+                    "environment": None,
+                    "sourceOwner": None,
+                    "releaseId": None,
+                    "manifestDigest": None,
+                    "releaseDigest": None,
+                    "sourceVersion": 1,
+                    "safetyRevision": 1,
                 }
             ),
         },

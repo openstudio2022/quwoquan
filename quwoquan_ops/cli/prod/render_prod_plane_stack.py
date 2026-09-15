@@ -218,6 +218,11 @@ def _rewrite_service(
             environment["RELEASE_EVIDENCE_DIGEST"] = release_evidence_digest
         if instance == "prevalidate":
             environment["QWQ_NONPROMOTABLE_PREVALIDATION"] = "first-party"
+            if name in {"recommendation-service", "product-ops-service"}:
+                from quwoquan_ops.cli.lib.port_manifest import compose_role_base_url, load_port_manifest
+                environment["CONTENT_SERVICE_BASE_URL"] = compose_role_base_url(
+                    load_port_manifest(), "content-service"
+                )
         # scheme 必须写出来：服务端按 scheme 决定 trace 是否加密传输，缺 scheme
         # 判否。collector 在共享网络内明文接收，所以这里声明 http://。
         environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = (
@@ -428,6 +433,12 @@ def _rewrite_service(
                 "https://embedding-provider-unavailable.invalid/v1/embeddings"
             )
             environment["CONTENT_EMBEDDING_API_KEY"] = "provider-unavailable"
+    # 两种数据模式都消费同一已验证binding派生值；只补本能力身份/endpoint，不覆盖isolated其他资源映射。
+    if data_plane_environment and name in {"recommendation-service", "product-ops-service"}:
+        target_environment = updated.setdefault("environment", {})
+        for key, value in data_plane_environment.items():
+            if key.startswith("RECOMMENDATION_RELEASE_CANDIDATE_") or (name == "recommendation-service" and key == "MONGODB_DATABASE") or (name == "product-ops-service" and key == "CONTENT_SERVICE_BASE_URL"):
+                target_environment[key] = value
     if instance != "prevalidate" and name not in {"gamma-proxy", "postgres", "mongodb", "mongo-init", "redis", "object-storage", "object-storage-init", "elasticsearch"}:
         extra_hosts = list(updated.get("extra_hosts") or [])
         if f"{EXTERNAL_DATA_HOST}:host-gateway" not in extra_hosts:
@@ -622,6 +633,9 @@ def _prevalidation_published_ports(name: str, ports: Any) -> list[Any]:
         for service in plane.get("imageAndConfigOnlyServices", [])
     }
     if name in image_only:
+        return []
+    if not bindings:
+        # 启动但仅供同项目网络消费的服务不得继承模板宿主发布口。
         return []
     rendered: list[Any] = []
     seen: set[int] = set()

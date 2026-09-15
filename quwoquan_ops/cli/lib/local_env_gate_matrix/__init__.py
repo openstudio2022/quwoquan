@@ -31,7 +31,7 @@ from quwoquan_ops.cli.lib.deployment_candidate_manifest import (  # noqa: F401
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import (  # noqa: F401
     _acceptance_lease_event,
-    _data_cli_runner,
+    _ops_release_runner,
     _data_readiness_path,
     _data_run_ids,
     _homepage_release_evidence,

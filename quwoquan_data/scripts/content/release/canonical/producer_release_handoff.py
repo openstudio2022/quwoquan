@@ -149,6 +149,59 @@ def _binding_for_path(path: Path, *, repo_root: Path, output_root: Path, label: 
     raise _error("DATA.RELEASE.HANDOFF_REF_SCOPE_INVALID", label)
 
 
+def _artifact_inventory(release_dir: Path) -> dict[str, Any]:
+    """枚举 handoff 自身之外的完整 release 字节；拒绝链接与路径逃逸。"""
+
+    root = _assert_no_symlink(release_dir, label="release artifact", regular=False)
+    handoff_name = _FILE_NAME
+    entries: list[dict[str, Any]] = []
+    for candidate in sorted(root.rglob("*")):
+        try:
+            relative = candidate.relative_to(root).as_posix()
+        except ValueError as exc:
+            raise _error("DATA.RELEASE.HANDOFF_ARTIFACT_PATH_ESCAPE", str(candidate)) from exc
+        ref = _safe_ref(relative, label="artifact.entries.ref")
+        if candidate.is_symlink():
+            raise _error("DATA.RELEASE.HANDOFF_ARTIFACT_SYMLINK", ref)
+        if candidate.is_dir():
+            continue
+        if not candidate.is_file():
+            raise _error("DATA.RELEASE.HANDOFF_ARTIFACT_INVALID", ref)
+        if ref == handoff_name:
+            continue
+        raw = candidate.read_bytes()
+        entries.append({"ref": ref, "digest": _digest(raw), "bytes": len(raw)})
+    encoded = json.dumps(entries, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {
+        "rootRef": f"data/releases/{release_dir.name}",
+        "entries": entries,
+        "treeDigest": _digest(encoded),
+    }
+
+
+def _validate_artifact_inventory(release_dir: Path, expected: object) -> None:
+    if not isinstance(expected, Mapping):
+        raise _error("DATA.RELEASE.HANDOFF_ARTIFACT_INVALID", "artifact")
+    expected_entries = expected.get("entries")
+    if not isinstance(expected_entries, list):
+        raise _error("DATA.RELEASE.HANDOFF_ARTIFACT_INVALID", "artifact.entries")
+    for row in expected_entries:
+        if not isinstance(row, Mapping):
+            raise _error("DATA.RELEASE.HANDOFF_ARTIFACT_INVALID", "artifact entry")
+        _safe_ref(row.get("ref"), label="artifact.entries.ref")
+    actual = _artifact_inventory(release_dir)
+    expected_refs = {str(row.get("ref")) for row in expected_entries}
+    actual_refs = {str(row.get("ref")) for row in actual["entries"]}
+    missing = sorted(expected_refs - actual_refs)
+    if missing:
+        raise _error("DATA.RELEASE.HANDOFF_ARTIFACT_MISSING", ", ".join(missing))
+    extra = sorted(actual_refs - expected_refs)
+    if extra:
+        raise _error("DATA.RELEASE.HANDOFF_ARTIFACT_EXTRA", ", ".join(extra))
+    if dict(expected) != actual:
+        raise _error("DATA.RELEASE.HANDOFF_ARTIFACT_DIGEST_DRIFT", release_dir.name)
+
+
 def _counts_from_refs(refs: list[str]) -> dict[str, int]:
     counts = {carrier: 0 for carrier in _CARRIERS}
     for ref in refs:
@@ -583,6 +636,8 @@ def _validate_handoff(
         raise _error("DATA.RELEASE.HANDOFF_BASELINE_DRIFT", revision)
     release_id = str(document["releaseId"])
     milestone = str(document["milestone"])
+    release_dir = release_root / release_id
+    _validate_artifact_inventory(release_dir, document["artifact"])
     header, counts, header_digest, release_digest = _validate_release_facts(
         release_id=release_id, release_root=release_root, cohort=cohort, milestone=milestone
     )
@@ -676,6 +731,7 @@ def write_producer_release_handoff(*, release_id: str, cohort_file: Path, milest
         },
         "explicitCohort": cohort_binding,
         "contentPoolObjects": pool_rows,
+        "artifact": _artifact_inventory(release_root / release_id),
         "producerBaselineRevision": revision,
         "producerContractDigest": producer_contract_digest(repo_root),
     }
@@ -711,4 +767,4 @@ def read_producer_release_handoff(
     )
 
 
-__all__ = ["ProducerReleaseHandoffError", "producer_contract_digest", "read_producer_release_handoff", "validate_producer_release_handoff", "write_producer_release_handoff"]
+__all__ = ["ProducerReleaseHandoffError", "_artifact_inventory", "producer_contract_digest", "read_producer_release_handoff", "validate_producer_release_handoff", "write_producer_release_handoff"]

@@ -620,7 +620,6 @@ def _android_home(tmp_path: Path, root: Path) -> tuple[Path, Path]:
     archive = b"gradle distribution"
     roots = [
         _wrapper(root, "quwoquan_app/android", archive),
-        _wrapper(root, "quwoquan_app/test_host/patrol/android", archive),
     ]
     raw = tmp_path / "raw-gradle-home"
     distribution = raw / "wrapper/dists/gradle-8.14-bin/fixture"

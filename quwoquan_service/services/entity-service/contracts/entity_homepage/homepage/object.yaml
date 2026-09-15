@@ -79,6 +79,7 @@ assistant_access:
     requires_user_consent: true
     consent_scope_ref: assistant.entity.homepage.write
 business_rules:
+- ReadHomepageReleaseCandidate仅受信Content调用，从exact verified release候选生成完整ReleaseHomepageCandidateSnapshot；每项identity与entityRef映射及sourceClosure一致，source摘要不是Search ready。无active可以读，超界拒绝不截断，不回落live/latest，不向Search暴露Entity存储。
 - canonical identity 与 homepageType 创建后不可变
 - candidate 只能在必填主档、标签和来源证据齐全后发布；这是 Homepage aggregate governance candidate，不得当作 release candidate
 - 数据发布只写 homepage_release_projection stage candidate；Content active tuple 是唯一 live fence，Homepage 不建立独立 active pointer

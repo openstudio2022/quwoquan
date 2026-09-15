@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from generated.recommendation.ranked_recommendation_window.models.request_response import ReleasePinnedQueryFence
+
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -498,6 +500,7 @@ class RedisWindowStore:
         writer = _BoundedJSONWriter(self.MAX_WINDOW_PAYLOAD_BYTES)
         writer.raw(b"{")
         fields: tuple[tuple[str, Any], ...] = (
+            ("contentFence", window.content_fence.model_dump(mode="json")),
             ("windowId", window.window_id),
             ("subjectId", window.subject_id),
             ("scenario", window.scenario),
@@ -593,6 +596,7 @@ class RedisWindowStore:
 
         visit(
             (
+                window.content_fence.model_dump(mode="json"),
                 window.window_id,
                 window.subject_id,
                 window.scenario,
@@ -647,6 +651,7 @@ class RedisWindowStore:
             self._require_exact_fields(
                 document,
                 {
+                    "contentFence",
                     "windowId",
                     "subjectId",
                     "scenario",
@@ -781,6 +786,7 @@ class RedisWindowStore:
                     document["requestDigest"], "requestDigest"
                 ),
                 ranking=ranking,
+                content_fence=ReleasePinnedQueryFence.model_validate(document["contentFence"]),
                 now=created_at,
             )
             if window.expires_at != expires_at:

@@ -85,7 +85,7 @@ CLOSED_SUBJECT_ID = "account-ranked-window-closed"
 
 
 def _page_path(window_id: str) -> str:
-    return f"/internal/recommendation/ranked-pages/{window_id}"
+    return f"/internal/recommendation/ranked-pages/{window_id}:query"
 
 
 def _rule_only_policy() -> ExperimentPolicy:
@@ -213,7 +213,7 @@ def test_ranked_window_create_and_continue_over_real_redis_and_mongo(
     runtime: _Runtime,
     real_redis,
 ) -> None:
-    body = {"subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 2}
+    body = {"contentFence": {"release": None, "revision": 0}, "subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 2}
 
     created = runtime.client.post(
         CREATE_RANKED_RECOMMENDATION_WINDOW_PATH,
@@ -237,6 +237,12 @@ def test_ranked_window_create_and_continue_over_real_redis_and_mongo(
     assert stored is not None
     assert [item.ordinal for item in stored.items] == list(range(CANDIDATE_COUNT))
     assert real_redis.xlen(EXPERIMENT_ASSIGNMENT_STREAM) >= 1
+    assert stored.content_fence.model_dump(mode="json") == body["contentFence"]
+    changed = runtime.client.post(_page_path(window_id), headers=runtime.headers(), json={"subjectId": SUBJECT_ID, "contentFence": {"release": {"environment": "gamma", "sourceOwner": "qwq_data", "releaseId": "next", "manifestDigest": "sha256:" + "a" * 64}, "revision": 2}, "fromOrdinal": 2, "limit": 2})
+    assert changed.status_code == 409
+    assert changed.json()["detail"]["code"] == "RECOMMENDATION.USER.ranked_window_conflict"
+    old_get = runtime.client.get(f"/internal/recommendation/ranked-pages/{window_id}", headers=runtime.headers())
+    assert old_get.status_code == 404
 
     replayed = runtime.client.post(
         CREATE_RANKED_RECOMMENDATION_WINDOW_PATH,
@@ -246,10 +252,10 @@ def test_ranked_window_create_and_continue_over_real_redis_and_mongo(
     assert replayed.status_code == 200
     assert replayed.json() == payload
 
-    continued = runtime.client.get(
+    continued = runtime.client.post(
         _page_path(window_id),
         headers=runtime.headers(),
-        params={"subjectId": SUBJECT_ID, "fromOrdinal": 2, "limit": 2},
+        json={"contentFence": {"release": None, "revision": 0}, "subjectId": SUBJECT_ID, "fromOrdinal": 2, "limit": 2},
     )
     assert continued.status_code == 200
     continued_payload = continued.json()
@@ -258,18 +264,18 @@ def test_ranked_window_create_and_continue_over_real_redis_and_mongo(
     assert continued_payload["rankingSnapshotDigest"] == payload["rankingSnapshotDigest"]
     assert continued_payload["expiresAt"] == payload["expiresAt"]
 
-    tail = runtime.client.get(
+    tail = runtime.client.post(
         _page_path(window_id),
         headers=runtime.headers(),
-        params={"subjectId": SUBJECT_ID, "fromOrdinal": 4, "limit": 20},
+        json={"contentFence": {"release": None, "revision": 0}, "subjectId": SUBJECT_ID, "fromOrdinal": 4, "limit": 20},
     )
     assert tail.status_code == 200
     assert tail.json()["nextOrdinal"] is None
 
-    foreign_subject = runtime.client.get(
+    foreign_subject = runtime.client.post(
         _page_path(window_id),
         headers=runtime.headers(),
-        params={"subjectId": "persona-other", "fromOrdinal": 0, "limit": 2},
+        json={"contentFence": {"release": None, "revision": 0}, "subjectId": "persona-other", "fromOrdinal": 0, "limit": 2},
     )
     assert foreign_subject.status_code == 404
     assert foreign_subject.json()["detail"]["code"] == (
@@ -280,7 +286,7 @@ def test_ranked_window_create_and_continue_over_real_redis_and_mongo(
 def test_ranked_window_rejects_unauthorized_conflict_and_missing_window(
     runtime: _Runtime,
 ) -> None:
-    body = {"subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 2}
+    body = {"contentFence": {"release": None, "revision": 0}, "subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 2}
 
     anonymous = runtime.client.post(CREATE_RANKED_RECOMMENDATION_WINDOW_PATH, json=body)
     assert anonymous.status_code == 401
@@ -326,10 +332,10 @@ def test_ranked_window_rejects_unauthorized_conflict_and_missing_window(
         "RECOMMENDATION.USER.ranked_window_conflict"
     )
 
-    expired = runtime.client.get(
+    expired = runtime.client.post(
         _page_path("00000000-0000-0000-0000-000000000000"),
         headers=runtime.headers(),
-        params={"subjectId": SUBJECT_ID},
+        json={"contentFence": {"release": None, "revision": 0}, "subjectId": SUBJECT_ID},
     )
     assert expired.status_code == 404
     assert expired.json()["detail"]["code"] == (
@@ -340,7 +346,7 @@ def test_ranked_window_rejects_unauthorized_conflict_and_missing_window(
 def test_ranked_window_closes_and_erases_windows_for_closed_subject(
     runtime: _Runtime,
 ) -> None:
-    body = {"subjectId": CLOSED_SUBJECT_ID, "scenario": "content_feed", "limit": 2}
+    body = {"contentFence": {"release": None, "revision": 0}, "subjectId": CLOSED_SUBJECT_ID, "scenario": "content_feed", "limit": 2}
 
     created = runtime.client.post(
         CREATE_RANKED_RECOMMENDATION_WINDOW_PATH,
@@ -363,10 +369,10 @@ def test_ranked_window_closes_and_erases_windows_for_closed_subject(
     )
     assert appended
 
-    read_after_closure = runtime.client.get(
+    read_after_closure = runtime.client.post(
         _page_path(window_id),
         headers=runtime.headers(),
-        params={"subjectId": CLOSED_SUBJECT_ID},
+        json={"contentFence": {"release": None, "revision": 0}, "subjectId": CLOSED_SUBJECT_ID},
     )
     assert read_after_closure.status_code == 410
     assert read_after_closure.json()["detail"]["code"] == (

@@ -231,11 +231,9 @@ def _stackctl(*args: str, env: Mapping[str, str] | None = None, log_dir: Path) -
     return StackctlResult(command, payload, completed.stderr)
 
 
-DATA_CLI = ROOT / "quwoquan_data/scripts/cli.py"
-
 
 # DEC-041：release 不携带类别；acceptance 只消费显式 immutable 身份。
-HANDOFF_REF_RE = re.compile(r"^handoff-ref-v1:sha256:[0-9a-f]{64}:sha256:[0-9a-f]{64}$")
+HANDOFF_REF_RE = re.compile(r"^data/releases/[^/]+/producer_release_handoff\.json=sha256:[0-9a-f]{64}$")
 
 
 def _release_id(attestation: Path) -> str:
@@ -284,36 +282,32 @@ def _acceptance_binds_inputs(*, store: Path, fact: Mapping[str, Any], inputs: Ma
 
 
 def _handoff_ref(value: str, *, label: str) -> str:
-    """现役 `qwq-data ship` 只接受 authoritative handoff-ref-v1 准入；release id 不再是隐式选择器。"""
+    """消费producer immutable exact ref；通用会话handoff不再作为Data第二准入。"""
 
     ref = str(value or "").strip()
     if not HANDOFF_REF_RE.fullmatch(ref):
         raise IntegrationRunError(
             "INTEGRATION_RUN.INPUT_INVALID",
-            f"{label} must be a canonical handoff-ref-v1 (got {ref[:48] or '-'}); "
-            "obtain it from the Data producer release handoff (qwq-state/handoffs)",
+            f"{label} must bind data/releases/<releaseId>/producer_release_handoff.json=sha256:<digest> "
+            f"(got {ref[:48] or '-'}); use exact producer release bytes",
         )
     return ref
 
 
-def _data_ship(*args: str, log_dir: Path, label: str) -> None:
-    """Data release 进入环境只经 canonical `qwq-data ship`；失败保留 stdout/stderr 作为 typed blocker。"""
+def _content_release(*args: str, log_dir: Path, label: str) -> None:
+    """环境发布仅经 Ops-owned stackctl content-release。"""
 
-    process_env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    completed = subprocess.run(
-        [sys.executable, "-B", str(DATA_CLI), "ship", *args],
-        cwd=ROOT, env=process_env, text=True, capture_output=True, check=False,
-    )
-    log_dir.mkdir(parents=True, exist_ok=True)
-    (log_dir / f"data-ship-{label}.stdout.log").write_text(completed.stdout, encoding="utf-8")
-    (log_dir / f"data-ship-{label}.stderr.log").write_text(completed.stderr, encoding="utf-8")
-    if completed.returncode != 0:
-        tail = " ".join((completed.stderr or completed.stdout).split())[-400:]
-        raise IntegrationRunError("INTEGRATION_RUN.DATA_RELEASE_FAILED", f"qwq-data ship {label} failed: {tail}")
+    result = _stackctl("content-release", *args, log_dir=log_dir)
+    if result.exit_code != 0:
+        detail = " ".join(str(item) for item in result.payload.get("details", []))[-400:]
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.DATA_RELEASE_FAILED",
+            f"stackctl content-release {label} failed: {detail}",
+        )
 
 
 def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespace, log_dir: Path,
-                        previous_readiness: Path | None) -> Path:
+                        previous_readiness: Path | None, candidate_root: Path | None = None) -> Path:
     """candidate release 进入环境：`ship apply --handoff-ref … --import --full-sync` → `ship activate` → `ship verify`。
 
     handoff-ref 是现役 Data CLI 唯一的 release 准入身份；attestation 只用于 stackctl package 的候选绑定，
@@ -323,19 +317,20 @@ def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespa
     release_id = _release_id(args.release_attestation)
     handoff_ref = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
     import_run, activate_run, verify_run = f"{run_id}-import", f"{run_id}-activate", f"{run_id}-verify"
-    _data_ship("apply", "--handoff-ref", handoff_ref, "--env", environment, "--run-id", import_run,
-               "--import", "--full-sync", log_dir=log_dir, label=f"{environment}-apply")
-    _data_ship("activate", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
-               "--run-id", activate_run, log_dir=log_dir, label=f"{environment}-activate")
+    candidate_args = ("--runtime-candidate-root", str(candidate_root)) if candidate_root is not None else ()
+    _content_release("apply", "--handoff-ref", handoff_ref, "--env", environment, "--run-id", import_run,
+               *candidate_args, "--import", "--full-sync", log_dir=log_dir, label=f"{environment}-apply")
+    _content_release("activate", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
+               "--run-id", activate_run, *candidate_args, log_dir=log_dir, label=f"{environment}-activate")
     _bootstrap_premium_pool(environment=environment, release_id=release_id, import_run=import_run,
                             attestation=args.release_attestation, log_dir=log_dir)
     # ship verify 的 --import-run-id 指向 completed 的 activate run（其 result.importRunId 再指回 apply run）；
     # 传 apply run 会因 result status=prepared 被拒（"completed activation predecessor result status 不一致"）。
     verify_args = ["verify", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", activate_run,
-                   "--run-id", verify_run]
+                   "--run-id", verify_run, *candidate_args]
     if previous_readiness is not None:
         verify_args.extend(["--previous-environment-readiness", _output_ref(previous_readiness)])
-    _data_ship(*verify_args, log_dir=log_dir, label=f"{environment}-verify")
+    _content_release(*verify_args, log_dir=log_dir, label=f"{environment}-verify")
     readiness = OUTPUT_ROOT / "env" / environment / "runs/data-release" / release_id / verify_run / "release-readiness.json"
     if not readiness.is_file():
         raise IntegrationRunError("INTEGRATION_RUN.DATA_RELEASE_FAILED", f"release readiness receipt missing: {readiness}")
@@ -764,6 +759,7 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
         # health 的 release_active 层要求该环境已导入并验证 candidate Data release（release-readiness 回执）。
         readiness = phases.run(f"{environment}.data-release", lambda: _apply_data_release(
             environment=environment, run_id=summary["runId"], args=args, log_dir=log_dir, previous_readiness=previous_readiness,
+            candidate_root=Path(str(active["candidateDir"])),
         ))
         env_summary["dataRelease"] = {"readiness": _output_ref(readiness), "digest": exact_file_digest(readiness)}
         health = phases.run(f"{environment}.health", lambda: _require_ok(_stackctl("health", "--target", target, "--scope", "full", log_dir=log_dir), "INTEGRATION_RUN.HEALTH_FAILED"))
@@ -1310,7 +1306,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--rollback-release-attestation", type=Path, default=None,
                         help="acceptance 必填：rollback production Data release attestation（只参与候选绑定，不执行 rollback）")
     parser.add_argument("--release-handoff-ref", default="",
-                        help="acceptance 必填：candidate production release 的 authoritative handoff-ref-v1（现役 qwq-data ship 唯一准入身份）；"
+                        help="acceptance 必填：candidate release 的producer输出相对ref=sha256:digest；"
                              "rollback release 只参与 stackctl package 候选绑定，因此不需要其 handoff-ref")
     parser.add_argument("--workload", default="full", choices=("content-release", "content-commercial", "full"))
     parser.add_argument("--profile", default="integration", choices=("smoke", "integration"))

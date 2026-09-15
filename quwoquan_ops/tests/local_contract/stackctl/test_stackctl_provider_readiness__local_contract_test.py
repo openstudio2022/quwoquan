@@ -579,7 +579,7 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
             with (
                 mock.patch.object(
                     stackctl,
-                    "require_prod_hosted_release_redundancy",
+                    "require_prod_hosted_release_inventory",
                 ),
                 mock.patch.object(stackctl, "run", side_effect=run_preflight_then_package),
                 mock.patch.object(
@@ -630,7 +630,7 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
             with (
                 mock.patch.object(
                     stackctl,
-                    "require_prod_hosted_release_redundancy",
+                    "require_prod_hosted_release_inventory",
                 ),
                 mock.patch.object(
                     stackctl,

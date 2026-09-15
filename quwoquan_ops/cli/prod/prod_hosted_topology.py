@@ -101,11 +101,11 @@ def _safe_absolute_path(value: Any, label: str) -> str:
 
 
 def _plane_specs(access: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    specs = {
-        str(item.get("plane") or ""): item
-        for item in access.get("planes") or []
-        if isinstance(item, dict)
-    }
+    specs: dict[str, dict[str, Any]] = {}
+    for item in access.get("planes") or []:
+        if not isinstance(item, dict) or str(item.get("plane") or "") in specs:
+            raise ProdHostedTopologyError("invalid or duplicate access plane")
+        specs[str(item.get("plane") or "")] = item
     for plane in EXECUTION_PLANES:
         spec = specs.get(plane)
         if not isinstance(spec, dict) or spec.get("access") != "read-write":
@@ -138,6 +138,8 @@ def _host_specs(access: dict[str, Any]) -> dict[str, dict[str, Any]]:
             )
         if host_id in hosts:
             raise ProdHostedTopologyError(f"duplicate management host id: {host_id}")
+        if any(item["sshHost"].lower() == ssh_host.lower() for item in hosts.values()):
+            raise ProdHostedTopologyError(f"duplicate management host endpoint: {ssh_host}")
         forbidden = {"privateKey", "password", "token", "secretValue"} & set(raw)
         if forbidden:
             raise ProdHostedTopologyError(
@@ -343,36 +345,21 @@ def resolve_plan(
     return plan
 
 
-def require_release_redundancy(plan: list[DeploymentReplica]) -> None:
-    """Fail closed until formal rollout has real multi-host replica inventory."""
-
+def require_release_inventory(
+    plan: list[DeploymentReplica], access: dict[str, Any],
+) -> None:
+    """正式计划必须精确等于未过滤的 inventory；主机数量不授予 HA。"""
     if not plan:
         raise ProdHostedTopologyError("formal rollout deployment plan is empty")
     instances = {item.instance for item in plan}
     if len(instances) != 1 or next(iter(instances)) not in {"gray", "prod"}:
+        raise ProdHostedTopologyError("formal rollout inventory requires gray/prod instance")
+    expected = resolve_plan(access, instance=next(iter(instances)))
+    # 比较完整 dataclass，不能只比数量或过滤后的 host/plane 集合。
+    if len(plan) != len(expected) or set(plan) != set(expected):
         raise ProdHostedTopologyError(
-            "formal rollout redundancy applies only to gray/prod instances"
-        )
-    selected_planes = {item.plane for item in plan}
-    if selected_planes != set(EXECUTION_PLANES):
-        raise ProdHostedTopologyError(
-            "formal rollout redundancy requires the complete service+edge inventory; "
-            "filtered plane plans are not promotable"
-        )
-    host_ids = {item.host_id for item in plan}
-    issues: list[str] = []
-    if len(host_ids) < 2:
-        issues.append("at least two real inventory hosts are required")
-    for plane in sorted({item.plane for item in plan}):
-        placements = [item for item in plan if item.plane == plane]
-        plane_hosts = {item.host_id for item in placements}
-        if len(placements) < 2 or len(plane_hosts) < 2:
-            issues.append(
-                f"{plane} requires at least two replicas on distinct inventory hosts"
-            )
-    if issues:
-        raise ProdHostedTopologyError(
-            "formal rollout inventory is not redundant: " + "; ".join(issues)
+            "formal rollout requires complete canonical service+edge inventory; "
+            "filtered, duplicate or drifted placements are not promotable"
         )
 
 
@@ -422,16 +409,25 @@ def validate_host_coverage(
     """Return issues when formal CAS lacks a passed check for every placement."""
 
     expected = expected_placement_check_names(plan)
+    issues: list[str] = []
+    if not expected or len(expected) != len(set(expected)):
+        issues.append("empty or duplicate expected placement identity")
     observed: dict[str, str] = {}
     for item in post_checks:
         name = str(item.get("name") or "").strip()
         if not name.startswith("host:"):
             continue
+        if name in observed:
+            issues.append(f"duplicate host coverage check: {name}")
+            continue
         status = str(item.get("status") or "").strip()
-        if not status and "exitCode" in item:
-            status = "passed" if int(item.get("exitCode") or 1) == 0 else "failed"
+        if "exitCode" in item:
+            exit_code = item["exitCode"]
+            if not isinstance(exit_code, int) or isinstance(exit_code, bool) or exit_code != 0:
+                status = "failed"
+            elif not status:
+                status = "passed"
         observed[name] = status
-    issues: list[str] = []
     for name in expected:
         status = observed.get(name)
         if status is None:
@@ -483,11 +479,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ssh-host", default="")
     parser.add_argument("--service-filter", default="")
     parser.add_argument(
-        "--require-release-redundancy",
+        "--require-release-inventory",
         action="store_true",
         help=(
             "GATE_BLOCK unless the complete gray/prod service+edge inventory "
-            "has two real hosts and replicas per plane"
+            "exactly matches canonical placements"
         ),
     )
     parser.add_argument("--format", choices=("json", "tsv"), default="json")
@@ -504,16 +500,17 @@ def main() -> int:
             )
         if not instance:
             raise ProdHostedTopologyError("--instance or --stage is required")
+        access = load_access_manifest(args.manifest)
         plan = resolve_plan(
-            load_access_manifest(args.manifest),
+            access,
             instance=instance,
             planes=args.plane,
             host_ids=args.host_id,
             ssh_host_override=args.ssh_host,
             service_filter=args.service_filter,
         )
-        if args.require_release_redundancy:
-            require_release_redundancy(plan)
+        if args.require_release_inventory:
+            require_release_inventory(plan, access)
     except ProdHostedTopologyError as error:
         print(f"GATE_BLOCK: {error}", file=sys.stderr)
         return 2

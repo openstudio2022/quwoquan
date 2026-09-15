@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"quwoquan_service/internal/metadata/ast"
 )
 
 // responseBodyKinds 是 operation 响应体形态闭集：
@@ -108,10 +110,17 @@ func (v *validator) validateServiceEntities(
 				}
 			}
 		}
-		// response_entity 既可指向 fields.yaml entity，也可指向 projection read_model（如各类 *View/*Summary）。
-		if op.ResponseEntity != "" && !fieldsEntities[op.ResponseEntity] && !v.fieldEntities[op.ResponseEntity] && !v.projectionReadModels[op.ResponseEntity] {
-			v.warnf("%s/operations.yaml: operation %q references response_entity %q not in fields.yaml nor any projection read_model",
-				dirName, opName, op.ResponseEntity)
+		// 响应同时消费现役 Source 的对象闭集与带作用域的共享类型事实。
+		if op.ResponseEntity != "" {
+			known, err := v.knownResponseEntity(dir, strings.TrimSpace(op.ResponseEntity), fieldsEntities)
+			if err != nil {
+				v.errorf("%s/operations.yaml: operation %q: %v", dirName, opName, err)
+				continue
+			}
+			if !known {
+				v.warnf("%s/operations.yaml: operation %q references response_entity %q not in fields.yaml, projection read_model or scoped shared types",
+					dirName, opName, op.ResponseEntity)
+			}
 		}
 
 		body := strings.TrimSpace(op.ResponseBody)
@@ -149,13 +158,45 @@ func (v *validator) validateServiceEntities(
 				dirName, opName, kind)
 			continue
 		}
-		if !fieldsEntities[resolvedResponse] &&
-			!v.fieldEntities[resolvedResponse] &&
-			!v.projectionReadModels[resolvedResponse] {
-			v.errorf("%s/operations.yaml: operation %q canonical response %q is not a known fields entity or projection read_model",
+		known, err := v.knownResponseEntity(dir, resolvedResponse, fieldsEntities)
+		if err != nil {
+			v.errorf("%s/operations.yaml: operation %q: %v", dirName, opName, err)
+		} else if !known {
+			v.errorf("%s/operations.yaml: operation %q canonical response %q is not a known fields entity, projection read_model or scoped shared type",
 				dirName, opName, resolvedResponse)
 		}
 	}
+}
+
+func (v *validator) knownResponseEntity(dir, name string, fieldsEntities map[string]bool) (bool, error) {
+	if fieldsEntities[name] || v.fieldEntities[name] || v.projectionReadModels[name] {
+		return true, nil
+	}
+	relative, err := v.source.RelativePath(dir)
+	if err != nil {
+		return false, err
+	}
+	domain := strings.Split(relative, "/")[0]
+	// 复用 loader 解析后的 shared definitions；与现役字段/生成器解析一样，
+	// service 优先于 global，其他 service 和对象私有类型不得泄漏到此作用域。
+	for _, level := range []ast.EnumOwnerLevel{ast.EnumOwnerService, ast.EnumOwnerGlobal} {
+		var sources []string
+		for _, definition := range v.source.Graph().Governance.Types {
+			if definition.Name != name || definition.OwnerLevel != level ||
+				(level == ast.EnumOwnerService && definition.Domain != domain) {
+				continue
+			}
+			sources = append(sources, definition.SourcePath)
+		}
+		if len(sources) > 1 {
+			sort.Strings(sources)
+			return false, fmt.Errorf("canonical response %q has ambiguous shared type definitions at %s scope: %s", name, level, strings.Join(sources, ", "))
+		}
+		if len(sources) == 1 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func validateInvocationRequestShape(

@@ -495,7 +495,12 @@ func (relay *AccountSecurityRelay) SubscribeAccountSecurity(
 	}
 	source, err := relay.client.Subscribe(ctx, accountSecurityRelayChannel)
 	if err != nil {
-		return nil, application.ErrAccountSecurityUnavailable
+		return nil, fmt.Errorf(
+			"%w: subscribe Redis channel %q: %w",
+			application.ErrAccountSecurityUnavailable,
+			accountSecurityRelayChannel,
+			err,
+		)
 	}
 	return newAccountSecurityRelaySubscription(ctx, source), nil
 }

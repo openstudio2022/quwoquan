@@ -1,10 +1,52 @@
 package main
 
 import (
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/validate"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+func TestPremiumModelGeneratorUsesCanonicalOwner(t *testing.T) {
+	view := os.Getenv("QWQ_TEST_CONTRACT_VIEW")
+	if view == "" {
+		t.Skip("explicit current canonical view required")
+	}
+	source, err := contractcodegen.NewSource(view, validate.ProfileBaseline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := generatePremiumContracts(source, dir); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "product_ops/premium_pool_entry/contract/model/premium_pool_entry.go")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"type UpsertPremiumPoolEntryRequest struct", "*ReleaseCandidateObjectIdentity", "[]ReleasePremiumAdmission", "type ReleaseCandidateBinding struct"} {
+		if !strings.Contains(string(payload), expected) {
+			t.Fatalf("missing %s", expected)
+		}
+	}
+	if _, err := parser.ParseFile(token.NewFileSet(), path, payload, parser.AllErrors); err != nil {
+		t.Fatal(err)
+	}
+	if err := generatePremiumContracts(source, dir); err != nil {
+		t.Fatal(err)
+	}
+	again, _ := os.ReadFile(path)
+	if string(again) != string(payload) {
+		t.Fatal("nondeterministic owner emission")
+	}
+}
 
 func TestProductOpsObjectErrorPathsDiscoverEveryObject(t *testing.T) {
 	paths, err := productOpsObjectErrorPaths([]string{

@@ -189,8 +189,21 @@ verify-storage-index-governance:
 verify-circle-service-errors: service-contract-view
 	go run ./tools/codegen_circle_domain --metadata-dir "$(CONTRACT_VIEW)" --contract-graph generated/contract_graph.json --output-dir services/circle-service/generated/circle_management --shared-dir generated/serviceclients --check
 
-verify-content-service-codegen: service-contract-view verify-semantic-document-codegen
+# 主体关闭runtime证据仅由owner合同同源生成；定向入口不重建Graph/App。
+.PHONY: codegen-content-account-closure-runtime verify-content-account-closure-runtime
+codegen-content-account-closure-runtime: service-contract-view
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --operation-owner content/content/content_account_closure_workflow --operation-name RecoverContentAccountClosureDeadLetter --owner-local-types ContentAccountClosureRuntimeEvidence,ContentAccountClosureRuntimeSourceCreation --operation-go-output services/content-service/generated/content/content_account_closure_workflow/contract/runtime/payload.g.go
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --operation-owner content/content/content_account_closure_workflow --operation-name RecoverContentAccountClosureDeadLetter --owner-local-types ContentAccountClosureRuntimeEvidence,ContentAccountClosureRuntimeSourceCreation --operation-python-output ../quwoquan_ops/cli/lib/generated/content_account_closure_runtime.py
+
+verify-content-account-closure-runtime: service-contract-view
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --operation-owner content/content/content_account_closure_workflow --operation-name RecoverContentAccountClosureDeadLetter --owner-local-types ContentAccountClosureRuntimeEvidence,ContentAccountClosureRuntimeSourceCreation --operation-go-output services/content-service/generated/content/content_account_closure_workflow/contract/runtime/payload.g.go --check
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --operation-owner content/content/content_account_closure_workflow --operation-name RecoverContentAccountClosureDeadLetter --owner-local-types ContentAccountClosureRuntimeEvidence,ContentAccountClosureRuntimeSourceCreation --operation-python-output ../quwoquan_ops/cli/lib/generated/content_account_closure_runtime.py --check
+
+verify-content-service-codegen: service-contract-view verify-semantic-document-codegen verify-content-account-closure-runtime
 	go run ./tools/codegen_content_service --metadata-dir "$(CONTRACT_VIEW)" --output-dir services/content-service/generated --aggregate Post --route-service content-service --check
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --operation-owner content/content/post --operation-name ReadContentReleaseCommitReceipt --operation-go-output services/content-service/generated/content/post/contract/releasequery/payload.g.go --check
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --operation-owner content/content/post --operation-name ReadPostCandidateSafety --owner-local-types PostSafetyState,PostSourceCommitMetadata,PostSafetyRuntimeFact,PostSafetyRuntimeCurrentBinding,PostSafetyDeploymentStartupMaterial,PostSafetyRuntimeCreationReceipt,PostSafetyRuntimeRecoveryReceipt,PostSafetyRuntimeAuthorization --operation-go-output services/content-service/generated/content/post/contract/safety/payload.g.go --check
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --operation-owner content/content/post --operation-name ReadPostCandidateSafety --owner-local-types PostSafetyRuntimeFact,PostSafetyRuntimeCurrentBinding,PostSafetyDeploymentStartupMaterial,PostSafetyRuntimeCreationReceipt,PostSafetyRuntimeRecoveryReceipt,PostSafetyRuntimeAuthorization --operation-python-output ../quwoquan_ops/cli/lib/generated/post_safety_runtime.py --check
 
 verify-semantic-document-codegen:
 	go run ./tools/codegen_semantic_document --source contracts/metadata/_shared/semantic_document.yaml --repo-root "$(REPO_ROOT)" --check
@@ -335,7 +348,7 @@ codegen-openapi: service-contract-view
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/contracts/sync_service_openapi.py --contract-view "$(CONTRACT_VIEW)"
 
 codegen-contract-graph: codegen-graphql-read-registry codegen-openapi
-	go run ./tools/qwq_contract generate --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile $(CONTRACT_GRAPH_PROFILE) --output generated/contract_graph.json --go-security-output generated/operationsecurity/descriptors.g.go
+	go run ./tools/qwq_contract generate --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile $(CONTRACT_GRAPH_PROFILE) --output generated/contract_graph.json --go-security-output generated/operationsecurity/descriptors.g.go --generated-manifest generated/contract_graph_manifest.json
 
 codegen-graphql-read-registry: service-contract-view
 	go run ./tools/codegen_graphql_read_registry \
@@ -418,8 +431,11 @@ codegen-assistant-citation-destinations:
 codegen-external-provider-bindings:
 	PYTHONDONTWRITEBYTECODE=1 python3 ../quwoquan_ops/cli/lib/external_provider_governance.py --quiet --go-bindings
 
-codegen-content-service:
+codegen-content-service: codegen-content-account-closure-runtime
 	go run ./tools/codegen_content_service --metadata-dir "$(CONTRACT_VIEW)" --output-dir services/content-service/generated --aggregate Post --route-service content-service
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --operation-owner content/content/post --operation-name ReadContentReleaseCommitReceipt --operation-go-output services/content-service/generated/content/post/contract/releasequery/payload.g.go
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --operation-owner content/content/post --operation-name ReadPostCandidateSafety --owner-local-types PostSafetyState,PostSourceCommitMetadata,PostSafetyRuntimeFact,PostSafetyRuntimeCurrentBinding,PostSafetyDeploymentStartupMaterial,PostSafetyRuntimeCreationReceipt,PostSafetyRuntimeRecoveryReceipt,PostSafetyRuntimeAuthorization --operation-go-output services/content-service/generated/content/post/contract/safety/payload.g.go
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --operation-owner content/content/post --operation-name ReadPostCandidateSafety --owner-local-types PostSafetyRuntimeFact,PostSafetyRuntimeCurrentBinding,PostSafetyDeploymentStartupMaterial,PostSafetyRuntimeCreationReceipt,PostSafetyRuntimeRecoveryReceipt,PostSafetyRuntimeAuthorization --operation-python-output ../quwoquan_ops/cli/lib/generated/post_safety_runtime.py
 
 codegen-semantic-document:
 	go run ./tools/codegen_semantic_document --source contracts/metadata/_shared/semantic_document.yaml --repo-root "$(REPO_ROOT)"
@@ -463,7 +479,8 @@ codegen-event-constants: codegen-content-service codegen-circle-service codegen-
 	go run ./tools/codegen_event_constants --metadata-dir "$(CONTRACT_VIEW)" --service-root . --python-output generated/event_constants.py --manifest-output generated/event_constants_manifest.json
 
 codegen-rec-model-python:
-	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --service-dir recommendation/recommendation/recommendation_model_release --output-dir services/recommendation-service/generated/recommendation/recommendation_model_release --content-feature-profile-go-output services/content-service/generated/content/post/recommendation_feature_profile.g.go
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --service-dir recommendation/recommendation/recommendation_model_release --output-dir services/recommendation-service/generated/recommendation/recommendation_model_release --content-feature-profile-go-output services/content-service/generated/content/post/recommendation_feature_profile.g.go --manifest-output generated/rec_model_python_manifest.json
+	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --operation-owner content/content/post --operation-name ReadContentReleaseCommitReceipt --operation-go-output services/search-service/generated/search/search_index_view/commitreceipt/payload.g.go
 
 codegen-rec-policy:
 	go run ./tools/codegen_rec_policy --source services/content-service/resources/policies/content/post/recommendation_policy.yaml --out-dir runtime/recpolicy

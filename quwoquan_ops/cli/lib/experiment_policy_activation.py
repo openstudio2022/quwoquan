@@ -318,6 +318,8 @@ def activate_search_experiment_policy_via_published_port(
         ports = profile_ports(load_port_manifest(), target)
         published_port = int(ports["product-ops-service"])
         redis_published_port = int(ports["redis"])
+        from quwoquan_ops.cli.commands.source_allocation import prepare_gamma_local_redis_acl
+        redis_runtime_runtime_credential = prepare_gamma_local_redis_acl()["runtimePassword"]
     except (KeyError, OSError, TypeError, ValueError) as exc:
         raise ExperimentPolicyActivationError(
             "Product Ops or Redis published port cannot be derived for the target"
@@ -340,6 +342,7 @@ def activate_search_experiment_policy_via_published_port(
         product_ops_base_url=f"http://127.0.0.1:{published_port}",
         token=token,
         redis_published_port=redis_published_port,
+        redis_runtime_password=redis_runtime_password,
         deadline=deadline,
     )
     return {
@@ -433,6 +436,7 @@ def _ensure_activation_facts_visible(
     product_ops_base_url: str,
     token: str,
     redis_published_port: int,
+    redis_runtime_password: str,
     deadline: float,
     poll_interval_seconds: float = 1.0,
 ) -> dict[str, Any]:
@@ -458,6 +462,8 @@ def _ensure_activation_facts_visible(
                     port=redis_published_port,
                     stream=ACTIVATION_FACT_STREAM,
                     field="experimentId",
+                    username="qwq_runtime",
+                    password=redis_runtime_password,
                 )
             )
             last_probe_error = None

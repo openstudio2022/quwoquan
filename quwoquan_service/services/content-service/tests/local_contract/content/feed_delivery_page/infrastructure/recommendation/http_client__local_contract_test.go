@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -69,15 +70,30 @@ func TestHTTPClientCreateUsesGeneratedBodyAndRetriesTransientStatus(t *testing.T
 }
 
 func TestHTTPClientGetPageBindsGeneratedPathAndQuery(t *testing.T) {
+	expectedEscapedPath := strings.Replace(
+		transport.GetRankedRecommendationPagePath,
+		"{windowId}",
+		url.PathEscape("window identity"),
+		1,
+	)
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/internal/recommendation/ranked-pages/window%20identity" &&
-			request.URL.EscapedPath() != "/internal/recommendation/ranked-pages/window%20identity" {
-			t.Fatalf("path=%q escaped=%q", request.URL.Path, request.URL.EscapedPath())
+		if request.Method != transport.GetRankedRecommendationPageMethod ||
+			request.URL.EscapedPath() != expectedEscapedPath {
+			t.Fatalf("request=%s path=%q escaped=%q", request.Method, request.URL.Path, request.URL.EscapedPath())
 		}
-		if request.URL.Query().Get("subjectId") != "subject identity" ||
-			request.URL.Query().Get("fromOrdinal") != "20" ||
-			request.URL.Query().Get("limit") != "10" {
-			t.Fatalf("query=%v", request.URL.Query())
+		if len(request.URL.Query()) != 0 {
+			t.Fatalf("unexpected URL query=%v", request.URL.Query())
+		}
+		var query map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&query); err != nil {
+			t.Fatalf("decode query body: %v", err)
+		}
+		if query["subjectId"] != "subject identity" ||
+			query["fromOrdinal"] != float64(20) || query["limit"] != float64(10) {
+			t.Fatalf("query body=%v", query)
+		}
+		if _, leaked := query["windowId"]; leaked {
+			t.Fatalf("path window identity leaked into query body: %v", query)
 		}
 		writeRankedPage(t, writer, "window identity", 20)
 	}))

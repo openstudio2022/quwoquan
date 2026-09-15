@@ -3,6 +3,7 @@ import hashlib
 import json
 
 import pytest
+from generated.recommendation.ranked_recommendation_window.models.request_response import ReleasePinnedQueryFence
 
 from generated.recommendation.recommendation_model_release.models.request_response import (
     CandidateScore,
@@ -173,6 +174,7 @@ def _ranker(
 def test_ranker_freezes_feature_snapshot_and_stable_score_order() -> None:
     scoring = _Scoring()
     result = _ranker(scoring).rank(
+        content_fence=ReleasePinnedQueryFence(release=None, revision=0),
         subject_id="persona-viewer",
         scenario="content_feed",
         session_id="window-001",
@@ -200,6 +202,7 @@ def test_ranker_keeps_audience_selection_separate_from_model_scenario() -> None:
         scoring,
         candidates=_Candidates(expected_scenario="premium_stream"),
     ).rank(
+        content_fence=ReleasePinnedQueryFence(release=None, revision=0),
         subject_id="persona-viewer",
         scenario="premium_stream",
         session_id="window-premium",
@@ -212,6 +215,7 @@ def test_ranker_keeps_audience_selection_separate_from_model_scenario() -> None:
 def test_ranker_fails_closed_when_scoring_omits_candidate() -> None:
     with pytest.raises(RuntimeError, match="does not match"):
         _ranker(_Scoring(incomplete=True)).rank(
+        content_fence=ReleasePinnedQueryFence(release=None, revision=0),
             subject_id="persona-viewer",
             scenario="content_feed",
             session_id="window-001",
@@ -222,6 +226,7 @@ def test_ranker_fails_closed_when_scoring_omits_candidate() -> None:
 def test_ranker_applies_profile_hard_exclusions_before_scoring() -> None:
     scoring = _Scoring()
     result = _ranker(scoring, features=_HardExclusionFeatures()).rank(
+        content_fence=ReleasePinnedQueryFence(release=None, revision=0),
         subject_id="persona-viewer",
         scenario="content_feed",
         session_id="window-excluded",
@@ -283,6 +288,7 @@ def test_ranker_freezes_object_cards_from_candidate_snapshot_and_entity_affinity
         candidates=candidates,
         features=_ObjectCardFeatures(),
     ).rank(
+        content_fence=ReleasePinnedQueryFence(release=None, revision=0),
         subject_id="persona-viewer",
         scenario="content_feed",
         session_id="window-object-cards",
@@ -318,6 +324,7 @@ def test_ranker_uses_shared_object_card_source_for_gathering_candidates() -> Non
         _Scoring(),
         candidates=candidates,
     ).rank(
+        content_fence=ReleasePinnedQueryFence(release=None, revision=0),
         subject_id="persona-viewer",
         scenario="content_feed",
         session_id="window-gathering-card",

@@ -1,0 +1,39 @@
+description: 候选准备流程的输入、冲突、缺失和不确定依赖终态；认证拒绝由generated service guard拥有。
+errors:
+- code: SEARCH.PREPARATION.invalid_input
+  reason: invalid_input
+  http_status: 422
+  emitted_by: [{surface: http, operations: [PrepareSearchRelease, ReadSearchReleasePreparation]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: searchPreparationInvalidInput
+  go_const: ErrSearchPreparationInvalidInput
+  user_message: {zh: 搜索准备输入或来源闭包无效, en: Invalid search preparation input or source closure}
+- code: SEARCH.PREPARATION.conflict
+  reason: conflict
+  http_status: 409
+  emitted_by: [{surface: http, operations: [PrepareSearchRelease, ReadSearchReleasePreparation]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: searchPreparationConflict
+  go_const: ErrSearchPreparationConflict
+  user_message: {zh: 搜索准备身份或版本冲突，请重新读取状态, en: Search preparation identity or version conflict; read current state}
+- code: SEARCH.PREPARATION.not_found
+  reason: not_found
+  http_status: 404
+  emitted_by: [{surface: http, operations: [ReadSearchReleasePreparation]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: searchPreparationNotFound
+  go_const: ErrSearchPreparationNotFound
+  user_message: {zh: 指定搜索准备不存在, en: Exact search preparation was not found}
+- code: SEARCH.PREPARATION.unavailable
+  reason: unavailable
+  http_status: 503
+  emitted_by: [{surface: http, operations: [PrepareSearchRelease, ReadSearchReleasePreparation]}]
+  recovery_action: retry
+  recovery_after_seconds: 5
+  disruption_level: snackbar
+  dart_const: searchPreparationUnavailable
+  go_const: ErrSearchPreparationUnavailable
+  user_message: {zh: 搜索准备依赖暂时不可用，请先读取当前状态, en: Search preparation dependency unavailable; read current state before retrying}

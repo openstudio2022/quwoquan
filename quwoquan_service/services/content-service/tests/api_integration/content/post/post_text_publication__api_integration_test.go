@@ -360,6 +360,14 @@ func newTextPublicationHTTPHarness(
 	store := newMongoPostStore(
 		requireMongoDB(t).Collection("posts"),
 	)
+	manager, cleanup, err := newAPIIntegrationPostSafetyManager(context.Background(), requireMongoDB(t))
+	if err != nil {
+		t.Fatalf("create verified Post safety manager: %v", err)
+	}
+	t.Cleanup(cleanup)
+	if err = store.BindSafety(manager, "gamma"); err != nil {
+		t.Fatalf("bind Post safety manager: %v", err)
+	}
 	if err := store.EnsureIndexes(context.Background()); err != nil {
 		t.Fatalf("ensure Post indexes: %v", err)
 	}

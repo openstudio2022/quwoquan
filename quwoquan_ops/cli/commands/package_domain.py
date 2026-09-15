@@ -24,14 +24,113 @@ import contextlib
 import fcntl
 import json
 import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Self
 
 from quwoquan_ops.cli.commands.package_runtime_support import _receipt_safe_text
 from quwoquan_ops.cli.lib.package_reuse.dependency_fs import remove_private_tree
+from quwoquan_ops.cli.lib.package_reuse.dependency_network_command import (
+    has_managed_parent_capability,
+    process_group_cleanup_grace,
+    run_managed_subprocess,
+)
 
 PACKAGE_STAGING_CLEANUP_BLOCKER = "OPS.PACKAGE.staging_cleanup_failed"
+_PACKAGE_ATTEMPT_TIMEOUT_ENV = "QWQ_PACKAGE_DEPENDENCY_LOAD_TIMEOUT_SECONDS"
+_PACKAGE_ATTEMPT_TIMEOUT_DEFAULT_SECONDS = 900
+PACKAGE_ATTEMPT_TIMEOUT_BLOCKER = "OPS.PACKAGE.attempt_timeout"
+
+
+def _package_attempt_timeout_seconds() -> int:
+    raw = str(os.environ.get(_PACKAGE_ATTEMPT_TIMEOUT_ENV) or "").strip()
+    if not raw:
+        return _PACKAGE_ATTEMPT_TIMEOUT_DEFAULT_SECONDS
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ValueError(f"{_PACKAGE_ATTEMPT_TIMEOUT_ENV} must be an integer") from error
+    if value < 1 or value > 3600:
+        raise ValueError(f"{_PACKAGE_ATTEMPT_TIMEOUT_ENV} must be between 1 and 3600")
+    return value
+
+
+def should_manage_runtime_package_cli(args: argparse.Namespace) -> bool:
+    return (
+        str(getattr(args, "command", "") or "") == "package"
+        and str(getattr(args, "kind", "runtime") or "runtime") == "runtime"
+        and not has_managed_parent_capability()
+    )
+
+
+def run_managed_runtime_package_cli(args: argparse.Namespace) -> dict[str, Any]:
+    """Run the complete runtime package handler under one non-resetting deadline."""
+
+    timeout = _package_attempt_timeout_seconds()
+    print(
+        f"[package-entry-stage] dispatch managed runtime package timeout={timeout}s",
+        file=sys.stderr,
+        flush=True,
+    )
+    argv = list(sys.argv)
+    normalized_argv = [argv[0]]
+    index = 1
+    while index < len(argv):
+        argument = argv[index]
+        if argument == "--output-format":
+            index += 2
+            continue
+        if argument.startswith("--output-format="):
+            index += 1
+            continue
+        normalized_argv.append(argument)
+        index += 1
+    normalized_argv[1:1] = ["--output-format", "json"]
+    try:
+        completed = run_managed_subprocess(
+            [sys.executable, "-B", *normalized_argv],
+            cwd=Path(__file__).resolve().parents[3],
+            env={
+                **os.environ,
+                "PYTHONUNBUFFERED": "1",
+            },
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            on_stderr=lambda chunk: print(
+                chunk, end="", file=sys.stderr, flush=True
+            ),
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "exitCode": 2,
+            "status": "GATE_BLOCK",
+            "summary": "stackctl runtime package attempt timed out",
+            "firstBlocker": PACKAGE_ATTEMPT_TIMEOUT_BLOCKER,
+            "details": [
+                f"{PACKAGE_ATTEMPT_TIMEOUT_BLOCKER}: runtime package exceeded "
+                f"{timeout}s; all owned process groups killed and reaped"
+            ],
+            "cleanupGrace": process_group_cleanup_grace(),
+        }
+    try:
+        payload = json.loads(completed.stdout)
+    except (TypeError, UnicodeError, json.JSONDecodeError) as error:
+        return {
+            "exitCode": 2,
+            "status": "GATE_BLOCK",
+            "summary": "stackctl managed runtime package result is invalid",
+            "details": [f"managed runtime package JSON result is invalid: {error}"],
+        }
+    if not isinstance(payload, dict):
+        raise TypeError("managed runtime package result must be an object")
+    if int(payload.get("exitCode") or 0) != completed.returncode:
+        raise ValueError("managed runtime package process result identity mismatch")
+    return payload
 
 
 def _package_staging_cleanup_warning(staging_dir: Path) -> str:
@@ -287,10 +386,15 @@ def _package_evidence_projection(
     return payload
 
 
+def _package_stage(message: str) -> None:
+    print(f"[package-entry-stage] {message}", file=sys.stderr, flush=True)
+
+
 def command_package(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
     package_kind = str(getattr(args, "kind", "runtime") or "runtime")
+    _package_stage(f"entered kind={package_kind}")
     if package_kind != "runtime":
         env_name = str(getattr(args, "env", "") or "").strip()
         target_name = str(getattr(args, "target", "") or "").strip()
@@ -338,9 +442,11 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
     args.include_services = True
     # 打包会把服务镜像层写进 Docker 数据盘；容量不足时构建会以镜像层写失败、
     # 拉取中断等形态失败，前置判定让报告直接指向容量。
+    _package_stage("before topology and capacity reads")
     capacity = _stackctl.local_runtime_capacity_evidence(
         _stackctl.get_target(_stackctl.load_environment_topology(), target_name)
     )
+    _package_stage("after topology and capacity reads")
     if capacity["issues"]:
         return {
             "exitCode": 2,
@@ -349,17 +455,29 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             "firstBlocker": capacity["blocker"],
             "capacity": capacity["evidence"],
         }
+    release_attestation_path = str(
+        getattr(args, "release_attestation", "") or ""
+    )
+    rollback_attestation_path = str(
+        getattr(args, "rollback_release_attestation", "") or ""
+    )
+    _package_stage(
+        "before release attestation reads "
+        f"candidate={release_attestation_path} rollback={rollback_attestation_path}"
+    )
     try:
         requested_release_bindings = _stackctl.validate_release_attestations(
-            str(getattr(args, "release_attestation", "") or ""),
-            str(getattr(args, "rollback_release_attestation", "") or ""),
+            release_attestation_path,
+            rollback_attestation_path,
         )
+        _package_stage("after release attestation reads")
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
         return {
             "exitCode": 2,
             "summary": f"stackctl runtime package inputs blocked for {env_name}",
             "details": [str(exc)],
         }
+    _package_stage("before runtime use lock acquisition")
     try:
         # hosted 不占本机 runtime slot，仍由下方 target package 锁串行化物料化。
         build_cache_use_lock = (
@@ -376,10 +494,13 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             "summary": f"stackctl runtime package blocked for {env_name}",
             "details": [str(exc)],
         }
+    _package_stage("before runtime and package lock entry")
     with (
         build_cache_use_lock,
         _stackctl._target_package_lock(target_name),
     ):
+        _package_stage("after runtime and package lock entry")
+        _package_stage("before deployment input root construction")
         package_input_roots = _stackctl.deployment_input_roots(
             env_name,
             target_name,
@@ -389,14 +510,17 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 getattr(args, "rollback_release_attestation", "") or ""
             ),
         )
+        _package_stage("after deployment input root construction")
         # 签名材料只由 env/target 决定，不依赖 capsule 或 baseline。放在任何落盘之前
         # 解析，缺签名就不会留下半个 staging 树，也不用靠清理路径兜底。
+        _package_stage("before GraphQL signing material reads")
         try:
             args._graphql_read_signing_material = (
                 _stackctl._resolve_graphql_read_signing_for_local_target(
                     env_name, target_name
                 )
             )
+            _package_stage("after GraphQL signing material reads")
         except (OSError, ValueError) as exc:
             return {
                 "exitCode": 2,
@@ -419,6 +543,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 staging_dir / _stackctl.PACKAGE_INPUT_CAPSULE_DIRECTORY
             )
             try:
+                _package_stage("before input capsule materialization dispatch")
                 package_snapshot = _stackctl.materialize_package_input_capsule(
                     package_input_roots,
                     capsule_root=capsule_staging_root,

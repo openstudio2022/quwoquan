@@ -48,13 +48,21 @@
     },
     "handoffRef": {
       "type": "string",
-      "pattern": "^handoff-ref-v1:sha256:[0-9a-f]{64}:sha256:[0-9a-f]{64}$"
+      "pattern": "^data/releases/[^/]+/producer_release_handoff\\.json=sha256:[0-9a-f]{64}$"
     },
     "handoffArtifactRef": {
       "type": "string",
       "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*[\\u0000-\\u001f\\u007f]).+/producer_release_handoff\\.json$"
     },
     "handoffArtifactDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "materializedReleaseRef": {
+      "type": "string",
+      "pattern": "^content-release/releases/[^/\\\u0000-\u001f\u007f]+/sha256-[0-9a-f]{64}$"
+    },
+    "materializedReleaseDigest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },

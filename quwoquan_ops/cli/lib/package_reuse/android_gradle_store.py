@@ -8,7 +8,7 @@ import re
 import stat
 import subprocess
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -298,10 +298,23 @@ def materialize_pinned_flutter_gradle_wrappers(
     )
 
 
+def canonical_android_dependency_bundle_invocations(
+    project_root: Path,
+) -> tuple[GradleInvocation, ...]:
+    """Return only the production App package task owned by this bundle."""
+
+    repository = project_root.expanduser().absolute()
+    return (
+        GradleInvocation(
+            gradle_root=repository / "quwoquan_app/android",
+            tasks=(":app:assembleNonprodDebug",),
+        ),
+    )
+
 def canonical_android_uat_gradle_invocations(
     project_root: Path,
 ) -> tuple[GradleInvocation, GradleInvocation]:
-    """Return both real APK and instrumentation builds used by canonical UAT."""
+    """Return Patrol and AndroidTest tasks owned by explicit UAT execution."""
 
     repository = project_root.expanduser().absolute()
     return (
@@ -317,6 +330,7 @@ def canonical_android_uat_gradle_invocations(
             tasks=(":app:assembleDebug", ":app:assembleDebugAndroidTest"),
         ),
     )
+
 
 
 def _fresh_directory(path: Path, *, label: str) -> Path:
@@ -545,6 +559,26 @@ def seal_android_gradle_home(
     return snapshot
 
 
+def copy_android_gradle_seed_home(
+    snapshot: AndroidGradleSnapshot,
+    destination: Path,
+    *,
+    include_wrapper: bool,
+) -> Path:
+    """Copy only verified dependency cache domains into a fresh writable home."""
+
+    target = _fresh_directory(destination, label="seeded online home")
+    prefixes = ["home/caches/modules-2/"]
+    if include_wrapper:
+        prefixes.append("home/wrapper/dists/")
+    for item in snapshot.files:
+        if any(item.relative.startswith(prefix) for prefix in prefixes):
+            _copy_regular(
+                item.source, target / Path(item.relative).relative_to("home"), writable=True
+            )
+    return target
+
+
 def copy_android_gradle_snapshot(
     snapshot: AndroidGradleSnapshot,
     destination: Path,
@@ -636,18 +670,17 @@ def _run_gradle_invocation(
     root: Path,
     environment: Mapping[str, str],
     offline: bool,
+    deadline: float,
+    log_chunk: Callable[[str], None] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     attempts = 1 if offline else _GRADLE_NETWORK_MAX_ATTEMPTS
-    started_at = time.monotonic()
-    first_failure: subprocess.CalledProcessError | None = None
+    final_failure: subprocess.CalledProcessError | None = None
     events: list[str] = []
     for attempt_index in range(attempts):
-        remaining = _GRADLE_INVOCATION_DEADLINE_SECONDS - (
-            time.monotonic() - started_at
-        )
+        remaining = deadline - time.monotonic()
         if remaining <= 0:
-            if first_failure is not None:
-                raise first_failure
+            if final_failure is not None:
+                raise final_failure
             raise subprocess.CalledProcessError(
                 returncode=124,
                 cmd=command,
@@ -664,6 +697,7 @@ def _run_gradle_invocation(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 timeout=process_timeout,
+                on_stdout=log_chunk,
             )
         except subprocess.TimeoutExpired as error:
             failure = _bounded_timeout_failure(error, command=command)
@@ -686,19 +720,16 @@ def _run_gradle_invocation(
                 stdout=output,
                 stderr=completed.stderr,
             )
-        if first_failure is None:
-            first_failure = failure
+        final_failure = failure
         if offline:
             raise failure
         if cause is None:
             raise failure
         if attempt_index + 1 >= attempts:
             break
-        remaining = _GRADLE_INVOCATION_DEADLINE_SECONDS - (
-            time.monotonic() - started_at
-        )
+        remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise first_failure
+            raise final_failure
         delay = min(_GRADLE_NETWORK_BACKOFF_SECONDS[attempt_index], remaining)
         events.append(
             retry_event(
@@ -709,9 +740,9 @@ def _run_gradle_invocation(
             )
         )
         time.sleep(delay)
-    if first_failure is None:  # pragma: no cover - the loop always runs at least once
+    if final_failure is None:  # pragma: no cover - the loop always runs at least once
         raise RuntimeError("Android Gradle invocation did not run")
-    raise first_failure
+    raise final_failure
 
 
 def run_gradle_invocations(
@@ -721,6 +752,8 @@ def run_gradle_invocations(
     invocations: Sequence[GradleInvocation],
     offline: bool,
     environment: Mapping[str, str] | None = None,
+    deadline: float | None = None,
+    on_output: Callable[[GradleInvocation, str], None] | None = None,
 ) -> list[subprocess.CompletedProcess[str]]:
     """Run the exact build tasks with a private home; replay requires offline."""
 
@@ -734,6 +767,9 @@ def run_gradle_invocations(
     env["GRADLE_USER_HOME"] = str(home)
     env.pop("GRADLE_HOME", None)
     results: list[subprocess.CompletedProcess[str]] = []
+    invocation_deadline = deadline or (
+        time.monotonic() + _GRADLE_INVOCATION_DEADLINE_SECONDS
+    )
     for invocation in invocations:
         root = invocation.gradle_root.expanduser().absolute()
         if not root.is_relative_to(repository) or not invocation.tasks:
@@ -753,6 +789,12 @@ def run_gradle_invocations(
                 root=root,
                 environment=env,
                 offline=offline,
+                deadline=invocation_deadline,
+                log_chunk=(
+                    (lambda chunk, current=invocation: on_output(current, chunk))
+                    if on_output is not None
+                    else None
+                ),
             )
         )
     return results
@@ -762,15 +804,29 @@ def synchronize_android_gradle_dependencies(
     *,
     project_root: Path,
     online_home: Path,
+    verified_seed: AndroidGradleSnapshot | None = None,
+    seed_wrapper_distribution: bool = False,
     sealed_tree: Path,
     replay_tree: Path,
     gradle_roots: Sequence[Path],
     invocations: Sequence[GradleInvocation],
     environment: Mapping[str, str] | None = None,
+    deadline: float | None = None,
+    on_output: Callable[[str, GradleInvocation, str], None] | None = None,
 ) -> AndroidGradleSyncResult:
     """Network sync once, seal it, then replay the same closure offline."""
 
-    network_home = _fresh_directory(online_home, label="online sync home")
+    sync_deadline = deadline or (
+        time.monotonic() + _GRADLE_INVOCATION_DEADLINE_SECONDS
+    )
+    if verified_seed is None:
+        network_home = _fresh_directory(online_home, label="online sync home")
+    else:
+        network_home = copy_android_gradle_seed_home(
+            verified_seed,
+            online_home,
+            include_wrapper=seed_wrapper_distribution,
+        )
     policy_path = network_home / "init.d/qwq-plugin-repositories.gradle"
     _write_generated(policy_path, ANDROID_GRADLE_REPOSITORY_INIT)
     online = run_gradle_invocations(
@@ -779,6 +835,12 @@ def synchronize_android_gradle_dependencies(
         invocations=invocations,
         offline=False,
         environment=environment,
+        deadline=sync_deadline,
+        on_output=(
+            (lambda invocation, chunk: on_output("online", invocation, chunk))
+            if on_output is not None
+            else None
+        ),
     )
     policy, _mode = _read_regular_nofollow(policy_path, label="plugin repository policy")
     if policy != ANDROID_GRADLE_REPOSITORY_INIT:
@@ -801,6 +863,12 @@ def synchronize_android_gradle_dependencies(
         invocations=invocations,
         offline=True,
         environment=environment,
+        deadline=sync_deadline,
+        on_output=(
+            (lambda invocation, chunk: on_output("offline", invocation, chunk))
+            if on_output is not None
+            else None
+        ),
     )
     return AndroidGradleSyncResult(
         snapshot=snapshot,

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from quwoquan_ops.ci.integration_qualification import PAYLOAD_TYPE
 from quwoquan_ops.ci.promotion_evidence import (
     PromotionEvidenceError,
     canonical_bytes,
@@ -245,10 +246,11 @@ def test_gate_produced_facts_are_accepted_by_promotion_admit(tmp_path: Path, byp
     )
     signing = create_temporary_signing(tmp_path / "signing", identities=(INTEGRATION_SCHEDULER_IDENTITY,))
     payload = canonical_bytes(unsigned)
-    pae = b"DSSEv1 " + str(len("application/vnd.quwoquan.integration-qualification-fact.v1+json")).encode() + b" application/vnd.quwoquan.integration-qualification-fact.v1+json " + str(len(payload)).encode() + b" " + payload
+    payload_type = PAYLOAD_TYPE.encode("utf-8")
+    pae = b"DSSEv1 " + str(len(payload_type)).encode() + b" " + payload_type + b" " + str(len(payload)).encode() + b" " + payload
     fact = dict(unsigned, signer={
         "identity": INTEGRATION_SCHEDULER_IDENTITY,
-        "payloadType": "application/vnd.quwoquan.integration-qualification-fact.v1+json",
+        "payloadType": PAYLOAD_TYPE,
         "payload": base64.b64encode(payload).decode("ascii"),
         "signature": signing.signer(INTEGRATION_SCHEDULER_IDENTITY)(pae),
     })

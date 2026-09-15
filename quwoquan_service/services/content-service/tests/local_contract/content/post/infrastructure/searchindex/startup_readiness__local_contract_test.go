@@ -47,7 +47,7 @@ func TestSearchIndexStartupWaitsForDelayedRecoverableDependency(t *testing.T) {
 		StartupTimeoutMs:        500,
 		StartupInitialBackoffMs: 5,
 		StartupMaxBackoffMs:     10,
-	}, fakeReader{})
+	})
 	if err != nil {
 		t.Fatalf("build search index: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestSearchIndexStartupTimeoutIsBoundedAndFailClosed(t *testing.T) {
 		StartupTimeoutMs:        40,
 		StartupInitialBackoffMs: 5,
 		StartupMaxBackoffMs:     10,
-	}, fakeReader{})
+	})
 	if err != nil {
 		t.Fatalf("build search index: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestSearchIndexStartupRejectsInvalidRetryConfiguration(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := searchindex.Build(cfg, fakeReader{}); err == nil {
+			if _, err := searchindex.Build(cfg); err == nil {
 				t.Fatal("invalid startup retry configuration was accepted")
 			}
 		})
@@ -139,7 +139,7 @@ func TestSearchIndexStartupDoesNotRetrySchemaOrAuthorizationFailures(t *testing.
 				StartupTimeoutMs:        200,
 				StartupInitialBackoffMs: 5,
 				StartupMaxBackoffMs:     10,
-			}, fakeReader{})
+			})
 			if err != nil {
 				t.Fatalf("build search index: %v", err)
 			}

@@ -145,6 +145,18 @@ members:
         ops_exposure: read
         role: owned_value
 types:
+  PersonaRelationshipEventPayload:
+    description: domain/model.OutboxPayload的实际PG payload_json；eventId与eventName属于OutboxEntry/envelope，relay可展平但不属于本值。following始终发出，三个clear字段仅非零时发出。
+    fields:
+      - {name: pairId, type: string, constraints: [NOT_NULL]}
+      - {name: sourcePersonaId, type: string, constraints: [NOT_NULL]}
+      - {name: targetPersonaId, type: string, constraints: [NOT_NULL]}
+      - {name: following, type: bool, constraints: [NOT_NULL]}
+      - {name: sourceFollowCleared, type: bool, constraints: [NULLABLE]}
+      - {name: targetFollowCleared, type: bool, constraints: [NULLABLE]}
+      - {name: clearedFollowDirections, type: int, constraints: [NULLABLE]}
+      - {name: version, type: int64, constraints: [NOT_NULL]}
+      - {name: occurredAt, type: timestamp, constraints: [NOT_NULL]}
   FollowingRelationshipPageSlice:
     fields:
       - {name: items, type: '[]FollowingListItemView', constraints: [NOT_NULL]}

@@ -20,7 +20,9 @@ classification:
     - {path: quwoquan_app/tool/shell_navigation_codegen/generated_manifest.json, root: quwoquan_app, generator: tools/codegen_app_metadata}
     - {path: quwoquan_app/tool/graphql_read_codegen/generated_manifest.json, root: quwoquan_app, generator: codegen_graphql_app_client}
     - {path: quwoquan_app/tool/graphql_read_codegen/search_generated_manifest.json, root: quwoquan_app, generator: codegen_graphql_app_search_client}
+    - {path: quwoquan_service/generated/contract_graph_manifest.json, root: quwoquan_service, generator: tools/qwq_contract}
     - {path: quwoquan_service/generated/event_constants_manifest.json, root: quwoquan_service, generator: tools/codegen_event_constants}
+    - {path: quwoquan_service/generated/rec_model_python_manifest.json, root: quwoquan_service, generator: tools/codegen_rec_model_python}
   # 旧生成入口的来源登记，不证明输出摘要一致或已重生成；report 必须单列未验证状态。
   generated_exact_sources:
     quwoquan_app/lib/l10n/app_localizations.dart: quwoquan_app/l10n.yaml

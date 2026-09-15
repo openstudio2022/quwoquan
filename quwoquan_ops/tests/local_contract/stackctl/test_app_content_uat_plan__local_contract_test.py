@@ -530,3 +530,87 @@ def test_uat_plan__rejects_retired_source_identity_shape__local_contract() -> No
             release_uat_sample_plan_digest=_canonical_digest(_sample_plan()),
             release_payload_sha256=DIGESTS["manifest"],
         )
+
+def test_core_diagnostic_suite_plan_is_closed_and_keeps_formal_default() -> None:
+    """spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002"""
+    from types import SimpleNamespace
+    from quwoquan_ops.cli.commands.app_preflight_uat_orchestration import (
+        app_content_uat_suite_plan,
+    )
+
+    stackctl = SimpleNamespace(
+        CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET="recovery.dart",
+        DISCOVERY_FEED_UAT_TEST_TARGET="feed.dart",
+        HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET="video.dart",
+        APP_CORE_READBACK_UAT_TEST_TARGET="core.dart",
+    )
+    formal = app_content_uat_suite_plan(
+        stackctl=stackctl, release_video_work_id="video-1"
+    )
+    assert [row[0] for row in formal] == [
+        "release-sample-matrix", "controlled-edge-recovery", "homepage-feed",
+        "profile-journey", "message-home", "home-video-playback", "app-core-readback",
+    ]
+    diagnostic = app_content_uat_suite_plan(
+        stackctl=stackctl,
+        release_video_work_id="video-1",
+        verification_purpose="core_diagnostic",
+        core_suites="homepage-media,post-write-readback",
+    )
+    assert [row[0] for row in diagnostic] == [
+        "homepage-media", "post-write-readback"
+    ]
+    assert all(row[0] not in {"release-sample-matrix", "controlled-edge-recovery"} for row in diagnostic)
+
+
+@pytest.mark.parametrize(
+    "selectors",
+    ["homepage-media", "post-write-readback", "homepage-media,unknown", "homepage-media,homepage-media,post-write-readback"],
+)
+def test_core_diagnostic_suite_plan_rejects_incomplete_or_open_selection(selectors: str) -> None:
+    """spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002"""
+    from types import SimpleNamespace
+    from quwoquan_ops.cli.commands.app_preflight_uat_orchestration import app_content_uat_suite_plan
+
+    stackctl = SimpleNamespace(
+        CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET="recovery.dart",
+        DISCOVERY_FEED_UAT_TEST_TARGET="feed.dart",
+        HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET="video.dart",
+        APP_CORE_READBACK_UAT_TEST_TARGET="core.dart",
+    )
+    with pytest.raises(ValueError, match="core"):
+        app_content_uat_suite_plan(
+            stackctl=stackctl,
+            release_video_work_id="video-1",
+            verification_purpose="core_diagnostic",
+            core_suites=selectors,
+        )
+
+
+def test_core_diagnostic_receipt_cannot_emit_formal_authority() -> None:
+    """spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002"""
+    from quwoquan_ops.cli.commands.app_preflight_uat_receipt import build_app_content_uat_receipt
+
+    projection = {
+        "rawResultRefs": {"gamma-local": []},
+        "rawResultDigests": {"gamma-local": []},
+        "rawCoverage": {"gamma-local": {"expected": 0, "present": 0, "missing": 0}},
+        "rawGaps": {"gamma-local": []},
+    }
+    receipt = build_app_content_uat_receipt(
+        status="diagnostic_complete", targets=["gamma-local"], platform="ios-simulator",
+        device_id="simulator-1", uat_profile={"profile": "rehearsal", "nonPromotable": True},
+        runtime_bindings=[], launch_bindings={}, target_uat_binding_refs={},
+        raw_authority_projection=projection, preflights=[], runs=[],
+        experience_screenshot_digests={}, issues=[], dry_run=False,
+        canonical_checksum=_canonical_digest, verification_purpose="core_diagnostic",
+        selected_suites=("homepage-media", "post-write-readback"),
+    )
+    assert receipt["nonPromotable"] is True
+    assert receipt["targetUatBindingRefs"] == {}
+    assert receipt["rawResultRefs"] == {"gamma-local": []}
+    assert receipt["suitePlan"]["outOfScope"] == [
+        "complete_uat", "TargetUatBinding", "EnvironmentAcceptanceFact", "promotion_authority"
+    ]
+    assert "release-sample-matrix" in receipt["suitePlan"]["notExecuted"]
+    assert "controlled-edge-recovery" in receipt["suitePlan"]["notExecuted"]

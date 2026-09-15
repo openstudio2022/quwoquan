@@ -134,6 +134,11 @@ func runGenerate(args []string, stdout io.Writer) error {
 		"",
 		"generated Go operation security descriptor output",
 	)
+	generatedManifest := flags.String(
+		"generated-manifest",
+		"",
+		"generated output provenance manifest",
+	)
 	profileValue := flags.String("profile", string(validate.ProfileCommercial), "baseline or commercial")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -151,9 +156,9 @@ func runGenerate(args []string, stdout io.Writer) error {
 		return err
 	}
 	if *output == "" {
-		if *goSecurityOutput != "" {
+		if *goSecurityOutput != "" || *generatedManifest != "" {
 			return errors.New(
-				"--go-security-output requires --output for a fixed graph bundle",
+				"--go-security-output and --generated-manifest require --output for a fixed graph bundle",
 			)
 		}
 		_, err = stdout.Write(data)
@@ -162,18 +167,56 @@ func runGenerate(args []string, stdout io.Writer) error {
 	if err := os.WriteFile(*output, data, 0o644); err != nil {
 		return err
 	}
-	if *goSecurityOutput == "" {
+	var securitySource []byte
+	if *goSecurityOutput != "" {
+		graphDigest := fmt.Sprintf("%x", sha256.Sum256(data))
+		securitySource = contractcodegen.RenderOperationSecurityGo(contractGraph, graphDigest)
+		if err := os.MkdirAll(filepath.Dir(*goSecurityOutput), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(*goSecurityOutput, securitySource, 0o644); err != nil {
+			return err
+		}
+	}
+	if *generatedManifest == "" {
 		return nil
 	}
-	graphDigest := fmt.Sprintf("%x", sha256.Sum256(data))
-	securitySource := contractcodegen.RenderOperationSecurityGo(
-		contractGraph,
-		graphDigest,
-	)
-	if err := os.MkdirAll(filepath.Dir(*goSecurityOutput), 0o755); err != nil {
+	outputs := []generatedOutputManifest{newGeneratedOutputManifest(*output, data)}
+	if *goSecurityOutput != "" {
+		outputs = append(outputs, newGeneratedOutputManifest(*goSecurityOutput, securitySource))
+	}
+	return writeGeneratedManifest(*generatedManifest, outputs)
+}
+
+type generatedOutputManifest struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+	Bytes  int    `json:"bytes"`
+}
+
+type generatedManifestDocument struct {
+	Generator string                    `json:"generator"`
+	Outputs   []generatedOutputManifest `json:"outputs"`
+}
+
+func newGeneratedOutputManifest(path string, body []byte) generatedOutputManifest {
+	return generatedOutputManifest{
+		Path: filepath.ToSlash(path), SHA256: fmt.Sprintf("%x", sha256.Sum256(body)), Bytes: len(body),
+	}
+}
+
+func writeGeneratedManifest(path string, outputs []generatedOutputManifest) error {
+	payload, err := json.MarshalIndent(generatedManifestDocument{
+		Generator: "tools/qwq_contract", Outputs: outputs,
+	}, "", "  ")
+	if err != nil {
 		return err
 	}
-	return os.WriteFile(*goSecurityOutput, securitySource, 0o644)
+	payload = append(payload, '\n')
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, payload, 0o644)
 }
 
 func runCheck(args []string, stdout io.Writer) error {

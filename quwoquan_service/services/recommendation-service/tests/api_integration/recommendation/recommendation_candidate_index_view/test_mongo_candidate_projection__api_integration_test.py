@@ -149,15 +149,19 @@ def test_post_lifecycle_stream_projects_mongo_candidate_before_ack(
     store.ensure_indexes()
     occurred_at = "2026-08-05T08:00:00Z"
     payload = {
-        "postId": "post-stream-001",
-        "authorId": "persona-stream-author",
-        "contentType": "article",
-        "status": "published",
-        "visibility": "public",
-        "moderationStatus": "approved",
-        "publishedAt": occurred_at,
-        "updatedAt": occurred_at,
-        "tagRefs": ["Topic/旅行"],
+        "environment": None, "sourceOwner": None, "releaseId": None,
+        "manifestDigest": None, "releaseDigest": None, "sourceVersion": 1,
+        "safetyRevision": 1,
+        "postId": "post-stream-001", "authorId": "persona-stream-author",
+        "contentType": "article", "contentIdentity": "work",
+        "status": "published", "visibility": "public",
+        "moderationStatus": "approved", "title": "旅行", "body": "正文",
+        "summary": "摘要", "authorDisplayNameSnapshot": "作者",
+        "authorAvatarUrlSnapshot": "", "coverUrl": "", "thumbnailUrl": "",
+        "videoUrl": "", "width": 0, "height": 0, "durationMs": 0,
+        "contentVertical": "travel", "createdAt": occurred_at,
+        "publishedAt": occurred_at, "updatedAt": occurred_at,
+        "visitedAt": None, "tagRefs": ["Topic/旅行"],
         "entityRefs": ["entity-stream-001"],
     }
     real_redis.xadd(
@@ -197,6 +201,8 @@ def test_premium_pool_stream_projects_mongo_admission_before_ack(
     store.ensure_indexes()
     payload = {
         "contentId": "post-premium-stream-001",
+        "releaseAdmissions": [],
+        "revision": 1,
         "scope": "global",
         "status": "active",
         "qualityScore": 0.91,

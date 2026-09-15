@@ -229,11 +229,28 @@ class LocalGammaServiceRuntimeBindingsTest(unittest.TestCase):
             self.assertIn(bounded_setting, service_block)
         self.assertNotIn("sleep ", service_block)
 
+    def test_gamma_redis_acl_is_persistent_and_health_is_authenticated(self) -> None:
+        compose = COMPOSE_FILE.read_text(encoding="utf-8")
+        self.assertIn("--aclfile", compose)
+        self.assertIn("/run/quwoquan/redis/users.acl", compose)
+        self.assertIn("redis-cli --user qwq_runtime", compose)
+        self.assertIn("LOCAL_GAMMA_REDIS_RUNTIME_PASSWORD_FILE", compose)
+
+    def test_gamma_runtime_redis_override_injects_api_edge_secret_ref_credentials(self) -> None:
+        launcher = START_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('if name == "api-edge" or name == "service-core":', launcher)
+        self.assertIn('additions["API_EDGE_REDIS_USERNAME"] = "qwq_runtime"', launcher)
+        self.assertIn(
+            'additions["API_EDGE_REDIS_PASSWORD"] = "${QWQ_RUNTIME_REDIS_PASSWORD:?managed Redis runtime password is required}"',
+            launcher,
+        )
+        self.assertNotIn('if key == "API_EDGE_REDIS_PASSWORD":', launcher)
+
     def test_gamma_redis_health_requires_ready_command_processing(self) -> None:
         compose = COMPOSE_FILE.read_text(encoding="utf-8")
 
         self.assertIn(
-            'test: ["CMD-SHELL", "redis-cli --raw ping | grep -qx PONG"]',
+            'test: ["CMD-SHELL", "redis-cli --user qwq_runtime --pass $$(cat /run/quwoquan/redis/runtime.key) --no-auth-warning --raw ping | grep -qx PONG"]',
             compose,
         )
         self.assertNotIn('test: ["CMD", "redis-cli", "ping"]', compose)

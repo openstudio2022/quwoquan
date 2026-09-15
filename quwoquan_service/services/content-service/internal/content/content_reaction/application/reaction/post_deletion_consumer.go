@@ -17,13 +17,19 @@ import (
 const postDeletionReactionBatchSize = 500
 
 type postDeletedFact struct {
-	PostID          string   `json:"postId"`
-	AuthorID        string   `json:"authorId"`
-	ContentType     string   `json:"contentType"`
-	ContentIdentity string   `json:"contentIdentity"`
-	Status          string   `json:"status"`
-	CircleIDs       []string `json:"circleIds"`
-	DeletedAt       string   `json:"deletedAt"`
+	PostID          string  `json:"postId"`
+	AuthorID        string  `json:"authorId"`
+	ContentType     string  `json:"contentType"`
+	ContentIdentity string  `json:"contentIdentity"`
+	Status          string  `json:"status"`
+	DeletedAt       string  `json:"deletedAt"`
+	Environment     *string `json:"environment"`
+	SourceOwner     *string `json:"sourceOwner"`
+	ReleaseID       *string `json:"releaseId"`
+	ManifestDigest  *string `json:"manifestDigest"`
+	ReleaseDigest   *string `json:"releaseDigest"`
+	SourceVersion   int64   `json:"sourceVersion"`
+	SafetyRevision  int64   `json:"safetyRevision"`
 }
 
 // PostDeletionConsumer 是 Post 与 ContentReaction 之间的唯一删除生命周期边界。
@@ -92,6 +98,15 @@ func decodePostDeletedFact(event postports.OutboxEvent) (postDeletedFact, error)
 		event.OccurredAt.IsZero() {
 		return postDeletedFact{}, fmt.Errorf("PostDeleted outbox identity is incomplete")
 	}
+	var presence map[string]json.RawMessage
+	if err := json.Unmarshal(event.Payload, &presence); err != nil {
+		return postDeletedFact{}, err
+	}
+	for _, key := range []string{"environment", "sourceOwner", "releaseId", "manifestDigest", "releaseDigest", "sourceVersion"} {
+		if _, ok := presence[key]; !ok {
+			return postDeletedFact{}, fmt.Errorf("PostDeleted required source field missing: %s", key)
+		}
+	}
 	var payload postDeletedFact
 	decoder := json.NewDecoder(bytes.NewReader(event.Payload))
 	decoder.DisallowUnknownFields()
@@ -101,6 +116,12 @@ func decodePostDeletedFact(event postports.OutboxEvent) (postDeletedFact, error)
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		return postDeletedFact{}, fmt.Errorf("PostDeleted lifecycle fact contains trailing JSON")
+	}
+	if payload.SourceVersion != event.AggregateVersion || payload.SafetyRevision < 1 {
+		return postDeletedFact{}, fmt.Errorf("PostDeleted source version differs from committed envelope")
+	}
+	if payload.Environment != nil || payload.SourceOwner != nil || payload.ReleaseID != nil || payload.ManifestDigest != nil || payload.ReleaseDigest != nil {
+		return postDeletedFact{}, fmt.Errorf("Data PostDeleted requires authoritative source safety binding")
 	}
 	deletedAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(payload.DeletedAt))
 	if err != nil || deletedAt.IsZero() || payload.PostID != event.AggregateID ||

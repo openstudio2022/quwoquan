@@ -1,7 +1,9 @@
 """Data-side adapter for the action-scoped Ops environment receipt."""
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -30,6 +32,10 @@ class ShipReadinessReceipt:
     target: str
     outcome: str
     report_dir: str
+    workload: str
+    candidate_digest: str
+    provider_runtime_digest: str
+    startup_attempt_id: str
 
     @property
     def passed(self) -> bool:
@@ -39,7 +45,10 @@ class ShipReadinessReceipt:
 def _decode_receipt(value: object) -> ShipReadinessReceipt:
     if not isinstance(value, Mapping):
         raise ValueError("Ops ship readiness receipt must be an object")
-    required = {"schema", "action", "environment", "target", "outcome", "reportDir"}
+    required = {
+        "schema", "action", "environment", "target", "outcome", "reportDir",
+        "workload", "candidateDigest", "providerRuntimeDigest", "startupAttemptId",
+    }
     if not required.issubset(value) or value.get("schema") != _RECEIPT_SCHEMA:
         raise ValueError("Ops ship readiness receipt contract is invalid")
     return ShipReadinessReceipt(
@@ -48,6 +57,10 @@ def _decode_receipt(value: object) -> ShipReadinessReceipt:
         target=str(value["target"]),
         outcome=str(value["outcome"]),
         report_dir=str(value["reportDir"]),
+        workload=str(value["workload"]),
+        candidate_digest=str(value["candidateDigest"]),
+        provider_runtime_digest=str(value["providerRuntimeDigest"]),
+        startup_attempt_id=str(value["startupAttemptId"]),
     )
 
 
@@ -82,8 +95,6 @@ def require_environment_readiness(
         action.value,
         "--env",
         environment.value,
-        "--report-dir",
-        str(run / "ops-readiness"),
     ]
     if action is ShipReadinessAction.VERIFY:
         command.extend(
@@ -98,9 +109,21 @@ def require_environment_readiness(
             command.extend(["--verify-run-id", verify_run_id])
         if lifecycle_exit_ref:
             command.extend(["--lifecycle-exit-ref", lifecycle_exit_ref])
+    ops_env = dict(os.environ)
+    for name in (
+        "QWQ_DATA_ROOT",
+        "QWQ_OUTPUT_ROOT",
+        "QWQ_PUBLISH_ROOT",
+        "QWQ_LIBRARY_ROOT",
+        "QWQ_CARRIED_MEDIA_ROOT",
+        "QWQ_DATA_PYTHON",
+        "QWQ_DATA_CLI_BOOTSTRAPPED",
+    ):
+        ops_env.pop(name, None)
     completed = subprocess.run(
         command,
         cwd=REPO_ROOT,
+        env=ops_env,
         text=True,
         capture_output=True,
         check=False,
@@ -111,13 +134,27 @@ def require_environment_readiness(
         raise SystemExit(
             f"[ship] GATE_BLOCK {environment.value}/{action.value}: Ops ship readiness receipt is invalid"
         ) from exc
+    ops_report = Path(receipt.report_dir).expanduser().resolve() / "report.json"
+    try:
+        report_bytes = ops_report.read_bytes()
+    except OSError as exc:
+        raise SystemExit(
+            f"[ship] GATE_BLOCK {environment.value}/{action.value}: "
+            "canonical Ops readiness report is unavailable"
+        ) from exc
+    report_digest = "sha256:" + hashlib.sha256(report_bytes).hexdigest()
     evidence: dict[str, object] = {
         "schema": "quwoquan_data.environment_readiness_ref",
         "action": receipt.action.value,
         "environment": receipt.environment.value,
         "target": receipt.target,
         "outcome": receipt.outcome,
-        "opsReportDir": receipt.report_dir,
+        "workload": receipt.workload,
+        "candidateDigest": receipt.candidate_digest,
+        "providerRuntimeDigest": receipt.provider_runtime_digest,
+        "startupAttemptId": receipt.startup_attempt_id,
+        "opsReceiptRef": str(ops_report),
+        "opsReceiptDigest": report_digest,
     }
     if lifecycle_exit_ref:
         evidence["lifecycleExitRef"] = lifecycle_exit_ref

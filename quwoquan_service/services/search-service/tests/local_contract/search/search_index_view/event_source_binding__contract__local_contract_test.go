@@ -34,27 +34,33 @@ func TestSearchIndexProjectionDeclaresOnlyAssembledProductionSources(t *testing.
 		t.Fatal(err)
 	}
 	want := []string{
+		"content.post.ContentReleaseFenceChanged",
+		"content.post.PostPublished",
+		"content.post.PostUpdated",
+		"content.post.PostSettingsUpdated",
+		"content.post.PostPromotedToWork",
+		"content.post.PostModerationRejected",
+		"content.post.PostDeleted",
+		"content.post.PostPrivacyRedacted",
+		"content.post.PostPurged",
 		"ops.experiment.ExperimentPolicyActivated",
 		"user.user_account.UserProfileSearchProjectionRequested",
 		"user.user_account.UserSuspended",
 		"user.user_account.UserRestored",
 	}
-	if len(document.Lifecycle.EventConsumers) != 3 ||
-		document.Lifecycle.EventConsumers[0].Name != "ApplySearchExperimentPolicy" ||
-		document.Lifecycle.EventConsumers[0].Kind != "projector" ||
-		document.Lifecycle.EventConsumers[0].Facet != "ExperimentPolicyConsumer" ||
-		document.Lifecycle.EventConsumers[0].Method != "processOnce" ||
-		document.Lifecycle.EventConsumers[0].Idempotency != "event_id" ||
-		document.Lifecycle.EventConsumers[1].Name != "ApplyAccountRestriction" ||
-		document.Lifecycle.EventConsumers[1].Kind != "projector" ||
-		document.Lifecycle.EventConsumers[1].Facet != "UserAccountRestrictionConsumer" ||
-		document.Lifecycle.EventConsumers[1].Method != "processOnce" ||
-		document.Lifecycle.EventConsumers[1].Idempotency != "event_id" ||
-		document.Lifecycle.EventConsumers[2].Name != "ApplyUserProfileSearchProjection" ||
-		document.Lifecycle.EventConsumers[2].Kind != "projector" ||
-		document.Lifecycle.EventConsumers[2].Facet != "UserProfileSearchProjectionConsumer" ||
-		document.Lifecycle.EventConsumers[2].Method != "processOnce" ||
-		document.Lifecycle.EventConsumers[2].Idempotency != "event_id" ||
+	wantConsumers := []struct {
+		Name        string `yaml:"name"`
+		Kind        string `yaml:"kind"`
+		Facet       string `yaml:"facet"`
+		Method      string `yaml:"method"`
+		Idempotency string `yaml:"idempotency"`
+	}{
+		{Name: "ApplyContentPostLifecycle", Kind: "projector", Facet: "ContentPostLifecycleConsumer", Method: "processOnce", Idempotency: "event_id"},
+		{Name: "ApplySearchExperimentPolicy", Kind: "projector", Facet: "ExperimentPolicyConsumer", Method: "processOnce", Idempotency: "event_id"},
+		{Name: "ApplyAccountRestriction", Kind: "projector", Facet: "UserAccountRestrictionConsumer", Method: "processOnce", Idempotency: "event_id"},
+		{Name: "ApplyUserProfileSearchProjection", Kind: "projector", Facet: "UserProfileSearchProjectionConsumer", Method: "processOnce", Idempotency: "event_id"},
+	}
+	if !reflect.DeepEqual(document.Lifecycle.EventConsumers, wantConsumers) ||
 		!reflect.DeepEqual(document.Lifecycle.SourceEvents, want) {
 		t.Fatalf("search index lifecycle event binding drifted: %+v", document.Lifecycle)
 	}

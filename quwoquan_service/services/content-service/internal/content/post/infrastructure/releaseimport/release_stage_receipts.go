@@ -3,6 +3,7 @@ package releaseimport
 import (
 	"context"
 	"fmt"
+	wire "quwoquan_service/services/content-service/generated/content/post/contract/releasequery"
 	"strings"
 	"time"
 
@@ -17,24 +18,27 @@ const (
 )
 
 type releaseStageReceipt struct {
-	Environment            string    `bson:"environment"`
-	SourceOwner            string    `bson:"sourceOwner"`
-	ReleaseID              string    `bson:"releaseId"`
-	ManifestDigest         string    `bson:"manifestDigest"`
-	Stage                  string    `bson:"stage"`
-	AttemptID              string    `bson:"attemptId"`
-	Status                 string    `bson:"status"`
-	RecordedAt             time.Time `bson:"recordedAt"`
-	DurationMs             int64     `bson:"durationMs"`
-	AttemptedCount         int       `bson:"attemptedCount"`
-	SuccessCount           int       `bson:"successCount"`
-	Checkpoint             string    `bson:"checkpoint"`
-	FirstTypedBlocker      string    `bson:"firstTypedBlocker,omitempty"`
-	ExpectedEmpty          bool      `bson:"expectedEmpty,omitempty"`
-	ExpectedSourceOwner    string    `bson:"expectedSourceOwner,omitempty"`
-	ExpectedReleaseID      string    `bson:"expectedReleaseId,omitempty"`
-	ExpectedManifestDigest string    `bson:"expectedManifestDigest,omitempty"`
-	ExpectedRevision       int64     `bson:"expectedRevision,omitempty"`
+	Transition             *wire.ContentReleaseFenceChangedPayload `bson:"transition,omitempty"`
+	EventID                string                                  `bson:"eventId,omitempty"`
+	PayloadDigest          string                                  `bson:"payloadDigest,omitempty"`
+	Environment            string                                  `bson:"environment"`
+	SourceOwner            string                                  `bson:"sourceOwner"`
+	ReleaseID              string                                  `bson:"releaseId"`
+	ManifestDigest         string                                  `bson:"manifestDigest"`
+	Stage                  string                                  `bson:"stage"`
+	AttemptID              string                                  `bson:"attemptId"`
+	Status                 string                                  `bson:"status"`
+	RecordedAt             time.Time                               `bson:"recordedAt"`
+	DurationMs             int64                                   `bson:"durationMs"`
+	AttemptedCount         int                                     `bson:"attemptedCount"`
+	SuccessCount           int                                     `bson:"successCount"`
+	Checkpoint             string                                  `bson:"checkpoint"`
+	FirstTypedBlocker      string                                  `bson:"firstTypedBlocker,omitempty"`
+	ExpectedEmpty          bool                                    `bson:"expectedEmpty,omitempty"`
+	ExpectedSourceOwner    string                                  `bson:"expectedSourceOwner,omitempty"`
+	ExpectedReleaseID      string                                  `bson:"expectedReleaseId,omitempty"`
+	ExpectedManifestDigest string                                  `bson:"expectedManifestDigest,omitempty"`
+	ExpectedRevision       int64                                   `bson:"expectedRevision,omitempty"`
 }
 
 func releaseAttemptID(environment string, opts ImportOptions, requestedAt time.Time) string {

@@ -46,6 +46,28 @@ externalDependencies:
     operations: [appendDurable]
     scenes: [general, realtime]
 api_routes:
+  - method: POST
+    path: /internal/user/creator-search-candidate:query
+    operation: ReadCreatorSearchCandidate
+    actor: none
+    commercial: {status: blocked, block_reason: Creator candidate typed reader 尚待实现与真实闭包测试, gap_id: USER_CREATOR_SEARCH_CANDIDATE, target_story: canonical-search-contract}
+    application: {kind: query, facet: CreatorSearchCandidateQueryFacade, method: readCreatorSearchCandidate, reader: CreatorSearchCandidateReader, slice: CreatorSearchCandidateResult}
+    authorization: {principal: service, scopes: [user.creator_search.candidate.read], ownership_policy: content_release_preparation}
+    security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    error_codes: [USER.CREATOR_SEARCH.invalid_candidate, USER.CREATOR_SEARCH.unavailable]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: user_creator_search_candidate_read, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 1000, availability_percent: 99.9}
+    description: >-
+      仅允许已验证 content-service principal；sourceOwner 必须 qwq_data，environment 必须等于部署环境。
+      只用共享ReleaseCandidateBinding生产Creator源快照，供唯一Search准备协议消费；不签发Creator专用proof，不默认补旧字段，所有调用者同步升级。
+      用完整 tuple 委托 Creator named reader 校验存储闭包，返回全部共享公开快照或明确 absent，不扫描 latest、不 pin active 替换请求候选。
+      公开身份碰撞、候选未 verified、重复身份、源/媒体摘要漂移及超过500个 Creator 一律 invalid_candidate，绝不截断或忽略坏对象。
+      只读 owning store，不写账户、Persona、PG outbox 或 command receipt，依赖错误返回 unavailable。
+    request_entity: ReadCreatorSearchCandidateQuery
+    request_body_kind: object
+    response_entity: CreatorSearchCandidateResult
   - actor: account
     application:
       facet: PersonaManagementQueryFacade

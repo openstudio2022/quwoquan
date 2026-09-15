@@ -16,6 +16,9 @@ from internal.recommendation.recommendation_candidate_index_view.adapters.inboun
 
 def _fields() -> dict[bytes, bytes]:
     payload = {
+        "sourceOwner": None, "environment": None, "releaseId": None, "manifestDigest": None, "releaseDigest": None, "sourceVersion": 4, "safetyRevision": 1,
+        "contentIdentity": "work", "title": "旅行", "body": "正文", "summary": "摘要", "authorDisplayNameSnapshot": "作者", "authorAvatarUrlSnapshot": "",
+        "coverUrl": "", "thumbnailUrl": "", "videoUrl": "", "width": 0, "height": 0, "durationMs": 0, "contentVertical": "travel", "createdAt": "2026-07-31T10:00:00Z", "visitedAt": None,
         "postId": "post-001",
         "authorId": "persona-001",
         "contentType": "article",
@@ -58,11 +61,13 @@ class _Redis:
         return True
 
     def xautoclaim(self, *_args, **_kwargs):
+        if _args[0] != POST_LIFECYCLE_STREAM: return ("0-0", [], [])
         if self.pending:
             return ("0-0", [(b"1000-0", _fields())], [])
         return ("0-0", [], [])
 
     def xreadgroup(self, *_args, **_kwargs):
+        if POST_LIFECYCLE_STREAM not in _args[2]: return []
         if not self.deliver:
             return []
         self.deliver = False
@@ -116,6 +121,22 @@ class _SubjectClosures:
         return subject_id in self.closed_subjects
 
 
+def test_fence_ack_failure_is_not_hidden_by_empty_scan() -> None:
+    from datetime import datetime, timezone
+    redis = _Redis(); projection = _Projection()
+    class Reconciler:
+        def apply(self, values): pass
+    consumer = PostLifecycleConsumer(redis_client=redis, projection=projection, subject_closures=_SubjectClosures(), consumer="fence", fence_reconciler=Reconciler())
+    ack = redis.xack
+    def failed_ack(*_): raise RuntimeError("ACK disconnected")
+    redis.xack = failed_ack
+    with pytest.raises(RuntimeError): consumer._process("fence-1", {"eventType": "ContentReleaseFenceChanged"})
+    consumer._last_failure = None; consumer._last_success = datetime.now(timezone.utc)
+    assert not consumer.healthy()
+    redis.xack = ack; consumer._process("fence-1", {"eventType": "ContentReleaseFenceChanged"})
+    assert consumer.healthy()
+
+
 def test_consumer_projects_then_acks_one_typed_post_event() -> None:
     redis = _Redis()
     projection = _Projection()
@@ -148,7 +169,7 @@ def test_incomplete_upsert_snapshot_cannot_be_interpreted_as_candidate_removal()
 
     with pytest.raises(
         ValueError,
-        match="complete eligibility snapshot",
+        match="visibility",
     ):
         lifecycle_snapshot(decode_post_lifecycle(values))
 
@@ -159,7 +180,7 @@ def test_post_lifecycle_requires_the_single_canonical_post_id_field() -> None:
     payload["id"] = payload.pop("postId")
     values["payload"] = json.dumps(payload)
 
-    with pytest.raises(ValueError, match="aggregate identity mismatch"):
+    with pytest.raises(ValueError, match="extra_forbidden"):
         decode_post_lifecycle(values)
 
 
@@ -194,7 +215,7 @@ def test_closed_author_event_can_only_advance_a_removal_tombstone() -> None:
     assert event["removal"] == ("content_feed", "post-001", 4)
 
 
-def test_consumer_dead_letters_and_acks_only_after_fifth_failure() -> None:
+def test_consumer_dead_letters_but_keeps_unapplied_fact_pending() -> None:
     redis = _Redis()
     projection = _Projection(fail=True)
     consumer = PostLifecycleConsumer(
@@ -204,13 +225,10 @@ def test_consumer_dead_letters_and_acks_only_after_fifth_failure() -> None:
         consumer="candidate-test",
     )
     for attempt in range(1, 6):
-        if attempt < 5:
-            with pytest.raises(RuntimeError, match="projection failed"):
-                consumer.process_once()
-            assert redis.acked == []
-        else:
-            assert consumer.process_once() == 1
+        with pytest.raises(RuntimeError, match="projection failed"):
+            consumer.process_once()
+        assert redis.acked == []
     assert redis.dead_letters[0][0] == POST_LIFECYCLE_DLQ
     assert redis.dead_letters[0][1]["attempts"] == "5"
-    assert redis.acked == [(POST_LIFECYCLE_STREAM, CONSUMER_GROUP, "1000-0")]
+    assert redis.acked == []
     assert redis.trimmed[0][0] == POST_LIFECYCLE_DLQ

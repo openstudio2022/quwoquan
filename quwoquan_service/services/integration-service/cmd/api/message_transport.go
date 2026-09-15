@@ -28,6 +28,7 @@ func buildIntegrationRedisRouter(
 		Mode:           cfg.Redis.General.Mode,
 		Addr:           cfg.Redis.General.Addr,
 		Addrs:          cfg.Redis.General.Addrs,
+		Username:       cfg.Redis.General.Username,
 		Password:       cfg.Redis.General.Password,
 		DB:             cfg.Redis.General.DB,
 		TLS:            cfg.Redis.General.TLS,

@@ -170,7 +170,7 @@ void main() {
   );
 
   test('策略身份 cohort 随曝光→点击→展开→转化→负反馈全链原样回传（SIT-004.t3）', () async {
-    const cohort = 'sha256:policy-digest-fixture';
+    const cohort = 'sha256:13d8a9947ed93da5d8b5da1f0488ef7ff981c9a3340be584dda9087558b8c2b3';
     tracker.trackImpression(
       'object_a',
       intersectionId: 'ix_rel_a',
