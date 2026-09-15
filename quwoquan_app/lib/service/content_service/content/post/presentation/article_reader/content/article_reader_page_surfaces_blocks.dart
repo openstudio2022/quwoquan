@@ -228,12 +228,8 @@ class _ArticlePageImage extends StatelessWidget {
             kind: MediaDeliveryKind.image,
             publicBuilder: (context, publicUrl) =>
                 ArticleAdaptiveImage(imageUrl: publicUrl),
-            signedReadyBuilder: (context, deliveryUrl, cacheIdentity) =>
-                ArticleAdaptiveImage(
-                  imageUrl: imageUrl,
-                  signedDeliveryUrl: deliveryUrl,
-                  signedCacheIdentity: cacheIdentity,
-                ),
+            signedReadyBuilder: (context, lease) =>
+                ArticleAdaptiveImage(imageUrl: imageUrl, lease: lease),
           ),
         ),
       ),

@@ -1006,8 +1006,12 @@ void main() {
       expect(find.byKey(TestKeys.globalAssistantEntryMark), findsOneWidget);
     });
 
+    // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-002
     testWidgets('横滑校园内容切到旅行频道', (tester) async {
       _suppressExpectedErrors();
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
 
@@ -1034,9 +1038,41 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(
+        tester
+            .widget<HomePrimaryTabStrip>(find.byType(HomePrimaryTabStrip))
+            .activeChannelId,
+        HomePrimaryTabStrip.travelChannelId,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('home-feed-travel')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('home-feed-campus')),
+        findsNothing,
+      );
+      final viewport = tester.getRect(find.byKey(HomePrimaryTabStrip.stripKey));
+      final travel = tester.getRect(
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId),
+        ),
+      );
+      expect(travel.center.dx, closeTo(viewport.center.dx, 0.1));
+      expect(
+        find.byKey(HomePrimaryTabStrip.channelKey('following')).hitTestable(),
+        findsNothing,
+      );
+      expect(
+        tester
+            .getRect(find.byKey(HomePrimaryTabStrip.channelKey('recommend')))
+            .left,
+        closeTo(viewport.left, 0.1),
+      );
     });
 
-    testWidgets('切到旅行后主 tab 位置保持稳定', (tester) async {
+    // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-002
+    testWidgets('切到旅行不溢出不动，溢出时尽量居中', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
@@ -1088,8 +1124,25 @@ void main() {
           HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId),
         ),
       );
-      expect(campusAfter.dx, closeTo(campusBefore.dx, 0.1));
-      expect(travelAfter.dx, closeTo(travelBefore.dx, 0.1));
+      final viewport = tester.getRect(find.byKey(HomePrimaryTabStrip.stripKey));
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byKey(HomePrimaryTabStrip.stripKey),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      final expectedShift = (travelBefore.dx - viewport.center.dx).clamp(
+        0.0,
+        scrollable.position.maxScrollExtent,
+      );
+      expect(campusAfter.dx, closeTo(campusBefore.dx - expectedShift, 0.1));
+      expect(travelAfter.dx, closeTo(travelBefore.dx - expectedShift, 0.1));
+      expect(
+        tester
+            .widget<HomePrimaryTabStrip>(find.byType(HomePrimaryTabStrip))
+            .activeChannelId,
+        HomePrimaryTabStrip.travelChannelId,
+      );
       expect(campusTopAfter.dy, closeTo(campusTopBefore.dy, 0.1));
       expect(travelTopAfter.dy, closeTo(travelTopBefore.dy, 0.1));
     });

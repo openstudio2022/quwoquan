@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
@@ -6,14 +7,13 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 
-class HomePrimaryTabStrip extends StatelessWidget {
+class HomePrimaryTabStrip extends StatefulWidget {
   const HomePrimaryTabStrip({
     super.key,
     required this.activeChannelId,
     required this.onChannelChanged,
     required this.isDark,
     this.channels,
-    this.onHorizontalDragEnd,
   });
 
   static const String followingChannelId = 'following';
@@ -49,7 +49,9 @@ class HomePrimaryTabStrip extends StatelessWidget {
   /// 首页频道（运营资产，来自 homeChannelsProvider：端默认 + 远程覆盖）。
   /// 为空时回退发布自带默认 [homeChannelIds]（仅离线兜底）。
   final List<HomeChannelConfig>? channels;
-  final GestureDragEndCallback? onHorizontalDragEnd;
+
+  @override
+  State<HomePrimaryTabStrip> createState() => _HomePrimaryTabStripState();
 
   static double _measureLabelWidth(BuildContext context, String label) {
     final painter = TextPainter(
@@ -76,50 +78,6 @@ class HomePrimaryTabStrip extends StatelessWidget {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final gap = AppSpacing.primaryTabGroupGap(context);
-    final labelByChannelId = <String, String>{
-      for (final channel in channels ?? const <HomeChannelConfig>[])
-        channel.id: UITextConstants.homeChannelLabel(channel.labelKey),
-    };
-    final regularChannelIds = (channels != null && channels!.isNotEmpty)
-        ? channels!.map((channel) => channel.id).toList(growable: false)
-        : homeChannelIds;
-    final channelIds = regularChannelIds;
-    String labelFor(String channelId) =>
-        labelByChannelId[channelId] ?? _labelForChannel(channelId);
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onHorizontalDragEnd: onHorizontalDragEnd,
-      child: SingleChildScrollView(
-        key: stripKey,
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: SizedBox(
-          height: AppSpacing.primaryTopBarHeight(context),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < channelIds.length; i++) ...[
-                if (i > 0) SizedBox(width: gap),
-                _HomePrimaryTabStripItem(
-                  key: channelKey(channelIds[i]),
-                  channelId: channelIds[i],
-                  label: labelFor(channelIds[i]),
-                  selected: activeChannelId == channelIds[i],
-                  slotWidth: _slotWidth(context, labelFor(channelIds[i])),
-                  isDark: isDark,
-                  onTap: () => _handleChannelTap(channelIds[i]),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   static String _labelForChannel(String channelId) => switch (channelId) {
     followingChannelId => DiscoveryText.homeTabFollowing,
     recommendedChannelId => DiscoveryText.homeTabRecommended,
@@ -139,6 +97,181 @@ class HomePrimaryTabStrip extends StatelessWidget {
     }
     onChannelChanged(channelId);
   }
+}
+
+class _HomePrimaryTabStripState extends State<HomePrimaryTabStrip>
+    with SingleTickerProviderStateMixin {
+  final ScrollController _scrollController = ScrollController();
+  late final AnimationController _selectionAnimation = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 200),
+  )..addListener(_advanceSelection);
+  double _animationStart = 0;
+  double _animationTarget = 0;
+
+  void _advanceSelection() {
+    if (!_scrollController.hasClients) return;
+    final progress = Curves.easeOutCubic.transform(_selectionAnimation.value);
+    _scrollController.jumpTo(
+      (_animationStart + (_animationTarget - _animationStart) * progress).clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      ),
+    );
+  }
+
+  List<double> _geometry = const [];
+  String? _syncedChannel;
+  int _layoutGeneration = 0;
+
+  @override
+  void dispose() {
+    _layoutGeneration++;
+    _selectionAnimation.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _syncSelection(List<double> geometry, double target) {
+    if (_syncedChannel == widget.activeChannelId &&
+        listEquals(_geometry, geometry)) {
+      return;
+    }
+    _geometry = geometry;
+    _syncedChannel = widget.activeChannelId;
+    final generation = ++_layoutGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          generation != _layoutGeneration ||
+          !_scrollController.hasClients) {
+        return;
+      }
+      final position = _scrollController.position;
+      final offset = target.clamp(0.0, position.maxScrollExtent);
+      // ScrollPosition.animateTo 会忽略动画中子项的点击；逐帧 jump 保持标签可点击。
+      _selectionAnimation.stop();
+      if (MediaQuery.disableAnimationsOf(context) ||
+          (position.pixels - offset).abs() < 0.1) {
+        _scrollController.jumpTo(offset);
+      } else {
+        _animationStart = position.pixels;
+        _animationTarget = offset;
+        _selectionAnimation.forward(from: 0);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final channels = widget.channels;
+    final ids = channels != null && channels.isNotEmpty
+        ? channels.map((channel) => channel.id).toList(growable: false)
+        : HomePrimaryTabStrip.homeChannelIds;
+    final labels = <String, String>{
+      for (final channel in channels ?? const <HomeChannelConfig>[])
+        channel.id: UITextConstants.homeChannelLabel(channel.labelKey),
+    };
+    String labelFor(String id) =>
+        labels[id] ?? HomePrimaryTabStrip._labelForChannel(id);
+    final widths = [
+      for (final id in ids)
+        HomePrimaryTabStrip._slotWidth(context, labelFor(id)),
+    ];
+    final gap = AppSpacing.primaryTabGroupGap(context);
+    final starts = <double>[];
+    var total = 0.0;
+    for (var i = 0; i < ids.length; i++) {
+      starts.add(total);
+      total += widths[i] + (i == ids.length - 1 ? 0 : gap);
+    }
+    final hasAnchor =
+        ids.length > 1 &&
+        ids[0] == HomePrimaryTabStrip.followingChannelId &&
+        ids[1] == HomePrimaryTabStrip.recommendedChannelId;
+    Widget item(int i) => _HomePrimaryTabStripItem(
+      key: HomePrimaryTabStrip.channelKey(ids[i]),
+      channelId: ids[i],
+      label: labelFor(ids[i]),
+      selected: widget.activeChannelId == ids[i],
+      slotWidth: widths[i],
+      isDark: widget.isDark,
+      onTap: () => widget._handleChannelTap(ids[i]),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final index = ids.indexOf(widget.activeChannelId);
+        final center = index < 0 ? 0.0 : starts[index] + widths[index] / 2;
+        final target = total > width && index >= 0 && (!hasAnchor || index > 1)
+            ? center - width / 2
+            : 0.0;
+        _syncSelection([width, gap, ...widths, index.toDouble()], target);
+        return SizedBox(
+          key: HomePrimaryTabStrip.stripKey,
+          height: AppSpacing.primaryTopBarHeight(context),
+          child: AnimatedBuilder(
+            animation: _scrollController,
+            builder: (context, _) {
+              final offset = _scrollController.hasClients
+                  ? _scrollController.offset
+                  : 0.0;
+              final anchored = hasAnchor && total > width && offset > 0;
+              return Stack(
+                clipBehavior: Clip.hardEdge,
+                children: [
+                  Listener(
+                    onPointerDown: (_) => _selectionAnimation.stop(),
+                    child: ClipRect(
+                      clipper: _HomeTabViewportClipper(
+                        anchored ? widths[1] + gap : 0,
+                      ),
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        scrollDirection: Axis.horizontal,
+                        physics: const ClampingScrollPhysics(),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (var i = 0; i < ids.length; i++) ...[
+                              if (i > 0) SizedBox(width: gap),
+                              if (hasAnchor && i == 1)
+                                SizedBox(width: widths[i])
+                              else
+                                item(i),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (hasAnchor)
+                    Positioned(
+                      left: anchored ? 0 : starts[1] - offset,
+                      top: 0,
+                      bottom: 0,
+                      child: item(1),
+                    ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HomeTabViewportClipper extends CustomClipper<Rect> {
+  const _HomeTabViewportClipper(this.left);
+
+  final double left;
+
+  @override
+  Rect getClip(Size size) => Rect.fromLTRB(left, 0, size.width, size.height);
+
+  @override
+  bool shouldReclip(_HomeTabViewportClipper oldClipper) =>
+      left != oldClipper.left;
 }
 
 class _HomePrimaryTabStripItem extends StatelessWidget {
@@ -250,6 +383,7 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
       ),
       maxLines: 1,
       textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
     )..layout();
     return painter.width;
   }

@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+
 import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+
 import 'dart:ui' show ImageFilter, lerpDouble;
 
 import 'package:flutter/cupertino.dart';
@@ -517,13 +519,13 @@ List<Widget> _buildReadOnlyPageFragments(
         // 与分页测量同源，状态转换不得改变占位框几何。
         widgets.add(
           _ArticlePageImage(
-            imageUrl: fragment.asset!.imageUrl.trim(),
+            imageUrl: fragment.asset!.imageUrl,
             // 交付形态取自 manifest 声明；私有资产没有公开 URL，绑定必须带
             // 资产身份，否则会退回公开路把授权判定跳过。
             binding: MediaDeliveryBinding(
               assetId: fragment.asset!.id.trim(),
               accessMode: articleAssetAccessMode(fragment.asset!.accessMode),
-              publicUrl: fragment.asset!.imageUrl.trim(),
+              publicUrl: fragment.asset!.imageUrl,
             ),
             borderRadius: 0,
             aspectRatio: resolveArticleFigureAspectRatio(
@@ -580,11 +582,11 @@ List<Widget> _buildReadOnlyPageFragments(
         }
         widgets.add(
           ArticleWrappedParagraph(
-            imageUrl: fragment.asset!.imageUrl.trim(),
+            imageUrl: fragment.asset!.imageUrl,
             binding: MediaDeliveryBinding(
               assetId: fragment.asset!.id.trim(),
               accessMode: articleAssetAccessMode(fragment.asset!.accessMode),
-              publicUrl: fragment.asset!.imageUrl.trim(),
+              publicUrl: fragment.asset!.imageUrl,
             ),
             body: fragment.text.trim(),
             leadingText: fragment.leadingText,

@@ -25,6 +25,7 @@ final class _ContentCdnImageUrlAdapter implements CdnImageUrlPort {
   String full(String url) => CdnImageUrlBuilder.full(url);
 }
 
+const CdnImageUrlPort contentImageProfiles = _ContentCdnImageUrlAdapter();
 final cdnImageUrlPortProvider = Provider<CdnImageUrlPort>(
-  (ref) => const _ContentCdnImageUrlAdapter(),
+  (ref) => contentImageProfiles,
 );

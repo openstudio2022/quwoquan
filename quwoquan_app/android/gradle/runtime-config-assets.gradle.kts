@@ -63,6 +63,11 @@ fun requiresRuntimeConfigTrustEarly(taskName: String): Boolean {
 // 同一次调用夹带任何 Release/Profile/prod 制品都回到 fail-closed。
 val selfSupplyEligible: Boolean =
     configuredAssetRoot.isEmpty() &&
+        (project.findProperty("target")?.toString() ?: "lib/main.dart").let { raw ->
+            val selected = (if (File(raw).isAbsolute) File(raw) else repositoryRoot.resolve("quwoquan_app").resolve(raw)).canonicalFile
+            selected == repositoryRoot.resolve("quwoquan_app/lib/main.dart").canonicalFile ||
+                selected == repositoryRoot.resolve("quwoquan_app/lib/main_alpha.dart").canonicalFile
+        } &&
         run {
             val artifactSelectors =
                 explicitTaskSelectorsEarly(gradle.startParameter.taskNames)

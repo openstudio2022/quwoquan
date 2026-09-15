@@ -628,7 +628,7 @@ class ArticleDocumentData {
         .toList(growable: false);
     final template = (map['template'] ?? 'gentle').toString();
     final fontPreset = (map['fontPreset'] ?? 'clean').toString();
-    final coverImageUrl = (map['coverImageUrl'] ?? '').toString().trim();
+    final coverImageUrl = (map['coverImageUrl'] ?? '').toString();
     final titleStyle = ArticleDocumentTitleStyle.values.firstWhere(
       (s) => s.name == (map['titleStyle'] ?? '').toString(),
       orElse: () => ArticleDocumentTitleStyle.major,
@@ -794,7 +794,7 @@ List<ArticleDocumentNode> _normalizeDocumentNodes(
       .map(
         (node) => node.copyWith(
           text: _normalizeArticleText(node.text),
-          imageUrl: node.imageUrl.trim(),
+          imageUrl: node.imageUrl,
           caption: node.caption.trim(),
         ),
       )

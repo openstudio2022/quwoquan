@@ -49,6 +49,63 @@ public final class ProductionHomepageExternalAutTest {
     private static final Pattern PACKAGE_NAME =
             Pattern.compile("^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)+$");
 
+    private static android.graphics.Rect tabBounds(UiAutomation automation, String target, String selector) throws Exception {
+        AccessibilityNodeInfo node = waitForSelectedNode(automation, target, selector, 15_000L);
+        assertNotNull(node);
+        try {
+            assertTrue(node.isVisibleToUser());
+            android.graphics.Rect bounds = new android.graphics.Rect();
+            node.getBoundsInScreen(bounds);
+            assertFalse(bounds.isEmpty());
+            return bounds;
+        } finally { node.recycle(); }
+    }
+
+    private static void swipeTab(UiAutomation automation, int width, int y, boolean forward) {
+        long started = SystemClock.uptimeMillis();
+        float from = width * (forward ? 0.85f : 0.28f);
+        float to = width * (forward ? 0.28f : 0.85f);
+        for (int index = 0; index <= 12; index++) {
+            int action = index == 0 ? android.view.MotionEvent.ACTION_DOWN
+                    : index == 12 ? android.view.MotionEvent.ACTION_UP : android.view.MotionEvent.ACTION_MOVE;
+            android.view.MotionEvent event = android.view.MotionEvent.obtain(started, SystemClock.uptimeMillis(),
+                    action, from + (to - from) * index / 12, y, 0);
+            event.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
+            try { assertTrue(automation.injectInputEvent(event, true)); } finally { event.recycle(); }
+            SystemClock.sleep(25);
+        }
+        SystemClock.sleep(500);
+    }
+
+    private static String observeTabRoundtrip(UiAutomation automation, String target, String selector) throws Exception {
+        String[] labels = selector.split("\\|", -1);
+        assertEquals(2, labels.length);
+        android.graphics.Rect initial = tabBounds(automation, target, labels[0]);
+        android.graphics.Rect following = tabBounds(automation, target, labels[1]);
+        AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+        assertNotNull(root);
+        android.graphics.Rect screen = new android.graphics.Rect();
+        try { root.getBoundsInScreen(screen); } finally { root.recycle(); }
+        swipeTab(automation, screen.width(), initial.centerY(), true);
+        android.graphics.Rect middle = tabBounds(automation, target, labels[0]);
+        swipeTab(automation, screen.width(), initial.centerY(), true);
+        android.graphics.Rect further = tabBounds(automation, target, labels[0]);
+        assertTrue(middle.left < initial.left - 5);
+        assertTrue(Math.abs(middle.left - further.left) <= 5);
+        for (int index = 0; index < 6; index++) {
+            swipeTab(automation, screen.width(), initial.centerY(), false);
+            if (Math.abs(tabBounds(automation, target, labels[0]).left - initial.left) <= 5) { break; }
+        }
+        android.graphics.Rect restored = tabBounds(automation, target, labels[0]);
+        android.graphics.Rect followingRestored = tabBounds(automation, target, labels[1]);
+        assertTrue(Math.abs(restored.left - initial.left) <= 5);
+        assertTrue(Math.abs(followingRestored.left - following.left) <= 5);
+        JSONObject geometry = new JSONObject().put("initial", new JSONArray().put(initial.left).put(following.left))
+                .put("middle", new JSONArray().put(middle.left)).put("further", new JSONArray().put(further.left))
+                .put("restored", new JSONArray().put(restored.left).put(followingRestored.left));
+        return selector + " geometry=" + geometry;
+    }
+
     @Test
     public void executesOfflinePageCaseInCanonicalProductionProcess() throws Exception {
         Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
@@ -73,7 +130,7 @@ public final class ProductionHomepageExternalAutTest {
         for (int index = 0; index < steps.length(); index++) {
             JSONObject step = steps.getJSONObject(index);
             assertEquals(2, step.length());
-            assertTrue(step.getString("operation").matches("visible|tap|scroll|seek|playback|back|reveal"));
+            assertTrue(step.getString("operation").matches("visible|tap|scroll|seek|playback|back|reveal|tab-roundtrip"));
             String selector = step.getString("selector");
             assertFalse(selector.trim().isEmpty());
             if (selector.startsWith("text-prefix:")) {
@@ -90,6 +147,11 @@ public final class ProductionHomepageExternalAutTest {
             String operation = step.getString("operation");
             assertEquals(before, requireSingleRunningPid(automation, target));
             String selector = step.getString("selector");
+            if (operation.equals("tab-roundtrip")) {
+                observations.put(new JSONObject().put("operation", operation).put("selector", selector)
+                        .put("observed", observeTabRoundtrip(automation, target, selector)));
+                continue;
+            }
             if (operation.equals("back")) {
                 assertTrue(automation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK));
             }

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/domain/signed_media_delivery_lease.dart';
 
 /// 私有视频的短签播放交付（DEC-033）。
 ///
@@ -10,20 +11,16 @@ import 'package:flutter/foundation.dart';
 /// 因此播放器只需要一个单签 URL，不需要逐段换签。
 @immutable
 class SignedVideoDelivery {
-  const SignedVideoDelivery({
-    required this.deliveryUri,
-    required this.cacheIdentity,
-    required this.assetId,
-    this.onReSignRequested,
-  });
+  const SignedVideoDelivery({required this.lease, this.onReSignRequested});
 
   /// 已校验的短签交付地址（https + sign + t）。
-  final Uri deliveryUri;
+  final SignedMediaDeliveryLease lease;
+  Uri get deliveryUri => lease.deliveryUri;
 
   /// 稳定缓存身份：签名 query 随 TTL 轮换，不参与缓存键。
-  final String cacheIdentity;
+  String get cacheIdentity => lease.cacheIdentity;
 
-  final String assetId;
+  String get assetId => lease.assetId;
 
   /// 播放失败后请求强制换签。TTL 到期或签名被边缘拒绝时由播放器回调，
   /// 换签编排仍在协调器一侧，播放器不自行兑换。

@@ -124,6 +124,7 @@ public final class RuntimeConfigPackageStoreTest {
     manifest.addProperty("environment", "alpha");
     manifest.addProperty("target", "alpha-local");
     manifest.addProperty("contentSource", "bundled_snapshot");
+    manifest.addProperty("entrypoint", AppLaunchContract.APP_EFFECTIVE_LAUNCH_MANIFEST_ENTRYPOINT.get("bundled_snapshot"));
     manifest.addProperty("requiresLocalTransport", false);
     manifest.addProperty("runtimeConfigSupplyMode", "build_time_self_supply");
     refreshEffectiveManifestDigest(request);

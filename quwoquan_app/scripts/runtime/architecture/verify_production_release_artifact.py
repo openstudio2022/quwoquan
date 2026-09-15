@@ -41,8 +41,15 @@ FORBIDDEN_MARKERS = (
     b"test_fixtures/",
     b"runners/alpha/",
     b"alpha_cloud_composition",
+    b"assets/content/alpha/",
+    b"OfflineContentBundle",
+    b"BundledContentPostReader",
+    b"BundledContentDiscoveryFeedQuery",
+    b"BundledProfileQuery",
+    b"BundledImageProvider",
     b"patrol",
-    b"integration_test",
+    b"package:integration_test/",
+    b"IntegrationTestWidgetsFlutterBinding",
     b"PatrolJUnitRunner",
     b"RunnerUITests",
     b"XCTest",
@@ -125,25 +132,50 @@ def missing_ios_rpath_dependencies(app_path: Path) -> list[str]:
     return sorted(findings)
 
 
+def _scan_stream(name: str, stream) -> tuple[dict[str, object], set[bytes]]:
+    """Debug kernel 可大于归档上限；流式检查不丢跨块 marker，不放宽 ZIP bomb 门。"""
+    digest = hashlib.sha256()
+    size = 0
+    overlap = max(map(len, FORBIDDEN_MARKERS)) - 1
+    previous = name.encode("utf-8") + b"\n"
+    found = {marker for marker in FORBIDDEN_MARKERS if marker in previous}
+    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+        digest.update(chunk)
+        size += len(chunk)
+        searchable = previous + chunk
+        found.update(marker for marker in FORBIDDEN_MARKERS if marker in searchable)
+        previous = searchable[-overlap:]
+    return {"path": name, "sha256": digest.hexdigest(), "sizeBytes": size}, found
+
+
+def _scanned_entries(path: Path):
+    if path.is_dir():
+        for file_path in sorted(item for item in path.rglob("*") if item.is_file()):
+            if file_path.is_symlink():
+                raise ValueError("artifact symlink is forbidden")
+            with file_path.open("rb") as stream:
+                yield _scan_stream(file_path.relative_to(path).as_posix(), stream)
+    else:
+        import io
+        for name, payload in iter_artifact_entries(path):
+            yield _scan_stream(name.replace("\\", "/"), io.BytesIO(payload))
+
+
 def scan_artifact(path: Path, platform: str) -> tuple[list[str], dict[str, object]]:
     findings: list[str] = []
     scanned_entries: list[dict[str, object]] = []
-    for name, payload in iter_artifact_entries(path):
-        normalized_name = name.replace("\\", "/")
-        scanned_entries.append(
-            {
-                "path": normalized_name,
-                "sha256": hashlib.sha256(payload).hexdigest(),
-                "sizeBytes": len(payload),
-            }
-        )
-        searchable = normalized_name.encode("utf-8", errors="replace") + b"\n" + payload
-        for marker in FORBIDDEN_MARKERS:
-            if marker in searchable:
-                findings.append(
-                    f"{path}: production {platform} artifact contains forbidden marker "
-                    f"{marker.decode('ascii')} in {normalized_name}"
-                )
+    for entry, markers in _scanned_entries(path):
+        normalized_name = str(entry["path"])
+        scanned_entries.append(entry)
+        if "integration_test" in normalized_name:
+            findings.append(f"{path}: production artifact contains test runner path {normalized_name}")
+        if normalized_name.endswith("/runtime-config-self-supply-request.json"):
+            findings.append(f"{path}: online artifact contains Alpha self-supply resource {normalized_name}")
+        for marker in sorted(markers):
+            findings.append(
+                f"{path}: production {platform} artifact contains forbidden marker "
+                f"{marker.decode('ascii')} in {normalized_name}"
+            )
     if platform == "ios" and path.is_dir():
         findings.extend(
             f"{path}: production ios artifact has unresolved runtime dependency {item}"

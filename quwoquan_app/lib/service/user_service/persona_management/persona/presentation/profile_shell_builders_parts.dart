@@ -343,9 +343,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
         SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
     final isMine = widget.mode == ProfileMode.mine;
     final displayCapability = state.displayCapability;
-    final resolvedAvatarUrl = isLocalFileImageSource(avatarUrl)
-        ? (avatarUrl ?? '')
-        : resolveAvatarImageUrl(avatarUrl);
+    final resolvedAvatarUrl = avatarUrl ?? '';
     final effectiveIdentityTags =
         state.profile?.identityTags ?? const <String>[];
     final hasIdentityTags = effectiveIdentityTags

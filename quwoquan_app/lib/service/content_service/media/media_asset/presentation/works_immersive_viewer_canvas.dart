@@ -799,7 +799,6 @@ class _WorksTextCanvas extends StatelessWidget {
               absentWidget: Container(color: AppColors.worksBackground),
               publicBuilder: (context, publicUrl) => AppCachedNetworkImage(
                 imageUrl: publicUrl,
-                imageUrlCandidates: resolveContentMediaUrlCandidates(publicUrl),
                 cdnPreset: CdnImagePreset.thumbnail,
                 fit: BoxFit.cover,
                 placeholder: Container(color: AppColors.worksBackground),

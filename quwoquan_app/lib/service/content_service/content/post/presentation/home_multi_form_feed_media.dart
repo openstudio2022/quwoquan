@@ -33,7 +33,7 @@ class _HomeImagePostCard extends ConsumerWidget {
       objectKind: 'content',
       routeId: 'workBrowser',
     );
-    final media = _buildMedia(context, ref.watch(mediaEndpointConfigProvider));
+    final media = _buildMedia(context);
     final isMomentGrid = _isMomentGridPost(item);
     final intersectionRow = _buildPostIntersectionRow(
       reason: reason,
@@ -102,10 +102,7 @@ class _HomeImagePostCard extends ConsumerWidget {
     );
   }
 
-  Widget? _buildMedia(
-    BuildContext context,
-    MediaEndpointConfig? endpointConfig,
-  ) {
+  Widget? _buildMedia(BuildContext context) {
     final urls = item.mediaImageUrls;
     final deliveryIndex = _feedImageDeliveryIndex(item);
     if (_isMomentGridPost(item)) {
@@ -157,7 +154,6 @@ class _HomeImagePostCard extends ConsumerWidget {
           child: _feedDeliveryImage(
             binding: _feedBinding(url, delivery),
             isDark: isDark,
-            endpointConfig: endpointConfig,
           ),
         ),
       ),
@@ -188,14 +184,14 @@ Map<String, _FeedImageDelivery> _feedImageDeliveryIndex(
 ) {
   final index = <String, _FeedImageDelivery>{};
   for (final media in item.mediaItems) {
-    final url = media.url.trim();
+    final url = media.url;
     if (url.isNotEmpty) {
       index[url] = _FeedImageDelivery(
         assetId: media.mediaAssetId?.trim() ?? '',
         accessMode: media.accessMode,
       );
     }
-    final coverUrl = media.coverUrl?.trim() ?? '';
+    final coverUrl = media.coverUrl ?? '';
     if (coverUrl.isNotEmpty) {
       index[coverUrl] = _FeedImageDelivery(
         assetId: media.coverAssetId?.trim() ?? '',
@@ -215,7 +211,6 @@ Map<String, _FeedImageDelivery> _feedImageDeliveryIndex(
 Widget _feedDeliveryImage({
   required MediaDeliveryBinding binding,
   required bool isDark,
-  required MediaEndpointConfig? endpointConfig,
   BoxFit fit = BoxFit.cover,
   CdnImagePreset cdnPreset = CdnImagePreset.cover,
   Widget? placeholder,
@@ -230,10 +225,6 @@ Widget _feedDeliveryImage({
     // 加载中，用户与 UAT 都无法发现，因此公开路沿用原子自带的显式失败件。
     publicBuilder: (context, publicUrl) => AppCachedNetworkImage(
       imageUrl: publicUrl,
-      imageUrlCandidates: resolveContentMediaUrlCandidates(
-        publicUrl,
-        endpointConfig: endpointConfig,
-      ),
       cdnPreset: cdnPreset,
       fit: fit,
       placeholder: waiting,
@@ -760,7 +751,6 @@ class _ArticleCoverImage extends ConsumerWidget {
       child: _feedDeliveryImage(
         binding: _feedBinding(url, signedDelivery),
         isDark: isDark,
-        endpointConfig: ref.watch(mediaEndpointConfigProvider),
       ),
     );
   }

@@ -1,7 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_profile_snapshot.dart';
 
@@ -22,15 +20,8 @@ class UserDataNotifier extends Notifier<PersonaProfileSnapshot?> {
           .getUserProfile(userId);
       // 本地选取（相册/拍照）但尚未上传的临时文件路径原样保留（alpha 保存后即时回显），
       // 不经媒体解析器拼成不可访问 URL；服务端对象键 / 远端地址仍正常解析。
-      final avatarUrl = isLocalFileImageSource(profile.avatarUrl)
-          ? profile.avatarUrl
-          : resolveAvatarImageUrl(
-              profile.avatarUrl,
-              avatarVersion: profile.avatarVersion,
-            );
-      final backgroundUrl = isLocalFileImageSource(profile.backgroundUrl)
-          ? profile.backgroundUrl
-          : resolveContentMediaUrl(profile.backgroundUrl);
+      final avatarUrl = profile.avatarUrl;
+      final backgroundUrl = profile.backgroundUrl;
       final personaId = profile.personaId.isNotEmpty
           ? profile.personaId
           : userId;

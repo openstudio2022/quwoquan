@@ -7,6 +7,7 @@ import binascii
 import base64
 import hashlib
 import json
+import math
 import os
 import plistlib
 import re
@@ -32,7 +33,7 @@ RUNNER_SOURCE = "quwoquan_ops/cli/commands/app_preflight_uat_offline_pages.py"
 RUNNER_IDENTITY = "stackctl.offline-native-pages.v1"
 ANDROID_PAGE_METHOD = "executesOfflinePageCaseInCanonicalProductionProcess"
 IOS_PAGE_METHOD = "testExecutesOfflinePageCaseInCanonicalProductionProcess"
-OPERATIONS = frozenset({"visible", "tap", "scroll", "seek", "playback", "back", "reveal"})
+OPERATIONS = frozenset({"visible", "tap", "scroll", "seek", "playback", "back", "reveal", "tab-roundtrip"})
 
 
 def document_digest(value: Mapping[str, Any]) -> str:
@@ -53,15 +54,30 @@ def validate_page_plan(plan: Mapping[str, Any]) -> None:
         required.add("tap")
     if case_id in {"article-detail", "image-detail", "creator-avatar", "pagination-end"}:
         required.add("reveal")
-    if case_id in {"video-complete", "video-seek"}:
-        required.add("playback" if case_id == "video-complete" else "seek")
-    if not required.issubset(operations) or operations[-1] not in {"visible", "playback", "seek"}:
+    if case_id in {"video-complete", "video-seek", "homepage-video-playback"}:
+        required.add("seek" if case_id == "video-seek" else "playback")
+    if case_id == "homepage-video-playback":
+        required.add("reveal")
+    if case_id == "homepage-tab-roundtrip":
+        required.add("tab-roundtrip")
+    if not required.issubset(operations) or operations[-1] not in {"visible", "playback", "seek", "tab-roundtrip"}:
         raise ValueError("APP.UAT.page_plan_invalid: required page journey cannot be replaced by first frame")
     _validate_identity_journey(plan)
 
 
 def _validate_identity_journey(plan: Mapping[str, Any]) -> None:
     steps, case_id = plan["steps"], plan["caseId"]
+    if case_id == "homepage-video-playback":
+        if (len(steps) < 6 or steps[-4]["operation"] != "reveal" or steps[-3] != {
+                "operation": "tap", "selector": steps[-4]["selector"]}
+                or steps[-2]["operation"] != "visible" or steps[-1]["operation"] != "playback"
+                or plan.get("route") in {"/", "/video-book"}):
+            raise ValueError("APP.UAT.page_plan_invalid: home video requires feed reveal/tap and playback")
+    if case_id == "homepage-tab-roundtrip":
+        labels = steps[-1]["selector"].split("|")
+        if (steps[-1]["operation"] != "tab-roundtrip" or len(labels) != 2 or not all(labels)
+                or steps[-2] != {"operation": "visible", "selector": labels[1]} or plan.get("route") != "/"):
+            raise ValueError("APP.UAT.page_plan_invalid: tab roundtrip requires original following and geometry")
     terminal = {
         "login-unavailable": "capability-unavailable:account_authentication:profileTab",
         "write-unavailable": "capability-unavailable:like",
@@ -182,6 +198,20 @@ def _validate_step_observation(step: Mapping[str, Any], observation: object) -> 
         raise ValueError("offline native page observation is missing or drifted")
     if step["operation"] in {"seek", "playback"}:
         _validate_playback_observation(step["operation"], observation["observed"])
+    if step["operation"] == "tab-roundtrip":
+        try:
+            geometry = json.loads(observation["observed"].split(" geometry=", 1)[1])
+            initial, middle, further, restored = [geometry[key] for key in ("initial", "middle", "further", "restored")]
+            for coordinates, count in ((initial, 2), (middle, 1), (further, 1), (restored, 2)):
+                if (not isinstance(coordinates, list) or len(coordinates) != count
+                        or any(type(value) not in {int, float} or not math.isfinite(value) or value < 0 for value in coordinates)):
+                    raise ValueError("offline native tab geometry is invalid")
+            if not (middle[0] < initial[0] - 5 and abs(middle[0] - further[0]) <= 5
+                    and abs(restored[0] - initial[0]) <= 5 and abs(restored[1] - initial[1]) <= 5
+                    and initial[1] < initial[0] and restored[1] < restored[0]):
+                raise ValueError("tab geometry did not pin and restore")
+        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
+            raise ValueError("offline native tab geometry is incomplete") from error
 
 
 def validate_native_page_result(output: str, *, plan: Mapping[str, Any], launch: Mapping[str, Any]) -> dict[str, Any]:
@@ -378,6 +408,8 @@ def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
             raise ValueError("APP.UAT.page_plan_invalid: snapshot lacks required " + channel + "/" + kind)
         return selected[0]
     article, image, video = post("article"), post("image"), post("video", "premium")
+    home_video = post("video")
+    following = text("ui_text_constants_discovery", "homeTabFollowing")
     if channels.get("campus"):
         raise ValueError("APP.UAT.page_plan_invalid: canonical empty channel is no longer empty")
     route_file = app_root / "lib/runtime/shell/navigation/generated/app_route_paths.g.dart"
@@ -406,6 +438,11 @@ def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
          [*base, reveal(article["title"]), tap(article["title"]), visible("text-prefix:" + article_excerpt)], [step("back", home)]),
         ("image-detail", "image", route("workBrowserPathTemplate", workId=image["postId"]),
          [*open_image, visible(success[1])], [step("back", home)]),
+        ("homepage-video-playback", "video", route("workBrowserPathTemplate", workId=home_video["postId"]),
+         [*base, reveal(home_video["title"]), tap(home_video["title"]), visible(progress), step("playback", progress)],
+         [step("back", home)]),
+        ("homepage-tab-roundtrip", "homepage", route("home"),
+         [*base, visible(following), step("tab-roundtrip", recommend + "|" + following)], []),
         ("creator-avatar", "image", route("userProfilePathTemplate", userHandle=image["authorId"]),
          [*base, reveal("creator-avatar:" + image["authorId"]), tap("creator-avatar:" + image["authorId"]),
           visible("creator-profile-avatar:" + image["authorId"])], [step("back", home)]),
@@ -741,7 +778,7 @@ def _write_offline_case_result(*, plan: Mapping[str, Any], candidate: Mapping[st
         "platform": launch["platform"], "deviceIdentity": launch["deviceId"], "deviceRegistered": False,
         "deviceClass": binding["device"]["class"], "uatProfile": "rehearsal", "nonPromotable": True,
         "physicalDevice": False, "artifactClass": "production_behavior", "carrier": plan["carrier"],
-        "entrySurface": "feed" if plan["caseId"] in {"default-entry", "homepage-recommendation", "empty-state", "pagination-end"} else "direct_or_object_route",
+        "entrySurface": "feed" if plan["caseId"] in {"default-entry", "homepage-recommendation", "homepage-video-playback", "homepage-tab-roundtrip", "image-detail", "empty-state", "pagination-end"} else "direct_or_object_route",
         "observedOutcome": offline_case_outcome(plan["caseId"])}
     raw_ref = _reference(write_readiness_case_result(case_dir / "result.json", raw, generated_at=completed), output_root)
     slot = launch["platform"] + ":" + plan["caseId"]
@@ -765,7 +802,7 @@ def _close_offline_page_resources(owned: ExitStack, receipt: dict[str, Any]) -> 
 
 def execute_offline_page_cases(*, args: argparse.Namespace, candidate: Mapping[str, Any], launch: Mapping[str, Any],
                                projection: Mapping[str, Any], report_dir: Path, output_root: Path) -> dict[str, Any]:
-    """单平台 13 格；所有 ref 均 output_root 相对，rawResultRefs 可直接交 acceptance。
+    """单平台 required 格；所有 ref 均 output_root 相对，rawResultRefs 可直接交 acceptance。
 
     对象边界是设备解析、制品 readback 与原生命令；无 test-only execution 分支。
     失败保留已产出的 raw refs 与第一个 typed blocker，不制造剩余用例的 PASS。

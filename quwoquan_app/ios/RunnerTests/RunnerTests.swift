@@ -1206,7 +1206,7 @@ class RunnerTests: XCTestCase {
       "environment": environment,
       "buildProfile": buildProfile,
       "target": target,
-      "entrypoint": AppLaunchContract.appEffectiveLaunchManifestEntrypoint,
+      "entrypoint": AppLaunchContract.appEffectiveLaunchManifestEntrypoint["remote"]!,
       "launchProvenance": "canonical_launcher",
       "runtimeConfigSupplyMode": "external_runtime_package",
       "launchPolicy": launchPolicy,

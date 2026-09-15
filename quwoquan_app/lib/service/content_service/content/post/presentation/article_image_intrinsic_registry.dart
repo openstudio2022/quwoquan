@@ -1,6 +1,5 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 import 'package:flutter/widgets.dart';
-import 'package:quwoquan_app/runtime/platform/local_image_provider.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 
 /// 文内图「宽/高」比缓存（宽 ÷ 高），供 [ArticleFlowLayoutEngine] 流式测量与 reflow。
@@ -86,7 +85,7 @@ class _ArticleImageIntrinsicListenerState
   }
 
   void _attachIfNeeded() {
-    final url = widget.imageUrl.trim();
+    final url = widget.imageUrl;
     final key = widget.reportKey.trim();
     if (url.isEmpty || key.isEmpty || !mounted) {
       return;
@@ -94,23 +93,11 @@ class _ArticleImageIntrinsicListenerState
     if (ArticleImageIntrinsicRegistry.aspectRatioFor(key) != null) {
       return;
     }
-    final ImageProvider<Object> provider;
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      provider = CachedNetworkImageProvider(
-        url,
-        cacheManager: AppImageCacheController.cacheManagerForPreset(
-          CdnImagePreset.inline,
-        ),
-        maxWidth: appImageDecodeMaxPhysicalExtent,
-        maxHeight: appImageDecodeMaxPhysicalExtent,
-      );
-    } else {
-      provider = ResizeImage.resizeIfNeeded(
-        appImageDecodeMaxPhysicalExtent,
-        appImageDecodeMaxPhysicalExtent,
-        localFileImageProvider(url),
-      );
-    }
+    final provider = ResizeImage.resizeIfNeeded(
+      appImageDecodeMaxPhysicalExtent,
+      appImageDecodeMaxPhysicalExtent,
+      publicMediaDelivery.imageProvider(url, profile: CdnImagePreset.inline),
+    );
     final stream = provider.resolve(createLocalImageConfiguration(context));
     final listener = ImageStreamListener((ImageInfo info, bool _) {
       ArticleImageIntrinsicRegistry.reportAspect(

@@ -1,26 +1,17 @@
 import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 
-import 'dart:developer' as developer;
-
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/domain/signed_media_delivery_lease.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
-import 'package:quwoquan_app/runtime/platform/media/app_image_cache_controller.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
-import 'package:quwoquan_app/runtime/transport/media/media_candidate_failure.dart';
-import 'package:quwoquan_app/runtime/transport/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/platform/media/app_image_cache_controller.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/page_lifecycle_observability.dart';
-import 'package:quwoquan_app/design_system/media/cdn_image_url_port.dart';
-import 'package:quwoquan_app/runtime/di/content_image_delivery_dependencies.dart';
-
 export 'package:quwoquan_app/runtime/platform/media/app_image_cache_controller.dart';
 
 const int appImageDecodeMaxPhysicalExtent = 2048;
@@ -64,10 +55,6 @@ class AppAvatarImage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return AppCachedNetworkImage(
       imageUrl: imageUrl,
-      imageUrlCandidates: resolveAvatarImageUrlCandidates(
-        imageUrl,
-        endpointConfig: ref.watch(mediaEndpointConfigProvider),
-      ),
       width: size,
       height: size,
       fit: fit,
@@ -98,7 +85,7 @@ class AppCircularAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final normalizedUrl = imageUrl?.trim() ?? '';
+    final normalizedUrl = imageUrl ?? '';
     final fallbackSurface = ColoredBox(
       color: backgroundColor,
       child: Center(child: fallback ?? const SizedBox.shrink()),
@@ -197,6 +184,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
   final VoidCallback? onLoadSucceeded;
   final void Function(Object error)? onLoadFailed;
   final CdnImagePreset cdnPreset;
+  final MediaDeliveryKind mediaKind;
   final Widget Function(BuildContext context, ImageProvider imageProvider)?
   imageBuilder;
   final DateTime Function()? now;
@@ -210,6 +198,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
   /// 用完整 URL 作键会导致每次换签都重新下载与解码。
   /// 仅作用于首个候选 URL；候选回退指向不同资产字节，不能共享同一键。
   final String? cacheKey;
+  final SignedMediaDeliveryLease? lease;
 
   const AppCachedNetworkImage({
     super.key,
@@ -223,80 +212,19 @@ class AppCachedNetworkImage extends ConsumerWidget {
     this.onLoadSucceeded,
     this.onLoadFailed,
     this.cdnPreset = CdnImagePreset.none,
+    this.mediaKind = MediaDeliveryKind.image,
     this.imageBuilder,
     this.cacheKey,
+    this.lease,
     this.now,
     this.successSemanticIdentifier,
   });
 
-  List<String> _processedUrlCandidates(
-    MediaEndpointConfig? endpointConfig,
-    CdnImageUrlPort urlPort,
-  ) {
-    final rawCandidates =
-        imageUrlCandidates ??
-        _resolveImplicitCandidates(imageUrl, endpointConfig: endpointConfig);
-    final processed = <String>[];
-    for (final candidate in rawCandidates) {
-      final normalized = candidate.trim();
-      if (normalized.isEmpty || processed.contains(normalized)) {
-        continue;
-      }
-      switch (cdnPreset) {
-        case CdnImagePreset.thumbnail:
-          processed.add(urlPort.thumbnail(normalized));
-        case CdnImagePreset.cover:
-          processed.add(urlPort.cover(normalized));
-        case CdnImagePreset.inline:
-          processed.add(urlPort.display(normalized));
-        case CdnImagePreset.avatar:
-          processed.add(
-            urlPort.avatar(normalized, size: (width ?? 120).toInt()),
-          );
-        case CdnImagePreset.full:
-          processed.add(urlPort.full(normalized));
-        case CdnImagePreset.none:
-          processed.add(normalized);
-      }
-    }
-    return processed;
-  }
-
-  static List<String> _resolveImplicitCandidates(
-    String raw, {
-    MediaEndpointConfig? endpointConfig,
-  }) {
-    final normalized = raw.trim();
-    if (normalized.isEmpty) {
-      return const <String>[];
-    }
-    if (_looksLikeAvatarMedia(normalized)) {
-      return resolveAvatarImageUrlCandidates(
-        normalized,
-        endpointConfig: endpointConfig,
-      );
-    }
-    return resolveContentMediaUrlCandidates(
-      normalized,
-      endpointConfig: endpointConfig,
-    );
-  }
-
-  static bool _looksLikeAvatarMedia(String raw) {
-    final normalized = raw.replaceFirst(RegExp(r'^/+'), '').toLowerCase();
-    return normalized.startsWith('media/avatar/') ||
-        normalized.startsWith('avatar/') ||
-        normalized.contains('/media/avatar/');
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final candidates = _processedUrlCandidates(
-      ref.watch(mediaEndpointConfigProvider),
-      ref.watch(cdnImageUrlPortProvider),
-    );
+    final candidates = imageUrl.isEmpty ? const <String>[] : <String>[imageUrl];
     return _ImageLoadCycleScope(
-      sourceIdentity: imageUrl.trim(),
+      sourceIdentity: imageUrl,
       candidates: candidates,
       now: now,
       builder: (cycle) {
@@ -359,12 +287,15 @@ class AppCachedNetworkImage extends ConsumerWidget {
     required String result,
     required int candidatesTried,
     Object? error,
+    PageLifecycleObservability? observability,
   }) {
     if (!cycle.markTerminal()) {
       return;
     }
-    ref
-        .read(pageLifecycleObservabilityProvider)
+    (observability ??
+            ref.read<PageLifecycleObservability>(
+              pageLifecycleObservabilityProvider,
+            ))
         .recordMediaLoad(
           mediaType: 'image',
           result: result,
@@ -382,241 +313,115 @@ class AppCachedNetworkImage extends ConsumerWidget {
     int index,
     _ImageLoadTelemetryCycle cycle,
   ) {
-    final verified = publicMediaDelivery.verifiedImageProvider(
-      candidates[index],
-    );
-    if (verified != null) {
-      return Image(
-        image: verified,
-        fit: fit,
-        width: width,
-        height: height,
-        frameBuilder: (context, child, frame, synchronous) {
-          if (frame == null) {
-            return KeyedSubtree(
-              key: appImageLoadPlaceholderKey,
-              child: placeholder ?? const SizedBox.shrink(),
-            );
-          }
+    final observability = ref.read(pageLifecycleObservabilityProvider);
+    ImageProvider<Object> verified;
+    try {
+      verified = ref
+          .watch(publicMediaDeliveryProvider)
+          .imageProvider(
+            candidates[index],
+            profile: cdnPreset,
+            kind: mediaKind,
+            cacheKey: cacheKey,
+            lease: lease,
+          );
+    } catch (error) {
+      return _ImageLoadFailureReporter(
+        key: ObjectKey(cycle),
+        onReport: () {
           _recordTerminalMediaLoad(
             ref: ref,
             cycle: cycle,
-            result: 'success',
+            result: 'failure',
             candidatesTried: 1,
+            error: error,
           );
-          final decoded = Semantics(
-            identifier:
-                successSemanticIdentifier ?? appImageLoadSuccessKey.value,
-            image: true,
-            child: KeyedSubtree(
-              key: appImageLoadSuccessKey,
-              child: imageBuilder?.call(context, verified) ?? child,
-            ),
-          );
-          return onLoadSucceeded == null
-              ? decoded
-              : _ImageLoadSuccessReporter(
-                  reportKey: candidates[index],
-                  onReport: onLoadSucceeded!,
-                  child: decoded,
-                );
+          onLoadFailed?.call(error);
         },
-        errorBuilder: (context, error, stackTrace) => _ImageLoadFailureReporter(
-          key: ObjectKey(cycle),
-          onReport: () {
-            _recordTerminalMediaLoad(
-              ref: ref,
-              cycle: cycle,
-              result: 'failure',
-              candidatesTried: 1,
-              error: error,
-            );
-            onLoadFailed?.call(error);
-          },
-          child: KeyedSubtree(
-            key: appImageLoadErrorKey,
-            child: errorWidget ?? _buildErrorWidget(context),
-          ),
+        child: KeyedSubtree(
+          key: appImageLoadErrorKey,
+          child: errorWidget ?? _buildErrorWidget(context),
         ),
       );
     }
-    final cacheManager = AppImageCacheController.cacheManagerForPreset(
-      cdnPreset,
-    );
     return LayoutBuilder(
       builder: (context, constraints) {
-        final logicalWidth = _effectiveLogicalExtent(
-          width,
-          constraints.maxWidth,
+        int? extent(double? explicit, double bound) {
+          final logical = explicit ?? bound;
+          if (!logical.isFinite || logical <= 0) return null;
+          return (logical * MediaQuery.devicePixelRatioOf(context))
+              .round()
+              .clamp(1, appImageDecodeMaxPhysicalExtent);
+        }
+
+        final resized = ResizeImage.resizeIfNeeded(
+          extent(width, constraints.maxWidth),
+          extent(height, constraints.maxHeight),
+          verified,
         );
-        final logicalHeight = _effectiveLogicalExtent(
-          height,
-          constraints.maxHeight,
-        );
-        return CachedNetworkImage(
-          imageUrl: candidates[index],
-          cacheKey: index == 0 ? cacheKey : null,
-          cacheManager: cacheManager,
+        return Image(
+          image: resized,
           fit: fit,
           width: width,
           height: height,
-          memCacheWidth: _decodeExtentFor(logicalWidth, context),
-          memCacheHeight: _decodeExtentFor(logicalHeight, context),
-          maxWidthDiskCache: _diskCacheExtentFor(
-            cacheManager,
-            logicalWidth,
-            context,
-          ),
-          maxHeightDiskCache: _diskCacheExtentFor(
-            cacheManager,
-            logicalHeight,
-            context,
-          ),
-          imageBuilder: (context, imageProvider) {
+          frameBuilder: (context, child, frame, synchronous) {
+            if (frame == null) {
+              return KeyedSubtree(
+                key: appImageLoadPlaceholderKey,
+                child: placeholder ?? const SizedBox.shrink(),
+              );
+            }
             MediaLoadFailureCache.instance.clearIdentity(candidates[index]);
             _recordTerminalMediaLoad(
               ref: ref,
               cycle: cycle,
               result: 'success',
-              candidatesTried: index + 1,
+              candidatesTried: 1,
             );
-            final builder = imageBuilder;
-            final decoded = builder != null
-                ? builder(context, imageProvider)
-                : Image(
-                    image: imageProvider,
-                    fit: fit,
-                    width: width,
-                    height: height,
-                  );
-            final child = Semantics(
+            final decoded = Semantics(
               identifier:
                   successSemanticIdentifier ?? appImageLoadSuccessKey.value,
               image: true,
-              child: KeyedSubtree(key: appImageLoadSuccessKey, child: decoded),
+              child: KeyedSubtree(
+                key: appImageLoadSuccessKey,
+                child: imageBuilder?.call(context, verified) ?? child,
+              ),
             );
-            final onSucceeded = onLoadSucceeded;
-            if (onSucceeded == null) {
-              return child;
-            }
-            return _ImageLoadSuccessReporter(
-              reportKey: candidates[index],
-              onReport: onSucceeded,
-              child: child,
-            );
+            return onLoadSucceeded == null
+                ? decoded
+                : _ImageLoadSuccessReporter(
+                    reportKey: candidates[index],
+                    onReport: onLoadSucceeded!,
+                    child: decoded,
+                  );
           },
-          // 占位色随主题动态解析：深色模式禁止闪白底。
-          placeholder: (context, url) => KeyedSubtree(
-            key: appImageLoadPlaceholderKey,
-            child:
-                placeholder ??
-                Container(color: AppColors.iosGroupedSurface(context)),
-          ),
-          errorWidget: (context, url, error) {
-            final nextIndex = index + 1;
-            if (nextIndex < candidates.length) {
-              return _buildCandidateImage(
-                context,
-                ref,
-                candidates,
-                nextIndex,
-                cycle,
-              );
-            }
-            final failureIdentity = candidates.first;
-            MediaLoadFailureCache.instance.recordFailure(
-              failureIdentity,
-              error: error,
-              candidateUrl: url,
-            );
-            final kind = classifyMediaCandidateLoadFailure(
-              error,
-              candidateUrl: url,
-            );
-            if (MediaLoadFailureCache.instance.shouldLogFailure(
-              failureIdentity,
-            )) {
-              developer.log(
-                'image load failed after ${candidates.length} candidate(s); '
-                'last=${_summarizeImageUrl(url)}; '
-                '(kind=${kind.name})',
-                name: 'AppCachedNetworkImage',
-                error: error.runtimeType,
-              );
-              debugPrint(
-                '[AppCachedNetworkImage] image load failed after '
-                '${candidates.length} candidate(s); '
-                'last=${_summarizeImageUrl(url)}; '
-                'kind=${kind.name}; '
-                'errorType=${error.runtimeType}',
-              );
-            }
-            _recordTerminalMediaLoad(
-              ref: ref,
-              cycle: cycle,
-              result: 'failure',
-              error: error,
-              candidatesTried: candidates.length,
-            );
-            onLoadFailed?.call(error);
-            return KeyedSubtree(
-              key: appImageLoadErrorKey,
-              child: errorWidget ?? _buildErrorWidget(context),
-            );
-          },
+          errorBuilder: (context, error, stackTrace) =>
+              _ImageLoadFailureReporter(
+                key: ObjectKey(cycle),
+                onReport: () {
+                  MediaLoadFailureCache.instance.recordFailure(
+                    candidates[index],
+                    error: error,
+                    candidateUrl: candidates[index],
+                  );
+                  _recordTerminalMediaLoad(
+                    ref: ref,
+                    observability: observability,
+                    cycle: cycle,
+                    result: 'failure',
+                    candidatesTried: 1,
+                    error: error,
+                  );
+                  onLoadFailed?.call(error);
+                },
+                child: KeyedSubtree(
+                  key: appImageLoadErrorKey,
+                  child: errorWidget ?? _buildErrorWidget(context),
+                ),
+              ),
         );
       },
     );
-  }
-
-  double? _effectiveLogicalExtent(double? explicit, double constrained) {
-    if (explicit != null && explicit > 0 && explicit != double.infinity) {
-      return explicit;
-    }
-    if (constrained > 0 && constrained != double.infinity) {
-      return constrained;
-    }
-    return null;
-  }
-
-  int? _decodeExtentFor(double? logicalExtent, BuildContext context) {
-    if (logicalExtent == null ||
-        logicalExtent <= 0 ||
-        logicalExtent == double.infinity) {
-      return null;
-    }
-    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-    final value = (logicalExtent * devicePixelRatio).round();
-    if (value < 1) {
-      return 1;
-    }
-    if (value > appImageDecodeMaxPhysicalExtent) {
-      return appImageDecodeMaxPhysicalExtent;
-    }
-    return value;
-  }
-
-  int? _diskCacheExtentFor(
-    BaseCacheManager cacheManager,
-    double? logicalExtent,
-    BuildContext context,
-  ) {
-    if (cacheManager is! ImageCacheManager) {
-      return null;
-    }
-    final decoded = _decodeExtentFor(logicalExtent, context);
-    if (decoded == null) {
-      return null;
-    }
-    return decoded;
-  }
-
-  String _summarizeImageUrl(String raw) {
-    final uri = Uri.tryParse(raw);
-    if (uri == null || uri.host.isEmpty) {
-      return 'unparseable';
-    }
-    return uri.host;
   }
 
   Widget _buildErrorWidget(BuildContext context) {

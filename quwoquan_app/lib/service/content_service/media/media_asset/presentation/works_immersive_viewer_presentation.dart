@@ -488,7 +488,6 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
 
   List<String> _imageUrlsForPost(ContentPostViewData post) {
     final projected = _workItemFor(post).effectiveImageUrls
-        .map((url) => url.trim())
         .where((url) => url.isNotEmpty)
         .toList(growable: false);
     final fallback = post.hasImages
@@ -527,7 +526,13 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
           assetId: index < imageItems.length
               ? (imageItems[index].mediaAssetId?.trim() ?? '')
               : '',
-          accessMode: index < imageItems.length
+          accessMode:
+              (_originalImageUrlsByPostId[post.id]?[index]?.isUsableAt(
+                    DateTime.now(),
+                  ) ??
+                  false)
+              ? MediaDeliveryAccessMode.signedGrant
+              : index < imageItems.length
               ? imageItems[index].accessMode
               : null,
           publicUrl: urls[index],
@@ -639,7 +644,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
           videoBinding: MediaDeliveryBinding(
             assetId: item.mediaAssetId?.trim() ?? '',
             accessMode: item.accessMode,
-            publicUrl: item.url.trim(),
+            publicUrl: item.url,
           ),
           deliveryReference: delivery,
           adaptiveDeliveryReference: adaptiveDelivery,
@@ -650,7 +655,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
           coverBinding: MediaDeliveryBinding(
             assetId: item.coverAssetId?.trim() ?? '',
             accessMode: item.accessMode,
-            publicUrl: item.coverUrl?.trim() ?? '',
+            publicUrl: item.coverUrl ?? '',
           ),
           verifiedDuration: item.durationMs == null
               ? null
@@ -956,20 +961,20 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     final coverUrl =
         _rawPostById(
           post.id,
-        )?[ContentMediaPostProjectionKeys.coverUrl]?.toString().trim() ??
+        )?[ContentMediaPostProjectionKeys.coverUrl]?.toString() ??
         '';
     if (coverUrl.isEmpty) {
       return const MediaDeliveryBinding.absent();
     }
     for (final media in post.mediaItems) {
-      if ((media.coverUrl?.trim() ?? '') == coverUrl) {
+      if ((media.coverUrl ?? '') == coverUrl) {
         return MediaDeliveryBinding(
           assetId: media.coverAssetId?.trim() ?? '',
           accessMode: media.accessMode,
           publicUrl: coverUrl,
         );
       }
-      if (media.url.trim() == coverUrl) {
+      if (media.url == coverUrl) {
         return MediaDeliveryBinding(
           assetId: media.mediaAssetId?.trim() ?? '',
           accessMode: media.accessMode,

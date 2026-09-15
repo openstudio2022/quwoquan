@@ -676,11 +676,12 @@ def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping
 
 def _validate_offline_axis(*, store: Path, axis: Mapping[str, Any], candidate: Mapping[str, Any]) -> list[dict[str, str]]:
     from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline import OFFLINE_REQUIRED_CASES
 
     try:
         expected_root = f"offline-page-evidence/{candidate['candidateId'].removeprefix('sha256:')}"
         if (axis.get("root") != expected_root or axis.get("required") is not True
-                or axis.get("nonPromotable") is not True or axis.get("caseCount") != 26):
+                or axis.get("nonPromotable") is not True or axis.get("caseCount") != 2 * len(OFFLINE_REQUIRED_CASES)):
             raise ValueError("required offline evidence axis is missing or drifted")
         evidence = offline_receipt_evidence(root=_bundle_path(store, expected_root), receipts=axis["receipts"],
                                             candidate=candidate, devices=axis["devices"])

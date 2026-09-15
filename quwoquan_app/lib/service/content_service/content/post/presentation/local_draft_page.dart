@@ -19,7 +19,7 @@ import 'package:quwoquan_app/runtime/platform/platform_providers.dart'
     show fileStorageGatewayProvider;
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/design_system/media/app_media_image.dart';
+import 'package:quwoquan_app/design_system/media/app_draft_image.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
@@ -221,9 +221,7 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
     };
     final hasVideoFile =
         videoPath.isNotEmpty &&
-        (isRemoteMediaImageSource(videoPath) ||
-            !gateway.isSupported ||
-            await gateway.exists(localMediaImagePath(videoPath)));
+        (!gateway.isSupported || await gateway.exists(videoPath));
     final resolvedPreview = previewSource.trim();
     if (resolvedPreview.isEmpty) {
       return _DraftMediaState(
@@ -234,7 +232,7 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
             : false,
       );
     }
-    if (isRemoteMediaImageSource(resolvedPreview) || !gateway.isSupported) {
+    if (!gateway.isSupported) {
       return _DraftMediaState(
         imageSource: resolvedPreview,
         missingVisual: false,
@@ -243,7 +241,7 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
             : true,
       );
     }
-    final exists = await gateway.exists(localMediaImagePath(resolvedPreview));
+    final exists = await gateway.exists(resolvedPreview);
     if (exists) {
       return _DraftMediaState(
         imageSource: resolvedPreview,
@@ -575,10 +573,9 @@ class _LocalDraftCardVisual extends StatelessWidget {
           : Stack(
               fit: StackFit.expand,
               children: [
-                AppMediaImage(
-                  imageSource: mediaState.imageSource!,
+                AppDraftImage(
+                  source: DraftImageFile(mediaState.imageSource!),
                   fit: BoxFit.cover,
-                  placeholder: placeholder,
                   errorWidget: placeholder,
                 ),
                 if (draft.flowKind == CreateDraftFlowKind.video)

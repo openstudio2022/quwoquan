@@ -6,16 +6,9 @@ import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 
 import 'dart:ui' as ui;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/runtime/di/signed_media_delivery_dependencies.dart';
-import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
-    show MediaDeliveryKind;
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show MediaDeliveryAccessMode;
-import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/cdn_image_url_builder.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/image_book_page_surface.dart';
 import 'package:quwoquan_app/design_system/gestures/immersive_gesture_intent_controller.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_page_flip_book.dart';
@@ -27,7 +20,6 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/spacing/immersive_media_wait_motion.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/shell/loading/app_request_wait_controller.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 
@@ -75,10 +67,8 @@ class ImageBookMediaLoadEvent {
 /// 每页只保留一条解码链；静态页和翻页纹理共享同一个 [ui.Image] 与 cover
 /// source rect，避免图片晚到时发生裁剪或亮度切换。
 ///
-/// 每页的取址形态由 typed 交付绑定决定（DEC-033）：公开页走候选推导 + CDN
-/// cover 变体，私有页由 SignedMediaDeliveryCoordinator 兑换短签地址后单候选
-/// 直传，短签地址不进入候选推导也不经 CDN 变体处理器。本画布不从 URL 形态
-/// 反推交付形态，也不在私有页失败时回退公开 URL。
+/// 每页把投影引用与 typed 绑定原样交给统一获取器；full profile 独立传参。
+/// 授权、来源、CDN 与校验不进入画布，所有结果共享同一解码/呈现链。
 class ImageBookCanvas extends ConsumerStatefulWidget {
   const ImageBookCanvas({
     super.key,
@@ -387,18 +377,13 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
       index,
       () => _ImageBookPageResource(binding),
     );
-    final signed = binding.isSignedGrant;
-    // 私有页的地址要等 grant 兑换才有，候选推导只服务公开页；短签地址不进入
-    // 候选推导也不经 CDN 变体，否则签名会被改写。
-    final candidates = signed
-        ? const <String>[]
-        : _processedCoverCandidates(binding.publicUrl);
-    if (binding.isSignedGrantWithoutAsset) {
+    final candidates = <String>[binding.publicUrl];
+    if (binding.isSignedGrantWithoutAsset || binding.isContractFailure) {
       // 投影声明私有却没有资产身份：自相矛盾，落显式判否，不回退公开 URL。
       _presentContradictoryBinding(index: index, resource: resource);
       return;
     }
-    if (!signed && candidates.isEmpty) {
+    if (!binding.hasRenderableSource) {
       if (resource.availability == _ImageBookPageAvailability.absent) {
         return;
       }
@@ -500,20 +485,6 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
         );
       },
     );
-    if (signed) {
-      unawaited(
-        _loadSignedPage(
-          index: index,
-          resource: resource,
-          generation: generation,
-          binding: binding,
-          pageSize: pageSize,
-          startedAt: startedAt,
-          forceResign: force,
-        ),
-      );
-      return;
-    }
     _startPageOperation(
       index: index,
       resource: resource,
@@ -521,6 +492,7 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
       candidates: candidates,
       pageSize: pageSize,
       startedAt: startedAt,
+      refresh: force,
     );
   }
 
@@ -531,8 +503,11 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
     required List<String> candidates,
     required Size pageSize,
     required DateTime startedAt,
+    bool refresh = false,
   }) {
-    final identity = candidates.first;
+    final identity = resource.binding.isSignedGrant
+        ? 'signed|image|${resource.binding.assetId}'
+        : candidates.first;
     resource.loadIdentity = identity;
     final cachedFailure = MediaLoadFailureCache.instance.activeFailure(
       identity,
@@ -567,6 +542,8 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
           context: context,
           candidates: candidates,
           pageSize: pageSize,
+          binding: resource.binding,
+          refresh: refresh,
         );
     resource.activeLoad = operation;
     unawaited(
@@ -578,71 +555,6 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
         startedAt: startedAt,
       ),
     );
-  }
-
-  /// 私有页的解码链：先经 coordinator 兑换短签地址，再进入同一条解码/呈现链。
-  ///
-  /// 兑换耗时计入本页等待窗口（指示延迟、慢提示与读取死线都已在调用方开启），
-  /// 因此私有页与公开页的等待观感一致。用户驱动的重试走强制换签：旧签名已被
-  /// 交付边缘拒绝，复用缓存只会重复失败。
-  Future<void> _loadSignedPage({
-    required int index,
-    required _ImageBookPageResource resource,
-    required int generation,
-    required MediaDeliveryBinding binding,
-    required Size pageSize,
-    required DateTime startedAt,
-    required bool forceResign,
-  }) async {
-    final coordinator = ref.read(signedMediaDeliveryCoordinatorProvider);
-    bool stale() =>
-        !mounted ||
-        _resources[index] != resource ||
-        resource.generation != generation;
-    try {
-      final lease = forceResign
-          ? await coordinator.refresh(
-              assetId: binding.assetId,
-              kind: MediaDeliveryKind.image,
-            )
-          : await coordinator.resolve(
-              assetId: binding.assetId,
-              kind: MediaDeliveryKind.image,
-              accessMode: MediaDeliveryAccessMode.signedGrant,
-            );
-      if (stale()) {
-        return;
-      }
-      _startPageOperation(
-        index: index,
-        resource: resource,
-        generation: generation,
-        // 短签地址单候选直传：不推导候选，不经 CDN 变体。
-        candidates: <String>[lease.deliveryUri.toString()],
-        pageSize: pageSize,
-        startedAt: startedAt,
-      );
-    } on Object catch (error) {
-      if (stale()) {
-        return;
-      }
-      resource
-        ..cancelWaitTimers()
-        ..cancelActiveLoad()
-        ..loadInFlight = false
-        ..availability = _ImageBookPageAvailability.failed
-        ..error = error;
-      _textureRevision += 1;
-      _syncPresentation(resource);
-      widget.onMediaLoad?.call(
-        ImageBookMediaLoadEvent(
-          result: 'failure',
-          error: error,
-          durationMs: _now.difference(startedAt).inMilliseconds,
-          candidatesTried: 0,
-        ),
-      );
-    }
   }
 
   void _presentContradictoryBinding({
@@ -847,22 +759,6 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
     );
   }
 
-  List<String> _processedCoverCandidates(String imageUrl) {
-    final processed = <String>[];
-    for (final candidate in resolveContentMediaUrlCandidates(imageUrl)) {
-      final normalized = candidate.trim();
-      final uri = Uri.tryParse(normalized);
-      if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
-        continue;
-      }
-      final coverUrl = CdnImageUrlBuilder.cover(normalized);
-      if (!processed.contains(coverUrl)) {
-        processed.add(coverUrl);
-      }
-    }
-    return processed;
-  }
-
   void _disposeResources() {
     for (final resource in _resources.values) {
       resource.dispose();
@@ -877,11 +773,15 @@ final class _DefaultImageBookImageLoadOperation
     required this.context,
     required List<String> candidates,
     required this.pageSize,
+    required this.binding,
+    required this.refresh,
   }) : candidates = List<String>.unmodifiable(candidates) {
     unawaited(_run());
   }
 
   final BuildContext context;
+  final bool refresh;
+  final MediaDeliveryBinding binding;
   final List<String> candidates;
   final Size pageSize;
   final Completer<ImageBookImageLoadResult> _resultCompleter =
@@ -940,16 +840,19 @@ final class _DefaultImageBookImageLoadOperation
     }
   }
 
-  Future<ui.Image> _resolveCandidate(String candidate) {
+  Future<ui.Image> _resolveCandidate(String candidate) async {
     final completer = Completer<ui.Image>();
-    final provider =
-        publicMediaDelivery.verifiedImageProvider(candidate) ??
-        CachedNetworkImageProvider(
+    final provider = await ProviderScope.containerOf(context, listen: false)
+        .read(publicMediaDeliveryProvider)
+        .acquireImage(
           candidate,
-          cacheManager: AppImageCacheController.cacheManagerForPreset(
-            CdnImagePreset.cover,
-          ),
+          binding: binding,
+          profile: CdnImagePreset.full,
+          refresh: refresh,
         );
+    if (_cancelled || !context.mounted) {
+      throw StateError('image load cancelled');
+    }
     final stream = provider.resolve(
       createLocalImageConfiguration(context, size: pageSize),
     );

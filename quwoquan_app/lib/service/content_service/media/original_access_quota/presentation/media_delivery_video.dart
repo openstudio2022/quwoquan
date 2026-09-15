@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
-import 'package:quwoquan_app/runtime/di/signed_media_delivery_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
     show MediaDeliveryKind;
 import 'package:quwoquan_app/runtime/transport/media/signed_video_delivery.dart';
@@ -9,8 +9,6 @@ import 'package:quwoquan_app/service/content_service/media/original_access_quota
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_failure_state.dart';
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_image.dart'
     show MediaDeliveryBinding;
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show MediaDeliveryAccessMode;
 
 /// 视频消费点的 typed 交付分流入口（DEC-033）。
 ///
@@ -99,11 +97,11 @@ class _MediaDeliveryVideoState extends ConsumerState<MediaDeliveryVideo> {
     _phase = _SignedVideoPhase.resolving;
     _lease = null;
     ref
-        .read(signedMediaDeliveryCoordinatorProvider)
-        .resolve(
-          assetId: widget.binding.assetId,
+        .read(publicMediaDeliveryProvider)
+        .acquireLease(
+          widget.binding.publicUrl,
+          binding: widget.binding,
           kind: MediaDeliveryKind.video,
-          accessMode: MediaDeliveryAccessMode.signedGrant,
         )
         .then(
           (lease) {
@@ -148,10 +146,12 @@ class _MediaDeliveryVideoState extends ConsumerState<MediaDeliveryVideo> {
     });
     try {
       final lease = await ref
-          .read(signedMediaDeliveryCoordinatorProvider)
-          .refresh(
-            assetId: widget.binding.assetId,
+          .read(publicMediaDeliveryProvider)
+          .acquireLease(
+            widget.binding.publicUrl,
+            binding: widget.binding,
             kind: MediaDeliveryKind.video,
+            refresh: true,
           );
       if (!mounted || generation != _generation) {
         return;
@@ -204,17 +204,15 @@ class _MediaDeliveryVideoState extends ConsumerState<MediaDeliveryVideo> {
           return widget.signedBuilder(
             context,
             SignedVideoDelivery(
-              deliveryUri: lease.deliveryUri,
-              cacheIdentity: lease.cacheIdentity,
-              assetId: binding.assetId,
+              lease: lease,
               onReSignRequested: () => _reSignOnceOrFail(),
             ),
           );
       }
     }
     if (binding.isPublic) {
-      final publicUrl = binding.publicUrl.trim();
-      if (publicUrl.isEmpty) {
+      final publicUrl = binding.publicUrl;
+      if (publicUrl.trim().isEmpty) {
         return widget.absentWidget ?? const SizedBox.shrink();
       }
       return widget.publicBuilder(context, publicUrl);

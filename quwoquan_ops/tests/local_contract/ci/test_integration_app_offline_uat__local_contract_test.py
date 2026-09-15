@@ -155,6 +155,8 @@ def _receipt_matrix(root):
                     observed += " 2:07 / 2:07"
                 elif step["operation"] == "seek":
                     observed += " 0:30 / 2:07"
+                elif step["operation"] == "tab-roundtrip":
+                    observed += ' geometry={"initial":[80,10],"middle":[10],"further":[10],"restored":[80,10]}'
                 observations.append({**step, "observed": observed})
             native = {"schema": "quwoquan_ops.offline_native_page_result.v1", "caseId": case, "planDigest": plan["planDigest"],
                       **{key: launch[key] for key in ("candidateDigest", "artifactDigest", "deviceId", "launchAttemptId")},
@@ -191,7 +193,7 @@ def test_acceptance_consumes_actual_dual_platform_raw_closure(tmp_path):
     receipts, _ = _receipt_matrix(tmp_path)
     evidence = offline_receipt_evidence(root=tmp_path, receipts=receipts, candidate=_CANDIDATE,
                                         devices={"android": "android-device", "ios": "ios-device"})
-    assert len(evidence["cases"]) == 26
+    assert len(evidence["cases"]) == 2 * len(OFFLINE_REQUIRED_CASES)
     assert len(evidence["bindings"]) == 2
     assert all(result["nonPromotable"] for result in evidence["results"])
     assert not any("packageDigest" in result for result in evidence["results"])
@@ -265,7 +267,7 @@ def test_integration_offline_orchestration_forwards_exact_candidate_and_devices(
     assert all(command[command.index("--candidate") + 1] == "candidates/exact.json=" + _DIGEST for command in commands)
     assert all(command[0] == "app-content-uat" and "--dry-run" not in command for command in commands)
     refs = subject._validate_offline_axis(store=tmp_path / "store", axis=axis, candidate=_CANDIDATE)
-    assert len(axis["cases"]) == 26 and refs
+    assert len(axis["cases"]) == 2 * len(OFFLINE_REQUIRED_CASES) and refs
     with pytest.raises(subject.IntegrationRunError):
         subject._validate_offline_axis(store=tmp_path / "store", axis=axis, candidate={**_CANDIDATE, "tree": "f" * 40})
     store = tmp_path / "store"

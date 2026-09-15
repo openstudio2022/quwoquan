@@ -988,6 +988,8 @@ def validate_handoff_against_metadata(
     source = selected_contract["content_source_policy"].get(environment)
     if effective_manifest.get("contentSource") != source:
         issues.append("effective launch contentSource disagrees with canonical environment policy")
+    if effective_manifest.get("entrypoint") != selected_contract["content_source_entrypoints"].get(source):
+        issues.append("effective launch entrypoint disagrees with canonical content source")
     requires_local_transport = source == "remote" and target in local_targets
     if effective_manifest.get("requiresLocalTransport") is not requires_local_transport:
         issues.append("requiresLocalTransport disagrees with canonical target topology")

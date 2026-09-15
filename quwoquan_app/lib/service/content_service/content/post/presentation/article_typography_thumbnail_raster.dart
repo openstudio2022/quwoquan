@@ -475,7 +475,7 @@ class _TypographyCapturePage extends StatelessWidget {
               page: page,
               template: editorState.articleTemplate,
               fontPreset: font,
-              coverUrl: coverUrl.trim(),
+              coverUrl: coverUrl,
               paperTexture: paper,
             )
           : ArticlePageReadOnlyView(

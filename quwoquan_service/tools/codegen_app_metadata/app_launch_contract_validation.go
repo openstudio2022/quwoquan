@@ -328,8 +328,14 @@ func validateAppLaunchSchemas(
 	}
 	effective := launch.Schemas.AppEffectiveLaunchManifest
 	entrypoint, exists := effective.Fields["entrypoint"]
-	if !exists || entrypoint.Type != "string" || strings.TrimSpace(entrypoint.Const) == "" {
-		return fmt.Errorf("app_effective_launch_manifest entrypoint const is invalid")
+	if !exists || entrypoint.Type != "string" || entrypoint.Const != "" || entrypoint.Source != "content_source_entrypoints[contentSource]" {
+		return fmt.Errorf("app_effective_launch_manifest entrypoint source mapping is invalid")
+	}
+	if len(launch.ContentSourceEntrypoints) != 2 || launch.ContentSourceEntrypoints["bundled_snapshot"] != "lib/main_alpha.dart" || launch.ContentSourceEntrypoints["remote"] != "lib/main_prod.dart" {
+		return fmt.Errorf("content_source_entrypoints must isolate Alpha and Remote compositions")
+	}
+	if err := requireExactStringSet("entrypoint.allowed_values", entrypoint.AllowedValues, []string{launch.ContentSourceEntrypoints["bundled_snapshot"], launch.ContentSourceEntrypoints["remote"]}); err != nil {
+		return err
 	}
 	if err := requireAppLaunchFieldRef(
 		effective,

@@ -2,6 +2,7 @@
 @import patrol;
 @import ObjectiveC.runtime;
 #import <CommonCrypto/CommonDigest.h>
+#import <math.h>
 
 static NSString *QWQOfflineScreenshotDigest(NSData *data) {
   unsigned char digest[CC_SHA256_DIGEST_LENGTH];
@@ -113,7 +114,7 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
   NSArray *steps = plan[@"steps"];
   XCTAssertTrue([steps isKindOfClass:NSArray.class]);
   XCTAssertTrue(steps.count > 0 && steps.count <= 40);
-  NSSet *operations = [NSSet setWithArray:@[@"visible", @"tap", @"scroll", @"seek", @"playback", @"back", @"reveal"]];
+  NSSet *operations = [NSSet setWithArray:@[@"visible", @"tap", @"scroll", @"seek", @"playback", @"back", @"reveal", @"tab-roundtrip"]];
   for (NSDictionary *step in steps) {
     XCTAssertTrue([step isKindOfClass:NSDictionary.class]);
     XCTAssertEqual(step.count, 2);
@@ -147,6 +148,47 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
       }
     }
     NSString *selector = step[@"selector"];
+    if ([operation isEqualToString:@"tab-roundtrip"]) {
+      NSArray<NSString *> *labels = [selector componentsSeparatedByString:@"|"];
+      XCTAssertEqual(labels.count, 2);
+      XCUIElement *recommend = [self offlineElement:labels[0] app:app];
+      XCUIElement *following = [self offlineElement:labels[1] app:app];
+      CGRect initial = recommend.frame;
+      CGRect followingInitial = following.frame;
+      XCTAssertTrue(recommend.hittable && following.hittable);
+      CGFloat width = app.windows.firstMatch.frame.size.width;
+      CGFloat y = CGRectGetMidY(initial);
+      void (^swipe)(BOOL) = ^(BOOL forward) {
+        XCUICoordinate *origin = [app coordinateWithNormalizedOffset:CGVectorMake(0, 0)];
+        XCUICoordinate *start = [origin coordinateWithOffset:CGVectorMake(width * (forward ? 0.85 : 0.28), y)];
+        XCUICoordinate *end = [origin coordinateWithOffset:CGVectorMake(width * (forward ? 0.28 : 0.85), y)];
+        [start pressForDuration:0.1 thenDragToCoordinate:end];
+      };
+      swipe(YES);
+      CGRect middle = [self offlineElement:labels[0] app:app].frame;
+      XCTAssertTrue([self offlineElement:labels[0] app:app].hittable);
+      swipe(YES);
+      CGRect further = [self offlineElement:labels[0] app:app].frame;
+      XCTAssertTrue([self offlineElement:labels[0] app:app].hittable);
+      XCTAssertLessThan(middle.origin.x, initial.origin.x - 5);
+      XCTAssertEqualWithAccuracy(middle.origin.x, further.origin.x, 5);
+      for (NSInteger index = 0; index < 6; index++) {
+        swipe(NO);
+        if (following.hittable && fabs(recommend.frame.origin.x - initial.origin.x) <= 5) { break; }
+      }
+      CGRect restored = recommend.frame;
+      XCTAssertTrue(recommend.hittable && following.hittable);
+      XCTAssertEqualWithAccuracy(restored.origin.x, initial.origin.x, 5);
+      XCTAssertEqualWithAccuracy(following.frame.origin.x, followingInitial.origin.x, 5);
+      NSDictionary *geometry = @{@"initial": @[@(initial.origin.x), @(followingInitial.origin.x)],
+          @"middle": @[@(middle.origin.x)], @"further": @[@(further.origin.x)],
+          @"restored": @[@(restored.origin.x), @(following.frame.origin.x)]};
+      NSData *data = [NSJSONSerialization dataWithJSONObject:geometry options:NSJSONWritingSortedKeys error:nil];
+      NSString *observed = [NSString stringWithFormat:@"%@ geometry=%@", selector,
+          [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]];
+      [observations addObject:@{@"operation": operation, @"selector": selector, @"observed": observed}];
+      continue;
+    }
     if ([operation isEqualToString:@"reveal"]) {
       for (NSInteger index = 0; index < 30; index++) {
         XCUIElement *candidate = [[app descendantsMatchingType:XCUIElementTypeAny]

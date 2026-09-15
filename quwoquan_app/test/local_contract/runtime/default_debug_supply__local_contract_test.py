@@ -229,7 +229,8 @@ class BuildTimeSelfSupplyContractTest(unittest.TestCase):
         )
         # raw flutter run 不带 --target 时 Xcode 收到 lib/main.dart：接受该纯委托别名并归一。
         self.assertIn('(app_dir / "lib/main.dart").resolve()', source)
-        self.assertIn('print("export FLUTTER_TARGET=" + shlex.quote("lib/main_prod.dart"))', source)
+        self.assertIn('mapping = load_launch_manifest_contract()["content_source_entrypoints"]', source)
+        self.assertIn('shlex.quote(allowed[requested_path.resolve()])', source)
 
     def test_ios_native_gate_consumes_self_supply_only_in_debug(self) -> None:
         delegate = IOS_APP_DELEGATE.read_text(encoding="utf-8")

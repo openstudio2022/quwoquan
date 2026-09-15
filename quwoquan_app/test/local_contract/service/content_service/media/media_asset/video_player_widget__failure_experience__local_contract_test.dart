@@ -2,6 +2,9 @@
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012.t1
 import 'package:flutter/cupertino.dart';
+
+import '../../../../../support/runtime/media/signed_media_lease_test_support.dart';
+
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -42,18 +45,21 @@ void main() {
   for (final signed in <bool>[false, true]) {
     testWidgets('视频负缓存命中不刷新 TTL、不换签或重复 QoE（signed=$signed）', (tester) async {
       final cache = MediaLoadFailureCache.instance;
-      final delivery = MediaDeliveryResolver(
-        MediaEndpointConfig(
-          avatarBaseUrl: 'https://media.example.test',
-          imageBaseUrl: 'https://media.example.test',
-          videoBaseUrl: 'https://media.example.test',
-          attachmentBaseUrl: 'https://media.example.test',
-        ),
-      ).resolve(
-        'media/video/s/fixture/v1/missing.mp4',
-        kind: MediaDeliveryKind.video,
-      );
-      final identity = delivery.cacheIdentity;
+      final delivery =
+          MediaDeliveryResolver(
+            MediaEndpointConfig(
+              avatarBaseUrl: 'https://media.example.test',
+              imageBaseUrl: 'https://media.example.test',
+              videoBaseUrl: 'https://media.example.test',
+              attachmentBaseUrl: 'https://media.example.test',
+            ),
+          ).resolve(
+            'media/video/s/fixture/v1/missing.mp4',
+            kind: MediaDeliveryKind.video,
+          );
+      final identity = signed
+          ? 'signed|video|fixture-video'
+          : delivery.cacheIdentity;
       cache.recordTerminalFailure(
         identity,
         kind: MediaCandidateFailureKind.http404,
@@ -95,11 +101,12 @@ void main() {
                 deliveryReference: signed ? null : delivery,
                 signedDelivery: signed
                     ? SignedVideoDelivery(
-                        deliveryUri: Uri.parse(
-                          '${delivery.url}?sign=fixture&t=1893456300',
+                        lease: testSignedMediaLease(
+                          deliveryUri: Uri.parse(
+                            '${delivery.url}?sign=fixture&t=1893456300',
+                          ),
+                          assetId: 'fixture-video',
                         ),
-                        cacheIdentity: identity,
-                        assetId: 'fixture-video',
                         onReSignRequested: () => reSignCount += 1,
                       )
                     : null,

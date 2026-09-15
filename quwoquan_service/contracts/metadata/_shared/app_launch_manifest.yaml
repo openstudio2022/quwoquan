@@ -25,6 +25,11 @@ content_source_policy:
   gamma: remote
   prod: remote
 
+# 构建 composition 由签名 source 唯一决定；不以运行时分支载入两套 adapter。
+content_source_entrypoints:
+  bundled_snapshot: lib/main_alpha.dart
+  remote: lib/main_prod.dart
+
 runtime_document_content_sources:
   app-runtime-config-package: remote
   app-offline-bootstrap-document: bundled_snapshot
@@ -560,7 +565,7 @@ schemas:
       environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
       buildProfile: { type: string, allowed_values: [nonprod, prod] }
       target: { type: string, allowed_values: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
-      entrypoint: { type: string, const: lib/main_prod.dart }
+      entrypoint: { type: string, allowed_values: [lib/main_alpha.dart, lib/main_prod.dart], source: 'content_source_entrypoints[contentSource]' }
       launchProvenance: { type: string, allowed_values_ref: app_artifact_manifest.launch_provenances }
       runtimeConfigSupplyMode: { type: string, allowed_values_ref: runtime_config_supply_modes }
       launchPolicy: { type: string, allowed_values: [test_live, prod_release] }

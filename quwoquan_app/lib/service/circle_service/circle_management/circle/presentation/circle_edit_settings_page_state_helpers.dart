@@ -27,12 +27,17 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                   AppSpacing.md,
               width: double.infinity,
               child: coverUrl.isNotEmpty
-                  ? AppMediaImage(
-                      imageSource: coverUrl,
-                      fit: BoxFit.cover,
-                      placeholder: ColoredBox(color: cardBg),
-                      errorWidget: ColoredBox(color: cardBg),
-                    )
+                  ? _coverSourceOverride != null
+                        ? AppDraftImage(
+                            source: DraftImageFile(_coverSourceOverride!),
+                            fit: BoxFit.cover,
+                          )
+                        : AppMediaImage(
+                            imageSource: coverUrl,
+                            fit: BoxFit.cover,
+                            placeholder: ColoredBox(color: cardBg),
+                            errorWidget: ColoredBox(color: cardBg),
+                          )
                   : ColoredBox(
                       color: AppColors.primaryColor.withValues(alpha: 0.1),
                     ),
@@ -71,19 +76,26 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                     ),
                     child: avatarUrl.isNotEmpty
                         ? ClipOval(
-                            child: AppMediaImage(
-                              imageSource: avatarUrl,
-                              fit: BoxFit.cover,
-                              errorWidget: const ColoredBox(
-                                color: AppColors.transparent,
-                                child: Center(
-                                  child: Icon(
-                                    CupertinoIcons.person_3_fill,
-                                    color: AppColors.white,
+                            child: _avatarSourceOverride != null
+                                ? AppDraftImage(
+                                    source: DraftImageFile(
+                                      _avatarSourceOverride!,
+                                    ),
+                                    fit: BoxFit.cover,
+                                  )
+                                : AppMediaImage(
+                                    imageSource: avatarUrl,
+                                    fit: BoxFit.cover,
+                                    errorWidget: const ColoredBox(
+                                      color: AppColors.transparent,
+                                      child: Center(
+                                        child: Icon(
+                                          CupertinoIcons.person_3_fill,
+                                          color: AppColors.white,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ),
                           )
                         : const Icon(
                             CupertinoIcons.person_3_fill,
@@ -162,12 +174,17 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
                   child: _hasCoverSource
-                      ? AppMediaImage(
-                          imageSource: _resolvedCoverSource,
-                          fit: BoxFit.cover,
-                          placeholder: ColoredBox(color: fill),
-                          errorWidget: ColoredBox(color: fill),
-                        )
+                      ? _coverSourceOverride != null
+                            ? AppDraftImage(
+                                source: DraftImageFile(_coverSourceOverride!),
+                                fit: BoxFit.cover,
+                              )
+                            : AppMediaImage(
+                                imageSource: _resolvedCoverSource,
+                                fit: BoxFit.cover,
+                                placeholder: ColoredBox(color: fill),
+                                errorWidget: ColoredBox(color: fill),
+                              )
                       : DecoratedBox(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
@@ -269,20 +286,25 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                 ),
                 child: ClipOval(
                   child: _hasAvatarSource
-                      ? AppMediaImage(
-                          imageSource: _resolvedAvatarSource,
-                          fit: BoxFit.cover,
-                          placeholder: ColoredBox(
-                            color: fgSecondary.withValues(alpha: 0.12),
-                          ),
-                          errorWidget: ColoredBox(
-                            color: fgSecondary.withValues(alpha: 0.12),
-                            child: Icon(
-                              CupertinoIcons.person_3_fill,
-                              color: fgSecondary,
-                            ),
-                          ),
-                        )
+                      ? _avatarSourceOverride != null
+                            ? AppDraftImage(
+                                source: DraftImageFile(_avatarSourceOverride!),
+                                fit: BoxFit.cover,
+                              )
+                            : AppMediaImage(
+                                imageSource: _resolvedAvatarSource,
+                                fit: BoxFit.cover,
+                                placeholder: ColoredBox(
+                                  color: fgSecondary.withValues(alpha: 0.12),
+                                ),
+                                errorWidget: ColoredBox(
+                                  color: fgSecondary.withValues(alpha: 0.12),
+                                  child: Icon(
+                                    CupertinoIcons.person_3_fill,
+                                    color: fgSecondary,
+                                  ),
+                                ),
+                              )
                       : Icon(CupertinoIcons.person_3_fill, color: fgSecondary),
                 ),
               ),

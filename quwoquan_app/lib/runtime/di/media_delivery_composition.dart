@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/domain/signed_media_delivery_lease.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
     show MediaDeliveryKind;
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_image.dart';
@@ -21,14 +22,15 @@ Widget mediaDeliveryImage({
   Key? key,
   required MediaDeliveryBinding binding,
   required MediaDeliveryKind kind,
-  required Widget Function(BuildContext context, String publicUrl) publicBuilder,
+  required Widget Function(BuildContext context, String publicUrl)
+  publicBuilder,
   double? width,
   double? height,
   BoxFit? fit,
   Widget? placeholder,
   Widget? errorWidget,
   Widget? absentWidget,
-  Widget Function(BuildContext context, String deliveryUrl, String cacheIdentity)?
+  Widget Function(BuildContext context, SignedMediaDeliveryLease lease)?
   signedReadyBuilder,
   VoidCallback? onLoadSucceeded,
   void Function(Object error)? onLoadFailed,
@@ -54,7 +56,8 @@ Widget mediaDeliveryImage({
 Widget mediaDeliveryVideo({
   Key? key,
   required MediaDeliveryBinding binding,
-  required Widget Function(BuildContext context, String publicUrl) publicBuilder,
+  required Widget Function(BuildContext context, String publicUrl)
+  publicBuilder,
   required Widget Function(BuildContext context, SignedVideoDelivery delivery)
   signedBuilder,
   Widget? placeholder,

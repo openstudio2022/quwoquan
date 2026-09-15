@@ -431,7 +431,7 @@ class ArticlePaginationEngine {
         id: 'page_$pageIndex',
         title: titleText,
         body: bodyText,
-        imageUrl: pageAsset?.imageUrl.trim() ?? '',
+        imageUrl: pageAsset?.imageUrl ?? '',
         imageLayout: pageAsset?.imageLayout ?? 'fullWidth',
         caption: pageAsset?.caption ?? '',
         contentBlocks: pageBlocks,

@@ -25,6 +25,9 @@
 
 ## 4. 关键决策
 
+- 构建派生物封印与离线交互验收遵循 [`environment-topology-and-packaging` REQ-008/GWT-007](./environment-topology-and-packaging/spec.md#gwt-007)：iOS registrant 仅按精确路径从工具链模板及锁定插件声明验证完整字节，源 capsule CAS 与派生清单摘要分别绑定；SwiftPM 缓存预建在 private projection 内，不添加外部 symlink 例外。未知字节或路径越界终止，保留首错并由新 candidate/fresh projection 恢复，不修改依赖锁或全局缓存。
+- 页面证据只由外部原生 test host 对生产 App 执行真实点击/滑动并观察；首页推荐视频与视频书分格，Tab 往返用控件实际坐标证明固定及恢复，不在 AUT 注入状态或路由。local_contract 验证篡改拒绝与步骤/观察完整性，双平台 user_acceptance 验证实际行为；未执行设备证据不提升为通过。
+
 <a id="dec-001"></a>
 ### DEC-001 三环境内容验收以可恢复窗口编排原始 CaseResult
 - 决策：Beta/Gamma Remote App 在同一次安装的正向读回后验证受控 Edge 恢复；独立 Alpha API gate 验证服务端 Edge 与 empty/replay lifecycle，Alpha 离线 App 则证明同一故障期间继续读取快照。两类 source 证据不互换；窗口只在目标维护租约与精确 receipt-bound runtime 内执行并恢复，不停止其他 target。
@@ -58,7 +61,7 @@
 - 被否决方案：任一启动、构建或测试入口自行生成 trust envelope、注入 endpoint，或维护第二套 installer、reader 或状态机。
 - 可测试观察面：local_contract 由 metadata 驱动覆盖两种 signed document 的签名、profile/target、同一 installer/reader/resolver、CAS 与 absent/failed 结果；证明 Alpha 离线不伪造 endpoint、不豁免 online expiry，且无旧环境 flavor 或直接 bundle bootstrap 读取旁路。
 - 可测试观察面：local_contract 覆盖所有受支持入口只能提交当前 generated activation contract；对于未经 canonical handoff 的入口，只断言本 owner 的 typed 配置失败、active pointer 不变与无伪成功回执。入口解析、设备选择、工具链和 attach 行为由它们的 owner 测试，不在本 DEC 复制。
-- 可测试观察面：同一 nonprod APK/`.app` 在 Alpha 离线与 Beta/Gamma 在线 source 间显式切换，完整 AppArtifact digest、签名与可执行字节不变；只更新已验证配置/绑定并重建上下文，失败保留上一已验证 source。在线 package 原子性与离线闭包完整性分别证明。
+- 可测试观察面：Beta/Gamma 共用在线 nonprod APK/`.app` 并仅更新已验证配置，完整 AppArtifact digest 与签名不变。Alpha 另用隔离制品，不要求 Alpha↔在线制品切换保持摘要不变；各自仍按同一 canonical activation/CAS/read chain 验信，在线 package 原子性与离线闭包完整性分别证明。
 - 可测试观察面：user_acceptance 回读 Android/iOS 安装 identity、trust envelope digest、active package digest、runtime environment 与 target，并证明冷启动、连续 Hot Restart、图标启动和配置回滚保持同一规范化身份；首次无 package 显示配置阻断页。
 - SLI/SLO：activation attempt 及 active receipt 的记录面只引用 [App launch manifest 的 `schemas.runtime_config_activation_receipt`](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml)，不在 Design 维护第二份字段表或旧精确字段集。有效 package 的本地 activation 在 5 秒内成功率目标为 99.9%；禁止记录 endpoint、密钥或 package 原文。无 active package、签名失败、过期、身份错配与原子 readback 失败均立即告警，配置回滚目标为 5 分钟内完成。
 - Schema 迁移恢复：host executor、native 与 Dart 的运行路径只接受上述 canonical metadata 当前 generated schema，不得删字段推断旧 schema、继续轮询旧 receipt 或 dual-read。已安装基线如存在历史 receipt，只允许在新 activation 开始前执行一次性离线迁移：将旧 receipt 从运行时可见路径隔离并写独立迁移审计，随后由 canonical activation 全量校验 active package 并产生当前 schema receipt。迁移不得伪造缺失字段、产生兼容 reader 或将历史回执当作 CAS 成功证据；迁移未完成时 activation fail closed 且 active pointer 保持不变。
@@ -74,6 +77,7 @@
 - 角色入口边界：Make、IDE、raw SDK、受管字面命令与 run.sh 只消费同一 canonical 启动 contract，不持第二套配置生成或设备权威。默认 Alpha 的 signed offline document 经过同一 activation/CAS/read chain 并验证快照与设备绑定，无云栈、TLS/登录 readiness 前置；在线 source 消费目标签名配置和对应严格 readiness。direct 安全租约只防运行占用，不提升 managed/UAT authority；其余子命令和项目 exact 透传，设备选择由 canonical device authority 裁决。
 - 终端注入边界：Cursor terminal profiles 与显式 opt-in、可逆的 user-zsh managed source block 只注入受管 PATH bin 目录（含 launcher `flutter` dispatcher）与钉定的 Flutter SDK/CocoaPods/Python 身份，不改 ZDOTDIR、不生成 terminal receipt；既有 shell 只能显式 source 刷新，移除注入即完全回退。terminal carrier receipt、`workspace_flutter_run` 与 `native_flutter_run` provenance 均已退役，`app_launch_attempt` 的两个 carrier 字段固定为空值。
 - 依赖 staleness 恢复边界：只有 live worktree 的外层 canonical launcher 在创建 private workspace projection 前、stdin/stderr 双 TTY 的交互会话中，才允许对首个 `APP.DEPENDENCY.bundle_stale` 自动执行一次 canonical `stackctl app-dependency-sync` 并在 active readback 与本次 sync attempt 一致后重试一次 projection（one-shot）；非交互/CI/UAT、private projection 内、同步失败、activation ambiguous 与第二次 stale 均 fail-closed，首个 stale blocker 必须先输出且不得被替换。sync 事务自身的对象与恢复语义由 [`platform-ops-governance` design](../../platform-ops-governance/design.md#dec-003) 拥有，本 DEC 只冻结启动侧触发边界。
+- VM discovery：iOS Simulator 组合入口的 exact device/PID 与 pre-launch log start 是唯一发现 authority；使用该设备结构化 PID 日志获得唯一 loopback VM URI，随后全局 lsof 必须返回 exact PID 单集合。退役按 bundle 名 dns-sd 全局查询，避免不同模拟器同包名解析到另一进程；不保留 mDNS fallback。15 秒预算内无记录可有界等候，跨 PID、多个 URI、格式不明或端口 owner 错配立即 fail closed；token 仅在受保护调用参数中传递，不写错误日志。
 - Retry owner：iOS UAT parent 由 entry/toolchain owner 在 attempt-1 前一次性冻结 exact `PATH` 与同一 six-field physical CocoaPods binding，并由 attempt-1/retry 原样消费；ambient parent shell identity、attempt 间重发现与 child 反向传回均无 authority，binding 漂移在 Flutter child 前 typed block。
 - UAT authority 边界：raw authority 仍固定为 `ReleaseUatSamplePlan → TargetUatBinding → raw ReadinessCaseResult → EnvironmentAcceptanceFact`；父 report 只读投影 raw refs、exact-byte digests、coverage 与缺口，无独立 outcome verdict，也不能进入或回写该链。
 - Query 边界：native、Dart 与 host readback 只消费 [`schemas.runtime_config_activation_receipt`](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml) 当前 generated schema 的 canonical result。入口 provenance、启动终态或缓存的旧回执不得被推断为配置成功，也不得成为第二个 query source。
@@ -114,7 +118,11 @@
 <a id="dec-006"></a>
 ### DEC-006 内容 source 在组合根选择，离线制品与在线配置分别验信
 
-- 对象与 owner：canonical producer 拥有选定 release/cohort、许可与完整媒体闭包；App 只消费其不可变离线派生产物，不重选业务内容。runtime 组合根根据已验证配置构造同一组 typed read ports；页面、domain/application、Provider 消费端不读取 source/profile。Alpha local adapter 与 Remote adapter 复用 canonical Post/Creator/实体投影，离线只发布 typed capability，不伪造服务 active identity。
+- 对象与 owner：canonical producer 拥有选定 release/cohort、许可与完整媒体闭包；App 只消费其不可变离线派生产物，不重选业务内容。Alpha 与在线是两个隔离的构建 composition，各自构造同一组 typed read ports；页面、domain/application、Provider 消费端不读取 source/profile。Alpha local adapter 与 Remote adapter 复用 canonical Post/Creator/实体投影，离线只发布 typed capability，不伪造服务 active identity。
+- 构建隔离：在线入口传递 import/export/part（包括所有 conditional URI）及 path package 的 source closure 不得到达 Alpha adapter、bundle loader、fixture、Mock 或 test runner。production pubspec 不声明 Alpha 资产；Alpha 资产只可向 fresh 私有构建投影显式加入且保持 canonical snapshot exact bytes，禁止改 live pubspec、共享当前环境文件或借 runtime if/tree shaking 证明纯度。Beta/Gamma/Prod 消费同一真实业务/Remote 图，仅配置与既有信任域不同。构建门失败保留具体依赖链，禁止签发纯度成功。
+- direct 投影身份：fresh repository projection 保留兄弟 path package 布局，记录原仓 audited Git identity 与逐文件 source digest；签发前重验原仓 Git identity、投影 source bytes 和投影 pubspec，不把 private 目录伪装为 Git worktree 或 immutable candidate。canonical immutable capsule 路径继续使用其既有验证，不由 direct 投影取代。
+- 同源构建探针：需要 Alpha/Remote 同源对照时，只 capture 一次两个入口闭包的并集及构建输入，封存逐文件摘要和 audited Git identity 的只读 source manifest，再从该冻结目录分别派生两份可写 projection。派生和编译身份回读只校验冻结 manifest/exact bytes，不重新读取 live 字节或要求 live HEAD 不变；两份投影交集 source digest 必须完全相等。冻结 source manifest 只证明本地 build probe，不成为 package input capsule、candidate 或发布 authority；live 漂移只另报 currentness。
+- 平台与入口交接：隔离 composition 入口必须先由 canonical launch metadata/codegen 声明，原生自供给仅对 Alpha 隔离产物有效；在线产物不得隐式嵌入 Alpha signed document。未迁移入口/native/purity 的闭包明确阻断，不能把新增投影函数或 source contract PASS 当作已构建制品。包身份、trust envelope、在线 expiry、activation/CAS/readback 不因构建隔离改变或绕过。
 - Command/query：构建准备完整 snapshot 并验证 digest/引用/许可，由独立 signed offline bootstrap document 绑定；离线与在线 document 共用 canonical activation/CAS/receipt/read chain，只有文档类型的验证合同不同，不另建 bootstrap reader。AppContentSource 的 typed 取值只消费 [`App launch manifest`](../../../../quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml) 的 source 策略，Dart/wire 映射不在设计复制。source 在 provider scope 创建前冻结，显式换环境结束设备绑定、取消旧请求/播放器/outbox，再冷启动或重建整个 scope，不修改旧 client base。
 - 信任与时间：离线完整性由独立 signed offline document、制品签名、source digest 和许可共同承担，不继承在线 24 小时到期；不能靠忽略在线 expiry 实现离线。在线 endpoint trust、profile、target、签名与新配置有效期不豁免。尚有效在线配置在刷新失败时保留，到期按 canonical 错误恢复，不能用离线包续命；同 authority 刷新保留授权 namespace。
 - 验收装配：现役 `app-content-uat` 在编排边界按 canonical source 分流前置与测试集；页面和 application 不增加环境开关。`TargetUatBinding` 与 raw `ReadinessCaseResult` 用互斥的 source authority 表达离线制品/快照或在线 release/activation，复用 exact ref/digest、create-once 和设备/runner 绑定。离线不得填造在线字段，Remote 不因离线分支放宽验签、有效期、登录或 CAS/readback。

@@ -1,4 +1,3 @@
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/design_system/formatters/chat_time_formatter.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
@@ -208,10 +207,7 @@ extension ChatMessageViewDataDisplay on ChatMessageViewData {
       clientMsgId: clientMsgId,
       senderId: senderId,
       senderName: senderName?.trim() ?? '',
-      senderAvatar: resolveAvatarImageUrl(
-        senderAvatar,
-        endpointConfig: mediaEndpointConfig,
-      ),
+      senderAvatar: senderAvatar ?? '',
       senderPersonaId: senderId,
       type: type,
       content: content?.trim() ?? '',

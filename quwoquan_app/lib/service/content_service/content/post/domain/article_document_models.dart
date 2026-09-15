@@ -751,7 +751,7 @@ List<ArticleDocumentNode> _normalizeDocumentNodes(
       .map(
         (node) => node.copyWith(
           text: _normalizeArticleText(node.text),
-          imageUrl: node.imageUrl.trim(),
+          imageUrl: node.imageUrl,
           caption: node.caption.trim(),
         ),
       )
@@ -795,9 +795,10 @@ _ArticleDocumentProjection _projectArticleDocument(
   final blocks = <ArticleDocumentBlock>[];
   final allBlocks = <ArticleDocumentBlock>[];
   var orderedIndex = 0;
-  final joinedWrapBelowParagraphIds = resolveArticleWrapNodeGroups(
-    nodes,
-  ).map((group) => group.belowParagraph?.id).whereType<String>().toSet();
+  final joinedWrapBelowParagraphIds = resolveArticleWrapNodeGroups(nodes)
+      .map((group) => group.belowParagraph?.id)
+      .whereType<String>()
+      .toSet();
 
   void appendBodyText(String line, {bool separateLine = true}) {
     final normalized = line.trim();

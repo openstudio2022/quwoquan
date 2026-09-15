@@ -78,6 +78,15 @@
 - 必须具备回滚到“服务端保留上一版 `avatarUrl`、客户端仍只读 `avatarUrl`”的最小回滚路径
 - 统一媒体运行时必须覆盖对象引用与 URL 规范，不止是“上传”
 
+<a id="req-004"></a>
+### REQ-004 同一 typed 媒体获取入口与 URL 原样透传
+
+- 业务从 Post 获取的媒体引用必须逐字节原样传给 `PublicMediaDeliveryPort`，图片 profile 作为独立参数；业务不得检查环境、contentSource、endpoint、scheme、host、path 或扩展名来决定包内/远端、provider 或 controller。
+- 图片、视频和可选 preview manifest/sprite 共用所选获取器；获取器及平台 adapter 负责授权、CDN profile、包内 checksum、HTTP 与平台 controller 差异，不以 nullable 包内结果作为网络 fallback 信号。
+- Alpha 注入制品绑定 Bundled adapter；Beta/Gamma/Prod 使用同一个 Remote 实现，仅配置不同。四环境对同一业务驱动暴露相同 typed 获取结果与失败语义，线上依赖闭包不导入 Alpha 包内实现。
+- 非空媒体引用的 null/unknown accessMode 在统一边界 fail closed；业务可按 typed 结果、显式功能开关及内容缺席选择 UI，但不得自行决定交付来源。
+- 图片查看器使用 full profile、不改变 BoxFit；可选预览失败或缺席只退化时间浮标，不阻断 P0 视频。Alpha 的空 endpoint 是合法装配，不得靠关闭预览开关掩盖错误。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`runtime`](../spec.md) 声明的领域入口。
@@ -115,7 +124,25 @@
 - THEN video_playback_qoe 只进入 Ops 强类型遥测，effective_play 只进入 content behavior；两条链路的字段、隐私和推荐消费者互不混用。
 - THEN canonical release 生成会拒绝缺失或状态不匹配的 media canary profile，asset/version/duration/public slice/preview track 保持同源；四环境均执行真实 Remote media UAT，不以 fixture smoke 替代。
 
+<a id="sit-003"></a>
+### SIT-003 四环境同业务媒体获取一致性
+
+- GIVEN Alpha canonical snapshot 和 Beta/Gamma/Prod 配置驱动的同一 Remote adapter，业务取得原始 Post URL 与独立 profile。
+- WHEN 同一业务驱动加载图片、视频及 preview manifest/sprite。
+- THEN 获取接口记录的 URL 与 Post 字节相同；真实 adapter 返回相同 typed 结果，校验或权限失败均不切换来源。
+- THEN Alpha 真实 snapshot 的作品视频不 override preview query provider 仍可构建 P0；相对图片引用经真实 canvas 默认 loader 解码成功，不使用替换被测 adapter 的测试替身。
+- THEN 图片查看使用 full profile；缺轨、损坏轨及合法 null endpoint 不导致 P0 构建异常，null accessMode 明确失败且无网络请求。
+
 ## 8. 开放事项
+
+<a id="open-003"></a>
+### OPEN-003 四环境统一获取真实消费验收
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺 `SIT-003` 的四环境真实设备读回与完整 preview 轨资源制品证据；统一 typed lease 授权、Post/文章/头像原样透传、真实 canvas 默认解码、合法空 endpoint、缺轨不阻断 P0 已有本地合同，不能替代在线 HTTP/设备播放证据。
+- 完成判定：`SIT-003` 全部结果子句有真实命名证据且四环境设备读回完成。
 
 <a id="open-001"></a>
 ### OPEN-001 runtime media 交付与加载恢复 SIT

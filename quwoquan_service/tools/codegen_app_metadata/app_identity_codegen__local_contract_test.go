@@ -71,7 +71,7 @@ func TestAppIdentityCodegenRendersCompletePlatformMatrix(t *testing.T) {
 		`#include "Identity/nonprod.xcconfig"`,
 		`QWQ_EXPECTED_CONFIGURATION = Debug-nonprod`,
 		`QWQ_MODE_BUNDLE_ID_SUFFIX = .debug`,
-		`FLUTTER_TARGET = lib/main_prod.dart`,
+		`FLUTTER_TARGET is owned by Flutter invocation and validated against launch metadata.`,
 	} {
 		if !strings.Contains(debugNonprod, expected) {
 			t.Fatalf("Debug-nonprod.xcconfig misses %q", expected)

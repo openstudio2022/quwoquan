@@ -4,7 +4,9 @@ import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.da
     show MediaDeliveryKind;
 import 'package:quwoquan_app/runtime/transport/media/signed_video_delivery.dart';
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/application/signed_media_delivery_coordinator.dart';
-import 'package:quwoquan_app/service/content_service/media/original_access_quota/domain/signed_media_delivery_lease.dart';
+
+import '../../../support/runtime/media/signed_media_lease_test_support.dart';
+
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
@@ -56,15 +58,11 @@ void main() {
   test('signed video delivery equality ignores callback identity', () {
     final uri = Uri.parse('https://cdn.test/video.mp4?sign=a&t=1');
     final first = SignedVideoDelivery(
-      deliveryUri: uri,
-      cacheIdentity: 'signed|video|asset-1',
-      assetId: 'asset-1',
+      lease: testSignedMediaLease(deliveryUri: uri, assetId: 'asset-1'),
       onReSignRequested: () {},
     );
     final second = SignedVideoDelivery(
-      deliveryUri: uri,
-      cacheIdentity: 'signed|video|asset-1',
-      assetId: 'asset-1',
+      lease: testSignedMediaLease(deliveryUri: uri, assetId: 'asset-1'),
     );
 
     expect(first, second);
@@ -74,13 +72,13 @@ void main() {
   test('signed media lease has value equality and typed failure text', () {
     final expiresAt = DateTime.utc(2030, 1, 1);
     final uri = Uri.parse('https://cdn.test/image.jpg?sign=a&t=1');
-    final first = SignedMediaDeliveryLease(
+    final first = testSignedMediaLease(
       assetId: 'asset-1',
       kind: MediaDeliveryKind.image,
       deliveryUri: uri,
       expiresAt: expiresAt,
     );
-    final second = SignedMediaDeliveryLease(
+    final second = testSignedMediaLease(
       assetId: 'asset-1',
       kind: MediaDeliveryKind.image,
       deliveryUri: uri,

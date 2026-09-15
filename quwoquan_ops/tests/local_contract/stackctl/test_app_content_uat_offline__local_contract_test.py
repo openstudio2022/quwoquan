@@ -26,6 +26,43 @@ SCREENSHOT = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC
 SCREENSHOT_DIGEST = "sha256:" + hashlib.sha256(SCREENSHOT).hexdigest()
 
 
+def test_home_video_and_tab_roundtrip_are_required_real_journeys() -> None:
+    plans = {plan["caseId"]: plan for plan in _plans(_launch_identity())}
+    video = plans["homepage-video-playback"]
+    snapshot = json.loads((ROOT / "quwoquan_app/assets/content/alpha/manifest.json").read_bytes())
+    recommended = next(row["orderedPostIds"] for row in snapshot["channels"] if row["channelId"] == "recommend")
+    post = next(row["detail"] for row in snapshot["posts"]
+                if row["projection"]["postId"] in recommended and row["detail"]["contentType"] == "video")
+    assert post["postId"] in video["route"]
+    assert video["steps"][-3] == {"operation": "tap", "selector": post["title"]}
+    assert [step["operation"] for step in video["steps"]][-3:] == ["tap", "visible", "playback"]
+    assert any(step["operation"] == "reveal" for step in video["steps"])
+    tabs = plans["homepage-tab-roundtrip"]
+    assert tabs["steps"][-1]["operation"] == "tab-roundtrip"
+    for plan in (video, tabs):
+        pages.validate_page_plan(plan)
+        assert plan["caseId"] in offline.OFFLINE_REQUIRED_CASES
+
+
+@pytest.mark.parametrize("geometry", [
+    {"initial": [80, 10], "middle": [80], "further": [80], "restored": [80, 10]},
+    {"initial": [80, 10], "middle": [10], "further": [40], "restored": [80, 10]},
+    {"initial": [80, 10], "middle": [10], "further": [10], "restored": [10, -70]},
+])
+def test_tab_roundtrip_rejects_unpinned_or_unrestored_geometry(geometry: dict) -> None:
+    step = {"operation": "tab-roundtrip", "selector": "推荐|关注"}
+    with pytest.raises(ValueError, match="geometry"):
+        pages._validate_step_observation(step, {**step, "observed": "推荐|关注 geometry=" + json.dumps(geometry)})
+
+
+def test_home_video_cannot_replace_click_with_route_or_first_frame() -> None:
+    plan = next(plan for plan in _plans(_launch_identity()) if plan["caseId"] == "homepage-video-playback")
+    plan["steps"] = [step for step in plan["steps"] if step["operation"] != "reveal"]
+    plan["planDigest"] = pages.document_digest({key: value for key, value in plan.items() if key != "planDigest"})
+    with pytest.raises(ValueError):
+        pages.validate_page_plan(plan)
+
+
 def test_source_selection_comes_from_canonical_policy() -> None:
     assert offline.content_source_for_target("alpha-local") == "bundled_snapshot"
     assert offline.content_source_for_target("beta-local") == "remote"
@@ -99,6 +136,8 @@ def _native_marker(plan: dict[str, object], binding: dict[str, object]) -> str:
             observed += " 2:07 / 2:07"
         elif step["operation"] == "seek":
             observed += " 0:30 / 2:07"
+        elif step["operation"] == "tab-roundtrip":
+            observed += ' geometry={"initial":[80,10],"middle":[10],"further":[10],"restored":[80,10]}'
         observations.append({**step, "observed": observed})
     return "QWQ_OFFLINE_PAGE " + json.dumps({
         **{key: binding[key] for key in ("candidateDigest", "artifactDigest", "deviceId", "launchAttemptId")},
@@ -237,10 +276,10 @@ def test_live_dispatch_calls_real_executor_and_produces_full_acceptance_refs(mon
     receipt = offline.run_offline_app_content_uat(args=argparse.Namespace(dry_run=False, platform="android" if platform == "android" else "ios-simulator", device_id=binding["deviceId"]),
         report_dir=tmp_path / "uat", output_root=tmp_path, issues=[])
     assert receipt["status"] == "passed", receipt
-    assert len(commands) == 13
-    assert len(receipt["rawResultRefs"]["alpha-local"]) == 13
-    assert len(receipt["rawResultDigests"]["alpha-local"]) == 13
-    assert len(receipt["pageResultRefs"]) == 13
+    assert len(commands) == len(offline.OFFLINE_REQUIRED_CASES)
+    assert len(receipt["rawResultRefs"]["alpha-local"]) == len(offline.OFFLINE_REQUIRED_CASES)
+    assert len(receipt["rawResultDigests"]["alpha-local"]) == len(offline.OFFLINE_REQUIRED_CASES)
+    assert len(receipt["pageResultRefs"]) == len(offline.OFFLINE_REQUIRED_CASES)
     results = [json.loads((tmp_path / ref["ref"]).read_bytes()) for ref in receipt["rawResultRefs"]["alpha-local"]]
     target = receipt["targetUatBindingRefs"]["alpha-local"]
     typed_binding = read_target_uat_binding(tmp_path / target["ref"])
@@ -265,7 +304,7 @@ def test_live_failure_keeps_first_typed_blocker_and_completed_raw_refs(monkeypat
     assert receipt["firstBlocker"] == "APP.LAUNCH.runtime_config_trust_missing"
     assert len(commands) == 4
     assert len(receipt["rawResultRefs"]["alpha-local"]) == 3
-    assert receipt["rawCoverage"]["alpha-local"] == {"expected": 13, "present": 3, "missing": 10}
+    assert receipt["rawCoverage"]["alpha-local"] == {"expected": len(offline.OFFLINE_REQUIRED_CASES), "present": 3, "missing": len(offline.OFFLINE_REQUIRED_CASES) - 3}
 
 
 @pytest.mark.parametrize("field", ["candidateDigest", "sourceGitSha", "deviceId", "platform"])
@@ -356,7 +395,7 @@ def test_native_sources_prevalidate_all_steps_and_check_canonical_pid() -> None:
     android = (ROOT / "quwoquan_app/test_host/patrol/android/app/src/androidTest/java/com/quwoquan/testhost/patrol/ProductionHomepageExternalAutTest.java").read_text()
     ios = (ROOT / "quwoquan_app/test_host/patrol/ios/RunnerUITests/RunnerUITests.m").read_text()
     assert android.count("private static String observedNode(") == 1
-    assert android.index('matches("visible|tap|scroll|seek|playback|back|reveal")') < android.index("int before = requireSingleRunningPid(automation, target);")
+    assert android.index('matches("visible|tap|scroll|seek|playback|back|reveal|tab-roundtrip")') < android.index("int before = requireSingleRunningPid(automation, target);")
     assert 'plan.getInt("canonicalProcessId"), before' in android
     assert 'Assume.assumeTrue(explicitlySelected || arguments.containsKey("qwqOfflinePagePlan"))' in android
     assert 'XCTAssertEqualObjects(before, plan[@"canonicalProcessId"])' in ios

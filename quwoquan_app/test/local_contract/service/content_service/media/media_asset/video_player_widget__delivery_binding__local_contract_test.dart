@@ -6,6 +6,9 @@
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012.t3
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-003
 import 'dart:async';
+
+import '../../../../../support/runtime/media/signed_media_lease_test_support.dart';
+
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -520,11 +523,12 @@ void main() {
     var reSignRequests = 0;
     final delivery = ValueNotifier<SignedVideoDelivery>(
       SignedVideoDelivery(
-        deliveryUri: Uri.parse(
-          'https://media.example.test/media/objects/private.mp4?sign=one&t=1893456300',
+        lease: testSignedMediaLease(
+          deliveryUri: Uri.parse(
+            'https://media.example.test/media/objects/private.mp4?sign=one&t=1893456300',
+          ),
+          assetId: 'asset-private-1',
         ),
-        cacheIdentity: 'signed|video|asset-private-1',
-        assetId: 'asset-private-1',
         onReSignRequested: () {
           reSignRequests += 1;
         },
@@ -567,11 +571,12 @@ void main() {
     expect(reSignRequests, 1);
 
     delivery.value = SignedVideoDelivery(
-      deliveryUri: Uri.parse(
-        'https://media.example.test/media/objects/private.mp4?sign=two&t=1893456600',
+      lease: testSignedMediaLease(
+        deliveryUri: Uri.parse(
+          'https://media.example.test/media/objects/private.mp4?sign=two&t=1893456600',
+        ),
+        assetId: 'asset-private-1',
       ),
-      cacheIdentity: 'signed|video|asset-private-1',
-      assetId: 'asset-private-1',
       onReSignRequested: () {
         reSignRequests += 1;
       },

@@ -1376,7 +1376,9 @@ enum NativeRuntimeConfigActivationCoordinator {
           let manifestTarget = nonEmptyString(manifest["target"]),
           AppLaunchContract.targetEnvironment[manifestTarget] == manifestEnvironment,
           manifest["entrypoint"] as? String
-            == AppLaunchContract.appEffectiveLaunchManifestEntrypoint,
+            == AppLaunchContract.appEffectiveLaunchManifestEntrypoint[
+              AppLaunchContract.contentSourcePolicy[manifestEnvironment] ?? ""
+            ],
           let launchProvenance = nonEmptyString(manifest["launchProvenance"]),
           AppLaunchContract.launchProvenances.contains(launchProvenance),
           let supplyMode = nonEmptyString(manifest["runtimeConfigSupplyMode"]),

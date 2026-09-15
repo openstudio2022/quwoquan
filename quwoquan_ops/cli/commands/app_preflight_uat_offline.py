@@ -17,7 +17,7 @@ from quwoquan_ops.cli.lib.readiness_case_result import write_create_once_json
 OFFLINE_SPEC_REF = "specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007"
 OFFLINE_REQUIRED_CASES = (
     "default-entry", "homepage-recommendation", "premium-video-book", "article-detail",
-    "image-detail", "creator-avatar", "video-complete", "video-seek",
+    "image-detail", "homepage-video-playback", "homepage-tab-roundtrip", "creator-avatar", "video-complete", "video-seek",
     "empty-state", "pagination-end", "login-unavailable", "write-unavailable", "private-unavailable",
 )
 

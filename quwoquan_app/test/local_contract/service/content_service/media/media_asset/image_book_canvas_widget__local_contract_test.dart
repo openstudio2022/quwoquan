@@ -24,15 +24,27 @@ import 'package:quwoquan_app/service/content_service/media/original_access_quota
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/spacing/immersive_media_wait_motion.dart';
-import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_load_failure_cache.dart';
-import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/cdn_image_url_builder.dart';
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 
 Widget _host(Widget child) => ProviderScope(
-  overrides: sealedCloudBoundaryOverrides(),
+  overrides: [
+    ...sealedCloudBoundaryOverrides(),
+    publicMediaDeliveryProvider.overrideWithValue(
+      RemotePublicMediaDelivery(
+        MediaEndpointConfig(
+          avatarBaseUrl: 'https://media.example.test/media/avatar',
+          imageBaseUrl: 'https://media.example.test/media/image',
+          videoBaseUrl: 'https://media.example.test/media/video',
+          attachmentBaseUrl: 'https://media.example.test',
+        ),
+      ),
+    ),
+  ],
   child: CupertinoApp(home: CupertinoPageScaffold(child: child)),
 );
 
@@ -40,11 +52,9 @@ Widget _host(Widget child) => ProviderScope(
 /// 私有交付分流由 image_book_signed_delivery 锚点覆盖。
 List<MediaDeliveryBinding> _publicPages(List<String> urls) => urls
     .map(
-      (url) => MediaDeliveryBinding(
-        assetId: '',
-        accessMode: null,
-        publicUrl: url,
-      ),
+      (url) => url.isEmpty
+          ? const MediaDeliveryBinding.absent()
+          : MediaDeliveryBinding.public(publicUrl: url),
     )
     .toList(growable: false);
 
@@ -223,7 +233,7 @@ void main() {
 
   testWidgets('图片负缓存命中阻止默认 provider 并保留页位与 TTL', (tester) async {
     const path = 'media/image/s/fixture/v1/negative-cache.jpg';
-    final identity = CdnImageUrlBuilder.cover(resolveContentMediaUrl(path));
+    const identity = path;
     final cache = MediaLoadFailureCache.instance;
     cache.recordTerminalFailure(
       identity,
@@ -266,7 +276,7 @@ void main() {
 
   testWidgets('图片真实失败跨实例缓存，用户重试清 identity，成功清缓存', (tester) async {
     const path = 'media/image/s/fixture/v1/negative-retry.jpg';
-    final identity = CdnImageUrlBuilder.cover(resolveContentMediaUrl(path));
+    const identity = path;
     final cache = MediaLoadFailureCache.instance;
     final loader = _ControlledImageLoader();
     Widget canvas(int instance) => _host(
@@ -295,13 +305,18 @@ void main() {
     await tester.pump();
     expect(cache.activeFailure(identity), isNull);
     expect(loader.attempts[0], hasLength(2));
-    expect(loader.candidateAttempts[0]!.last, loader.candidateAttempts[0]!.first);
+    expect(
+      loader.candidateAttempts[0]!.last,
+      loader.candidateAttempts[0]!.first,
+    );
     // 在途加载的成功必须清除同身份稍后到达的失败记录。
     cache.recordTerminalFailure(
       identity,
       kind: MediaCandidateFailureKind.http404,
     );
-    loader.latest(0).complete(await _solidImage(24, 36, const Color(0xFF3182CE)));
+    loader
+        .latest(0)
+        .complete(await _solidImage(24, 36, const Color(0xFF3182CE)));
     await tester.pump();
     expect(cache.activeFailure(identity), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -444,7 +459,7 @@ void main() {
           child: ImageBookCanvas(
             deliveries: _publicPages(const <String>[
               'media/image/s/fixture/v1/book-1.jpg',
-              'asset://unresolved-article-image',
+              '',
               'media/image/s/fixture/v1/book-3.jpg',
             ]),
             initialIndex: 1,
@@ -465,7 +480,7 @@ void main() {
     expect(
       loader.attempts.containsKey(1),
       isFalse,
-      reason: 'Unresolved asset identities must not enter the network loader.',
+      reason: '真正缺席的绑定不能进入获取或解码链。',
     );
     expect(
       find.byKey(const ValueKey<String>('image-book-status-absent')),
@@ -479,6 +494,52 @@ void main() {
     expect(mediaEvents.map((event) => event.result), <String>['absent']);
 
     await tester.pumpWidget(_host(const SizedBox()));
+  });
+
+  testWidgets('ImageBookCanvas 非空非法引用保留页位并呈现可重试 failure 而非 absent', (
+    tester,
+  ) async {
+    final events = <ImageBookMediaLoadEvent>[];
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: ImageBookCanvas(
+            deliveries: _publicPages(const [
+              '',
+              'asset://unresolved-article-image',
+              '',
+            ]),
+            initialIndex: 1,
+            onImageChanged: (_) {},
+            onMediaLoad: events.add,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(
+      tester
+          .widget<MediaPageFlipBook>(find.byType(MediaPageFlipBook))
+          .pageCount,
+      3,
+    );
+    expect(
+      find.byKey(const ValueKey('image-book-status-failed')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('image-book-status-absent')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('image-book-retry')), findsOneWidget);
+    final failure = events.singleWhere((event) => event.result == 'failure');
+    expect(failure.error, isA<FormatException>());
+    expect(failure.candidatesTried, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('ImageBookCanvas 接入公共翻书宿主并上报初始页', (tester) async {
@@ -994,7 +1055,9 @@ void main() {
           width: 320,
           height: 480,
           child: ImageBookCanvas(
-            deliveries: _publicPages(const <String>['media/image/s/fixture/v1/slow.jpg']),
+            deliveries: _publicPages(const <String>[
+              'media/image/s/fixture/v1/slow.jpg',
+            ]),
             imageLoader: loader.call,
             onImageChanged: (_) {},
           ),
@@ -1038,7 +1101,9 @@ void main() {
           width: 320,
           height: 480,
           child: ImageBookCanvas(
-            deliveries: _publicPages(const <String>['media/image/s/fixture/v1/deadline.jpg']),
+            deliveries: _publicPages(const <String>[
+              'media/image/s/fixture/v1/deadline.jpg',
+            ]),
             imageLoader: loader.call,
             onMediaLoad: mediaEvents.add,
             onImageChanged: (_) {},
@@ -1143,7 +1208,9 @@ void main() {
             width: 320,
             height: 480,
             child: ImageBookCanvas(
-              deliveries: _publicPages(const <String>['media/image/s/fixture/v1/reduced.jpg']),
+              deliveries: _publicPages(const <String>[
+                'media/image/s/fixture/v1/reduced.jpg',
+              ]),
               imageLoader: loader.call,
               onImageChanged: (_) {},
             ),

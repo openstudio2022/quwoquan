@@ -6,7 +6,6 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/a
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/presentation/conversation_members_state.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 
 /// 会话成员及设置的 Notifier（family by conversationId）
 /// 所有治理写入均以 Remote 权威读回为成功边界。
@@ -57,7 +56,7 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
           .map(
             (member) => _copyMember(
               member,
-              avatarUrl: resolveAvatarImageUrl(member.avatarUrl),
+              avatarUrl: member.avatarUrl,
               isCurrentUser: member.userId == _currentUserId,
             ),
           )

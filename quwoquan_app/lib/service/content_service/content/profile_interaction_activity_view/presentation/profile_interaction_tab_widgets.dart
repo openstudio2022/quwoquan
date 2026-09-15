@@ -253,7 +253,7 @@ class _ProfileInteractionPreviewTileState
   @override
   Widget build(BuildContext context) {
     final kind = _normalizedPreviewKind(widget.item);
-    final imageUrl = resolveContentMediaUrl(widget.item.previewImageUrl);
+    final imageUrl = widget.item.previewImageUrl;
     final previewText = widget.item.previewText.trim();
 
     if (kind == _ProfilePreviewKind.unavailable) {

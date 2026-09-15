@@ -72,6 +72,12 @@
         "quwoquan_app/.flutter-plugins-dependencies": [
           "file"
         ],
+        "quwoquan_app/ios/Runner/GeneratedPluginRegistrant.h": [
+          "file"
+        ],
+        "quwoquan_app/ios/Runner/GeneratedPluginRegistrant.m": [
+          "file"
+        ],
         "quwoquan_app/ios/Flutter/Flutter.podspec": [
           "file"
         ],

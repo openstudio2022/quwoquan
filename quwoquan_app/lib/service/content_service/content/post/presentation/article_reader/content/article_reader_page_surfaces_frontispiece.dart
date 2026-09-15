@@ -59,14 +59,12 @@ class ArticleFrontispieceView extends StatelessWidget {
                             key: imageKey,
                             imageUrl: publicUrl,
                           ),
-                      signedReadyBuilder:
-                          (context, deliveryUrl, cacheIdentity) =>
-                              ArticleAdaptiveImage(
-                                key: imageKey,
-                                imageUrl: coverUrl,
-                                signedDeliveryUrl: deliveryUrl,
-                                signedCacheIdentity: cacheIdentity,
-                              ),
+                      signedReadyBuilder: (context, lease) =>
+                          ArticleAdaptiveImage(
+                            key: imageKey,
+                            imageUrl: coverUrl,
+                            lease: lease,
+                          ),
                     ),
                     Positioned.fill(
                       child: DecoratedBox(

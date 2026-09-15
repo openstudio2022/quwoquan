@@ -49,9 +49,11 @@
 - compact、regular 与 expanded 视口必须保持文本和控制区不碰撞，并在文字缩放、评论重绑、过滤恢复和媒体重排后保持同一媒体身份。
 
 <a id="req-005"></a>
-### REQ-005 约束：production Remote-only 与 Alpha/test 隔离
+### REQ-005 约束：统一媒体获取与 Alpha 制品隔离
 
 - **约束**：四环境 production composition、runner 与 UAT support 不得提供 Mock/Remote 切换或 fixture override；对象级 typed double 只存在测试树。
+- Alpha 使用制品绑定 Bundled 获取器，Beta/Gamma/Prod 共用 Remote 实现且仅配置不同。Post 视频、封面、预览 manifest/sprite 原始引用交给同一 typed port，平台与来源判断不得进入业务。
+- 可选预览的空端点/缺轨/失败不得阻断 P0 播放；Alpha 不关闭预览掩盖获取错误。私有视频只接受真实校验 lease，不以 URL scheme 或缓存身份授予权限。
 - 按 category=video 隔离，不与图片混用
 - 不得把 `videoUrl` 当图片 URL 交给 image loader
 - 首页、通用视频卡、作品浏览器、沉浸式浏览器首帧态必须消费同一封面优先级，不允许使用无关 seed 图、作者头像、地点图、视频 URL 或端侧运行时临时抽帧。

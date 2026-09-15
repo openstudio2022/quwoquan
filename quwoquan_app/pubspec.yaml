@@ -175,15 +175,7 @@ flutter:
   assets:
     - assets/filters/filter_presets.json
     - assets/assistant/config/progress_text_policy.json
-    - path: assets/content/alpha/manifest.json
-      flavors:
-        - nonprod
-    - path: assets/content/alpha/bundle_identity.json
-      flavors:
-        - nonprod
-    - path: assets/content/alpha/media/
-      flavors:
-        - nonprod
+    # Alpha 离线资产只进入独立私有 source projection，不按 nonprod flavor 打包。
 
   shaders:
     - shaders/article_page_curl_lighting.frag

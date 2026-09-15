@@ -636,10 +636,7 @@ class LocalChatSearchStore
     if (userId.trim().isEmpty || avatarUrl.trim().isEmpty) {
       return;
     }
-    final resolvedAvatarUrl = resolveAvatarImageUrl(
-      avatarUrl,
-      avatarVersion: avatarVersion,
-    );
+    final resolvedAvatarUrl = avatarUrl;
     final database = await _database;
     final rows = await database.query(
       'chat_contacts',
@@ -652,9 +649,9 @@ class LocalChatSearchStore
       return;
     }
     final payload = _decodePayload(rows.first['payload_json']);
-    final updatedPayload = LocalChatSearchContactRecord.fromStorageMap(
-      payload,
-    ).copyWith(avatarUrl: resolvedAvatarUrl).toStorageMap();
+    final updatedPayload = LocalChatSearchContactRecord.fromStorageMap(payload)
+        .copyWith(avatarUrl: resolvedAvatarUrl)
+        .toStorageMap();
     await database.update(
       'chat_contacts',
       <String, Object?>{

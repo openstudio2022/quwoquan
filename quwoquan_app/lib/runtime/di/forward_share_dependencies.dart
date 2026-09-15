@@ -7,7 +7,6 @@ import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
         chatMessageCommandWriterProvider;
 import 'package:quwoquan_app/runtime/shell/share/forward_share_dependencies.dart';
 import 'package:quwoquan_app/runtime/shell/share/forward_share_models.dart';
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/contact_intersection_subtitle.dart';
@@ -110,7 +109,7 @@ AppForwardRecipient _recipientFromConversation(ChatInboxViewData row) {
         : AppForwardRecipientKind.conversation,
     title: title,
     subtitle: row.lastMessagePreview.trim(),
-    avatarUrl: resolveAvatarImageUrl(row.avatarUrl),
+    avatarUrl: row.avatarUrl,
     conversationId: row.id,
     lastActiveAt: row.lastMessageTime,
   );
@@ -133,7 +132,7 @@ AppForwardRecipient _recipientFromContactHome(ContactHomeRow row) {
     subtitle: row.subtitle.trim().isNotEmpty
         ? row.subtitle.trim()
         : contactIntersectionFactsSubtitle(row.intersectionFacts),
-    avatarUrl: resolveAvatarImageUrl(row.avatarUrl),
+    avatarUrl: row.avatarUrl,
     conversationId: row.conversationId?.trim() ?? '',
     userId: (row.userId?.trim().isNotEmpty ?? false)
         ? row.userId!.trim()

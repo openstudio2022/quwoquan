@@ -15,6 +15,7 @@ import 'package:quwoquan_app/design_system/surfaces/app_action_sheet.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
+import 'package:quwoquan_app/design_system/media/app_draft_image.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/image_pick_source.dart';
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';

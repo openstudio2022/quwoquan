@@ -205,16 +205,21 @@ class IntegrationAppLaunchContractTest(unittest.TestCase):
                     launch.select_ios_simulator()
         self.assertEqual(blocked.exception.code, launch.DEVICE_BLOCKER)
 
-    def test_offline_artifact_includes_identity_only_in_nonprod(self) -> None:
+    def test_offline_artifact_includes_identity_only_in_alpha_projection(self) -> None:
         import yaml
         from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import _verify_snapshot_assets
 
         app = ROOT / "quwoquan_app"
         declarations = yaml.safe_load((app / "pubspec.yaml").read_text())["flutter"]["assets"]
         expected = ("assets/content/alpha/manifest.json", "assets/content/alpha/bundle_identity.json")
+        # Alpha 已独立隔离；共享 nonprod pubspec 不能携带离线资产声明。
         for name in expected:
-            self.assertEqual([row for row in declarations if isinstance(row, dict) and row.get("path") == name],
-                             [{"path": name, "flavors": ["nonprod"]}])
+            self.assertFalse(any(row == name or isinstance(row, dict) and row.get("path") == name for row in declarations))
+        from quwoquan_app.scripts.device.app_source_isolation import materialize_alpha_assets
+        alpha_output = self.root / "alpha-native-assets"
+        materialize_alpha_assets(app, alpha_output, entrypoint="lib/main_alpha.dart")
+        for name in expected:
+            self.assertEqual((alpha_output / name).read_bytes(), (app / name).read_bytes())
         source = app / expected[0]
         reads = []
         def read_asset(name):
@@ -303,7 +308,8 @@ def host_offline(tmp_path, monkeypatch):
 def test_host_offline_exact_closure_is_portable_without_resigning(host_offline):
     setup = host_offline
     axis = integration_run._alpha_offline_pages(**setup.params)
-    assert axis["nonPromotable"] is True and axis["caseCount"] == 26
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline import OFFLINE_REQUIRED_CASES
+    assert axis["nonPromotable"] is True and axis["caseCount"] == 2 * len(OFFLINE_REQUIRED_CASES)
     for exact in axis["files"]:
         assert (setup.store / axis["root"] / exact["ref"]).read_bytes() == (setup.root / exact["ref"]).read_bytes()
     # 删除宿主可用性之后，验收只消费 store 内完整闭包。

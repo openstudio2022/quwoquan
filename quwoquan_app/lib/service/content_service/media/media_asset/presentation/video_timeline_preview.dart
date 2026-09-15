@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/video_preview_track_query.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
@@ -158,8 +159,8 @@ class _VideoTimelinePreviewState extends State<VideoTimelinePreview> {
             width: frameWidth,
             height: frameHeight,
             child: AppCachedNetworkImage(
-              imageUrl: frame.sprite.reference.url,
-              imageUrlCandidates: <String>[frame.sprite.reference.url],
+              imageUrl: frame.sprite.reference.sourceReference,
+              mediaKind: MediaDeliveryKind.video,
               width: frameWidth,
               height: frameHeight,
               fit: BoxFit.none,

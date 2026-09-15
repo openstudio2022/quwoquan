@@ -164,6 +164,7 @@ type appLaunchMetadata struct {
 	DigestContract                appLaunchDigestContract               `yaml:"digest_contract"`
 	TargetEnvironment             map[string]string                     `yaml:"target_environment"`
 	ContentSourcePolicy           map[string]string                     `yaml:"content_source_policy"`
+	ContentSourceEntrypoints      map[string]string                     `yaml:"content_source_entrypoints"`
 	RuntimeDocumentContentSources map[string]string                     `yaml:"runtime_document_content_sources"`
 	LocalTransportTargets         []string                              `yaml:"local_transport_targets"`
 	LaunchPolicies                map[string]appLaunchPolicyContract    `yaml:"launch_policies"`
@@ -204,7 +205,7 @@ type appLaunchContract struct {
 	SchemaRequiredFields               map[string][]string
 	RuntimePackageRuntimeFields        []string
 	EffectiveManifestTransportFields   []string
-	EffectiveManifestEntrypoint        string
+	EffectiveManifestEntrypoint        map[string]string
 	RuntimePackageSignatureAlgorithm   string
 	RuntimePackageMaxLifetimeSeconds   int
 	RuntimePackageMaxFutureSkewSeconds int
@@ -254,7 +255,7 @@ type appLaunchContractGeneratedDocument struct {
 	SchemaRequiredFields                              map[string][]string       `json:"schemaRequiredFields"`
 	RuntimeConfigPackageRuntimeRequiredFields         []string                  `json:"runtimeConfigPackageRuntimeRequiredFields"`
 	AppEffectiveLaunchManifestTransportRequiredFields []string                  `json:"appEffectiveLaunchManifestTransportRequiredFields"`
-	AppEffectiveLaunchManifestEntrypoint              string                    `json:"appEffectiveLaunchManifestEntrypoint"`
+	AppEffectiveLaunchManifestEntrypoint              map[string]string         `json:"appEffectiveLaunchManifestEntrypoint"`
 	RuntimeConfigPackageSignatureAlgorithm            string                    `json:"runtimeConfigPackageSignatureAlgorithm"`
 	RuntimeConfigPackageMaxLifetimeSeconds            int                       `json:"runtimeConfigPackageMaxLifetimeSeconds"`
 	RuntimeConfigPackageMaxFutureSkewSeconds          int                       `json:"runtimeConfigPackageMaxFutureSkewSeconds"`
@@ -370,7 +371,7 @@ func loadAppLaunchContract(metadataDir string) (appLaunchContract, error) {
 		SchemaRequiredFields:               appLaunchSchemaRequiredFields(launchMetadata.Schemas),
 		RuntimePackageRuntimeFields:        append([]string(nil), launchMetadata.Schemas.RuntimeConfigPackage.Fields["runtime"].RequiredFields...),
 		EffectiveManifestTransportFields:   append([]string(nil), launchMetadata.Schemas.AppEffectiveLaunchManifest.Fields["transport"].RequiredFields...),
-		EffectiveManifestEntrypoint:        launchMetadata.Schemas.AppEffectiveLaunchManifest.Fields["entrypoint"].Const,
+		EffectiveManifestEntrypoint:        launchMetadata.ContentSourceEntrypoints,
 		RuntimePackageSignatureAlgorithm:   launchMetadata.RuntimeConfigPackage.SignatureAlgorithm,
 		RuntimePackageMaxLifetimeSeconds:   launchMetadata.RuntimeConfigPackage.MaxLifetimeSeconds,
 		RuntimePackageMaxFutureSkewSeconds: launchMetadata.RuntimeConfigPackage.MaxFutureSkewSeconds,

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
     show ReferralSource;
-import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_contacts_row.dart';
@@ -39,10 +38,7 @@ ChatContactsRow chatContactsRowFromContactDto(
     personaId: dto.userId.trim().isEmpty ? null : dto.userId.trim(),
     userHandle: dto.userHandle.trim().isEmpty ? null : dto.userHandle.trim(),
     displayName: dto.displayName,
-    avatarUrl: resolveAvatarImageUrl(
-      dto.avatarUrl,
-      endpointConfig: mediaEndpointConfig,
-    ),
+    avatarUrl: dto.avatarUrl,
     subtitle: sub,
     relationState: dto.relationState,
     source: source,
@@ -65,10 +61,7 @@ ChatContactsRow chatContactsRowFromContactHomeDto(
     personaId: (dto.userId?.trim().isEmpty ?? true) ? null : dto.userId!.trim(),
     userHandle: dto.userHandle.trim().isEmpty ? null : dto.userHandle.trim(),
     displayName: dto.title,
-    avatarUrl: resolveAvatarImageUrl(
-      dto.avatarUrl,
-      endpointConfig: mediaEndpointConfig,
-    ),
+    avatarUrl: dto.avatarUrl,
     subtitle: kind == ChatContactsRowKind.user
         // typed 交集事实（≤2 条）：只透传云侧 primaryText，端不拼句不改写。
         ? dto.intersectionFacts

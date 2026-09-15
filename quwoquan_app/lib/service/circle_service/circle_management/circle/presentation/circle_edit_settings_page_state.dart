@@ -635,18 +635,17 @@ class _CircleEditSettingsPageState
                   cardBg: cardBg,
                   child: Column(
                     children: [
-                      _CircleEditSettingsPageStateHelpers(
-                        this,
-                      )._buildSwitchTile(
-                        icon: CupertinoIcons.chat_bubble_2_fill,
-                        title: CommunityText.circleAutoSyncChatLabel,
-                        subtitle: CommunityText.circleAutoSyncChatHint,
-                        value: _autoSyncChat,
-                        onChanged: (value) =>
-                            setState(() => _autoSyncChat = value),
-                        fg: fg,
-                        fgSecondary: fgSecondary,
-                      ),
+                      _CircleEditSettingsPageStateHelpers(this)
+                          ._buildSwitchTile(
+                            icon: CupertinoIcons.chat_bubble_2_fill,
+                            title: CommunityText.circleAutoSyncChatLabel,
+                            subtitle: CommunityText.circleAutoSyncChatHint,
+                            value: _autoSyncChat,
+                            onChanged: (value) =>
+                                setState(() => _autoSyncChat = value),
+                            fg: fg,
+                            fgSecondary: fgSecondary,
+                          ),
                       SizedBox(height: AppSpacing.md),
                       Align(
                         alignment: Alignment.centerLeft,
