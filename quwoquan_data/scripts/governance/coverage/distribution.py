@@ -51,6 +51,7 @@ class ContentDistributionPolicy:
     m100_targets: tuple[tuple[str, int], ...]
     m1000_targets: tuple[tuple[str, int], ...]
     m10000_targets: tuple[tuple[str, int], ...]
+    m100000_targets: tuple[tuple[str, int], ...]
     require_m100_promotion_before_m1000: bool
     require_m1000_promotion_before_m10000: bool
     milestone_attainment_required: bool
@@ -85,6 +86,7 @@ class ContentDistributionPolicy:
             dict(self.m100_targets),
             dict(self.m1000_targets),
             dict(self.m10000_targets),
+            dict(self.m100000_targets),
         )
         for carrier in ("homepage", "article", "image", "video"):
             if not (
@@ -109,6 +111,7 @@ class ContentDistributionPolicy:
             "M100": dict(self.m100_targets),
             "M1000": dict(self.m1000_targets),
             "M10000": dict(self.m10000_targets),
+            "M100000": dict(self.m100000_targets),
         }
 
     def governed_scales(self) -> tuple[str, ...]:
@@ -170,6 +173,10 @@ def load_content_distribution_policy(
         ),
         m10000_targets=tuple(
             (carrier, int(scale_milestones["m10000Targets"][carrier]))
+            for carrier in ("homepage", "article", "image", "video")
+        ),
+        m100000_targets=tuple(
+            (carrier, int(scale_milestones["m100000Targets"][carrier]))
             for carrier in ("homepage", "article", "image", "video")
         ),
         require_m100_promotion_before_m1000=bool(

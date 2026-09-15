@@ -277,3 +277,34 @@ def test_review_seal_rejects_article_without_independent_intent(execution: Path)
     judgement = {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": report, **_semantic_bindings()}
     with pytest.raises(seal_module.SealError, match="缺少独立 intent"):
         _seal(execution, "5.review", REVIEWER, reviews={TARGET_REF: judgement})
+def test_review_accepts_grok_bot_host_when_session_and_run_differ(execution: Path) -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020
+
+    Data 只校验 host/sessionId 与 runId 互异；同 host=`grok-bot` 合法。不认证原生 token，也不把花名册 UUID 当作 sessionId 格式门。
+    """
+    author = {
+        "host": "grok-bot",
+        "modelFamily": "grok",
+        "sessionId": "c16fe559-0744-4b1c-bcfe-af598722cf95",
+        "invocation": {"provider": "xai", "model": "grok", "runId": "native-run-author"},
+    }
+    reviewer = {
+        "host": "grok-bot",
+        "modelFamily": "grok",
+        "sessionId": "4ba2a463-f5e9-4836-99b6-ef21f40a7a7d",
+        "invocation": {"provider": "xai", "model": "grok", "runId": "native-run-reviewer"},
+    }
+    _seal(execution, "1.download", author)
+    _write(execution / TARGET_REF / "4.draft/draft.article.md", "# 西湖速览\n\n正文。\n")
+    _seal(execution, "4.draft", author)
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": []}
+    with pytest.raises(seal_module.SealError, match="同一 host/sessionId"):
+        _seal(
+            execution,
+            "5.review",
+            {**author, "invocation": {**author["invocation"], "runId": "native-run-reviewer"}},
+            reviews={TARGET_REF: judgement},
+        )
+    sealed = _seal(execution, "5.review", reviewer, reviews={TARGET_REF: judgement})
+    assert sealed["status"] == "created"
+    assert _seal(execution, "5.review", reviewer, reviews={TARGET_REF: judgement})["status"] == "replayed"

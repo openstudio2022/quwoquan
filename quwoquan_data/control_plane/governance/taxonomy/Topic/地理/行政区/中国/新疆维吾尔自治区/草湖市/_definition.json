@@ -1,0 +1,12 @@
+{
+  "label": "草湖市",
+  "labelEn": "草湖市",
+  "description": "新疆维吾尔自治区草湖市",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-09-12T15:30:58.904615+00:00",
+  "updatedAt": "2026-09-12T15:30:58.904615+00:00"
+}

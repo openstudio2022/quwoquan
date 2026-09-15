@@ -134,8 +134,12 @@ def _delivery_issue(
             return "DATA.POOL.AUTHOR_NOT_ADMITTED"
         if not creator_ref or not is_pool_record_admitted(author_record):
             return "DATA.POOL.AUTHOR_NOT_ADMITTED"
+    from content.execution.task_init import optional_location_content_type
+
     raw_entity_refs = manifest.get("entityRefs")
-    if not isinstance(raw_entity_refs, list) or not raw_entity_refs:
+    if not isinstance(raw_entity_refs, list) or (
+        not raw_entity_refs and not optional_location_content_type(candidate.content_type)
+    ):
         return "DATA.POOL.REFERENCE_MISSING"
     for raw_ref in raw_entity_refs:
         value = str(raw_ref or "").strip()

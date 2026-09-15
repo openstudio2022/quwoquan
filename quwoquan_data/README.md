@@ -4,7 +4,7 @@
 
 ## Skill + AI Agent
 
-宿主 Cursor/Codex IDE/CLI Agent 是唯一内容语义主体：点名来源与实体相关性、创作、独立评审，并明确 approved 对象、cohort 与 milestone。Skill 的 [producer.py](../.agents/skills/content-production/scripts/producer.py) 提供 `source/download/preview/build-inputs/lint` 单阶段工具：来源取得与预览/下载可按宿主显式输入出网，本地构造与 lint 不出网；工具不创作、不判分、不推进或恢复，也不包装 seal/publish。未实现来源由宿主通用工具处理，实际入口只在各载体 `sources.md` 小节声明。
+宿主 AI（当前包括 Cursor 与本机执行的 Grok Bot）是唯一内容语义主体：点名来源与实体相关性、创作、独立评审，并明确 approved 对象、cohort 与 milestone。二者共用同一 Skill/CLI，不另建 Grok 专属流程或仓内调度器。Skill 的 [producer.py](../.agents/skills/content-production/scripts/producer.py) 提供 `source/download/preview/build-inputs/lint` 单阶段工具：来源取得与预览/下载可按宿主显式输入出网，本地构造与 lint 不出网；工具不创作、不判分、不推进或恢复，也不包装 seal/publish。未实现来源由宿主通用工具处理，实际入口只在各载体 `sources.md` 小节声明。
 
 producer 固定为六步 `init → acquire → author → review → publish → release`，`release finalize` 成功即 `END`。import/activate/readback/health、API/App UAT、EAF、sampling authority、promotion、rollback/replay 全部 out of scope；下游 owner 是 Environment Ops scheduler，Data 不创建环境 acceptance。
 
@@ -45,7 +45,7 @@ python3 quwoquan_data/scripts/cli.py task seal --help
 以下是已冻结的目标契约，不是迁移完成声明；实现、最小回归与精确授权切换分别由 [发布仓 OPEN-027](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-027)、[对象包 OPEN-025](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-025) 和 [身份切换 OPEN-001](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/canonical-content-identity-recovery/spec.md#open-001) 承接。现有 production/cutover 成果、媒体保护副本及历史 release/receipt 原件全部保留。
 
 - canonical 内容仓为 `/Users/zhaoyuxi/Projects/quwoquan/publish`，与 `data-engineering/` 等源码工作树平级，是独立 Git 仓而不是源码 worktree、submodule 或 symlink。`QWQ_PUBLISH_ROOT` 绑定仓身份；根缺失/不符就阻断，不回退仓内旧树。源码保留 schema/Skill/CLI/tests，执行包的原物理布局不变。
-- `repository.json` 只绑定仓身份、布局版本与工程契约摘要，不保存绝对路径、active release、统计或 token。对象 inventory 只遍历声明对象根，不把 `.git`、仓元数据或 releases 计作对象；共享写锁定位于共同内容根，不随各源码 output root 漂移。
+- `repository.json` 除 schema 标识外只保存 `repositoryId` 与 `layoutVersion`，不保存 `producerContractDigest`、绝对路径、active release、统计或 token；实际工程契约摘要仅由 handoff 绑定。对象 inventory 只遍历声明对象根，不把 `.git`、仓元数据或 releases 计作对象；共享写锁定位于共同内容根，不随各源码 output root 漂移。
 
 ```text
 publish/                                      # 独立内容仓，实际初始化/搬迁须另授权
@@ -72,6 +72,9 @@ publish/                                      # 独立内容仓，实际初始�
 - golden media（默认 `~/.local/share/quwoquan/golden_media`，`QWQ_CARRIED_MEDIA_ROOT`）独立保护副本继续保留，不准 gc/hygiene 触碰既有保护根及任何保留作品/release 引用摘要。普通 Git 不跟踪媒体，忽略规则/硬链接不算备份，同卷完整拷贝不证明抗盘损坏；无异卷/远端恢复证据时明确该层耐久性未建立，见 [耐久性 OPEN-002](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/spec.md#open-002)。
 - verify/消费只读，不隐式下载、回填 library 或修复对象；媒体根不可达、单文件缺失、摘要损坏与来源证据缺失分开报告。恢复须显式操作并验证独立副本的 exact bytes，来源 URL 不保证重建转码字节。`verify all` 与 `release handoff-verify` 都是纯只读入口：不下载、不回填 library、不修复对象。handoff 逐项绑定完整 release 文件清单，并对缺失、额外、symlink、path escape 与摘要漂移 typed fail；历史 release/receipt 只作 audit 原件，不被验证入口改写。
 - finalize 只保存既有 cohort/handoff 两份 terminal 事实，绑定工程 baseline/实际契约摘要与内容仓身份、所选 ID/版本/包摘要/定位清单的 exact 快照；只有匹配实际字节才记内容 commit，不新增两次提交门槛。历史 `reference/releases`、bundle、review 与 receipts 保留原字节；可重建范围必须有固定时间/cohort/exact build 输入和测试支持，不能承诺重建 AI 判断或外部网页。
+- verify/消费只读，不隐式下载、回填 library 或修复对象；媒体根不可达、单文件缺失、摘要损坏与来源证据缺失分开报告。恢复须显式操作并验证独立副本的 exact bytes，来源 URL 不保证重建转码字节。
+- finalize 只保存既有 cohort/handoff 两份 terminal 事实；handoff 仅新增 `repositoryId`，工程 baseline/实际契约摘要沿用既有字段，所选对象与 exact 内容快照复用既有 release/object query digests，不另加 objectPath 表、`contentRevision` 或 `layoutVersion`，不要求内容提交或双提交。历史 `reference/releases`、bundle、review 与 receipts 保留原字节；可重建范围必须有固定时间/cohort/exact build 输入和测试支持，不能承诺重建 AI 判断或外部网页。
+- 旧对象仅在来源、review、媒体和依赖可验证时转换；未验证对象只归档，不进入新合格池，不以固定目标数补造资格。转换后完成新包与引用闭包验证，才能按精确授权清理旧链，且既有 release/review/receipt 及所引用媒体保持原字节；未取得该证据不宣称迁移完成。
 - 实际搬迁、旧树删除、init/clone、commit/push、备份外写与环境激活各须精确授权；一个 lane 的配置不证明全局已切换。在飞工作区不自动清理，删除运行证据会失去该次执行审计。
 
 ```bash
@@ -80,7 +83,7 @@ python3 quwoquan_data/scripts/cli.py release finalize --help
 python3 quwoquan_data/scripts/cli.py release handoff-verify --help
 ```
 
-M1/M10/M100/M1000 按 `cumulative_unique_finalized_objects` 累计，每级形成自己的 full explicit cohort/release/handoff；凡已完成 canonical publish 且 review approved 的对象都可复用进入 cohort。handoff 以 canonical publish proof 为凭，记录 `producerBaselineRevision` 与 `producerContractDigest`，不含 UAT/import/readback/EAF/promotion/rollback。任何外部 consumer 只可只读上述 immutable producer facts。
+M1/M10/M100/M1000 按 `cumulative_unique_finalized_objects` 累计，每级形成自己的 full explicit cohort/release/handoff；凡已完成 canonical publish 且 review approved 的对象都可复用进入 cohort。handoff 以 canonical publish proof 为凭，记录 `repositoryId`、`producerBaselineRevision` 与 `producerContractDigest`，不含 UAT/import/readback/EAF/promotion/rollback。任何外部 consumer 只可只读上述 immutable producer facts。
 
 ## 可复用输入与输出边界
 
@@ -95,6 +98,7 @@ local/       cache/ runs/ workspace/；生产输入放 workspace/content-product
 ```
 
 删除 `.qwq_output/` 不得损失依赖声明、recipe、prompt、template、schema、policy 或部署规则。组合验证入口仍为下列命令；入口只做纯离线只读校验，不承担下载、回填、修复或环境消费。显式恢复命令由现有 CLI 的实际帮助与 schema 确认，不在文档虚构新入口：
+删除 `.qwq_output/` 不得损失依赖声明、recipe、prompt、template、schema、policy 或部署规则。下列组合验证入口只读，缺失或损坏只报告 typed blocker，不隐式下载、补库或修复包；通过不代表真实迁移、备份恢复或下游消费已闭合。显式恢复命令由现有 CLI 的实际帮助与 schema 确认，不在文档虚构新入口：
 
 ```bash
 python3 quwoquan_data/scripts/cli.py verify all

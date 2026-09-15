@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 from content.execution.receipt_chain import _independent_actors, validate_live_receipt_chain
-from content.release.canonical.content_pool_record import pool_payload_digest
 from content.release.canonical.object_source_identity import validate_object_source_identity
 from content.release.canonical.object_transaction_contract import _digest_bytes, _digest_file, _json_bytes, _read_json
 from content.release.canonical.pool_cutover import _absolute, _relative, snapshot_pool
@@ -141,13 +140,27 @@ def _record_history(root: Path, ref: str, manifest: dict) -> list[dict]:
     return rows
 
 
+def original_pool_payload_digest(root: Path) -> str:
+    """仅离线旧池 reader：复现原提交 6763232b 的文档摘要，不刷新旧记录。
+
+    新包包含媒体并排除 records；旧包仅包含文档并排除 _pool/assets。
+    两者不是可互换的算法，普通 publisher 不得调用本函数。
+    """
+    from content.release.canonical.pool_cutover import _regular_tree
+    rows = []
+    for path in _regular_tree(root):
+        relative = path.relative_to(root)
+        if relative.parts[0] in {"_pool", "assets"}:
+            continue
+        if relative.suffix.casefold() not in {".json", ".md", ".ndjson", ".vtt"}:
+            continue
+        rows.append({"path": relative.as_posix(), "sha256": _digest_file(path), "bytes": path.stat().st_size})
+    return _digest_bytes(_json_bytes(rows))
+
+
 def _records(root: Path, ref: str, manifest: dict, review: dict) -> dict:
     latest = _record_history(root, ref, manifest)[-1]
-    # 本入口只检查旧 _pool 布局；不能调用现役排除 records/ 的摘要算法。
-    from content.release.canonical.pool_cutover import _regular_tree
-    original_rows = [{"path": path.relative_to(root).as_posix(), "sha256": _digest_file(path), "bytes": path.stat().st_size}
-                     for path in _regular_tree(root) if path.relative_to(root).parts[0] != "_pool"]
-    if latest.get("payloadDigest") != _digest_bytes(_json_bytes(original_rows)):
+    if latest.get("payloadDigest") != original_pool_payload_digest(root):
         _fail("ORIGINAL_PAYLOAD_DRIFT", ref)
     digest = _digest_file(root / "content_review.json")
     admission = manifest.get("admission") or {}
@@ -405,7 +418,7 @@ def _recovery_row(row: dict, pool: Path, tasks: Path, executions: list[Path], ar
             "originalExecutionRef": str(execution), "originalExecutionExists": execution.is_dir(),
             "originalExecutionId": execution_id, "manifestExecutionId": manifest.get("executionId"),
             "canonicalReview": review, "manifestReviewDigest": manifest.get("admission", {}).get("evidenceDigest"),
-            "recordPayloadMatches": record.get("payloadDigest") == pool_payload_digest(root),
+            "recordPayloadMatches": record.get("payloadDigest") == original_pool_payload_digest(root),
             "recordRightsResult": record.get("rightsResult"), "recordSequence": record["recordSequence"],
             "historicalAudit": _legacy_evidence(root, execution, ref), "archiveReviewCopies": archives[ref],
             "availableExecutionReviews": alternatives,

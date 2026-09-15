@@ -1,0 +1,15 @@
+{
+  "label": "荒漠",
+  "labelEn": "Desertscape",
+  "description": "沙漠、戈壁等干旱地貌风光，不含普通荒地或工地",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:23:06.682317+00:00",
+  "updatedAt": "2026-09-12T01:23:06.682317+00:00"
+}

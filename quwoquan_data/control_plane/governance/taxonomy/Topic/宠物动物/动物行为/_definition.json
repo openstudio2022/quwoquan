@@ -1,0 +1,15 @@
+{
+  "label": "动物行为",
+  "labelEn": "Animal Behavior",
+  "description": "画面中可核验的动物行为，不推断动机、智商或保护等级",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:20:16.517586+00:00",
+  "updatedAt": "2026-09-12T01:20:16.517586+00:00"
+}

@@ -103,6 +103,90 @@ def test_one_round_spec_creates_every_declared_carrier_and_derives_mechanical_fi
     assert [row["status"] for row in initialize_round(round_spec_path=round_spec)["executions"]] == ["replayed", "replayed"]
 
 
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+@pytest.mark.parametrize("content_type,expected", [
+    ("image", True), ("video", True), ("article", False), ("homepage", False), ("", False), (None, False),
+])
+def test_optional_location_content_type_matches_photography_carriers(content_type: object, expected: bool) -> None:
+    from content.execution.task_init import optional_location_content_type
+    assert optional_location_content_type(content_type) is expected
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+@pytest.mark.parametrize("carrier", ["image", "video"])
+@pytest.mark.parametrize("located", [False, True])
+def test_optional_location_init_replay_and_frozen_readers(tmp_path: Path, carrier: str, located: bool) -> None:
+    execution_id = f"20260912--travel-{carrier}-photography--contract--pilot-001"
+    target = {"carrier": carrier, "name": "鸟类摄影", "publishAngle": "摄影", "publishTitle": "飞羽瞬间"}
+    if located:
+        target.update(entityRef="/entity/wetland", entityId="entity:wetland", entityType="地点/景区", region="中国/福建省/福州市")
+    round_path = tmp_path / "round.json"
+    round_path.write_text(json.dumps({"schema": "quwoquan_data.round_spec", "executions": {carrier: execution_id}, "targets": [target]}), encoding="utf-8")
+    assert initialize_round(round_spec_path=round_path)["executions"][0]["status"] == "created"
+    frozen = load_frozen_target_set(execution_id)
+    expected = {key: value for key, value in target.items() if key != "carrier"} | {"publishSeq": 1}
+    assert frozen["targets"] == [expected]
+    assert frozen["targetRefs"] == [f"posts/{carrier}/摄影/飞羽瞬间/1"]
+    manifest = load_frozen_execution_manifest(execution_id)
+    assert manifest["submittedInputs"]["immutableCandidateBindings"]["targets"] == [expected]
+    root = paths.DATA_EXECUTIONS_ROOT / execution_id
+    before = {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    assert initialize_round(round_spec_path=round_path)["executions"][0]["status"] == "replayed"
+    assert {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
+    assert task_init_issues(execution_id) == []
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+@pytest.mark.parametrize("carrier,present", [
+    (carrier, present)
+    for carrier in ("homepage", "article", "image", "video")
+    for present in ((), ("entityRef",), ("entityId",), ("entityType",), ("region",), ("entityRef", "entityId"), ("entityRef", "entityType"), ("entityId", "entityType"))
+    if carrier not in {"image", "video"} or present
+])
+def test_incomplete_identity_is_rejected_by_round_target_set_and_init(tmp_path: Path, carrier: str, present: tuple) -> None:
+    identity = {"entityRef": "/entity/wetland", "entityId": "entity:wetland", "entityType": "地点/景区", "region": "中国/福建省/福州市"}
+    target = {"name": "主体", **{key: identity[key] for key in present}}
+    if carrier != "homepage":
+        target.update(publishAngle="摄影", publishTitle="主体", publishSeq=1)
+    execution_id = f"20260912--travel-{carrier}-identity--contract--pilot-001"
+    document = {"schema": "quwoquan_data.round_spec", "executions": {carrier: execution_id}, "targets": [{"carrier": carrier, **target}]}
+    round_path = tmp_path / "invalid.json"
+    round_path.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(ValueError):
+        initialize_round(round_spec_path=round_path)
+    with pytest.raises(ValueError):
+        assert_valid({"schema": "quwoquan_data.target_set", "executionId": execution_id, "carrier": carrier,
+                      "selectionPolicy": "frozen", "entityCatalogDigest": "sha256:" + "0" * 64,
+                      "candidateBinding": {"scope": "output", "ref": "input.json", "digest": "sha256:" + "0" * 64, "candidateCount": 1},
+                      "targetCount": 1, "targetRefs": ["posts/video/摄影/主体/1"], "targets": [target]}, "execution", "target_set")
+    from content.execution.task_init import initialize_execution
+    with pytest.raises(ValueError):
+        initialize_execution(submitted_demand={"schema": "quwoquan_data.carrier_demand", "executionId": execution_id,
+                                              "carrier": carrier, "familyRef": f"content/travel/{carrier}/{carrier}"},
+                             submitted_bindings={"schema": "quwoquan_data.immutable_candidate_bindings", "executionId": execution_id,
+                                                 "carrier": carrier, "targets": [target]})
+    assert not (paths.DATA_EXECUTIONS_ROOT / execution_id).exists()
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+@pytest.mark.parametrize("carrier", ["image", "video"])
+@pytest.mark.parametrize("invalid", ["blank_name", "identity_conflict"])
+def test_optional_identity_keeps_name_and_located_conflicts_strict(tmp_path: Path, carrier: str, invalid: str) -> None:
+    execution_id = f"20260912--travel-{carrier}-identity--contract--pilot-001"
+    target = {"carrier": carrier, "name": "鸟类摄影", "publishAngle": "摄影", "publishTitle": "飞羽瞬间"}
+    targets = [target]
+    if invalid == "blank_name":
+        target["name"] = "   "
+    else:
+        target.update(entityRef="/entity/wetland", entityId="entity:wetland", entityType="地点/景区")
+        targets.append({**target, "entityId": "entity:other", "publishSeq": 2})
+    path = tmp_path / "round.json"
+    path.write_text(json.dumps({"schema": "quwoquan_data.round_spec", "executions": {carrier: execution_id}, "targets": targets}), encoding="utf-8")
+    with pytest.raises(TaskInitError):
+        initialize_round(round_spec_path=path)
+    assert not (paths.DATA_EXECUTIONS_ROOT / execution_id).exists()
+
+
 def test_homepage_target_without_resolvable_region_fails_at_init(tmp_path: Path) -> None:
     round_spec = _write_pretty(
         tmp_path / "round.json",

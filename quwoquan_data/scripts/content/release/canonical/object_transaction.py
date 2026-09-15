@@ -52,6 +52,7 @@ from content.release.canonical.pool_source_attribution import (
 from content.release.canonical.review_rights_binding import validate_review_authority
 from content.release.canonical.canonical_inventory import allocate_package_path
 from content.release.canonical.post_transaction_sources import project_object_sources
+from content.release.canonical.post_transaction_media import copy_markdown_surface
 from core.paths import PUBLISH_ROOT
 from core.publish_layout import logical_object_ref
 from core.source_attribution import canonical_source_attribution
@@ -67,6 +68,9 @@ def build_entity_object_transaction_package(
     object_ref: str,
     transaction_id: str,
     package_root: Path,
+    version: int = 1,
+    input_payload_digest: str | None = None,
+    publish_root: Path | None = None,
 ) -> dict[str, Any]:
     """Build one production transaction package from an approved execution entity.
 
@@ -74,6 +78,8 @@ def build_entity_object_transaction_package(
     projects one approved entity into a content-addressed, rights-bound transaction
     input without copying runtime stages into canonical content.release.canonical.
     """
+    if type(version) is not int or version < 1:
+        raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: version must be positive")
     manifest_path = execution_root / "execution_manifest.json"
     execution_manifest = _read_json(manifest_path)
     execution_id = _execution_id(str(execution_manifest.get("executionId") or ""))
@@ -143,6 +149,8 @@ def build_entity_object_transaction_package(
         if (
             existing.get("transactionId") == transaction_id
             and existing.get("executionId") == execution_id
+            and existing.get("inputPayloadDigest") == input_payload_digest
+            and _read_json(package_root / "object/manifest.json").get("version") == version
         ):
             return existing
         raise ObjectTransactionError(f"对象事务包已存在且输入不一致：{package_root}")
@@ -154,7 +162,6 @@ def build_entity_object_transaction_package(
     try:
         object_root = staging / "object"
         object_root.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(object_source / "page.md", object_root / "page.md")
         shutil.copy2(
             content_review_source,
             object_root / CANONICAL_CONTENT_REVIEW_REF,
@@ -399,6 +406,11 @@ def build_entity_object_transaction_package(
                 "height": height,
             })
 
+        copy_markdown_surface(
+            object_source / "page.md", object_root / "page.md",
+            source_assets=source_manifest.get("assets") or [],
+            canonical_assets=canonical_assets,
+        )
         if not cas_rows and not (
             str(source_manifest.get("contentType") or "") in {"article", "homepage"}
             and str(source_manifest.get("publishMediaMode") or "") == "text_only"
@@ -426,7 +438,7 @@ def build_entity_object_transaction_package(
                 "schema": "quwoquan_data.entity_object",
                 "entityId": entity_id,
                 "entityRef": str(entity.get("entityRef") or ""),
-                "version": 1,
+                "version": version,
                 "executionId": execution_id,
                 "sourceIdentity": source_identity,
                 "finalContentRef": "page.md",
@@ -481,6 +493,7 @@ def build_entity_object_transaction_package(
         )
         package = {
             "schema": PACKAGE_SCHEMA,
+            **({"inputPayloadDigest": input_payload_digest} if input_payload_digest is not None else {}),
             "transactionId": transaction_id,
             "executionId": execution_id,
             "publishMediaMode": (
@@ -493,7 +506,7 @@ def build_entity_object_transaction_package(
                 "layoutSchema": LAYOUT_SCHEMA,
                 "objectKind": "entities",
                 "objectRef": canonical_ref,
-                "objectPath": allocate_package_path(PUBLISH_ROOT, _read_json(object_root / "manifest.json"), "entities", object_root),
+                "objectPath": allocate_package_path(publish_root or PUBLISH_ROOT, _read_json(object_root / "manifest.json"), "entities", object_root),
                 "objectSchema": "quwoquan_data.entity_object",
                 "packageObjectRef": "object",
             },

@@ -1,0 +1,15 @@
+{
+  "label": "城市夜景",
+  "labelEn": "City Nightscape",
+  "description": "城市夜间灯火与夜景氛围，不要求曝光参数或夜游玩法标签",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:20:16.517586+00:00",
+  "updatedAt": "2026-09-12T01:20:16.517586+00:00"
+}

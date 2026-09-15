@@ -333,6 +333,17 @@ def _target_entity_ref(target: Mapping[str, Any]) -> str:
     return ref
 
 
+def _target_entity_refs(target: Mapping[str, Any], *, carrier: str) -> list[str]:
+    # 只有摄影 image/video 且地点字段全缺席才能没有关联；空串/null/半填不等于缺席。
+    from content.execution.task_init import location_identity_omitted
+
+    if location_identity_omitted(target, carrier=carrier):
+        return []
+    if not str(target.get("entityType") or "").strip():
+        raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: target lacks frozen entityType")
+    return [_target_entity_ref(target)]
+
+
 def _target_tag_refs(target: Mapping[str, Any]) -> list[str]:
     refs = {f"Entity/{str(target.get('entityType') or '').strip('/')}"}
     region = str(target.get("region") or "").strip().strip("/")
@@ -397,7 +408,7 @@ def _post_manifest(
         "contentType": carrier,
         "contentIdentity": "work",
         "title": str(draft.get("title") or compose.get("title") or target.get("publishTitle") or ""),
-        "entityRefs": [_target_entity_ref(target)],
+        "entityRefs": _target_entity_refs(target, carrier=carrier),
         "tagRefs": sorted(
             {str(value) for value in compose.get("tagRefs") or [] if str(value)}
         ),

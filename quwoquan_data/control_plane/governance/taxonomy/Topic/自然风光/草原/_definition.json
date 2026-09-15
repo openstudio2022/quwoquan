@@ -1,0 +1,15 @@
+{
+  "label": "草原",
+  "labelEn": "Grassland",
+  "description": "草原与草甸开阔植被，不含农田或城市绿地",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:23:06.682317+00:00",
+  "updatedAt": "2026-09-12T01:23:06.682317+00:00"
+}

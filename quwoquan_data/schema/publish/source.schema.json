@@ -11,6 +11,7 @@
     "sourceUrl": {"type": "string", "pattern": "^https://"},
     "sourceUseMode": {"enum": ["licensed_adaptation", "factual_reference_only", "rights_audit_only"]},
     "fetchedAt": {"type": "string", "minLength": 1},
+    "sourceWork": {"$ref": "../source/source_work.schema.json"},
     "metadata": {"type": "object", "description": "取得时原始来源元数据；不补造作者、许可或访问状态。"},
     "sourceAttribution": {"type": "object"},
     "assets": {"type": "array", "items": {"type": "object"}, "description": "采用资产的原始权利、许可、访问限制与派生事实；不把生成副本作为第三方权利证明。"},
@@ -25,7 +26,8 @@
           "path": {"type": "string", "pattern": "^evidence(?:-[1-9][0-9]*)?\\.[A-Za-z0-9]+$"},
           "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
           "bytes": {"type": "integer", "minimum": 1},
-          "kind": {"enum": ["source_snapshot", "source_excerpt", "license_response", "acquisition_receipt"]}
+          "id": {"$ref": "../source/source_work.schema.json#/$defs/evidenceId"},
+          "kind": {"$ref": "../source/source_work.schema.json#/$defs/evidenceKind"}
         }
       }
     }

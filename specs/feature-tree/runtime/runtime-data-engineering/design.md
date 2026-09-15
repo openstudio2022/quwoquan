@@ -40,9 +40,9 @@ execution、reviewed delivery、canonical pool、milestone 与 release build/han
 - 关联验收：`SIT-001`
 
 <a id="dec-002"></a>
-### DEC-002 content library 与 pool/release 只作为上游只读事实
-- 决策：content library sole-holder、canonical object package/pool record 与 immutable release 均由上游 owner 单写。本域只消费 media binding、manifest digest、access mode 与 object refs，不拥有 holder、selection seal、materialization rebuild 或 pool repair command。
-- 理由：consumer 取得写权会让 sole-holder 与 release owner 分叉；跨域层只需验证 exact binding 并 fail closed。
+### DEC-002 随体对象包与 pool/release 只作为上游只读事实
+- 决策：canonical object package 持有随体最终媒体，content library 仅作采集复用；完整包与 immutable release 消费不依赖原库。包、pool record、library 与 release 均由各自上游 owner 单写，本域只消费 media binding、manifest digest、access mode 与 object refs，不拥有 holder、selection seal、materialization rebuild 或 pool repair command。
+- 理由：consumer 取得写权会破坏包与 release 的单写边界；跨域层只需验证 exact binding 并 fail closed。
 - 被否决方案：从 runtime cache、旧 release、fixture 或 App 本地字节回填 canonical；从 SourcePool/execution/campaign/provider/model 推导 eligibility。
 - 一致性与恢复：binding 不可达或 digest 漂移时 importer/query 整体或逐对象按公开契约阻断，owner bytes 不变；恢复后 exact replay。
 - 可测试面：local_contract 锁定 consumer schema 白名单，api_integration 覆盖 binding 漂移与 exact replay。
@@ -137,12 +137,12 @@ execution、reviewed delivery、canonical pool、milestone 与 release build/han
 - 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写 ship succeeded 或追加伪 `EnvironmentAcceptanceFact`。
 - execution 恢复：写前失败保持 canonical 不变，terminal 只以新 `executionId + retryOf` 恢复。reset 后只按 terminal evidence replay/adopt。
 - 环境恢复：追加新的 operation/readback/Exit/raw result facts 并重新求值，不改旧 execution/acceptance。
-- materialization 恢复：只从 content library sole-holder exact rebuild。
+- materialization 恢复：由原 owner 显式从完整随体包重建；包损坏时须从独立保护副本逐摘要验证恢复，不依赖原 content library，不由 consumer 隐式修复。
 - 禁止 fallback：不得回退到 Mock、旧 wire、双读双写、compatibility shim、View Repository/checkpoint 或页面本地写副本。
 
 ## 6. 质量与观测
 
-- 成本影响保持同量级：reset 只处理 canonical publish/inventory 元数据，replay 成本与被选 terminal execution 数量线性相关；release materialization 可重建，不引入 content library 之外的长期 media holder。
+- 成本影响保持同量级：reset 只处理 canonical publish/inventory 元数据，replay 成本与被选 terminal execution 数量线性相关；release materialization 从随体包重建，content library 只作采集复用，既有独立 golden media 保护副本保留，不由 consumer 新建长期 holder。
 - reset 写阶段在取得锁后 60 秒内完成或 fail closed；环境从 empty baseline 恢复原 release 的目标为 5 分钟内完成。超时只产生失败 receipt，不放宽锁、holder protection 或 closure。
 - SLI 直接读取 create-once reset/producer-stage receipt 与下游 ship receipt、empty/replay lifecycle、canonical identity state query、raw readiness result、target binding 与 acceptance fact 的完成状态和耗时；View 与 bundle 只做查询，不新增第二份状态台账。
 - 内容生产启动不由 Runtime 决定；本域在正式 candidate 准备边界预物化 required 查询闭包，active pointer 改变后按 same digest 对账，不重新选择内容。既有消费缺口保留在本能力 OPEN-004/005/008；无中断准入的新设计与实证缺口由环境 Story OPEN-019 承接。

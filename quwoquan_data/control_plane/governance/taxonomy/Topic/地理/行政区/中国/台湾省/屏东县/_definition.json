@@ -1,0 +1,12 @@
+{
+  "label": "屏东县",
+  "labelEn": "Pingtung",
+  "description": "台湾省 22 个县市之一：屏东县",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-09-12T15:30:58.904615+00:00",
+  "updatedAt": "2026-09-12T15:30:58.904615+00:00"
+}

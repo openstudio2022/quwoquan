@@ -15,8 +15,8 @@
 ### In Scope
 
 - article lane 在冻结 target set 之前完成实体级来源预筛，并把候选级拒绝原因聚合为实体级单一首要失败原因。
-- image/video 的 candidate 只冻结对象身份；媒体来源、bytes/CAS 与 hard facts 在 `1.download` 形成，execution 后由 sequence-007 单一 `content_review.json` 完成独立内容/rights 审核。
-- 宿主 AI 按 producer 九阶段完成来源、创作与独立 review；publish AI 对 approved 对象逐个调用 canonical 单对象事务。
+- image/video 的 candidate 只冻结对象身份；媒体来源、bytes/CAS 与 hard facts 在 `1.download` 形成，execution 后由 `003-5.review` 单一 `content_review.json` 完成独立内容/rights 审核。
+- 宿主 AI 按 producer 六步完成来源、创作与独立 review；publish AI 对 approved 对象逐个调用 canonical 单对象事务。
 - homepage 正文在 `4.draft` 自检截面的派生度准入：段落相对 `1.download` 原始 source unit 的逐字重合与正文内部的段落自我重复；自检结论冻结在 sequence-006 receipt，不形成额外业务文件。
 - 单对象 approved/rejected 与非成功终态的 typed issues；通用 stage receipt 只保持 `pass|blocked`，不新增 `partial` 或 recovery action。
 - 同一冻结请求的 exact replay 零增量验证。
@@ -60,7 +60,7 @@
 <a id="req-002"></a>
 ### REQ-002 唯一入池路径、typed 结果与新 execution 恢复面
 
-- 新内容的唯一写路径固定为宿主 AI producer 九阶段在 sequence-007 receipt 中冻结每对象唯一 `content_review.json`，随后 publish AI 对每个 approved 对象直接调用 canonical 单对象事务。单对象事务是原子与幂等单位；不存在独立 review receipt、drain/process manager 或 execution 级 publish。
+- 新内容的唯一写路径固定为宿主 AI producer 六步在 `003-5.review` receipt 中冻结每对象唯一 `content_review.json`，随后 publish AI 对每个 approved 对象直接调用 canonical 单对象事务。单对象事务是原子与幂等单位；不存在独立 review receipt、drain/process manager 或 execution 级 publish。
 - 每个对象由 AI 显式提交 `published|blocked` 与 typed issues；原子事务另提供 `applied|replayed|conflict` 硬事实。汇总只读对象 receipts、review 与 transaction facts，不新增可写台账。
 - 任一对象失败由 AI 在 stage CLOSE 中写 typed issue 与 evidence refs；代码不生成 nextAction/reentry 或 recovery stage。整个 execution blocked 后以新 execution 重新开始。
 - 入池冻结证据必须绑定 batch 输入摘要、逐对象 record（`contentVersion/recordSequence/结果态`）与 post-apply 池 readback，不得只引用一次终端输出；追加过程中断（含尾部快照刷新失败窗口）必须可重入且不产生半可见对象。
@@ -155,7 +155,7 @@
 - WHEN `task init` 创建 execution，宿主依次在 `sources` 选择来源、`1.download` 取得 bytes/CAS 与机械 probe/rights hard facts、`2.quality` 判断语义/保留、`3.compose` 组织结构、`4.draft` 创作并在 `5.review` 独立裁决。
 - THEN candidate binding 只冻结 target/candidate identity；实际 source refs、asset digest、MIME、probe 与 rights hard facts 均到 `1.download` 才形成并可从 portable root 逐字节解析，绝对路径、`..`、symlink、缺失 ref 或 digest drift 使当前 stage typed blocked，不倒写 candidate。
 - THEN `4.draft` 每对象只留下 `image_work.json|video_script.json`，sequence-006 receipt 冻结整个 execution 的一个真实 author actor/invocation、自检与 input/output exact refs；不生成 draft meta、self-check 或 agent envelope 镜像文件。
-- THEN `5.review` 由另一个真实 reviewer actor 会话执行，每对象只写 `content_review.json`，统一给出 `approved|rejected`、简短 dimensions/blockingIssues 与逐资产 rights 结论；sequence-007 receipt 冻结 reviewer actor/invocation 与 exact ref/digest，不存在独立 review receipt 第二 authority。author/reviewer 必须不同 session/runId，可为同一 model family。
+- THEN `5.review` 由另一个真实 reviewer actor 会话执行，每对象只写 `content_review.json`，统一给出 `approved|rejected`、简短 dimensions/blockingIssues 与逐资产 rights 结论；`003-5.review` receipt 冻结 reviewer actor/invocation 与 exact ref/digest，不存在独立 review receipt 第二 authority。author/reviewer 必须不同 session/runId，可为同一 model family。
 - THEN Image 与 Video 各自独立满足上述链路；任一 Video `entityMatch=mismatch` 在 quality/review 保持 typed rejected，不得因 playable、4K、premium eligible 或已有下载字节被 approved。
 - THEN approved/rejected 可混合且 shortfall 进入 stage result/typed issues，至少一个 approved 时 receipt 可 pass；零 approved 或 stage-wide identity/integrity failure 才 blocked。approved 对象只被 canonical append 一次，重放得到相同摘要，异字节或重复身份在写前失败。
 
@@ -165,7 +165,7 @@
 - GIVEN 一份 confirmed 请求已完成独立 review，包含多个 approved/rejected 对象。
 - WHEN publish AI 只对 approved 对象逐个调用 canonical single-object transaction，并 exact replay 已成功对象。
 - THEN 每对象 transaction 原子且幂等；一个对象 blocked/conflict 不撤销其它已成功对象，replay 不增加 pool record。
-- THEN stage CLOSE 由 AI 显式提交每对象 verdict、typed issues、result refs 与 verifier facts；transaction 代码不生成业务 verdict、nextAction 或 recovery stage。
+- THEN seal 由 AI 显式提交每对象 verdict、typed issues、result refs 与 verifier facts；transaction 代码不生成业务 verdict、nextAction 或 recovery stage。
 - THEN consumer projection 不暴露运行身份，canonical 写入单位始终是单对象事务。
 
 <a id="gwt-006"></a>
@@ -230,7 +230,7 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：唯一入池判据和 receipt 协议 publish 已实现，但仍未有一次 confirmed carrier demand → identity-only candidate-backed `task init` → 宿主 producer 九阶段 → sequence-007 `content_review.json` approved → canonical append 的完整走通，也未以同一请求做 exact replay 零增量。缺口是目标单轨的真实 evidence，不是原子事务机制本身。
+- 影响或价值：唯一入池判据和 receipt 协议 publish 已实现，但仍未有一次 confirmed carrier demand → identity-only candidate-backed `task init` → 宿主 producer 六步 → `003-5.review` `content_review.json` approved → canonical append 的完整走通，也未以同一请求做 exact replay 零增量。缺口是目标单轨的真实 evidence，不是原子事务机制本身。
 - contract-reset 要求删除 drain/recovery action 闭集及其 processor；新轨只保留 AI typed issues、单对象 transaction 硬事实与 pool record。规格不声称对应实现已完成。
 - 完成判定：[`GWT-005`](#gwt-005) 由新 `task init` 和宿主 AI 完成 Article M1 的逐对象首次 apply 与 exact replay，并断言无 drain/process manager/recovery action 与 legacy publish 入口。
 - 依赖：入池原子性与唯一写路径由 [L2 DEC-026](../design.md#dec-026) 冻结；中性初始化由 [`work-request-compilation`](../work-request-compilation/spec.md) 的 `OPEN-003` 先行关闭。

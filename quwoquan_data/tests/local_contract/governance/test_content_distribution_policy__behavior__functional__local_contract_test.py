@@ -82,6 +82,12 @@ def test_production_policy_is_explicit_and_disables_media_generation() -> None:
         "image": 10000,
         "video": 1000,
     }
+    assert dict(policy.m100000_targets) == {
+        "homepage": 100000,
+        "article": 100000,
+        "image": 100000,
+        "video": 100000,
+    }
     assert policy.require_m100_promotion_before_m1000 is False
     assert policy.require_m1000_promotion_before_m10000 is False
     assert policy.milestone_attainment_required is True
@@ -96,6 +102,7 @@ def test_scale_target_supports_every_governed_milestone() -> None:
     assert policy.scale_target("M100", "video") == 10
     assert policy.scale_target("M1000", "video") == 100
     assert policy.scale_target("M10000", "video") == 1000
+    assert policy.scale_target("M100000", "video") == 100000
 
 
 def test_production_admission_is_independent_of_recorded_rights() -> None:

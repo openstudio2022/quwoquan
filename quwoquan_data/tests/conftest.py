@@ -48,6 +48,8 @@ if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
     for _key in (
         "QWQ_OUTPUT_ROOT",
         "QWQ_PUBLISH_ROOT",
+        "QWQ_LIBRARY_ROOT",
+        "QWQ_CARRIED_MEDIA_ROOT",
         "QWQ_EXECUTION_PHASE",
         "QWQ_EXECUTION_CONTENT_TYPE",
         "QWQ_EXECUTION_SUPPLY_MODE",
@@ -58,8 +60,12 @@ if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
     # paths 常量也只会冻结在这里，绝不落真实根。
     _ISOLATED_ROOT = tempfile.mkdtemp(prefix="qwq_pytest_isolated_")
     os.environ["QWQ_DATA_ROOT"] = _ISOLATED_ROOT
+    # paths 的 library/golden 默认值都由 XDG_DATA_HOME 派生；默认值本身也要落在测试根。
+    os.environ["XDG_DATA_HOME"] = str(Path(_ISOLATED_ROOT) / "xdg_data")
     os.environ["QWQ_OUTPUT_ROOT"] = str(Path(_ISOLATED_ROOT) / "output")
     os.environ["QWQ_PUBLISH_ROOT"] = str(Path(_ISOLATED_ROOT) / "publish")
+    # 采集库默认位于用户目录，测试也必须显式隔离，避免 import-time 常量冻结到正式库。
+    os.environ["QWQ_LIBRARY_ROOT"] = str(Path(_ISOLATED_ROOT) / "content_library")
     # 随体媒体根是发布事务的写入目标，且按设计落在仓内受版本控制目录。任何执行
     # apply 的测试都会往那里写字节，因此隔离与 publish 根同级必需。
     os.environ["QWQ_CARRIED_MEDIA_ROOT"] = str(Path(_ISOLATED_ROOT) / "carried_media")
@@ -68,9 +74,11 @@ if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
     os.environ.setdefault("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "0")
 
 _ROOT_ENV_KEYS = (
+    "XDG_DATA_HOME",
     "QWQ_DATA_ROOT",
     "QWQ_OUTPUT_ROOT",
     "QWQ_PUBLISH_ROOT",
+    "QWQ_LIBRARY_ROOT",
     "QWQ_CARRIED_MEDIA_ROOT",
 )
 _ISOLATED_ROOT_ENV = {
@@ -148,7 +156,7 @@ def pytest_configure(config):
     )
 
 
-_PATHS_ROOT_CONSTANTS = ("DATA_ROOT", "OUTPUT_ROOT", "PUBLISH_ROOT")
+_PATHS_ROOT_CONSTANTS = ("DATA_ROOT", "OUTPUT_ROOT", "PUBLISH_ROOT", "LIBRARY_ROOT")
 
 
 def _snapshot_diff(now: dict, before: object) -> list[str]:
@@ -183,9 +191,11 @@ def _isolation_breach_evidence(paths_module, isolated_env: dict) -> list[str]:
         value = Path(getattr(paths_module, name)).resolve()
         if not value.is_relative_to(isolated_base):
             breaches.append(f"core.paths.{name} escaped the isolated root: {value}")
+    carried_default = Path(paths_module.default_carried_media_root()).resolve()
     carried = Path(paths_module.carried_media_root()).resolve()
-    if not carried.is_relative_to(isolated_base):
-        breaches.append(f"carried media root escaped the isolated root: {carried}")
+    for label, value in (("default carried media root", carried_default), ("carried media root", carried)):
+        if not value.is_relative_to(isolated_base):
+            breaches.append(f"{label} escaped the isolated root: {value}")
     return breaches
 
 

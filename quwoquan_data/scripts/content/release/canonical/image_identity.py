@@ -79,7 +79,7 @@ def _acquired_asset_index(root: Path, object_ref: str, meta_path: Path, index_pa
             or receipt.get("assets") != [{key: row.get(key) for key in keys} for row in rows]):
         raise ObjectTransactionError("DATA.PREFLIGHT.ACQUISITION_IDENTITY_DRIFT")
     expected_source = {"acquisitionReceiptRef": receipt_ref, "collectionPageUrl": receipt["filePage"],
-                       "sourceUrl": receipt["filePage"], "originalAssetUrl": receipt["directUrl"]}
+                       "sourceUrl": receipt["filePage"], "originalAssetUrl": receipt["directUrl"] or receipt["filePage"]}
     observed_sources = [{key: row.get(key) for key in expected_source} for row in rows]
     if observed_sources != [expected_source] * len(rows):
         raise ObjectTransactionError("DATA.PREFLIGHT.ASSET_IDENTITY_DRIFT")
@@ -149,14 +149,15 @@ def acquired_asset_identity_view(*, execution_root: Path, selections: list[dict[
         index = _acquired_assets(root, ref)
         _validate_acquire_target(root, ref)
         assets = _selected_identity_rows(root, selection["assetRefs"], index, carrier)
-        entity = targets[ref]["entityRef"]
-        manifest = {"contentType": "article" if carrier == "homepage" else carrier, "assets": assets}
+        target = targets[ref]
+        manifest = {"contentType": carrier, "assets": assets}
         canonical_ref = ref
         if carrier == "homepage":
-            manifest.update(schema="quwoquan_data.entity_object", entityRef=entity, entityId=targets[ref]["entityId"])
+            entity = target["entityRef"]
+            manifest.update(schema="quwoquan_data.entity_object", entityRef=entity, entityId=target["entityId"])
             canonical_ref = "entities/" + entity.removeprefix("/entity/")
         else:
-            manifest["entityRefs"] = [entity]
+            manifest["entityRefs"] = [target["entityRef"]] if "entityRef" in target else []
         candidates.append({"objectRef": canonical_ref, "manifest": manifest})
     return candidates
 

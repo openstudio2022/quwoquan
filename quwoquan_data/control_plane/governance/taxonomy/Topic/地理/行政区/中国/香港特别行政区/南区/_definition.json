@@ -1,0 +1,12 @@
+{
+  "label": "南区",
+  "labelEn": "Southern",
+  "description": "香港特别行政区十八个行政区之一：南区",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-09-12T12:04:29.344938+00:00",
+  "updatedAt": "2026-09-12T12:04:29.344938+00:00"
+}

@@ -67,7 +67,10 @@
     },
     "sourceSelection": {
       "type": "object", "additionalProperties": false, "required": ["candidateId", "relevance"],
+      "dependentRequired": {"sourceWork": ["sourceWorkEvidence"], "sourceWorkEvidence": ["sourceWork"]},
       "properties": {
+        "sourceWork": {"$ref": "https://quwoquan.local/content-production/source_work.schema.json"},
+        "sourceWorkEvidence": {"$ref": "https://quwoquan.local/content-production/source_work.schema.json#/$defs/inputEvidence"},
         "candidateId": {"$ref": "#/$defs/text"}, "relevance": {"$ref": "#/$defs/text"},
         "role": {"enum": ["primary", "supplement", "media"]},
         "factEvidence": {"$ref": "#/$defs/factEvidence"},

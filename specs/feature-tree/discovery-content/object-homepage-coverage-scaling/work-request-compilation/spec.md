@@ -24,7 +24,7 @@
 - 来源发现执行、载体生产、review 与 canonical 池准入（归 [`on-demand-content-pool-admission`](../on-demand-content-pool-admission/spec.md)）。
 - immutable release producer handoff（归 [`multi-carrier-release`](../multi-carrier-release/spec.md)）；环境导入与 App 消费由下游环境 owner 独立拥有。
 - 由自然语言静默猜测缺失数量、未知区域、载体、lifecycle、provider、来源策略或 retry 依据；resolver 可以在 preview 中提出显式默认建议，但确认前不得写 carrier demand 或执行。
-- 新建或调用 Campaign、仓内 Agent/controller/queue/runner/fleet/recovery、managed SDK/provider 路径、第二套 Execution/发布台账或运行生命周期；意图请求只编译 confirmed carrier demand，执行由宿主 Agent 进入 producer 九阶段。
+- 新建或调用 Campaign、仓内 Agent/controller/queue/runner/fleet/recovery、managed SDK/provider 路径、第二套 Execution/发布台账或运行生命周期；意图请求只编译 confirmed carrier demand，执行由宿主 Agent 进入 producer 六步。
 
 ## 3. 行为要求
 
@@ -36,7 +36,7 @@
 - 内容运营者可以确认、修改或取消 preview。修改回到新的 preview。取消不写 carrier demand。只有确认才进入编译。宿主 Agent 不运行仓内 Cursor key/model/SDK semantic preflight；来源访问与素材 rights 分别在 source admission 与对象 admission 返回 typed 失败，不得塌陷为空结果。
 - 同一已确认输入、resolver policy/catalog digest 与全部依赖 ref/digest 必须生成相同 confirmed-demand digest 与每 carrier demand digest。每个 active carrier 恰好生成一个 demand record；编译器不得直写 execution work package、Campaign plan/report、reconciliation receipt、SourcePool 或 pool record。
 - 多 carrier 编译采用全有或全无语义：任一 carrier 无法形成合法 carrier demand 时，本次不发布任何新 carrier demand，已存在的 create-once artifact 保持不变并回到可修改 preview。同 ID 同 bytes 重放幂等；同 ID 不同 bytes、policy/receipt/source digest 漂移必须在写前失败。
-- `fresh` 不得携带 `retryOf`。`retry` 必须绑定 exact predecessor terminal receipt。网络、来源访问、rights、候选为空、执行中断或批次截止分别保留自身 typed 终态和下一动作。修复输入后回到 preview；已经产生 execution 事实的恢复只能创建新的 `executionId + retryOf` 并由宿主 Agent 进入同一 producer 九阶段。
+- `fresh` 不得携带 `retryOf`。`retry` 必须绑定 exact predecessor terminal receipt。网络、来源访问、rights、候选为空、执行中断或批次截止分别保留自身 typed 终态和下一动作。修复输入后回到 preview；已经产生 execution 事实的恢复只能创建新的 `executionId + retryOf` 并由宿主 Agent 进入同一 producer 六步。
 
 <a id="req-002"></a>
 ### REQ-002 confirmed demand 输入不静默默认
@@ -74,7 +74,7 @@
 - THEN 只有确认生成稳定 confirmed-demand digest，并为每个 active carrier 恰好生成一个 carrier demand；相同输入、policy/catalog digest 与依赖 ref/digest 重放得到相同摘要，同 ID 异字节在写前失败。
 - THEN 编译结果可读出 resolver policy/catalog、全部 dependency 与 carrier demand ref/digest；execution work package、Campaign plan/report、reconciliation receipt、SourcePool 与 pool record 均未由编译器写入。
 - THEN 任一 carrier 编译失败时全批零发布，已存在的 create-once artifact 不变；修复输入后回到 preview。
-- THEN 已实现的 candidate-backed `task init` 之后，confirmed demand 只由宿主 Agent 按 producer 九阶段消费；source access、rights、空候选、中断或截止失败保留真实 stage 终态。恢复只能由新 `executionId + retryOf` 消费精确 receipt，且其它 carrier 的既有合格对象不被撤销。
+- THEN 已实现的 candidate-backed `task init` 之后，confirmed demand 只由宿主 Agent 按 producer 六步消费；source access、rights、空候选、中断或截止失败保留真实 stage 终态。恢复只能由新 `executionId + retryOf` 消费精确 receipt，且其它 carrier 的既有合格对象不被撤销。
 
 <a id="gwt-002"></a>
 ### GWT-002 confirmed demand 承载四类 scope 且输入缺口不静默

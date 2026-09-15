@@ -23,6 +23,7 @@
 - 非地点 producer、自动重分区、引用健康服务、后台逐图探活或自动修复。
 - 新增跨服务强一致、普通实体下线的级联删除、跨端缓存失效广播；既有发布激活 fence 保持原 owner。
 - 异卷或远端备份的部署、恢复目标与运维周期的具体取值；未验证的耐久性由 `OPEN-002` 如实保持未建立。
+- 切账号、创建 Bot、启停 Routine 或正式内容生产；这些由宿主与当次授权拥有，不构成本层 SIT 的完成条件。
 
 ## 3. Journey / Scenario 贡献
 
@@ -37,7 +38,7 @@
 - [`work-request-compilation`](./work-request-compilation/spec.md)：confirmed 按需意图收敛为现役逐载体 demand 与 immutable candidate bindings；旧 handoff/WorkRequest/request-envelope schema 已删除。
 - [`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md)：所选载体生产、来源/媒体准入、article 来源预筛与唯一 reviewed delivery 入池路径，终点为 canonical pool record 与可恢复 typed 终态。
 - [`source-discovery-scale-reliability`](./source-discovery-scale-reliability/spec.md)：来源发现由宿主 AI 原生串并行，仓内 worker/slot/heartbeat 控制面退役。
-- [`multi-carrier-release`](./multi-carrier-release/spec.md)：每个发布对象必须闭合 creator、tag、entity、media 与 source 引用，运行 receipt 只能写入输出目录、不得回写静态真相源；immutable release handoff 是 producer 终点；环境导入与 App 消费由下游环境 owner 只读 handoff 后独立闭合。
+- [`multi-carrier-release`](./multi-carrier-release/spec.md)：每个发布对象必须闭合 creator、tag、entity、media 与 source 引用，运行 receipt 只能写入输出目录、不得回写静态真相源；immutable release handoff 是 producer 终点；环境导入与 App 消费由下游环境 owner 只读 handoff 后独立闭合。内容团队模板等价、初始化不启动与多账号写边界由该 Story 的 `REQ-022` 拥有。
 - [`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md)：invalid canonical identity 只通过显式对象治理 query/command 收敛，不成为内容生产自动恢复。
 - [`content-pool-workbench`](./content-pool-workbench/spec.md)：生产结束后在本地只读查看 canonical 内容池全貌与元数据，并以独立文件台账完成精确版本人工复核和 R1/R2 离线返工回读，不修改发布仓或触发发布。
 
@@ -115,6 +116,15 @@
 - THEN 独立备份经显式操作在隔离目标证明 exact-byte 恢复后才承认该层恢复能力；同卷副本或硬链接不能声明抗卷损坏，未验证异卷/远端备份时其耐久性仍未建立。
 - THEN 源站不可达不影响随体成品；校验不执行恢复，来源 URL 或重新派生不被当作 exact-byte 恢复保证。
 
+<a id="sit-003"></a>
+### SIT-003 内容团队共用同一手册并在交接后保持唯一写者
+
+- GIVEN 六角色模板与 content-production Skill 已冻结，且运营者可按账号绑定同一手册版本。
+- WHEN 按模板复建、轮换接管或在对象范围不相交时请求分片并行。
+- THEN 六角色引用同一工作手册与四载体六步，不另建流程或团队 registry。
+- THEN 跨团队共用唯一 canonical 内容仓、站点总预算与单一全局收官人。
+- THEN 初始化不启动生产。交接只认 receipts、resultRefs 与产物。
+
 ## 8. 开放事项
 
 <a id="open-001"></a>
@@ -136,3 +146,13 @@
 - 尚缺实现与证据：按新随体对象包完成只读校验与显式恢复边界，分别验证根不可达、文件缺失、摘要漂移及来源证据缺失；在获授权隔离目标上核验真实备份恢复。异卷/远端未建立时持续明示该层未建立，不增加周期健康服务或自动修复。
 - 完成判定：`SIT-002` 全部结果子句按当前对象包契约成立，且 `SIT-002.t4` 有真实独立备份与隔离恢复证据，原媒体及审计字节不变。
 - 依赖：Data/Ops 的显式备份与恢复授权；既有 `quwoquan_data/tests/local_contract/release/test_media_holding_closure__library_sole_holder__reliability__local_contract_test.py` 需改验新随体语义，旧 sole-holder 测试即使通过也不关闭本 OPEN。包级缺口由 `multi-carrier-release` 的 `OPEN-025` 承接，环境消费由其 `OPEN-015` 承接。
+
+<a id="open-003"></a>
+### OPEN-003 内容团队接管与多账号运行尚缺宿主证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：团队模板与六步共用关系可本地核对，但创建 Bot、六人群读回、轮换接管与分片并行仍缺宿主与生产证据。规格 PASS 不构成可生产。
+- 完成判定：[`SIT-003`](#sit-003) 由手册/规格 local_contract 与后续宿主读回分别绑定。模型锁定、双账号并行与正式生产分别由 [`multi-carrier-release` OPEN-032](./multi-carrier-release/spec.md#open-032) 与 [`OPEN-033`](./multi-carrier-release/spec.md#open-033) 关闭。
+- 依赖：content-production Skill 与 [`DEC-046`](./design.md#dec-046)；实际切号与生产另需用户授权。

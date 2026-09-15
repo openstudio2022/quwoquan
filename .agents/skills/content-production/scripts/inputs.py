@@ -41,6 +41,7 @@ def validate(document, schema_path: Path, definition: str | None = None) -> None
     schema = io.read_json(schema_path)
     # 本地注册 Data 唯一 schema 及其相对引用，不出网或复制字段闭集。
     for relative, name in (("source/ingest_manifest.schema.json", "ingest"),
+                           ("source/source_work.schema.json", "source_work.schema.json"),
                            ("execution/round_spec.schema.json", "round_spec.schema.json"),
                            ("execution/target_set.schema.json", "target_set.schema.json")):
         path = REPO / "quwoquan_data/schema" / relative
@@ -192,6 +193,60 @@ def rights_facts(original, selected, root, carrier):
     return result
 
 
+def source_work_evidence(root, carrier, records):
+    result, seen = [], set()
+    for record in records:
+        if record["id"] in seen:
+            raise io.InputError("SOURCE.WORK_EVIDENCE_DUPLICATE：原作证据 ID 重复")
+        seen.add(record["id"])
+        path = io.carrier_path(root, carrier, record["inputPath"])
+        if not path.is_file():
+            raise io.InputError("SOURCE.WORK_EVIDENCE_MISSING：原作证据不是普通文件")
+        facts = io.file_hashes(path)
+        if record["sha256"] != "sha256:" + facts["sha256"] or record["bytes"] != facts["bytes"]:
+            raise io.InputError("SOURCE.WORK_EVIDENCE_DRIFT：原作证据摘要或字节数漂移")
+        result.append({**record, "inputPath": str(path)})
+    return result
+
+
+def require_work_evidence(base, path, digest, kinds):
+    refs = base["sourceWork"]["capture"]["evidenceRefs"]
+    if not any(record["id"] in refs and record["inputPath"] == str(path)
+               and record["sha256"] == "sha256:" + digest and record["kind"] in kinds
+               for record in base["sourceWorkEvidence"]):
+        raise io.InputError("SOURCE.WORK_ORIGINAL_REQUIRED：原作须显式引用已绑定的真实响应或元数据原件，摘要/底稿不能替代")
+
+
+def source_work_facts(candidate, choice, root, carrier):
+    work = choice.get("sourceWork")
+    if work is None:
+        return {}
+    identity = work["identity"]
+    # 原生 ID 与 candidate 的 provider:ID 不是同一语法，原生语义由宿主核实。
+    if identity["pageUrl"] != candidate["sourceUrl"] or identity["provider"] != candidate["source"]:
+        raise io.InputError("SOURCE.WORK_IDENTITY_MISMATCH：原作页面或 provider 与候选不一致")
+    records = source_work_evidence(root, carrier, choice["sourceWorkEvidence"])
+    if set(work["capture"]["evidenceRefs"]) != {record["id"] for record in records}:
+        raise io.InputError("SOURCE.WORK_EVIDENCE_REF_UNKNOWN：原作证据与显式引用必须一致")
+    result = {"sourceWork": work, "sourceWorkEvidence": records}
+    if evidence := candidate.get("evidence"):
+        require_work_evidence(result, io.carrier_path(root, carrier, evidence["responsePath"]),
+                              evidence["responseSha256"], {"source_response", "source_metadata"})
+    if carrier == "image":
+        gallery_selection(candidate, choice)
+    return result
+
+
+def gallery_selection(candidate, choice):
+    galleries = [item["members"] for item in choice["sourceWork"]["structure"] if item["role"] == "gallery"]
+    if not galleries:
+        return
+    selected_ids = [asset["id"] for asset, _ in selected_assets(candidate, choice)]
+    # 不要求候选含原作全部成员，也不从列表位置或下载格式创造第二身份。
+    if not any(selected_ids == [member for member in members if member in selected_ids] for members in galleries):
+        raise io.InputError("SOURCE.GALLERY_SELECTION_INVALID：选中资产必须是原生 gallery 成员的原序子序列")
+
+
 def source_facts(candidate, choice, root, carrier):
     candidate_paths(candidate, root, carrier)
     evidence = candidate.get("evidence")
@@ -201,7 +256,8 @@ def source_facts(candidate, choice, root, carrier):
             raise io.InputError(f"原始响应摘要漂移：{candidate['id']}")
     if "accessPolicy" in candidate and "accessPolicy" in choice and candidate["accessPolicy"] != choice["accessPolicy"]:
         raise io.InputError("选择不能改写来源访问事实")
-    base = {"sourceUrl": candidate["sourceUrl"], "relevance": choice["relevance"], **rights_facts(candidate, choice, root, carrier)}
+    base = {"sourceUrl": candidate["sourceUrl"], "relevance": choice["relevance"], **rights_facts(candidate, choice, root, carrier),
+            **source_work_facts(candidate, choice, root, carrier)}
     for field in ("accessPolicy", "discoverySignals"):
         value = choice.get(field, candidate.get(field))
         if value is not None:
@@ -225,16 +281,31 @@ def selected_assets(candidate, choice):
         raise io.InputError("候选资产身份重复")
     selected_ids = [selected["id"] for selected in choice.get("assets", [])]
     if not selected_ids or len(selected_ids) != len(set(selected_ids)) or not set(selected_ids) <= set(assets):
-        raise io.InputError("选中媒体须有已取得直链且资产引用唯一")
+        raise io.InputError("选中媒体须有本地取得事实且资产引用唯一")
     return [(assets[selected["id"]], selected) for selected in choice["assets"]]
+
+
+def local_work_evidence(root, carrier, base, local):
+    if "sourceWork" in base and local.get("acquisition") == "ytdlp_local":
+        require_work_evidence(base, io.carrier_path(root, carrier, local["metadataPath"]),
+                              local["metadataSha256"], {"source_metadata", "source_response"})
 
 
 def media_row(root, carrier, candidate, base, asset, selected, local):
     path = io.cached_file(root, carrier, {**asset, "sourceUrl": candidate["sourceUrl"]}, local)
+    local_work_evidence(root, carrier, base, local)
     rights = rights_facts({**base, **asset}, selected, root, carrier)
+    row = {**base, **rights, "kind": candidate["kind"], "directUrl": local.get("directUrl"), "filePath": str(path)}
     if not local.get("directUrl"):
-        raise io.InputError("SOURCE.DIRECT_URL_REQUIRED：本地结果已登记，但当前 Data ingest 要求实际单文件 directUrl；不得用作品页冒充")
-    row = {**base, **rights, "kind": candidate["kind"], "directUrl": local["directUrl"], "filePath": str(path)}
+        if carrier != "video" or local.get("acquisition") != "ytdlp_local":
+            raise io.InputError("SOURCE.ACQUISITION_REQUIRED：无直链视频必须有已核验的本地取得事实")
+        metadata = io.read_json(io.carrier_path(root, carrier, local["metadataPath"]))
+        formats = metadata.get("requested_formats") or metadata.get("requested_downloads") or [metadata]
+        format_ids = [str(value["format_id"]) for value in formats if value.get("format_id") is not None]
+        if len(format_ids) != len(formats) or any(not value.strip() for value in format_ids):
+            raise io.InputError("SOURCE.FORMAT_IDS_REQUIRED：元数据必须逐格式提供实际 format_id")
+        row["acquisition"] = {"method": "host_merged", "tool": "yt-dlp", "metadataSha256": local["metadataSha256"],
+                              "formatIds": list(dict.fromkeys(format_ids))}
     for field in ("sha1", "description"):
         if asset.get(field) is not None:
             row[field] = asset[field]
@@ -264,6 +335,10 @@ def carrier_ingest(root, selection, pool, downloads):
     validate(selection, SKILL / f"carriers/{carrier}/schemas/selection.schema.json")
     validate(list(pool.values()), SKILL / f"carriers/{carrier}/schemas/candidate.schema.json")
     validate(downloads, SKILL / "schemas/common.schema.json", "downloads")
+    if carrier == "image":
+        work_ids = [choice["candidateId"] for chosen in selection["targets"] for choice in chosen["sources"]]
+        if len(work_ids) != len(set(work_ids)):
+            raise io.InputError("SOURCE.IMAGE_WORK_SPLIT：同一原作不能拆到多个 image target")
     for candidate in pool.values():
         candidate_paths(candidate, root, carrier)
     for local in downloads.values():
@@ -300,7 +375,8 @@ def preflight_selection(root, relative):
         ref = canonical_target_ref(target)
         targets.add(ref)
         refs.add(ref)
-        refs.add("entities/" + target["entityRef"].removeprefix("/entity/"))
+        if "entityRef" in target:
+            refs.add("entities/" + target["entityRef"].removeprefix("/entity/"))
     return refs, targets
 
 
@@ -311,7 +387,7 @@ def preflight_manifest(candidate, carrier):
     prefix = "entities/" if carrier == "homepage" else f"posts/{carrier}/"
     if not isinstance(ref, str) or not ref.startswith(prefix):
         raise io.InputError("预检候选不得引用另一个载体工作区")
-    expected_type = "article" if carrier == "homepage" else carrier
+    expected_type = carrier
     if not isinstance(manifest, dict) or manifest.get("contentType") != expected_type:
         raise io.InputError("预检 manifest 必须声明当前 contentType")
     if carrier == "homepage":

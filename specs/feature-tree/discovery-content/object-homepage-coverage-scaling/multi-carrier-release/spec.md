@@ -19,6 +19,7 @@
 - 本 producer 默认只有一套 immutable release/handoff，不要求或声明发布类别、运行类别或命名消费轨道；逐对象保留完整 rights/`usageScope` 记录事实，但权利状态不构成 publish/release 阻断。公众可见性按 `REQ-002` 的开发验证统一开放裁定执行，环境差异只由环境配置表达，不据此建立第二 workflow、pool 或 semantic queue。
 - 批次级/跨载体聚合门只作目标与统计；四载体共用 acquisition/rights/distribution 记录，权利只记录不阻断，但不放宽访问控制、内容安全、隐私、未成年人、恶意文件、去重、实体相关性、质量或可播放性。
 - 经确认的请求只由宿主 Cursor/Codex IDE/CLI Agent 直接执行 canonical content-production Skill；identity-only candidate-backed 工作包、producer 六步（init → acquire → author → review → publish → release）的三份 seal receipts、approved object package、canonical pool 与 immutable release handoff 单轨推进。handoff 不携带 UAT/sample authority、import/activate/readback、App/API UAT、EAF、environment promotion 或 rollback facts。
+- 可复制内容团队模板、账号部署绑定与当次任务授权分层；每团队采用创作总监、创作者、独立 QA、电脑管家四类岗位，创作者与 QA 可有多个独立实例，不设固定七人上限或载体组长；总监承担唯一发布与保流责任，独立 QA 不由创作者临时兼任。初始化核对角色、共享有效任务版本与知识入口，不启动生产。轮换接管保持唯一写者；分片并行仅在对象范围不相交且宿主前提已证时启用。十团队放量只消费显式具名分片与当前全局轮次，不因账号、Bot 或进程在线自动获得工作。
 
 ### Out of Scope
 
@@ -32,6 +33,7 @@
 - 改变 homepage、image 或 video 的真正来源、权利与质量硬判据；但其执行时点统一硬切为 candidate binding 仅冻结对象身份、`acquire` 由 AI 出网取得来源后以零网络 ingest 清单交脚本机械派生 bytes/CAS/probe 事实，相关性、水印与保留由 AI 直接判断。
 - 冻结期多样性准入的每实体累计上限与 Top-N 上限数值：阈值由多样性策略的既有 owner 单点拥有，本 Story 只消费其准入结论，并约束该结论的归属、呈现与批次级零合格归因。
 - 将 Data 的 `homepage` carrier 解释为 App micro。carrier 闭集固定为 `homepage|article|image|video`；App entry surface 与二维 UAT 矩阵属于下游消费规格，不构成 producer handoff 的内容或验收。
+- 切 Grok 账号、创建或删除 Bot、启停 Routine、正式生产、跨账号消息桥、仓内模型路由或第二套生产 Skill。
 
 ## 3. 行为要求
 
@@ -39,9 +41,9 @@
 ### REQ-001 多载体宿主 execution 与 pool→release 单轨
 
 - 每个发布对象必须闭合 creator、tag、entity、media、source、rights 与 independent review；`4.draft` 每对象只有一个 carrier 主产物，`5.review` 每对象只有一个 `content_review.json`。运行 receipt 只能写入 execution/output，不回写静态真相源。
-- homepage、article、image、video 共享 canonical entity catalog，但各自拥有由 identity-only candidate bindings 初始化的 immutable execution。唯一语义与推进主体是直接执行 `.agents/skills/content-production/SKILL.md` 的宿主 Cursor/Codex IDE/CLI Agent；新任务不得调用或新增仓内 resolver/projector/runner/controller/queue/registry/SDK/自动恢复、`task execute`（含 plan-only）或 pool-dispatch。
+- homepage、article、image、video 共享 canonical entity catalog，但各自拥有由 identity-only candidate bindings 初始化的 immutable execution。唯一语义与推进主体是直接执行 `.agents/skills/content-production/SKILL.md` 的宿主 AI Agent（包括 Cursor/Codex IDE/CLI 与 Grok Bot，均使用同一 Skill）；新任务不得调用或新增仓内 resolver/projector/runner/controller/queue/语义调度或业务完成 registry/SDK/自动恢复、`task execute`（含 plan-only）或 pool-dispatch。只保存具名分片占用与资源预留硬事实的最小本地 SQLite 协作库按 `REQ-022` 例外允许。
 - candidate binding 只冻结目标对象身份，不要求 task-init 前 source/media admission。中性 `task init` 从一份 round spec 原子创建该轮全部 carrier execution 的三份输入后，宿主严格执行 producer 六步：`acquire` 由 AI 以宿主原生能力出网检索、取证并下载来源，再按 execution 提交一份零网络 ingest 清单，脚本只从本地字节机械派生 sha256/CAS/mime/probe/poster、按申报 license 派生 `rightsStatus`（物理目录 `1.download/`）；`author` 由 AI 直接创作每对象唯一 carrier 产物（`4.draft/`），标题、tagRefs、creatorProfileId 与选用资产由产物自身声明；`review` 由另一真实会话按 execution 提交一份判断输入，seal 机械扇出到逐对象 `5.review/content_review.json`。每步完成后由 `task seal` 自行校验硬事实（schema、引用、摘要、媒体字节、tagRefs、author≠reviewer）并 create-once 写 receipt `001-1.download`/`002-4.draft`/`003-5.review`；不存在 stage-open、宿主 verifierFacts、2.quality/3.compose 产物。`publish` 是单对象事务，`release finalize` 成功即 `END`。
-- 一个 execution 的 `4.draft` 由一个真实 author actor 会话负责——可以是主会话，也可以是宿主派发的独立子 Agent 会话——其 actor/invocation 与产物 exact refs/digests 只由 `002-4.draft` seal receipt 冻结；`acquire` 的出网取证、下载与 ingest 清单可由主会话或该 author 完成，`001-1.download` 只冻结提交者 actor，不要求与 author 同一会话；该 seal 同样逐对象校验来源硬事实，ingest 失败或字节漂移的对象只以 typed issue 退出本 execution，至少一个对象取得来源即 `pass`，后续 `4.draft` 只校验 `001-1.download` resultRefs 中的对象。`002-4.draft` seal 逐对象校验产物硬事实（非空、tagRefs 解析、creatorProfileId 解析、homepage 百科主源）并一次报出全部违规：不合规对象只记 typed issue 并退出本 execution，至少一个合规产物即 `pass`，只有零合规产物或 stage-wide identity/integrity failure 才 `blocked`。`5.review` 由另一个真实 reviewer actor 会话负责，其判断输入的覆盖集合是 `002-4.draft` receipt 的 resultRefs 对象集合（退轮对象不需评审），其 actor/invocation 与逐对象 `content_review.json` exact refs/digests 只由 `003-5.review` seal receipt 冻结，review seal 负责把 execution 级判断输入扇出为逐对象文件并补齐机械字段（schema/stage/executionId/objectRef/draft 与 assetRights 权利转录）。两者必须为不同 session/runId，可使用同一 model family；同一 execution 同时至多一个 reviewer 调用，不同 execution 的 author 与 reviewer 可由宿主原生并行；不建立对象级 actor projection。跨会话只认 receipts 与业务 result refs。主会话拥有与用户的一次性约束澄清、全部机械命令、子 Agent 派发与轮次收官；澄清后由宿主自行规划并推进到终止条件（计数达标、候选前沿耗尽、连续零净增、用户中止或授权闸口），收官报告六段（目标 vs `pool-query` 计数、新增/复用、放弃清单、blocked execution 与首个 typed blocker、缺口、后继轮次的最小入口）且计数只从 `pool-query` 读；续跑交 `continue`/`plan-next`，不另立恢复轨或轮次台账。
+- 一个 execution 由一个真实 author actor 主会话完整负责获准的 init、来源取证、下载、ingest 与 author seal，不保留另一会话代跑的双轨；`4.draft` 的 actor/invocation 与产物 exact refs/digests 由 `002-4.draft` seal receipt 冻结，`001-1.download` 记录同一作者会话的真实提交 invocation，不以主子会话切换替代本人责任或绕过容量；该 seal 同样逐对象校验来源硬事实，ingest 失败或字节漂移的对象只以 typed issue 退出本 execution，至少一个对象取得来源即 `pass`，后续 `4.draft` 只校验 `001-1.download` resultRefs 中的对象。`002-4.draft` seal 逐对象校验产物硬事实（非空、tagRefs 解析、creatorProfileId 解析、homepage 百科主源）并一次报出全部违规：不合规对象只记 typed issue 并退出本 execution，至少一个合规产物即 `pass`，只有零合规产物或 stage-wide identity/integrity failure 才 `blocked`。`5.review` 由另一个真实 reviewer actor 会话负责，其判断输入的覆盖集合是 `002-4.draft` receipt 的 resultRefs 对象集合（退轮对象不需评审），其 actor/invocation 与逐对象 `content_review.json` exact refs/digests 只由 `003-5.review` seal receipt 冻结，review seal 负责把 execution 级判断输入扇出为逐对象文件并补齐机械字段（schema/stage/executionId/objectRef/draft 与 assetRights 权利转录）。两者必须为不同 session/runId，可使用同一 model family；同一 execution 同时至多一个 reviewer 调用，不同 execution 的 author 与 reviewer 可由宿主原生并行；不建立对象级 actor projection。跨会话只认 receipts 与业务 result refs。团队按 `REQ-022` 分配命令职责：总监在用户一次性授权内确认方向与预算并唯一收官；每位作者就是本人 execution 的主会话，自领整批并执行获准的 init/acquire/author seal，独立 QA 自领整批并执行 review seal，不由总监代理全部机械命令。澄清后各角色沿共享任务版本在本人 scope 自主推进到终止条件（计数达标、候选前沿耗尽、连续零净增、用户中止或授权闸口），收官报告六段（目标 vs `pool-query` 计数、新增/复用、放弃清单、blocked execution 与首个 typed blocker、缺口、后继轮次的最小入口）且计数只从 `pool-query` 读；续跑交 `continue`/`plan-next`，不另立恢复轨或轮次台账。
 - 单载体失败不得覆盖其它工作包，也不得阻止其它载体已合格对象入池。approved/rejected 可混合，短缺由 stage result artifact/typed issue 表达，不给通用 receipt 增加 `partial`；只要至少一个 approved 对象且无 stage-wide identity/integrity failure，stage 可 `pass` 并保留 shortfall，只有零 approved 或 stage-wide identity/integrity failure 才 `blocked`。
 - `003-5.review` receipt 所绑定的 `content_review.json` 判定 approved 后，publish AI 对对象逐个调用 canonical 单对象事务（无 plan/apply 双跑）；不存在独立 review receipt、drain/process manager 或 execution 级 publish。canonical object package + append-only pool record 是 producer 内部 publish→release 的持久事实；release ref/digest、explicit cohort ref/digest、milestone、carrier counts、content-pool handoff refs/digests、producer baseline revision 与 producer contract digest 组成唯一 immutable producer handoff，handoff 以 canonical publish proof 为凭而不内嵌 execution receipt 链。运行身份不进入 consumer identity、eligibility、release cohort 或 App DTO。
 - release selection 只接受显式 create-once pool record、完整 admission、随体来源/媒体与 canonical identity。逐对象失败只排除该对象，成功对象继续。content library 用于采集复用；最终对象包和 release 的完整消费不依赖原 execution 或 library 在场，release 仍只作分发物化。
@@ -70,6 +72,15 @@
 - Video 来源矩阵按「切题实景、可落实体、热度作排序、频道/UP 主批量」运行：Wikimedia Commons 视频类目与 `filetype:video` 全文检索、YouTube（无 key 时经 `yt-dlp` 以 `ytsearch` 发现、频道 `/videos` 批量并读取单条 `license`/互动指标，只下载 Creative Commons 条目；有 Data API v3 key 时以 `videoLicense=creativeCommon` 发现）、Bilibili（经 `yt-dlp` 拉 UP 主全集与逐条元数据；版权保留 → `unverified`）、Dailymotion API（`unverified`）、archive.org 与 Vimeo CC、Pexels/Pixabay 空镜。频道/上传者/UP 主全集是批量发现入口，入池仍逐条按实体落点、相关性与负面主题过滤；无法取得逐作品来源证据时只保留本次命中。
 - 热点信号（携程热度/点评数、维基 pageviews、Flickr interestingness/faves、YouTube/Bilibili views/likes/comments、图虫 favorites/views、创作者粉丝数）与逐载体候选级质量筛选（百科正文厚度与结构化事实、游记长度与实用信息项数与时效、图片分辨率与主体切题与水印类型与长宽比、视频时长与清晰度与实景比例）只作候选排序与可重放的候选级放弃判据，不是 execution 内的门禁，也不落台账。来源层级 `sourceTier`（S1 精选/S2 高产可信创作者/S3 其它开放许可/S4 非白名单许可）与创作者层级 `creatorTier` 同样只记录进 `discoverySignals`，供评分校准回归，不作门。
 - 访问合规只区分两类。**技术性规避**仍然禁止：所有站点、搜索和 creator shard 只允许公开直链、平台公开接口、RSS 或人工提供文件，不得规避登录墙、付费墙、验证码、访问控制、DRM 或反爬挑战页（小红书、抖音、快手、西瓜、知乎、微信公众号、穷游 503、去哪儿挑战页、美篇 SPA 等不进入任何自动化路径）。**robots 与服务条款限制只记录、不阻断入池**：新增站点前先读其 robots 与服务条款，并把结论作为每条来源行与每个资产的 `accessPolicy` 事实记录（闭集 `open|robots_disallowed|tos_restricted`，缺席不视为 `open`）；`Disallow: /` 或 ToS 限制自动访问的站点（Pinterest、i.pinimg.com、图虫、Bilibili、YouTube 下载、马蜂窝）照常入池，acquire 原样透传到 `meta.json` 与资产行，release header 汇总 `accessRestrictedAssetIds`。版权保留或权利未知的来源一律入池：`license` 逐字写作品页或平台条款原文（如「图虫用户协议（版权保留）」「Pinterest 服务条款（转载物，原始权利未知）」），脚本按白名单派生 `rightsStatus=unverified|unknown` 与 `authorizationRequired=true`，进入 header 的 `authorizationRequiredAssetIds` 与 `containsUnverifiedAssets`，caption 标注作者与来源链接；这些资产的当前开发期可见性按 `REQ-002` 统一开放，商用策略由 `OPEN-026` 跟踪，不由 Data 侧拒绝。来源侧出网由宿主 AI 点名 exact URL/查询后，以通用工具或 content-production Skill 内的单阶段机械工具执行；Skill `scripts/` 与 `carriers/<carrier>/sources/` 可负责有界请求、来源原文提取、下载与输入构造，不负责选择来源、相关性、评分、review、verdict、后继或恢复。Data `content/source`、`content/execution` 与 `core` 保持零来源网络。API key 只存在于本机环境而不进仓库；使用声明产品与联系方式的合规 User-Agent，同站串行、遵守 Crawl-delay、429/503 停止本次来源请求；多会话预算由宿主协调，不按会话数放大。单来源的 typed failure 只阻断自身，不阻断同 carrier 其他来源。
+- 实体口径是「用户感兴趣、愿意去的一切地方」：景区景点、秘境、网红打卡地、古镇、露营地、温泉、观景台、徒步节点、探险探秘地，不限 A 级评定，不设数量上限；实体类型只从 taxonomy `Entity/地点/*` 现有叶子中选取。homepage 主源顺序为 Wikipedia（`zh.wikipedia.org`）第一、百度百科（`baike.baidu.com`）第二、头条百科（`www.baike.com`）第三，与既有 homepage source registry 的 authorityRank/probeOrder 一致。顺序不替代实体消歧和实际正文核验；前一来源缺条目、信息不足或无法合法取得时记录实际原因后采用下一来源。百度百科进入主源闭集不代表可自动抓取，遇登录/验证码/反爬挑战仍停止，来源页可见性与合法原文取得分别举证。实体发现以携程景点榜（热度分、点评数、「必打卡」标签、类型筛选）、zh.wikipedia 分层类目（5A/4A/3A、一级博物馆、历史文化名镇名村、国家级自然保护区、各省文保单位）与 AI 按地域给出的秘境名单为前沿，逐条以百科页存在与正文厚度核验。
+- Article、image、video 均将专业类与综合类平台作为同等优先来源，不按分类或名单先后排名；百科和 Commons 仅作明确需要的补充，不因工具方便而默认采用。来源相关性、原作证据、合法取得及质量各自核验，不以网站多样性代替质量。
+- Article 从读者问题出发，旅行/摄影专业平台与综合内容平台的实质正文同等优先，百科只补身份历史；不将百科年代、地址或面积拆句套标题当独立文章。事实参考可采用携程游记/攻略与景点榜、新闻旅游频道（新华网、中国新闻网）、政府与文旅厅/景区官网公告、磨房户外线路帖、zh.wikivoyage 以及页面为服务端渲染的其它公开旅行 UGC（马蜂窝按 `accessPolicy=robots_disallowed` 记录），全部按 `factual_reference_only` 登记——AI 只取事实、路线、费用与贴士并亲笔原创，不搬运来源表达，来源 URL 全部进入 `sourceUrls`。Article 分类必须覆盖 `摄影`；摄影文章与攻略、游记等使用同一 Post/Article 契约与质量准入，不创建第二套载体。
+- Image 来源按专业/综合同等优先、摄影师/原生作品有界发现运行；图库可包含图虫、Pinterest、500px、Flickr、1x、摄影师原站、Unsplash/Pexels/Pixabay及商业图库，名单不代表已实现下载或授权。以下为历史工具能力说明，不是检索优先级：Wikimedia Commons（高产上传者 `allimages&aiuser` 全集与 Quality/Featured/Valued 类目）、Openverse API（Flickr CC 与 Commons 聚合，无 key）、Flickr 官方 API（有 key 时 `people.getPublicPhotos`/`photos.search` CC 筛选）、iNaturalist API（research-grade 且 CC 的自然观察，供自然保护区实体）、图虫（`/rest/tags/<标签>/posts` 与 `/rest/sites/<摄影师>/posts` 对合规 UA 直出 JSON，CDN 原图可下载；版权保留 → `unverified`）、Pinterest（用户/画板 RSS 与检索作发现，`i.pinimg.com/236x/<hash>` 改写为 `/originals/<hash>` 取原图；转载物、原始权利未知 → `unknown`）、头条百科标注 `CC BY-SA` 的自有图片、Unsplash/Pexels/Pixabay 官方 API（自有免费许可 → `unverified`）、archive.org/Europeana 等公有领域历史影像。每个资产的 `sourceUrl`、`creator`、原始资产 `directUrl`、取得方式与 `license`/`licenseUrl` 必须回到作品页、平台条款页或官方 API；500px 只作发现。旅行与自然生态摄影图片在拍摄地点未核实时允许显式无地点关联，不创建虚构地点或物种主页；地点身份字段要么完整声明并通过依赖校验，要么全部不声明，与摄影视频共用同一规则。
+- Video 专业来源与综合平台同等优先，公开发现覆盖抖音、快手、TikTok、Facebook、腾讯视频、百度视频、YouTube、Bilibili、Vimeo、Dailymotion与专业素材库；逐站区分发现、详情和原件实际可用性。百度视频等聚合入口须追溯实际作品页，不把发现站、CDN或许可页算原作来源。按「切题实景、地点有据才关联、热度作排序、频道/UP 主有界发现」运行，以下历史能力说明不是优先级或自动取得保证：Wikimedia Commons 视频类目与 `filetype:video` 全文检索、YouTube（无 key 时经 `yt-dlp` 以 `ytsearch` 发现、频道 `/videos` 批量并读取单条 `license`/互动指标，只下载 Creative Commons 条目；有 Data API v3 key 时以 `videoLicense=creativeCommon` 发现）、Bilibili（经 `yt-dlp` 拉 UP 主全集与逐条元数据；版权保留 → `unverified`）、Dailymotion API（`unverified`）、archive.org 与 Vimeo CC、Pexels/Pixabay 空镜。频道/上传者/UP 主全集是批量发现入口，入池逐条按实际主体、相关性与负面主题过滤；无法取得逐作品来源证据时只保留本次命中。摄影视频使用既有摄影主题标签，拍摄地点未核实时允许显式无地点关联，不创建虚构地点或物种主页。地点身份字段要么完整声明并通过依赖校验，要么全部不声明；缺地点不改变视频的来源、媒体、独立审核与去重判据。homepage与article原身份要求保持不变；image与video共用可选地点规则。
+- 视频与图片共用题材 `tagRefs`，不按载体复制目录。作者按可见主体、可核验场景或行为选择已有叶子：自然风光、动物行为、城市天际线或夜景等题材与图片相同。正式消费只使用已声明 `consumedBy` 的叶子；未声明采集与消费的 Format 内容角度只作创作提示。器材、光圈、快门、ISO、构图术语和制作流程不得作为大众兴趣 `tagRefs`。地点与季节只在有据时选择。不新增 Intent 轴、视频分类树、观赏或风景欣赏目录、展示入口 ID 表，也不手写固定排序权重。昆虫、两栖动物、淡水鱼等类型叶子仅在真实作品需要且现有定义无法覆盖时补入 Entity，不得借用爬行动物或海洋生物。人口画像不从画面或观看行为推断；标签存在不宣称推荐排序已生效。
+- 文章复用同一批共享题材叶子，并用现有旅行主题、出行约束与 Format 内容角度叶子表达阅读问题；不新增地貌/营造细分、散文/随笔/访谈体裁、六个发现根或 Intent 轴。展示入口映射现有 tags。Data seal 解析定义文件；在线 `ValidateTagRefs` 仍只接受 active release 的无子节点叶子。人口画像不从文章推断。
+- 热点信号（携程热度/点评数、维基 pageviews、Flickr interestingness/faves、YouTube/Bilibili views/likes/comments、图虫 favorites/views、创作者粉丝数）与逐载体候选级质量筛选（百科正文厚度与结构化事实、游记长度与实用信息项数与时效、图片分辨率与主体切题与水印类型与长宽比、视频时长与清晰度与实景比例）只作候选排序与可重放的候选级放弃判据，不是 execution 内的门禁，也不落台账。既有来源层级 `sourceTier` 与创作者层级 `creatorTier` 只作为实际取得的历史指标记录进 `discoverySignals`，不从平台类型、开放许可或工具章节顺序生成优先级，不用层级覆盖专业/综合同等优先，也不作准入门。
+- 访问合规只区分两类。**技术性规避**仍然禁止：所有站点、搜索和 creator shard 只允许公开直链、平台公开接口、RSS 或人工提供文件，不得规避登录墙、付费墙、验证码、访问控制、DRM 或反爬挑战页（包括小红书、抖音、快手、西瓜、知乎、微信公众号等遇到的挑战；穷游 503、去哪儿挑战页、美篇 SPA 等实际失败同样按边界停止）。这些平台的公开检索线索可登记，不代表详情或原件已经取得，不能从公开搜索摘要绕过受限原页。**robots 与服务条款限制只记录、不阻断入池**：新增站点前先读其 robots 与服务条款，并把结论作为每条来源行与每个资产的 `accessPolicy` 事实记录（闭集 `open|robots_disallowed|tos_restricted`，缺席不视为 `open`）；`Disallow: /` 或 ToS 限制自动访问的站点（Pinterest、i.pinimg.com、图虫、Bilibili、YouTube 下载、马蜂窝）照常入池，acquire 原样透传到 `meta.json` 与资产行，release header 汇总 `accessRestrictedAssetIds`。版权保留或权利未知的来源一律入池：`license` 逐字写作品页或平台条款原文（如「图虫用户协议（版权保留）」「Pinterest 服务条款（转载物，原始权利未知）」），脚本按白名单派生 `rightsStatus=unverified|unknown` 与 `authorizationRequired=true`，进入 header 的 `authorizationRequiredAssetIds` 与 `containsUnverifiedAssets`，caption 标注作者与来源链接；这些资产的当前开发期可见性按 `REQ-002` 统一开放，商用策略由 `OPEN-026` 跟踪，不由 Data 侧拒绝。来源侧出网由宿主 AI 点名 exact URL/查询后，以通用工具或 content-production Skill 内的单阶段机械工具执行；Skill `scripts/` 与 `carriers/<carrier>/sources/` 可负责有界请求、来源原文提取、下载与输入构造，不负责选择来源、相关性、评分、review、verdict、后继或恢复。Data `content/source`、`content/execution` 与 `core` 保持零来源网络。API key 只存在于本机环境而不进仓库；使用声明产品与联系方式的合规 User-Agent，同站串行、遵守 Crawl-delay、429/503 停止本次来源请求；多会话预算由宿主协调，不按会话数放大。单来源的 typed failure 只阻断自身，不阻断同 carrier 其他来源。
 - CLI 与 receipt 对每个 `displayName/provider` 输出 `planned/discovered/downloaded/accepted/rejectedAssetCount` 及 verified/unverified/restricted/unknown 计数；下载成功不得把 rights 状态升级为 verified。
 - 文章有图即 illustrated：只要求至少一张可追溯授权来源的图片并把首图派生为唯一封面，配图张数不设下限，一张图与多张图同样合法；无图即 text_only。封面与正文图可来自不同的可追溯授权来源。illustrated/text-only rate 只作为供给统计，不参与对象准入或规模晋级。
 - 视频候选保留 play/like/comment/share/favorite 的真实观测与观测时间，并只在同平台、同主题、同时间桶内按 percentile 排序。缺失项保持缺失并标明不可参与热度排序的原因，不得补零或生成虚假排名。
@@ -79,14 +90,15 @@
 
 - 原生多图作品以来源命名空间与原生作品身份分组，一个作品对应一个 image target，选中的资产保留来源顺序与逐资产权利；部分选择必须显式，不按图片数量拆成多个作品。仅同作者或同日期不足以合并跨页面作品。author 的逐资产说明按 Data author schema 表达，投影到既有 `assets[].caption`，不得改变总 caption、消费字段或已发布字节；同名资产必须能在同一对象内唯一投影。
 - homepage 是对已获许可百科来源的 faithful adaptation，不是「移动端模板、有据整理」或自由改写：必须保留主源的实体范围、关键事实、限定条件、归因、信息层级与可验证语义，只允许为统一 semantic document 做必要的结构映射、去除站点 chrome、可访问布局与有据补充。维基优先作主源，头条百科只补同实体缺失事实；无维基可用另一闭集百科。任何删改若改变事实含义、把不确定写成确定、合并冲突来源或脱离许可要求，必须 typed 判否或进入人工 disposition。主源须核对名称、类型与行政区；空章节、冲突或无时效依据的票价不补写。多百科产物显式声明本对象已取得的主源，source binding、唯一 manifest 与正文归属使用同一选择，不依赖 source unit 排序；视口、长度与评分只作布局/advisory，不生成端专属正文。
+- homepage 按移动端模板有据整理，主源按 Wikipedia、百度百科、头条百科的顺序选择，缺失事实可用已取得的同实体来源交叉核实，不能以历史取证失败排除一个合规主源，也不绕过实际访问限制。主源须核对名称、类型与行政区；空章节、冲突或无时效依据的票价不补写。多百科产物显式声明本对象已取得的主源，source catalog、实体头与正文归属使用同一选择，不依赖 source unit 排序；模板、长度与评分只作 advisory。
 
 <a id="req-006"></a>
 ### REQ-006 零仓内编排与 legacy 硬删除
 
-- 旧 managed SDK/provider、agent/controller/queue/campaign/recovery、runner/fleet/lane claim、stage-gate registry、semantic prepare/record wrapper、自动恢复与 execution-state reducer 必须物理删除；禁止 shim、dual-read、retired-path fallback 或 sequence-017 兼容。
+- 旧 managed SDK/provider、agent/controller/queue/campaign/recovery、runner/fleet、语义 lane claim、stage-gate/业务完成 registry、semantic prepare/record wrapper、自动恢复与 execution-state reducer 必须物理删除；禁止 shim、dual-read、retired-path fallback 或 sequence-017 兼容。`REQ-022` 的最小本地 SQLite 协作事实库只做具名分片 CAS 占用、资源预留与释放审计，不在本禁令中；一旦它解释 receipt 选择后继、签发业务完成或自动恢复，即越界为被禁控制面；按 `REQ-022` 对归属/容量所需正式证据作机械核验不产生第二业务 authority。
 - 删除是本 contract-reset 的已批准架构决定，不以 `GWT-034`、`OPEN-006`、stable-production proof、旧 proof、任何 App/API UAT 或 terminal retry evidence 为前置授权。
 - 宿主并发、模型选择、截止与会话重启是宿主原生能力，只能作为外部诊断，不进入仓库业务对象、producer handoff 或下游 promotion。
-- 每个 stage 的 verdict、typed issues 与 result refs 由宿主 AI 显式提交；代码只执行 OPEN input freeze、CLOSE create-once 与窄 IO/verifier，不建立第二终态 writer。
+- 每个 stage 的 verdict、typed issues 与 result refs 由宿主 AI 显式提交；代码只执行冻结输入上的 create-once seal 与窄 IO/verifier，不建立第二终态 writer。
 - 单阶段批量不是编排：`task init` 一次建一轮多个 execution、`task acquire` 一次 ingest 一个 execution 的多个 target、`task seal --stage 5.review` 从一份 execution 级判断输入扇出到逐对象文件，都只在一个阶段内对显式输入做无状态、无恢复、无跨阶段推进的展开；逐 target 结果独立报告，单 target 失败不影响同批其余。凡跨阶段推进、读取 receipt 决定下一步、重试或恢复，都属被禁的 runner/controller。
 
 <a id="req-017"></a>
@@ -95,14 +107,14 @@
 - 归工具的判据只有一条：同样字节换任何执行者必须得到同样结果，且结果不可伪造。闭集为：从字节算 sha256 并按来源声明的 sha1 交叉校验、mime/尺寸/时长探测、按载体预算降采样与转码、抽 poster、content library CAS 与硬链接、create-once source unit 与 receipt、schema 校验、单对象原子事务、canonical 序列化与 merkle、cohort 规范化与 handoff、`pool-query` 只读口径、随体闭包比对。
 - 归宿主 AI 的判据只有一条：需要理解语义或看见内容才能得出结论。闭集为：与用户澄清约束、制定与推进规划、并行派发子 Agent、检索与选题、点名来源与相关性、读来源页取权利事实、下载字节、看图判水印与相关性、写 `source.md` 与四类 carrier 产物、评审判断、cohort 与 milestone。这些语义判断与流程推进以宿主原生能力（检索、读页、终端、看图、子 Agent、规划）和既有通用 Skill（`continue`/`plan-next`/`review`/`commit`）完成，不在仓内再实现一遍。下载、提取原文、构造输入等机械部分可由宿主调用 Skill 内工具执行；工具不得选择 approved 对象、伪造 actor 或自动调用下一阶段。
 - 来源可达与权利事实的取证方式随之改变：「来源 `https://` 可检索」由 AI 申报的 `sourceUrl`/`directUrl` 形状与来源声明的 `sha1` 对本地字节的交叉校验共同成立，不再由脚本出网验证；license 原文与 `licenseUrl` 必须逐字抄自来源文件页，`rightsStatus` 仍由「申报 license 字符串 → 开放许可白名单」纯函数派生，AI 不直接给出 `rightsStatus`。这是取证方式的显式降级：可审计性从「机器取自 API」变为「AI 申报 + 本地字节自证 + 人可按 `sourceUrl` 复核」。
-- 过程状态不建第二真相源：「已存在什么」只读 `release pool-query`，「在飞 execution 到哪一步」只读 `_shared/receipts/`，本会话在飞状态只活在宿主 todos；候选级放弃靠可重放判据（条目缺失、消歧义、正文过薄、水印类型、相关性）在再次选题时自然重现，不落台账；人工裁决过的例外写入 `OPEN-###`。
+- 过程状态不建第二语义真相源：「已存在什么」只读 `release pool-query`，「在飞 execution 到哪一步」只读 `_shared/receipts/`，业务完成只认 receipts/resultRefs/publish proof/handoff；候选级放弃靠可重放判据（条目缺失、消歧义、正文过薄、水印类型、相关性）在再次选题时自然重现，不落台账；人工裁决过的例外写入 `OPEN-###`。`REQ-022` 允许的 SQLite 只记录协作占用硬事实，不能回答 execution 到哪一步或对象是否完成。
 
 <a id="req-018"></a>
 ### REQ-018 质量评分与热度信号只记录不门禁
 
 - 每个载体拥有一套由 Skill reference 声明的多维质量评分（整数 1–5，维度名为闭集，各载体六维），由 reviewer 会话在评审时逐对象申报为 `content_review.json` 的可选 `qualityScores{维度: 分}` 与可选 `qualityNotes`；`task seal --stage 5.review` 只做 schema 校验与逐对象透传，publish 事务原样写入 canonical 对象包。评分缺席合法，缺席不得由脚本补零或推断。
 - 来源热度信号（携程热度/点评数、维基 pageviews、Flickr interestingness/faves、YouTube viewCount 等）由 AI 在 ingest 清单的来源行以可选 `discoverySignals{信号名: 数值}` 申报，acquire 只透传到该 source unit 的 `meta.json`。
-- 两类记录都不参与任何判否：不改变 `decision`、不进入 publish/release admission、不进入 cohort 选择、不由脚本聚合成第二状态源；reject 理由仍只有关键论断缺证据、安全/隐私、素材不相关或不可播放三类。
+- 两类记录都不参与任何判否：不改变 `decision`、不进入 publish/release admission、不进入 cohort 选择、不由脚本聚合成第二状态源；reject 判据包括事实论断缺少必要证据或与已取得证据矛盾、安全/隐私、素材不相关或不可播放。可验证的地点、主体、人数、音轨等文案与媒体矛盾须明确引用原句及相反证据，交作者纠正，不能仅以低分/advisory 放行；一般审美、片长、风格及权利状态仍按既有记录边界处理，不增设分数硬门。必需的来源/当前草稿或媒体观察未完成时报告 blocked，不以省略某项评分代替审核完成；这些判断由真实独立 QA 作出，不交脚本分类。
 - 评分体系是草案：横向校准由 AI 对已绑定独立内容仓中的审核原件只读抽样完成，修订只发生在 Skill reference 的维度锚点与候选级筛选阈值，不改门禁与 schema 闭集之外的字段；仓位置与布局不参与评分事实。
 
 <a id="req-007"></a>
@@ -110,17 +122,18 @@
 
 - producer 完整路径固定为 `confirmed carrier demand -> identity-only candidate-backed task init -> acquire -> author -> review（三份 seal receipt）-> 逐对象 publish -> release finalize（explicit cohort immutable release + handoff）-> END`；旧控制面与任何消费阶段不在现役闭包。
 - `task init` 的 deterministic 三文件原子初始化已实现并由 local contract 锁定；真实 confirmed demand 的宿主消费证据由 [`work-request-compilation` OPEN-001](../work-request-compilation/spec.md#open-001) 跟踪。每一步只消费前一步 immutable ref/digest，失败不得跳阶或用旧 receipt 冒充当前完成。
+- 正常职责链为作者完整生产与自检后整批直交独立 QA，QA 判断后直交总监按原授权发布；退回直接通知作者。自检不增加预审阶段，总监不内容复审，finalize 只在正式交付点执行。已知阻塞直接由相应责任人处理，原任务负责人跟进、总监兜底无人承接与跨角色冲突；仅在既有 report/checkpoint 留阻塞事实、解阻责任人、下一动作与下次检查，不新增审批岗、报表或调度状态。
 - producer release/handoff 不包含 UAT sample authority、environment consumer facts、import/activate/readback、App/API UAT、EAF、promotion 或 rollback。下游可只读 handoff 独立消费，但其成功、失败或未运行均不得生成 producer receipt、回写 execution 或改变 producer END。
 
 <a id="req-008"></a>
 ### REQ-008 发布只消费显式 cohort
 
-- release 只消费调用方显式提供且经 schema 验证的 exact cohort；不得扫描全池后隐式选择“全部可发布对象”。M1/M10/M100/M1000 按 `cumulative_unique_finalized_objects` 累计达标，每级都必须形成自己的 full explicit cohort、immutable release 与 producer handoff。达标判据是 cohort 四载体计数**不低于**里程碑目标，release header 分别冻结实际 `counts` 与 `milestoneTargets`；cohort 的 `objectRefs` 排序、canonical 字节化与 `expectedCarrierCounts` 派生由 finalize 机械完成，不要求调用方手工对齐。
+- release 只消费调用方显式提供且经 schema 验证的 exact cohort；不得扫描全池后隐式选择“全部可发布对象”。M1/M10/M100/M1000/M10000/M100000 按 `cumulative_unique_finalized_objects` 累计达标，每级都必须形成自己的 full explicit cohort、immutable release 与 producer handoff。M100000 的 `milestoneTargets` 固定为 homepage/article/image/video 各 `100000`，不得沿用较低视频底线或以媒体张数替代 video/image 唯一作品数。达标判据是 cohort 四载体计数**不低于**里程碑目标，release header 分别冻结实际 `counts` 与 `milestoneTargets`；cohort 的 `objectRefs` 排序、canonical 字节化与 `expectedCarrierCounts` 派生由 finalize 机械完成，不要求调用方手工对齐。
 - build 在写入前逐对象重验 canonical identity、review、rights 与随体 source/media closure；任一对象失败只形成 typed exclusion，不改写 cohort 或其它对象，不隐式修复包或依赖原 content library。
 - release identity、cohort digest 与 payload 一次冻结并 create-once；重放只接受逐字节相同结果，任何漂移 fail closed。更高级别可复用 canonical 对象及其首次 producer execution/publish proof，handoff 以 canonical publish proof 为凭，不伪造新 receipts；重复 identity 不增加累计对象数。
 - 里程碑 cohort 与 producer handoff 继续是仅有的两份 terminal 事实，由 finalize create-or-same 保存到独立内容仓的 release 边界；不另建 catalog、状态账本或副 handoff。现有 immutable bundle、旧 terminal 原件与运行审计不因迁仓删除或改写；可重建承诺必须覆盖固定时间、cohort 与 exact build 输入，并由实际重建验证支持。
-- handoff 同时绑定工程 baseline/实际契约摘要及内容仓身份、所选稳定 ID/版本/包摘要与定位清单的 exact 快照；只有内容 commit 与实际字节匹配才记录 commit，不以源码提交冒充内容已提交，不新增双提交仪式。
-- canonical 包按稳定资产身份绑定相对随体媒体与摘要；环境交付键只在 release 物化时派生，运行 URL 由既有 media endpoint 生成，不把本地路径或来源直链交给 App。包内摘要不包含外层地域/分区定位，定位清单包含它；改变包字节须新版本/摘要，纯移动不重做 review。
+- handoff 仅新增内容仓 `repositoryId`，继续绑定工程 baseline/实际契约摘要，并复用既有 release 与逐对象 query digests 固定所选对象及内容快照；不另加 objectPath 表、`contentRevision` 或 `layoutVersion`，不增加内容提交或双提交门槛。
+- canonical 包按稳定资产身份绑定相对随体媒体与摘要；环境交付键只在 release 物化时派生，运行 URL 由既有 media endpoint 生成，不把本地路径或来源直链交给 App。包内摘要不包含外层地域/分区定位，release 复用既有引用定位；改变包字节须新版本/摘要，纯移动不重做 review。
 
 <a id="req-009"></a>
 ### REQ-009 最终媒体随作品交付，内容库只负责采集复用
@@ -216,8 +229,11 @@
 - manifest 是对象身份、版本、分类、标题/caption、实体事实、正文和有序媒体/业务依赖的唯一结构化发布事实；homepage/article 另有唯一最终正文，image/video 不制造伪正文或携带脚本草稿。字段与文件语法由 canonical schema 拥有，不为整齐重命名既有业务 ID。
 - 采用来源的 URL、原作者、时间、许可/授权/访问事实由包内 `sources/<unit>/source.json` 单写，必要证据在同一来源单元内聚；相同来源可在不同作品保留少量独立审计元数据，不建全球 source resolver。只保留真实、必要且被引用的证据，原始大下载非默认成品，生成的 manifest 副本不是第三方授权证明。
 - 删除重复 asset/creator/tag 引用旁车及独立 source catalog/rights 投影，真实原件转入随体来源；消费者只从 manifest/source 生成公共 attribution，不再手工维护第二份事实。
+- 四载体采用同一版本化原作记录，沿候选、取得与随体来源保留原生作品身份、原页面与已核实原作地址、实际响应/摘录/取得凭据、取得范围与有序采用关系。响应完整不等于原作完整，未知或局部取得须显式声明；未保存原字节不得只凭摘要声称可恢复。
+- 原作记录只保存内容区域的媒体使用项与证据定位，不复制DOM或全文AST。原生组图成员保留相对原序，封面、正文配图、视频poster及参考链接按用途引用；同一资产多处使用不重复计作品。图标、广告、推荐图等未采用媒体不进入成品或分发闭包；内容主题确实涉及标志时可由宿主有据采用，不按尺寸/扩展名推断。
+- 原始来源、审核成品和目标渲染投影分别绑定，不要求跨阶段署名对象全等。新渲染版本由下游分发构建从固定成品生成，不能反写来源、媒体或review；目标不支持的必要媒体关系明确阻断该投影，不静默丢图、改序或夹带未选图片。来源变化只更新取得/识别适配，普通消费不回原站解析。
 - 独立 reviewer 的原结论与原始审核对象摘要保留，迁移只追加原件 binding，不把旧审核改成新审核。追加式 pool records 保留入池/退役事实并绑定包与 review 摘要，不复制完整 manifest/source；审核结论与入池状态不能相互替代。
-- 单对象 publish 在同一内容仓共享锁下校验临时包并原子可见；所有源码工作树对共同根使用同一锁，不随各自 output root 漂移。仓 metadata 只承载身份、布局版本与契约摘要，不承载绝对路径、统计、active release 或凭据。
+- 单对象 publish 在同一内容仓共享锁下校验临时包并原子可见；所有源码工作树对共同根使用同一锁，不随各自 output root 漂移。仓 metadata 除 schema 标识外只承载 `repositoryId` 与 `layoutVersion`，不保存 `producerContractDigest`、绝对路径、统计、active release 或凭据；实际工程契约摘要仅由 handoff 绑定。
 
 <a id="req-021"></a>
 ### REQ-021 稳定实体导航与媒体失败只做局部降级
@@ -238,6 +254,70 @@
 - Wikipedia source revision 必须把 exact revision 的 wikitext 与 Parsoid HTML 共同绑定到 sourceRevision；homepage faithful adaptation 和 article 独立性由 author self-check 与 independent review 对 exact tuple 裁决。只改标题/角度的单实体百科文章 typed rejected，不得以新 `publishAngle`、contentId 或 layoutRevision 绕过。
 - mapping/adaptation/independence 的 diagnostic 与 disposition 随对象保留并可由工作台只读展示；工作台与端 renderer 都不拥有人工 approval、semantic mutation 或 publish eligibility。人工决定后的继续生产必须产生新 tuple 并重新 review。
 
+<a id="req-028"></a>
+### REQ-028 四类岗位、多实例与具名分片协作事实边界
+
+- 可复制团队模板只保存创作总监、创作者、独立 QA、电脑管家四类岗位、职责、必读引用、工作关系、禁止动作与复建核对方法，不含账号、Bot UUID、凭证、活动任务、旧授权或旧执行身份。岗位与人数分离：保留唯一总监和管家职责，四载体作者按每载体 2–4 个执行槽设计，QA 从 1–2 个独立会话验证起，实际启用量由总预算与实测吞吐决定，不设七人上限、不承诺十六作者满载、不增设载体组长。独立 QA 不得创作或修改其审核 execution，岗位不可临时互换给本人作品过审。账号部署绑定只证明配置，不签发业务身份或工作完成。
+- 总监在用户授权内一次确认当次方向、候选/来源边界、载体预算与并发份额、停止条件及发布权限，保存到全员可读的现有任务输入/报告；不得扩大人类授权，也不逐题批准开工或转发正常交接。总监是本团队唯一发布与收官责任人，直接消费 approved 对象，执行获准的 publish/readback 与正式 milestone finalize/Git；只做机械发布检查，不重审内容、不代写草稿或代签 QA。缺发布授权时保留待发布并一次报告用户，不另设发布经理。
+- 每位作者就是本人 execution 主会话，在已授权候选、来源与预算内自主选题、查重、原子取得小批 scope、取证、下载、创作、自检及 init/acquire/author seal；补取证、未封存输入修正、缩批或普通候选替换在既有契约允许范围内自主决定，不改冻结 target/已封存集合，不手写 receipt、不自审、不 publish。全部有效对象完成 author seal 后整批直接交 QA，有容量即续领，不等其他作者或整组作品齐套。
+- QA 自主原子取得已 author seal 且无人持有的 review scope，每人一次只审一批，不同 QA 可并行审不同 execution；整批覆盖恰为 author receipt 的有效 resultRefs，逐作品核事实和真实媒体（图片看原图，视频看画面并听音轨），机械批量校验不替代判断。QA 只写本人 review 输入并自行 review seal，直接交总监并通知需处理退回项的作者；优先处理等待较久的合格已就绪批，长视频按真实工作量安排，不挑短件或等总监派下一批。
+- 管家负责实际活动根、媒体可读性、磁盘、网络/站点故障、下载转码压力与证据保存，在已有工具/环境授权内给受影响人员可执行信息；不参与选题、审核或发布，不要求每次下载先请示。越权修复交工程 owner/用户，无精确授权不清理、迁移活动目录或停止他人进程。
+- 按模板初始化后默认只读待命。核对四类岗位、多实例成员和共享信息，不等于启动 acquire/author/review/publish/release，也不启用 Routine。十团队 deployment 仍只表示部署集合；单账号自主生产增量只优化一个账号，多账号与 VM 扩容暂停，未来须另行授权与举证，不以更多 Bot 代替有效产出。Bot 角色、平台 `creatorProfileId`、来源原作者与宿主 `sessionId`/`runId` 互不代替，岗位简介不构成技术权限隔离或模型路由。
+- 每个可认领单元必须显式冻结 `shardName`、正整数 `globalIteration`、`deploymentId` 与单调 `generation`；唯一键为 `(deploymentId, generation, globalIteration, shardName)`。`shardName` 是稳定、非空、不可变的业务可读名称并绑定不重叠对象范围，不从团队号、账号、Bot、session、PID 或目录临时推导；同名分片跨 generation/iteration 是新单元，旧 claim 不得复用。协作状态闭集为 `available|claimed|draining|blocked|closed`，不得以聊天、文件 mtime、inflight 或 receipt 缺席补造状态。
+- 仅在用户已授权的 `globalIteration`、有效 deployment/generation、具名 shard、团队部署绑定、独立 QA 容量以及站点请求/模型/下载转码/随体与保护副本峰值预算均已显式预留时，宿主可自动 CAS 认领 `available -> claimed`；自动认领只选择既有 `available` 分片，不创建轮次、不扩大对象范围/预算/发布/清理授权，也不读取业务结果决定下一片。预算不足保持 `available` 或进入显式 `blocked`，不得先认领后透支。
+- 协作事实只落在既有本机单文件 SQLite coordination 入口，保存具名分片归属、actor/execution/target 集合、generation、claim nonce、角色写 scope、预留预算引用、时间戳与 append-only 占用审计。一个小批只有一个 author，一个 review scope 只有一个独立 reviewer；同一短事务原子核验归属与在制容量，同批多抢仅一个 winner，失败者自行选另一已授权未领批。init 成功、群内认领消息或团队级 shard claim 均不自动证明作者级独占。只消费已冻结授权 target；滚动候选扩入须由同一既有入口明确支持且不改旧冻结集合，能力未证不宣称动态抢领可用。
+- 每作者最多两个未闭合小批，其中最多一个正在创作；送审、审核中、待发布都计入未闭合，只有本批有效对象全部成功 publish/readback，或按现有契约明确终止且核完在飞写者，才释放该端到端名额。此处 readback 仅指本地 canonical 单对象发布事务的 exact 字节/身份读回，不要求下游 import、环境或 App/API 验收来释放生产名额。unknown 不释放；无发布授权只做有界试点，不把 review 通过当已发布腾名额。两批是单账号自主生产增量统一起始参数，调整只由总监依据实测端到端吞吐及资源余量在同一规则处确认，不叠加创作/待审/发布令牌或多层配额账本。
+- 该库不新增 execution/review/publish/release 语义状态机，不解释 receipts 选择后继、签发业务完成或自动恢复；容量核验只读取正式事实及其 exact 绑定来验证调用方申报的占用/释放条件，不持久化第二套阶段状态或 completed 清单。`release pool-query`、三份 receipts、resultRefs、逐对象 publish proof 与 handoff 仍是各自唯一业务事实；SQLite 丢失可由明确人工重新建立协作边界，但不得由业务产物反推并补写旧 claim。消息、checkpoint 与只读汇总不是第二台账。
+- 协作 release 必须对 exact 唯一键与 claim nonce 作单事务 compare-and-set，`claimed|draining -> available|blocked|closed` 由调用方显式给出；相同释放输入重放返回同一结果，nonce/generation/state 漂移零写。失联、十分钟无写入、TTL 到期、进程退出、账号切换或 `inflight=0` 均不得抢占、释放或转移 claim；终态未知则保留原 scope/证据，只冻结冲突正式写，其他安全划出的已授权任务可继续，不把观察结束伪造终态。
+- 每轮先冻结有效 deployment/generation/iteration、具名 shard 与总预算，核原生在飞写者及前任交接后才在获准范围内认领。一个 deployment 仍至多一个 active shard，多个作者在该 shard 内持有不重叠 execution；不得创建额外 deployment 绕门。运行期增量检查按 `REQ-024`，不设每轮全团队十分钟零生产或整组齐套屏障。停止条件到达后先 `draining`、闭合本片在飞写与报告，再显式释放；预计耗时、轮次结束或建议比例均不证明业务完成。
+- 后继团队认领前必须只读审计前任的 exact transition、claim nonce、receipts、产物与预算释放；后继只能清理自己 generation/claim 明确创建且不在保护集中的临时字节，不能清理、覆盖、seal、release 或接管前任未确认终止的产物。前任清理缺失或归属不明时后继报告 `blocked`，由原 owner/全局协调者在独立清理授权下处置。共同 publish 锁仍只串行化单对象事务，不是跨机器 claim。
+- Grok 桌面多实例只采用同一官方签名 App 加每账号独立空 `profileRoot`/`SAND_USER_DATA_DIR`/`SAND_DATA_ROOT`；`instanceId -> profileRoot -> dataRoot -> deploymentId -> accountIdentityRef` 一对一且路径互不为父子，不复制已登录 profile、不修改 App/Bundle ID/daemon/relay。该内部入口按客户端 exact 版本与签名准入，升级后回到 `PROFILE_REVALIDATION_REQUIRED`；深链、系统通知、更新器、Keychain 与 Computer Use helper 不视为已隔离。
+- 实例准入状态按 `PROFILE_ISOLATED -> ACCOUNT_VERIFIED -> LOCAL_EXEC_VERIFIED -> PRODUCTION_ELIGIBLE` 单向举证；窗口或 PID 存在最多证明进程启动。每 deployment 必须绑定同一账号身份引用、四类岗位及实际实例、独立 QA、共享 coordination DB identity、独立 execution/output/workspace 根与资源预留引用；同一 deployment 在同一 iteration 至多持有一个 active shard。稳定协作身份为 `shardId`，可读 `name` 仅展示且重命名不改变 claim/generation/target occupancy。
+- 团队自主生产的每个 `task init/acquire/seal`、`publish-object` 与 `finalize` 有限写入必须携带 current coordination DB 与 generation write-fence 输入，并在真实业务写点核角色、actor、exact execution/target scope 与有效授权；长期有限调用由本机共享写者 gate 保护，释放/撤权等控制变更取对应独占 gate；不同小批可并行，SQLite 仅在 gate 内做短事务核验，不覆盖媒体处理等完整业务调用。锁序由 design 固定，禁止持有 SQLite 事务等待其他进程的长期 execution/publish 锁；同片换代必须等待受保护写者离开，不能解锁后裸写。单账号多作者同样不能省略围栏，缺失/失效时拒绝，不因环境变量遗漏回退无保护生产。只有显式指定的收官 deployment 内获准总监 actor 可执行 canonical publish/finalize/Git，producer 或同 deployment 的其他 actor 不因 claim 获得这些授权；同站总限流、桌面冲突与原生模型并发仍受真实宿主能力限制。
+- 扩容准入逐级为 2、5、10 个真实账号实例；每级均重新证明 profile/data root、账号与 cloud computer、local daemon/gateway、外盘 UUID、共享 SQLite、独立 execution 根、预算、同片唯一 winner、旧代零写、断线不抢占与唯一收官。上一级证据不得替代下一级；十实例在线不关闭 M100000。
+
+<a id="req-029"></a>
+### REQ-029 全员共享同一有效任务版本，角色分别写入
+
+- 总监确认的方向、目标、已授权动作、费用/站点/存储预算与份额、停止条件及版本/生效范围只落在一份现有任务输入/报告；已有授权直接引用，普通选题不重新请示，扩大人类授权仍由用户决定。全员可读预算余量、任务占用、前序 receipts、来源/媒体、QA 结果、publish proof、阻断与恢复裁定；总监、作者、QA、管家事实访问平等，凭证、令牌与无关隐私不共享。
+- 可读不等于可写：作者、QA、总监与管家各写本人获准 scope，不能篡改他人输入、sealed bytes 或业务事实。已确认变更先保存再通知全队，受影响角色在下次认领/提交核对当前有效版本；在飞任务不追溯改变 actor/授权，紧急撤权由真实写围栏拒绝，不依赖群消息已读。
+- 正常路径仅作者整批→QA、QA 整批结果→总监两次关键交接；一次给齐 execution、前序 receipt/ref/digest、来源媒体路径、允许 scope、下一动作、风险与授权引用，只 @需行动的人，作者不等待“收到”才续领。通知缺失从原事实核对，未回复不重派，不私聊保存唯一决定或要求全员确认。
+- 当前必要事实不可读、版本过期或写权限缺失时暂停受影响正式动作并报告缺口，其他健康任务继续；不以旧记忆、Bot 简介或复制出的 completed 清单代偿，不新建看板服务、消息代理、管理平台、Envelope 或授权文件体系。
+
+<a id="req-024"></a>
+### REQ-024 总监增量检查主动保流，未知调用不抢占
+
+- 运行期总监约每 10 分钟做一次低成本增量检查：合格空闲人员未续领、author seal 批无人接审、approved 未发布、资源阻断及调用明确终止后无人接续；不全池重扫、不要求全员同时汇报。已知失败、授权缺口与身份/完整性异常立即报告，在下一可执行检查处理，不等整点。
+- 连续两次检查仍有无法解释等待，或超过同载体/阶段实测正常周期时，核原生状态并向责任人定向询问。长视频/转码仍在运行则按实测预期安排检查，10/20 分钟不是取消或 TTL 抢占门槛；无 native 时间不编造等待时长。
+- 首次异常在现有 checkpoint 写问题、owner、下一动作与下次检查时间；下一检查仍未解释/解决时必须裁定授权内修复、确认终态后接续、交工程 owner、请用户决策或有 owner 的 blocked 等待，不只重复催问。普通未封存输入错误由本人修正，同类确定性错误再次发生即停止盲重试并一次升级；QA/发布拥堵只在预算内调已验证并发，不能取消审核或放宽名额堆稿。
+- 调用明确终止后核原生终态、receipts、原 actor/授权，按原 retryOf/恢复契约由唯一 owner 接续；已封存成果复用，不冒用旧 actor。unknown、失联或额度耗尽保留原 scope，只冻结冲突正式写；缺可信终态/隔离授权就报告 blocked，请用户裁决，不取消未知调用制造周转。一个慢批只占所属作者容量；全局资源真实耗尽或 QA 全失效可暂停新增，不承诺无限不停工。
+- 检查只用实际支持的原生通知/Routine/状态读取能力，单个非重入检查，不每 tick 新建总监或生产调用；初始化不自动启 Routine，启用需授权。无自动唤醒能力则明确需要人工唤醒，不签发无人值守通过。一次授权明确用户为最终接管人；总监失联时各角色保存本人 checkpoint，管家能通知即直接告知用户，不假定同账号仍有预算写最后交接，也不承诺未落盘推理可恢复。
+- 同一个原生检查约每 10 分钟低成本核异常，并在每个整点对上个 `Asia/Shanghai` 完整小时只向已核目标群发送一次摘要，不另建小时调度器。逐载体分列有效 author 整批交付、QA approved/rejected/blocked、首次入池唯一对象、eligible 净变化和最老待审/待发布项；内容修订、恢复资格、身份归并及退出不计首次新增。图片或视频首次入池或净变化为零必须给出证据支持的原因、owner、下一动作和下次检查；连续两个完整小时为零或同一阻断未解时，总监须裁定授权内解阻/缩批、工程升级、用户决定或有理由 blocked，不只催促。
+- 首次无基线、读取失败、事件范围不完整、Mac 不可达均报告 `unknown` 而非零；迟到事件按原小时补报并标补报时间。以目标群、时区和完整小时键幂等去重，重复 tick 不重复发送；发送失败保留原生失败回执并在恢复后补报。10分钟检查复用点名 receipts/review/apply proof，池全量查询仅在约定校准点执行并记录查询区间，不以来源统计或约4分钟全池扫描充当业务状态机。
+
+<a id="req-025"></a>
+### REQ-025 A/B/C 初始化安全收敛为同一团队规则
+
+- A 新建：复用匹配 Bot，按授权并发补缺，核四类岗位/成员、实际工具/媒体链、原生身份、活动根与手册版本；只证明配置，不自动认领、生产、启 Routine 或清理。
+- B 已有空闲：先证明无在飞或待接管任务，再原位更新岗位、唯一发布责任及总监检查触发路径；不删历史、不建重复 Bot、不继承无效旧授权。空载核验与共享版本读回后，另按生产授权启动。
+- C 已有任务或 unknown：逐工作单元保留旧 scope/actor/receipts/版本，原调用保持身份至安全交接点再更新该角色，新任务遵守同一新规则；不等待全队同步切换，不改旧 receipt，不并行重派。unknown 保留对应范围、阻断及责任人，安全切换不建立长期旧权限兼容层。
+- 三场景均通过宿主受支持入口更新并重新读回全角色共享信息可达性、同一有效任务版本和实际生效配置；仅文件或简介已改不等于活跃 Bot 已生效。缺 Grok 管理或原生调用读取工具时，交精确人工清单并保留外部阻断，不擅改客户端/relay。
+
+<a id="req-026"></a>
+### REQ-026 建议比例与放大边界不替代正式里程碑
+
+- 主页:文章:图片作品:视频作品的 1:2:3:4 仅为整体建议，不是逐实体配额、阶段门或停止线。热门实体有据多作，冷门实体可只有主页；热度无证据标 unknown，媒体无可靠地点不捏造关联。同一实体始终只有一个稳定主页身份，主页扩量来自更多真实实体；原作拆图、换标题或换版本不增加唯一作品数。
+- 各载体建议量可按价值最高扩展至基础建议的 50 倍，仅为用户确认的规划边界，不是生产量承诺、费用或发布授权。K=10000 对应 10000/20000/30000/40000 只作初始参考，实际阶段目标、可自主追加范围、费用/站点/存储预算、发布权限与停止条件取自有效人类授权；总监只能在内调整份额，达到建议比例本身不停止或拒收。
+- 正式 M1000/M10000/M100000 数字只读 `content_distribution.policy.yaml`，不被建议比例或放大倍数替代；M100000 仍需四载体各至少十万累计唯一 finalized 对象与独立 release/handoff。基础工具通过、真实团队生效、净 eligible 产量提升与正式里程碑分别举证，不能互相替代。
+
+<a id="req-027"></a>
+### REQ-027 有界来源统计只读既有内容事实
+
+- Skill 只读统计消费调用方点名的同一根、同一阶段对象/执行范围，不默认全库扫描、不出网、不触发生产、不写 receipt 或第二完成台账。默认标准输出，报告可由调用方保存于既有可删除运行输出。
+- 按稳定对象身份消除版本重复，原作身份明确时消除同原作重复；同作品同网站计一次，图集多张图、视频poster、转码或新版本不增加作品数。无法核实跨平台原作关系时标未知，不凭标题相似或所有URL猜身份。
+- 作品页网站按 sourceUrl 等明确来源字段核定；发现平台、作品页、可证原作网站分列。CDN/许可页不计内容源，百科参考列表不等于实际采用；原始响应的溯源线索与结构化字段矛盾留待核，不由统计改写身份。
+- 每网站给唯一作品覆盖数/总范围作品数，以及作品-网站去重关联数/全部有效关联数的构成占比；前者合计可超过100%，后者在有来源关联时合计100%。空范围不除零；缺来源/无法解析单列，不能从总作品分母悄悄排除。来源统计不证明质量、当前eligible或原生审核生效。
+
 ## 4. 契约引用
 
 - canonical entity/identity：`quwoquan_data/schema/publish/entity.schema.json`
@@ -255,6 +335,7 @@
 - stage receipt：`quwoquan_data/schema/execution/stage_receipt.schema.json`
 - canonical pool record：`quwoquan_data/schema/release/pool_object_record.schema.json`
 - UAT matrix cell binding：契约字段 `required|not_applicable`、repo-relative `spec_ref`、`runner`
+- 团队岗位与 Grok 重建：`.agents/skills/content-production/references/team.md`、`.agents/skills/content-production/references/grok-team-rebuild.md`
 
 ## 5. 验收场景
 
@@ -288,14 +369,16 @@
 - WHEN 宿主 AI 产生 stage receipts 与逐对象 transaction facts。
 - THEN quota、workUnitCount、对象 identity/eligibility 与显式 release cohort 相同；并发、elapsed、模型与会话数不写入业务 authority。
 - THEN 仓库不保存宿主调度或容量 receipt，亦不据其自动推进或恢复。
+- THEN 未证明两账号同时保持受支持本机连接时只启用轮换，不把单次调用内站点间隔或本机 flock 当作跨账号锁。
 
 <a id="gwt-010"></a>
 ### GWT-010 宿主中断不伪造阶段结论
 
-- GIVEN 某 stage 已 OPEN 且宿主会话在 CLOSE 前中断。
-- WHEN 新会话接手。
-- THEN 新会话读取同一 OPEN exact inputs 并重做该 stage；代码不写假 verdict、next、deadline terminal 或 recovery state。
-- THEN 已 CLOSE blocked 的 execution 不续跑，只能新建 execution；既有 receipts 与成功对象字节不变。
+- GIVEN 某步尚无 create-once receipt，或已有部分草稿但原调用终态未核。
+- WHEN 新会话接手同一 execution。
+- THEN 新会话只读取同一冻结输入与已有 receipts。未 seal 步骤仅在原真实 actor 可核验时续写部分产物。代码不写假 verdict、next、deadline terminal 或 recovery state。
+- THEN receipt 已 blocked 的 execution 不续跑，只能新建 execution。既有 receipts 与成功对象字节不变。
+- THEN 轮换接管时原写者停止同片新增。新写者在读回三份 receipts 与产物并接受责任后才写入。
 
 <a id="gwt-011"></a>
 ### GWT-011 AI 单写 stage verdict 与 typed issues
@@ -322,7 +405,7 @@
 
 - GIVEN 一个 identity-only candidate-backed execution 与 canonical Skill。
 - WHEN 宿主 AI 依次执行 acquire、author、review 三步，每步直接写业务产物后调用 `task seal` 提交真实 actor 与 verdict；seal 自行校验硬事实并 create-once 写 receipt。
-- THEN 不存在 stage-open、宿主 verifierFacts、stage-gate registry、semantic prepare/record、runner/fleet/lane claim、自动恢复、execution-state reducer 或代码派生 next；pass 后继只按 Skill 固定顺序，blocked 后新建 execution。
+- THEN 不存在 stage-open、宿主 verifierFacts、stage-gate/业务完成 registry、semantic prepare/record、runner/fleet/语义 lane claim、自动恢复、execution-state reducer 或代码派生 next；pass 后继只按 Skill 固定顺序，blocked 后新建 execution。
 - THEN candidate binding 只冻结目标对象身份，init 输入是一份 round spec（`executionId` 逐 carrier 给出，`familyRef` 缺省派生，逐 target 只写身份；homepage 的 `region` 在 init 即校验为现有行政区 tag），`entityCatalogDigest/candidateCount/status/quota` 等可派生字段不由 AI 手写，canonical 字节化由脚本完成；`acquire` 由 AI（主会话或该 execution 的 author）出网取得来源并按 execution 提交一份 ingest 清单（逐 target 的本地文件路径 + 申报的 `sourceUrl/directUrl/license/licenseUrl/creator/sha1/description/relevance` 与水印三字段，可选 `discoverySignals`；page 来源附 AI 以通用工具落盘并亲笔附取证段的 `source.md`），脚本零网络地从本地字节生成 source units/source refs/CAS、sha256、mime/probe/poster 硬事实，按申报 sha1 交叉校验字节，按申报 license 派生 `rightsStatus`，不阻断；超预算视频转码为 mp4 派生体；不存在 2.quality/3.compose 产物。
 - THEN `author` 每对象只写 `page.md|draft.article.md|image_work.json|video_script.json` 之一，标题/tagRefs/creatorProfileId 由产物自身声明且 tagRefs 必须解析到 taxonomy、creatorProfileId 必须解析到 creator 注册表、homepage 必须至少一个百科 `page` 来源，三者均在 `002-4.draft` seal 逐对象校验而不是 publish；seal 一次报出全部对象的违规，违规对象只以 typed issue（含 `objectRef`）退出本 execution 且不进入 resultRefs，至少一个合规产物即 `pass`，零合规才 `blocked`；`4.draft` 目录允许存在草稿以外的文件；`002-4.draft` receipt 冻结同一 execution 唯一真实 author actor/invocation 与合规产物 exact refs/digests。
 - THEN `review` 由另一个真实 reviewer actor 会话执行，按 execution 提交一份判断输入，覆盖集合恰为 `002-4.draft` receipt 的 resultRefs 对象集合，逐对象只含 `decision/blockingIssues/advisories`（可选 `safety`、逐资产 `assetRights[].issues`、只记录的 `qualityScores/qualityNotes`），只在证据缺失、安全隐私、素材不相关或不可播放时 reject，权利疑虑写入 advisories；`003-5.review` seal 把该输入机械扇出为逐对象 `content_review.json`，从对象实际引用的资产补齐 `assetRights`（缺省 approved）、缺省 `dimensions` 与 schema/stage/executionId/objectRef/draft 字段，原样透传 `qualityScores/qualityNotes`，并冻结 reviewer actor/invocation 与 exact ref/digest。author 与 reviewer 必须不同 session/runId，可为同一 model family，任一方可以是宿主派发的独立子 Agent 会话。
@@ -510,6 +593,8 @@
 - THEN 同一 ingest 清单重放得到逐字节相同的 source unit 与 source refs；不同 execution 的相同来源文件在 content library 只持有一份字节。
 - THEN `sourceUrl` host 为 `www.baike.com` 的 page 来源登记为 `sourceClass=encyclopedia`、`sourceId=toutiao_baike`，homepage 事务据此投影 `sourceKind=toutiao_baike`/`extractor=toutiao_baike_html`/`policyRevision=encyclopedia-primary` 并通过 publish entity schema；`discoverySignals` 原样进入该 source unit 的 `meta.json`，不进入任何判否。
 - THEN 来源行申报的 `accessPolicy` 原样进入该 source unit 的 `meta.json` 与资产行且闭集之外的取值被 schema 拒绝；未申报的来源行其 `meta.json` 与资产行不含该字段且不被补为 `open`；publish 事务把资产行的 `accessPolicy` 转录到 canonical 资产记录，release header 把取值非 `open` 的资产汇总为 `accessRestrictedAssetIds` 且不据此排除任何对象。
+- THEN 宿主用 yt-dlp 合并的本地视频可声明 `directUrl=null`，但必须提供真实元数据摘要与选中格式列表；acquire 保留取得事实及 null 直链，资产署名回指作品页，不把作品页伪装成下载直链。图片、缺合并事实或非法元数据摘要仍被 schema 拒绝。
+- THEN page 可显式申报既有 `extractor` 方法，acquire 原样冻结到 source meta，homepage 主源与来源目录采用该事实；宿主读取网页正文的 `html_text` 不因 Wikipedia 域名变成 `wikipedia_api`。该字段不改变百科闭集或主源资格；未申报时保持既有站点方法约定，已冻结 source unit 的方法不得通过重放改写。
 
 <a id="gwt-038"></a>
 ### GWT-038 4.draft 逐对象短缺、质量评分透传与里程碑事实版本化
@@ -552,10 +637,46 @@
 
 - GIVEN 四载体独立审核后的对象包含采用来源、真实证据与最终媒体，另有旧审核原件和追加式 pool records。
 - WHEN 同一单对象事务生成新包、复制到无原 execution/library 的目录并由 importer 消费，另注入来源缺失、引用逃逸或第二份矛盾投影。
-- THEN manifest 单写身份、正文引用、有序媒体与主体依赖，homepage/article 另有唯一最终正文而 image/video 无伪正文，来源事实与必要原件随体，完整复制后不依赖原 execution/library 消费。
+- THEN manifest 单写身份、正文引用、有序媒体与主体依赖，homepage/article 另有唯一最终正文而 image/video 无伪正文，来源事实与必要原件随体，完整复制后不依赖原 execution/library 消费；正文图片按已验证资产身份同步投影到包内媒体路径，只替换引用位置，不改写文字或原审核，未知或歧义图片引用阻断。
 - THEN 重复 refs/source catalog/rights 旁车不再读写，消费者只从唯一 manifest/source 投影归属，缺证据或非法引用 typed 拒绝。
 - THEN 原 review 结论/审核对象摘要与 records 原件可复核，迁移只追加 binding/新版本事实而不伪造重新审核，旧 release/receipt 与已保护媒体保持原字节。
-- THEN finalize 的现有 cohort/handoff 以 create-or-same 绑定内容仓身份、所选 ID/版本/包摘要与定位快照，无匹配内容 commit 不冒称已提交，不强制双提交或隐式补库。
+- THEN finalize 的现有 cohort/handoff 以 create-or-same 保存，handoff 仅新增 `repositoryId`，工程 baseline/实际契约摘要与既有 release/object query digests 绑定 exact 快照；无新增 objectPath 表、`contentRevision` 或 `layoutVersion`，不要求内容提交或双提交，不隐式补库。
+
+<a id="gwt-060"></a>
+### GWT-060 摄影图片与视频无地点时仍可保存和分发
+
+- GIVEN 有真实来源、媒体和独立审核的摄影图片或视频未确认拍摄地点，另有完整地点身份作品和半填身份反例。
+- WHEN 沿相同init、取得、创作、审核、publish、显式cohort及离线投影处理。
+- THEN 无地点作品保留题材或摄影标签和空实体关联，不填假地点；公共投影省略可选主页锚点，作品和媒体可被消费。
+- THEN 有地点作品继续严格校验实体闭包；半填身份、伪造依赖、来源/媒体漂移与重复作品均拒绝，不因无地点跳过审核或完整性。
+- THEN homepage与article原身份约束不变；image与video共用同一可选地点规则；未知地点不推断省市区；重放不新增作品，四载体里程碑计数保持唯一对象语义。
+
+<a id="gwt-047"></a>
+### GWT-047 视频兴趣标签按消费者题材与观看价值解析
+
+- GIVEN 图片与视频可引用同一批已声明 `consumedBy` 的自然风光、动物行为、城市题材叶子，以及已声明消费的摄影教程叶子。
+- WHEN 作者为日照金山、燕鸥求偶、古镇夜景、海边旅行与摄影学习选择 `tagRefs`。
+- THEN 上述查询解析到已声明 `consumedBy` 的共享题材或摄影教程叶子，描述不含光圈、快门、ISO 或构图术语。
+- THEN 不存在视频专用重复题材路径，也不存在观赏、风景欣赏、昆虫、两栖动物或淡水鱼空目录。
+- THEN Topic 一级目录共 39 个，其中 36 个有本层定义可作为 `tagRefs`；场景、时间、地理是含后代的目录根，不是本层可选标签；雪山定义覆盖冰川用语。
+
+<a id="gwt-048"></a>
+### GWT-048 文章发现查询复用现有标签，不扩地貌营造体裁目录
+
+- GIVEN 图片与视频已声明 `consumedBy` 的共享题材叶子存在，文章可引用同一批题材及现有旅行/攻略/科普叶子。
+- WHEN 读者查询南迦巴瓦日照金山、燕鸥求偶、周末古镇公共交通、陈家祠观看、带长辈游园与住宿比较。
+- THEN 上述查询解析到已有 Topic、Entity 或 Format 定义，不新建 Intent 轴或文章分类树。
+- THEN 不存在冰川地貌至民居营造等拟增主题叶子，也不存在散文、随笔、访谈体裁叶子；`Topic/历史文化/建筑艺术` 保持无子标签定义。
+- THEN `Format/内容角度` 描述不硬编码视角个数；现有 15 个角度父节点仍可解析。
+
+<a id="gwt-061"></a>
+### GWT-061 原作证据与媒体用途在渲染变化时保持隔离
+
+- GIVEN 已保存真实响应或明确摘录的原生多图作品、图文页、转载预览与视频，内容区包含封面、配图、参考链接，页面另含未采用图标及推荐图。
+- WHEN 宿主明确原作范围与有序采用项，经零网络取得、审核成品保存及目标分发投影，再改变目标渲染实现并注入缺图、错序、证据漂移或未知用途。
+- THEN 四载体引用同一原作记录定义，真实原响应/摘录/凭据的类型、摘要和取得范围贯通；部分或未知范围不被改为完整，原作身份与采用成员能回查证据。
+- THEN 同一原生图集只保存一个作品并保留原序，封面可引用同资产而不重复轮播；正文配图位置与说明、视频poster关系和参考链接保持对应，未采用图标/推荐媒体不进入交付闭包。
+- THEN 缺字节、重复成员、断开引用与证据漂移明确拒绝；改变目标投影不改变原来源、成品及review摘要，无法表达的必要结构不静默平铺或丢弃，原站不可访问不影响已完整保存的成品消费。
 
 <a id="gwt-042"></a>
 ### GWT-042 实体失效与媒体故障不破坏已可读作品
@@ -580,6 +701,111 @@
 - THEN faithful homepage 在各端及不同 viewport 保持同一节点集合、内容结构、事实、归因、表格分类和阅读顺序；`layoutRevision` 只改变同一统一规则允许的尺寸、换行、滚动或线性化，改变限定语义的版本产生可定位 disposition 且不进入 publish。
 - THEN 两篇单实体百科改标题/角度的候选被判为同一语义对象，第二篇不能以新 publishAngle、contentId 或 layoutRevision 取得独立文章资格；真正独立的问题/路线/时间窗口或多来源论证候选才可进入新文章 review。
 - THEN 工作台可展示上述 exact tuple、diagnostic 与人工建议，但不能改变判定；人工修订必须生成新 tuple 并重新 review 后才可能发布。
+<a id="gwt-049"></a>
+### GWT-049 团队模板可私有复建且初始化不启动生产
+
+- GIVEN 一份无账号身份的四类岗位模板与可粘贴简介已写入 content-production 手册，创作者/QA 可有多个实例，独立 QA 为常设职责。
+- WHEN 运营者按该模板在另一账号核对角色、群成员与知识引用。
+- THEN 模板不含 Bot UUID、账号凭证或旧 runId。
+- THEN 初始化话术声明不启动生产、不启用 Routine。
+- THEN 重复按同一模板核对时不要求新建重复角色。
+
+<a id="gwt-050"></a>
+### GWT-050 岗位资质不构成已绑定高能力模型的证明
+
+- GIVEN 岗位手册要求总监与创作者按行业顶级专业标准工作。
+- WHEN 当前宿主公开能力不提供模型选择器。
+- THEN 写入专家资质不得被解释为已绑定更高能力模型。
+- THEN 团队不得宣称已满足严格高能力模型匹配并全面无人值守接管。
+
+<a id="gwt-051"></a>
+### GWT-051 多账号分片并行在宿主前提未证时保持阻断
+
+- GIVEN 两个账号绑定同一 Skill 版本与同一 canonical 内容仓。
+- WHEN 运营者请求分片并行。
+- THEN 未取得同时本机连接与不重叠对象范围证据时并行保持阻断。
+- THEN 轮换模式下旧队停止同片新增，原调用终态、在飞写者与 exact release 已核后，新队才可认领；10 分钟检查不构成全队暂停窗，失联或 TTL 到期不构成抢占依据，unknown 只冻结冲突范围。
+
+<a id="gwt-052"></a>
+### GWT-052 具名分片在授权轮次内原子认领并安全释放
+
+- GIVEN 当前 `deploymentId/generation/globalIteration` 已冻结对象范围不重叠的具名 shard，四类岗位及实例 deployment、独立 QA、总预算及逐 shard 预留均有效；另有 generation 漂移、预算不足、旧 nonce、失联与前任清理未明反例。
+- WHEN 宿主核实在飞写者与前任交接后，在已授权范围对 `available` shard 原子认领，生产停止后进入 `draining` 并以 exact claim nonce 显式释放，同时重放同一释放。
+- THEN 每个唯一键至多一个 `claimed` winner；只在已授权 iteration 与预留预算内发生 `available -> claimed`，自动认领不创建 shard/iteration、不选择候选、不解释 receipts 选择后继或签发完成、不扩大 publish 或清理授权。SQLite transition 与预算引用可审计，但删除该库不改变任何对象、execution、review、publish、release 或 handoff 事实。
+- THEN exact 释放与同输入重放得到同一终态，错误 nonce/generation/state 零写；失联、十分钟无写入、TTL 到期、进程退出或账号切换均保持原 claim，不触发抢占。观察结束仍未知、预算不足或前任清理归属不明时 shard 显式 `blocked`。
+- THEN 后继只读审计前任 transition/receipts/产物/预算释放后才可认领，只清理本 claim 明确创建且不受保护的临时字节；前任未确认终止的产物、canonical pool、handoff、library/golden/随体媒体与外盘副本均不被后继清理。
+- THEN M100000 只有显式 cohort 的 homepage/article/image/video 各至少 `100000` 个累计唯一 finalized 对象并形成独立 release/handoff 时达标；十团队数量、claim 数、轮次数或媒体文件数都不能代替该计数。
+
+<a id="gwt-053"></a>
+### GWT-053 作者与独立 QA 自主整批交接，慢批不形成屏障
+
+- GIVEN 同一已授权图片目标 100 作品已拆为 20 个五作品 execution，至少两作者与两独立 QA 有可读相同任务版本、有效归属与预算，其中一作者或 QA 的慢批仍在原生运行。
+- WHEN 作者各自完成本人 execution init/acquire/author seal，整批直接交接，QA 自主领取不同已就绪批并自行 review seal，总监消费已 approved 对象。
+- THEN 每 execution 只有一个 author 主会话和另一个 reviewer；QA 覆盖恰为 author receipt 的有效 resultRefs，多出或漏评拒绝，不自审、不改已封存稿，图片原图与视频画面/音轨有真实核查证据。
+- THEN 正常路径只有作者整批→QA、QA 整批结果→总监两次关键交接，普通选题/开工/续领不经总监逐项批准，作者无须等消息确认；同 execution 不能有多个 reviewer 同时写入。
+- THEN 独立快批可 seal/publish/readback 并在容量允许时跨已授权窗口续领，不等慢作者/慢 QA 或 100 作品齐套；95 个合格只能报 95，失败替补不得超出授权候选/补量范围。
+- THEN 总监唯一执行获准 publish/finalize/Git，只核机械发布条件，不重审内容或代跑所有作者/QA 命令；未获发布授权时保留待发布，不能伪造成功或靠 review 通过释放容量。
+
+<a id="gwt-054"></a>
+### GWT-054 原子归属、在制上限与真实写围栏共同拒绝越界
+
+- GIVEN 同一 deployment 的一个 active shard 内有多个不重叠 execution，同批/同 review scope 存在竞争认领，某作者已有两批未闭合且一批正在创作；另有缺围栏、旧 generation、跨 actor/target 与非总监发布反例。
+- WHEN 并发认领作者/review scope、申请续领或关闭批次，并调用真实 init/acquire/seal/publish/finalize 写入口。
+- THEN 归属与容量在同一短事务原子核验，同一小批和 review scope 各至多一个 winner；每作者最多两个未闭合且最多一个创作，失败认领无残留占用，不能靠新 deployment 或 init 成功绕过。
+- THEN 送审、审核中和待发布仍占端到端名额，只有全部有效对象成功 publish/readback 或按契约明确终止且核完在飞写者才释放；unknown、TTL、退出登录或 review 通过不释放，重复关闭幂等，漂移零写。
+- THEN 缺失/失效围栏、旧代、错 actor/target、作者写 review 或非总监 publish/finalize 均在正式业务写前拒绝，包含省略环境变量的负例；其他不冲突合法 scope 仍可写，同站和全局资源预算不因增加 Bot 放大。
+- THEN coordination 只保存归属/预算硬事实并机械核验正式证据绑定，不持久化另一阶段状态或完成清单，不解释 receipt 选择后继、自动恢复或授予 actor；删除协作库不改变 receipt、对象、publish proof 与 handoff。
+
+<a id="gwt-055"></a>
+### GWT-055 共享有效任务版本与角色写 scope 分离
+
+- GIVEN 总监已在用户授权内确认方向、预算和生效范围并保存当前任务版本，四类角色均具各自写 scope；另有权限缺失、旧版本和紧急撤权负例。
+- WHEN 全角色读回任务、占用、资源预算、receipts、QA/publish 证据和异常裁定，再认领、提交或执行正式写。
+- THEN 所有角色读到同一有效版本及必要证据，不依赖总监私聊转述；普通范围内决策自主，扩大人类授权仍拒绝或请求用户，凭证/令牌/无关隐私不可读。
+- THEN 全员可读不授予他人 scope 写权；过期版本、当前必要事实不可读、越权或撤权在受影响正式动作前阻断，其他健康任务继续，不以消息已读、旧记忆或缺省授权代偿。
+- THEN 确认变更先保存再通知，受影响角色下次认领/提交核新版本，在飞 actor/历史授权不追溯改写；无真实总监确认与四角色读回时只报告仓库规则/本地测试，不宣称团队重组已生效。
+
+<a id="gwt-056"></a>
+### GWT-056 总监主动检查有裁定，unknown 不抢占
+
+- GIVEN 原生宿主提供已核实的通知/状态读取/检查触发能力，或明确缺少自动唤醒；注入普通输入失败、已知终止、unknown、无人接审、发布积压、检查失效及额度耗尽。
+- WHEN 总监按约 10 分钟增量检查，异常立即报告，连续两次无法解释等待或超过实测正常周期时定向核状态。
+- THEN 首次发现记录问题、owner、下一动作与下次检查；下一检查仍未解决/解释时形成授权内修复、终态接续、工程升级、用户裁定或有 owner 的 blocked，不只重复催问，不全池重扫或全员同步汇报。
+- THEN 同类确定性输入错误再次发生停止盲重试，长视频/转码按实际预期保持运行，10/20 分钟不作取消门槛；已知终止恢复只由唯一 owner 按既有契约接续，已封存字节和真实 actor 保留。
+- THEN unknown/账号或总监额度耗尽保留原 claim 和证据，只冻结冲突写，安全独立任务可继续；不以 TTL/mtime/进程退出抢占，不保证未知调用已恢复或无预算仍能最后交接，必要时由用户接管。
+- THEN 检查单个非重入且不启动新生产调用，Routine 需独立授权；无原生唤醒则明确人工唤醒并保留阻断，只证明识别/通知不得报告恢复或无人值守通过，无 native 时间不填等待数据。
+- THEN 同一检查按 `Asia/Shanghai` 每个完整小时键最多发送一次上一小时群报；重复 tick 不重发，迟到事件带补报时间归入原小时，群发送失败保留原生失败回执。无基线、Mac 不可达、读取失败或事件范围不完整均为 unknown 而非零。
+- THEN 群报逐载体分列 author、QA 三种终态、首次入池、eligible 净变化及最老积压；修订、恢复资格、身份归并和退出不冒充新增。图片/视频任一零增量即附原因、owner、下一动作和下次检查，连续两完整小时仍为零或阻断未解必须形成解阻/缩批、工程升级、用户裁定或有 owner 的 blocked。
+
+<a id="gwt-057"></a>
+### GWT-057 A/B/C 重组保护在飞身份且读回实际生效
+
+- GIVEN 团队分别处于 A 新建、B 已证实空闲、C 有任务或 unknown，且已明确宿主支持入口与必要授权。
+- WHEN 按同一四类岗位规则配置或原位更新，核共享版本、角色/工具/媒体链、活动根及总监检查触发，并从实际宿主读回。
+- THEN A 复用匹配 Bot 按授权补缺，B 先证无在飞/待接管再原位更新；均不自动生产、认领、启 Routine 或清理，不删历史或继承无效授权。
+- THEN C 逐单元保留旧 scope/actor/receipts/版本，安全交接点后更新，新任务用同一新规则，不等全队同时切换、不改旧 receipt/冒名 seal/并行重派；unknown 保持范围与 owner，不留长期旧权限兼容层。
+- THEN 三场景均读回四类角色可访问同一有效任务版本与真实生效配置；缺 Grok 管理、原生状态或更新接口时输出精确人工清单并 blocked，文件/简介修改不冒充活跃团队已更新。
+
+<a id="gwt-058"></a>
+### GWT-058 建议比例不判否，提效只报告真实唯一产出
+
+- GIVEN 1:2:3:4 基础建议、最高 50 倍规划边界及明确总预算/目标/停止条件，存在热门实体多作品、冷门仅主页、无地点媒体和同原作拆图/改标题/新版本反例。
+- WHEN 作者自主选题、比例已超额后继续获准生产，并用当前 pool/proof 与真实原生时间和成本比较有限试点。
+- THEN 建议比例超额不拒收或停止，50 倍不授予费用/发布/扩候选权限；无热度证据标 unknown，无地点不造实体，同一实体只有一个稳定主页，扩主页来自更多真实实体。
+- THEN 拆图/改标题/换版本不增加唯一计数，正式 M1000/M10000 数字保持现有 policy，M100000 仍需四载体各至少 100000 唯一 finalized 对象与独立 release/handoff。
+- THEN 在同质量、载体和冷热缓存条件报告净 eligible 产速、周期、WIP、最老未闭合项、首审/返工与每合格对象成本，缺 native 时间就标未测，不预承诺翻倍；两作者、四作者与两 QA 的真实有界试点分别举证，规则测试、Bot 生效、生产净增和正式里程碑不互相代偿。
+
+<a id="gwt-059"></a>
+### GWT-059 来源指导与只读网站占比不代替质量验收
+
+- GIVEN 点名的四载体来源样本，包括百科主页、专业/综合来源作品、同原作多图、多源文章、重复对象版本、无来源及CDN/许可URL。
+- WHEN 创作者按来源指导选材，并在同根同阶段的明确对象范围执行只读网站统计。
+- THEN 主页按 Wikipedia→百度百科→头条百科选择；其他三载体专业/综合同等优先，源码模块顺序不构成检索排名。未验证的平台能力、受限访问和原作关联不得伪称已取得。
+- THEN 每对象每网站仅计一次，保留网站覆盖率和来源关联构成占比的不同分母；零对象与缺失来源不伪造百分比，图集/派生/重复版本不膨胀作品数。
+- THEN 发现平台、作品页来源和原站沿革分开；聚合页、CDN、许可页、百科尾部引用不冒充实际采用网站；来源字段矛盾只报告，不隐式修复。
+- THEN 统计默认无写入、无网络、无调度或完成裁定；样本仅代表所选范围，未看像素/完整视频音轨不能报告视觉或视听通过，低质量approved样本不得被包装成优质成果。
+- THEN 宿主单阶段命令保留每次候选实际退出码，混合失败不抹去已成功资产、不登记余项为成功；视频同源小组首错停止，未执行项显式报告，由宿主决定下一动作，不自动重试。观察调用不捎带新生产，定位只读已知准确路径或有界范围；聚合探测的正常退出不代表所有候选成功。
+- THEN 必需观察缺失保持 blocked；有声媒体未核听不得通过省略 audio_fit 获得 approved。已确认文案与真实媒体/来源矛盾由 QA 点名原句及证据交作者纠正，不只记 advisory；风格/片长/低分本身不成为拒绝门。QA 不改稿，总监不代审，封存历史不被该纠偏覆盖。
 
 ## 6. 依赖
 
@@ -590,6 +816,30 @@
 
 ## 7. 开放事项
 
+<a id="open-037"></a>
+### OPEN-037 视频消费者标签的真实作品读回与推荐效果待验证
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺真实视频 `tagRefs` 经 author、独立 review、publish 与下游检索或推荐的读回证据，也尚缺排序质量证据。
+- 尚缺实现：未声明 `collectionChannel`/`consumedBy` 的 Format 内容角度若要进入正式消费，须由 taxonomy owner 补声明；本增量不改那些共享定义。
+- 尚缺验收证据：[`GWT-047`](#gwt-047) 的真实视频读回、跨载体同一题材召回、负反馈边界与授权环境消费；标签存在或 `consumedBy` 声明不替代上述证据。
+- 完成判定：[`GWT-047`](#gwt-047) 由真实视频 author、独立 review 与 publish 读回绑定，搜索命中与推荐效果分别由对应 owner 举证。
+- 依赖：本节点 [`GWT-047`](#gwt-047) 映射合同；下游 Tag、Search、Feed 与 Environment Ops scheduler。
+
+<a id="open-031"></a>
+### OPEN-031 文章标签到 tag-service/App 的环境消费待验证
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：文章发现查询的静态映射与 Data seal 解析已可本地验证，尚缺同一 release 经 tag-service 导入、`ValidateTagRefs` 叶子校验与 App 既有 chips/search 的授权环境读回。
+- 尚缺实现：无新页面或新分类树；Format 内容角度未声明 `consumedBy` 时仍只作创作提示。
+- 尚缺验收证据：[`GWT-048`](#gwt-048) 的 tag-service 导入查询、active leaf 拒绝父节点、以及 App 既有入口命中/误匹配；静态目录存在不替代检索与推荐效果。
+- 完成判定：[`GWT-048.t1`](#gwt-048) 至 [`GWT-048.t5`](#gwt-048) 的静态映射由 Data local_contract 绑定；tag-service 导入、`ValidateTagRefs` 叶子校验与 App 既有 chips/search 读回由对应 owner 在授权环境举证。搜索命中与推荐效果不由本 OPEN 的静态测试关闭。
+- 依赖：本节点 [`GWT-048`](#gwt-048)；下游 Tag、Search、Feed 与 Environment Ops scheduler。
+
 <a id="open-029"></a>
 ### OPEN-029 载体工具重构与多源作品投影待验证
 
@@ -599,7 +849,8 @@
 - 影响或价值：尚缺载体工具与多源投影的全部准出证据，离线回放不能证明外部来源持续可达、真实宿主渐进加载或消费者逐图说明展示。
 - 尚缺实现与证据：来源工具、多图说明与同名投影、显式主页主源绑定及 acquire 后只读身份预检已有实现；Service→App 逐图 caption 映射已进入工作树，仍须以最终契约回归和 fresh runtime 展示证明，不把实现存在等同下游验收。
 - 尚缺验收证据：[`GWT-039`](#gwt-039) 已有子句级 local_contract 绑定，上下文预算、Skill 手写源码分类、图片稳定引用/重复作品/身份漂移与主源投影回归已收敛；仍缺迁移后真实宿主小轮、跨层消费及当前候选正式准出证据，不能以离线回放替代。
-- 完成判定：[`GWT-039`](#gwt-039) 子句级测试、现有 producer/consumer 合同回归、上下文与 Feature Tree 门禁在同一增量通过；旧配方与有效引用完成删除替换。
+- 尚缺验收证据：摄影图片与视频无地点路径的 [`GWT-060`](#gwt-060) 须由Data输入、发布/分发与离线投影的联合测试绑定；现有公共可空主页字段不单独证明生产链已经支持。
+- 完成判定：[`GWT-060`](#gwt-060)、[`GWT-061`](#gwt-061) 与 [`GWT-039`](#gwt-039) 子句级测试、现有 producer/consumer 合同回归、上下文与 Feature Tree 门禁在同一增量通过；旧配方与有效引用完成删除替换。
 - 依赖：Data author schema、既有 canonical 包与 actor 契约；对象包瘦身继续由 [`OPEN-025`](#open-025) 拥有。
 
 <a id="open-019"></a>
@@ -648,8 +899,8 @@
 - 准出影响：`block`
 - 影响或价值：authoring contract 已硬切，但仍需真实 producer execution 证明 identity-only candidate、单一 draft/review artifact、逐对象 publish、累计 cohort release 与 terminal handoff 端到端成立。
 - 已冻结语义：producer 六步止于 `release finalize` 并拒绝消费阶段；candidate binding 不要求 pre-init source admission；`002-4.draft`/`003-5.review` receipts 分别冻结 execution 级唯一 author/reviewer actor 与 invocation；`4.draft`/`5.review` 每对象各一份业务产物；approved/rejected 可混合且短缺不扩展 receipt verdict。
-- 里程碑语义：M1/M10/M100/M1000 按 `cumulative_unique_finalized_objects` 计数，每级形成自己的 full explicit cohort、release 与 handoff；更高级别复用 canonical 对象及其 canonical publish proof，不伪造新 receipts。任何旧 schema 字面上的额外 milestone 不扩大本 OPEN 的验收闭集。
-- handoff 边界：handoff 严格绑定 release/cohort、四载体 counts、逐对象 content-pool query（canonical publish proof）、`producerBaselineRevision`、`producerContractDigest` 与 create-once identity；不包含 UAT sample authority、import/activate/readback、App/API UAT、EAF、environment promotion 或 rollback facts。
+- 里程碑语义：M1/M10/M100/M1000 按 `cumulative_unique_finalized_objects` 计数，每级形成自己的 full explicit cohort、release 与 handoff；更高级别复用 canonical 对象及其 canonical publish proof，不伪造新 receipts。运营生产目标为四载体各 1000、再各 10000（图片按唯一原作计）；正式 policy 视频底线仍为 M1000=`100`、M10000=`1000`，超出底线的视频不改变 milestone 判据，也不因底线达标提前停止运营目标。任何旧 schema 字面上的额外 milestone 不扩大本 OPEN 的验收闭集。
+- handoff 边界：handoff 严格绑定 release/cohort、四载体 counts、逐对象 content-pool query（canonical publish proof）、`producerBaselineRevision`、`producerContractDigest`、`repositoryId` 与 create-once identity；不包含 UAT sample authority、import/activate/readback、App/API UAT、EAF、environment promotion 或 rollback facts。
 - 当前证据：六步路径已取得 M1/M10/M100 三级真实 producer E2E，均为 author 与 reviewer 不同会话、`release finalize` create-once handoff 且 `handoff-verify` 只读重放通过——M1 release `20260906--travel-research-m1--six-step-tangqi-001`（塘栖古镇 `1/1/1/1`，来源 zh.wikipedia + Commons）；M10 release `20260906--travel-research-m10--six-step-cumulative-001`（`10/10/10/2`，`producerBaselineRevision` `d5226a78acafc940887429d95515d1f611af4d75`，复用 M1 canonical 对象）；M100 release `20260906--travel-research-m100--six-step-cumulative-001`（`100/100/100/10` 共 310 对象，`producerBaselineRevision` `6f826e461128255e1bb4f2a585c96bc7152d657e`，从累计已发布 104/103/104/11 canonical 对象中显式选出，复用 M1/M10 对象与其 canonical publish proof，未伪造新 receipts）。
 - 尚缺验收证据：M1000（不低于 `1000/1000/1000/100`；运营生产目标为四载体各 1000，视频超出底线的部分不改变里程碑判据，实体前沿按 [`REQ-003`](#req-003) 口径开放不设上限）按累计唯一对象形成独立、无类别选择的 cohort/release/handoff 的证据；历史 r03 `release pool-query` 曾记录 eligible 141/149/130/14（该计数只适用于当时契约，不是当前新 reader 的资格；当时已排除 [`OPEN-021`](#open-021) 实体闭包；零网络 ingest 契约下的真实轮次 `sichuan-r01`、`recover-r02`、`national-r03` 以子 Agent author 与独立 reviewer 走通，其中 `national-r03` 一轮四 execution 发布 24/24/20/5 个对象、含 5 个头条百科主源实体，每个 `content_review.json` 携带六维 `qualityScores`，1.download/4.draft 逐对象退轮各在真实 execution 中出现一次以上），当时里程碑缺口约 859/851/870/86。当前占位、缺失依赖与迁移后有效计数按 [`OPEN-021`](#open-021) 重算，不沿用历史数字。已封存冒烟 release `20260906--travel-production-smoke--six-step-h06-001`（cohort 5/1/4/2 ≥ M1 目标，media_manifest 仅 `publicSliceKey`，原契约 `handoff-verify` 通过，含 Commons 超预算 webm 转码 mp4 的两条视频）及 M1/M10/M100 三级 release 只证明各自封存契约，既有通过事实、原始字节与身份保留；它们不能证明 [`REQ-002`](#req-002) 的无类别默认链路，也不得改摘要或补字段后冒充现役 handoff。无类别 release/handoff 须重新生成并通过当前 `handoff-verify`，M1000 按新对象包契约累计覆盖全部合格唯一对象。视频缺口的成因是发现方法（未沿 Commons `Videos from <地区>` 类目树检索）与 50 MiB 预算下缺少转码分支，已由 [`REQ-003`](#req-003) 转码子句承接。局部 schema/local_contract/静态 gate PASS 不替代此证据。
 - 完成判定：[`GWT-020`](#gwt-020) 全部 producer 子句与 [`GWT-034`](#gwt-034) 由同一条可追溯 producer proof 链通过；M1 证明首次对象生产，后续各级证明累计唯一对象、原 proof 复用与独立 cohort/release/handoff。下游 Alpha 不参与关闭。
@@ -711,9 +962,9 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：publish 截面的实体 schema 门（[`GWT-036`](#gwt-036)）只拦新投影，门落地前已发布的 canonical 实体仍缺合规处置；既有样本曾缺百科来源身份、地理引用或派生修改字段，依赖这些对象的 cohort 在 `homepage_import` fail closed。具体对象、数量及 exact apply 结果属于运行盘点证据，不在通用规格冻结任务实例；历史样本不等于当前全池无效对象总数。
-- 尚缺实现与证据：按 [`canonical-content-identity-recovery`](../canonical-content-identity-recovery/spec.md) 对全部当前对象逐项冻结 before 身份、摘要、来源/review 与依赖，构造满足新契约的完整 staging；证据充分者迁移，不能证明者经精确授权连同无法修复的依赖退役删除。旧 excluded 只作历史诊断，取消“永不入 cohort 但保留活跃树”的终态。
+- 尚缺实现与证据：按 [`canonical-content-identity-recovery`](../canonical-content-identity-recovery/spec.md) 的事务与保护边界对全部当前对象逐项冻结 before 身份、摘要、来源/review 与依赖，构造满足新契约的完整 staging；仅转换可验证对象，未验证对象及未闭合依赖只归档，不进入新合格池，不以目标数量补造资格。旧 excluded 只作历史诊断，不作为当前资格。
 - 当前盘点口径：snapshot 只计物理占位（含作者）；pool-query 的 objects 还包含展开的缺失依赖，occupied/invalid 与 absent 必须分开。新包契约下旧计数不能用作当前 eligible，历史错误与本次错误分别保留；合法的原对象级权利词汇不因删除类别而成为错误，也不得因某项先触发的记录错误掩盖原 payload/rights 问题。迁移保留逻辑身份、原权利值与原 review，只对受治理包格式转换生成新版本/摘要。
-- 完成判定：全量当前对象迁移或授权退役均有终态，活跃实体全部满足 [`GWT-036.t3`](#gwt-036)，没有旧结构、悬空依赖或永久 excluded；媒体与旧 release/receipt 原字节不变。新 release 在授权 Alpha 的 `homepage_import` closure 属独立消费证据，不以 producer 测试替代；不得手改摘要补 passed、放宽 schema 或在导入器加 fallback。
+- 完成判定：全量当前对象均有可验证转换或仅归档终态，活跃实体全部满足 [`GWT-036.t3`](#gwt-036)，没有旧结构、悬空依赖或永久 excluded；转换后完成新包、引用闭包及保护集验证才按精确授权清理旧链，媒体与既有 release/review/receipt 原字节不变，未取得证据不宣称完成。新 release 在授权 Alpha 的 `homepage_import` closure 属独立消费证据，不以 producer 测试替代；不得手改摘要补 passed、放宽 schema 或在导入器加 fallback。
 - 依赖：单轨 schema、受治理全池 cutover、精确删除授权与真实独立 review；Data ship 与 homepage 导入器只读新对象，不参与修正。
 
 <a id="open-022"></a>
@@ -772,7 +1023,8 @@
 - 准出影响：`block`
 - 影响或价值：尚缺新随体对象包与跨端单源消费的完整证据。当前 Data/Service/Ops 已有 manifest 单源、公开媒体与 cutover 成果，有效部分保留；单一 production 类别不属于当前无类别目标，不能据此恢复类别或改写对象级权利词汇。不能把已有三旁车收敛视为随体媒体、来源原件、审核 binding 与独立仓 handoff 已完成。旧真实池仍须受治理转换，不以固定文件数验收或借精简丢失审计。
 - 尚缺实现：按 [L2 DEC-044](../design.md#dec-044) 同步实体事实入 manifest、采用来源在 `sources/<unit>/source.json` 单写并携带必要证据、最终媒体完整复制及 records 收敛。旧 source catalog/rights/生成式 snapshot 的真实事实迁入 source，删除重复投影而保留第三方原件、review 原结论/对象摘要及历史 records；creator 身份/profile 仍独立。verify 与消费者必须只读，不再隐式恢复 library。
-- 完成判定：[`GWT-041`](#gwt-041)、[`GWT-022`](#gwt-022)、[`GWT-023`](#gwt-023)、[`GWT-036`](#gwt-036) 与 [`GWT-038`](#gwt-038) 的改动子句在新闭集上由真实测试直接绑定；完整复制到无 execution/library 的目录仍可校验，来源缺失、媒体损坏与逃逸可区分；同一新 release 经唯一 reader 消费，旧 release/review/receipt 与保护媒体摘要不变。不以 dual-read/dual-write 或重算旧审核摘要关闭。
+- 完成判定：[`GWT-045`](#gwt-045)、[`GWT-041`](#gwt-041)、[`GWT-022`](#gwt-022)、[`GWT-023`](#gwt-023)、[`GWT-036`](#gwt-036) 与 [`GWT-038`](#gwt-038) 的改动子句在新闭集上由真实测试直接绑定；完整复制到无 execution/library 的目录仍可校验，来源缺失、媒体损坏与逃逸可区分；同一新 release 经唯一 reader 消费，旧 release/review/receipt 与保护媒体摘要不变。不以 dual-read/dual-write 或重算旧审核摘要关闭。
+- 尚缺验收证据：[`GWT-045.t1`](#gwt-045) 至 [`GWT-045.t6`](#gwt-045) 尚缺子句级绑定与真实生产证据。候选到ingest尚未完整携带原响应、原生作品身份和成员范围；需用共用sourceWork与实际证据引用绑定四载体，证明媒体用途、组图原序、正文位置及未采用媒体排除。既有多图schema或Alpha导出通过不替代原作取得和目标投影变化的隔离证据，不要求补造旧成品缺失原始记录。
 - 最小测试入口：`quwoquan_data/tests/local_contract/release/test_publish_fail_closed__carried_media__contract__local_contract_test.py`、`test_homepage_entity_projection__publish_schema_gate__contract__local_contract_test.py` 及现有对象事务/release handoff 测试；先增加 `GWT-041.t1` 至 `t4` 的包级证明，再由 Service importer/Ops materialize 的短 api_integration 验单源。旧 sole-holder 断言须改验新语义，历史 PASS 不算新证据。
 - 依赖：Data schema/producer、Service importer、Ops delivery 的各 exact path owner；实际存量迁移、删除与内容仓初始化分别授权，归身份恢复 Story 的 `OPEN-001`。
 
@@ -795,6 +1047,7 @@
 - 准出影响：`block`
 - 影响或价值：尚缺稳定 mention 与局部失败的真实消费证据。现有图片占位、负缓存与主页下线展示继续复用；真实文章 importer 是否填充 exact 主页映射、图集是否接入负缓存、视频 cache hit 是否不续 TTL 尚须当前候选证明，手填 mention 的 Widget 测试不足以证明生产链。
 - 尚缺实现：复用 Entity 映射完成 Content 文章投影，缺映射去掉链接外观；仅修图集与视频既有缓存接线，不扩建非文章引用 UI、通用富文本或健康框架。目标权限与 ordinary offline/historical View 仍由原 owner 处理。
+- 已知不阻断限制：App 对缺映射 styled mention 当前会整段降级为纯文本，样式保真尚不完整；仅此限制不阻断本次收敛，不表示用户批准全部风险，也不代替下述真实消费证据或关闭本 OPEN。
 - 完成判定：[`GWT-042`](#gwt-042) 五条结果分别有真实 importer→typed query api_integration 与 App 局部失败/缓存 local_contract 绑定；授权环境的实体下线点击返回、单图失败可滑动及视频有界停止另有 fresh UAT，不以局部 PASS 关闭。
 - 最小测试入口：Entity homepage importer、Content release importer 与既有 article mention Widget 测试；App `image_book_canvas`、`video_player_widget`、主页错误展示的现有短 local_contract，测试需直接绑定 `GWT-042.t1` 至 `t5`。Dart 改动按 App 规则热重载，未连设备保持未验证。
 - 依赖：Service/App/Ops 原 owner 与明确环境授权；不是 producer handoff 的前置。
@@ -808,3 +1061,64 @@
 - 影响或价值：[`REQ-022`](#req-022) 已消除移动端模板、同实体百科换 `publishAngle` 与跨 revision 拼接，并区分 protocol version triplet 与 object revision tuple，但 exact wikitext+Parsoid acquisition、semantic mapper、双版本绑定、faithful adaptation/文章独立性 review 和跨端 reader 尚无同 revision 完整证据。
 - 完成判定：Data canonical contracts、acquire/author/review/publish、Service projection、Web/Android/iOS renderer 与工作台 query 对同一对象逐节点、逐 protocol version、逐 object revision 对账并通过 [`GWT-045`](#gwt-045)；unknown schema/dialect major、canonicalization mismatch、required capability missing、交叉 source revision、非忠实改写、同实体换角度、viewport 内容结构分叉、端专属模板和工作台越权写入均有 fail-closed 反例。
 - 依赖：`content-type-framework` 的 [`DEC-003`](../../content-type-framework/design.md#dec-003) 与 `markdown-article-kernel` 的 [`OPEN-002`](../../content-type-framework/markdown-article-kernel/spec.md#open-002)，以及本层 `DEC-046`。
+<a id="open-032"></a>
+### OPEN-032 宿主不提供模型选择器时无法兑现按岗锁定高能力模型
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：总监与创作者必须按行业顶级专业标准配置与验收，但当前已核实的 Grok 公开文档写明由 Cursor 管理模型选择、无模型选择器。写入专家人设不能证明实际调用已升档，也不能作为无人值守接管的依据。
+- 尚缺实现：不伪造 model 参数，不改 relay/客户端/账号路由。若受支持入口将来允许选择模型或推理档，按岗位任务评测选择高能力配置并读取实际生效结果。
+- 完成判定：只有受支持入口可选择目标模型/推理档、读回实际生效身份，并以岗位任务评测证明满足要求时才可关闭。[`GWT-050`](#gwt-050) 的“明确未知”只证明诚实披露与安全降级，不能关闭模型选择能力；样本通过也只证明该样本表现，不证明模型已锁定。
+- 依赖：宿主产品能力与用户确认的执行端。不得暗中恢复 Cursor 生产或新建模型路由服务。
+
+<a id="open-033"></a>
+### OPEN-033 双账号同时本机连接与分片并行尚未证明
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺两账号同时保持受支持本机连接、切号是否切断另一账号调用、以及不重叠分片写入的证据。多账号复制会放大重复选材、共享磁盘与发布锁冲突。当前 Fetcher 间隔只约束单次调用，内容仓 flock 只覆盖同一锁域进程，不是跨机器分布式锁。
+- 尚缺实现与证据：当前 0.47.0 包内存在 `--user-data-dir`/`SAND_USER_DATA_DIR` 隔离入口但未形成公开产品承诺；须按 exact 版本/签名以两个空 profile 和独立 data/output 根证明两账号同时连接、退出/重启互不切断、daemon/gateway/Computer Use 不串接，并在 generation fence 已接入真实写点后证明两队读取同一 coordination DB 与同一 canonical 锁。不能证明时只启用轮换。
+- 尚缺验收证据：P0 单实例基线、P1 双实例只读 30–60 分钟、P2 双实例沙箱写、P3 唯一收官正式小轮的分层读回；账号串号、cloud computer 重合、固定端口/Computer Use 冲突、跨根 credential 删除或旧代写成功任一发生即回退单实例。轮换路径可先于并行单独举证。
+- 完成判定：[`GWT-051`](#gwt-051) 由真实双账号连接读回与不重叠分片写入证据关闭。轮换路径可先于并行单独举证。
+- 依赖：受支持本机执行端与用户授权的切号试验。不改 daemon/relay 规避账号隔离。
+
+<a id="open-034"></a>
+### OPEN-034 十团队具名分片协作与 M100000 真实闭环尚未取得
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：[`REQ-022`](#req-022) 与 [`GWT-052`](#gwt-052) 保留具名 shard、全局 iteration、deployment/generation、既有协作状态、预算预留、原子幂等释放及后继清理边界；岗位按四类、多实例收敛，检查改为总监增量保流而非全队十分钟停产。当前规格、已有 SQLite 或局部测试不证明十团队宿主连接、真实内容生产或 M100000 已成立，单账号自主生产增量暂停跨账号/VM 扩容，不关闭原目标缺口。
+- 尚缺实现与证据：既有 coordination 只承担 claim/预算硬事实，作者/review 原子归属与真实写围栏增量由 [`OPEN-035`](#open-035) 单独跟踪；禁止语义调度、业务完成 writer、TTL 抢占与自动清理。未来授权的多团队仍须同步四类岗位及实际实例，独立 QA 不得降回临时互审。
+- 尚缺验收证据：可控时钟/并发 local_contract 覆盖既有状态闭集、唯一 winner、generation/nonce 漂移、幂等释放、失联不抢占和 SQLite 删除不改业务事实；真实宿主验证十团队 deployment/连接与独立 QA；生产小轮验证原生在飞状态、预算预留和后继只审计不清理前任；独立外盘验证随体/保护副本容量、摘要、挂载身份与恢复。单账号自主生产通过不代替这些证据。
+- 完成判定：[`GWT-052`](#gwt-052) 的 local_contract 与真实宿主/生产小轮/外盘证据在同一有效 generation 分层通过，且最终 M100000 cohort/release/handoff 读回四载体分别不少于 `100000` 个累计唯一 finalized 对象。任一宿主、生产授权、外盘或 M100000 事实缺失均保持阻断，不能以 SQLite 行数、团队数、历史 M1/M10/M100/M1000/M10000 或计划文本关闭。
+- 依赖：受支持的真实多团队宿主、用户明确生产与 publish/finalize 授权、唯一 canonical 内容仓、足额 provider/模型/磁盘预算及经用户确认的独立外盘；本次规格冻结不签发这些授权。
+
+<a id="open-036"></a>
+### OPEN-036 多源检索指导的 policy 对齐与真实媒体复核待完成
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：尚缺专业/综合同级优先与既有 imageProviderPriority policy 的一致性验证，该policy及schema由其他活跃writer占用，用户明确要求不覆盖并先完成技能及统计；新平台来源名单不证明实际下载或合法授权。当前registry/schema已支持百度百科且authorityRank位于第二，但在线来源能力仍需实证。
+- 尚缺验收证据：点名样本发现百科拆句、摄影标签证据不足、生产指令进入正文、旧视频审核未读当前草稿或未实听音轨仍 approved，事实矛盾仅记 advisory；媒体观察与活动根仍需逐批证实。存量 b01f/b01h/b01j 只做点名复核与获准安全修订，不能回填旧 receipt 或以新批成功关闭历史缺口。
+- 来源投影缺口：article-r108 雁荡山对象包含声明为徒步主源的 Meet99 与百科补充，文本 attribution 却优先选百科；须由来源投影 owner 核实际选择及显式归属，不以百科存在自动决定文章主源，不把单源许可外推为整个多源作品授权。先冻结字段/归属契约与负例再修改投影，所需代码 scope 独立确认；不改历史对象包或新增来源管理岗。历史作品不自动修订，统计不外推全库，协调内核不由此扩展。
+- 完成判定：[`GWT-059`](#gwt-059) 的只读计数/去重/缺失/路径边界测试通过，并由policy owner完成同级优先对齐，实际受支持平台与点名媒体复核有证据；源码工具PASS不替代真实视听或平台可用性。
+
+<a id="open-035"></a>
+### OPEN-035 单账号自主整批生产的真实工具、团队生效与净增证据待取得
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：[`REQ-022`](#req-022) 至 [`REQ-026`](#req-026) 已冻结四类岗位、自主整批交接、两批且一创作、共享有效版本、总监主动保流与 A/B/C 安全重组；尚缺作者级独占与完整真实写围栏的实现验收，以及活跃 Bot 生效、原生唤醒和有效产出提升的真实证据，规格和手册一致不能代替这些缺口。
+- 实现边界：coordination 与真实 CLI 已接入角色数组、任务摘要/根绑定、author/reviewer 小批原子归属及角色写入核验；容量按已登记的 host/session 聚合，exact run 继续绑定产物，换 run 不产生独立名额；空正文沿 acquire 内核逐 target 报错而非整批拒绝。本地回归覆盖不能证明原生身份认证、OS 权限隔离或直接调用 Python 内核不能绕过。显式任务确认引用不是 Grok 总监真实确认凭证，同 OS 用户仍不能仅靠应用内校验获得安全隔离。
+- 尚缺实现与证据：当前源码的 producer callable 已移出 SQLite 写事务，由 deployment/shard 与 execution 门保护业务；不能继续将 SQLite 长事务当作现役停滞根因。慢 acquire/媒体派生、撤权竞争和跨批不阻塞仍须该工程 owner 绑定当前字节及测试/原生证据确认，已有测试定义不等于对应源码指纹的运行证据；门实现的变更和验证由工程 owner 独立负责。handler 预读后内核再次读取输入，exact bytes 消费与校验后修改负例尚缺。缺可信原生终态证明时，全批 blocked/unknown 名额仍保留，不能以 caller 布尔值放行。混合 pass review 的明确 rejected 对象经审核原件与 blockingIssues 校验后退轮，全部 approved 对象仍须 exact publish proof 闭合；该路径已由本地真实 seal/publish 测试覆盖，不代表原生终止恢复已实现。历史 cohort 对象可能不在当前 claim，累计 finalize 的历史 proof 授权与成功路径尚未闭合。
+- 使用限制：新 CLI 对缺少绑定的调用拒绝，不等于已经完成活跃团队安全切换；旧单值角色不静默迁移。须先从受支持入口核实际活动根、旧写者、显式四根/任务版本绑定与所需授权，再启用新调用。不得以源码已改推断当前 Grok 已配置或依此改动正式根。
+- 本机执行阻断：已有进程证据显示个别 shell 在业务执行前等待快照管道输入；尚缺当前 Grok 应用与可维护启动器源码/owner绑定。旧编译备份中的 write/end 与 exit 后 close watchdog 不证明该输入等待根因，不能据累计无时间日志归因数据库锁、代理或全队容量耗尽。需启动器 owner 用合成快照隔离复现后修复，不在内容 Skill 新建执行器、不修改旧 bundle、不以重启或取消安全校验代偿。
+- 外部阻断：仍需支持的 Grok 团队管理/原生调用状态/通知或 Routine 接口、真实总监确认、全角色共享事实和同版本读回，以及实际活动根/媒体链核实。工具不可用交精确人工清单；无自动唤醒不得宣称无人值守，文件或简介更新不得宣称运行配置已生效，unknown 不因该重组被终止或重派。
+- 尚缺生产证据：在明确费用/站点/存储及生产发布授权内，先两作者再四作者、至少两独立 QA 并行不同批；用 100 图片作品拆小批证明慢批不阻塞健康批、容量边界与连续续领，并注入普通失败、已知终止、unknown、待审/发布积压、总监检查失效和额度耗尽。无发布授权只到 review 且停在端到端名额边界，不以局部 PASS 代替完整发布。
+- 完成判定：[`GWT-053`](#gwt-053)、[`GWT-054`](#gwt-054)、[`GWT-055`](#gwt-055)、[`GWT-056`](#gwt-056)、[`GWT-057`](#gwt-057)、[`GWT-058`](#gwt-058) 的 local_contract、真实宿主读回与真实有界生产证据分层闭合；共享版本/越权/旧代零写、每次异常有 owner 和下一检查裁定均可复核，并在同质量/载体/冷热缓存条件取得净 eligible 产速、周期、WIP、最老项、返工和单位成本的真实对比。缺 native 时间不编等待，只有通知不报恢复，不预承诺翻倍。
+- 依赖与不代偿：需要用户有效授权、受支持原生工具、实际活动根和真实角色会话。`OPEN-020` 的 producer 里程碑、`OPEN-032` 的模型选择、`OPEN-033` 的双账号连接和 `OPEN-034` 的十团队/M100000 保持原缺口，不因单账号自主生产增量单账号规则或测试通过关闭；本 OPEN 关闭也不等于正式 M100000 达标。

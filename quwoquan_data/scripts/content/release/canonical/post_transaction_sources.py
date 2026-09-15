@@ -152,6 +152,44 @@ def asset_source_use_mode(
     return next(iter(modes))
 
 
+def _validate_work_refs(work: Mapping[str, Any], rows: list[dict[str, Any]], source_url: str) -> None:
+    """原作引用绑定实际证据 ID，不解析原站或补造采用关系。"""
+    from core.schema import assert_valid
+
+    assert_valid(work, "source", "source_work")
+    ids = [row["id"] for row in rows if "id" in row]
+    if len(ids) != len(set(ids)) or set(ids) != set(work["capture"]["evidenceRefs"]):
+        raise ObjectTransactionError("DATA.PUBLISH.SOURCE_WORK_EVIDENCE_REF_INVALID")
+    if len({row["path"] for row in rows}) != len(rows):
+        raise ObjectTransactionError("DATA.PUBLISH.SOURCE_WORK_EVIDENCE_PATH_DUPLICATE")
+    if work["identity"]["pageUrl"] != source_url:
+        raise ObjectTransactionError("DATA.PUBLISH.SOURCE_WORK_IDENTITY_CONFLICT")
+
+
+def _copy_work_evidence(meta: Mapping[str, Any], unit_root: Path, target: Path,
+                        evidence: list[dict[str, Any]], source_url: str) -> None:
+    from content.release.canonical.object_transaction_contract import _digest_file
+    from core.schema import assert_valid
+
+    if "sourceWork" not in meta:
+        if "sourceWorkEvidence" in meta:
+            raise ObjectTransactionError("DATA.PUBLISH.SOURCE_WORK_EVIDENCE_REF_INVALID")
+        return
+    assert_valid(meta, "source", "atomic_source_unit_meta")
+    rows = meta["sourceWorkEvidence"]
+    _validate_work_refs(meta["sourceWork"], rows, source_url)
+    for row in rows:
+        original = unit_root / _safe_rel(row["path"], label="sourceWorkEvidence.path")
+        if not original.is_file() or any(p.is_symlink() for p in (original, *original.parents)):
+            raise ObjectTransactionError("DATA.PUBLISH.SOURCE_WORK_EVIDENCE_INVALID")
+        if _digest_file(original) != row["sha256"] or original.stat().st_size != row["bytes"]:
+            raise ObjectTransactionError("DATA.PUBLISH.SOURCE_WORK_EVIDENCE_DRIFT")
+        filename = f"evidence-{len(evidence) + 1}{original.suffix}"
+        target.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(original, target / filename)
+        evidence.append({**row, "path": filename})
+
+
 def project_object_sources(
     *, execution_root: Path, source_object: Path, object_root: Path,
     manifest: Mapping[str, Any], source_assets: Mapping[str, dict[str, Any]],
@@ -209,6 +247,7 @@ def project_object_sources(
             shutil.copy2(original, target / filename)
             evidence.append({"path": filename, "sha256": digest, "bytes": original.stat().st_size,
                              "kind": "source_excerpt" if original.name == "source.md" else "source_snapshot"})
+        _copy_work_evidence(meta, unit_root, target, evidence, url)
         adopted: list[dict[str, Any]] = []
         for asset in canonical_assets:
             matching = [ref for ref in asset.get("sourceAssetRefs") or [] if str(ref).startswith(f"sources/{unit}/")]
@@ -223,7 +262,10 @@ def project_object_sources(
         fetched_at = str(meta.get("fetchedAt") or next((row.get("fetchedAt") for row in adopted if row.get("fetchedAt")), ""))
         document = {"schema": "quwoquan_data.publish_source", "sourceId": unit, "sourceUrl": url,
                     "sourceUseMode": meta.get("sourceUseMode"), "fetchedAt": fetched_at,
-                    "metadata": dict(meta), "assets": adopted, "evidence": evidence}
+                    "metadata": {key: value for key, value in meta.items() if key not in {"sourceWork", "sourceWorkEvidence"}},
+                    "assets": adopted, "evidence": evidence}
+        if "sourceWork" in meta:
+            document["sourceWork"] = meta["sourceWork"]
         if isinstance(meta.get("sourceAttribution"), Mapping):
             document["sourceAttribution"] = dict(meta["sourceAttribution"])
         assert_valid(document, "publish", "source")
@@ -250,6 +292,10 @@ def read_object_sources(object_root: Path, manifest: Mapping[str, Any]) -> list[
             raise ObjectTransactionError("DATA.PUBLISH.SOURCE_EVIDENCE_INVALID")
         document = _read_json(source)
         assert_valid(document, "publish", "source")
+        if "sourceWork" in document:
+            _validate_work_refs(document["sourceWork"], document["evidence"], document["sourceUrl"])
+        elif any("id" in row for row in document["evidence"]):
+            raise ObjectTransactionError("DATA.PUBLISH.SOURCE_WORK_EVIDENCE_REF_INVALID")
         for row in document["evidence"]:
             path = source.parent / _safe_rel(row["path"], label="source.evidence.path")
             if not path.is_file() or path.is_symlink():

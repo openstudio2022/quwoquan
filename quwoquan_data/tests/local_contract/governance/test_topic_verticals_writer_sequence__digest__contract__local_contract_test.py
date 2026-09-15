@@ -20,23 +20,23 @@ from governance.taxonomy.bootstrap_tags_topic import (  # noqa: E402
     _gen_topic_verticals,
 )
 
-# 拆分前冻结的 writer 调用流 digest（184 次 group/dim/tag/tags_list）。
+# Topic verticals writer 调用流 digest（188 次 group/dim/tag/tags_list）。
 # 生成：recording writers + _gen_topic_verticals() + json.dumps(sort_keys=False)。
 EXPECTED_WRITER_SEQUENCE_SHA256 = (
-    "6793e3182afe80eb79ee0e461e28cf70092ca19160c5b7fe8c5e81598b37ca9a"
+    "3d5ab4241f7ab15181a014c66bbd79fa1ec36ea3a1d78f86ce515d3a093ca5d8"
 )
-EXPECTED_CALL_COUNT = 184
+EXPECTED_CALL_COUNT = 188
 
 # 拆分前冻结的 Topic vertical 产物树 digest（真实 write_json，冻结 NOW_ISO）。
 # 生成：TAGS_ROOT=tmp + NOW_ISO=FIXED + 真实 writers + _gen_topic_verticals()，
 # 再对 sorted(relpath + bytes) 做 sha256。拆分前 vertical shards 与七模块均为此值。
 FIXED_NOW_ISO = "2026-05-15T00:00:00+08:00"
 EXPECTED_TOPIC_VERTICALS_ARTIFACT_SHA256 = (
-    "dfbb1fd94634c68c92f99c5dc0b046baa711fa42978f5b9bad912dc07edd75a4"
+    "82a18c45ed310b1a0230592654a9d01aca784d4edae6201913fd36cf70dc3a99"
 )
-EXPECTED_DEFINITION_COUNT = 802
+EXPECTED_DEFINITION_COUNT = 816
 EXPECTED_DIMENSION_COUNT = 26
-EXPECTED_JSON_FILE_COUNT = 828
+EXPECTED_JSON_FILE_COUNT = 842
 
 
 def _record_writer_sequence() -> list[dict[str, object]]:

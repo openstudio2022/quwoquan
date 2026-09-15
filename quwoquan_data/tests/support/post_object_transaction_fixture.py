@@ -41,19 +41,19 @@ CREATOR_PROFILE_PATH = (
 )
 
 
-def _seed_creator_avatar_holding() -> None:
-    seed_system_creator_avatar_holding(CREATOR_REF)
+def _seed_creator_avatar_holding(monkeypatch: pytest.MonkeyPatch) -> None:
+    seed_system_creator_avatar_holding(CREATOR_REF, monkeypatch=monkeypatch)
 
 
 @pytest.fixture(autouse=True)
-def _isolate_creator_avatar_cas() -> None:
+def _isolate_creator_avatar_cas(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stand up the referenced creator avatar in the isolated content library.
 
     Projecting a creator resolves its avatar by digest against the library, so
     the holding has to exist before the projection runs; canonical publish never
     carries the body and cannot supply it.
     """
-    _seed_creator_avatar_holding()
+    _seed_creator_avatar_holding(monkeypatch)
 
 
 def make_text_only_article(execution_root: Path) -> None:
@@ -387,6 +387,6 @@ def _fixture(
     publish = tmp_path / "publish"
     for relative in ("creators", "entities", "posts", "tags"):
         (publish / relative).mkdir(parents=True, exist_ok=True)
-    _seed_creator_avatar_holding()
+    _seed_creator_avatar_holding(monkeypatch)
     package = execution / "evidence/object-transactions" / transaction_id
     return execution, package, publish, transaction_id

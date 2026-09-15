@@ -598,7 +598,7 @@ def _write_create_or_same(path: Path, data: bytes, *, allow_rewrite: bool = Fals
     return "created"
 
 
-def seal_stage(*, execution_id: str, stage: str, input_path: Path) -> dict[str, Any]:
+def seal_stage(*, execution_id: str, stage: str, input_path: Path | None = None, submitted_input: Mapping[str, Any] | None = None) -> dict[str, Any]:
     execution_id = validate_execution_id(execution_id)
     if stage not in STAGES:
         raise SealError(f"未知 stage：{stage!r}；只允许 {STAGES}")
@@ -606,7 +606,12 @@ def seal_stage(*, execution_id: str, stage: str, input_path: Path) -> dict[str, 
     _regular(root / "execution_manifest.json", label="execution_manifest")
     target_refs = _target_refs(root)
 
-    seal_input = _read_json(Path(input_path).expanduser(), label="seal input")
+    if submitted_input is None:
+        if input_path is None:
+            raise SealError("input_path 或 submitted_input 必须提供其一")
+        seal_input = _read_json(Path(input_path).expanduser(), label="seal input")
+    else:
+        seal_input = dict(submitted_input)
     assert_valid(seal_input, "execution", "seal_input", label="seal input")
     actor = seal_input["actor"]
     verdict = seal_input["verdict"]

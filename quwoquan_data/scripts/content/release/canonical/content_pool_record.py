@@ -314,7 +314,12 @@ def _pool_identity_rows(
     for record in iter_pool_records(object_root, object_type="content"):
         if record["objectRef"] != object_ref:
             raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID")
-        rows.append((str(record["objectId"]), int(record["contentVersion"])))
+        identity = (str(record["objectId"]), int(record["contentVersion"]))
+        if rows and (identity[0] != rows[-1][0] or identity[1] < rows[-1][1]):
+            raise ObjectTransactionError(
+                "DATA.POOL.IDENTITY_INVALID: pool history identity/version drift"
+            )
+        rows.append(identity)
     return rows
 
 
@@ -322,8 +327,11 @@ def _known_versions(publish_root: Path, content_id: str) -> list[int]:
     versions: list[int] = []
     for path in sorted((publish_root / "posts").rglob("manifest.json")):
         document = _read_json(path)
-        from core.publish_layout import logical_object_ref
-        object_ref = logical_object_ref(document, "posts")
+        object_ref = str(document.get("objectRef") or "").strip()
+        if not object_ref:
+            # 先让 ledger/identity 校验给出领域 typed error；不让 locator
+            # 在旧/损坏 manifest 上抢先泄漏 PublishLayoutError。
+            object_ref = path.parent.relative_to(publish_root / "posts").as_posix()
         identity_rows = _pool_identity_rows(
             path.parent,
             object_ref=object_ref,
@@ -351,16 +359,14 @@ def _known_versions(publish_root: Path, content_id: str) -> list[int]:
                 "DATA.POOL.IDENTITY_INVALID: manifest.version must be positive"
             )
         if identity_rows:
-            if any(
-                row[:2] != (manifest_content_id, manifest_version)
-                for row in identity_rows
-            ):
+            # 历史经严格 reader 验证后，仅当前记录与当前 manifest 对账。
+            if identity_rows[-1] != (manifest_content_id, manifest_version):
                 raise ObjectTransactionError(
                     "DATA.POOL.IDENTITY_INVALID: manifest/pool record identity drift"
                 )
-            record_content_id, record_version = identity_rows[0]
-            if record_content_id == content_id:
-                versions.append(record_version)
+            if manifest_content_id == content_id:
+                # 同版本可追加记录，但全部历史内容版本仍占用，不能重新分配。
+                versions.extend(sorted({version for _, version in identity_rows}))
             continue
         if manifest_content_id == content_id:
             versions.append(manifest_version)
@@ -390,13 +396,13 @@ def pool_usage_scope(
     return "commercial" if commercial else "research"
 
 
-def plan_content_pool_identity(
+def _plan_content_pool_identity(
     *,
     source_manifest: Mapping[str, Any],
     canonical_ref: str,
     publish_root: Path,
-) -> dict[str, Any]:
-    """Plan the next stable Post identity before delivery mutates canonical pool."""
+) -> tuple[dict[str, Any], list[int]]:
+    """同次规划返回严格扫描结果，供 builder 复用；不保留跨调用状态。"""
 
     content_id = stable_content_id(source_manifest, canonical_ref)
     requested_version = source_manifest.get("version")
@@ -408,8 +414,22 @@ def plan_content_pool_identity(
         raise ObjectTransactionError(
             "DATA.POOL.IDENTITY_INVALID: manifest.version must be explicit"
         )
-    _known_versions(publish_root, content_id)
-    return {"contentId": content_id, "version": requested_version}
+    known_versions = _known_versions(publish_root, content_id)
+    return {"contentId": content_id, "version": requested_version}, known_versions
+
+
+def plan_content_pool_identity(
+    *,
+    source_manifest: Mapping[str, Any],
+    canonical_ref: str,
+    publish_root: Path,
+) -> dict[str, Any]:
+    """Plan the next stable Post identity before delivery mutates canonical pool."""
+    planned, _ = _plan_content_pool_identity(
+        source_manifest=source_manifest, canonical_ref=canonical_ref,
+        publish_root=publish_root,
+    )
+    return planned
 
 
 def build_content_pool_fields(
@@ -425,7 +445,7 @@ def build_content_pool_fields(
 ) -> dict[str, Any]:
     """Build minimal explicit fields for a newly generated Post."""
 
-    planned = plan_content_pool_identity(
+    planned, known_versions = _plan_content_pool_identity(
         source_manifest=source_manifest,
         canonical_ref=canonical_ref,
         publish_root=publish_root,
@@ -439,7 +459,6 @@ def build_content_pool_fields(
     requested_version = source_manifest.get("version")
     if requested_version is not None and requested_version != version:
         raise ObjectTransactionError("pool delivery reserved version drift")
-    known_versions = _known_versions(publish_root, content_id)
     if version in known_versions:
         raise ObjectTransactionError(
             "DATA.POOL.VERSION_CONFLICT: "

@@ -30,15 +30,27 @@ def _attribution() -> dict:
     return {"isOriginal": False, "originalCreatorName": "真实作者", "platform": "Wikimedia Commons",
         "sourcePostUrl": "https://example.test/work", "originalAssetUrl": "https://example.test/asset.jpg",
         "attributionText": "作者 / 来源", "rightsBasis": "CC BY-SA 4.0", "commercialAuthorizationStatus": "verified",
-        "publicationAdmission": "production_release", "watermarkStatus": "absent", "watermarkKind": "none",
+        "publicationAdmission": "commercial_release", "watermarkStatus": "absent", "watermarkKind": "none",
         "audioRightsStatus": "no_audio", "modelReleaseStatus": "not_required", "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-09-09T00:00:00Z", "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
         "derivedModifications": [], "termsUrl": "https://example.test/terms", "authorizationProofUrl": "https://example.test/proof"}
 
 
+
+def _repository(root: Path) -> Path:
+    (root / ".git").mkdir(parents=True, exist_ok=True)
+    marker = root / "repository.json"
+    if not marker.exists():
+        write_json(marker, {"schema": "quwoquan_data.publish_repository.v2",
+            "repositoryId": "pool-preflight-test", "layoutVersion": 2})
+    return root
+
+
 def _record(publish: Path, ref: str, manifest: dict) -> dict:
+    _repository(publish)
     root = publish / ref
-    write_json(root / "manifest.json", manifest)
+    write_json(root / "manifest.json", {**manifest, "objectRef": ref.split("/", 1)[1]})
+    manifest = json.loads((root / "manifest.json").read_bytes())
     write_json(root / "content_review.json", {"decision": "approved"})
     identity = {"executionId": "offline-execution", "sourceRevision": "sha256:" + "1" * 64,
         "sourceDigest": "sha256:" + "2" * 64, "entityCatalogDigest": "sha256:" + "3" * 64}
@@ -48,10 +60,10 @@ def _record(publish: Path, ref: str, manifest: dict) -> dict:
         "recordSequence": 1, "contentVersion": manifest["version"], "status": "active", "processResult": "completed",
         "qualityResult": "passed", "eligibilityResult": "passed", "rightsResult": "passed",
         "rightsAuthorityRef": ref + "/content_review.json", "rightsAuthorityDigest": _digest(root / "content_review.json"),
-        "usageScope": "production", "evidenceRef": "content_review.json", "evidenceDigest": _digest(root / "content_review.json"),
+        "usageScope": "commercial", "evidenceRef": "content_review.json", "evidenceDigest": _digest(root / "content_review.json"),
         "payloadDigest": digest, "canonicalObjectDigest": digest,
         "sourceIdentity": {**identity, "identityDigest": source_identity_digest(identity)}, "sourceAttribution": _attribution()}
-    write_json(root / "_pool/versions/1.json", record)
+    write_json(root / "records/1.json", record)
     return record
 
 
@@ -83,7 +95,7 @@ def _snapshot(root: Path) -> dict[str, bytes]:
 
 
 def test_three_entities_eight_dependent_posts_keep_identity_and_deepest_errors(tmp_path: Path) -> None:
-    publish = tmp_path / "publish"
+    publish = _repository(tmp_path / "publish")
     entities = [_homepage(publish, name) for name in ("实体甲", "实体乙", "实体丙")]
     write_json(publish / "creators/author/profile.json", {"authorId": "author", "version": 1, "status": "active",
         "admission": {"processResult": "completed", "qualityResult": "passed", "evidenceRef": "review.json", "evidenceDigest": "sha256:" + "f" * 64}})
@@ -91,7 +103,7 @@ def test_three_entities_eight_dependent_posts_keep_identity_and_deepest_errors(t
     # 三种实体事实：合法、缺记录、payload 漂移，真实 identity 不等于目录名。
     complete = query_pool(publish)
     assert complete["counts"] == {"homepage": 3, "article": 8, "image": 0, "video": 0}, complete["excluded"]
-    (publish / entities[1] / "_pool/versions/1.json").unlink()
+    (publish / entities[1] / "records/1.json").unlink()
     (publish / entities[2] / "page.md").write_text("冻结后漂移", encoding="utf-8")
     before = _snapshot(tmp_path)
     result = query_pool(publish)
@@ -115,6 +127,7 @@ def test_missing_manifest_and_invalid_record_still_reserve_real_id(tmp_path: Pat
     ref = _post(tmp_path, 1, "entities/地点/景区/未发布")
     manifest = tmp_path / ref / "manifest.json"
     manifest.unlink()
+    _repository(tmp_path)
     result = query_pool(tmp_path, target_refs=[ref, "posts/image/摄影/不存在/1"])
     rows = {row["objectRef"]: row for row in result["objects"]}
     assert rows[ref]["occupied"] and rows[ref]["state"] == "invalid"
@@ -132,9 +145,9 @@ def _image(index: int = 1) -> dict:
 @pytest.mark.parametrize("carrier", ["article", "homepage"])
 @pytest.mark.parametrize("hot", [False, True])
 def test_readonly_stable_asset_reference_reuse_is_independent_positive(tmp_path: Path, carrier: str, hot: bool) -> None:
-    publish = tmp_path / "publish"
+    publish = _repository(tmp_path / "publish")
     existing = _image()
-    write_json(publish / "posts/image/摄影/已有作品/1/manifest.json", existing)
+    write_json(publish / "posts/image/摄影/已有作品/1/manifest.json", {**existing, "objectRef": "image/摄影/已有作品/1"})
     if hot:
         load_or_bootstrap_inventory(publish)
     candidate = copy.deepcopy(existing)
@@ -165,9 +178,9 @@ def test_readonly_stable_asset_reference_reuse_is_independent_positive(tmp_path:
     ("same_post_duplicate", "IMAGE_SHA256_DUPLICATE"),
 ])
 def test_readonly_and_publish_recheck_reject_image_identity_conflicts(tmp_path: Path, case: str, expected: str) -> None:
-    publish = tmp_path / "publish"
+    publish = _repository(tmp_path / "publish")
     existing = _image()
-    write_json(publish / "posts/image/摄影/已有作品/1/manifest.json", existing)
+    write_json(publish / "posts/image/摄影/已有作品/1/manifest.json", {**existing, "objectRef": "image/摄影/已有作品/1"})
     candidate = copy.deepcopy(existing)
     candidate["contentId"] = "different-work"
     asset = candidate["assets"][0]
@@ -215,6 +228,7 @@ def test_one_native_work_keeps_distinct_assets_in_order(tmp_path: Path) -> None:
     candidate["assets"].append(second)
     ref = "posts/image/摄影/有序多图作品/1"
     before = copy.deepcopy(candidate)
+    _repository(tmp_path)
     result = query_pool(tmp_path, candidates=[{"objectRef": ref, "manifest": candidate}])
     assert result["preflight"][0]["imageConflicts"] == []
     assert candidate == before
@@ -235,13 +249,13 @@ def test_cli_preflight_is_readonly_and_does_not_auto_approve(tmp_path: Path, cap
 
 
 def test_publish_rechecks_dependencies_after_successful_readonly_preflight(tmp_path: Path) -> None:
-    publish = tmp_path / "publish"
+    publish = _repository(tmp_path / "publish")
     entity = _homepage(publish, "被引用实体")
     candidate = {**_image(), "entityRefs": ["/entity/" + entity.removeprefix("entities/")]}
     ref = "posts/image/摄影/待发布/1"
     result = query_pool(publish, candidates=[{"objectRef": ref, "manifest": candidate}])
     assert result["preflight"][0]["dependencyIssues"] == []
-    (publish / entity / "_pool/versions/1.json").unlink()
+    (publish / entity / "records/1.json").unlink()
     run = tmp_path / "run"
     write_json(run / "manifest.json", candidate)
     entry = {"operation": "create", "destination": ref + "/manifest.json", "blobRef": "manifest.json", "sha256": _digest(run / "manifest.json")}
@@ -251,10 +265,33 @@ def test_publish_rechecks_dependencies_after_successful_readonly_preflight(tmp_p
     assert _snapshot(publish) == before
 
 
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+@pytest.mark.parametrize("content_type,entity_refs,ok", [
+    ("image", [], True),
+    ("video", [], True),
+    ("article", [], False),
+    ("image", ["/entity/不存在"], False),
+])
+def test_optional_location_entity_refs_do_not_invent_homepage_anchors(tmp_path: Path, content_type: str, entity_refs: list[str], ok: bool) -> None:
+    from content.release.canonical.aggregate_release_pool_closure import selected_pool_entity_refs
+
+    publish = _repository(tmp_path / "publish")
+    object_ref = f"{content_type}/摄影/可选地点样本/1"
+    write_json(publish / "posts" / object_ref / "manifest.json", {
+        "objectRef": object_ref, "contentType": content_type, "contentId": f"{content_type}-sample",
+        "version": 1, "entityRefs": entity_refs, "creatorProfileId": "author", "authorId": "author",
+    })
+    if ok:
+        assert selected_pool_entity_refs(publish, post_refs={object_ref}) == set()
+    else:
+        with pytest.raises(ObjectTransactionError, match="REFERENCE_MISSING"):
+            selected_pool_entity_refs(publish, post_refs={object_ref})
+
+
 def test_candidates_detect_each_other_without_rescanning_pool(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from content.release.canonical import pool_query as subject
 
-    publish = tmp_path / "publish"
+    publish = _repository(tmp_path / "publish")
     load_or_bootstrap_inventory(publish)
     def reject_scan(*args, **kwargs):
         raise AssertionError("点名候选的热预检不得全池扫描")
@@ -276,6 +313,7 @@ def test_same_path_does_not_hide_binding_or_logical_identity_drift(tmp_path: Pat
     ref = "posts/image/摄影/相同路径/1"
     existing = _image()
     write_json(tmp_path / ref / "manifest.json", existing)
+    _repository(tmp_path)
     load_or_bootstrap_inventory(tmp_path)
     candidate = copy.deepcopy(existing)
     if change == "bytes":
@@ -284,16 +322,18 @@ def test_same_path_does_not_hide_binding_or_logical_identity_drift(tmp_path: Pat
         candidate["assets"][0]["originalAssetUrl"] = "https://other.test/changed.jpg"
     else:
         candidate["contentId"] = "different-logical-id"
+    _repository(tmp_path)
     result = query_pool(tmp_path, candidates=[{"objectRef": ref, "manifest": candidate}])
     assert result["preflight"][0]["imageConflicts"]
 
 
 def test_invalid_latest_record_keeps_real_identity_without_admission(tmp_path: Path) -> None:
     ref = _homepage(tmp_path, "记录冲突")
-    record_path = tmp_path / ref / "_pool/versions/1.json"
+    record_path = tmp_path / ref / "records/1.json"
     record = json.loads(record_path.read_text())
     record.update(objectId="record-reserved-id", recordSequence=2, processResult="invalid")
     write_json(record_path.with_name("2.json"), record)
+    _repository(tmp_path)
     row = query_pool(tmp_path, target_refs=[ref])["objects"][0]
     assert row["state"] == "invalid" and not row["eligible"]
     assert row["recordIdentity"]["objectId"] == "record-reserved-id"
@@ -303,7 +343,7 @@ def test_invalid_latest_record_keeps_real_identity_without_admission(tmp_path: P
 def test_cli_refuses_json_output_inside_publish(tmp_path: Path) -> None:
     parser = argparse.ArgumentParser()
     register_parser(parser.add_subparsers())
-    publish = tmp_path / "publish"
+    publish = _repository(tmp_path / "publish")
     args = parser.parse_args(["release", "pool-query", "--publish-root", str(publish), "--json", str(publish / "result.json")])
     with pytest.raises(ValueError, match="must not mutate canonical publish"):
         args.handler(args)
@@ -314,7 +354,7 @@ def test_cutover_snapshot_cli_only_reads_exact_occupied_objects(tmp_path, capsys
     from content.release.canonical.pool_cutover import snapshot_pool
     parser = argparse.ArgumentParser()
     register_parser(parser.add_subparsers())
-    publish = tmp_path / "publish"
+    publish = _repository(tmp_path / "publish")
     _homepage(publish, "盘点对象")
     before = _snapshot(tmp_path)
     args = parser.parse_args(["release", "pool-cutover", "snapshot", "--publish-root", str(publish)])
@@ -328,7 +368,7 @@ def test_cutover_snapshot_cli_only_reads_exact_occupied_objects(tmp_path, capsys
 def test_snapshot_counts_only_occupied_while_query_includes_missing_dependencies(tmp_path):
     from content.release.canonical.pool_cutover import snapshot_pool
 
-    publish = tmp_path / "publish"
+    publish = _repository(tmp_path / "publish")
     homepage = _homepage(publish, "已占位")
     missing = "entities/地点/景区/都江堰"
     post = _post(publish, 1, missing)
@@ -386,7 +426,7 @@ def test_cutover_cli_preserves_typed_blocker_without_writing(tmp_path, capsys):
 
 @pytest.mark.parametrize("payload", [b"not json", b"[]"])
 def test_cutover_cli_rejects_unreadable_snapshot_with_typed_diagnostic(tmp_path, capsys, payload):
-    publish = tmp_path / "publish"
+    publish = _repository(tmp_path / "publish")
     root = publish / "entities/地点/景区/损坏对象"
     root.mkdir(parents=True)
     (root / "manifest.json").write_bytes(payload)

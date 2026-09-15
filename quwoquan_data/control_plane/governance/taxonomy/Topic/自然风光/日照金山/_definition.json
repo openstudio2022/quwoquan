@@ -1,0 +1,15 @@
+{
+  "label": "日照金山",
+  "labelEn": "Golden Mountain Light",
+  "description": "雪山或极高山在日出日落时被低角度阳光染成金色的可核验天象，不含仅有暖色滤镜的城市或平原",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-09-12T01:20:16.517586+00:00",
+  "updatedAt": "2026-09-12T01:20:16.517586+00:00"
+}

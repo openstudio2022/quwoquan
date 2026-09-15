@@ -86,6 +86,7 @@
       ]
     },
     "pageSource": {
+      "allOf": [{"if": {"required": ["sourceWork"]}, "then": {"required": ["sourceWorkEvidence"]}, "else": {"not": {"required": ["sourceWorkEvidence"]}}}],
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -99,6 +100,8 @@
         "relevance"
       ],
       "properties": {
+        "sourceWork": {"$ref": "source_work.schema.json"},
+        "sourceWorkEvidence": {"$ref": "source_work.schema.json#/$defs/inputEvidence"},
         "kind": {
           "const": "page"
         },
@@ -111,6 +114,10 @@
         "sourceMarkdownPath": {
           "description": "AI 亲笔的 source.md 本地路径：首行 H1 为标题，正文含可见正文与结构化信息区取证。",
           "$ref": "#/$defs/nonEmpty"
+        },
+        "extractor": {
+          "description": "宿主显式申报的正文取得方法；网页工具渲染摘录使用 html_text，不冒充 API 原响应。",
+          "enum": ["wikipedia_api", "baidu_baike_html", "toutiao_baike_html", "html_text"]
         },
         "license": {
           "$ref": "#/$defs/nonEmpty"
@@ -144,6 +151,17 @@
         }
       }
     },
+    "hostMergedAcquisition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "tool", "metadataSha256", "formatIds"],
+      "properties": {
+        "method": {"const": "host_merged"},
+        "tool": {"const": "yt-dlp"},
+        "metadataSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "formatIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/nonEmpty"}}
+      }
+    },
     "mediaSource": {
       "type": "object",
       "additionalProperties": false,
@@ -160,6 +178,8 @@
         "watermarkKind"
       ],
       "properties": {
+        "sourceWork": {"$ref": "source_work.schema.json"},
+        "sourceWorkEvidence": {"$ref": "source_work.schema.json#/$defs/inputEvidence"},
         "kind": {
           "enum": [
             "image",
@@ -171,9 +191,10 @@
           "$ref": "#/$defs/httpsUrl"
         },
         "directUrl": {
-          "description": "AI 实际下载的直链。",
-          "$ref": "#/$defs/httpsUrl"
+          "description": "实际下载直链；宿主本地合并视频无单文件直链时为 null，并附 acquisition 事实。",
+          "anyOf": [{"$ref": "#/$defs/httpsUrl"}, {"type": "null"}]
         },
+        "acquisition": {"$ref": "#/$defs/hostMergedAcquisition"},
         "filePath": {
           "description": "AI 已下载到本地的字节路径。",
           "$ref": "#/$defs/nonEmpty"
@@ -239,6 +260,12 @@
         }
       },
       "allOf": [
+        {"if": {"required": ["sourceWork"]}, "then": {"required": ["sourceWorkEvidence"]}, "else": {"not": {"required": ["sourceWorkEvidence"]}}},
+        {
+          "if": {"properties": {"directUrl": {"type": "null"}}, "required": ["directUrl"]},
+          "then": {"properties": {"kind": {"const": "video"}}, "required": ["acquisition"]},
+          "else": {"not": {"required": ["acquisition"]}}
+        },
         {
           "if": {
             "properties": {

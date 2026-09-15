@@ -37,7 +37,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     finalize.add_argument("--cohort-file", required=True)
     finalize.add_argument(
         "--milestone",
-        choices=("M1", "M10", "M100", "M1000", "M10000"),
+        choices=("M1", "M10", "M100", "M1000", "M10000", "M100000"),
         required=True,
     )
     finalize.add_argument("--producer-baseline-revision", required=True)
@@ -133,6 +133,16 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         dest="object_transaction_action",
         required=True,
     )
+    from content.release.canonical.homepage_revision import handle_revise_homepage
+    revision = object_transaction_actions.add_parser(
+        "revise-homepage", help="宿主明确授权后以新独立审核执行同身份版本修正；不覆盖旧包",
+    )
+    revision.add_argument("--execution-id", required=True)
+    revision.add_argument("--target-ref", required=True, help="保留的 entities/ 逻辑 ref，不是过程 locator")
+    revision.add_argument("--expected-current-version", required=True, type=int)
+    revision.add_argument("--expected-payload-digest", required=True)
+    revision.add_argument("--reason", required=True)
+    revision.set_defaults(handler=handle_revise_homepage)
     object_transaction_rollback = object_transaction_actions.add_parser(
         "rollback",
         help="按精确 inverse delta 回滚一笔已应用对象事务并保留回执",

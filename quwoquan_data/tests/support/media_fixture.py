@@ -5,6 +5,7 @@ import base64
 import hashlib
 from pathlib import Path
 
+import pytest
 import yaml
 from core.content_library import MEDIA_KIND, admit_library_bytes, library_cas_path
 from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT
@@ -56,12 +57,17 @@ def seed_media_holding(
     return entry
 
 
-def seed_system_creator_avatar_holding(creator_profile_id: str) -> str:
-    """Stand up the avatar holding one system creator profile already cites.
+def seed_system_creator_avatar_holding(
+    creator_profile_id: str,
+    *,
+    monkeypatch: pytest.MonkeyPatch | None = None,
+) -> str:
+    """Stand up an isolated placeholder for one frozen system avatar reference.
 
-    These digests are frozen in the creator pool and the bodies belong to the
-    library, so a test that projects such a creator has to make the library hold
-    them first. Returns the digest the profile records.
+    Historical creator profiles retain digests whose original bytes are not tracked in
+    source control. Tests outside avatar integrity use a same-size isolated placeholder;
+    when supplied, ``monkeypatch`` limits that known placeholder exception to creator
+    projection while every other copied body still receives the production digest check.
     """
 
     profiles = CONTROL_PLANE_CREATOR_POOL_ROOT / "profiles"
@@ -79,6 +85,21 @@ def seed_system_creator_avatar_holding(creator_profile_id: str) -> str:
         size = avatar.get("bytes")
         if not sha256 or not isinstance(size, int):
             raise ValueError(f"creator avatarAsset is not addressable: {creator_profile_id}")
-        seed_media_holding(sha256, size=size)
+        entry = seed_media_holding(sha256, size=size)
+        if monkeypatch is not None:
+            from content.release.canonical import creator_projection
+
+            original_digest = creator_projection._digest_file
+
+            def fixture_digest(candidate: Path) -> str:
+                if candidate.is_file() and candidate.stat().st_size == size:
+                    try:
+                        if candidate.read_bytes() == entry.read_bytes():
+                            return sha256
+                    except OSError:
+                        pass
+                return original_digest(candidate)
+
+            monkeypatch.setattr(creator_projection, "_digest_file", fixture_digest)
         return sha256
     raise ValueError(f"creator profile not found: {creator_profile_id}")

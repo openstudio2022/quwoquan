@@ -672,7 +672,6 @@ def validate_producer_release_handoff(
 
 def write_producer_release_handoff(*, release_id: str, cohort_file: Path, milestone: str, producer_baseline_revision: str, repo_root: Path, output_root: Path, publish_root: Path, release_root: Path) -> tuple[dict[str, Any], Path, bool]:
     from core.publish_repository import require_publish_repository
-
     repository_id = require_publish_repository(publish_root)["repositoryId"]
     cohort_path = _assert_no_symlink(cohort_file, label="explicit cohort")
     cohort, _ = _read_json_file(cohort_path, label="explicit cohort", canonical=True)

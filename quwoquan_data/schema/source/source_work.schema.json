@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/source_work.schema.json",
+  "description": "四载体共用的原作事实；不含运输路径、全文、DOM 或资产副本。缺失事实不补默认值。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "identity", "capture", "structure"],
+  "properties": {
+    "version": {"const": 1},
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "pageUrl"],
+      "properties": {
+        "provider": {"$ref": "#/$defs/nonEmpty"},
+        "nativeId": {"$ref": "#/$defs/nonEmpty"},
+        "pageUrl": {"$ref": "#/$defs/httpsUrl"},
+        "originalUrl": {"$ref": "#/$defs/httpsUrl"},
+        "creator": {"$ref": "#/$defs/nonEmpty"}
+      }
+    },
+    "capture": {
+      "type": "object", "additionalProperties": false,
+      "required": ["method", "coverage", "evidenceRefs", "scope"],
+      "properties": {
+        "method": {"$ref": "#/$defs/nonEmpty"},
+        "coverage": {"description": "已取得的原作范围，不表示 HTTP 响应是否收全；responseComplete 如由来源提供只保留在原始证据中。", "enum": ["complete", "partial", "unknown"]},
+        "scope": {"$ref": "#/$defs/nonEmpty"},
+        "evidenceRefs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/evidenceId"}}
+      }
+    },
+    "structure": {
+      "description": "原作中的有序使用关系。ref/members 是不透明原生作品或资产引用，不是 execution/包路径，禁止用于文件读写；优先原生 ID，不以签名下载地址或尺寸决定身份。reference 的 ref 必须为 HTTPS 链接。anchor 只作证据定位说明。",
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["ref", "role"],
+        "properties": {
+          "ref": {"$ref": "#/$defs/nonEmpty"},
+          "role": {"enum": ["gallery", "cover", "inline", "poster", "reference", "unknown"]},
+          "anchor": {"$ref": "#/$defs/nonEmpty"},
+          "members": {"description": "原生资产引用的原序；同成员可另被 cover/inline/poster 引用，不复制资产。", "type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/nonEmpty"}}
+        },
+        "allOf": [{
+          "if": {"properties": {"role": {"const": "gallery"}}, "required": ["role"]},
+          "then": {"required": ["members"]},
+          "else": {"not": {"required": ["members"]}}
+        }, {
+          "if": {"properties": {"role": {"const": "reference"}}, "required": ["role"]},
+          "then": {"properties": {"ref": {"type": "string", "pattern": "^https://[^/\\s?#]+(?:[/?#][^\\s]*)?$"}}}
+        }]
+      }
+    }
+  },
+  "$defs": {
+    "nonEmpty": {"type": "string", "minLength": 1},
+    "httpsUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
+    "evidenceId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"},
+    "evidenceKind": {"enum": ["source_snapshot", "source_excerpt", "license_response", "acquisition_receipt", "source_response", "source_metadata", "source_receipt"]},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "evidencePath": {"type": "string", "pattern": "^evidence(?:-[1-9][0-9]*)?\\.[A-Za-z0-9]+$"},
+    "inputEvidence": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "inputPath", "sha256", "bytes", "kind"],
+        "properties": {
+          "id": {"$ref": "#/$defs/evidenceId"},
+          "inputPath": {"$ref": "#/$defs/nonEmpty"},
+          "sha256": {"$ref": "#/$defs/digest"},
+          "bytes": {"type": "integer", "minimum": 1},
+          "kind": {"$ref": "#/$defs/evidenceKind"}
+        }
+      }
+    },
+    "storedEvidence": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "path", "sha256", "bytes", "kind"],
+        "properties": {
+          "id": {"$ref": "#/$defs/evidenceId"},
+          "path": {"$ref": "#/$defs/evidencePath"},
+          "sha256": {"$ref": "#/$defs/digest"},
+          "bytes": {"type": "integer", "minimum": 1},
+          "kind": {"$ref": "#/$defs/evidenceKind"}
+        }
+      }
+    }
+  }
+}

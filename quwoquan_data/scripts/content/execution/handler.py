@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+from content.coordination.runtime import current_tokens, execution_targets, producer_call
+from content.coordination.store import CoordinationError
 from content.execution.seal import STAGES, SealConflict, seal_stage
 from content.execution.task_init_cli import register_task_init_parser
 from content.source.acquire import acquire
@@ -13,8 +15,16 @@ from content.source.acquire import acquire
 
 def _handle_acquire(args: argparse.Namespace) -> None:
     try:
-        result = acquire(execution_id=args.execution_id, request_path=Path(args.input))
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        current_tokens()
+        targets = execution_targets(args.execution_id)
+        request = json.loads(Path(args.input).read_bytes())
+        rows = request.get("targets") or []
+        if (sorted(row.get("targetRef", "") for row in rows) != sorted(targets)
+                or any(not row.get("sources") for row in rows)):
+            raise ValueError("COORDINATION.INGEST_TARGET_COVERAGE_INVALID: 全 target 与非空 sources 必须在 ingest 前闭合")
+        result = producer_call(lambda: acquire(execution_id=args.execution_id, submitted_request=request),
+                               operation="acquire", batches={args.execution_id: targets})
+    except (CoordinationError, FileNotFoundError, OSError, TypeError, ValueError, KeyError, IndexError) as exc:
         print(f"[task acquire] GATE_BLOCK {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -25,8 +35,18 @@ def _handle_acquire(args: argparse.Namespace) -> None:
 
 def _handle_seal(args: argparse.Namespace) -> None:
     try:
-        result = seal_stage(execution_id=args.execution_id, stage=args.stage, input_path=Path(args.input))
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        current_tokens()
+        targets = execution_targets(args.execution_id)
+        submitted = json.loads(Path(args.input).read_bytes())
+        if args.stage == "5.review":
+            from content.execution.receipt_chain import validate_live_receipt_chain
+            from content.coordination.runtime import _receipt_targets
+            from core import paths
+            chain = validate_live_receipt_chain(execution_id=args.execution_id, execution_root=paths.DATA_EXECUTIONS_ROOT / args.execution_id)
+            targets = _receipt_targets(chain.receipts[1], "4.draft")
+        result = producer_call(lambda: seal_stage(execution_id=args.execution_id, stage=args.stage, submitted_input=submitted),
+                               operation=args.stage, batches={args.execution_id: targets}, submitted_actor=submitted.get("actor", {}))
+    except (CoordinationError, FileNotFoundError, OSError, TypeError, ValueError, KeyError, IndexError) as exc:
         print(f"[task seal] GATE_BLOCK {exc}", file=sys.stderr)
         raise SystemExit(3 if isinstance(exc, SealConflict) else 2) from exc
     print(json.dumps(result, ensure_ascii=False, indent=2))
