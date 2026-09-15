@@ -188,6 +188,25 @@ def test_python_test_selection_defers_broad_owner_trees() -> None:
     )
 
 
+def test_ios_runtime_config_native_changes_select_python_contracts() -> None:
+    expected = [
+        "quwoquan_app/test/local_contract/runtime/"
+        "default_debug_supply__local_contract_test.py",
+        "quwoquan_app/test/local_contract/runtime/"
+        "ios_runtime_dart_defines__local_contract_test.py",
+    ]
+    for path in (
+        "quwoquan_app/ios/Runner/NativeRuntimeConfigSupply.swift",
+        "quwoquan_app/ios/Runner/NativeRuntimeConfigChannel.swift",
+        "quwoquan_app/ios/Runner/NativeRuntimeConfigActivationCoordinator.swift",
+        "quwoquan_app/ios/Runner.xcodeproj/project.pbxproj",
+        "quwoquan_app/test_host/patrol/ios/Runner.xcodeproj/project.pbxproj",
+    ):
+        selected, deferred = select_pytest_paths([path])
+        assert selected == expected, path
+        assert deferred == [], path
+
+
 def test_commit_gate_changes_select_only_their_focused_contracts() -> None:
     expected = (
         [
