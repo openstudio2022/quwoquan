@@ -141,6 +141,240 @@ public final class RuntimeConfigPackageStoreTest {
     assertEquals("broken", Files.readString(activeFile().toPath()));
   }
 
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+  @Test
+  public void selfSupplyMigratesFreshAndExpiredRetiredAlphaOnlineIdentity() throws Exception {
+    TestMaterial oldAlpha = TestMaterial.create("nonprod").nextPackage("alpha", "alpha-local");
+    TestMaterial offline = offlineMaterial(oldAlpha);
+    for (Instant now : List.of(NOW, NOW.plusSeconds(86400 * 2))) {
+      // 退役在线包不能通过当前候选入口安装；模拟升级前已持久化的签名字节。
+      Files.write(activeFile().toPath(), RuntimeConfigPackageStore.canonicalJsonBytes(oldAlpha.packageDocument));
+      RuntimeConfigPackageStore store = createStoreAt(offline, RuntimeConfigPackageStore.durableAtomicWriter(), now);
+      RuntimeConfigActivationCoordinator coordinator = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+      JsonObject request = selfSupplyRequest(offline);
+      assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED, selfSupply(coordinator, request).kind);
+      assertEquals(oldAlpha.packageDigest(), readLaunchReceipt().get("previousActiveDigest").getAsString());
+      assertCurrentSelfSupply(coordinator, offline, request);
+      assertFalse(store.networkAccessAllowed());
+    }
+  }
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+  @Test
+  public void selfSupplyRepairsMissingMalformedAndDriftedOfflineReceipts() throws Exception {
+    TestMaterial offline = offlineMaterial(TestMaterial.create("nonprod"));
+    RuntimeConfigPackageStore store = createStore(offline, RuntimeConfigPackageStore.durableAtomicWriter());
+    installFirst(store, offline);
+    RuntimeConfigActivationCoordinator coordinator = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+    JsonObject request = selfSupplyRequest(offline);
+    File receiptFile = activeReceiptFile();
+    for (String corruption : List.of("missing", "malformed", "mismatch")) {
+      if (corruption.equals("missing")) {
+        Files.deleteIfExists(receiptFile.toPath());
+      } else if (corruption.equals("malformed")) {
+        Files.writeString(receiptFile.toPath(), "not-json");
+      } else {
+        JsonObject receipt = readLaunchReceipt();
+        receipt.addProperty("activePackageDigest", differentDigest());
+        Files.write(receiptFile.toPath(), RuntimeConfigPackageStore.canonicalJsonBytes(receipt));
+      }
+      expectFailure(coordinator::readVerifiedFlutterEnvelope);
+      assertEquals(corruption, RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED, selfSupply(coordinator, request).kind);
+      assertCurrentSelfSupply(coordinator, offline, request);
+    }
+    // 同一文档但当前 manifest 已改变，也必须写入本次 request 的 receipts。
+    request.getAsJsonObject("effectiveLaunchManifest").addProperty("launchProvenance", "workspace_ide_debug");
+    refreshEffectiveManifestDigest(request);
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED, selfSupply(coordinator, request).kind);
+    assertCurrentSelfSupply(coordinator, offline, request);
+  }
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+  @Test
+  public void repeatedSelfSupplyRevalidatesAndKeepsCompleteOfflineState() throws Exception {
+    TestMaterial offline = offlineMaterial(TestMaterial.create("nonprod"));
+    RuntimeConfigPackageStore store = createStore(offline, RuntimeConfigPackageStore.durableAtomicWriter());
+    JsonObject request = selfSupplyRequest(offline);
+    for (int launch = 0; launch < 3; launch++) {
+      RuntimeConfigActivationCoordinator coordinator = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+      assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED, selfSupply(coordinator, request).kind);
+      assertCurrentSelfSupply(coordinator, offline, request);
+    }
+  }
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+  @Test
+  public void selfSupplyPreservesValidBetaGammaAndRejectsExpiredOnes() throws Exception {
+    TestMaterial material = TestMaterial.create("nonprod");
+    for (String environment : List.of("beta", "gamma")) {
+      TestMaterial remote = material.nextPackage(environment, environment + "-local");
+      RuntimeConfigPackageStore store = createStore(remote, RuntimeConfigPackageStore.durableAtomicWriter());
+      RuntimeConfigActivationCoordinator coordinator = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+      JsonObject remoteRequest = activationRequest(remote, store.readCurrentActiveDigest());
+      remoteRequest.addProperty("environment", environment);
+      remoteRequest.addProperty("target", environment + "-local");
+      remoteRequest.getAsJsonObject("effectiveLaunchManifest").addProperty("environment", environment);
+      remoteRequest.getAsJsonObject("effectiveLaunchManifest").addProperty("target", environment + "-local");
+      refreshEffectiveManifestDigest(remoteRequest);
+      assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED,
+          coordinator.consumePendingRequest(writeActivationRequest(remoteRequest)).kind);
+      byte[] before = Files.readAllBytes(activeFile().toPath());
+      byte[] receiptBefore = Files.readAllBytes(activeReceiptFile().toPath());
+      JsonObject request = selfSupplyRequest(offlineMaterial(remote));
+      assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.NOT_REQUESTED, selfSupply(coordinator, request).kind);
+      assertArrayEquals(before, Files.readAllBytes(activeFile().toPath()));
+      assertArrayEquals(receiptBefore, Files.readAllBytes(activeReceiptFile().toPath()));
+      RuntimeConfigActivationCoordinator stale = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(),
+          createStoreAt(remote, RuntimeConfigPackageStore.durableAtomicWriter(), NOW.plusSeconds(86400 * 2)));
+      assertEquals("runtime_config_freshness_invalid", selfSupply(stale, request).errorCode);
+      assertArrayEquals(before, Files.readAllBytes(activeFile().toPath()));
+      assertArrayEquals(receiptBefore, Files.readAllBytes(activeReceiptFile().toPath()));
+    }
+  }
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+  @Test
+  public void selfSupplyRejectsCorruptAlphaIdentityAndPreservesFirstError() throws Exception {
+    TestMaterial oldAlpha = TestMaterial.create("nonprod").nextPackage("alpha", "alpha-local");
+    TestMaterial offline = offlineMaterial(oldAlpha);
+    RuntimeConfigActivationCoordinator coordinator = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(),
+        createStoreAt(offline, RuntimeConfigPackageStore.durableAtomicWriter(), NOW.plusSeconds(86400 * 2)));
+    for (String corruption : List.of("signature", "structure", "digest")) {
+      JsonObject broken = oldAlpha.packageDocument.deepCopy();
+      String expected;
+      if (corruption.equals("signature")) {
+        broken.addProperty("signature", Base64.getEncoder().encodeToString(new byte[64]));
+        expected = "runtime_config_signature_invalid";
+      } else if (corruption.equals("structure")) {
+        broken.addProperty("unknown", "field");
+        expected = "runtime_config_schema_mismatch";
+      } else {
+        broken.addProperty("payloadDigest", differentDigest());
+        expected = "runtime_config_payload_digest_mismatch";
+      }
+      byte[] before = RuntimeConfigPackageStore.canonicalJsonBytes(broken);
+      Files.write(activeFile().toPath(), before);
+      assertEquals(expected, selfSupply(coordinator, selfSupplyRequest(offline)).errorCode);
+      assertArrayEquals(before, Files.readAllBytes(activeFile().toPath()));
+    }
+  }
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+  @Test
+  public void selfSupplyRejectsInvalidNewSignatureBeforeRepairingReceipt() throws Exception {
+    TestMaterial offline = offlineMaterial(TestMaterial.create("nonprod"));
+    RuntimeConfigPackageStore store = createStore(offline, RuntimeConfigPackageStore.durableAtomicWriter());
+    installFirst(store, offline);
+    byte[] before = Files.readAllBytes(activeFile().toPath());
+    offline.packageDocument.addProperty("signature", Base64.getEncoder().encodeToString(new byte[64]));
+    RuntimeConfigActivationCoordinator coordinator = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+    assertEquals("runtime_config_signature_invalid", selfSupply(coordinator, selfSupplyRequest(offline)).errorCode);
+    assertArrayEquals(before, Files.readAllBytes(activeFile().toPath()));
+    assertFalse(activeReceiptFile().exists());
+  }
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+  @Test
+  public void selfSupplyReceiptWriteFailureRestoresPreviousOfflinePackageAndReceipt() throws Exception {
+    TestMaterial offline = offlineMaterial(TestMaterial.create("nonprod"));
+    RuntimeConfigPackageStore store = createStore(offline, RuntimeConfigPackageStore.durableAtomicWriter());
+    installFirst(store, offline);
+    byte[] before = Files.readAllBytes(activeFile().toPath());
+    Files.writeString(activeReceiptFile().toPath(), "old-malformed-receipt");
+    TestMaterial next = offline.nextPackage("alpha", "alpha-local");
+    boolean[] failed = {false};
+    RuntimeConfigActivationCoordinator coordinator = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store,
+        (destination, payload) -> {
+          if (destination.getName().equals(RuntimeConfigActivationCoordinator.RECEIPT_FILE_NAME) && !failed[0]) {
+            failed[0] = true;
+            throw new IOException("injected self-supply receipt failure");
+          }
+          RuntimeConfigPackageStore.writeDurablyAndReplace(destination, payload);
+        }, requestFile -> Files.deleteIfExists(requestFile.toPath()));
+    assertEquals("runtime_config_activation_receipt_write_failed", selfSupply(coordinator, selfSupplyRequest(next)).errorCode);
+    assertTrue(failed[0]);
+    assertArrayEquals(before, Files.readAllBytes(activeFile().toPath()));
+    assertEquals("old-malformed-receipt", Files.readString(activeReceiptFile().toPath()));
+  }
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+  @Test
+  public void selfSupplyTrustIoFailureKeepsOldPackageAndOriginalError() throws Exception {
+    TestMaterial oldAlpha = TestMaterial.create("nonprod").nextPackage("alpha", "alpha-local");
+    byte[] before = RuntimeConfigPackageStore.canonicalJsonBytes(oldAlpha.packageDocument);
+    Files.write(activeFile().toPath(), before);
+    RuntimeConfigPackageStore store = new RuntimeConfigPackageStore(temporaryFolder.getRoot(),
+        () -> { throw new IOException("injected trust read failure"); }, () -> NOW,
+        RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator coordinator = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+    RuntimeConfigActivationCoordinator.ConsumeResult result = selfSupply(coordinator, selfSupplyRequest(offlineMaterial(oldAlpha)));
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.FAILED, result.kind);
+    assertEquals("runtime_config_trust_read_failed", result.errorCode);
+    assertEquals("runtime_config_trust_read_failed", result.validationIssues.get(0));
+    assertArrayEquals(before, Files.readAllBytes(activeFile().toPath()));
+  }
+
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+  @Test
+  public void selfSupplyReceiptPathFailureRollsBackWithoutBypassingIoValidation() throws Exception {
+    TestMaterial oldAlpha = TestMaterial.create("nonprod").nextPackage("alpha", "alpha-local");
+    byte[] before = RuntimeConfigPackageStore.canonicalJsonBytes(oldAlpha.packageDocument);
+    Files.write(activeFile().toPath(), before);
+    Files.createDirectory(activeReceiptFile().toPath());
+    RuntimeConfigActivationCoordinator coordinator = new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(),
+        createStore(oldAlpha, RuntimeConfigPackageStore.durableAtomicWriter()));
+    assertEquals("runtime_config_package_path_invalid", selfSupply(coordinator, selfSupplyRequest(offlineMaterial(oldAlpha))).errorCode);
+    assertArrayEquals(before, Files.readAllBytes(activeFile().toPath()));
+    assertTrue(activeReceiptFile().isDirectory());
+  }
+
+  private TestMaterial offlineMaterial(TestMaterial material) throws Exception {
+    TestMaterial offline = material.nextPackage("alpha", "alpha-local");
+    offline.packageDocument.addProperty("schema", "app-offline-bootstrap-document");
+    offline.packageDocument.remove("issuedAt");
+    offline.packageDocument.remove("expiresAt");
+    offline.packageDocument.addProperty("contentSource", "bundled_snapshot");
+    offline.packageDocument.addProperty("trustEnvelopeDigest", offline.trustDigest());
+    JsonObject runtime = new JsonObject();
+    runtime.addProperty("appRuntimeEnv", "alpha");
+    offline.packageDocument.add("runtime", runtime);
+    offline.resign();
+    return offline;
+  }
+
+  private JsonObject selfSupplyRequest(TestMaterial offline) throws Exception {
+    JsonObject request = activationRequest(offline, "");
+    request.addProperty("environment", "alpha");
+    request.addProperty("target", "alpha-local");
+    JsonObject manifest = request.getAsJsonObject("effectiveLaunchManifest");
+    manifest.addProperty("environment", "alpha");
+    manifest.addProperty("target", "alpha-local");
+    manifest.addProperty("contentSource", "bundled_snapshot");
+    manifest.addProperty("requiresLocalTransport", false);
+    manifest.addProperty("runtimeConfigSupplyMode", "build_time_self_supply");
+    refreshEffectiveManifestDigest(request);
+    return request;
+  }
+
+  private RuntimeConfigActivationCoordinator.ConsumeResult selfSupply(
+      RuntimeConfigActivationCoordinator coordinator, JsonObject request) throws Exception {
+    return coordinator.consumeBundledSelfSupplyRequest(
+        new ByteArrayInputStream(RuntimeConfigPackageStore.canonicalJsonBytes(request)));
+  }
+
+  private File activeReceiptFile() {
+    return new File(temporaryFolder.getRoot(), RuntimeConfigActivationCoordinator.ACTIVE_RECEIPT_FILE_NAME);
+  }
+
+  private void assertCurrentSelfSupply(RuntimeConfigActivationCoordinator coordinator,
+      TestMaterial offline, JsonObject request) throws Exception {
+    Map<String, Object> envelope = coordinator.readVerifiedFlutterEnvelope();
+    assertEquals(offline.packageDigest(), envelope.get("runtimeConfigPackageDigest"));
+    assertEquals(request.get("effectiveLaunchManifestDigest").getAsString(), envelope.get("effectiveLaunchManifestDigest"));
+    assertEquals(sha256(RuntimeConfigPackageStore.canonicalJsonBytes(request)), readLaunchReceipt().get("requestDigest").getAsString());
+    assertArrayEquals(RuntimeConfigPackageStore.canonicalJsonBytes(readLaunchReceipt()), Files.readAllBytes(activeReceiptFile().toPath()));
+  }
+
   @Test
   public void firstReadIsTypedAbsentAndIncludesArtifactTrust() throws Exception {
     TestMaterial material = TestMaterial.create("nonprod");

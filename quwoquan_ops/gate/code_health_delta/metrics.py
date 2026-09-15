@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import json
 import re
 import subprocess
 from dataclasses import dataclass
@@ -19,6 +20,13 @@ class FunctionMetric:
     end: int
     cyclomatic: int
     cognitive: int
+    qualified_name: str = ""
+
+
+def finding_identity(code: str, path: str, qualified_symbol: str = "") -> str:
+    """行号与 range 由 report 绑定，不进入跨报告稳定身份。"""
+    payload = json.dumps([code, path, qualified_symbol], ensure_ascii=False, separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def line_count(body: bytes | None) -> int:
@@ -27,20 +35,38 @@ def line_count(body: bytes | None) -> int:
     return len(body.decode("utf-8", "replace").splitlines())
 
 
+def _python_symbols(tree: ast.AST, scope: str = "", counts: dict[str, int] | None = None) -> Iterable[tuple[ast.AST, str]]:
+    counts = {} if counts is None else counts
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            counts[node.name] = counts.get(node.name, 0) + 1
+            suffix = "" if counts[node.name] == 1 else f"#{counts[node.name]}"
+            qualified = ".".join(filter(None, (scope, node.name + suffix)))
+            if not isinstance(node, ast.ClassDef):
+                yield node, qualified
+            yield from _python_symbols(node, qualified)
+        else:
+            yield from _python_symbols(node, scope, counts)
+
+
+def _nested_scope(current: ast.AST, root: ast.AST) -> bool:
+    return current is not root and isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda))
+
+
 def _python_functions(text: str) -> list[FunctionMetric]:
     try:
         tree = ast.parse(text)
     except SyntaxError as error:
         raise ValueError(f"Python source syntax unavailable for complexity analysis: {error}") from error
     metrics: list[FunctionMetric] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
+    for node, qualified in _python_symbols(tree):
         cyclomatic = 1
         cognitive = 0
         stack: list[tuple[ast.AST, int]] = [(node, 0)]
         while stack:
             current, depth = stack.pop()
+            if _nested_scope(current, node):
+                continue
             branch = isinstance(current, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.IfExp, ast.comprehension, ast.ExceptHandler, ast.Match))
             if branch and current is not node:
                 cyclomatic += 1
@@ -51,7 +77,7 @@ def _python_functions(text: str) -> list[FunctionMetric]:
                 cognitive += extra
             next_depth = depth + 1 if branch else depth
             stack.extend((child, next_depth) for child in ast.iter_child_nodes(current))
-        metrics.append(FunctionMetric(node.name, node.lineno, getattr(node, "end_lineno", node.lineno), cyclomatic, cognitive))
+        metrics.append(FunctionMetric(node.name, node.lineno, getattr(node, "end_lineno", node.lineno), cyclomatic, cognitive, qualified))
     return metrics
 
 
@@ -123,16 +149,44 @@ def strip_code_noise(text: str) -> str:
     return "".join(out)
 
 
+def _brace_qualified(lines: list[str], index: int, name: str, scopes: list[tuple[int, str]]) -> str:
+    scopes[:] = [(end, scope) for end, scope in scopes if end >= index]
+    header = lines[index].split("{", 1)[0]
+    receiver = re.search(r"func\s+\(\w+\s+\*?(\w+)(?:\[[^]]*\])?\)", header)
+    owner = receiver.group(1) if receiver else ".".join(scope for _, scope in scopes)
+    signature = re.sub(r"\s+", " ", header[header.find(name) + len(name):].strip())
+    return ".".join(filter(None, (owner, name))) + signature
+
+
+def _brace_end(lines: list[str], start: int) -> int:
+    depth = 0
+    for end in range(start, len(lines)):
+        depth += lines[end].count("{") - lines[end].count("}")
+        if depth <= 0:
+            return end
+    return len(lines) - 1
+
+
+def _control_head(name: str, prefix_tokens: list[str]) -> bool:
+    return name in _CONTROL_KEYWORDS or any(token in _CONTROL_KEYWORDS for token in prefix_tokens)
+
+
 def _brace_functions(text: str) -> list[FunctionMetric]:
     lines = strip_code_noise(text).splitlines()
     results: list[FunctionMetric] = []
+    scopes: list[tuple[int, str]] = []
+    counts: dict[str, int] = {}
     for index, line in enumerate(lines):
+        scopes[:] = [(end, scope) for end, scope in scopes if end >= index]
+        declaration = re.search(r"\b(?:class|interface|enum|object|extension|struct)\s+(\w+)[^{]*\{", line)
+        if declaration:
+            scopes.append((_brace_end(lines, index), declaration.group(1)))
         match = _FUNCTION_START.search(line)
         if not match:
             continue
         prefix_tokens = (match.group("prefix") or "").split()
         name = match.group("name")
-        if name in _CONTROL_KEYWORDS or any(token in _CONTROL_KEYWORDS for token in prefix_tokens):
+        if _control_head(name, prefix_tokens):
             continue
         depth = 0; end = index; branches = 0; cognitive = 0
         for cursor in range(index, len(lines)):
@@ -143,9 +197,13 @@ def _brace_functions(text: str) -> list[FunctionMetric]:
             cognitive += branches_here * (1 + max(0, before - 1))
             depth += current.count("{") - current.count("}")
             end = cursor
-            if cursor > index and depth <= 0:
+            if depth <= 0:
                 break
-        results.append(FunctionMetric(name, index + 1, end + 1, 1 + branches, cognitive))
+        qualified = _brace_qualified(lines, index, name, scopes)
+        counts[qualified] = counts.get(qualified, 0) + 1
+        unique = qualified if counts[qualified] == 1 else f"{qualified}#{counts[qualified]}"
+        results.append(FunctionMetric(name, index + 1, end + 1, 1 + branches, cognitive, unique))
+        scopes.append((end, qualified.split("(", 1)[0].split(".")[-1]))
     return results
 
 
@@ -153,21 +211,26 @@ def function_metrics(path: str, body: bytes | None) -> list[FunctionMetric]:
     if body is None:
         return []
     text = body.decode("utf-8", "replace")
-    return _python_functions(text) if path.endswith(".py") else _brace_functions(text)
+    if path.endswith(".py"):
+        return _python_functions(text)
+    return _brace_functions(text) if Path(path).suffix in {".go", ".dart", ".java", ".ts", ".tsx", ".js", ".jsx"} else []
 
 
 def changed_complexity_findings(path: str, old_body: bytes | None, new_body: bytes | None, changed_lines: frozenset[int], cyclomatic_limit: int, cognitive_limit: int) -> list[dict[str, object]]:
-    old = {item.name: item for item in function_metrics(path, old_body)}
+    old = {item.qualified_name: item for item in function_metrics(path, old_body)}
     findings = []
     for metric in function_metrics(path, new_body):
         if changed_lines and not any(metric.start <= line <= metric.end for line in changed_lines):
             continue
-        previous = old.get(metric.name)
+        previous = old.get(metric.qualified_name)
         worsened = previous is None or metric.cyclomatic > previous.cyclomatic or metric.cognitive > previous.cognitive
         if worsened and (metric.cyclomatic > cyclomatic_limit or metric.cognitive > cognitive_limit):
             findings.append({
                 "code": "CODE_HEALTH.COMPLEXITY_ADVISORY", "path": path,
                 "symbol": metric.name, "terminal": "PR_WARN",
+                "qualifiedSymbol": metric.qualified_name,
+                "findingId": finding_identity("CODE_HEALTH.COMPLEXITY_ADVISORY", path, metric.qualified_name),
+                "range": {"startLine": metric.start, "endLine": metric.end},
                 "message": f"changed function complexity cyclomatic={metric.cyclomatic} cognitive={metric.cognitive} exceeds advisory {cyclomatic_limit}/{cognitive_limit}",
                 "measure": {"cyclomatic": metric.cyclomatic, "cognitive": metric.cognitive,
                             "previousCyclomatic": None if previous is None else previous.cyclomatic,

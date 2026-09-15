@@ -1,6 +1,8 @@
 # 本地工作副本（fixed lane worktree、唯一 integration worktree 与同源 clone）生命周期策略。
 # 分支闭集只读 branch_policy.yaml；lane 路径 ownership 只读 lane_ownership.yaml。
 # 本文件唯一拥有物理布局：project root、bare hub、固定 branch->同名目录和 integration。
+# 六条本地 lane 仅作检出/验收 identity，upstream 指向 origin/dev1.0，不建立远端 lane。
+# bootstrap/resync 只消费 fetch 后冻结的已发布 origin/dev1.0 exact SHA，不回落本地未发布 dev。
 
 schema_version: 2
 project_root: "{repo_parent}"
@@ -12,7 +14,7 @@ lane_worktree_directory_rule: branch_suffix
 authorization_env_var: QWQ_WORKTREE_AUTHZ
 unmerged_reminder_after_days: 3
 reminder_min_interval_hours: 24
-# lane 相对本地 dev1.0 落后超过该提交数时，Skill PRE 与会话提醒建议先运行
+# lane 相对已发布 origin/dev1.0 exact SHA 落后超过该提交数时，Skill PRE 与会话提醒建议先运行
 # sync-lane-from-dev；只提醒，不自动同步。
 resync_reminder_behind_commits: 20
 

@@ -27,7 +27,6 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
 import time
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
@@ -94,22 +93,14 @@ DEV_REF = "refs/heads/dev1.0"
 NO_LIVE = NO_LIVE_ENVIRONMENT_REQUIRED
 ENVIRONMENT_SPEC_REF = "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001"
 DEFAULT_SIGNER = "quwoquan-environment-ops-local"
-ACCEPTANCE_BUNDLE_SCHEMA = "quwoquan_ops.acceptance_bundle.v1"
-BUNDLE_MANIFEST = "bundle.json"
-BUNDLE_STORE_DIR = "store"
-_EAF_NAMED_FIELDS = (
-    "runtimeIdentity", "dataLifecycle", "providerReadiness", "observabilityReadiness",
-    "inspectEvidence", "doctorEvidence", "cleanupEvidence", "leaseClosureEvidence",
+from quwoquan_ops.cli.integration_run_acceptance import validate_mode_inputs, validate_source_inputs, preflight_identity, record_imported_bundle
+from quwoquan_ops.cli.integration_run_bundle import (
+    ACCEPTANCE_BUNDLE_SCHEMA, BUNDLE_MANIFEST, BUNDLE_STORE_DIR, _EAF_NAMED_FIELDS,
+    IntegrationRunError, _canonical_bytes, _sha256_hex, _bundle_path, _bundle_bytes,
+    _bundle_put, _read_store_object, _source_receipt, _fact_evidence_refs,
+    _report_fact_refs, _load_bundle_manifest, read_bundle_files, validate_bundle_identity,
+    validate_manifest_candidate, validate_manifest_source, validate_manifest_fact,
 )
-
-
-class IntegrationRunError(RuntimeError):
-    """Typed blocker; the summary keeps the first one."""
-
-    def __init__(self, code: str, detail: str) -> None:
-        super().__init__(f"{code}: {detail}")
-        self.code = code
-        self.detail = detail
 
 
 def _now() -> str:
@@ -124,8 +115,8 @@ def _git(*args: str) -> str:
     return completed.stdout.strip()
 
 
-def _canonical_bytes(value: Mapping[str, Any]) -> bytes:
-    return json.dumps(dict(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+def _is_ancestor(parent: str, commit: str) -> bool:
+    return subprocess.run(["git", "merge-base", "--is-ancestor", parent, commit], cwd=ROOT, check=False).returncode == 0
 
 
 def _write_canonical(path: Path, value: Mapping[str, Any]) -> dict[str, str]:
@@ -437,6 +428,7 @@ def _readiness_local_ref(*, args: argparse.Namespace, commit: str) -> str:
 
 
 def _local_readiness(*, level: str, parent: str, commit: str, run_dir: Path, args: argparse.Namespace) -> tuple[Path, dict[str, Any]]:
+    validate_source_inputs(args, repository=ROOT)
     # `run` 会读取 push updates 两次（plan + run），stdin 只能读一次，所以落成文件再传路径。
     local_ref = _readiness_local_ref(args=args, commit=commit)
     updates_path = run_dir / f"push-updates-{level}.txt"
@@ -619,20 +611,54 @@ def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping
         raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_DEVICE_UNAVAILABLE", "explicit distinct --android-device-id and --ios-device-id are required")
     receipts = {}
     evidence_root = None
-    for platform, device in devices.items():
-        result = phases.run(f"alpha.offline-{platform}", lambda: _require_ok(_stackctl(
+    first_error = None
+
+    def run_platform(platform: str, device: str, observed: dict[str, Any]) -> None:
+        nonlocal evidence_root
+        result = _stackctl(
             "app-content-uat", "--targets", "alpha-local", "--platform", "android" if platform == "android" else "ios-simulator",
             "--device-id", device, "--candidate", f"{candidate_ref['ref']}={candidate_ref['digest']}",
             log_dir=run_dir / "offline" / platform,
-        ), "INTEGRATION_RUN.APP_LAUNCH_FAILED"))
-        if result.report_dir is None:
-            raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", "offline receipt directory is absent")
-        path = result.report_dir / "receipt.json"
-        root, ref = _evidence_location(path)
-        if evidence_root is not None and root != evidence_root:
-            raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", "offline platforms use different evidence roots")
-        evidence_root = root
-        receipts[platform] = {"ref": ref, "digest": exact_file_digest(path)}
+        )
+        observed["result"] = dict(result.payload)
+        command_error = None
+        try:
+            _require_ok(result, "INTEGRATION_RUN.APP_LAUNCH_FAILED")
+        except IntegrationRunError as exc:
+            # 上游 typed 首错原样保留，不被通用 summary 或后续缺报告覆盖。
+            blocker = result.payload.get("firstBlocker")
+            command_error = IntegrationRunError(exc.code, f"{blocker}: {exc.detail}") if blocker else exc
+        try:
+            if result.report_dir is None:
+                raise ValueError("offline receipt directory is absent")
+            path = result.report_dir / "receipt.json"
+            root, ref = _evidence_location(path)
+            observed["receipt"] = {"ref": ref, "digest": exact_file_digest(path)}
+            if evidence_root is not None and root != evidence_root:
+                raise ValueError("offline platforms use different evidence roots")
+            evidence_root = root
+            receipts[platform] = observed["receipt"]
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            if command_error is not None:
+                raise command_error from exc
+            raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", str(exc)) from exc
+        if command_error is not None:
+            raise command_error
+
+    for platform, device in devices.items():
+        observed: dict[str, Any] = {}
+        try:
+            phases.run(f"alpha.offline-{platform}", lambda: run_platform(platform, device, observed))
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            error = exc if isinstance(exc, IntegrationRunError) else IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", str(exc))
+            observed["blocker"] = {"code": error.code, "detail": error.detail}
+            if first_error is None:
+                first_error = error
+        finally:
+            # phase 状态来自实际执行；保留每端 result/receipt，而非把另一端成功升级为整体通过。
+            phases.items[-1].update(observed)
+    if first_error is not None:
+        raise first_error
     try:
         evidence = offline_receipt_evidence(root=evidence_root, receipts=receipts, candidate=candidate, devices=devices)
     except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
@@ -959,20 +985,21 @@ def _offline_fact_refs(*, store: Path, fact: Mapping[str, Any], candidate: Mappi
 
 
 def _existing_candidate(*, exact: str, identity: Mapping[str, str], impact_plan_digest: str,
-                        owner_identity: str = "") -> tuple[dict[str, str], dict[str, Any]]:
+                        owner_identity: str = "", store: Path | None = None) -> tuple[dict[str, str], dict[str, Any]]:
     from quwoquan_ops.ci.scoped_candidate.core import _load_exact_ref, exact_digest
 
     try:
         ref, digest = exact.rsplit("=", 1)
         candidate_ref = {"ref": ref, "digest": digest}
-        candidate, _ = _load_exact_ref(_store(), candidate_ref, "candidate")
+        root = store if store is not None else _store()
+        candidate, _ = _load_exact_ref(root, candidate_ref, "candidate")
         if (candidate.get("schema") != _CANDIDATE_SCHEMA
                 or candidate.get("candidateId") != exact_digest({k: v for k, v in candidate.items() if k != "candidateId"})
                 or any(candidate.get(key) != identity[field] for key, field in (("commit", "commit"), ("tree", "tree"), ("expectedParent", "parent")))
                 or candidate.get("impactPlanDigest") != impact_plan_digest
                 or (owner_identity and candidate.get("ownerIdentityRef") != owner_identity)):
             raise ValueError("existing candidate commit/tree/parent/ImpactPlan/owner drifted")
-        claim, _ = _load_exact_ref(_store(), {"ref": candidate["claimRef"], "digest": candidate["claimDigest"]}, "claim")
+        claim, _ = _load_exact_ref(root, {"ref": candidate["claimRef"], "digest": candidate["claimDigest"]}, "claim")
         if (claim.get("paths") != candidate.get("paths") or claim.get("expectedParent") != candidate["expectedParent"]
                 or claim.get("ownerIdentityRef") != candidate.get("ownerIdentityRef")):
             raise ValueError("existing candidate claim scope or owner drifted")
@@ -981,10 +1008,29 @@ def _existing_candidate(*, exact: str, identity: Mapping[str, str], impact_plan_
         raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", str(exc)) from exc
 
 
+def _candidate_matches_caller(*, store: Path, path: Path, raw: bytes, identity: Mapping[str, str],
+                              impact_plan_digest: str, owner_identity: str) -> bool:
+    try:
+        _existing_candidate(exact=f"{path.relative_to(store).as_posix()}={_sha256_hex(raw)}", identity=identity,
+                            impact_plan_digest=impact_plan_digest, owner_identity=owner_identity, store=store)
+        return True
+    except (IntegrationRunError, ScopedCandidateError):
+        return False
+
+
+def _reusable_offline_evidence(store: Path, alpha: Mapping[str, str], candidate: Mapping[str, Any]) -> bool:
+    try:
+        _offline_fact_refs(store=store, fact=_read_store_object(store, alpha, "alpha"), candidate=candidate)
+        return True
+    except (IntegrationRunError, KeyError, OSError, ValueError):
+        return False
+
+
 def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str, impact_plan_digest: str,
                              profile: str, beta: bool = False, signature_verifier: Any = None,
                              expected_signer_identity: str | None = None,
-                             release_inputs: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
+                             release_inputs: Mapping[str, Any] | None = None,
+                             owner_identity: str = "") -> dict[str, Any] | None:
     """寻找同源码及 exact release/rollback/handoff 输入、持有有效 passed Alpha 的 candidate。
 
     candidateId 含 claim 与创建时间，因此按 exact 身份字段匹配。Beta opt-in 只消费 passed；未 opt-in
@@ -1002,14 +1048,12 @@ def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str
             body = json.loads(raw)
         except (IntegrationRunError, OSError, ValueError):
             continue
-        if (
-            not isinstance(body, Mapping)
-            or body.get("schema") != _CANDIDATE_SCHEMA
-            or body.get("commit") != commit
-            or body.get("tree") != tree
-            or body.get("expectedParent") != parent
-            or body.get("impactPlanDigest") != impact_plan_digest
-        ):
+        expected = {"schema": _CANDIDATE_SCHEMA, "commit": commit, "tree": tree,
+                    "expectedParent": parent, "impactPlanDigest": impact_plan_digest}
+        if not isinstance(body, Mapping) or any(body.get(key) != value for key, value in expected.items()):
+            continue
+        if not _candidate_matches_caller(store=store, path=path, raw=raw, identity={"commit": commit, "tree": tree, "parent": parent},
+                                         impact_plan_digest=impact_plan_digest, owner_identity=owner_identity):
             continue
         candidate_id = str(body.get("candidateId") or "")
         alpha = _reusable_acceptance(
@@ -1020,9 +1064,7 @@ def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str
         )
         if alpha is None:
             continue
-        try:
-            _offline_fact_refs(store=store, fact=_read_store_object(store, alpha, "alpha"), candidate=body)
-        except (IntegrationRunError, KeyError, OSError, ValueError):
+        if not _reusable_offline_evidence(store, alpha, body):
             continue
         beta_ref = _reusable_acceptance(
             store=store, candidate_id=candidate_id, environment="beta", profile=profile,
@@ -1034,7 +1076,8 @@ def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str
         )
         beta_slot = store / "environment-execution/acceptance" / candidate_id.removeprefix("sha256:") / "beta.json"
         beta_evidence = store / "environment-evidence" / candidate_id.removeprefix("sha256:") / "beta"
-        if not beta and beta_ref is None and any(slot.exists() or slot.is_symlink() for slot in (beta_slot, beta_evidence)):
+        occupied = any(slot.exists() or slot.is_symlink() for slot in (beta_slot, beta_evidence))
+        if not beta and beta_ref is None and occupied:
             # 不得把 passed/no-live/失效旧事实改称政策跳过，也不覆盖旧证据目录。
             continue
         matches.append({
@@ -1072,126 +1115,25 @@ def _issue(*, environment: str, candidate_ref: Mapping[str, str], impact_plan_di
     return acceptance
 
 
-def _sha256_hex(data: bytes) -> str:
-    return "sha256:" + hashlib.sha256(data).hexdigest()
-
-
-def _bundle_path(root: Path, ref: str) -> Path:
-    """exact ref 只允许物理根内 canonical POSIX 整文件，任何 symlink 分量拒绝。"""
-    if not ref or ref == "." or any(char in ref for char in "\x00\n\r\\") or Path(ref).is_absolute() or Path(ref).as_posix() != ref or ".." in Path(ref).parts:
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"unsafe bundle ref: {ref!r}")
-    path = root / ref
-    if any(part.is_symlink() for part in (path, *path.parents)):
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"linked bundle ref: {ref}")
-    return path
-
-
-def _bundle_bytes(root: Path, exact: Mapping[str, str]) -> bytes:
-    if not isinstance(exact, Mapping) or set(exact) != {"ref", "digest"}:
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "bundle exact ref must contain ref and digest")
-    if not isinstance(exact["ref"], str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(exact["digest"])):
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "bundle exact ref has invalid types or digest")
-    path = _bundle_path(root, exact["ref"])
-    if not path.is_file():
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INCOMPLETE", f"bundle file is absent: {exact['ref']}")
-    raw = read_repo_relative_regular_single_link(root, exact["ref"], require_current_name=True)
-    if _sha256_hex(raw) != exact["digest"]:
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"bundle exact bytes drifted: {exact['ref']}")
-    return raw
-
-
-def _bundle_put(root: Path, ref: str, raw: bytes) -> bool:
-    """先 fsync 私有临时文件，再 link 原子 create-once；竞争失败只接受 exact-byte replay。"""
-    path = _bundle_path(root, ref)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, name = tempfile.mkstemp(prefix=".bundle-", dir=path.parent)
-    temporary = Path(name)
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(raw)
-            handle.flush()
-            os.fsync(handle.fileno())
-        _bundle_path(root, ref)
-        try:
-            os.link(temporary, path)
-            return True
-        except FileExistsError:
-            _bundle_path(root, ref)
-            if not path.is_file() or path.read_bytes() != raw:
-                raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"create-once slot differs: {ref}")
-            return False
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def _read_store_object(store: Path, exact: Mapping[str, str], label: str) -> dict[str, Any]:
-    try:
-        payload = json.loads(_bundle_bytes(store, exact))
-    except (UnicodeError, json.JSONDecodeError) as exc:
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"{label} is not JSON") from exc
-    if not isinstance(payload, dict):
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"{label} is not an object")
-    return payload
-
-
-def _source_receipt(source: Mapping[str, Any]) -> tuple[dict[str, str], str]:
-    exact = source.get("receipt")
-    if not isinstance(exact, Mapping) or not str(exact.get("ref", "")).startswith(".qwq_output/env/repo/"):
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "source receipt must be an exact repo output ref")
-    return dict(exact), str(exact["ref"]).removeprefix(".qwq_output/")
-
-
-def _fact_evidence_refs(fact: Mapping[str, Any]) -> list[dict[str, str]]:
-    """EAF 的全部 store 内 exact 引用：caseResultRefs + 八类 named evidence（predecessor 单独打包）。"""
-    refs: list[dict[str, str]] = [dict(item) for item in (fact.get("caseResultRefs") or [])]
-    for field in _EAF_NAMED_FIELDS:
-        value = fact.get(field)
-        if not isinstance(value, Mapping):
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"acceptance fact lacks {field}")
-        refs.append(dict(value))
-    return refs
-
-
-def _report_fact_refs(*, store: Path, fact: Mapping[str, Any]) -> list[dict[str, str]]:
-    """只遍历签名 named evidence 的显式报告引用，不扫描宿主目录或猜测 JSON 字段。"""
-    refs = []
-    for field in _EAF_NAMED_FIELDS:
-        if field not in fact:
-            continue  # required named fields 仍由 canonical EAF validator 校验。
-        source = _read_store_object(store, fact[field], field).get("source", {})
-        if "reportRoot" not in source:
-            continue
-        if source["reportRoot"] != "store":
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "unsupported report root")
-        exact = {"ref": source["reportRef"], "digest": source["reportDigest"]}
-        if not exact["ref"].startswith("runtime-reports/" + exact["digest"].removeprefix("sha256:") + "/"):
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "report slot differs from exact digest")
-        _bundle_bytes(store, exact)
-        refs.append(exact)
-    return refs
-
-
 def _merged_lanes(*, values: Sequence[str], lane_branch: str, commit: str, remote: str) -> list[dict[str, str]]:
     """记录本次验收 candidate 合并了哪些 lane head：每个 lane 解析为 exact commit 且必须是 candidate 的祖先。
 
     这是多工作树合并验收的显式来源记录（用户明确指定），不是自动发现；缺省只记录 lane 自身。
     """
+    from quwoquan_ops.gate.git_branch_policy.policy import load_policy
+    allowed = load_policy(POLICY.with_name("branch_policy.yaml")).allowed_local
     entries: list[dict[str, str]] = []
     seen: set[str] = set()
     for raw in [lane_branch, *values]:
         name = str(raw or "").strip().removeprefix("refs/heads/")
-        if not name.startswith("lane/"):
-            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"--merged-lanes expects lane/<name> (got {name or '-'})")
+        if not name.startswith("lane/") or name not in allowed:
+            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"--merged-lanes expects a declared local lane (got {name or '-'})")
         if name in seen:
             continue
-        resolved = ""
-        for ref in (f"refs/heads/{name}", f"refs/remotes/{remote}/{name}"):
-            probe = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], cwd=ROOT, text=True, capture_output=True, check=False)
-            if probe.returncode == 0 and probe.stdout.strip():
-                resolved = probe.stdout.strip()
-                break
+        probe = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{name}^{{commit}}"], cwd=ROOT, text=True, capture_output=True, check=False)
+        resolved = probe.stdout.strip() if probe.returncode == 0 else ""
         if not resolved:
-            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"--merged-lanes {name} does not resolve to a local or {remote} lane head")
+            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"--merged-lanes {name} does not resolve to a declared local lane head")
         if subprocess.run(["git", "merge-base", "--is-ancestor", resolved, commit], cwd=ROOT, check=False).returncode != 0:
             raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"--merged-lanes {name}@{resolved[:12]} is not an ancestor of the candidate")
         seen.add(name)
@@ -1270,30 +1212,8 @@ def _write_acceptance_bundle(*, run_dir: Path, candidate_ref: Mapping[str, str],
     return bundle_dir
 
 
-def _load_bundle_manifest(bundle_dir: Path) -> dict[str, Any]:
-    manifest_path = _bundle_path(bundle_dir, BUNDLE_MANIFEST)
-    if not bundle_dir.is_dir() or not manifest_path.is_file():
-        raise IntegrationRunError(
-            "INTEGRATION_RUN.ACCEPTANCE_REQUIRED",
-            f"integrate consumes a lane acceptance bundle; {manifest_path} is missing (run make accept in the lane worktree first)",
-        )
-    try:
-        manifest = json.loads(manifest_path.read_bytes())
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"bundle manifest is not JSON: {exc}") from exc
-    if not isinstance(manifest, dict) or manifest.get("schema") != ACCEPTANCE_BUNDLE_SCHEMA:
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"bundle manifest schema must be {ACCEPTANCE_BUNDLE_SCHEMA}")
-    material = {key: value for key, value in manifest.items() if key != "bundleId"}
-    if manifest.get("bundleId") != _sha256_hex(_canonical_bytes(material)):
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", "bundle manifest bytes do not match bundleId")
-    for key in ("candidateId", "commit", "tree", "expectedParent", "candidate", "claim", "sourceFact", "alphaFact", "betaFact", "storeFiles", "signerIdentity", "sourceReceipt", "impactPlan", "beta", "profile"):
-        if key not in manifest:
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"bundle manifest lacks {key}")
-    return manifest
-
-
 def _import_acceptance_bundle(*, bundle_dir: Path, commit: str, tree: str, parent: str, args: argparse.Namespace,
-                              keyring: Any) -> dict[str, Any]:
+                              keyring: Any, validate_only: bool = False) -> dict[str, Any]:
     """integrate 模式唯一的事实来源：逐字节导入 lane bundle 并复核绑定。
 
     - 每个 store 文件按 manifest digest 复核后 create-once 写入本工作树 store；已存在且字节不同即 `BUNDLE_DRIFT`。
@@ -1302,41 +1222,14 @@ def _import_acceptance_bundle(*, bundle_dir: Path, commit: str, tree: str, paren
     - Alpha/Beta EAF 以仓内 keyring 验签、复核全部引用与 candidate 绑定；source fact 必须 passed 且绑定同一 candidateId。
     """
     manifest = _load_bundle_manifest(bundle_dir)
-    if manifest["commit"] != commit or manifest["tree"] != tree:
-        raise IntegrationRunError(
-            "INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH",
-            f"bundle was accepted for {str(manifest['commit'])[:12]} but the integration candidate is {commit[:12]}",
-        )
-    if manifest["expectedParent"] != parent:
-        raise IntegrationRunError(
-            "INTEGRATION_RUN.BUNDLE_STALE",
-            f"bundle expectedParent {str(manifest['expectedParent'])[:12]} != remote dev1.0 {parent[:12]}; "
-            "dev1.0 moved since acceptance, re-run make accept on a head that includes the current dev1.0",
-        )
-    # 先在 bundle 内验证完整闭包，不让目标 store 的残留文件补齐不完整输入。
+    validate_bundle_identity(manifest, commit=commit, tree=tree, parent=parent)
     store = bundle_dir / BUNDLE_STORE_DIR
-    if not isinstance(manifest["storeFiles"], list) or not isinstance(manifest["impactPlan"], dict):
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "invalid storeFiles or impactPlan")
-    files: dict[str, bytes] = {}
-    for exact in manifest["storeFiles"]:
-        raw = _bundle_bytes(store, exact)
-        if exact["ref"] in files:
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "duplicate storeFiles ref")
-        files[exact["ref"]] = raw
-    _bundle_bytes(bundle_dir, {"ref": "impact-plan.json", "digest": manifest["impactPlan"].get("fileSha256")})
+    files = read_bundle_files(bundle_dir, manifest)
     candidate = _read_store_object(store, manifest["candidate"], "candidate")
-    if (
-        candidate.get("candidateId") != manifest["candidateId"] or candidate.get("commit") != commit
-        or candidate.get("tree") != tree or candidate.get("expectedParent") != parent
-        or candidate.get("claimRef") != manifest["claim"].get("ref") or candidate.get("claimDigest") != manifest["claim"].get("digest")
-    ):
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "imported candidate does not bind the bundle identity")
+    validate_manifest_candidate(manifest, candidate)
     _read_store_object(store, manifest["claim"], "claim")
     source_fact = _read_store_object(store, manifest["sourceFact"], "sourceFact")
-    if (source_fact.get("status") != "passed" or source_fact.get("candidateId") != candidate["candidateId"]
-            or source_fact.get("commit") != commit or source_fact.get("tree") != tree
-            or source_fact.get("candidate") != manifest["candidate"]):
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "imported source fact is not passed for this candidate")
+    validate_manifest_source(manifest, source_fact)
     receipt, output_ref = _source_receipt(source_fact)
     if receipt != manifest["sourceReceipt"]:
         raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", "source receipt differs from manifest")
@@ -1358,20 +1251,18 @@ def _import_acceptance_bundle(*, bundle_dir: Path, commit: str, tree: str, paren
         required.extend(_fact_evidence_refs(validated))
         required.extend(_report_fact_refs(store=store, fact=validated))
         required.extend(_offline_fact_refs(store=store, fact=validated, candidate=candidate))
-        if (validated.get("profile") != manifest["profile"] or validated.get("nonPromotable") is not False
-                or validated.get("impactPlanDigest") != manifest["impactPlan"].get("digest")
-                or candidate.get("impactPlanDigest") != manifest["impactPlan"].get("digest")
-                or (environment == "alpha" and validated.get("status") != "passed")
-                or (environment == "beta" and (validated.get("predecessor") != manifest["alphaFact"] or manifest["beta"] != {
-                    "status": validated.get("status"), "executed": validated.get("status") == "passed",
-                    "reasonCode": validated.get("reasonCode")}))):
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", f"{environment} signed fact differs from manifest")
-        binding = validated.get("candidate") or {}
-        if validated.get("environment") != environment or binding.get("candidateId") != candidate["candidateId"] \
-                or binding.get("commit") != commit or binding.get("tree") != tree:
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", f"{environment} fact does not bind the imported candidate")
+        validate_manifest_fact(manifest, validated, environment)
+    if candidate.get("impactPlanDigest") != manifest["impactPlan"].get("digest"):
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "candidate ImpactPlan drifted")
     if {item["ref"]: item["digest"] for item in required} != {ref: _sha256_hex(raw) for ref, raw in files.items()}:
         raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INCOMPLETE", "storeFiles is not the exact evidence closure")
+    if validate_only:
+        # 完整可验证 admission 条件与最终签发同轨；receipt 只从 bundle 闭包读取。
+        from quwoquan_ops.ci.scoped_candidate.core import validate_publish_inputs
+        validate_publish_inputs(repository=ROOT, store_root=store, candidate_ref=manifest["candidate"],
+            source_fact_refs=[manifest["sourceFact"]], alpha_fact_ref=manifest["alphaFact"], beta_fact_ref=manifest["betaFact"],
+            expected_remote_oid=parent, receipt_root=bundle_dir / "repository")
+        return {"manifest": manifest, "candidate": candidate, "importedFiles": 0, "storeFiles": len(files)}
     destination = _store()
     imported = sum(_bundle_put(destination, ref, raw) for ref, raw in files.items())
     _bundle_put(OUTPUT_ROOT, output_ref, receipt_raw)
@@ -1386,8 +1277,7 @@ def _parser() -> argparse.ArgumentParser:
                         help="integrate=integration 工作区消费 acceptance bundle 并 admit/publish；"
                              "acceptance=lane 工作树跑 readiness + Alpha（--beta 时含 Beta）并签发事实与 bundle")
     parser.add_argument("--baseline", default="",
-                        help="acceptance 专用：ImpactPlan/readiness 的 exact parent commit；缺省取远端 dev1.0 head，"
-                             "candidate 已等于远端 dev1.0 时必须显式给出上一个已验收基线")
+                        help="acceptance 专用：显式确认 exact parent；必须等于当前远端 dev1.0 head，不接受历史基线发布")
     parser.add_argument("--beta", action="store_true",
                         help="acceptance 专用：显式 opt-in 真跑 Beta；缺省不按集成深度分流，"
                              "以 typed not_required(reason=ACCEPTANCE.BETA_OPTIONAL_BY_POLICY) 闭合")
@@ -1395,13 +1285,15 @@ def _parser() -> argparse.ArgumentParser:
                         help="acceptance 专用：candidate 显式合并的其他 lane（lane/<name>，可重复）；每个都必须是 candidate 的祖先")
     parser.add_argument("--acceptance-bundle", type=Path, default=None,
                         help="integrate 专用：lane `make accept` 产出的 acceptance-bundle 目录；缺失即 INTEGRATION_RUN.ACCEPTANCE_REQUIRED")
+    parser.add_argument("--validate-bundle-only", action="store_true",
+                        help="integrate：本地 FF 前校验 exact bundle/candidate/远端 parent，仅输出 bundle_validated；不导入、不 admit/publish")
     parser.add_argument("--remote", default="origin")
     parser.add_argument("--owner-identity", default="", help="PRE owner identity manifest ref（make feature-context 输出）")
     parser.add_argument("--candidate-evidence", default="")
     parser.add_argument("--review-consolidation", default="")
     parser.add_argument("--required-evidence", action="append", default=[])
-    parser.add_argument("--readiness-level", choices=("fast", "scope"), default="fast",
-                        help="fast=exact delta 静态+聚焦（deferred 允许，L2 在 Gamma 前补齐）；scope 需 Review consolidation 输入")
+    parser.add_argument("--readiness-level", choices=("fast", "scope"), default="scope",
+                        help="可发布验收只接受默认 scope，要求 Review consolidation 与 required evidence；fast 明确拒绝")
     parser.add_argument("--release-attestation", type=Path, default=None,
                         help="acceptance 必填：candidate production Data release attestation（stackctl package 候选绑定）")
     parser.add_argument("--rollback-release-attestation", type=Path, default=None,
@@ -1426,6 +1318,153 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _prepare_signing(args: argparse.Namespace, summary: dict[str, Any]) -> tuple[Any, Any]:
+    validate_mode_inputs(args)
+    if args.validate_bundle_only:
+        from quwoquan_ops.ci.scoped_candidate.core import validate_integration_publish_origin
+        validate_integration_publish_origin(ROOT, args.remote)
+    try:
+        keyring = load_keyring(args.signing_keyring)
+    except EvidenceSigningError as exc:
+        raise IntegrationRunError("INTEGRATION_RUN.SIGNER_UNAVAILABLE", exc.detail) from exc
+    if args.mode == "integrate":
+        return keyring, None
+    try:
+        signer = ed25519_signer(args.signer_identity, root=key_root(), keyring=keyring)
+    except EvidenceSigningError as exc:
+        code = "INTEGRATION_RUN.SIGNER_UNREGISTERED" if exc.code == "EVIDENCE_SIGNING.SIGNER_UNREGISTERED" else "INTEGRATION_RUN.SIGNER_UNAVAILABLE"
+        raise IntegrationRunError(code, exc.detail) from exc
+    for label, path in (("release", args.release_attestation), ("rollback", args.rollback_release_attestation)):
+        if path is None or not path.is_file():
+            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{label} attestation is required in acceptance mode and must be a file: {path}")
+    release_ids = {_release_id(args.release_attestation), _release_id(args.rollback_release_attestation)}
+    if len(release_ids) != 2:
+        raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "release and rollback attestations must name two different releases")
+    summary["dataReleases"] = sorted(release_ids)
+    summary["dataReleaseHandoffRef"] = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
+    return keyring, signer
+
+
+def _integrate_bundle(args: argparse.Namespace, *, identity: Mapping[str, str], phases: Phases,
+                      summary: dict[str, Any], keyring: Any) -> None:
+    imported = phases.run("validate-bundle" if args.validate_bundle_only else "import-bundle", lambda: _import_acceptance_bundle(
+        bundle_dir=args.acceptance_bundle, commit=identity["commit"], tree=identity["tree"], parent=identity["parent"],
+        args=args, keyring=keyring, validate_only=args.validate_bundle_only,
+    ))
+    manifest = imported["manifest"]
+    if args.validate_bundle_only:
+        if _git("ls-remote", args.remote, DEV_REF).split()[0] != identity["parent"]:
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_STALE", "remote dev1.0 changed during prevalidation")
+        summary["acceptanceBundle"] = {"path": str(args.acceptance_bundle), "bundleId": manifest["bundleId"],
+                                        "storeFiles": imported["storeFiles"], "importedFiles": 0}
+        summary["terminal"] = "bundle_validated"
+        return
+    record_imported_bundle(summary, imported, bundle_dir=args.acceptance_bundle)
+    admission_path = phases.run("admit", lambda: create_publish_admission(
+        repository=ROOT, policy_path=POLICY, candidate_ref=manifest["candidate"], source_fact_refs=[manifest["sourceFact"]],
+        alpha_fact_ref=manifest["alphaFact"], beta_fact_ref=manifest["betaFact"], expected_remote_oid=identity["parent"],
+    ))
+    summary["admission"] = store_ref(repository=ROOT, policy_path=POLICY, path=admission_path)
+    summary["terminal"] = "admitted"
+    if args.publish:
+        result_path = phases.run("publish", lambda: local_git_cas_publish(
+            repository=ROOT, policy_path=POLICY, admission_ref=admission_path, remote=args.remote,
+        ))
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        summary["publish"] = {**store_ref(repository=ROOT, policy_path=POLICY, path=result_path),
+                              "beforeOid": result["beforeOid"], "afterOid": result["afterOid"], "readbackOid": result["readbackOid"]}
+        summary["terminal"] = "published"
+
+
+def _accept_alpha(*, args: argparse.Namespace, candidate_ref: Mapping[str, str], candidate: Mapping[str, Any],
+                  plan: Mapping[str, Any], reusable: Mapping[str, Any] | None, phases: Phases,
+                  run_dir: Path, summary: dict[str, Any], signer: Any) -> tuple[dict[str, str], dict[str, Any] | None]:
+    if reusable is not None:
+        alpha_ref = reusable["alpha"]
+        summary["reused"]["alpha"] = True
+        summary["environments"]["alpha"] = {"environment": "alpha", "executed": False, "reused": True, "acceptance": alpha_ref}
+        phases.run("alpha.reuse", lambda: alpha_ref)
+        return alpha_ref, None
+    offline_pages = None
+    if "app" in plan["scopes"]:
+        offline_pages = phases.run("alpha.offline-pages", lambda: _alpha_offline_pages(
+            candidate=candidate, candidate_ref=candidate_ref, args=args, run_dir=run_dir, phases=phases,
+        ))
+    evidence = _run_environment(environment="alpha", profile=args.profile, candidate=candidate,
+                                impact_plan_digest=plan["plan_digest"], args=args, run_dir=run_dir, phases=phases, summary=summary,
+                                scopes=tuple(str(scope) for scope in plan["scopes"]), offline_pages=offline_pages)
+    alpha_ref = phases.run("alpha.issue", lambda: _issue(
+        environment="alpha", candidate_ref=candidate_ref, impact_plan_digest=plan["plan_digest"], evidence=evidence,
+        status="passed", predecessor=None, profile=args.profile, args=args, signer=signer,
+    ))
+    summary["environments"]["alpha"]["acceptance"] = alpha_ref
+    return alpha_ref, evidence
+
+
+def _accept_beta(*, args: argparse.Namespace, candidate_ref: Mapping[str, str], candidate: Mapping[str, Any],
+                 plan_path: Path, alpha_ref: Mapping[str, str], alpha_evidence: Mapping[str, Any] | None,
+                 reusable: Mapping[str, Any] | None, phases: Phases, run_dir: Path,
+                 summary: dict[str, Any], signer: Any) -> dict[str, str]:
+    impact_digest = summary["impactPlan"]["digest"]
+    depth = summary["impactPlan"]["integrationDepth"]
+    reason = None if args.beta else BETA_OPTIONAL_BY_POLICY
+    if reusable is not None and reusable["beta"] is not None:
+        beta_ref = reusable["beta"]
+        summary["reused"]["beta"] = True
+        summary["environments"]["beta"] = {"environment": "beta", "executed": False, "reused": True,
+                                             "acceptance": beta_ref, "reasonCode": reason, "integrationDepth": depth}
+        phases.run("beta.reuse", lambda: beta_ref)
+        return beta_ref
+    if args.beta:
+        if alpha_evidence is None:
+            raise IntegrationRunError("INTEGRATION_RUN.BETA_REUSE_UNAVAILABLE", "Alpha reused without recoverable exact Beta predecessor; rerun acceptance without --reuse")
+        evidence = _run_environment(environment="beta", profile=args.profile, candidate=candidate,
+                                    impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary,
+                                    previous_readiness=alpha_evidence["readiness"])
+    else:
+        evidence = _not_required_beta(candidate=candidate, impact_plan_digest=impact_digest, impact_plan_path=plan_path,
+                                     profile=args.profile, reason_code=reason)
+        summary["environments"]["beta"] = {"environment": "beta", "executed": False, "reasonCode": reason, "integrationDepth": depth}
+    beta_ref = phases.run("beta.issue", lambda: _issue(
+        environment="beta", candidate_ref=candidate_ref, impact_plan_digest=impact_digest, evidence=evidence,
+        status="passed" if args.beta else "not_required", predecessor=alpha_ref, profile=args.profile, args=args, signer=signer,
+    ))
+    summary["environments"]["beta"]["acceptance"] = beta_ref
+    return beta_ref
+
+
+def _select_candidate(*, args: argparse.Namespace, identity: Mapping[str, str], impact_digest: str,
+                      keyring: Any, phases: Phases, summary: dict[str, Any]) -> tuple[dict[str, str], dict[str, Any], dict[str, Any] | None, Path | None]:
+    reusable = None
+    if args.reuse:
+        reusable = phases.run("reuse-lookup", lambda: _find_reusable_candidate(
+            store=_store(), commit=identity["commit"], tree=identity["tree"], parent=identity["parent"],
+            impact_plan_digest=impact_digest, profile=args.profile, beta=args.beta,
+            signature_verifier=ed25519_environment_verifier(keyring, [args.signer_identity]),
+            expected_signer_identity=args.signer_identity, owner_identity=args.owner_identity,
+            release_inputs=_acceptance_release_inputs(args),
+        ))
+    if args.candidate_ref:
+        ref, candidate = _existing_candidate(exact=args.candidate_ref, identity=identity,
+            impact_plan_digest=impact_digest, owner_identity=args.owner_identity)
+        if reusable is not None and reusable["candidateRef"] != ref:
+            reusable = None
+        summary["reused"]["candidate"] = True
+        return ref, candidate, reusable, None
+    if reusable is not None:
+        summary["reused"]["candidate"] = True
+        return reusable["candidateRef"], reusable["candidate"], reusable, None
+    expires = (datetime.now(timezone.utc) + timedelta(hours=args.fact_ttl_hours)).isoformat().replace("+00:00", "Z")
+    path = phases.run("build-head", lambda: build_head_candidate(
+        repository=ROOT, policy_path=POLICY, commit=identity["commit"], expected_parent=identity["parent"],
+        owner_identity_ref=args.owner_identity or f"integration-run:{summary['runId']}", impact_plan_digest=impact_digest,
+        writer_id=args.writer, expires_at=expires,
+    ))
+    ref = store_ref(repository=ROOT, policy_path=POLICY, path=path)
+    candidate = json.loads(path.read_text(encoding="utf-8"))
+    return ref, candidate, None, _store() / candidate["claimRef"]
+
+
 def main(argv: list[str] | None = None) -> int:
     started_monotonic = time.monotonic()
     args = _parser().parse_args(argv)
@@ -1437,122 +1476,16 @@ def main(argv: list[str] | None = None) -> int:
         "schema": "quwoquan_ops.integration_run_summary.v1", "runId": run_id, "startedAt": _now(),
         "terminal": "running", "environments": {}, "phases": phases.items,
     }
-    detached = False
-    original_branch = None
     claim_path: Path | None = None
     try:
         summary["mode"] = args.mode
-        try:
-            keyring = load_keyring(args.signing_keyring)
-        except EvidenceSigningError as exc:
-            raise IntegrationRunError("INTEGRATION_RUN.SIGNER_UNAVAILABLE", exc.detail) from exc
-        if args.mode == "integrate":
-            # integrate 只消费 lane 事实：不签发、不跑环境，因此不需要私钥与 Data release 输入。
-            for flag, value in (("--baseline", args.baseline), ("--beta", args.beta), ("--reuse", args.reuse), ("--merged-lanes", args.merged_lanes),
-                                ("--candidate-ref", args.candidate_ref), ("--android-device-id", args.android_device_id), ("--ios-device-id", args.ios_device_id),
-                                ("--release-attestation", args.release_attestation),
-                                ("--rollback-release-attestation", args.rollback_release_attestation),
-                                ("--release-handoff-ref", args.release_handoff_ref)):
-                if value:
-                    raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{flag} is acceptance-only; integrate consumes --acceptance-bundle")
-            if args.acceptance_bundle is None:
-                raise IntegrationRunError(
-                    "INTEGRATION_RUN.ACCEPTANCE_REQUIRED",
-                    "integrate requires --acceptance-bundle produced by make accept in the lane worktree; no environment runs here",
-                )
-            signer = None
-        else:
-            if args.publish:
-                raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "acceptance mode issues environment facts only; publish belongs to the integration worktree")
-            if args.acceptance_bundle is not None:
-                raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "--acceptance-bundle is integrate-only; acceptance produces the bundle")
-            try:
-                signer = ed25519_signer(args.signer_identity, root=key_root(), keyring=keyring)
-            except EvidenceSigningError as exc:
-                raise IntegrationRunError(
-                    "INTEGRATION_RUN.SIGNER_UNREGISTERED" if exc.code == "EVIDENCE_SIGNING.SIGNER_UNREGISTERED" else "INTEGRATION_RUN.SIGNER_UNAVAILABLE",
-                    exc.detail,
-                ) from exc
-            for label, path in (("release", args.release_attestation), ("rollback", args.rollback_release_attestation)):
-                if path is None or not path.is_file():
-                    raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{label} attestation is required in acceptance mode and must be a file: {path}")
-            release_ids = {_release_id(args.release_attestation), _release_id(args.rollback_release_attestation)}
-            if len(release_ids) != 2:
-                raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "release and rollback attestations must name two different releases")
-            summary["dataReleases"] = sorted(release_ids)
-            summary["dataReleaseHandoffRef"] = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
+        keyring, signer = _prepare_signing(args, summary)
 
-        def preflight() -> dict[str, str]:
-            if _git("status", "--porcelain", "--untracked-files=no"):
-                raise IntegrationRunError("INTEGRATION_RUN.DIRTY_WORKTREE", "worktree must be clean")
-            commit = _git("rev-parse", f"{args.candidate}^{{commit}}")
-            remote_head = _git("ls-remote", args.remote, DEV_REF).split()[0]
-            if args.mode == "acceptance":
-                # lane 工作树只签发环境事实：parent 是显式基线（或远端 dev1.0），不要求 candidate 领先远端。
-                parent = _git("rev-parse", f"{args.baseline}^{{commit}}") if args.baseline else remote_head
-                if commit == parent:
-                    raise IntegrationRunError(
-                        "INTEGRATION_RUN.NOTHING_TO_ACCEPT",
-                        "candidate equals its baseline; pass --baseline <previous accepted commit> to accept an already-landed head",
-                    )
-                if subprocess.run(["git", "merge-base", "--is-ancestor", parent, commit], cwd=ROOT, check=False).returncode != 0:
-                    raise IntegrationRunError("INTEGRATION_RUN.NOT_FAST_FORWARD", "baseline is not an ancestor of the candidate")
-                return {"commit": commit, "parent": parent, "remoteHead": remote_head, "tree": _git("show", "-s", "--format=%T", commit)}
-            parent = remote_head
-            if commit == parent:
-                raise IntegrationRunError("INTEGRATION_RUN.NOTHING_TO_INTEGRATE", "candidate equals remote dev1.0 head")
-            if subprocess.run(["git", "merge-base", "--is-ancestor", parent, commit], cwd=ROOT, check=False).returncode != 0:
-                raise IntegrationRunError("INTEGRATION_RUN.NOT_FAST_FORWARD", "remote dev1.0 is not an ancestor of the candidate")
-            # publish 在 dev1.0 分支上 ff 到 candidate；要求 HEAD 已是 candidate，避免导入后再移动本地分支。
-            if _git("symbolic-ref", "--quiet", "HEAD") != DEV_REF or _git("rev-parse", "HEAD") != commit:
-                raise IntegrationRunError(
-                    "INTEGRATION_RUN.INTEGRATION_IDENTITY_INVALID",
-                    "integrate must run on refs/heads/dev1.0 with HEAD == candidate (git merge --ff-only <lane head> first)",
-                )
-            return {"commit": commit, "parent": parent, "remoteHead": remote_head, "tree": _git("show", "-s", "--format=%T", commit)}
-
-        identity = phases.run("preflight", preflight)
+        identity = phases.run("preflight", lambda: preflight_identity(args, git=_git, is_ancestor=_is_ancestor))
         summary["candidate"] = identity
 
         if args.mode == "integrate":
-            imported = phases.run("import-bundle", lambda: _import_acceptance_bundle(
-                bundle_dir=args.acceptance_bundle, commit=identity["commit"], tree=identity["tree"], parent=identity["parent"],
-                args=args, keyring=keyring,
-            ))
-            manifest = imported["manifest"]
-            candidate = imported["candidate"]
-            # 导入的 claim 属于 lane；integration 不释放未取得的 ownership。
-            summary["candidate"].update({"candidateId": candidate["candidateId"], "candidateRef": dict(manifest["candidate"]), "claimRef": candidate["claimRef"]})
-            summary["acceptanceBundle"] = {
-                "path": str(args.acceptance_bundle), "bundleId": manifest["bundleId"], "runId": manifest.get("runId"),
-                "laneBranch": manifest.get("laneBranch"), "mergedLanes": manifest.get("mergedLanes"),
-                "baseline": manifest.get("baseline"), "beta": manifest.get("beta"),
-                "importedFiles": imported["importedFiles"], "storeFiles": imported["storeFiles"],
-            }
-            summary["impactPlan"] = dict(manifest.get("impactPlan") or {})
-            summary["dataReleases"] = manifest.get("dataReleases")
-            summary["dataReleaseHandoffRef"] = manifest.get("dataReleaseHandoffRef")
-            summary["sourceFact"] = dict(manifest["sourceFact"])
-            summary["environments"] = {
-                "alpha": {"environment": "alpha", "executed": True, "imported": True, "acceptance": dict(manifest["alphaFact"])},
-                "beta": {"environment": "beta", "executed": bool((manifest.get("beta") or {}).get("executed")), "imported": True,
-                         "reasonCode": (manifest.get("beta") or {}).get("reasonCode"), "acceptance": dict(manifest["betaFact"])},
-            }
-            admission_path = phases.run("admit", lambda: create_publish_admission(
-                repository=ROOT, policy_path=POLICY, candidate_ref=manifest["candidate"], source_fact_refs=[manifest["sourceFact"]],
-                alpha_fact_ref=manifest["alphaFact"], beta_fact_ref=manifest["betaFact"], expected_remote_oid=identity["parent"],
-            ))
-            summary["admission"] = store_ref(repository=ROOT, policy_path=POLICY, path=admission_path)
-            if args.publish:
-                result_path = phases.run("publish", lambda: local_git_cas_publish(
-                    repository=ROOT, policy_path=POLICY, admission_ref=admission_path, remote=args.remote,
-                ))
-                result = json.loads(result_path.read_text(encoding="utf-8"))
-                summary["publish"] = {**store_ref(repository=ROOT, policy_path=POLICY, path=result_path),
-                                      "beforeOid": result["beforeOid"], "afterOid": result["afterOid"], "readbackOid": result["readbackOid"]}
-                summary["terminal"] = "published"
-            else:
-                summary["terminal"] = "admitted"
+            _integrate_bundle(args, identity=identity, phases=phases, summary=summary, keyring=keyring)
             return 0
 
         lane_branch = _readiness_local_ref(args=args, commit=identity["commit"])
@@ -1564,9 +1497,9 @@ def main(argv: list[str] | None = None) -> int:
         impact_digest = str(plan["plan_digest"])
         summary["impactPlan"] = {"digest": impact_digest, "integrationDepth": depth, "ref": _output_ref(plan_path), "scopes": plan["scopes"]}
         if depth == "no_live":
-            summary["terminal"] = "no_live"
-            summary["note"] = "ImpactPlan 判定无 runtime 影响；不产生环境事实，也不发布。"
-            return 0
+            # ImpactPlan 保留真实分类；可发布验收仍走既有最小 smoke profile，绝不伪造 EAF。
+            args.profile = "smoke"
+            summary["note"] = "无 runtime 增量仍须真实 Alpha smoke；Beta 仅显式 opt-in。"
 
         receipt_path, receipt = phases.run(f"readiness-{args.readiness_level}", lambda: _local_readiness(
             level=args.readiness_level, parent=identity["parent"], commit=identity["commit"], run_dir=run_dir, args=args,
@@ -1575,37 +1508,8 @@ def main(argv: list[str] | None = None) -> int:
         summary["reused"] = reused
         summary["readiness"] = {"level": args.readiness_level, "receiptRef": _output_ref(receipt_path), "deferred": len(receipt.get("plan", {}).get("deferred", [])), "reused": reused["readiness"]}
 
-        expires = (datetime.now(timezone.utc) + timedelta(hours=args.fact_ttl_hours)).isoformat().replace("+00:00", "Z")
-        reusable = None
-        if args.reuse:
-            reusable = phases.run("reuse-lookup", lambda: _find_reusable_candidate(
-                store=_store(), commit=identity["commit"], tree=identity["tree"], parent=identity["parent"],
-                impact_plan_digest=impact_digest, profile=args.profile, beta=args.beta,
-                signature_verifier=ed25519_environment_verifier(keyring, [args.signer_identity]),
-                expected_signer_identity=args.signer_identity,
-                release_inputs=_acceptance_release_inputs(args),
-            ))
-        if args.candidate_ref:
-            candidate_ref, candidate = _existing_candidate(exact=args.candidate_ref, identity=identity,
-                                                           impact_plan_digest=impact_digest, owner_identity=args.owner_identity)
-            if reusable is not None and reusable["candidateRef"] != candidate_ref:
-                reusable = None
-            reused["candidate"] = True
-        elif reusable is not None:
-            # 复用既有 exact candidate：不再 build/claim；Alpha（及政策匹配的 Beta）事实进入 lane bundle。
-            candidate_path = reusable["candidatePath"]
-            candidate_ref = reusable["candidateRef"]
-            candidate = reusable["candidate"]
-            reused["candidate"] = True
-        else:
-            candidate_path = phases.run("build-head", lambda: build_head_candidate(
-                repository=ROOT, policy_path=POLICY, commit=identity["commit"], expected_parent=identity["parent"],
-                owner_identity_ref=args.owner_identity or f"integration-run:{run_id}", impact_plan_digest=impact_digest,
-                writer_id=args.writer, expires_at=expires,
-            ))
-            candidate_ref = store_ref(repository=ROOT, policy_path=POLICY, path=candidate_path)
-            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
-            claim_path = _store() / candidate["claimRef"]
+        candidate_ref, candidate, reusable, claim_path = _select_candidate(args=args, identity=identity,
+            impact_digest=impact_digest, keyring=keyring, phases=phases, summary=summary)
         candidate_identity = {"candidateId": candidate["candidateId"], "commit": candidate["commit"], "tree": candidate["tree"]}
         summary["candidate"].update({"candidateId": candidate["candidateId"], "candidateRef": candidate_ref, "claimRef": candidate["claimRef"], "reused": reused["candidate"]})
 
@@ -1616,68 +1520,16 @@ def main(argv: list[str] | None = None) -> int:
         source_ref = store_ref(repository=ROOT, policy_path=POLICY, path=source_path)
         summary["sourceFact"] = source_ref
 
-        head = _git("rev-parse", "HEAD")
-        if head != identity["commit"]:
-            original_branch = _git("symbolic-ref", "--quiet", "HEAD")
-            _git("checkout", "--quiet", "--detach", identity["commit"])
-            detached = True
+        if _git("rev-parse", "HEAD") != identity["commit"]:
+            raise IntegrationRunError("INTEGRATION_RUN.LANE_IDENTITY_INVALID", "lane HEAD moved after readiness; reaccept the new exact candidate")
 
-        alpha_evidence: dict[str, Any] | None = None
-        if reusable is not None:
-            alpha_ref = reusable["alpha"]
-            reused["alpha"] = True
-            summary["environments"]["alpha"] = {"environment": "alpha", "executed": False, "reused": True, "acceptance": alpha_ref}
-            phases.run("alpha.reuse", lambda: alpha_ref)
-        else:
-            offline_pages = None
-            if "app" in plan["scopes"]:
-                offline_pages = phases.run("alpha.offline-pages", lambda: _alpha_offline_pages(
-                    candidate=candidate_identity, candidate_ref=candidate_ref, args=args, run_dir=run_dir, phases=phases,
-                ))
-            alpha_evidence = _run_environment(environment="alpha", profile=args.profile, candidate=candidate_identity,
-                                              impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary,
-                                              scopes=tuple(str(scope) for scope in plan["scopes"]), offline_pages=offline_pages)
-            alpha_ref = phases.run("alpha.issue", lambda: _issue(
-                environment="alpha", candidate_ref=candidate_ref, impact_plan_digest=impact_digest, evidence=alpha_evidence,
-                status="passed", predecessor=None, profile=args.profile, args=args, signer=signer,
-            ))
-            summary["environments"]["alpha"]["acceptance"] = alpha_ref
-
-        # Beta 只由本次显式 opt-in 决定；复用查找也必须匹配同一状态、原因码与 Alpha 前驱。
+        alpha_ref, alpha_evidence = _accept_alpha(args=args, candidate_ref=candidate_ref, candidate=candidate_identity,
+            plan=plan, reusable=reusable, phases=phases, run_dir=run_dir, summary=summary, signer=signer)
+        beta_ref = _accept_beta(args=args, candidate_ref=candidate_ref, candidate=candidate_identity,
+            plan_path=plan_path, alpha_ref=alpha_ref, alpha_evidence=alpha_evidence, reusable=reusable,
+            phases=phases, run_dir=run_dir, summary=summary, signer=signer)
         beta_status = "passed" if args.beta else "not_required"
         beta_reason = None if args.beta else BETA_OPTIONAL_BY_POLICY
-        if reusable is not None and reusable["beta"] is not None:
-            beta_ref = reusable["beta"]
-            reused["beta"] = True
-            summary["environments"]["beta"] = {
-                "environment": "beta", "executed": False, "reused": True, "acceptance": beta_ref,
-                "reasonCode": beta_reason, "integrationDepth": depth,
-            }
-            phases.run("beta.reuse", lambda: beta_ref)
-        else:
-            if args.beta:
-                if alpha_evidence is None:
-                    raise IntegrationRunError(
-                        "INTEGRATION_RUN.BETA_REUSE_UNAVAILABLE",
-                        "--beta 复用了 Alpha 事实但没有可复用的 passed Beta；Alpha EAF 不携带可恢复的 exact release readiness，"
-                        "请不带 --reuse 重跑，不从环境摘要或旧路径补造前驱回执",
-                    )
-                beta_evidence = _run_environment(environment="beta", profile=args.profile, candidate=candidate_identity,
-                                                 impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary,
-                                                 previous_readiness=alpha_evidence["readiness"])
-            else:
-                beta_evidence = _not_required_beta(candidate=candidate_identity, impact_plan_digest=impact_digest, impact_plan_path=plan_path,
-                                                   profile=args.profile, reason_code=beta_reason)
-                summary["environments"]["beta"] = {"environment": "beta", "executed": False, "reasonCode": beta_reason, "integrationDepth": depth}
-            beta_ref = phases.run("beta.issue", lambda: _issue(
-                environment="beta", candidate_ref=candidate_ref, impact_plan_digest=impact_digest, evidence=beta_evidence,
-                status=beta_status, predecessor=alpha_ref, profile=args.profile, args=args, signer=signer,
-            ))
-            summary["environments"]["beta"]["acceptance"] = beta_ref
-
-        if detached:
-            _git("checkout", "--quiet", original_branch.removeprefix("refs/heads/"))
-            detached = False
 
         # 环境事实已 create-once 落盘；admission/publish 只属于 integration 工作区（gamma/prod 亦然）。
         # bundle 把全部 exact 事实按 store 相对路径复制出去，供 integration 逐字节导入。
@@ -1704,8 +1556,6 @@ def main(argv: list[str] | None = None) -> int:
         summary["blocker"] = {"code": "INTEGRATION_RUN.UNEXPECTED", "detail": f"{type(exc).__name__}: {exc}"}
         return 1
     finally:
-        if detached and original_branch:
-            subprocess.run(["git", "checkout", "--quiet", original_branch.removeprefix("refs/heads/")], cwd=ROOT, check=False)
         if claim_path is not None:
             # claim 只保护候选构造期；run 终态后显式释放，避免下一轮同 scope 候选被过期 claim 卡住。
             try:

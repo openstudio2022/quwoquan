@@ -9,6 +9,7 @@ from typing import Any
 from .agent_governance_contract import declared_object, validate_declared_fields
 from .descriptor_safe_io import read_repo_relative_regular_single_link
 from .evidence_fingerprint import normalize_repo_relative_path
+from .review_fingerprint import dependency_root
 
 
 class NamedEvidenceArtifactError(ValueError):
@@ -59,7 +60,7 @@ def _report(
 ) -> dict[str, Any]:
     ref = normalize_repo_relative_path(str(descriptor["ref"]), repo_root)
     try:
-        raw = read_repo_relative_regular_single_link(repo_root, ref)
+        raw = read_repo_relative_regular_single_link(dependency_root(repo_root), ref)
     except (OSError, ValueError) as exc:
         raise NamedEvidenceArtifactError(
             f"evidence={evidence_id} result artifact report 非 single-link regular file: {exc}"

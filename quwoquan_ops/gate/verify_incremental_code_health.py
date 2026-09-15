@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,9 +52,20 @@ def parser() -> argparse.ArgumentParser:
     return value
 
 
+def validate_exact_paths(repo: Path, paths: list[str]) -> None:
+    """--changed-file 只收整文件路径，目录或 glob 不得静默得到空 PASS。"""
+    for raw in paths:
+        path = PurePosixPath(raw)
+        if (path.is_absolute() or path.as_posix() != raw or raw in {"", "."}
+                or ".." in path.parts or "\\" in raw or any(token in raw for token in "*?[")
+                or (repo / raw).is_dir()):
+            raise ValueError(f"--changed-file requires an exact file, not a directory/glob: {raw}")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
+        validate_exact_paths(ROOT, args.changed_file)
         if (args.base is None) != (args.head is None):
             raise ValueError("--base and --head must be provided together")
         if args.index_only and not args.working_tree:

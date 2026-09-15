@@ -33,7 +33,12 @@ candidate_evidence_manifest:
   max_bytes: 65536
   required_fields: [schema_version, owner_identity_ref, owner_identity_canonical_bytes_sha256, delivery_owner, lead_lane, delivery_policy_digests, target, resolved_owner, path_set_identity, workspace_digests, context_snapshots, impact_plan_identity, evidence_fingerprint]
   owner_identity_ref_semantics: primary_delivery_predecessor
-  delivery_identity_source: current_branch_validated_by_branch_and_lane_ownership_policies
+  delivery_identity_source: current_branch_or_exact_source_identity_with_git_verified_producer_lane_ref
+  optional_fields: [source_identity]
+  source_identity_fields: [base_sha, head_sha, head_tree, producer_lane]
+  source_identity_validation: clean_source_HEAD_tree_exact_ancestor_range_complete_changed_paths_and_producer_lane_ref_equals_head
+  dependency_root_semantics: runtime_exact_bytes_only_never_source_truth_no_source_fallback
+  portable_consumers: [review_dispatch, evidence_runner, handoff_consumer, review_consolidator]
   owner_chain_fields: [level, node_id, path]
   impacted_owner_group_fields: [owner_identity, paths]
   impacted_owner_identity_fields: [resolved_owner, owner_chain_digest]
@@ -115,6 +120,11 @@ review_plan:
   profile_source: .agents/skills/review/references/registry.yaml#profiles
   evidence_source: .agents/skills/review/references/registry.yaml#evidence
   fingerprint_identity: canonical-evidence-fingerprint-receipt
+  optional_fields: [git_range]
+  git_range_fields: [base_sha, head_sha, head_tree]
+  git_range_semantics: explicit_exact_ancestor_base_current_head_and_tree_validated_in_source_repository
+  git_range_binding: review_fingerprint_git_and_review_identity
+  default_git_range: existing_development_merge_base_resolution
 
 named_evidence_receipt:
   schema_version: 5
@@ -205,6 +215,37 @@ review_result:
     - finished_at
     - findings
   statuses: [completed, incomplete, cancelled]
+  # 条件式扩展不是旧 schema 双读；无健康证据/无替换的其他 workflow 可省略。
+  optional_fields: [candidate_closure]
+
+candidate_review_closure:
+  schema_version: 1
+  required_fields: [candidate_fingerprint_ref, candidate_fingerprint_digest, health_dispositions, replacements]
+  carrier: review_result.candidate_closure
+  producer: completed_primary_reviewer
+  health_artifact_kind: code-health-report-v1
+  health_finding_identity: findingId
+  handwritten_dev_requires_health: true
+  disposition_fields: [finding_id, disposition, reason, evidence_ids, open_ref]
+  dispositions: [fix-now, owner-open, out-of-scope]
+  fix_now: later_current_candidate_health_report_without_original_finding_id
+  fix_now_reachability: deterministic_immutable_candidate_rerun_cannot_remove_warning_source_fix_requires_new_candidate
+  exact_closure_consumer: quwoquan_ops.cli.review_consolidator.validate_exact_consolidation
+  exact_closure_inputs: [consolidation, plan, evidence_pairs, reviewer_pairs, registry, exact_bytes_by_ref]
+  exact_closure_validation: full_current_chain_recomputation_no_partial_health_projection
+  owner_open: current_lowest_owner_open_with_completion_and_track_impact_bound_in_plan_context
+  out_of_scope: finding_path_and_resolved_owner_outside_candidate_with_named_boundary_evidence
+  replacement_fields: [old_path, old_symbols, successor_path, successor_symbols, consumers, cleanup, dynamic_entry_status, scan_evidence_ids, test_evidence_ids]
+  consumer_fields: [path, status, reason]
+  consumer_statuses: [migrated, retained, unknown]
+  cleanup_fields: [path, kind, action, reason]
+  cleanup_kinds: [implementation, config, test]
+  cleanup_actions: [removed, retained, not-applicable]
+  cleanup_not_applicable: config_or_test_only_null_path_with_nonempty_reason_and_scan_evidence
+  dynamic_entry_statuses: [resolved, unknown]
+  machine_verifies: [exact_candidate_identity, total_unique_dispositions, current_named_evidence, current_owner_open, objective_scope_exclusion, declared_path_state, unknown_entry_no_automatic_deletion]
+  reviewer_verifies: [semantic_fix, consumer_completeness, retention_reason, scan_coverage, behavioral_test_adequacy]
+  no_replacement: empty_replacements_no_fabricated_deletion_inventory
 
 review_consolidation:
   schema_version: 3

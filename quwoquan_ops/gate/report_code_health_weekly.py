@@ -31,7 +31,8 @@ def _load_previous(paths: list[Path]) -> list[dict]:
     return reports
 
 
-def discover_local_previous(weekly_root: Path, *, current_head: str, limit: int = LOCAL_HISTORY_LIMIT) -> list[Path]:
+def discover_local_previous(weekly_root: Path, *, current_head: str, limit: int = LOCAL_HISTORY_LIMIT,
+                            observation_branch: str | None = None) -> list[Path]:
     """本地既有 weekly report（不同 head，按 window end 倒序），让本地运行也能给出棘轮方向。
 
     只有 schema 不符或同 head 才算「不是上期」；不可读或损坏的报告与 `_load_previous` 同轨抛错，
@@ -45,6 +46,8 @@ def discover_local_previous(weekly_root: Path, *, current_head: str, limit: int 
             raise ValueError(f"local weekly report 无法读取 {path}: {exc}") from exc
         if not isinstance(report, dict) or report.get("schema") != WEEKLY_SCHEMA or report.get("headSha") == current_head:
             continue
+        if observation_branch is not None and report.get("observationBranch") != observation_branch:
+            continue
         candidates.append((str(report["window"]["end"]), path))
     return [path for _, path in sorted(candidates, reverse=True)[:limit]]
 
@@ -52,6 +55,9 @@ def discover_local_previous(weekly_root: Path, *, current_head: str, limit: int 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--head", default="HEAD")
+    parser.add_argument("--observation-branch", help="历史所属分支；省略时读取当前分支身份，不移动工作树")
+    parser.add_argument("--mode", choices=("full", "fast"), default="full")
+    parser.add_argument("--existing-evidence", type=Path, help="已有 coverage/architecture/reachability/owner exact 证据 JSON")
     parser.add_argument("--policy", type=Path, default=ROOT / "quwoquan_ops/policies/code_health_policy.yaml")
     parser.add_argument("--delivery-runs", type=Path)
     parser.add_argument("--cloc", default="cloc")
@@ -69,10 +75,15 @@ def main(argv: list[str] | None = None) -> int:
         head_sha = subprocess.run(
             ["git", "rev-parse", "--verify", f"{args.head}^{{commit}}"], cwd=ROOT, check=True, capture_output=True, text=True,
         ).stdout.strip()
-        previous_paths = args.previous or discover_local_previous(weekly_root, current_head=head_sha)
+        branch = args.observation_branch or subprocess.run(
+            ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True,
+        ).stdout.strip() or f"detached:{head_sha}"
+        previous_paths = args.previous or discover_local_previous(weekly_root, current_head=head_sha, observation_branch=branch)
+        supplied = None if args.existing_evidence is None else json.loads(args.existing_evidence.read_text(encoding="utf-8"))
         report = analyze_weekly(
-            ROOT, head=args.head, policy=policy, cloc_executable=args.cloc,
+            ROOT, head=head_sha, policy=policy, cloc_executable=args.cloc,
             delivery_run_pages=pages, previous_reports=_load_previous(previous_paths),
+            observation_branch=branch, mode=args.mode, existing_evidence=supplied,
         )
         output = args.output or weekly_root / report["identityDigest"].removeprefix("sha256:") / "report.json"
         output.parent.mkdir(parents=True, exist_ok=True)

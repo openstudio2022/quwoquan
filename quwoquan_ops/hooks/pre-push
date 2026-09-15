@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 本地 pre-push 只做 branch policy：lane 与 integration 均只推同名远端；integration→
-# origin/dev1.0 另强制 expected-old 快进；main 禁止直推；可证明的受管 system
-# fast-forward backsync 依 contract 放行。发布就绪回执不在这里消费。
+# 本地 integration 发布校验 exact admission、远端身份与 expected-old 快进。
+# lane 远端及 main 直推禁止；受管 system backsync 独立验真。
+# 本地 hook 不等于服务端 Alpha 强制保障。
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 export QWQ_OUTPUT_ROOT="$ROOT/.qwq_output"
@@ -15,7 +15,7 @@ if [[ -z "$updates" ]]; then
   exit 0
 fi
 
-if ! printf '%s\n' "$updates" | python3 -B quwoquan_ops/gate/verify_git_branch_policy.py --pre-push; then
+if ! printf '%s\n' "$updates" | python3 -B quwoquan_ops/gate/verify_git_branch_policy.py --pre-push --remote-name "${1:-}" --remote-url "${2:-}"; then
   echo "[pre-push] GATE_BLOCK: branch policy rejected push updates" >&2
   exit 1
 fi

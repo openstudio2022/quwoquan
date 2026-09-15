@@ -45,6 +45,41 @@ profiles:
     required_checks: [static, focused, scope_build, release]
     allow_deferred: false
     required_admission: [review_consolidation_pass, required_named_evidence_pass]
+lane_gate:
+  schema_version: 1
+  # push exact candidate 是 accept 的 source fact；staged/workspace fast 仍只是反馈。
+  source_mode: push
+  producer: local_readiness
+  required_groups: [governance, impact_boundary, code_health_full, ops_local_contract]
+  governance_scripts:
+    - quwoquan_ops/gate/verify_git_branch_policy.py
+    - quwoquan_ops/gate/verify_github_supply_chain.py
+    - quwoquan_ops/gate/verify_github_artifact_lifecycle.py
+    - quwoquan_ops/gate/verify_workflow_cli_arguments.py
+    - quwoquan_ops/gate/verify_entrypoint_script_paths.py
+    - quwoquan_ops/ci/verify_quality_policy.py
+  python_governance_scopes: [app, service, ops, data]
+  feature_tree_command: [make, verify-feature-tree]
+  ops_selector: quwoquan_ops/gate/delivery_gate_data_shard.py
+  ops_shards: 4
+  ops_lane_gate_exclusions: quwoquan_ops/policies/gates/lane_gate_ops_contract_exclusions.yaml
+  reuse_identity: [candidate_commit, candidate_tree, expected_parent, complete_plan, source_tree, toolchain, check_commands, timeout_policy]
+  legacy_fast_receipt: rejected
+  hosted_ruleset_readback: manual_deletion_and_non_fast_forward_protection_only
+  hosted_alpha_enforcement: open_track_not_blocking_local_dev
+  legacy_hosted_required_check: retired_by_authorization
+  integration: validate_exact_receipt_without_rerunning_checks
+bundle_prevalidation:
+  command: python3 -B quwoquan_ops/cli/integration_run.py --mode integrate --validate-bundle-only --candidate <exact-candidate-sha> --acceptance-bundle <dir>
+  required_branch: refs/heads/dev1.0
+  candidate_may_differ_from_head: true
+  expected_parent: current_remote_dev1.0
+  checks: [bundle_digest, exact_file_closure, candidate_commit_tree, remote_parent, source_receipt, eaf_signature_references]
+  writes: [run_summary_only]
+  forbidden: [store_import, local_ref_move, admission, publish, environment_execution]
+  terminal: bundle_validated
+  final_integration_recheck: candidate_commit_tree_equals_head_and_current_remote_parent
+  validation_is_publish_authority: false
 timeouts:
   schema_version: 1
   # 解析顺序固定为 check → phase → level → default。每个 canonical check 都带 phase，
@@ -68,6 +103,10 @@ timeouts:
   overrides_by_check:
     static:code_health_delta_fast: 30
     static:code-health-delta: 300
+    lane_gate:ops-local-contract:0: 900
+    lane_gate:ops-local-contract:1: 900
+    lane_gate:ops-local-contract:2: 900
+    lane_gate:ops-local-contract:3: 900
     # App-only emitter 固定 Graph clean rebuild（cloudOutputs≈164）单跑约 50–80s，
     # 与其余 static 并发时超 60s 默认；给 180s。
     static:app_generated_manifest: 180

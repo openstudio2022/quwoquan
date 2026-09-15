@@ -23,6 +23,31 @@ PROMOTION_FORBIDDEN_EXECUTION = re.compile(
 )
 
 
+def _backsync_caller_findings(relative_path: str, job: object) -> list[Finding]:
+    """只允许成功 seal 的 exact 输出进入受管通道，不掩盖独立回同步失败。"""
+    expected = {
+        "needs": "main_source_seal",
+        "if": "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.main_source_seal.result == 'success' }}",
+        "uses": "./.github/workflows/system-backsync.yml",
+        "permissions": {"actions": "read", "checks": "read", "contents": "read", "packages": "read"},
+        "with": {
+            "expected_dev_before": "${{ needs.main_source_seal.outputs.source_sha }}",
+            "source_sha": "${{ needs.main_source_seal.outputs.source_sha }}",
+            "main_source_seal_ref": "${{ needs.main_source_seal.outputs.main_source_seal_ref }}",
+            "main_source_seal_digest": "${{ needs.main_source_seal.outputs.main_source_seal_digest }}",
+        },
+    }
+    if not isinstance(job, Mapping):
+        return [Finding(relative_path, 0, "managed backsync caller must be a job mapping")]
+    findings = [
+        Finding(relative_path, 0, f"managed backsync caller {field} must bind the canonical successful seal contract")
+        for field, value in expected.items() if job.get(field) != value
+    ]
+    if set(job) - {*expected, "name"}:
+        findings.append(Finding(relative_path, 0, "managed backsync caller forbids extra execution, secrets or failure-masking fields"))
+    return findings
+
+
 def promotion_workflow_findings(
     relative_path: str,
     text: str,
@@ -67,17 +92,18 @@ def promotion_workflow_findings(
         )
 
     jobs = workflow.get("jobs")
-    expected_jobs = ["promotion_verify", "main_source_seal"]
+    expected_jobs = ["promotion_verify", "main_source_seal", "system_backsync"]
     if not isinstance(jobs, Mapping) or list(jobs) != expected_jobs:
         findings.append(
             Finding(
                 relative_path,
                 0,
-                "promotion workflow must separate pre-merge verification and MainSourceSeal; source convergence to dev1.0 is the integration worktree fast-forward channel",
+                "promotion workflow must separate pre-merge verification, MainSourceSeal and managed system_backsync",
             )
         )
         return findings
 
+    findings.extend(_backsync_caller_findings(relative_path, jobs["system_backsync"]))
     premerge = jobs["promotion_verify"]
     postmerge = jobs["main_source_seal"]
     pre_commands = job_commands(premerge)
@@ -88,7 +114,7 @@ def promotion_workflow_findings(
             "checks": "write", "pull-requests": "read",
         },
         "main_source_seal": {
-            "contents": "read", "packages": "write",
+            "actions": "read", "contents": "read", "packages": "write",
             "checks": "read", "pull-requests": "read",
         },
     }

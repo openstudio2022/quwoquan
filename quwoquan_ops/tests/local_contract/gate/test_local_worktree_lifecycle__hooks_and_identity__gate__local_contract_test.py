@@ -477,13 +477,33 @@ def test_policy_declares_fixed_project_hub_integration_and_lane_directories(poli
     }
 
 
-def test_lane_command_targets_render_without_mutation_and_derive_policy(policy) -> None:
-    bootstrap = lane_worktree_commands.render("bootstrap")
-    resync = lane_worktree_commands.render("resync")
+def test_lane_command_targets_render_without_mutation_and_derive_policy(policy, tmp_path: Path) -> None:
+    repo = tmp_path / policy.bare_hub_directory
+    _init_repo(repo)
+    _run_git(repo, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "published")
+    published = _run_git(repo, "rev-parse", "HEAD")
+    remote_ref = f"refs/remotes/origin/{policy.integration_branch}"
+    _run_git(repo, "update-ref", remote_ref, published)
+    _run_git(repo, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "unpublished local dev")
+    before_refs = _run_git(repo, "show-ref")
+    before_files = {path.relative_to(tmp_path): path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+    resolved = []
+
+    def observed_git(cwd, *args):
+        resolved.append((cwd, args))
+        return lane_worktree_commands._git(cwd, *args)
+
+    bootstrap = lane_worktree_commands.render("bootstrap", policy=policy, project_root=tmp_path, git=observed_git)
+    assert resolved == []
+    resync = lane_worktree_commands.render("resync", policy=policy, project_root=tmp_path, git=observed_git)
+    assert resolved == [(repo, ("rev-parse", "--verify", "--quiet", f"{remote_ref}^{{commit}}"))]
     assert len(bootstrap) == len(resync) == 6
     for branch, directory in policy.lane_worktree_directories:
         assert any(branch in command and f"/{directory}" in command for command in bootstrap)
-        assert any(f"/{directory}" in command and "merge --ff-only dev1.0" in command for command in resync)
+        assert any(f"/{directory}" in command and command.endswith(f"merge --ff-only {published}") for command in resync)
+        assert not (tmp_path / directory).exists()
+    assert _run_git(repo, "show-ref") == before_refs
+    assert {path.relative_to(tmp_path): path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()} == before_files
     # 渲染是默认路径：不带 --execute 的 CLI 只打印命令；mutation 只能由显式 --execute 进入
     # resync 三态执行面（其零写合同见 test_lane_resync_execute__gate__local_contract_test）。
     source = (ROOT / "quwoquan_ops/cli/lane_worktree_commands.py").read_text(encoding="utf-8")

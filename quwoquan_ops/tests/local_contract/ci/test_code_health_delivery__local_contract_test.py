@@ -65,6 +65,12 @@ def test_delivery_recomputes_exact_commit_and_rejects_stale_path_identity(
     assert output.is_file()
     assert identity.startswith("sha256:")
     assert json.loads(output.read_text(encoding="utf-8"))["headSha"] == head
+    delivery_cli.validate_delivery_report(repo, passed, base_sha=base, head_sha=head,
+        expected_path_digest=report["changedPathsDigest"], expected_impact_plan_digest=plan["plan_digest"])
+    forged = {**passed, "terminal": "PASS", "findings": [{"code": "forged"}]}
+    with pytest.raises(ValueError, match="canonical full measurement"):
+        delivery_cli.validate_delivery_report(repo, forged, base_sha=base, head_sha=head,
+            expected_path_digest=report["changedPathsDigest"], expected_impact_plan_digest=plan["plan_digest"])
 
     with pytest.raises(ValueError, match="changed-path digest differs"):
         verify_delivery(

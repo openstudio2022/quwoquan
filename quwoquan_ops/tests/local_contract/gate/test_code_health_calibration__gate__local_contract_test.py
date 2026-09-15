@@ -12,6 +12,7 @@ import pytest
 
 from quwoquan_ops.gate.code_health_delta.calibration import CalibrationError, aggregate_calibration
 from quwoquan_ops.gate.code_health_delta.engine import REPORT_SCHEMA
+from quwoquan_ops.gate.code_health_delta.metrics import finding_identity
 from quwoquan_ops.gate.code_health_delta.policy import load_policy
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -23,12 +24,14 @@ DUPLICATION = "CODE_HEALTH.DUPLICATION_ADVISORY"
 
 def _sample(number: int, *, reviewed: bool, codes: tuple[str, ...] = (COMPLEXITY,), verdict: str = "confirmed") -> dict:
     findings = [{"code": code, "path": f"quwoquan_ops/ci/{number}.py", "terminal": "PR_WARN"} for code in codes]
+    for finding in findings:
+        finding["findingId"] = finding_identity(finding["code"], finding["path"])
     report = {
         "schema": REPORT_SCHEMA, "candidateSource": "commit",
         "headSha": f"{number:040x}", "terminal": "PR_WARN", "findings": findings,
         "evidenceFingerprint": {"digest": "sha256:" + f"{number:064x}"},
     }
-    reviews = [{"code": item["code"], "path": item["path"], "verdict": verdict} for item in findings] if reviewed else []
+    reviews = [{"findingId": item["findingId"], "verdict": verdict} for item in findings] if reviewed else []
     return {"pullRequest": number, "durationSeconds": 12.0, "report": report, "findingReviews": reviews}
 
 
@@ -88,6 +91,25 @@ def test_eligibility_is_sampled_per_code_not_all_advisories() -> None:
     result = aggregate_calibration(noisy, policy=POLICY, observed_at=OBSERVED)
     assert result["promotion"]["perCode"][COMPLEXITY]["falsePositiveRate"] == 0.15
     assert result["promotion"]["eligibleForHumanPolicyRevision"] is False
+
+
+def test_reviews_cannot_alias_multiple_functions_or_unknown_findings() -> None:
+    sample = _sample(1, reviewed=False)
+    first = sample["report"]["findings"][0]
+    first["findingId"] = "sha256:" + "a" * 64
+    second = {**first, "findingId": "sha256:" + "b" * 64}
+    sample["report"]["findings"].append(second)
+    sample["findingReviews"] = [{"findingId": first["findingId"], "verdict": "confirmed"}]
+    result = aggregate_calibration([sample], policy=POLICY, observed_at=OBSERVED)
+    assert result["review"]["reviewedFindingCount"] == 1
+    assert result["review"]["unreviewedAdvisoryCount"] == 1
+    sample["findingReviews"].append({"findingId": "sha256:" + "c" * 64, "verdict": "confirmed"})
+    with pytest.raises(CalibrationError, match="未覆盖|不存在"):
+        aggregate_calibration([sample], policy=POLICY, observed_at=OBSERVED)
+    sample["findingReviews"] = []
+    second["findingId"] = first["findingId"]
+    with pytest.raises(CalibrationError, match="重复"):
+        aggregate_calibration([sample], policy=POLICY, observed_at=OBSERVED)
 
 
 def test_sample_contract_is_closed() -> None:

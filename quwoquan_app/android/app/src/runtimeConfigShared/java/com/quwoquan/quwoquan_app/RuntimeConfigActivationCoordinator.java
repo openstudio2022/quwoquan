@@ -292,8 +292,8 @@ final class RuntimeConfigActivationCoordinator {
    *
    * <p>与外部请求走同一 validate → CAS activate → receipt 路径，区别只有两点：请求来自
    * assets 而非私有容器，`expectedActiveDigest` 由这里以当前 active digest 现场补齐。
-   * 决策矩阵：合法在线 active → 保持不变；缺席或合法同源 Alpha 离线重建 → 激活；
-   * 过期在线或损坏 active → typed 失败，绝不自动回落 Alpha。
+   * 决策矩阵：缺席或已验签 Alpha 前值 → 完整激活并重建 receipts；
+   * 其他 active 必须严格验证后保持不变，过期 Beta/Gamma 或损坏身份绝不回落 Alpha。
    */
   synchronized ConsumeResult consumeBundledSelfSupplyRequest(InputStream requestStream) {
     Map<String, Object> request = null;
@@ -318,25 +318,21 @@ final class RuntimeConfigActivationCoordinator {
       if (!"bundled_snapshot".equals(effectiveManifestStringMapValue(request, "contentSource"))) {
         throw new ActivationFailure("runtime_config_content_source_mismatch");
       }
-      Map<String, Object> state = store.readStateEnvelope();
-      if ("present".equals(state.get("state"))) {
-        Map<String, Object> activeReceipt = readActiveReceipt();
-        if (!receiptMatchesActiveState(activeReceipt, state)) {
-          throw new ActivationFailure("runtime_config_activation_receipt_mismatch");
-        }
-        Object activePackage = state.get("package");
-        if (!(activePackage instanceof Map)
-            || !AppLaunchContract.SCHEMA_VALUES.get("offline_bootstrap_document")
-                .equals(((Map<?, ?>) activePackage).get("schema"))) {
+      RuntimeConfigPackageStore.ReadState identity = store.readActivePackageIdentity();
+      if (identity.kind == RuntimeConfigPackageStore.ReadKind.FAILURE) {
+        throw identity.error;
+      }
+      if (identity.kind == RuntimeConfigPackageStore.ReadKind.PRESENT) {
+        Map<?, ?> activePackage = (Map<?, ?>) identity.payload.get("package");
+        if (!"alpha-local".equals(activePackage.get("target"))
+            || !"nonprod".equals(activePackage.get("buildProfile"))) {
+          // 非 Alpha 不使用宽松身份作为成功证据：时间窗和 active receipt 仍严格读取。
+          readVerifiedFlutterEnvelope();
           return ConsumeResult.notRequested();
         }
-        if (isAlreadyActivated(request, requestDigest)) return ConsumeResult.activated();
-      } else if (!"absent".equals(state.get("state"))) {
-        Object code = state.get("errorCode");
-        throw new ActivationFailure(code instanceof String ? (String) code : "runtime_config_package_malformed");
+        previousActiveDigest = (String) identity.payload.get("packageDigest");
       }
-      // 只有合法同源离线或缺席可以自动供给；在线过期/损坏绝不回落 Alpha。
-      previousActiveDigest = store.readCurrentActiveDigest();
+      // 不短路旧 receipt；Alpha 每次完整验证新请求、CAS 激活并原子重建当前 receipts。
       previousActiveDigestKnown = true;
       JsonObject packageDocument = requestDocument.getAsJsonObject("package");
       Map<String, Object> finalRequest = request;

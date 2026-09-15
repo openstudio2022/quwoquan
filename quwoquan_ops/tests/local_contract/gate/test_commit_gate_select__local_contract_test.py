@@ -53,6 +53,30 @@ def test_source_changes_select_fast_code_health_but_docs_do_not() -> None:
     assert "code_health_delta_fast" not in _checks("specs/feature-tree/runtime/spec.md")
 
 
+def test_retired_terms_selects_engineering_changes_and_its_companion() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-006.t1
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-006.t3
+    from quwoquan_ops.gate.commit_gate_select import build_plan
+
+    paths = [
+        "quwoquan_app/lib/runtime/value.dart",
+        "quwoquan_app/android/app/src/main/Value.java",
+        "quwoquan_app/ios/Runner/Value.swift",
+        "quwoquan_service/runtime/value.go",
+        "quwoquan_data/scripts/content/value.py",
+        "quwoquan_ops/cli/value.py",
+        "quwoquan_ops/portal/src/value.ts",
+    ]
+    for path in paths:
+        assert _checks(path).count("retired_terms_zero") == 1
+    assert static_checks(classify(paths), paths).count("retired_terms_zero") == 1
+    assert "retired_terms_zero" not in _checks("README.md")
+    assert "retired_terms_zero" not in _checks("specs/feature-tree/runtime/spec.md")
+    assert "feature_tree" in _checks("specs/feature-tree/runtime/spec.md")
+    plan = build_plan(["quwoquan_app/scripts/runtime/architecture/verify_retired_terms_zero.py"], cap=5)
+    assert any("test_retired_terms_zero__gate__local_contract_test.py" in path for path in plan["pytest_paths"])
+
+
 def test_each_python_script_owner_runs_only_its_own_governance_scope() -> None:
     paths = {
         "app": "quwoquan_app/scripts/runtime/check.py",

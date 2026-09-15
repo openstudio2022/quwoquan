@@ -115,6 +115,20 @@ def test_workflow_consumes_exact_source_seal_before_nonforce_cas() -> None:
         assert forbidden not in text
 
 
+def test_backsync_trust_matches_delivery_and_missing_key_blocks_before_push() -> None:
+    text, workflow = load_workflow()
+    delivery = yaml.safe_load((ROOT / ".github/workflows/delivery-gate.yml").read_text())
+    readback = next(step for step in delivery["jobs"]["main_source_seal"]["steps"] if step.get("id") == "readback")
+    assert readback["env"]["TRUSTED_RECORDER_APP_SLUG"] == "github-actions"
+    assert readback["env"]["TRUSTED_RECORDER_APP_ID"] == "15368"
+    assert 'test "$QWQ_PROMOTION_RECORDER_APP_ID" = 15368' in text
+    assert 'test "$QWQ_PROMOTION_RECORDER_APP_SLUG" = github-actions' in text
+    assert text.index("dedicated system backsync key is unavailable") < text.index("quwoquan_ops/ci/system_backsync.py")
+    assert "secrets.SYSTEM_BACKSYNC_DEPLOY_KEY" in text
+    assert "secrets: inherit" not in text
+    assert "non_fast_forward/deletion" in text
+
+
 def test_workflow_delegates_check_run_validation_to_canonical_validator() -> None:
     text, _workflow = load_workflow()
 

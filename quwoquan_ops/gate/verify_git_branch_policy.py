@@ -48,13 +48,39 @@ from quwoquan_ops.gate.git_branch_policy.policy import (
     PullRequestEdge,
     RequiredPromotionCheck,
     SystemBacksync,
-    _matches_pull_request_prefix,
     evaluate_transition,
     load_policy as _load_policy,
     load_policy_bytes,
     pull_request_context_from_environment,
     repository_branch_context_from_environment,
 )
+
+def _verify_acceptance_update(environment: Mapping[str, str], before: str, after: str,
+                              ref: str, remote_name: str | None, remote_url: str | None) -> None:
+    # 发布验真才加载证据依赖；普通本地分支检查不依赖环境签名与发布栈。
+    from quwoquan_ops.ci.scoped_candidate.core import ScopedCandidateError, validate_publish_update
+
+    if not remote_name or not remote_url:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "exact push remote name/URL are required")
+    validate_publish_update(
+        repository=ROOT, policy_path=ROOT / "quwoquan_ops/policies/scoped_candidate_policy.yaml",
+        admission_ref={"ref": environment.get("QWQ_PUBLISH_ADMISSION_REF", ""),
+                       "digest": environment.get("QWQ_PUBLISH_ADMISSION_DIGEST", "")},
+        before=before, after=after, ref=ref, remote=remote_name, remote_url=remote_url,
+    )
+
+def _acceptance_update_issue(policy: BranchPolicy, environment: Mapping[str, str], before: str, after: str,
+                             ref: str, remote_name: str | None, remote_url: str | None) -> str | None:
+    if before == after:
+        return None
+    try:
+        _verify_acceptance_update(environment, before, after, ref, remote_name, remote_url)
+    except (ImportError, OSError, ValueError) as error:
+        return _issue(policy, "direct_push_not_allowed",
+            f"integration worktree fast-forward update to '{ref.removeprefix('refs/heads/')}' was rejected; "
+            f"acceptance publish admission invalid: {_safe_error_detail(error)}")
+    return None
+
 
 def _run_git(*args: str) -> list[str]:
     completed = subprocess.run(
@@ -392,6 +418,8 @@ def pre_push_issues(
     current_branch: str | None,
     update_lines: Iterable[str],
     environment: Mapping[str, str],
+    remote_name: str | None = None,
+    remote_url: str | None = None,
 ) -> list[str]:
     issues: list[str] = []
     if not current_branch:
@@ -412,6 +440,18 @@ def pre_push_issues(
             )
         )
 
+    parsed_updates, parse_issues = _parse_push_updates(policy, update_lines)
+    issues.extend(parse_issues)
+    issues.extend(_push_updates_issues(
+        policy, current_branch, parsed_updates, environment, remote_name, remote_url,
+    ))
+    return issues
+
+
+def _parse_push_updates(
+    policy: BranchPolicy, update_lines: Iterable[str],
+) -> tuple[list[tuple[str, str, str, str]], list[str]]:
+    issues: list[str] = []
     parsed_updates: list[tuple[str, str, str, str]] = []
     for raw_line in update_lines:
         fields = raw_line.strip().split()
@@ -428,6 +468,18 @@ def pre_push_issues(
             continue
         parsed_updates.append((fields[0], fields[1], fields[2], fields[3]))
 
+    return parsed_updates, issues
+
+
+def _push_updates_issues(
+    policy: BranchPolicy,
+    current_branch: str,
+    parsed_updates: list[tuple[str, str, str, str]],
+    environment: Mapping[str, str],
+    remote_name: str | None,
+    remote_url: str | None,
+) -> list[str]:
+    issues: list[str] = []
     for local_ref, local_sha, remote_ref, remote_sha in parsed_updates:
         if not remote_ref.startswith("refs/heads/"):
             issues.append(
@@ -458,90 +510,13 @@ def pre_push_issues(
                 )
             )
             continue
-        if _matches_pull_request_prefix(remote_branch, policy.pull_request_prefixes):
-            if (
-                remote_branch != current_branch
-                or local_ref != f"refs/heads/{current_branch}"
-            ):
-                issues.append(
-                    _issue(
-                        policy,
-                        "ref_not_allowed",
-                        f"persistent lane push must update its matching remote ref: {current_branch!r}",
-                    )
-                )
-            continue
         if remote_branch == policy.integration_branch:
-            matching_backsync_source = (
-                current_branch == policy.release_branch
-                and local_ref == f"refs/heads/{policy.release_branch}"
+            issue = _integration_update_issue(
+                policy, current_branch, (local_ref, local_sha, remote_ref, remote_sha),
+                environment, remote_name, remote_url,
             )
-            if matching_backsync_source and _is_managed_system_backsync_environment(
-                environment
-            ):
-                decision = evaluate_transition(
-                    policy=policy,
-                    transition=BranchTransition(
-                        event="system_backsync",
-                        actor_kind="system",
-                        repository=environment.get("GITHUB_REPOSITORY", "github"),
-                        head=policy.release_branch,
-                        base=policy.integration_branch,
-                        before_oid=remote_sha,
-                        after_oid=local_sha,
-                    ),
-                    is_ancestor=lambda ancestor, descendant: _git_is_ancestor(
-                        ancestor, descendant
-                    ),
-                )
-                if not decision.allowed:
-                    failure_key = _failure_key_for_code(policy, decision.reason_code)
-                    issues.append(
-                        _issue(
-                            policy,
-                            failure_key,
-                            f"managed system backsync to '{remote_branch}' was rejected",
-                        )
-                    )
-            elif (
-                current_branch == policy.integration_branch
-                and local_ref == f"refs/heads/{policy.integration_branch}"
-            ):
-                decision = evaluate_transition(
-                    policy=policy,
-                    transition=BranchTransition(
-                        event="direct_push",
-                        actor_kind="integration_worktree",
-                        repository=environment.get("GITHUB_REPOSITORY", "local"),
-                        head=policy.integration_branch,
-                        base=policy.integration_branch,
-                        before_oid=remote_sha,
-                        after_oid=local_sha,
-                    ),
-                    is_ancestor=lambda ancestor, descendant: _git_is_ancestor(
-                        ancestor, descendant
-                    ),
-                )
-                if not decision.allowed:
-                    failure_key = _failure_key_for_code(policy, decision.reason_code)
-                    issues.append(
-                        _issue(
-                            policy,
-                            failure_key,
-                            f"integration worktree fast-forward update to '{remote_branch}' was rejected",
-                        )
-                    )
-            else:
-                issues.append(
-                    _issue(
-                        policy,
-                        "direct_push_not_allowed",
-                        f"direct update of active integration branch '{remote_branch}' is blocked; "
-                        "push only from its matching integration worktree branch, use the "
-                        "canonical trusted integration publisher, or use managed system "
-                        "fast-forward backsync",
-                    )
-                )
+            if issue:
+                issues.append(issue)
             continue
         elif remote_branch == policy.release_branch:
             issues.append(
@@ -561,6 +536,69 @@ def pre_push_issues(
                 )
             )
     return issues
+
+
+def _integration_update_issue(
+    policy: BranchPolicy,
+    current_branch: str,
+    update: tuple[str, str, str, str],
+    environment: Mapping[str, str],
+    remote_name: str | None,
+    remote_url: str | None,
+) -> str | None:
+    local_ref, local_sha, remote_ref, remote_sha = update
+    matching_backsync_source = (
+        current_branch == policy.release_branch
+        and local_ref == f"refs/heads/{policy.release_branch}"
+    )
+    if matching_backsync_source and _is_managed_system_backsync_environment(environment):
+        return _transition_update_issue(
+            policy,
+            BranchTransition(
+                event="system_backsync", actor_kind="system",
+                repository=environment.get("GITHUB_REPOSITORY", "github"),
+                head=policy.release_branch, base=policy.integration_branch,
+                before_oid=remote_sha, after_oid=local_sha,
+            ),
+            f"managed system backsync to '{policy.integration_branch}' was rejected",
+        )
+    if (
+        current_branch == policy.integration_branch
+        and local_ref == f"refs/heads/{policy.integration_branch}"
+    ):
+        admission_issue = _acceptance_update_issue(
+            policy, environment, remote_sha, local_sha, remote_ref, remote_name, remote_url,
+        )
+        if admission_issue:
+            return admission_issue
+        return _transition_update_issue(
+            policy,
+            BranchTransition(
+                event="direct_push", actor_kind="integration_worktree",
+                repository=environment.get("GITHUB_REPOSITORY", "local"),
+                head=policy.integration_branch, base=policy.integration_branch,
+                before_oid=remote_sha, after_oid=local_sha,
+            ),
+            f"integration worktree fast-forward update to '{policy.integration_branch}' was rejected",
+        )
+    return _issue(
+        policy, "direct_push_not_allowed",
+        f"direct update of active integration branch '{policy.integration_branch}' is blocked; "
+        "push only from its matching integration worktree branch, use the "
+        "canonical trusted integration publisher, or use managed system "
+        "fast-forward backsync",
+    )
+
+
+def _transition_update_issue(
+    policy: BranchPolicy, transition: BranchTransition, rejection: str,
+) -> str | None:
+    decision = evaluate_transition(
+        policy=policy, transition=transition, is_ancestor=_git_is_ancestor,
+    )
+    if decision.allowed:
+        return None
+    return _issue(policy, _failure_key_for_code(policy, decision.reason_code), rejection)
 
 
 def local_commit_issues(
@@ -633,6 +671,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="reject local commits outside writable lane/integration worktrees",
     )
+    parser.add_argument("--remote-name", help="Git pre-push exact remote name")
+    parser.add_argument("--remote-url", help="Git pre-push exact remote URL")
     args = parser.parse_args(argv)
     try:
         policy = load_policy()
@@ -649,6 +689,8 @@ def main(argv: list[str] | None = None) -> int:
                 current_branch=_current_branch(),
                 update_lines=sys.stdin,
                 environment=os.environ,
+                remote_name=args.remote_name,
+                remote_url=args.remote_url,
             )
         elif args.local_commit:
             issues = local_commit_issues(

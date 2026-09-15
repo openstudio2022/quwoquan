@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/conversation_cache_record.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/adapters/conversation_cache_service.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_cache_services.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/runtime/di/cache_management_service.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/adapters/user_profile_cache_service.dart';
@@ -16,7 +17,20 @@ void main() {
 
   group('CacheManagementService', () {
     test('清理离线内容会删除 post/query 缓存但保留会话保护计数', () async {
-      final postCache = PostObjectCacheService();
+      final postCache = PostObjectCacheService()
+        ..adoptNamespace(
+          ContentCacheIsolationIdentity(
+            environment: 'alpha',
+            accountId: 'cache-management-account',
+            personaId: 'cache-management-persona',
+            sourceOwner: 'qwq_data',
+            activationIdentity: ContentActivationIdentity(
+              releaseId: 'cache-management-release',
+              manifestDigest:
+                  'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            ),
+          ),
+        );
       final queryStore = ContentQuerySnapshotStore();
       final conversationCache = ConversationCacheService();
       final service = CacheManagementService(

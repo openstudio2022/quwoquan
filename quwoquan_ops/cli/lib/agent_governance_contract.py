@@ -350,7 +350,11 @@ def declared_object(
 
 
 def validate_required_fields(payload: dict[str, Any], section: str) -> None:
-    validate_declared_fields(payload, section, "required_fields")
+    optional = contract_section(section).get("optional_fields", [])
+    validate_declared_fields(
+        {key: value for key, value in payload.items() if key not in optional},
+        section, "required_fields",
+    )
 
 
 def validate_schema_version(payload: dict[str, Any], section: str) -> None:

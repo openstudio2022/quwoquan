@@ -77,7 +77,7 @@ def test_seven_categories_are_mutually_exclusive() -> None:
     cases = {
         "quwoquan_app/lib/service/post.dart": "handwritten-production",
         "quwoquan_app/test/local_contract/post_test.dart": "test",
-        "quwoquan_service/generated/content/post.g.go": "generated",
+        "quwoquan_service/generated/content/post.g.go": "handwritten-production",
         "quwoquan_service/runtime/observability/operation_privacy_generated.go": "generated",
         "quwoquan_app/vendor/sdk/lib.dart": "vendor",
         "quwoquan_service/services/content/contracts/post/fields.yaml": "contract-metadata",
@@ -203,7 +203,8 @@ def test_new_oversized_file_blocks_but_generated_and_test_do_not(tmp_path: Path)
     repo, base = init_repo(tmp_path)
     body = "value = 1\n" * OVER_BLOCK_LINES
     write(repo, "quwoquan_ops/ci/new_module.py", body)
-    write(repo, "quwoquan_service/generated/new_module.py", body)
+    from quwoquan_ops.tests.support.code_health_delta_test_support import write_launch_generated
+    write_launch_generated(repo, "quwoquan_app/ios/Runner/AppLaunchContract.generated.swift", body)
     write(repo, "quwoquan_ops/tests/local_contract/ci/test_big.py", body)
     head = commit(repo)
     report = analyze_delta(repo, base=base, head=head, policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml", mode="fast")

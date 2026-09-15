@@ -644,6 +644,96 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 containers[name]["oomKilled"] = False
         self.assertEqual(check(), [])
 
+    # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-003
+    def test_container_state_failure_preserves_priority_and_strict_initializer_exit(self) -> None:
+        running = {"running": True, "status": "running", "health": "healthy", "exitCode": 0}
+        cases = [
+            ("api", {}, False, None),
+            ("api", {"oomKilled": True, "error": "start failed"}, True, ("CONTAINER_OOM", True)),
+            ("mongo-init", {"oomKilled": True, "error": "init failed"}, False, ("CONTAINER_OOM", True)),
+            ("mongo-init", {"error": "init failed"}, False, ("INITIALIZATION_FAILED", True)),
+            ("mongo-init", {}, False, ("INITIALIZATION_PENDING", False)),
+            ("mongo-init", {"status": "dead"}, False, ("INITIALIZATION_FAILED", True)),
+            ("object-storage-init", {"status": "stopped"}, False, ("INITIALIZATION_FAILED", True)),
+            ("mongo-init", {"status": "exited", "running": True}, False, ("INITIALIZATION_FAILED", True)),
+            ("mongo-init", {"status": "exited", "running": False, "exitCode": False}, False, ("INITIALIZATION_FAILED", True)),
+            ("mongo-init", {"status": "exited", "running": False, "exitCode": 0.0}, False, ("INITIALIZATION_FAILED", True)),
+            ("mongo-init", {"status": "exited", "running": False, "exitCode": 0}, False, None),
+            ("api", {"error": "start failed", "running": False}, True, ("CONTAINER_START_FAILED", True)),
+            ("api", {"status": "exited", "running": False}, True, ("CONTAINER_EXITED", True)),
+            ("api", {"status": "created", "running": None}, True, ("CONTAINER_UNSCHEDULED", False)),
+            ("api", {"health": None}, True, ("HEALTHCHECK_NOT_CONFIGURED", True)),
+            ("api", {"health": ""}, True, ("HEALTHCHECK_NOT_CONFIGURED", True)),
+            ("api", {"health": "not-configured"}, True, ("HEALTHCHECK_NOT_CONFIGURED", True)),
+            ("api", {"health": "starting"}, False, ("CONTAINER_UNHEALTHY", False)),
+            ("api", {"health": "unhealthy"}, False, ("CONTAINER_UNHEALTHY", False)),
+            ("api", {"health": "starting"}, True, None),
+            ("api", {"health": "unhealthy"}, True, None),
+            ("api", {"health": "unknown"}, True, ("CONTAINER_UNHEALTHY", False)),
+        ]
+        for service, changes, provider_bound, expected in cases:
+            with self.subTest(service=service, changes=changes, provider_bound=provider_bound):
+                self.assertEqual(
+                    prevalidate._container_state_failure(
+                        service, {**running, **changes}, provider_bound=provider_bound,
+                    ),
+                    expected,
+                )
+
+    # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-003
+    def test_runtime_blockers_preserve_duplicate_last_readback_and_diagnostic_order(self) -> None:
+        spec, projection, containers, report, delivery = self._runtime_fixture()
+        service = projection.startup_services[0]
+        failed = {**containers[service], "oomKilled": True, "error": "start failed", "imageId": "invalid"}
+        report["containers"].append(failed)
+        report["unit"] = {"name": "prevalidate", "enabled": False, "active": False}
+        delivery["contentDigestVerified"] = False
+        blockers = prevalidate._runtime_blockers(report, projection, spec, delivery, data_mode="isolated")
+        self.assertEqual([item["code"] for item in blockers], [
+            "CONTAINER_DUPLICATE", "CONTAINER_OOM", "IMAGE_DELIVERY_UNVERIFIED",
+            "IMAGE_ID_INVALID", "UNIT_NOT_READY",
+        ])
+        self.assertEqual(blockers[1], {
+            "code": "CONTAINER_OOM", "plane": projection.name, "service": service, "terminal": True,
+            **{key: failed.get(key) for key in ("status", "running", "exitCode", "health", "error")},
+        })
+        self.assertEqual(blockers[-1], {
+            "code": "UNIT_NOT_READY", "plane": projection.name, "service": "", "terminal": False,
+            "unit": "prevalidate", "enabled": False, "active": False,
+        })
+
+    # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-003
+    def test_required_runtime_services_deduplicate_only_running_closure(self) -> None:
+        spec = {"isolatedData": {"services": ["db", "api", "db"]}}
+        for plane, mode, expected in (
+            ("service", "isolated", ["api", "gamma-proxy", "db"]),
+            ("service", "external", ["api", "gamma-proxy"]),
+            ("edge", "isolated", ["api"]),
+        ):
+            with self.subTest(plane=plane, mode=mode):
+                projection = prevalidate.PlaneProjection(plane, "account", "secret", ("api", "api"), ("image-only",), ())
+                self.assertEqual(prevalidate._required_runtime_services(projection, spec, data_mode=mode), expected)
+                self.assertEqual(spec, {"isolatedData": {"services": ["db", "api", "db"]}})
+
+    # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-003
+    def test_image_identity_failures_keep_image_only_and_missing_container_semantics(self) -> None:
+        projection = prevalidate.PlaneProjection("edge", "account", "secret", ("api",), ("image-only",), ())
+        digest = "sha256:" + "a" * 64
+        delivered = {"contentDigestVerified": True, "remoteImageContentDigests": {"api": digest, "image-only": digest}}
+        for containers, expected in (
+            ({}, []),
+            ({"api": {"imageId": "a" * 64}, "image-only": {"imageId": "invalid"}}, []),
+            ({"api": {"imageId": "sha256:" + "b" * 64}}, [("IMAGE_DIGEST_MISMATCH", "api")]),
+            ({"api": {"imageId": "invalid"}}, [("IMAGE_ID_INVALID", "api")]),
+        ):
+            with self.subTest(containers=containers):
+                self.assertEqual(prevalidate._runtime_image_failures(projection, delivered, containers), expected)
+        delivered["contentDigestVerified"] = False
+        delivered["remoteImageContentDigests"] = {}
+        self.assertEqual(prevalidate._runtime_image_failures(projection, delivered, {}), [
+            ("IMAGE_DELIVERY_UNVERIFIED", ""), ("IMAGE_ID_INVALID", "api"), ("IMAGE_ID_INVALID", "image-only"),
+        ])
+
     def test_phase_timeouts_are_bounded_and_typed(self) -> None:
         timeout = subprocess.TimeoutExpired(["test-command"], 1)
         for phase in ("transfer", "activation", "readiness"):
@@ -907,6 +997,51 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         self.assertEqual(blocker["firstReason"]["service"], "gamma-proxy")
         self.assertEqual(clock[0], 6)
         self.assertEqual([call.kwargs["timeout"] for call in run.call_args_list], [6, 1])
+
+    # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-003
+    def test_readiness_inspection_binds_host_budget_and_preserves_first_reason(self) -> None:
+        args = SimpleNamespace(host="pinned-host", key_dir=Path("key"))
+        placement = SimpleNamespace(host_id="host-id", replica_id="replica")
+        first = {"code": "CONTAINER_UNSCHEDULED", "service": "api"}
+        with mock.patch.object(prevalidate, "_run", return_value={"stdout": '{"containers": []}'}) as run:
+            self.assertEqual(prevalidate._inspect_readiness_runtime(args, "edge", placement, 3, None), {"containers": []})
+        self.assertEqual(run.call_args.kwargs, {"phase": "readiness", "timeout": 3})
+        self.assertEqual(run.call_args.args[0], [
+            "python3", "quwoquan_ops/cli/prod/inspect_prod_plane_runtime.py", "--plane", "edge",
+            "--instance", "prevalidate", "--host-id", "host-id", "--replica-id", "replica",
+            "--key-dir", "key", "--host", "pinned-host",
+        ])
+        for reason in (None, first):
+            failure = prevalidate.PrevalidationError("transport timed out", code="READINESS_TIMEOUT")
+            original = dict(failure.blocker)
+            with mock.patch.object(prevalidate, "_run", side_effect=failure), self.assertRaises(prevalidate.PrevalidationError) as raised:
+                prevalidate._inspect_readiness_runtime(args, "edge", placement, 999, reason)
+            self.assertIs(raised.exception, failure)
+            self.assertEqual(failure.blocker["firstReason"], reason or original)
+
+    # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-003
+    def test_readiness_terminal_failure_keeps_earliest_reason(self) -> None:
+        spec, projection, containers, report, delivery = self._runtime_fixture()
+        service = projection.startup_services[0]
+        containers[service].update(oomKilled=True)
+        report["containers"] = [item for name, item in containers.items() if name != service] + [containers[service]]
+        reports = [{"containers": [], "unit": report["unit"]}, report]
+        clock = [0.0]
+        with (
+            mock.patch.object(prevalidate.time, "monotonic", side_effect=lambda: clock[0]),
+            mock.patch.object(prevalidate.time, "sleep", side_effect=lambda seconds: clock.__setitem__(0, clock[0] + seconds)),
+            mock.patch.object(prevalidate, "_run", side_effect=[{"stdout": json.dumps(item)} for item in reports]) as run,
+            self.assertRaises(prevalidate.PrevalidationError) as raised,
+        ):
+            prevalidate._wait_for_readiness(
+                SimpleNamespace(host="", key_dir=Path("key"), data_mode="isolated"), spec,
+                {"service": projection}, {"service": SimpleNamespace(host_id="host", replica_id="replica")},
+                {"service": delivery},
+            )
+        self.assertEqual(raised.exception.blocker["code"], "CONTAINER_OOM")
+        self.assertEqual(raised.exception.blocker["firstReason"]["code"], "CONTAINER_UNSCHEDULED")
+        self.assertEqual(raised.exception.blocker["blockers"][0]["code"], "CONTAINER_OOM")
+        self.assertEqual(run.call_count, 2)
 
     def test_runtime_inspection_reads_systemd_and_container_image_identity(self) -> None:
         source = inspect_runtime._remote_python()

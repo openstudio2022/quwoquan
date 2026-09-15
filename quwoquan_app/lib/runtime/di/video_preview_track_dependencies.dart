@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:quwoquan_app/runtime/config/app_content_source.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/video_preview_track_bundled.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/video_preview_track_query.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/video_preview_track_remote.dart';
 import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
@@ -7,6 +10,9 @@ import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 
 final videoPreviewTrackQueryProvider = Provider<VideoPreviewTrackQuery>((ref) {
+  if (CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot) {
+    return const BundledVideoPreviewTrackQuery();
+  }
   final endpointConfig = ref.watch(mediaEndpointConfigProvider);
   if (endpointConfig == null) {
     throw StateError('视频预览轨缺少 package-bound media endpoint config');

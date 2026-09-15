@@ -5,6 +5,9 @@ import json
 import os
 import subprocess
 import sys
+
+import pytest
+
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -59,6 +62,11 @@ def _initialize_repository(tmp_path: Path) -> tuple[Path, Path]:
     (repository / "owned.txt").write_text("current\n", encoding="utf-8")
     _git(repository, "add", "owned.txt")
     _git(repository, "commit", "-m", "current dev head")
+    # 只使用临时 bare origin；不访问真实远端、不移动工程 refs。
+    origin = tmp_path / "origin.git"
+    _git(repository, "init", "--bare", str(origin))
+    _git(repository, "remote", "add", "origin", str(origin))
+    _git(repository, "push", "origin", "dev1.0")
     return repository, store
 
 
@@ -452,6 +460,7 @@ def test_cli_supersede_turns_mutated_stale_gamma_into_safe_teardown(
     (repository / "next.txt").write_text("next\n", encoding="utf-8")
     _git(repository, "add", "next.txt")
     _git(repository, "commit", "-m", "advance dev head")
+    _git(repository, "push", "origin", "dev1.0")
     head, tree = _dev_identity(repository)
     completed, payload = _run_cli(
         repository,
@@ -488,6 +497,7 @@ def test_cli_qualify_blocks_gamma_for_stale_dev_head(tmp_path: Path) -> None:
     (repository / "next.txt").write_text("next\n", encoding="utf-8")
     _git(repository, "add", "next.txt")
     _git(repository, "commit", "-m", "replace qualified candidate")
+    _git(repository, "push", "origin", "dev1.0")
 
     completed, payload = _qualify(repository, store, publish_result, gamma)
 
@@ -657,3 +667,143 @@ def test_cli_issues_gamma_and_qualifies_current_exact_dev_head(
     assert fact["devTree"] == candidate["tree"]
     assert fact["candidate"] == candidate
     assert fact["environmentChain"]["gamma"] == gamma
+    assert fact["publishResult"] == publish_result
+
+
+def _store_snapshot(store: Path) -> dict[str, bytes]:
+    return {path.relative_to(store).as_posix(): path.read_bytes()
+            for path in store.rglob("*") if path.is_file()}
+
+
+def test_published_head_still_requires_exact_publish_predecessor(tmp_path: Path) -> None:
+    repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
+    payload = json.loads((store / publish_result["ref"]).read_bytes())
+    payload["readbackOid"] = "0" * 40
+    wrong_publish = _write(store, "publish/wrong-readback.json", payload)
+    before = _store_snapshot(store)
+    completed, result = _qualify(repository, store, wrong_publish, gamma)
+    assert completed.returncode == 2
+    assert result["code"] == "INTEGRATION_QUALIFICATION.DEV_HEAD_DRIFT"
+    assert _store_snapshot(store) == before
+
+
+def test_local_unpublished_head_cannot_qualify(tmp_path: Path) -> None:
+    repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
+    _git(repository, "commit", "--allow-empty", "-m", "unpublished candidate")
+    before = _store_snapshot(store)
+    completed, payload = _qualify(repository, store, publish_result, gamma)
+    assert completed.returncode == 2
+    assert payload["code"] == "ENVIRONMENT_EXECUTION.DEV_HEAD_DRIFT"
+    assert _store_snapshot(store) == before
+
+
+def test_remote_move_without_local_tracking_update_blocks_qualification(tmp_path: Path) -> None:
+    repository, store, publish_result, gamma, candidate = _qualification_inputs(tmp_path)
+    moved = _git(repository, "commit-tree", candidate["tree"], "-p", candidate["commit"], "-m", "published next")
+    _git(repository, "push", str(tmp_path / "origin.git"), f"{moved}:refs/heads/dev1.0")
+    before = _store_snapshot(store)
+    completed, payload = _qualify(repository, store, publish_result, gamma)
+    assert completed.returncode == 2
+    assert payload["code"] == "ENVIRONMENT_EXECUTION.DEV_HEAD_DRIFT"
+    assert _git(repository, "rev-parse", "origin/dev1.0") == candidate["commit"]
+    assert _store_snapshot(store) == before
+
+
+@pytest.mark.parametrize("failure", ["local-ahead", "remote-moved", "unavailable", "candidate-drift", "expected-tree"])
+def test_gamma_request_rejects_unpublished_identity_without_mutation(tmp_path: Path, failure: str) -> None:
+    repository, store = _initialize_repository(tmp_path)
+    head, tree = _dev_identity(repository)
+    if failure == "local-ahead":
+        _git(repository, "commit", "--allow-empty", "-m", "local only")
+        head, tree = _dev_identity(repository)
+    candidate, _ = _candidate(store, repository)
+    if failure == "remote-moved":
+        moved = _git(repository, "commit-tree", tree, "-p", head, "-m", "remote only")
+        _git(repository, "push", str(tmp_path / "origin.git"), f"{moved}:refs/heads/dev1.0")
+    elif failure == "unavailable":
+        _git(repository, "remote", "set-url", "origin", str(tmp_path / "missing.git"))
+    elif failure == "candidate-drift":
+        _git(repository, "commit", "--allow-empty", "-m", "published successor")
+        _git(repository, "push", "origin", "dev1.0")
+        head, tree = _dev_identity(repository)
+    elif failure == "expected-tree":
+        tree = "0" * 40
+    before = _store_snapshot(store)
+    refs = _git(repository, "show-ref")
+    index = (repository / ".git/index").read_bytes()
+    completed, payload = _run_cli(
+        repository, store, "request", "--candidate", _exact_arg(candidate),
+        "--environment", "gamma", "--impact-plan-digest", IMPACT, "--priority", "1",
+        "--expected-dev-head", head, "--expected-dev-tree", tree,
+    )
+    code = {"unavailable": "DEV_AUTHORITY_UNAVAILABLE", "candidate-drift": "GAMMA_IDENTITY_DRIFT"}.get(failure, "DEV_HEAD_DRIFT")
+    assert completed.returncode == 2
+    assert payload["code"] == f"ENVIRONMENT_EXECUTION.{code}"
+    assert _store_snapshot(store) == before
+    assert _git(repository, "show-ref") == refs
+    assert (repository / ".git/index").read_bytes() == index
+
+
+@pytest.mark.parametrize("stage", ["before-sign", "after-sign"])
+@pytest.mark.parametrize("failure", ["moved", "unavailable"])
+@pytest.mark.parametrize("command", ["issue", "qualify"])
+def test_signing_stage_drift_leaves_no_usable_fact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str, failure: str, command: str,
+) -> None:
+    from quwoquan_ops.cli import environment_execution as execution
+
+    original_cli = _run_cli
+    original_guard = execution._published_dev_signer
+    observed = []
+
+    def intercepted(repository: Path, store: Path, *arguments: str):
+        if arguments[0] != command or (command == "issue" and "evidence/gamma-case.json" not in " ".join(arguments)):
+            return original_cli(repository, store, *arguments)
+        for key, value in _signing(store).environment({}).items():
+            monkeypatch.setenv(key, value)
+        args = execution._build_parser().parse_args([
+            "--repository", str(repository), "--store-root", str(store), *arguments,
+        ])
+        before = _store_snapshot(store)
+        expected = "DEV_HEAD_DRIFT" if failure == "moved" else "DEV_AUTHORITY_UNAVAILABLE"
+        with pytest.raises(execution.EnvironmentExecutionError, match=expected):
+            execution._dispatch(args)
+        assert _store_snapshot(store) == before
+        observed.append(command)
+        # 提前终止 fixture，不合成 acceptance 或 qualification 成功。
+        raise StopIteration("observed signing fence")
+
+    def guard(repository, current, signer):
+        def drift():
+            if failure == "unavailable":
+                _git(repository, "remote", "set-url", "origin", str(tmp_path / "absent.git"))
+            else:
+                moved = _git(repository, "commit-tree", current["tree"], "-p", current["head"], "-m", "concurrent publish")
+                _git(repository, "push", str(tmp_path / "origin.git"), f"{moved}:refs/heads/dev1.0")
+
+        def real_sign(payload):
+            signature = signer(payload)
+            if stage == "after-sign":
+                drift()
+            return signature
+
+        if stage == "before-sign":
+            drift()
+        return original_guard(repository, current, real_sign)
+
+    monkeypatch.setattr(execution, "_published_dev_signer", guard)
+    monkeypatch.setattr(sys.modules[__name__], "_run_cli", intercepted)
+    with pytest.raises(StopIteration, match="observed signing fence"):
+        repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
+        _qualify(repository, store, publish_result, gamma)
+    assert observed == [command]
+
+
+def test_unreadable_origin_cannot_fall_back_to_local_dev(tmp_path: Path) -> None:
+    repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
+    _git(repository, "remote", "set-url", "origin", str(tmp_path / "missing-origin.git"))
+    before = _store_snapshot(store)
+    completed, payload = _qualify(repository, store, publish_result, gamma)
+    assert completed.returncode == 2
+    assert payload["code"] == "ENVIRONMENT_EXECUTION.DEV_AUTHORITY_UNAVAILABLE"
+    assert _store_snapshot(store) == before

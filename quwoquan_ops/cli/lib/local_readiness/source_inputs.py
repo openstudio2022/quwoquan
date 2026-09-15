@@ -355,15 +355,52 @@ def _materialize_capsule_entry(repo_root: Path, capsule_root: Path, entry: dict[
             os.close(fd)
 
 
-def _capsule_entries(repo_root: Path, *, mode: str, push_updates: list[dict[str, str]] | None) -> tuple[list[dict[str, str]], str]:
+def push_source_identity(repo_root: Path, *, mode: str, push_updates: list[dict[str, str]] | None) -> dict[str, Any] | None:
+    if mode != "push":
+        return None
+    head, base = _core._validated_push_identity(repo_root, push_updates or [])
+    return {"base": base, "head": head,
+            "tree": _core._git_text(repo_root, "rev-parse", f"{head}^{{tree}}").strip(),
+            "paths": _core.push_paths(repo_root, push_updates or []), "mode": mode}
+
+
+def read_health_result(path: Path | None, command: list[str], *, repo_root: Path) -> tuple[dict[str, Any] | None, bool]:
+    """读取真实执行器报告，并按同一 Git adapter 校验执行范围。"""
+    if path is None:
+        return None, True
+    if not path.is_file():
+        return None, False
+    from quwoquan_ops.ci.impact_planner_core import canonical_digest
+    from quwoquan_ops.gate.code_health_delta.git_delta import changes, working_tree_changes
+    from quwoquan_ops.gate.code_health_delta.base_ref import resolve_auto_base
+    report = _core._read_json_regular(path, label="code health report")
+    if not isinstance(report, dict):
+        return None, False
+    evidence = {"report": report, "digest": canonical_digest(report)}
+    base_ref = command[command.index("--base") + 1]
+    base = resolve_auto_base(repo_root)["sha"] if base_ref == "auto" else _core._git_text(repo_root, "rev-parse", base_ref).strip()
+    head = _core._git_text(repo_root, "rev-parse", command[command.index("--head") + 1]).strip()
+    paths = [command[index + 1] for index, value in enumerate(command) if value == "--changed-file"]
+    working, indexed = "--working-tree" in command, "--index-only" in command
+    delta = working_tree_changes(repo_root, base, paths or None, index_only=indexed) if working else changes(repo_root, base, head, paths or None)
+    source = "index" if indexed else "working-tree" if working else "commit"
+    expected = {"schema": "quwoquan.code-health-delta", "baseSha": base, "headSha": head,
+                "changedPaths": [item.path for item in delta], "candidateSource": source,
+                "mode": command[command.index("--mode") + 1]}
+    valid = all(report.get(key) == value for key, value in expected.items())
+    return evidence, valid and report.get("terminal") in {"PASS", "PR_WARN"}
+
+
+def _capsule_entries(repo_root: Path, *, mode: str, push_updates: list[dict[str, str]] | None) -> tuple[list[dict[str, str]], str, str]:
     if mode == "staged":
-        return _core._index_source_entries(repo_root), _core._head_sha(repo_root)
+        head = _core._head_sha(repo_root)
+        return _core._index_source_entries(repo_root), head, head
     if mode == "commit":
         head = _core._head_sha(repo_root)
-        return _core._tree_source_entries(repo_root, head), head
+        return _core._tree_source_entries(repo_root, head), head, _core._merge_base(repo_root, head)
     if mode == "push":
-        head, _base = _core._validated_push_identity(repo_root, push_updates or [])
-        return _core._tree_source_entries(repo_root, head), head
+        head, base = _core._validated_push_identity(repo_root, push_updates or [])
+        return _core._tree_source_entries(repo_root, head), head, base
     raise _core.LocalReadinessError(f"mode={mode} 不使用 immutable capsule")
 
 
@@ -379,7 +416,7 @@ def source_execution_root(
     if mode == "workspace":
         yield repo_root, {}, []
         return
-    entries, source_sha = _core._capsule_entries(repo_root, mode=mode, push_updates=push_updates)
+    entries, source_sha, base_sha = _core._capsule_entries(repo_root, mode=mode, push_updates=push_updates)
     process_root = _core._ensure_secure_directory(
         state_root / "process/materializations",
         label="local readiness materialization root",
@@ -440,6 +477,8 @@ def source_execution_root(
             ["git", "config", "core.worktree", str(capsule)],
             ["git", "symbolic-ref", "HEAD", "refs/heads/dev1.0"],
             ["git", "update-ref", "refs/heads/dev1.0", source_sha],
+            # 保留实际 before 对象供显式 range 执行；不改变 candidate 的干净 HEAD/index。
+            ["git", "update-ref", "refs/readiness/base", base_sha],
             ["git", "read-tree", "--empty"],
         ):
             proc = subprocess.run(command, cwd=capsule, env={**os.environ, **setup_env}, capture_output=True, check=False)

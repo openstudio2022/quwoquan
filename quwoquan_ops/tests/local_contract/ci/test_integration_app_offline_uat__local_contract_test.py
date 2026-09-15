@@ -284,6 +284,86 @@ def test_integration_offline_orchestration_forwards_exact_candidate_and_devices(
         subject._offline_fact_refs(store=store, fact=fact, candidate=_CANDIDATE)
 
 
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004
+@pytest.mark.parametrize("second_fails", [False, True])
+@pytest.mark.parametrize("missing_report", [False, True])
+def test_offline_failure_attempts_both_platforms_and_preserves_first_blocker(tmp_path, monkeypatch, second_fails, missing_report):
+    from argparse import Namespace
+    from quwoquan_ops.cli import integration_run as subject
+
+    receipts, write = _receipt_matrix(tmp_path)
+    commands = []
+    payloads = {}
+    for platform, failed in (("android", True), ("ios", second_fails)):
+        payload = json.loads((tmp_path / receipts[platform]["ref"]).read_bytes())
+        payload.update(exitCode=2 if failed else 0, status="gate_block" if failed else "passed",
+                       firstBlocker=("APP.LAUNCH.receipt_timeout" if platform == "android" else "APP.UAT.page_artifact_binding_missing") if failed else "",
+                       summary="Offline App content UAT is GATE_BLOCK" if failed else "passed")
+        write(receipts[platform]["ref"], payload)
+        if not (platform == "android" and missing_report):
+            payload["reportDir"] = str(tmp_path / platform)
+        payloads[platform] = payload
+
+    def stackctl(*argv, **kwargs):
+        platform = "android" if "android" in argv else "ios"
+        commands.append(platform)
+        return subject.StackctlResult("app-content-uat", payloads[platform], "")
+
+    monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
+    monkeypatch.setattr(subject, "_store", lambda: tmp_path / "store")
+    monkeypatch.setattr(subject, "_stackctl", stackctl)
+    phases = subject.Phases()
+    with pytest.raises(subject.IntegrationRunError) as blocked:
+        phases.run("alpha.offline-pages", lambda: subject._alpha_offline_pages(
+            candidate=_CANDIDATE, candidate_ref={"ref": "candidate.json", "digest": _DIGEST},
+            args=Namespace(android_device_id="android-device", ios_device_id="ios-device"), run_dir=tmp_path, phases=phases))
+    assert commands == ["android", "ios"]
+    assert blocked.value.code == "INTEGRATION_RUN.APP_LAUNCH_FAILED"
+    assert "APP.LAUNCH.receipt_timeout" in blocked.value.detail
+    assert "APP.UAT.page_artifact_binding_missing" not in blocked.value.detail
+    assert [phase["name"] for phase in phases.items] == ["alpha.offline-android", "alpha.offline-ios", "alpha.offline-pages"]
+    assert [phase["status"] for phase in phases.items] == ["failed", "failed" if second_fails else "passed", "failed"]
+    assert [phase["result"] for phase in phases.items[:2]] == [payloads["android"], payloads["ios"]]
+    assert ("receipt" in phases.items[0]) is not missing_report
+    assert phases.items[1]["receipt"]["ref"] == "ios/receipt.json"
+    assert "APP.LAUNCH.receipt_timeout" in phases.items[0]["blocker"]["detail"]
+    assert not (tmp_path / "store").exists(), "失败不得复制出可签发的 offline axis"
+    assert not (tmp_path / "acceptance-bundle").exists()
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004
+@pytest.mark.parametrize("damage", ["missing-receipt", "missing-case"])
+def test_offline_orchestration_still_requires_actual_dual_platform_closure(tmp_path, monkeypatch, damage):
+    from argparse import Namespace
+    from quwoquan_ops.cli import integration_run as subject
+
+    receipts, write = _receipt_matrix(tmp_path)
+    if damage == "missing-receipt":
+        (tmp_path / receipts["android"]["ref"]).unlink()
+    else:
+        receipt = json.loads((tmp_path / receipts["android"]["ref"]).read_bytes())
+        receipt["rawResultRefs"]["alpha-local"].pop()
+        write(receipts["android"]["ref"], receipt)
+    commands = []
+
+    def stackctl(*argv, **kwargs):
+        platform = "android" if "android" in argv else "ios"
+        commands.append(platform)
+        return subject.StackctlResult("app-content-uat", {"exitCode": 0, "reportDir": str(tmp_path / platform)}, "")
+
+    monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
+    monkeypatch.setattr(subject, "_store", lambda: tmp_path / "store")
+    monkeypatch.setattr(subject, "_stackctl", stackctl)
+    phases = subject.Phases()
+    with pytest.raises(subject.IntegrationRunError):
+        subject._alpha_offline_pages(candidate=_CANDIDATE, candidate_ref={"ref": "candidate.json", "digest": _DIGEST},
+            args=Namespace(android_device_id="android-device", ios_device_id="ios-device"), run_dir=tmp_path, phases=phases)
+    assert commands == ["android", "ios"]
+    if damage == "missing-receipt":
+        assert [phase["status"] for phase in phases.items] == ["failed", "passed"]
+    assert not (tmp_path / "store").exists()
+
+
 def test_make_and_parser_pass_explicit_candidate_and_two_devices():
     from quwoquan_ops.cli import integration_run as subject
     args = subject._parser().parse_args(["--mode", "acceptance", "--candidate-ref", "candidate.json=" + _DIGEST,

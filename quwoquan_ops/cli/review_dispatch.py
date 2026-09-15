@@ -51,6 +51,7 @@ from lib.human_agent_delivery.runtime_bridge import (  # noqa: E402
 )
 from lib.review_fingerprint import (  # noqa: E402
     build_review_fingerprint,
+    validate_git_range, repository_inputs, source_root, dependency_root,
     head_sha as _review_head_sha,
     normalize_path as _review_normalize_path,
     sha256_text as _review_sha256_text,
@@ -110,6 +111,7 @@ def validate_emitted_terminal_closure() -> None:
     _validate_emitted_terminal_closure(contract_section)
 
 
+@repository_inputs
 def build_plan(
     registry: dict[str, Any],
     workflow: str,
@@ -129,6 +131,7 @@ def build_plan(
     incomplete_roles: list[dict[str, str] | str] | None = None,
     failed_evidence_ids: list[str] | None = None,
     cancelled: bool = False,
+    git_range: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic review plan without executing evidence or reviewers.
 
@@ -137,6 +140,8 @@ def build_plan(
     compatible.
     """
 
+    git_projection = _git_range_projection(git_range)
+    git_range = git_projection.get("git_range")
     validate_emitted_terminal_closure()
     _validate_registry_header(registry)
     workflows = registry.get("workflows") or {}
@@ -189,6 +194,7 @@ def build_plan(
             target_kind="review",
             admission_class=admission_class,
             human_decision_ref=human_decision_ref,
+            repo_root=dependency_root(),
         )
     except HumanDecisionBridgeError as exc:
         raise ValueError(f"{exc.code}: {exc.detail}") from exc
@@ -281,6 +287,7 @@ def build_plan(
         contexts=contexts,
         initial_reviewers=initial_reviewers,
         evidence=evidence,
+        git_range=git_range,
     )
     fingerprint = fingerprint_receipt["digest"]
     evidence_reusable = bool(
@@ -342,8 +349,16 @@ def build_plan(
             timespec="seconds"
         ),
     }
+    plan.update(git_projection)
     _validate_plan_contract(plan)
     return plan
+
+
+def _git_range_projection(value: dict[str, str] | None) -> dict[str, Any]:
+    if value is None:
+        return {}
+    value = validate_git_range(value, repo_root=source_root(REPO_ROOT))
+    return {"git_range": value, "head_sha": value["head_sha"], "merge_base_sha": value["base_sha"]}
 
 
 def _validate_exact_git_identity(plan: dict[str, Any]) -> None:
@@ -632,7 +647,7 @@ def _resolve_evidence(
 
 
 def _checklist_evidence(checklist: str) -> list[str]:
-    path = REFERENCES_DIR / checklist
+    path = source_root() / ".agents/skills/review/references" / checklist
     if not path.is_file():
         _refuse("REVIEW.CHECKLIST_MISSING", f"checklist 不存在：{checklist}")
     evidence: dict[str, None] = {}
@@ -647,7 +662,7 @@ def _read_owner_manifest_exact_bytes(manifest_ref: str) -> bytes:
     """Compatibility export for the descriptor-relative exact-ref reader."""
 
     return _review_owner_manifest.read_owner_manifest_exact_bytes(
-        manifest_ref, repo_root=REPO_ROOT
+        manifest_ref, repo_root=source_root(REPO_ROOT)
     )
 
 
@@ -667,7 +682,7 @@ def _normalize_contexts(
         changed_paths=changed_paths,
         expected_scope=expected_scope,
         required=required,
-        repo_root=REPO_ROOT,
+        repo_root=source_root(REPO_ROOT),
         reader=_read_owner_manifest_exact_bytes,
         validate_manifest=validate_feature_context_manifest,
         validate_current_fingerprint=validate_current_feature_context_fingerprint,
@@ -687,12 +702,14 @@ def _measure_reviewer_contexts(
     del workflow, workflow_config, active_profiles, contexts
     limit = int(registry["limits"]["reviewer_context_bytes"])
     estimates: dict[str, int] = {}
-    grading = GRADING_PATH.read_bytes() if GRADING_PATH.is_file() else b""
-    system_path = REFERENCES_DIR / "reviewer-executor.md"
+    references = source_root() / ".agents/skills/review/references"
+    grading_path = references / "grading.md"
+    grading = grading_path.read_bytes() if grading_path.is_file() else b""
+    system_path = references / "reviewer-executor.md"
     system = system_path.read_bytes() if system_path.is_file() else b""
     for reviewer in reviewers:
-        role_path = REFERENCES_DIR / "roles" / reviewer["role"] / "ROLE.md"
-        checklist_path = REFERENCES_DIR / reviewer["checklist"]
+        role_path = references / "roles" / reviewer["role"] / "ROLE.md"
+        checklist_path = references / reviewer["checklist"]
         if not role_path.is_file():
             _refuse("REVIEW.ROLE_MISSING", f"角色定义不存在：{reviewer['role']}")
         estimates[reviewer["role"]] = (
@@ -720,6 +737,7 @@ def _fingerprint_receipt(
     initial_reviewers: list[dict[str, Any]],
     evidence: list[dict[str, Any]],
     human_decision_projection: dict[str, Any] | None = None,
+    git_range: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     return build_review_fingerprint(
         workflow=workflow,
@@ -738,9 +756,11 @@ def _fingerprint_receipt(
         contexts=contexts,
         initial_reviewers=initial_reviewers,
         evidence=evidence,
+        git_range=git_range,
     )
 
 
+@repository_inputs
 def recompute_plan_fingerprint(
     plan: dict[str, Any], registry: dict[str, Any]
 ) -> dict[str, Any]:
@@ -784,6 +804,7 @@ def recompute_plan_fingerprint(
         contexts=contexts,
         initial_reviewers=initial_reviewers,
         evidence=evidence,
+        git_range=plan.get("git_range"),
     )
 
 
@@ -807,13 +828,21 @@ def validate_plan_terminal_for_phase(
 def _validate_current_owner_manifest(plan: dict[str, Any]) -> dict[str, Any]:
     return _review_owner_manifest.validate_current_owner_manifest(
         plan,
-        repo_root=REPO_ROOT,
+        repo_root=source_root(REPO_ROOT),
         reader=_read_owner_manifest_exact_bytes,
         validate_manifest=validate_feature_context_manifest,
         validate_current_fingerprint=validate_current_feature_context_fingerprint,
     )
 
 def _validate_current_git_range(plan: dict[str, Any]) -> None:
+    if "git_range" in plan:
+        try:
+            explicit = validate_git_range(plan["git_range"], repo_root=source_root(REPO_ROOT))
+        except (ValueError, OSError) as exc:
+            _refuse("REVIEW.FINGERPRINT_CHANGED", str(exc))
+        if plan["head_sha"] != explicit["head_sha"] or plan["merge_base_sha"] != explicit["base_sha"]:
+            _refuse("REVIEW.FINGERPRINT_CHANGED", "Review git_range 与 plan range 不一致")
+        return
     if (
         plan["head_sha"] != _head_sha()
         or plan["merge_base_sha"] != _merge_base_sha()
@@ -824,6 +853,7 @@ def _validate_current_git_range(plan: dict[str, Any]) -> None:
         )
 
 
+@repository_inputs
 def validate_current_review_plan(
     plan: dict[str, Any], registry: dict[str, Any], *, phase: str = "evidence"
 ) -> dict[str, Any]:
@@ -833,6 +863,7 @@ def validate_current_review_plan(
             target_kind="review",
             admission_class=str(plan["human_decision_projection"]["admission_class"]),
             human_decision_ref=plan["human_decision_ref"],
+            repo_root=dependency_root(),
         )
     except HumanDecisionBridgeError as exc:
         _refuse("REVIEW.FINGERPRINT_CHANGED", f"{exc.code}: {exc.detail}")
@@ -937,7 +968,7 @@ def _repo_relative(raw_path: str) -> str:
 def _merge_base_sha() -> str:
     for base in ("origin/dev1.0", "dev1.0", "main"):
         result = subprocess.run(
-            ["git", "merge-base", "HEAD", base], cwd=REPO_ROOT,
+            ["git", "merge-base", "HEAD", base], cwd=source_root(REPO_ROOT),
             capture_output=True, text=True, check=False,
         )
         if result.returncode == 0 and result.stdout.strip():
@@ -981,7 +1012,7 @@ def main(argv: list[str] | None = None) -> int:
     return _review_dispatch_cli.main(
         argv,
         description=__doc__.splitlines()[0],
-        repo_root=REPO_ROOT,
+        repo_root=source_root(REPO_ROOT),
         registry_path=REGISTRY_PATH,
         runtime_output_root=(
             runtime_output_root if isinstance(runtime_output_root, str) else ""

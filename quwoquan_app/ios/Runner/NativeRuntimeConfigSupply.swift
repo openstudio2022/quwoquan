@@ -1064,12 +1064,33 @@ enum NativeRuntimeConfigActivationCoordinator {
     }
   }
 
+  // 只决定 CAS 前值，不授予消费权限。旧 Alpha 在线包和离线包都必须先验签；
+  // Alpha 的旧 receipt 不参与成功判定，由本次完整 activation 原子替换。
+  // Beta/Gamma 必须仍通过严格消费读取，过期或坏 receipt 不能隐式回落 Alpha。
+  static func selfSupplyPreviousActiveDigest() throws -> String? {
+    switch NativeRuntimeConfigStore.readActivePackageIdentity() {
+    case .absent:
+      return ""
+    case .failure(let error):
+      throw error
+    case .present(let active):
+      if active.package["environment"] as? String == "alpha",
+         active.package["target"] as? String == "alpha-local",
+         active.package["buildProfile"] as? String == "nonprod" {
+        return active.packageDigest
+      }
+      _ = try readVerifiedIdentity()
+      NSLog("QWQStartup ios_runtime_config_self_supply_skipped reason=external_active")
+      return nil
+    }
+  }
+
   /// Debug-nonprod 构建期自供给：冷启动无外部 activation 参数时消费制品内嵌的激活请求。
   ///
   /// 与外部请求走同一 validate → CAS activate → receipt 路径，区别只有两点：请求位于
   /// 制品而非私有容器，`expectedActiveDigest` 由这里以当前 active digest 现场补齐。
-  /// 决策矩阵：制品无请求 → 未请求；合法在线 active → 保持不变；
-  /// 缺席或已有合法 Alpha 离线且请求变化 → 激活；过期在线/损坏 → typed 失败，不回落。
+  /// 决策矩阵：制品无请求 → 未请求；合法 Beta/Gamma active → 保持不变；
+  /// 缺席或已验签的同目标 Alpha → 完整激活；其他过期在线/损坏 → typed 失败。
   /// 失败只记账并返回 typed 码，调用方继续既有 trust/config 阻断，不得静默回退。
   static func consumeBundledSelfSupplyRequest() -> NativeRuntimeConfigActivationConsumeResult {
     let notRequested = NativeRuntimeConfigActivationConsumeResult(
@@ -1102,30 +1123,10 @@ enum NativeRuntimeConfigActivationCoordinator {
       else {
         throw NativeRuntimeConfigReadError.activationIdentityMismatch
       }
-      switch NativeRuntimeConfigStore.readActivePackage() {
-      case .present(let active):
-        _ = try readVerifiedIdentity()
-        let activeReceipt = try readActiveReceiptDocument()
-        guard active.package["schema"] as? String == AppLaunchContract.schemaValues["offline_bootstrap_document"] else {
-          NSLog("QWQStartup ios_runtime_config_self_supply_skipped reason=external_active")
-          return notRequested
-        }
-        if activeReceipt["requestDigest"] as? String == requestDigest,
-           active.packageDigest == receiptIdentity.packageDigest {
-          return NativeRuntimeConfigActivationConsumeResult(
-            requested: true,
-            activated: true,
-            errorCode: "",
-            validationIssues: []
-          )
-        }
-        previousActiveDigest = active.packageDigest
-      case .absent:
-        previousActiveDigest = ""
-      case .failure(let error):
-        // 只有显式 canonical activation 可以替换在线过期包；默认供给不降级权限。
-        throw error
+      guard let activeDigest = try selfSupplyPreviousActiveDigest() else {
+        return notRequested
       }
+      previousActiveDigest = activeDigest
       previousActiveDigestKnown = true
       guard let package = decoded["package"] as? [String: Any],
             let packageDigest = decoded["packageDigest"] as? String,

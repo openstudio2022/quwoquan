@@ -17,7 +17,7 @@ from quwoquan_ops.gate.code_health_delta.engine import analyze_delta
 from quwoquan_ops.gate.code_health_delta.policy import load_policy
 from quwoquan_ops.gate.python_script_governance import constants as governance_constants
 from quwoquan_ops.tests.support.code_health_delta_test_support import (
-    POLICY, commit, init_repo, policy_path, policy_text_with, write,
+    POLICY, commit, git, init_repo, policy_path, policy_text_with, write,
 )
 
 BLOCK = 2000
@@ -31,6 +31,34 @@ def _codes(report: dict) -> set[str]:
 
 def _analyze(repo: Path, base: str, head: str) -> dict:
     return analyze_delta(repo, base=base, head=head, policy_path=policy_path(repo), mode="fast")
+
+
+def test_debt_delta_retains_resolution_and_never_nets_blockers(tmp_path: Path) -> None:
+    repo, _ = init_repo(tmp_path)
+    old = "quwoquan_ops/ci/old.py"
+    fresh = "quwoquan_ops/ci/new.py"
+    write(repo, old, "old = 1\n" * (BLOCK + 10))
+    base = commit(repo)
+    (repo / old).unlink()
+    write(repo, fresh, "fresh = 2\n" * (BLOCK + 1))
+    head = commit(repo)
+    report = _analyze(repo, base, head)
+    assert report["terminal"] == "GATE_BLOCK"
+    entries = report["debtDelta"]["entries"]
+    assert any(e["path"] == old and e["status"] == "resolved" for e in entries)
+    assert any(e["path"] == fresh and e["status"] == "introduced" for e in entries)
+
+
+def test_pure_rename_reports_unchanged_debt(tmp_path: Path) -> None:
+    repo, _ = init_repo(tmp_path)
+    write(repo, "quwoquan_ops/ci/before.py", "x = 1\n" * (BLOCK + 1))
+    base = commit(repo)
+    git(repo, "mv", "quwoquan_ops/ci/before.py", "quwoquan_ops/ci/after.py")
+    head = commit(repo)
+    report = _analyze(repo, base, head)
+    assert report["debtDelta"]["entries"]
+    assert {e["status"] for e in report["debtDelta"]["entries"]} == {"unchanged"}
+    assert report["terminal"] == "PASS"
 
 
 def test_python_script_governance_owns_no_second_line_budget() -> None:

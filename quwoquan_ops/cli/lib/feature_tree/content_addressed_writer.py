@@ -18,7 +18,7 @@ from . import context
 
 def _content_addressed_path(content: bytes, *, subdirectory: str | None = None) -> Path:
     digest = hashlib.sha256(content).hexdigest()
-    parent = context.OUTPUT_ROOT / "by-fingerprint"
+    parent = context.output_root() / "by-fingerprint"
     if subdirectory is not None:
         parent /= subdirectory
     return parent / f"{digest}.json"
@@ -148,8 +148,8 @@ def _write_content_addressed_bytes(
             "GATE_BLOCK: immutable ref 只允许 canonical receipts/candidates 子目录"
         )
     path = _content_addressed_path(content, subdirectory=subdirectory)
-    output_root = Path(os.path.abspath(context.OUTPUT_ROOT))
-    repository_root = Path(os.path.abspath(context.REPO_ROOT))
+    output_root = Path(os.path.abspath(context.output_root()))
+    repository_root = Path(os.path.abspath(context.repository_root()))
     canonical_output_root = (
         repository_root / ".qwq_output/env/repo/runs/feature-tree"
     )

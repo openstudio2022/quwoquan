@@ -472,7 +472,7 @@ def test_git_hooks_only_check_boundaries_and_never_consume_receipts() -> None:
     assert "release_ready" not in source
     assert "readiness PASS" not in source
     pre_push = PRE_PUSH.read_text(encoding="utf-8")
-    assert "verify_git_branch_policy.py --pre-push" in pre_push
+    assert 'verify_git_branch_policy.py --pre-push --remote-name "${1:-}" --remote-url "${2:-}"' in pre_push
     assert "verify --level release" not in pre_push
     assert "scope_ready" not in pre_push
     assert "release_ready" not in pre_push
@@ -970,6 +970,20 @@ def test_user_service_focused_go_uses_check_override_within_fast_ceiling() -> No
     check = next(item for item in plan["checks"] if item["id"] == "focused:go:user-service")
     assert check["timeout_seconds"] == 600
     assert check["timeout_seconds"] <= 900
+
+
+@pytest.mark.parametrize("level", ["fast", "scope", "release"])
+def test_retired_terms_check_precedes_build_for_every_readiness_level(level: str) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-006.t1
+    from quwoquan_ops.ci.local_readiness_planner import STATIC_COMMANDS
+
+    plan = build_impact_plan(["quwoquan_app/lib/runtime/value.dart"], level=level)
+    checks = plan["checks"]
+    selected = [check for check in checks if check["id"] == "static:retired_terms_zero"]
+    assert len(selected) == 1
+    assert selected[0]["command"] == STATIC_COMMANDS["retired_terms_zero"][0]
+    assert selected[0]["phase"] == "static"
+    assert all(checks.index(selected[0]) < index for index, check in enumerate(checks) if check["phase"] == "scope_build")
 
 
 def test_source_scope_routes_fast_and_full_code_health_with_bounded_timeouts() -> None:

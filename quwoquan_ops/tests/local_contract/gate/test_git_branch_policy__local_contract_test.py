@@ -4,6 +4,8 @@
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t4
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-002.t1
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-002.t2
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-005.t1
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-005.t2
 """分支政策 schema、仓库上下文与稳定 CLI 本地契约。
 
 activation、纯转换判定和 pre-push 场景按职责拆至
@@ -97,7 +99,7 @@ def test_repository_policy_declares_dev_integration_main_release_and_six_lanes()
     policy = _repository_policy()
 
     assert policy.allowed_local == set(ALL_LONG_LIVED)
-    assert policy.allowed_remote == set(ALL_LONG_LIVED)
+    assert policy.allowed_remote == {"dev1.0", "main"}
     assert policy.pull_request_prefixes == {"lane/"}
     assert policy.integration_branch == "dev1.0"
     assert policy.release_branch == "main"
@@ -107,7 +109,7 @@ def test_repository_policy_declares_dev_integration_main_release_and_six_lanes()
             "integration_worktree_fast_forward",
             "system_fast_forward_backsync",
         ),
-        ordinary_direct_push="matching_integration_fast_forward_only",
+        ordinary_direct_push="exact_admission_integration_fast_forward_only",
     )
     assert policy.source_admission_branch == "main"
     assert policy.production_selector == ProductionSelector(
@@ -124,17 +126,9 @@ def test_repository_policy_declares_dev_integration_main_release_and_six_lanes()
             workflow=".github/workflows/delivery-gate.yml",
         ),
     )
-    assert policy.required_integration_checks == (
-        RequiredPromotionCheck(
-            name="04. Lane Gate",
-            workflow=".github/workflows/lane-gate.yml",
-        ),
-    )
-    for row in policy.required_integration_checks:
-        assert (ROOT / row.workflow).is_file(), row.workflow
+    assert policy.required_integration_checks == ()
     assert policy.allowed_pull_request_edges == (
         PullRequestEdge(base="main", head="dev1.0"),
-        PullRequestEdge(base="dev1.0", head="lane/*"),
     )
     assert policy.system_backsync == SystemBacksync(
         head="main",
@@ -143,7 +137,7 @@ def test_repository_policy_declares_dev_integration_main_release_and_six_lanes()
     )
     assert policy.persistent_lane_admission is not None
     assert policy.persistent_lane_admission.isolation == "branch_per_writer"
-    assert policy.persistent_lane_admission.promotion == "declared_pull_request_edge_only"
+    assert policy.persistent_lane_admission.promotion == "exact_acceptance_bundle_integration_publish_only"
     assert policy.persistent_lane_admission.resync == "mandatory_fast_forward_after_integration_or_abort"
     assert policy.persistent_lane_admission.worktree_lifecycle == "retained"
     assert policy.persistent_lane_admission.concurrency_evidence == "required"
@@ -157,6 +151,29 @@ def test_repository_policy_declares_dev_integration_main_release_and_six_lanes()
         "ref_not_allowed": "OPS.BRANCH.REF_NOT_ALLOWED",
         "source_not_main_reachable": "OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE",
     }
+
+
+def test_local_commit_does_not_import_publish_or_signing_stack() -> None:
+    script = """
+import sys
+from importlib.abc import MetaPathFinder
+
+class RejectPublicationImports(MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.startswith(('quwoquan_ops.ci.', 'cryptography')):
+            raise AssertionError('local commit imported publication stack: ' + fullname)
+
+sys.meta_path.insert(0, RejectPublicationImports())
+from quwoquan_ops.gate.verify_git_branch_policy import load_policy, local_commit_issues
+policy = load_policy()
+for branch in policy.allowed_local - {policy.release_branch}:
+    assert local_commit_issues(policy, branch) == []
+"""
+    completed = subprocess.run(
+        [sys.executable, "-B", "-c", script], cwd=ROOT,
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
 def test_local_commit_accepts_integration_candidate_construction() -> None:
@@ -182,15 +199,14 @@ def test_branch_policy_accepts_every_declared_long_lived_branch(
     assert _issues(current_branch=current_branch) == []
 
 
-def test_branch_policy_accepts_six_persistent_lane_refs_locally_and_remotely() -> None:
-    assert (
-        _issues(
-            current_branch="dev1.0",
-            local_branches=list(ALL_LONG_LIVED),
-            remote_branches=list(ALL_LONG_LIVED),
-        )
-        == []
-    )
+def test_branch_policy_accepts_six_persistent_lane_refs_only_locally() -> None:
+    assert _issues(current_branch="dev1.0", local_branches=list(ALL_LONG_LIVED),
+                   remote_branches=["dev1.0", "main"]) == []
+    issues = _issues(current_branch="dev1.0", local_branches=list(ALL_LONG_LIVED),
+                     remote_branches=list(ALL_LONG_LIVED))
+    assert len(issues) == 1
+    assert "unexpected remote branches" in issues[0]
+    assert all(branch in issues[0] for branch in LANE_BRANCHES)
 
 
 def test_branch_policy_rejects_a_third_long_lived_branch() -> None:
@@ -267,7 +283,7 @@ def test_default_mode_still_rejects_stale_undeclared_refs(
     issues = module.current_repo_issues(_repository_policy())
 
     assert any("unexpected local branches: stale/local" in issue for issue in issues)
-    assert any("unexpected remote branches: stale/remote" in issue for issue in issues)
+    assert any("unexpected remote branches:" in issue and "stale/remote" in issue for issue in issues)
 
 
 def test_branch_policy_rejects_codex_branch_even_when_it_targets_dev() -> None:
@@ -297,17 +313,16 @@ def test_branch_policy_accepts_dev_to_main_promotion() -> None:
 
 
 @pytest.mark.parametrize("lane", list(LANE_BRANCHES))
-def test_branch_policy_accepts_every_lane_to_dev_pull_request_edge(lane: str) -> None:
-    assert (
-        _issues(
-            current_branch=None,
-            local_branches=[],
-            remote_branches=["dev1.0", "main", lane],
-            ci_head_branch=lane,
-            ci_base_branch="dev1.0",
-        )
-        == []
+def test_branch_policy_rejects_every_lane_to_dev_pull_request_edge(lane: str) -> None:
+    issues = _issues(
+        current_branch=None,
+        local_branches=[],
+        remote_branches=["dev1.0", "main", lane],
+        ci_head_branch=lane,
+        ci_base_branch="dev1.0",
     )
+    assert issues
+    assert all(issue.startswith("OPS.BRANCH.REF_NOT_ALLOWED:") for issue in issues)
 
 
 @pytest.mark.parametrize(
@@ -319,6 +334,7 @@ def test_branch_policy_accepts_every_lane_to_dev_pull_request_edge(lane: str) ->
         ("dev1.0", "dev1.0"),
         ("main", "main"),
         ("release/other", "main"),
+        ("lane/small-fix", "dev1.0"),
         ("lane/small-fix", "main"),
         ("lane/small-fix", "lane/refactor"),
         ("lane/undeclared", "dev1.0"),
@@ -371,8 +387,8 @@ def test_hosted_pull_request_uses_only_remote_event_facts(
 
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
-    monkeypatch.setenv("GITHUB_HEAD_REF", "lane/ops")
-    monkeypatch.setenv("GITHUB_BASE_REF", "dev1.0")
+    monkeypatch.setenv("GITHUB_HEAD_REF", "dev1.0")
+    monkeypatch.setenv("GITHUB_BASE_REF", "main")
     monkeypatch.setattr(
         module,
         "_run_git",
@@ -415,7 +431,7 @@ def test_hosted_push_does_not_infer_direct_push_without_explicit_update_source(
     monkeypatch.setenv("GITHUB_REF_NAME", branch)
     monkeypatch.setenv("GITHUB_REPOSITORY", "openstudio2022/quwoquan")
 
-    assert current_repo_issues() == []
+    assert not any("DIRECT_PUSH_NOT_ALLOWED" in issue for issue in current_repo_issues())
 
 
 def test_main_push_after_pr_merge_is_not_misreported_as_direct_push(
@@ -431,7 +447,7 @@ def test_main_push_after_pr_merge_is_not_misreported_as_direct_push(
     issues = current_repo_issues()
 
     assert not any("DIRECT_PUSH_NOT_ALLOWED" in issue for issue in issues)
-    assert issues == []
+    assert all("unexpected remote branches:" in issue for issue in issues)
 
 
 def test_branch_policy_does_not_trust_detached_non_pr_environment() -> None:
@@ -760,10 +776,12 @@ def test_cli_classifies_git_unicode_decode_failure_as_authority_unavailable(
     assert "Traceback" not in output
 
 
-def test_real_cli_passes_without_traceback() -> None:
+def test_real_cli_honestly_reports_current_remote_inventory() -> None:
     completed = _run_branch_policy_cli()
-    assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert "[verify_git_branch_policy] OK" in completed.stdout
+    issues = current_repo_issues()
+    assert completed.returncode == (1 if issues else 0), completed.stdout + completed.stderr
+    for issue in issues:
+        assert issue in completed.stdout
     assert "Traceback" not in completed.stdout + completed.stderr
 
 
@@ -787,28 +805,38 @@ def test_policy_byte_loader_rejects_unknown_or_missing_root_fields() -> None:
 
 
 def test_integration_and_promotion_required_checks_are_independent_sets() -> None:
-    """lane PR 与 main promotion 的 required check 不能共享 workflow 或名字。
-
-    `required_promotion_checks` 被 hosted release authority 展开成 main ruleset 期望值；
-    把 lane check 混进去会让 ruleset readback 失配，把 promotion check 混进 lane 会让
-    lane PR 去等一个永远不会为它触发的 workflow。
-    """
+    """dev 可不声明 required check；若声明，仍不得复用 main promotion 的名字或 workflow。"""
     raw = (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(encoding="utf-8")
-    shared_workflow = raw.replace(
-        "workflow: .github/workflows/lane-gate.yml",
-        "workflow: .github/workflows/delivery-gate.yml",
-    )
+    assert load_policy_bytes(raw.encode()).required_integration_checks == ()
+    populated = raw.replace("required_integration_checks: []", "required_integration_checks:\n"
+        "  - name: 04. Dev Protection Readback\n    workflow: .github/workflows/lane-gate.yml")
+    assert len(load_policy_bytes(populated.encode()).required_integration_checks) == 1
+    shared_workflow = populated.replace(
+        "workflow: .github/workflows/lane-gate.yml", "workflow: .github/workflows/delivery-gate.yml")
     with pytest.raises(ValueError, match="must not share a workflow"):
-        load_policy_bytes(shared_workflow.encode("utf-8"))
-    shared_name = raw.replace("name: 04. Lane Gate", "name: 03. Delivery Gate")
+        load_policy_bytes(shared_workflow.encode())
+    shared_name = populated.replace("name: 04. Dev Protection Readback", "name: 03. Delivery Gate")
     with pytest.raises(ValueError, match="must not share a check name"):
-        load_policy_bytes(shared_name.encode("utf-8"))
-    empty = raw.replace(
-        "required_integration_checks:\n  - name: 04. Lane Gate\n    workflow: .github/workflows/lane-gate.yml\n",
-        "required_integration_checks: []\n",
-    )
-    with pytest.raises(ValueError, match="required_integration_checks must be non-empty"):
-        load_policy_bytes(empty.encode("utf-8"))
+        load_policy_bytes(shared_name.encode())
+
+
+@pytest.mark.parametrize("key", ["required_integration_checks", "required_promotion_checks"])
+def test_required_checks_keep_shape_and_uniqueness_constraints(key: str) -> None:
+    payload = yaml.safe_load((ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text())
+    payload[key] = []
+    if key == "required_integration_checks":
+        assert load_policy_bytes(yaml.safe_dump(payload).encode()).required_integration_checks == ()
+    else:
+        with pytest.raises(ValueError, match="required_promotion_checks must be non-empty"):
+            load_policy_bytes(yaml.safe_dump(payload).encode())
+    for invalid in (None, "", {}):
+        payload[key] = invalid
+        with pytest.raises(TypeError, match=f"{key} must be a list"):
+            load_policy_bytes(yaml.safe_dump(payload).encode())
+    row = {"name": "Independent Check", "workflow": ".github/workflows/independent.yml"}
+    payload[key] = [row, row]
+    with pytest.raises(ValueError, match="duplicate-free"):
+        load_policy_bytes(yaml.safe_dump(payload).encode())
 
 
 def test_persistent_lane_admission_schema_is_exact_and_closed() -> None:
@@ -817,7 +845,7 @@ def test_persistent_lane_admission_schema_is_exact_and_closed() -> None:
     )
     assert payload["persistent_lane_admission"] == {
         "isolation": "branch_per_writer",
-        "promotion": "declared_pull_request_edge_only",
+        "promotion": "exact_acceptance_bundle_integration_publish_only",
         "resync": "mandatory_fast_forward_after_integration_or_abort",
         "resync_scope": "clean_or_non_overlapping_ancestor_only",
         "worktree_lifecycle": "retained",

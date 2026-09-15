@@ -1,8 +1,8 @@
 # Canonical post-promotion source convergence. The caller must pass the exact
 # MainSourceSeal emitted for this main merge; no release or Prod fact is involved.
-# 现状：dev1.0 的回同步由 integration 工作区 `make promotion-backsync`（FF 通道）执行；
-# 本 reusable workflow 暂无 caller，待 dedicated deploy key 与 Environment 到位后再接回
-# （见 daily-merge-release-strategy OPEN）。
+# caller 为 delivery-gate 的 main push seal 成功 job；专用 key/Environment 未部署则阻断。
+# system actor 只能 bypass 独立 required-check ruleset；non_fast_forward/deletion 必须
+# 留在无 bypass 的独立保护 ruleset。仓内接线不证明 hosted 保护已部署（OPEN-004）。
 name: 08. Managed System Backsync
 
 permissions:
@@ -68,8 +68,8 @@ jobs:
         run: |
           set -euo pipefail
           HANDOFF_CONTEXT='quwoquan/promotion-admission-handoff/v1'
-          [[ "$QWQ_PROMOTION_RECORDER_APP_ID" =~ ^[1-9][0-9]*$ ]] \
-            && test -n "$QWQ_PROMOTION_RECORDER_APP_SLUG" || {
+          test "$QWQ_PROMOTION_RECORDER_APP_ID" = 15368 \
+            && test "$QWQ_PROMOTION_RECORDER_APP_SLUG" = github-actions || {
             echo '::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: trusted promotion recorder App identity is unavailable'
             exit 2
           }

@@ -4,6 +4,7 @@
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t4
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-002.t1
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-002.t2
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-005.t2
 """分支政策 activation、转换判定与 pre-push 本地契约。
 
 由 1000 行硬顶按运行时判定职责拆分自
@@ -188,7 +189,7 @@ def test_transition_evaluator_rejects_non_integration_actor_dev_direct_push() ->
 def test_transition_evaluator_has_single_typed_result_semantics() -> None:
     policy = _repository_policy()
 
-    accepted = evaluate_transition(
+    blocked_lane = evaluate_transition(
         policy=policy,
         transition=BranchTransition(
             event="direct_push",
@@ -209,16 +210,8 @@ def test_transition_evaluator_has_single_typed_result_semantics() -> None:
         ),
     )
 
-    assert accepted == BranchDecision(
-        status="allowed",
-        string_context=(
-            ("actorKind", "human"),
-            ("base", "lane/ops"),
-            ("event", "direct_push"),
-            ("head", "lane/ops"),
-            ("repository", "owner/repo"),
-        ),
-    )
+    assert blocked_lane.status == "blocked"
+    assert blocked_lane.reason_code == "OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED"
     assert blocked.status == "blocked"
     assert blocked.reason_code == "OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED"
     assert blocked.allowed is False
@@ -227,8 +220,8 @@ def test_transition_evaluator_has_single_typed_result_semantics() -> None:
 @pytest.mark.parametrize(
     ("head", "base", "allowed"),
     [
-        ("lane/ops", "lane/ops", True),
-        ("lane/refactor", "lane/refactor", True),
+        ("lane/ops", "lane/ops", False),
+        ("lane/refactor", "lane/refactor", False),
         ("lane/ops", "dev1.0", False),
         ("lane/undeclared", "lane/undeclared", False),
     ],
@@ -257,6 +250,8 @@ def test_pre_push_allows_matching_integration_worktree_fast_forward(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import quwoquan_ops.gate.verify_git_branch_policy as module
+    # 此用例隔离 admission 边界，只验证分支转换；全链负向在 scoped candidate 套件。
+    monkeypatch.setattr(module, "_verify_acceptance_update", lambda *args: None)
 
     before = "b" * 40
     after = "a" * 40
@@ -278,9 +273,69 @@ def test_pre_push_allows_matching_integration_worktree_fast_forward(
                 remote_sha=before,
             )
         ],
-        environment={},
+        environment={"QWQ_ACCEPTANCE_PUBLISH": "1"},
     ) == []
     assert calls == [(before, after)]
+
+
+def test_pre_push_preserves_parse_issue_order_before_update_decisions() -> None:
+    issues = pre_push_issues(
+        policy=_repository_policy(), current_branch="lane/engineering",
+        update_lines=[
+            "\n", _update(local_branch="lane/engineering", remote_branch="main"),
+            "malformed update\n",
+            _update(local_branch="lane/engineering", remote_branch="lane/engineering"),
+        ], environment={},
+    )
+    assert [issue.split(":", 1)[0] for issue in issues] == [
+        "OPS.BRANCH.POLICY_INVALID", "OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED",
+        "OPS.BRANCH.REF_NOT_ALLOWED",
+    ]
+    assert "promotion PR" in issues[1]
+    assert "undeclared remote branch" in issues[2]
+
+
+@pytest.mark.parametrize("failure", [OSError("unavailable"), RuntimeError("unavailable")])
+@pytest.mark.parametrize("event", ["direct_push", "system_backsync"])
+def test_transition_preserves_context_and_authority_failure(event, failure) -> None:
+    def unavailable(before, after):
+        raise failure
+
+    transition = BranchTransition(
+        event=event, actor_kind="system" if event == "system_backsync" else "integration_worktree",
+        repository="owner/repo", head="main" if event == "system_backsync" else "dev1.0",
+        base="dev1.0", before_oid="b" * 40, after_oid="a" * 40,
+    )
+    decision = evaluate_transition(
+        policy=_repository_policy(), transition=transition, is_ancestor=unavailable,
+    )
+    assert decision.reason_code == "OPS.BRANCH.AUTHORITY_UNAVAILABLE"
+    assert decision.recovery_action == "restore_git_authority_then_retry"
+    assert dict(decision.string_context) == {
+        "event": event, "actorKind": transition.actor_kind, "repository": "owner/repo",
+        "head": transition.head, "base": "dev1.0", "beforeOid": "b" * 40, "afterOid": "a" * 40,
+    }
+
+
+def test_publish_verifier_receives_exact_admission_and_remote(monkeypatch) -> None:
+    import quwoquan_ops.ci.scoped_candidate.core as core
+    import quwoquan_ops.gate.verify_git_branch_policy as module
+
+    calls = []
+    monkeypatch.setattr(core, "validate_publish_update", lambda **kwargs: calls.append(kwargs))
+    environment = {
+        "QWQ_ACCEPTANCE_PUBLISH": "1", "QWQ_PUBLISH_ADMISSION_REF": "admissions/exact.json",
+        "QWQ_PUBLISH_ADMISSION_DIGEST": "sha256:" + "c" * 64,
+    }
+    module._verify_acceptance_update(
+        environment, "b" * 40, "a" * 40, "refs/heads/dev1.0", "origin", "ssh://exact-remote",
+    )
+    assert calls == [{
+        "repository": ROOT, "policy_path": ROOT / "quwoquan_ops/policies/scoped_candidate_policy.yaml",
+        "admission_ref": {"ref": "admissions/exact.json", "digest": "sha256:" + "c" * 64},
+        "before": "b" * 40, "after": "a" * 40, "ref": "refs/heads/dev1.0",
+        "remote": "origin", "remote_url": "ssh://exact-remote",
+    }]
 
 
 def test_pre_push_rejects_matching_integration_worktree_non_fast_forward(
@@ -293,12 +348,28 @@ def test_pre_push_rejects_matching_integration_worktree_non_fast_forward(
         policy=_repository_policy(),
         current_branch="dev1.0",
         update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
-        environment={},
+        environment={"QWQ_ACCEPTANCE_PUBLISH": "1"},
     )
 
     assert len(issues) == 1
     assert issues[0].startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:")
     assert "integration worktree fast-forward update" in issues[0]
+
+
+@pytest.mark.parametrize("environment", [{}, {"QWQ_ACCEPTANCE_PUBLISH": "1"},
+    {"QWQ_PUBLISH_ADMISSION_REF": "admissions/fake.json", "QWQ_PUBLISH_ADMISSION_DIGEST": "sha256:" + "a" * 64}])
+def test_pre_push_rejects_bare_integration_fast_forward_without_acceptance_publish(environment) -> None:
+    issues = pre_push_issues(
+        policy=_repository_policy(),
+        current_branch="dev1.0",
+        update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
+        environment=environment,
+        remote_name="origin", remote_url="https://github.com/openstudio2022/quwoquan.git",
+    )
+
+    assert len(issues) == 1
+    assert issues[0].startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:")
+    assert "acceptance publish admission" in issues[0]
 
 
 def test_pre_push_rejects_integration_update_without_remote_before_oid(
@@ -323,7 +394,7 @@ def test_pre_push_rejects_integration_update_without_remote_before_oid(
                 remote_sha=ZERO_SHA,
             )
         ],
-        environment={},
+        environment={"QWQ_ACCEPTANCE_PUBLISH": "1"},
     )
 
     assert len(issues) == 1
@@ -334,6 +405,7 @@ def test_pre_push_rejects_matching_integration_worktree_without_git_authority(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import quwoquan_ops.gate.verify_git_branch_policy as module
+    monkeypatch.setattr(module, "_verify_acceptance_update", lambda *args: None)
 
     monkeypatch.setattr(
         module,
@@ -344,7 +416,7 @@ def test_pre_push_rejects_matching_integration_worktree_without_git_authority(
         policy=_repository_policy(),
         current_branch="dev1.0",
         update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
-        environment={},
+        environment={"QWQ_ACCEPTANCE_PUBLISH": "1"},
     )
 
     assert len(issues) == 1
@@ -357,31 +429,31 @@ def test_pre_push_one_ordinary_lane_does_not_require_all_lanes() -> None:
         remote_branch="lane/data-engineering",
     )
 
-    assert pre_push_issues(
+    issues = pre_push_issues(
         policy=_repository_policy(),
         current_branch="lane/data-engineering",
         update_lines=[update],
         environment={},
-    ) == []
+    )
+    assert issues
+    assert all("undeclared remote branch" in issue for issue in issues)
 
 
-def test_pre_push_accepts_only_matching_lane_remote_branch() -> None:
+def test_pre_push_rejects_lane_remote_and_cross_branch_sources() -> None:
     policy = _repository_policy()
 
-    assert (
-        pre_push_issues(
-            policy=policy,
-            current_branch="lane/small-fix",
-            update_lines=[
-                _update(
-                    local_branch="lane/small-fix",
-                    remote_branch="lane/small-fix",
-                )
-            ],
-            environment={},
-        )
-        == []
+    same_named = pre_push_issues(
+        policy=policy,
+        current_branch="lane/small-fix",
+        update_lines=[
+            _update(
+                local_branch="lane/small-fix",
+                remote_branch="lane/small-fix",
+            )
+        ],
+        environment={},
     )
+    assert any("undeclared remote branch" in issue for issue in same_named)
     foreign_source = pre_push_issues(
         policy=policy,
         current_branch="dev1.0",
@@ -391,7 +463,7 @@ def test_pre_push_accepts_only_matching_lane_remote_branch() -> None:
         environment={},
     )
     assert any(
-        "persistent lane push must update its matching remote ref" in issue
+        "undeclared remote branch" in issue
         for issue in foreign_source
     )
     lane_to_dev = pre_push_issues(
@@ -495,6 +567,10 @@ def test_pre_push_accepts_provable_managed_system_fast_forward_backsync(
 ) -> None:
     import quwoquan_ops.gate.verify_git_branch_policy as module
 
+    def reject_publish_admission(*args) -> None:
+        raise AssertionError("system backsync must not load lane publish admission")
+
+    monkeypatch.setattr(module, "_verify_acceptance_update", reject_publish_admission)
     before = "b" * 40
     after = "a" * 40
     calls: list[tuple[str, str]] = []
@@ -552,6 +628,7 @@ def test_pre_push_system_identity_does_not_replace_matching_integration_source(
             "openstudio2022/quwoquan/.github/workflows/"
             "system-backsync.yml@refs/heads/main"
         ),
+        "QWQ_ACCEPTANCE_PUBLISH": "1",
     }
 
     monkeypatch.setattr(
@@ -564,7 +641,7 @@ def test_pre_push_system_identity_does_not_replace_matching_integration_source(
         current_branch="dev1.0",
         update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
         environment=environment,
-    ) == []
+    ) != []
 
 
 @pytest.mark.parametrize(

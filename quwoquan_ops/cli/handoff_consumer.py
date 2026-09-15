@@ -36,6 +36,8 @@ from lib.evidence_fingerprint import (  # noqa: E402
     workspace_digests,
 )
 
+from lib.review_fingerprint import repository_inputs, source_root, dependency_root
+
 REGISTRY_PATH = ROOT / ".agents/skills/review/references/registry.yaml"
 GENERATOR_PATH = "quwoquan_ops/cli/handoff_manifest.py"
 
@@ -46,13 +48,14 @@ class HandoffConsumerError(ValueError):
 
 def _load_json_ref(raw: str, *, label: str) -> tuple[str, dict[str, Any]]:
     relative = normalize_repo_relative_path(raw, ROOT)
-    path = ROOT / relative
+    path = dependency_root(ROOT) / relative
     if path.is_symlink():
         raise HandoffConsumerError(f"{label} ref 不得为 symlink：{relative}")
     if not path.is_file():
         raise HandoffConsumerError(f"{label} 不存在：{relative}")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        from lib.descriptor_safe_io import read_repo_relative_regular_single_link
+        payload = json.loads(read_repo_relative_regular_single_link(dependency_root(ROOT), relative))
     except (OSError, json.JSONDecodeError) as exc:
         raise HandoffConsumerError(f"{label} 无法读取：{relative}: {exc}") from exc
     if not isinstance(payload, dict):
@@ -95,6 +98,7 @@ def _plan_evidence(plan: dict[str, Any]) -> list[dict[str, Any]]:
     return results
 
 
+@repository_inputs
 def validate_named_evidence_ref_payload(
     receipt: dict[str, Any],
     *,
@@ -225,7 +229,7 @@ def named_evidence_identity(
     receipt_ref: str, receipt: dict[str, Any]
 ) -> dict[str, Any]:
     return named_evidence_identity_from_raw(
-        receipt_ref, (ROOT / receipt_ref).read_bytes(), receipt
+        receipt_ref, (dependency_root(ROOT) / receipt_ref).read_bytes(), receipt
     )
 
 
@@ -314,7 +318,8 @@ def validate_review_result_ref(
     raw_ref: str, *, plan: dict[str, Any], evidence_identities: list[dict[str, Any]]
 ) -> tuple[str, dict[str, Any], dict[str, Any]]:
     relative, result = _load_json_ref(raw_ref, label="review result")
-    raw = (ROOT / relative).read_bytes()
+    from lib.descriptor_safe_io import read_repo_relative_regular_single_link
+    raw = read_repo_relative_regular_single_link(dependency_root(ROOT), relative)
     identity = validate_review_result_ref_payload(
         relative, raw, result, plan=plan, evidence_identities=evidence_identities
     )

@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD：五分钟源码晋级与标签驱动发布
 
-本文档只描述当前永久单轨合同、现行 workflow 接线与尚待闭合的外部前提。它不证明 GitHub Environments、Apps、keys、rulesets、hosted authorities、runner 或生产基础设施已经配置；缺少对应权威 readback 时必须保持 `GATE_BLOCK`。
+本文档只描述当前永久单轨合同、现行 workflow 接线与尚待闭合的外部前提。它不证明 GitHub Environments、Apps、keys、rulesets、hosted authorities、runner 或生产基础设施已经配置；对应操作缺少必需权威 readback 时必须保持 `GATE_BLOCK`。专用 hosted publisher/system 身份缺口独立保持 OPEN-track，不作为普通授权 dev fast-forward 的前置条件。
 
 合同真相源：
 
@@ -48,7 +48,7 @@ PR body 只接受一个 JSON 对象，恰好两个键：
 
 - 校验 head/base/merge SHA 与唯一合法分支边；
 - 取回 bundle，用 PR head exact bytes 中的仓内 Ed25519 公钥 keyring（`quwoquan_ops/policies/evidence_signing_keyring.yaml`）与固定 signer identity（`quwoquan-integration-scheduler-local` / `quwoquan-environment-ops-local`）验证 current dev head 的 `IntegrationQualificationFact` 及其 A/B/G 链；Gate 不持有任何可签名材料，无 repository secret；
-- 自己从 hosted readback 生产 approval（`/pulls/{n}/reviews`，只计 head commit 上非作者的最后一条 APPROVED）、threads（GraphQL `reviewThreads` 全部 resolved）、ruleset（main 上 active ruleset 要求 PR、无 bypass actor、required check 精确为 `03. Delivery Gate`）与 changed-boundary（branch policy + promotion 影响面 + secret/generated）四类事实，再由 `release_control.py promotion-admit` 消费；
+- 自己从 hosted readback 生产 approval（`/pulls/{n}/reviews`，只计 head commit 上非作者的最后一条 APPROVED）、threads（GraphQL `reviewThreads` 全部 resolved）、ruleset（main 上 active ruleset 要求 PR、required check 精确为 `03. Delivery Gate`，且 bypass 必须已观测为空才能通过）与 changed-boundary（branch policy + promotion 影响面 + secret/generated）四类事实，再由 `release_control.py promotion-admit` 消费；只读 token 看不到 bypass 时记录 unknown 并拒绝 admission，不自称无 bypass；
 - 只验真 promotion admission 所需前驱与 exact identity，不在该 context 内执行合并、ref mutation 或 post-merge effect；
 - 以 GITHUB_TOKEN（`checks: write`）创建 create-once handoff check-run `quwoquan/promotion-admission-handoff/v1`，其 App 身份就是 main ruleset 信任的 GitHub Actions integration（`github-actions` / `15368`），不再需要自建 GitHub App；
 - 为 `main` push 后形成 `MainSourceSeal` 提供准入事实；固定 SLI 目标 p95 为 300 秒，handoff 有效窗口等于 ratchet enforcement budget（1800 秒）。
@@ -57,11 +57,11 @@ PR body 只接受一个 JSON 对象，恰好两个键：
 
 本地左移：`make commit-gate` 在 `.github/workflows/**` 变更时运行 `verify_workflow_actionlint.sh`（pinned actionlint，拦截解析期即失效的非法上下文、不存在属性与 reusable 输入类型错误）；workflow↔仓内 CLI 的 argparse required 一致性由 `verify_workflow_cli_arguments.py` 负责（含常量循环内 f-string 声明的成组 required）；step 内引用自身 `steps.<id>.outputs` 由 `verify_github_supply_chain.py` 拦截。三者在 `gate_repo.sh` 全量执行。
 
-### 3.1 `04. Lane Gate` 只做 lane PR 静态/合同复算与 dev1.0 ruleset 读回
+### 3.1 dev 本地资格与手动保护读回
 
-`.github/workflows/lane-gate.yml` 是 `lane/* -> dev1.0` 的唯一 hosted required check，context 名精确为 `04. Lane Gate`，由 `branch_policy.yaml#required_integration_checks` 唯一声明，与 `03. Delivery Gate` 不共享 workflow 或名字。它只监听 `pull_request: branches: [dev1.0]`，在 exact PR head 的 clean checkout 上重跑静态治理、ImpactPlan/boundary、candidate-bound Code Health Delta 与 `quwoquan_ops/tests/local_contract/**` 四分片；不打包、不签名、不触碰设备或环境。合入不在该 context 内发生：由 integration 工作区通道携 Alpha/Beta admission 把远端 `dev1.0` 快进到已过检的 lane head（见 `daily-merge-release-strategy`）。
+`branch_policy.yaml#required_integration_checks` 为空，dev 不再要求 `04. Lane Gate` 或 lane PR。静态治理、ImpactPlan/boundary、Code Health 与合同检查由本地 accept 执行；本地工作流要求的 Alpha 资格不等于服务端强制。普通授权 non-force fast-forward 可更新 dev，但不签发 Alpha/Beta/Gamma、IQF、promotion、release 或 Prod authority；main 技术门不因此放宽。
 
-唯一的 hosted 读取是 governance job 以默认只读 `github.token`（`permissions: contents: read`，rulesets 只需 metadata read）执行 `verify_hosted_integration_ruleset.py`，读回 `repos/{r}/rulesets` 中适用于 `refs/heads/dev1.0` 的 ruleset 并产出 `hosted-integration-ruleset-receipt`；它不持有任何 secret，不创建 check-run，不写任何 ref。
+`.github/workflows/lane-gate.yml` 现为手动 `workflow_dispatch` 的 `04. Dev Protection Readback`。它只用只读 `github.token` 执行 `verify_hosted_integration_ruleset.py`，核对 dev 的 `deletion` / `non_fast_forward` 保护并产出 `hosted-integration-ruleset-receipt`，不是 required check 或 Alpha 资格证明。`bypass_actors` 对只读 token 不可见时必须以观测字段留痕；admin 侧 `--require-bypass-observable` 才承担无 bypass 的证明。不得为更新 dev 豁免防删/防非 FF 保护。
 
 ## 4. 三个 release workflow 的单一职责
 
@@ -124,11 +124,13 @@ stackctl deploy --target prod-hosted --stage canary|5|20|50|100
 - tag ruleset 必须 create-only，update/delete 全拒绝且无 bypass actor；creator/ruleset API readback 必须绑定刚创建的 tag object。
 - product authority、release authority、active product version train 或 exact qualified RC 任一缺失时不得创建 stable tag。
 
-### `system-backsync`（保留合同，当前无 caller）
+### `system-backsync`（caller 已接线，外部身份保持 OPEN-track）
 
-- `main -> dev1.0` 的回同步现由唯一 integration 工作区按自身 FF 通道执行：`make promotion-backsync` 校验远端 main 头是恰好一次两父 merge 且第二父等于本地 `dev1.0`，`--ff-only` 后经既有 pre-push FF 通道推送并 `ls-remote` 读回；dev1.0 已前移时阻断交人工，不 reset、不自动 merge。
-- reusable `system-backsync.yml` 保留 expected-before nonforce fast-forward 合同，但 `delivery-gate.yml` 不再调用它；接回前提是 dedicated `SYSTEM_BACKSYNC_DEPLOY_KEY`（只授予 `dev1.0` 写权限，不得复用 `PROD_SERVICE_SSH_KEY`、开发者 key、release controller key 或通用 PAT）与 `system-backsync` Environment 就位（见 daily-merge-release-strategy OPEN-004）。
-- post-merge handoff 的身份验证不再依赖 `QWQ_PROMOTION_RECORDER_APP_*`：`main_source_seal` job 只读 source SHA 上唯一名为 `quwoquan/promotion-admission-handoff/v1` 的 Check Run，并由 `promotion_evidence.py validate-hosted-handoff` 以 GitHub Actions integration（`github-actions` / `15368`）身份结合对应 workflow run（`pull_request` 或 `pull_request_review` 事件）校验 run/ref/digest。
+- `delivery-gate.yml` 的独立 `system_backsync` job 只在 main push 且 `main_source_seal` 成功后调用 `./.github/workflows/system-backsync.yml`。`expected_dev_before` 与 `source_sha` 都绑定 seal job 的 `source_sha` 输出（被晋级 dev source，不是旧 main 的 push before）；seal ref/digest 只取 publish、materialize 与字节比对成功后的 exact 输出。
+- caller 只授予 `actions/checks/contents/packages: read`，不继承全量 secrets。callee 从 `system-backsync` Environment 读取 dedicated `SYSTEM_BACKSYNC_DEPLOY_KEY`；不得复用生产 key、开发者 key、release controller key 或通用 PAT。专用身份及真实回执未配置/未取得仍属于 OPEN-004 的 OPEN-track，不阻普通 dev 更新，不证明回同步已完成。当前 dev 无 required check，不需要 check bypass；防删/防非 FF 规则必须保持无 bypass。
+- `main_source_seal` 以固定 GitHub Actions integration（`github-actions` / `15368`）结合 Check Run 与 workflow run 验真 handoff；callee 保留 `QWQ_PROMOTION_RECORDER_APP_SLUG/ID` variables 接口，但前置检查必须等于上述身份，缺失或不符即 `OPS.BRANCH.AUTHORITY_UNAVAILABLE`。key 缺失也在 CAS 之前阻断。
+- backsync 缺失身份会令独立 job 失败，并使该 main push workflow 汇总变红；不撤销已成功的 `MainSourceSeal`，也不是普通 dev 的 required gate。不得用 `continue-on-error` 或假 success 冒充 source convergence；main 技术资格和后续 release/Prod 前驱保持原约束。
+- `make promotion-backsync` 仅 local resync：在干净本地 `dev1.0` fetch 后确认远端 dev 与 main 已相等、且本地可 FF，才 `merge --ff-only` 到冻结的远端 dev。未收敛/分叉时本地 HEAD 零写；该入口不执行远端 push，不签发发布资格。
 
 ### `production`
 
@@ -142,7 +144,7 @@ stackctl deploy --target prod-hosted --stage canary|5|20|50|100
 ### GitHub 与 release controller
 
 - trusted integration publisher：受信 GitHub App/broker 对 `dev1.0` 执行 expected-old fast-forward CAS；客户端通过 exact HTTPS broker URL 和短期 token 调用，CLI 默认 token 名为 `QWQ_INTEGRATION_PUBLISHER_TOKEN`。该通道保留为执行 Alpha/Beta 准入并签发集成资格的发布通道，但不再是 `dev1.0` 唯一 writer。`integration/` 工作区可用普通认证 Git 凭据把匹配本地 `refs/heads/dev1.0` non-force fast-forward 推到远端同名分支；缺 before/after OID、ancestry authority 不可用、非快进、force/delete 或来源不匹配必须阻断。此 direct push 只提交源码，不签发 `integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion、release 或 Prod authority。
-- 源码回同步：promotion 后由 integration 工作区 `make promotion-backsync` 以 FF 通道把 `dev1.0` 跟到 main merge commit；受管 system actor 通道（reusable system backsync）保留合同、暂无 caller。分叉、unknown outcome 或身份不可证明时零写停止。
+- 源码回同步：promotion 后由已接线 reusable system backsync 消费已验真的 MainSourceSeal，执行 expected-before non-force FF 与远端读回；身份缺失保持独立 OPEN-track。`make promotion-backsync` 只在远端 dev/main 已收敛后执行本地 FF，不提供远端 fallback。分叉、unknown outcome 或身份不可证明时不伪称成功。
 - 证据签名信任根（L2 DEC-010）：Alpha/Beta/Gamma `EnvironmentAcceptanceFact` 与 `IntegrationQualificationFact` 用 Ed25519 签名（`ed25519:<base64>`）。两个 signer identity（`quwoquan-environment-ops-local`、`quwoquan-integration-scheduler-local`）的私钥只在本地仓外 `QWQ_EVIDENCE_SIGNING_KEY_ROOT`（默认 `~/.cache/quwoquan/keys/evidence-signing`，0600），由 `make evidence-signing-bootstrap` 生成并把公钥登记进仓内 `quwoquan_ops/policies/evidence_signing_keyring.yaml`（版本化 authoring source，改动随提交进入 `dev1.0`）。Gate 与所有验签方只读 keyring 中的 active 公钥；不存在同名 secret、环境变量或 repository variable。轮换用 `ROTATE=1 make evidence-signing-bootstrap`，旧 key 置 `retired` 后不再验签。
 - release controller：`RELEASE_CONTROLLER_DEPLOY_KEY` 必须是独立、最小权限、可轮换的 SSH key，其公钥即仓库 deploy key `release-controller`（写权限）；workflow 推标签前以指纹比对 hosted 读回，不能复用开发者 key，也不再需要 controller GitHub App。
 - production approval ingress：受控 GitHub App installation + webhook secret。必须先对 raw request bytes 校验 `X-Hub-Signature-256`，再 append request/approved 事件；重复 delivery 不同 payload、乱序、自批或身份映射漂移全部拒绝。
@@ -204,11 +206,11 @@ GitHub OIDC、GHCR write/read 与 attestation signer identity必须有受信策�
 截至当前仓库快照，以下事实不能从源码与 workflow 文件推导为已闭合：
 
 - `quwoquan_ops/policies/product_version.yaml` 的 release train 为 `inactive`，previous stable 为 `not_imported`，initial release authority 为 `absent`，activation 为 `blocked`；因此 RC/stable 发布链尚未激活。
-- Hosted branch protection/ruleset、唯一 promotion binding、system actor 与八条允许 refs 的真实 API readback 尚未提供；在此前 `hostedProtectionVerified=false`、`formalProd=false`。
-- `dev1.0` ruleset（`20969668`）已于 2026-09-07 由 admin 配置为 `required_status_checks=[04. Lane Gate]`（strict、`do_not_enforce_on_create=false`）并移除原无规格来源的 `DeployKey`/`always` bypass actor——后者由 admin 侧 `--require-bypass-observable` 读回证明（收据 `.qwq_output/env/repo/runs/lane-gate/hosted-integration-ruleset-admin.json`，evidenceDigest `sha256:d4021fe5c652bf482a8f1827da220b2f18cd678d54480539c9da30aff2b92fa7`，`bypassActorsObservable=true`；该读回须在每次 ruleset 变更后与每次 promotion 前重跑）；`04. Lane Gate` 只读 governance job 的 readback 首次于 run `34078890252` 通过，随后 integration 快进 `1f4e09aa2` 被带 required check 的 ruleset 接受（PR #77）。governance job 的只读 `github.token` 读不到 `bypass_actors`（GitHub 只向 ruleset write 权限返回该字段），读回只在字段可见且非空时阻断并以 `bypassActorsObservable` 留痕，不能替 admin 证明为空。该 ruleset **不得**加 `pull_request` 规则（会封死 integration fast-forward 合入通道）；promotion 后 `main -> dev1.0` 回同步推的是 merge commit、不带本 check，在专用 system backsync actor 与其 bypass 语义就位前（daily-merge-release-strategy OPEN-004）只能由人工按 OPEN 流程处理。main ruleset 侧 `promotion_hosted.ruleset_fact` 仍把不可见 bypass 折成 `[]`（daily-merge-release-strategy OPEN-007）。
-- 受管 system backsync 尚无执行面：`system-backsync` Environment 与仅写 `dev1.0` 的 `SYSTEM_BACKSYNC_DEPLOY_KEY` 未配置，`delivery-gate.yml` 也不再调用 reusable backsync；当前回同步只由 integration 工作区 `make promotion-backsync` 完成（daily-merge-release-strategy OPEN-004）。
+- 远端闭集为 dev/main，两分支之外的六条远端 lane 已按授权迁移；本地六 lane identity 保留。dev 保护的目标形状是 `deletion` / `non_fast_forward`、无 bypass、无 required check。外部现状必须以本次权威 readback 为准，旧 `04. Lane Gate` 收据不证明当前规则；dev 拓扑/保护完成不等于 `formalProd=true`。
+- main ruleset 的 `promotion_hosted.ruleset_fact` 已显式区分观测边界：缺席/null 返回 `bypassActorsObservable=false`、`bypassActors=null`，`requiredCheckEnforced` 只声明 required-check 形状。既有 admission 对未知/非空 bypass 仍拒绝；main 权威 bypass 读回和 receipt 时效对账未闭合时保持 OPEN-007，不把只读 token 未观测到的数据说成空列表，main 技术门不放宽。
+- 受管 system backsync caller 已接线，但 `system-backsync` Environment、专用 key/identity 与 current hosted 成功回执仍未闭合（OPEN-004）。这是独立 OPEN-track，不阻普通授权 dev FF；缺身份时受管 job 仍 typed 失败。`make promotion-backsync` 只做已收敛远端后的本地 resync，不能替代远端回同步。
 - `03. Delivery Gate` 验签只依赖仓内 `evidence_signing_keyring.yaml`；keyring 缺 identity 的 active 公钥、或 IQF/EAF 由未登记 key 签发时，PR job 在验签步骤 fail closed（不需要也不接受 repository secret）。
-- trusted publisher 的真实 GitHub App/broker credential、跨主机协调与 Hosted ref CAS/readback 尚缺外部证明。
+- trusted publisher 的真实 GitHub App/broker credential、跨主机协调与 Hosted ref CAS/readback 尚缺外部证明；该专用资格通道缺口保持 OPEN-track，不阻普通授权 dev FF。
 - RC workflow 尚未真实闭合 service/app factory dispatch、hosted build-number CAS、最终 Android/iOS 签名包、双物理平台 acceptance、Provider、Remote UAT 与 supply-chain facts。
 - release controller 尚未闭合 creator/ruleset readback、RC/stable admission 发布和不可变 tag 保护的真实 Hosted 证据。
 - production approval authority 所需 GitHub App installation/webhook secret、hosted DB/provider signing key、OIDC/MFA principals 与 durable request/approved readback 尚缺正式 UAT evidence。
@@ -216,7 +218,7 @@ GitHub OIDC、GHCR write/read 与 attestation signer identity必须有受信策�
 - 当前 Prod workflow 的 admission output 与 runner credentials 仍为未闭合接线，不能启动正式 mutation。
 - 正式 iOS identity、签名/分发接线与物理设备验收尚未闭合；Android 外部平台登记也必须与冻结 applicationId 和签名证书摘要一致。
 
-任一前提缺失、过期、签名错误、source/tree/material/tag/digest/authority 漂移或 readback 不一致，都必须保留首个 typed blocker，不得降级为 warning 或借用历史 receipt。
+对应操作的任一必需前提缺失、过期、签名错误、source/tree/material/tag/digest/authority 漂移或 readback 不一致，都必须保留首个 typed blocker，不得借用历史 receipt。独立 OPEN-track 不阻普通 dev 更新，但不能把未执行或失败的专用发布/回同步操作报告为成功；main、release、Prod 技术门保持原约束。
 
 ## 9. 配置与核对原则
 

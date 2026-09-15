@@ -1,9 +1,10 @@
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-005
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001
-"""dev1.0 ruleset 读回合同：04. Lane Gate 只在 hosted 真把它设为 required 时才算 fail-closed。"""
+"""dev1.0 最小保护读回合同：禁删/非 FF，不宣称 hosted Alpha 强制。"""
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 from unittest.mock import patch
 
 import pytest
@@ -37,14 +38,15 @@ def _ruleset(rule_id: int, branch: str, checks: list[str], *, with_pull_request:
     rules = [{"type": "deletion"}, {"type": "non_fast_forward"}]
     if with_pull_request:
         rules.append(_pull_request_rule())
-    rules.append({"type": "required_status_checks", "parameters": {
-        "strict_required_status_checks_policy": True,
-        "do_not_enforce_on_create": False,
-        "required_status_checks": [
-            {"context": check, "integration_id": GITHUB_ACTIONS_APP_ID}
-            for check in checks
-        ],
-    }})
+    if checks:
+        rules.append({"type": "required_status_checks", "parameters": {
+            "strict_required_status_checks_policy": True,
+            "do_not_enforce_on_create": False,
+            "required_status_checks": [
+                {"context": check, "integration_id": GITHUB_ACTIONS_APP_ID}
+                for check in checks
+            ],
+        }})
     return {
         "id": rule_id,
         "name": f"protect {branch}",
@@ -65,7 +67,7 @@ def _rule_index(ruleset: dict, rule_type: str) -> int:
 
 def _responses() -> dict[str, object]:
     policy = load_policy()
-    integration_checks = [item.name for item in policy.required_integration_checks]
+    integration_checks = []  # 新政策 fixture；仓内接线另由 workflow 合同直接验证。
     promotion_checks = [item.name for item in policy.required_promotion_checks]
     return {
         "": {"default_branch": "main"},
@@ -77,17 +79,13 @@ def _responses() -> dict[str, object]:
     }
 
 
-def _dev_required_checks(value: dict) -> list:
-    ruleset = value["/rulesets/1"]
-    return ruleset["rules"][_rule_index(ruleset, "required_status_checks")]["parameters"]["required_status_checks"]
-
-
 def _add_ruleset(value: dict, ruleset: dict) -> None:
     value[RULESETS].append({"id": ruleset["id"]})
     value[f"/rulesets/{ruleset['id']}"] = ruleset
 
 
 def _verify(responses: dict[str, object], *, expected_calls: set[str] = EXPECTED_CALLS, **kwargs) -> dict:
+    kwargs.setdefault("policy", replace(load_policy(), required_integration_checks=()))
     with patch(
         API, side_effect=lambda _repository, path, _token: copy.deepcopy(responses[path]),
     ) as api:
@@ -97,13 +95,17 @@ def _verify(responses: dict[str, object], *, expected_calls: set[str] = EXPECTED
     return receipt
 
 
-def test_lane_gate_is_proven_to_be_the_hosted_required_check() -> None:
+def test_dev_protection_does_not_claim_hosted_acceptance_enforcement() -> None:
     receipt = _verify(_responses())
     assert receipt["schema"] == "hosted-integration-ruleset-receipt"
     assert receipt["branch"] == "dev1.0"
-    assert receipt["requiredIntegrationChecksEnforced"] is True
-    assert [item["name"] for item in receipt["ruleset"]["requiredChecks"]] == ["04. Lane Gate"]
-    assert receipt["ruleset"]["mergeExecutor"] == "integration_fast_forward_push"
+    assert receipt["requiredIntegrationChecksEnforced"] is False
+    assert receipt["ruleset"]["requiredChecks"] == []
+    assert receipt["ruleset"]["mergeExecutor"] == "ordinary_authorized_fast_forward_push"
+    assert receipt["hostedAlphaEnforced"] is False
+    assert receipt["hostedPublisherEnforcement"] == "open_track_not_blocking_local_dev"
+    assert receipt["ruleset"]["deletionProtected"] is True
+    assert receipt["ruleset"]["nonFastForwardProtected"] is True
     assert receipt["ruleset"]["bypassActorsObservable"] is True
     assert receipt["evidenceDigest"].startswith("sha256:")
 
@@ -118,7 +120,7 @@ def test_read_only_token_cannot_observe_bypass_actors_and_receipt_says_so(shape:
     else:
         responses["/rulesets/1"]["bypass_actors"] = None
     receipt = _verify(responses)
-    assert receipt["requiredIntegrationChecksEnforced"] is True
+    assert receipt["requiredIntegrationChecksEnforced"] is False
     assert receipt["ruleset"]["bypassActorsObservable"] is False
 
 
@@ -261,20 +263,20 @@ def test_second_ruleset_matching_dev_by_github_pattern_semantics_is_not_missed(l
                 rules=[{"type": "deletion"}, {"type": "non_fast_forward"}, {"type": "creation"}],
             ),
             value["/rulesets/1"].pop("bypass_actors"),
-        ), "must contain one 'required_status_checks' rule"),
+        ), "rules must contain only deletion and non_fast_forward"),
         # 同一 ruleset 的 admin 视角：DeployKey/always bypass 可见且非空，必须阻断。
         ("hosted-state-before-2026-09-07-admin-view", lambda value: value["/rulesets/1"].update(
             bypass_actors=[{"actor_id": None, "actor_type": "DeployKey", "bypass_mode": "always"}],
         ), "must have no bypass actors"),
-        ("missing-lane-gate", lambda value: _dev_required_checks(value).clear(), "required checks must be exactly"),
-        ("promotion-check-instead-of-lane-gate", lambda value: _dev_required_checks(value)[0].update(context="03. Delivery Gate"), "required checks must be exactly"),
-        ("unbound-check-producer", lambda value: _dev_required_checks(value)[0].pop("integration_id"), "required checks must be exactly"),
+        ("retired-lane-gate", lambda value: value["/rulesets/1"]["rules"].append({"type": "required_status_checks", "parameters": {"required_status_checks": [{"context": "04. Lane Gate"}]}}), "must not require hosted status checks"),
+        ("empty-required-status-rule", lambda value: value["/rulesets/1"]["rules"].append({"type": "required_status_checks", "parameters": {"required_status_checks": []}}), "must not require hosted status checks"),
+        ("update-restriction", lambda value: value["/rulesets/1"]["rules"].append({"type": "update"}), "rules must contain only deletion and non_fast_forward"),
         ("bypass-actor", lambda value: value["/rulesets/1"].update(bypass_actors=[{"actor_id": 1, "actor_type": "DeployKey"}]), "must have no bypass actors"),
         ("pull-request-rule", lambda value: value["/rulesets/1"]["rules"].insert(2, _pull_request_rule()), "must not require pull requests"),
         # 唯一命中但以通配写法指向 dev1.0：形状漂移，detail 带 observed。
         ("sole-wildcard-dev-ruleset", lambda value: value["/rulesets/1"]["conditions"]["ref_name"]["include"].__setitem__(0, "refs/heads/dev*"), 'ref condition must be exactly {"exclude": [], "include": ["refs/heads/dev1.0"]} (observed {"exclude": [], "include": ["refs/heads/dev*"]})'),
-        ("non-strict", lambda value: value["/rulesets/1"]["rules"][_rule_index(value["/rulesets/1"], "required_status_checks")]["parameters"].update(strict_required_status_checks_policy=False), 'required-check protection is incomplete (strict + enforce-on-create required; observed {"do_not_enforce_on_create": false, "strict_required_status_checks_policy": false}'),
-        ("enforce-on-create-off", lambda value: value["/rulesets/1"]["rules"][_rule_index(value["/rulesets/1"], "required_status_checks")]["parameters"].update(do_not_enforce_on_create=True), 'required-check protection is incomplete (strict + enforce-on-create required; observed {"do_not_enforce_on_create": true, "strict_required_status_checks_policy": true}'),
+        ("missing-deletion", lambda value: value["/rulesets/1"]["rules"].pop(_rule_index(value["/rulesets/1"], "deletion")), "must contain one 'deletion' rule"),
+        ("duplicate-deletion", lambda value: value["/rulesets/1"]["rules"].append({"type": "deletion"}), "must contain one 'deletion' rule"),
         ("missing-non-fast-forward", lambda value: value["/rulesets/1"]["rules"].pop(_rule_index(value["/rulesets/1"], "non_fast_forward")), "must contain one 'non_fast_forward' rule"),
         ("inactive", lambda value: value["/rulesets/1"].update(enforcement="evaluate"), "exactly one applicable active branch ruleset (found 0)"),
         ("two-dev-rulesets", lambda value: value["/rulesets/2"]["conditions"]["ref_name"]["include"].append("refs/heads/dev1.0"), "exactly one applicable active branch ruleset (found 2)"),
@@ -291,6 +293,23 @@ def test_integration_ruleset_fails_closed_with_specific_detail(label: str, mutat
     assert "recovery=configure the dev1.0 branch ruleset" in message
 
 
+@pytest.mark.parametrize("value", [False, {}, "hidden"])
+def test_malformed_bypass_does_not_become_unobservable_success(value):
+    responses = _responses()
+    responses["/rulesets/1"]["bypass_actors"] = value
+    with pytest.raises(HostedIntegrationRulesetError, match="invalid type"):
+        _verify(responses)
+
+
+def test_old_required_check_policy_is_not_silently_accepted():
+    from quwoquan_ops.gate.git_branch_policy.policy import RequiredPromotionCheck
+    policy = replace(load_policy(), required_integration_checks=(
+        RequiredPromotionCheck(name="04. Lane Gate", workflow=".github/workflows/lane-gate.yml"),
+    ))
+    with pytest.raises(HostedIntegrationRulesetError, match="policy must retire"):
+        _verify(_responses(), policy=policy)
+
+
 def test_requires_authenticated_token() -> None:
     with pytest.raises(HostedIntegrationRulesetError, match="terminal=blocked"):
         verify_hosted_integration_ruleset(repository=REPOSITORY, token="")
@@ -301,6 +320,8 @@ def test_cli_writes_receipt_prints_observability_and_blocks_with_exit_2(tmp_path
     output = tmp_path / "receipt.json"
     responses = _responses()
     responses["/rulesets/1"].pop("bypass_actors")
+    policy = replace(load_policy(), required_integration_checks=())
+    monkeypatch.setattr("quwoquan_ops.ci.verify_hosted_integration_ruleset.load_policy", lambda: policy)
     with patch(API, side_effect=lambda _repository, path, _token: copy.deepcopy(responses[path])):
         assert main(["--repository", REPOSITORY, "--output", str(output)]) == 0
     assert '"schema": "hosted-integration-ruleset-receipt"' in output.read_text(encoding="utf-8")

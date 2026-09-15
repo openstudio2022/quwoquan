@@ -11,12 +11,6 @@ allowed_local_branches:
 allowed_remote_branches:
   - dev1.0
   - main
-  - lane/product-mainline
-  - lane/data-engineering
-  - lane/engineering
-  - lane/ops
-  - lane/small-fix
-  - lane/refactor
 
 pull_request_branch_prefixes:
   - lane/
@@ -27,7 +21,8 @@ integration_branch_updates:
     - trusted_integration_publisher_cas
     - integration_worktree_fast_forward
     - system_fast_forward_backsync
-  ordinary_direct_push: matching_integration_fast_forward_only
+  # 环境布尔标记不授权；最终 publisher 与 hook 共用 exact admission 全链验证。
+  ordinary_direct_push: exact_admission_integration_fast_forward_only
 release_branch: main
 source_admission_branch: main
 # Prod 选择语义的 canonical 在 release_selection_policy.yaml#production；此处是分支治理侧投影，
@@ -44,17 +39,13 @@ required_promotion_checks:
   - name: 03. Delivery Gate
     workflow: .github/workflows/delivery-gate.yml
 
-# lane/* -> dev1.0 的 hosted required check。与 promotion checks 是独立集合：
-# 前者由 hosted release authority 展开为 main ruleset 期望值，不能混入 lane check。
-required_integration_checks:
-  - name: 04. Lane Gate
-    workflow: .github/workflows/lane-gate.yml
+# 验收由本地 accept/bundle/integrate/hook 强制；dev 不再等待旧 Lane Gate required check。
+# hosted 仅保留禁删/禁 non-FF 保护读回，不证明 Alpha 必经；专用 publisher 缺口为 OPEN-track。
+required_integration_checks: []
 
 allowed_pull_request_edges:
   - head: dev1.0
     base: main
-  - head: lane/*
-    base: dev1.0
 
 system_backsync:
   head: main
@@ -65,11 +56,11 @@ system_backsync:
 # 同一时刻至多一个 writer；integration/abort 后 worktree retained，并强制
 # fast-forward resync 到新的 dev1.0。共享 host mutation 仍保持单 writer。
 # resync_scope：回同步只对「无进行中 merge/rebase、工作树干净或脏文件与本次 ff 不重叠、
-# 且是新 dev1.0 祖先」的 lane 执行 ff-only；分叉或重叠脏树只产出 typed 结果，
+# 且是新 dev1.0 祖先」的 lane 执行本地 ff-only，不推远端 lane；分叉或重叠脏树只产出 typed 结果，
 # 由该 lane 自己的会话以 sync-lane-from-dev Skill 解决，不在他人工作树里 merge。
 persistent_lane_admission:
   isolation: branch_per_writer
-  promotion: declared_pull_request_edge_only
+  promotion: exact_acceptance_bundle_integration_publish_only
   resync: mandatory_fast_forward_after_integration_or_abort
   resync_scope: clean_or_non_overlapping_ancestor_only
   worktree_lifecycle: retained

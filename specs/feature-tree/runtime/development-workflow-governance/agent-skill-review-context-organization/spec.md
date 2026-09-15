@@ -72,6 +72,7 @@
 - board 每个 evidence ID 只执行一次并把结果共享给 Reviewer。Reviewer 缺 evidence 时报告 incomplete，禁止自行补跑命令。Evidence runner 在首条命令前按 plan changed paths、canonical contexts 与 review assets 重算 current EvidenceFingerprint；tracked/untracked/deleted/renamed/symlink/context/registry command 任一变化必须零命令返回 `REVIEW.FINGERPRINT_CHANGED`。
 - 每条命令后与最终收口都必须复核同一输入 identity；运行中受管内容变化使 result stale/GATE_BLOCK。execution/result receipt 必须携带真实 workspace digests，不能以空摘要代替当前工作树。
 - 产出结构化 artifact 的 evidence 必须在 registry 声明唯一 artifact kind，并只通过 runner 注入的 create-once descriptor path 回传；runner 从 exact plan/candidate 校验 artifact regular-file/ref/bytes digest、range、changed-path 与 ImpactPlan identity 后，将 report identity、typed terminal、summary/findings 原样写入 named-evidence receipt。Reviewer 只消费该 receipt 中的 runner-validated artifact 投影，不扫描 latest、不信任 stdout，也不自行重跑 producer。
+- Review producer 可显式接收 source repository 可验证的 exact ancestor base、current HEAD 与 HEAD tree，写入既有 plan 的 canonical `git_range` 并绑定 fingerprint；validator 使用相同校验器拒绝错误 range/tree 与旧 readback，缺省开发路径保留既有 merge-base 解析。显式范围 candidate 保留 producer lane/policy digest，并绑定 source HEAD/tree、祖先 base 与完整 changed paths；consumer 从 source Git 验证 producer lane ref 指向该 exact HEAD，禁止信任自报 lane。source repository 唯一拥有 Git、源码、owner 与 policy 事实；dependency root 仅提供经过有界 exact-byte 校验的运行依赖，缺失、篡改、路径逃逸或 symlink 拒绝且不得回退读取旧 source 输出。runner 使用同一 validated range 并在命令前后复核 HEAD/tree/clean；默认 lane 路径不变。
 - 复用指纹必须消费 canonical contract 声明的全部输入；tracked、untracked、删除、symlink、
   context 或 evidence 定义的变化都不得复用旧结论。
 - re-review 必须引用 initial plan，finding owner 必须来自首次 Reviewer；scope、profile 或路径集合变化时
@@ -100,6 +101,9 @@
 - Handoff producer 必须把 canonical exact JSON create-once 发布到 current `git-common-dir/qwq-state/handoffs` 的 git-internal authoritative store，并输出内容绑定的 `handoff-ref-v1`；`.qwq_output/**` 仅为可删除 projection/cache。consumer/verifier 只接受 CLI 显式 ref，不扫描 latest、不读取环境变量 truth；相同 identity+same bytes 幂等，不同 bytes 返回 typed conflict，symlink/non-regular/multi-link 拒绝且发布必须 fsync。
 - Handoff manifest 与 Review exact evidence 链共享 owner identity、candidate evidence identity、plan/named evidence/reviewer result/consolidation refs；producer、consumer/verifier 从 exact bytes 与 ref 重算绑定。本地 current freshness 可额外重算工作树，但 Hosted admission 只消费传输的同一 published exact bytes/ref，本机 clone/worktree inventory 仅 diagnostic，不得成为 hosted runner 硬输入。
 - Review consolidator 只消费 current plan、fresh named evidence 与结构化 reviewer results：required incomplete=`GATE_BLOCK`、optional incomplete=`PR_WARN`，finding 确定性去重，旧 fingerprint result 拒绝。Board 必须按 terminal 等级与唯一恢复动作收敛，禁止把 READY、incomplete、cancelled 或 stale 包装为 PASS。
+- 原始 Code Health `PR_WARN` 按稳定 finding identity 在现有 reviewer result 内逐项 typed 裁决为 fix-now、最低 owner OPEN 或有客观边界证据的 out-of-scope；consolidator 对原始 artifact 集合确定性对账，缺项、重复、旧 candidate fingerprint、失效 OPEN 或 candidate 范围内伪 out-of-scope 均拒绝。fix-now 绑定当前 candidate 的后续真实健康验证，按原 finding identity 判断是否仍有效，不误吞同文件其他成员。确定性 producer 对同一 immutable candidate 重跑不能使 warning 消失；源码修复必须新建 candidate 并重新验证，不迁移旧 receipt 冒充当前证据；高风险 `GATE_BLOCK` 不可用 OPEN 抵消。手写 dev 准出缺健康 artifact 必须阻断，其他无健康证据合法 workflow 不强加该输入。
+- candidate 声明 replacement 才要求列旧 path/symbol、接替入口、消费者迁移、旧实现及配置/测试清理或保留理由、当前扫描与测试命名 evidence；无 replacement 不虚构删除清单；无关联配置或测试时以带理由及扫描证据的 not-applicable 声明，不虚构路径，动态入口 unknown 不得自动删除。字段、枚举、身份和条件式输入只引用 `agent_governance_contract.yaml#candidate_review_closure`，复用已有 artifact 与 candidate fingerprint，不建立独立持久台账。
+- 机器仅验证身份、逐项覆盖、引用有效性、可客观证明的 scope 排除、声明路径状态与 unknown 删除禁令；任意自然语言修复/保留理由、扫描覆盖和行为等价性仍由既有主审结合真实 evidence 判定，不宣称自动证明。主审只增加客观反模式检查，不新增角色或 SOLID 分数。
 
 ## 4. 契约引用
 
@@ -175,6 +179,8 @@
 - AND candidate-bound Code Health evidence 只接受 runner 注入的 exact plan path/SHA/ref，在 clean `merge-base → plan HEAD` 上产生非空 report；plan/candidate/path/ImpactPlan 任一漂移、descriptor/report 非 regular file 或 report bytes digest 不符均 fail-closed，Reviewer assembled input 只含 runner 已验证并写入 receipt 的 exact report 投影。
 - AND 空 triggers 即使未提供 artifacts/Review/authority 也只返回 `no_persistent_handoff` 且零 projection/store；六类 trigger 任一成立则必须通过 exact owner/candidate/named evidence/Reviewer/consolidation 完整链，格式合法但 byte digest 错误的 foreign ref 返回 `HandoffStoreConflict`。
 - AND 仅 current fresh 输入可被确定性 consolidation；required incomplete 为 `GATE_BLOCK`、optional incomplete 为 `PR_WARN`、finding 去重稳定，downstream 只能来自 canonical workflow registry。
+- AND 原始健康 finding 逐项覆盖的正例通过；漏项、重复、陈旧 fingerprint、已消失/错误 owner/缺完成判定 OPEN、scope 内伪 out-of-scope、未重新验证或仍保留有效 warning 的 fix-now、高风险 blocker 以 OPEN 抵消均由真实 consolidation 负例拒绝。手写 dev 缺健康证据判否，其他合法无健康 workflow 仍可通过。
+- AND 无 replacement 不强求删除清单；声明 replacement 时旧入口、接替入口、消费者、实现/配置/测试处置、扫描及测试证据任一缺失判否；unknown 动态入口不得自动删除。正例仅证明契约和引用闭合，不把文字说明升级为行为等价证明。
 
 <a id="gwt-008"></a>
 ### GWT-008 非阻断 Workflow Trace 与宿主能力矩阵
@@ -232,6 +238,8 @@
 - 准出影响：`track`
 - 影响或价值：当前 Code Health 将 `evidence_runner.py::run_plan`、`agent_governance_contract.py::validate_candidate_evidence_manifest` 及无损闭包的 `handoff_consumer.py::validate_handoff_payload`、`agent_governance_contract.py::validate_candidate_path_set`、`candidate_evidence.py::_validate_path_set`、`candidate_evidence.py::validate_candidate_closure`、`feature_tree/ownership.py::_read_design_ownerships` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`，并将 `review_dispatch.py` 标为 `CODE_HEALTH.FILE_LINES_ADVISORY`；这些 calibration `PR_WARN` 不阻断 candidate，但增加 exact identity、artifact 与 fail-closed 分支的审计成本。单个 schema 迁移增量的 `CHANGE_SIZE_ADVISORY` 保持原子闭包边界，不以拆候选消除；路径与 owner 解析热点的结构收敛交对应精确 owner 增量。
 - 完成判定：`GWT-002.t10`、`GWT-003` 与 `GWT-007` 对应行为继续满足；独立 owner increment 逐项收敛上述 identity，保持单轨 Review schema、有界读取、create-once、digest 与 terminal 合同；fresh clean-range Code Health 不再产生对应结构 advisory，且不得新增 allowlist、baseline 或削弱 Reviewer 输入预算。
+- 当前结构状态：`review_consolidator.py::_health_artifacts`、`_health_dispositions`、`_replacements`、`validate_candidate_closure` 已在同文件按 artifact 身份/finding、逐项裁决、消费者迁移、清理状态及主审身份职责拆分；full working-tree Code Health 的新增/恶化复杂度均为零，不再把这四项作为未偿债务。原始 finding 对账、current fingerprint、OPEN/scope 校验及 unknown 退役禁令保留；该本地反馈不替代 fresh clean-range named evidence，本 OPEN 其他既有热点仍待收敛。
+- portable promotion 接线范围：canonical Review 已支持带 source HEAD/tree/range 与 Git 验证 producer lane 的 candidate predecessor，以及 source/transport 双 root 运行依赖读取；真实 clean Git producer、warning/OPEN 完整 consolidation 与 transport 消费正例可测，篡改/依赖缺失时旧 source 副本不可替代。promotion adapter 的生产接线及真实发布环境 readback 仍待对应 owner 验证；不得使用全局 ROOT mutation、复制源码到证据根或跳过 current/human/fingerprint 检查作替代。
 - 依赖：current Code Health named evidence与 Review focused contracts。
 
 <a id="open-004"></a>

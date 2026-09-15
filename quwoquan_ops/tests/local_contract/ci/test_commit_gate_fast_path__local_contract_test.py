@@ -101,6 +101,14 @@ sys.exit(17 if service == os.environ["SERVICE_CHECK_FAILURE"] else 0)
         from quwoquan_ops.ci.local_readiness_planner import STATIC_COMMANDS
         self.assertEqual(STATIC_COMMANDS["data_verify"][0][-3:], ["all", "--scope", "source"])
 
+    def test_retired_terms_case_matches_readiness_command(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-006.t1
+        from quwoquan_ops.ci.local_readiness_planner import STATIC_COMMANDS
+
+        source = COMMIT_GATE.read_text(encoding="utf-8")
+        body = source.split("    retired_terms_zero)\n", 1)[1].split(";;", 1)[0].strip()
+        self.assertEqual(body.split(), STATIC_COMMANDS["retired_terms_zero"][0])
+
     def test_makefile_gate_does_not_embed_test_local_contract(self) -> None:
         source = MAKEFILE.read_text(encoding="utf-8")
         gate_idx = source.index("\ngate:\n")

@@ -237,11 +237,7 @@ class BuildTimeSelfSupplyContractTest(unittest.TestCase):
         self.assertIn("consumeBundledSelfSupplyRequest", supply)
         self.assertIn(f'"{SELF_SUPPLY_REQUEST_FILE_NAME}"', supply)
         self.assertIn(f'"{SELF_SUPPLY_MODE}"', supply)
-        # 外部 canonical 供给已激活且新鲜时保持不变；重建后 requestDigest 变化才刷新。
-        self.assertIn("ios_runtime_config_self_supply_skipped reason=external_active", supply)
-        self.assertIn("activeReceipt[\"requestDigest\"] as? String == requestDigest", supply)
-        self.assertIn("_ = try readVerifiedIdentity()", supply)
-        self.assertIn("case .failure(let error):", supply)
+        # active 决策、验签、CAS 与 receipt 恢复由下方真实 Swift 行为矩阵覆盖。
         # 消费只编入 DEBUG，且位于外部 activation 之后、fatal gate 之前。
         debug_block = delegate[
             delegate.index("#if DEBUG\n      // Debug-nonprod 构建期自供给") : delegate.index(
@@ -412,6 +408,248 @@ class NativeCanonicalJSONContractTest(unittest.TestCase):
                             f"python=sha256:{hashlib.sha256(python_bytes).hexdigest()} "
                             f"swift=sha256:{hashlib.sha256(swift_bytes).hexdigest()}",
                         )
+
+
+class NativeSelfSupplyRecoveryContractTest(unittest.TestCase):
+    """Host 编译真实供给栈；只重定向容器根，不替换验签、CAS 或 receipt 实现。"""
+
+    # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+    def test_signed_store_self_supply_recovery_matrix(self) -> None:
+        swiftc = shutil.which("swiftc")
+        if sys.platform != "darwin" or swiftc is None:
+            self.skipTest("HOST_SWIFT_UNAVAILABLE: macOS Foundation/CryptoKit 行为矩阵未执行")
+        source = IOS_RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        # 红测仅在临时编译输入消费 HEAD 字节，绝不改动共享生产文件。
+        if os.environ.get("QWQ_NATIVE_SUPPLY_REVISION") == "HEAD":
+            source = subprocess.run(
+                ["git", "show", "HEAD:quwoquan_app/ios/Runner/NativeRuntimeConfigSupply.swift"],
+                cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+            ).stdout
+        source, channel, _ = source.partition("enum NativeRuntimeConfigChannel {")
+        self.assertTrue(channel, "Flutter channel 抽取边界已迁移")
+        source = source.replace("import Flutter\n", "")
+        source, roots = re.subn(
+            r"try fileManager\.url\(\s*for: \.applicationSupportDirectory,\s*"
+            r"in: \.userDomainMask,\s*appropriateFor: nil,\s*create: createDirectory\s*\)",
+            "URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)", source,
+        )
+        self.assertEqual(roots, 2, "仅重定向 package 与 receipt 两处 Application Support 根")
+        program = r'''
+let fm = FileManager.default
+let support = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
+let runtime = support.appendingPathComponent("qwq_runtime", isDirectory: true)
+let resources = Bundle.main.resourceURL!.appendingPathComponent("qwq_runtime", isDirectory: true)
+let packageURL = runtime.appendingPathComponent("runtime-config-package.json")
+let receiptURL = runtime.appendingPathComponent("runtime-config-active-receipt.json")
+let requestURL = resources.appendingPathComponent("runtime-config-self-supply-request.json")
+func bytes(_ value: [String: Any]) throws -> Data { try NativeRuntimeCanonicalJSON.data(value) }
+func digest(_ value: [String: Any]) throws -> String { nativeSHA256Identity(try bytes(value)) }
+func write(_ value: [String: Any], _ url: URL) throws { try bytes(value).write(to: url) }
+let key = Curve25519.Signing.PrivateKey()
+let keyring = ["local-contract-only": key.publicKey.rawRepresentation.base64EncodedString()]
+var request = try JSONSerialization.jsonObject(with: Data(contentsOf: requestURL)) as! [String: Any]
+let trust: [String: Any] = [
+  "schema": AppLaunchContract.schemaValues["runtime_config_trust_envelope"]!,
+  "buildProfile": "nonprod", "signatureAlgorithm": "ed25519", "trustedPublicKeys": keyring,
+]
+let trustDigest = try digest(trust)
+try write(trust, resources.appendingPathComponent("runtime-config-trust.json"))
+func signed(_ raw: [String: Any]) throws -> [String: Any] {
+  var package = raw
+  package.removeValue(forKey: "signature")
+  package["signatureKeyId"] = "local-contract-only"
+  package["trustedPublicKeys"] = keyring
+  package["payloadDigest"] = ""
+  package["payloadDigest"] = try digest(package)
+  package["signature"] = try key.signature(for: bytes(package)).base64EncodedString()
+  return package
+}
+var offline = request["package"] as! [String: Any]
+offline["trustEnvelopeDigest"] = trustDigest
+offline = try signed(offline)
+let offlineDigest = try digest(offline)
+request["package"] = offline
+request["packageDigest"] = offlineDigest
+request["trustEnvelopeDigest"] = trustDigest
+var manifest = request["effectiveLaunchManifest"] as! [String: Any]
+manifest["runtimeConfigPackageDigest"] = offlineDigest
+manifest["runtimeConfigTrustEnvelopeDigest"] = trustDigest
+request["effectiveLaunchManifest"] = manifest
+request["effectiveLaunchManifestDigest"] = try digest(manifest)
+try write(request, requestURL)
+let requestDigest = try digest(request)
+func online(_ environment: String, expired: Bool) throws -> [String: Any] {
+  var package = offline
+  for field in ["contentSource", "trustEnvelopeDigest"] { package.removeValue(forKey: field) }
+  package["schema"] = AppLaunchContract.schemaValues["runtime_config_package"]!
+  package["environment"] = environment
+  package["target"] = environment + "-local"
+  let formatter = ISO8601DateFormatter()
+  package["issuedAt"] = formatter.string(from: Date().addingTimeInterval(expired ? -7200 : -60))
+  package["expiresAt"] = formatter.string(from: Date().addingTimeInterval(expired ? -3600 : 3600))
+  var values = [String: String]()
+  for field in AppLaunchContract.runtimeConfigPackageRuntimeRequiredFields {
+    values[field] = field == "appRuntimeEnv" ? environment
+      : (["realtimeBaseUrl", "rtcMediaConnectionUrl"].contains(field)
+        ? "wss://contract.invalid" : "https://contract.invalid")
+  }
+  package["runtime"] = values
+  return try signed(package)
+}
+func state(_ identity: Bool = false) -> String {
+  switch identity ? NativeRuntimeConfigStore.readActivePackageIdentity() : NativeRuntimeConfigStore.readActivePackage() {
+  case .absent: return "absent"
+  case .present: return "present"
+  case .failure(let error): return error.flutterCode
+  }
+}
+func verified() -> String {
+  do { return try NativeRuntimeConfigActivationCoordinator.readVerifiedIdentity().packageDigest }
+  catch { return (error as! NativeRuntimeConfigReadError).flutterCode }
+}
+let cases = ["absent", "retired_alpha", "offline_missing", "offline_malformed", "offline_mismatch",
+             "beta_valid", "gamma_valid", "beta_expired", "gamma_expired",
+             "unknown_schema", "bad_signature", "bad_candidate_signature", "cas_conflict", "receipt_rollback"]
+var rows = [[String: Any]]()
+for name in cases {
+  if fm.fileExists(atPath: runtime.path) { try fm.removeItem(at: runtime) }
+  try fm.createDirectory(at: runtime, withIntermediateDirectories: true)
+  try write(request, requestURL)
+  var active = offline
+  if name == "retired_alpha" { active = try online("alpha", expired: true) }
+  if name == "receipt_rollback" {
+    active["sourceGitSha"] = String(repeating: "f", count: 40)
+    active = try signed(active)
+  }
+  if name.hasPrefix("beta_") { active = try online("beta", expired: name.hasSuffix("expired")) }
+  if name.hasPrefix("gamma_") { active = try online("gamma", expired: name.hasSuffix("expired")) }
+  if name == "unknown_schema" { active["schema"] = "unknown-runtime-schema"; active = try signed(active) }
+  if name == "bad_signature" { active["signature"] = Data(repeating: 0, count: 64).base64EncodedString() }
+  let oldDigest = try digest(active)
+  if name != "absent" { try write(active, packageURL) }
+  // 测试材料只在独立临时容器中出现；所有消费与验证仍使用生产实现。
+  var receipt: [String: Any] = [
+    "schema": AppLaunchContract.schemaValues["runtime_config_activation_receipt"]!,
+    "status": "activated", "requestDigest": requestDigest,
+    "environment": active["environment"]!, "buildProfile": "nonprod", "target": active["target"]!,
+    "launchProvenance": "workspace_ide_debug", "runtimeConfigSupplyMode": "external_runtime_package",
+    "packageDigest": oldDigest, "trustEnvelopeDigest": trustDigest,
+    "effectiveLaunchManifestDigest": request["effectiveLaunchManifestDigest"]!,
+    "previousActiveDigest": "", "activePackageDigest": oldDigest, "errorCode": "", "validationIssues": [String](),
+  ]
+  if name == "offline_mismatch" { receipt["packageDigest"] = "sha256:" + String(repeating: "0", count: 64) }
+  if name != "absent" && name != "offline_missing" { try write(receipt, receiptURL) }
+  if name == "offline_malformed" { try Data("{broken".utf8).write(to: receiptURL) }
+  if name == "bad_candidate_signature" {
+    var badRequest = request
+    var badPackage = offline
+    badPackage["signature"] = Data(repeating: 0, count: 64).base64EncodedString()
+    let badDigest = try digest(badPackage)
+    var badManifest = manifest
+    badManifest["runtimeConfigPackageDigest"] = badDigest
+    badRequest["package"] = badPackage
+    badRequest["packageDigest"] = badDigest
+    badRequest["effectiveLaunchManifest"] = badManifest
+    badRequest["effectiveLaunchManifestDigest"] = try digest(badManifest)
+    try write(badRequest, requestURL)
+  }
+  let beforePackage = try? Data(contentsOf: packageURL)
+  let beforeReceipt = try? Data(contentsOf: receiptURL)
+  var row: [String: Any] = ["name": name, "before": state(), "identity": state(true), "oldDigest": oldDigest]
+  if name == "cas_conflict" || name == "receipt_rollback" {
+    do {
+      _ = try NativeRuntimeConfigStore.activate(
+        package: offline, expectedPackageDigest: offlineDigest, expectedTrustEnvelopeDigest: trustDigest,
+        expectedActiveDigest: name == "cas_conflict" ? "sha256:" + String(repeating: "0", count: 64) : oldDigest
+      ) { _ in throw NativeRuntimeConfigReadError.activationReceiptWriteFailed }
+      row["error"] = "unexpected_success"
+    } catch { row["error"] = (error as! NativeRuntimeConfigReadError).flutterCode }
+  } else {
+    let result = NativeRuntimeConfigActivationCoordinator.consumeBundledSelfSupplyRequest()
+    row["requested"] = result.requested
+    row["activated"] = result.activated
+    row["error"] = result.errorCode
+  }
+  row["packagePreserved"] = beforePackage == (try? Data(contentsOf: packageURL))
+  row["receiptPreserved"] = beforeReceipt == (try? Data(contentsOf: receiptURL))
+  row["verified"] = verified()
+  if let current = try? NativeRuntimeConfigActivationCoordinator.readActiveReceiptDocument() {
+    row["receiptPrevious"] = current["previousActiveDigest"]
+    row["receiptRequest"] = current["requestDigest"]
+  }
+  if row["activated"] as? Bool == true {
+    let repeated = NativeRuntimeConfigActivationCoordinator.consumeBundledSelfSupplyRequest()
+    row["repeated"] = repeated.activated && repeated.errorCode.isEmpty && verified() == offlineDigest
+  }
+  rows.append(row)
+}
+let output: [String: Any] = ["offlineDigest": offlineDigest, "requestDigest": requestDigest, "cases": rows]
+print(String(data: try JSONSerialization.data(withJSONObject: output), encoding: .utf8)!)
+'''
+        with tempfile.TemporaryDirectory(prefix="qwq-native-self-supply-") as raw_root:
+            root = Path(raw_root)
+            contents = root / "Probe.app/Contents"
+            resources = contents / "Resources/qwq_runtime"
+            resources.mkdir(parents=True, mode=0o700)
+            executable = contents / "MacOS/Probe"
+            executable.parent.mkdir()
+            generated = subprocess.run(
+                [sys.executable, str(SELF_SUPPLY_BUILDER),
+                 "--trust-output", str(resources / "runtime-config-trust.json"),
+                 "--request-output", str(resources / SELF_SUPPLY_REQUEST_FILE_NAME)],
+                cwd=REPO_ROOT,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": str(REPO_ROOT)},
+                capture_output=True, text=True, check=False, timeout=90,
+            )
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            probe = root / "main.swift"
+            probe.write_text(source + "\n" + program, encoding="utf-8")
+            compiled = subprocess.run(
+                [swiftc, "-module-cache-path", str(root / "module-cache"),
+                 str(APP_DIR / "ios/Runner/AppLaunchContract.generated.swift"),
+                 str(IOS_CANONICAL_JSON), str(probe), "-o", str(executable)],
+                capture_output=True, text=True, check=False, timeout=120,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            container = root / "Application Support"
+            container.mkdir()
+            native = subprocess.run(
+                [str(executable), str(container)], capture_output=True, text=True,
+                check=False, timeout=30,
+            )
+            self.assertEqual(native.returncode, 0, native.stderr)
+            output = json.loads(native.stdout)
+        rows = {row["name"]: row for row in output["cases"]}
+        for name in ("absent", "retired_alpha", "offline_missing", "offline_malformed", "offline_mismatch"):
+            with self.subTest(case=name):
+                row = rows[name]
+                self.assertTrue(row["activated"], row)
+                self.assertEqual(row["error"], "")
+                self.assertEqual(row["verified"], output["offlineDigest"])
+                self.assertEqual(row["receiptRequest"], output["requestDigest"])
+                self.assertEqual(row["receiptPrevious"], "" if name == "absent" else row["oldDigest"])
+                self.assertTrue(row["repeated"], row)
+        self.assertEqual(rows["retired_alpha"]["before"], "runtime_config_content_source_mismatch")
+        self.assertEqual(rows["retired_alpha"]["identity"], "present")
+        for name in ("beta_valid", "gamma_valid"):
+            with self.subTest(case=name):
+                row = rows[name]
+                self.assertFalse(row["requested"], row)
+                self.assertFalse(row["activated"], row)
+                self.assertEqual(row["error"], "")
+                self.assertEqual(row["verified"], row["oldDigest"])
+                self.assertTrue(row["packagePreserved"] and row["receiptPreserved"], row)
+        for name, error in {
+            "beta_expired": "freshness_invalid", "gamma_expired": "freshness_invalid",
+            "unknown_schema": "schema_mismatch", "bad_signature": "signature_invalid",
+            "bad_candidate_signature": "signature_invalid", "cas_conflict": "active_digest_conflict",
+            "receipt_rollback": "activation_receipt_write_failed",
+        }.items():
+            with self.subTest(case=name):
+                row = rows[name]
+                self.assertEqual(row["error"], "runtime_config_" + error, row)
+                self.assertTrue(row["packagePreserved"] and row["receiptPreserved"], row)
+                self.assertFalse(row.get("activated", False), row)
 
 
 if __name__ == "__main__":

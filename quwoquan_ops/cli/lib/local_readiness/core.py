@@ -345,13 +345,13 @@ def _execution_plan(plan: dict[str, Any]) -> dict[str, Any]:
     timeout_identity = plan["timeout_policy"]
     if (
         not isinstance(timeout_identity, dict)
-        or tuple(timeout_identity) != ("schema", "source", "digest")
+        or set(timeout_identity) != {"schema", "source", "digest"}
         or not isinstance(timeout_identity.get("digest"), str)
         or not timeout_identity["digest"].startswith("sha256:")
     ):
         raise LocalReadinessError("local readiness timeout policy identity 字段漂移")
     for check in plan["checks"]:
-        if not isinstance(check, dict) or tuple(check) != CHECK_FIELDS:
+        if not isinstance(check, dict) or set(check) != set(CHECK_FIELDS):
             raise LocalReadinessError("local readiness check 字段漂移")
         timeout = check.get("timeout_seconds")
         if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
@@ -359,10 +359,21 @@ def _execution_plan(plan: dict[str, Any]) -> dict[str, Any]:
     return {field: plan[field] for field in PLAN_FIELDS}
 
 
-def canonicalize_plan(plan: dict[str, Any], *, repo_root: Path = ROOT) -> dict[str, Any]:
+def _source_plan(paths: list[str], *, level: str, mode: str, repo_root: Path, push_updates: list[dict[str, str]] | None = None) -> dict[str, Any]:
+    from quwoquan_ops.ci.local_readiness_planner import bind_source_health_plan
+    plan = build_impact_plan(paths, level=level, repo_root=repo_root)
+    head = _head_sha(repo_root)
+    base = head
+    if mode == "push":
+        head, base = _validated_push_identity(repo_root, push_updates or [])
+        if sorted(paths) != push_paths(repo_root, push_updates or []):
+            raise LocalReadinessError("push readiness 必须覆盖实际完整 changed paths")
+    return {**bind_source_health_plan(plan, mode=mode, base=base, head=head), "mode": mode}
+
+
+def canonicalize_plan(plan: dict[str, Any], *, repo_root: Path = ROOT, push_updates: list[dict[str, str]] | None = None) -> dict[str, Any]:
     supplied = _execution_plan(plan)
-    canonical = build_impact_plan(supplied["paths"], level=str(supplied["level"]), repo_root=repo_root)
-    canonical = {**canonical, "mode": supplied["mode"]}
+    canonical = _source_plan(supplied["paths"], level=str(supplied["level"]), mode=supplied["mode"], repo_root=repo_root, push_updates=push_updates)
     if supplied != canonical:
         raise LocalReadinessError("local readiness plan 与 canonical planner exact plan 不一致")
     if not supplied["paths"] or not supplied["checks"]:
@@ -552,7 +563,7 @@ def plan_readiness(
     state_root: Path | None = None,
 ) -> dict[str, Any]:
     _load_contract()
-    plan = {**build_impact_plan(paths, level=level, repo_root=repo_root), "mode": mode}
+    plan = _source_plan(paths, level=level, mode=mode, repo_root=repo_root, push_updates=push_updates)
     fingerprint = capture_fingerprint(
         plan,
         repo_root=repo_root,
@@ -583,7 +594,7 @@ def _materialize_capsule_entry(repo_root: Path, capsule_root: Path, entry: dict[
     implementation(repo_root, capsule_root, entry)
 
 
-def _capsule_entries(repo_root: Path, *, mode: str, push_updates: list[dict[str, str]] | None) -> tuple[list[dict[str, str]], str]:
+def _capsule_entries(repo_root: Path, *, mode: str, push_updates: list[dict[str, str]] | None) -> tuple[list[dict[str, str]], str, str]:
     from .source_inputs import _capsule_entries as implementation
     return implementation(repo_root, mode=mode, push_updates=push_updates)
 
@@ -637,6 +648,12 @@ def _run_check(
         configured_timeout, max(0.0, float(timeout_seconds))
     )
     command = list(check["command"])
+    health_path = None
+    if "code-health" in check.get("resources", []):
+        health_path = log_path.with_suffix(".health.json")
+        health_path.parent.mkdir(parents=True, exist_ok=True)
+        health_path.unlink(missing_ok=True)
+        command.extend(["--output", str(health_path.resolve())])
     result = run_command(
         command,
         cwd=_safe_cwd(repo_root, str(check["cwd"])),
@@ -646,9 +663,12 @@ def _run_check(
     )
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_bytes(result.stdout + result.stderr)
+    from .source_inputs import read_health_result
+    health, health_valid = read_health_result(health_path, command, repo_root=repo_root)
     return {
         "id": check["id"],
-        "status": "PASS" if result.returncode == 0 else "FAIL",
+        "status": "PASS" if result.returncode == 0 and health_valid else "FAIL",
+        **({"code_health": health} if health is not None else {}),
         "exit_code": result.returncode,
         "elapsed_ms": int((time.monotonic() - started) * 1000),
         "log": str(log_path),
@@ -735,7 +755,7 @@ def run_readiness(
     )
     if plan.get("level") != "fast" and plan.get("deferred"):
         raise LocalReadinessError("scope/release readiness 要求 deferred=[]")
-    canonical = canonicalize_plan(plan, repo_root=repo_root)
+    canonical = canonicalize_plan(plan, repo_root=repo_root, push_updates=push_updates)
     level, mode = str(canonical["level"]), str(canonical["mode"])
     if level != "fast" and canonical["deferred"]:
         raise LocalReadinessError("scope/release readiness 要求 deferred=[]")
@@ -836,8 +856,10 @@ def run_readiness(
         queue_observation = _assert_scope_queue_closed(canonical, state_root=root)
         status = "PASS" if len(results) == len(canonical["checks"]) and all(item["status"] == "PASS" for item in results) and stable and (level == "fast" or not canonical["deferred"]) else "FAIL"
         admission_paths, admission_identity = _load_review_inputs(review_consolidation, required_evidence, repo_root=repo_root, required=level in {"scope", "release"})
+        from .source_inputs import push_source_identity
         receipt = {
             "schema": RECEIPT_SCHEMA,
+            "source_identity": push_source_identity(repo_root, mode=mode, push_updates=push_updates),
             "level": level,
             "facts": {
                 "sourceReadiness": {
@@ -896,7 +918,7 @@ def verify_receipt(
     receipt_path: Path | None = None,
     state_root: Path | None = None,
 ) -> dict[str, Any]:
-    canonical = {**build_impact_plan(paths, level=level, repo_root=repo_root), "mode": mode}
+    canonical = _source_plan(paths, level=level, mode=mode, repo_root=repo_root, push_updates=push_updates)
     root = _state_root(state_root)
     if receipt_path is None:
         pointer = _receipt_locations(canonical, {"digest": "sha256:" + "0" * 64}, state_root=root, push_updates=push_updates)[1]

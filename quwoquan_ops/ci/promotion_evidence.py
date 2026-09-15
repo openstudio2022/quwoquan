@@ -11,7 +11,10 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
+
+sys.dont_write_bytecode = True
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -337,6 +340,8 @@ def create_promotion_admission(
     required_evidence: Sequence[Mapping[str, str]],
     promotion_ready_at: str,
 ) -> Path:
+    from quwoquan_ops.ci.verify_code_health_delivery import verify_promotion_health_evidence
+
     repository, root = repository.resolve(), evidence_root.resolve()
     head = _sha(head_sha, "headSha")
     base = _sha(base_sha, "baseSha")
@@ -437,6 +442,7 @@ def create_promotion_admission(
                 "PROMOTION.EVIDENCE_INVALID",
                 "required evidence is not passed for promotion range",
             )
+        verify_promotion_health_evidence(repository, root, fact, base=base, head=head)
         evidence.append(normalized)
     if not evidence:
         raise PromotionEvidenceError(

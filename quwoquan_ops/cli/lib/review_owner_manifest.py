@@ -23,6 +23,7 @@ from lib.evidence_fingerprint import (
     snapshot_path,
 )
 from lib.descriptor_safe_io import read_repo_relative_regular_single_link
+from lib.review_fingerprint import dependency_root
 from lib.candidate_evidence import (
     CandidateEvidenceError, candidate_identity, validate_candidate_ref,
 )
@@ -103,7 +104,7 @@ def read_owner_manifest_exact_bytes(
             f"{manifest_ref}"
         )
     return read_repo_relative_regular_single_link(
-        repo_root,
+        dependency_root(repo_root),
         manifest_ref,
         expected_directory_parts=OWNER_MANIFEST_DIRECTORY_PARTS,
         max_bytes=int(contract_section("feature_context_manifest")["max_bytes"]),
@@ -266,6 +267,15 @@ def normalize_contexts(
     return contexts, len(encoded), target, identity, candidate
 
 
+def validate_candidate_source_range(payload: dict, plan: dict) -> None:
+    identity = payload.get("source_identity")
+    if identity is None:
+        return
+    expected = {key: identity[key] for key in ("base_sha", "head_sha", "head_tree")}
+    if plan.get("git_range") != expected:
+        _refuse("CANDIDATE.STALE", "Review range 与 candidate source identity 不一致")
+
+
 def validate_current_owner_manifest(
     plan: dict[str, Any],
     *,
@@ -310,6 +320,7 @@ def validate_current_owner_manifest(
         )
     except CandidateEvidenceError as exc:
         _refuse(exc.code, exc.message)
+    validate_candidate_source_range(payload, plan)
     expected_candidate = candidate_identity(candidate_ref, candidate_raw, payload, fingerprint)
     if expected_candidate != candidate:
         _refuse("CANDIDATE.STALE", "Review plan candidate identity 已漂移")

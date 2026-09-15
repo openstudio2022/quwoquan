@@ -213,6 +213,41 @@ def launch_and_observe(
     return observation
 
 
+def probe_installed_content(*, artifact: Path, platform: str, expected_artifact_digest: str,
+                            app_root: Path) -> dict[str, Any]:
+    """只读父调用提供的 installed .app / 回读 APK，不签发安装或页面通过事实。
+
+    expected_artifact_digest 由调用方使用既有 installed readback 获取；本函数
+    复用 canonical snapshot reader 的前后 payload digest 校验，不接触设备。
+    返回值仅供开发诊断内存投影，不是 receipt、CaseResult 或准入证据。
+    """
+    import zipfile
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import read_artifact_snapshot
+    from quwoquan_ops.cli.smoke.environment_patrol_smoke.artifact_binding import TestedAppArtifactBindingError
+
+    result: dict[str, Any] = {
+        "nonPromotable": True, "firstBlocker": "",
+        "rawLaunch": "not_evaluated", "pageContent": "not_evaluated",
+        "apiContentReadback": "not_evaluated", "deviceBinding": "not_evaluated",
+        "installedContent": {"status": "not_evaluated", "platform": platform,
+                             "artifactPath": str(artifact), "artifactDigest": expected_artifact_digest},
+    }
+    content = result["installedContent"]
+    try:
+        if platform not in {"ios", "android"}:
+            raise ValueError("installed content probe requires ios or android")
+        if not isinstance(expected_artifact_digest, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", expected_artifact_digest) is None:
+            raise ValueError("installed content probe requires an exact artifact digest")
+        snapshot = read_artifact_snapshot(artifact=artifact, platform=platform,
+                                          expected_artifact_digest=expected_artifact_digest, app_root=app_root)
+    except (TestedAppArtifactBindingError, OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile) as error:
+        result["firstBlocker"] = getattr(error, "code", READBACK_BLOCKER)
+        content.update(status="failed", detail=getattr(error, "detail", str(error)))
+    else:
+        content.update(status="verified", snapshot=snapshot)
+    return result
+
+
 def _content_page_identity(payload: Mapping[str, Any], items: list[Any]) -> tuple[str, str]:
     """不把非空集合、重复对象或半份 release 身份误判为可用内容。"""
     if payload.get("outcome") != "content" or payload.get("emptyReason") is not None:

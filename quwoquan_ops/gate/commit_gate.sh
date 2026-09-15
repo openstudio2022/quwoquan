@@ -160,6 +160,9 @@ run_static_check() {
         python3 -B quwoquan_ops/gate/verify_workflow_cli_arguments.py "${workflow_args[@]}"
       fi
       ;;
+    retired_terms_zero)
+      python3 -B quwoquan_app/scripts/runtime/architecture/verify_retired_terms_zero.py
+      ;;
     code_health_delta_fast)
       changed_args=()
       while IFS= read -r changed; do

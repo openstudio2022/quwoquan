@@ -55,7 +55,7 @@ class TargetResolution:
 def domain_service_roots() -> list[Path]:
     """仅从服务自身的 contracts/domain.yaml 发现领域服务。"""
 
-    services_root = context.REPO_ROOT / "quwoquan_service" / "services"
+    services_root = context.repository_root() / "quwoquan_service" / "services"
     if not services_root.is_dir():
         return []
     return sorted(
@@ -66,7 +66,7 @@ def domain_service_roots() -> list[Path]:
 
 
 def undeclared_service_roots() -> list[Path]:
-    services_root = context.REPO_ROOT / "quwoquan_service" / "services"
+    services_root = context.repository_root() / "quwoquan_service" / "services"
     if not services_root.is_dir():
         return []
     return sorted(
@@ -84,10 +84,10 @@ def validate_domain_service_ownership(nodes: Iterable[Node]) -> list[str]:
     claims = {node: engineering_claims(node) for node in l1_nodes}
     for service in undeclared_service_roots():
         errors.append(
-            f"{service.relative_to(context.REPO_ROOT)}: 服务根必须声明 contracts/domain.yaml"
+            f"{service.relative_to(context.repository_root())}: 服务根必须声明 contracts/domain.yaml"
         )
     for service in domain_service_roots():
-        root = service.relative_to(context.REPO_ROOT).as_posix()
+        root = service.relative_to(context.repository_root()).as_posix()
         direct_owners = sorted(
             node.node_id
             for node, node_claims in claims.items()
@@ -107,10 +107,10 @@ def validate_domain_service_ownership(nodes: Iterable[Node]) -> list[str]:
             )
 
     shared_metadata = (
-        context.REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared"
+        context.repository_root() / "quwoquan_service" / "contracts" / "metadata" / "_shared"
     )
     if shared_metadata.is_dir():
-        shared_root = shared_metadata.relative_to(context.REPO_ROOT).as_posix()
+        shared_root = shared_metadata.relative_to(context.repository_root()).as_posix()
         shared_owners = sorted(
             node.node_id
             for node, node_claims in claims.items()
@@ -163,7 +163,7 @@ def _engineering_roots(node: Node) -> list[str]:
 
 def owners_for_path(target: Path, nodes: Iterable[Node]) -> list[Node]:
     try:
-        rel = target.resolve().relative_to(context.REPO_ROOT.resolve()).as_posix()
+        rel = target.resolve().relative_to(context.repository_root().resolve()).as_posix()
     except ValueError:
         return []
     matches: list[tuple[int, Node]] = []
@@ -188,7 +188,7 @@ def canonical_app_test_owner_target(target: Path) -> Path | None:
     精确 L1 Journey root；support 不属于三层对象测试，继续按普通工程路径处理。
     """
     try:
-        parts = target.resolve().relative_to(context.REPO_ROOT.resolve()).parts
+        parts = target.resolve().relative_to(context.repository_root().resolve()).parts
     except ValueError:
         return None
     if (
@@ -201,12 +201,12 @@ def canonical_app_test_owner_target(target: Path) -> Path | None:
     # 保留 domain 后的完整对象路径，否则
     # ``test/<layer>/design_system/pageflip/**`` 会被折叠为
     # ``lib/design_system``，L2 DEC 就无法和 production path 共用同一 owner。
-    return context.REPO_ROOT / "quwoquan_app" / "lib" / Path(*parts[3:])
+    return context.repository_root() / "quwoquan_app" / "lib" / Path(*parts[3:])
 
 
 def owners_for_app_test_path(target: Path, nodes: Iterable[Node]) -> list[Node] | None:
     try:
-        parts = target.resolve().relative_to(context.REPO_ROOT.resolve()).parts
+        parts = target.resolve().relative_to(context.repository_root().resolve()).parts
     except ValueError:
         return None
     if (
@@ -221,7 +221,7 @@ def owners_for_app_test_path(target: Path, nodes: Iterable[Node]) -> list[Node] 
         # Resolve the declared Journey root, not the individual test file. This
         # preserves duplicate-owner detection and prevents a project-level App
         # or runtime root from becoming an implicit fallback.
-        root_owners = owners_for_path(context.REPO_ROOT / journey_root, nodes)
+        root_owners = owners_for_path(context.repository_root() / journey_root, nodes)
         return [
             owner
             for owner in root_owners
@@ -230,7 +230,7 @@ def owners_for_app_test_path(target: Path, nodes: Iterable[Node]) -> list[Node] 
     projected = canonical_app_test_owner_target(target)
     if projected is None:
         return None
-    projected_rel = projected.resolve().relative_to(context.REPO_ROOT.resolve()).as_posix()
+    projected_rel = projected.resolve().relative_to(context.repository_root().resolve()).as_posix()
     owners = owners_for_path(projected, nodes)
     return [
         owner
@@ -352,7 +352,7 @@ def _read_design_ownerships(
             roots = tuple(sorted({root.rstrip("/") for root in PATH_RE.findall(root_field)}))
             if not roots:
                 raise ValueError(
-                    f"GATE_BLOCK: {l2.design.relative_to(context.REPO_ROOT)}#{anchor} "
+                    f"GATE_BLOCK: {l2.design.relative_to(context.repository_root())}#{anchor} "
                     "声明了适用工程根，但未包含 canonical 仓库路径"
                 )
 
@@ -368,7 +368,7 @@ def _read_design_ownerships(
             if len(story_nodes) != 1:
                 story_ids = sorted(item.node_id for item in story_nodes)
                 raise ValueError(
-                    f"GATE_BLOCK: {l2.design.relative_to(context.REPO_ROOT)}#{anchor} "
+                    f"GATE_BLOCK: {l2.design.relative_to(context.repository_root())}#{anchor} "
                     "的适用工程根必须指向唯一直属 Story；"
                     f"当前={story_ids or '无'}"
                 )
@@ -389,7 +389,7 @@ def _read_design_ownerships(
             )
             if missing:
                 raise ValueError(
-                    f"GATE_BLOCK: {l2.design.relative_to(context.REPO_ROOT)}#{anchor} "
+                    f"GATE_BLOCK: {l2.design.relative_to(context.repository_root())}#{anchor} "
                     f"引用了 {story.rel} 不存在的锚点：{', '.join(missing)}"
                 )
             result.append(
@@ -411,7 +411,7 @@ def _design_owner_for_path(
     nodes: list[Node],
 ) -> DesignOwnership | None:
     try:
-        rel = target.resolve().relative_to(context.REPO_ROOT.resolve()).as_posix()
+        rel = target.resolve().relative_to(context.repository_root().resolve()).as_posix()
     except ValueError:
         return None
     matches: list[tuple[int, DesignOwnership]] = []
@@ -440,9 +440,9 @@ def resolve_target_details(raw: str | Path, nodes: list[Node]) -> TargetResoluti
     raw_path = str(raw).partition("#")[0]
     target = Path(raw_path)
     if not target.is_absolute():
-        target = context.REPO_ROOT / target
+        target = context.repository_root() / target
     try:
-        target.resolve(strict=False).relative_to(context.REPO_ROOT.resolve())
+        target.resolve(strict=False).relative_to(context.repository_root().resolve())
     except ValueError as error:
         raise ValueError(f"GATE_BLOCK: {raw} 越出仓库") from error
     if target.is_dir() and (target / "spec.md").is_file():

@@ -37,7 +37,7 @@ def _sample(value: str) -> tuple[int, str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", action="append", type=_sample, required=True)
-    parser.add_argument("--reviews", type=Path, help="Optional JSON map: '<pr>:<code>:<path>' -> confirmed|false-positive")
+    parser.add_argument("--reviews", type=Path, help="Optional JSON map: '<pr>:<findingId>' -> confirmed|false-positive")
     parser.add_argument("--policy", type=Path, default=ROOT / "quwoquan_ops/policies/code_health_policy.yaml")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
@@ -47,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("reviews 必须为 object")
         policy = load_policy(args.policy)
         samples = []
+        consumed_reviews: set[str] = set()
         for pull_request, merge_sha in args.sample:
             head = _git("rev-parse", "--verify", f"{merge_sha}^{{commit}}")
             parents = _git("rev-list", "--parents", "-n", "1", head).split()
@@ -58,11 +59,14 @@ def main(argv: list[str] | None = None) -> int:
             duration = round(time.monotonic() - started, 3)
             finding_reviews = []
             for finding in report["findings"]:
-                key = f"{pull_request}:{finding['code']}:{finding['path']}"
+                key = f"{pull_request}:{finding['findingId']}"
                 if key in reviews:
-                    finding_reviews.append({"code": finding["code"], "path": finding["path"], "verdict": reviews[key]})
+                    consumed_reviews.add(key)
+                    finding_reviews.append({"findingId": finding["findingId"], "verdict": reviews[key]})
             samples.append({"pullRequest": pull_request, "durationSeconds": duration, "report": report, "findingReviews": finding_reviews})
             print(f"calibration sample PR #{pull_request}: {report['terminal']} {duration:.3f}s", file=sys.stderr)
+        if set(reviews) != consumed_reviews:
+            raise ValueError("reviews 含未匹配 current findingId 的旧键或未知样本")
         observed_at = datetime.now(timezone.utc)
         aggregate = aggregate_calibration(samples, policy=policy, observed_at=observed_at)
         payload = {**aggregate, "samples": samples}

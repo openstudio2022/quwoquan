@@ -67,6 +67,19 @@ def test_projection_filters_owner_and_flags_two_week_streaks(tmp_path: Path) -> 
     assert "quwoquan_ops/ci/z.py" not in text
 
 
+def test_stale_report_exposes_scope_and_does_not_imply_health() -> None:
+    from datetime import datetime, timezone
+    report = _report("b" * 40, "2026-08-01T00:00:00+00:00", {})
+    projection = hotspots.project(report, "quwoquan_ops/gate", source="oci", current_head="c" * 40,
+                                  now=datetime(2026, 9, 11, tzinfo=timezone.utc))
+    assert projection["freshness"]["status"] == "stale"
+    assert projection["freshness"]["matchesCurrentHead"] is False
+    assert projection["inputScope"]["status"] == "unavailable"
+    assert projection["measurementStatus"] == "unavailable"
+    assert projection["selection"]["emptyMeansHealthy"] is False
+    assert projection["authority"]["blocksDevelopment"] is False
+
+
 def test_unavailable_is_typed_and_does_not_block(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setattr(hotspots, "latest_oci_report", lambda repository: None)
     code = hotspots.main(["--owner", "quwoquan_ops/gate", "--weekly-root", str(tmp_path / "missing"), "--json"])

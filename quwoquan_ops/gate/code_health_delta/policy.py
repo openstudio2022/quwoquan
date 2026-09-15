@@ -21,7 +21,7 @@ _CATEGORIES = (
     "contract-metadata", "config-data", "docs",
 )
 _CLASSIFICATION_FIELDS = frozenset({
-    "source_extensions", "generated_markers", "vendor_markers", "test_markers",
+    "source_extensions", "generated_manifests", "generated_exact_sources", "vendor_markers", "test_markers",
     "contract_markers", "docs_prefixes", "config_extensions",
 })
 _THRESHOLD_FIELDS = {
@@ -107,14 +107,37 @@ def load_policy(path: Path) -> dict[str, Any]:
         raise PolicyError("source_categories 必须为 canonical 七类闭集")
 
     classification = _closed_mapping(document.get("classification"), _CLASSIFICATION_FIELDS, "classification")
-    for field in _CLASSIFICATION_FIELDS:
+    for field in _CLASSIFICATION_FIELDS - {"generated_manifests", "generated_exact_sources"}:
         _string_list(classification.get(field), f"classification.{field}")
+    _validate_generated_sources(classification)
     _validate_thresholds(document.get("thresholds"))
     _validate_rollout(document.get("rollout"))
     _validate_performance(document.get("performance"))
     _validate_notes(document.get("notes"))
     _validate_report(document.get("report"))
+    from .classification import generated_provenance
+    root = path.resolve().parents[2]
+    statuses: dict[str, Any] = {}
+    document["_generated_provenance"] = generated_provenance(
+        document, lambda name: (root / name).read_bytes() if (root / name).is_file() else None,
+        statuses=statuses,
+    )
+    document["_generated_statuses"] = statuses
     return document
+
+
+def _validate_generated_sources(classification: dict[str, Any]) -> None:
+    manifests = classification["generated_manifests"]
+    sources = classification["generated_exact_sources"]
+    if not isinstance(manifests, list) or not isinstance(sources, dict):
+        raise PolicyError("generated sources 必须为 manifest list 与 exact mapping")
+    for item in manifests:
+        _closed_mapping(item, frozenset({"path", "root", "generator"}), "generated manifest")
+        _non_empty_string(item["generator"], "generated generator")
+    paths = [p for item in manifests for p in (item["path"], item["root"])] + list(sources) + list(sources.values())
+    for value in paths:
+        if not isinstance(value, str) or Path(value).is_absolute() or ".." in Path(value).parts:
+            raise PolicyError("generated source 必须为仓库相对 exact path")
 
 
 def _ratio(value: Any, upper: float, label: str) -> None:

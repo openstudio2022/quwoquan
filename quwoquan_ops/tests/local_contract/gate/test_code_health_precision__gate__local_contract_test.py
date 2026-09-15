@@ -58,7 +58,7 @@ def test_l10n_and_native_test_directories_are_not_handwritten_production() -> No
     ("quwoquan_service/contracts/metadata/schema.json", "contract-metadata"),
     ("quwoquan_service/contracts/README.md", "docs"),
     ("quwoquan_service/contracts/tests/test_compiler.py", "test"),
-    ("quwoquan_service/contracts/generated/compiler.py", "generated"),
+    ("quwoquan_service/contracts/generated/compiler.py", "handwritten-production"),
 ])
 def test_source_type_wins_over_skill_and_contract_directory_names(path: str, category: str) -> None:
     assert classify_path(path, load_policy(POLICY)) == category
@@ -88,6 +88,184 @@ def test_brace_parser_ignores_control_flow_heads_and_string_braces() -> None:
     assert metrics["List"].end == 13
     # 两个真实分支（if、for），字符串与注释里的关键字不计。
     assert metrics["List"].cyclomatic == 3
+
+
+def test_qualified_functions_and_finding_ids_survive_line_moves(tmp_path: Path) -> None:
+    repo, base = init_repo(tmp_path)
+    body = "\n".join(
+        f"class {name}:\n    def run(self):\n" + "        if self.ready: pass\n" * 22
+        for name in ("First", "Second")
+    )
+    path = "quwoquan_ops/ci/members.py"
+    write(repo, path, body)
+    head = commit(repo)
+    report = analyze_delta(repo, base=base, head=head, policy_path=policy_path(repo))
+    findings = [f for f in report["findings"] if f["code"] == "CODE_HEALTH.COMPLEXITY_ADVISORY"]
+    assert {f["qualifiedSymbol"] for f in findings} == {"First.run", "Second.run"}
+    ids = {f["findingId"] for f in findings}
+    assert len(ids) == 2
+    write(repo, path, "\n\n" + body)
+    moved = commit(repo)
+    report = analyze_delta(repo, base=base, head=moved, policy_path=policy_path(repo))
+    assert {f["findingId"] for f in report["findings"] if f["code"] == "CODE_HEALTH.COMPLEXITY_ADVISORY"} == ids
+
+
+def test_member_worsening_is_not_masked_by_sibling_repair(tmp_path: Path) -> None:
+    repo, _ = init_repo(tmp_path)
+    path = "quwoquan_ops/ci/siblings.py"
+    def body(first: int, second: int) -> str:
+        return "\n".join(f"class {name}:\n    def run(self):\n" + "        if self.ready: pass\n" * branches for name, branches in (("First", first), ("Second", second)))
+    write(repo, path, body(21, 30))
+    base = commit(repo)
+    write(repo, path, body(22, 1))
+    head = commit(repo)
+    report = analyze_delta(repo, base=base, head=head, policy_path=policy_path(repo))
+    assert {f["qualifiedSymbol"] for f in report["findings"] if f["code"] == "CODE_HEALTH.COMPLEXITY_ADVISORY"} == {"First.run"}
+    entries = report["debtDelta"]["entries"]
+    assert {e["status"] for e in entries if e["qualifiedSymbol"] == "First.run"} == {"worsened"}
+    assert {e["status"] for e in entries if e["qualifiedSymbol"] == "Second.run"} == {"resolved"}
+
+
+def test_nested_function_complexity_does_not_inflate_parent() -> None:
+    body = b"def parent():\n    def child():\n        if True: pass\n    return child\n"
+    metrics = {m.qualified_name: m for m in function_metrics("x.py", body)}
+    assert metrics["parent"].cyclomatic == 1
+    assert metrics["parent.child"].cyclomatic == 2
+
+
+@pytest.mark.parametrize("path", [
+    "quwoquan_app/ios/Runner/AppLaunchContract.generated.swift",
+    "quwoquan_app/android/app/src/runtimeConfigShared/java/com/quwoquan/quwoquan_app/AppLaunchContract.java",
+])
+def test_native_manifest_outputs_are_trusted_generated(path: str) -> None:
+    assert classify_path(path, load_policy(POLICY)) == "generated"
+
+
+@pytest.mark.parametrize("path", [
+    "quwoquan_ops/ci/generated/handwritten.py", "quwoquan_ops/ci/gen/fake.py",
+    "quwoquan_app/ios/Runner/Fake.generated.swift", "quwoquan_app/lib/fake.g.dart",
+])
+def test_generated_name_alone_does_not_grant_exemption(path: str) -> None:
+    assert classify_path(path, load_policy(POLICY)) == "handwritten-production"
+
+
+@pytest.mark.parametrize(("path", "body", "owners"), [
+    ("x.go", "func (a *First) Run() {\n}\nfunc (b *Second) Run() {\n}\n", {"First.Run()", "Second.Run()"}),
+    ("x.java", "class First {\n void run() {}\n void run(int value) {}\n}\nclass Second {\n void run() {}\n}\n", {"First.run()", "First.run(int value)", "Second.run()"}),
+    ("x.py", "if flag:\n def run(): pass\nelse:\n def run(): pass\n", {"run", "run#2"}),
+])
+def test_qualified_member_identity_is_unique(path: str, body: str, owners: set[str]) -> None:
+    metrics = function_metrics(path, body.encode())
+    assert {m.qualified_name for m in metrics} == owners
+
+
+def test_generated_manifest_source_is_bound_to_exact_candidate(tmp_path: Path) -> None:
+    from quwoquan_ops.tests.support.code_health_delta_test_support import write_launch_generated
+    repo, base = init_repo(tmp_path)
+    path = "quwoquan_app/ios/Runner/AppLaunchContract.generated.swift"
+    write(repo, path, "// Code generated. DO NOT EDIT.\n" + "let value = 1\n" * 2001)
+    handwritten = commit(repo)
+    report = analyze_delta(repo, base=base, head=handwritten, policy_path=policy_path(repo), mode="fast")
+    assert report["terminal"] == "GATE_BLOCK"
+    write_launch_generated(repo, path, (repo / path).read_text())
+    generated = commit(repo)
+    trusted = analyze_delta(repo, base=base, head=generated, policy_path=policy_path(repo), mode="fast")
+    assert trusted["terminal"] == "PASS"
+    # 不能拿 working-tree 的 manifest 为历史 commit 授权。
+    replay = analyze_delta(repo, base=base, head=handwritten, policy_path=policy_path(repo), mode="fast")
+    assert replay["terminal"] == "GATE_BLOCK"
+    assert trusted["generatedClassification"]["sources"][path].endswith("generated_manifest.json")
+    manifest = repo / "quwoquan_app/tool/app_launch_contract_codegen/generated_manifest.json"
+    manifest.write_text(manifest.read_text().replace("tools/codegen_app_metadata --app-launch-contract-only", "self-declared-generator"))
+    forged = commit(repo)
+    rejected = analyze_delta(repo, base=base, head=forged, policy_path=policy_path(repo), mode="fast")
+    assert rejected["terminal"] == "GATE_BLOCK"
+
+
+@pytest.mark.parametrize("declared", ["not-a-digest", "sha256:" + "z" * 64, "sha256:" + "0" * 64])
+def test_generated_output_digest_must_match_exact_bytes(tmp_path: Path, declared: str) -> None:
+    import json
+    from quwoquan_ops.tests.support.code_health_delta_test_support import write_launch_generated
+    repo, base = init_repo(tmp_path)
+    path = "quwoquan_app/ios/Runner/AppLaunchContract.generated.swift"
+    write_launch_generated(repo, path, "let value = 1\n" * 2001)
+    manifest = repo / "quwoquan_app/tool/app_launch_contract_codegen/generated_manifest.json"
+    document = json.loads(manifest.read_text())
+    document["outputs"][0]["sha256"] = declared
+    manifest.write_text(json.dumps(document))
+    head = commit(repo)
+    report = analyze_delta(repo, base=base, head=head, policy_path=policy_path(repo), mode="fast")
+    assert report["terminal"] == "GATE_BLOCK"
+    assert report["generatedClassification"]["statuses"][path]["status"] in {"invalid-output-digest", "output-digest-mismatch"}
+
+
+def test_changed_generated_output_requires_updated_snapshot_manifest(tmp_path: Path) -> None:
+    from quwoquan_ops.tests.support.code_health_delta_test_support import write_launch_generated
+    repo, base = init_repo(tmp_path)
+    path = "quwoquan_app/ios/Runner/AppLaunchContract.generated.swift"
+    write_launch_generated(repo, path, "let value = 1\n" * 2001)
+    original = commit(repo)
+    write(repo, path, "let value = 2\n" * 2002)
+    drifted = commit(repo)
+    write_launch_generated(repo, path, (repo / path).read_text())
+    repaired = commit(repo)
+    for head, terminal in ((original, "PASS"), (drifted, "GATE_BLOCK"), (repaired, "PASS")):
+        report = analyze_delta(repo, base=base, head=head, policy_path=policy_path(repo), mode="fast")
+        assert report["terminal"] == terminal
+    assert report["generatedClassification"]["verification"] == "manifest-output-byte-match-not-regeneration"
+
+
+def test_generated_provenance_requires_output_callback_and_preserves_go_manifest(tmp_path: Path) -> None:
+    import hashlib
+    import json
+    from quwoquan_ops.gate.code_health_delta.classification import generated_provenance, generated_output_declarations
+    policy = load_policy(POLICY)
+    manifest = "quwoquan_service/generated/event_constants_manifest.json"
+    output = "quwoquan_service/services/chat-service/generated/chat/event/events.go"
+    body = b"package event\n"
+    contents = {manifest: json.dumps({"generator": "tools/codegen_event_constants", "outputs": [{"path": output.removeprefix("quwoquan_service/"), "sha256": hashlib.sha256(body).hexdigest()}]}).encode()}
+    assert set(generated_output_declarations(policy, contents.get)) == {output}
+    statuses = {}
+    assert output not in generated_provenance(policy, contents.get, statuses=statuses)
+    assert statuses[output]["status"] == "output-unavailable"
+    contents[output] = body
+    assert generated_provenance(policy, contents.get)[output] == manifest
+
+
+def test_source_only_and_uncovered_generated_are_explicitly_unverified() -> None:
+    from quwoquan_ops.gate.code_health_delta.classification import generated_classification_report
+    policy = load_policy(POLICY)
+    source_only = "quwoquan_service/runtime/observability/operation_privacy_generated.go"
+    unknown = "quwoquan_service/services/chat-service/generated/unknown.go"
+    report = generated_classification_report(policy, [source_only, unknown])
+    assert report["statuses"][source_only]["status"] == "registered-source-only-not-output-verified"
+    assert report["uncoveredGeneratedCandidates"] == [unknown]
+    assert report["falseClassificationRate"] is None
+
+
+def test_deleted_generated_is_classified_from_base_snapshot(tmp_path: Path) -> None:
+    from quwoquan_ops.tests.support.code_health_delta_test_support import write_launch_generated
+    repo, _ = init_repo(tmp_path)
+    path = "quwoquan_app/ios/Runner/AppLaunchContract.generated.swift"
+    write_launch_generated(repo, path, "let value = 1\n" * 2001)
+    base = commit(repo)
+    (repo / path).unlink()
+    head = commit(repo)
+    report = analyze_delta(repo, base=base, head=head, policy_path=policy_path(repo), mode="fast")
+    assert report["categorySummary"]["generated"]["files"] == 1
+    assert report["debtDelta"]["entries"] == []
+    assert report["tools"]["baselineGeneratedSourcesDigest"]
+
+
+def test_coverage_distinguishes_unmeasured_languages_and_data_entry(tmp_path: Path) -> None:
+    repo, base = init_repo(tmp_path)
+    write(repo, "quwoquan_ops/ci/no_entry.py", "VALUE = 1\n")
+    write(repo, "quwoquan_app/ios/Runner/Fresh.swift", "func fresh() {}\n")
+    head = commit(repo)
+    report = analyze_delta(repo, base=base, head=head, policy_path=policy_path(repo))
+    assert report["analysisCoverage"]["complexity"]["quwoquan_app/ios/Runner/Fresh.swift"] == "unsupported-not-measured"
+    assert report["analysisCoverage"]["repositoryEntry"]["unmeasured"] == "all-other-python-paths"
+    assert report["terminal"] == "PASS"
 
 
 def test_strip_code_noise_preserves_line_numbers() -> None:

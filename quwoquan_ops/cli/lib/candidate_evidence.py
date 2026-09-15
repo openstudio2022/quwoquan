@@ -10,9 +10,10 @@ from typing import Any
 
 from .agent_governance_contract import (
     contract_schema_version, contract_section, declared_object, validate_candidate_evidence_manifest,
-    validate_candidate_path_set, validate_feature_context_manifest,
+    validate_candidate_path_set, validate_feature_context_manifest, validate_declared_fields,
 )
 from .descriptor_safe_io import read_repo_relative_regular_single_link
+from .review_fingerprint import dependency_root, repository_inputs, validate_git_range
 from .evidence_fingerprint import (
     EvidenceFingerprintError, build_evidence_fingerprint, canonical_digest,
     canonical_json_bytes, normalize_repo_relative_path, snapshot_paths,
@@ -48,7 +49,7 @@ def _read_exact(ref: str, *, repo_root: Path, candidate: bool) -> bytes:
     section = "candidate_evidence_manifest" if candidate else "feature_context_manifest"
     try:
         return read_repo_relative_regular_single_link(
-            repo_root, relative, expected_directory_parts=parts,
+            dependency_root(repo_root), relative, expected_directory_parts=parts,
             max_bytes=int(contract_section(section)["max_bytes"]), require_current_name=True,
         )
     except (OSError, ValueError) as exc:
@@ -83,10 +84,7 @@ def _current_owner(
     from .feature_tree.nodes import discover_nodes, parent_chain
     from .feature_tree.ownership import resolve_target_details
 
-    old_root, old_tree = tree_context.REPO_ROOT, tree_context.TREE_ROOT
-    try:
-        tree_context.REPO_ROOT = repo_root
-        tree_context.TREE_ROOT = repo_root / "specs/feature-tree"
+    with tree_context.source_repository(repo_root):
         nodes = discover_nodes()
         resolution = resolve_target_details(target, nodes)
         by_dir = {node.directory.resolve(): node for node in nodes}
@@ -99,9 +97,6 @@ def _current_owner(
             ],
             "canonical_contexts": list(canonical_contexts or []),
         }
-    finally:
-        tree_context.REPO_ROOT, tree_context.TREE_ROOT = old_root, old_tree
-
 
 def _owner_facts(payload: dict[str, Any]) -> dict[str, Any]:
     return {key: payload[key] for key in ("target", "resolved_owner", "owner_chain")}
@@ -174,10 +169,8 @@ def _impacted_owner_groups(paths: list[str], *, repo_root: Path) -> list[dict[st
     from .feature_tree import context as tree_context
     from .feature_tree.nodes import discover_nodes
     from .feature_tree.ownership import ownership_batch
-    if tree_context.REPO_ROOT.resolve() != repo_root.resolve():
-        _refuse("CANDIDATE.STALE", "owner batch repository root 不一致")
     try:
-        with ownership_batch(discover_nodes()):
+        with tree_context.source_repository(repo_root), ownership_batch(discover_nodes()):
             return _resolve_impacted_owner_groups(paths, repo_root=repo_root)
     except CandidateEvidenceError:
         raise
@@ -191,10 +184,7 @@ def _resolve_impacted_owner_groups(paths: list[str], *, repo_root: Path) -> list
     from .feature_tree.nodes import discover_nodes, parent_chain
     from .feature_tree.ownership import resolve_target_details
 
-    old_root, old_tree = tree_context.REPO_ROOT, tree_context.TREE_ROOT
-    try:
-        tree_context.REPO_ROOT = repo_root
-        tree_context.TREE_ROOT = repo_root / "specs/feature-tree"
+    with tree_context.source_repository(repo_root):
         nodes = discover_nodes()
         by_dir = {node.directory.resolve(): node for node in nodes}
         groups: dict[str, dict[str, Any]] = {}
@@ -226,9 +216,6 @@ def _resolve_impacted_owner_groups(paths: list[str], *, repo_root: Path) -> list
             declared_object(groups[key], "candidate_evidence_manifest", "impacted_owner_group_fields")
             for key in sorted(groups, key=lambda item: item.encode("utf-8"))
         ]
-    finally:
-        tree_context.REPO_ROOT, tree_context.TREE_ROOT = old_root, old_tree
-
 
 def _path_set_identity(document: dict[str, Any]) -> dict[str, Any]:
     raw = canonical_json_bytes(document)
@@ -289,7 +276,7 @@ def load_candidate_path_set(payload: dict[str, Any], *, repo_root: Path) -> dict
         _refuse("CANDIDATE.STALE", "candidate path set ref 非canonical")
     try:
         raw = read_repo_relative_regular_single_link(
-            repo_root, expected_ref, expected_directory_parts=tuple(directory.split("/")),
+            dependency_root(repo_root), expected_ref, expected_directory_parts=tuple(directory.split("/")),
             max_bytes=identity["byte_count"], require_current_name=True,
         )
         return _validate_path_set(raw, payload)
@@ -372,7 +359,31 @@ def _candidate_fingerprint(payload: dict[str, Any], workspace: dict[str, Any], *
     }, captured_at="candidate-evidence-v3", captured_by=captured_by, captured_metadata={"consumer": "candidate_evidence_manifest"})
 
 
-def _assemble_candidate(owner_identity_ref: str, changed_paths: list[str], *, repo_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+def _source_delivery(identity: dict | None, paths: list[str], *, repo_root: Path) -> tuple:
+    if identity is None:
+        return _delivery_identity(repo_root=repo_root)
+    import subprocess
+
+    validate_declared_fields(identity, "candidate_evidence_manifest", "source_identity_fields")
+    validate_git_range({key: identity[key] for key in ("base_sha", "head_sha", "head_tree")}, repo_root=repo_root)
+    lane = identity["producer_lane"]
+    if lane not in _allowed_delivery_lanes(repo_root=repo_root):
+        _refuse("CANDIDATE.OWNER_DRIFT", "producer lane 不在版本化 policy")
+    def git(*args):
+        return subprocess.check_output(["git", *args], cwd=repo_root, text=True).strip()
+    if git("rev-parse", f"refs/heads/{lane}") != identity["head_sha"]:
+        _refuse("CANDIDATE.OWNER_DRIFT", "producer lane ref 不指向 exact source HEAD")
+    if git("status", "--porcelain", "--untracked-files=normal"):
+        _refuse("CANDIDATE.STALE", "跨阶段 source 必须 clean")
+    changed = git("diff", "--name-only", "--no-renames", identity["base_sha"], identity["head_sha"]).splitlines()
+    if sorted(changed) != sorted(paths):
+        _refuse("CANDIDATE.STALE", "source identity 必须覆盖完整 range paths")
+    digests = {"branch_policy_digest": _policy_digest(BRANCH_POLICY_PATH, repo_root=repo_root),
+               "lane_ownership_digest": _policy_digest(LANE_OWNERSHIP_PATH, repo_root=repo_root)}
+    return lane, lane, digests
+
+
+def _assemble_candidate(owner_identity_ref: str, changed_paths: list[str], *, repo_root: Path, source_identity: dict | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     owner_ref, owner_raw, owner = _load_owner(owner_identity_ref, repo_root=repo_root)
     normalized = sorted(
         {normalize_repo_relative_path(path, repo_root) for path in changed_paths},
@@ -387,7 +398,7 @@ def _assemble_candidate(owner_identity_ref: str, changed_paths: list[str], *, re
     impacted_owners = {item["owner_identity"]["resolved_owner"] for item in impacted_groups}
     if owner["resolved_owner"] not in impacted_owners:
         _refuse("CANDIDATE.OWNER_DRIFT", "primary PRE target owner 未出现在 impacted owner groups")
-    delivery_owner, lead_lane, policy_digests = _delivery_identity(repo_root=repo_root)
+    delivery_owner, lead_lane, policy_digests = _source_delivery(source_identity, normalized, repo_root=repo_root)
     _, impact_identity = _impact_plan(normalized, repo_root=repo_root)
     document = {
         "schema_version": contract_schema_version("candidate_path_set"),
@@ -416,22 +427,25 @@ def _assemble_candidate(owner_identity_ref: str, changed_paths: list[str], *, re
         "impact_plan_identity": impact_identity,
         "evidence_fingerprint": {},
     }
+    if source_identity is not None:
+        payload["source_identity"] = dict(source_identity)
     payload["evidence_fingerprint"] = _candidate_fingerprint(payload, payload["workspace_digests"], captured_by="candidate_evidence")
     validate_candidate_evidence_manifest(payload)
     return payload, document
 
 
-def build_candidate_evidence(owner_identity_ref: str, changed_paths: list[str], *, repo_root: Path) -> dict[str, Any]:
-    payload, document = _assemble_candidate(owner_identity_ref, changed_paths, repo_root=repo_root)
+@repository_inputs
+def build_candidate_evidence(owner_identity_ref: str, changed_paths: list[str], *, repo_root: Path, source_identity: dict | None = None) -> dict[str, Any]:
+    payload, document = _assemble_candidate(owner_identity_ref, changed_paths, repo_root=repo_root, source_identity=source_identity)
     from .feature_tree.content_addressed_writer import _write_content_addressed_bytes
     from .feature_tree import context as tree_context
-    if tree_context.REPO_ROOT.resolve() != repo_root.resolve():
-        _refuse("CANDIDATE.STALE", "candidate producer repository root 不一致")
-    _write_content_addressed_bytes(canonical_json_bytes(document), subdirectory="candidate-paths")
+    with tree_context.source_repository(repo_root):
+        _write_content_addressed_bytes(canonical_json_bytes(document), subdirectory="candidate-paths")
     load_candidate_path_set(payload, repo_root=repo_root)
     return payload
 
 
+@repository_inputs
 def validate_candidate_ref(raw_ref: str, *, repo_root: Path, expected_owner_identity_ref: str | None = None, expected_changed_paths: list[str] | None = None) -> tuple[str, bytes, dict[str, Any], dict[str, Any]]:
     relative = normalize_repo_relative_path(raw_ref, repo_root)
     if _REF_RE.fullmatch(relative) is None:
@@ -469,7 +483,7 @@ def validate_candidate_ref(raw_ref: str, *, repo_root: Path, expected_owner_iden
     if _owner_facts(current) != _owner_facts(owner):
         _refuse("CANDIDATE.OWNER_DRIFT", "candidate 当前 owner 重算漂移")
     # consumer 重建事实不得发布或补全缺失对象。
-    rebuilt, _ = _assemble_candidate(owner_ref, changed, repo_root=repo_root)
+    rebuilt, _ = _assemble_candidate(owner_ref, changed, repo_root=repo_root, source_identity=payload.get("source_identity"))
     owner_fields = {
         "target", "resolved_owner", "path_set_identity", "delivery_owner",
         "lead_lane", "delivery_policy_digests",

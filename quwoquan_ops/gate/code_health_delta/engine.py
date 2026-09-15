@@ -13,7 +13,7 @@ from quwoquan_ops.ci.impact_planner_core import canonical_digest as impact_diges
 from quwoquan_ops.cli.lib.evidence_fingerprint import build_evidence_fingerprint, canonical_digest
 
 from .base_ref import AUTO_BASE, resolve_auto_base
-from .classification import classify_path
+from .classification import classify_path, generated_provenance, generated_output_declarations, generated_classification_report
 from .git_delta import (
     Change, blob, blobs, changes, index_blob, resolve_sha, working_tree_blob,
     working_tree_changes,
@@ -21,7 +21,7 @@ from .git_delta import (
 from .metrics import (
     candidate_duplicate_windows, changed_complexity_findings, duplicate_window_index,
     duplicate_windows, executable_magic, has_repository_entry, line_count, reuse_scope_key,
-    tracked_paths,
+    tracked_paths, finding_identity, function_metrics,
 )
 from .policy import load_policy
 
@@ -52,7 +52,8 @@ def _implementation_digest() -> str:
 
 
 def _finding(code: str, path: str, terminal: str, message: str, **extra: object) -> dict[str, object]:
-    finding = {"code": code, "path": path, "terminal": terminal, "message": message, **extra}
+    finding = {"code": code, "path": path, "terminal": terminal, "message": message,
+               "findingId": finding_identity(code, path, str(extra.get("qualifiedSymbol", ""))), **extra}
     if terminal == "GATE_BLOCK" and not finding.get("recovery"):
         raise ValueError(f"{code} GATE_BLOCK finding 缺 recovery")
     return finding
@@ -116,10 +117,16 @@ def _drop_merge_inherited(
     return kept
 
 
+def _change_category(item: Change, policy: dict[str, Any]) -> str:
+    if item.status == "D":
+        return classify_path(item.old_path or item.path, policy.get("_baseline_policy", policy))
+    return classify_path(item.path, policy)
+
+
 def _category_summary(policy: dict[str, Any], delta: list[Change]) -> dict[str, dict[str, int]]:
     result = {name: {"files": 0, "added": 0, "deleted": 0, "churn": 0} for name in policy["source_categories"]}
     for item in delta:
-        category = classify_path(item.path if item.status != "D" else (item.old_path or item.path), policy)
+        category = _change_category(item, policy)
         current = result[category]
         current["files"] += 1; current["added"] += item.added; current["deleted"] += item.deleted; current["churn"] += item.added + item.deleted
     return result
@@ -151,7 +158,7 @@ def _baseline_duplicate_index(repo: Path, base_sha: str, policy: dict[str, Any],
     baseline_paths = [
         path for path in tracked_paths(repo, base_sha)
         if path not in changed_old and reuse_scope_key(path) in reuse_scopes
-        and classify_path(path, policy) == "handwritten-production"
+        and classify_path(path, policy.get("_baseline_policy", policy)) == "handwritten-production"
     ]
     baseline_blobs = blobs(repo, base_sha, baseline_paths)
     return duplicate_window_index(
@@ -261,20 +268,56 @@ def _executable_findings(delta: list[Change], candidate: _Candidate) -> list[dic
     return findings
 
 
+def _debt_status(before: int, after: int) -> str:
+    if before == after:
+        return "unchanged"
+    if not before:
+        return "introduced"
+    if not after:
+        return "resolved"
+    return "worsened" if after > before else "improved"
+
+
+def _debt_entry(path: str, old_path: str | None, metric: str, symbol: str, before: int, after: int, threshold: int) -> dict[str, Any] | None:
+    old_debt, new_debt = max(0, before - threshold), max(0, after - threshold)
+    if not old_debt and not new_debt:
+        return None
+    return {"path": path, "oldPath": old_path, "metric": metric, "qualifiedSymbol": symbol,
+            "status": _debt_status(old_debt, new_debt), "before": before, "after": after,
+            "threshold": threshold, "beforeDebt": old_debt, "afterDebt": new_debt}
+
+
+def _file_debt(path: str, old_path: str | None, old: bytes | None, new: bytes | None, thresholds: dict[str, Any], mode: str) -> list[dict[str, Any]]:
+    entries = []
+    for tier, threshold in thresholds["file_lines"].items():
+        entries.append(_debt_entry(path, old_path, f"fileLines.{tier}", "", line_count(old), line_count(new), threshold))
+    if mode == "full":
+        previous = {m.qualified_name: m for m in function_metrics(path, old)}
+        current = {m.qualified_name: m for m in function_metrics(path, new)}
+        for symbol in sorted(previous.keys() | current.keys()):
+            for metric in ("cyclomatic", "cognitive"):
+                before = getattr(previous.get(symbol), metric, 0)
+                after = getattr(current.get(symbol), metric, 0)
+                entries.append(_debt_entry(path, old_path, metric, symbol, before, after, thresholds["complexity"][f"{metric}_advisory"]))
+    return [entry for entry in entries if entry is not None]
+
+
 def _production_findings(
     repo: Path, base_sha: str, head_sha: str, policy: dict[str, Any], production: list[Change],
     candidate: _Candidate, *, mode: str,
-) -> tuple[list[dict[str, object]], list[tuple[str, bytes, frozenset[int]]]]:
+) -> tuple[list[dict[str, object]], list[tuple[str, bytes, frozenset[int]]], list[dict[str, Any]]]:
     """Per-file size, Data entry and complexity findings plus the live candidate corpus."""
     thresholds = policy["thresholds"]
     base_changed_blobs = blobs(repo, base_sha, sorted({item.old_path or item.path for item in production}))
     findings: list[dict[str, object]] = []
     live_candidates: list[tuple[str, bytes, frozenset[int]]] = []
+    debt_entries: list[dict[str, Any]] = []
     for item in production:
+        old = base_changed_blobs.get(item.old_path or item.path)
+        new = None if item.status == "D" else candidate.bytes_of(item.path)
+        debt_entries.extend(_file_debt(item.path, item.old_path, old, new, thresholds, mode))
         if item.status == "D":
             continue
-        old = base_changed_blobs.get(item.old_path or item.path)
-        new = candidate.bytes_of(item.path)
         live_candidates.append((item.path, new or b"", item.changed_new_lines))
         size_finding = _file_size_finding(item.path, line_count(old), line_count(new), thresholds["file_lines"])
         if size_finding is not None:
@@ -283,7 +326,7 @@ def _production_findings(
             findings.append(_finding("CODE_HEALTH.NEW_PRIVATE_PYTHON_WITHOUT_ENTRY", item.path, "GATE_BLOCK", "new Data package module has no language or repository entry edge", recovery="add_canonical_repository_entry_or_remove_private_module"))
         if mode == "full":
             findings.extend(changed_complexity_findings(item.path, old, new, item.changed_new_lines, thresholds["complexity"]["cyclomatic_advisory"], thresholds["complexity"]["cognitive_advisory"]))
-    return findings, live_candidates
+    return findings, live_candidates, debt_entries
 
 
 def _evidence(
@@ -291,7 +334,7 @@ def _evidence(
     paths: list[str], impact: dict[str, Any], commands: dict[str, Any], candidate: _Candidate,
 ) -> tuple[dict[str, Any], dict[str, Any], str]:
     implementation_digest = _implementation_digest()
-    toolchain = {"python": list(sys.version_info[:3]), "builtin": 1, "metricsProvider": policy["notes"]["metrics_provider"]}
+    toolchain = {"python": list(sys.version_info[:3]), "builtin": 1, "metricsProvider": policy["notes"]["metrics_provider"], "generatedSourcesDigest": policy.get("_generated_sources_digest"), "baselineGeneratedSourcesDigest": policy.get("_baseline_policy", {}).get("_generated_sources_digest")}
     fingerprint = build_evidence_fingerprint({
         "git": {"head_sha": head_sha, "merge_base_sha": base_sha},
         "workspace": _workspace_identity(repo, head_sha, delta, working_tree=candidate.working_tree, index_only=candidate.index_only, commit_blobs=candidate.commit_blobs),
@@ -333,6 +376,57 @@ def _candidate_source(candidate: _Candidate) -> str:
     return "index" if candidate.index_only else "working-tree"
 
 
+def _bind_generated_snapshot(repo: Path, sha: str, policy: dict[str, Any], *, working_tree: bool, index_only: bool) -> None:
+    rules = policy["classification"]
+    sources = {item["path"] for item in rules["generated_manifests"]} | set(rules["generated_exact_sources"].values())
+    contents: dict[str, bytes] = {}
+    if not working_tree:
+        contents.update(blobs(repo, sha, sorted(sources)))
+    def read(path: str) -> bytes | None:
+        if not working_tree:
+            return contents.get(path)
+        return index_blob(repo, path) if index_only else working_tree_blob(repo, path)
+    outputs = generated_output_declarations(policy, read)
+    if not working_tree:
+        contents.update(blobs(repo, sha, sorted(outputs)))
+    measured: dict[str, str | None] = {}
+    def measured_read(path: str) -> bytes | None:
+        body = read(path)
+        measured[path] = None if body is None else _sha256_bytes(body)
+        return body
+    statuses: dict[str, Any] = {}
+    policy["_generated_provenance"] = generated_provenance(policy, measured_read, statuses=statuses)
+    policy["_generated_statuses"] = statuses
+    policy["_generated_sources_digest"] = canonical_digest(measured)
+
+
+def _order_findings(findings: list[dict[str, object]]) -> None:
+    if len({item["findingId"] for item in findings}) != len(findings):
+        raise ValueError("code health findingId collision")
+    findings.sort(key=lambda item: (-_SEVERITY[str(item["terminal"])], str(item["path"]), str(item["code"]), str(item["findingId"])))
+
+
+def _analysis_coverage(production: list[Change], mode: str) -> dict[str, Any]:
+    complexity = {}
+    for item in production:
+        suffix = Path(item.path).suffix
+        if mode != "full":
+            status = "not-measured-fast-mode"
+        elif suffix == ".py":
+            status = "python-ast"
+        elif suffix in {".go", ".dart", ".java", ".ts", ".tsx", ".js", ".jsx"}:
+            status = "brace-heuristic-partial"
+        else:
+            status = "unsupported-not-measured"
+        complexity[item.path] = status
+    return {
+        "complexity": complexity,
+        "complexityLimitations": ["brace-parser-not-language-complete", "same-qualified-signature-redefinitions-use-ordinal", "no-cross-file-semantic-identity"],
+        "duplication": "normalized-text-windows" if mode == "full" else "not-measured-fast-mode",
+        "repositoryEntry": {"scope": "added-quwoquan_data/scripts/**/*.py-only", "analyzer": "textual-entry-heuristic-not-call-graph", "unmeasured": "all-other-python-paths"},
+    }
+
+
 def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: str = "full", explicit_paths: list[str] | None = None, working_tree: bool = False, index_only: bool = False, merge_parents: list[str] | None = None) -> dict[str, Any]:
     if mode not in {"fast", "full"}:
         raise ValueError("code health mode 必须为 fast/full")
@@ -346,12 +440,17 @@ def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: 
         repo, base_sha=base_sha, head_sha=head_sha, explicit_paths=explicit_paths,
         working_tree=working_tree, index_only=index_only, merge_parents=merge_parents,
     )
+    baseline_policy = dict(policy)
+    _bind_generated_snapshot(repo, base_sha, baseline_policy, working_tree=False, index_only=False)
+    _bind_generated_snapshot(repo, head_sha, policy, working_tree=working_tree, index_only=index_only)
+    policy["_baseline_policy"] = baseline_policy
+    provenance = policy["_generated_provenance"]
     paths = [item.path for item in delta]
     impact = classify_impacts(paths)
-    production = [item for item in delta if classify_path(item.old_path or item.path if item.status == "D" else item.path, policy) == "handwritten-production"]
+    production = [item for item in delta if _change_category(item, policy) == "handwritten-production"]
 
     findings = _executable_findings(delta, candidate)
-    production_findings, live_candidates = _production_findings(repo, base_sha, head_sha, policy, production, candidate, mode=mode)
+    production_findings, live_candidates, debt_entries = _production_findings(repo, base_sha, head_sha, policy, production, candidate, mode=mode)
     findings.extend(production_findings)
     duplication_summary = {"measuredNewLines": 0, "duplicatedLines": 0, "duplicationPercent": 0.0}
     if mode == "full":
@@ -361,7 +460,7 @@ def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: 
     if size_finding is not None:
         findings.append(size_finding)
 
-    findings.sort(key=lambda item: (-_SEVERITY[str(item["terminal"])], str(item["path"]), str(item["code"])))
+    _order_findings(findings)
     terminal = max((str(item["terminal"]) for item in findings), key=_SEVERITY.get, default="PASS")
     policy_digest = _sha256_bytes(policy_path.read_bytes())
     commands = {"mode": mode, "base": base_sha, "head": head_sha, "paths": paths, "workingTree": working_tree, "indexOnly": index_only, "mergeParents": resolved_parents}
@@ -378,6 +477,16 @@ def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: 
         "mode": mode, "candidateSource": _candidate_source(candidate), "categorySummary": _category_summary(policy, delta),
         "summary": _delta_summary(delta, findings, size_summary, duplication_summary),
         "findings": findings, "tools": toolchain,
+        "debtDelta": {
+            "entries": debt_entries,
+            "summary": {status: sum(e["status"] == status for e in debt_entries) for status in ("introduced", "worsened", "resolved", "improved", "unchanged")},
+            "scope": "changed-handwritten-files; per-metric-threshold-excess; no-cross-location-netting",
+            "identityMatching": "git-rename-oldPath-and-qualified-symbol; no-semantic-move-inference",
+            "unmeasured": ["historical-duplication-debt", "historical-entry-debt"],
+        },
+        "analysisCoverage": _analysis_coverage(production, mode),
+        "generatedClassification": {"provenanceDigest": canonical_digest(provenance), "measuredSourcesDigest": policy["_generated_sources_digest"], "sources": {path: provenance[path] for path in paths if path in provenance}, **generated_classification_report(policy, paths)},
+
         "rollout": {"automaticPromotion": False, "calibration": policy["rollout"]["calibration"], "advisoryOnlyCodes": policy["notes"]["advisory_only_codes"]},
         "evidenceFingerprint": fingerprint,
         "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),

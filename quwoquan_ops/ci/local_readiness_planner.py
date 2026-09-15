@@ -41,6 +41,7 @@ LOCKFILE_CANDIDATES: dict[str, tuple[str, ...]] = {
     ),
 }
 STATIC_COMMANDS: dict[str, tuple[list[str], str, list[str]]] = {
+    "retired_terms_zero": (["python3", "-B", "quwoquan_app/scripts/runtime/architecture/verify_retired_terms_zero.py"], ".", ["ops-static"]),
     "branch_policy": (["python3", "-B", "quwoquan_ops/gate/verify_git_branch_policy.py", "--local-commit"], ".", ["git-index"]),
     "feature_tree": (["make", "verify-feature-tree"], ".", ["feature-tree"]),
     "entrypoint_script_paths": (["python3", "-B", "quwoquan_ops/gate/verify_entrypoint_script_paths.py"], ".", ["ops-static"]),
@@ -411,9 +412,118 @@ def build_impact_plan(
     }
 
 
+def _lane_gate_checks(*, base: str, head: str, paths: list[str]) -> list[dict[str, Any]]:
+    """扩充既有 push runner，不新增独立 receipt 或执行流水线。"""
+    from quwoquan_ops.gate.delivery_gate_data_shard import sharded_test_files
+
+    contract = yaml.safe_load(CONTRACT_PATH.read_text(encoding="utf-8"))["lane_gate"]
+    if contract["schema_version"] != 1 or contract["required_groups"] != [
+        "governance", "impact_boundary", "code_health_full", "ops_local_contract",
+    ] or contract["ops_shards"] != 4:
+        raise ValueError("Lane Gate required contract drifted")
+    checks = [
+        _check("lane_gate:" + Path(script).stem, "spec_contract", "static",
+               ["python3", "-B", script], resources=["ops-static"])
+        for script in contract["governance_scripts"]
+    ]
+    for scope in contract["python_governance_scopes"]:
+        checks.append(_static_check("python_script_governance_" + scope))
+    checks.append(_check("lane_gate:feature-tree", "spec_contract", "static",
+                         contract["feature_tree_command"], resources=["feature-tree"]))
+    boundary = ["python3", "-B", "quwoquan_ops/ci/local_readiness_planner.py",
+                "--validate-lane-impact", "--base", base, "--head", head]
+    for path in paths:
+        boundary.extend(["--changed-file", path])
+    checks.append(_check("lane_gate:impact-boundary", "spec_contract", "static", boundary,
+                         resources=["impact-plan"]))
+    for shard in range(contract["ops_shards"]):
+        # 直接复用 hosted selector 与 managed pytest；精确文件列表进入 command fingerprint。
+        files = sharded_test_files(ROOT, contract["ops_shards"], shard, "ops", lane_gate=True)
+        if not files:
+            raise ValueError(f"Lane Gate ops shard {shard} is empty")
+        checks.append(_check(f"lane_gate:ops-local-contract:{shard}", "spec_contract", "focused",
+            ["python3", "-B", "quwoquan_ops/cli/local_readiness.py", "managed-pytest", *files],
+            resources=["python-tests"]))
+    return checks
+
+
+def _bind_lane_gate(plan: dict[str, Any], *, base: str, head: str) -> dict[str, Any]:
+    required = _lane_gate_checks(base=base, head=head, paths=plan["paths"])
+    commands = {tuple(check["command"]) for check in required}
+    covered = {path for check in required if check["id"].startswith("lane_gate:ops-local-contract:")
+               for path in check["command"][4:]}
+    checks = []
+    for check in plan["checks"]:
+        if tuple(check["command"]) in commands or check["id"] == "static:branch_policy":
+            continue
+        if check["id"] == "focused:python":
+            # ops 全集已经由四片覆盖；只保留非 ops 的原聚焦测试，避免同 candidate 重跑。
+            prefix, files = check["command"][:4], check["command"][4:]
+            files = [path for path in files if path not in covered]
+            if not files:
+                continue
+            check = {**check, "command": [*prefix, *files]}
+        checks.append(check)
+    policy, _ = load_timeout_policy()
+    checks.extend(_canonical_check_timeout(check, level=plan["level"], policy=policy) for check in required)
+    deferred = [item for item in plan["deferred"]
+                if not item["work"].startswith("quwoquan_ops/tests/local_contract")]
+    return {**plan, "checks": checks, "deferred": deferred}
+
+
+def validate_lane_impact(*, base: str, head: str, paths: list[str]) -> None:
+    """同 hosted 的 exact ImpactPlan build/validate/changed boundary，不执行其他检查。"""
+    from quwoquan_ops.ci.detect_ci_impacted_scopes import git_changed_files
+    from quwoquan_ops.ci.impact_planner_core import build_delivery_impact_plan, validate_delivery_impact_plan
+    from quwoquan_ops.ci.verify_ci_changed_boundary import verify
+    import subprocess
+
+    actual = normalize_changed_paths(git_changed_files(base, head))
+    if actual != normalize_changed_paths(paths):
+        raise ValueError("Lane Gate changed paths differ from exact candidate range")
+    tree = subprocess.run(["git", "rev-parse", f"{head}^{{tree}}"], cwd=ROOT,
+                          check=True, text=True, capture_output=True).stdout.strip()
+    plan = build_delivery_impact_plan(actual, source_sha=head, base_sha=base, head_sha=head,
+        synthetic_sha=head, source_tree_digest=f"sha1:{tree}", execution_profile="manual",
+        force_device=False, fail_closed_empty=True, required_scopes=[])
+    validate_delivery_impact_plan(plan, expected_source_sha=head, expected_tree_digest=f"sha1:{tree}")
+    path = ROOT / ".qwq_output/env/repo/runs/lane-impact" / plan["plan_digest"].removeprefix("sha256:") / "impact-plan.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(plan, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    verify(path, expected_source_sha=head, expected_tree_digest=f"sha1:{tree}", expected_plan_digest=plan["plan_digest"])
+    print(json.dumps(plan, ensure_ascii=False, sort_keys=True))
+
+
+def bind_source_health_plan(
+    plan: dict[str, Any], *, mode: str, base: str, head: str,
+) -> dict[str, Any]:
+    """把健康检查绑定实际源码身份；push 等级不降低 full 准出判据。"""
+    source_paths = [path for path in plan["paths"] if path.startswith(
+        ("quwoquan_app/", "quwoquan_service/", "quwoquan_data/", "quwoquan_ops/")
+    )]
+    if mode not in {"push", "staged"} or (mode == "staged" and not source_paths):
+        return plan
+    checks = [check for check in plan["checks"] if "code-health" not in check["resources"]]
+    health_mode = "full" if mode == "push" else "fast"
+    command = ["python3", "-B", "quwoquan_ops/gate/verify_incremental_code_health.py",
+               "--base", base, "--head", head, "--mode", health_mode]
+    if mode == "staged":
+        command.extend(["--working-tree", "--index-only"])
+    for path in plan["paths"]:
+        command.extend(["--changed-file", path])
+    health = _check("static:code-health-delta", "spec_contract", "static", command, resources=["code-health"])
+    policy, _ = load_timeout_policy()
+    checks.insert(0, _canonical_check_timeout(health, level=plan["level"], policy=policy))
+    bound = {**plan, "checks": checks}
+    return _bind_lane_gate(bound, base=base, head=head) if mode == "push" else bound
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--level", choices=("fast", "scope", "release"), required=True)
+    parser.add_argument("--level", choices=("fast", "scope", "release"))
+    parser.add_argument("--validate-lane-impact", action="store_true")
+    parser.add_argument("--base", default="")
+    parser.add_argument("--head", default="")
     parser.add_argument("--changed-file", action="append", default=[])
     parser.add_argument("--flutter-cap", type=int, default=40)
     return parser
@@ -422,6 +532,9 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = _parser().parse_args()
     try:
+        if args.validate_lane_impact:
+            validate_lane_impact(base=args.base, head=args.head, paths=args.changed_file)
+            return 0
         plan = build_impact_plan(args.changed_file, level=args.level, flutter_cap=args.flutter_cap)
     except (ImpactPlannerError, ValueError) as exc:
         print(f"local-readiness-planner: GATE_BLOCK: {exc}", file=sys.stderr)

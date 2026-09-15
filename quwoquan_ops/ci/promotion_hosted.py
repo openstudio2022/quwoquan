@@ -43,6 +43,7 @@ from quwoquan_ops.ci.promotion_evidence import (
     canonical_bytes,
     digest,
 )
+from quwoquan_ops.ci.verify_code_health_delivery import promotion_health_plan
 
 BUNDLE_ARTIFACT_TYPE = "application/vnd.quwoquan.promotion-evidence-bundle.v1"
 BUNDLE_LAYER_TYPE = "application/vnd.quwoquan.promotion-evidence-bundle.v1.tar"
@@ -55,7 +56,7 @@ _AUTHORITY_SCHEMAS = {
     "changedBoundary": "quwoquan_ops.promotion_boundary_fact.v1",
 }
 _REQUIRED_EVIDENCE_SCHEMA = "quwoquan_ops.promotion_required_evidence_fact.v1"
-_SAFE_MEMBER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+_SAFE_MEMBER = re.compile(r"^(?:[A-Za-z0-9][A-Za-z0-9._/-]*|\.qwq_output/[A-Za-z0-9._/-]+)$")
 
 
 # --------------------------------------------------------------------------- bundle
@@ -232,6 +233,23 @@ def threads_fact(*, threads: Sequence[Mapping[str, Any]], head_sha: str, base_sh
     }
 
 
+def _required_check_shape(rules: list[Any]) -> tuple[list[str], bool, bool]:
+    """只提取 required check 形状，不推断 token 未观测到的 bypass 权限。"""
+    checks: list[str] = []
+    strict = False
+    requires_pr = False
+    for rule in rules:
+        if not isinstance(rule, Mapping):
+            continue
+        if rule.get("type") == "required_status_checks":
+            parameters = rule.get("parameters") if isinstance(rule.get("parameters"), Mapping) else {}
+            checks = [str(item.get("context")) for item in parameters.get("required_status_checks", []) if isinstance(item, Mapping)]
+            strict = parameters.get("strict_required_status_checks_policy") is True
+        if rule.get("type") == "pull_request":
+            requires_pr = True
+    return checks, strict, requires_pr
+
+
 def ruleset_fact(*, rulesets: Sequence[Mapping[str, Any]], head_sha: str, base_sha: str) -> dict[str, Any]:
     """main 分支必须有 active ruleset：要求 PR、无 bypass actor、required check 精确为 03. Delivery Gate。"""
     matched: list[dict[str, Any]] = []
@@ -243,26 +261,23 @@ def ruleset_fact(*, rulesets: Sequence[Mapping[str, Any]], head_sha: str, base_s
         if "refs/heads/main" not in (ref_name.get("include") or []):
             continue
         rules = ruleset.get("rules") if isinstance(ruleset.get("rules"), list) else []
-        checks: list[str] = []
-        strict = False
-        requires_pr = False
-        for rule in rules:
-            if not isinstance(rule, Mapping):
-                continue
-            if rule.get("type") == "required_status_checks":
-                parameters = rule.get("parameters") if isinstance(rule.get("parameters"), Mapping) else {}
-                checks = [str(item.get("context")) for item in parameters.get("required_status_checks", []) if isinstance(item, Mapping)]
-                strict = parameters.get("strict_required_status_checks_policy") is True
-            if rule.get("type") == "pull_request":
-                requires_pr = True
+        checks, strict, requires_pr = _required_check_shape(rules)
         if DELIVERY_GATE_CHECK in checks:
-            matched.append({"id": ruleset.get("id"), "name": ruleset.get("name"), "checks": checks, "strict": strict, "requiresPullRequest": requires_pr, "bypassActors": list(ruleset.get("bypass_actors") or [])})
-    enforced = len(matched) == 1 and matched[0]["strict"] and matched[0]["requiresPullRequest"] and matched[0]["bypassActors"] == []
+            bypass = ruleset.get("bypass_actors")
+            observable = isinstance(bypass, list)
+            matched.append({"id": ruleset.get("id"), "name": ruleset.get("name"), "checks": checks,
+                "strict": strict, "requiresPullRequest": requires_pr,
+                "bypassActorsObservable": observable, "bypassActors": bypass if observable else None})
+    enforced = len(matched) == 1 and matched[0]["strict"] and matched[0]["requiresPullRequest"]
+    observable = len(matched) == 1 and matched[0]["bypassActorsObservable"]
+    bypass = matched[0]["bypassActors"] if len(matched) == 1 else None
+    # 只读 token 无法证明 bypass 为空；保留未知值，既有 admission 消费者继续 fail-closed。
+    passed = enforced and observable and bypass == []
     return {
-        "schema": _AUTHORITY_SCHEMAS["ruleset"], "status": "passed" if enforced else "failed",
+        "schema": _AUTHORITY_SCHEMAS["ruleset"], "status": "passed" if passed else "failed",
         "headSha": _sha(head_sha, "headSha"), "baseSha": _sha(base_sha, "baseSha"), "commitSha": _sha(head_sha, "headSha"),
         "requiredCheck": DELIVERY_GATE_CHECK, "requiredCheckEnforced": enforced,
-        "bypassActors": matched[0]["bypassActors"] if matched else ["<no matching active ruleset>"],
+        "bypassActorsObservable": observable, "bypassActors": bypass,
         "rulesets": matched, "source": "github_rest:/repos/{repo}/rulesets/{id}",
     }
 
@@ -282,21 +297,78 @@ def boundary_fact(*, head_sha: str, base_sha: str, branch_policy_exit: int, chan
     }
 
 
-def required_evidence_fact(*, head_sha: str, base_sha: str, evidence: Sequence[Mapping[str, str]]) -> dict[str, Any]:
+def required_evidence_fact(*, repository: Path, evidence_root: Path, head_sha: str, base_sha: str,
+                           evidence: Sequence[Mapping[str, str]]) -> dict[str, Any]:
     items = [{"ref": _text(item.get("ref"), "evidence.ref"), "digest": _text(item.get("digest"), "evidence.digest")} for item in evidence]
     if not items:
         raise PromotionEvidenceError("PROMOTION.EVIDENCE_INVALID", "required evidence cannot be empty")
+    from quwoquan_ops.ci.verify_code_health_delivery import read_review_evidence, verify_delivery, validate_delivery_report
+
+    plan = promotion_health_plan(repository, base_sha, head_sha)
+    report, _, _ = verify_delivery(
+        repository, base_sha=base_sha, head_sha=head_sha,
+        expected_path_digest=plan["changed_paths_digest"],
+        expected_impact_plan_digest=plan["plan_digest"], write_report=False,
+    )
+    supplied = [payload for item in items for payload, _ in [read_review_evidence(evidence_root, item)]
+        if payload.get("schema") == "quwoquan.code-health-delta"]
+    if len(supplied) > 1:
+        raise PromotionEvidenceError("PROMOTION.HEALTH_INVALID", "multiple supplied health reports")
+    if supplied:
+        validate_delivery_report(repository, supplied[0], base_sha=base_sha, head_sha=head_sha,
+            expected_path_digest=plan["changed_paths_digest"], expected_impact_plan_digest=plan["plan_digest"])
+        report = supplied[0]  # 保留已有 Review artifact 引用的同一份原始 report 字节与 generatedAt。
+    else:
+        report_path = evidence_root / "promotion" / "health" / f"{digest(report)}.json"
+        _write_once(report_path, report)
+        items.append({"ref": report_path.relative_to(evidence_root).as_posix(), "digest": digest(report_path)})
     return {
-        "schema": _REQUIRED_EVIDENCE_SCHEMA, "status": "passed",
+        "schema": _REQUIRED_EVIDENCE_SCHEMA,
+        "status": "failed" if report["terminal"] == "GATE_BLOCK" else "passed",
         "headSha": _sha(head_sha, "headSha"), "baseSha": _sha(base_sha, "baseSha"),
+        "headTree": plan["source_tree_digest"].removeprefix("sha1:"),
+        "impactPlanDigest": plan["plan_digest"], "changedPathsDigest": plan["changed_paths_digest"],
         "evidence": sorted(items, key=lambda item: (item["ref"], item["digest"])),
     }
+
+
+def review_bundle_evidence(*, bundle_root: Path, evidence_root: Path, handoff_ref: str) -> list[dict[str, str]]:
+    """从已有 handoff carrier 的显式 refs 装载 Review 链；不扫描 latest 或发明裁决载体。"""
+    from quwoquan_ops.ci.verify_code_health_delivery import read_review_evidence
+    from quwoquan_ops.cli.lib.agent_governance_contract import validate_declared_fields
+
+    def load(ref: str) -> dict[str, Any]:
+        from quwoquan_ops.cli.lib.descriptor_safe_io import read_repo_relative_regular_single_link
+        from quwoquan_ops.ci.promotion_evidence import _valid_exact_identity
+        if not _valid_exact_identity({"ref": ref, "digest": "sha256:" + "0" * 64}):
+            raise PromotionEvidenceError("PROMOTION.HEALTH_INVALID", "Review dependency path is not canonical")
+        raw = read_repo_relative_regular_single_link(bundle_root, ref)
+        value, _ = read_review_evidence(bundle_root, {"ref": ref, "digest": digest(raw)})
+        return value
+
+    handoff = load(handoff_ref)
+    validate_declared_fields(handoff, "handoff_manifest", "required_fields")
+    refs = {handoff_ref, handoff["review_plan_ref"], handoff["review_consolidation_ref"],
+        handoff["owner_identity_ref"], handoff["candidate_evidence_ref"],
+        *handoff["evidence_receipt_refs"], *handoff["reviewer_result_refs"],
+        *(item["ref"] for item in handoff["candidate_closure"])}
+    for ref in handoff["evidence_receipt_refs"]:
+        for entry in load(ref)["evidence"]:
+            artifact = entry.get("artifact") or {}
+            if artifact.get("kind") == "code-health-report-v1":
+                refs.add(artifact["ref"])
+    evidence = []
+    for ref in sorted(refs):
+        load(ref)
+        path = bundle_root / ref
+        evidence.append({"ref": path.relative_to(evidence_root).as_posix(), "digest": digest(path)})
+    return evidence
 
 
 def write_hosted_authority_facts(*, evidence_root: Path, head_sha: str, base_sha: str, reviews_file: Path, threads_file: Path,
                                  rulesets_file: Path, author_login: str, branch_policy_exit: int, changed_boundary_exit: int,
                                  impact_plan_digest: str, changed_paths_digest: str,
-                                 required_evidence: Sequence[Mapping[str, str]]) -> dict[str, dict[str, str]]:
+                                 required_evidence: Sequence[Mapping[str, str]], repository: Path = ROOT) -> dict[str, dict[str, str]]:
     root = evidence_root.resolve()
     reviews = _load_json(reviews_file, "reviews")
     threads = _load_json(threads_file, "threads")
@@ -310,7 +382,8 @@ def write_hosted_authority_facts(*, evidence_root: Path, head_sha: str, base_sha
         "boundary": boundary_fact(head_sha=head_sha, base_sha=base_sha, branch_policy_exit=branch_policy_exit,
                                   changed_boundary_exit=changed_boundary_exit, impact_plan_digest=impact_plan_digest,
                                   changed_paths_digest=changed_paths_digest),
-        "required-evidence": required_evidence_fact(head_sha=head_sha, base_sha=base_sha, evidence=required_evidence),
+        "required-evidence": required_evidence_fact(repository=repository, evidence_root=root,
+            head_sha=head_sha, base_sha=base_sha, evidence=required_evidence),
     }
     written: dict[str, dict[str, str]] = {}
     for name, fact in facts.items():
@@ -336,6 +409,7 @@ def _parser() -> argparse.ArgumentParser:
     materialize.add_argument("--output-dir", required=True, type=Path)
     authority = sub.add_parser("hosted-authority")
     authority.add_argument("--evidence-root", required=True, type=Path)
+    authority.add_argument("--repository", required=True, type=Path)
     authority.add_argument("--head-sha", required=True)
     authority.add_argument("--base-sha", required=True)
     authority.add_argument("--reviews-file", required=True, type=Path)
@@ -347,7 +421,22 @@ def _parser() -> argparse.ArgumentParser:
     authority.add_argument("--impact-plan-digest", required=True)
     authority.add_argument("--changed-paths-digest", required=True)
     authority.add_argument("--required-evidence", action="append", required=True, help="ref=digest（bundle 内路径）")
+    authority.add_argument("--review-handoff", help="existing Review handoff 在 qualification bundle 内的 exact path")
+    authority.add_argument("--review-bundle-root", type=Path)
     return parser
+
+
+def _authority_evidence(args: argparse.Namespace) -> list[dict[str, str]]:
+    evidence = []
+    for item in args.required_evidence:
+        ref, _, item_digest = item.partition("=")
+        evidence.append({"ref": ref, "digest": item_digest})
+    if bool(args.review_handoff) != bool(args.review_bundle_root):
+        raise PromotionEvidenceError("PROMOTION.HEALTH_INVALID", "Review handoff and bundle root must be supplied together")
+    if args.review_handoff:
+        evidence.extend(review_bundle_evidence(bundle_root=args.review_bundle_root,
+            evidence_root=args.evidence_root, handoff_ref=args.review_handoff))
+    return evidence
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -358,12 +447,9 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "materialize-oci-bundle":
             result = materialize_oci_bundle(exact_ref=args.ref, output_dir=args.output_dir)
         elif args.command == "hosted-authority":
-            evidence = []
-            for item in args.required_evidence:
-                ref, _, item_digest = item.partition("=")
-                evidence.append({"ref": ref, "digest": item_digest})
+            evidence = _authority_evidence(args)
             result = write_hosted_authority_facts(
-                evidence_root=args.evidence_root, head_sha=args.head_sha, base_sha=args.base_sha,
+                repository=args.repository, evidence_root=args.evidence_root, head_sha=args.head_sha, base_sha=args.base_sha,
                 reviews_file=args.reviews_file, threads_file=args.threads_file, rulesets_file=args.rulesets_file,
                 author_login=args.author_login, branch_policy_exit=args.branch_policy_exit,
                 changed_boundary_exit=args.changed_boundary_exit, impact_plan_digest=args.impact_plan_digest,
