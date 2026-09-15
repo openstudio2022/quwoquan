@@ -47,7 +47,7 @@ RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     ./services/content-service/cmd/import
 RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+    export CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB; \
     go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" -o /out/tag-import ./services/tag-service/cmd/import \
     && go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" -o /out/creator-import ./services/user-service/cmd/release-import \
     && go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" -o /out/homepage-import ./services/entity-service/cmd/homepage-import \

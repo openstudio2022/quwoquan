@@ -236,5 +236,5 @@ def materialize_content_release(admission: Any, *, target_name: str) -> Material
         raise ContentReleaseMaterializationError(
             "OPS.CONTENT_RELEASE.MATERIALIZATION_SOURCE_DRIFT"
         )
-    ref = destination.relative_to(target_root).as_posix()
+    ref = digest_root.relative_to(target_root).as_posix()
     return MaterializedContentRelease(destination, ref, tree_digest)

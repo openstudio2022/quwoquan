@@ -459,6 +459,7 @@ def apply_release(
                     manifest_digest=admission.manifest_digest,
                     report_path=run / "creator-candidate-receipt.json",
                     output_root=dependencies.output_root,
+                    importer_image_ref=getattr(target, "content_importer_image_ref", ""),
                 )
             failed_stage = "homepage_import"
             homepage_import_report = dependencies.run_homepage_importer(
@@ -490,6 +491,7 @@ def apply_release(
                     manifest_digest=admission.manifest_digest,
                     report_path=run / "homepage-candidate-receipt.json",
                     output_root=dependencies.output_root,
+                    importer_image_ref=getattr(target, "content_importer_image_ref", ""),
                 )
             failed_stage = "content_candidate_stage"
             content_receipt = dependencies.run_content_importer(
