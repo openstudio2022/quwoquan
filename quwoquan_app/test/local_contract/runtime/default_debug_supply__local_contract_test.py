@@ -429,22 +429,47 @@ class NativeSelfSupplyRecoveryContractTest(unittest.TestCase):
         swiftc = shutil.which("swiftc")
         if sys.platform != "darwin" or swiftc is None:
             self.skipTest("HOST_SWIFT_UNAVAILABLE: macOS Foundation/CryptoKit 行为矩阵未执行")
-        source = IOS_RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
-        # 红测仅在临时编译输入消费 HEAD 字节，绝不改动共享生产文件。
-        if os.environ.get("QWQ_NATIVE_SUPPLY_REVISION") == "HEAD":
-            source = subprocess.run(
-                ["git", "show", "HEAD:quwoquan_app/ios/Runner/NativeRuntimeConfigSupply.swift"],
-                cwd=REPO_ROOT, capture_output=True, text=True, check=True,
-            ).stdout
-        source, channel, _ = source.partition("enum NativeRuntimeConfigChannel {")
-        self.assertTrue(channel, "Flutter channel 抽取边界已迁移")
-        source = source.replace("import Flutter\n", "")
+        source_paths = (
+            IOS_RUNTIME_CONFIG_SUPPLY,
+            APP_DIR / "ios/Runner/NativeRuntimeConfigMigrationArchive.swift",
+            IOS_RUNTIME_CONFIG_ACTIVATION,
+        )
+        source_parts = []
+        for path in source_paths:
+            source_part = path.read_text(encoding="utf-8")
+            # 红测仅在临时编译输入消费 HEAD 字节，绝不改动共享生产文件。
+            if (
+                path == IOS_RUNTIME_CONFIG_SUPPLY
+                and os.environ.get("QWQ_NATIVE_SUPPLY_REVISION") == "HEAD"
+            ):
+                source_part = subprocess.run(
+                    ["git", "show", "HEAD:quwoquan_app/ios/Runner/NativeRuntimeConfigSupply.swift"],
+                    cwd=REPO_ROOT,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout
+            source_parts.append(source_part)
+        # Host probe 合并真实职责文件；后续文件的 import 必须提升到顶层 import 区域。
+        source = source_parts[0] + "\n" + "\n".join(
+            re.sub(r"^import [A-Za-z0-9_]+\n", "", part, flags=re.MULTILINE)
+            for part in source_parts[1:]
+        )
+        self.assertNotIn(
+            "enum NativeRuntimeConfigChannel {",
+            source,
+            "Flutter channel 必须只存在于独立 NativeRuntimeConfigChannel.swift",
+        )
         source, roots = re.subn(
             r"try fileManager\.url\(\s*for: \.applicationSupportDirectory,\s*"
             r"in: \.userDomainMask,\s*appropriateFor: nil,\s*create: createDirectory\s*\)",
             "URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)", source,
         )
-        self.assertEqual(roots, 2, "仅重定向 package 与 receipt 两处 Application Support 根")
+        self.assertEqual(
+            roots,
+            3,
+            "仅重定向 store 两处与 activation coordinator 一处 Application Support 根",
+        )
         program = r'''
 let fm = FileManager.default
 let support = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
@@ -491,7 +516,9 @@ try write(request, requestURL)
 let requestDigest = try digest(request)
 func online(_ environment: String, expired: Bool) throws -> [String: Any] {
   var package = offline
-  for field in ["contentSource", "trustEnvelopeDigest"] { package.removeValue(forKey: field) }
+  for field in ["contentSource", "rehearsalSpace", "trustEnvelopeDigest"] {
+    package.removeValue(forKey: field)
+  }
   package["schema"] = AppLaunchContract.schemaValues["runtime_config_package"]!
   package["environment"] = environment
   package["target"] = environment + "-local"
@@ -631,16 +658,30 @@ print(String(data: try JSONSerialization.data(withJSONObject: output), encoding:
             self.assertEqual(native.returncode, 0, native.stderr)
             output = json.loads(native.stdout)
         rows = {row["name"]: row for row in output["cases"]}
-        for name in ("absent", "retired_alpha", "offline_missing", "offline_malformed", "offline_mismatch"):
+        row = rows["absent"]
+        self.assertTrue(row["activated"], row)
+        self.assertEqual(row["error"], "")
+        self.assertEqual(row["verified"], output["offlineDigest"])
+        self.assertEqual(row["receiptRequest"], output["requestDigest"])
+        self.assertEqual(row["receiptPrevious"], "")
+        self.assertTrue(row["repeated"], row)
+        # 默认自供给不拥有损坏/历史 active 的迁移权限；只有显式 canonical
+        # activation 才能进入 previous-layout archive 与 CAS 替换路径。
+        for name, error in {
+            "retired_alpha": "content_source_mismatch",
+            "offline_missing": "activation_receipt_missing",
+            "offline_malformed": "activation_receipt_malformed",
+            "offline_mismatch": "activation_receipt_mismatch",
+        }.items():
             with self.subTest(case=name):
                 row = rows[name]
-                self.assertTrue(row["activated"], row)
-                self.assertEqual(row["error"], "")
-                self.assertEqual(row["verified"], output["offlineDigest"])
-                self.assertEqual(row["receiptRequest"], output["requestDigest"])
-                self.assertEqual(row["receiptPrevious"], "" if name == "absent" else row["oldDigest"])
-                self.assertTrue(row["repeated"], row)
-        self.assertEqual(rows["retired_alpha"]["before"], "runtime_config_content_source_mismatch")
+                self.assertEqual(row["error"], "runtime_config_" + error, row)
+                self.assertFalse(row["activated"], row)
+                self.assertTrue(row["packagePreserved"] and row["receiptPreserved"], row)
+        self.assertEqual(
+            rows["retired_alpha"]["before"],
+            "runtime_config_content_source_mismatch",
+        )
         self.assertEqual(rows["retired_alpha"]["identity"], "present")
         for name in ("beta_valid", "gamma_valid"):
             with self.subTest(case=name):

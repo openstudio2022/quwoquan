@@ -585,6 +585,102 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
         self.assertEqual(resolved, (APP_DIR / "ios/Runner" / name).resolve())
         self.assertTrue(resolved.is_file())
 
+    def _assert_runtime_config_channel_compile_closure(
+        self,
+        project: Path,
+        project_source: str,
+        *,
+        source_overrides: dict[str, str] | None = None,
+    ) -> None:
+        source_overrides = source_overrides or {}
+        source_texts = {
+            path.name: source_overrides.get(path.name, path.read_text(encoding="utf-8"))
+            for path in RUNTIME_CONFIG_SOURCES
+        }
+        declarations: dict[str, list[str]] = {}
+        for name, source_text in source_texts.items():
+            for declaration in re.findall(
+                r"^\s*(?:(?:private|internal)\s+)?(?:enum|struct|class|protocol)\s+"
+                r"([A-Za-z_][A-Za-z0-9_]*)",
+                source_text,
+                flags=re.MULTILINE,
+            ):
+                declarations.setdefault(declaration, []).append(name)
+        duplicates = {
+            declaration: sources
+            for declaration, sources in declarations.items()
+            if len(sources) != 1
+        }
+        self.assertEqual(
+            duplicates,
+            {},
+            f"runtime config 编译闭包不得包含重复顶层声明: {project}",
+        )
+        self.assertEqual(
+            declarations.get("NativeRuntimeConfigChannel"),
+            ["NativeRuntimeConfigChannel.swift"],
+            f"runtime config channel 必须只由独立源码声明: {project}",
+        )
+        self.assertEqual(
+            declarations.get("NativeRuntimeConfigActivationCoordinator"),
+            ["NativeRuntimeConfigActivationCoordinator.swift"],
+            f"activation coordinator 必须只由独立源码声明: {project}",
+        )
+        self._assert_shared_source_link(
+            project,
+            project_source,
+            "NativeRuntimeConfigChannel.swift",
+        )
+
+    def test_runner_and_patrol_compile_one_runtime_config_channel(self) -> None:
+        for project in (RUNNER_PROJECT, PATROL_PROJECT):
+            with self.subTest(project=str(project)):
+                self._assert_runtime_config_channel_compile_closure(
+                    project,
+                    project.read_text(encoding="utf-8"),
+                )
+
+    def test_runtime_config_channel_compile_closure_rejects_old_copy_and_duplicate_link(self) -> None:
+        supply = (APP_DIR / "ios/Runner/NativeRuntimeConfigSupply.swift").read_text(
+            encoding="utf-8"
+        )
+        old_copy = supply + "\nenum NativeRuntimeConfigChannel { }\n"
+        old_coordinator_copy = supply + "\nenum NativeRuntimeConfigActivationCoordinator { }\n"
+        for project in (RUNNER_PROJECT, PATROL_PROJECT):
+            source = project.read_text(encoding="utf-8")
+            with self.subTest(project=str(project), mutation="old_supply_copy"):
+                with self.assertRaises(AssertionError):
+                    self._assert_runtime_config_channel_compile_closure(
+                        project,
+                        source,
+                        source_overrides={"NativeRuntimeConfigSupply.swift": old_copy},
+                    )
+            with self.subTest(project=str(project), mutation="old_coordinator_copy"):
+                with self.assertRaises(AssertionError):
+                    self._assert_runtime_config_channel_compile_closure(
+                        project,
+                        source,
+                        source_overrides={
+                            "NativeRuntimeConfigSupply.swift": old_coordinator_copy
+                        },
+                    )
+            channel_build_entry = next(
+                line
+                for line in source.splitlines(keepends=True)
+                if "NativeRuntimeConfigChannel.swift in Sources */," in line
+            )
+            duplicated = source.replace(
+                channel_build_entry,
+                channel_build_entry + channel_build_entry,
+                1,
+            )
+            with self.subTest(project=str(project), mutation="duplicate_sources_entry"):
+                with self.assertRaises(AssertionError):
+                    self._assert_runtime_config_channel_compile_closure(
+                        project,
+                        duplicated,
+                    )
+
     def test_runner_and_patrol_compile_the_same_generated_launch_contract(self) -> None:
         self.assertTrue(GENERATED_LAUNCH_CONTRACT.is_file())
         for project in (RUNNER_PROJECT, PATROL_PROJECT):
