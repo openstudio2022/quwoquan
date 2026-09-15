@@ -40,6 +40,7 @@ import (
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/placeindex"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	postsafety "quwoquan_service/services/content-service/internal/content/post/infrastructure/safety"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
 	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/application"
 	profileinteractioninfra "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/infrastructure/persistence"
@@ -73,6 +74,10 @@ func assembleContentDomain(
 ) error {
 	ctx := asm.Context
 	appEnv := asm.Identity.AppEnv
+	registerActiveReleaseFence(asm.Mux, asm.MongoDB, appEnv)
+	if err := registerCreatorSearchPrepare(asm, cfg); err != nil {
+		return err
+	}
 	instanceID := asm.Identity.InstanceID
 	workers := asm.Workers
 	healthChecker := asm.Health
@@ -178,16 +183,9 @@ func assembleContentDomain(
 		postapp.WithGatheringParticipationReader(gatheringParticipationReader),
 	)
 
-	// Mongo 是启动必需依赖：uri/database/collection 的在场由声明式 required
-	// 校验保证，因此这里不再有「无 Mongo 也能起」的分支。连接、ping 健康检查
-	// 与断连清理由骨架承担。
-	db, err := asm.Mongo(servicekit.MongoConfig{
-		URI:      cfg.Mongo.URI,
-		Database: cfg.Mongo.Database,
-	})
-	if err != nil {
-		return err
-	}
+	// Mongo 是启动必需依赖：servicekit 已在进入领域装配前连接、验证并把
+	// canonical database 放入 Assembly。全部 route/store/worker 共用该句柄。
+	db := asm.MongoDB
 	dbName := cfg.Mongo.Database
 	collName := cfg.Mongo.Collection
 
@@ -219,6 +217,17 @@ func assembleContentDomain(
 		tombstonepost.NewStorePort(tombstonepersistence.NewMongoStore(db)),
 		mediaReferenceFence,
 	)
+	safetyManager, err := postsafety.OpenRuntimeManager(
+		ctx, db, appEnv, cfg.PostSafety.MaterialRoot, cfg.PostSafety.CurrentBindingRef,
+		cfg.PostSafety.RecoveryEvidenceRef, cfg.PostSafety.HMACSecretRef,
+		asm.Auth.AccountSecurityAuthority,
+	)
+	if err != nil {
+		return fmt.Errorf("Post safety runtime verification failed: %w", err)
+	}
+	if err = mongoStore.BindSafety(safetyManager, appEnv); err != nil {
+		return fmt.Errorf("Post safety store binding failed: %w", err)
+	}
 	if err := mongoStore.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("post indexes init failed: %w", err)
 	}
@@ -564,7 +573,7 @@ func assembleContentDomain(
 	// when ES is off (alpha): Built is empty and the projector is nil, so the
 	// write path is unaffected. When enabled we ensure the shared index exists
 	// up front so increments have somewhere to land, and register a liveness ping.
-	searchBuilt, searchErr := searchindex.Build(cfg.ES, store, searchindex.WithLogger(logger))
+	searchBuilt, searchErr := searchindex.Build(cfg.ES)
 	if searchErr != nil {
 		return fmt.Errorf("search index assembly failed: %w", searchErr)
 	}
@@ -580,7 +589,7 @@ func assembleContentDomain(
 		}
 		placeStore := placeindex.NewMongoPlaceStore(db.Collection(placeindex.PlaceSnapshotCollection), logger)
 		placeProjector = placeindex.NewProjector(searchBuilt.Indexer, store, placeStore, placeindex.WithLogger(logger))
-		log.Printf("content-service search index projector enabled (es endpoints=%d index=%s, place objects on)", len(cfg.ES.Endpoints), searchBuilt.Client.IndexName())
+		log.Printf("content-service place/account-cleanup ES binding enabled (endpoints=%d index=%s)", len(cfg.ES.Endpoints), searchBuilt.Client.IndexName())
 	}
 	accountClosureObjectFences, err := mediaobjectfence.New(db)
 	if err != nil {
@@ -646,13 +655,7 @@ func assembleContentDomain(
 			recinfra.NewDiscoveryFeedProjector(db),
 		),
 		"content-discovery-feed-projection", "post_outbox_discovery_feed", healthChecker, logger)
-	if searchBuilt.Projector != nil {
-		startPostOutboxRelay(ctx, workers, store, store,
-			postmessaging.NewInProcessProjectorPublisher(
-				&projectorAdapter{search: searchBuilt.Projector},
-			),
-			"content-search-projection", "post_outbox_search", healthChecker, logger)
-	}
+	// ordinary Post搜索写入只由Search消费content-post-lifecycle-stream；此处仅保留place/账号关闭用途。
 	if placeProjector != nil {
 		startPostOutboxRelay(ctx, workers, store, store,
 			postmessaging.NewInProcessProjectorPublisher(

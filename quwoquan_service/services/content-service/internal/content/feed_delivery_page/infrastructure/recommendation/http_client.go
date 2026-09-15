@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -56,9 +55,10 @@ func (client *HTTPClient) Create(
 	command transport.CreateRankedRecommendationWindowCommand,
 ) (transport.RankedRecommendationPage, error) {
 	body, err := json.Marshal(transport.CreateRankedRecommendationWindowRequestBody{
-		SubjectId: command.SubjectId,
-		Scenario:  command.Scenario,
-		Limit:     command.Limit,
+		ContentFence: command.ContentFence,
+		SubjectId:    command.SubjectId,
+		Scenario:     command.Scenario,
+		Limit:        command.Limit,
 	})
 	if err != nil {
 		return transport.RankedRecommendationPage{}, fmt.Errorf(
@@ -87,19 +87,20 @@ func (client *HTTPClient) GetPage(
 		url.PathEscape(strings.TrimSpace(request.WindowId)),
 		1,
 	)
-	query := url.Values{}
-	query.Set("subjectId", strings.TrimSpace(request.SubjectId))
-	if request.FromOrdinal != nil {
-		query.Set("fromOrdinal", strconv.Itoa(*request.FromOrdinal))
-	}
-	if request.Limit != nil {
-		query.Set("limit", strconv.Itoa(*request.Limit))
+	body, err := json.Marshal(struct {
+		ContentFence transport.ReleasePinnedQueryFence `json:"contentFence"`
+		SubjectID    string                            `json:"subjectId"`
+		FromOrdinal  *int                              `json:"fromOrdinal,omitempty"`
+		Limit        *int                              `json:"limit,omitempty"`
+	}{request.ContentFence, strings.TrimSpace(request.SubjectId), request.FromOrdinal, request.Limit})
+	if err != nil {
+		return transport.RankedRecommendationPage{}, err
 	}
 	return client.do(
 		ctx,
 		transport.GetRankedRecommendationPageMethod,
-		client.baseURL+path+"?"+query.Encode(),
-		nil,
+		client.baseURL+path,
+		body,
 		"",
 		300*time.Millisecond,
 	)

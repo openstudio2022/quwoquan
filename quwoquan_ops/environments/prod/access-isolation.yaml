@@ -66,6 +66,55 @@ deploymentInstances:
         - id: r0
           hostId: prod-host-01
 
+# DEC-015内核安装契约；仅声明路径和动作，不表示helper已安装或首发已准入。
+executionControl:
+  authorityHostRef: management.defaultHostId
+  authorityPlane: service
+  authorityRootRelative: release-ledger/execution
+  inventoryProjection: inventory.json
+  controllerHelperRelative: quwoquan_ops/cli/prod/hosted_release_ledger.py
+  guardHelperRelative: process/execution-guard/bin/quwoquan-plane-execution-guard
+  guardRootRelative: process/execution-guard
+  trustedController:
+    identity: quwoquan-prod-deployment-controller
+    keyId: prod-execution-controller-ed25519-k1
+    publicKeyDescriptorRef: credentials/execution-controller/public-key.pem
+    privateKeySecretRef: QWQ_PROD_EXECUTION_CONTROLLER_SIGNING_KEY
+    sessionBinding: existing-plane-ssh-public-key
+  requestEnvelope:
+    schema: quwoquan.prod.execution-request.v1
+    fields: [schema, controllerIdentity, controllerKeyId, attemptId, executionGeneration, releaseGeneration, inventoryDigest, placementId, guardIncarnation, sequence, action, parameters, materialDigest]
+    signatureFields: [payloadDigest, algorithm, keyId, signature]
+  resultEnvelope:
+    schema: quwoquan.prod.execution-result.v1
+    fields: [schema, requestDigest, placementId, guardIncarnation, sequence, status, effectDigest, processGroup, returnCode, terminal, reconciled]
+  monotonicFence: [guardIncarnation, executionGeneration, sequence]
+  permittedActions:
+    - guard-prepare
+    - guard-close
+    - prevalidate-promote-runtime
+    - prevalidate-install-unit
+    - prevalidate-start
+    - prevalidate-stop
+    - prevalidate-status
+    - observe-runtime-identity
+    - observe-route
+    - observe-current-pointer
+    - promote-active-config
+    - promote-caddy-config
+    - promote-systemd-unit
+    - candidate-start
+    - candidate-stop
+    - route-current-cas
+    - ledger-activation-cas
+    - ledger-stage-cas
+    - ledger-recovery-cas
+    - distribution-current-cas
+  parameterPolicy: typed-placement-relative-no-argv-path-shell
+  identityReadRelative: runtime/artifact-identity.json
+  credentialBoundary: existing-plane-account
+  takeoverPolicy: explicit-reconcile-after-exact-process-group-or-authorized-isolation-and-effect-readback
+
 # 非 root 中转/bootstrap 账号：仅用于 SSH 登录、按平面分发凭据、触发受限发布命令；无日常 root。
 relayAccount:
   name: prod-ops
@@ -105,6 +154,13 @@ prevalidation:
     gamma-proxy: [api-edge]
     api-edge: [user-service]
     user-service: [integration-service]
+  externalSecretRefs:
+    envFileRelative: prevalidation/runtime.env
+    requiredEnvironment: [INTEGRATION_SMS_ENDPOINT, INTEGRATION_SMS_TOKEN]
+    requiredFiles:
+      INTEGRATION_SERVICE_MTLS_CA_FILE: prevalidation/mtls/user-to-integration/ca.crt
+      INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE: prevalidation/mtls/user-to-integration/client.crt
+      INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE: prevalidation/mtls/user-to-integration/client.key
   unavailablePublicCapabilities: [media-delivery, media-upload, livekit-sfu, turn, ops, commercial-login]
   capacityStrategy: constrained-per-replica-host
   minimumHostResources:
@@ -165,7 +221,8 @@ prevalidation:
         - tag-service
         - entity-service
         - notification-service
-      imageAndConfigOnlyServices: [integration-service]
+        - integration-service
+      imageAndConfigOnlyServices: []
       # 渲染、跨平面 URL 和宿主占用前检共享此唯一发布口源。
       # 未启动 integration、未监听 ops/media proxy 端口不得占位。
       publishedPorts:

@@ -122,6 +122,26 @@ func validateContentConfig(cfg *config) error {
 			return fmt.Errorf("%s content runtime embedding binding: %w", appEnv, err)
 		}
 	}
+	return validatePostSafetyBootstrap(cfg)
+}
+
+// validatePostSafetyBootstrap只校验启动所需的locator形状；材料内容、当前部署
+// 身份、Mongo物理身份和账号资格必须在数据库连接后由production authority复验。
+func validatePostSafetyBootstrap(cfg *config) error {
+	const prefix = "CONTENT.RELEASE.query_barrier_not_ready: post safety bootstrap: "
+	if cfg == nil {
+		return fmt.Errorf("%sconfiguration is required", prefix)
+	}
+	for _, item := range []struct{ name, value string }{
+		{"hmac_secret_ref", cfg.PostSafety.HMACSecretRef},
+		{"recovery_evidence_ref", cfg.PostSafety.RecoveryEvidenceRef},
+		{"material_root", cfg.PostSafety.MaterialRoot},
+		{"current_binding_ref", cfg.PostSafety.CurrentBindingRef},
+	} {
+		if strings.TrimSpace(item.value) == "" {
+			return fmt.Errorf("%s%s is required", prefix, item.name)
+		}
+	}
 	return nil
 }
 
@@ -292,7 +312,6 @@ func hostname() string {
 // projectorAdapter bridges content read-model projectors to ports.Projector.
 type projectorAdapter struct {
 	embedding *recinfra.EmbeddingProjector
-	search    *searchindex.Projector
 	place     *placeindex.PlaceProjector
 }
 
@@ -311,11 +330,6 @@ func (a *projectorAdapter) Project(ctx context.Context, event ports.ProjectorEve
 	}
 	// Each projector is driven by its own durable relay. Returning an error keeps
 	// that projector's checkpoint replayable without affecting the committed Post.
-	if a.search != nil {
-		if err := a.search.Project(ctx, event); err != nil {
-			return err
-		}
-	}
 	// First-party place index (location.place) shares the same ES client but owns
 	// an independent checkpoint.
 	if a.place != nil {

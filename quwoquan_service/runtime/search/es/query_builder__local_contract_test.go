@@ -348,7 +348,7 @@ func TestEveryCanonicalQueryExcludesSoftTombstones(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			query := body["query"].(map[string]any)
-			if !queryExcludesDeleted(query) {
+			if !queryRequiresCurrent(query) {
 				t.Fatalf("canonical query includes tombstones: %#v", body)
 			}
 			if name == "hybrid" {
@@ -361,14 +361,14 @@ func TestEveryCanonicalQueryExcludesSoftTombstones(t *testing.T) {
 	}
 }
 
-func TestEnsureNotDeletedSearchBodyIsIdempotent(t *testing.T) {
+func TestEnsureCurrentSearchBodyIsIdempotent(t *testing.T) {
 	body := map[string]any{
 		"query": map[string]any{"match_all": map[string]any{}},
 		"knn":   map[string]any{"field": "embedding"},
 	}
-	EnsureNotDeletedSearchBody(body)
+	EnsureCurrentSearchBody(body)
 	first := fmt.Sprintf("%#v", body)
-	EnsureNotDeletedSearchBody(body)
+	EnsureCurrentSearchBody(body)
 	second := fmt.Sprintf("%#v", body)
 	if first != second {
 		t.Fatalf("tombstone filter duplicated on retry: first=%s second=%s", first, second)

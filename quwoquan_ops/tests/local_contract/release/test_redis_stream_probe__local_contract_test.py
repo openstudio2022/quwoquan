@@ -73,6 +73,18 @@ class RedisStreamProbeLocalContractTest(unittest.TestCase):
         for forbidden in (b"XADD", b"XTRIM", b"XDEL", b"EXPIRE", b"XACK"):
             self.assertNotIn(forbidden, request)
 
+    def test_authenticated_probe_authenticates_before_read_only_xrange(self) -> None:
+        reply = b"+OK\r\n*0\r\n"
+        port, received = _serve_once(reply)
+        self.assertEqual(stream_field_values(
+            host="127.0.0.1", port=port, stream="events.ops.experiment_policy_activated",
+            field="experimentId", username="qwq_runtime", password="managed-secret",
+        ), ())
+        request = received[0]
+        self.assertLess(request.index(b"AUTH"), request.index(b"XRANGE"))
+        for forbidden in (b"XADD", b"XTRIM", b"XDEL", b"EXPIRE", b"XACK"):
+            self.assertNotIn(forbidden, request)
+
     def test_missing_stream_key_reads_as_empty(self) -> None:
         # XRANGE 对不存在的 key 返回空数组；整体过期的事实流与空流同义。
         port, _received = _serve_once(b"*0\r\n")

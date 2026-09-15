@@ -12,6 +12,7 @@ type SceneConfig struct {
 	Mode     string   `yaml:"mode"` // "standalone", "cluster", "memory"
 	Addr     string   `yaml:"addr"`
 	Addrs    []string `yaml:"addrs"`
+	Username string   `yaml:"username"`
 	Password string   `yaml:"password"`
 	DB       int      `yaml:"db"`
 	TLS      bool     `yaml:"tls"`

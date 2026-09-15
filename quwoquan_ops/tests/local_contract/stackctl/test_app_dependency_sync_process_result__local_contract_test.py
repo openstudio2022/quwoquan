@@ -6,13 +6,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import signal
 import stat
+import subprocess
+import sys
+import time
 from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 
 from quwoquan_ops.cli.commands import app_dependency_sync as sync
+from quwoquan_ops.cli.lib.package_reuse import android_gradle_store
 from quwoquan_ops.tests.support.app_dependency_sync_test_support import (
     component_builder as _component_builder,
 )
@@ -27,6 +33,20 @@ def _process_result(output: Path, result: Mapping[str, object]) -> tuple[Path, d
     attempt_id = attempt_detail.split("=", 1)[1]
     path = output / f"env/repo/local/app-dependency-sync/process/{attempt_id}/result.json"
     return path, json.loads(path.read_text(encoding="utf-8"))
+
+
+
+def test_fresh_five_component_sync_budget_is_ninety_minutes() -> None:
+    assert sync._SYNC_TOTAL_DEADLINE_SECONDS == 90 * 60
+    assert sync._builder._SYNC_TIMEOUT_SECONDS < sync._SYNC_TOTAL_DEADLINE_SECONDS
+    assert (
+        sync._builder._SYNC_NETWORK_DEADLINE_SECONDS
+        < sync._SYNC_TOTAL_DEADLINE_SECONDS
+    )
+    assert (
+        android_gradle_store._GRADLE_PROCESS_TIMEOUT_SECONDS
+        < sync._SYNC_TOTAL_DEADLINE_SECONDS
+    )
 
 
 def test_dependency_progress_reports_validated_phase() -> None:
@@ -389,3 +409,94 @@ def test_lock_failure_still_persists_process_result(
     assert path.is_file()
     assert source_path.read_bytes() == b"packages: {}\n"
     assert stat.S_IMODE(source_path.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(os.name != "posix", reason="canonical dependency sync is POSIX-only")
+def test_real_sigterm_writes_private_typed_result_and_preserves_active(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "output"
+    _stub_sync(monkeypatch, output)
+    active = output / "env/repo/local/app-dependency-sync/cache/active.json"
+    active.parent.mkdir(parents=True)
+    active.write_text("old-active\n", encoding="ascii")
+    identities = tmp_path / "sync-child-identities"
+
+    def blocking_builder(context: sync.DependencyComponentBuildContext) -> Mapping[str, Path]:
+        context.progress.begin("gradle-online-resolution")
+        network = sync._builder.run_managed_subprocess
+        network(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import os,pathlib,signal,subprocess,sys,time\n"
+                    "child=subprocess.Popen([sys.executable, '-c', "
+                    "'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)'])\n"
+                    "pathlib.Path(sys.argv[1]).write_text(f'{os.getpid()} {child.pid}', encoding='ascii')\n"
+                    "time.sleep(60)\n"
+                ),
+                str(identities),
+            ],
+            cwd=tmp_path,
+            env={"PYTHONDONTWRITEBYTECODE": "1"},
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=30,
+        )
+        raise AssertionError("unreachable")
+
+    sender = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import os,signal,time\n"
+                "deadline=time.monotonic()+3\n"
+                "while not os.path.exists(os.environ['IDENTITIES']) and time.monotonic()<deadline: time.sleep(.02)\n"
+                "os.kill(os.getppid(), signal.SIGTERM)\n"
+            ),
+        ],
+        env={**os.environ, "IDENTITIES": str(identities)},
+    )
+    result = sync.command_app_dependency_sync(
+        argparse.Namespace(), component_builder=blocking_builder
+    )
+    sender.wait(timeout=2)
+
+    path, process_result = _process_result(output, result)
+    assert result["exitCode"] == 2
+    assert process_result["failedPhase"] == "gradle-online-resolution"
+    assert process_result["cause"] == "signal_sigterm"
+    assert "signal=SIGTERM" in " ".join(process_result["details"])
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert active.read_text(encoding="ascii") == "old-active\n"
+    parent_pid, _child_pid = (int(item) for item in identities.read_text().split())
+    with pytest.raises(ProcessLookupError):
+        os.killpg(parent_pid, 0)
+
+
+def test_process_result_preserves_typed_network_cause(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "output"
+    _stub_sync(monkeypatch, output)
+
+    def fail(context: sync.DependencyComponentBuildContext) -> Mapping[str, Path]:
+        context.progress.begin("gradle-online-resolution")
+        raise ValueError(
+            "APP.DEPENDENCY.android_sync_failed: cause=network_unreachable; "
+            "host=quwoquan_app/android; task=:app:assembleNonprodDebug"
+        )
+
+    result = sync.command_app_dependency_sync(
+        argparse.Namespace(), component_builder=fail
+    )
+    _path, process_result = _process_result(output, result)
+    assert process_result["failedPhase"] == "gradle-online-resolution"
+    assert process_result["cause"] == "network_unreachable"
+    assert "host=quwoquan_app/android" in " ".join(process_result["details"])

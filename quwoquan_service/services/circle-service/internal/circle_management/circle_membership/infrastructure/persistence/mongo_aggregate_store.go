@@ -277,7 +277,11 @@ func membershipEventPayload(value membershipmodel.CircleMembership, circleOwnerP
 	payload := map[string]any{
 		"id": value.ID, "version": value.Version, "circleId": value.CircleID,
 		"personaId": value.PersonaID, "role": value.Role, "state": value.State,
-		"joinedAt": value.JoinedAt.UTC(), "createdAt": value.CreatedAt.UTC(), "updatedAt": value.UpdatedAt.UTC(),
+		"joinedAt": nil, "createdAt": value.CreatedAt.UTC(), "updatedAt": value.UpdatedAt.UTC(),
+	}
+	// 未实际加入不是公元一年，也不能以创建/当前时间伪造加入事实。
+	if !value.JoinedAt.IsZero() {
+		payload["joinedAt"] = value.JoinedAt.UTC()
 	}
 	if !value.LeftAt.IsZero() {
 		payload["leftAt"] = value.LeftAt.UTC()

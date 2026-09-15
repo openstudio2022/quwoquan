@@ -6,6 +6,8 @@ class ContentRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AbortMediaUpload': 'content.media.abort',
+    'ActivateContentReleaseAtSearchBarrier':
+        'content.activate.content.release.at.search.barrier',
     'ActivateFilterCatalogRelease': 'content.activate.filter.catalog.release',
     'AppendOutboundShareFact': 'content.outbound_share.create',
     'AppendProfileInteractionReadFact':
@@ -69,8 +71,15 @@ class ContentRequestPageIds {
     'OpenPostModerationCase': 'content.open.post.moderation.case',
     'PauseMediaImageReprocessRun': 'content.pause.media.image.reprocess.run',
     'PinComment': 'content.pin.comment',
+    'PreparePostReleaseQueries': 'content.prepare.post.release.queries',
     'PromotePostToWork': 'content.post.promote',
     'ReactToComment': 'content.react.to.comment',
+    'ReadActiveReleaseFence': 'content.read.active.release.fence',
+    'ReadContentReleaseCommitReceipt':
+        'content.read.content.release.commit.receipt',
+    'ReadPostCandidateSafety': 'content.read.post.candidate.safety',
+    'ReadPostReleaseCandidate': 'content.read.post.release.candidate',
+    'ReadRequiredReleaseQueries': 'content.read.required.release.queries',
     'RecordMediaProcessingResult': 'content.record.media.processing.result',
     'RecoverContentAccountClosureDeadLetter':
         'content.recover.content.account.closure.dead.letter',
@@ -99,6 +108,8 @@ class ContentRequestPageIds {
   };
 
   static const String abortMediaUpload = 'content.media.abort';
+  static const String activateContentReleaseAtSearchBarrier =
+      'content.activate.content.release.at.search.barrier';
   static const String activateFilterCatalogRelease =
       'content.activate.filter.catalog.release';
   static const String appendOutboundShareFact = 'content.outbound_share.create';
@@ -180,8 +191,20 @@ class ContentRequestPageIds {
   static const String pauseMediaImageReprocessRun =
       'content.pause.media.image.reprocess.run';
   static const String pinComment = 'content.pin.comment';
+  static const String preparePostReleaseQueries =
+      'content.prepare.post.release.queries';
   static const String promotePostToWork = 'content.post.promote';
   static const String reactToComment = 'content.react.to.comment';
+  static const String readActiveReleaseFence =
+      'content.read.active.release.fence';
+  static const String readContentReleaseCommitReceipt =
+      'content.read.content.release.commit.receipt';
+  static const String readPostCandidateSafety =
+      'content.read.post.candidate.safety';
+  static const String readPostReleaseCandidate =
+      'content.read.post.release.candidate';
+  static const String readRequiredReleaseQueries =
+      'content.read.required.release.queries';
   static const String recordMediaProcessingResult =
       'content.record.media.processing.result';
   static const String recoverContentAccountClosureDeadLetter =

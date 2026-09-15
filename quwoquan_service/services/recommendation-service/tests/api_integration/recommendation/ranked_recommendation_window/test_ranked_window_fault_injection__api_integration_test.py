@@ -226,7 +226,7 @@ def test_redis_window_store_unreachable_fails_closed_within_budget(
         response = server.client.post(
             CREATE_RANKED_RECOMMENDATION_WINDOW_PATH,
             headers=_headers("fault-redis-001"),
-            json={"subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 2},
+            json={"contentFence": {"release": None, "revision": 0}, "subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 2},
         )
         elapsed = time.monotonic() - started
         assert response.status_code == 500
@@ -259,7 +259,7 @@ def test_mongo_unreachable_fails_closed_within_budget(real_redis) -> None:
         response = server.client.post(
             CREATE_RANKED_RECOMMENDATION_WINDOW_PATH,
             headers=_headers("fault-mongo-001"),
-            json={"subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 2},
+            json={"contentFence": {"release": None, "revision": 0}, "subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 2},
         )
         elapsed = time.monotonic() - started
         assert response.status_code == 500
@@ -294,7 +294,7 @@ def test_model_bucket_without_artifact_degrades_to_rule_over_real_transport(
         response = server.client.post(
             CREATE_RANKED_RECOMMENDATION_WINDOW_PATH,
             headers=_headers("fault-model-001"),
-            json={"subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 3},
+            json={"contentFence": {"release": None, "revision": 0}, "subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 3},
         )
         assert response.status_code == 200
         payload = response.json()

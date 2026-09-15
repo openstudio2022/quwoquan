@@ -172,6 +172,7 @@ def test_bundle_requires_exactly_five_build_products(
         )
 
     subject.validate_bundle(
+        delivery_target_scope=["app", "service"],
         bundle_dir=bundle,
         source_git_sha=revision,
         source_tree_digest=tree,
@@ -185,6 +186,7 @@ def test_bundle_requires_exactly_five_build_products(
     apk.write_bytes(b"tampered")
     with pytest.raises(ValueError, match="android-prod-apk hosted payload digest mismatch"):
         subject.validate_bundle(
+            delivery_target_scope=["app", "service"],
             bundle_dir=bundle,
             source_git_sha=revision,
             source_tree_digest=tree,
@@ -222,6 +224,7 @@ def test_bundle_rejects_environment_duplicated_package_name(
 
     with pytest.raises(ValueError, match="App build product package set mismatch"):
         subject.validate_bundle(
+            delivery_target_scope=["app", "service"],
             bundle_dir=bundle,
             source_git_sha=revision,
             source_tree_digest=tree,

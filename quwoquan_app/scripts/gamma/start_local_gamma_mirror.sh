@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
+source "$ROOT/quwoquan_app/scripts/gamma/local_gamma_runtime_authority.sh"
 LOCAL_GAMMA_ACTIVE_CHILD_PID=""
 STARTUP_ATTEMPT_PREPARED=0
 STARTUP_ATTEMPT_PARTIAL=0
@@ -196,6 +197,7 @@ eval "$(python3 "$ROOT/quwoquan_ops/cli/lib/local_run.py" \
   --env "$QWQ_LOCAL_RELEASE_ENV" --target "$QWQ_LOCAL_RELEASE_TARGET" \
   --action "$LOCAL_RUN_ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
 export QWQ_OUTPUT_ROOT QWQ_DEPLOY_WORK_ROOT QWQ_OBSERVABILITY_RUN_ROOT QWQ_RUN_ROOT
+validate_stackctl_managed_python
 write_startup_attempt() {
   local status="$1"
   local failure="${2:-}"
@@ -363,7 +365,7 @@ else
     COMPOSE_FILES+=("$candidate_compose_file")
   done <<< "$QWQ_RUNTIME_TOPOLOGY_COMPOSE_FILES"
 fi
-if [[ "$WORKLOAD" == "full" ]]; then
+if [[ "$WORKLOAD" == "full" || "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
   provider_compose_files=()
   provider_compose_digests=()
   while IFS= read -r provider_compose_file; do
@@ -441,6 +443,9 @@ if [[ "$WORKLOAD" == "full" || "$WORKLOAD" == "content-commercial" ]]; then
     exit 2
   fi
   COMPOSE_FILES+=("$OBSERVABILITY_LOG_SINK_COMPOSE_FILE")
+fi
+if [[ -n "${QWQ_PROVIDER_RUNTIME_COMPOSE_PROFILES:-}" ]]; then
+  export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}${QWQ_PROVIDER_RUNTIME_COMPOSE_PROFILES}"
 fi
 COMPOSE_FILE_ARGS=()
 for service_compose_file in "${COMPOSE_FILES[@]}"; do
@@ -750,6 +755,7 @@ export \
   LOCAL_GAMMA_PUBLIC_WEB_ROOT \
   QWQ_PUBLIC_WEB_CONTENT_DIGEST
 export QWQ_LOCAL_RELEASE_ENV QWQ_LOCAL_RELEASE_TARGET
+export_post_safety_locators
 
 library_image() {
   local image="$1"
@@ -1305,29 +1311,10 @@ prepare_media_root() {
     echo "[local-release] run immutable release full-sync before exposing $QWQ_LOCAL_RELEASE_TARGET media" >&2
     return 2
   fi
-  echo "[local-gamma] release media root ready; Data CLI ship apply --full-sync owns public slices: $media"
+  echo "[local-gamma] release media root ready; Ops stackctl content-release apply owns public slices: $media"
 }
 
-validate_caddyfile_source() {
-  if [[ ! -f "$LOCAL_GAMMA_CADDYFILE" ]]; then
-    echo "[local-gamma] FAIL: missing Ops-owned Caddyfile: $LOCAL_GAMMA_CADDYFILE" >&2
-    return 1
-  fi
-}
 
-print_defines() {
-  if ! python3 - <<'PY' >/dev/null 2>&1; then
-import sys
-raise SystemExit(0 if sys.version_info >= (3, 7) else 1)
-PY
-    echo "[local-gamma] skip dart defines: python3 >= 3.7 required" >&2
-    return 0
-  fi
-
-  python3 "$ROOT/quwoquan_app/scripts/env/print_app_env_dart_defines.py" \
-    --env "$LOCAL_GAMMA_APP_ENV" \
-    --target "$QWQ_LOCAL_RELEASE_TARGET"
-}
 
 run_docker_probe_with_timeout() {
   local probe_pid=""
@@ -1652,7 +1639,7 @@ if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose
   echo "[local-release] GATE_BLOCK: the retired manual Podman compatibility runtime is forbidden; use canonical Docker Compose through stackctl" >&2
   exit 2
 fi
-compose_cmd=(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}")
+prepare_runtime_security_projection
 # candidate topology 投影后 core 逻辑服务合并为 service-core；显式服务名单必须
 # 映射到当前 compose 拓扑的真实服务名，否则 docker compose 对任一未知服务名
 # 整体拒绝执行（no such service）。core 模块集合以
@@ -2515,7 +2502,11 @@ else
     local state=""
     local deadline=0
     bootstrap_services="$("${compose_cmd[@]}" config --services 2>/dev/null || true)"
-    for bootstrap_service in service-core product-ops-service postgres-init; do
+    local -a required_bootstrap_services=(service-core postgres-init)
+    if [[ "$PRODUCT_OPS_REQUIRED" == "1" ]]; then
+      required_bootstrap_services+=(product-ops-service)
+    fi
+    for bootstrap_service in "${required_bootstrap_services[@]}"; do
       if [[ -z "$bootstrap_services" ]] \
         || ! grep -qx "$bootstrap_service" <<<"$bootstrap_services"; then
         echo "[local-gamma] FAIL: policy owner bootstrap requires $bootstrap_service in the compose topology" >&2
@@ -2580,6 +2571,7 @@ else
         sleep 2
       done
     done
+    prepare_service_core_runtime_authorities || return 1
     # --no-deps 绕过会拉起 Recommendation/Search 的 Compose dependency graph；
     # 随后等待的 container health 只探 /healthz（shallow liveness），不等待
     # aggregate /readyz 或尚未激活的实验策略。这样既破环，也不会把 module
@@ -2617,6 +2609,9 @@ else
       fi
       sleep 2
     done
+    if [[ "$PRODUCT_OPS_REQUIRED" != "1" ]]; then
+      return 0
+    fi
     # --no-deps：candidate 拓扑把 product-ops 依赖投影为 service-core healthy，
     # 但 bootstrap 此时只需已完成 Build/Bind/Start 的 UserAccount 内部健康面。operator 凭据的公开
     # command 不经过 AccountSecurityAuthority，但仍完整经过验签、scope、
@@ -2658,9 +2653,9 @@ PY
       return 1
     fi
   }
-  if [[ "$PRODUCT_OPS_REQUIRED" == "1" ]]; then
+  if [[ "$QWQ_LOCAL_RELEASE_TARGET" == "gamma-local" || "$PRODUCT_OPS_REQUIRED" == "1" ]]; then
     if ! bootstrap_experiment_policy_owner; then
-      echo "[local-gamma] FAIL: experiment policy owner bootstrap failed; a cold full-stack startup would deadlock on the authored policy" >&2
+      echo "[local-gamma] FAIL: runtime authority bootstrap failed before service-core startup" >&2
       exit 1
     fi
   fi

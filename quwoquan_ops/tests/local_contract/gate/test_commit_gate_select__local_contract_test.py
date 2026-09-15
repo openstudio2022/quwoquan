@@ -121,6 +121,18 @@ def test_ordinary_commit_never_selects_worktree_lifecycle_static_gate() -> None:
     ) == (selected, deferred)
 
 
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002
+def test_data_requirements_defer_the_entire_owner_suite() -> None:
+    suite = "quwoquan_data/tests/local_contract"
+    focused = "quwoquan_ops/tests/local_contract/gate/test_commit_gate_select__local_contract_test.py"
+    for paths in (["quwoquan_data/requirements.txt"], ["quwoquan_data/requirements.txt", focused]):
+        selected, deferred = select_pytest_paths(paths)
+        assert deferred == [suite]
+        assert selected == ([focused] if focused in paths else [])
+    # 只声明真实全局依赖输入，不把任意近似文件名提升为全域规则。
+    assert select_pytest_paths(["quwoquan_data/requirements-extra.txt"]) == ([], [])
+
+
 def test_python_test_selection_defers_broad_owner_trees() -> None:
     assert select_pytest_paths(
         ["quwoquan_ops/policies/gates/assistant_search_weak_typing_baseline.json"]

@@ -44,6 +44,7 @@ def _declared(code: str) -> dict:
 
 def _fields(*, valid_identity: bool = True) -> dict[bytes, bytes]:
     payload = {
+        "sourceOwner": None,
         "postId": "post-001",
         "authorId": "persona-001",
         "contentType": "article",
@@ -88,6 +89,7 @@ class _Redis:
         return True
 
     def xautoclaim(self, *_args, **_kwargs):
+        if _args[0] != POST_LIFECYCLE_STREAM: return ("0-0", [], [])
         if self.pending:
             return (
                 "0-0",
@@ -97,6 +99,7 @@ class _Redis:
         return ("0-0", [], [])
 
     def xreadgroup(self, *_args, **_kwargs):
+        if POST_LIFECYCLE_STREAM not in _args[2]: return []
         if not self.deliver:
             return []
         self.deliver = False

@@ -12,15 +12,31 @@ import (
 // MongoConfig 是可选 Mongo 场景构件的统一 YAML 段（DEC-028）：uri 与
 // database 均为必填，env 覆盖键为 <PREFIX>_MONGO_URI / <PREFIX>_MONGO_DATABASE。
 type MongoConfig struct {
-	URI      string `yaml:"uri" env:"MONGO_URI" required:"true"`
-	Database string `yaml:"database" env:"MONGO_DATABASE" required:"true"`
+	URI      string `yaml:"uri" env:"MONGO_URI"`
+	Database string `yaml:"database" env:"MONGO_DATABASE"`
 }
 
 // MongoDatabase 是 database 句柄的本包投影，声明式装配经 Assembly.MongoDB
 // 暴露它。驱动类型收在 internal/platform/mongodb，公共层不直连存储驱动。
 type MongoDatabase = rtmongo.Database
 
-type mongoConnectFunc func(ctx context.Context, cfg rtmongo.ConnectConfig) (rtmongo.Handle, error)
+type MongoConnectConfig = rtmongo.ConnectConfig
+type MongoHandle = rtmongo.Handle
+type mongoConnectFunc func(ctx context.Context, cfg MongoConnectConfig) (MongoHandle, error)
+
+// MongoConstructionError 标识 Mongo 在模块构造期的确定性失败；调用方可用
+// errors.As 区分配置、连接与 database handle 失败，同时保留底层 cause。
+type MongoConstructionError struct {
+	Service string
+	Stage   string
+	Cause   error
+}
+
+func (err *MongoConstructionError) Error() string {
+	return fmt.Sprintf("%s mongodb %s failed: %v", err.Service, err.Stage, err.Cause)
+}
+
+func (err *MongoConstructionError) Unwrap() error { return err.Cause }
 
 // defaultMongoConnect 是包级注入点：生产恒为真实驱动连接，同包白盒测试
 // 以 typed double 临时替换来验证装配编排。
@@ -63,15 +79,15 @@ func (assembly *Assembly) mongo(
 ) (MongoDatabase, error) {
 	serviceName := assembly.Identity.ServiceName
 	if strings.TrimSpace(config.URI) == "" {
-		return nil, fmt.Errorf("%s mongo.uri is required", serviceName)
+		return nil, &MongoConstructionError{Service: serviceName, Stage: "config", Cause: fmt.Errorf("mongo.uri is required")}
 	}
 	if strings.TrimSpace(config.Database) == "" {
-		return nil, fmt.Errorf("%s mongo.database is required", serviceName)
+		return nil, &MongoConstructionError{Service: serviceName, Stage: "config", Cause: fmt.Errorf("mongo.database is required")}
 	}
 
 	client, err := assembly.mongoConnect(assembly.Context, rtmongo.ConnectConfig{URI: config.URI})
 	if err != nil {
-		return nil, fmt.Errorf("%s mongodb connect failed: %w", serviceName, err)
+		return nil, &MongoConstructionError{Service: serviceName, Stage: "connect", Cause: err}
 	}
 	assembly.Cleanups.Add(func(cleanupCtx context.Context) error {
 		return client.Disconnect(cleanupCtx)
@@ -81,5 +97,13 @@ func (assembly *Assembly) mongo(
 	} else {
 		assembly.Health.Register(healthCheckName, client.Ping)
 	}
-	return client.Database(config.Database), nil
+	database := client.Database(config.Database)
+	if database == nil {
+		return nil, &MongoConstructionError{
+			Service: serviceName,
+			Stage:   "database",
+			Cause:   fmt.Errorf("connector returned nil database handle"),
+		}
+	}
+	return database, nil
 }

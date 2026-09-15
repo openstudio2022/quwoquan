@@ -27,6 +27,9 @@ assistant_access:
     scopes: []
   denied_reason: "通讯录匹配等高敏个人数据对小趣完全关闭，不存在最小可开放子集。"
 business_rules:
+- ContentReleaseFenceChanged从Content owning-event生成的before/after专属类型消费，只对账release可见范围，不当PostPublished/PostDeleted产生或销毁社会证明/作者历史特征，也不从fence自行补准备或建立active状态。Data特征公开读取仍受唯一Content fence及当前安全资格限制。
+- transition按eventId/规范摘要幂等，同revision异摘要拒绝；迟到只有既有inbox或Content ReadContentReleaseCommitReceipt证明已提交才可superseded，缺receipt/错tuple/未来revision/未知字段保持pending，不按较小revision默认ACK。
+- Post普通来源字段显式null、Data完整environment/sourceOwner/releaseId/manifestDigest，releaseDigest只审计；sourceVersion唯一且等于对象envelope aggregateVersion，不使用activationRevision。真实删除/privacy/purge/权限收紧清除同来源canonical对象所有候选相关可识别特征并保持防复活事实，不因rollback恢复；release退出不触发该清理，源类型只在Content声明并生成，不复制或默认补字段。
 - 特征只从 typed 事实和公开关系事件投影，任何在线排序调用不得回写长期特征。
 - TagFeedbackRecorded 只由本对象消费：click/dislike 分别设置显式正/负 tagAffinity，ignore 清除，correct 仅推进事实收据且不臆造偏好。
 - dislike/report、hide_author、hide_content_type 分别形成有界的内容、作者、内容类型硬排除集合；RankedRecommendationWindow 必须在评分前应用，Content 不得保留第二份排除状态。
@@ -51,6 +54,8 @@ lifecycle:
   - circle.circle_membership.CircleMembershipRejected
   - circle.gathering.GatheringParticipationChanged
   - circle.gathering.GatheringPublished
+  - content.post.ContentReleaseFenceChanged
+  - content.post.PostModerationRejected
   - content.post.PostPublished
   - content.post.PostUpdated
   - content.post.PostSettingsUpdated

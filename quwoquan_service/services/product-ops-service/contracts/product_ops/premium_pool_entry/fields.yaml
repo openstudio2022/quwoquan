@@ -1,5 +1,6 @@
 description: 全局精选池条目聚合、命令和具名结果。
 fields:
+- {name: releaseAdmissions, type: '[]ReleasePremiumAdmission', constraints: [NOT_NULL], max_items: 16, role: authoritative_state, description: 同contentId聚合内有界Data候选准入成员，不是独立对象或新authority；普通内容为空，按完整tuple唯一，保留窗口满拒绝而不自动逐出rollback目标。}
 - {name: contentId, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: drop, ops_exposure: read, role: authoritative_state, reference: true}
 - {name: scope, type: enum, enum_ref: PremiumPoolScope, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
 - {name: status, type: enum, enum_ref: PremiumPoolEntryStatus, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
@@ -19,6 +20,7 @@ types:
     description: 受信 operator 提交全局精选池准入所需的最小质量证据；聚合身份从 contentId 派生。
     fields:
     - {name: contentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: drop, ops_exposure: write}
+    - {name: releaseSource, type: ReleaseCandidateObjectIdentity, constraints: [NULLABLE], description: Data准入必须提交exact source且经Content受信candidate query重验，普通内容必须null；不能依据caller supplySource猜资格。}
     - {name: scope, type: enum, enum_ref: PremiumPoolScope, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write, description: 省略时由服务端归一为 global}
     - {name: qualityScore, type: decimal, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
     - {name: qualityAdmission, type: enum, enum_ref: PremiumPoolQualityAdmission, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}

@@ -1,10 +1,21 @@
 backend: elasticsearch
 description: >-
-  SearchIndexView 文档以稳定 objectType:objectId 作为 Elasticsearch _id，并由 sourceVersion
+  Creator/Post/Homepage共用物理键release:<SHA256(canonical {releaseSliceBinding, objectType, objectId})>，不保留Creator专用键/reader/writer。
+  releaseSliceBinding与releaseSourceIdentity的tuple、slice、provider/schema全部显式keyword/数值mapping且参与查询前过滤。
+  sourceVersion/tombstone冲突只作用同完整候选分区；旧Data共享objectType:objectId须在受管迁移中移除或明确隐藏，不得归ordinary fallback。
+  reader/writer/admin只消费同一受管generation，proof至CAS窗口禁止mapping/alias切代和candidate GC；无此真实保护则不ready，不能以两次generation相等替代。
+  普通文档保留objectType:objectId物理键；全部Data候选sourceKind=release_candidate，并使用同一releaseSliceBinding过滤。
+  SearchReleaseCandidateDocument.physicalId保存摘要，键前缀不用于来源推断；原Creator和typed-slice历史分区只离线审计，新运行不读不迁入ready。
+  所有候选写入仅用Search角色writer，经sourceVersion
   external versioning 在 Elasticsearch shard 内原子裁决；严格更高版本才生效，低版本为 stale
   no-op，同版本仅在 canonical sourceDigest 相同时为 replay no-op，不同 digest 返回 typed conflict。
   删除写入保留 objectType/objectId/sourceVersion/sourceDigest/deleted=true 的持久 soft tombstone，
-  所有 canonical 查询排除 deleted=true。Mongo inbox/watermark 仅记录消费进度与
+  所有 canonical 查询仅接受 search_index_document 投影契约的完整合法 current 形状与 deleted=false，
+  缺字段/null/非法版本或摘要、未知sourceKind均不公开可见；term/vector/ids/count/facet/PIT一致，
+  ordinary必须显式来源且无候选绑定，Data须完整来源tuple/provider/schema并通过当前fence，不以缺字段放行。
+  历史bytes仅离线审计；保留合法Provider _id/_version与external version裁决，不直接删ES数据，
+  不隐式回填、不为跨越旧内部版本凭空抬高sourceVersion。owner按真实源版本重投或在独立新索引重建，
+  未有当前闭包/查询readback与整代切换证明则not-ready。Mongo inbox/watermark 仅记录消费进度与
   同版本载荷冲突，不作为 Elasticsearch 写入顺序真相源。
 resources:
   search_documents:
@@ -17,6 +28,29 @@ resources:
     required: true
 role: projection
 collections:
+  search_content_fence_receipts:
+    entity: SearchContentFenceReceipt
+    role: append_only
+    description: 不设TTL，eventDigest唯一且同scope/revision只有一份规范payload；持久记录在exact候选/proof只读对账或Content确切旧提交回执验证成功后写入，ACK失败重放不重复写。无payload/PII正文，不是active/proof新authority，任何未来revision/错tuple/缺receipt拒绝。
+    indexes:
+      - {name: uq_search_content_fence_event, keys: {eventDigest: 1}, unique: true}
+      - {name: uq_search_content_fence_revision, keys: {scopeDigest: 1, revision: 1}, unique: true}
+  search_content_post_inbox:
+    entity: SearchContentPostInbox
+    role: append_only
+    description: eventDigest为eventId的canonical sha256唯一键；payloadDigest绑定完整规范envelope/payload。Provider成功后才与对象checkpoint同事务写入；无PII正文、无TTL，未知/Data/fence未实现不写成功inbox。
+    indexes:
+      - name: uq_search_content_post_event
+        keys: {eventDigest: 1}
+        unique: true
+  search_content_post_checkpoints:
+    entity: SearchContentPostCheckpoint
+    role: projection
+    description: objectDigest绑定ordinary/content.post/objectId。sourceVersion单调，sourceVersion同版本不同projectionDigest拒绝，持久deletionVersion阻止旧写复活；先锁定同对象checkpoint事务再执行ES条件写，Provider成功Mongo失败依赖同摘要重放。非Data安全authority，不建未来fence空集合。
+    indexes:
+      - name: uq_search_content_post_checkpoint
+        keys: {objectDigest: 1}
+        unique: true
   search_user_profile_projection_inbox:
     entity: SearchUserProfileProjectionInbox
     role: append_only

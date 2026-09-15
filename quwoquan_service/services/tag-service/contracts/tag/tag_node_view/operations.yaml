@@ -1,3 +1,9 @@
+description: >-
+  Data taxonomy 的全部公共/内部查询及反馈 tagRef 校验共享同一 active reader：每次查询只通过
+  Content 正式 ReadActiveReleaseFence 服务鉴权 operation pin 一次完整 environment/sourceOwner/releaseId/manifestDigest/revision，
+  再重验本地 exact verified candidate 和节点闭包。stage 不影响 live，Content CAS/rollback 的新 revision 决定下一请求可见性。
+  无 Content pointer 时返回既有空/未命中结果；有 pointer 但候选缺失、身份或闭包漂移、transport/鉴权失败时返回既有 storage_read_failed，
+  不回退 prior taxonomy active、latest 或缓存，不共享 Content Mongo。既有 prior Activate 控制面不作为 Data 公共查询可见性来源。
 commercial_defaults:
   status: blocked
   block_reason: canonical operation awaits object-centered commercial migration

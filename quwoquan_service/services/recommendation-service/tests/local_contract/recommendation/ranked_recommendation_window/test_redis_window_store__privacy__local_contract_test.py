@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import pytest
 
 from internal.recommendation.ranked_recommendation_window.domain.model import (
+    ReleasePinnedQueryFence,
     RecommendationObjectCard,
     RankedCandidate,
     RankedRecommendationWindow,
@@ -17,6 +18,18 @@ from internal.recommendation.ranked_recommendation_window.infrastructure.redis_s
 
 
 _NOW = datetime(2026, 7, 31, 12, 1, tzinfo=timezone.utc)
+
+
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+def test_window_without_fence_is_rejected_not_upgraded():
+    import json
+    from internal.recommendation.ranked_recommendation_window.infrastructure.redis_store import WindowStoreError
+    store = RedisWindowStore(_Redis(), now=lambda: _NOW)
+    window = _window(window_id="missing-fence", subject_id="persona-fence")
+    payload = json.loads(store._encode_window(window))
+    del payload["contentFence"]
+    with pytest.raises(WindowStoreError):
+        store._decode_window(json.dumps(payload), expected_subject_id=window.subject_id, expected_window_id=window.window_id)
 
 
 class _Redis:
@@ -139,6 +152,7 @@ def _window(
 ) -> RankedRecommendationWindow:
     created_at = datetime(2026, 7, 31, 12, tzinfo=timezone.utc)
     return RankedRecommendationWindow.create(
+        content_fence=ReleasePinnedQueryFence(release=None, revision=0),
         window_id=window_id,
         subject_id=subject_id,
         scenario="content_feed",

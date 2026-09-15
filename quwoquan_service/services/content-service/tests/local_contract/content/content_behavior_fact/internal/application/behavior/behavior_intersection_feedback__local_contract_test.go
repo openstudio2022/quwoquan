@@ -125,7 +125,7 @@ func TestProcessBatchRoutesIntersectionExposureAndClearToSink(t *testing.T) {
 			IntersectionDimension: "relationship",
 			IntersectionClass:     "fact",
 			IntersectionSourceRef: "sharedFollowees",
-			IntersectionCohort:    "sha256:policy-cohort",
+			IntersectionCohort:    "sha256:e4b8f0283b87dd05783e9221d8f14d2afae1a49f878039efdd9218ec3fdea91e",
 		}
 	}
 	impressed := base("evt-ix-impressed", "impression")

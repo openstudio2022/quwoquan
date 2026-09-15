@@ -193,6 +193,14 @@
 - 视频时长、封面、资产顺序、摘要与来源说明从 importer 到 App 保持一致；Range 播放的真实验证独立于生产端测试，不以可探测文件替代可播放证据。
 - 发布与消费链的 research 专属 feed、readback、role/whitelist/session/attestation 与 isolation 分支在 Data/Service/App/Ops 全部退役；普通 JWT/OTP、跨业务共享的私有媒体、原图 view/save 配额及 signed_grant 安全能力不在退役范围。
 
+<a id="req-022"></a>
+### REQ-022 核心可用性诊断复用 Data ship consumer
+
+- `ship verify --verification-purpose core-diagnostic` 只消费同一 immutable release、prepared apply、completed activate、四 owner candidate/fenced readback 与 exact runtime candidate data-plane binding；不得省略、猜测或重建其中任一前驱。它是 Gamma 与 Prod prevalidate 的不可提升诊断，不写 `release-readiness.json`、EAF、promotion、lifecycle 或其它 readiness fact。
+- feature 选择只允许 `identity|feed-detail|search-recommendation|image-video-range|post-write-readback|chat-write-readback`。Data 复用当前 post/homepage/media/search/recommendation consumer verifier，只拥有前四项；后两项明确记为 `not_executed` 并交 Ops/App 汇总，不在 Data 内创建账号或业务写操作。未选择项也逐项记为 `not_executed`；任一由 Data 拥有且被选择的 required case 缺失或失败，诊断失败。
+- 诊断报告恒为 `nonPromotable=true`、`releaseEligibility=GATE_BLOCK`、`readinessWritten=false`，逐项只允许 `passed|failed|not_executed`。不要求 M10、前一环境 readiness、lifecycle Exit 或 premium stream，除非调用方显式选择其对应现役正式能力；默认 `ship verify` 行为完全不变，正式 readiness 对 M10、Beta 前驱、Exit 与 premium 的既有拒绝不得弱化。
+- Prod 只允许 `deployment-instance=prevalidate`、`data-mode=isolated` 且 runtime candidate target 为 `prod-hosted`；正式 Prod deployment instance、external/production binding 或无法证明隔离的输入在 consumer 请求前拒绝。Gamma 仍消费当前 `gamma-local` exact candidate binding。
+
 <a id="req-019"></a>
 ### REQ-019 独立发布仓按真实地域与同名组管理
 
@@ -446,6 +454,14 @@
 - WHEN 普通 guest 调用内容 feed/detail，另行调用普通身份与共享媒体授权边界。
 - THEN 公开内容不要求 research session、白名单或 attestation，旧专属 operation/config 不再注册；当前开发期不因缺少授权记录隐藏或拒绝，商用治理由 `OPEN-026` 跟踪，不新增本阶段运营开关。
 - THEN 普通 JWT/OTP、原图 view/save 配额、签名与到期校验保持原约束，非法请求仍拒绝，不因删除专属分支放宽共享权限。
+
+<a id="gwt-045"></a>
+### GWT-045 Gamma/Prod prevalidate 核心诊断不可提升
+
+- GIVEN 同一 release 已有 exact prepared apply、completed activate、candidate/fenced readback 与未漂移 runtime candidate data-plane binding。
+- WHEN Gamma 或隔离的 Prod prevalidate 选择核心 feature 运行 `ship verify --verification-purpose core-diagnostic`。
+- THEN Data 复用现役 guest identity、feed/detail、search/recommendation 与 image/video Range consumer verifier，报告六项闭集的 `passed|failed|not_executed`，并恒写 `nonPromotable=true`、`releaseEligibility=GATE_BLOCK`、`readinessWritten=false`；不写 `release-readiness.json`。
+- THEN 缺 selected Data required case、candidate/apply/activate/binding 漂移、Prod 非 prevalidate、Prod 非 isolated 或正式 Prod 输入均 fail closed；默认 formal verify 仍要求原 M10/Beta predecessor/lifecycle Exit/premium closure。
 
 <a id="gwt-034"></a>
 ### GWT-034 四载体 producer 里程碑按累计唯一对象形成独立 handoff

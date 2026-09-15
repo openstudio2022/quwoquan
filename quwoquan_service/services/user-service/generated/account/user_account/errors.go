@@ -10,6 +10,8 @@ import (
 //
 //nolint:gochecknoglobals
 var (
+	ErrCreatorSearchInvalidCandidate     = errors.New("USER.CREATOR_SEARCH.invalid_candidate")
+	ErrCreatorSearchUnavailable          = errors.New("USER.CREATOR_SEARCH.unavailable")
 	ErrUserNotFound                      = errors.New("USER.USER.not_found")
 	ErrUnauthorized                      = errors.New("USER.USER.unauthorized")
 	ErrForbidden                         = errors.New("USER.USER.forbidden")
@@ -26,6 +28,18 @@ var (
 	ErrProfileQrTokenInvalid             = errors.New("USER.PROFILE.qr_token_invalid")
 	ErrProfileQrTokenExpired             = errors.New("USER.PROFILE.qr_token_expired")
 )
+
+// AppErrorFromCreatorSearchInvalidCandidate returns *AppError for USER.CREATOR_SEARCH.invalid_candidate (user_message from errors.yaml).
+func AppErrorFromCreatorSearchInvalidCandidate(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrCreatorSearchInvalidCandidate.Error()))
+	return rerrors.NewAppError(code, "创作者候选身份或公开闭包无效", debugMessage).WithMetadata("invalid_candidate", 422).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromCreatorSearchUnavailable returns *AppError for USER.CREATOR_SEARCH.unavailable (user_message from errors.yaml).
+func AppErrorFromCreatorSearchUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrCreatorSearchUnavailable.Error()))
+	return rerrors.NewAppError(code, "创作者候选读取暂时不可用", debugMessage).WithMetadata("unavailable", 503).WithRecoveryDirective("retry", "snackbar", 5)
+}
 
 // AppErrorFromUserNotFound returns *AppError for USER.USER.not_found (user_message from errors.yaml).
 func AppErrorFromUserNotFound(debugMessage string) *rerrors.AppError {

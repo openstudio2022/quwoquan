@@ -156,7 +156,8 @@ func (c *Client) Search(ctx context.Context, index string, body map[string]any) 
 	if strings.TrimSpace(index) == "" {
 		index = c.index
 	}
-	EnsureNotDeletedSearchBody(body)
+	EnsureCurrentSearchBody(body)
+	filterCreatorSearch(body, rtsearch.CreatorQueryBinding(ctx))
 	var path string
 	if _, hasPIT := body["pit"]; hasPIT {
 		// A PIT search must not carry an index path or preference: the snapshot
@@ -503,10 +504,7 @@ func (c *Client) CheckSearchReady(ctx context.Context) error {
 			"size":             1,
 			"track_total_hits": false,
 			"_source":          false,
-			"query": map[string]any{"bool": map[string]any{
-				"must":     []map[string]any{{"match_all": map[string]any{}}},
-				"must_not": []map[string]any{NotDeletedQuery()},
-			}},
+			"query":            CurrentDocumentQuery(),
 		},
 		"application/json",
 	)

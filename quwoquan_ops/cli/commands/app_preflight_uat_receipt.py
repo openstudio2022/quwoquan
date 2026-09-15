@@ -178,8 +178,10 @@ def build_app_content_uat_receipt(
     issues: list[str],
     dry_run: bool,
     canonical_checksum: Callable[[dict[str, Any]], str],
+    verification_purpose: str = "formal",
+    selected_suites: Sequence[str] = (),
 ) -> dict[str, Any]:
-    if status not in {"planned", "gate_block", "complete"}:
+    if status not in {"planned", "gate_block", "complete", "diagnostic_complete"}:
         raise ValueError("App content UAT projection status is invalid")
     first = preflights[0] if preflights else {}
     first_plan = (
@@ -195,11 +197,13 @@ def build_app_content_uat_receipt(
     }
     if set(raw_authority_projection) != required_projection_fields:
         raise ValueError("App content UAT raw authority projection is invalid")
-    if status == "complete" and issues:
+    if status in {"complete", "diagnostic_complete"} and issues:
         raise ValueError("complete UAT projection cannot contain integrity gaps")
     projection_details = (
         ["dry-run planned expected raw authority coverage; no raw result was written"]
         if dry_run and not issues
+        else ["core diagnostic execution complete; no promotion authority emitted"]
+        if status == "diagnostic_complete"
         else ["raw authority projection complete"]
         if status == "complete"
         else list(issues)
@@ -211,10 +215,83 @@ def build_app_content_uat_receipt(
         "platform": platform,
         "deviceId": device_id,
         "launchPolicy": "immutable_candidate",
+        "verificationPurpose": verification_purpose,
         "uatProfile": str(uat_profile.get("profile") or ""),
         "deviceClass": str(uat_profile.get("deviceClass") or ""),
         "deviceRegistered": uat_profile.get("deviceRegistered"),
-        "nonPromotable": uat_profile.get("nonPromotable"),
+        "nonPromotable": (
+            True if verification_purpose == "core_diagnostic"
+            else uat_profile.get("nonPromotable")
+        ),
+        "suitePlan": {
+            "selected": list(selected_suites),
+            "expectedCoverage": list(selected_suites),
+            "notExecuted": [
+                name for name in (
+                    "release-sample-matrix", "controlled-edge-recovery",
+                    "profile-journey", "message-home", "premium-video-book",
+                ) if name not in selected_suites
+            ],
+            "outOfScope": [
+                "complete_uat", "TargetUatBinding", "EnvironmentAcceptanceFact",
+                "promotion_authority",
+            ] if verification_purpose == "core_diagnostic" else [],
+        },
+        "diagnosticBindings": (
+            {
+                "runtimeCandidates": {
+                    str(item.get("target") or ""): {
+                        "candidateDigest": str(item.get("candidateDigest") or ""),
+                        "packageDigest": str(item.get("packageDigest") or ""),
+                        "sourceCapsuleManifestRef": str(item.get("sourceCapsuleManifestRef") or ""),
+                    }
+                    for item in runtime_bindings
+                    if str(item.get("target") or "")
+                },
+                "startupReceipts": {
+                    target: {
+                        "launchAttemptRef": str(binding.get("launchAttemptRef") or ""),
+                        "launchReportRef": str(binding.get("launchReportRef") or ""),
+                        "startupTerminalEvidenceRef": str(binding.get("startupTerminalEvidenceRef") or ""),
+                        "artifactDigest": str(binding.get("artifactDigest") or ""),
+                        "runtimeConfigPackageDigest": str(binding.get("runtimeConfigPackageDigest") or ""),
+                        "trustDigest": str(binding.get("trustDigest") or ""),
+                    }
+                    for target, binding in launch_bindings.items()
+                },
+                "releaseReadbacks": {
+                    str(item.get("target") or ""): {
+                        "releaseId": str(item.get("releaseId") or ""),
+                        "manifestDigest": str(item.get("manifestDigest") or ""),
+                        "readinessReceiptRef": str(item.get("readinessReceiptRef") or ""),
+                        "readinessReceiptDigest": str(item.get("readinessReceiptDigest") or ""),
+                        "activationEnvelope": dict(item.get("activationEnvelope") or {}),
+                        "activationEnvelopeDigest": str(item.get("activationEnvelopeDigest") or ""),
+                    }
+                    for item in preflights
+                    if str(item.get("target") or "")
+                },
+            }
+            if verification_purpose == "core_diagnostic"
+            else {}
+        ),
+        "evidenceRefs": (
+            [
+                {
+                    "target": str(item.get("target") or ""),
+                    "suite": str(item.get("suite") or ""),
+                    "reportRef": str(item.get("reportRef") or ""),
+                    "screenshotDigest": str((item.get("evidence") or {}).get("screenshotDigest") or ""),
+                    "route": str(((item.get("evidence") or {}).get("screenshotMarker") or {}).get("route") or ""),
+                    "objectRefs": list((item.get("evidence") or {}).get("objectRefs") or []),
+                    "requestRefs": list((item.get("evidence") or {}).get("requestRefs") or []),
+                    "traceRefs": list((item.get("evidence") or {}).get("traceRefs") or []),
+                }
+                for item in runs
+            ]
+            if verification_purpose == "core_diagnostic"
+            else []
+        ),
         "packageBaselines": {
             str(item.get("target") or ""): str(item.get("candidateDigest") or "")
             for item in runtime_bindings

@@ -255,6 +255,31 @@ def _stable_flutter_identity(monkeypatch: pytest.MonkeyPatch) -> None:
         ),
     )
 
+    def managed(operation: str, *, staging: Path, **_kwargs):
+        if operation == "load-active":
+            bundle = dependency_bundle.load_active_dependency_bundle(repo_root=package_reuse.ROOT)
+            return {"manifests": input_capsule._dependency_manifest_payloads(bundle)}
+        if operation == "materialize-active":
+            snapshots = input_capsule.load_managed_dependency_snapshots(
+                repo_root=package_reuse.ROOT
+            )
+            return {
+                "records": input_capsule.copy_dependency_bundle_to_capsule(
+                    snapshots=snapshots, capsule_root=staging
+                )
+            }
+        if operation == "verify-full":
+            verified = input_capsule.verify_package_input_capsule(
+                staging, expected_snapshot=_kwargs["expected_snapshot"]
+            )
+            return {
+                "baselineId": verified["baselineId"],
+                "deploymentInputDigest": verified["deploymentInputDigest"],
+            }
+        raise AssertionError(operation)
+
+    monkeypatch.setattr(input_capsule, "_run_capsule_managed_operation", managed)
+
 
 def test_package_capsule_projects_only_the_managed_locked_pub_tree(
     tmp_path: Path,

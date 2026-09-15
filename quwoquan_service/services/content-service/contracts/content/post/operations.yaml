@@ -99,6 +99,150 @@ externalDependencies:
     scenes: [general, realtime]
 runtime_entrypoints: []
 api_routes:
+  - method: POST
+    path: /internal/content/post-candidate-safety:query
+    operation: ReadPostCandidateSafety
+    actor: none
+    commercial: {status: blocked, block_reason: Post安全状态初始化及exact候选安全reader尚未实现, gap_id: CONTENT_POST_CANDIDATE_SAFETY, target_story: canonical-search-contract}
+    application: {kind: query, facet: PostCandidateSafetyQueryFacade, method: read, reader: PostCandidateSafetyReader, slice: PostCandidateSafetyResult}
+    authorization: {principal: service, scopes: [content.release.prepare], ownership_policy: exact_environment_source_owner}
+    security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
+    request_entity: ReadPostCandidateSafetyQuery
+    request_body_kind: object
+    response_entity: PostCandidateSafetyResult
+    error_codes: [CONTENT.RELEASE.query_barrier_invalid, CONTENT.RELEASE.query_barrier_not_ready, CONTENT.RELEASE.query_barrier_unavailable]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_post_candidate_safety_read, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 1200, availability_percent: 99.9}
+    description: >-
+      请求仅接受当前部署environment、sourceOwner=qwq_data的完整release及source snapshotDigest；
+      读取既有verified candidate完整Post集合和显式safetyBinding，按Post独立安全密钥派生objectDigest逐项匹配PostSafetyState。
+      缺任何状态/绑定/显式初始化或主体关闭/恢复authority不可证为not-ready；restricted/terminated或旧安全revision同样not-ready，身份/摘要/集合漂移invalid，依赖不可读unavailable。
+      不静默过滤失效对象、不签发新的Search proof、不写初始化/记录、不取得CAS执行权；空集合只有verified原源确认为零才可成立。
+      activation仍必须在自身Mongo事务内对同键safety记录真实写入并匹配revision，不能把本次只读结果作为免检token。
+  - method: POST
+    path: /internal/content/release-candidates:query
+    operation: ReadPostReleaseCandidate
+    actor: none
+    commercial: {status: blocked, block_reason: verified候选公开快照读取与闭包证明尚待实现, gap_id: CONTENT_RELEASE_SOURCE_QUERY, target_story: environment-topology-and-packaging}
+    application: {kind: query, facet: PostReleaseCandidateQueryFacade, method: read, reader: PostReleaseCandidateReader, slice: ReleasePostCandidateSnapshot}
+    authorization: {principal: service, scopes: [content.release.source.read], ownership_policy: exact_environment_source_owner}
+    security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+    reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
+    request_entity: ReadPostReleaseCandidateQuery
+    request_body_kind: object
+    response_entity: ReleasePostCandidateSnapshot
+    error_codes: [CONTENT.RELEASE.query_barrier_invalid, CONTENT.RELEASE.query_barrier_not_ready, CONTENT.RELEASE.query_barrier_unavailable]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_release_source_read, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 2500, availability_percent: 99.9}
+    description: 仅受信release准备调用，校验部署环境和exact tuple；缺verified源not_ready，身份或摘要漂移invalid，不可读unavailable。无active可以查询，不写索引或准备状态。
+  - method: POST
+    path: /internal/content/release-queries:prepare
+    operation: PreparePostReleaseQueries
+    actor: none
+    commercial: {status: blocked, block_reason: Post/Homepage准备与Recommendation durable候选publication尚待实现, gap_id: CONTENT_RELEASE_QUERIES_PREPARE, target_story: environment-topology-and-packaging}
+    application: {kind: command, facet: ContentReleasePreparationCommandFacet, method: prepareRequiredQueries, aggregate_owner: Post, mutation_target: Post, invariant_target: Post}
+    authorization: {principal: service, scopes: [content.release.prepare], ownership_policy: environment_release_owner}
+    security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+    reliability: {timeout_ms: 70000, cancellation: supported, retry_mode: idempotent, max_attempts: 1, idempotency: required}
+    request_entity: PreparePostReleaseQueriesCommand
+    request_body_kind: object
+    response_entity: PostReleaseQueryPreparationResult
+    error_codes: [CONTENT.RELEASE.query_barrier_invalid, CONTENT.RELEASE.query_barrier_not_ready, CONTENT.RELEASE.query_barrier_unavailable]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_release_queries_prepare, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 65000, availability_percent: 99.9}
+    description: 四binding的slice为creator_search/post_search/homepage_search/recommendation，release相同且generation受管匹配。User/Content/Entity完整源由owner query取得，三类搜索共用PrepareSearchRelease/ReadSearchReleasePreparation；同binding不同输入拒绝。Recommendation由PostReleaseCandidatePrepared唯一durable路径消费；受理不等于ready，失败先query再显式恢复，无active前提。无旧Creator-only入口，所有客户端和测试统一升级。
+  - method: POST
+    path: /internal/content/release-queries:query
+    operation: ReadRequiredReleaseQueries
+    actor: none
+    commercial: {status: blocked, block_reason: 统一真实owner evaluator与完整required proof尚待实现, gap_id: CONTENT_RELEASE_QUERIES_EVALUATOR, target_story: environment-topology-and-packaging}
+    application: {kind: query, facet: RequiredReleaseQueriesQueryFacade, method: read, reader: RequiredReleaseQueriesReader, slice: RequiredReleaseQueriesView}
+    authorization: {principal: service, scopes: [content.release.prepare], ownership_policy: environment_release_owner}
+    security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+    reliability: {timeout_ms: 8000, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
+    request_entity: ReadRequiredReleaseQueriesQuery
+    request_body_kind: object
+    response_entity: RequiredReleaseQueriesView
+    error_codes: [CONTENT.RELEASE.query_barrier_invalid, CONTENT.RELEASE.query_barrier_not_ready, CONTENT.RELEASE.query_barrier_unavailable]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_release_queries_read, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 7000, availability_percent: 99.9}
+    description: 仅组合当前owner真实源/四域/媒体/必要详情/Search三slice和Recommendation home/premium证明。缺失或未完成not_ready，漂移invalid，依赖不可读unavailable；不存聚合ready、不推进、不以此查询返回代替activation短窗口受管generation保护。还必须复用PostCandidateSafetyReader核验当前candidate安全绑定及全部对象状态，缺失/旧revision/否定not-ready；查询不取得安全fence写权。
+  - method: POST
+    path: /internal/content/releases:activate-at-search-barrier
+    operation: ActivateContentReleaseAtSearchBarrier
+    actor: none
+    commercial: {status: blocked, block_reason: 完整候选query barrier与activation统一admission尚待实现和真实回滚验证, gap_id: CONTENT_RELEASE_QUERY_BARRIER, target_story: canonical-search-contract}
+    application: {kind: command, facet: ContentReleaseActivationCommandFacet, method: activateAtSearchBarrier, aggregate_owner: Post, mutation_target: Post, invariant_target: Post}
+    authorization: {principal: service, scopes: [content.release.activate], ownership_policy: environment_release_owner}
+    security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+    reliability: {timeout_ms: 10000, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: required}
+    error_codes: [CONTENT.RELEASE.query_barrier_invalid, CONTENT.RELEASE.query_barrier_not_ready, CONTENT.RELEASE.query_barrier_unavailable, CONTENT.RELEASE.activation_conflict, CONTENT.RELEASE.activation_ambiguous]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_release_query_barrier_activate, trace: true, attributes: [outcome, action]}
+    slo: {latency_p95_ms: 8000, availability_percent: 99.9}
+    request_entity: ActivateContentReleaseAtSearchBarrierCommand
+    request_body_kind: object
+    response_entity: ContentActiveReleaseFence
+    description: >-
+      环境owner显式选目标，Content不选release。输入expected使用ReadActiveReleaseFence的原typed结果，完整性不变。
+      CAS前回读Search preparation completed proof，核对binding/snapshotDigest/proofDigest及当前Provider查询闭包，并重验User候选sourceClosure/objectSet；
+      缺失/partial为query_barrier_not_ready，身份/摘要/代际漂移为query_barrier_invalid，不可读为query_barrier_unavailable，均不执行CAS。
+      Creator proof不替代其余四域/媒体/Post/Entity/Recommendation required barrier；同application RequiredReleaseQueries evaluator从部署binding派生唯一当前目标并实时query各owner，不从caller补造proof，其缺失同样not_ready。所有CLI/importer/HTTP activation及rollback共用此admission无绕过。
+      验证proof至CAS前还须核验PostCandidateSafetyBinding；在正式Mongo事务内对全部引用对象安全记录按objectDigest固定顺序真实递增fenceGeneration并匹配allowed及绑定safetyRevision，缺记录/旧revision/否定不得物化或CAS，不能只读否定表避免不了write skew。此检查在重放/rollback入口同样执行，旧receipt不能授予当前安全资格。验证proof至CAS必须持有受管Provider/schema generation持续保护与candidate保留，保护authority尚未生产交付，缺失保持not_ready；不得以caller boolean/token、假签名锁、VerifyHeld接口存在或首尾相等采样冒充保护。所有切代/GC与CAS路径必须共同执行过期fencing，安全撤回不被保护延期。premium有效时间覆盖有界窗口，撤权仍即时fail closed，Content cursor/window绑定完整tuple+revision。
+      完整准入后复用Content已有事务及expected tuple+revision CAS，冲突409且不改变live；同事务将ContentReleaseFenceChanged的before/after、eventId及payloadDigest写入既有active stage receipt与outbox，不借PostPublished/PostDeleted表达转换。action=rollback只允许保留且当前安全合法的已验证previous目标，生成更大revision；任何包含已删除/撤权对象的immutable候选整体not_ready，不删减集合沿用旧proof，合法新候选须重新prepare。
+      CAS成功后exact readback失败或结果未知返回activation_ambiguous；必须先ReadActiveReleaseFence再显式恢复，不能自动重发CAS或猜旧pointer。
+      幂等键绑定目标、expected、action及proof摘要，只有已有同意图成功receipt且当前pointer仍为该结果才可返回重放，不再次CAS。
+  - method: POST
+    path: /internal/content/release-commit-receipts:query
+    operation: ReadContentReleaseCommitReceipt
+    actor: none
+    commercial: {status: blocked, block_reason: 既有active stage receipt的exact transition持久化及只读reader尚未实现, gap_id: CONTENT_RELEASE_COMMIT_RECEIPT, target_story: canonical-search-contract}
+    application: {kind: query, facet: ContentReleaseCommitReceiptQueryFacade, method: read, reader: ContentReleaseCommitReceiptReader, slice: ContentReleaseCommitReceipt}
+    authorization: {principal: service, scopes: [content.release.fence.read], ownership_policy: exact_environment_source_owner}
+    security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+    reliability: {timeout_ms: 500, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
+    request_entity: ReadContentReleaseCommitReceiptQuery
+    request_body_kind: object
+    response_entity: ContentReleaseCommitReceipt
+    error_codes: [CONTENT.RELEASE.query_barrier_invalid, CONTENT.RELEASE.query_barrier_not_ready, CONTENT.RELEASE.query_barrier_unavailable]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_release_commit_receipt_read, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 400, availability_percent: 99.9}
+    description: >-
+      按部署匹配的release及完整expected fence复用releaseActivationAttemptID定位data_release_stage_receipts的stage=active回执。
+      只有status=passed、checkpoint=live-closure-and-active-pointer-cas-committed及保存的完整transition/eventId/payloadDigest与请求一致时返回；
+      before必须与expected完全相等，after必须匹配release且revision=expected.revision+1。缺回执或缺原始transition为not_ready，错身份/摘要为invalid，存储不可读为unavailable。
+      不新建ledger，不补历史字段，不从当前pointer/recordedAt/expectedRevision推导历史after，不推进、不生成ready或保护资格。
+  - method: GET
+    path: /internal/content/active-release-fence
+    operation: ReadActiveReleaseFence
+    actor: account
+    commercial: {status: ready}
+    application: {kind: query, facet: ActiveReleaseFenceQueryFacade, method: readActiveReleaseFence, reader: ActiveReleaseFenceReader, slice: ContentActiveReleaseFenceSlice}
+    authorization: {principal: service, scopes: [content.release.fence.read], ownership_policy: exact_environment_source_owner}
+    reliability: {timeout_ms: 500, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
+    error_codes: [CONTENT.USER.invalid_argument, CONTENT.SYSTEM.storage_read_failed]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_active_release_fence_read, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 200, availability_percent: 99.9}
+    security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+    description: >-
+      只读 Content 唯一 active pointer，按 environment/sourceOwner exact key 返回一次 pin 的完整 tuple+revision。
+      不存在时 found=false，保留请求 environment/sourceOwner，releaseId/manifestDigest 为空、revision/projectionVersion 为零、activatedAt 为 null。
+      存在时所有 tuple 字段、正 revision/projectionVersion、activatedAt 必须完整且与查询相符；legacy、部分状态或漂移返回 storage_read_failed，不回退 prior/latest。
+      本服务只接受与部署环境一致的 environment 及 sourceOwner=qwq_data；不暴露 Mongo、不执行 activation，不缓存或自动重试。
+    request_entity: ReadActiveReleaseFenceQuery
+    request_body_kind: none
+    request_bindings:
+      query:
+        - {name: environment, field: environment, required: true}
+        - {name: sourceOwner, field: sourceOwner, required: true}
+    response_entity: ContentActiveReleaseFence
   - method: GET
     path: /content/feed
     operation: GetFeed
@@ -577,7 +721,13 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    description: 删除内容（级联下架作者分发与用户转发并写入墓碑）
+    description: >-
+      删除内容，仍仅post_owner本人授权，不新增任意service删除权限，不为平台Creator构造登录Persona。
+      owning Load/Commit须携带PostSourceCommitMetadata，Data来源由实际行及部署环境读出；当前Data拒写保护只有真实安全事务/来源保留实现后才能移除。
+      同一Post CAS事务提交状态、sourceVersion=expectedObjectVersion+1的PostDeleted、命令receipt、PostSafetyState terminated及递增safetyRevision/fenceGeneration，并按原端口追加30天410墓碑。
+      重放同意图不生成第二安全决定，冲突或任一步失败全部回滚；否定针对同来源canonical对象的全部保留候选，禁止把事件源tuple当唯一目标，既有candidate原文/摘要不改写。
+      无安全状态/密钥/主体关闭恢复authority或无合法actor必须typed拒绝，不能称已删除；平台Creator永久删除actor权限缺口仍阻断。
+      隐私清理/外部媒体完成独立判定，不把本地事务提交冒充跨服务清理成功。
     request_entity: DeletePostCommand
     request_body_kind: none
     response_entity: PostDeletionReceipt
@@ -635,7 +785,11 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    description: 更新发布后仍可调整的 Post 设置（visibility / assistantUsePolicy / homepage reference）；Circle 分发只经 CirclePostPlacement command
+    description: >-
+      更新发布后Post设置，Circle分发仍只经CirclePostPlacement command；原post_owner授权不变。
+      真实公开资格收紧与原Post CAS/receipt/PostSettingsUpdated同事务写PostSafetyState restricted并递增safetyRevision，event sourceVersion取同次对象版本。
+      只有原合法owner命令及已核实当前审核/关闭资格可重新允许restricted状态，terminated不得恢复；重新允许递增安全revision但不刷新旧candidate绑定。
+      不影响安全资格的设置只携带当前safetyRevision，不额外递增；缺安全状态/来源或恢复authority拒绝，不在consumer补默认。
     request_entity: UpdatePostSettingsRequest
     request_body_kind: object
     response_entity: ContentPostProjection

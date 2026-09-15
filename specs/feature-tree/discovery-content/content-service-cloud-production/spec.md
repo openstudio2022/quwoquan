@@ -77,3 +77,8 @@
 - 准出影响：`track`
 - 影响或价值：需要持续证明 release、真实 importer、服务存储和 App Remote 在目标环境中闭环。
 - 完成判定：`SIT-001` 在匹配环境中具有有效 `api_integration` 与 `user_acceptance` 的 `spec_ref`。
+
+### Gamma local Post safety 冷启动授权例外
+
+- `gamma-local` 的 target-owned startup producer 可在目标执行锁内复用现役 local-managed Environment Ops Ed25519 私钥 provisioning 与仓内 keyring，先验证 exact source-allocation current，再独占创建 Content account-closure 的独立 subject key 与九集合并以真实 UUID/全量 majority readback 形成闭包，最后签发逐项绑定 environment、target、candidateDigest、dataPlaneBindingDigest、startupAttemptId、runtimeGeneration 与 evidencePredecessor 的初始化授权并写 canonical `startup.json`。
+- 该例外只属于 `gamma-local`；`prod`/`prod-hosted` 仍只消费仓外正式 authority 的签名材料，本仓入口必须拒绝本地签发且不得 fallback。create-once 重复执行只做 strict verify，不改任何材料字节；前驱缺失、漂移或半成品均 typed block 并保留诊断材料。

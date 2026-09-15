@@ -9,6 +9,7 @@ import (
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
+	events "quwoquan_service/services/content-service/generated/content/post/contract/event"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
@@ -42,7 +43,11 @@ func (publisher *PostLifecycleStreamPublisher) Publish(ctx context.Context, even
 	if !json.Valid(event.Payload) {
 		return fmt.Errorf("post lifecycle event payload is not valid JSON")
 	}
-	_, err := publisher.redis.XAdd(ctx, PostLifecycleStream, map[string]string{
+	stream := PostLifecycleStream
+	if event.EventType == events.PostReleaseCandidatePrepared {
+		stream = "events.content.post_release_candidate"
+	}
+	_, err := publisher.redis.XAdd(ctx, stream, map[string]string{
 		"eventId":          event.EventID,
 		"eventType":        event.EventType,
 		"aggregateType":    event.AggregateType,
@@ -54,10 +59,10 @@ func (publisher *PostLifecycleStreamPublisher) Publish(ctx context.Context, even
 	if err != nil {
 		return fmt.Errorf("append post lifecycle stream: %w", err)
 	}
-	if err := publisher.redis.XTrimOlderThan(ctx, PostLifecycleStream, PostLifecycleStreamRetention); err != nil {
+	if err := publisher.redis.XTrimOlderThan(ctx, stream, PostLifecycleStreamRetention); err != nil {
 		return fmt.Errorf("trim post lifecycle stream retention: %w", err)
 	}
-	if err := publisher.redis.Expire(ctx, PostLifecycleStream, PostLifecycleStreamRetention); err != nil {
+	if err := publisher.redis.Expire(ctx, stream, PostLifecycleStreamRetention); err != nil {
 		return fmt.Errorf("bound inactive post lifecycle stream retention: %w", err)
 	}
 	return nil

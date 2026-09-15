@@ -40,11 +40,6 @@ _COMMANDS = {
         "register_parser",
         "canonical immutable release",
     ),
-    "ship": _CommandDefinition(
-        "content.release.environment.cli",
-        "register_parser",
-        "immutable release 环境交付与 readback",
-    ),
     "template": _CommandDefinition(
         "content.templates.handler",
         "register_parser",

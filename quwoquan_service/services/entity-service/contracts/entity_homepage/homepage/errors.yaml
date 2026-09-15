@@ -2,6 +2,33 @@ description: 'entity 域共享主页错误码。格式：MODULE.KIND.REASON。
 
   '
 errors:
+- code: ENTITY.RELEASE.candidate_invalid
+  reason: candidate_invalid
+  http_status: 422
+  emitted_by: [{surface: http, operations: [ReadHomepageReleaseCandidate]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  go_const: ErrReleaseCandidateInvalid
+  dart_const: releaseCandidateInvalid
+  user_message: {zh: 候选身份或闭包不一致, en: Candidate identity or closure mismatch}
+- code: ENTITY.RELEASE.candidate_not_ready
+  reason: candidate_not_ready
+  http_status: 409
+  emitted_by: [{surface: http, operations: [ReadHomepageReleaseCandidate]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  go_const: ErrReleaseCandidateNotReady
+  dart_const: releaseCandidateNotReady
+  user_message: {zh: 候选尚未完成验证, en: Candidate is not verified}
+- code: ENTITY.RELEASE.candidate_unavailable
+  reason: candidate_unavailable
+  http_status: 503
+  emitted_by: [{surface: http, operations: [ReadHomepageReleaseCandidate]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  go_const: ErrReleaseCandidateUnavailable
+  dart_const: releaseCandidateUnavailable
+  user_message: {zh: 候选读取暂不可用, en: Candidate read unavailable}
 - code: ENTITY.USER.invalid_argument
   reason: invalid_argument
   http_status: 400

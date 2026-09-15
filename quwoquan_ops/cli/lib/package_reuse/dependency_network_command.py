@@ -5,7 +5,9 @@ from __future__ import annotations
 import codecs
 import os
 import re
+import select
 import signal
+import stat
 import subprocess
 import tempfile
 import time
@@ -14,6 +16,8 @@ from pathlib import Path
 
 _PROCESS_GROUP_GRACE_SECONDS = 2.0
 _PROCESS_GROUP_KILL_GRACE_SECONDS = 2.0
+_MANAGED_PARENT_CONTROL_FD_ENV = "QWQ_INTERNAL_MANAGED_PARENT_CONTROL_FD"
+_MANAGED_DEADLINE_ENV = "QWQ_INTERNAL_MANAGED_DEADLINE_MONOTONIC"
 _DETERMINISTIC_TLS_MARKERS = (
     "certificate verify failed",
     "hostname mismatch",
@@ -62,6 +66,68 @@ _GIT_FETCH_CONTEXT = re.compile(
 
 class DependencyProcessGroupCleanupError(RuntimeError):
     """The exact dependency subprocess group did not converge after SIGKILL."""
+
+
+class ManagedSubprocessCancelled(BaseException):
+    """The owning process vanished or was terminated; children are already reaped."""
+
+    def __init__(self, *, signum: int = signal.SIGTERM) -> None:
+        super().__init__(f"managed subprocess cancelled by signal {signum}")
+        self.signum = signum
+
+
+def process_group_cleanup_grace() -> dict[str, float]:
+    return {
+        "termSeconds": _PROCESS_GROUP_GRACE_SECONDS,
+        "killSeconds": _PROCESS_GROUP_KILL_GRACE_SECONDS,
+    }
+
+
+def _managed_parent_control_fd() -> int | None:
+    raw = str(os.environ.get(_MANAGED_PARENT_CONTROL_FD_ENV) or "").strip()
+    try:
+        descriptor = int(raw)
+    except ValueError:
+        return None
+    if descriptor < 3:
+        return None
+    try:
+        metadata = os.fstat(descriptor)
+    except OSError:
+        return None
+    return descriptor if stat.S_ISFIFO(metadata.st_mode) else None
+
+
+def has_managed_parent_capability() -> bool:
+    """Accept only an inherited live pipe, never an ambient environment claim."""
+
+    descriptor = _managed_parent_control_fd()
+    if descriptor is None:
+        return False
+    readable, _, _ = select.select([descriptor], [], [], 0)
+    if not readable:
+        return True
+    try:
+        return os.read(descriptor, 1) != b""
+    except OSError:
+        return False
+
+
+def _inherited_deadline() -> float | None:
+    raw = str(os.environ.get(_MANAGED_DEADLINE_ENV) or "").strip()
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def remaining_managed_deadline_seconds(default_seconds: float) -> float:
+    deadline = time.monotonic() + default_seconds
+    inherited = _inherited_deadline()
+    if inherited is not None:
+        deadline = min(deadline, inherited)
+    return max(0.001, deadline - time.monotonic())
 
 
 def transient_network_cause(output: object) -> str | None:
@@ -196,8 +262,9 @@ def run_managed_subprocess(
     stderr: int,
     timeout: float,
     on_stderr: Callable[[str], None] | None = None,
+    on_stdout: Callable[[str], None] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run one command in its own process group and reap the entire tree on timeout."""
+    """Run one owned session and propagate cancellation through nested sessions."""
 
     if (
         not text
@@ -205,75 +272,116 @@ def run_managed_subprocess(
         or stderr not in {subprocess.PIPE, subprocess.STDOUT}
     ):
         raise ValueError("managed dependency subprocess requires captured text output")
-    with (
-        tempfile.TemporaryFile() as stdout_file,
-        tempfile.TemporaryFile() as stderr_file,
-    ):
-        process = subprocess.Popen(
-            list(command),
-            cwd=str(cwd),
-            env=dict(env),
-            stdout=stdout_file,
-            stderr=(stderr_file if stderr == subprocess.PIPE else subprocess.STDOUT),
-            start_new_session=True,
-        )
-        deadline = time.monotonic() + timeout
-        stderr_offset = 0
-        stderr_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    inherited_control = _managed_parent_control_fd()
+    inherited_deadline = _inherited_deadline()
+    deadline = time.monotonic() + timeout
+    if inherited_deadline is not None:
+        deadline = min(deadline, inherited_deadline)
+    child_control_read, child_control_write = os.pipe()
+    child_env = dict(env)
+    child_env[_MANAGED_PARENT_CONTROL_FD_ENV] = str(child_control_read)
+    child_env[_MANAGED_DEADLINE_ENV] = repr(deadline)
+    previous_sigterm = None
+    installed_sigterm = False
 
-        def emit_stderr(*, final: bool) -> None:
-            nonlocal stderr_offset
-            if on_stderr is None or stderr != subprocess.PIPE:
-                return
-            encoded, stderr_offset = _read_output_since(stderr_file, stderr_offset)
-            chunk = stderr_decoder.decode(encoded, final=final)
-            if not chunk:
-                return
+    def cancel_on_sigterm(signum: int, _frame: object) -> None:
+        raise ManagedSubprocessCancelled(signum=signum)
+
+    if signal.getsignal(signal.SIGTERM) == signal.SIG_DFL:
+        previous_sigterm = signal.signal(signal.SIGTERM, cancel_on_sigterm)
+        installed_sigterm = True
+    try:
+        with (
+            tempfile.TemporaryFile() as stdout_file,
+            tempfile.TemporaryFile() as stderr_file,
+        ):
             try:
-                on_stderr(chunk)
-            except BaseException:
-                _stop_process_group(process)
-                raise
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                _stop_process_group(process)
+                process = subprocess.Popen(
+                    list(command),
+                    cwd=str(cwd),
+                    env=child_env,
+                    stdout=stdout_file,
+                    stderr=(stderr_file if stderr == subprocess.PIPE else subprocess.STDOUT),
+                    start_new_session=True,
+                    pass_fds=(child_control_read,),
+                )
+            finally:
+                os.close(child_control_read)
+            stdout_offset = 0
+            stderr_offset = 0
+            stdout_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+            stderr_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+
+            def emit_stdout(*, final: bool) -> None:
+                nonlocal stdout_offset
+                if on_stdout is None:
+                    return
+                encoded, stdout_offset = _read_output_since(stdout_file, stdout_offset)
+                chunk = stdout_decoder.decode(encoded, final=final)
+                if chunk:
+                    on_stdout(chunk)
+
+            def emit_stderr(*, final: bool) -> None:
+                nonlocal stderr_offset
+                if on_stderr is None or stderr != subprocess.PIPE:
+                    return
+                encoded, stderr_offset = _read_output_since(stderr_file, stderr_offset)
+                chunk = stderr_decoder.decode(encoded, final=final)
+                if chunk:
+                    on_stderr(chunk)
+
+            try:
+                while True:
+                    if inherited_control is not None:
+                        readable, _, _ = select.select([inherited_control], [], [], 0)
+                        if readable and os.read(inherited_control, 1) == b"":
+                            raise ManagedSubprocessCancelled()
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        _stop_process_group(process)
+                        emit_stdout(final=True)
+                        emit_stderr(final=True)
+                        raise subprocess.TimeoutExpired(
+                            command,
+                            timeout,
+                            output=_read_output(stdout_file),
+                            stderr=(
+                                _read_output(stderr_file)
+                                if stderr == subprocess.PIPE
+                                else None
+                            ),
+                        )
+                    try:
+                        returncode = process.wait(timeout=min(0.1, remaining))
+                    except subprocess.TimeoutExpired:
+                        emit_stdout(final=False)
+                        emit_stderr(final=False)
+                        continue
+                    break
+                emit_stdout(final=True)
                 emit_stderr(final=True)
                 captured_stdout = _read_output(stdout_file)
                 captured_stderr = (
                     _read_output(stderr_file) if stderr == subprocess.PIPE else None
                 )
-                raise subprocess.TimeoutExpired(
-                    command,
-                    timeout,
-                    output=captured_stdout,
-                    stderr=captured_stderr,
-                )
-            try:
-                returncode = process.wait(
-                    timeout=min(1.0 if on_stderr is not None else remaining, remaining)
-                )
-            except KeyboardInterrupt:
+            except BaseException:
                 _stop_process_group(process)
                 raise
-            except subprocess.TimeoutExpired:
-                emit_stderr(final=False)
-                continue
-            break
-        emit_stderr(final=True)
-        captured_stdout = _read_output(stdout_file)
-        captured_stderr = _read_output(stderr_file) if stderr == subprocess.PIPE else None
-    completed = subprocess.CompletedProcess(
-        command,
-        returncode,
-        stdout=captured_stdout,
-        stderr=captured_stderr,
-    )
-    if check and returncode != 0:
-        raise subprocess.CalledProcessError(
-            returncode,
+        completed = subprocess.CompletedProcess(
             command,
-            output=captured_stdout,
+            returncode,
+            stdout=captured_stdout,
             stderr=captured_stderr,
         )
-    return completed
+        if check and returncode != 0:
+            raise subprocess.CalledProcessError(
+                returncode,
+                command,
+                output=captured_stdout,
+                stderr=captured_stderr,
+            )
+        return completed
+    finally:
+        os.close(child_control_write)
+        if installed_sigterm:
+            signal.signal(signal.SIGTERM, previous_sigterm)

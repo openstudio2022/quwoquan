@@ -95,6 +95,9 @@
 - THEN 敏感 query 被阻断，未实现或无权限 provider 不影响其他 provider 结果。
 - THEN 搜索词 queryheat/relatedTerms 与 searchTermAffinity 推荐闭环可证明被排序或 Feed scorer 消费。
 - THEN 相同输入经同一公开入口重复执行时保持 Provider 路由、结果字段与降级信号一致。
+- THEN 公开 term/vector/ids/count/facet/PIT 只接受 canonical SearchIndexDocument 的完整合法 current 形状；缺任一必需字段、null、非法版本或摘要、tombstone 均不可见，过滤不改写历史 bytes。
+- THEN 普通 Post/User/Homepage/圈子/location 与 Data Creator/Post/Homepage 的生产 writer current 文档正确可读，来源显式且 Data 仅匹配所 pin 的权威 fence；合法非 Post 不因缺少 Post 专属字段而漏召回。
+- THEN 同版本同摘要保持幂等、同版本异摘要拒绝，旧 upsert 不越过 tombstone；未完成 owner 重投/重建的历史对象保持不可见与 not-ready，不由公开查询迁移或默认补版本。
 
 ## 8. 开放事项
 
@@ -126,10 +129,10 @@
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-004"></a>
-### OPEN-004 版本化写入面之前的存量搜索文档缺少 reindex/backfill 回执
+### OPEN-004 当前搜索文档单轨读写与 owner 重建证据尚未完成
 
-- 类型：`risk`
-- 优先级：`P2`
-- 准出影响：`track`
-- 影响或价值：Elasticsearch 写传输已收口为单轨版本化写入（`UpsertVersioned` / `TombstoneVersioned`，[DEC-002](./design.md#dec-002)），但在此之前写入各环境索引的存量文档没有 `sourceVersion` / `sourceDigest` / `deleted` 字段。读面 `NotDeletedQuery` 有意让缺 `deleted` 的存量文档保持可见，避免切换写入面时语料整体消失；写面撞上存量文档且外部版本不高于 ES 内部 `_version` 时以 typed `QWQ_VERSIONED_SOURCE_STATE_INVALID` fail-closed，不做静默 noop。以上两条行为已由 `legacy_document_versioning__api_integration_test.go` 在真实 ES 上固定，但仓内没有任何环境的存量文档 reindex 或 owner backfill（content/post、circle_search_item_view、homepage_search_item_view 的 `Backfill`）执行回执，因此无法证明存量文档已全部收敛到版本化形状；在收敛前，存量对象的首次版本化写入可能因 `_version` 高于聚合版本而被拒绝并需要 owner backfill 介入。
-- 完成判定：alpha/beta/gamma/prod 各环境对统一索引执行一次 owner backfill（或 alias rebuild）并留下 readback 回执（缺 `sourceVersion` 文档计数为 0），[`SIT-001`](#sit-001) 的「相同输入经同一公开入口重复执行时保持 Provider 路由、结果字段与降级信号一致」在回填前后结论不变；`legacy_document_versioning__api_integration_test.go` 的 fail-closed 与收敛断言持续通过；回执落地后可把读面对缺 `deleted` 文档的宽容改为严格过滤并更新本条。
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：当前 [SearchIndexDocument](../../../../quwoquan_service/services/search-service/contracts/search/search_index_view/projections/search_index_document.yaml) 已冻结完整合法形状，[DEC-002](./design.md#dec-002) 禁止历史读兼容。当前实现仍仅排除显式 tombstone，legacy 测试仍要求缺字段文档可见，普通 mapper 未显式输出来源；这些是待修缺口，不是允许的兼容窗口。必须先同步所有普通与 Data producer，再在全部 Provider 查询路径施加 current 门禁，不能为避免旧语料隐藏而继续公开旧形状。旧 bytes 保留离线审计，不实际删除或查询时补字段。当前没有 owner 重投/重建、全对象闭包、当前候选重新 prepare 与整代切换的环境 readback 证据，保持 not-ready；本项不授权任何环境迁移。
+- 完成判定：[`SIT-001`](#sit-001) 的 current 单轨验收在独立真实 CJK ES 上通过，原 `legacy_document_versioning__api_integration_test.go` 改为旧形状明确不可见及生产 writer current 正例，覆盖缺一个必需字段/null/非法版本或摘要、tombstone 防复活、同版本异摘要拒绝、ordinary/Data fence、向量和合法非 Post 边界。环境恢复另需 owner 按真实源版本显式重投或受管独立新索引重建，留下全对象预期闭包与 current 查询 readback、候选重新 prepare 和整代切换回执；不得以虚构更高 sourceVersion 跨过旧 `_version`，不得以旧 receipt 或测试 PASS 冒充环境恢复。

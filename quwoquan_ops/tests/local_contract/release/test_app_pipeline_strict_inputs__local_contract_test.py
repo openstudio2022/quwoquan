@@ -105,7 +105,7 @@ def test_dependency_sync_timeout_is_bounded_typed_and_preserves_diagnostics(
         subject.PipelinePreparationError,
         match=(
             r"^APP\.PIPELINE\.dependency_sync_timeout: "
-            r"timeoutSeconds=1500; latestDiagnostic=\[app-dependency-sync\] "
+            r"timeoutSeconds=6000; latestDiagnostic=\[app-dependency-sync\] "
             r"phase=gradle-online-resolution state=running$"
         ),
     ):
@@ -356,7 +356,7 @@ def test_hosted_workflow_passes_exact_fresh_outputs_to_every_package() -> None:
     }
 
     assert product["runs-on"] == "macos-latest"
-    assert int(product["timeout-minutes"]) == 30
+    assert int(product["timeout-minutes"]) == 120
     assert subject._DEPENDENCY_SYNC_TIMEOUT_SECONDS < int(
         product["timeout-minutes"]
     ) * 60

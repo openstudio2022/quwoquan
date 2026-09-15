@@ -1,78 +1,44 @@
+description: 六事件使用真实producer共同完整payload，事件种类表达状态迁移，不裁剪成与实际JSON冲突的字段子集；身份/版本/可空时间与来源均由本owner唯一声明，consumer严格拒绝额外字段。
 events:
 - name: CircleMembershipRequested
+  description: 加入审批请求提交为pending；首次尚未实际加入时joinedAt为null，再申请不抹除真实历史加入时间。
   delivery_semantics: transactional_outbox
   wire_event_type: CircleMembershipRequested
-  payload_entity: CircleMembership
-  payload_fields:
-  - id
-  - version
-  - circleId
-  - circleOwnerPersonaId
-  - personaId
-  - role
-  - state
-  - createdAt
+  payload_entity: CircleMembershipLifecyclePayload
+  payload_shape: exact
+  payload_fields: [id, version, circleId, personaId, role, state, joinedAt, createdAt, updatedAt, leftAt, circleOwnerPersonaId]
 - name: CircleMembershipJoined
+  description: 直接加入成为active，joinedAt为本次真实加入时间。
   delivery_semantics: transactional_outbox
   wire_event_type: CircleMembershipJoined
-  payload_entity: CircleMembership
-  payload_fields:
-  - id
-  - version
-  - circleId
-  - circleOwnerPersonaId
-  - personaId
-  - role
-  - state
-  - joinedAt
+  payload_entity: CircleMembershipLifecyclePayload
+  payload_shape: exact
+  payload_fields: [id, version, circleId, personaId, role, state, joinedAt, createdAt, updatedAt, leftAt, circleOwnerPersonaId]
 - name: CircleMembershipApproved
+  description: pending审批通过成为active，joinedAt为实际批准加入时间。
   delivery_semantics: transactional_outbox
   wire_event_type: CircleMembershipApproved
-  payload_entity: CircleMembership
-  payload_fields:
-  - id
-  - version
-  - circleId
-  - circleOwnerPersonaId
-  - personaId
-  - role
-  - state
-  - joinedAt
+  payload_entity: CircleMembershipLifecyclePayload
+  payload_shape: exact
+  payload_fields: [id, version, circleId, personaId, role, state, joinedAt, createdAt, updatedAt, leftAt, circleOwnerPersonaId]
 - name: CircleMembershipLeft
+  description: active成员真实退出，leftAt存在且为退出时间，joinedAt保留真实加入时间；圈主不可退出的原授权不变。
   delivery_semantics: transactional_outbox
   wire_event_type: CircleMembershipLeft
-  payload_entity: CircleMembership
-  payload_fields:
-  - id
-  - version
-  - circleId
-  - circleOwnerPersonaId
-  - personaId
-  - role
-  - state
-  - leftAt
+  payload_entity: CircleMembershipLifecyclePayload
+  payload_shape: exact
+  payload_fields: [id, version, circleId, personaId, role, state, joinedAt, createdAt, updatedAt, leftAt, circleOwnerPersonaId]
 - name: CircleMembershipRoleChanged
+  description: active成员角色变化，保留真实加入时间；共同payload仍携带事务内可用圈主，不因事件字段裁剪丢失。
   delivery_semantics: transactional_outbox
   wire_event_type: CircleMembershipRoleChanged
-  payload_entity: CircleMembership
-  payload_fields:
-  - id
-  - version
-  - circleId
-  - personaId
-  - role
-  - state
-  - updatedAt
+  payload_entity: CircleMembershipLifecyclePayload
+  payload_shape: exact
+  payload_fields: [id, version, circleId, personaId, role, state, joinedAt, createdAt, updatedAt, leftAt, circleOwnerPersonaId]
 - name: CircleMembershipRejected
+  description: pending审批拒绝成为rejected，尚未加入时joinedAt为null，不伪造加入或退出时间。
   delivery_semantics: transactional_outbox
   wire_event_type: CircleMembershipRejected
-  payload_entity: CircleMembership
-  payload_fields:
-  - id
-  - version
-  - circleId
-  - circleOwnerPersonaId
-  - personaId
-  - role
-  - state
-  - updatedAt
+  payload_entity: CircleMembershipLifecyclePayload
+  payload_shape: exact
+  payload_fields: [id, version, circleId, personaId, role, state, joinedAt, createdAt, updatedAt, leftAt, circleOwnerPersonaId]

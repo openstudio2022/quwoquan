@@ -6,6 +6,25 @@ import math
 from typing import Any, Mapping
 
 
+from generated.recommendation.ranked_recommendation_window.models.request_response import ReleasePinnedQueryFence
+
+
+def validate_content_fence(fence: ReleasePinnedQueryFence) -> ReleasePinnedQueryFence:
+    if not isinstance(fence, ReleasePinnedQueryFence):
+        raise ValueError("typed Content fence is required")
+    if fence.release is None:
+        if fence.revision != 0:
+            raise ValueError("empty Content fence must have zero revision")
+    else:
+        release = fence.release
+        if (fence.revision <= 0 or release.environment not in {"alpha", "beta", "gamma", "prod"}
+                or release.sourceOwner != "qwq_data" or not release.releaseId.strip()
+                or len(release.manifestDigest) != 71 or not release.manifestDigest.startswith("sha256:")
+                or any(c not in "0123456789abcdef" for c in release.manifestDigest[7:])):
+            raise ValueError("Content fence identity is invalid")
+    return fence.model_copy(deep=True)
+
+
 WINDOW_TTL = timedelta(minutes=10)
 MAX_WINDOW_ITEMS = 300
 MAX_WINDOW_OBJECT_CARDS = 20
@@ -56,6 +75,7 @@ class RankingResult:
 
 @dataclass(frozen=True, slots=True)
 class RankedRecommendationWindow:
+    content_fence: ReleasePinnedQueryFence
     window_id: str
     subject_id: str
     scenario: str
@@ -82,6 +102,7 @@ class RankedRecommendationWindow:
         scenario: str,
         request_digest: str,
         ranking: RankingResult,
+        content_fence: ReleasePinnedQueryFence,
         now: datetime | None = None,
     ) -> "RankedRecommendationWindow":
         created_at = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
@@ -147,6 +168,7 @@ class RankedRecommendationWindow:
                 )
             )
         return cls(
+            content_fence=validate_content_fence(content_fence),
             window_id=window_id.strip(),
             subject_id=normalized_subject,
             scenario=normalized_scenario,

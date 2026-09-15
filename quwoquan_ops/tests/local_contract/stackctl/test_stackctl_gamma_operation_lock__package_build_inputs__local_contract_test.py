@@ -539,6 +539,64 @@ class StackctlGammaOperationLockContractTest(
             projected.values(),
         )
 
+    def test_bounded_content_runtime_projects_integration_provider_closure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            candidate_root = Path(temporary_dir).resolve()
+            workloads = []
+            validated_workloads = []
+            images = {}
+            for index, role in enumerate(("sms-provider-substitute", "provider-protocol-substitute")):
+                compose_path = candidate_root / "packages" / f"{role}.compose.yaml"
+                compose_path.parent.mkdir(parents=True, exist_ok=True)
+                compose_path.write_text("services: {}\n", encoding="utf-8")
+                workloads.append({
+                    "role": role,
+                    "composeRef": f"packages/{role}.compose.yaml",
+                    "composeDigest": stackctl._sha256_file(compose_path),
+                })
+                validated_workloads.append({
+                    "role": role,
+                    "composeProfiles": [f"profile-{role}"],
+                })
+                images[role] = {
+                    "buildInputDigest": "sha256:" + str(index + 1) * 64,
+                    "ref": f"quwoquan/{role}:candidate",
+                    "imageDigest": "sha256:" + str(index + 3) * 64,
+                }
+            provider_runtime = {
+                "composition": {"environment": "gamma", "target": "gamma-local"},
+                "workloads": workloads,
+                "images": images,
+            }
+            with mock.patch.object(
+                stackctl,
+                "validate_provider_runtime_composition",
+                return_value={
+                    "runtimeCompositionDigest": "sha256:" + "a" * 64,
+                    "workloads": validated_workloads,
+                },
+            ):
+                projected = stackctl._provider_runtime_launch_environment(
+                    provider_runtime,
+                    candidate_root=candidate_root,
+                    workload="content-release",
+                )
+
+        self.assertIn("sms-provider-substitute.compose.yaml", projected["QWQ_PROVIDER_RUNTIME_COMPOSE_FILES"])
+        self.assertIn("provider-protocol-substitute.compose.yaml", projected["QWQ_PROVIDER_RUNTIME_COMPOSE_FILES"])
+        self.assertEqual(
+            projected["QWQ_PROVIDER_RUNTIME_COMPOSE_PROFILES"],
+            "profile-provider-protocol-substitute,profile-sms-provider-substitute",
+        )
+        self.assertIn(
+            "QWQ_PROVIDER_RUNTIME_SMS_PROVIDER_SUBSTITUTE_IMAGE",
+            projected,
+        )
+        self.assertIn(
+            "QWQ_PROVIDER_RUNTIME_PROVIDER_PROTOCOL_SUBSTITUTE_IMAGE",
+            projected,
+        )
+
     def test_package_build_never_receives_protected_provider_values(self) -> None:
         environment = {
             "ASSISTANT_MODEL_API_KEY": "protected-real-value",

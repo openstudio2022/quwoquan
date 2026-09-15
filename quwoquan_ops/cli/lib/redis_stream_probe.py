@@ -26,6 +26,8 @@ def stream_field_values(
     port: int,
     stream: str,
     field: str,
+    username: str | None = None,
+    password: str | None = None,
     timeout_seconds: float = 5.0,
 ) -> tuple[str, ...]:
     """Return the values of ``field`` across all retained stream entries.
@@ -34,12 +36,16 @@ def stream_field_values(
     bootstrap 只关心「事实是否对下游可见」。
     """
 
-    reply = _execute(
-        host=host,
-        port=port,
-        timeout_seconds=timeout_seconds,
-        command=("XRANGE", stream, "-", "+"),
+    commands: list[tuple[str, ...]] = []
+    if username is not None or password is not None:
+        if not username or not password:
+            raise RedisStreamProbeError("redis probe credentials are incomplete")
+        commands.append(("AUTH", username, password))
+    commands.append(("XRANGE", stream, "-", "+"))
+    replies = _execute(
+        host=host, port=port, timeout_seconds=timeout_seconds, commands=tuple(commands),
     )
+    reply = replies[-1]
     if reply is None:
         return ()
     if not isinstance(reply, list):
@@ -71,13 +77,15 @@ def _execute(
     host: str,
     port: int,
     timeout_seconds: float,
-    command: tuple[str, ...],
-) -> object:
-    encoded = b"*" + str(len(command)).encode("ascii") + b"\r\n"
-    for part in command:
-        payload = part.encode("utf-8")
-        encoded += b"$" + str(len(payload)).encode("ascii") + b"\r\n"
-        encoded += payload + b"\r\n"
+    commands: tuple[tuple[str, ...], ...],
+) -> list[object]:
+    encoded = b""
+    for command in commands:
+        encoded += b"*" + str(len(command)).encode("ascii") + b"\r\n"
+        for part in command:
+            payload = part.encode("utf-8")
+            encoded += b"$" + str(len(payload)).encode("ascii") + b"\r\n"
+            encoded += payload + b"\r\n"
     try:
         with socket.create_connection(
             (host, port), timeout=max(0.1, timeout_seconds)
@@ -85,7 +93,7 @@ def _execute(
             connection.sendall(encoded)
             reader = connection.makefile("rb")
             try:
-                return _read_reply(reader)
+                return [_read_reply(reader) for _ in commands]
             finally:
                 reader.close()
     except OSError as exc:

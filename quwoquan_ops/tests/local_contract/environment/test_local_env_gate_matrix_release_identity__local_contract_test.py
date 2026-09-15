@@ -403,22 +403,23 @@ def test_retired_category_fields_block_before_any_environment_action(
 
 @pytest.mark.parametrize("environment", ["alpha", "beta", "gamma", "prod"])
 @pytest.mark.parametrize("kind", ["apply", "activate", "rollback", "verify"])
-def test_actual_data_parser_has_no_release_category_or_readiness_phase(environment, kind):
-    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_data_args
+def test_actual_ops_parser_has_no_release_category_or_readiness_phase(tmp_path, environment, kind):
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_content_release_args
 
-    argv = ["ship", kind, "--handoff-ref",
+    argv = [kind, "--handoff-ref",
             f"handoff-ref-v1:sha256:{'1' * 64}:sha256:{'2' * 64}",
-            "--env", environment, "--run-id", "parser-contract"]
+            "--env", environment, "--run-id", "parser-contract",
+            "--runtime-candidate-root", str(tmp_path)]
     if kind != "apply":
         argv.extend(("--import-run-id", "exact-predecessor"))
     if kind == "rollback":
         argv.extend(("--from-release-id", "current-release", "--from-manifest-digest",
                      f"sha256:{'3' * 64}", "--from-revision", "7"))
-    args = _parse_data_args(argv)
+    args = _parse_content_release_args(argv)
     assert args.ship_command == kind and args.env == environment
     assert not {"readiness_phase", "release_class", "product_lifecycle_state"}.intersection(vars(args))
     with pytest.raises(SystemExit) as rejected:
-        _parse_data_args([*argv, "--readiness-phase", "production"])
+        _parse_content_release_args([*argv, "--readiness-phase", "production"])
     assert rejected.value.code == 2
 
 
@@ -444,7 +445,7 @@ def test_data_lifecycle_parser_exact_predecessors_and_first_error(tmp_path, monk
     from quwoquan_ops.tests.local_contract.environment.test_local_env_gate_matrix__local_contract_test import (
         _matrix_data_runner, _matrix_release_inputs,
     )
-    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _run_data_lifecycle, _parse_data_args
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _run_data_lifecycle, _parse_content_release_args
     from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import _release_admission_binding
 
     monkeypatch.setattr(matrix_mod, "output_root", lambda: tmp_path)
@@ -461,9 +462,9 @@ def test_data_lifecycle_parser_exact_predecessors_and_first_error(tmp_path, monk
     exit_code, category = _run_data_lifecycle(
         phases=phases, block=block, target="alpha-local", environment="alpha",
         candidate=bindings[0], rollback=bindings[1], data_ids=ids,
-        data_fn=_matrix_data_runner(tmp_path, calls, drift=drift),
+        data_fn=_matrix_data_runner(tmp_path, calls, drift=drift), runtime_candidate_root=tmp_path,
     )
-    args = [_parse_data_args(call["argv"][2:]) for call in calls if call["argv"]]
+    args = [_parse_content_release_args(call["argv"][3:]) for call in calls if call["argv"]]
     assert args[0].ship_command == "apply"
     assert args[1].ship_command == "activate"
     assert args[1].import_run_id == args[0].run_id
@@ -541,32 +542,16 @@ def test_admission_revalidates_current_full_package_identity(tmp_path, monkeypat
         )
 
 
-def test_handoff_admission_uses_current_data_authority(tmp_path, monkeypatch):
-    from quwoquan_data.scripts import cli  # noqa: F401
-    from quwoquan_data.tests.local_contract.release.test_ship_handoff_admission__contract__local_contract_test import (
-        _release_and_handoff, _authority_ref, _sha,
-    )
-    from content.release.environment import release_runtime
-    from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import _release_admission_binding
+def test_handoff_admission_parser_uses_exact_producer_ref(tmp_path):
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_content_release_args
 
-    release, handoff, document = _release_and_handoff(tmp_path)
-    monkeypatch.setattr(matrix_mod, "output_root", lambda: tmp_path)
-    validate = mock.Mock(return_value={"artifacts": [str(handoff)]})
-    monkeypatch.setattr(release_runtime.handoff_store, "read", lambda *_a, **_kw: b"authority")
-    monkeypatch.setattr(release_runtime.handoff_consumer, "validate_published_bytes", validate)
-    monkeypatch.setattr(release_runtime.handoff_store, "resolve_unique_artifact", lambda *_a, **_kw: (
-        "data/releases/release-a/producer_release_handoff.json", handoff, handoff.read_bytes(), _sha(handoff)))
-    monkeypatch.setattr(release_runtime, "read_producer_release_handoff", lambda *_a, **_kw: document)
-    attestation = release / "attestations/release.json"
-    attestation.parent.mkdir(parents=True)
-    attestation.write_text(json.dumps({**_release_attestation(release_id="release-a", digest_char="1"),
-                                      "payloadSha256": document["release"]["payloadDigest"]}))
-    binding = matrix_mod._release_binding(str(attestation), label="candidate")
-    admitted = _release_admission_binding(binding, handoff_ref=_authority_ref(),
-                                        system_attestation_ref="", system_attestation_digest="")
-    assert admitted["admissionArgv"] == ["--handoff-ref", _authority_ref()]
-    assert admitted["admissionEnvelope"]["handoffRef"] == _authority_ref()
-    assert validate.call_args.kwargs["validate_current"] is True
+    exact_ref = f"data/releases/release-a/producer_release_handoff.json=sha256:{'1' * 64}"
+    args = _parse_content_release_args([
+        "apply", "--handoff-ref", exact_ref, "--env", "alpha",
+        "--runtime-candidate-root", str(tmp_path),
+    ])
+    assert args.handoff_ref == exact_ref
+    assert args.runtime_candidate_root == tmp_path
 
 
 def test_matrix_parser_delegates_explicit_candidate_and_rollback_admission(monkeypatch):

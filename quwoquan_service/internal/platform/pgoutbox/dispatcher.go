@@ -99,6 +99,14 @@ func NewDispatcher(
 	}, nil
 }
 
+// CheckReadiness verifies that the owner outbox relation is queryable. It does
+// not dispatch or mutate events; Redis transport readiness is checked by the
+// owning service's separately declared message dependency.
+func (d *Dispatcher) CheckReadiness(ctx context.Context) error {
+	var relationExists bool
+	return d.pool.QueryRow(ctx, fmt.Sprintf("SELECT EXISTS (SELECT 1 FROM %s LIMIT 1)", d.table)).Scan(&relationExists)
+}
+
 func (d *Dispatcher) Run(ctx context.Context) {
 	ticker := time.NewTicker(d.interval)
 	defer ticker.Stop()

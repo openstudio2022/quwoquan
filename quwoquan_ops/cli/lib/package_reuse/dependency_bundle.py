@@ -276,8 +276,14 @@ def _validate_receipt(
         raise ValueError("App dependency sync receipt readback drifted")
 
 
-def load_active_dependency_bundle(*, repo_root: Path) -> AppDependencyBundle:
-    """Read active once and verify source, receipt, and all component selectors."""
+def load_active_dependency_bundle(
+    *, repo_root: Path, require_current_source: bool = True
+) -> AppDependencyBundle:
+    """Read active once and verify receipt plus all component selectors.
+
+    ``require_current_source=False`` is reserved for cache seeding: stale source/native
+    identity may donate verified dependency bytes, but never currentness or activation.
+    """
 
     repository = repo_root.expanduser().absolute()
     root = managed_dependency_bundle_root()
@@ -310,9 +316,10 @@ def load_active_dependency_bundle(*, repo_root: Path) -> AppDependencyBundle:
     if not attempt_id or any(character not in "0123456789abcdef" for character in attempt_id):
         raise ValueError("App dependency bundle attempt identity is invalid")
     current = _current_source_identity(repository)
-    for field, expected in current.items():
-        if active.get(field) != expected:
-            raise AppDependencyBundleStaleError(field)
+    if require_current_source:
+        for field, expected in current.items():
+            if active.get(field) != expected:
+                raise AppDependencyBundleStaleError(field)
     raw_components = active.get("components")
     if not isinstance(raw_components, Mapping) or set(raw_components) != set(
         APP_DEPENDENCY_COMPONENTS

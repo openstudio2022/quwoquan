@@ -143,9 +143,10 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 	appEnv := asm.Identity.AppEnv
 	pgPool := asm.PostgresPool
 
-	// 启动期迁移带持久化 ledger，重启/滚动升级可以安全复用既有 Postgres 卷。
-	if err := persistence.RunManagedMigrations(ctx, pgPool); err != nil {
-		return fmt.Errorf("migration: %v", err)
+	// schema 由环境 owner 在服务启动前使用 canonical source initializer 迁移；
+	// runtime 仅持有业务 DML 权限，在开放 admission 前验证完整迁移账本。
+	if err := persistence.VerifyManagedMigrations(ctx, pgPool); err != nil {
+		return fmt.Errorf("managed schema readiness: %v", err)
 	}
 
 	// Mongo 是隐性可选依赖（OPEN-009）：未注入 uri 时 8 处功能降级而不是
@@ -903,6 +904,9 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 	)
 	serviceMux := http.NewServeMux()
 	userHandler.RegisterRoutes(serviceMux)
+	if creatorCandidateStore != nil {
+		registerCreatorSearchCandidate(serviceMux, creatorCandidateStore, personaStore, profileStore, appEnv)
+	}
 	personaHostAuthorityHandler.RegisterRoutes(serviceMux)
 	accountAppealHandler.RegisterRoutes(serviceMux)
 	federatedPhoneBindingHandler.RegisterRoutes(serviceMux)

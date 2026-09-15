@@ -72,6 +72,7 @@ class UserRequestPageIds {
     'MarkFollowedSubjectVisited': 'user.mark.followed.subject.visited',
     'PullUserSync': 'user.pull.user.sync',
     'ReadAccountSecurity': 'user.read.account.security',
+    'ReadCreatorSearchCandidate': 'user.read.creator.search.candidate',
     'RefreshToken': 'user.refresh.token',
     'RejectProposal': 'user.reject.proposal',
     'RemoveDevicePushEndpoint': 'user.remove.device.push.endpoint',
@@ -187,6 +188,8 @@ class UserRequestPageIds {
       'user.mark.followed.subject.visited';
   static const String pullUserSync = 'user.pull.user.sync';
   static const String readAccountSecurity = 'user.read.account.security';
+  static const String readCreatorSearchCandidate =
+      'user.read.creator.search.candidate';
   static const String refreshToken = 'user.refresh.token';
   static const String rejectProposal = 'user.reject.proposal';
   static const String removeDevicePushEndpoint =

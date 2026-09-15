@@ -1001,6 +1001,59 @@ def resolve_data_plane_environment(
                 root = env_key[:-5]
                 service_environment[root + "_MODE"] = "standalone"
                 service_environment[root + "_TLS"] = "false"
+    # 两个owner消费同一已验证制品身份；不接受inject.literal或环境覆盖伪造摘要。
+    search_namespaces = {
+        binding["namespace"] for binding in canonical["bindings"].values()
+        if binding["slot"].startswith("search.objects.")
+    }
+    if search_namespaces:
+        if len(search_namespaces) != 1:
+            raise DataPlaneBindingError("search.objects physical namespace is ambiguous")
+        namespace = next(iter(search_namespaces))
+        for service in ("content-service", "search-service"):
+            environment = environments.setdefault(service, {})
+            for key, value in {
+                "CREATOR_SEARCH_BINDING_DIGEST": canonical["bindingDigest"],
+                "CREATOR_SEARCH_PHYSICAL_NAMESPACE": namespace,
+            }.items():
+                if key in environment and environment[key] != value:
+                    raise DataPlaneBindingError(f"{service}.{key} must be derived from canonical binding")
+                environment[key] = value
+    if "product-ops-service" in environments or "recommendation-service" in environments:
+        from .port_manifest import compose_role_base_url, load_port_manifest
+        try:
+            endpoint = compose_role_base_url(load_port_manifest(), "content-service")
+        except ValueError as error:
+            raise DataPlaneBindingError("Content canonical internal endpoint is unavailable") from error
+        for service in ("product-ops-service", "recommendation-service"):
+            if service not in environments:
+                continue
+            env = environments[service]
+            if "CONTENT_SERVICE_BASE_URL" in env and env["CONTENT_SERVICE_BASE_URL"] != endpoint:
+                raise DataPlaneBindingError(f"{service} Content endpoint differs from canonical topology")
+            env["CONTENT_SERVICE_BASE_URL"] = endpoint
+    recommendation_bindings = [b for b in canonical["bindings"].values() if b["service"] == "recommendation-service"]
+    if recommendation_bindings:
+        mongo = [b for b in recommendation_bindings if b["engine"] == "mongodb"]
+        redis = [b for b in recommendation_bindings if b["engine"] == "redis"]
+        namespaces = {b["namespace"] for b in mongo}
+        if len(namespaces) != 1 or not redis:
+            raise DataPlaneBindingError("recommendation candidate requires exact Mongo namespace and Redis binding")
+        schema_path = Path(__file__).resolve().parents[3] / "quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_candidate_index_view/storage.yaml"
+        storage = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
+        rows = []
+        for collection, declaration in storage["collections"].items():
+            for index in declaration.get("indexes", []):
+                if index["name"].startswith("uq_rec_release_"):
+                    rows.append({"collection": collection, "name": index["name"], "keys": dict(index["keys"]), "unique": bool(index.get("unique", False))})
+        if len(rows) != 3:
+            raise DataPlaneBindingError("recommendation candidate index schema is incomplete")
+        values = {"RECOMMENDATION_RELEASE_CANDIDATE_BINDING_DIGEST": canonical["bindingDigest"], "RECOMMENDATION_RELEASE_CANDIDATE_MONGODB_NAMESPACE": next(iter(namespaces)), "RECOMMENDATION_RELEASE_CANDIDATE_SCHEMA_GENERATION": _sha256(_canonical_json(sorted(rows, key=lambda r: r["name"]))) }
+        rec_env = environments.setdefault("recommendation-service", {})
+        for key, value in values.items():
+            if key in rec_env and rec_env[key] != value:
+                raise DataPlaneBindingError(f"{key} must be derived from canonical recommendation binding")
+            rec_env[key] = value
     return {
         "bindingDigest": canonical["bindingDigest"],
         "environment": environments,

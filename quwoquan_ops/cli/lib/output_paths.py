@@ -568,6 +568,20 @@ def target_cache_dir(target: str) -> Path:
     return target_local_dir(target) / "cache"
 
 
+def post_safety_startup_material_root(target: str) -> Path:
+    """Canonical target-owned protected root for Post safety startup material."""
+    return deployment_target_path(target, "startup-material", "content-service", "post-safety")
+
+
+def post_safety_startup_material_path(target: str) -> Path:
+    return post_safety_startup_material_root(target) / "startup.json"
+
+
+def post_safety_startup_material_descriptor(target: str) -> dict[str, str]:
+    path = post_safety_startup_material_path(target)
+    return {"owner": "deployment-control", "path": str(path), "relativeRef": "startup.json"}
+
+
 def _deployment_base_root() -> Path:
     configured = os.environ.get("QWQ_DEPLOY_WORK_ROOT", "").strip()
     base = Path(configured).expanduser() if configured else DEFAULT_DEPLOY_WORK_ROOT

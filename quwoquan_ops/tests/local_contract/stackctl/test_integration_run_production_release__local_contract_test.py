@@ -34,7 +34,7 @@ from quwoquan_ops.tests.support.deployment_candidate_manifest_test_support impor
     release_attestation_payload,
 )
 
-VALID_REF = "handoff-ref-v1:sha256:" + "a" * 64 + ":sha256:" + "b" * 64
+VALID_REF = "data/releases/release/producer_release_handoff.json=sha256:" + "b" * 64
 
 
 def _attestation(root: Path, release_id: str) -> Path:
@@ -90,7 +90,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
 
         args = SimpleNamespace(release_attestation=attestation, release_handoff_ref=VALID_REF)
         with (
-            mock.patch.object(integration_run, "_data_ship", side_effect=fake_ship),
+            mock.patch.object(integration_run, "_content_release", side_effect=fake_ship),
             mock.patch.object(integration_run, "_bootstrap_premium_pool", side_effect=fake_bootstrap),
         ):
             readiness = integration_run._apply_data_release(
@@ -697,7 +697,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
             return path
 
         forbidden = {name: mock.patch.object(integration_run, name, side_effect=AssertionError(f"{name} must not run in integrate"))
-                     for name in ("_run_environment", "_local_readiness", "_impact_plan", "_apply_data_release", "_stackctl", "_data_ship",
+                     for name in ("_run_environment", "_local_readiness", "_impact_plan", "_apply_data_release", "_stackctl", "_content_release",
                                   "build_head_candidate", "create_source_fact", "_not_required_beta", "_issue", "_write_acceptance_bundle")}
         with self._runtime_patches(), mock.patch.object(integration_run, "_store", return_value=integration_store), \
                 mock.patch.object(integration_run, "_git", side_effect=fake_git), \

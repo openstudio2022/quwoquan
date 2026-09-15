@@ -12,12 +12,8 @@ on:
         description: Exact immutable stable ReleaseTagAdmissionFact OCI @sha256 ref
         required: true
         type: string
-      previous_active_released_ledger_ref:
-        description: Exact immutable previous active released ledger OCI @sha256 ref
-        required: true
-        type: string
-      rollback_readiness_ref:
-        description: Exact immutable rollback readiness OCI @sha256 ref
+      prior_ref:
+        description: Exact immutable explicit prior OCI @sha256 ref; absent blocked until authority exists
         required: true
         type: string
 
@@ -51,8 +47,7 @@ jobs:
         env:
           STORE: ${{ runner.temp }}/release-control
           TAG_FACT: ${{ inputs.release_tag_admission_ref }}
-          PREVIOUS_FACT: ${{ inputs.previous_active_released_ledger_ref }}
-          ROLLBACK_FACT: ${{ inputs.rollback_readiness_ref }}
+          PRIOR_FACT: ${{ inputs.prior_ref }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -67,8 +62,19 @@ jobs:
             printf '%s=%s\n' "$exact_ref" "$local_digest"
           }
           TAG_EXACT="$(materialize_fact release-tag "$TAG_FACT")"
-          PREVIOUS_EXACT="$(materialize_fact previous-released "$PREVIOUS_FACT")"
-          ROLLBACK_EXACT="$(materialize_fact rollback-readiness "$ROLLBACK_FACT")"
+          PRIOR_EXACT="$(materialize_fact prior "$PRIOR_FACT")"
+          PRIOR_PREDECESSORS="$(python3 -B - "$STORE/$PRIOR_FACT" <<'PY'
+          import json, sys
+          from quwoquan_ops.ci.qualified_prod import validate_prior
+          prior = validate_prior(json.load(open(sys.argv[1])))
+          for field in ("previousReleased", "rollbackReadiness"):
+              print(prior[field]["ref"])
+          PY
+          )"
+          while IFS= read -r ref; do materialize_fact prior-predecessor "$ref" >/dev/null; done <<< "$PRIOR_PREDECESSORS"
+          PREVIOUS_REF="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["previousReleased"]["ref"])' "$STORE/$PRIOR_FACT")"
+          PREVIOUS_RECEIPT_REF="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["hostedReceiptReadback"]["ref"])' "$STORE/$PREVIOUS_REF")"
+          materialize_fact previous-receipt "$PREVIOUS_RECEIPT_REF" >/dev/null
           python3 - "$STORE" "$TAG_FACT" <<'PY'
           import hashlib, json, re, subprocess, sys
           from pathlib import Path
@@ -95,7 +101,7 @@ jobs:
           PY
           RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-admit \
             --release-tag-admission "$TAG_EXACT" \
-            --previous-active-released-ledger "$PREVIOUS_EXACT" --rollback-readiness "$ROLLBACK_EXACT" \
+            --prior "$PRIOR_EXACT" \
             --control-plane-git-sha "${{ github.workflow_sha }}" --admitted-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
           ADMISSION_LOCAL_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$RESULT")"
           ADMISSION_DIGEST="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])' <<<"$RESULT")"
@@ -170,16 +176,24 @@ jobs:
           fact = json.load(open(sys.argv[1], encoding="utf-8"))
           exact_ref = re.compile(r"^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")
           exact_digest = re.compile(r"^sha256:[0-9a-f]{64}$")
-          for field in ("releaseTagAdmission", "qualification", "candidateMaterialManifest", "previousActiveReleasedLedger", "rollbackReadiness"):
-              value = fact.get(field)
+          from quwoquan_ops.ci.qualified_prod import admission_prior
+          prior = admission_prior(fact)
+          predecessors = [fact.get(field) for field in ("releaseTagAdmission", "qualification", "candidateMaterialManifest")]
+          predecessors.extend(prior[field] for field in ("previousReleased", "rollbackReadiness"))
+          for value in predecessors:
+              field = "activation predecessor"
               if not isinstance(value, dict) or set(value) != {"ref", "digest"} or exact_ref.fullmatch(str(value.get("ref", ""))) is None or exact_digest.fullmatch(str(value.get("digest", ""))) is None:
                   raise SystemExit(f"GATE_BLOCK: ProdActivationAdmissionFact {field} is not exact OCI-bound evidence")
               # authority.digest 是独立受信的 fact 字节摘要，不是 ref 的 OCI manifest 摘要。
               print("authority", value["ref"], value["digest"], sep="\t")
+          from quwoquan_ops.ci.release_qualification import validate_delivery_scope
+          validate_delivery_scope(fact, effect="service")
+          targets = validate_delivery_scope(fact, effect="service")
           factories = fact.get("factoryMaterials")
-          if not isinstance(factories, dict) or set(factories) != {"service", "app"}:
+          expected = {"service", "web"} | ({"app"} if "app" in targets else set())
+          if not isinstance(factories, dict) or set(factories) != expected:
               raise SystemExit("GATE_BLOCK: ProdActivationAdmissionFact factory closure is incomplete")
-          for kind in ("service", "app"):
+          for kind in sorted(expected):
               value = factories[kind]
               if not isinstance(value, dict) or set(value) != {"ociRef", "ociDigest", "payloadDigest", "materialDigest"} or exact_ref.fullmatch(str(value.get("ociRef", ""))) is None or value["ociRef"].rsplit("@", 1)[-1] != value.get("ociDigest"):
                   raise SystemExit(f"GATE_BLOCK: {kind} factory material locator drifted")
@@ -206,7 +220,8 @@ jobs:
                 local_digest="sha256:$(shasum -a 256 "$STORE/$local_ref" | awk '{print $1}')"
                 case "$ref" in
                   */service-factory-material@*) factory_name="service" ;;
-                  */app-candidate-artifact@*) factory_name="app" ;;
+                  */app-candidate-artifact@*)
+                    if [[ ! -f "$RUNNER_TEMP/web-factory.exact" ]]; then factory_name="web"; else factory_name="app"; fi ;;
                   *) echo "::error::GATE_BLOCK: unknown factory OCI repository $ref"; exit 2 ;;
                 esac
                 printf '%s=%s\n' "$local_ref" "$local_digest" > "$RUNNER_TEMP/$factory_name-factory.exact"
@@ -214,12 +229,31 @@ jobs:
               *) echo "::error::GATE_BLOCK: unknown activation predecessor kind $kind"; exit 2 ;;
             esac
           done <<< "$PREDECESSORS"
+          python3 -B - "$STORE" "$ADMISSION_OCI_REF" <<'PY'
+          import json, subprocess, sys
+          from pathlib import Path
+          from quwoquan_ops.ci.release_qualification import digest
+          root = Path(sys.argv[1]); admission = json.loads((root / sys.argv[2]).read_bytes())
+          material = json.loads((root / admission["candidateMaterialManifest"]["ref"]).read_bytes())
+          def materialize(exact):
+              destination = root / exact["ref"]
+              subprocess.run(["python3", "-B", "quwoquan_ops/ci/promotion_evidence.py", "materialize-oci", "--ref", exact["ref"], "--output-file", str(destination)], check=True)
+              if digest(destination) != exact["digest"]: raise SystemExit("GATE_BLOCK: qualification predecessor bytes drifted")
+              return json.loads(destination.read_bytes())
+          request = materialize(material["qualificationRequest"])
+          materialize(material["artifactBuildNumberAllocation"])
+          materialize(request["requestAuthority"])
+          previous = json.loads((root / admission["prior"]["previousReleased"]["ref"]).read_bytes())
+          materialize(previous["hostedReceiptReadback"])
+          PY
           SERVICE_FACTORY_EXACT="$(cat "$RUNNER_TEMP/service-factory.exact")"
-          APP_FACTORY_EXACT="$(cat "$RUNNER_TEMP/app-factory.exact")"
+          WEB_FACTORY_EXACT="$(cat "$RUNNER_TEMP/web-factory.exact")"
+          APP_FACTORY_ARGS=()
+          if [[ -f "$RUNNER_TEMP/app-factory.exact" ]]; then APP_FACTORY_ARGS=(--app-factory-material "$(cat "$RUNNER_TEMP/app-factory.exact")"); fi
           python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-materialize-input \
             --admission "$ADMISSION_OCI_REF=$ADMISSION_DIGEST" \
             --service-factory-material "$SERVICE_FACTORY_EXACT" \
-            --app-factory-material "$APP_FACTORY_EXACT" \
+            --web-factory-material "$WEB_FACTORY_EXACT" "${APP_FACTORY_ARGS[@]}" \
             --output "$STORE/$ADMISSION_LOCAL_REF" --github-output "$GITHUB_OUTPUT"
           test -s "$STORE/$ADMISSION_LOCAL_REF"
           python3 - "$STORE/$ADMISSION_LOCAL_REF" "$ADMISSION_OCI_REF" "$ADMISSION_DIGEST" "$GITHUB_OUTPUT" <<'PY'
@@ -284,7 +318,7 @@ jobs:
           exact_admission = {"ref": admission_ref, "digest": "sha256:" + hashlib.sha256((store / admission_ref).read_bytes()).hexdigest()}
           sources = {"activation": report.get("releaseState") or {}, "health": report.get("rollbackPostChecks") or [], "readback": report.get("rollback") or {}}
           for kind, source in sources.items():
-              body = {"schema": f"quwoquan_ops.prod_rollback_{kind}_evidence.v1", "admission": exact_admission, "stage": stage, "status": "passed", "rollbackTarget": json.loads((store / admission_ref).read_text())["previousActiveReleasedLedger"], "ociDigests": json.loads((store / admission_ref).read_text())["previousOciDigests"], "source": source}
+              body = {"schema": f"quwoquan_ops.prod_rollback_{kind}_evidence.v1", "admission": exact_admission, "stage": stage, "status": "passed", "rollbackTarget": json.loads((store / admission_ref).read_text())["prior"]["previousReleased"], "ociDigests": json.loads((store / admission_ref).read_text())["prior"]["ociDigests"], "source": source}
               encoded = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode() + b"\n"
               path = store / "prod" / "rollback-evidence" / stage / f"{kind}.json"
               path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(encoded)

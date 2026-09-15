@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from collections.abc import Mapping
@@ -57,13 +58,6 @@ _OWNER_RELEASE_CONTROL = {
 
 # All release-control commands intentionally share one service-root cwd and one
 # flag surface. Mongo URI remains argv-only and is never included in failures.
-_OWNER_RELEASE_CONTROL_COMMANDS = {
-    "content": "./services/content-service/cmd/release-control",
-    "tag": "./services/tag-service/cmd/release-control",
-    "creator": "./services/user-service/cmd/creator-release-control",
-    "homepage": "./services/entity-service/cmd/homepage-release-control",
-}
-
 
 def _assert_receipt_ref_path(path: Path, *, output_root: Path) -> str:
     try:
@@ -187,6 +181,48 @@ def load_content_release_receipt(
     return ContentReleaseEvidence(document, path, ref, digest)
 
 
+
+def _candidate_binary_command(
+    *,
+    image_ref: str,
+    binary: str,
+    arguments: list[str],
+    path_mappings: tuple[tuple[Path, str, bool], ...],
+) -> list[str]:
+    """Execute one packaged binary with host paths projected into the container."""
+    image = image_ref.strip()
+    if not image:
+        raise RuntimeError(f"candidate-packaged {binary} image is required")
+
+    mappings: list[tuple[str, str, bool]] = []
+    for source, destination, read_only in path_mappings:
+        host_path = str(source.resolve())
+        if any(existing == host_path for existing, _target, _ro in mappings):
+            raise ValueError(f"candidate path mapping source 重复：{host_path}")
+        mappings.append((host_path, destination, read_only))
+
+    def container_argument(value: str) -> str:
+        for source, destination, _read_only in mappings:
+            if value == source:
+                return destination
+            prefix = source.rstrip("/") + "/"
+            if value.startswith(prefix):
+                return destination.rstrip("/") + "/" + value[len(prefix):]
+        return value
+
+    command = [
+        "docker", "run", "--rm", "--network", "host",
+        "--user", f"{os.geteuid()}:{os.getegid()}",
+    ]
+    for source, destination, read_only in mappings:
+        mode = ":ro" if read_only else ""
+        command.extend(("-v", f"{source}:{destination}{mode}"))
+    command.extend((
+        "--entrypoint", f"/usr/local/bin/{binary}", image,
+        *(container_argument(value) for value in arguments),
+    ))
+    return command
+
 def _run_release_control(command: list[str]) -> None:
     result = subprocess.run(
         command,
@@ -241,19 +277,18 @@ def query_owner_release_candidate(
     manifest_digest: str,
     report_path: Path,
     output_root: Path,
+    importer_image_ref: str,
 ) -> OwnerReleaseEvidence:
     """Query one service-owned immutable candidate without reading latest."""
 
     try:
         _service, schema = _OWNER_RELEASE_CONTROL[owner]
-        command_path = _OWNER_RELEASE_CONTROL_COMMANDS[owner]
     except KeyError as exc:
         raise ValueError(f"未知 release owner：{owner}") from exc
     release_id = _strict_release_control_identity(release_id, label="releaseId")
     if _SHA256_DIGEST.fullmatch(manifest_digest) is None:
         raise ValueError("manifest_digest 必须是规范 sha256 digest")
-    command = [
-        "go", "run", command_path,
+    arguments = [
         "--operation", "query-candidate",
         "--mongo-uri", mongo_uri,
         "--env", env,
@@ -262,6 +297,10 @@ def query_owner_release_candidate(
         "--release-id", release_id,
         "--manifest-digest", manifest_digest,
     ]
+    command = _candidate_binary_command(
+        image_ref=importer_image_ref, binary=f"{owner}-release-control",
+        arguments=arguments, path_mappings=((output_root, "/run/quwoquan/release-control-output", False),),
+    )
     _run_release_control(command)
     ref, digest = _receipt_evidence(report_path, output_root=output_root)
     document = _validate_release_control_receipt(
@@ -296,13 +335,12 @@ def readback_owner_at_content_fence(
     fence: Mapping[str, Any],
     report_path: Path,
     output_root: Path,
+    importer_image_ref: str,
 ) -> OwnerReleaseEvidence:
     """Read one owner projection at an explicit Content visibility fence."""
 
-    try:
-        command_path = _OWNER_RELEASE_CONTROL_COMMANDS[owner]
-    except KeyError as exc:
-        raise ValueError(f"未知 release owner：{owner}") from exc
+    if owner not in _OWNER_RELEASE_CONTROL:
+        raise ValueError(f"未知 release owner：{owner}")
     required = {
         "environment": env,
         "sourceOwner": "qwq_data",
@@ -318,8 +356,7 @@ def readback_owner_at_content_fence(
         or required["revision"] <= 0
     ):
         raise ValueError("Content fence 必须是完整 environment/sourceOwner/releaseId/manifestDigest/revision tuple")
-    command = [
-        "go", "run", command_path,
+    arguments = [
         "--operation", "readback-at-content-fence",
         "--mongo-uri", mongo_uri,
         "--env", env,
@@ -329,6 +366,10 @@ def readback_owner_at_content_fence(
         "--manifest-digest", required["manifestDigest"],
         "--content-revision", str(required["revision"]),
     ]
+    command = _candidate_binary_command(
+        image_ref=importer_image_ref, binary=f"{owner}-release-control",
+        arguments=arguments, path_mappings=((output_root, "/run/quwoquan/release-control-output", False),),
+    )
     _run_release_control(command)
     ref, digest = _receipt_evidence(report_path, output_root=output_root)
     payload = read_json(report_path)
@@ -366,6 +407,7 @@ def query_content_release_candidate(
     manifest_digest: str,
     report_path: Path,
     output_root: Path,
+    importer_image_ref: str,
 ) -> OwnerReleaseEvidence:
     return query_owner_release_candidate(
         owner="content",
@@ -375,6 +417,7 @@ def query_content_release_candidate(
         manifest_digest=manifest_digest,
         report_path=report_path,
         output_root=output_root,
+        importer_image_ref=importer_image_ref,
     )
 
 def load_content_release_candidate_receipt(
@@ -402,11 +445,9 @@ def query_content_active_release(
     mongo_uri: str,
     report_path: Path,
     output_root: Path,
+    importer_image_ref: str,
 ) -> ContentReleaseEvidence:
-    command = [
-        "go",
-        "run",
-        "./services/content-service/cmd/release-control",
+    arguments = [
         "--operation",
         "query-active",
         "--mongo-uri",
@@ -418,6 +459,12 @@ def query_content_active_release(
         "--report",
         str(report_path),
     ]
+    command = _candidate_binary_command(
+        image_ref=importer_image_ref,
+        binary="content-release-control",
+        arguments=arguments,
+        path_mappings=((output_root, "/run/quwoquan/release-control-output", False),),
+    )
     _run_release_control(command)
     ref, digest = _receipt_evidence(report_path, output_root=output_root)
     document = _validate_release_control_receipt(
@@ -437,13 +484,11 @@ def activate_content_release(
     expected_active: Mapping[str, Any],
     report_path: Path,
     output_root: Path,
+    importer_image_ref: str,
 ) -> ContentReleaseEvidence:
     if _SHA256_DIGEST.fullmatch(manifest_digest) is None:
         raise ValueError("manifest_digest 必须是规范 sha256 digest")
-    command = [
-        "go",
-        "run",
-        "./services/content-service/cmd/release-control",
+    arguments = [
         "--operation",
         "activate",
         "--mongo-uri",
@@ -478,7 +523,7 @@ def activate_content_release(
             or expected_revision <= 0
         ):
             raise ValueError("expected active receipt 缺少完整 revision-bearing tuple")
-        command.extend(
+        arguments.extend(
             [
                 "--expected-active-release-id",
                 expected_release_id,
@@ -489,7 +534,13 @@ def activate_content_release(
             ]
         )
     else:
-        command.append("--expected-active-empty")
+        arguments.append("--expected-active-empty")
+    command = _candidate_binary_command(
+        image_ref=importer_image_ref,
+        binary="content-release-control",
+        arguments=arguments,
+        path_mappings=((output_root, "/run/quwoquan/release-control-output", False),),
+    )
     _run_release_control(command)
     ref, digest = _receipt_evidence(report_path, output_root=output_root)
     document = _validate_release_control_receipt(
@@ -648,6 +699,18 @@ def run_content_importer(
     creator_candidate_receipt: Path,
     homepage_import_report: Path,
     homepage_candidate_receipt: Path | None,
+    mongo_database: str = "quwoquan_content",
+    post_safety_material_root: Path | None = None,
+    post_safety_current_binding_ref: str = "",
+    post_safety_recovery_evidence_ref: str = "",
+    post_safety_hmac_secret_ref: str = "",
+    runtime_auth_env_ref: Path | None = None,
+    runtime_auth_issuer: str = "",
+    runtime_auth_audience: str = "",
+    runtime_auth_token_version: str = "",
+    account_security_authority_base_url: str = "",
+    account_security_authority_timeout_ms: int = 0,
+    importer_image_ref: str = "",
 ) -> Path:
     """Stage exactly one Content candidate; activation uses release-control."""
 
@@ -663,14 +726,13 @@ def run_content_importer(
         )
     report_path = run / "import.json"
     creator_proof = creator_candidate_receipt
-    command = [
-        "go",
-        "run",
-        "./services/content-service/cmd/import",
+    arguments = [
         "--release-root",
         str(release),
         "--mongo-uri",
         mongo_uri,
+        "--posts-db",
+        mongo_database,
         "--media-avatar-base-url",
         media_avatar_base_url,
         "--media-image-base-url",
@@ -693,9 +755,76 @@ def run_content_importer(
         str(homepage_import_report),
     ]
     if homepage_candidate_receipt is not None:
-        command.extend(["--homepage-candidate-receipt", str(homepage_candidate_receipt)])
-    if dry_run:
-        command.append("--dry-run")
+        arguments.extend(["--homepage-candidate-receipt", str(homepage_candidate_receipt)])
+    if not dry_run:
+        locators = {
+            "--post-safety-material-root": str(post_safety_material_root or ""),
+            "--post-safety-current-binding-ref": post_safety_current_binding_ref,
+            "--post-safety-recovery-evidence-ref": post_safety_recovery_evidence_ref,
+            "--post-safety-hmac-secret-ref": post_safety_hmac_secret_ref,
+            "--runtime-auth-env-ref": str(runtime_auth_env_ref or ""),
+            "--runtime-auth-issuer": runtime_auth_issuer,
+            "--runtime-auth-audience": runtime_auth_audience,
+            "--runtime-auth-token-version": runtime_auth_token_version,
+            "--account-security-authority-base-url": account_security_authority_base_url,
+        }
+        missing_locators = [name for name, value in locators.items() if not value.strip()]
+        if missing_locators:
+            raise RuntimeError(
+                "Content stage requires canonical Post safety startup locators: "
+                + ",".join(missing_locators)
+            )
+        if account_security_authority_timeout_ms <= 0:
+            raise RuntimeError("Content stage requires positive account authority timeout")
+        for flag_name, value in locators.items():
+            arguments.extend([flag_name, value])
+        arguments.extend([
+            "--account-security-authority-timeout-ms",
+            str(account_security_authority_timeout_ms),
+        ])
+        if not importer_image_ref.strip():
+            raise RuntimeError("Content stage requires candidate-packaged importer image")
+        container_release = "/run/quwoquan/release"
+        container_run = "/run/quwoquan/import-run"
+        container_material = "/run/quwoquan/post-safety"
+        container_auth_env = "/run/quwoquan/runtime-auth.env"
+        replacements = (
+            (str(release), container_release),
+            (str(run), container_run),
+            (str(post_safety_material_root), container_material),
+            (str(runtime_auth_env_ref), container_auth_env),
+        )
+        def container_value(value: str) -> str:
+            for source, destination in replacements:
+                if value == source:
+                    return destination
+                prefix = source.rstrip("/") + "/"
+                if value.startswith(prefix):
+                    return destination.rstrip("/") + "/" + value[len(prefix):]
+            return value
+        importer_args = [container_value(value) for value in arguments]
+        command = [
+            "docker", "run", "--rm", "--network", "host",
+            "--user", f"{os.geteuid()}:{os.getegid()}",
+            "-v", f"{release}:{container_release}:ro",
+            "-v", f"{run}:{container_run}",
+            "-v", f"{post_safety_material_root}:{container_material}:ro",
+            "-v", f"{runtime_auth_env_ref}:{container_auth_env}:ro",
+            "--entrypoint", "/usr/local/bin/content-import",
+            importer_image_ref,
+            *importer_args,
+        ]
+    else:
+        arguments.append("--dry-run")
+        command = _candidate_binary_command(
+        image_ref=importer_image_ref,
+        binary="content-import",
+        arguments=arguments,
+        path_mappings=(
+            (release, "/run/quwoquan/release", True),
+            (run, "/run/quwoquan/import-run", False),
+        ),
+    )
     result = subprocess.run(command, cwd=REPO_ROOT / "quwoquan_service", check=False)
     if result.returncode != 0:
         raise SystemExit(
@@ -720,13 +849,12 @@ def run_creator_importer(
     media_avatar_base_url: str,
     dry_run: bool,
     mode: ImportMode = ImportMode.UPSERT,
+    mongo_database: str = "quwoquan_user",
+    importer_image_ref: str = "",
 ) -> Path:
     """Stage one immutable Creator candidate before Content."""
     report_path = run / "creator-import.json"
-    command = [
-        "go",
-        "run",
-        "./services/user-service/cmd/release-import",
+    arguments = [
         "--release-root",
         str(release),
         "--mongo-uri",
@@ -747,7 +875,16 @@ def run_creator_importer(
         str(report_path),
     ]
     if dry_run:
-        command.append("--dry-run")
+        arguments.append("--dry-run")
+    command = _candidate_binary_command(
+        image_ref=importer_image_ref,
+        binary="creator-import",
+        arguments=arguments,
+        path_mappings=(
+            (release, "/run/quwoquan/release", True),
+            (run, "/run/quwoquan/import-run", False),
+        ),
+    )
     result = subprocess.run(command, cwd=REPO_ROOT / "quwoquan_service", check=False)
     if result.returncode != 0:
         raise SystemExit(f"[ship] creator importer failed: exit={result.returncode}")
@@ -777,14 +914,13 @@ def run_tag_importer(
     run: Path,
     mongo_uri: str,
     dry_run: bool,
+    mongo_database: str = "quwoquan_tag",
+    importer_image_ref: str = "",
 ) -> Path:
     """Stage the exact immutable Tag candidate before dependent objects."""
 
     report_path = run / "tag-import.json"
-    command = [
-        "go",
-        "run",
-        "./services/tag-service/cmd/import",
+    arguments = [
         "--release-root",
         str(release),
         "--release-id",
@@ -793,13 +929,24 @@ def run_tag_importer(
         "stage-only",
         "--mongo-uri",
         mongo_uri,
+        "--db",
+        mongo_database,
         "--env",
         env,
         "--report",
         str(report_path),
     ]
     if dry_run:
-        command.append("--dry-run")
+        arguments.append("--dry-run")
+    command = _candidate_binary_command(
+        image_ref=importer_image_ref,
+        binary="tag-import",
+        arguments=arguments,
+        path_mappings=(
+            (release, "/run/quwoquan/release", True),
+            (run, "/run/quwoquan/import-run", False),
+        ),
+    )
     result = subprocess.run(command, cwd=REPO_ROOT / "quwoquan_service", check=False)
     if result.returncode != 0:
         raise SystemExit(f"[ship] tag importer failed: exit={result.returncode}")
@@ -832,16 +979,17 @@ def run_homepage_importer(
     media_image_base_url: str,
     dry_run: bool,
     mode: ImportMode,
+    mongo_database: str = "quwoquan_entity",
+    importer_image_ref: str = "",
 ) -> dict[str, Any]:
     report_path = run / "homepage-import.json"
-    command = [
-        "go",
-        "run",
-        "./cmd/homepage-import",
+    arguments = [
         "--release-root",
         str(release),
         "--mongo-uri",
         mongo_uri,
+        "--entity-db",
+        mongo_database,
         "--media-image-base-url",
         media_image_base_url,
         "--env",
@@ -854,7 +1002,16 @@ def run_homepage_importer(
         str(report_path),
     ]
     if dry_run:
-        command.append("--dry-run")
+        arguments.append("--dry-run")
+    command = _candidate_binary_command(
+        image_ref=importer_image_ref,
+        binary="homepage-import",
+        arguments=arguments,
+        path_mappings=(
+            (release, "/run/quwoquan/release", True),
+            (run, "/run/quwoquan/import-run", False),
+        ),
+    )
     result = subprocess.run(
         command,
         cwd=REPO_ROOT / "quwoquan_service" / "services" / "entity-service",

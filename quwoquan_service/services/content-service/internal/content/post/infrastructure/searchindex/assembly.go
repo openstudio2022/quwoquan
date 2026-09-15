@@ -37,10 +37,9 @@ type ESConfig struct {
 // fields are nil and every helper is a no-op, so the primary write path is
 // unaffected.
 type Built struct {
-	Client    *es.Client
-	Indexer   *es.Indexer
-	Projector *Projector
-	startup   startupRetryPolicy
+	Client  *es.Client
+	Indexer *es.Indexer
+	startup startupRetryPolicy
 }
 
 var ErrSearchIndexStartupTimeout = errors.New("search index startup timed out")
@@ -60,13 +59,13 @@ type startupRetryPolicy struct {
 // Build assembles the write-time search index from config. An explicitly
 // disabled projection returns an empty Built; an enabled but incomplete
 // configuration fails fast.
-func Build(cfg ESConfig, reader PostReader, opts ...Option) (Built, error) {
+func Build(cfg ESConfig) (Built, error) {
 	if !cfg.Enabled {
 		return Built{}, nil
 	}
-	if len(cfg.Endpoints) == 0 || reader == nil {
+	if len(cfg.Endpoints) == 0 {
 		return Built{}, fmt.Errorf(
-			"Post search projection requires endpoints and reader",
+			"Content place and account-cleanup ES binding requires endpoints",
 		)
 	}
 	startup, err := startupPolicy(cfg)
@@ -93,10 +92,9 @@ func Build(cfg ESConfig, reader PostReader, opts ...Option) (Built, error) {
 	}
 	indexer := es.NewIndexer(client, client.WriteIndexName())
 	return Built{
-		Client:    client,
-		Indexer:   indexer,
-		Projector: NewProjector(indexer, reader, opts...),
-		startup:   startup,
+		Client:  client,
+		Indexer: indexer,
+		startup: startup,
 	}, nil
 }
 

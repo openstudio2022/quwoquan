@@ -1,5 +1,32 @@
 description: 该自治边界的运行配置定义与默认值；环境只维护差异和引用。
 configs:
+- key: sys.recommendation-service.content_receipt.base_url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: Content receipt/fence受信只读地址，唯一由canonical topology注入CONTENT_SERVICE_BASE_URL，无fallback。使用既有AUTH_JWT服务身份配置签发content.release.fence.read，配置缺失启动失败。
+- key: sys.recommendation-service.release_candidate.binding_digest
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: 仅由已验证canonical data-plane binding派生，无请求或环境猜测默认。
+- key: sys.recommendation-service.release_candidate.mongodb_namespace
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.recommendation-service.release_candidate.schema_generation
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: 候选三集合唯一索引语义摘要，启动与proof读取时核验真实索引。
 - key: ops.reco.discovery.prerank.new_content_boost
   type: float
   owner: recommendation

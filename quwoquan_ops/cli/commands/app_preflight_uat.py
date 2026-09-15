@@ -154,9 +154,30 @@ def _command_app_content_uat(
             "reportDir": "",
         }
 
+    verification_purpose = str(getattr(args, "verification_purpose", "formal") or "formal")
+    core_suites = str(getattr(args, "core_suites", "") or "")
+    diagnostic = verification_purpose == "core_diagnostic"
+
     from quwoquan_ops.cli.commands.app_preflight_uat_offline import (
         content_source_for_target, run_offline_app_content_uat,
     )
+    if diagnostic and any(content_source_for_target(target) == "bundled_snapshot" for target in targets):
+        return {
+            "schema": "quwoquan_ops.app_content_uat_receipt",
+            "status": "gate_block",
+            "verificationPurpose": "core_diagnostic",
+            "nonPromotable": True,
+            "targets": targets,
+            "targetUatBindingRefs": {},
+            "rawResultRefs": {target: [] for target in targets},
+            "firstBlocker": "APP.LAUNCH.receipt_invalid",
+            "details": [
+                "core_diagnostic requires a Remote target; bundled_snapshot cannot perform post/chat readback"
+            ],
+            "exitCode": 2,
+            "summary": "App core diagnostic is GATE_BLOCK",
+            "reportDir": "",
+        }
     if any(content_source_for_target(target) == "bundled_snapshot" for target in targets):
         offline = run_offline_app_content_uat(
             args=args, report_dir=report_dir / "alpha-local", output_root=canonical_output_root,
@@ -174,6 +195,17 @@ def _command_app_content_uat(
             "rawResultRefs": {**offline["rawResultRefs"], **online.get("rawResultRefs", {})},
         }
 
+    try:
+        planned_suites = app_content_uat_suite_plan(
+            stackctl=_stackctl,
+            release_video_work_id="__candidate_bound_at_runtime__",
+            verification_purpose=verification_purpose,
+            core_suites=core_suites,
+        )
+    except ValueError as exc:
+        issues.append(str(exc))
+        planned_suites = []
+
     preflights: list[dict[str, Any]] = []
     runtime_bindings: list[dict[str, Any]] = []
     if not issues:
@@ -182,7 +214,7 @@ def _command_app_content_uat(
                 argparse.Namespace(
                     target=target,
                     report_dir=str(report_dir / target / "preflight"),
-                    purpose="content_live",
+                    purpose=("core_diagnostic" if diagnostic else "content_live"),
                     runtime_mode="immutable_candidate",
                 )
             )
@@ -426,8 +458,10 @@ def _command_app_content_uat(
             suite_plan = app_content_uat_suite_plan(
                 stackctl=_stackctl,
                 release_video_work_id=release_video_work_id,
+                verification_purpose=verification_purpose,
+                core_suites=core_suites,
             )
-            if not bool(getattr(args, "dry_run", False)):
+            if not diagnostic and not bool(getattr(args, "dry_run", False)):
                 recorded_launch = launch_bindings.get(target)
                 if not isinstance(recorded_launch, Mapping):
                     issues.append(f"{target}: canonical launch binding is missing")
@@ -448,7 +482,7 @@ def _command_app_content_uat(
                 target_uat_bindings[target] = binding
                 target_uat_binding_refs[target] = binding_ref
             app_uat_authority: dict[str, str] | None = None
-            if not bool(getattr(args, "dry_run", False)):
+            if not diagnostic and not bool(getattr(args, "dry_run", False)):
                 try:
                     app_uat_authority, sample_plan_path = (
                         build_app_uat_patrol_authority(
@@ -841,7 +875,8 @@ def _command_app_content_uat(
                     run_payload["testDataScope"] = test_data_scope
                 runs.append(run_payload)
                 if (
-                    not bool(getattr(args, "dry_run", False))
+                    not diagnostic
+                    and not bool(getattr(args, "dry_run", False))
                     and patrol_target == RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET
                 ):
                     binding_ref = target_uat_binding_refs.get(target)
@@ -909,7 +944,7 @@ def _command_app_content_uat(
                         f"{target}: {suite_name} failed: " + page_artifact_binding_issue
                     )
                     break
-            if not issues and not bool(getattr(args, "dry_run", False)):
+            if not issues and not diagnostic and not bool(getattr(args, "dry_run", False)):
                 try:
                     experience_screenshot_digests[target] = (
                         _stackctl._app_content_experience_screenshot_digests(
@@ -919,7 +954,7 @@ def _command_app_content_uat(
                     )
                 except (StopIteration, TypeError, ValueError) as exc:
                     issues.append(f"{target}: {exc}")
-            if not issues and not bool(getattr(args, "dry_run", False)):
+            if not issues and not diagnostic and not bool(getattr(args, "dry_run", False)):
                 binding = target_uat_bindings.get(target)
                 sample_plan = preflight.get("releaseUatSamplePlan")
                 if not isinstance(binding, Mapping) or not isinstance(
@@ -990,4 +1025,6 @@ def _command_app_content_uat(
         project_raw_authority=project_app_content_uat_raw_authority,
         build_receipt=build_app_content_uat_receipt,
         select_first_blocker=first_canonical_app_blocker,
+        verification_purpose=verification_purpose,
+        selected_suites=[name for name, _target, _bind, _work in planned_suites],
     )

@@ -172,9 +172,10 @@ def load_android_gradle_component(
     project_root: Path,
     component_root: Path,
     invocations: Sequence[GradleInvocation],
-    upstream_dependency_digests: Mapping[str, str],
+    upstream_dependency_digests: Mapping[str, str] | None = None,
+    require_current_inputs: bool = True,
 ) -> AndroidGradleSnapshot:
-    """Verify task/source currentness and then the complete sealed Gradle CAS."""
+    """Verify the complete CAS; optionally require current source/task identity."""
 
     repository = project_root.expanduser().absolute()
     root = component_root.expanduser().absolute()
@@ -188,30 +189,35 @@ def load_android_gradle_component(
     _encoded, manifest = _read_manifest(root / ANDROID_GRADLE_SYNC_MANIFEST)
     if set(manifest) != _SYNC_FIELDS or manifest.get("schema") != ANDROID_GRADLE_SYNC_SCHEMA:
         raise ValueError("Android Gradle sync manifest fields or schema mismatch")
-    native = native_resolution_input_identity(repository)
-    for field in (
-        "nativeResolutionInputDigest",
-        "nativeResolutionInputCount",
-        "nativeResolutionInputs",
-    ):
-        if manifest.get(field) != native[field]:
-            raise ValueError("Android Gradle component is stale for native inputs")
-    invocation = android_gradle_invocation_identity(
-        project_root=repository,
-        invocations=invocations,
-    )
-    for field in ("invocationSetDigest", "invocations"):
-        if manifest.get(field) != invocation[field]:
-            raise ValueError("Android Gradle component is stale for invocation set")
-    if manifest.get("upstreamDependencyDigests") != _upstream_dependency_digests(
-        upstream_dependency_digests
-    ):
-        raise ValueError("Android Gradle component is stale for upstream Pub")
+    if require_current_inputs:
+        native = native_resolution_input_identity(repository)
+        for field in (
+            "nativeResolutionInputDigest",
+            "nativeResolutionInputCount",
+            "nativeResolutionInputs",
+        ):
+            if manifest.get(field) != native[field]:
+                raise ValueError("Android Gradle component is stale for native inputs")
+        invocation = android_gradle_invocation_identity(
+            project_root=repository,
+            invocations=invocations,
+        )
+        for field in ("invocationSetDigest", "invocations"):
+            if manifest.get(field) != invocation[field]:
+                raise ValueError("Android Gradle component is stale for invocation set")
+        if upstream_dependency_digests is None or manifest.get(
+            "upstreamDependencyDigests"
+        ) != _upstream_dependency_digests(upstream_dependency_digests):
+            raise ValueError("Android Gradle component is stale for upstream Pub")
     snapshot = load_android_gradle_snapshot(
         project_root=repository,
         tree_root=root / ANDROID_GRADLE_SYNC_TREE,
         manifest_path=root / ANDROID_GRADLE_SYNC_DEPENDENCY_MANIFEST,
-        gradle_roots=[item.gradle_root for item in invocations],
+        gradle_roots=(
+            [item.gradle_root for item in invocations]
+            if require_current_inputs
+            else None
+        ),
     )
     dependency = manifest.get("dependency")
     if not isinstance(dependency, Mapping) or dict(dependency) != snapshot.manifest:

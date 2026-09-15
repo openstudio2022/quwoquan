@@ -2,6 +2,36 @@
 // ignore_for_file: constant_identifier_names
 
 enum ContentErrorCode {
+  contentReleaseQueryBarrierInvalid(
+    'CONTENT.RELEASE.query_barrier_invalid',
+    'surface',
+    0,
+    422,
+  ),
+  contentReleaseQueryBarrierNotReady(
+    'CONTENT.RELEASE.query_barrier_not_ready',
+    'surface',
+    0,
+    409,
+  ),
+  contentReleaseQueryBarrierUnavailable(
+    'CONTENT.RELEASE.query_barrier_unavailable',
+    'retry',
+    5,
+    503,
+  ),
+  contentReleaseActivationConflict(
+    'CONTENT.RELEASE.activation_conflict',
+    'surface',
+    0,
+    409,
+  ),
+  contentReleaseActivationAmbiguous(
+    'CONTENT.RELEASE.activation_ambiguous',
+    'surface',
+    0,
+    503,
+  ),
   contentDeleted('CONTENT.USER.content_deleted', 'surface', 0, 410),
   postNotFound('CONTENT.USER.post_not_found', 'surface', 0, 404),
   forbiddenEdit('CONTENT.USER.forbidden_edit', 'surface', 0, 403),
@@ -274,6 +304,16 @@ enum ContentErrorCode {
 
   static ContentErrorCode fromCode(String code) {
     switch (code) {
+      case 'CONTENT.RELEASE.query_barrier_invalid':
+        return ContentErrorCode.contentReleaseQueryBarrierInvalid;
+      case 'CONTENT.RELEASE.query_barrier_not_ready':
+        return ContentErrorCode.contentReleaseQueryBarrierNotReady;
+      case 'CONTENT.RELEASE.query_barrier_unavailable':
+        return ContentErrorCode.contentReleaseQueryBarrierUnavailable;
+      case 'CONTENT.RELEASE.activation_conflict':
+        return ContentErrorCode.contentReleaseActivationConflict;
+      case 'CONTENT.RELEASE.activation_ambiguous':
+        return ContentErrorCode.contentReleaseActivationAmbiguous;
       case 'CONTENT.USER.content_deleted':
         return ContentErrorCode.contentDeleted;
       case 'CONTENT.USER.post_not_found':
@@ -417,6 +457,12 @@ class ContentErrorMessages {
   const ContentErrorMessages._();
 
   static const Map<ContentErrorCode, String> zh = <ContentErrorCode, String>{
+    ContentErrorCode.contentReleaseQueryBarrierInvalid: '内容候选查询证明身份或摘要无效',
+    ContentErrorCode.contentReleaseQueryBarrierNotReady: '内容候选尚未完成全部必要查询准备',
+    ContentErrorCode.contentReleaseQueryBarrierUnavailable: '内容查询准备依赖暂时不可用',
+    ContentErrorCode.contentReleaseActivationConflict: '内容激活版本冲突，请读取当前指针',
+    ContentErrorCode.contentReleaseActivationAmbiguous:
+        '内容激活结果待确认，须先读取权威指针再显式恢复',
     ContentErrorCode.contentDeleted: '内容已删除',
     ContentErrorCode.postNotFound: '内容不存在或已删除',
     ContentErrorCode.forbiddenEdit: '无权编辑此内容',
@@ -487,6 +533,15 @@ class ContentErrorMessages {
   };
 
   static const Map<ContentErrorCode, String> en = <ContentErrorCode, String>{
+    ContentErrorCode.contentReleaseQueryBarrierInvalid:
+        'Content candidate query proof identity or digest is invalid',
+    ContentErrorCode.contentReleaseQueryBarrierNotReady:
+        'Required content candidate queries are not ready',
+    ContentErrorCode.contentReleaseQueryBarrierUnavailable:
+        'Content query preparation dependency is unavailable',
+    ContentErrorCode.contentReleaseActivationConflict:
+        'Content activation version conflict; read the current pointer',
+    ContentErrorCode.contentReleaseActivationAmbiguous: 'Content activation outcome unknown; read the authoritative pointer before recovery',
     ContentErrorCode.contentDeleted: 'Content has been deleted',
     ContentErrorCode.postNotFound: 'Post not found or deleted',
     ContentErrorCode.forbiddenEdit: 'Not allowed to edit this post',

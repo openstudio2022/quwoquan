@@ -230,8 +230,8 @@ func postDeletedOutboxEvent(t *testing.T, postID, eventID string) postports.Outb
 		"contentType":     "image",
 		"contentIdentity": "work",
 		"status":          "published",
-		"circleIds":       []string{},
-		"deletedAt":       now.Format(time.RFC3339Nano),
+		"environment":     nil, "sourceOwner": nil, "releaseId": nil, "manifestDigest": nil, "releaseDigest": nil, "sourceVersion": int64(2),
+		"deletedAt": now.Format(time.RFC3339Nano),
 	})
 	if err != nil {
 		t.Fatal(err)

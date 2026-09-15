@@ -320,6 +320,17 @@
 - THEN 同 cohort 的离线/Remote 参数化合同证明身份、过滤、详情、空态和分页边界等价；Beta/Gamma/Prod 不消费离线快照且在线签名过期仍阻断，页面不按 source/profile 分支，nonprod 同包切环境重建上下文。
 - THEN 在线缺媒体、精选/必要查询未 ready 或 CAS race 保持旧版本；CAS 结果未知与 60 秒回读失败先查权威 pointer，再显式 rollback，5 分钟内恢复或明确阻断，首次无 previous 不猜旧版本；读会话和媒体不混版本。
 - THEN 报告将声明库存、激活闭包、详情、推荐窗口、premium 和媒体成功分开，不可达为未知；服务 SLO 口径冲突及未测设备/生产故障域保持 OPEN，不以离线成功、首屏数量或旧 receipt 计为 Remote 健康。
+- GIVEN Post、Homepage、Creator、Tag 的源 candidate 均 verified，目标与 previous 具有重复公开 ID、增删对象，普通 UGC/账户继续变化；目标的 Search、Recommendation 或精品准入任一尚未 ready。
+- WHEN Content 的正式纯准备入口在无 active 或 previous 可读时准备目标，并在完整证明后执行 expected-current CAS、续页及显式 rollback。
+- THEN Creator/Post/Homepage统一使用同一typed prepare/query、同一proof形状及一套流程存储，slice只区分对象种类，不存在协议版本选择、Creator-only兼容入口或旧completed升级为ready；运行代码、配置、客户端与测试同步替换，旧receipt只供离线审计，当前候选必须重新prepare。checkpoint version、Content revision、源数据版本与受管Provider/schema generation继续保留并发和安全语义。
+- THEN 源 closure 成功不授予查询 ready；纯准备不依赖 active、不签发 activation，也不创建真实用户曝光/反馈。Content 只通过各真实 owner 的 typed 事实证明完整 Search Post/Homepage/Creator 查询、Recommendation 首页及 premium 和必要详情/媒体闭包；任何缺项、同数量错身份、摘要/契约/Provider 代际漂移或普通视频代替 premium 均阻止 CAS，旧 live 不变。
+- THEN 首次完整准备后以 expected-empty 完成真实激活；A→B→A 的 CAS 与 rollback 正向路径恢复，A/B 同 ID 候选互不覆盖、revision 单调增加，旧 candidate 保留至回滚窗口和活跃读引用结束。UGC/普通账户的资格及原投影不因 Data stage、CAS 或 rollback 被替换；Search cursor 与推荐 session/window/Content cursor 在切换及回滚后拒绝旧 fence，已 pin 请求的详情和媒体不混版本。
+- THEN 真实 Provider 故障注入分别证明写入成功但 refresh 未可查询、schema/mapping 不兼容、alias/binding 切换及 proof→CAS pointer race 不会放行旧证明；证明验证至 CAS 的受管代际保护不能仅靠先后两次读数相等。CAS 后依赖故障按 ambiguous/readback 收敛，不伪称跨库原子事务；首次无 previous 的失败明确阻断，不构造假 rollback target。
+- THEN 候选级 `home` 证明完整安全供给 S，而不是某个用户的 TopN/分页/个性化结果；源缺对象、同数量换身份、sourceVersion/摘要漂移或 home 不全均 not-ready，不把全集比较放宽为非空 hash。普通用户的排序、频控和偏好子集独立验收，不改 S 或候选准入；`required_detail` 的 Rec 全集摘要仍必须配合 Content owner 对同 S 的真实 hydration、引用和媒体核验。
+- THEN premium P 可以是 S 中真实已批准且有效的非空子集；两条精品中一条退出/到期而另一条仍合法且覆盖准入期限时，重验得到的新 P 证明可以成立，不自动否定 S、不沿用包含已失效成员的旧 proof；home 或 P 为空仍阻断发布准入，不能以普通用户查询的合法空态替代。
+- THEN Content 权威删除、privacy/purge、审核拒绝、可见性收紧或账号关闭导致源对象安全失效时，所有含该对象的候选均不可 activation/rollback，不静默删减 S 后沿用旧 proof；账号关闭清理/安全事实不足不得当作恢复。suspension 可逆但当前候选 not-ready，只有真实恢复事实后重新核验；精品池撤回与 Content 对象安全撤回分开判定。
+- THEN 消费方拒绝非法或超出获准时钟误差的未来 `verifiedAt`、`validUntil <= verifiedAt`、已过期及 `validUntil` 恰等于或早于实际 commit deadline 的 proof；超出获准界限的跨服务正负 clock skew、无法证明时钟健康、查询耗时耗尽预算或提交前保护失效均阻断。时间上限须按 [DEC-003](../../runtime-data-engineering/design.md#dec-003) 的最后资源观察、policy、premium 最早 expiry 和实际保护期限重验，不延长审批 expiresAt、不凭增大固定秒数过门。所有查询保持零写；时间 authority、Safety 或 GenerationProtection 尚缺真实实现时继续 not-ready。
+- THEN Content单写时间策略经同一封存输入投影到三个owner配置包，三方policyDigest/来源Content config digest一致；篡改派生段、漏项或以caller数字覆盖均拒绝。ClockHealth来自服务实际运行宿主/VM的受管只读adapter，容器到宿主映射、boot/clock identity、单调age、同步状态及保守误差可回读；观测过期、失同步/跳时、未知holdover误差或拿另一宿主样本代填均not-ready，配置/指标在线不冒充同步事实。query携带显式requiredUntil仅请求覆盖，不能延长premium expiresAt或policy寿命；扣完查询耗时、时钟误差及最小提交余量无法覆盖时拒绝。
 
 ## 6. 依赖
 
@@ -545,8 +556,9 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：Alpha canonical 快照派生/公开离线许可/完整资产、typed adapter、四入口冷启动/媒体及在线 candidate-scoped 推荐/精选/必要查询预物化尚缺 fresh 闭环。CAS 后异步追平会 fail closed，不能写成已实现无中断切换；首次无 previous、结果未知、显式 rollback 与 exact pointer readback 必须故障注入验证。
-- 待补能力：离线页面 UAT 使用制品/快照 authority 的 typed binding 与双平台 required case 消费，解除对在线身份与 activation 的错误依赖。仅完成合并、契约或局部测试不关闭本 OPEN。
-- 完成判定：`GWT-007` 由 canonical cohort 参数化 local_contract、真实媒体/四域/query barrier/CAS/recovery api_integration 和 Android/iOS 首装离线及在线页面/播放器 user_acceptance 直接绑定；源码或局部测试不替代完整证据。
+- 待补能力：离线页面 UAT 使用制品/快照 authority 的 typed binding 与双平台 required case 消费，解除对在线身份与 activation 的错误依赖。在线剩余 slice 按 [runtime-data-engineering DEC-003](../../runtime-data-engineering/design.md#dec-003) 冻结为无兼容版本的单主线；旧Creator-only/typed-slice代码、配置、客户端和测试尚待同步替换，旧Graph/handoff不能证明当前合同，新候选须重新prepare：Post/Homepage typed 源快照、同一 SearchReleasePreparation 的正式扩展、Recommendation release 分区/预准备事实/premium 就绪读取、Content 真实 RequiredReleaseQueries evaluator 与全部 activation/rollback 入口装配。现有接口/测试替身、Creator 纯准备成功及 verified source receipt 均不能替代完整查询屏障；原 CAS/rollback 正向回归和 bootstrap transport 的失败不得改成只断言拒绝以掩盖。仅完成合并、契约或局部测试不关闭本 OPEN。
+- 集合与时间剩余缺口：按 DEC-003 保留 S/home 全集判定、Content owner required hydration 和真实 premium 子集 P，不新增 exclusion 协议平台。时间供给选择已固定为Content服务config/schema单写 `release_query_time` 四项策略、环境显式值、canonical配置包向Content/Search/Rec派生消费段与policyDigest；Platform Ops仅查看/核对，不另建在线writer。尚缺四项字段的canonical authoring/打包投影、宿主time-sync只读adapter和ClockHealthReader事实、CAS保守执行预算及provider误差/holdover实测，故精确数值尚不得设默认。`requiredUntil`/`policyDigest`须在后续query合同显式声明，不从caller值授予authority。候选安全失效/账号关闭事实完整消费与持续Safety/GenerationProtection仍独立必需。缺策略、摘要错配、时钟健康未知/超限或提交余量不足均not-ready；配置值、node-exporter在线、JWT skew、固定十秒、首尾采样或接口存在都不替代事实。
+- 完成判定：`GWT-007` 由 canonical cohort 参数化 local_contract、真实媒体/四域/query barrier/CAS/recovery api_integration 和 Android/iOS 首装离线及在线页面/播放器 user_acceptance 直接绑定；新增集合/安全/时间子句须由同数量换源ID、完整home、合法premium子集及撤权、future/expiry/equal-deadline/耗时与clock-skew负例、query零写和持续保护的直接证据覆盖。只有文档/契约或局部联合事件段通过不得关闭本 OPEN。
 - 依赖：canonical Data producer、Content/Recommendation/Search candidate owner、App 组合根与启动 metadata；规格不新增 wire 字段，未具备 typed 契约前对应实现仍阻断。
 
 <a id="open-020"></a>

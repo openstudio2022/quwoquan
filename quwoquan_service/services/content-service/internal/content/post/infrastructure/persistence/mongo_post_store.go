@@ -2,8 +2,11 @@ package persistence
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	safetywire "quwoquan_service/services/content-service/generated/content/post/contract/safety"
+	safetyapp "quwoquan_service/services/content-service/internal/content/post/application/public"
 	"strings"
 	"time"
 
@@ -31,13 +34,15 @@ type postCommandReceiptDocument struct {
 
 // MongoPostStore 是 Post 聚合、幂等 receipt 与 content outbox 的同库 adapter。
 type MongoPostStore struct {
-	coll            *mongo.Collection
-	receipts        *mongo.Collection
-	outbox          *mongo.Collection
-	sequences       *mongo.Collection
-	checkpoints     *mongo.Collection
-	tombstones      postports.TombstoneStore
-	mediaReferences referencefence.Fence
+	coll              *mongo.Collection
+	receipts          *mongo.Collection
+	outbox            *mongo.Collection
+	sequences         *mongo.Collection
+	checkpoints       *mongo.Collection
+	tombstones        postports.TombstoneStore
+	mediaReferences   referencefence.Fence
+	safety            safetyapp.PostSafetyPort
+	safetyEnvironment string
 }
 
 func NewMongoPostStore(
@@ -58,6 +63,43 @@ func NewMongoPostStore(
 		tombstones:      tombstones,
 		mediaReferences: mediaReferences,
 	}
+}
+
+func (s *MongoPostStore) BindSafety(port safetyapp.PostSafetyPort, environment string) error {
+	if port == nil || environment == "" || s.safety != nil {
+		return safetyapp.ErrPostSafetyNotReady
+	}
+	s.safety = port
+	s.safetyEnvironment = environment
+	return nil
+}
+func (s *MongoPostStore) LoadSourceMetadata(ctx context.Context, id string) (safetywire.PostSourceCommitMetadata, error) {
+	var result safetywire.PostSourceCommitMetadata
+	if s.safety == nil {
+		return result, safetyapp.ErrPostSafetyNotReady
+	}
+	var row struct {
+		Version       int64   `bson:"version"`
+		SourceOwner   *string `bson:"sourceOwner"`
+		ReleaseID     *string `bson:"releaseId"`
+		Manifest      *string `bson:"manifestDigest"`
+		ReleaseDigest *string `bson:"releaseDigest"`
+	}
+	if err := s.coll.FindOne(ctx, bson.M{"_id": id}).Decode(&row); err != nil {
+		return result, err
+	}
+	owner := "content"
+	if row.SourceOwner != nil {
+		owner = *row.SourceOwner
+		if owner != "qwq_data" || row.ReleaseID == nil || *row.ReleaseID == "" || row.Manifest == nil {
+			return result, safetyapp.ErrPostSafetyConflict
+		}
+	}
+	member, err := s.safety.LoadRevision(ctx, owner, id)
+	if err != nil {
+		return result, err
+	}
+	return safetywire.PostSourceCommitMetadata{Environment: s.safetyEnvironment, SourceOwner: row.SourceOwner, ReleaseId: row.ReleaseID, ManifestDigest: row.Manifest, ReleaseDigest: row.ReleaseDigest, ObjectDigest: member.ObjectDigest, ExpectedObjectVersion: row.Version, ExpectedSafetyRevision: member.SafetyRevision}, nil
 }
 
 func (s *MongoPostStore) EnsureIndexes(ctx context.Context) error {
@@ -255,8 +297,102 @@ func (s *MongoPostStore) Commit(ctx context.Context, commit postports.Commit) (p
 			return nil, receiptErr
 		}
 
+		if s.safety == nil {
+			return nil, contentgenerated.AppErrorFromContentReleaseQueryBarrierNotReady("Post safety authority is not configured")
+		}
 		next := *commit.Post
 		next.Version = commit.ExpectedVersion + 1
+		owner := "content"
+		source := commit.SourceMetadata
+		if commit.ExpectedVersion > 0 {
+			if source == nil || source.ExpectedObjectVersion != commit.ExpectedVersion || source.Environment != s.safetyEnvironment {
+				return nil, safetyapp.ErrPostSafetyConflict
+			}
+			var actual bson.M
+			if err := s.coll.FindOne(txCtx, bson.M{"_id": next.ID, "version": commit.ExpectedVersion}).Decode(&actual); err != nil {
+				return nil, err
+			}
+			pairs := []struct {
+				key   string
+				value *string
+			}{{"sourceOwner", source.SourceOwner}, {"releaseId", source.ReleaseId}, {"manifestDigest", source.ManifestDigest}, {"releaseDigest", source.ReleaseDigest}}
+			for _, pair := range pairs {
+				expected := any(nil)
+				if pair.value != nil {
+					expected = *pair.value
+				}
+				if actual[pair.key] != expected {
+					return nil, safetyapp.ErrPostSafetyConflict
+				}
+			}
+			if source.SourceOwner != nil {
+				owner = *source.SourceOwner
+			}
+		}
+		if source != nil {
+			identity, err := s.safety.Identity(owner, next.ID)
+			if err != nil {
+				return nil, err
+			}
+			if identity != source.ObjectDigest {
+				return nil, safetyapp.ErrPostSafetyConflict
+			}
+		}
+		status, reason := "allowed", "verified_source"
+		if next.Status == "deleted" {
+			status, reason = "terminated", "author_deleted"
+		} else if next.ModerationStatus == "rejected" {
+			status, reason = "restricted", "moderation_rejected"
+		} else if next.Status != "published" || next.Visibility != "public" || next.ModerationStatus != "approved" {
+			status, reason = "restricted", "visibility_restricted"
+		}
+		digest := "sha256:" + commit.CommandDigest
+		var safetyMember safetyapp.PostSafetyMember
+		var safetyErr error
+		if owner == "content" {
+			verifier, ok := s.safety.(safetyapp.PostSafetySourceVerifier)
+			if !ok {
+				return nil, safetyapp.ErrPostSafetyNotReady
+			}
+			if err := verifier.VerifySource(txCtx, s.safetyEnvironment, owner, next.AuthorId); err != nil {
+				return nil, err
+			}
+		}
+		if commit.ExpectedVersion == 0 {
+			safetyMember, safetyErr = s.safety.Initialize(txCtx, owner, next.ID, next.Version, status, reason, digest)
+		} else {
+			safetyMember, safetyErr = s.safety.Decide(txCtx, owner, next.ID, source.ExpectedSafetyRevision, next.Version, status, reason, digest)
+		}
+		if safetyErr != nil {
+			return nil, safetyErr
+		}
+		// 同事务最终确定来源/版本/安全revision，不能用旧Post版本或外部caller字段。
+		for index, event := range commit.Events {
+			switch event.EventType {
+			case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostPromotedToWork", "PostModerationRejected", "PostDeleted":
+				var payload map[string]any
+				if err := json.Unmarshal(event.Payload, &payload); err != nil {
+					return nil, err
+				}
+				payload["sourceVersion"] = next.Version
+				payload["safetyRevision"] = safetyMember.SafetyRevision
+				for _, key := range []string{"environment", "sourceOwner", "releaseId", "manifestDigest", "releaseDigest"} {
+					payload[key] = nil
+				}
+				if source != nil && source.SourceOwner != nil {
+					payload["environment"] = source.Environment
+					payload["sourceOwner"] = source.SourceOwner
+					payload["releaseId"] = source.ReleaseId
+					payload["manifestDigest"] = source.ManifestDigest
+					payload["releaseDigest"] = source.ReleaseDigest
+				}
+				raw, err := json.Marshal(payload)
+				if err != nil {
+					return nil, err
+				}
+				commit.Events[index].Payload = raw
+			}
+		}
 		if next.Status != "deleted" {
 			if err := s.mediaReferences.AllowReferences(
 				txCtx,
@@ -281,10 +417,26 @@ func (s *MongoPostStore) Commit(ctx context.Context, commit postports.Commit) (p
 				return nil, insertErr
 			}
 		} else {
+			raw, err := bson.Marshal(&next)
+			if err != nil {
+				return nil, err
+			}
+			var replacement bson.M
+			if err = bson.Unmarshal(raw, &replacement); err != nil {
+				return nil, err
+			}
+			if source != nil && source.SourceOwner != nil {
+				replacement["sourceOwner"] = *source.SourceOwner
+				replacement["releaseId"] = *source.ReleaseId
+				replacement["manifestDigest"] = *source.ManifestDigest
+				if source.ReleaseDigest != nil {
+					replacement["releaseDigest"] = *source.ReleaseDigest
+				}
+			}
 			replaceResult, replaceErr := s.coll.ReplaceOne(
 				txCtx,
 				bson.M{"_id": next.ID, "version": commit.ExpectedVersion},
-				&next,
+				replacement,
 			)
 			if replaceErr != nil {
 				return nil, replaceErr

@@ -122,11 +122,17 @@ type BootstrapSpec[T any] struct {
 	// 本模块的内部端点）。判据窄化到精确 `/internal/` 路径，见
 	// normalizePreAdmissionPaths。
 	PreAdmissionPaths []string
+	// PreAdmissionOperations 为 authenticated owner command 声明
+	// operation-specific readiness；不改变 aggregate Ready/OpenAdmission。
+	PreAdmissionOperations []PreAdmissionOperation
 	// HijacksConnections 声明本服务会把连接从 net/http 接管出去
 	// （WebSocket 升级、长轮询）。此时不能设置 WriteTimeout：Go 不会为已
 	// hijack 的连接重置写截止时间，请求级上限由 operation guard 施加的
 	// reliability.timeout_ms 承担。
 	HijacksConnections bool
+	// MongoConnect 覆盖 canonical Mongo connector；nil 使用生产连接器。
+	// 该 seam 只替换唯一连接点，不改变 MongoDB 的装配顺序或创建第二 client。
+	MongoConnect func(ctx context.Context, cfg MongoConnectConfig) (MongoHandle, error)
 	// Assemble 是领域装配回调：store/facade/worker 构造、路由注册、
 	// 领域健康检查。必填。
 	Assemble func(asm *Assembly, cfg *T) error
@@ -205,6 +211,30 @@ func Bootstrap[T any](serviceName string, spec BootstrapSpec[T]) (*Module, error
 	return module, err
 }
 
+func validatePreAdmissionOperationContracts(
+	serviceName string,
+	operations []PreAdmissionOperation,
+	descriptors []rtauth.OperationSecurityDescriptor,
+) error {
+	for _, operation := range operations {
+		matched := false
+		for _, descriptor := range descriptors {
+			if descriptor.CanonicalOperationID != operation.CanonicalOperationID {
+				continue
+			}
+			matched = true
+			if descriptor.Method != operation.Method || descriptor.PathTemplate != operation.PathTemplate || descriptor.AuthMode != "required" {
+				return fmt.Errorf("%s pre-admission operation %s must match one authenticated canonical command route", serviceName, operation.CanonicalOperationID)
+			}
+			break
+		}
+		if !matched {
+			return fmt.Errorf("%s pre-admission operation %s is absent from generated descriptors", serviceName, operation.CanonicalOperationID)
+		}
+	}
+	return nil
+}
+
 func bootstrapAssembly[T any](
 	serviceName string,
 	spec BootstrapSpec[T],
@@ -216,6 +246,9 @@ func bootstrapAssembly[T any](
 		return nil, nil, fmt.Errorf(
 			"%s bootstrap requires generated operation descriptors", serviceName,
 		)
+	}
+	if err := validatePreAdmissionOperationContracts(serviceName, spec.PreAdmissionOperations, spec.OperationDescriptors); err != nil {
+		return nil, nil, err
 	}
 	envPrefix := strings.TrimSpace(spec.EnvPrefix)
 	if envPrefix == "" {
@@ -323,6 +356,9 @@ func bootstrapAssembly[T any](
 		Mux:           http.NewServeMux(),
 		Context:       context.Background(),
 		mongoConnect:  defaultMongoConnect,
+	}
+	if spec.MongoConnect != nil {
+		assembly.mongoConnect = spec.MongoConnect
 	}
 
 	infrastructure, err := discoverInfrastructure(cfg)
@@ -444,12 +480,13 @@ func bootstrapAssembly[T any](
 			Write:      writeTimeout,
 			Idle:       authStack.Timeouts.Idle,
 		},
-		Health:            health,
-		Workers:           workers,
-		Cleanups:          cleanups,
-		PrepareMigration:  spec.PrepareMigration,
-		ReadinessTimeout:  spec.ReadinessTimeout,
-		PreAdmissionPaths: spec.PreAdmissionPaths,
+		Health:                 health,
+		Workers:                workers,
+		Cleanups:               cleanups,
+		PrepareMigration:       spec.PrepareMigration,
+		ReadinessTimeout:       spec.ReadinessTimeout,
+		PreAdmissionPaths:      spec.PreAdmissionPaths,
+		PreAdmissionOperations: spec.PreAdmissionOperations,
 	})
 	if err != nil {
 		return nil, nil, err

@@ -174,13 +174,15 @@ def _load_prod_activation_admission(
     envelope_fields = {
         "schema", "prodActivationAdmission", "releaseTagAdmission",
         "qualification", "candidateMaterialManifest",
-        "serviceFactoryMaterial", "appFactoryMaterial", "previousReleased",
-        "rollbackReadiness", "stableTag", "sourceGitSha", "sourceTree",
+        "serviceFactoryMaterial", "webFactoryMaterial", "prior",
+        "stableTag", "sourceGitSha", "sourceTree",
         "controlPlaneGitSha", "candidateMaterialId", "previousReleasedId",
         "candidateDigest", "previousCandidateDigest",
-        "serviceMaterialDigest", "appMaterialDigest",
-        "ociDigests", "previousOciDigests",
+        "serviceMaterialDigest", "webMaterialDigest",
+        "ociDigests",
     }
+    if isinstance(envelope, dict) and ("appFactoryMaterial" in envelope or "appMaterialDigest" in envelope):
+        envelope_fields |= {"appFactoryMaterial", "appMaterialDigest"}
     if (
         not isinstance(envelope, dict)
         or set(envelope) != envelope_fields
@@ -197,8 +199,8 @@ def _load_prod_activation_admission(
         "schema", "admissionId", "decision", "stableTag", "tagObjectOid",
         "sourceGitSha", "sourceTree", "controlPlaneGitSha",
         "releaseTagAdmission", "qualification", "candidateMaterialManifest",
-        "factoryMaterials", "previousActiveReleasedLedger", "rollbackReadiness",
-        "artifacts", "ociDigests", "previousOciDigests",
+        "factoryMaterials", "deliveryTargets", "prior",
+        "artifacts", "ociDigests",
         "createdBeforeStage", "admittedAt",
     }
     unsigned_admission = dict(admission)
@@ -221,12 +223,24 @@ def _load_prod_activation_admission(
     material, material_exact = _load_materialized_exact_fact(
         root, admission.get("candidateMaterialManifest"), field="candidateMaterialManifest"
     )
+    from quwoquan_ops.ci.qualified_prod import admission_prior
+    try:
+        prior = admission_prior(admission)
+    except QualifiedProdError as error:
+        raise RuntimeError(str(error)) from error
     previous, previous_exact = _load_materialized_exact_fact(
-        root, admission.get("previousActiveReleasedLedger"), field="previousReleased"
+        root, prior["previousReleased"], field="prior.previousReleased"
     )
     rollback, rollback_exact = _load_materialized_exact_fact(
-        root, admission.get("rollbackReadiness"), field="rollbackReadiness"
+        root, prior["rollbackReadiness"], field="prior.rollbackReadiness"
     )
+    from quwoquan_ops.ci.release_qualification import validate_delivery_scope, required_platforms
+    try:
+        targets = validate_delivery_scope(admission, tag, qualification, material, effect="service")
+        if {item["platform"] for item in material.get("artifacts", [])} != required_platforms(targets):
+            raise ValueError("deliveryTargets artifact closure drifted")
+    except ValueError as error:
+        raise RuntimeError(str(error)) from error
     stable_tag = str(admission.get("stableTag") or "")
     source_git_sha = _require_git_identity(admission.get("sourceGitSha"), field="sourceGitSha")
     source_tree = _normalized_tree_identity(admission.get("sourceTree"), field="sourceTree")
@@ -244,6 +258,11 @@ def _load_prod_activation_admission(
         previous.get("candidateMaterialId") or previous.get("candidateId"),
         field="previousReleased.candidateMaterialId",
     )
+    from quwoquan_ops.ci.qualified_prod import validate_present_prior
+    try:
+        validate_present_prior(root, prior, candidate=candidate_digest)
+    except QualifiedProdError as error:
+        raise RuntimeError(str(error)) from error
     if (
         re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", stable_tag) is None
         or tag.get("schema") != "quwoquan_ops.release_tag_admission_fact.v1"
@@ -279,37 +298,34 @@ def _load_prod_activation_admission(
         raise RuntimeError("Prod activation exact authority graph drifted")
 
     try:
-        outputs = _factory_outputs(material.get("factoryOutputs"))
+        outputs = _factory_outputs(material.get("factoryOutputs"), targets)
         factory_refs = _factory_refs(outputs)
-        service_binding = envelope.get("serviceFactoryMaterial")
-        app_binding = envelope.get("appFactoryMaterial")
-        if not isinstance(service_binding, dict) or not isinstance(app_binding, dict):
-            raise RuntimeError("Prod activation factory material bindings are missing")
         expected_binding_fields = {"ociRef", "ociDigest", "payloadDigest", "materialDigest", "materializedManifest"}
-        if set(service_binding) != expected_binding_fields or set(app_binding) != expected_binding_fields:
-            raise RuntimeError("Prod activation factory material binding shape drifted")
-        if (
-            {key: service_binding[key] for key in expected_binding_fields - {"materializedManifest"}} != factory_refs["service"]
-            or {key: app_binding[key] for key in expected_binding_fields - {"materializedManifest"}} != factory_refs["app"]
-            or admission.get("factoryMaterials") != factory_refs
-        ):
+        bindings = {}
+        for kind in outputs:
+            field = f"{kind}FactoryMaterial"
+            binding = envelope.get(field)
+            if not isinstance(binding, dict) or set(binding) != expected_binding_fields:
+                raise RuntimeError(f"Prod activation {kind} factory material binding shape drifted")
+            if {key: binding[key] for key in expected_binding_fields - {"materializedManifest"}} != factory_refs[kind]:
+                raise RuntimeError("Prod activation factory locator closure drifted")
+            bindings[kind] = binding
+        if admission.get("factoryMaterials") != factory_refs:
             raise RuntimeError("Prod activation factory locator closure drifted")
-        service_material, app_material, service_exact, app_exact = _validated_factory_actual_materials(
-            root=root,
-            material=material,
-            service_material_ref=service_binding["materializedManifest"],
-            app_material_ref=app_binding["materializedManifest"],
+        actual, validated = _validated_factory_actual_materials(
+            root=root, material=material,
+            service_material_ref=bindings["service"]["materializedManifest"],
+            web_material_ref=bindings["web"]["materializedManifest"],
+            app_material_ref=bindings.get("app", {}).get("materializedManifest"),
             repository_root=Path(__file__).resolve().parents[3],
         )
     except QualifiedProdError as error:
         raise RuntimeError(str(error)) from error
-    if (
-        service_binding["materializedManifest"] != service_exact
-        or app_binding["materializedManifest"] != app_exact
-        or envelope.get("serviceMaterialDigest") != service_material.get("materialDigest")
-        or envelope.get("appMaterialDigest") != app_material.get("materialDigest")
-    ):
-        raise RuntimeError("Prod activation actual factory material closure drifted")
+    for kind, binding in bindings.items():
+        if binding["materializedManifest"] != actual[kind][1] or envelope.get(f"{kind}MaterialDigest") != actual[kind][0].get("materialDigest"):
+            raise RuntimeError("Prod activation actual factory material closure drifted")
+    service_material = actual["service"][0]
+    service_exact = actual["service"][1]
 
     artifacts = _require_exact_artifacts(admission.get("artifacts"), field="admission.artifacts")
     if (
@@ -332,8 +348,7 @@ def _load_prod_activation_admission(
         "releaseTagAdmission": tag_exact,
         "qualification": qualification_exact,
         "candidateMaterialManifest": material_exact,
-        "previousReleased": previous_exact,
-        "rollbackReadiness": rollback_exact,
+        "prior": prior,
         "stableTag": stable_tag,
         "sourceGitSha": source_git_sha,
         "sourceTree": admission["sourceTree"],
@@ -343,13 +358,12 @@ def _load_prod_activation_admission(
         "candidateDigest": candidate_digest,
         "previousCandidateDigest": previous_candidate,
         "ociDigests": oci_digests,
-        "previousOciDigests": previous_oci_digests,
     }
     if not previous_oci_digests or any(envelope.get(field) != expected for field, expected in expected_envelope.items()):
         raise RuntimeError("Prod activation envelope exact authority binding drifted")
     if (
         sorted(admission.get("ociDigests") or []) != oci_digests
-        or sorted(admission.get("previousOciDigests") or []) != previous_oci_digests
+        or sorted(prior["ociDigests"]) != previous_oci_digests
         or sorted(rollback.get("ociDigests") or []) != previous_oci_digests
     ):
         raise RuntimeError("Prod activation current or rollback OCI digest set drifted")
@@ -360,14 +374,18 @@ def _load_prod_activation_admission(
         "candidateId": candidate_digest,
         "candidateMaterialId": candidate_material_id,
         "source": {"gitSha": source_git_sha, "treeDigest": admission["sourceTree"]},
-        "serviceFactoryMaterial": service_binding,
-        "appFactoryMaterial": app_binding,
+        "serviceFactoryMaterial": bindings["service"],
+        "webFactoryMaterial": bindings["web"],
         "images": service_material["images"],
         "prodRuntimeConfigDeploymentBundle": service_material["prodRuntimeConfigDeploymentBundle"],
-        "factoryOciDigests": {kind: factory_refs[kind]["ociDigest"] for kind in ("service", "app")},
-        "factoryMaterialDigests": {kind: factory_refs[kind]["materialDigest"] for kind in ("service", "app")},
+        "factoryOciDigests": {kind: factory_refs[kind]["ociDigest"] for kind in factory_refs},
+        "factoryMaterialDigests": {kind: factory_refs[kind]["materialDigest"] for kind in factory_refs},
     }
+    if "app" in targets:
+        deploy_material["appFactoryMaterial"] = bindings["app"]
     identity = {
+        "prior": prior,
+        "deliveryTargets": targets,
         "prodActivationAdmissionRef": admission_exact["ref"],
         "prodActivationAdmissionOciDigest": admission_exact["ref"].rsplit("@", 1)[-1],
         "prodActivationAdmissionPayloadDigest": admission_exact["digest"],
@@ -384,8 +402,8 @@ def _load_prod_activation_admission(
         "candidateMaterialId": candidate_material_id,
         "serviceFactoryOciRef": factory_refs["service"]["ociRef"],
         "serviceFactoryOciDigest": factory_refs["service"]["ociDigest"],
-        "appFactoryOciRef": factory_refs["app"]["ociRef"],
-        "appFactoryOciDigest": factory_refs["app"]["ociDigest"],
+        "webFactoryOciRef": factory_refs["web"]["ociRef"],
+        "webFactoryOciDigest": factory_refs["web"]["ociDigest"],
         "previousReleasedRef": previous_exact["ref"],
         "previousReleasedOciDigest": previous_exact["ref"].rsplit("@", 1)[-1],
         "previousReleasedPayloadDigest": previous_exact["digest"],
@@ -399,6 +417,8 @@ def _load_prod_activation_admission(
         "candidateDigest": candidate_digest,
         "previousCandidateDigest": previous_candidate,
     }
+    if "app" in targets:
+        identity.update({"appFactoryOciRef": factory_refs["app"]["ociRef"], "appFactoryOciDigest": factory_refs["app"]["ociDigest"]})
     return identity, service_manifest_path, candidate_material_id, deploy_material
 
 

@@ -910,7 +910,7 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 	writeFile(t, filepath.Join(owner, "manifest.json"), `{"assets":[{
 		"assetId":"杭州西湖_cover_三潭印月石塔_28_36eb11bd",
 		"sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		"bytes":12,"path":"assets/source.jpg","sourceRefs":["sources/a/source.json"]
+		"bytes":12,"path":"media/source.jpg","sourceRefs":["sources/a/source.json"]
 	}]}`)
 	writeFile(t, filepath.Join(owner, "sources/a/source.json"), `{
 		"schema":"quwoquan_data.publish_source","sourceId":"a","sourceUrl":"https://example.com/source",

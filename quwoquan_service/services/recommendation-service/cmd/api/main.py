@@ -274,6 +274,10 @@ def _build_redis_client(scene: str):
     if not primary and addresses:
         primary = str(addresses[0])
     host, port = _host_port(primary)
+    username = os.getenv(
+        f"RECOMMENDATION_REDIS_{scene.upper()}_USERNAME",
+        "",
+    ).strip() or None
     password = os.getenv(
         f"RECOMMENDATION_REDIS_{scene.upper()}_PASSWORD",
         "",
@@ -288,6 +292,7 @@ def _build_redis_client(scene: str):
             RedisCluster(
                 host=host,
                 port=port,
+                username=username,
                 password=password,
                 ssl=tls,
                 socket_connect_timeout=connect_timeout,
@@ -301,6 +306,7 @@ def _build_redis_client(scene: str):
             host=host,
             port=port,
             db=int(config.get("db", 0)),
+            username=username,
             password=password,
             ssl=tls,
             socket_connect_timeout=connect_timeout,
@@ -331,11 +337,10 @@ async def lifespan(app: FastAPI):
             )
         )
     app.state.runtime_log_exporter = runtime_log_exporter
-    mongodb_database = os.getenv("MONGODB_DATABASE", "quwoquan_recommendation").strip()
-    if mongodb_database != "quwoquan_recommendation":
-        raise RuntimeError(
-            "recommendation-service MONGODB_DATABASE must be quwoquan_recommendation"
-        )
+    mongodb_database = _required_env("MONGODB_DATABASE")
+    bound_namespace = _required_env("RECOMMENDATION_RELEASE_CANDIDATE_MONGODB_NAMESPACE")
+    if mongodb_database != bound_namespace:
+        raise RuntimeError("recommendation Mongo namespace differs from canonical data-plane binding")
     mongo_client = MongoClient(
         _required_env("MONGODB_URI"),
         serverSelectionTimeoutMS=3000,
@@ -375,6 +380,8 @@ async def lifespan(app: FastAPI):
         feedback_store = MongoRecommendationFeedbackFactStore(database)
         model_release_store.ensure_indexes()
         candidate_store.ensure_indexes()
+        from internal.recommendation.recommendation_candidate_index_view.infrastructure.runtime_binding import compose_release_binding
+        candidate_store._release_runtime_binding = compose_release_binding(database, runtime_config, environment=os.environ["APP_ENV"])
         feature_store.ensure_indexes()
         subject_closure_store.ensure_indexes()
         exposure_store.ensure_indexes()
@@ -478,8 +485,25 @@ async def lifespan(app: FastAPI):
                 ),
                 subject_closures=subject_closure_store,
                 exclusion_profiles=feature_store,
+                release_readiness=candidate_store,
             )
+        from internal.recommendation.recommendation_candidate_index_view.application.fence_reconciliation import FenceReconciler
+        from internal.recommendation.recommendation_candidate_index_view.application.release_candidate import digest as release_digest
+        from internal.recommendation.recommendation_candidate_index_view.infrastructure.fence_reconciliation import CandidateFenceReceipts, ContentReceiptClient, content_service_authorization
+        from internal.recommendation.recommendation_feature_profile_view.infrastructure.fence_reconciliation import FeatureFenceReceipts
+        from generated.recommendation.recommendation_candidate_index_view.events.content_post_ContentReleaseFenceChanged import ContentReleaseFenceChangedPayload as CandidateFenceModel, ContentActiveReleaseFence as CandidateFenceValue
+        from generated.recommendation.recommendation_feature_profile_view.events.content_post_ContentReleaseFenceChanged import ContentReleaseFenceChangedPayload as FeatureFenceModel
+        content_receipts = ContentReceiptClient(os.environ.get("CONTENT_SERVICE_BASE_URL", ""), content_service_authorization(), CandidateFenceValue)
+        def read_fence_proof(after):
+            from generated.recommendation.ranked_recommendation_window.models.request_response import ReleaseCandidateBinding
+            release = ReleaseCandidateBinding.model_validate({key: after[key] for key in ("environment", "sourceOwner", "releaseId", "manifestDigest")})
+            binding = candidate_store._release_runtime_binding(release)
+            source = candidate_store.read_release_source(binding)
+            return release_digest(candidate_store.read_release_readiness(binding, source.snapshot.snapshotDigest))
+        candidate_fence = FenceReconciler(model=CandidateFenceModel, store=CandidateFenceReceipts(database), content=content_receipts, proof_reader=read_fence_proof, environment=os.environ["APP_ENV"])
+        feature_fence = FenceReconciler(model=FeatureFenceModel, store=FeatureFenceReceipts(database), content=content_receipts, proof_reader=read_fence_proof, environment=os.environ["APP_ENV"])
         post_lifecycle_consumer = CandidatePostLifecycleConsumer(
+            fence_reconciler=candidate_fence,
             redis_client=general_redis_client,
             projection=candidate_store,
             subject_closures=subject_closure_store,
@@ -630,6 +654,7 @@ async def lifespan(app: FastAPI):
         feature_content_behavior_consumer.start()
         app.state.feature_content_behavior_consumer = feature_content_behavior_consumer
         feature_post_lifecycle_consumer = FeaturePostLifecycleConsumer(
+            fence_reconciler=feature_fence,
             redis_client=general_redis_client,
             feature_store=feature_store,
             projector=intersection_event_projector,
@@ -823,6 +848,10 @@ def health(request: Request) -> dict[str, str]:
         ),
         "candidate_post_lifecycle_consumer": (
             candidate_consumer is not None and candidate_consumer.healthy()
+        ),
+        "feature_post_lifecycle_consumer": (
+            getattr(request.app.state, "feature_post_lifecycle_consumer", None) is not None
+            and request.app.state.feature_post_lifecycle_consumer.healthy()
         ),
         "candidate_gathering_lifecycle_consumer": (
             gathering_consumer is not None and gathering_consumer.healthy()

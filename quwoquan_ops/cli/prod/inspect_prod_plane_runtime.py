@@ -97,6 +97,7 @@ def _resolve_key_source(secret_name: str, account: str, key_dir: Path) -> tuple[
 
 def _remote_python() -> str:
     return r"""
+import hashlib
 import json
 import os
 import pathlib
@@ -199,11 +200,42 @@ payload = {
     },
     "containerCount": len(runtime_containers),
     "containers": runtime_containers,
-    "inspect": selected_inspect,
     "listeners": listener_result["stdout"],
-    "podmanPs": ps_result,
-    "podmanInspect": inspect_result,
 }
+# 只读公开制品身份与配置摘要，不输出配置内容或 credentials。
+provenance_path = compose_root / "provenance.json"
+guard_journal_path = compose_root / "process/execution-guard/journal.json"
+try:
+    guard_journal_readback = json.loads(guard_journal_path.read_text()) if guard_journal_path.is_file() else {"status": "missing"}
+except (OSError, ValueError) as error:
+    raise SystemExit("RUNTIME_INSPECTION_INVALID: guard journal: " + str(error))
+identity_path = compose_root / "runtime/artifact-identity.json"
+try:
+    provenance = json.loads(provenance_path.read_text())
+    identity = json.loads(identity_path.read_text())
+    config_digests = {}
+    for service in provenance.get("configServices", []):
+        if not isinstance(service, str) or pathlib.Path(service).name != service:
+            raise ValueError("invalid config service identity")
+        config_path = compose_root / "runtime/config-root" / (service + ".yaml")
+        if config_path.is_symlink():
+            raise ValueError("config readback must not follow symlink")
+        config_digests[service] = "sha256:" + hashlib.sha256(config_path.read_bytes()).hexdigest()
+    payload["candidateDigest"] = provenance["candidateDigest"]
+    payload["configDigest"] = identity["configDigest"]
+    payload["configFileDigests"] = config_digests
+    payload["provenanceDigest"] = hashlib.sha256(provenance_path.read_bytes()).hexdigest()
+except (OSError, ValueError, KeyError):
+    payload["identityReadbackError"] = "candidate/config readback unavailable"
+platform = [item for item in runtime_containers if item["composeService"] == "platform-ops-service"]
+if len(platform) == 1:
+    ack = run(["podman", "exec", platform[0]["id"], "wget", "-qO-",
+               "http://127.0.0.1:18088/readyz/config-convergence"])
+    try:
+        payload["configAck"] = json.loads(ack["stdout"]) if ack["returncode"] == 0 else {}
+    except ValueError:
+        payload["configAck"] = {}
+payload["guard-journal-readback"] = guard_journal_readback
 print(json.dumps(payload, ensure_ascii=False))
 """
 

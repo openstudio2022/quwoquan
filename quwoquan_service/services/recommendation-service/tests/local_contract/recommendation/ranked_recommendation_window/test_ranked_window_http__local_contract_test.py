@@ -16,6 +16,10 @@ from security.service_authorization import AuthorizationFailure
 from datetime import datetime, timezone
 
 
+def _fence():
+    return {"release": None, "revision": 0}
+
+
 class _Store:
     def __init__(self) -> None:
         self.windows = {}
@@ -41,7 +45,7 @@ class _Store:
 
 
 class _Ranker:
-    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int):
+    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int, content_fence):
         assert limit == 300
         return RankingResult(
             experiment_bucket="model",
@@ -114,7 +118,7 @@ def _headers(idempotency_key: str = "request-001") -> dict[str, str]:
 
 def test_create_replay_and_continue_ranked_window() -> None:
     client = _client()
-    body = {"subjectId": "persona-001", "scenario": "content_feed", "limit": 2}
+    body = {"contentFence": _fence(), "subjectId": "persona-001", "scenario": "content_feed", "limit": 2}
     created = client.post(
         "/internal/recommendation/ranked-pages",
         headers=_headers(),
@@ -133,26 +137,26 @@ def test_create_replay_and_continue_ranked_window() -> None:
     )
     assert replay.json() == created.json()
 
-    continued = client.get(
-        "/internal/recommendation/ranked-pages/window-001",
+    continued = client.post(
+        "/internal/recommendation/ranked-pages/window-001:query",
         headers={"Authorization": "Bearer ranked-window-service"},
-        params={"subjectId": "persona-001", "fromOrdinal": 2, "limit": 2},
+        json={"contentFence": _fence(), "subjectId": "persona-001", "fromOrdinal": 2, "limit": 2},
     )
     assert continued.status_code == 200
     assert [item["ordinal"] for item in continued.json()["items"]] == [2, 3]
     assert continued.json()["nextOrdinal"] == 4
 
-    wrong_subject = client.get(
-        "/internal/recommendation/ranked-pages/window-001",
+    wrong_subject = client.post(
+        "/internal/recommendation/ranked-pages/window-001:query",
         headers={"Authorization": "Bearer ranked-window-service"},
-        params={"subjectId": "persona-other", "fromOrdinal": 2, "limit": 2},
+        json={"contentFence": _fence(), "subjectId": "persona-other", "fromOrdinal": 2, "limit": 2},
     )
     assert wrong_subject.status_code == 404
 
 
 def test_ranked_window_rejects_auth_invalid_body_and_idempotency_conflict() -> None:
     client = _client()
-    body = {"subjectId": "persona-001", "scenario": "content_feed", "limit": 2}
+    body = {"contentFence": _fence(), "subjectId": "persona-001", "scenario": "content_feed", "limit": 2}
     unauthorized = client.post("/internal/recommendation/ranked-pages", json=body)
     assert unauthorized.status_code == 401
     assert unauthorized.json()["detail"]["code"].endswith("ranked_window_unauthorized")
@@ -184,7 +188,7 @@ def test_ranked_window_returns_terminal_subject_closed_error() -> None:
     response = client.post(
         "/internal/recommendation/ranked-pages",
         headers=_headers(),
-        json={"subjectId": "account-closed", "scenario": "content_feed", "limit": 2},
+        json={"contentFence": _fence(), "subjectId": "account-closed", "scenario": "content_feed", "limit": 2},
     )
     assert response.status_code == 410
     assert response.json()["detail"]["code"].endswith("ranked_window_subject_closed")

@@ -1,6 +1,13 @@
 backend: mongodb
 role: projection
 collections:
+  recommendation_feature_content_fence_receipts:
+    entity: FeatureContentFenceReceipt
+    role: append_only
+    description: 本owner专属fence消费凭据，不复用主体/inbox，不变更作者特征或删除候选，只有现役候选公开port/proof对账或exact原提交验证后写，失败pending，无TTL、不保存PII正文。
+    indexes:
+      - {name: uq_rec_feature_fence_event, keys: {eventDigest: 1}, unique: true}
+      - {name: uq_rec_feature_fence_revision, keys: {scopeDigest: 1, revision: 1}, unique: true}
   rm_recommend_feature:
     entity: RecommendationFeatureProfileView
     role: projection

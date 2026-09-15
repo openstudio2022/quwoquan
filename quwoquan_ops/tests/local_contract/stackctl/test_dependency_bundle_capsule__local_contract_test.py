@@ -173,7 +173,7 @@ def test_loader_resolves_cocoapods_from_path_when_environment_identity_is_absent
     monkeypatch.setattr(capsule, "load_verified_ios_pod_capsule", load_pod)
     monkeypatch.setattr(
         capsule,
-        "canonical_android_uat_gradle_invocations",
+        "canonical_android_dependency_bundle_invocations",
         lambda _repository: [],
     )
     monkeypatch.setattr(
@@ -285,7 +285,7 @@ def test_loader_explicit_pod_uses_declared_physical_directory_not_ambient_path(
     monkeypatch.setattr(capsule, "load_verified_ios_pod_capsule", load_pod)
     monkeypatch.setattr(
         capsule,
-        "canonical_android_uat_gradle_invocations",
+        "canonical_android_dependency_bundle_invocations",
         lambda _repository: [],
     )
     monkeypatch.setattr(

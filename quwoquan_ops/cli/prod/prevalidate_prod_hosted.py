@@ -35,6 +35,11 @@ from quwoquan_ops.cli.lib.output_paths import (
     deployment_render_dir,
 )
 from quwoquan_ops.cli.prod.load_prod_plane_images import normalize_image_id
+from quwoquan_ops.cli.prod.execution_controller import (
+    ControllerSession, SubprocessTransport, digest as execution_digest,
+    load_contract as load_execution_contract, prevalidate_placements,
+    run_prevalidate_coordination,
+)
 from quwoquan_ops.cli.prod.prod_hosted_topology import (
     DeploymentReplica,
     ProdHostedTopologyError,
@@ -157,6 +162,8 @@ def validate_rehearsal_candidate(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def validate_external_data_plane_candidate(args: argparse.Namespace) -> Path | None:
+    if args.exact_candidate and args.data_mode != "isolated":
+        raise PrevalidationError("local-build rehearsal requires isolated data mode", code="LOCAL_BUILD_ISOLATION_REQUIRED")
     if args.data_mode != "external":
         return None
     candidate_root = deployment_candidate_dir("prod-hosted", args.candidate_digest)
@@ -256,8 +263,8 @@ def load_projection() -> tuple[dict[str, Any], dict[str, PlaneProjection]]:
             image_only_services=image_only,
             exposed_ports=ports,
         )
-    if projections["service"].image_only_services != ("integration-service",):
-        raise PrevalidationError("integration-service must be image/config-only")
+    if "integration-service" not in projections["service"].startup_services:
+        raise PrevalidationError("integration-service must be a startup service")
     startup_services = {
         service
         for projection in projections.values()
@@ -910,6 +917,49 @@ def _wait_for_readiness(
     )
 
 
+def _tree_digest(root: Path) -> str:
+    import hashlib
+    value = hashlib.sha256()
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        value.update(path.relative_to(root).as_posix().encode("utf-8"))
+        value.update(b"\0")
+        value.update(hashlib.sha256(path.read_bytes()).digest())
+    return "sha256:" + value.hexdigest()
+
+
+def _coordinate_prevalidate(
+    args: argparse.Namespace, placements: dict[str, DeploymentReplica],
+    render_dirs: dict[str, Path],
+) -> dict[str, Any]:
+    contract = load_execution_contract()
+    signing_ref = str(contract["executionControl"]["trustedController"]["privateKeySecretRef"])
+    key_text = os.environ.get(signing_ref, "").strip()
+    if not key_text:
+        raise PrevalidationError("prevalidate execution controller signing key is unavailable", code="EXECUTION_CONTROLLER_UNAVAILABLE")
+    private_key = Path(key_text).expanduser()
+    if not private_key.is_absolute() or not private_key.is_file() or private_key.is_symlink() or private_key.stat().st_mode & 0o077:
+        raise PrevalidationError("prevalidate execution controller signing key is unsafe", code="EXECUTION_CONTROLLER_UNAVAILABLE")
+    plan = [placements[name] for name in sorted(placements)]
+    execution_placements = prevalidate_placements(plan, contract)
+    expected_generation = int(os.environ.get("QWQ_PREVALIDATE_EXPECTED_EXECUTION_GENERATION", "0"))
+    attempt = execution_digest({"candidateDigest": args.candidate_digest, "hostId": plan[0].host_id, "instance": "prevalidate"})
+    staged: dict[str, dict[str, str]] = {}
+    for placement in execution_placements:
+        render_dir = render_dirs[placement["plane"]]
+        unit = next((item.name for item in (render_dir / "systemd").glob("*.service")), "")
+        if not unit:
+            raise PrevalidationError("rendered prevalidate unit is missing", code="EXECUTION_STAGING_INVALID")
+        tree = _tree_digest(render_dir)
+        staged[placement["plane"]] = {
+            "stagingRelative": f"staging/{attempt.removeprefix('sha256:')}/{tree.removeprefix('sha256:')}",
+            "treeDigest": tree,
+            "unitName": unit,
+            "unitDigest": "sha256:" + __import__("hashlib").sha256((render_dir / "systemd" / unit).read_bytes()).hexdigest(),
+        }
+    session = ControllerSession(SubprocessTransport(contract), contract, private_key, attempt, expected_generation, 0)
+    return run_prevalidate_coordination(session, execution_placements, staged)
+
+
 def execute_deployment(
     args: argparse.Namespace,
     spec: dict[str, Any],
@@ -918,6 +968,7 @@ def execute_deployment(
 ) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     image_reports: dict[str, Any] = {}
+    render_dirs: dict[str, Path] = {}
     reclaim_policy = dict(spec.get("staleRuntimeReclaimPolicy") or {})
     reclaim_policy["minimumHostResources"] = dict(
         spec.get("minimumHostResources") or {}
@@ -940,6 +991,7 @@ def execute_deployment(
         render_dir = deployment_render_dir(
             "prod", target="prod-hosted", name=placement.render_name
         )
+        render_dirs[name] = render_dir
         steps.append(
             _run(
                 [
@@ -1030,18 +1082,11 @@ def execute_deployment(
                     "--root-suffix",
                     f"instances/prevalidate/{placement.replica_id}",
                 ], phase="transfer", timeout=TRANSFER_TIMEOUT_SECONDS,
+                env={"QWQ_EXECUTION_ATTEMPT_ID": execution_digest({"candidateDigest": args.candidate_digest, "hostId": placement.host_id, "instance": "prevalidate"})},
             )
         )
-    units = [
-        _install_unit(
-            host=placements[item.name].ssh_host,
-            projection=item,
-            key_dir=args.key_dir,
-            replica_id=placements[item.name].replica_id,
-            remote_root=placements[item.name].remote_root,
-        )
-        for item in projections.values()
-    ]
+    coordination = _coordinate_prevalidate(args, placements, render_dirs)
+    units = [{"plane": name, "status": "coordinated"} for name in sorted(placements)]
     runtime = _wait_for_readiness(args, spec, projections, placements, image_reports)
     return {
         "status": "passed",
@@ -1065,6 +1110,7 @@ def execute_deployment(
         "staleRuntimeReclaim": reclaim_reports,
         "units": units,
         "runtime": runtime,
+        "executionCoordination": coordination,
         "imageDelivery": image_reports,
         "steps": steps,
     }

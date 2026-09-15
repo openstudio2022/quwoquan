@@ -27,6 +27,7 @@ class EntityRequestPageIds {
     'ListHomepageReviews': 'entity.list.homepage.reviews',
     'ListHomepageStatusReports': 'entity.list.homepage.status.reports',
     'PublishHomepageCandidate': 'entity.homepage.candidate.publish',
+    'ReadHomepageReleaseCandidate': 'entity.read.homepage.release.candidate',
     'ReviewHomepageClaimRequest': 'entity.homepage.claim.review',
     'ReviewHomepageStatusReport': 'entity.homepage.status_report.review',
     'SearchHomepages': 'entity.homepage.search',
@@ -68,6 +69,8 @@ class EntityRequestPageIds {
       'entity.list.homepage.status.reports';
   static const String publishHomepageCandidate =
       'entity.homepage.candidate.publish';
+  static const String readHomepageReleaseCandidate =
+      'entity.read.homepage.release.candidate';
   static const String reviewHomepageClaimRequest =
       'entity.homepage.claim.review';
   static const String reviewHomepageStatusReport =

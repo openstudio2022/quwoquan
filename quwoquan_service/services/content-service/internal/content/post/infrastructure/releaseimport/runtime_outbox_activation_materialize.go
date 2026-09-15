@@ -314,8 +314,7 @@ func tombstoneMissingLivePosts(
 		ids = append(ids, snapshot.PostID)
 	}
 	update, err := live.UpdateMany(ctx, bson.M{"_id": bson.M{"$in": ids}}, bson.M{"$set": bson.M{
-		"status": "deleted", "visibility": "hidden", "lifecycleStatus": "tombstone",
-		"deletedAt": activatedAt, "deletedByReleaseId": candidate.ReleaseID,
+		"visibility": "hidden", "lifecycleStatus": "inactive",
 		"updatedAt": activatedAt,
 	}})
 	if err != nil {
@@ -416,47 +415,6 @@ func materializeCandidateMedia(
 	return materialized, nil
 }
 
-func tombstoneMissingLiveMedia(
-	ctx context.Context,
-	live *mongo.Collection,
-	candidate importedReleaseCandidateState,
-	tombstonedAt time.Time,
-) (int64, error) {
-	targetIDs := make([]string, 0)
-	cursor, err := live.Find(ctx, bson.M{
-		"ownerId": candidate.SourceOwner, "sourceReleaseId": candidate.ReleaseID,
-		"sourceManifestDigest": candidate.ManifestDigest, "processingStatus": "ready",
-	}, options.Find().SetProjection(bson.M{"_id": 1}))
-	if err != nil {
-		return 0, fmt.Errorf("read materialized target media identities: %w", err)
-	}
-	for cursor.Next(ctx) {
-		var row struct {
-			ID string `bson:"_id"`
-		}
-		if err := cursor.Decode(&row); err != nil {
-			_ = cursor.Close(ctx)
-			return 0, err
-		}
-		targetIDs = append(targetIDs, row.ID)
-	}
-	if err := cursor.Close(ctx); err != nil {
-		return 0, err
-	}
-	result, err := live.UpdateMany(ctx, bson.M{
-		"ownerId":          candidate.SourceOwner,
-		"sourceReleaseId":  bson.M{"$ne": candidate.ReleaseID},
-		"processingStatus": "ready", "_id": bson.M{"$nin": targetIDs},
-	}, bson.M{"$set": bson.M{
-		"processingStatus": "deleted", "deletedAt": tombstonedAt,
-		"deletedByReleaseId": candidate.ReleaseID,
-	}})
-	if err != nil {
-		return 0, fmt.Errorf("tombstone previous live release media: %w", err)
-	}
-	return result.ModifiedCount, nil
-}
-
 func validateActivationOutboxClosure(
 	ctx context.Context,
 	live *mongo.Collection,
@@ -485,7 +443,8 @@ func validateActivationOutboxClosure(
 	}
 	if len(events) > 0 {
 		count, err := live.CountDocuments(ctx, bson.M{
-			"releaseId":        candidate.ReleaseID,
+			"releaseId":   candidate.ReleaseID,
+			"sourceOwner": candidate.SourceOwner, "manifestDigest": candidate.ManifestDigest, "eventType": "ContentReleaseFenceChanged", "aggregateId": candidate.Environment + "/" + candidate.SourceOwner,
 			"aggregateVersion": events[0].AggregateVersion,
 		})
 		if err != nil {
@@ -522,7 +481,9 @@ func validateLiveReleaseClosure(
 	}
 	publishedCount, err := outbox.CountDocuments(ctx, bson.M{
 		"aggregateVersion": activationVersion,
-		"eventType":        "PostPublished",
+		"eventType":        "ContentReleaseFenceChanged",
+		"aggregateId":      candidate.Environment + "/" + candidate.SourceOwner,
+		"manifestDigest":   candidate.ManifestDigest,
 		"releaseId":        candidate.ReleaseID,
 	})
 	if err != nil {
@@ -537,12 +498,12 @@ func validateLiveReleaseClosure(
 	}
 	if postCount != int64(candidate.Counts.PostsProjected) ||
 		(requireExactActiveClosure && totalActivePosts != int64(candidate.Counts.PostsProjected)) ||
-		publishedCount != int64(candidate.Counts.PostsProjected) ||
+		publishedCount != 1 ||
 		mediaCount != int64(candidate.Counts.MediaProjected) {
 		return fmt.Errorf(
 			"GATE_BLOCK: live release closure mismatch: posts=%d/%d totalActive=%d publishedEvents=%d/%d media=%d/%d",
 			postCount, candidate.Counts.PostsProjected, totalActivePosts,
-			publishedCount, candidate.Counts.PostsProjected,
+			publishedCount, 1,
 			mediaCount, candidate.Counts.MediaProjected,
 		)
 	}

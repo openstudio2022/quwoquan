@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .android_gradle_capsule import build_android_gradle_snapshot, digest_bytes
-from .android_gradle_store import canonical_android_uat_gradle_invocations
+from .android_gradle_store import canonical_android_dependency_bundle_invocations
 from .dependency_fs import read_regular_nofollow
 from .dependency_projection_contract import (
     CAS_BLOCKER,
@@ -204,7 +204,7 @@ def _android_component(
         return None
     home = Path(raw_home).expanduser().absolute()
     tree = home.parent
-    invocations = canonical_android_uat_gradle_invocations(root)
+    invocations = canonical_android_dependency_bundle_invocations(root)
     try:
         snapshot = build_android_gradle_snapshot(
             project_root=root,

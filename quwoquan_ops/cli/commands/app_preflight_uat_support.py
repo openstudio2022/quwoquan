@@ -34,6 +34,18 @@ PROFILE_JOURNEY_UAT_TEST_TARGET = (
     "test/user_acceptance/journeys/profile/"
     "profile_journey__user_acceptance_test.dart"
 )
+TEXT_PUBLICATION_UAT_TEST_TARGET = (
+    "test/user_acceptance/service/content_service/content/post/"
+    "text_publication_entry_journey__user_acceptance_test.dart"
+)
+HOME_RECOMMENDATION_UAT_TEST_TARGET = (
+    "test/user_acceptance/journeys/home_recommendation/"
+    "home_recommendation_journey__user_acceptance_test.dart"
+)
+CROSS_DOMAIN_SEARCH_UAT_TEST_TARGET = (
+    "test/user_acceptance/journeys/cross_domain_search/"
+    "cross_domain_search_journey__user_acceptance_test.dart"
+)
 MESSAGE_HOME_UAT_TEST_TARGET = (
     "test/user_acceptance/service/chat_service/chat/chat_inbox_view/"
     "message_home_remote__user_acceptance_test.dart"
@@ -60,6 +72,14 @@ def register_parser(
         default="alpha-local,beta-local,gamma-local",
     )
     app_content_uat_parser.add_argument(
+        "--target-kind",
+        choices=("local", "prod-hosted"),
+        default="local",
+        help="Prod is limited to hosted prevalidation; device execution remains local-only",
+    )
+    app_content_uat_parser.add_argument("--build-profile", choices=("nonprod", "prod"), default="nonprod")
+    app_content_uat_parser.add_argument("--prod-user-allowlist-ref", default="")
+    app_content_uat_parser.add_argument(
         "--platform",
         choices=("ios-simulator", "android", "android-physical", "ios-physical"),
         default="ios-simulator",
@@ -70,6 +90,21 @@ def register_parser(
         "--candidate", default="", help="离线验收绑定的 <store-relative ref>=<sha256:digest>",
     )
     app_content_uat_parser.add_argument("--dry-run", action="store_true")
+    app_content_uat_parser.add_argument(
+        "--verification-purpose",
+        choices=("formal", "core_diagnostic"),
+        default="formal",
+        help="formal seven-suite UAT or non-promotable bounded core diagnostics",
+    )
+    app_content_uat_parser.add_argument(
+        "--core-suites",
+        default="",
+        help=(
+            "Closed comma-separated core diagnostic selectors: identity, "
+            "homepage-media, search-recommendation, post-write-readback, "
+            "chat-send-readback"
+        ),
+    )
 
 
 _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
@@ -78,6 +113,9 @@ _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
         # 作者主页旅程含关注/取关真实往返，需要真实非生产身份。
         PROFILE_JOURNEY_UAT_TEST_TARGET,
         MESSAGE_HOME_UAT_TEST_TARGET,
+        TEXT_PUBLICATION_UAT_TEST_TARGET,
+        HOME_RECOMMENDATION_UAT_TEST_TARGET,
+        CROSS_DOMAIN_SEARCH_UAT_TEST_TARGET,
         APP_CORE_READBACK_UAT_TEST_TARGET,
         RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET,
         HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,

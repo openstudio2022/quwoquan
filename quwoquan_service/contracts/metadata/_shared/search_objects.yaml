@@ -83,9 +83,10 @@ object_types:
     owner_object: entity.homepage
     execution_strategy: remote_only
     provider: homepage_remote
-  # user.profile 的 owner 是 user.user_account：可搜索用户文档由 account 生命周期
-  # （accountState=active）决定，投影函数与 SearchIndexView 消费的
-  # user.user_account.UserSuspended/UserRestored 事件同源。它不是 user.persona。
+  # user.profile 只有 user.user_account 一个公开契约 owner，不新增 Creator registration。
+  # 普通账户仍按 accountState=active 与既有账户事件投影；release Creator 经该 owner 的
+  # ReadCreatorSearchCandidate 只读委托 Creator candidate，并由 SearchReleasePreparation 准备。
+  # 两类来源不共享资格或事件；不创建登录账号，CreatorRuntimeProfile 仍是资料事实 owner。
   - id: user.profile
     label: 用户
     domain: user

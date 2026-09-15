@@ -16,6 +16,7 @@ type RedisSceneConfig struct {
 	Mode     string   `yaml:"mode" env:"MODE"`
 	Addr     string   `yaml:"addr" env:"ADDR"`
 	Addrs    []string `yaml:"addrs" env:"ADDRS"`
+	Username string   `yaml:"username" env:"USERNAME"`
 	Password string   `yaml:"password" env:"PASSWORD"`
 	DB       int      `yaml:"db" env:"DB"`
 	TLS      bool     `yaml:"tls" env:"TLS"`
@@ -49,6 +50,7 @@ func (config RedisSceneConfig) IsUndeclared() bool {
 	return strings.TrimSpace(config.Mode) == "" &&
 		strings.TrimSpace(config.Addr) == "" &&
 		len(config.Addrs) == 0 &&
+		config.Username == "" &&
 		config.Password == "" &&
 		config.DB == 0 &&
 		!config.TLS &&
@@ -71,6 +73,9 @@ func (config RedisSceneConfig) IsUndeclared() bool {
 // 判否文本描述缺的那处声明或注入键，不描述症状：触发它的现实场景是环境装配注入
 // 了单点 addr 却没覆盖 cluster 声明，读者需要知道该改哪个文件。
 func (config RedisSceneConfig) DeclaredMode() (string, error) {
+	if config.Username != strings.TrimSpace(config.Username) {
+		return "", fmt.Errorf("Redis ACL username must be canonical without surrounding whitespace")
+	}
 	declared := strings.ToLower(strings.TrimSpace(config.Mode))
 	addr := strings.TrimSpace(config.Addr)
 	switch declared {
@@ -82,6 +87,9 @@ func (config RedisSceneConfig) DeclaredMode() (string, error) {
 			RedisModeMemory, RedisModeStandalone, RedisModeCluster,
 		)
 	case RedisModeMemory:
+		if config.Username != "" {
+			return declared, fmt.Errorf("memory scene cannot declare a Redis ACL username")
+		}
 		// memory 与地址同时在场是两处声明互相矛盾，判否比挑一处生效更安全：
 		// 挑地址会让声明的关停失效，挑 memory 会让注入的地址静默失效。
 		if addr != "" || len(config.Addrs) > 0 {
@@ -152,6 +160,7 @@ func (config RedisSceneConfig) SceneConfig() (rtredis.SceneConfig, error) {
 		Mode:           mode,
 		Addr:           config.Addr,
 		Addrs:          config.Addrs,
+		Username:       config.Username,
 		Password:       config.Password,
 		DB:             config.DB,
 		TLS:            config.TLS,

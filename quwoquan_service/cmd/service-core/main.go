@@ -17,6 +17,7 @@ import (
 
 	"quwoquan_service/runtime/artifactidentity"
 	"quwoquan_service/runtime/servicehost"
+	"quwoquan_service/runtime/servicekit"
 	apiedge "quwoquan_service/services/api-edge/cmd/api"
 	assistant "quwoquan_service/services/assistant-service/cmd/api"
 	chat "quwoquan_service/services/chat-service/cmd/api"
@@ -166,6 +167,10 @@ func main() {
 func runPreflight(composition *servicehost.Composition) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
+	_, err := prepareVirtualHTTPRouting()
+	if err != nil {
+		return err
+	}
 	modules, err := composition.Build(ctx)
 	if err != nil {
 		return err
@@ -344,6 +349,14 @@ func prepareVirtualHTTPRouting() (*servicehost.VirtualHTTPRouter, error) {
 	routes := make([]servicehost.VirtualHTTPRoute, 0, len(manifest.Modules))
 	userServiceInternalAddress := ""
 	for _, module := range manifest.Modules {
+		baseURL := fmt.Sprintf("http://%s:%d", module.Host, module.Port)
+		if err := os.Setenv(servicekit.ServiceBaseURLKey(module.Name), baseURL); err != nil {
+			return nil, fmt.Errorf(
+				"set service-core module base URL %s: %w",
+				servicekit.ServiceBaseURLKey(module.Name),
+				err,
+			)
+		}
 		if module.AddressEnvironment == "" && module.InternalAddress == "" {
 			continue
 		}

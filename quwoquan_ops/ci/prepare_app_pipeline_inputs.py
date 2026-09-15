@@ -61,7 +61,8 @@ _ATTEMPT_ID = re.compile(r"^[0-9a-f]{32}$")
 # The full five-component transaction performs two Pub, two CocoaPods and two
 # Android Gradle online/offline replays. Keep its process guard below the 30m
 # workflow-step boundary while allowing the reviewed 25m packaging phase budget.
-_DEPENDENCY_SYNC_TIMEOUT_SECONDS = 25 * 60
+# Keep bounded cleanup outside the command's 90-minute transaction budget.
+_DEPENDENCY_SYNC_TIMEOUT_SECONDS = 100 * 60
 
 
 class PipelinePreparationError(RuntimeError):

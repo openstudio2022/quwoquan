@@ -158,6 +158,7 @@
         "selectedRcAdmission",
         "selectedRcTagName",
         "selectedRcTagObjectOid",
+        "deliveryTargets",
         "qualificationFact",
         "qualificationId",
         "candidateMaterialManifest",
@@ -214,6 +215,9 @@
         },
         "selectedRcTagObjectOid": {
           "$ref": "#/$defs/git"
+        },
+        "deliveryTargets": {
+          "enum": [["app"], ["service"], ["app", "service"]]
         },
         "qualificationFact": {
           "$ref": "#/$defs/exactRef"

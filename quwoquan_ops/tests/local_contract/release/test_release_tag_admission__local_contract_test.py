@@ -286,6 +286,7 @@ def stable_inputs(
     ]
     request_body: dict[str, Any] = {
         "schema": "quwoquan_ops.release_qualification_request.v1",
+        "deliveryTargets": ["app", "service"],
         "rcTagAdmission": rc,
         "sourceGitSha": rc_fact["peeledCommit"], "sourceTree": rc_fact["sourceTree"],
         "tagName": rc_fact["tagName"],
@@ -304,6 +305,7 @@ def stable_inputs(
     allocation = write(store, "qualification/allocation.json", allocation_body)
     material_body: dict[str, Any] = {
         "schema": "quwoquan_ops.candidate_material_manifest.v1",
+        "deliveryTargets": ["app", "service"],
         "qualificationRequest": request, "artifactBuildNumberAllocation": allocation,
         "sourceGitSha": rc_fact["peeledCommit"], "sourceTree": rc_fact["sourceTree"],
         "tagName": rc_fact["tagName"], "artifactBuildNumber": 17,
@@ -314,6 +316,7 @@ def stable_inputs(
     material = write(store, "qualification/material.json", material_body)
     qualification_body: dict[str, Any] = {
         "schema": "quwoquan_ops.qualification_fact.v1", "decision": "qualified",
+        "deliveryTargets": ["app", "service"],
         "qualificationRequest": request, "candidateMaterialManifest": material,
         "sourceGitSha": rc_fact["peeledCommit"], "sourceTree": rc_fact["sourceTree"],
         "tagName": rc_fact["tagName"], "artifactBuildNumber": 17, "artifacts": artifacts,

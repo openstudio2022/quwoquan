@@ -106,8 +106,9 @@ type QueryCaller struct {
 }
 
 type QueryExecutionIdentity struct {
-	CandidateDigest string
-	PolicyDigest    string
+	CandidateDigest    string
+	PolicyDigest       string
+	ContentFenceDigest string
 }
 
 type QueryExecution struct {

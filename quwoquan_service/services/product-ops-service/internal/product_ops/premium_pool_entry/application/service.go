@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	generated "quwoquan_service/services/product-ops-service/generated/product_ops/premium_pool_entry/contract/model"
 	"sort"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ const (
 )
 
 type UpsertCommand struct {
+	ReleaseSource    *generated.ReleaseCandidateObjectIdentity
 	ContentID        string
 	Scope            string
 	QualityScore     float64
@@ -38,20 +40,21 @@ type UpsertCommand struct {
 }
 
 type EntryView struct {
-	ContentID        string  `json:"contentId"`
-	Scope            string  `json:"scope"`
-	Status           string  `json:"status"`
-	QualityScore     float64 `json:"qualityScore"`
-	QualityAdmission string  `json:"qualityAdmission"`
-	SupplySource     string  `json:"supplySource,omitempty"`
-	SourceTaskID     string  `json:"sourceTaskId,omitempty"`
-	AuditID          string  `json:"auditId"`
-	RollbackToken    string  `json:"rollbackToken"`
-	FeaturedAt       string  `json:"featuredAt"`
-	ExpiresAt        string  `json:"expiresAt"`
-	TakedownEjected  bool    `json:"takedownEjected"`
-	Revision         int64   `json:"revision"`
-	UpdatedAt        string  `json:"updatedAt"`
+	ReleaseAdmissions []generated.ReleasePremiumAdmission `json:"releaseAdmissions"`
+	ContentID         string                              `json:"contentId"`
+	Scope             string                              `json:"scope"`
+	Status            string                              `json:"status"`
+	QualityScore      float64                             `json:"qualityScore"`
+	QualityAdmission  string                              `json:"qualityAdmission"`
+	SupplySource      string                              `json:"supplySource,omitempty"`
+	SourceTaskID      string                              `json:"sourceTaskId,omitempty"`
+	AuditID           string                              `json:"auditId"`
+	RollbackToken     string                              `json:"rollbackToken"`
+	FeaturedAt        string                              `json:"featuredAt"`
+	ExpiresAt         string                              `json:"expiresAt"`
+	TakedownEjected   bool                                `json:"takedownEjected"`
+	Revision          int64                               `json:"revision"`
+	UpdatedAt         string                              `json:"updatedAt"`
 }
 
 type MutationReceiptView struct {
@@ -74,9 +77,19 @@ type TakedownResult struct {
 	Receipt        *MutationReceiptView `json:"receipt,omitempty"`
 }
 
+type CandidateSourceReader interface {
+	VerifyCandidateSource(context.Context, generated.ReleaseCandidateObjectIdentity) error
+}
+
+func (service *Service) WithCandidateSource(reader CandidateSourceReader) *Service {
+	service.source = reader
+	return service
+}
+
 type Service struct {
-	store ports.Store
-	now   func() time.Time
+	source CandidateSourceReader
+	store  ports.Store
+	now    func() time.Time
 }
 
 func NewService(store ports.Store) *Service {
@@ -104,6 +117,17 @@ func (service *Service) List(ctx context.Context, activeOnly bool) ([]EntryView,
 }
 
 func (service *Service) Upsert(ctx context.Context, command UpsertCommand) (EntryView, error) {
+	if err := validateCommandContext(command.Context); err != nil {
+		return EntryView{}, err
+	}
+	if command.ReleaseSource != nil {
+		if service.source == nil || command.ReleaseSource.Release.Environment != command.Context.Environment {
+			return EntryView{}, model.ErrInvalidArgument
+		}
+		if err := service.source.VerifyCandidateSource(ctx, *command.ReleaseSource); err != nil {
+			return EntryView{}, err
+		}
+	}
 	if err := validateCommandContext(command.Context); err != nil {
 		return EntryView{}, err
 	}
@@ -135,7 +159,8 @@ func (service *Service) Upsert(ctx context.Context, command UpsertCommand) (Entr
 		expectedRevision = current.Revision
 	}
 	next, err := model.Upsert(currentRef, model.UpsertInput{
-		ContentID: contentID, Scope: command.Scope, QualityScore: command.QualityScore,
+		ReleaseSource: command.ReleaseSource,
+		ContentID:     contentID, Scope: command.Scope, QualityScore: command.QualityScore,
 		QualityAdmission: command.QualityAdmission, SupplySource: command.SupplySource,
 		SourceTaskID: command.SourceTaskID, AuditID: command.AuditID,
 		RollbackToken: command.RollbackToken, ExpiresAt: command.ExpiresAt,
@@ -337,7 +362,8 @@ func eventPayload(entry model.Entry) map[string]any {
 
 func viewFromEntry(entry model.Entry) EntryView {
 	return EntryView{
-		ContentID: entry.ContentID, Scope: entry.Scope,
+		ReleaseAdmissions: append([]generated.ReleasePremiumAdmission{}, entry.ReleaseAdmissions...),
+		ContentID:         entry.ContentID, Scope: entry.Scope,
 		Status: string(entry.Status), QualityScore: entry.QualityScore,
 		QualityAdmission: entry.QualityAdmission, SupplySource: entry.SupplySource,
 		SourceTaskID: entry.SourceTaskID, AuditID: entry.AuditID,

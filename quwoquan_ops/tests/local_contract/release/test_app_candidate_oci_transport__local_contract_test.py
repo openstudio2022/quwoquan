@@ -84,6 +84,7 @@ def test_transport_materializes_exactly_canonical_product_repositories(
         bundle_dir=tmp_path / "aggregate",
         repository_prefix="ghcr.io/example/quwoquan",
         transport_tag="run-1",
+        delivery_target_scope=["app", "service"],
     )
 
     assert tuple(refs) == EXPECTED_PRODUCTS

@@ -88,6 +88,11 @@
           "type": "integer",
           "minimum": 0
         },
+        "acceptedCount": {
+          "description": "实际接纳的Post数量，不区分已退役的release类别。",
+          "type": "integer",
+          "minimum": 0
+        },
         "productionLoaded": {
           "type": "integer",
           "minimum": 0

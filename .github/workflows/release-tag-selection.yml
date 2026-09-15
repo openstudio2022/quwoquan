@@ -180,6 +180,11 @@ jobs:
               [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
               RC_EXACT="$(materialize_fact "$RC_ADMISSION")"
               QUALIFICATION_EXACT="$(materialize_fact "$QUALIFICATION")"
+              python3 -B - "$STORE/$QUALIFICATION" <<'PY'
+          import json, sys
+          from quwoquan_ops.ci.release_qualification import delivery_targets
+          delivery_targets(json.load(open(sys.argv[1])).get("deliveryTargets"))
+          PY
               RELEASE_EXACT="$(materialize_fact "$RELEASE_AUTHORITY")"
               RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" tag-admit-stable-intent \
                 --tag-name "$TAG" --source-git-sha "$SOURCE_SHA" --reservation "$RESERVATION_EXACT" \

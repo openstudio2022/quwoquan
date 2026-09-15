@@ -14,6 +14,12 @@ import (
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
 )
 
+func TestManagedMigrationReadinessAcceptsFreshEmptySchema(t *testing.T) {
+	if err := persistence.VerifyManagedMigrations(context.Background(), pgPool); err != nil {
+		t.Fatalf("fresh empty migrated schema must be runtime-ready: %v", err)
+	}
+}
+
 func TestManagedMigrationsAreIdempotent(t *testing.T) {
 	ctx := context.Background()
 	if _, err := pgPool.Exec(ctx, `

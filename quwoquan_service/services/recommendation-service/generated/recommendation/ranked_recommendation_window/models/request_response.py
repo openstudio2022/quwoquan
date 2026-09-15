@@ -9,16 +9,42 @@ from pydantic import BaseModel, ConfigDict
 
 
 
-class RecommendationObjectCard(BaseModel):
-    """排序窗口内冻结的个性化对象卡；objectKind 支持 entity_homepage 与 gathering，Content 仅按当前 policy 锚定并随 FeedDeliveryPage 交付。"""
-    objectKind: str
-    objectId: str
-    title: str
-    subtitle: str | None = None
-    coverUrl: str | None = None
-    tagRefs: list[str]
-    reasonKey: str
-    recallPath: str
+class ReleaseCandidateBinding(BaseModel):
+    """User、Content、Search 共享的不可变内容候选值；不是 ContentActiveReleaseFence，刻意不含 active、revision 或 activatedAt。"""
+    environment: str
+    sourceOwner: str
+    releaseId: str
+    manifestDigest: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReleasePinnedQueryFence(BaseModel):
+    """Content从唯一active pointer生产的请求值，不替代ContentActiveReleaseFence transport；无active时release=null且revision=0，found候选完整且revision正。Recommendation不得自行选active，public不得提交此值。"""
+    release: ReleaseCandidateBinding | None = None
+    revision: int
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CreateRankedRecommendationWindowCommand(BaseModel):
+    """创建稳定推荐窗口的内部强类型命令；Content唯一pin请求fence，Recommendation不自行查询active或接受public提供的fence。"""
+    contentFence: ReleasePinnedQueryFence
+    idempotencyKey: str
+    subjectId: str
+    scenario: str
+    limit: int
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class GetRankedRecommendationPageQuery(BaseModel):
+    """读取稳定窗口页的内部强类型查询；subjectId 只用于推导隐私摘要 key 并校验窗口 owner，不进入响应。contentFence由Content本请求重pin，与窗口不等即冲突，要求首刷。"""
+    contentFence: ReleasePinnedQueryFence
+    subjectId: str
+    windowId: str
+    fromOrdinal: int | None = None
+    limit: int | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -34,28 +60,23 @@ class RankedRecommendationItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class CreateRankedRecommendationWindowCommand(BaseModel):
-    """创建稳定推荐窗口的内部强类型命令。"""
-    idempotencyKey: str
-    subjectId: str
-    scenario: str
-    limit: int
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class GetRankedRecommendationPageQuery(BaseModel):
-    """读取稳定窗口页的内部强类型查询；subjectId 只用于推导隐私摘要 key 并校验窗口 owner，不进入响应。"""
-    subjectId: str
-    windowId: str
-    fromOrdinal: int | None = None
-    limit: int | None = None
+class RecommendationObjectCard(BaseModel):
+    """排序窗口内冻结的个性化对象卡；objectKind 支持 entity_homepage 与 gathering，Content 仅按当前 policy 锚定并随 FeedDeliveryPage 交付。"""
+    objectKind: str
+    objectId: str
+    title: str
+    subtitle: str | None = None
+    coverUrl: str | None = None
+    tagRefs: list[str]
+    reasonKey: str
+    recallPath: str
 
     model_config = ConfigDict(extra="forbid")
 
 
 class RankedRecommendationPage(BaseModel):
     """稳定窗口的一页排序结果。"""
+    contentFence: ReleasePinnedQueryFence
     windowId: str
     scenario: str
     experimentBucket: str
@@ -70,5 +91,50 @@ class RankedRecommendationPage(BaseModel):
     objectCards: list[RecommendationObjectCard]
     nextOrdinal: int | None = None
     expiresAt: datetime
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReleaseQueryPreparationBinding(BaseModel):
+    """唯一准备身份为本值canonical摘要，slice只区分对象种类，无协议版本字段或兼容选择；源摘要不参与身份。Provider与schema代际必须由部署受管事实验证，不能由caller自行选择。"""
+    release: ReleaseCandidateBinding
+    slice: str
+    providerBindingGeneration: str
+    schemaGeneration: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReadRecommendationReleaseReadinessQuery(BaseModel):
+    """受信Content准备/evaluator调用，不接受用户subject，不创建window/session/曝光；不要求binding.release为active。"""
+    binding: ReleaseQueryPreparationBinding
+    snapshotDigest: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReleaseQueryClassEvidence(BaseModel):
+    """一类真实候选查询的完整结果身份/内容摘要，非passed布尔值；proof evaluator重验不能仅比较数量。"""
+    queryClass: str
+    objectSetDigest: str
+    documentsDigest: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReleaseQueryReadinessProof(BaseModel):
+    """owner只读重验自身checkpoint与真实查询后返回，不存第二ready registry。完整身份/文档摘要不能用数量代替；proofDigest按除自身外canonical JSON计算。validUntil覆盖短准入窗口，source/projection/准入漂移立即失效。"""
+    binding: ReleaseQueryPreparationBinding
+    sourceClosureDigest: str
+    objectSetDigest: str
+    snapshotDigest: str
+    documentsDigest: str
+    checkpointVersion: int
+    queryClasses: list[ReleaseQueryClassEvidence]
+    premiumAdmissionDigest: str | None = None
+    premiumObjectSetDigest: str | None = None
+    verifiedAt: datetime
+    validUntil: datetime
+    proofDigest: str
 
     model_config = ConfigDict(extra="forbid")

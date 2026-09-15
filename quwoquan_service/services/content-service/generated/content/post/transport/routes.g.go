@@ -29,6 +29,13 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
 	{method: "POST", pathTemplate: "/content/posts:publish", operation: "SubmitPostPublication"},
 	{method: "GET", pathTemplate: "/content/social-proof/{anchorKind}/{objectId}", operation: "GetGatheringSocialProof"},
+	{method: "GET", pathTemplate: "/internal/content/active-release-fence", operation: "ReadActiveReleaseFence"},
+	{method: "POST", pathTemplate: "/internal/content/post-candidate-safety:query", operation: "ReadPostCandidateSafety"},
+	{method: "POST", pathTemplate: "/internal/content/release-candidates:query", operation: "ReadPostReleaseCandidate"},
+	{method: "POST", pathTemplate: "/internal/content/release-commit-receipts:query", operation: "ReadContentReleaseCommitReceipt"},
+	{method: "POST", pathTemplate: "/internal/content/release-queries:prepare", operation: "PreparePostReleaseQueries"},
+	{method: "POST", pathTemplate: "/internal/content/release-queries:query", operation: "ReadRequiredReleaseQueries"},
+	{method: "POST", pathTemplate: "/internal/content/releases:activate-at-search-barrier", operation: "ActivateContentReleaseAtSearchBarrier"},
 }
 
 type generatedRouteDef struct {
@@ -183,9 +190,25 @@ func BindGeneratedGetFeedParams(r *http.Request) (GeneratedGetFeedParams, error)
 }
 
 var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
+	"ActivateContentReleaseAtSearchBarrier": {
+		"release":        {},
+		"expected":       {},
+		"action":         {},
+		"idempotencyKey": {},
+	},
 	"GenerateArticleSummary": {
 		"title": {},
 		"body":  {},
+	},
+	"PreparePostReleaseQueries": {
+		"creatorBinding":                     {},
+		"expectedCreatorPreparationVersion":  {},
+		"postBinding":                        {},
+		"homepageBinding":                    {},
+		"recommendationBinding":              {},
+		"expectedPostPreparationVersion":     {},
+		"expectedHomepagePreparationVersion": {},
+		"idempotencyKey":                     {},
 	},
 	"PromotePostToWork": {
 		"contentType":             {},
@@ -202,6 +225,20 @@ var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
 		"primaryHomepageSnapshot": {},
 		"visibility":              {},
 		"assistantUsePolicy":      {},
+	},
+	"ReadContentReleaseCommitReceipt": {
+		"release":  {},
+		"expected": {},
+	},
+	"ReadPostCandidateSafety": {
+		"release":        {},
+		"snapshotDigest": {},
+	},
+	"ReadPostReleaseCandidate": {
+		"release": {},
+	},
+	"ReadRequiredReleaseQueries": {
+		"release": {},
 	},
 	"SubmitPostPublication": {
 		"publishIntentId":           {},

@@ -35,9 +35,9 @@ void main() {
 
       final result = await service.clear(CacheClearLevel.offlineContent);
 
-      expect(result.objectsRemoved, 2);
+      expect(result.objectsRemoved, 1);
       expect(result.protectedObjects, conversationCache.activeDiskCount);
-      expect(service.estimateUsage().postObjects, 1);
+      expect(service.estimateUsage().postObjects, 0);
       expect(service.estimateUsage().querySnapshots, 0);
     });
 

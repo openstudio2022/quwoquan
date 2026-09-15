@@ -44,9 +44,11 @@ type Handler struct {
 	requestFacts    *requestapplication.Recorder
 	candidateDigest string
 	ownerCache      *application.OwnerSearchCache
+	creatorFence    *application.CreatorQueryFence
 }
 
 type HandlerConfig struct {
+	CreatorFence    *application.CreatorQueryFence
 	Intersections   *application.IntersectionAttacher
 	RequestFacts    *requestapplication.Recorder
 	CandidateDigest string
@@ -78,6 +80,7 @@ func NewHandlerWithConfig(
 		requestFacts:    config.RequestFacts,
 		candidateDigest: strings.TrimSpace(config.CandidateDigest),
 		ownerCache:      config.OwnerSearchCache,
+		creatorFence:    config.CreatorFence,
 	}
 }
 
@@ -179,6 +182,15 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	identity := application.QueryExecutionIdentity{
 		CandidateDigest: h.candidateDigest,
 		PolicyDigest:    h.decorator.PolicyDigest(),
+	}
+	if h.creatorFence != nil {
+		ctx, digest, pinErr := h.creatorFence.Pin(r.Context())
+		if pinErr != nil {
+			writeSearchUnavailable(w, requestID, "Content fence unavailable")
+			return
+		}
+		r = r.WithContext(ctx)
+		identity.ContentFenceDigest = digest
 	}
 	// AB-aware pre-query decision: bucket assignment + related terms + the
 	// query-time BoostTerms of the term_heat arm. Ranking stays single-sourced

@@ -61,8 +61,32 @@ func newModule() (*servicekit.Module, error) {
 		// 运营台身份走 OIDC；Prod/release 缺配置即 fail-closed。
 		OperatorOIDCEnvPrefix: "OPS_OIDC",
 		RetiredEnvKeys:        retiredEnvKeys(),
-		ValidateConfig:        validateProductOpsConfig,
-		RedisScenes:           resolveRedisScenes,
+		// Experiment bootstrap is an authenticated owner command. It can run
+		// after Build/Bind/Start once its transaction/outbox dependencies are
+		// ready, without waiting for unrelated aggregate checks such as delivery,
+		// telemetry or config sync. AccountSecurity remains explicitly required.
+		PreAdmissionOperations: []servicekit.PreAdmissionOperation{
+			{
+				CanonicalOperationID: "ops.experiment.CreateExperiment",
+				Method:               http.MethodPost,
+				PathTemplate:         "/control-plane/product/experiments",
+				RequiredHealthChecks: []string{"account_security_authority", "postgres", "redis", "experiment-outbox"},
+			},
+			{
+				CanonicalOperationID: "ops.experiment.ListExperiments",
+				Method:               http.MethodGet,
+				PathTemplate:         "/control-plane/product/experiments",
+				RequiredHealthChecks: []string{"account_security_authority", "postgres"},
+			},
+			{
+				CanonicalOperationID: "ops.experiment.UpdateExperimentRollout",
+				Method:               http.MethodPost,
+				PathTemplate:         "/control-plane/product/experiments/{experimentId}:rollout",
+				RequiredHealthChecks: []string{"account_security_authority", "postgres", "redis", "experiment-outbox"},
+			},
+		},
+		ValidateConfig: validateProductOpsConfig,
+		RedisScenes:    resolveRedisScenes,
 		Assemble: func(asm *servicekit.Assembly, cfg *config) error {
 			if err := assembleProductOpsDomain(asm, cfg); err != nil {
 				return err
@@ -184,6 +208,7 @@ func assembleProductOpsDomain(asm *servicekit.Assembly, cfg *config) error {
 	if err != nil {
 		return fmt.Errorf("product_ops_outbox dispatcher invalid: %w", err)
 	}
+	asm.Health.Register("experiment-outbox", experimentDispatcher.CheckReadiness)
 	asm.Workers.Add(experimentDispatcher.Run)
 
 	controlPlaneDispatcher, err := pgoutbox.NewDispatcher(
@@ -228,7 +253,15 @@ func assembleProductOpsDomain(asm *servicekit.Assembly, cfg *config) error {
 		publisher,
 	)
 	service.accountEnforcement = accountEnforcementService
-	service.premiumPool = premiumpoolapp.NewService(premiumPoolStore)
+	contentCredentials, err := asm.Auth.ServiceCredentials("content.release.source.read")
+	if err != nil {
+		return fmt.Errorf("premium source credentials: %w", err)
+	}
+	contentSource, err := newPremiumSourceReader(cfg.ContentSource.BaseURL, contentCredentials)
+	if err != nil {
+		return err
+	}
+	service.premiumPool = premiumpoolapp.NewService(premiumPoolStore).WithCandidateSource(contentSource)
 	recoveryFailureReporter, err := recoveryreporter.NewReporter(service.runtimeLogs)
 	if err != nil {
 		return fmt.Errorf("RecoveryFailure reporter init failed: %w", err)

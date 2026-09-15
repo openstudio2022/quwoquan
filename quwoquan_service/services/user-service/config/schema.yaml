@@ -158,6 +158,13 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
+- key: sys.user-service.redis.general.username
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: 当前Redis scene的ACL用户名，原样传入AUTH；空值仅表示Redis明确default用户语义，不从密码推断或named认证失败回落default。非空值必须无首尾空白且不可用于memory；由受管源绑定注入，与同scene密码/地址整体解析，不记录凭据。
 - key: sys.user-service.redis.general.password
   type: string
   scope: workload

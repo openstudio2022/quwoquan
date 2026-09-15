@@ -55,6 +55,7 @@
 - 三类面必须保持契约与部署拓扑解耦；第一方服务拥有独立 workload 定义，跨服务装配不得引入组合业务 `seed-box`。
 - 契约设计不得依赖当前部署拓扑，避免后续拆 Pod 返工。
 - 可观测统一且可检索
+- 内容导入前能力检查与导入后公开消费验证分离：前者只证明当前target/candidate/startup一致、真实API/媒体/导入服务探针与runtime/provider就绪，不要求尚未产生的active release/readiness；后者仍强制完整内容readiness、Feed/视频及观测回读。两者结果用途明确，导入前通过不授予内容可用、EAF或生产资格，任一基础探针/代际缺失或未知仍阻断。
 - Alpha、Beta、Gamma 的 mutable `test_live` runtime 必须由 `stackctl` 同轨完成启动与退出。
 - 内容 release 只消费 [`object-homepage-coverage-scaling` DEC-041](../discovery-content/object-homepage-coverage-scaling/design.md#dec-041) 的单一生产契约，不生成 Data 专属白名单身份或以登录解锁内容；公众可见性由运营运行时配置决定。普通登录、私有业务媒体授权与受保护 UAT Actor 的安全边界不因内容契约简化而放宽。
 - `dev-session` 只拥有 mutable runtime 生命周期，不创建或保留 UAT 业务数据。Alpha、Beta、Gamma 的受保护 UAT 必须由 `stackctl verify` 从选中 CaseResult 的强类型请求图创建独立 Actor 与交易事实，经目标 canonical HTTPS 和所属领域公开 operation 完成 provision、业务正文、readback 与 cleanup；候选、Provider、target 或请求依赖漂移必须在首个 mutation 前阻断。

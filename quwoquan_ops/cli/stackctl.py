@@ -44,6 +44,21 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# Canonical stackctl always runs in the Ops-owned cache. This executes before
+# the command graph (and therefore before package/up/deploy can mutate infra).
+if __name__ == "__main__":
+    from quwoquan_ops.cli.commands.managed_python import ensure_managed_stackctl_runtime
+
+    try:
+        ensure_managed_stackctl_runtime(sys.argv)
+    except RuntimeError as exc:
+        print(
+            "stackctl GATE_BLOCK: Ops managed Python preflight failed; "
+            "run `make prepare-test-python`: " + str(exc),
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
 def _bootstrap_command(argv: Sequence[str]) -> str:
     """Resolve the command without importing the full argparse command graph."""
 
@@ -96,7 +111,7 @@ from quwoquan_ops.cli.prod.prod_hosted_topology import (
     ProdHostedTopologyError, instance_for_stage as prod_hosted_instance_for_stage,
     load_access_manifest as load_prod_hosted_access_manifest,
     placement_check_name as prod_hosted_placement_check_name,
-    require_release_redundancy as require_prod_hosted_release_redundancy,
+    require_release_inventory as require_prod_hosted_release_inventory,
     resolve_plan as resolve_prod_hosted_plan,
     validate_host_coverage as validate_prod_hosted_host_coverage,
 )
@@ -122,6 +137,7 @@ from quwoquan_ops.cli.lib.environment_topology import (
 )
 from quwoquan_ops.cli.lib.experiment_policy_activation import (
     ExperimentPolicyActivationError, activate_search_experiment_policy,
+    activate_search_experiment_policy_via_published_port,
     activate_test_live_experiment_policies,
 )
 from quwoquan_ops.cli.lib.local_environment_auth import (
@@ -398,6 +414,8 @@ from quwoquan_ops.cli.commands import down_domain as down_domain_commands
 from quwoquan_ops.cli.commands import down_shared as down_shared_commands
 from quwoquan_ops.cli.commands import drill as drill_commands
 from quwoquan_ops.cli.commands import filter_catalog as filter_catalog_commands
+from quwoquan_ops.cli.commands import content_release as content_release_commands
+from quwoquan_ops.cli.commands.content_release import command_content_release
 from quwoquan_ops.cli.commands import health as health_commands
 from quwoquan_ops.cli.commands import hosted_release_receipt as hosted_release_receipt_commands
 from quwoquan_ops.cli.commands import hosted_read_only as hosted_read_only_commands
@@ -455,6 +473,7 @@ from quwoquan_ops.cli.commands.app_preflight_uat import (
 from quwoquan_ops.cli.commands.app_dependency_sync import command_app_dependency_sync
 from quwoquan_ops.cli.commands.assistant_skill_package import command_assistant_skill_package
 from quwoquan_ops.cli.commands.consumer_lease import command_consumer_lease
+from quwoquan_ops.cli.commands.source_allocation import command_source_allocation
 from quwoquan_ops.cli.commands.content_acceptance import (
     _content_release_uat_command, _release_feed_post_expectations, _run_data_acceptance_lease,
     _run_release_feed_readback_probe, _run_release_video_delivery_probe,
@@ -472,7 +491,10 @@ from quwoquan_ops.cli.commands.diagnostics_shared import (
 from quwoquan_ops.cli.commands.doctor import command_doctor
 from quwoquan_ops.cli.commands.down_domain import (
     _bind_local_teardown_runtime, _bounded_workload_down_decision, _command_down_unlocked,
-    _consumer_lease_down_gate, _receipt_bound_local_compose_model, command_down,
+    _bind_gamma_teardown_redis_locators, _complete_gamma_purge_control_transaction,
+    _consumer_lease_down_gate, _gamma_purge_control_paths,
+    _prepare_gamma_purge_control_transaction,
+    _receipt_bound_local_compose_model, command_down,
 )
 from quwoquan_ops.cli.commands.down_shared import (
     _command_mutable_test_live_down, _mutable_test_live_container_ids,
@@ -797,10 +819,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     content_acceptance_commands.register_uat_parsers(subparsers)
 
+    content_release_commands.register_parser(subparsers)
     filter_catalog_commands.register_parser(subparsers)
 
     premium_pool_commands.register_parser(subparsers)
 
+    from quwoquan_ops.cli.commands.source_allocation import register_parser as register_source_allocation
+    register_source_allocation(subparsers)
+    from quwoquan_ops.cli.commands.post_safety_runtime import register_parser as register_post_safety_runtime
+    register_post_safety_runtime(subparsers)
     repair_domain_commands.register_parser(subparsers)
     roll_commands.register_parser(subparsers)
 
@@ -948,18 +975,26 @@ _TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES = frozenset(
 )
 
 
+def command_post_safety_runtime(args: argparse.Namespace) -> dict[str, Any]:
+    from quwoquan_ops.cli.commands.post_safety_runtime import command_post_safety_runtime as handler
+    return handler(args)
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     # 真正执行入口封闭宿主权威；模块 API 的显式路径注入仅用于离线契约测试。
-    if args.command in {"up", "down", "dev-session", "app-managed-prepare", "repair", "consumer-lease"}:
+    if args.command in {"up", "down", "dev-session", "app-managed-prepare", "repair", "consumer-lease", "source-allocation", "post-safety-runtime"}:
         from quwoquan_ops.cli.lib.host_locks import require_canonical_runtime_authority
         try:
             require_canonical_runtime_authority()
         except ValueError as exc:
             return print_result(args, {"exitCode": 2, "blockerKind": "runtime_authority_mismatch",
                                       "summary": "stackctl is GATE_BLOCK", "details": [str(exc)]})
-    payload = stackctl_dispatch.dispatch(args, globals())
+    if package_domain_commands.should_manage_runtime_package_cli(args):
+        payload = package_domain_commands.run_managed_runtime_package_cli(args)
+    else:
+        payload = stackctl_dispatch.dispatch(args, globals())
     return print_result(args, payload)
 
 

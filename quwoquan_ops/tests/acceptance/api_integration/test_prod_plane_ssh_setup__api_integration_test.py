@@ -669,5 +669,46 @@ class ProdPlaneSshSetupTest(unittest.TestCase):
             self.assertTrue((extract_dir / "prod-ssh-bundle" / "prod-service-svc").is_file())
 
 
+    # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-003.t3
+    def test_execution_helper_install_is_digest_bound_idempotent_and_plane_isolated(self) -> None:
+        import hashlib
+        from quwoquan_ops.cli.prod import setup_prod_plane_ssh_access as bootstrap
+        placements=[argparse.Namespace(plane=p,account="prod-"+p+"-svc",ssh_host="host") for p in ("service","edge")]
+        helper=(ROOT/"quwoquan_ops/cli/prod/hosted_release_ledger_lib/execution_guard.py").read_bytes(); contract=(ROOT/"quwoquan_ops/cli/prod/hosted_release_ledger_lib/contract.py").read_bytes()
+        expected=("sha256:"+hashlib.sha256(helper).hexdigest(),"sha256:"+hashlib.sha256(contract).hexdigest())
+        def remote(placement,script,timeout):
+            self.assertIn("EXECUTION_HELPER_DRIFT",script); self.assertNotIn("sudo",script); self.assertEqual(timeout,60)
+            return subprocess.CompletedProcess([],0,json.dumps({"status":"installed","helperDigest":expected[0],"contractDigest":expected[1],"helperMode":"0o500","wrapperSelfCheck":"passed"}),"")
+        with mock.patch("quwoquan_ops.cli.prod.prod_hosted_topology.resolve_plan",return_value=placements), mock.patch.object(bootstrap,"_run_plane_script",side_effect=remote) as run:
+            first=bootstrap._install_execution_helper("prod-host-01"); second=bootstrap._install_execution_helper("prod-host-01")
+        self.assertEqual(first,second); self.assertEqual(first["exitCode"],0); self.assertTrue(first["nonPromotable"]); self.assertEqual(first["releaseEligibility"],"GATE_BLOCK")
+        self.assertEqual([call.args[0].account for call in run.call_args_list],["prod-edge-svc","prod-service-svc"]*2)
+
+    def test_execution_helper_rejects_missing_or_wrong_wrapper_selfcheck(self) -> None:
+        import hashlib
+        from quwoquan_ops.cli.prod import setup_prod_plane_ssh_access as bootstrap
+        placements=[argparse.Namespace(plane=p,account="prod-"+p+"-svc",ssh_host="host") for p in ("service","edge")]
+        helper=(ROOT/"quwoquan_ops/cli/prod/hosted_release_ledger_lib/execution_guard.py").read_bytes()
+        contract=(ROOT/"quwoquan_ops/cli/prod/hosted_release_ledger_lib/contract.py").read_bytes()
+        base={"status":"installed","helperDigest":"sha256:"+hashlib.sha256(helper).hexdigest(),"contractDigest":"sha256:"+hashlib.sha256(contract).hexdigest(),"helperMode":"0o500"}
+        for marker in (None, "failed", "PASS", True):
+            with self.subTest(wrapperSelfCheck=marker):
+                payload=dict(base)
+                if marker is not None:
+                    payload["wrapperSelfCheck"]=marker
+                completed=subprocess.CompletedProcess([],0,json.dumps(payload),"")
+                with mock.patch("quwoquan_ops.cli.prod.prod_hosted_topology.resolve_plan",return_value=placements), mock.patch.object(bootstrap,"_run_plane_script",return_value=completed):
+                    result=bootstrap._install_execution_helper("prod-host-01")
+                self.assertEqual(result["exitCode"],2)
+                self.assertEqual(result["releaseEligibility"],"GATE_BLOCK")
+
+    def test_execution_helper_readback_failure_never_generates_formal_facts(self) -> None:
+        from quwoquan_ops.cli.prod import setup_prod_plane_ssh_access as bootstrap
+        placements=[argparse.Namespace(plane=p,account="prod-"+p+"-svc",ssh_host="host") for p in ("service","edge")]
+        with mock.patch("quwoquan_ops.cli.prod.prod_hosted_topology.resolve_plan",return_value=placements), mock.patch.object(bootstrap,"_run_plane_script",return_value=subprocess.CompletedProcess([],0,"{}","")):
+            result=bootstrap._install_execution_helper("prod-host-01")
+        self.assertEqual(result["exitCode"],2); self.assertEqual(result["releaseEligibility"],"GATE_BLOCK")
+        self.assertNotRegex(json.dumps(result),r"ProdReleasedFact|ProdStageAttemptFact|EnvironmentAcceptanceFact")
+
 if __name__ == "__main__":
     unittest.main()

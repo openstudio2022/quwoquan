@@ -115,6 +115,7 @@ def _parser() -> argparse.ArgumentParser:
     validate.add_argument("--bundle-dir", required=True, type=Path)
     validate.add_argument("--source-git-sha", required=True)
     validate.add_argument("--source-tree-digest", required=True)
+    validate.add_argument("--delivery-target", action="append", required=True, choices=("app", "service"))
     return parser
 
 
@@ -362,19 +363,22 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def validate_bundle(
-    *, bundle_dir: Path, source_git_sha: str, source_tree_digest: str
+    *, bundle_dir: Path, source_git_sha: str, source_tree_digest: str,
+    delivery_target_scope: list[str],
 ) -> None:
+    from quwoquan_ops.ci.release_qualification import app_build_product_ids
+    selected_products = app_build_product_ids(delivery_target_scope)
     git_sha, tree_digest = _validate_source(source_git_sha, source_tree_digest)
     applications = bundle_dir / "application-packages"
     actual_files = {path.name for path in applications.glob("*.json") if path.is_file()}
-    expected_files = {f"{product_id}.json" for product_id in BUILD_PRODUCT_IDS}
+    expected_files = {f"{product_id}.json" for product_id in selected_products}
     if actual_files != expected_files:
         raise ValueError(
             "App build product package set mismatch: "
             f"missing={sorted(expected_files - actual_files)}, "
             f"extra={sorted(actual_files - expected_files)}"
         )
-    expected_payloads = set(BUILD_PRODUCT_IDS)
+    expected_payloads = set(selected_products)
     payload_root = bundle_dir / "payloads"
     actual_payloads = (
         {path.name for path in payload_root.iterdir() if path.is_dir()}
@@ -387,7 +391,7 @@ def validate_bundle(
             f"missing={sorted(expected_payloads - actual_payloads)}, "
             f"extra={sorted(actual_payloads - expected_payloads)}"
         )
-    for product_id in BUILD_PRODUCT_IDS:
+    for product_id in selected_products:
         payload = validate_package(
             _load_json(applications / f"{product_id}.json"),
             build_product_id=product_id,
@@ -420,6 +424,7 @@ def main() -> int:
                 bundle_dir=args.bundle_dir,
                 source_git_sha=args.source_git_sha.strip().lower(),
                 source_tree_digest=args.source_tree_digest.strip().lower(),
+                delivery_target_scope=args.delivery_target,
             )
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"GATE_BLOCK: {error}")

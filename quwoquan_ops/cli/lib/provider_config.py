@@ -63,6 +63,29 @@ def project_provider_secret_bundles(
     return projected
 
 
+def project_provider_runtime_env_file(
+    *,
+    target: str,
+    source: Mapping[str, str],
+    keys: tuple[str, ...],
+) -> Path:
+    """Write existing Provider values to a target-owned 0600 Compose env file."""
+
+    values: dict[str, str] = {}
+    for key in keys:
+        if not KEY_RE.fullmatch(key):
+            raise ValueError(f"invalid Provider material key: {key}")
+        value = str(source.get(key) or "")
+        if not value or "\n" in value or "\r" in value:
+            raise ValueError(f"Provider runtime material is unavailable: {key}")
+        values[key] = value
+    deployment_root = deployment_work_root(target)
+    path = deployment_root / "secrets" / "provider-runtime.env"
+    payload = "".join(f"{key}={values[key]}\n" for key in sorted(values)).encode("utf-8")
+    _atomic_write(path, payload, mode=0o600, deployment_root=deployment_root)
+    return path
+
+
 def compile_provider_config(
     *,
     action: str,

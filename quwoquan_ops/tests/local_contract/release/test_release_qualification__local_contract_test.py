@@ -27,12 +27,14 @@ def write(root: Path, ref: str, payload: dict) -> dict[str, str]:
     return {"ref": ref, "digest": digest(path)}
 
 
-def setup(root: Path):
+def setup(root: Path, targets=None, *, authority_targets=None):
+    targets = ["app", "service"] if targets is None else targets
+    authority_targets = targets if authority_targets is None else authority_targets
     rc = write(root, "rc.json", {"decision": "admitted", "tagName": "v1.2.3-rc.1", "peeledCommit": SHA, "sourceTree": TREE})
     seal = write(root, "seal.json", {"schema": "quwoquan_ops.main_source_seal.v1", "mainSha": SHA, "mainTree": TREE, "sourceHeadSha": "c" * 40})
     integration = write(root, "integration.json", {"schema": "quwoquan_ops.integration_qualification_fact.v1", "decision": "qualified", "devHead": "c" * 40, "devTree": TREE})
-    authority = write(root, "authority.json", {"status": "approved", "sourceGitSha": SHA})
-    request_path = create_qualification_request(root=root, rc_tag_admission_ref=rc, main_source_seal_ref=seal, integration_qualification_ref=integration, requested_by_ref=authority, requested_at="2026-09-05T10:00:00Z")
+    authority = write(root, "authority.json", {"status": "approved", "sourceGitSha": SHA, "deliveryTargets": authority_targets})
+    request_path = create_qualification_request(root=root, rc_tag_admission_ref=rc, main_source_seal_ref=seal, integration_qualification_ref=integration, requested_by_ref=authority, requested_at="2026-09-05T10:00:00Z", delivery_target_scope=targets)
     request = {"ref": request_path.relative_to(root).as_posix(), "digest": digest(request_path)}
     version = write(root, "version.json", {"schema": "ProductVersionManifest", "targetVersion": "1.2.3"})
     sbom = write(root, "sbom.json", {"status": "passed"}); provenance = write(root, "provenance.json", {"status": "passed"}); signing = write(root, "signing.json", {"status": "passed"})
@@ -47,18 +49,25 @@ def setup(root: Path):
     }
     allocation_body["allocationId"] = digest(allocation_body)
     allocation = write(root, "allocation.json", allocation_body)
-    artifacts = [{"platform": platform, "digest": "sha256:" + str(i) * 64, "ociRef": f"ghcr.io/q/{platform}@sha256:" + str(i) * 64} for i, platform in enumerate(("android", "ios", "service", "web"), 1)]
+    from quwoquan_ops.ci.release_qualification import required_platforms
+    artifacts = [{"platform": platform, "digest": "sha256:" + str(i) * 64, "ociRef": f"ghcr.io/q/{platform}@sha256:" + str(i) * 64} for i, platform in enumerate(sorted(required_platforms(targets)), 1)]
     material_path = create_candidate_material_manifest(root=root, request_ref=request, artifact_build_number=17, artifact_build_number_allocation_ref=allocation, product_version_manifest_ref=version, artifacts=artifacts, sbom_ref=sbom, provenance_ref=provenance, signing_ref=signing, created_at="2026-09-05T10:10:00Z")
     material = {"ref": material_path.relative_to(root).as_posix(), "digest": digest(material_path)}
     material_id = json.loads(material_path.read_text())["materialId"]
     return request, material, material_id
 
 
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-004
+def test_request_without_declared_delivery_targets_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ReleaseQualificationError, match="deliveryTargets"):
+        setup(tmp_path, targets=[])
+
+
 def test_explicit_request_material_once_and_final_physical_acceptance(tmp_path: Path) -> None:
     request, material, material_id = setup(tmp_path)
-    def fact(name: str, extra=None): return write(tmp_path, f"{name}.json", {"status": "passed", "materialId": material_id, "sourceGitSha": SHA, **(extra or {})})
+    def fact(name: str, extra=None): return write(tmp_path, f"{name}.json", {"status": "passed", "materialId": material_id, "sourceGitSha": SHA, "deliveryTargets": ["app", "service"], **(extra or {})})
     package = fact("package", {"physicalDevicePlatforms": ["android", "ios"]})
-    path = create_qualification_fact(root=tmp_path, request_ref=request, material_ref=material, package_acceptance_ref=package, provider_fact_ref=fact("provider"), uat_fact_ref=fact("uat"), supply_chain_fact_ref=fact("supply"), qualified_at="2026-09-05T10:20:00Z")
+    path = create_qualification_fact(root=tmp_path, request_ref=request, material_ref=material, package_acceptance_ref=package, provider_fact_ref=fact("provider"), uat_fact_ref=fact("uat"), supply_chain_fact_ref=fact("supply"), service_acceptance_ref=fact("service", {key: fact(key) for key in ("tests", "environment", "recovery")}), qualified_at="2026-09-05T10:20:00Z")
     result = json.loads(path.read_text())
     assert result["decision"] == "qualified"
     assert result["artifactBuildNumber"] == 17
@@ -73,9 +82,68 @@ def test_final_package_acceptance_cannot_use_one_or_simulated_platform(
     tmp_path: Path, physical_platforms: list[str]
 ) -> None:
     request, material, material_id = setup(tmp_path)
-    def fact(name: str, extra=None): return write(tmp_path, f"{name}.json", {"status": "passed", "materialId": material_id, "sourceGitSha": SHA, **(extra or {})})
+    def fact(name: str, extra=None): return write(tmp_path, f"{name}.json", {"status": "passed", "materialId": material_id, "sourceGitSha": SHA, "deliveryTargets": ["app", "service"], **(extra or {})})
     with pytest.raises(ReleaseQualificationError, match="both physical"):
-        create_qualification_fact(root=tmp_path, request_ref=request, material_ref=material, package_acceptance_ref=fact("package", {"physicalDevicePlatforms": physical_platforms}), provider_fact_ref=fact("provider"), uat_fact_ref=fact("uat"), supply_chain_fact_ref=fact("supply"), qualified_at="2026-09-05T10:20:00Z")
+        create_qualification_fact(root=tmp_path, request_ref=request, material_ref=material, package_acceptance_ref=fact("package", {"physicalDevicePlatforms": physical_platforms}), provider_fact_ref=fact("provider"), uat_fact_ref=fact("uat"), supply_chain_fact_ref=fact("supply"), service_acceptance_ref=fact("service", {key: fact(key) for key in ("tests", "environment", "recovery")}), qualified_at="2026-09-05T10:20:00Z")
+
+
+@pytest.mark.parametrize("targets", [[], ["unknown"], ["service", "service"], ["service", "app"]])
+def test_noncanonical_or_missing_target_scope_rejected(tmp_path: Path, targets) -> None:
+    with pytest.raises(ReleaseQualificationError, match="deliveryTargets"):
+        setup(tmp_path, targets=targets)
+
+
+def test_request_scope_must_match_approved_authority(tmp_path: Path) -> None:
+    with pytest.raises(ReleaseQualificationError, match="approved"):
+        setup(tmp_path, targets=["service"], authority_targets=["app"])
+
+
+def _qualify_scope(root: Path, targets, *, missing="", physical=None):
+    request, material, material_id = setup(root, targets=targets)
+    def fact(name, extra=None):
+        return write(root, f"{name}.json", {"status": "failed" if missing == name else "passed",
+                     "materialId": material_id, "sourceGitSha": SHA,
+                     "deliveryTargets": targets, **(extra or {})})
+    package = fact("package", {"physicalDevicePlatforms": physical if physical is not None else ["android", "ios"]}) if "app" in targets else None
+    service = fact("service", {key: fact(key) for key in ("tests", "environment", "recovery")}) if "service" in targets else None
+    return create_qualification_fact(
+        root=root, request_ref=request, material_ref=material, package_acceptance_ref=package,
+        service_acceptance_ref=service, provider_fact_ref=fact("provider"),
+        uat_fact_ref=fact("uat"), supply_chain_fact_ref=fact("supply"), qualified_at="2026-09-05T10:20:00Z",
+    )
+
+
+def test_service_qualification_does_not_grant_app_permission(tmp_path: Path) -> None:
+    from quwoquan_ops.ci.release_qualification import validate_delivery_scope
+    result = json.loads(_qualify_scope(tmp_path, ["service"]).read_bytes())
+    assert result["deliveryTargets"] == ["service"]
+    assert {item["platform"] for item in result["artifacts"]} == {"service", "web"}
+    assert "packageAcceptance" not in result["evidence"]
+    with pytest.raises(ReleaseQualificationError, match="authorize app"):
+        validate_delivery_scope(result, effect="app")
+
+
+@pytest.mark.parametrize("targets", [["app"], ["app", "service"]])
+def test_app_and_joint_targets_cannot_use_simulator(tmp_path: Path, targets) -> None:
+    with pytest.raises(ReleaseQualificationError, match="both physical"):
+        _qualify_scope(tmp_path, targets, physical=["ios-simulator"])
+
+
+@pytest.mark.parametrize("missing", ["tests", "environment", "recovery", "package", "provider", "uat", "supply"])
+def test_joint_target_any_required_failure_blocks(tmp_path: Path, missing) -> None:
+    with pytest.raises(ReleaseQualificationError, match="not passed"):
+        _qualify_scope(tmp_path, ["app", "service"], missing=missing)
+
+
+def test_material_scope_drift_rejected(tmp_path: Path) -> None:
+    request, material, material_id = setup(tmp_path, targets=["service"])
+    payload = json.loads((tmp_path / material["ref"]).read_bytes())
+    payload["deliveryTargets"] = ["app", "service"]
+    changed = write(tmp_path, "scope-drift.json", payload)
+    with pytest.raises(ReleaseQualificationError, match="deliveryTargets drifted"):
+        create_qualification_fact(root=tmp_path, request_ref=request, material_ref=changed,
+            package_acceptance_ref=None, provider_fact_ref={}, uat_fact_ref={}, supply_chain_fact_ref={},
+            qualified_at="2026-09-05T10:20:00Z")
 
 
 def test_material_requires_exact_complete_oci_set(tmp_path: Path) -> None:
@@ -110,7 +178,8 @@ def test_material_rejects_non_hosted_build_number_allocation(tmp_path: Path) -> 
         )
 
 
-def _actual_factory_fixture(tmp_path: Path) -> dict[str, object]:
+def _actual_factory_fixture(tmp_path: Path, targets=None) -> dict[str, object]:
+    targets = ["app", "service"] if targets is None else targets
     from quwoquan_ops.ci.plan_service_release_images import (
         RUNTIME_IMAGE_OWNERS,
         TRUST_DOMAINS,
@@ -128,10 +197,11 @@ def _actual_factory_fixture(tmp_path: Path) -> dict[str, object]:
     request_oci_ref = "ghcr.io/example/quwoquan/request@sha256:" + "2" * 64
     request_body = {
         "schema": "quwoquan_ops.release_qualification_request.v1",
+        "deliveryTargets": targets,
         "rcTagAdmission": {"ref": rc_ref, "digest": "sha256:" + "3" * 64},
         "mainSourceSeal": {"ref": "seal.json", "digest": "sha256:" + "4" * 64},
         "integrationQualification": {"ref": "integration.json", "digest": "sha256:" + "5" * 64},
-        "requestAuthority": {"ref": "authority.json", "digest": "sha256:" + "6" * 64},
+        "requestAuthority": write(tmp_path, "authority.json", {"status": "approved", "sourceGitSha": SHA, "deliveryTargets": targets}),
         "tagName": "v1.2.3-rc.1",
         "sourceGitSha": SHA,
         "sourceTree": TREE,
@@ -250,6 +320,8 @@ def _actual_factory_fixture(tmp_path: Path) -> dict[str, object]:
     }
     app_artifacts = {}
     for platform, (product_id, artifact_digest) in app_artifact_specs.items():
+        if "app" not in targets and platform != "web":
+            continue
         from quwoquan_ops.cli.lib.app_identity import (
             application_id_for_build_product,
             resolve_build_product,
@@ -338,8 +410,10 @@ def _reduce_actual_factory_fixture(tmp_path: Path, fixture: dict[str, object], *
         "service_qualification_request_digest": service["qualificationRequest"]["digest"],
         "service_material_digest": service["materialDigest"],
         "service_artifact_digest": service["serviceDigest"],
-        "app_material_ref": fixture["appMaterial"],
-        "app_evidence_ref": fixture["appRef"],
+        "web_material_ref": fixture["appMaterial"],
+        "web_evidence_ref": fixture["appRef"],
+        "app_material_ref": fixture["appMaterial"] if "app" in fixture["requestBody"]["deliveryTargets"] else None,
+        "app_evidence_ref": fixture["appRef"] if "app" in fixture["requestBody"]["deliveryTargets"] else "",
         "app_source_git_sha": app["sourceGitSha"],
         "app_source_tree": app["sourceTreeDigest"],
         "app_qualification_request_ref": app["qualificationRequest"]["ref"],
@@ -348,13 +422,35 @@ def _reduce_actual_factory_fixture(tmp_path: Path, fixture: dict[str, object], *
         "app_allocation_ref": app["artifactBuildNumberAllocation"]["ref"],
         "app_allocation_digest": app["artifactBuildNumberAllocation"]["digest"],
         "app_material_digest": app["materialDigest"],
-        "app_android_artifact_digest": app["artifacts"]["android"]["artifactDigest"],
-        "app_ios_artifact_digest": app["artifacts"]["ios"]["artifactDigest"],
-        "app_web_artifact_digest": app["artifacts"]["web"]["artifactDigest"],
+        "app_android_artifact_digest": app["artifacts"].get("android", {}).get("artifactDigest", ""),
+        "app_ios_artifact_digest": app["artifacts"].get("ios", {}).get("artifactDigest", ""),
+        "app_web_artifact_digest": app["artifacts"].get("web", {}).get("artifactDigest", ""),
         "created_at": "2026-09-05T10:20:00Z",
     }
     values.update(overrides)
     return create_candidate_material_from_factory_outputs(**values)
+
+
+def test_service_factory_reducer_requires_real_web_without_mobile(tmp_path: Path) -> None:
+    fixture = _actual_factory_fixture(tmp_path, targets=["service"])
+    body = json.loads(_reduce_actual_factory_fixture(tmp_path, fixture).read_bytes())
+    assert body["deliveryTargets"] == ["service"]
+    assert set(body["artifactByteDigests"]) == {"service", "web"}
+    assert set(body["factoryOutputs"]["web"]) == {"ociRef", "ociDigest", "payloadDigest", "materialDigest", "artifactDigest", "artifactManifest", "sourceTreeDigest"}
+    fixture["appBody"]["artifacts"] = {}
+    unsigned = dict(fixture["appBody"]); unsigned.pop("materialDigest")
+    fixture["appBody"]["materialDigest"] = digest(unsigned)
+    fixture["appMaterial"] = write(tmp_path, "missing-web.json", fixture["appBody"])
+    with pytest.raises(ReleaseQualificationError, match="authority/build"):
+        _reduce_actual_factory_fixture(tmp_path, fixture, app_web_artifact_digest="")
+
+
+def test_app_factory_reducer_does_not_require_service_material(tmp_path: Path) -> None:
+    fixture = _actual_factory_fixture(tmp_path, targets=["app"])
+    result = _reduce_actual_factory_fixture(tmp_path, fixture, service_material_ref=None, service_evidence_ref="")
+    body = json.loads(result.read_bytes())
+    assert set(body["artifactByteDigests"]) == {"android", "ios", "web"}
+    assert "service" not in body["factoryOutputs"]
 
 
 def test_factory_reducer_derives_cmm_only_from_actual_canonical_bytes(tmp_path: Path) -> None:
@@ -372,6 +468,7 @@ def test_factory_reducer_derives_cmm_only_from_actual_canonical_bytes(tmp_path: 
         "service": service["serviceDigest"],
     }
     assert body["factoryOutputs"]["service"]["payloadDigest"] == fixture["serviceMaterial"]["digest"]
+    assert body["factoryOutputs"]["web"]["payloadDigest"] == fixture["appMaterial"]["digest"]
     assert body["factoryOutputs"]["app"]["payloadDigest"] == fixture["appMaterial"]["digest"]
     assert body["factoryOutputs"]["app"]["artifactManifests"] == app["artifacts"]
     assert body["factoryOutputs"]["app"] == {
@@ -454,6 +551,17 @@ def test_factory_reducer_rejects_noncanonical_app_payload_bytes(tmp_path: Path) 
         "digest": digest(app_path),
     }
     with pytest.raises(ReleaseQualificationError, match="bytes are not canonical JSON"):
+        _reduce_actual_factory_fixture(tmp_path, fixture)
+
+
+def test_service_scope_rejects_tampered_signature_verification(tmp_path: Path) -> None:
+    fixture = _actual_factory_fixture(tmp_path, targets=["service"])
+    service = fixture["serviceBody"]
+    service["images"][0]["signature"]["verificationDigest"] = "sha256:" + "f" * 64
+    service.pop("materialDigest")
+    service["materialDigest"] = digest(service)
+    fixture["serviceMaterial"] = write(tmp_path, "tampered-signature.json", service)
+    with pytest.raises(ReleaseQualificationError, match="verification digest drifted"):
         _reduce_actual_factory_fixture(tmp_path, fixture)
 
 

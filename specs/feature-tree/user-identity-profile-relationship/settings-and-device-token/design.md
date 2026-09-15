@@ -55,6 +55,16 @@
 - 关联要求：`REQ-003`、`REQ-004`
 - 关联验收：`SIT-003`
 
+<a id="dec-003"></a>
+### DEC-003 Content 主体关闭 runtime 证据只由本地工作流 owner 声明
+- 决策：`ContentAccountClosureWorkflow` 的 `quwoquan_service/services/content-service/contracts/content/content_account_closure_workflow/fields.yaml` 唯一声明本地 owner 空间创建/闭包证据；Post 的 `account_closure.ownerEvidence` 只引用其 exact 文件摘要，不复制 schema，也不以 Post 安全集合 creation receipt 代证主体闭包。该证据证明当前 Content 物理空间与精确 User 源事件空间、订阅和投影初始化的绑定，不证明全世界 User 没有已关闭主体，不替代 DEC-002 的同步账号权威。
+- 创建与恢复：环境 owner 在受管 target 执行锁和停写窗口内，从批准的 candidate/data-plane 资源输入独占创建全部 owner collections 和隔离源事件空间，逐集合读回 Mongo UUID、逐源分区读回初始边界及订阅位置。只有源创建凭证同时证明该源生产者的持久化/outbox 空间属于本次新空间且旧写路已隔离，才允许 `new_source` 的真实初始零水位；新建 Redis stream 本身不证明旧 User outbox 不会回放。复用已有源必须走 `replayed_source`，取得源 owner 完整历史/备份边界并真实重放至冻结边界，所有分区与本地投影逐项追齐且无 PEL/待处理工作；无法证明的 restored 或 Prod 暂时硬拒绝，不能改名为 new。
+- 源分配信任：PG/Redis不提供永久不可复用的存储UUID。源证据使用managed allocation binding，可信性来自环境owner在现役target排他锁内独占创建受保护材料、PG专属角色/数据库与Redis专属ACL，并实际读回权限及producer→source配置，验证旧凭据拒绝连接/写入。随机ID、配置摘要、空态、PG system identifier/OID、container ID及mount信息均不能单独授信；这些provider信息只辅助定位。admin/root绕行及由其制造的不可区分拷贝不在本地非生产威胁模型；可观察的权限、凭据、挂载、candidate或current漂移必须拒绝。没有第二回执协议，不双读旧physicalAllocationId字段；Prod/restored未实现时保持拒绝。
+- 一致性与拒绝：创建 attempt、资源 namespace、collection UUID、独立主体 HMAC key identity、源生产者创建凭证和订阅边界共同绑定一份 create-once evidence。已有资源、部分创建、未初始化、源恢复未知、错环境/candidate、旧证据复制到新物理空间均不产成功事实；失败保留本 attempt 诊断，不删除或补发 new 证据，不回滚到旧 key/旧源。初始闭包只在首次开放或停写恢复时比对；普通提交后的重启验证当前绑定和物理身份，不拿初始空摘要误判合法增长。
+- 理由与被否决方案：空目标集合、最大分区水位、caller 时间/布尔授权、同一个 Post receipt 的两份 hash 都不能证明主体安全完整性。不新增 authority 服务、HTTP command 或业务 collection；受管创建 producer 调用 owner 的创建/readback 端口，Content bootstrap 只消费严格解析及实际身份验证的证据，再绑定现有 PostSafetyAuthority/Manager。
+- 质量与测试 seam：沿用账号 consumer lag/DLQ/readiness 与 Post `query_barrier_not_ready`，仅输出脱敏 outcome/attempt 摘要，缺证据立即拒绝开放；不新增无实测 SLO。隔离 Mongo/Redis/源 producer 测试以同一创建函数验证成功和上述负例，另验普通写后重启；只读材料/类型测试不计 HTTP 闭环。
+- 关联要求：`REQ-003`、`REQ-004`；关联验收：`SIT-003` 及 `account-lifecycle-self-service-account-closure` 的 `GWT-003`、`GWT-004`；影响 Story：账号关闭、账号封禁恢复与普通 Post 发布。字段及 covered collection 闭集仅归工作流 contracts。
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

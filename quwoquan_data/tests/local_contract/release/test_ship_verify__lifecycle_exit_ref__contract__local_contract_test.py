@@ -18,7 +18,7 @@ from content.release.environment.release_runtime import ReleaseAdmission  # noqa
 from content.release.environment._ship_consumer_verification import (  # noqa: E402
     verify_release_consumers,
 )
-from content.release.environment._ship_operation_dependencies import (  # noqa: E402
+from quwoquan_ops.cli.lib.content_release_environment._ship_operation_dependencies import (  # noqa: E402
     ShipOperationDependencies,
 )
 from content.release.environment.readiness import ShipReadinessAction  # noqa: E402
@@ -58,7 +58,7 @@ _ADMISSION = ReleaseAdmission(
     release_id="release-a",
     manifest_digest="sha256:" + "0" * 64,
     admission_kind="producer_handoff",
-    handoff_ref=f"handoff-ref-v1:sha256:{'1' * 64}:sha256:{'2' * 64}",
+    handoff_ref="data/releases/release-a/producer_release_handoff.json=sha256:" + "0" * 64,
     handoff_artifact_ref=".qwq_output/data/releases/release-a/producer_release_handoff.json",
     handoff_artifact_digest="sha256:" + "0" * 64,
 )
@@ -173,7 +173,7 @@ def _dependencies(
         handoff_ref=(
             ""
             if release_kind is ReleaseKind.EMPTY_BASELINE
-            else f"handoff-ref-v1:sha256:{'1' * 64}:sha256:{'2' * 64}"
+            else f"data/releases/{release.name}/producer_release_handoff.json=sha256:{'0' * 64}"
         ),
         handoff_artifact_ref=(
             ""
@@ -354,6 +354,21 @@ def _dependencies(
         "contentPostActiveReceiptDigest": "sha256:"
         + __import__("hashlib").sha256(post_active.read_bytes()).hexdigest(),
     }
+    write_environment_result(
+        apply_run / "result.json",
+        {
+            "schema": "quwoquan_data.environment_release_result",
+            "environment": "gamma",
+            "releaseId": release.name,
+            "containsUnverifiedAssets": research,
+            "manifestDigest": manifest_digest,
+            **admission.result_envelope(),
+            "runId": "apply-001",
+            "status": "prepared",
+            **evidence_fields,
+            "homepageVerificationCasesRef": homepage_cases_ref,
+        },
+    )
     overrides = dict(predecessor_overrides or {})
     predecessor_admission = admission.result_envelope()
     if overrides.get("admissionKind") == "empty_baseline_attestation":
@@ -371,7 +386,6 @@ def _dependencies(
         "importRunId": "apply-001",
         "status": "completed",
         **evidence_fields,
-        "homepageVerificationCasesRef": homepage_cases_ref,
         **overrides,
     }
     write_environment_result(import_run / "result.json", predecessor)
@@ -491,6 +505,110 @@ def test_ship_verify__production_forwards_lifecycle_exit_ref(
     assert result["status"] == "completed"
     assert result["handoffArtifactRef"].endswith("/producer_release_handoff.json")
     assert result["handoffArtifactDigest"].startswith("sha256:")
+
+
+def test_ship_verify__passes_runtime_candidate_to_target_and_revalidates(
+    tmp_path: Path,
+) -> None:
+    observed: dict[str, Any] = {}
+    dependencies = _dependencies(tmp_path, observed=observed)
+    target = dependencies.resolve_environment_release_target("gamma")
+    candidate_root = tmp_path / "candidate"
+
+    def _resolve(env: str, *, candidate_root: Path) -> EnvironmentReleaseTarget:
+        observed["resolved_candidate"] = (env, candidate_root)
+        return target
+
+    dependencies = replace(
+        dependencies,
+        resolve_environment_release_target=_resolve,
+        assert_environment_release_target_unchanged=lambda value: observed.update(
+            revalidated_target=value
+        ),
+    )
+    verify_release_consumers(
+        _verify_args(
+            observed["admission"],
+            run_id="verify-candidate-binding",
+            runtime_candidate_root=candidate_root,
+        ),
+        dependencies=dependencies,
+    )
+
+    assert observed["resolved_candidate"] == ("gamma", candidate_root)
+    assert observed["revalidated_target"] is target
+
+
+def test_ship_verify__candidate_drift_blocks_before_consumer(
+    tmp_path: Path,
+) -> None:
+    observed: dict[str, Any] = {}
+    dependencies = _dependencies(tmp_path, observed=observed)
+    target = dependencies.resolve_environment_release_target("gamma")
+    dependencies = replace(
+        dependencies,
+        resolve_environment_release_target=lambda _env, **_kwargs: target,
+        assert_environment_release_target_unchanged=lambda _target: (_ for _ in ()).throw(
+            RuntimeError("DATA.RELEASE.DATA_PLANE_BINDING_CAS_DRIFT")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="DATA_PLANE_BINDING_CAS_DRIFT"):
+        verify_release_consumers(
+            _verify_args(
+                observed["admission"],
+                run_id="verify-candidate-drift",
+                runtime_candidate_root=tmp_path / "candidate",
+            ),
+            dependencies=dependencies,
+        )
+
+    assert observed.get("created_runs") is None
+
+
+def test_ship_verify__reads_cases_ref_only_from_prepared_apply_result(
+    tmp_path: Path,
+) -> None:
+    observed: dict[str, Any] = {}
+    dependencies = _dependencies(
+        tmp_path,
+        observed=observed,
+        predecessor_overrides={
+            "homepageVerificationCasesRef": "env/gamma/runs/data-release/release-a/"
+            "activate-001/tampered.json"
+        },
+    )
+
+    verify_release_consumers(
+        _verify_args(observed["admission"], run_id="verify-apply-cases-chain"),
+        dependencies=dependencies,
+    )
+
+    assert observed["result"]["status"] == "completed"
+
+
+def test_ship_verify__rejects_prepared_apply_identity_mismatch(
+    tmp_path: Path,
+) -> None:
+    observed: dict[str, Any] = {}
+    dependencies = _dependencies(tmp_path, observed=observed)
+    result_path = (
+        tmp_path / "env/gamma/runs/data-release/release-a/apply-001/result.json"
+    )
+    result = read_json(result_path)
+    result["manifestDigest"] = "sha256:" + "9" * 64
+    replacement = result_path.with_name("replacement.json")
+    write_environment_result(replacement, result)
+    result_path.unlink()
+    replacement.replace(result_path)
+
+    with pytest.raises(SystemExit, match="prepared apply predecessor result manifestDigest"):
+        verify_release_consumers(
+            _verify_args(observed["admission"], run_id="verify-apply-mismatch"),
+            dependencies=dependencies,
+        )
+
+    assert observed.get("created_runs") is None
 
 
 def test_ship_verify__rejects_revision_chain_drift_before_consumer(

@@ -90,7 +90,7 @@ func TestIndexerUpsertMapsTargetAndAnchors(t *testing.T) {
 	if stored["authorId"] != "user_1" || stored["authorName"] != "alice" {
 		t.Fatalf("anchor fields missing: %#v", stored)
 	}
-	if stored["sourceVersion"] != int64(1) || stored["deleted"] != false {
+	if stored["sourceVersion"] != int64(1) || stored["deleted"] != false || stored["sourceKind"] != "ordinary" {
 		t.Fatalf("versioned upsert must persist sourceVersion and live marker: %#v", stored)
 	}
 }

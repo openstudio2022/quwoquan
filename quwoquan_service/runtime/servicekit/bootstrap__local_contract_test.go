@@ -2,10 +2,12 @@ package servicekit
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -323,6 +325,9 @@ func TestBootstrapAutoAssemblesDeclaredMongo(t *testing.T) {
 		OperationDescriptors: authTestSpec().OperationDescriptors,
 		AuthorityScopes:      []string{"user.account.security.read"},
 		Assemble: func(asm *Assembly, cfg *mongoFixtureConfig) error {
+			if asm.MongoDB == nil {
+				return errors.New("domain assembly received nil canonical MongoDB")
+			}
 			assembled = true
 			return nil
 		},
@@ -335,9 +340,59 @@ func TestBootstrapAutoAssemblesDeclaredMongo(t *testing.T) {
 	if !assembled {
 		t.Fatal("domain assembly must run")
 	}
+	if !reflect.DeepEqual(double.databaseNames, []string{"quwoquan_fixture"}) {
+		t.Fatalf("canonical database must be resolved exactly once, got %v", double.databaseNames)
+	}
 	checks := assembly.Health.Check(context.Background()).Checks
 	if _, registered := checks["mongodb"]; !registered {
 		t.Fatalf("declared mongo must auto-register its health check, got %v", checks)
+	}
+}
+
+func TestBootstrapMongoConstructionErrorPreventsDomainAssembly(t *testing.T) {
+	type mongoFixtureConfig struct {
+		BaseConfig `yaml:",inline"`
+		Mongo      MongoConfig `yaml:"mongo"`
+	}
+	bootstrapTestEnvironment(t, "bootstrap-fixture")
+	root := os.Getenv("CONFIG_ROOT")
+	snapshot := strings.Join([]string{
+		"config:",
+		"  version: sha256:cfg-fixture",
+		"service:",
+		"  http:",
+		"    addr: :19081",
+		"user_account_security_authority:",
+		"  base_url: http://user.internal:18081",
+		"  timeout_ms: 800",
+		"mongo:",
+		"  uri: mongodb://db.internal:27017",
+		"  database: quwoquan_fixture",
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(root, "bootstrap-fixture.yaml"), []byte(snapshot), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	connectErr := errors.New("connection refused")
+	domainAssembled := false
+	_, _, err := bootstrapAssembly("bootstrap-fixture", BootstrapSpec[mongoFixtureConfig]{
+		OperationDescriptors: authTestSpec().OperationDescriptors,
+		AuthorityScopes:      []string{"user.account.security.read"},
+		MongoConnect: func(context.Context, MongoConnectConfig) (MongoHandle, error) {
+			return nil, connectErr
+		},
+		Assemble: func(*Assembly, *mongoFixtureConfig) error {
+			domainAssembled = true
+			return nil
+		},
+	})
+	var constructionErr *MongoConstructionError
+	if !errors.As(err, &constructionErr) || constructionErr.Stage != "connect" || !errors.Is(err, connectErr) {
+		t.Fatalf("expected typed Mongo connect construction error, got %T %v", err, err)
+	}
+	if domainAssembled {
+		t.Fatal("domain assembly must not run after Mongo construction failure")
 	}
 }
 

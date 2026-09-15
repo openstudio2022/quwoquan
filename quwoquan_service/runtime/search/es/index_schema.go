@@ -120,7 +120,7 @@ func buildIndexMappings(c IndexSchemaConfig) map[string]any {
 		"target":        keywordField(),
 		"objectType":    keywordField(),
 		"objectId":      keywordField(),
-		"sourceVersion": map[string]any{"type": "long"},
+		"sourceVersion": map[string]any{"type": "long", "coerce": false},
 		"sourceDigest":  keywordField(),
 		"deleted":       map[string]any{"type": "boolean"},
 		"contentType":   keywordField(),
@@ -146,7 +146,17 @@ func buildIndexMappings(c IndexSchemaConfig) map[string]any {
 		// Object-specific public presentation fields are retained in _source but
 		// never dynamically indexed. Search/filter truth remains in the explicit
 		// fields above.
-		"payload": map[string]any{"type": "object", "enabled": false},
+		"payload":          map[string]any{"type": "object", "enabled": false},
+		"sourceKind":       keywordField(),
+		"releaseBindingId": keywordField(),
+		"releaseSliceBinding": map[string]any{"properties": map[string]any{
+			"release": map[string]any{"properties": map[string]any{"environment": keywordField(), "sourceOwner": keywordField(), "releaseId": keywordField(), "manifestDigest": keywordField()}},
+			"slice":   keywordField(), "providerBindingGeneration": keywordField(), "schemaGeneration": keywordField(),
+		}},
+		"releaseSourceIdentity": map[string]any{"properties": map[string]any{
+			"release":    map[string]any{"properties": map[string]any{"environment": keywordField(), "sourceOwner": keywordField(), "releaseId": keywordField(), "manifestDigest": keywordField()}},
+			"objectType": keywordField(), "objectId": keywordField(), "sourceVersion": map[string]any{"type": "long", "coerce": false}, "sourceDigest": keywordField(),
+		}},
 		// Cross-object location dimension (R-S05e): geo enables geo_distance
 		// ("附近") recall + distance sort; placeId/placeName carry the place
 		// reference. All optional — only objects with a real location populate them.

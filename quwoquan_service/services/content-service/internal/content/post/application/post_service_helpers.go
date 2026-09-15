@@ -82,6 +82,14 @@ func formatTimePtr(t time.Time) string {
 	return t.UTC().Format(time.RFC3339)
 }
 
+// 可空时间按事件契约发送null，不能让消费者猜测空字符串。
+func nullableProjectionTime(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
 func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 	if post == nil {
 		return nil
@@ -100,7 +108,7 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"moderationStatus":          strings.ToLower(strings.TrimSpace(post.ModerationStatus)),
 		"contentDigest":             strings.TrimSpace(post.ContentDigest),
 		"assistantUsePolicy":        post.AssistantUsePolicy,
-		"publishedAt":               formatTimePtr(post.PublishedAt),
+		"publishedAt":               nullableProjectionTime(post.PublishedAt),
 		"createdAt":                 formatTimePtr(post.CreatedAt),
 		"updatedAt":                 formatTimePtr(post.UpdatedAt),
 		"title":                     post.Title,
@@ -125,7 +133,7 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"entityRefs":                asStringSlice(post.EntityRefs),
 		"primaryHomepageId":         strings.TrimSpace(post.PrimaryHomepageId),
 		"primaryHomepageSnapshot":   postHomepageSnapshotForEvent(post),
-		"visitedAt":                 formatTimePtr(post.VisitedAt),
+		"visitedAt":                 nullableProjectionTime(post.VisitedAt),
 		// 共同经历回流引用：只在作者 Participation 校验通过后落库（fail-closed，
 		// 见 validateGatheringReference），下游 recommendation 据此生产
 		// coExperiencedGathering 交集事实与社会证明计数。

@@ -62,6 +62,7 @@ class GithubSupplyChainContractTest(unittest.TestCase):
                 "source_git_sha",
                 "product_version_manifest_ref",
                 "package_acceptance_fact_ref",
+                "service_acceptance_fact_ref",
                 "provider_fact_ref",
                 "uat_fact_ref",
                 "supply_chain_fact_ref",
@@ -84,8 +85,7 @@ class GithubSupplyChainContractTest(unittest.TestCase):
             verify_github_supply_chain._dispatch_inputs(production),
             {
                 "release_tag_admission_ref",
-                "previous_active_released_ledger_ref",
-                "rollback_readiness_ref",
+                "prior_ref",
             },
         )
 
@@ -530,7 +530,7 @@ class StepSelfOutputReferenceContractTest(unittest.TestCase):
             "      - name: Validate exact facts and issue PromotionAdmissionReceipt\n"
             "        id: admission\n"
             "        run: |\n"
-            "          echo \"digest=sha256:0\" >> \"$GITHUB_OUTPUT\"\n"
+            "          echo \"digest=sha256:dd5d74b503a7045ef336dc7772419337cd9e78734f87b026a967d1cb41ef7f51\" >> \"$GITHUB_OUTPUT\"\n"
             "      - name: Create exact promotion handoff payload\n"
             "        id: handoff\n"
             "        env:\n"

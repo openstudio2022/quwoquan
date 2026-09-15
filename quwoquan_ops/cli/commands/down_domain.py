@@ -24,7 +24,9 @@ mutable test-live teardown 家族在 `commands/down_shared.py`;
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -402,6 +404,73 @@ def _bind_local_teardown_runtime(
     return release_composition, "runtime-receipt", compose_project, False
 
 
+def _bind_gamma_teardown_redis_locators(
+    *, target_name: str, environment: dict[str, str]
+) -> None:
+    """Bind existing deployment-owned Redis material for read-only Compose rendering.
+
+    Teardown/recovery must never create or rotate credentials and must not trust
+    ambient locator variables. Candidate changes do not alter these target-owned
+    locator identities.
+    """
+    import os
+    import stat
+
+    from quwoquan_ops.cli.lib import output_paths
+
+    if target_name != "gamma-local":
+        return
+    root = output_paths.deployment_target_path(
+        target_name, "secrets", "source-allocation-management"
+    )
+    repository = output_paths.ROOT.resolve()
+    absolute_root = root.absolute()
+    if (
+        not absolute_root.is_absolute()
+        or absolute_root == repository
+        or repository in absolute_root.parents
+        or root.is_symlink()
+    ):
+        raise ValueError("gamma teardown Redis material root is unsafe")
+    root_info = root.stat(follow_symlinks=False)
+    if (
+        not stat.S_ISDIR(root_info.st_mode)
+        or root_info.st_uid != os.geteuid()
+        or stat.S_IMODE(root_info.st_mode) != 0o700
+    ):
+        raise ValueError("gamma teardown Redis material root ownership differs")
+    for ancestor in root.parents:
+        info = ancestor.stat(follow_symlinks=False)
+        writable = bool(info.st_mode & 0o022)
+        root_sticky = bool(info.st_mode & stat.S_ISVTX) and info.st_uid == 0
+        if (
+            not stat.S_ISDIR(info.st_mode)
+            or info.st_uid not in {0, os.geteuid()}
+            or (writable and not root_sticky)
+        ):
+            raise ValueError("gamma teardown Redis material ancestor is unsafe")
+    bindings = {
+        "LOCAL_GAMMA_REDIS_ACL_FILE": root / "users.acl",
+        "LOCAL_GAMMA_REDIS_RUNTIME_PASSWORD_FILE": root / "redis-runtime.key",
+    }
+    for name, path in bindings.items():
+        encoded = output_paths._read_secure_bytes(
+            path, label="gamma teardown Redis managed material"
+        )
+        info = path.stat(follow_symlinks=False)
+        if (
+            encoded is None
+            or not encoded
+            or len(encoded) > 1 << 20
+            or not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.geteuid()
+            or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o600
+        ):
+            raise ValueError(f"gamma teardown Redis managed material differs: {name}")
+        environment[name] = str(path)
+
+
 def _receipt_bound_local_compose_model(
     *,
     environment_name: str,
@@ -412,6 +481,9 @@ def _receipt_bound_local_compose_model(
 ) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    _bind_gamma_teardown_redis_locators(
+        target_name=target_name, environment=environment
+    )
     candidate_value = str(
         environment.get(_stackctl.RUNTIME_CANDIDATE_ROOT_ENV) or ""
     ).strip()
@@ -559,6 +631,64 @@ def _receipt_bound_local_compose_model(
         raise ValueError("receipt-bound Compose model must be a JSON object")
     return dict(compose_model)
 
+
+def _gamma_purge_control_paths(target: str) -> list[Path]:
+    from quwoquan_ops.cli.lib import output_paths
+    return [
+        output_paths.deployment_target_path(target, "secrets", "source-allocation"),
+        output_paths.deployment_target_path(target, "secrets", "source-allocation-management"),
+        output_paths.deployment_target_path(target, "secrets", "post-safety"),
+        output_paths.deployment_target_path(target, "secrets", "content-account-closure"),
+        output_paths.deployment_target_path(target, "startup-material", "content-service", "account-closure"),
+        output_paths.post_safety_startup_material_root(target),
+    ]
+
+def _digest_path(path: Path) -> str:
+    digest = hashlib.sha256()
+    for item in sorted(path.rglob("*"), key=lambda value: str(value.relative_to(path))):
+        relative = str(item.relative_to(path)); info = item.stat(follow_symlinks=False)
+        if item.is_symlink() or not (item.is_dir() or item.is_file()): raise ValueError("purge control material contains unsafe entry")
+        digest.update(relative.encode()); digest.update(b"\0")
+        if item.is_file(): digest.update(item.read_bytes())
+        digest.update(b"\0")
+    return "sha256:" + digest.hexdigest()
+
+def _prepare_gamma_purge_control_transaction(*, target: str, report_dir: Path, receipt: Mapping[str, Any], compose_project: str) -> Path | None:
+    if target != "gamma-local": return None
+    from quwoquan_ops.cli.lib.startup_attempt_receipt import _write_transaction_journal_exclusive
+    identity = {"target": target, "attemptId": receipt.get("attemptId"), "candidateDigest": receipt.get("candidateDigest"), "composeProject": compose_project}
+    if not all(identity.values()): raise ValueError("Gamma purge receipt identity is incomplete")
+    entries = []
+    for source in _gamma_purge_control_paths(target):
+        if source.exists(): entries.append({"source": str(source), "digest": _digest_path(source), "relativePath": str(source.relative_to(source.parents[3]))})
+    path = report_dir / "gamma-purge-control-transaction.json"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    raw = json.dumps({"schema":"qwq.gamma-purge-control.v1","state":"prepared","identity":identity,"reason":"receipt-bound rebuildable provider state purged","entries":entries},sort_keys=True,separators=(",",":")).encode()
+    if path.exists():
+        existing=json.loads(path.read_text())
+        if existing.get("identity") != identity: raise ValueError("Gamma purge reconciliation identity differs")
+        return path
+    _write_transaction_journal_exclusive(path, raw)
+    return path
+
+def _complete_gamma_purge_control_transaction(path: Path) -> dict[str, Any]:
+    value=json.loads(path.read_text()); target=value["identity"]["target"]
+    from quwoquan_ops.cli.lib import output_paths
+    archive=output_paths.deployment_target_path(target,"archive","rebuildable-purge",value["identity"]["attemptId"]); archive.mkdir(mode=0o700,parents=True,exist_ok=True)
+    archived=[]
+    for index,entry in enumerate(value["entries"]):
+        source=Path(entry["source"]); destination=archive/f"{index:02d}-{source.name}"
+        if destination.exists():
+            if _digest_path(destination)!=entry["digest"] or source.exists(): raise ValueError("purge partial archive differs")
+        else:
+            if not source.exists(): raise ValueError("purge control material disappeared before archive")
+            if _digest_path(source)!=entry["digest"]: raise ValueError("purge control material changed before archive")
+            os.rename(source,destination)
+        archived.append({**entry,"archive":str(destination)})
+    completed={**value,"state":"completed","archived":archived}
+    temporary=path.with_name(".gamma-purge-control-transaction.completed")
+    temporary.write_text(json.dumps(completed,sort_keys=True,separators=(",",":"))); os.chmod(temporary,0o600); os.replace(temporary,path)
+    return completed
 
 def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -766,11 +896,23 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
                 }
         if purge_rebuildable_state:
             cmd.append("--purge-rebuildable-state")
+        purge_transaction = None
+        if purge_rebuildable_state:
+            purge_transaction = _prepare_gamma_purge_control_transaction(target=args.target, report_dir=report_dir, receipt=_stackctl.load_startup_attempt(args.target), compose_project=runtime_compose_project)
+        from quwoquan_ops.cli.commands.managed_python import (
+            bind_managed_stackctl_python,
+        )
         from quwoquan_ops.cli.lib.output_paths import env_root
+
         env = {**(env or {}), "QWQ_OUTPUT_ROOT": str(env_root(env_name).parents[1])}
+        bind_managed_stackctl_python(env)
         runtime_result = _stackctl.run(cmd, env=env)
         if runtime_result.returncode == 0 and purge_rebuildable_state:
-            shutil.rmtree(_stackctl.target_cache_dir(args.target), ignore_errors=True)
+            try:
+                if purge_transaction is not None: _complete_gamma_purge_control_transaction(purge_transaction)
+                shutil.rmtree(_stackctl.target_cache_dir(args.target), ignore_errors=True)
+            except (OSError, ValueError) as exc:
+                runtime_result = subprocess.CompletedProcess(runtime_result.args, 2, runtime_result.stdout, f"purge control reconciliation required: {exc}")
         app_cmd: list[str] = []
         if prepared_attempt_only:
             app_result = subprocess.CompletedProcess(

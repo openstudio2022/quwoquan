@@ -1,4 +1,4 @@
-"""Canonical source inputs which control iOS/Android dependency resolution."""
+"""Canonical production Gradle inputs owned by the Android bundle component."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from typing import Any
 
 from .dependency_fs import assert_real_directory, read_regular_nofollow
 from .pub_cache_capsule import _canonical_bytes, _digest_bytes
-from .pub_cache_store import pub_resolution_input_paths
 
 NATIVE_RESOLUTION_INPUT_SCHEMA = "stackctl-native-resolution-inputs.v1"
 
@@ -18,10 +17,14 @@ ANDROID_GRADLE_REPOSITORY_INIT = b"""// Flutter included build does not inherit 
 gradle.beforeSettings { settings ->
     if (settings.settingsDir.toPath().endsWith('packages/flutter_tools/gradle')) {
         settings.pluginManagement.repositories {
+            google()
             mavenCentral {
                 content { includeGroup('org.jetbrains.kotlin') }
             }
             gradlePluginPortal()
+            maven { url = uri('https://maven.aliyun.com/repository/google') }
+            maven { url = uri('https://maven.aliyun.com/repository/public') }
+            maven { url = uri('https://maven.aliyun.com/repository/gradle-plugin') }
         }
     }
 }
@@ -66,27 +69,17 @@ def _is_resolution_file(path: Path) -> bool:
 
 
 def native_resolution_input_paths(repo_root: Path) -> list[Path]:
+    """Enumerate only production App Gradle resolution inputs.
+
+    Patrol and AndroidTest closures belong to their UAT/release executors and are
+    intentionally outside this reusable production package component identity.
+    """
+
     root = repo_root.expanduser().absolute()
     assert_real_directory(root, label="native resolution repository root")
-    subtrees: set[Path] = set()
-    for pubspec in pub_resolution_input_paths(root):
-        if pubspec.name != "pubspec.yaml":
-            continue
-        package_root = pubspec.parent
-        for name in ("android", "ios", "darwin", "macos"):
-            subtree = package_root / name
-            if subtree.is_dir() and not subtree.is_symlink():
-                subtrees.add(subtree)
-    patrol_host = root / "quwoquan_app/test_host/patrol"
-    for name in ("android", "ios"):
-        subtree = patrol_host / name
-        if subtree.is_dir() and not subtree.is_symlink():
-            subtrees.add(subtree)
-    relative_subtrees = sorted(
-        subtree.relative_to(root).as_posix() for subtree in subtrees
-    )
-    if not relative_subtrees:
-        raise ValueError("App native dependency subtree set is empty")
+    production_android = root / "quwoquan_app/android"
+    if production_android.is_symlink() or not production_android.is_dir():
+        raise ValueError("App production Android dependency subtree is empty")
     result = subprocess.run(
         [
             "git",
@@ -96,7 +89,7 @@ def native_resolution_input_paths(repo_root: Path) -> list[Path]:
             "--others",
             "--exclude-standard",
             "--",
-            *relative_subtrees,
+            production_android.relative_to(root).as_posix(),
         ],
         cwd=root,
         capture_output=True,
@@ -109,8 +102,12 @@ def native_resolution_input_paths(repo_root: Path) -> list[Path]:
         if not encoded:
             continue
         path = root / os.fsdecode(encoded)
+        if not path.is_relative_to(production_android):
+            continue
         relative = path.relative_to(root)
-        if any(part in _EXCLUDED_SEGMENTS for part in relative.parts):
+        if any(part in _EXCLUDED_SEGMENTS for part in relative.parts) or (
+            "androidTest" in relative.parts
+        ):
             continue
         if _is_resolution_file(path):
             paths.add(path)

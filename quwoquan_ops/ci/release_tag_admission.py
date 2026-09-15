@@ -647,7 +647,7 @@ def _intent(
             "qualificationId", "candidateMaterialManifest",
             "candidateMaterialId", "candidateIdentity",
             "artifactBuildNumber", "artifacts", "productAuthorityFact",
-            "releaseAuthorityFact",
+            "releaseAuthorityFact", "deliveryTargets",
         }
     )
     if (
@@ -870,7 +870,14 @@ def _validate_stable_authorities(
         or rc.get("productVersionManifestDigest") != manifest_digest
     ):
         _fail("RELEASE_TAG.RC_INVALID", "selected RC does not bind stable tag")
+    from quwoquan_ops.ci.release_qualification import validate_delivery_scope, required_platforms
+    try:
+        targets = validate_delivery_scope(request, material, qualification)
+    except ValueError as exc:
+        _fail("RELEASE_TAG.QUALIFICATION_INVALID", str(exc))
     qualified_artifacts = _artifact_map(qualification.get("artifacts"), "qualification.artifacts")
+    if {item["platform"] for item in qualified_artifacts} != required_platforms(targets):
+        _fail("RELEASE_TAG.QUALIFICATION_INVALID", "deliveryTargets material coverage drifted")
     material_artifacts = _artifact_map(material.get("artifacts"), "material.artifacts")
     hosted = allocation.get("hostedAuthority")
     if (
@@ -936,6 +943,7 @@ def _validate_stable_authorities(
         "artifactBuildNumber": material["artifactBuildNumber"], "artifacts": material_artifacts,
     })
     return {
+        "deliveryTargets": targets,
         "selectedRcAdmission": rc_exact, "selectedRcTagName": rc["tagName"],
         "selectedRcTagObjectOid": rc["tagObjectOid"],
         "qualificationFact": qualification_exact, "qualificationId": qualification_id,
@@ -1147,7 +1155,7 @@ def finalize_release_tag_admission(
         "selectedRcAdmission", "selectedRcTagName", "selectedRcTagObjectOid",
         "qualificationFact", "qualificationId", "candidateMaterialManifest",
         "candidateMaterialId", "candidateIdentity", "artifactBuildNumber", "artifacts",
-        "productAuthorityFact", "releaseAuthorityFact",
+        "productAuthorityFact", "releaseAuthorityFact", "deliveryTargets",
     )}
     body = {
         "schema": STABLE_SCHEMA, "decision": "admitted", "tagKind": "stable",

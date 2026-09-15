@@ -2466,6 +2466,44 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/content/active-release-fence:
+        get:
+            operationId: ReadActiveReleaseFence
+            x-contract-operation-id: content.post.ReadActiveReleaseFence
+            x-object-id: content.post
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ActiveReleaseFenceQueryFacade
+                method: readActiveReleaseFence
+                reader: ActiveReleaseFenceReader
+                slice: ContentActiveReleaseFenceSlice
+            parameters:
+                - name: environment
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: sourceOwner
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentActiveReleaseFence'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/content/comments/{commentId}:hide:
         post:
             operationId: HideComment
@@ -3099,6 +3137,39 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/content/post-candidate-safety:query:
+        post:
+            operationId: ReadPostCandidateSafety
+            x-contract-operation-id: content.post.ReadPostCandidateSafety
+            x-object-id: content.post
+            x-actor: none
+            x-application:
+                kind: query
+                facet: PostCandidateSafetyQueryFacade
+                method: read
+                reader: PostCandidateSafetyReader
+                slice: PostCandidateSafetyResult
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReadPostCandidateSafetyQuery'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PostCandidateSafetyResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/content/posts/{postId}/moderation-case:
         get:
             operationId: GetCurrentPostModerationCase
@@ -3335,11 +3406,193 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/content/release-candidates:query:
+        post:
+            operationId: ReadPostReleaseCandidate
+            x-contract-operation-id: content.post.ReadPostReleaseCandidate
+            x-object-id: content.post
+            x-actor: none
+            x-application:
+                kind: query
+                facet: PostReleaseCandidateQueryFacade
+                method: read
+                reader: PostReleaseCandidateReader
+                slice: ReleasePostCandidateSnapshot
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReadPostReleaseCandidateQuery'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReleasePostCandidateSnapshot'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/release-commit-receipts:query:
+        post:
+            operationId: ReadContentReleaseCommitReceipt
+            x-contract-operation-id: content.post.ReadContentReleaseCommitReceipt
+            x-object-id: content.post
+            x-actor: none
+            x-application:
+                kind: query
+                facet: ContentReleaseCommitReceiptQueryFacade
+                method: read
+                reader: ContentReleaseCommitReceiptReader
+                slice: ContentReleaseCommitReceipt
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReadContentReleaseCommitReceiptQuery'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentReleaseCommitReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/release-queries:prepare:
+        post:
+            operationId: PreparePostReleaseQueries
+            x-contract-operation-id: content.post.PreparePostReleaseQueries
+            x-object-id: content.post
+            x-actor: none
+            x-application:
+                kind: command
+                facet: ContentReleasePreparationCommandFacet
+                method: prepareRequiredQueries
+                aggregateOwner: Post
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PreparePostReleaseQueriesCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PostReleaseQueryPreparationResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/release-queries:query:
+        post:
+            operationId: ReadRequiredReleaseQueries
+            x-contract-operation-id: content.post.ReadRequiredReleaseQueries
+            x-object-id: content.post
+            x-actor: none
+            x-application:
+                kind: query
+                facet: RequiredReleaseQueriesQueryFacade
+                method: read
+                reader: RequiredReleaseQueriesReader
+                slice: RequiredReleaseQueriesView
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReadRequiredReleaseQueriesQuery'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RequiredReleaseQueriesView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/releases:activate-at-search-barrier:
+        post:
+            operationId: ActivateContentReleaseAtSearchBarrier
+            x-contract-operation-id: content.post.ActivateContentReleaseAtSearchBarrier
+            x-object-id: content.post
+            x-actor: none
+            x-application:
+                kind: command
+                facet: ContentReleaseActivationCommandFacet
+                method: activateAtSearchBarrier
+                aggregateOwner: Post
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ActivateContentReleaseAtSearchBarrierCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentActiveReleaseFence'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
 components:
     securitySchemes:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
+        ActivateContentReleaseAtSearchBarrierCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ActivateContentReleaseAtSearchBarrierCommand
+            x-contract-placeholder: true
         ActivateFilterCatalogReleaseRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3415,6 +3668,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContentAccountClosureDeadLetterRecoveryRequest
             x-contract-placeholder: true
+        ContentActiveReleaseFence:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContentActiveReleaseFence
+            x-contract-placeholder: true
         ContentArticleSummaryGenerateResponse:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3459,6 +3717,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContentReactionStateSlice
+            x-contract-placeholder: true
+        ContentReleaseCommitReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContentReleaseCommitReceipt
             x-contract-placeholder: true
         CreateContentCommentCommand:
             type: object
@@ -3650,6 +3913,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PauseMediaImageReprocessRunRequest
             x-contract-placeholder: true
+        PostCandidateSafetyResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PostCandidateSafetyResult
+            x-contract-placeholder: true
         PostCounterSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3669,6 +3937,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PostPublicationReceipt
+            x-contract-placeholder: true
+        PostReleaseQueryPreparationResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PostReleaseQueryPreparationResult
+            x-contract-placeholder: true
+        PreparePostReleaseQueriesCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PreparePostReleaseQueriesCommand
             x-contract-placeholder: true
         ProfileInteractionActivityPageSlice:
             type: object
@@ -3690,6 +3968,26 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReactToContentCommentCommand
             x-contract-placeholder: true
+        ReadContentReleaseCommitReceiptQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReadContentReleaseCommitReceiptQuery
+            x-contract-placeholder: true
+        ReadPostCandidateSafetyQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReadPostCandidateSafetyQuery
+            x-contract-placeholder: true
+        ReadPostReleaseCandidateQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReadPostReleaseCandidateQuery
+            x-contract-placeholder: true
+        ReadRequiredReleaseQueriesQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReadRequiredReleaseQueriesQuery
+            x-contract-placeholder: true
         ReceivedCommentPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3699,6 +3997,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RecordMediaProcessingResultRequest
+            x-contract-placeholder: true
+        ReleasePostCandidateSnapshot:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReleasePostCandidateSnapshot
             x-contract-placeholder: true
         ReplyPageSlice:
             type: object
@@ -3729,6 +4032,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RequestContentMediaOriginalAccessCommand
+            x-contract-placeholder: true
+        RequiredReleaseQueriesView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RequiredReleaseQueriesView
             x-contract-placeholder: true
         ResolveReportRequest:
             type: object

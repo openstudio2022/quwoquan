@@ -10,15 +10,36 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrInvalidArgument     = errors.New("ENTITY.USER.invalid_argument")
-	ErrHomepageNotFound    = errors.New("ENTITY.USER.homepage_not_found")
-	ErrHomepageOffline     = errors.New("ENTITY.USER.homepage_offline")
-	ErrInvalidHomepageType = errors.New("ENTITY.USER.invalid_homepage_type")
-	ErrPermissionDenied    = errors.New("ENTITY.USER.permission_denied")
-	ErrVersionConflict     = errors.New("ENTITY.USER.version_conflict")
-	ErrIdempotencyConflict = errors.New("ENTITY.USER.idempotency_conflict")
-	ErrInternalError       = errors.New("ENTITY.SYSTEM.internal_error")
+	ErrReleaseCandidateInvalid     = errors.New("ENTITY.RELEASE.candidate_invalid")
+	ErrReleaseCandidateNotReady    = errors.New("ENTITY.RELEASE.candidate_not_ready")
+	ErrReleaseCandidateUnavailable = errors.New("ENTITY.RELEASE.candidate_unavailable")
+	ErrInvalidArgument             = errors.New("ENTITY.USER.invalid_argument")
+	ErrHomepageNotFound            = errors.New("ENTITY.USER.homepage_not_found")
+	ErrHomepageOffline             = errors.New("ENTITY.USER.homepage_offline")
+	ErrInvalidHomepageType         = errors.New("ENTITY.USER.invalid_homepage_type")
+	ErrPermissionDenied            = errors.New("ENTITY.USER.permission_denied")
+	ErrVersionConflict             = errors.New("ENTITY.USER.version_conflict")
+	ErrIdempotencyConflict         = errors.New("ENTITY.USER.idempotency_conflict")
+	ErrInternalError               = errors.New("ENTITY.SYSTEM.internal_error")
 )
+
+// AppErrorFromReleaseCandidateInvalid returns *AppError for ENTITY.RELEASE.candidate_invalid (user_message from errors.yaml).
+func AppErrorFromReleaseCandidateInvalid(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrReleaseCandidateInvalid.Error()))
+	return rerrors.NewAppError(code, "候选身份或闭包不一致", debugMessage).WithMetadata("candidate_invalid", 422).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromReleaseCandidateNotReady returns *AppError for ENTITY.RELEASE.candidate_not_ready (user_message from errors.yaml).
+func AppErrorFromReleaseCandidateNotReady(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrReleaseCandidateNotReady.Error()))
+	return rerrors.NewAppError(code, "候选尚未完成验证", debugMessage).WithMetadata("candidate_not_ready", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromReleaseCandidateUnavailable returns *AppError for ENTITY.RELEASE.candidate_unavailable (user_message from errors.yaml).
+func AppErrorFromReleaseCandidateUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrReleaseCandidateUnavailable.Error()))
+	return rerrors.NewAppError(code, "候选读取暂不可用", debugMessage).WithMetadata("candidate_unavailable", 503).WithRecoveryDirective("surface", "inlineCard", 0)
+}
 
 // AppErrorFromInvalidArgument returns *AppError for ENTITY.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {

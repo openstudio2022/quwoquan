@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rthealth "quwoquan_service/runtime/health"
 )
@@ -15,10 +18,12 @@ import (
 // mongoClientDouble 是窄投影的同包 typed double：只验证编排（连接、健康
 // 检查、清理注册），不触真实 Mongo；double 不出测试树。
 type mongoClientDouble struct {
-	pings       int
-	disconnects int
-	pingErr     error
-	ping        func(context.Context) error
+	pings         int
+	disconnects   int
+	pingErr       error
+	ping          func(context.Context) error
+	client        *mongo.Client
+	databaseNames []string
 }
 
 func (double *mongoClientDouble) Ping(ctx context.Context) error {
@@ -34,8 +39,12 @@ func (double *mongoClientDouble) Disconnect(context.Context) error {
 	return nil
 }
 
-func (double *mongoClientDouble) Database(string) rtmongo.Database {
-	return nil
+func (double *mongoClientDouble) Database(name string) rtmongo.Database {
+	double.databaseNames = append(double.databaseNames, name)
+	if double.client == nil {
+		double.client, _ = mongo.Connect(options.Client().ApplyURI("mongodb://fixture.invalid:27017"))
+	}
+	return double.client.Database(name)
 }
 
 func mongoTestAssembly(connect mongoConnectFunc) *Assembly {
@@ -58,10 +67,20 @@ func TestAssemblyMongoFailsClosedOnMissingDeclaration(t *testing.T) {
 	if _, err := assembly.Mongo(MongoConfig{Database: "quwoquan_tag"}); err == nil ||
 		!strings.Contains(err.Error(), "mongo.uri is required") {
 		t.Fatalf("expected uri fail-closed, got %v", err)
+	} else {
+		var constructionErr *MongoConstructionError
+		if !errors.As(err, &constructionErr) || constructionErr.Stage != "config" {
+			t.Fatalf("expected typed config construction error, got %T %v", err, err)
+		}
 	}
 	if _, err := assembly.Mongo(MongoConfig{URI: "mongodb://db:27017"}); err == nil ||
 		!strings.Contains(err.Error(), "mongo.database is required") {
 		t.Fatalf("expected database fail-closed, got %v", err)
+	} else {
+		var constructionErr *MongoConstructionError
+		if !errors.As(err, &constructionErr) || constructionErr.Stage != "config" {
+			t.Fatalf("expected typed config construction error, got %T %v", err, err)
+		}
 	}
 }
 

@@ -220,10 +220,21 @@ def _write_runtime_shared(module, package_dir: Path, environment: str) -> None:
         "digest": _digest(binding_path),
         "bindingDigest": binding_digest,
     }
+    # 局部包形状fixture，不执行此placeholder；真实initializer执行由api_integration覆盖。
+    import platform
+    executable = _write(package_dir / "source-initializer/source-init", "local-contract-placeholder")
+    executable.chmod(0o755)
+    migration = _write(package_dir / "source-initializer/resources/migrations/001.up.sql", "SELECT 1;")
+    initializer_manifest = _write_json(package_dir / "source-initializer/manifest.json", {
+        "schema": "stackctl-source-initializer", "environment": environment,
+        "target": f"{environment}-local", "platform": platform.system()+"/"+platform.machine(),
+        "executable": "source-init", "files": {"source-init": _digest(executable), "resources/migrations/001.up.sql": _digest(migration)},
+    })
     _write_json(
         package_dir / "manifest.json",
         {
             "schema": "qwq.runtime_shared_package",
+            "sourceInitializer": {"ref": "packages/runtime-shared/source-initializer/manifest.json", "digest": _digest(initializer_manifest)},
             "environment": environment,
             "target": f"{environment}-local",
             "dataPlaneBinding": binding,
@@ -260,7 +271,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
     def test_self_consistent_package_is_accepted(self) -> None:
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "alpha")
             self.assertEqual(
                 module.validate_runtime_shared_package(package_dir, "alpha", "alpha-local"),
@@ -270,8 +281,8 @@ class RuntimeSharedPackageTest(unittest.TestCase):
     def test_missing_manifest_is_rejected(self) -> None:
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
-            package_dir.mkdir()
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
+            package_dir.mkdir(parents=True)
             self.assertEqual(
                 module.validate_runtime_shared_package(package_dir, "alpha", "alpha-local"),
                 ["missing runtime-shared manifest"],
@@ -280,7 +291,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
     def test_unparseable_manifest_is_reported_instead_of_raised(self) -> None:
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write(package_dir / "manifest.json", "{not json")
             issues = module.validate_runtime_shared_package(
                 package_dir, "alpha", "alpha-local"
@@ -292,7 +303,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
         """包身份必须自带环境：错环境的 runtime-shared 装进来，服务会读到另一套端点。"""
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "beta")
             issues = module.validate_runtime_shared_package(
                 package_dir, "alpha", "alpha-local"
@@ -302,7 +313,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
     def test_incomplete_provenance_file_set_is_rejected(self) -> None:
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "alpha")
             manifest = json.loads((package_dir / "manifest.json").read_text(encoding="utf-8"))
             manifest["provenance"]["files"].pop("livekit.yaml")
@@ -315,7 +326,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
     def test_payload_digest_drift_is_rejected(self) -> None:
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "alpha")
             _write(package_dir / "Caddyfile", ":80 {\n\trespond 500\n}\n")
             self.assertIn(
@@ -327,7 +338,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
         """每份共享文件只有一个 canonical owner 目录；source 指向别处就是第二真相源。"""
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "alpha")
             manifest = json.loads((package_dir / "manifest.json").read_text(encoding="utf-8"))
             manifest["provenance"]["files"]["retention_policy.yaml"]["source"] = (
@@ -343,7 +354,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
         """打包机上的 source 会带 `/…/repo/` 前缀；判据认的是归属目录而不是绝对路径。"""
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "alpha")
             manifest = json.loads((package_dir / "manifest.json").read_text(encoding="utf-8"))
             manifest["provenance"]["files"]["livekit.yaml"]["source"] = (
@@ -358,7 +369,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
     def test_unexpected_extra_payload_is_rejected(self) -> None:
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "alpha")
             _write(package_dir / "operator_notes.md", "手工补的文件\n")
             self.assertIn(
@@ -369,7 +380,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
     def test_registered_extra_top_level_payload_is_accepted(self) -> None:
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "alpha")
             _write(package_dir / "provider-runtime" / "bindings.json", "{}\n")
             self.assertEqual(
@@ -380,7 +391,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
     def test_oci_image_manifest_is_accepted_when_digest_covers_the_image_set(self) -> None:
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "alpha")
             _write_json(
                 package_dir / "oci-images.json",
@@ -395,7 +406,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
         """imageDigest 是整份镜像组合的唯一身份；换掉一个 ref 而不更新它就是身份撒谎。"""
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "alpha")
             payload = _oci_images_payload("alpha", "alpha-local")
             payload["images"]["demo-service"]["imageDigest"] = "sha256:" + "e" * 64
@@ -408,7 +419,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
     def test_oci_image_target_identity_mismatch_is_rejected(self) -> None:
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "alpha")
             _write_json(
                 package_dir / "oci-images.json",
@@ -422,7 +433,7 @@ class RuntimeSharedPackageTest(unittest.TestCase):
     def test_oci_image_descriptor_without_digest_is_rejected(self) -> None:
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
-            package_dir = Path(tmp) / "runtime-shared"
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
             _write_runtime_shared(module, package_dir, "alpha")
             payload = _oci_images_payload("alpha", "alpha-local")
             payload["images"] = {"demo-service": {"ref": "localhost/demo"}}

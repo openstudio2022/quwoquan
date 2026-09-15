@@ -180,8 +180,8 @@ def main() -> int:
             raise SystemExit(
                 f"FAIL: prevalidation services escape {args.plane} plane ownership"
             )
-        if args.plane == "service" and "integration-service" not in image_only_services:
-            raise SystemExit("FAIL: integration-service must remain image/config-only")
+        if args.plane == "service" and "integration-service" not in startup_governed:
+            raise SystemExit("FAIL: integration-service must be a startup service")
         _validate_prevalidation_startup(set(startup_services))
         config_services = list(governed)
     credentials_root = str(plane.get("credentialsPath") or "").strip()

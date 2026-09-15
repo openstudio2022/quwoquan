@@ -5,10 +5,48 @@ package feeddeliverypage
 
 import "time"
 
+const ReadRecommendationReleaseReadinessPath = "/internal/recommendation/release-readiness:query"
+const ReadRecommendationReleaseReadinessMethod = "POST"
 const CreateRankedRecommendationWindowPath = "/internal/recommendation/ranked-pages"
 const CreateRankedRecommendationWindowMethod = "POST"
-const GetRankedRecommendationPagePath = "/internal/recommendation/ranked-pages/{windowId}"
-const GetRankedRecommendationPageMethod = "GET"
+const GetRankedRecommendationPagePath = "/internal/recommendation/ranked-pages/{windowId}:query"
+const GetRankedRecommendationPageMethod = "POST"
+
+type ReleaseCandidateBinding struct {
+	Environment    string `json:"environment"`
+	SourceOwner    string `json:"sourceOwner"`
+	ReleaseId      string `json:"releaseId"`
+	ManifestDigest string `json:"manifestDigest"`
+}
+
+type ReleasePinnedQueryFence struct {
+	Release  *ReleaseCandidateBinding `json:"release,omitempty"`
+	Revision int64                    `json:"revision"`
+}
+
+type CreateRankedRecommendationWindowCommand struct {
+	ContentFence   ReleasePinnedQueryFence `json:"contentFence"`
+	IdempotencyKey string                  `json:"idempotencyKey"`
+	SubjectId      string                  `json:"subjectId"`
+	Scenario       string                  `json:"scenario"`
+	Limit          int                     `json:"limit"`
+}
+
+type GetRankedRecommendationPageQuery struct {
+	ContentFence ReleasePinnedQueryFence `json:"contentFence"`
+	SubjectId    string                  `json:"subjectId"`
+	WindowId     string                  `json:"windowId"`
+	FromOrdinal  *int                    `json:"fromOrdinal,omitempty"`
+	Limit        *int                    `json:"limit,omitempty"`
+}
+
+type RankedRecommendationItem struct {
+	Ordinal               int            `json:"ordinal"`
+	ContentId             string         `json:"contentId"`
+	Score                 float64        `json:"score"`
+	FeatureSnapshotDigest string         `json:"featureSnapshotDigest"`
+	ItemFeatureSnapshot   map[string]any `json:"itemFeatureSnapshot"`
+}
 
 type RecommendationObjectCard struct {
 	ObjectKind string   `json:"objectKind"`
@@ -21,29 +59,8 @@ type RecommendationObjectCard struct {
 	RecallPath string   `json:"recallPath"`
 }
 
-type RankedRecommendationItem struct {
-	Ordinal               int            `json:"ordinal"`
-	ContentId             string         `json:"contentId"`
-	Score                 float64        `json:"score"`
-	FeatureSnapshotDigest string         `json:"featureSnapshotDigest"`
-	ItemFeatureSnapshot   map[string]any `json:"itemFeatureSnapshot"`
-}
-
-type CreateRankedRecommendationWindowCommand struct {
-	IdempotencyKey string `json:"idempotencyKey"`
-	SubjectId      string `json:"subjectId"`
-	Scenario       string `json:"scenario"`
-	Limit          int    `json:"limit"`
-}
-
-type GetRankedRecommendationPageQuery struct {
-	SubjectId   string `json:"subjectId"`
-	WindowId    string `json:"windowId"`
-	FromOrdinal *int   `json:"fromOrdinal,omitempty"`
-	Limit       *int   `json:"limit,omitempty"`
-}
-
 type RankedRecommendationPage struct {
+	ContentFence          ReleasePinnedQueryFence    `json:"contentFence"`
 	WindowId              string                     `json:"windowId"`
 	Scenario              string                     `json:"scenario"`
 	ExperimentBucket      string                     `json:"experimentBucket"`
@@ -60,8 +77,42 @@ type RankedRecommendationPage struct {
 	ExpiresAt             time.Time                  `json:"expiresAt"`
 }
 
+type ReleaseQueryPreparationBinding struct {
+	Release                   ReleaseCandidateBinding `json:"release"`
+	Slice                     string                  `json:"slice"`
+	ProviderBindingGeneration string                  `json:"providerBindingGeneration"`
+	SchemaGeneration          string                  `json:"schemaGeneration"`
+}
+
+type ReadRecommendationReleaseReadinessQuery struct {
+	Binding        ReleaseQueryPreparationBinding `json:"binding"`
+	SnapshotDigest string                         `json:"snapshotDigest"`
+}
+
+type ReleaseQueryClassEvidence struct {
+	QueryClass      string `json:"queryClass"`
+	ObjectSetDigest string `json:"objectSetDigest"`
+	DocumentsDigest string `json:"documentsDigest"`
+}
+
+type ReleaseQueryReadinessProof struct {
+	Binding                ReleaseQueryPreparationBinding `json:"binding"`
+	SourceClosureDigest    string                         `json:"sourceClosureDigest"`
+	ObjectSetDigest        string                         `json:"objectSetDigest"`
+	SnapshotDigest         string                         `json:"snapshotDigest"`
+	DocumentsDigest        string                         `json:"documentsDigest"`
+	CheckpointVersion      int64                          `json:"checkpointVersion"`
+	QueryClasses           []ReleaseQueryClassEvidence    `json:"queryClasses"`
+	PremiumAdmissionDigest *string                        `json:"premiumAdmissionDigest,omitempty"`
+	PremiumObjectSetDigest *string                        `json:"premiumObjectSetDigest,omitempty"`
+	VerifiedAt             time.Time                      `json:"verifiedAt"`
+	ValidUntil             time.Time                      `json:"validUntil"`
+	ProofDigest            string                         `json:"proofDigest"`
+}
+
 type CreateRankedRecommendationWindowRequestBody struct {
-	SubjectId string `json:"subjectId"`
-	Scenario  string `json:"scenario"`
-	Limit     int    `json:"limit"`
+	ContentFence ReleasePinnedQueryFence `json:"contentFence"`
+	SubjectId    string                  `json:"subjectId"`
+	Scenario     string                  `json:"scenario"`
+	Limit        int                     `json:"limit"`
 }

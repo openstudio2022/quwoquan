@@ -733,9 +733,9 @@ class RehearsalRenderSafetyContractTest(unittest.TestCase):
         spec = _prevalidation_spec()
         service = spec["planes"]["service"]
         self.assertIn("api-edge", service["startupServices"])
-        self.assertIn("integration-service", service["imageAndConfigOnlyServices"])
-        with self.assertRaisesRegex(SystemExit, "user-service startup dependency unavailable: integration-service"):
-            wiring._validate_prevalidation_startup(set(service["startupServices"]) | {"gamma-proxy"})
+        self.assertIn("integration-service", service["startupServices"])
+        self.assertNotIn("integration-service", service["imageAndConfigOnlyServices"])
+        wiring._validate_prevalidation_startup(set(service["startupServices"]) | {"gamma-proxy"})
         wiring._validate_prevalidation_startup({"rtc-service", "realtime-gateway"})
         self.assertEqual(spec["resourceLimits"]["services"]["object-storage"]["memLimit"], "384m")
 
@@ -854,6 +854,8 @@ class RehearsalRenderSafetyContractTest(unittest.TestCase):
                 render._write_env_file(output, CANDIDATE, "candidate-tag", "prevalidate")
             self.assertFalse((output / "runtime/integration-mtls").exists())
             environment = dict(line.split("=", 1) for line in (output / "stack.env").read_text().splitlines())
+            environment.update({"LOCAL_GAMMA_REDIS_ACL_FILE": "/credentials/prevalidation/redis/users.acl", "LOCAL_GAMMA_REDIS_RUNTIME_PASSWORD_FILE": "/credentials/prevalidation/redis/password"})
+            self.assertTrue(environment["INTEGRATION_SERVICE_MTLS_CA_FILE"].startswith("/home/prod-service-svc/credentials/"))
             for plane in ("edge", "service"):
                 selected = set(prevalidation["planes"][plane]["startupServices"])
                 selected.update(prevalidation["planes"][plane]["imageAndConfigOnlyServices"])
@@ -908,10 +910,12 @@ class RehearsalRenderSafetyContractTest(unittest.TestCase):
                     self.assertEqual(projected["object-storage-init"]["depends_on"]["object-storage"], {"condition": "service_healthy"})
                     self.assertIn("api-edge", projected["gamma-proxy"]["depends_on"])
                     self.assertEqual(projected["integration-service"]["ports"], [])
-                    with self.assertRaisesRegex(SystemExit, "INTEGRATION_SERVICE_MTLS"):
-                        _validate_prevalidation_interpolation({"services": projected}, environment)
-                    projected.pop("user-service")
                     _validate_prevalidation_interpolation({"services": projected}, environment)
+                    self.assertIn("integration-service", projected)
+                    from quwoquan_ops.cli.lib.port_manifest import compose_role_base_url, load_port_manifest
+                    content_endpoint = compose_role_base_url(load_port_manifest(), "content-service")
+                    self.assertEqual(projected["recommendation-service"]["environment"]["CONTENT_SERVICE_BASE_URL"], content_endpoint)
+                    self.assertEqual(projected["product-ops-service"]["environment"]["CONTENT_SERVICE_BASE_URL"], content_endpoint)
 
     def test_systemd_prevalidates_full_compose_and_bounds_start_stop(self) -> None:
         from quwoquan_ops.cli.prod.render_prod_plane_stack_lib.runtime_outputs import _write_runtime_systemd_unit
@@ -925,8 +929,14 @@ class RehearsalRenderSafetyContractTest(unittest.TestCase):
             self.assertIn("config --quiet", unit)
             self.assertLess(unit.index("ExecStartPre="), unit.index("ExecStart="))
             self.assertNotIn("EnvironmentFile=", unit)
+            self.assertIn("%h/.local/bin/quwoquan-plane-execution-guard runtime-helper restart-admitted", unit)
+            self.assertIn("runtime-helper stop-admitted", unit)
+            self.assertNotIn("ExecStart=/usr/bin/podman compose", unit)
             with self.assertRaisesRegex(SystemExit, "integration-service"):
                 _write_runtime_systemd_unit(root, plane={"credentialsPath": "/credentials"}, plane_name="service", instance="prevalidate", replica_id="r0", remote_root="/stack", startup_services=["api-edge", "user-service"])
+            service_name = _write_runtime_systemd_unit(root, plane={"credentialsPath": "/credentials"}, plane_name="service", instance="prevalidate", replica_id="r0", remote_root="/stack", startup_services=["api-edge", "user-service", "integration-service"])
+            service_unit = (root / "systemd" / service_name).read_text()
+            self.assertIn("--env-file /credentials/prevalidation/runtime.env", service_unit)
 
     def test_sync_materializes_only_owned_persistent_media_and_refuses_symlinks(self) -> None:
         from quwoquan_ops.cli.prod.render_prod_plane_stack_lib import volume_layout

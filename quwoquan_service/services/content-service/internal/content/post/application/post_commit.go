@@ -64,6 +64,26 @@ func (s *PostService) commitPostCommandWithResult(
 		return nil, false, contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error())
 	}
 	commandHash := sha256.Sum256(commandJSON)
+	switch eventType {
+	case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostPromotedToWork", "PostModerationRejected", "PostDeleted":
+		source, ok := eventPayload.(map[string]any)
+		if !ok {
+			return nil, false, fmt.Errorf("Post lifecycle payload must be produced by owning mapper")
+		}
+		wire := make(map[string]any, len(source)+6)
+		for key, value := range source {
+			wire[key] = value
+		}
+		// 普通Post命令只拥有普通来源；Data行由persistence事务检查禁止降格覆盖。
+		for _, key := range []string{"environment", "sourceOwner", "releaseId", "manifestDigest", "releaseDigest"} {
+			if value, present := wire[key]; present && value != nil {
+				return nil, false, fmt.Errorf("ordinary Post command cannot impersonate release source")
+			}
+			wire[key] = nil
+		}
+		wire["sourceVersion"] = expectedVersion + 1
+		eventPayload = wire
+	}
 	eventJSON, err := json.Marshal(eventPayload)
 	if err != nil {
 		return nil, false, contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error())
@@ -89,6 +109,15 @@ func (s *PostService) commitPostCommandWithResult(
 		CommandDigest:    hex.EncodeToString(commandHash[:]),
 		ReceiptExpiresAt: occurredAt.Add(24 * time.Hour),
 		Events:           events,
+	}
+	if expectedVersion > 0 {
+		if sourceReader, ok := s.store.ports.Aggregate.(postports.SourceMetadataReader); ok {
+			metadata, err := sourceReader.LoadSourceMetadata(ctx, post.ID)
+			if err != nil {
+				return nil, false, err
+			}
+			commit.SourceMetadata = &metadata
+		}
 	}
 	for _, option := range commitOptions {
 		option(&commit)

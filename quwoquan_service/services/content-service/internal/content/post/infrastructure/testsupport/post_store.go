@@ -2,6 +2,7 @@ package testsupport
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -20,6 +21,22 @@ type postReceipt struct {
 	expiresAt     time.Time
 }
 
+type postSafetyState struct {
+	revision int64
+	version  int64
+	state    string
+}
+
+func safetyStatus(post postmodel.Post) string {
+	if post.Status == "deleted" {
+		return "terminated"
+	}
+	if post.Status != "published" || post.Visibility != "public" || post.ModerationStatus != "approved" {
+		return "restricted"
+	}
+	return "allowed"
+}
+
 // PostStore 仅供 local_contract 使用；生产装配不得依赖 testsupport。
 type PostStore struct {
 	mu          sync.RWMutex
@@ -28,10 +45,12 @@ type PostStore struct {
 	outbox      []postports.OutboxEvent
 	checkpoints map[string]string
 	tombstones  map[string]postports.PostDeletionTombstone
+	safety      map[string]postSafetyState
 }
 
 func NewPostStore(seed []postmodel.Post) *PostStore {
 	store := &PostStore{
+		safety:      map[string]postSafetyState{},
 		posts:       make(map[string]postmodel.Post, len(seed)),
 		receipts:    map[string]postReceipt{},
 		checkpoints: map[string]string{},
@@ -43,6 +62,8 @@ func NewPostStore(seed []postmodel.Post) *PostStore {
 			copyItem.Version = 1
 		}
 		store.posts[item.ID] = copyItem
+		// seed是本测试明确供给的初始对象事实，不是从未知历史行补默认。
+		store.safety[item.ID] = postSafetyState{revision: 1, version: copyItem.Version, state: safetyStatus(copyItem)}
 	}
 	return store
 }
@@ -89,6 +110,50 @@ func (s *PostStore) Commit(_ context.Context, commit postports.Commit) (postport
 	}
 	next := *commit.Post
 	next.Version = commit.ExpectedVersion + 1
+	safety, exists := s.safety[next.ID]
+	if commit.ExpectedVersion == 0 {
+		if exists {
+			return postports.CommitResult{}, contentgenerated.AppErrorFromVersionConflict("safety identity already initialized")
+		}
+		safety = postSafetyState{revision: 1, state: safetyStatus(next)}
+	} else {
+		if !exists || safety.version != commit.ExpectedVersion {
+			return postports.CommitResult{}, contentgenerated.AppErrorFromContentReleaseQueryBarrierNotReady("test safety state missing or drifted")
+		}
+		status := safetyStatus(next)
+		if safety.state == "terminated" && status != "terminated" {
+			return postports.CommitResult{}, contentgenerated.AppErrorFromVersionConflict("terminated Post cannot be restored")
+		}
+		if status != safety.state {
+			safety.revision++
+			safety.state = status
+		}
+	}
+	safety.version = next.Version
+	events := make([]postports.OutboxEvent, len(commit.Events))
+	for i, event := range commit.Events {
+		switch event.EventType {
+		case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostPromotedToWork", "PostModerationRejected", "PostDeleted":
+			var wire map[string]any
+			if err := json.Unmarshal(event.Payload, &wire); err != nil {
+				return postports.CommitResult{}, err
+			}
+			if wire == nil {
+				return postports.CommitResult{}, fmt.Errorf("Post lifecycle payload required")
+			}
+			wire["safetyRevision"] = safety.revision
+			wire["sourceVersion"] = next.Version
+			raw, err := json.Marshal(wire)
+			if err != nil {
+				return postports.CommitResult{}, err
+			}
+			event.Payload = raw
+		}
+		event.AggregateVersion = next.Version
+		events[i] = event
+	}
+	// 完成全部校验后，在同一锁内提交状态、receipt、outbox和墓碑。
+	s.safety[next.ID] = safety
 	s.posts[next.ID] = next
 	expiresAt := commit.ReceiptExpiresAt
 	if expiresAt.IsZero() {
@@ -100,10 +165,7 @@ func (s *PostStore) Commit(_ context.Context, commit postports.Commit) (postport
 		post:          next,
 		expiresAt:     expiresAt,
 	}
-	for _, event := range commit.Events {
-		event.AggregateVersion = next.Version
-		s.outbox = append(s.outbox, event)
-	}
+	s.outbox = append(s.outbox, events...)
 	if commit.Tombstone != nil {
 		key := strings.TrimSpace(commit.Tombstone.PostID)
 		if _, exists := s.tombstones[key]; !exists {

@@ -6,6 +6,8 @@
 package es
 
 import (
+	"bytes"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -67,8 +69,7 @@ func NewQueryBuilder() *QueryBuilder {
 // Build converts a RetrievePlan into an ES search body.
 func (b *QueryBuilder) Build(plan rtsearch.RetrievePlan) map[string]any {
 	must := []map[string]any{}
-	filter := []map[string]any{}
-	mustNot := []map[string]any{NotDeletedQuery()}
+	filter := []map[string]any{CurrentDocumentQuery()}
 	should := []map[string]any{}
 
 	// terms -> composed text recall: at least one of best_fields / exact phrase /
@@ -217,7 +218,6 @@ func (b *QueryBuilder) Build(plan rtsearch.RetrievePlan) map[string]any {
 	if len(filter) > 0 {
 		boolQuery["filter"] = filter
 	}
-	boolQuery["must_not"] = mustNot
 	if len(should) > 0 {
 		boolQuery["should"] = should
 	}
@@ -355,96 +355,108 @@ func (b *QueryBuilder) BuildHybrid(plan rtsearch.RetrievePlan, queryVector []flo
 		"num_candidates": k * 5,
 	}
 	body["rank"] = map[string]any{"rrf": map[string]any{}}
-	EnsureNotDeletedSearchBody(body)
+	EnsureCurrentSearchBody(body)
 	return body
 }
 
-// NotDeletedQuery is the canonical soft-tombstone exclusion clause. It uses a
-// must_not term so legacy documents without the field remain visible while all
-// versioned tombstones are excluded from lexical, PIT, and hybrid recall.
-func NotDeletedQuery() map[string]any {
-	return map[string]any{"term": map[string]any{"deleted": true}}
+// CurrentDocumentQuery 只使用倒排字段、数值范围与有限状态 regexp，不扫描 _source。
+// 不完整旧文档保持原 bytes，但不再进入公开召回或候选证明。
+func CurrentDocumentQuery() map[string]any {
+	filters := []map[string]any{
+		{"term": map[string]any{"deleted": false}},
+		{"range": map[string]any{"sourceVersion": map[string]any{"gte": 1}}},
+		{"regexp": map[string]any{"sourceDigest": "sha256:[0-9a-f]{64}"}},
+		{"terms": map[string]any{"sourceKind": []string{"ordinary", "release_candidate"}}},
+	}
+	for _, field := range []string{"target", "objectType", "objectId", "visibility"} {
+		filters = append(filters, map[string]any{"regexp": map[string]any{field: ".+"}})
+	}
+	data := []map[string]any{{"term": map[string]any{"sourceKind": "release_candidate"}}}
+	for _, field := range []string{"releaseBindingId", "releaseSliceBinding.release.manifestDigest", "releaseSliceBinding.providerBindingGeneration", "releaseSliceBinding.schemaGeneration", "releaseSourceIdentity.release.manifestDigest", "releaseSourceIdentity.sourceDigest"} {
+		data = append(data, map[string]any{"regexp": map[string]any{field: "sha256:[0-9a-f]{64}"}})
+	}
+	for _, field := range []string{"releaseSliceBinding.release.environment", "releaseSliceBinding.release.sourceOwner", "releaseSliceBinding.release.releaseId", "releaseSliceBinding.slice", "releaseSourceIdentity.release.environment", "releaseSourceIdentity.release.sourceOwner", "releaseSourceIdentity.release.releaseId", "releaseSourceIdentity.objectType", "releaseSourceIdentity.objectId"} {
+		data = append(data, map[string]any{"regexp": map[string]any{field: ".+"}})
+	}
+	data = append(data, map[string]any{"range": map[string]any{"releaseSourceIdentity.sourceVersion": map[string]any{"gte": 1}}})
+	filters = append(filters, map[string]any{"bool": map[string]any{"minimum_should_match": 1, "should": []map[string]any{
+		ordinarySourceQuery(), {"bool": map[string]any{"filter": data}},
+	}}})
+	return map[string]any{"bool": map[string]any{"filter": filters}}
 }
 
-// EnsureNotDeletedSearchBody applies the canonical tombstone exclusion to any
-// Elasticsearch body accepted by Client.Search. It preserves an existing query
-// (including bool/function_score/PIT shapes) and also filters hybrid kNN recall.
-func EnsureNotDeletedSearchBody(body map[string]any) {
+func ordinarySourceQuery() map[string]any {
+	excluded := []map[string]any{}
+	for _, field := range []string{"releaseSliceBinding", "releaseSourceIdentity", "releaseBindingId", "creatorBinding", "sourceOwner"} {
+		excluded = append(excluded, map[string]any{"exists": map[string]any{"field": field}})
+	}
+	return map[string]any{"bool": map[string]any{
+		"filter": []map[string]any{{"term": map[string]any{"sourceKind": "ordinary"}}}, "must_not": excluded,
+	}}
+}
+
+// EnsureCurrentSearchBody 在执行查询前统一施加当前形状门禁，保留原查询及 PIT。
+func EnsureCurrentSearchBody(body map[string]any) {
 	if body == nil {
 		return
 	}
-	query, hasQuery := body["query"].(map[string]any)
-	if !hasQuery {
+	query, ok := body["query"].(map[string]any)
+	if !ok {
 		query = map[string]any{"match_all": map[string]any{}}
 	}
-	if !queryExcludesDeleted(query) {
-		body["query"] = map[string]any{"bool": map[string]any{
-			"must":     []map[string]any{query},
-			"must_not": []map[string]any{NotDeletedQuery()},
-		}}
+	if !queryRequiresCurrent(query) {
+		body["query"] = map[string]any{"bool": map[string]any{"must": []map[string]any{query}, "filter": []map[string]any{CurrentDocumentQuery()}}}
 	}
-	knn, ok := body["knn"].(map[string]any)
-	if !ok {
-		return
-	}
-	deletedFilter := map[string]any{"bool": map[string]any{
-		"must_not": []map[string]any{NotDeletedQuery()},
-	}}
-	if existing, exists := knn["filter"]; exists {
-		if filterExcludesDeleted(existing) {
+	applyKNN := func(knn map[string]any) {
+		if queryRequiresCurrent(knn["filter"]) {
 			return
 		}
-		knn["filter"] = map[string]any{"bool": map[string]any{
-			"filter": []any{existing, deletedFilter},
-		}}
-	} else {
-		knn["filter"] = deletedFilter
-	}
-}
-
-func queryExcludesDeleted(query map[string]any) bool {
-	if boolQuery, ok := query["bool"].(map[string]any); ok {
-		switch clauses := boolQuery["must_not"].(type) {
-		case []map[string]any:
-			for _, clause := range clauses {
-				if isDeletedTerm(clause) {
-					return true
-				}
-			}
-		case []any:
-			for _, raw := range clauses {
-				if clause, ok := raw.(map[string]any); ok && isDeletedTerm(clause) {
-					return true
-				}
-			}
+		filters := []any{CurrentDocumentQuery()}
+		if existing, ok := knn["filter"]; ok {
+			filters = append(filters, existing)
 		}
+		knn["filter"] = map[string]any{"bool": map[string]any{"filter": filters}}
 	}
-	if functionScore, ok := query["function_score"].(map[string]any); ok {
-		if inner, ok := functionScore["query"].(map[string]any); ok {
-			return queryExcludesDeleted(inner)
-		}
-	}
-	return false
-}
-
-func isDeletedTerm(query map[string]any) bool {
-	term, ok := query["term"].(map[string]any)
-	return ok && term["deleted"] == true
-}
-
-func filterExcludesDeleted(filter any) bool {
-	switch value := filter.(type) {
+	switch knn := body["knn"].(type) {
 	case map[string]any:
-		return queryExcludesDeleted(value)
+		applyKNN(knn)
 	case []map[string]any:
-		for _, clause := range value {
-			if queryExcludesDeleted(clause) {
+		for _, item := range knn {
+			applyKNN(item)
+		}
+	case []any:
+		for _, item := range knn {
+			if value, ok := item.(map[string]any); ok {
+				applyKNN(value)
+			}
+		}
+	}
+}
+
+// 只检查必选合取路径，should/must_not 中出现门禁不能证明所有命中受保护。
+func queryRequiresCurrent(value any) bool {
+	actual, _ := json.Marshal(value)
+	expected, _ := json.Marshal(CurrentDocumentQuery())
+	if bytes.Equal(actual, expected) {
+		return true
+	}
+	switch query := value.(type) {
+	case map[string]any:
+		if b, ok := query["bool"].(map[string]any); ok {
+			return queryRequiresCurrent(b["filter"]) || queryRequiresCurrent(b["must"])
+		}
+		if f, ok := query["function_score"].(map[string]any); ok {
+			return queryRequiresCurrent(f["query"])
+		}
+	case []map[string]any:
+		for _, q := range query {
+			if queryRequiresCurrent(q) {
 				return true
 			}
 		}
 	case []any:
-		for _, clause := range value {
-			if filterExcludesDeleted(clause) {
+		for _, q := range query {
+			if queryRequiresCurrent(q) {
 				return true
 			}
 		}

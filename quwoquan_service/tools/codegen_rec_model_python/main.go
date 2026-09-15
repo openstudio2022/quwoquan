@@ -3,13 +3,17 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"go/format"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 
+	"quwoquan_service/internal/metadata/ast"
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 	"quwoquan_service/internal/metadata/validate"
 )
@@ -32,7 +36,59 @@ func main() {
 		"services/content-service/generated/content/post/recommendation_feature_profile.g.go",
 		"generated Content-side Go transport derived from RecommendationFeatureProfileView",
 	)
+	searchEvents := flag.String("search-events-go-output", "services/search-service/generated/search/search_index_view/events", "Search owning-event Go packages from declared lifecycle source events")
+	consumedOwner := flag.String("consumed-event-owner", "", "generate only this canonical consumer owning-event closure")
+	consumedOutput := flag.String("consumed-event-output", "", "output directory for explicit owning-event closure")
+	consumedGo := flag.Bool("consumed-event-go", false, "emit Go packages instead of Python for explicit owning-event closure")
+	operationOwner := flag.String("operation-owner", "", "owner metadata path for a generated Go operation closure")
+	operationName := flag.String("operation-name", "", "exact operation root")
+	additionalTypes := flag.String("owner-local-types", "", "comma-separated owner-local internal port roots")
+	operationOutput := flag.String("operation-go-output", "", "owner-local generated Go file")
+	operationPython := flag.String("operation-python-output", "", "owner-local generated Python file; reuses the exact operation/type DAG")
+	check := flag.Bool("check", false, "rebuild privately and reject stale canonical outputs")
 	flag.Parse()
+	if *operationOwner != "" {
+		source, err := contractcodegen.NewSource(*metadataDir, validate.ProfileBaseline)
+		if err == nil {
+			if *operationPython != "" && *operationOutput != "" {
+				err = fmt.Errorf("exactly one operation output language is required")
+			} else {
+				output := *operationOutput
+				if *operationPython != "" {
+					output = *operationPython
+				}
+				err = generateOperationTransport(source, *operationOwner, *operationName, output, *check, *operationPython != "", strings.Split(*additionalTypes, ",")...)
+			}
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *consumedOwner != "" {
+		if *consumedOutput == "" {
+			fmt.Fprintln(os.Stderr, "consumed-event-output required")
+			os.Exit(1)
+		}
+		source, err := contractcodegen.NewSource(*metadataDir, validate.ProfileBaseline)
+		if err == nil {
+			err = generateOrCheckConsumedEvents(source, *consumedOwner, *consumedOutput, *consumedGo, *check)
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *check {
+		if err := checkGenerated(*metadataDir, *outputDir, *serviceDir, *contentRankedWindowGoOutput, *contentFeatureProfileGoOutput, *searchEvents); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println("recommendation generated outputs are current")
+		return
+	}
 
 	if err := run(
 		*metadataDir,
@@ -40,11 +96,90 @@ func main() {
 		*serviceDir,
 		*contentRankedWindowGoOutput,
 		*contentFeatureProfileGoOutput,
+		*searchEvents,
 	); err != nil {
 		fmt.Fprintf(os.Stderr, "codegen_rec_model_python: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Printf("generated Python code at %s\n", *outputDir)
+}
+
+// checkGenerated重建到独立输出，逐字节核验，绝不修复或覆盖被检查文件。
+func checkGenerated(metadataDir, outputDir, serviceDir, rankedGo, featureGo string, searchOutputs ...string) error {
+	tmp, err := os.MkdirTemp("", "rec-codegen-check-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	privateOutput := filepath.Join(tmp, "python", filepath.Base(outputDir))
+	privateRanked, privateFeature := "", ""
+	if rankedGo != "" {
+		privateRanked = filepath.Join(tmp, "go", "ranked.go")
+	}
+	if featureGo != "" {
+		privateFeature = filepath.Join(tmp, "go", "feature.go")
+	}
+	privateSearch := ""
+	if len(searchOutputs) > 0 && searchOutputs[0] != "" {
+		privateSearch = filepath.Join(tmp, "search")
+	}
+	if err := run(metadataDir, privateOutput, serviceDir, privateRanked, privateFeature, privateSearch); err != nil {
+		return err
+	}
+	compare := func(generated, current string) error {
+		want, err := os.ReadFile(generated)
+		if err != nil {
+			return err
+		}
+		got, err := os.ReadFile(current)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(want, got) {
+			return fmt.Errorf("CONTRACT.CODEGEN.STALE_OUTPUT: %s", current)
+		}
+		return nil
+	}
+	if err := filepath.WalkDir(filepath.Join(tmp, "python"), func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(filepath.Join(tmp, "python"), path)
+		if err != nil {
+			return err
+		}
+		return compare(path, filepath.Join(filepath.Dir(outputDir), rel))
+	}); err != nil {
+		return err
+	}
+	if privateSearch != "" {
+		if err := filepath.WalkDir(privateSearch, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			rel, err := filepath.Rel(privateSearch, path)
+			if err != nil {
+				return err
+			}
+			return compare(path, filepath.Join(searchOutputs[0], rel))
+		}); err != nil {
+			return err
+		}
+	}
+	for _, pair := range [][2]string{{privateRanked, rankedGo}, {privateFeature, featureGo}} {
+		if pair[0] != "" {
+			if err := compare(pair[0], pair[1]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func run(
@@ -53,6 +188,7 @@ func run(
 	serviceDir,
 	contentRankedWindowGoOutput,
 	contentFeatureProfileGoOutput string,
+	searchOutputs ...string,
 ) error {
 	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
@@ -127,7 +263,7 @@ func run(
 			source,
 			rankedWindowPath,
 			rankedOutputDir,
-			rankedWindowTransportOrder,
+			nil,
 		); err != nil {
 			return fmt.Errorf("generate ranked recommendation window: %w", err)
 		}
@@ -145,6 +281,9 @@ func run(
 			)
 			if err != nil {
 				return fmt.Errorf("load ranked recommendation window Go operations: %w", err)
+			}
+			if _, err := resolveTransportClosure(rankedFields, rankedFields.Shared, rankedOperations); err != nil {
+				return err
 			}
 			if err := writeRankedWindowGoTransport(
 				contentRankedWindowGoOutput,
@@ -169,6 +308,9 @@ func run(
 			featureProfileTransportOrder,
 		); err != nil {
 			return fmt.Errorf("generate recommendation feature profile view: %w", err)
+		}
+		if err := generateConsumedEvents(source, featureProfilePath, filepath.Join(featureProfileOutputDir, "events")); err != nil {
+			return err
 		}
 		if strings.TrimSpace(contentFeatureProfileGoOutput) != "" {
 			featureFields, err := loadFields(
@@ -196,6 +338,16 @@ func run(
 				return fmt.Errorf("generate Content feature profile Go transport: %w", err)
 			}
 		}
+	}
+
+	if len(searchOutputs) > 0 && searchOutputs[0] != "" {
+		if err := generateConsumedEvents(source, "search/search/search_index_view", searchOutputs[0], true); err != nil {
+			return err
+		}
+	}
+	candidatePath := filepath.Join(filepath.Dir(servicePath), "recommendation_candidate_index_view")
+	if err := generateConsumedEvents(source, candidatePath, filepath.Join(filepath.Dir(outputDir), "recommendation_candidate_index_view", "events")); err != nil {
+		return err
 	}
 
 	// Generate content features + training sample from
@@ -259,7 +411,7 @@ func generateRankedWindowGoTransport(
 	for name := range fields.Entities {
 		entityNames[name] = true
 	}
-	for _, name := range rankedWindowTransportOrder {
+	for _, name := range transportOrder(fields) {
 		entity, ok := fields.Entities[name]
 		if !ok {
 			continue
@@ -372,14 +524,18 @@ func goJSONOmitEmpty(constraints []string) string {
 func goTransportType(metaType string, required bool, entityNames map[string]bool) string {
 	typeName := strings.TrimSpace(metaType)
 	if strings.HasPrefix(typeName, "[]") {
-		inner := strings.Trim(strings.TrimPrefix(typeName, "[]"), "[]\"'")
-		return "[]" + goTransportType(inner, true, entityNames)
+		inner := strings.TrimSpace(strings.TrimPrefix(typeName, "[]"))
+		result := "[]" + goTransportType(inner, true, entityNames)
+		if !required {
+			return "*" + result
+		}
+		return result
 	}
 	base := "map[string]any"
 	switch typeName {
-	case "string", "ObjectId":
+	case "string", "ObjectId", "enum":
 		base = "string"
-	case "float64", "number", "decimal":
+	case "float", "float64", "number", "decimal":
 		base = "float64"
 	case "int64":
 		base = "int64"
@@ -389,7 +545,7 @@ func goTransportType(metaType string, required bool, entityNames map[string]bool
 		base = "bool"
 	case "timestamp":
 		base = "time.Time"
-	case "object":
+	case "object", "json":
 		base = "map[string]any"
 	default:
 		if entityNames[typeName] {
@@ -413,8 +569,12 @@ func resolveContentBehaviors(source *contractcodegen.Source) string {
 // --- YAML structs ---
 
 type fieldsFile struct {
-	Entities map[string]entityDef `yaml:"entities"`
-	Types    map[string]entityDef `yaml:"types"`
+	Fields       []fieldDef           `yaml:"fields"`
+	ValueObjects map[string]entityDef `yaml:"value_objects"`
+	Order        []string
+	Shared       map[string]entityDef
+	Entities     map[string]entityDef `yaml:"entities"`
+	Types        map[string]entityDef `yaml:"types"`
 }
 
 type entityDef struct {
@@ -423,6 +583,10 @@ type entityDef struct {
 }
 
 type fieldDef struct {
+	Values      []string `yaml:"values"`
+	Min         *int64   `yaml:"min"`
+	Format      string   `yaml:"format"`
+	MaxItems    *int     `yaml:"max_items"`
 	Name        string   `yaml:"name"`
 	Type        string   `yaml:"type"`
 	Constraints []string `yaml:"constraints"`
@@ -480,7 +644,234 @@ func loadFields(source *contractcodegen.Source, path string) (*fieldsFile, error
 	if len(f.Entities) == 0 {
 		f.Entities = f.Types
 	}
+	if f.Entities == nil {
+		f.Entities = map[string]entityDef{}
+	}
+	for name, entity := range f.ValueObjects {
+		if old, exists := f.Entities[name]; exists && !reflect.DeepEqual(old, entity) {
+			return nil, fmt.Errorf("CONTRACT.CODEGEN.TYPE_CONFLICT: %s", name)
+		}
+		f.Entities[name] = entity
+	}
+	var shared fieldsFile
+	if source.Has("_shared/types.yaml") {
+		if err := source.Decode("_shared/types.yaml", &shared); err != nil {
+			return nil, err
+		}
+	}
+	f.Shared = shared.Types
 	return &f, nil
+}
+
+// resolveTransportClosure只从operation根遍历真实local/shared依赖；缺失或循环拒绝生成。
+func resolveTransportClosure(f *fieldsFile, shared map[string]entityDef, ops *operationsFile) ([]string, error) {
+	if f.Entities == nil {
+		f.Entities = map[string]entityDef{}
+	}
+	roots := []string{}
+	for _, op := range ops.APIRoutes {
+		for _, name := range []string{op.RequestEntity, op.ResponseEntity} {
+			if name != "" {
+				roots = append(roots, name)
+			}
+		}
+	}
+	if len(roots) == 0 {
+		for name := range f.Entities {
+			roots = append(roots, name)
+		}
+	}
+	sort.Strings(roots)
+	states := map[string]int{}
+	resolved := map[string]entityDef{}
+	order := []string{}
+	var visit func(string) error
+	visit = func(name string) error {
+		name = strings.TrimSpace(name)
+		if strings.HasPrefix(name, "[]") {
+			return visit(strings.TrimPrefix(name, "[]"))
+		}
+		switch name {
+		case "string", "ObjectId", "int", "int64", "float", "float64", "number", "decimal", "bool", "timestamp", "enum", "object", "json":
+			return nil
+		}
+		if states[name] == 2 {
+			return nil
+		}
+		if states[name] == 1 {
+			return fmt.Errorf("CONTRACT.CODEGEN.TYPE_CYCLE: %s", name)
+		}
+		entity, ok := f.Entities[name]
+		if sharedEntity, exists := shared[name]; exists && ok && !reflect.DeepEqual(entity, sharedEntity) {
+			return fmt.Errorf("CONTRACT.CODEGEN.TYPE_CONFLICT: %s", name)
+		}
+		if !ok {
+			entity, ok = shared[name]
+		}
+		if !ok {
+			return fmt.Errorf("CONTRACT.CODEGEN.TYPE_MISSING: %s", name)
+		}
+		states[name] = 1
+		for _, field := range entity.Fields {
+			if err := visit(field.Type); err != nil {
+				return fmt.Errorf("%s.%s: %w", name, field.Name, err)
+			}
+		}
+		states[name] = 2
+		resolved[name] = entity
+		order = append(order, name)
+		return nil
+	}
+	for _, root := range roots {
+		if err := visit(root); err != nil {
+			return nil, err
+		}
+	}
+	for name, entity := range resolved {
+		f.Entities[name] = entity
+	}
+	f.Order = order
+	return order, nil
+}
+
+// resolveEventPayloadClosure裁剪到owner声明的事件payload字段，随后复用相同typed依赖闭包。
+func resolveEventPayloadClosure(f *fieldsFile, shared map[string]entityDef, name string, payloadFields []string) ([]string, error) {
+	if len(payloadFields) == 0 {
+		return nil, fmt.Errorf("CONTRACT.CODEGEN.EVENT_PAYLOAD_EMPTY: %s", name)
+	}
+	entity, ok := f.Entities[name]
+	if !ok {
+		entity, ok = shared[name]
+	}
+	if !ok {
+		return nil, fmt.Errorf("CONTRACT.CODEGEN.TYPE_MISSING: %s", name)
+	}
+	byName := map[string]fieldDef{}
+	for _, field := range entity.Fields {
+		byName[field.Name] = field
+	}
+	selected := entityDef{Description: entity.Description}
+	seen := map[string]bool{}
+	for _, key := range payloadFields {
+		field, exists := byName[key]
+		if !exists || seen[key] {
+			return nil, fmt.Errorf("CONTRACT.CODEGEN.EVENT_PAYLOAD_FIELD_INVALID: %s.%s", name, key)
+		}
+		seen[key] = true
+		selected.Fields = append(selected.Fields, field)
+	}
+	// 裁剪只在本次生成内，不写回owner schema。
+	f.Entities[name] = selected
+	return resolveTransportClosure(f, shared, &operationsFile{APIRoutes: []routeDef{{RequestEntity: name}}})
+}
+
+func generateConsumedEvents(source *contractcodegen.Source, consumerPath, outputDir string, goOutputs ...bool) error {
+	emitGo := len(goOutputs) > 0 && goOutputs[0]
+	if !source.Has(filepath.Join(consumerPath, "object.yaml")) {
+		return nil
+	}
+	var consumer *ast.Object
+	for i := range source.Graph().Objects {
+		obj := &source.Graph().Objects[i]
+		if obj.SourcePath == filepath.ToSlash(filepath.Join(consumerPath, "object.yaml")) {
+			consumer = obj
+			break
+		}
+	}
+	if consumer == nil || consumer.Lifecycle == nil {
+		return fmt.Errorf("CONTRACT.CODEGEN.CONSUMER_MISSING: %s", consumerPath)
+	}
+	events := map[string]ast.EventDefinition{}
+	for _, packet := range source.Graph().Governance.Objects {
+		for _, event := range packet.Events {
+			ref := ast.CanonicalEventRef(packet.ObjectID, event.Name)
+			if _, exists := events[ref]; exists {
+				return fmt.Errorf("CONTRACT.CODEGEN.EVENT_CONFLICT: %s", ref)
+			}
+			events[ref] = event
+		}
+	}
+	refs := append([]string(nil), consumer.Lifecycle.SourceEvents...)
+	sort.Strings(refs)
+	outputs := map[string]string{}
+	if !emitGo {
+		local, err := loadFields(source, filepath.Join(consumerPath, "fields.yaml"))
+		if err != nil {
+			return err
+		}
+		if err := mergeProjectionEntities(source, consumerPath, local, true); err != nil {
+			return err
+		}
+		localOrder, err := resolveTransportClosure(local, local.Shared, &operationsFile{})
+		if err != nil {
+			return err
+		}
+		outputs["candidate_contracts.py"] = "# Source: " + filepath.Join(consumerPath, "fields.yaml") + "\n" + generateRequestResponsePyForNames(local, localOrder)
+	}
+	var failures []string
+	for _, ref := range refs {
+		event, exists := events[ref]
+		if !exists {
+			return fmt.Errorf("CONTRACT.CODEGEN.EVENT_MISSING: %s", ref)
+		}
+		fieldsPath := filepath.Join(filepath.Dir(event.SourcePath), "fields.yaml")
+		fields, err := loadFields(source, fieldsPath)
+		if err != nil {
+			return err
+		}
+		for _, obj := range source.Graph().Objects {
+			if obj.ID == event.ObjectID {
+				if fields.Entities == nil {
+					fields.Entities = map[string]entityDef{}
+				}
+				if len(fields.Fields) > 0 {
+					fields.Entities[obj.Name] = entityDef{Fields: fields.Fields}
+				}
+			}
+		}
+		order, err := resolveEventPayloadClosure(fields, fields.Shared, event.PayloadEntity, event.PayloadFields)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s (%s): %v", ref, event.SourcePath, err))
+			continue
+		}
+		if emitGo {
+			raw, err := renderConsumedEventGo(fields, order, event.SourcePath, ref)
+			if err != nil {
+				return err
+			}
+			outputs[filepath.Join(strings.ReplaceAll(ref, ".", "_"), "payload.g.go")] = string(raw)
+			continue
+		}
+		module := strings.ReplaceAll(ref, ".", "_") + ".py"
+		outputs[module] = "# Source: " + event.SourcePath + "; event_ref: " + ref + "\n" + generateRequestResponsePyForNames(fields, order)
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("CONTRACT.CODEGEN.CONSUMED_EVENTS_INCOMPLETE:\n%s", strings.Join(failures, "\n"))
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return err
+	}
+	for name, payload := range outputs {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(outputDir, name)), 0755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(outputDir, name), []byte(payload), 0644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func transportOrder(f *fieldsFile) []string {
+	if f.Order != nil {
+		return f.Order
+	}
+	names := []string{}
+	for name := range f.Entities {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func loadOperations(source *contractcodegen.Source, path string) (*operationsFile, error) {
@@ -498,6 +889,7 @@ func mergeProjectionEntities(
 	source *contractcodegen.Source,
 	servicePath string,
 	fields *fieldsFile,
+	missingOnly ...bool,
 ) error {
 	if fields.Entities == nil {
 		fields.Entities = map[string]entityDef{}
@@ -513,6 +905,10 @@ func mergeProjectionEntities(
 			return fmt.Errorf("%s: read_model is required", path)
 		}
 		if _, exists := fields.Entities[name]; exists {
+			// owning-event本地transport优先使用fields已有类型，只加载未声明的projection依赖。
+			if len(missingOnly) > 0 && missingOnly[0] {
+				continue
+			}
 			return fmt.Errorf("%s: read_model %s duplicates fields entity", path, name)
 		}
 		entity := entityDef{Description: projection.Description}
@@ -571,7 +967,7 @@ func pyType(metaType string, required bool, entityNames map[string]bool) string 
 		return wrapOptional("str")
 	case t == "enum":
 		return wrapOptional("str")
-	case t == "float64" || t == "number" || t == "decimal":
+	case t == "float" || t == "float64" || t == "number" || t == "decimal":
 		return wrapOptional("float")
 	case t == "int64" || t == "int":
 		return wrapOptional("int")
@@ -585,7 +981,7 @@ func pyType(metaType string, required bool, entityNames map[string]bool) string 
 		return wrapOptional("str")
 	case strings.HasPrefix(t, "[]"):
 		inner := strings.TrimPrefix(t, "[]")
-		inner = strings.Trim(inner, "[]\"'")
+		inner = strings.TrimSpace(inner)
 		innerPy := pyType(inner, true, entityNames)
 		return wrapOptional("list[" + innerPy + "]")
 	default:
@@ -610,7 +1006,7 @@ func pyTransportType(metaType string, required bool, entityNames map[string]bool
 	}
 	if strings.HasPrefix(t, "[]") {
 		inner := strings.TrimPrefix(t, "[]")
-		inner = strings.Trim(inner, "[]\"'")
+		inner = strings.TrimSpace(inner)
 		innerPy := pyTransportType(inner, true, entityNames)
 		return wrapOptional("list[" + innerPy + "]")
 	}
@@ -638,14 +1034,6 @@ var requestResponseOrder = []string{
 	"ModelScoreResponse",
 	"BatchModelScoreRequest",
 	"BatchModelScoreResponse",
-}
-
-var rankedWindowTransportOrder = []string{
-	"RecommendationObjectCard",
-	"RankedRecommendationItem",
-	"CreateRankedRecommendationWindowCommand",
-	"GetRankedRecommendationPageQuery",
-	"RankedRecommendationPage",
 }
 
 var featureProfileTransportOrder = []string{
@@ -683,13 +1071,18 @@ func generateRequestResponsePy(f *fieldsFile) string {
 	return generateRequestResponsePyForNames(f, requestResponseOrder)
 }
 
-func generateRequestResponsePyForNames(f *fieldsFile, names []string) string {
+func generateRequestResponsePyForNames(f *fieldsFile, names []string, requireNullablePresence ...bool) string {
+	strict := len(requireNullablePresence) > 0 && requireNullablePresence[0]
 	var b strings.Builder
 	b.WriteString(genHeader)
 	b.WriteString("\nfrom __future__ import annotations\n\n")
 	b.WriteString("from datetime import datetime\n")
-	b.WriteString("from typing import Any\n\n")
-	b.WriteString("from pydantic import BaseModel, ConfigDict\n\n")
+	if strict {
+		b.WriteString("from typing import Any, Literal\nfrom pydantic import BaseModel, ConfigDict, Field\n\n")
+	} else {
+		b.WriteString("from typing import Any\n\n")
+		b.WriteString("from pydantic import BaseModel, ConfigDict\n\n")
+	}
 
 	entityNames := make(map[string]bool)
 	for name := range f.Entities {
@@ -709,12 +1102,46 @@ func generateRequestResponsePyForNames(f *fieldsFile, names []string) string {
 			req := isRequired(fd.Constraints)
 			pyT := pyTransportType(fd.Type, req, entityNames)
 			def := ""
-			if !req {
+			if !req && !(len(requireNullablePresence) > 0 && requireNullablePresence[0]) {
 				def = " = None"
+			}
+			if strict {
+				if fd.Type == "enum" && len(fd.Values) > 0 {
+					members := make([]string, len(fd.Values))
+					for i, v := range fd.Values {
+						members[i] = fmt.Sprintf("%q", v)
+					}
+					pyT = "Literal[" + strings.Join(members, ", ") + "]"
+					if !req {
+						pyT += " | None"
+					}
+				}
+				args := []string{}
+				if fd.Min != nil {
+					args = append(args, fmt.Sprintf("ge=%d", *fd.Min))
+				}
+				if fd.MaxItems != nil {
+					args = append(args, fmt.Sprintf("max_length=%d", *fd.MaxItems))
+				}
+				if fd.Format == "canonical_sha256" {
+					args = append(args, `pattern=r"^sha256:[0-9a-f]{64}$"`)
+				}
+				for _, c := range fd.Constraints {
+					if c == "NOT_BLANK" {
+						args = append(args, `pattern=r".*\S.*"`)
+					}
+				}
+				if len(args) > 0 {
+					def = " = Field(" + strings.Join(args, ", ") + ")"
+				}
 			}
 			b.WriteString(fmt.Sprintf("    %s: %s%s\n", fd.Name, pyT, def))
 		}
-		b.WriteString("\n    model_config = ConfigDict(extra=\"forbid\")\n")
+		if strict {
+			b.WriteString("\n    model_config = ConfigDict(extra=\"forbid\", strict=True)\n")
+		} else {
+			b.WriteString("\n    model_config = ConfigDict(extra=\"forbid\")\n")
+		}
 	}
 	return b.String()
 }
@@ -849,6 +1276,12 @@ func generateObjectTransportPackage(
 	operations, err := loadOperations(source, filepath.Join(servicePath, "operations.yaml"))
 	if err != nil {
 		return fmt.Errorf("load operations: %w", err)
+	}
+	if order == nil {
+		order, err = resolveTransportClosure(fields, fields.Shared, operations)
+		if err != nil {
+			return err
+		}
 	}
 	for _, directory := range []string{
 		filepath.Join(outputDir, "models"),

@@ -118,6 +118,95 @@ func TestAdmissionGateRejectsTrafficUntilOpened(t *testing.T) {
 	}
 }
 
+func TestPreAdmissionOperationRequiresOnlyItsDeclaredHealthyDependencies(t *testing.T) {
+	spec := validModuleSpec(t)
+	for _, dependency := range []string{"account_security_authority", "postgres", "redis", "experiment-outbox"} {
+		spec.Health.Register(dependency, func(context.Context) error { return nil })
+	}
+	spec.Health.Register("unrelated-downstream", func(context.Context) error {
+		return context.DeadlineExceeded
+	})
+	spec.PreAdmissionOperations = []PreAdmissionOperation{{
+		CanonicalOperationID: "ops.experiment.CreateExperiment",
+		Method:               http.MethodPost,
+		PathTemplate:         "/control-plane/product/experiments",
+		RequiredHealthChecks: []string{"account_security_authority", "postgres", "redis", "experiment-outbox"},
+	}}
+	module, err := NewModule(spec)
+	if err != nil {
+		t.Fatalf("new module: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/control-plane/product/experiments", nil)
+	recorder := httptest.NewRecorder()
+	module.server.Handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("owner command must pass with operation dependencies ready, got %d", recorder.Code)
+	}
+	if result := spec.Health.Check(context.Background()); result.Status != "degraded" {
+		t.Fatalf("formal aggregate readiness must remain degraded, got %q", result.Status)
+	}
+}
+
+func TestPreAdmissionOperationFailsClosedForEachRequiredDependency(t *testing.T) {
+	for _, failed := range []string{"account_security_authority", "postgres", "redis", "experiment-outbox"} {
+		t.Run(failed, func(t *testing.T) {
+			spec := validModuleSpec(t)
+			for _, dependency := range []string{"account_security_authority", "postgres", "redis", "experiment-outbox"} {
+				dependency := dependency
+				spec.Health.Register(dependency, func(context.Context) error {
+					if failed == dependency {
+						return context.DeadlineExceeded
+					}
+					return nil
+				})
+			}
+			spec.PreAdmissionOperations = []PreAdmissionOperation{{
+				CanonicalOperationID: "ops.experiment.CreateExperiment",
+				Method:               http.MethodPost,
+				PathTemplate:         "/control-plane/product/experiments",
+				RequiredHealthChecks: []string{"account_security_authority", "postgres", "redis", "experiment-outbox"},
+			}}
+			module, err := NewModule(spec)
+			if err != nil {
+				t.Fatalf("new module: %v", err)
+			}
+			recorder := httptest.NewRecorder()
+			module.server.Handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/control-plane/product/experiments", nil))
+			if recorder.Code != http.StatusServiceUnavailable {
+				t.Fatalf("%s failure must preserve closed admission, got %d", failed, recorder.Code)
+			}
+		})
+	}
+}
+
+func TestPreAdmissionOperationDoesNotBypassAuthenticationMiddleware(t *testing.T) {
+	base := validModuleSpec(t)
+	base.Health.Register("postgres", func(context.Context) error { return nil })
+	base.PreAdmissionOperations = []PreAdmissionOperation{{
+		CanonicalOperationID: "ops.experiment.CreateExperiment",
+		Method:               http.MethodPost,
+		PathTemplate:         "/control-plane/product/experiments",
+		RequiredHealthChecks: []string{"postgres"},
+	}}
+	base.Handler = http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") == "" {
+			writer.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	})
+	module, err := NewModule(base)
+	if err != nil {
+		t.Fatalf("new module: %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	module.server.Handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/control-plane/product/experiments", nil))
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("pre-admission command must still execute auth/owner handler, got %d", recorder.Code)
+	}
+}
+
 func TestModuleStartServesAndShutdownReleasesWorkers(t *testing.T) {
 	module, err := NewModule(validModuleSpec(t))
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	generated "quwoquan_service/services/product-ops-service/generated/product_ops/premium_pool_entry/contract/model"
 	"strconv"
 	"strings"
 	"time"
@@ -60,16 +61,11 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type upsertRequest struct {
-	ContentID        string  `json:"contentId"`
-	Scope            string  `json:"scope"`
-	QualityScore     float64 `json:"qualityScore"`
-	QualityAdmission string  `json:"qualityAdmission"`
-	SupplySource     string  `json:"supplySource"`
-	SourceTaskID     string  `json:"sourceTaskId"`
-	AuditID          string  `json:"auditId"`
-	RollbackToken    string  `json:"rollbackToken"`
-	ExpiresAt        string  `json:"expiresAt"`
+func optionalString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (handler *Handler) list(w http.ResponseWriter, r *http.Request) {
@@ -88,22 +84,18 @@ func (handler *Handler) upsert(w http.ResponseWriter, r *http.Request) {
 		handler.writeApplicationError(w, r, err, true)
 		return
 	}
-	var request upsertRequest
+	var request generated.UpsertPremiumPoolEntryRequest
 	if err := decodeStrictJSON(r, &request); err != nil {
 		handler.writeApplicationError(w, r, model.ErrInvalidArgument, true)
 		return
 	}
-	expiresAt, err := time.Parse(time.RFC3339, strings.TrimSpace(request.ExpiresAt))
-	if err != nil {
-		handler.writeApplicationError(w, r, model.ErrInvalidArgument, true)
-		return
-	}
 	entry, err := handler.service.Upsert(r.Context(), application.UpsertCommand{
-		ContentID: request.ContentID, Scope: request.Scope,
+		ReleaseSource: request.ReleaseSource,
+		ContentID:     request.ContentId, Scope: optionalString(request.Scope),
 		QualityScore: request.QualityScore, QualityAdmission: request.QualityAdmission,
-		SupplySource: request.SupplySource, SourceTaskID: request.SourceTaskID,
-		AuditID: request.AuditID, RollbackToken: request.RollbackToken,
-		ExpiresAt: expiresAt, Context: commandContext,
+		SupplySource: optionalString(request.SupplySource), SourceTaskID: optionalString(request.SourceTaskId),
+		AuditID: request.AuditId, RollbackToken: optionalString(request.RollbackToken),
+		ExpiresAt: request.ExpiresAt, Context: commandContext,
 	})
 	if err != nil {
 		handler.writeApplicationError(w, r, err, true)

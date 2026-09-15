@@ -18,7 +18,8 @@ SCRIPTS = ROOT / "quwoquan_data/scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from content.release.environment import _ship_operations, importers  # noqa: E402
+from quwoquan_ops.cli.lib.content_release_environment import _ship_operations
+from content.release.environment import importers  # noqa: E402
 from content.release.environment.release_runtime import ReleaseAdmission  # noqa: E402
 from content.release.environment.run_evidence import (  # noqa: E402
     create_run,
@@ -72,10 +73,21 @@ def test_content_command_consumes_only_candidate_authenticated_homepage_mapping(
         media_avatar_base_url="", media_image_base_url="", media_video_base_url="", dry_run=False,
         creator_candidate_receipt=tmp_path / "creator.json", homepage_import_report=report,
         homepage_candidate_receipt=candidate,
+        post_safety_material_root=tmp_path / "post-safety",
+        post_safety_current_binding_ref="current.json",
+        post_safety_recovery_evidence_ref="fact.json",
+        post_safety_hmac_secret_ref="post-safety.key",
+        runtime_auth_env_ref=tmp_path / "auth.env",
+        runtime_auth_issuer="quwoquan.alpha.local",
+        runtime_auth_audience="quwoquan-app",
+        runtime_auth_token_version="1",
+        account_security_authority_base_url="http://127.0.0.1:17210",
+        account_security_authority_timeout_ms=300,
+        importer_image_ref="localhost/service-core@sha256:" + "a" * 64,
     )
     assert len(commands) == 1
-    assert commands[0][commands[0].index("--homepage-report") + 1] == str(report)
-    assert commands[0][commands[0].index("--homepage-candidate-receipt") + 1] == str(candidate)
+    assert commands[0][commands[0].index("--homepage-report") + 1] == "/run/quwoquan/import-run/report.json"
+    assert commands[0][commands[0].index("--homepage-candidate-receipt") + 1] == "/run/quwoquan/import-run/candidate.json"
 
 
 @pytest.mark.parametrize("drift", ["environment", "release", "owner", "manifest", "count", "closure", "version", "mapping", "digest", "dry-run", "candidate-status", "candidate-mapping"])
@@ -110,6 +122,19 @@ def test_content_rejects_homepage_mapping_drift_before_subprocess(tmp_path: Path
 def _write_receipt(path: Path, document: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(document, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _host_path_for_container_argument(command: list[str], argument: str) -> Path:
+    for index, value in enumerate(command):
+        if value != "-v":
+            continue
+        source, target, *_mode = command[index + 1].split(":")
+        if argument == target:
+            return Path(source)
+        prefix = target.rstrip("/") + "/"
+        if argument.startswith(prefix):
+            return Path(source) / argument[len(prefix):]
+    raise AssertionError(f"container argument has no mount: {argument}")
 
 
 def _candidate(release_id: str = "release-a") -> dict[str, object]:
@@ -262,7 +287,7 @@ def test_release_control_adapters_build_exact_flags_and_never_expose_mongo_uri(
     def run(command: list[str], **_kwargs: object) -> SimpleNamespace:
         commands.append(command)
         operation = command[command.index("--operation") + 1]
-        report = Path(command[command.index("--report") + 1])
+        report = _host_path_for_container_argument(command, command[command.index("--report") + 1])
         if operation == "query-candidate":
             _write_receipt(report, _candidate())
         elif operation == "query-active":
@@ -279,12 +304,14 @@ def test_release_control_adapters_build_exact_flags_and_never_expose_mongo_uri(
         manifest_digest=DIGEST_A,
         report_path=tmp_path / "candidate.json",
         output_root=tmp_path,
+        importer_image_ref="candidate/service-core:test",
     )
     pre = importers.query_content_active_release(
         env="alpha",
         mongo_uri="mongodb://user:secret@example.invalid",
         report_path=tmp_path / "pre.json",
         output_root=tmp_path,
+        importer_image_ref="candidate/service-core:test",
     )
     activation = importers.activate_content_release(
         env="alpha",
@@ -294,10 +321,17 @@ def test_release_control_adapters_build_exact_flags_and_never_expose_mongo_uri(
         expected_active=pre.document,
         report_path=tmp_path / "activation.json",
         output_root=tmp_path,
+        importer_image_ref="candidate/service-core:test",
     )
     assert candidate.digest.startswith("sha256:")
     assert activation.document["active"]["revision"] == 1
     assert commands[0][commands[0].index("--operation") + 1] == "query-candidate"
+    for command in commands:
+        report_argument = command[command.index("--report") + 1]
+        assert report_argument.startswith("/run/quwoquan/release-control-output/")
+        assert f"{tmp_path}:/run/quwoquan/release-control-output" in command
+        assert str(tmp_path) not in command[command.index("--entrypoint"):]
+        assert command[command.index("--mongo-uri") + 1] == "mongodb://user:secret@example.invalid"
     assert "--expected-active-empty" in commands[2]
     assert "--expected-active-release-id" not in commands[2]
 
@@ -312,8 +346,48 @@ def test_release_control_adapters_build_exact_flags_and_never_expose_mongo_uri(
             mongo_uri="mongodb://user:secret@example.invalid",
             report_path=tmp_path / "failed.json",
             output_root=tmp_path,
+            importer_image_ref="candidate/service-core:test",
         )
     assert "secret" not in str(exc.value)
+
+
+@pytest.mark.parametrize("owner", ["tag", "creator", "homepage"])
+def test_owner_release_control_projects_report_without_rewriting_dsn(
+    owner: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+    mongo_uri = f"mongodb://example.invalid/db?socket={tmp_path}"
+    monkeypatch.setattr(
+        importers.subprocess,
+        "run",
+        lambda command, **_kwargs: commands.append(command) or SimpleNamespace(returncode=0),
+    )
+    monkeypatch.setattr(importers, "_receipt_evidence", lambda *_args, **_kwargs: ("report.json", DIGEST_B))
+    monkeypatch.setattr(
+        importers,
+        "_validate_release_control_receipt",
+        lambda *_args, **_kwargs: {"status": "found"},
+    )
+
+    importers.query_owner_release_candidate(
+        owner=owner,
+        env="gamma",
+        mongo_uri=mongo_uri,
+        release_id="release-a",
+        manifest_digest=DIGEST_A,
+        report_path=tmp_path / f"{owner}-candidate.json",
+        output_root=tmp_path,
+        importer_image_ref="candidate/service-core:test",
+    )
+
+    command = commands[0]
+    assert command[command.index("--entrypoint") + 1] == f"/usr/local/bin/{owner}-release-control"
+    assert command[command.index("--report") + 1] == f"/run/quwoquan/release-control-output/{owner}-candidate.json"
+    assert f"{tmp_path}:/run/quwoquan/release-control-output" in command
+    assert command[command.index("--mongo-uri") + 1] == mongo_uri
+    assert [value for value in command[command.index("--entrypoint") + 2 :] if str(tmp_path) in value] == [mongo_uri]
 
 
 def test_activate_adapter_derives_revision_bearing_expected_tuple(
@@ -325,7 +399,7 @@ def test_activate_adapter_derives_revision_bearing_expected_tuple(
 
     def run(command: list[str], **_kwargs: object) -> SimpleNamespace:
         command_seen.extend(command)
-        report = Path(command[command.index("--report") + 1])
+        report = _host_path_for_container_argument(command, command[command.index("--report") + 1])
         _write_receipt(report, _activation(expected, revision=4))
         return SimpleNamespace(returncode=0)
 
@@ -338,6 +412,7 @@ def test_activate_adapter_derives_revision_bearing_expected_tuple(
         expected_active=expected,
         report_path=tmp_path / "activation.json",
         output_root=tmp_path,
+        importer_image_ref="candidate/service-core:test",
     )
     assert (
         command_seen[command_seen.index("--expected-active-release-id") + 1]
@@ -390,6 +465,7 @@ def test_activate_rejects_active_receipt_identity_before_subprocess(
             expected_active=drifted,
             report_path=tmp_path / "activation.json",
             output_root=tmp_path,
+            importer_image_ref="candidate/service-core:test",
         )
     assert not called
 
@@ -452,7 +528,7 @@ def _release(root: Path) -> tuple[Path, ReleaseAdmission]:
         release_id="release-a",
         manifest_digest=digest,
         admission_kind="producer_handoff",
-        handoff_ref=f"handoff-ref-v1:{DIGEST_B}:{DIGEST_B}",
+        handoff_ref=f"data/releases/release-a/producer_release_handoff.json={DIGEST_B}",
         handoff_artifact_ref="data/releases/release-a/producer_release_handoff.json",
         handoff_artifact_digest=DIGEST_B,
     )

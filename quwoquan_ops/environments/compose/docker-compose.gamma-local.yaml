@@ -122,7 +122,7 @@ services:
 
   redis:
     image: "${LOCAL_GAMMA_REDIS_IMAGE:-docker.io/library/redis:7.2-alpine}"
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--aclfile", "/run/quwoquan/redis/users.acl"]
     networks:
       - default
       - edge
@@ -130,10 +130,12 @@ services:
       - "${LOCAL_GAMMA_REDIS_PORT:-19420}:6379"
     volumes:
       - local-gamma-redis:/data
+      - ${LOCAL_GAMMA_REDIS_ACL_FILE:?managed Redis ACL file is required}:/run/quwoquan/redis/users.acl
+      - ${LOCAL_GAMMA_REDIS_RUNTIME_PASSWORD_FILE:?managed Redis runtime password file is required}:/run/quwoquan/redis/runtime.key:ro
     healthcheck:
       # `redis-cli ping` returns a zero process exit status for `LOADING`; make
       # Compose dependents wait until Redis can serve commands.
-      test: ["CMD-SHELL", "redis-cli --raw ping | grep -qx PONG"]
+      test: ["CMD-SHELL", "redis-cli --user qwq_runtime --pass $$(cat /run/quwoquan/redis/runtime.key) --no-auth-warning --raw ping | grep -qx PONG"]
       interval: 5s
       timeout: 3s
       retries: 20

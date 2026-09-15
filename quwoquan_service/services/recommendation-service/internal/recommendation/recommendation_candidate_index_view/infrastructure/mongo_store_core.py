@@ -15,9 +15,11 @@ from .mongo_store_audience_writes import MongoCandidateAudienceWriteOps
 from .mongo_store_gathering_writes import MongoGatheringCandidateWriteOps
 from .mongo_store_lifecycle_writes import MongoCandidateLifecycleWriteOps
 from .mongo_store_ranking_reads import MongoCandidateRankingReadOps
+from .mongo_release_candidates import MongoReleaseCandidateOps
 
 
 class MongoCandidateIndexStore(
+    MongoReleaseCandidateOps,
     MongoCandidateLifecycleWriteOps,
     MongoGatheringCandidateWriteOps,
     MongoCandidateAudienceWriteOps,
@@ -25,8 +27,12 @@ class MongoCandidateIndexStore(
 ):
     """Single owner of candidate, premium, entity-tag and tombstone projections."""
 
-    def __init__(self, database: Any) -> None:
+    def __init__(self, database: Any, *, release_runtime_binding=None) -> None:
         self._database = database
+        self._release_runtime_binding = release_runtime_binding
+        self._release_candidates = database["rm_release_discovery_candidates"]
+        self._release_checkpoints = database["recommendation_release_source_checkpoints"]
+        self._release_premium = database["rm_release_premium_candidates"]
         self._candidates = database["rm_discovery_feed"]
         self._gathering_candidates = database["rm_gathering_candidates"]
         self._premium = database["rm_premium_pool"]
@@ -48,6 +54,7 @@ class MongoCandidateIndexStore(
         ]
 
     def ensure_indexes(self) -> None:
+        self.ensure_release_indexes()
         self._candidates.create_index(
             [("scenario", ASCENDING), ("contentId", ASCENDING)],
             unique=True,

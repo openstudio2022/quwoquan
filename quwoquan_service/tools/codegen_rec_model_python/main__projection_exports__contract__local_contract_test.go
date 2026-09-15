@@ -1,9 +1,238 @@
 package main
 
 import (
+	goast "go/ast"
+	"go/parser"
+	"go/token"
+	"gopkg.in/yaml.v3"
+	"os"
+	"path/filepath"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/validate"
+	"strconv"
 	"strings"
 	"testing"
 )
+
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+func TestReleaseTransportDependencyClosure(t *testing.T) {
+	shared := map[string]entityDef{
+		"Release": {Fields: []fieldDef{{Name: "releaseId", Type: "string", Constraints: []string{"NOT_NULL"}}}},
+		"Fence":   {Fields: []fieldDef{{Name: "release", Type: "Release", Constraints: []string{"NULLABLE"}}, {Name: "revision", Type: "int64", Constraints: []string{"NOT_NULL"}}}},
+		"Proof":   {Fields: []fieldDef{{Name: "fences", Type: "[]Fence", Constraints: []string{"NULLABLE"}}}},
+	}
+	fields := &fieldsFile{Entities: map[string]entityDef{"ReadReadinessQuery": {Fields: []fieldDef{{Name: "contentFence", Type: "Fence", Constraints: []string{"NOT_NULL"}}}}}}
+	ops := &operationsFile{APIRoutes: []routeDef{{Method: "POST", Path: "/readiness:query", Operation: "ReadReadiness", RequestEntity: "ReadReadinessQuery", ResponseEntity: "Proof"}}}
+	order, err := resolveTransportClosure(fields, shared, ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	python := generateRequestResponsePyForNames(fields, order)
+	goSource := generateRankedWindowGoTransport(fields, ops)
+	for _, want := range []string{"contentFence: Fence", "release: Release | None = None", "fences: list[Fence] | None = None", "class Proof(BaseModel):"} {
+		if !strings.Contains(python, want) {
+			t.Fatalf("Python lost %q: %s", want, python)
+		}
+	}
+	for _, want := range []string{"ContentFence Fence", "Release *Release", "Fences *[]Fence", "type Proof struct", "ReadReadinessMethod = \"POST\""} {
+		if !strings.Contains(goSource, want) {
+			t.Fatalf("Go lost %q: %s", want, goSource)
+		}
+	}
+	if strings.Index(python, "class Release(") > strings.Index(python, "class Fence(") {
+		t.Fatal("dependencies must precede users")
+	}
+	again, err := resolveTransportClosure(fields, shared, ops)
+	if err != nil || strings.Join(order, ",") != strings.Join(again, ",") {
+		t.Fatal("closure is not deterministic", err)
+	}
+	if len(shared) != 3 {
+		t.Fatal("shared authoring was mutated")
+	}
+	bad := &fieldsFile{Entities: map[string]entityDef{"ReadReadinessQuery": {Fields: []fieldDef{{Name: "missing", Type: "[]Unknown", Constraints: []string{"NULLABLE"}}}}}}
+	if _, err := resolveTransportClosure(bad, shared, ops); err == nil {
+		t.Fatal("missing type must fail closed, not become a Map")
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+func TestTransportClosureRejectsCyclesAndDoesNotPartiallyPublish(t *testing.T) {
+	f := &fieldsFile{Entities: map[string]entityDef{"A": {Fields: []fieldDef{{Name: "b", Type: "B"}}}}}
+	shared := map[string]entityDef{"B": {Fields: []fieldDef{{Name: "a", Type: "[]A"}}}}
+	if _, err := resolveTransportClosure(f, shared, &operationsFile{}); err == nil || !strings.Contains(err.Error(), "TYPE_CYCLE") {
+		t.Fatalf("cycle must fail: %v", err)
+	}
+	if len(f.Entities) != 1 || f.Order != nil {
+		t.Fatal("failed resolution partially published types")
+	}
+	if _, err := resolveTransportClosure(f, map[string]entityDef{"A": {}}, &operationsFile{}); err == nil || !strings.Contains(err.Error(), "TYPE_CONFLICT") {
+		t.Fatalf("conflicting shared type: %v", err)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+func TestCanonicalReleaseReadinessEmission(t *testing.T) {
+	read := func(path string, out any) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := yaml.Unmarshal(data, out); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var f, shared fieldsFile
+	var ops operationsFile
+	root := filepath.Join("..", "..")
+	base := filepath.Join(root, "services/recommendation-service/contracts/recommendation/ranked_recommendation_window")
+	read(filepath.Join(base, "fields.yaml"), &f)
+	f.Entities = f.Types
+	read(filepath.Join(root, "contracts/metadata/_shared/types.yaml"), &shared)
+	read(filepath.Join(base, "operations.yaml"), &ops)
+	order, err := resolveTransportClosure(&f, shared.Types, &ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	goText := generateRankedWindowGoTransport(&f, &ops)
+	pyText := generateRequestResponsePyForNames(&f, order)
+	for _, name := range []string{"ReleaseCandidateBinding", "ReleasePinnedQueryFence", "ReleaseQueryReadinessProof", "ReleaseQueryClassEvidence", "ReadRecommendationReleaseReadinessQuery"} {
+		if !strings.Contains(goText, "type "+name+" struct") || !strings.Contains(pyText, "class "+name+"(BaseModel)") {
+			t.Fatalf("missing reachable type %s", name)
+		}
+	}
+	if !strings.Contains(goText, "ContentFence ReleasePinnedQueryFence") || !strings.Contains(pyText, "queryClasses: list[ReleaseQueryClassEvidence]") {
+		t.Fatal("shared types degraded")
+	}
+	if _, err := parser.ParseFile(token.NewFileSet(), "generated.go", goText, parser.AllErrors); err != nil {
+		t.Fatal(err)
+	}
+	if goText != generateRankedWindowGoTransport(&f, &ops) || pyText != generateRequestResponsePyForNames(&f, order) {
+		t.Fatal("nondeterministic emission")
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+func TestConsumerEventPayloadClosure(t *testing.T) {
+	f := &fieldsFile{Entities: map[string]entityDef{"Prepared": {Fields: []fieldDef{{Name: "snapshot", Type: "Snapshot", Constraints: []string{"NOT_NULL"}}}}}}
+	shared := map[string]entityDef{"Snapshot": {Fields: []fieldDef{{Name: "items", Type: "[]Item", Constraints: []string{"NOT_NULL"}}}}, "Item": {Fields: []fieldDef{{Name: "id", Type: "string", Constraints: []string{"NOT_NULL"}}}}}
+	order, err := resolveEventPayloadClosure(f, shared, "Prepared", []string{"snapshot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(generateRequestResponsePyForNames(f, order), "items: list[Item]") {
+		t.Fatal("event shared payload degraded")
+	}
+	if _, err := resolveEventPayloadClosure(f, shared, "Prepared", nil); err == nil {
+		t.Fatal("empty event cannot emit empty green DTO")
+	}
+	if _, err := resolveEventPayloadClosure(f, shared, "Prepared", []string{"missing"}); err == nil {
+		t.Fatal("missing payload field accepted")
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+func TestCanonicalConsumedEventProducesPreparedSource(t *testing.T) {
+	view := os.Getenv("QWQ_TEST_CONTRACT_VIEW")
+	if view == "" {
+		t.Skip("explicit current canonical view required")
+	}
+	source, err := contractcodegen.NewSource(view, validate.ProfileBaseline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := t.TempDir()
+	err = generateConsumedEvents(source, "recommendation/recommendation/recommendation_candidate_index_view", out)
+	if err != nil {
+		t.Fatalf("canonical producer payloads must resolve completely: %v", err)
+	}
+	prepared, err := os.ReadFile(filepath.Join(out, "content_post_PostReleaseCandidatePrepared.py"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, typ := range []string{"PostReleaseCandidatePrepared", "ReleasePostCandidateSnapshot", "ReleasePostPublicSnapshot", "ReleaseHomepagePublicSnapshot"} {
+		if !strings.Contains(string(prepared), "class "+typ+"(BaseModel)") {
+			t.Fatal("missing", typ)
+		}
+	}
+	candidate, err := os.ReadFile(filepath.Join(out, "candidate_contracts.py"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(candidate), "class ReleasePremiumAdmission(BaseModel)") {
+		t.Fatal("missing typed premium source")
+	}
+	premium, err := os.ReadFile(filepath.Join(out, "ops_premium_pool_entry_PremiumPoolEntryUpserted.py"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(premium), "releaseAdmissions: list[ReleasePremiumAdmission]") {
+		t.Fatal("premium authority source lost")
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+func TestPostPayloadFieldsCoverActualProducerMaps(t *testing.T) {
+	root := filepath.Join("..", "..")
+	var fields fieldsFile
+	data, err := os.ReadFile(filepath.Join(root, "services/content-service/contracts/content/post/fields.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := yaml.Unmarshal(data, &fields); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ path, function, payload string }{
+		{"services/content-service/internal/content/post/application/post_service_helpers.go", "projectionPayloadForPost", "PostLifecycleProjectionPayload"},
+		{"services/content-service/internal/content/post/application/post_service_lifecycle.go", "DeletePost", "PostDeletedPayload"},
+	} {
+		node, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, test.path), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		declared := map[string]bool{}
+		for _, f := range fields.Types[test.payload].Fields {
+			declared[f.Name] = true
+		}
+		count := 0
+		for _, decl := range node.Decls {
+			fn, ok := decl.(*goast.FuncDecl)
+			if !ok || fn.Name.Name != test.function {
+				continue
+			}
+			goast.Inspect(fn.Body, func(n goast.Node) bool {
+				lit, ok := n.(*goast.CompositeLit)
+				if !ok {
+					return true
+				}
+				if _, ok := lit.Type.(*goast.MapType); !ok {
+					return true
+				}
+				for _, elt := range lit.Elts {
+					kv, ok := elt.(*goast.KeyValueExpr)
+					if !ok {
+						continue
+					}
+					key, ok := kv.Key.(*goast.BasicLit)
+					if !ok || key.Kind != token.STRING {
+						continue
+					}
+					name, _ := strconv.Unquote(key.Value)
+					if name == "actorId" {
+						continue
+					}
+					count++
+					if !declared[name] {
+						t.Errorf("%s producer field %s absent from %s", test.function, name, test.payload)
+					}
+				}
+				return false
+			})
+		}
+		if count < 6 {
+			t.Fatal("producer map scan empty", test.path)
+		}
+	}
+}
 
 func TestGenerateModelsInitProjectionExports(t *testing.T) {
 	t.Run("empty projections do not import retired models", func(t *testing.T) {
@@ -87,7 +316,7 @@ func TestGenerateRankedWindowTransportIncludesObjectOwnedCardSnapshot(t *testing
 		},
 	}}
 
-	python := generateRequestResponsePyForNames(fields, rankedWindowTransportOrder)
+	python := generateRequestResponsePyForNames(fields, transportOrder(fields))
 	for _, expected := range []string{
 		"class RecommendationObjectCard(BaseModel):",
 		"class GetRankedRecommendationPageQuery(BaseModel):",

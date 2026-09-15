@@ -584,3 +584,45 @@ class AppContentPreflightUatArtifactTest(unittest.TestCase):
                 runs,
                 target="alpha-local",
             )
+
+
+def test_app_content_uat_parser_exposes_non_promotable_core_selector() -> None:
+    """spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002"""
+    import argparse
+    from quwoquan_ops.cli.commands.app_preflight_uat_support import register_parser
+
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="command")
+    register_parser(commands)
+    args = parser.parse_args([
+        "app-content-uat", "--device-id", "simulator-1",
+        "--verification-purpose", "core_diagnostic",
+        "--core-suites", "homepage-media,chat-send-readback",
+    ])
+    assert args.verification_purpose == "core_diagnostic"
+    assert args.core_suites == "homepage-media,chat-send-readback"
+
+
+def test_prod_hosted_selector_is_prevalidate_only_and_requires_prod_identity() -> None:
+    import argparse
+    from quwoquan_ops.cli.commands.app_preflight_uat_orchestration import prepare_app_content_uat_context
+    from types import SimpleNamespace
+
+    args = argparse.Namespace(
+        targets="gamma-local", platform="ios-simulator", device_id="simulator-1",
+        device_registration_ref="", verification_purpose="core_diagnostic",
+        core_suites="homepage-media,post-write-readback", target_kind="prod-hosted",
+        build_profile="nonprod", prod_user_allowlist_ref="", report_dir="",
+    )
+    stackctl_stub = SimpleNamespace(
+        repo_run_dir=lambda *_args, **_kwargs: Path("/tmp/report"),
+        output_root=lambda: Path("/tmp/output"),
+    )
+    context = prepare_app_content_uat_context(
+        args=args, stackctl=stackctl_stub,
+        resolve_uat_profile=lambda **_kwargs: {"profile": "rehearsal"}, initial_issues=(),
+    )
+    issues = context[3]
+    assert any("prod buildProfile" in issue for issue in issues)
+    assert any("real-user allowlist" in issue for issue in issues)
+    assert any("device execution is forbidden" in issue for issue in issues)

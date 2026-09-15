@@ -47,7 +47,7 @@ def _admission(release_id: str = "release-a") -> ReleaseAdmission:
         release_id=release_id,
         manifest_digest=_ADMISSION_DIGEST,
         admission_kind="producer_handoff",
-        handoff_ref=f"handoff-ref-v1:sha256:{'1' * 64}:sha256:{'2' * 64}",
+        handoff_ref=f"data/releases/{release_id}/producer_release_handoff.json={_ADMISSION_DIGEST}",
         handoff_artifact_ref=f".qwq_output/data/releases/{release_id}/producer_release_handoff.json",
         handoff_artifact_digest=_ADMISSION_DIGEST,
     )
@@ -177,12 +177,22 @@ def _target(
     root: Path,
     env: DeploymentEnvironment = DeploymentEnvironment.GAMMA,
 ) -> EnvironmentReleaseTarget:
-    return replace(
-        resolve_environment_release_target(env.value),
+    mode = EnvironmentReleaseMode.HOSTED_IMPORT if env is DeploymentEnvironment.PROD else EnvironmentReleaseMode.LOCAL_IMPORT
+    return EnvironmentReleaseTarget(
+        environment=env,
+        target_name="prod-hosted" if env is DeploymentEnvironment.PROD else f"{env.value}-local",
+        mode=mode,
         mongo_uri="mongodb://topology.test",
         user_postgres_dsn="postgres://topology.test/quwoquan",
         media_sync_root=root / "environment-media",
+        media_delivery_base_url=f"https://media.{env.value}.test",
+        api_base_url=f"https://api.{env.value}.test",
         missing_requirements=(),
+        redis_addr="127.0.0.1:6379",
+        tag_mongo_database="quwoquan_tag",
+        creator_mongo_database="quwoquan_user",
+        homepage_mongo_database="quwoquan_entity",
+        content_mongo_database="quwoquan_content",
     )
 
 
@@ -371,6 +381,21 @@ def _write_import_result(
         evidence[f"{owner}FencedReadbackReceiptRef"] = receipt.relative_to(root).as_posix()
         evidence[f"{owner}FencedReadbackReceiptDigest"] = "sha256:" + hashlib.sha256(receipt.read_bytes()).hexdigest()
     write_environment_result(
+        apply_run / "result.json",
+        {
+            "schema": "quwoquan_data.environment_release_result",
+            "environment": environment,
+            "releaseId": release.name,
+            "containsUnverifiedAssets": bool(header["containsUnverifiedAssets"]),
+            "manifestDigest": admission.manifest_digest,
+            **admission.result_envelope(),
+            "runId": apply_run_id,
+            "status": "prepared",
+            **evidence,
+            "homepageVerificationCasesRef": homepage_cases_ref,
+        },
+    )
+    write_environment_result(
         activation_run / "result.json",
         {
             "schema": "quwoquan_data.environment_release_result",
@@ -383,7 +408,6 @@ def _write_import_result(
             "importRunId": apply_run_id,
             "status": "completed",
             **evidence,
-            "homepageVerificationCasesRef": homepage_cases_ref,
         },
     )
     return apply_run

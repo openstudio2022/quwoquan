@@ -1,5 +1,170 @@
 
 types:
+  ReleaseCandidateBinding:
+    description: User、Content、Search 共享的不可变内容候选值；不是 ContentActiveReleaseFence，刻意不含 active、revision 或 activatedAt。
+    fields:
+      - {name: environment, type: enum, values: [alpha, beta, gamma, prod], constraints: [NOT_NULL]}
+      - {name: sourceOwner, type: enum, values: [qwq_data], constraints: [NOT_NULL]}
+      - {name: releaseId, type: string, constraints: [NOT_BLANK], max_utf8_bytes: 160}
+      - {name: manifestDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  CreatorSearchPublicSnapshot:
+    description: User 公开投影 owner 从 verified Creator candidate 生产的自包含公开值；无账户凭证、人设策略或作品正文。objectId 必须等于 personaId，authorId 与 creatorId 来自原包映射，不推导登录身份。
+    fields:
+      - {name: objectType, type: enum, values: [user.profile], constraints: [NOT_NULL]}
+      - {name: objectId, type: string, constraints: [NOT_BLANK]}
+      - {name: creatorId, type: string, constraints: [NOT_BLANK]}
+      - {name: personaId, type: string, constraints: [NOT_BLANK]}
+      - {name: authorId, type: string, constraints: [NOT_BLANK]}
+      - {name: userHandle, type: string, constraints: [NOT_BLANK]}
+      - {name: displayName, type: string, constraints: [NOT_BLANK]}
+      - {name: bio, type: string, constraints: [NULLABLE]}
+      - {name: avatarUrl, type: string, constraints: [NULLABLE]}
+      - {name: avatarAssetId, type: string, constraints: [NULLABLE]}
+      - {name: avatarAccessMode, type: enum, enum_ref: MediaDeliveryAccessMode, constraints: [NULLABLE]}
+      - {name: identityTags, type: '[]string', constraints: [NOT_NULL], max_items: 100}
+      - {name: postCount, type: int64, constraints: [NOT_NULL], min: 0}
+      - {name: sourceVersion, type: int64, constraints: [NOT_NULL], min: 1}
+      - {name: profileDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: sourceDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+  CreatorSearchCandidateSnapshot:
+    description: >-
+      完整候选公开闭包，按 objectId 升序且 creatorId/personaId/authorId 各自唯一；不得截断分页或用相同数量替代身份集合。
+      sourceDigest 为公开 snapshot 除自身 sourceDigest 外字段的 UTF-8 canonical JSON SHA-256；objectSetDigest 为排序 objectType/objectId 数组摘要，
+      snapshotDigest 为整个值除自身 snapshotDigest 外字段摘要。canonical JSON 按键排序、无空白、原 UTF-8、时间 UTC RFC3339Nano；所有摘要带 sha256: 前缀。
+      sourceClosureDigest 绑定 User verified candidate 的原 closure，不能用公开摘要覆盖原包事实；头像三字段同有同无，无头像全 null。
+    fields:
+      - {name: release, type: ReleaseCandidateBinding, constraints: [NOT_NULL]}
+      - {name: sourceClosureDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: objectSetDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: snapshotDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: profiles, type: '[]CreatorSearchPublicSnapshot', constraints: [NOT_NULL], max_items: 500}
+  SearchReleaseCandidateSnapshot:
+    description: 唯一搜索准备输入值，kind只区分creator/post/homepage。恰一对应snapshot非null且所有release一致；源owner快照不复制，旧形状拒绝不补字段。
+    fields:
+      - {name: kind, type: enum, values: [creator, post, homepage], constraints: [NOT_NULL]}
+      - {name: creator, type: CreatorSearchCandidateSnapshot, constraints: [NULLABLE]}
+      - {name: post, type: ReleasePostCandidateSnapshot, constraints: [NULLABLE]}
+      - {name: homepage, type: ReleaseHomepageCandidateSnapshot, constraints: [NULLABLE]}
+  ReleaseCandidateObjectIdentity:
+    description: 各源owner生产、Search/Recommendation消费的exact源身份；release只用共享四元组值。revision不属于candidate，不接受旧协议补字段。
+    fields:
+      - {name: release, type: ReleaseCandidateBinding, constraints: [NOT_NULL]}
+      - {name: objectType, type: enum, values: [content.post, entity.homepage, user.profile], constraints: [NOT_NULL]}
+      - {name: objectId, type: string, constraints: [NOT_BLANK]}
+      - {name: sourceVersion, type: int64, min: 1, constraints: [NOT_NULL]}
+      - {name: sourceDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  ReleaseHomepagePublicSnapshot:
+    description: Entity verified候选的公开裁剪，homepageId/objectId与entityRef映射逐项核验；documentDigest按除自身外canonical JSON计算，规则沿CreatorSearchCandidateSnapshot。
+    fields:
+      - {name: identity, type: ReleaseCandidateObjectIdentity, constraints: [NOT_NULL]}
+      - {name: entityRef, type: string, constraints: [NOT_BLANK]}
+      - {name: canonicalEntityId, type: string, constraints: [NOT_BLANK]}
+      - {name: title, type: string, constraints: [NOT_BLANK]}
+      - {name: homepageType, type: enum, enum_ref: HomepageType, constraints: [NOT_NULL]}
+      - {name: introductionMarkdown, type: string, constraints: [NOT_NULL]}
+      - {name: city, type: string, constraints: [NULLABLE]}
+      - {name: location, type: GeoPoint, constraints: [NULLABLE]}
+      - {name: coverUrl, type: string, constraints: [NULLABLE]}
+      - {name: tagRefs, type: '[]string', constraints: [NOT_NULL]}
+      - {name: deepLink, type: string, constraints: [NOT_BLANK]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: documentDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  ReleasePostPublicSnapshot:
+    description: Content从verified Post/outbox/media候选生成，供Search与Recommendation复用；不是live PostPublished。sourceDigest绑定原候选，documentDigest绑定本公开值除自身字段；Homepage来自Entity同tuple公开值，不从标题推导。
+    fields:
+      - {name: identity, type: ReleaseCandidateObjectIdentity, constraints: [NOT_NULL]}
+      - {name: postRef, type: string, constraints: [NOT_BLANK]}
+      - {name: authorId, type: string, constraints: [NOT_BLANK]}
+      - {name: authorDisplayName, type: string, constraints: [NOT_BLANK]}
+      - {name: authorAvatarUrl, type: string, constraints: [NULLABLE]}
+      - {name: contentType, type: enum, enum_ref: ContentType, constraints: [NOT_NULL]}
+      - {name: contentIdentity, type: enum, enum_ref: ContentIdentity, constraints: [NOT_NULL]}
+      - {name: status, type: enum, enum_ref: PostStatus, constraints: [NOT_NULL]}
+      - {name: visibility, type: enum, enum_ref: Visibility, constraints: [NOT_NULL]}
+      - {name: moderationStatus, type: enum, enum_ref: ModerationStatus, constraints: [NOT_NULL]}
+      - {name: title, type: string, constraints: [NOT_NULL]}
+      - {name: body, type: string, constraints: [NOT_NULL]}
+      - {name: summary, type: string, constraints: [NOT_NULL]}
+      - {name: tagRefs, type: '[]string', constraints: [NOT_NULL]}
+      - {name: entityRefs, type: '[]string', constraints: [NOT_NULL]}
+      - {name: primaryHomepage, type: ReleaseHomepagePublicSnapshot, constraints: [NULLABLE]}
+      - {name: mediaAssetIds, type: '[]string', constraints: [NOT_NULL]}
+      - {name: mediaUrls, type: '[]string', constraints: [NOT_NULL]}
+      - {name: coverUrl, type: string, constraints: [NULLABLE]}
+      - {name: thumbnailUrl, type: string, constraints: [NULLABLE]}
+      - {name: videoUrl, type: string, constraints: [NULLABLE]}
+      - {name: durationMs, type: int64, min: 0, constraints: [NOT_NULL]}
+      - {name: width, type: int, min: 0, constraints: [NOT_NULL]}
+      - {name: height, type: int, min: 0, constraints: [NOT_NULL]}
+      - {name: contentVertical, type: string, constraints: [NULLABLE]}
+      - {name: publishedAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: deepLink, type: string, constraints: [NOT_BLANK]}
+      - {name: documentDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  ReleasePostCandidateSnapshot:
+    description: 完整有界闭包，posts按objectId排序唯一，所有identity.release相同；超过1000拒绝而不截断。objectSetDigest为排序objectType/objectId数组摘要，snapshotDigest为除自身外canonical JSON摘要；源/媒体闭包摘要来自Content原verified事实，不是查询ready。
+    fields:
+      - {name: release, type: ReleaseCandidateBinding, constraints: [NOT_NULL]}
+      - {name: sourceClosureDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: mediaClosureDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: objectSetDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: snapshotDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: posts, type: '[]ReleasePostPublicSnapshot', max_items: 1000, constraints: [NOT_NULL]}
+  ReleaseHomepageCandidateSnapshot:
+    description: Entity完整verified候选公开集合；按objectId排序唯一，映射摘要来自原entityRef映射，摘要规则同ReleasePostCandidateSnapshot，超过1000拒绝不截断。
+    fields:
+      - {name: release, type: ReleaseCandidateBinding, constraints: [NOT_NULL]}
+      - {name: sourceClosureDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: entityRefMappingDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: objectSetDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: snapshotDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: homepages, type: '[]ReleaseHomepagePublicSnapshot', max_items: 1000, constraints: [NOT_NULL]}
+  ReleaseQueryPreparationBinding:
+    description: 唯一准备身份为本值canonical摘要，slice只区分对象种类，无协议版本字段或兼容选择；源摘要不参与身份。Provider与schema代际必须由部署受管事实验证，不能由caller自行选择。
+    fields:
+      - {name: release, type: ReleaseCandidateBinding, constraints: [NOT_NULL]}
+      - {name: slice, type: enum, values: [creator_search, post_search, homepage_search, recommendation], constraints: [NOT_NULL]}
+      - {name: providerBindingGeneration, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: schemaGeneration, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  ReleaseQueryClassEvidence:
+    description: 一类真实候选查询的完整结果身份/内容摘要，非passed布尔值；proof evaluator重验不能仅比较数量。
+    fields:
+      - {name: queryClass, type: enum, values: [result, suggest, retrieval, ids, count, facet, home, premium, required_detail], constraints: [NOT_NULL]}
+      - {name: objectSetDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: documentsDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  ReleaseQueryReadinessProof:
+    description: owner只读重验自身checkpoint与真实查询后返回，不存第二ready registry。完整身份/文档摘要不能用数量代替；proofDigest按除自身外canonical JSON计算。validUntil覆盖短准入窗口，source/projection/准入漂移立即失效。
+    fields:
+      - {name: binding, type: ReleaseQueryPreparationBinding, constraints: [NOT_NULL]}
+      - {name: sourceClosureDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: objectSetDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: snapshotDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: documentsDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: checkpointVersion, type: int64, min: 1, constraints: [NOT_NULL]}
+      - {name: queryClasses, type: '[]ReleaseQueryClassEvidence', constraints: [NOT_NULL], description: Search精确覆盖result/suggest/retrieval/ids/count/facet；Recommendation精确覆盖home/premium/required_detail，未知/重复/缺项拒绝。}
+      - {name: premiumAdmissionDigest, type: string, format: canonical_sha256, constraints: [NULLABLE], description: recommendation必填，其余必须null。}
+      - {name: premiumObjectSetDigest, type: string, format: canonical_sha256, constraints: [NULLABLE], description: recommendation必填且对应非空合格work+video集合，其余必须null。}
+      - {name: verifiedAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: validUntil, type: timestamp, constraints: [NOT_NULL]}
+      - {name: proofDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  ReleasePinnedQueryFence:
+    description: Content从唯一active pointer生产的请求值，不替代ContentActiveReleaseFence transport；无active时release=null且revision=0，found候选完整且revision正。Recommendation不得自行选active，public不得提交此值。
+    fields:
+      - {name: release, type: ReleaseCandidateBinding, constraints: [NULLABLE]}
+      - {name: revision, type: int64, min: 0, constraints: [NOT_NULL]}
+  ReleasePremiumAdmission:
+    description: ProductOps唯一签发的Data候选准入值；source必须为content.post且同contentId，独立绑定源版本/摘要。同对象A/B可并存，旧准入不能借contentId授予B；原聚合revision驱动撤回与下架，不产生第二premium authority。
+    fields:
+      - {name: source, type: ReleaseCandidateObjectIdentity, constraints: [NOT_NULL]}
+      - {name: admissionRevision, type: int64, min: 1, constraints: [NOT_NULL]}
+      - {name: auditId, type: string, constraints: [NOT_BLANK]}
+      - {name: qualityScore, type: float64, min: 0.75, constraints: [NOT_NULL]}
+      - {name: status, type: enum, values: [active, rolled_back, takedown_ejected], constraints: [NOT_NULL]}
+      - {name: qualityAdmission, type: enum, values: [approved], constraints: [NOT_NULL]}
+      - {name: scope, type: enum, values: [global], constraints: [NOT_NULL]}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: admissionDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
   RealtimeEventEnvelope:
     description: >-
       WebSocket 与 LongPoll 共用的第一方实时业务 envelope。type 是闭集判别器，

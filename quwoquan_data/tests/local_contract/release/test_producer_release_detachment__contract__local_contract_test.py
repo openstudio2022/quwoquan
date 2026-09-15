@@ -168,6 +168,11 @@ def test_producer_release_graph_has_no_consumer_named_selection_model() -> None:
         assert "targetEnvironment" not in source
 
 
+def test_data_requirements_have_no_ops_package_dependency() -> None:
+    requirements = (_DATA_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
+    assert not any("quwoquan_ops" in line or "quwoquan-ops" in line for line in requirements)
+
+
 def test_producer_cli_registration_does_not_load_consumer_modules() -> None:
     source = (_CANONICAL_ROOT / "handler.py").read_text(encoding="utf-8")
 
@@ -494,7 +499,8 @@ def _repository_handoff_fixture(root: Path) -> tuple[Path, dict]:
                     "headerDigest": handoff._digest(header_raw)},
         "explicitCohort": {"scope": "output", "ref": f"data/releases/{release_id}/cohort.json",
                            "digest": handoff._digest(cohort_raw), "document": cohort},
-        "contentPoolObjects": [row], "producerBaselineRevision": cohort["producerBaselineRevision"],
+        "contentPoolObjects": [row], "artifact": handoff._artifact_inventory(release),
+        "producerBaselineRevision": cohort["producerBaselineRevision"],
         "producerContractDigest": digest,
     }
     path = release / "producer_release_handoff.json"
@@ -517,8 +523,66 @@ def test_handoff_repository_identity_is_portable_and_exact(tmp_path: Path) -> No
     # 仓身份匹配不跳过 sealed payload 的真实摘要验证。
     with (path.parent / "payload/objects" / document["contentPoolObjects"][0]["objectRef"] / "manifest.json").open("ab") as stream:
         stream.write(b"\n")
-    with pytest.raises(handoff.ProducerReleaseHandoffError, match="HANDOFF_RELEASE_INTEGRITY_FAILED"):
+    with pytest.raises(handoff.ProducerReleaseHandoffError, match="HANDOFF_ARTIFACT_DIGEST_DRIFT"):
         handoff.read_producer_release_handoff(path, expected_repository_id="test-content", **roots)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code"),
+    (
+        ("missing", "HANDOFF_ARTIFACT_MISSING"),
+        ("extra", "HANDOFF_ARTIFACT_EXTRA"),
+        ("symlink", "HANDOFF_ARTIFACT_SYMLINK"),
+        ("drift", "HANDOFF_ARTIFACT_DIGEST_DRIFT"),
+    ),
+)
+def test_handoff_portable_artifact_failures_are_typed_and_read_only(
+    tmp_path: Path, mutation: str, code: str,
+) -> None:
+    from content.release.canonical import producer_release_handoff as handoff
+    from content.release.canonical.object_transaction_contract import _tree_digest
+
+    path, document = _repository_handoff_fixture(tmp_path)
+    release = path.parent
+    target = release / "cohort.json"
+    before = _tree_digest(release)
+    if mutation == "missing":
+        target.unlink()
+    elif mutation == "extra":
+        (release / "unexpected.txt").write_text("unexpected", encoding="utf-8")
+    elif mutation == "symlink":
+        target.unlink()
+        target.symlink_to(release / "payload/release.json")
+    else:
+        target.write_bytes(target.read_bytes() + b"\n")
+    mutated = None if mutation == "symlink" else _tree_digest(release)
+    with pytest.raises(handoff.ProducerReleaseHandoffError, match=code):
+        handoff.read_producer_release_handoff(
+            path,
+            repo_root=tmp_path / "no-source",
+            output_root=tmp_path / "no-output",
+            release_root=release.parent,
+        )
+    if mutation == "symlink":
+        assert target.is_symlink()
+    else:
+        assert _tree_digest(release) == mutated
+        assert mutated != before
+    assert not (tmp_path / "no-source").exists()
+    assert not (tmp_path / "no-output").exists()
+
+
+def test_handoff_artifact_rejects_path_escape_before_read(tmp_path: Path) -> None:
+    from content.release.canonical import producer_release_handoff as handoff
+
+    path, document = _repository_handoff_fixture(tmp_path)
+    document["artifact"]["entries"][0]["ref"] = "../outside"
+    path.write_bytes(handoff._canonical_bytes(document))
+    with pytest.raises(handoff.ProducerReleaseHandoffError, match="HANDOFF_SCHEMA_INVALID"):
+        handoff.read_producer_release_handoff(
+            path, repo_root=tmp_path / "no-source", output_root=tmp_path / "no-output",
+            release_root=path.parent.parent,
+        )
 
 
 @pytest.mark.parametrize("field,value", [("repositoryId", None), ("repositoryId", "bad/id"), ("producerContractDigest", None)])
@@ -548,6 +612,7 @@ def test_handoff_writer_replay_rejects_another_repository(tmp_path: Path) -> Non
     (path.parent / "cohort.json").write_bytes(cohort_raw)
     document["explicitCohort"]["digest"] = handoff._digest(cohort_raw)
     document["producerBaselineRevision"] = revision
+    document["artifact"] = handoff._artifact_inventory(path.parent)
     path.write_bytes(handoff._canonical_bytes(document))
     publish_root = tmp_path / "publish"
     (publish_root / ".git").mkdir(parents=True)

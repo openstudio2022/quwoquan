@@ -1,5 +1,19 @@
 description: 该自治边界的运行配置定义与默认值；环境只维护差异和引用。
 configs:
+- key: sys.search-service.creator_search.binding_digest
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: 四环境均由candidate-owned data-plane-binding.json验证后注入CREATOR_SEARCH_BINDING_DIGEST；值为原canonical bindingDigest，不接受手填或CONFIG_VERSION推导，缺失阻断启动。
+- key: sys.search-service.creator_search.physical_namespace
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: 同一验证制品的search.objects reader/writers/admin唯一物理namespace，由CREATOR_SEARCH_PHYSICAL_NAMESPACE注入；启动及proof读写重验双alias，不在运行时改写。
 - key: sys.search-service.user_account_security_authority.base_url
   type: string
   scope: workload

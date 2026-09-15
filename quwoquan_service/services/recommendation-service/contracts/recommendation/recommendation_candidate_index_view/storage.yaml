@@ -1,6 +1,37 @@
 backend: mongodb
 role: projection
+transaction:
+  scope: [rm_release_discovery_candidates, recommendation_release_source_checkpoints, recommendation_candidate_source_inbox, rm_release_premium_candidates, recommendation_candidate_projection_checkpoints]
+  isolation: mongo_transaction
+  mechanism: version_cas
+  guarantees: [checkpoint_version_cas]
+description: >-
+  Data候选只写独立release分区，普通投影保持原路径，无双读fallback。data候选、完整source checkpoint与原source inbox同Mongo事务提交；
+  proof由真实named reader临时派生不持久化。索引缺失或旧Data共享键未完成受管迁移即not-ready，不能把旧Data行当ordinary放行。
+  原Post lifecycle迟到事件只对账目标tuple，旧candidate/准入/checkpoint保留至回滚窗口与活跃引用结束，不使用TTL清理恢复依据。
 collections:
+  recommendation_candidate_content_fence_receipts:
+    entity: CandidateContentFenceReceipt
+    role: append_only
+    description: 本owner专属fence去重与revision凭据，不复用Post/premium inbox、不保存payload，无TTL；对账只读原candidate与proof，迟到核实Content exact receipt，失败不写成功、不ACK；唯一索引原子拒绝同revision异事实。
+    indexes:
+      - {name: uq_rec_candidate_fence_event, keys: {eventDigest: 1}, unique: true}
+      - {name: uq_rec_candidate_fence_revision, keys: {scopeDigest: 1, revision: 1}, unique: true}
+  rm_release_discovery_candidates:
+    entity: RecommendationCandidateIndexView
+    role: projection
+    indexes:
+    - {name: uq_rec_release_candidate, keys: {releaseBinding.release.environment: 1, releaseBinding.release.sourceOwner: 1, releaseBinding.release.releaseId: 1, releaseBinding.release.manifestDigest: 1, releaseBinding.providerBindingGeneration: 1, releaseBinding.schemaGeneration: 1, scenario: 1, contentId: 1}, unique: true}
+  recommendation_release_source_checkpoints:
+    entity: RecommendationReleaseSourceCheckpoint
+    role: checkpoint
+    indexes:
+    - {name: uq_rec_release_checkpoint, keys: {checkpointId: 1}, unique: true}
+  rm_release_premium_candidates:
+    entity: RecommendationReleasePremiumProjection
+    role: projection
+    indexes:
+    - {name: uq_rec_release_premium, keys: {admission.source.release.environment: 1, admission.source.release.sourceOwner: 1, admission.source.release.releaseId: 1, admission.source.release.manifestDigest: 1, admission.source.objectId: 1}, unique: true}
   rm_discovery_feed:
     entity: RecommendationCandidateIndexView
     role: projection

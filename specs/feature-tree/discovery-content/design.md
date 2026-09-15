@@ -69,6 +69,14 @@
 - 关联要求：`REQ-003`、`REQ-004`、`REQ-005`
 - 关联能力：[`publish-comment-reaction`](./publish-comment-reaction/spec.md)、[`feed-orchestration-recommendation`](./feed-orchestration-recommendation/spec.md)、[`object-homepage-coverage-scaling`](./object-homepage-coverage-scaling/spec.md)
 
+### DEC-003 immutable producer handoff是Data环境消费的唯一内容前驱
+
+- 决策：ship只接收`data/releases/<releaseId>/producer_release_handoff.json=sha256:<digest>`，定位范围仅为显式output根；复用producer严格reader验证canonical bytes、封存的producer身份/契约声明、cohort和对象/媒体/payload完整性；不要求消费方checkout等于producer历史baseline，再由环境操作持锁复验。旧通用会话handoff ref直接拒绝，不双读。
+- 结果：环境结果的handoffRef记录该exact ref，artifact ref/digest仍记录原producer字节；通用Review/handoff不再重复赋予内容生产资格。环境授权、full-sync、CAS、rollback和Prod确认完全保留。
+- 恢复与测试：任何路径逃逸、symlink、缺失、格式或digest漂移在导入前阻断；不改历史release，不隐式重建。用真实producer reader正向回归与篡改/错误仓/旧ref负例证明，Gamma运行数据读回是独立下游证据。
+- 理由：producer finalize已验证完整对象闭包，通用源码会话交付不应成为内容immutable artifact的第二生产者；验收范围应绑定所选release而非共享池所有对象。
+- 关联要求/验收：本层spec的内容单一准入、DOM-001；实现未完由OPEN-004跟踪。
+
 ## 6. 质量与运行约束
 
 - 沿用 AppRoot 全局质量约束并保持 metadata/code/test 单轨。

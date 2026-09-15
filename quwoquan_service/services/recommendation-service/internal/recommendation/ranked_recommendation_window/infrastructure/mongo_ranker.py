@@ -22,6 +22,8 @@ from internal.recommendation.ranked_recommendation_window.domain.model import (
     RecommendationObjectCard,
     RankedCandidate,
     RankingResult,
+    ReleasePinnedQueryFence,
+    validate_content_fence,
 )
 from internal.recommendation.ranked_recommendation_window.domain.experiment_policy import (
     ExperimentAssignments,
@@ -139,7 +141,9 @@ class MongoCandidateRanker:
         scenario: str,
         session_id: str,
         limit: int,
+        content_fence: ReleasePinnedQueryFence,
     ) -> RankingResult:
+        content_fence = validate_content_fence(content_fence)
         now = self._now().astimezone(timezone.utc)
         # RankedWindowSubjectID uses '\x00' as an internal namespace separator.
         # ExperimentAssignmentObserved crosses into Product Ops Postgres text
@@ -157,17 +161,11 @@ class MongoCandidateRanker:
         }:
             raise ValueError("unsupported recommendation ranking scenario")
         profile = self._feature_profiles.read_for_scoring(subject_id.strip())
-        documents = self._candidates.list_for_ranking(
-            subject_id=subject_id.strip(),
-            scenario=normalized_scenario,
-            limit=limit,
-        )
-        documents = self._merge_collaborative_lane(
-            documents,
-            profile=profile,
-            scenario=normalized_scenario,
-            limit=limit,
-        )
+        if content_fence.release is not None:
+            documents = self._candidates.list_release_for_ranking(content_fence, subject_id=subject_id.strip(), scenario=normalized_scenario, limit=limit)
+        else:
+            documents = self._candidates.list_for_ranking(subject_id=subject_id.strip(), scenario=normalized_scenario, limit=limit)
+            documents = self._merge_collaborative_lane(documents, profile=profile, scenario=normalized_scenario, limit=limit)
         negative_content_ids = {
             str(value).strip()
             for value in profile.get("negativeContentIds") or []

@@ -15,7 +15,6 @@ import (
 	"quwoquan_service/services/tag-service/internal/tag/tag_feedback_fact/application/tagfeedback"
 	"quwoquan_service/services/tag-service/internal/tag/tag_feedback_fact/infrastructure/tagfeedbackstore"
 	nodehttp "quwoquan_service/services/tag-service/internal/tag/tag_node_view/adapters/inbound/http"
-	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/application"
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
 	releasehttp "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/adapters/inbound/http"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/taxonomyrelease"
@@ -28,7 +27,11 @@ import (
 type config struct {
 	servicekit.BaseConfig `yaml:",inline"`
 
-	Mongo servicekit.MongoConfig `yaml:"mongo"`
+	Mongo               servicekit.MongoConfig `yaml:"mongo"`
+	ContentReleaseFence struct {
+		BaseURL   string `yaml:"base_url"`
+		TimeoutMs int    `yaml:"timeout_ms"`
+	} `yaml:"content_release_fence"`
 
 	Redis struct {
 		General servicekit.RedisSceneConfig `yaml:"general" envPrefix:"REDIS_GENERAL"`
@@ -53,6 +56,13 @@ func NewModule() (*servicekit.Module, error) {
 	})
 }
 
+func resolveContentReleaseFenceBaseURL(identity servicekit.Identity, configuredBaseURL string) string {
+	if projectedBaseURL := identity.ServiceBaseURL("content-service"); projectedBaseURL != "" {
+		return projectedBaseURL
+	}
+	return configuredBaseURL
+}
+
 func assembleTagDomain(asm *servicekit.Assembly, cfg *config) error {
 	ctx := asm.Context
 	db := asm.MongoDB
@@ -70,7 +80,15 @@ func assembleTagDomain(asm *servicekit.Assembly, cfg *config) error {
 	if err := releaseStore.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ensure tag_taxonomy_releases indexes: %w", err)
 	}
-	tagService := application.NewTagService(tagNodeStore, objectTagStore, releaseStore)
+	credentials, err := asm.Auth.ServiceCredentials("content.release.fence.read")
+	if err != nil {
+		return err
+	}
+	contentReleaseFenceBaseURL := resolveContentReleaseFenceBaseURL(asm.Identity, cfg.ContentReleaseFence.BaseURL)
+	tagService, activeReader, err := newContentFencedTagService(db, asm.Identity.AppEnv, contentReleaseFenceBaseURL, time.Duration(cfg.ContentReleaseFence.TimeoutMs)*time.Millisecond, credentials)
+	if err != nil {
+		return fmt.Errorf("Content fence reader init failed: %w", err)
+	}
 	releaseFacade, err := taxonomyrelease.NewFacade(releaseStore, tagNodeStore)
 	if err != nil {
 		return fmt.Errorf("taxonomy release facade init failed: %w", err)
@@ -122,23 +140,9 @@ func assembleTagDomain(asm *servicekit.Assembly, cfg *config) error {
 	feedbackhttp.NewTagFeedbackHandler(feedbackFacade).Register(asm.Mux)
 
 	asm.Health.Register("taxonomy-projection", func(hctx context.Context) error {
-		release, found, err := releaseStore.FindActive(hctx)
-		if err != nil {
-			return err
-		}
-		if !found {
-			// 冷启动的空库尚无任何 taxonomy release：canonical taxonomy 由
-			// Data CLI ship apply 在全栈就绪之后导入，若此处 fail 会构成
-			// 「readiness 等导入、导入等 readiness」的环境死锁。空 taxonomy
-			// 是合法初始状态（查询按空集服务）；只有「存在 active release
-			// 但节点投影与其不一致」才是必须 fail-closed 的损坏状态。
-			return nil
-		}
-		return tagNodeStore.ValidateReleaseProjection(
-			hctx,
-			release.ReleaseID,
-			release.NodeCount,
-		)
+		// 空 Content pointer 是合法冷启动；存在时由共享 reader 重验 exact candidate 全闭包。
+		_, _, err := activeReader.ActiveReleaseID(hctx)
+		return err
 	})
 	asm.Health.Register("profile-tag-consumer", func(context.Context) error {
 		return profileTagConsumer.Healthy(15 * time.Second)

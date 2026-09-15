@@ -7,7 +7,7 @@ from pathlib import Path
 
 from core import paths
 
-PUBLIC_COMMANDS = ("task", "filter-catalog", "release", "ship", "template", "verify", "governance")
+PUBLIC_COMMANDS = ("task", "filter-catalog", "release", "template", "verify", "governance")
 GOVERNANCE_HELP_SURFACES = (("governance",),)
 FORBIDDEN_TOKENS = (
     "content.execution.controller", "content.execution.queue", "content.execution.campaign",

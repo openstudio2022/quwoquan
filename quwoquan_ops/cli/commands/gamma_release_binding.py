@@ -298,16 +298,6 @@ def _bind_formal_local_release_provider_environment(
             f"{target_name} assistant Skill package trust materialization "
             f"failed: {exc}"
         )
-    if workload in {"content-release", "content-commercial"}:
-        # Bounded content workloads own release import/public read and the
-        # optional Product Ops premium command. External
-        # login, embedding, assistant, integration and RTC capabilities are
-        # not started by this workload; validating their protected material
-        # here would incorrectly turn unrelated full-workload prerequisites
-        # into a content activation or premium-command blocker.
-        # user-service still mounts integration mTLS PEMs on every local up,
-        # so empty /dev/null mounts must never reach Compose interpolation.
-        return None
     provider_roles = {
         str(item["role"])
         for item in validated_provider_runtime["workloads"]
@@ -323,7 +313,21 @@ def _bind_formal_local_release_provider_environment(
             f"{target_name} Provider runtime has unsupported materializers: "
             + ",".join(sorted(unsupported_roles))
         )
-    if "sms-provider-substitute" in provider_roles:
+    selected_provider_roles = (
+        provider_roles
+        if workload == "full"
+        else provider_roles
+        & {"sms-provider-substitute", "provider-protocol-substitute"}
+    )
+    if selected_provider_roles != {
+        "sms-provider-substitute",
+        "provider-protocol-substitute",
+    } and workload in {
+        "content-release",
+        "content-commercial",
+    }:
+        return f"{target_name} bounded Integration Provider closure is unavailable"
+    if "sms-provider-substitute" in selected_provider_roles:
         try:
             sms_substitute = _stackctl.prepare_local_sms_provider_substitute(
                 environment_name,
@@ -340,7 +344,7 @@ def _bind_formal_local_release_provider_environment(
         except (OSError, RuntimeError, ValueError) as exc:
             return f"{target_name} SMS substitute materialization failed: {exc}"
         environment.update(sms_substitute.environment)
-    if "provider-protocol-substitute" in provider_roles:
+    if "provider-protocol-substitute" in selected_provider_roles:
         try:
             provider_substitute = _stackctl.prepare_local_provider_protocol_substitute(
                 environment_name,
@@ -360,15 +364,16 @@ def _bind_formal_local_release_provider_environment(
                 f"failed: {exc}"
             )
         environment.update(provider_substitute.environment)
-    provider_error = _stackctl._bind_local_external_provider_environment(
-        environment,
-        environment_name=environment_name,
-        target_name=target_name,
-        storage_prefix="LOCAL_GAMMA",
-        runtime_composition=validated_provider_runtime,
-    )
-    if provider_error is not None:
-        return provider_error
+    if workload == "full":
+        provider_error = _stackctl._bind_local_external_provider_environment(
+            environment,
+            environment_name=environment_name,
+            target_name=target_name,
+            storage_prefix="LOCAL_GAMMA",
+            runtime_composition=validated_provider_runtime,
+        )
+        if provider_error is not None:
+            return provider_error
     try:
         provider_config = _stackctl._provider_config()
         provider_config.project_provider_secret_bundles(
@@ -377,6 +382,23 @@ def _bind_formal_local_release_provider_environment(
             source=environment,
             runtime_composition=validated_provider_runtime,
         )
+        runtime_secret_keys = (
+            "INTEGRATION_SMS_TOKEN",
+            "SMS_SUBSTITUTE_PROVIDER_TOKEN",
+            "SMS_SUBSTITUTE_OPERATOR_TOKEN",
+            "SMS_SUBSTITUTE_CAPTURE_KEY_B64",
+            "PROVIDER_SUBSTITUTE_OPERATOR_TOKEN",
+        )
+        runtime_env_file = provider_config.project_provider_runtime_env_file(
+            target=target_name,
+            source=environment,
+            keys=runtime_secret_keys,
+        )
+        environment["QWQ_PROVIDER_RUNTIME_SECRET_ENV_FILE"] = str(
+            runtime_env_file.resolve()
+        )
+        for secret_key in runtime_secret_keys:
+            environment.pop(secret_key, None)
         provider_config_result = provider_config.compile_provider_config(
             action="render",
             environment=environment_name,

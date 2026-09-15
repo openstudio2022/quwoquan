@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import ast
 import json
+import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -193,16 +195,44 @@ def test_main_push_only_creates_source_seal_not_build_tag_or_prod() -> None:
     assert set(trigger(load_workflow(PROD)[1])) == {"workflow_dispatch"}
 
 
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-004
+def test_scope_workflow_shell_and_embedded_python_are_syntactically_valid() -> None:
+    for filename in ("release-qualification.yml", "release-tag-selection.yml", "deploy-prod-auto.yml", "app_pipeline.yml", "service_pipeline.yml"):
+        _, workflow = load_workflow(WORKFLOWS / filename)
+        for job in workflow["jobs"].values():
+            for step in job.get("steps", []):
+                run = step.get("run")
+                if not isinstance(run, str): continue
+                shell = re.sub(r"\$\{\{.*?\}\}", "CHECK_VALUE", run)
+                result = subprocess.run(["bash", "-n"], input=shell, text=True, capture_output=True)
+                assert result.returncode == 0, (filename, step.get("name"), result.stderr)
+                for source in re.findall(r"<<'PY'[^\n]*\n(.*?)^PY\s*$", shell, re.M | re.S):
+                    compile(source, filename, "exec")
+
+
+def test_app_factory_scope_selects_products_without_dropping_signing_checks() -> None:
+    source, workflow = load_workflow(WORKFLOWS / "app_pipeline.yml")
+    assert workflow["jobs"]["product"]["needs"] == "select_products"
+    assert "fromJSON(needs.select_products.outputs.matrix)" in workflow["jobs"]["product"]["strategy"]["matrix"]
+    assert "require_ci_inputs.py --scope release-signing" in source
+    assert "App factory authority bytes are not canonical" in source
+    assert "app_build_product_ids(targets)" in source
+    assert "delivery_target_scope=args.delivery_target" in (ROOT / "quwoquan_ops/ci/app_candidate_oci_transport.py").read_text()
+
+
 def test_rc_factory_builds_once_and_finalizes_exact_qualification_facts() -> None:
     source, workflow = load_workflow(QUALIFICATION)
     inputs = trigger(workflow)["workflow_dispatch"]["inputs"]
     assert set(inputs) == {
         "rc_tag_admission_ref", "qualification_request_ref",
         "source_git_sha", "product_version_manifest_ref",
-        "package_acceptance_fact_ref", "provider_fact_ref",
+        "package_acceptance_fact_ref", "service_acceptance_fact_ref", "provider_fact_ref",
         "uat_fact_ref", "supply_chain_fact_ref",
     }
-    assert all(value["required"] is True for value in inputs.values())
+    conditional = {"package_acceptance_fact_ref", "service_acceptance_fact_ref"}
+    assert all(value["required"] is (name not in conditional) for name, value in inputs.items())
+    assert "needs.allocate_build_number.outputs.delivery_targets" in source
+    assert "ACCEPTANCE_ARGS" in source
     assert "@sha256" in inputs["rc_tag_admission_ref"]["description"]
     assert "release_control.py" in source
     assert "qualification-material" in source
@@ -236,7 +266,7 @@ def test_rc_factory_builds_once_and_finalizes_exact_qualification_facts() -> Non
         '"buildPolicy": "build_sign_attest_once"',
         '"artifactBuildNumber": build_number',
         '"factoryOutputs": factory_outputs',
-        '"supplyChainSubjects": [app_locator, service_locator]',
+        '"supplyChainSubjects": sorted({item["ociRef"] for item in artifacts})',
         '"artifactByteDigests": exact_artifact_digests',
     ):
         assert token in material
@@ -338,6 +368,7 @@ def test_stable_reuses_qualified_rc_material_and_admits_after_readback() -> None
         "artifactBuildNumber": material["artifactBuildNumber"], "artifacts": material_artifacts,
     })""" in qualified_material
     assert """return {
+        "deliveryTargets": targets,
         "selectedRcAdmission": rc_exact, "selectedRcTagName": rc["tagName"],
         "selectedRcTagObjectOid": rc["tagObjectOid"],
         "qualificationFact": qualification_exact, "qualificationId": qualification_id,
@@ -413,7 +444,7 @@ def test_stable_reuses_qualified_rc_material_and_admits_after_readback() -> None
         "selectedRcAdmission", "selectedRcTagName", "selectedRcTagObjectOid",
         "qualificationFact", "qualificationId", "candidateMaterialManifest",
         "candidateMaterialId", "candidateIdentity", "artifactBuildNumber", "artifacts",
-        "productAuthorityFact", "releaseAuthorityFact",
+        "productAuthorityFact", "releaseAuthorityFact", "deliveryTargets",
     )}""" in final_admission
     assert """"admissionIntent": intent_exact, "mutationOutcome": outcome,
         "creatorReadback": creator, "rulesetReadback": ruleset,""" in final_admission
@@ -425,8 +456,7 @@ def test_prod_accepts_only_stable_admission_exact_oci_and_orders_rollout() -> No
     inputs = trigger(workflow)["workflow_dispatch"]["inputs"]
     assert set(inputs) == {
         "release_tag_admission_ref",
-        "previous_active_released_ledger_ref",
-        "rollback_readiness_ref",
+        "prior_ref",
     }
     assert inputs["release_tag_admission_ref"]["required"] is True
     assert "stable ReleaseTagAdmissionFact" in inputs["release_tag_admission_ref"]["description"]
@@ -503,11 +533,11 @@ def test_prod_rollback_targets_previous_released_and_soak_is_independent() -> No
     soak = function_source(QUALIFIED_PROD, "create_post_release_soak_fact")
 
     for token in (
-        "previous_active_released_ledger_ref",
+        "prior_ref",
         'previous.get("terminal") != "released"',
         'previous.get("active") is not True',
         'previous.get("revoked") is not False',
-        '"previousActiveReleasedLedger": previous_exact',
+        '"prior": prior',
     ):
         assert token in admission
     for token in (

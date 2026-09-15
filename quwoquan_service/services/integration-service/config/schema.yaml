@@ -173,6 +173,13 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
+- key: sys.integration-service.redis.general.username
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: general scene ACL用户名；空值为明确default语义，named失败不回落，转换至runtime scene必须保留。
 - key: sys.integration-service.redis.general.password
   type: string
   scope: workload
@@ -248,6 +255,13 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
+- key: sys.integration-service.redis.rec.username
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: rec scene ACL用户名；空值为明确default语义，named失败不回落，转换至runtime scene必须保留。
 - key: sys.integration-service.redis.rec.password
   type: string
   scope: workload

@@ -112,10 +112,187 @@ def register_parser(
     )
     verify_parser.add_argument("--distribution-root", default="")
     verify_parser.add_argument("--verify-hosted", action="store_true")
+    verify_parser.add_argument(
+        "--verification-purpose",
+        choices=("formal-readiness", "core-diagnostic"),
+        default="formal-readiness",
+    )
+    verify_parser.add_argument(
+        "--feature",
+        action="append",
+        choices=(
+            "identity",
+            "feed-detail",
+            "search-recommendation",
+            "image-video-range",
+            "post-write-readback",
+            "chat-write-readback",
+        ),
+        default=[],
+    )
+    verify_parser.add_argument(
+        "--deployment-instance", choices=("prevalidate", "prod"), default=""
+    )
+    verify_parser.add_argument(
+        "--data-mode", choices=("isolated", "external"), default=""
+    )
+    verify_parser.add_argument(
+        "--app-core-diagnostic-report",
+        default="",
+        help="现有 app-content-uat core_diagnostic receipt；账号写用例由 Ops 汇总",
+    )
+
+
+def _command_core_diagnostic(args: argparse.Namespace) -> dict[str, Any]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    features = tuple(dict.fromkeys(getattr(args, "feature", ()) or ()))
+    if not features:
+        features = (
+            "identity", "feed-detail", "search-recommendation",
+            "image-video-range",
+        )
+    env_name = str(getattr(args, "env", "") or "").strip()
+    target_name = str(getattr(args, "target", "") or "").strip()
+    if not target_name and env_name in _stackctl.ENVIRONMENTS:
+        target_name = _stackctl.DEFAULT_TARGET_BY_ENV[env_name]
+    issue = ""
+    if env_name == "gamma" and target_name != "gamma-local":
+        issue = "Gamma core diagnostic requires target=gamma-local"
+    elif env_name == "prod" and (
+        target_name != "prod-hosted"
+        or str(getattr(args, "deployment_instance", "") or "") != "prevalidate"
+        or str(getattr(args, "data_mode", "") or "") != "isolated"
+    ):
+        issue = "Prod core diagnostic requires prod-hosted prevalidate with isolated data mode"
+    elif env_name not in {"gamma", "prod"}:
+        issue = "core diagnostic only supports gamma or prod"
+
+    report_dir = _stackctl.resolve_report_dir(args, env_name or "repo", target_name or "repo")
+    cases: list[dict[str, str]] = []
+    data_report: Mapping[str, Any] | None = None
+    data_path = _stackctl.env_runs_root(env_name) / "data-release" / str(args.data_release_id) / str(args.data_verify_run_id) / "core-diagnostic-report.json"
+    if not issue:
+        try:
+            loaded = json.loads(data_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, Mapping):
+                data_report = loaded
+        except (OSError, json.JSONDecodeError):
+            data_report = None
+        if (
+            data_report is None
+            or data_report.get("releaseId") != str(args.data_release_id)
+            or data_report.get("manifestDigest") != str(args.data_manifest_digest)
+            or data_report.get("nonPromotable") is not True
+            or data_report.get("releaseEligibility") != "GATE_BLOCK"
+            or data_report.get("readinessWritten") is not False
+        ):
+            issue = "exact Data core diagnostic report is missing or identity-drifted"
+    source = {
+        str(row.get("feature")): row
+        for row in list((data_report or {}).get("caseResults") or [])
+        if isinstance(row, Mapping)
+    }
+    write_features = {"post-write-readback", "chat-write-readback"} & set(features)
+    if write_features and not issue:
+        app_ref = str(getattr(args, "app_core_diagnostic_report", "") or "").strip()
+        try:
+            app_path = Path(app_ref).expanduser()
+            if not app_path.is_absolute():
+                app_path = _stackctl.output_root() / app_path
+            app_path = app_path.resolve()
+            app_path.relative_to(_stackctl.output_root().expanduser().resolve())
+            app_report = json.loads(app_path.read_text(encoding="utf-8"))
+            selected_suites = set(
+                ((app_report.get("suitePlan") or {}).get("selected") or [])
+            )
+            evidence_suites = {
+                str(row.get("suite") or "")
+                for row in (app_report.get("evidenceRefs") or [])
+                if isinstance(row, Mapping) and str(row.get("reportRef") or "")
+            }
+            readbacks = list(
+                ((app_report.get("diagnosticBindings") or {}).get("releaseReadbacks") or {}).values()
+            )
+            exact_release = bool(readbacks) and all(
+                isinstance(row, Mapping)
+                and row.get("releaseId") == str(args.data_release_id)
+                and row.get("manifestDigest") == str(args.data_manifest_digest)
+                and row.get("activationEnvelopeDigest")
+                for row in readbacks
+            )
+            if (
+                app_report.get("verificationPurpose") != "core_diagnostic"
+                or app_report.get("nonPromotable") is not True
+                or app_report.get("status") != "diagnostic_complete"
+                or not exact_release
+            ):
+                raise ValueError("App diagnostic identity or terminal status drifted")
+            suite_by_feature = {
+                "post-write-readback": "post-write-readback",
+                "chat-write-readback": "chat-send-readback",
+            }
+            for feature in write_features:
+                suite = suite_by_feature[feature]
+                source[feature] = {
+                    "feature": feature,
+                    "status": (
+                        "passed"
+                        if suite in selected_suites and suite in evidence_suites
+                        else "not_executed"
+                    ),
+                    "detail": "existing App core diagnostic evidence",
+                }
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            issue = f"App core diagnostic report is invalid: {exc}"
+    for feature in (
+        "identity",
+        "feed-detail",
+        "search-recommendation",
+        "image-video-range",
+        "post-write-readback",
+        "chat-write-readback",
+    ):
+        row = source.get(feature)
+        status = str((row or {}).get("status") or "not_executed")
+        detail = str((row or {}).get("detail") or "not selected")
+        cases.append({"feature": feature, "status": status, "detail": detail})
+        if feature in features and status != "passed" and not issue:
+            issue = f"selected required case is {status}: {feature}"
+    payload = {
+        "status": "failed" if issue else "passed",
+        "command": "verify",
+        "verificationPurpose": "core-diagnostic",
+        "environment": env_name,
+        "target": target_name,
+        "deploymentInstance": str(getattr(args, "deployment_instance", "") or ""),
+        "dataMode": str(getattr(args, "data_mode", "") or ""),
+        "releaseId": str(getattr(args, "data_release_id", "") or ""),
+        "manifestDigest": str(getattr(args, "data_manifest_digest", "") or ""),
+        "selectedFeatures": list(features),
+        "caseResults": cases,
+        "nonPromotable": True,
+        "releaseEligibility": "GATE_BLOCK",
+        "readinessWritten": False,
+        "issues": [issue] if issue else [],
+    }
+    _stackctl.write_json(report_dir / "core-diagnostic-report.json", payload)
+    return {
+        "exitCode": 2 if issue else 0,
+        "summary": "stackctl core diagnostic is GATE_BLOCK" if issue else "stackctl core diagnostic completed (non-promotable)",
+        "details": [issue] if issue else [f"passed {len(features)} selected cases"],
+        "reportDir": _stackctl.relpath(report_dir),
+        "nonPromotable": True,
+        "releaseEligibility": "GATE_BLOCK",
+        "readinessWritten": False,
+    }
 
 
 def command_verify(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
+
+    if str(getattr(args, "verification_purpose", "formal-readiness")) == "core-diagnostic":
+        return _command_core_diagnostic(args)
 
     service_name = str(getattr(args, "service", "") or "").strip()
     if service_name:

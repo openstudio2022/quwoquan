@@ -45,6 +45,28 @@ class StackctlGammaOperationLockContractTest(
                 }
             }
         }
+        sms = mock.Mock(
+            environment={
+                "INTEGRATION_SMS_ENDPOINT": "https://sms-provider-substitute:9443/v1/provider/sms/send",
+                "INTEGRATION_SMS_SUBSTITUTE_CA_FILE": "/run/secrets/sms-provider-substitute/ca.crt",
+                "QWQ_COMPOSE_SMS_SUBSTITUTE_CA_FILE": "/protected/sms-ca.crt",
+                "QWQ_COMPOSE_SMS_SUBSTITUTE_TLS_CERT_FILE": "/protected/sms.crt",
+                "QWQ_COMPOSE_SMS_SUBSTITUTE_TLS_KEY_FILE": "/protected/sms.key",
+                "QWQ_COMPOSE_SMS_SUBSTITUTE_PORT": "17330",
+            }
+        )
+        protocol = mock.Mock(environment={
+            "INTEGRATION_PUSH_SUBSTITUTE_ENDPOINT": "https://provider-protocol-substitute:18089/v1/provider/push/send",
+            "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_PORT": "17360",
+            "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_CA_FILE": "/protected/provider-ca.crt",
+            "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_CERT_FILE": "/protected/provider.crt",
+            "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_KEY_FILE": "/protected/provider.key",
+        })
+        provider_config = mock.Mock()
+        provider_config.compile_provider_config.return_value = {"exitCode": 0}
+        provider_config.project_provider_runtime_env_file.return_value = Path(
+            "/protected/provider-runtime.env"
+        )
         for workload in ("content-release", "content-commercial"):
             environment: dict[str, str] = {}
             with self.subTest(workload=workload):
@@ -73,7 +95,26 @@ class StackctlGammaOperationLockContractTest(
                     mock.patch.object(
                         stackctl,
                         "profile_ports",
-                        return_value={"object-storage-edge": 17100},
+                        return_value={
+                            "object-storage-edge": 17100,
+                            "sms-provider-substitute": 17330,
+                            "provider-protocol-substitute": 17360,
+                        },
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "prepare_local_sms_provider_substitute",
+                        return_value=sms,
+                    ) as prepare_sms,
+                    mock.patch.object(
+                        stackctl,
+                        "prepare_local_provider_protocol_substitute",
+                        return_value=protocol,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "_provider_config",
+                        return_value=provider_config,
                     ),
                     mock.patch.object(stackctl, "_sync_object_storage_binding_aliases"),
                     mock.patch.object(
@@ -96,6 +137,23 @@ class StackctlGammaOperationLockContractTest(
                     "/protected/ca.crt",
                 )
                 bind_external.assert_not_called()
+                prepare_sms.assert_called_once_with(
+                    "alpha", "alpha-local", port=17330
+                )
+                self.assertEqual(
+                    environment["INTEGRATION_SMS_ENDPOINT"],
+                    "https://sms-provider-substitute:9443/v1/provider/sms/send",
+                )
+                self.assertEqual(
+                    environment["INTEGRATION_SMS_SUBSTITUTE_CA_FILE"],
+                    "/run/secrets/sms-provider-substitute/ca.crt",
+                )
+                self.assertEqual(
+                    environment["QWQ_PROVIDER_RUNTIME_SECRET_ENV_FILE"],
+                    "/protected/provider-runtime.env",
+                )
+                self.assertNotIn("INTEGRATION_SMS_TOKEN", environment)
+                prepare_sms.reset_mock()
 
     def test_alpha_full_workload_requires_fixed_package_without_reading_run_state(
         self,

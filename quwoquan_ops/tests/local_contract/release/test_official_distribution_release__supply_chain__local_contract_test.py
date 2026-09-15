@@ -404,6 +404,26 @@ class OfficialDistributionReleaseTest(unittest.TestCase):
                     _deploy("web", authority, distribution)
                 self.assertFalse(distribution.exists())
 
+    # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-004
+    def test_service_scope_or_missing_scope_cannot_authorize_distribution(self) -> None:
+        for targets in (None, ["service"]):
+            with self.subTest(targets=targets), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                authority = _official_graph(root / "authority",
+                    web_manifest=_web_package(root / "web", build="18201"),
+                    android_manifest=_android_package(root / "android", build="18201"))
+                path = authority["graph_root"] / authority["stable_ref"]["ref"]
+                stable = json.loads(path.read_bytes())
+                stable.pop("admissionId")
+                if targets is None: stable.pop("deliveryTargets")
+                else: stable["deliveryTargets"] = targets
+                stable["admissionId"] = _digest_object(stable)
+                _write_fact(path, stable)
+                authority["stable_ref"]["digest"] = _sha256_prefixed(path)
+                with self.assertRaisesRegex(OfficialDistributionReleaseError, "deliveryTargets"):
+                    _deploy("web", authority, root / "origin")
+                self.assertFalse((root / "origin").exists())
+
     def test_semantic_graph_and_factory_drift_block_before_first_write(self) -> None:
         cases: tuple[tuple[str, Callable[[dict[str, Any]], None], str], ...] = (
             ("source", lambda authority: _mutate_app_material(authority, "sourceGitSha", "f" * 40), "source"),
@@ -631,6 +651,7 @@ def _official_graph(
 
     request_body: dict[str, Any] = {
         "schema": "quwoquan_ops.release_qualification_request.v1",
+        "deliveryTargets": ["app", "service"],
         "rcTagAdmission": {"ref": RC_OCI_REF, "digest": "sha256:" + "6" * 64},
         "tagName": "v1.8.2-rc.1",
         "sourceGitSha": source_git_sha,
@@ -673,6 +694,7 @@ def _official_graph(
     }
     material_body: dict[str, Any] = {
         "schema": "quwoquan_ops.candidate_material_manifest.v1",
+        "deliveryTargets": ["app", "service"],
         "qualificationRequest": request_ref,
         "qualificationRequestOciRef": REQUEST_OCI_REF,
         "sourceGitSha": source_git_sha,
@@ -701,6 +723,7 @@ def _official_graph(
     material_ref = _write_exact(graph_root, "qualification/material.json", material_body)
     qualification_body: dict[str, Any] = {
         "schema": "quwoquan_ops.qualification_fact.v1",
+        "deliveryTargets": ["app", "service"],
         "decision": "qualified",
         "qualificationRequest": request_ref,
         "candidateMaterialManifest": material_ref,
@@ -716,6 +739,7 @@ def _official_graph(
     qualification_ref = _write_exact(graph_root, "qualification/fact.json", qualification_body)
     stable_body: dict[str, Any] = {
         "schema": "quwoquan_ops.release_tag_admission_fact.v1",
+        "deliveryTargets": ["app", "service"],
         "decision": "admitted",
         "tagKind": "stable",
         "tagName": "v1.8.2",

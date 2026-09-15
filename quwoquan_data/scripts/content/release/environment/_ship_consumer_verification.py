@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.release.environment._ship_operation_dependencies import (
+from quwoquan_ops.cli.lib.content_release_environment._ship_operation_dependencies import (
     ShipOperationDependencies,
 )
 from content.release.environment.baseline_api_verification import (
@@ -30,7 +30,7 @@ from content.release.environment.run_evidence import (
 from content.release.environment.topology import EnvironmentReleaseMode
 from content.release.model import ReleaseKind
 from core.control_types import ReleaseRunKind, ReleaseRunStatus
-from core.io import read_json
+from core.io import read_json, write_json
 from core.release_layout import payload_file
 _SENSITIVE_RECEIPT_ASSIGNMENT = re.compile(
     r"(?i)\b(authorization|access[_-]?token|refresh[_-]?token|token|password|"
@@ -41,6 +41,75 @@ _SENSITIVE_RECEIPT_BEARER = re.compile(r"(?i)\bBearer\s+[^\s,;]+")
 _SENSITIVE_RECEIPT_URL_CREDENTIALS = re.compile(
     r"(?i)\b([a-z][a-z0-9+.-]*://)[^/@\s:]+:[^/@\s]+@"
 )
+
+_CORE_DIAGNOSTIC_FEATURES = (
+    "identity",
+    "feed-detail",
+    "search-recommendation",
+    "image-video-range",
+    "post-write-readback",
+    "chat-write-readback",
+)
+_DATA_DIAGNOSTIC_FEATURES = frozenset(_CORE_DIAGNOSTIC_FEATURES[:4])
+
+
+def _core_diagnostic_features(args: argparse.Namespace) -> tuple[str, ...]:
+    selected = tuple(dict.fromkeys(getattr(args, "feature", ()) or ()))
+    unknown = sorted(set(selected) - set(_CORE_DIAGNOSTIC_FEATURES))
+    if unknown:
+        raise SystemExit(f"[ship] GATE_BLOCK unknown core diagnostic features: {unknown}")
+    return selected or tuple(_DATA_DIAGNOSTIC_FEATURES)
+
+
+def _assert_core_diagnostic_scope(
+    args: argparse.Namespace, *, target: Any
+) -> tuple[str, ...]:
+    selected = _core_diagnostic_features(args)
+    env = str(args.env).strip()
+    if env not in {"gamma", "prod"}:
+        raise SystemExit("[ship] GATE_BLOCK core diagnostic only supports gamma or prod")
+    if env == "gamma" and str(target.target_name) != "gamma-local":
+        raise SystemExit("[ship] GATE_BLOCK gamma core diagnostic requires gamma-local")
+    if env == "prod" and (
+        str(target.target_name) != "prod-hosted"
+        or str(getattr(args, "deployment_instance", "") or "") != "prevalidate"
+        or str(getattr(args, "data_mode", "") or "") != "isolated"
+    ):
+        raise SystemExit(
+            "[ship] GATE_BLOCK prod core diagnostic requires "
+            "prod-hosted prevalidate with isolated data mode"
+        )
+    return selected
+
+
+def _diagnostic_case_results(
+    selected: tuple[str, ...], *, post_report: Mapping[str, Any] | None
+) -> list[dict[str, Any]]:
+    statuses = {name: "not_executed" for name in _CORE_DIAGNOSTIC_FEATURES}
+    details = {name: "not selected" for name in _CORE_DIAGNOSTIC_FEATURES}
+    if post_report is not None:
+        creators = list(post_report.get("creators") or [])
+        posts = list(post_report.get("posts") or [])
+        feeds = list(post_report.get("feedQueries") or [])
+        searches = list(post_report.get("searchQueries") or [])
+        probes = [probe for post in posts for probe in list(post.get("mediaProbes") or [])]
+        checks = {
+            "identity": bool(post_report.get("guestLogin")) and bool(creators),
+            "feed-detail": bool(posts) and bool(feeds),
+            "search-recommendation": bool(searches)
+                and any(row.get("name") == "homepage_recommend" for row in feeds),
+            "image-video-range": bool(probes),
+        }
+        for feature in selected:
+            if feature in _DATA_DIAGNOSTIC_FEATURES:
+                statuses[feature] = "passed" if checks[feature] else "failed"
+                details[feature] = "current Data consumer verifier evidence" if checks[feature] else "required Data consumer case is missing"
+            else:
+                details[feature] = "Data does not own account-bound write operation; Ops/App must execute and aggregate"
+    return [
+        {"feature": name, "status": statuses[name], "detail": details[name]}
+        for name in _CORE_DIAGNOSTIC_FEATURES
+    ]
 
 
 def _failure_receipt_error(error: Exception) -> str:
@@ -79,7 +148,23 @@ def _verify_release_consumers(
     release_id = str(admission.release_id).strip()
     release, contract = admission.release, admission.contract
     env = str(args.env).strip()
-    target = dependencies.resolve_environment_release_target(env)
+    candidate_root = getattr(args, "runtime_candidate_root", None)
+    if candidate_root is None:
+        target = dependencies.resolve_environment_release_target(env)
+    else:
+        target = dependencies.resolve_environment_release_target(
+            env, candidate_root=candidate_root
+        )
+        validator = dependencies.assert_environment_release_target_unchanged
+        if validator is None:
+            raise SystemExit(
+                "[ship] GATE_BLOCK runtime candidate binding validator is missing"
+            )
+        validator(target)
+    diagnostic = str(getattr(args, "verification_purpose", "formal-readiness")) == "core-diagnostic"
+    diagnostic_features = (
+        _assert_core_diagnostic_scope(args, target=target) if diagnostic else ()
+    )
     if target.mode is EnvironmentReleaseMode.PROJECTION_ONLY:
         raise SystemExit(
             f"[ship] {env} is projection-only and has no imported homepage API "
@@ -109,6 +194,18 @@ def _verify_release_consumers(
         label="activation import_run_id",
     )
     apply_run = dependencies.run_root(env, release_id, apply_run_id)
+    apply_result = read_environment_result(
+        apply_run / "result.json",
+        expected={
+            "environment": env,
+            "runId": apply_run_id,
+            "releaseId": release_id,
+            "manifestDigest": admission.manifest_digest,
+            **admission.result_envelope(),
+        },
+        required_status=ReleaseRunStatus.PREPARED,
+        label="prepared apply predecessor result",
+    )
     content_evidence: dict[str, Any] = {}
     for ref_field, digest_field, schema in (
         (
@@ -262,7 +359,7 @@ def _verify_release_consumers(
 
         if release_kind is ReleaseKind.EMPTY_BASELINE:
             failed_stage = "empty_baseline_import_binding"
-            if import_result.get("homepageVerificationCasesRef"):
+            if apply_result.get("homepageVerificationCasesRef"):
                 raise SystemExit(
                     "[ship] empty baseline import must not bind positive homepage cases"
                 )
@@ -318,6 +415,8 @@ def _verify_release_consumers(
                     api_base_url=target.api_base_url,
                     media_delivery_base_url=target.media_delivery_base_url,
                     ssl_cafile=target.ssl_cafile,
+                    include_premium_stream=not diagnostic,
+                    validate_report=not diagnostic,
                 )
             except PostApiVerificationError as exc:
                 raise SystemExit(
@@ -325,19 +424,27 @@ def _verify_release_consumers(
                 ) from exc
 
         failed_stage = "homepage_verification_cases"
-        case_manifest = apply_run / "homepage_verification_cases.json"
-        if not case_manifest.is_file():
-            raise SystemExit(
-                "[ship] homepage verification cases missing from import run: "
-                f"{case_manifest}"
-            )
+        case_ref = str(apply_result.get("homepageVerificationCasesRef") or "")
+        case_relative = Path(case_ref)
+        expected_case_relative = (
+            apply_run / "homepage_verification_cases.json"
+        ).relative_to(dependencies.output_root)
         if (
-            import_result.get("homepageVerificationCasesRef")
-            != case_manifest.relative_to(dependencies.output_root).as_posix()
+            not case_ref
+            or case_relative.is_absolute()
+            or ".." in case_relative.parts
+            or "\\" in case_ref
+            or case_relative != expected_case_relative
         ):
             raise SystemExit(
-                "[ship] import run does not bind a completed homepage verification "
-                "case manifest"
+                "[ship] prepared apply result does not bind the canonical "
+                "output-relative homepage verification case manifest"
+            )
+        case_manifest = dependencies.output_root / case_relative
+        if not case_manifest.is_file():
+            raise SystemExit(
+                "[ship] homepage verification cases missing from prepared apply run: "
+                f"{case_manifest}"
             )
         failed_stage = "homepage_api_verification"
         try:
@@ -356,7 +463,50 @@ def _verify_release_consumers(
             ) from exc
 
         readiness_report: Path | None = None
-        if post_report is not None:
+        diagnostic_report: Path | None = None
+        diagnostic_cases: list[dict[str, Any]] = []
+        if diagnostic:
+            failed_stage = "core_diagnostic_report"
+            if post_report is None:
+                raise SystemExit("[ship] core diagnostic requires release-bound post cases")
+            diagnostic_payload = read_json(post_report)
+            diagnostic_cases = _diagnostic_case_results(
+                diagnostic_features, post_report=diagnostic_payload
+            )
+            missing = [
+                row["feature"]
+                for row in diagnostic_cases
+                if row["feature"] in diagnostic_features
+                and row["status"] != "passed"
+                and row["feature"] in _DATA_DIAGNOSTIC_FEATURES
+            ]
+            diagnostic_report = run / "core-diagnostic-report.json"
+            write_json(
+                diagnostic_report,
+                {
+                    "schema": "quwoquan_data.core_diagnostic_report",
+                    "environment": env,
+                    "releaseId": release_id,
+                    "manifestDigest": admission.manifest_digest,
+                    "runId": run_id,
+                    "activateRunId": import_run_id,
+                    "applyRunId": apply_run_id,
+                    "runtimeTarget": str(target.target_name),
+                    "bindingDigest": str(target.binding_digest),
+                    "bindingArtifactDigest": str(target.binding_artifact_digest),
+                    "verificationPurpose": "core-diagnostic",
+                    "selectedFeatures": list(diagnostic_features),
+                    "nonPromotable": True,
+                    "releaseEligibility": "GATE_BLOCK",
+                    "readinessWritten": False,
+                    "caseResults": diagnostic_cases,
+                },
+            )
+            if missing:
+                raise SystemExit(
+                    f"[ship] core diagnostic required cases failed: {missing}"
+                )
+        if post_report is not None and not diagnostic:
             failed_stage = "previous_environment_readiness"
             previous_readiness_ref = str(
                 getattr(args, "previous_environment_readiness", "") or ""

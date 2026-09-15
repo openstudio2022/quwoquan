@@ -1,5 +1,12 @@
 description: 该自治边界的运行配置定义与默认值；环境只维护差异和引用。
 configs:
+- key: sys.product-ops-service.content_source.base_url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: canonical topology注入CONTENT_SERVICE_BASE_URL，仅调用Content候选公开query。
 - key: sys.product-ops-service.app_release.public_origin
   type: string
   scope: workload

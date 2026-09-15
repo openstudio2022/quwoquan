@@ -43,6 +43,78 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/search/release-preparations:prepare:
+        post:
+            operationId: PrepareSearchRelease
+            x-contract-operation-id: search.search_release_preparation.PrepareSearchRelease
+            x-object-id: search.search_release_preparation
+            x-actor: none
+            x-application:
+                kind: command
+                facet: SearchReleasePreparationCommandFacet
+                method: prepare
+                aggregateOwner: SearchReleasePreparation
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PrepareSearchReleaseCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SearchReleasePreparationView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/search/release-preparations:query:
+        post:
+            operationId: ReadSearchReleasePreparation
+            x-contract-operation-id: search.search_release_preparation.ReadSearchReleasePreparation
+            x-object-id: search.search_release_preparation
+            x-actor: none
+            x-application:
+                kind: query
+                facet: SearchReleasePreparationQueryFacade
+                method: read
+                reader: SearchReleasePreparationReader
+                slice: SearchReleasePreparationView
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReadSearchReleasePreparationQuery'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SearchReleasePreparationView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /search:
         post:
             operationId: Search
@@ -307,6 +379,16 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CanonicalSearchQuery
             x-contract-placeholder: true
+        PrepareSearchReleaseCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PrepareSearchReleaseCommand
+            x-contract-placeholder: true
+        ReadSearchReleasePreparationQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReadSearchReleasePreparationQuery
+            x-contract-placeholder: true
         RecentSearchEntrySlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -331,6 +413,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SearchAccountClosureDeadLetterRecoveryRequest
+            x-contract-placeholder: true
+        SearchReleasePreparationView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SearchReleasePreparationView
             x-contract-placeholder: true
         SearchResponseView:
             type: object

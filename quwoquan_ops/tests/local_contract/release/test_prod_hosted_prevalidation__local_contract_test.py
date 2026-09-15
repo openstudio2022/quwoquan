@@ -426,11 +426,8 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
     def test_projection_is_pinned_empty_and_excludes_external_providers(self) -> None:
         spec, projections = prevalidate.load_projection()
         self.assertFalse(spec["promotable"])
-        self.assertEqual(
-            projections["service"].image_only_services,
-            ("integration-service",),
-        )
-        self.assertNotIn("integration-service", projections["service"].startup_services)
+        self.assertEqual(projections["service"].image_only_services, ())
+        self.assertIn("integration-service", projections["service"].startup_services)
         self.assertEqual(
             set(projections["edge"].startup_services),
             {"realtime-gateway", "rtc-service"},

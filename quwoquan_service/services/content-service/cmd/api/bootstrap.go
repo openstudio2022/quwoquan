@@ -44,6 +44,7 @@ func NewModule() (*servicekit.Module, error) {
 	return servicekit.Bootstrap(serviceName, servicekit.BootstrapSpec[config]{
 		OperationDescriptors: operationsecurity.ForDomain("content"),
 		AuthorityScopes:      []string{accountSecurityReadScope},
+		PreAdmissionPaths:    []string{"/internal/content/active-release-fence"},
 		RetiredEnvKeys:       retiredEnvKeys(),
 		ValidateConfig:       validateContentConfig,
 		OperationGuard:       runtime.guardOperations,

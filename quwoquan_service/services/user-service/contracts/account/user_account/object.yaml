@@ -70,6 +70,10 @@ assistant_access:
     mode: none
     scopes: []
 business_rules:
+- Creator source query只返回ReleaseCandidateBinding绑定的源快照，交由三类对象统一Search准备协议；不暴露第二Creator准备/就绪流程，旧客户端和wire必须同步升级，不能默认补字段或使用旧completed。
+- user.profile 的唯一公开契约 owner 不等于所有来源都是登录账户；ReadCreatorSearchCandidate 通过同域 Creator application reader 读取 exact verified candidate，绝不写本对象、Persona、PG outbox 或账户 command receipt。
+- 普通账户 UserProfileSearchEligible 与 UserProfileSearchProjectionRequested 不变；Creator 不通过该事件投递，资格只来自 verified candidate、公开字段和身份闭包，不把 Creator OR 入 accountState 判据。
+- ReadCreatorSearchCandidate 必须拒绝 Creator 与普通账户/Persona 的公开身份碰撞、重复 Creator/persona/author 映射及不完整头像绑定，不按 ID 前缀推导来源，不以公开 active 查询回退候选。
 - 账号根身份在存储 userId 与 wire ownerId/accountId 中只使用 `uo_<origin>_<4hex>_<26 lowercase Crockford>`；4hex 必须等于 origin 与 entropy 的 canonical routing hash 槽位，禁止版本段、别名格式或宽松解析
 - accountState、identityOrigin 与 logicalShard 仅由账号生命周期命令或受信事件修改
 - UserAccount 不保存可写公开 Persona 资料、凭证 secret、Session token、设备 token 或设置值；公开资料字段只作为 active Persona outbox 的只读投影

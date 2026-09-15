@@ -404,7 +404,7 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
         self.assertIn("bootstrap_experiment_policy_owner() {", source)
         # bootstrap 必须在全栈 compose up 之前执行。
         bootstrap_call_index = source.index(
-            'if [[ "$PRODUCT_OPS_REQUIRED" == "1" ]]; then\n'
+            'if [[ "$QWQ_LOCAL_RELEASE_TARGET" == "gamma-local" || "$PRODUCT_OPS_REQUIRED" == "1" ]]; then\n'
             "    if ! bootstrap_experiment_policy_owner; then"
         )
         full_up_index = source.index(
@@ -413,7 +413,7 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
         self.assertLess(bootstrap_call_index, full_up_index)
         bootstrap_block = source.split("bootstrap_experiment_policy_owner() {", 1)[1]
         bootstrap_block = bootstrap_block.split(
-            'if [[ "$PRODUCT_OPS_REQUIRED" == "1" ]]; then', 1
+            '  if [[ "$QWQ_LOCAL_RELEASE_TARGET" == "gamma-local" || "$PRODUCT_OPS_REQUIRED" == "1" ]]; then', 1
         )[0]
         # 投影后 product-ops 的启动依赖是 service-core healthy（死锁环），
         # bootstrap 必须以 --no-deps 独立启动 owner。
@@ -468,7 +468,11 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
         # healthy 的 Postgres/Redis，以及 Elasticsearch（telemetry ILM/index
         # 初始化重试耗尽后 exit 1）。基础设施集必须一次补齐。
         self.assertIn(
-            "for bootstrap_service in service-core product-ops-service postgres-init; do",
+            'local -a required_bootstrap_services=(service-core postgres-init)',
+            bootstrap_block,
+        )
+        self.assertIn(
+            'required_bootstrap_services+=(product-ops-service)',
             bootstrap_block,
         )
         self.assertIn(

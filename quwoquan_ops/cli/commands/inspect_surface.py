@@ -60,6 +60,7 @@ def register_parser(
             "security",
             "runtime",
             "release",
+            "prior",
             "content",
             "all",
         ],
@@ -77,6 +78,7 @@ def register_parser(
             "security",
             "runtime",
             "release",
+            "prior",
             "content",
             "all",
         ],
@@ -136,6 +138,31 @@ def _command_content_inventory(args: argparse.Namespace) -> dict[str, Any]:
 
 def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
+
+    if args.scope == "prior":
+        if (args.target != "prod-hosted" or getattr(args, "ssh_host", "")
+                or getattr(args, "host_id", "")):
+            return {"exitCode": 2, "summary": "GATE_BLOCK: prior observation requires canonical prod-hosted authority"}
+        try:
+            observation = _stackctl._run_hosted_release_ledger(
+                service=_stackctl.PROD_RELEASE_UNIT, action="prior-observe",
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            return {"exitCode": 2, "summary": f"GATE_BLOCK: prior observation failed: {error}"}
+        return {
+            "exitCode": 2 if observation["priorState"] == "unknown" else 0,
+            "summary": "read-only prior observation; not a first-release admission",
+            "priorObservation": observation,
+            "targetAbsence": {
+                "admissionEligible": False,
+                "missingAdapters": [
+                    "complete_inventory_route_inflight_readback_under_one_target_fence",
+                    "fence_handoff_to_activation_expected_generation_cas",
+                    "consumed_human_recovery_scope_and_recovery_executor",
+                ],
+                "reason": "ledger shared lock ends with observation; it is not a target execution fence",
+            },
+        }
 
     # 内容只读盘点绝不进入 availability/candidate 聚合，其内部可能隐式 derive。
     if args.scope == "content":

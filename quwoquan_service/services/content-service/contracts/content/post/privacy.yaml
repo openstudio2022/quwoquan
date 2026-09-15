@@ -54,6 +54,12 @@ app_log_policy:
   app_log: mask
   mask_strategy: strip_detail
   description: 设备信息脱敏，不记录完整型号/版本
+# Post内部安全记录不继承下方原Post正文的retention_days；只保留最小不可复活摘要。
+# PostSafetyState禁止原postId/authorId/title/body/location/media URL，objectDigest使用独立受管HMAC并仍按可链接内部数据治理，不能宣称哈希自动匿名。
+# 安全密钥恢复及用途隔离由部署authority保证，禁止借JWT密钥；不可证明时阻断初始化/查询/activation。
+# terminated否定不设TTL，覆盖所有保留候选、outbox重放与备份恢复周期；恢复安全水位前业务数据不得公开。
+# 数据主体要求清理时live/candidate快照、publication/outbox、派生Search/Rec与媒体字节仍须按合法政策清理，不能因immutable保留PII或改摘要冒充原候选。
+# 30天DeletedPostTombstone只拥有410窗口，不改变其独立保留/授权；主体关闭HMAC标记不挪作Post安全状态。
 data_lifecycle:
   retention_days: 1825
   deletion_on_user_request: true

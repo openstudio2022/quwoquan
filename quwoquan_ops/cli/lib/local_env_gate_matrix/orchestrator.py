@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any
 
 # 测试通过 mock.patch("...local_env_gate_matrix._run_commit_gate") 与
@@ -11,7 +12,7 @@ from typing import Any
 import quwoquan_ops.cli.lib.local_env_gate_matrix as _matrix_pkg
 from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import (
     _acceptance_lease_event,
-    _data_cli_runner,
+    _ops_release_runner,
     _data_readiness_path,
     _data_run_ids,
     _homepage_release_evidence,
@@ -81,7 +82,7 @@ def _run_local_env_gate_matrix(
     android_physical_device: str = "",
     ios_physical_device: str = "",
     device_profile: str = DEVICE_PROFILE_FULL,
-    data_fn: DataRunner = _data_cli_runner,
+    data_fn: DataRunner = _ops_release_runner,
     execution_class: str = "live",
     matrix_run_id: str,
 ) -> dict[str, Any]:
@@ -482,6 +483,7 @@ def _run_local_env_gate_matrix(
                 phases=phases, block=block, target=target, environment=env_name,
                 candidate=candidate_release, rollback=rollback_release,
                 data_ids=data_ids, data_fn=data_fn,
+                runtime_candidate_root=Path(block["packageIdentity"]["candidateDir"]),
                 previous_readiness=previous_readiness,
             )
             if overall_exit == 0:

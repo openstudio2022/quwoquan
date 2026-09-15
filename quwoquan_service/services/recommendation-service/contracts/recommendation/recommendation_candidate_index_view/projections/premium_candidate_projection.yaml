@@ -2,7 +2,7 @@ read_model: RecommendationPremiumCandidateProjection
 description: >-
   Product Ops 的精选准入决定在 RecommendationCandidateIndexView 内形成的唯一
   premium 候选投影。排序窗口只读取本服务候选及此投影，不同步调用 Product Ops、
-  Content、质量评分或训练任务。
+  Content、质量评分或训练任务。此contentId索引仅承载非Data普通准入；Data由同对象RecommendationReleasePremiumProjection按完整tuple派生，不dual-read普通池作为Data fallback。
 storage_backend: mongodb
 collection: rm_premium_pool
 source_entities:

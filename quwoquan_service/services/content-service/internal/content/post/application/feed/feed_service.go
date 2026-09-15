@@ -630,6 +630,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 				feedRequestID,
 				recommendationContinuation,
 				limit-len(views),
+				activeSupply,
 			)
 			if rankedErr != nil {
 				terminalStage = rtrec.FailureStageRankedWindowUnavailable

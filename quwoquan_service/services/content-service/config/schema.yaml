@@ -1,5 +1,47 @@
 description: 该自治边界的运行配置定义与默认值；环境只维护差异和引用。
 configs:
+- key: sys.content-service.post_safety.hmac_secret_ref
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
+  description: Post专用密钥相对file-ref，以post_safety.material_root为唯一受管只读根；仅secrets/post-safety.key形式的locator，不接受内联材料/env值或任意绝对路径。由环境owner显式创建至少32随机字节raw文件，resolver逐级openat+O_NOFOLLOW验证目录/文件身份、常规文件、link数1、owner及0700目录/0600文件，无缺失创建/补键；读后重验inode/size防替换。服务只读挂载，值不入日志/制品/版本控制。与JWT及账号关闭密钥隔离，HMAC challenge核对fact的hmacKeyIdentity；恢复保持原键，不静默轮换。
+- key: sys.content-service.post_safety.recovery_evidence_ref
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: PostSafetyRuntimeFact相对file-ref，新建/恢复共用此唯一现役键，无历史别名；在post_safety.material_root内只读解析，exact bytes摘要必须等于PostSafetyRuntimeCurrentBinding.fact.digest且ref相同。fact来源必须具备环境owner写权和实际创建/恢复证据，填写字符串不能启用；按fields/object合同验证成功即允许ordinary原合法创建，不依赖Data source/proof/GenerationProtection。未知恢复状态仍拒绝所有Post写。
+- key: sys.content-service.post_safety.material_root
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: 受管target专用仓外材料目录在Content容器中的只读挂载点，配置来自当前deployment candidate/startup材料而非请求。host侧位于现役deployment work root的target secrets/evidence受保护子树，不能位于可删除.qwq_output或业务备份；producer独占写，service只读。resolver逐级拒绝symlink和非受信owner/可被其他主体写入的目录，目标私有根0700；无默认home/temp路径。
+- key: sys.content-service.post_safety.current_binding_ref
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: material_root内PostSafetyRuntimeCurrentBinding相对file-ref，由环境owner与现役target启动材料一起原子发布并只读挂载。核对当前candidate/data-plane/resource/namespace/真实实例/generation/key identity，不能从待验fact自行推expected值或只信旧startup审计receipt；所有写/read admission校验当前绑定仍相同，切换前停止旧runtime写权，绑定不可读或漂移立即not-ready。
+- key: sys.content-service.creator_search.binding_digest
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: 四环境从candidate-owned data-plane-binding.json验证后注入CREATOR_SEARCH_BINDING_DIGEST，直接使用原bindingDigest；与Search同值，无默认或人工摘要，缺失阻断准备装配。
+- key: sys.content-service.creator_search.physical_namespace
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: CREATOR_SEARCH_PHYSICAL_NAMESPACE由同一制品的search.objects唯一namespace派生；只读部署身份，不作为active flag或请求selector。
 - key: sys.content-service.user_account_security_authority.base_url
   type: string
   scope: workload
@@ -462,6 +504,13 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
+- key: sys.content-service.redis.general.username
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: 当前Redis scene ACL用户名，原样传AUTH，空值仅为明确default用户语义；named认证不得回落default。无首尾空白且不可用于memory，受管source绑定注入，与同scene连接及密码整体解析。
 - key: sys.content-service.redis.general.password
   type: string
   scope: workload
@@ -538,6 +587,13 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
+- key: sys.content-service.redis.realtime.username
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: realtime scene独立ACL用户名；空值为明确default语义，named失败不回落，用户名不可使该段误判未声明。
 - key: sys.content-service.redis.realtime.password
   type: string
   scope: workload
@@ -613,6 +669,13 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
+- key: sys.content-service.redis.rec.username
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  description: rec scene独立ACL用户名；空值为明确default语义，named失败不回落，用户名不可使该段误判未声明。
 - key: sys.content-service.redis.rec.password
   type: string
   scope: workload

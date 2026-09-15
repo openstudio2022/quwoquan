@@ -18,6 +18,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	rtsearch "quwoquan_service/runtime/search"
+	contentpublic "quwoquan_service/services/content-service/internal/content/post/application/public"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
@@ -372,6 +374,9 @@ func StageImportedPostRelease(
 			if err != nil || mediaDigest != existing.MediaClosureDigest {
 				return nil, fmt.Errorf("GATE_BLOCK: candidate media closure digest drift")
 			}
+			if err := checkCandidateSafety(txCtx, database, rtsearch.ReleaseCandidateBinding{Environment: environment, SourceOwner: opts.SourceOwner, ReleaseID: opts.ReleaseID, ManifestDigest: opts.ManifestDigest}, "", false); err != nil {
+				return nil, err
+			}
 			candidateResult.Replayed = true
 			result = candidateResult
 			return nil, nil
@@ -413,6 +418,13 @@ func StageImportedPostRelease(
 			txCtx, stateColl, candidatePosts, candidateOutbox, candidateMedia,
 			environment, opts, requestedAt, candidateResult,
 		); err != nil {
+			return nil, err
+		}
+		source, err := NewPostCandidateReader(database, nil).readCandidateSource(txCtx, rtsearch.ReleaseCandidateBinding{Environment: environment, SourceOwner: opts.SourceOwner, ReleaseID: opts.ReleaseID, ManifestDigest: opts.ManifestDigest})
+		if err != nil {
+			return nil, err
+		}
+		if _, err = sealCandidateSafety(txCtx, database, source); err != nil {
 			return nil, err
 		}
 		for _, stage := range []struct{ name, checkpoint string }{
@@ -656,6 +668,14 @@ func ActivateImportedPostRelease(
 	if err := validateExpectedActiveRelease(expected); err != nil {
 		return ReleaseActivationResult{}, err
 	}
+	if err := contentpublic.VerifyReleaseQueryActivation(ctx, rtsearch.ReleaseCandidateBinding{Environment: environment, SourceOwner: target.SourceOwner, ReleaseID: target.ReleaseID, ManifestDigest: target.ManifestDigest}); err != nil {
+		return ReleaseActivationResult{}, err
+	}
+	return activateImportedPostReleaseTransaction(ctx, database, environment, target, expected, activatedAt)
+}
+
+// 私有事务核心；仅公开入口完成全部admission后可调用，不暴露skipAdmission。
+func activateImportedPostReleaseTransaction(ctx context.Context, database *mongo.Database, environment string, target ImportedReleaseBinding, expected ExpectedActiveRelease, activatedAt time.Time) (ReleaseActivationResult, error) {
 	activatedAt = activatedAt.UTC().Truncate(time.Millisecond)
 	if activatedAt.IsZero() {
 		activatedAt = time.Now().UTC().Truncate(time.Millisecond)
@@ -710,6 +730,9 @@ func ActivateImportedPostRelease(
 		); err != nil {
 			return nil, err
 		}
+		if err := checkCandidateSafety(txCtx, database, rtsearch.ReleaseCandidateBinding{Environment: environment, SourceOwner: candidate.SourceOwner, ReleaseID: candidate.ReleaseID, ManifestDigest: candidate.ManifestDigest}, "", true); err != nil {
+			return nil, err
+		}
 		current, err := readActivePointerInTransaction(txCtx, state, environment, candidate.SourceOwner)
 		if err != nil {
 			return nil, err
@@ -722,7 +745,7 @@ func ActivateImportedPostRelease(
 					return nil, err
 				}
 				if err := validateLiveReleaseClosure(
-					txCtx, livePosts, liveOutbox, liveMedia, candidate, current.ProjectionVersion,
+					txCtx, livePosts, liveOutbox, liveMedia, candidate, current.Revision,
 					candidate.Mode == "sync" && candidate.DeletePolicy == "tombstone",
 				); err != nil {
 					return nil, err
@@ -746,7 +769,7 @@ func ActivateImportedPostRelease(
 		); err != nil {
 			return nil, err
 		}
-		materializedPosts, targetPosts, err := materializeCandidatePosts(
+		materializedPosts, _, err := materializeCandidatePosts(
 			txCtx, candidatePosts, livePosts, candidate, activationVersion,
 		)
 		if err != nil {
@@ -767,30 +790,15 @@ func ActivateImportedPostRelease(
 		if err != nil {
 			return nil, err
 		}
+		// release退出不等于MediaAsset权威删除；保留可rollback的媒体处理事实。
+		// 访问资格服从Content fence，安全删除/purge由独立owner命令处理。
 		removedMedia := int64(0)
-		if candidate.Mode == "sync" && candidate.DeletePolicy == "tombstone" {
-			removedMedia, err = tombstoneMissingLiveMedia(
-				txCtx, liveMedia, candidate, activatedAt,
-			)
-			if err != nil {
-				return nil, err
-			}
-		}
-		transitionOpts := ImportOptions{
-			ReleaseID: candidate.ReleaseID, ManifestDigest: candidate.ManifestDigest,
-			ReleaseKind: candidate.ReleaseKind,
-			SourceOwner: candidate.SourceOwner, Mode: candidate.Mode,
-			DeletePolicy: candidate.DeletePolicy, ProjectionVersion: activationVersion,
-		}
-		candidateEvents, err := BuildActivationPostLifecycleEvents(
-			targetPosts, removedSnapshots, transitionOpts, activatedAt,
-			current, current.Revision+1,
-		)
+		after := ActiveReleaseBinding{Found: true, Environment: environment, SourceOwner: candidate.SourceOwner, ReleaseID: candidate.ReleaseID, ManifestDigest: candidate.ManifestDigest, ProjectionVersion: activationVersion, Revision: current.Revision + 1, ActivatedAt: activatedAt}
+		fenceEvent, fenceReceipt, err := buildReleaseFenceEvent(current, after)
 		if err != nil {
 			return nil, err
 		}
-
-		allEvents := candidateEvents
+		allEvents := []postports.OutboxEvent{fenceEvent}
 		if err := validateActivationOutboxClosure(
 			txCtx, liveOutbox, candidate, allEvents,
 		); err != nil {
@@ -815,7 +823,7 @@ func ActivateImportedPostRelease(
 			return nil, err
 		}
 		if err := validateLiveReleaseClosure(
-			txCtx, livePosts, liveOutbox, liveMedia, candidate, activationVersion,
+			txCtx, livePosts, liveOutbox, liveMedia, candidate, current.Revision+1,
 			candidate.Mode == "sync" && candidate.DeletePolicy == "tombstone",
 		); err != nil {
 			return nil, err
@@ -849,6 +857,7 @@ func ActivateImportedPostRelease(
 			Environment: environment, SourceOwner: candidate.SourceOwner,
 			ReleaseID: candidate.ReleaseID, ManifestDigest: candidate.ManifestDigest,
 			Stage: "active", AttemptID: attemptID, Status: "passed", RecordedAt: activatedAt,
+			Transition: &fenceReceipt.Transition, EventID: fenceReceipt.EventId, PayloadDigest: fenceReceipt.PayloadDigest,
 			AttemptedCount: candidate.Counts.PostsExpected,
 			SuccessCount:   materializedPosts,
 			Checkpoint:     "live-closure-and-active-pointer-cas-committed",
@@ -1233,6 +1242,14 @@ func ValidateImportedReleaseApplyResult(
 	return nil
 }
 
+func candidatePostIndexes() []mongo.IndexModel {
+	return []mongo.IndexModel{
+		{Keys: bson.D{{Key: "environment", Value: 1}, {Key: "sourceOwner", Value: 1}, {Key: "releaseId", Value: 1}, {Key: "manifestDigest", Value: 1}, {Key: "postId", Value: 1}}, Options: options.Index().SetName("uq_data_release_candidate_post").SetUnique(true)},
+		{Keys: bson.D{{Key: "environment", Value: 1}, {Key: "sourceOwner", Value: 1}, {Key: "releaseId", Value: 1}, {Key: "manifestDigest", Value: 1}, {Key: "postRef", Value: 1}}, Options: options.Index().SetName("idx_data_release_candidate_post_ref").SetUnique(true)},
+		{Keys: bson.D{{Key: "environment", Value: 1}, {Key: "sourceOwner", Value: 1}, {Key: "postId", Value: 1}}, Options: options.Index().SetName("idx_data_release_candidate_post_safety_identity")},
+	}
+}
+
 func ensureImportedReleaseIndexes(
 	ctx context.Context,
 	posts *mongo.Collection,
@@ -1241,10 +1258,7 @@ func ensureImportedReleaseIndexes(
 	state *mongo.Collection,
 	receipts *mongo.Collection,
 ) error {
-	if _, err := posts.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{Keys: bson.D{{Key: "environment", Value: 1}, {Key: "sourceOwner", Value: 1}, {Key: "releaseId", Value: 1}, {Key: "manifestDigest", Value: 1}, {Key: "postId", Value: 1}}, Options: options.Index().SetName("uq_data_release_candidate_post").SetUnique(true)},
-		{Keys: bson.D{{Key: "environment", Value: 1}, {Key: "sourceOwner", Value: 1}, {Key: "releaseId", Value: 1}, {Key: "manifestDigest", Value: 1}, {Key: "postRef", Value: 1}}, Options: options.Index().SetName("idx_data_release_candidate_post_ref").SetUnique(true)},
-	}); err != nil {
+	if _, err := posts.Indexes().CreateMany(ctx, candidatePostIndexes()); err != nil {
 		return fmt.Errorf("ensure candidate Post indexes: %w", err)
 	}
 	if _, err := outbox.Indexes().CreateOne(ctx, mongo.IndexModel{
@@ -1855,21 +1869,6 @@ func validateActivationReplayReceipt(
 	target ImportedReleaseBinding,
 	expected ExpectedActiveRelease,
 ) error {
-	attemptID := releaseActivationAttemptID(environment, target.SourceOwner, target, expected)
-	var receipt releaseStageReceipt
-	if err := receipts.FindOne(ctx, bson.M{
-		"environment": environment, "sourceOwner": target.SourceOwner,
-		"releaseId": target.ReleaseID, "manifestDigest": target.ManifestDigest,
-		"stage": "active", "attemptId": attemptID,
-	}).Decode(&receipt); err != nil {
-		return fmt.Errorf("GATE_BLOCK: read exact activation replay receipt: %w", err)
-	}
-	if receipt.ExpectedEmpty != expected.Empty ||
-		receipt.ExpectedSourceOwner != expected.SourceOwner ||
-		receipt.ExpectedReleaseID != expected.ReleaseID ||
-		receipt.ExpectedManifestDigest != expected.ManifestDigest ||
-		receipt.ExpectedRevision != expected.Revision {
-		return fmt.Errorf("GATE_BLOCK: activation replay predecessor receipt differs")
-	}
-	return nil
+	_, err := readExactReleaseCommit(ctx, receipts, receipts.Database().Collection("content_outbox"), environment, target, expected, nil)
+	return err
 }

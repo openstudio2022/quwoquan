@@ -27,6 +27,72 @@ from quwoquan_ops.tests.support.single_track_contracts_test_support import (
 )
 
 class SingleTrackContractsContractTest(unittest.TestCase):
+    def test_python_digest_diagnostic_positions_are_not_instance_values(self) -> None:
+        module = _load_verifier()
+        source = '''import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("--binding", help="exact PATH=sha256:DIGEST")
+def read_binding():
+    raise ValueError("expected PATH=sha256:digest")
+'''
+        inv = _scan_fixture(module, "quwoquan_ops/cli/demo.py", source)
+        self.assertEqual(inv.counts.get("T1_noncanonical_sha256_literal", 0), 0)
+        for source in (
+            'def value():\n    return {"digest": "sha256:DIGEST"}\n',
+            'config = {"help": "sha256:digest"}\n',
+            'raise ValueError({"digest": "sha256:digest"})\n',
+            'raise ValueError("sha256:bad-instance")\n',
+            'def value(ValueError):\n    raise ValueError("sha256:digest")\n',
+            'import argparse\nargparse.ArgumentParser = fake\nparser = argparse.ArgumentParser()\nparser.add_argument("--binding", help="sha256:DIGEST")\n',
+            'parser.add_argument("--binding", help="sha256:DIGEST")\n',
+            'import argparse\nparser = argparse.ArgumentParser()\nparser = fake\nparser.add_argument("--binding", help="sha256:DIGEST")\n',
+            'import argparse\nparser = argparse.ArgumentParser()\nparser.add_argument("--binding", default="sha256:DIGEST", help="PATH=sha256:DIGEST")\n',
+        ):
+            with self.subTest(source=source):
+                inv = _scan_fixture(module, "quwoquan_ops/cli/demo.py", source)
+                self.assertGreater(inv.counts.get("T1_noncanonical_sha256_literal", 0), 0)
+
+    def test_python_digest_rejection_requires_direct_digest_assertion(self) -> None:
+        module = _load_verifier()
+        source = '''import pytest
+def test_digest():
+    with pytest.raises(ValueError, match="not a canonical sha256 digest"):
+        build(plan_digest="sha256:not-a-digest")
+'''
+        inv = _scan_fixture(module, "quwoquan_ops/tests/local_contract/demo_test.py", source)
+        self.assertEqual(inv.counts.get("T1_noncanonical_sha256_literal", 0), 0)
+        for source in (
+            source.replace('match="not a canonical sha256 digest"', 'match="missing rights"'),
+            source.replace('build(plan_digest=', 'build(rights="missing", plan_digest='),
+            'import pytest\ndef test_digest():\n    value = {"digest": "sha256:test"}\n    with pytest.raises(ValueError):\n        unrelated()\n',
+        ):
+            with self.subTest(source=source):
+                inv = _scan_fixture(module, "quwoquan_ops/tests/local_contract/demo_test.py", source)
+                self.assertGreater(inv.counts.get("T1_noncanonical_sha256_literal", 0), 0)
+
+    def test_contract_negative_prose_does_not_exempt_runtime_fallback(self) -> None:
+        module = _load_verifier()
+        path = "quwoquan_service/services/demo/contracts/demo/item/projections/item.yaml"
+        inv = _scan_fixture(module, path, 'description: "不dual-read普通池作为Data fallback。"\n')
+        self.assertEqual(inv.counts.get("compat_smell", 0), 0)
+        inv = _scan_fixture(module, path, 'mode: "dual-read"\ndescription: "不dual-read普通池作为Data fallback。"\n')
+        self.assertGreater(inv.counts.get("compat_smell", 0), 0)
+        inv = _scan_fixture(module, path, '{mode: "dual-read", description: "不dual-read普通池作为Data fallback。"}\n')
+        self.assertGreater(inv.counts.get("compat_smell", 0), 0)
+        inv = _scan_fixture(module, "quwoquan_app/lib/demo.dart", '// 不dual-read普通池作为Data fallback。\nfinal value = json["new"] ?? json["old"];\n')
+        self.assertGreater(inv.counts.get("multi_key_decode", 0), 0)
+
+    def test_unproven_external_shapes_remain_blocked(self) -> None:
+        module = _load_verifier()
+        for source in (
+            'manifest = {"schemaVersion": 2, "layers": []}\n',
+            'manifest = {"schemaVersion": 2, "layers": [{"payload": {"schemaVersion": 1}}]}\n',
+        ):
+            inv = _scan_fixture(module, "quwoquan_ops/tests/local_contract/demo_test.py", source)
+            self.assertGreater(inv.counts.get("T1_forbidden_envelope_field", 0), 0)
+        inv = _scan_fixture(module, "quwoquan_service/services/demo/tests/api_integration/demo_test.go", 'package demo\ntype Response struct { Hits struct { Hits []struct { ID string `json:"_id"` } `json:"hits"` } `json:"hits"` }\n')
+        self.assertGreater(inv.counts.get("wire_id_key", 0), 0)
+
     def test_versioned_golden_asset_names_are_forbidden(self) -> None:
         module = _load_verifier()
         scanner = _scanner_module()

@@ -17,7 +17,7 @@ SCRIPTS = ROOT / "quwoquan_data/scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from content.release.environment import ship_dispatch  # noqa: E402
+from quwoquan_ops.cli.lib.content_release_environment import ship_dispatch  # noqa: E402
 from content.release.environment.release_runtime import (  # noqa: E402
     ReleaseAdmission,
     admit_environment_release,
@@ -123,11 +123,11 @@ def _sha(path: Path) -> str:
 
 
 def _authority_ref() -> str:
-    return f"handoff-ref-v1:sha256:{'1' * 64}:sha256:{'2' * 64}"
+    return f"data/releases/release-a/producer_release_handoff.json=sha256:{'2' * 64}"
 
 
 def _args(_handoff: Path, _root: Path) -> argparse.Namespace:
-    return argparse.Namespace(handoff_ref=_authority_ref())
+    return argparse.Namespace(handoff_ref=f"{_handoff.relative_to(_root).as_posix()}={_sha(_handoff)}")
 
 
 def test_admission_consumes_current_authority_and_exact_portable_artifact(
@@ -135,31 +135,6 @@ def test_admission_consumes_current_authority_and_exact_portable_artifact(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     release, handoff, document = _release_and_handoff(tmp_path)
-    authority = {
-        "artifacts": [
-            ".qwq_output/data/releases/release-a/producer_release_handoff.json"
-        ]
-    }
-    observed: dict[str, object] = {}
-    monkeypatch.setattr(
-        "content.release.environment.release_runtime.handoff_store.read",
-        lambda ref, **_kwargs: observed.setdefault("authorityRef", ref) or b"authority",
-    )
-    monkeypatch.setattr(
-        "content.release.environment.release_runtime.handoff_consumer.validate_published_bytes",
-        lambda ref, raw, **kwargs: (
-            observed.update(ref=ref, raw=raw, **kwargs) or authority
-        ),
-    )
-    monkeypatch.setattr(
-        "content.release.environment.release_runtime.handoff_store.resolve_unique_artifact",
-        lambda *_args, **_kwargs: (
-            ".qwq_output/data/releases/release-a/producer_release_handoff.json",
-            handoff,
-            handoff.read_bytes(),
-            _sha(handoff),
-        ),
-    )
     monkeypatch.setattr(
         "content.release.environment.release_runtime.read_producer_release_handoff",
         lambda *_args, **_kwargs: document,
@@ -175,10 +150,57 @@ def test_admission_consumes_current_authority_and_exact_portable_artifact(
     assert admission.release == release
     assert admission.release_id == release.name
     assert admission.manifest_digest == payload_digest(release)
-    assert admission.handoff_ref == _authority_ref()
+    assert admission.handoff_ref == _args(handoff, tmp_path).handoff_ref
     assert admission.handoff_artifact_ref.endswith("producer_release_handoff.json")
     assert admission.handoff_artifact_digest == _sha(handoff)
-    assert observed["validate_current"] is True
+    assert admission.handoff_artifact_ref == "data/releases/release-a/producer_release_handoff.json"
+
+
+@pytest.mark.parametrize("bad_ref", [
+    _authority_ref(), "data/releases/release-a/producer_release_handoff.json",
+    "data/releases/../producer_release_handoff.json=sha256:" + "0" * 64,
+    "data/releases/release-a/producer_release_handoff.json=sha256:" + "0" * 64,
+])
+def test_direct_handoff_rejects_old_authority_escape_and_digest_drift(tmp_path, bad_ref):
+    _release_and_handoff(tmp_path)
+    with pytest.raises(ValueError, match="HANDOFF_AUTHORITY_INVALID"):
+        admit_environment_release(argparse.Namespace(handoff_ref=bad_ref), repo_root=ROOT,
+                                  output_root=tmp_path, release_root=tmp_path / "data/releases")
+
+
+def test_direct_admission_uses_real_sealed_reader_and_rejects_payload_tampering(tmp_path):
+    from quwoquan_data.tests.local_contract.release.test_producer_release_detachment__contract__local_contract_test import _repository_handoff_fixture
+    handoff, document = _repository_handoff_fixture(tmp_path)
+    args = _args(handoff, tmp_path)
+    # 此fixture是可移植历史handoff，现役环境header门仍独立拒绝不完整pool声明。
+    with pytest.raises(ValueError, match="HANDOFF_RELEASE_INTEGRITY_FAILED.*poolDigest"):
+        admit_environment_release(args, repo_root=ROOT, output_root=tmp_path,
+                                  release_root=tmp_path / "data/releases")
+    manifest = handoff.parent / "payload/objects" / document["contentPoolObjects"][0]["objectRef"] / "manifest.json"
+    manifest.write_bytes(manifest.read_bytes() + b"\n")
+    with pytest.raises(ValueError, match="HANDOFF_ARTIFACT_INVALID"):
+        admit_environment_release(args, repo_root=ROOT, output_root=tmp_path,
+                                  release_root=tmp_path / "data/releases")
+
+
+def test_direct_handoff_rejects_path_release_mismatch(tmp_path, monkeypatch):
+    _, handoff, document = _release_and_handoff(tmp_path)
+    document["releaseId"] = "another-release"
+    monkeypatch.setattr("content.release.environment.release_runtime.read_producer_release_handoff", lambda *a, **k: document)
+    with pytest.raises(ValueError, match="HANDOFF_RELEASE_ID_DRIFT"):
+        admit_environment_release(_args(handoff, tmp_path), repo_root=ROOT,
+                                  output_root=tmp_path, release_root=tmp_path / "data/releases")
+
+
+def test_direct_handoff_rejects_symlink_even_with_matching_bytes(tmp_path):
+    _, handoff, _ = _release_and_handoff(tmp_path)
+    args = _args(handoff, tmp_path)
+    original = handoff.with_suffix(".original")
+    handoff.rename(original)
+    handoff.symlink_to(original)
+    with pytest.raises(ValueError, match="SYMLINK_REJECTED"):
+        admit_environment_release(args, repo_root=ROOT, output_root=tmp_path,
+                                  release_root=tmp_path / "data/releases")
 
 
 def test_admission_rejects_old_output_relative_handoff_and_removed_digest_flag(
@@ -198,7 +220,7 @@ def test_admission_rejects_old_output_relative_handoff_and_removed_digest_flag(
     with pytest.raises(SystemExit):
         parser.parse_args(
             [
-                "ship",
+                "content-release",
                 "apply",
                 "--handoff-ref",
                 _authority_ref(),
@@ -245,18 +267,37 @@ def test_authority_or_artifact_drift_fails_before_dispatch_lock(
     assert events == []
 
 
+def test_handoff_is_revalidated_under_operation_lock_before_mutation(tmp_path, monkeypatch):
+    import contextlib
+    from dataclasses import replace
+    release, handoff, document = _release_and_handoff(tmp_path)
+    monkeypatch.setattr("content.release.environment.release_runtime.read_producer_release_handoff", lambda *a, **k: document)
+    admission = admit_environment_release(_args(handoff, tmp_path), repo_root=ROOT, output_root=tmp_path,
+                                          release_root=tmp_path / "data/releases")
+    values = iter((admission, replace(admission, manifest_digest="sha256:" + "f" * 64)))
+    monkeypatch.setattr(ship_dispatch, "admit_environment_release", lambda *a, **k: next(values))
+    monkeypatch.setattr(ship_dispatch, "release_operation_guard", lambda **k: contextlib.nullcontext())
+    events = []
+    with pytest.raises(SystemExit, match="HANDOFF_AUTHORITY_DRIFT"):
+        ship_dispatch.dispatch_ship(argparse.Namespace(ship_command="apply", env="gamma", run_id="test"),
+                                    release_root=tmp_path / "data/releases", output_root=tmp_path, repo_root=ROOT,
+                                    apply=lambda a: events.append("apply"), rollback=lambda a: None, verify=lambda a: None)
+    assert events == []
+
+
 def _ship_parser() -> argparse.ArgumentParser:
-    from content.release.environment import cli as ship_cli
+    from quwoquan_ops.cli.lib.content_release_environment import cli as release_cli
 
     parser = argparse.ArgumentParser()
-    ship_cli.register_parser(parser.add_subparsers(dest="command", required=True))
+    command = parser.add_subparsers(dest="command", required=True).add_parser("content-release")
+    release_cli.register_content_release_arguments(command)
     return parser
 
 
 @pytest.mark.parametrize("command", ["apply", "activate", "verify", "rollback"])
-def test_cli_accepts_authoritative_handoff_ref_only(command: str) -> None:
+def test_cli_accepts_authoritative_handoff_ref_only(command: str, tmp_path: Path) -> None:
     parser = _ship_parser()
-    argv = ["ship", command, "--handoff-ref", _authority_ref(), "--env", "alpha"]
+    argv = ["content-release", command, "--handoff-ref", _authority_ref(), "--env", "alpha", "--runtime-candidate-root", str(tmp_path / "runtime-candidate")]
     if command in {"activate", "verify"}:
         argv += ["--import-run-id", "apply-a"]
     if command == "rollback":
@@ -279,11 +320,11 @@ def test_cli_activate_requires_sealed_admission_and_apply_predecessor() -> None:
     parser = _ship_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(
-            ["ship", "activate", "--env", "alpha", "--import-run-id", "apply-a"]
+            ["content-release", "activate", "--env", "alpha", "--import-run-id", "apply-a"]
         )
     with pytest.raises(SystemExit):
         parser.parse_args(
-            ["ship", "activate", "--env", "alpha", "--handoff-ref", _authority_ref()]
+            ["content-release", "activate", "--env", "alpha", "--handoff-ref", _authority_ref()]
         )
 
 
@@ -528,10 +569,10 @@ def test_dispatch_invalid_attestation_fails_before_lock_or_operation(
 
 
 @pytest.mark.parametrize("command", ["apply", "activate", "verify", "rollback"])
-def test_cli_accepts_exactly_one_system_attestation_pair(command: str) -> None:
+def test_cli_accepts_exactly_one_system_attestation_pair(command: str, tmp_path: Path) -> None:
     parser = _ship_parser()
     argv = [
-        "ship",
+        "content-release",
         command,
         "--system-attestation-ref",
         "data/releases/baseline-a/attestations/release.json",
@@ -539,6 +580,8 @@ def test_cli_accepts_exactly_one_system_attestation_pair(command: str) -> None:
         "sha256:" + "1" * 64,
         "--env",
         "alpha",
+        "--runtime-candidate-root",
+        str(tmp_path / "runtime-candidate"),
     ]
     if command in {"activate", "verify"}:
         argv += ["--import-run-id", "apply-a"]
@@ -560,10 +603,10 @@ def test_cli_accepts_exactly_one_system_attestation_pair(command: str) -> None:
 
 
 @pytest.mark.parametrize("command", ["apply", "activate", "verify", "rollback"])
-def test_cli_rejects_crossed_admission_pairs(command: str) -> None:
+def test_cli_rejects_crossed_admission_pairs(command: str, tmp_path: Path) -> None:
     parser = _ship_parser()
     argv = [
-        "ship",
+        "content-release",
         command,
         "--handoff-ref",
         _authority_ref(),
@@ -571,6 +614,8 @@ def test_cli_rejects_crossed_admission_pairs(command: str) -> None:
         "sha256:" + "1" * 64,
         "--env",
         "alpha",
+        "--runtime-candidate-root",
+        str(tmp_path / "runtime-candidate"),
     ]
     if command in {"activate", "verify"}:
         argv += ["--import-run-id", "apply-a"]
@@ -643,7 +688,7 @@ def _environment_result_document(**overrides: object) -> dict[str, object]:
         "containsUnverifiedAssets": False,
         "manifestDigest": "sha256:" + "a" * 64,
         "admissionKind": "producer_handoff",
-        "handoffRef": _authority_ref(),
+        "handoffRef": "data/releases/release-a/producer_release_handoff.json=sha256:" + "b" * 64,
         "handoffArtifactRef": ".qwq_output/data/releases/release-a/producer_release_handoff.json",
         "handoffArtifactDigest": "sha256:" + "b" * 64,
         "runId": "apply-a",

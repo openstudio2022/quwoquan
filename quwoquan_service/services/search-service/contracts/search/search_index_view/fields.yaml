@@ -1,5 +1,7 @@
 description: 跨对象搜索索引统一投影
 fields:
+- {name: releaseSliceBinding, type: ReleaseQueryPreparationBinding, constraints: [NULLABLE], role: projection, description: 全部Data Creator/Post/Homepage必填，UGC/普通账户必须null；不是公开caller选择器。}
+- {name: releaseSourceIdentity, type: ReleaseCandidateObjectIdentity, constraints: [NULLABLE], role: projection, description: 完整source身份，同物理分区按sourceVersion/digest拒绝冲突。}
 - name: objectType
   type: string
   constraints:
@@ -53,6 +55,48 @@ fields:
   - NOT_NULL
   role: projection
 types:
+  SearchContentFenceReceipt:
+    description: 永久保留的exact已消费Content提交依据，只含身份摘要/顺序/proof摘要，不含payload正文或第二active指针。eventDigest唯一且scopeDigest/revision唯一，同revision异摘要冲突，proofEvidenceDigest绑定实际对账结果而非授予activation；superseded只在Content确切原提交回执可证时成立。
+    fields:
+      - {name: eventDigest, type: string, format: canonical_sha256, constraints: [PK, NOT_NULL]}
+      - {name: scopeDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: revision, type: int64, min: 1, constraints: [NOT_NULL]}
+      - {name: payloadDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: proofEvidenceDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: outcome, type: enum, values: [reconciled, superseded], constraints: [NOT_NULL]}
+      - {name: consumedAt, type: timestamp, constraints: [NOT_NULL]}
+  SearchContentPostInbox:
+    description: ordinary Content事件持久去重证据，不保存payload/标题/作者/媒体URL。eventId摘要为唯一键，事件规范摘要冲突拒绝，Provider成功后与checkpoint同事务提交；不设置TTL解除重放保护。
+    fields:
+      - {name: eventDigest, type: string, format: canonical_sha256, constraints: [PK, NOT_NULL]}
+      - {name: payloadDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: objectDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: sourceVersion, type: int64, min: 1, constraints: [NOT_NULL]}
+      - {name: appliedAt, type: timestamp, constraints: [NOT_NULL]}
+  SearchContentPostCheckpoint:
+    description: ordinary canonical Post身份摘要的单调消费checkpoint；不是ES版本比较authority，也不是Content active pointer。deletionVersion记录不可复活终态，权限暂不可见只影响deleted，不将其误作永久对象删除；不可逆标记不设置TTL。
+    fields:
+      - {name: objectDigest, type: string, format: canonical_sha256, constraints: [PK, NOT_NULL]}
+      - {name: sourceVersion, type: int64, min: 1, constraints: [NOT_NULL]}
+      - {name: projectionDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: deleted, type: bool, constraints: [NOT_NULL]}
+      - {name: deletionVersion, type: int64, min: 0, constraints: [NOT_NULL]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+  SearchReleaseCandidateDocument:
+    description: 仅由准备流程调用typed projector生成的ES候选输入；physicalId含完整binding+canonical对象，业务ID仍是snapshot.objectId。
+    fields:
+      - {name: physicalId, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: sourceKind, type: enum, values: [release_candidate], constraints: [NOT_NULL]}
+      - {name: binding, type: ReleaseQueryPreparationBinding, constraints: [NOT_NULL]}
+      - {name: snapshot, type: SearchReleaseCandidateSnapshot, constraints: [NOT_NULL]}
+      - {name: documentDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  SearchReleaseCandidateQueryResult:
+    description: typed内部query的实际readback，必须逐对象验证完整集合与digest；不存在或不可读不能返回ready。
+    fields:
+      - {name: binding, type: ReleaseQueryPreparationBinding, constraints: [NOT_NULL]}
+      - {name: objectSetDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: documentsDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+      - {name: objectCount, type: int64, constraints: [NOT_NULL], min: 0}
   SearchAccountRestrictionView:
     description: SearchIndexView 的主体可见性阻断投影。
     fields:

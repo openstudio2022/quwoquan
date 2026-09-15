@@ -1,0 +1,28 @@
+backend: mongodb
+role: authoritative
+description: >-
+  唯一流程状态和receipt集合；Creator/Post/Homepage共用完整binding身份，slice只区分对象类型。
+  同一Mongo事务提交checkpoint/命令回执，version/executionToken CAS，有界租约接管；Provider成功但checkpoint失败按原输入显式重验。
+  旧Creator-only/typed-slice集合和旧状态只供离线审计，不由新reader读取、迁入completed或补字段。当前候选重新prepare；本次不执行历史数据删除。
+  无active/latest/第二registry，保留覆盖rollback与活跃引用；schema/Provider受管generation是安全事实，不是兼容协议。
+transaction:
+  scope: [search_release_preparations, search_release_preparation_receipts]
+  isolation: mongo_transaction
+  mechanism: version_cas
+  guarantees: [checkpoint_version_cas, execution_token_cas, command_receipt_atomicity]
+resources:
+  preparation_state: {engine: mongodb, role: authority, required: true}
+collections:
+  search_release_preparations:
+    entity: SearchReleasePreparation
+    publication_role: not_published
+    indexes:
+    - {name: uq_search_release_preparation_identity, keys: {preparationId: 1}, unique: true}
+    - {name: uq_search_release_preparation_binding, keys: {binding.release.environment: 1, binding.release.sourceOwner: 1, binding.release.releaseId: 1, binding.release.manifestDigest: 1, binding.slice: 1, binding.providerBindingGeneration: 1, binding.schemaGeneration: 1}, unique: true}
+    - {name: idx_search_release_preparation_cas, keys: {preparationId: 1, version: 1, leaseUntil: 1}}
+  search_release_preparation_receipts:
+    entity: SearchReleasePreparationReceipt
+    publication_role: not_published
+    indexes:
+    - {name: uq_search_release_preparation_receipt, keys: {receiptKey: 1}, unique: true}
+    - {name: idx_search_release_preparation_receipt_owner, keys: {preparationId: 1, createdAt: -1}}

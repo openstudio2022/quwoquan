@@ -49,6 +49,7 @@ type Config struct {
 	Mode         string
 	Addr         string
 	Addrs        []string
+	Username     string
 	Password     string
 	TLS          bool
 	PoolSize     int
@@ -95,6 +96,7 @@ func NewClient(config Config) (redis.UniversalClient, error) {
 		}
 		options := &redis.ClusterOptions{
 			Addrs:        normalizedAddresses(config.Addrs),
+			Username:     config.Username,
 			Password:     config.Password,
 			PoolSize:     config.PoolSize,
 			DialTimeout:  config.DialTimeout,
@@ -113,6 +115,7 @@ func NewClient(config Config) (redis.UniversalClient, error) {
 	options := &redis.Options{
 		Network:      network,
 		Addr:         address,
+		Username:     config.Username,
 		Password:     config.Password,
 		PoolSize:     config.PoolSize,
 		DialTimeout:  config.DialTimeout,

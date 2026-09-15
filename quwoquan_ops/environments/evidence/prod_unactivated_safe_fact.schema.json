@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/prod_unactivated_safe_fact.schema.json",
+  "title": "ProdUnactivatedSafeFact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "safeStateId",
+    "terminal",
+    "admission",
+    "failedAttempt",
+    "recoveryReadback",
+    "previousGeneration",
+    "committedGeneration",
+    "candidateId",
+    "preservedResources",
+    "recordedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_ops.prod_unactivated_safe_fact.v1"
+    },
+    "safeStateId": {
+      "$ref": "#/$defs/digest"
+    },
+    "terminal": {
+      "const": "unactivated_safe"
+    },
+    "admission": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "failedAttempt": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "recoveryReadback": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "previousGeneration": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "committedGeneration": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "candidateId": {
+      "$ref": "#/$defs/digest"
+    },
+    "preservedResources": {
+      "type": "array",
+      "uniqueItems": true,
+      "const": [
+        "audit",
+        "backup",
+        "database",
+        "media",
+        "recoveryPoints",
+        "volume"
+      ]
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "exactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    }
+  }
+}

@@ -36,6 +36,8 @@ type virtualHTTPGroup struct {
 	serveError chan error
 }
 
+const activeReleaseFencePath = "/internal/content/active-release-fence"
+
 // NewVirtualHTTPRouter validates and groups routes by public listener.
 func NewVirtualHTTPRouter(routes ...VirtualHTTPRoute) (*VirtualHTTPRouter, error) {
 	if len(routes) == 0 {
@@ -104,16 +106,6 @@ func NewVirtualHTTPRouter(routes ...VirtualHTTPRoute) (*VirtualHTTPRouter, error
 		group.server = &http.Server{
 			Addr: address,
 			Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				if !router.admission.Load() &&
-					request.URL.Path != "/healthz" &&
-					request.URL.Path != "/internal/user/account-security/health" {
-					http.Error(
-						writer,
-						`{"status":"unavailable"}`,
-						http.StatusServiceUnavailable,
-					)
-					return
-				}
 				host := normalizeHTTPHost(request.Host)
 				proxy := targets[host]
 				if proxy == nil {
@@ -121,6 +113,14 @@ func NewVirtualHTTPRouter(routes ...VirtualHTTPRoute) (*VirtualHTTPRouter, error
 						writer,
 						`{"status":"misdirected_request"}`,
 						http.StatusMisdirectedRequest,
+					)
+					return
+				}
+				if !router.admission.Load() && !isPreAdmissionRequestAllowed(request) {
+					http.Error(
+						writer,
+						`{"status":"unavailable"}`,
+						http.StatusServiceUnavailable,
 					)
 					return
 				}
@@ -200,6 +200,18 @@ func (router *VirtualHTTPRouter) Shutdown(ctx context.Context) error {
 		}
 	}
 	return result
+}
+
+func isPreAdmissionRequestAllowed(request *http.Request) bool {
+	switch request.URL.Path {
+	case "/healthz", "/internal/user/account-security/health":
+		return true
+	case activeReleaseFencePath:
+		return request.Method == http.MethodGet &&
+			normalizeHTTPHost(request.Host) == "content-service"
+	default:
+		return false
+	}
 }
 
 func normalizeHTTPHost(raw string) string {

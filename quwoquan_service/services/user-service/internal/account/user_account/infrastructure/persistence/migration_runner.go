@@ -43,7 +43,60 @@ type migrationFile struct {
 	Checksum string
 }
 
-// RunManagedMigrations serializes startup migrations and records applied files,
+// VerifyManagedMigrations verifies that the canonical owner completed the exact
+// migration set before a least-privilege runtime starts. It never creates or
+// alters schema objects.
+func VerifyManagedMigrations(ctx context.Context, pool *pgxpool.Pool) error {
+	migrationRoot := resolveManagedMigrationRoot()
+	if migrationRoot == "" {
+		return fmt.Errorf("migration root not found")
+	}
+	files, err := readManagedMigrationFiles(migrationRoot)
+	if err != nil {
+		return err
+	}
+	rows, err := pool.Query(ctx, migrationLedgerSelectSQL, migrationLedgerService)
+	if err != nil {
+		return fmt.Errorf("read migration ledger: %w", err)
+	}
+	defer rows.Close()
+	applied := make(map[string]string, len(files))
+	for rows.Next() {
+		var name, checksum string
+		if err := rows.Scan(&name, &checksum); err != nil {
+			return fmt.Errorf("scan migration ledger: %w", err)
+		}
+		applied[name] = checksum
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read migration ledger rows: %w", err)
+	}
+	for _, file := range files {
+		if checksum, ok := applied[file.Name]; !ok {
+			return fmt.Errorf("required migration missing: %s", file.Name)
+		} else if checksum != file.Checksum {
+			return fmt.Errorf("migration checksum drift for %s", file.Name)
+		}
+	}
+	var ready bool
+	if err := pool.QueryRow(ctx, `SELECT
+		to_regclass('public.user_profiles') IS NOT NULL
+		AND EXISTS (
+			SELECT 1 FROM pg_attribute
+			WHERE attrelid='public.user_profiles'::regclass
+			AND attname IN ('user_id','account_state','auth_epoch')
+			AND attnum > 0 AND NOT attisdropped
+			HAVING COUNT(*) = 3
+		)`).Scan(&ready); err != nil {
+		return fmt.Errorf("verify UserAccount schema: %w", err)
+	}
+	if !ready {
+		return fmt.Errorf("required UserAccount schema is missing")
+	}
+	return nil
+}
+
+// RunManagedMigrations serializes owner migrations and records applied files,
 // so restart/rollout can safely preserve an existing Postgres volume.
 func RunManagedMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	migrationRoot := resolveManagedMigrationRoot()

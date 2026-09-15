@@ -7,10 +7,48 @@ import json
 import re
 from typing import Any, Mapping
 
+# DEC-015 execution-slot只属于既有ledger，不授予release authority。动作及参数为闭集；
+# envelope永不接受argv、shell或调用方提供的绝对路径。
+EXECUTION_ACTION_PARAMETERS = {
+    "guard-prepare": frozenset(),
+    "guard-close": frozenset(),
+    "prevalidate-promote-runtime": frozenset({"sourceRelative", "destinationRelative", "treeDigest"}),
+    "prevalidate-install-unit": frozenset({"sourceRelative", "unitName", "sourceDigest"}),
+    "prevalidate-start": frozenset({"unitName"}),
+    "prevalidate-stop": frozenset({"unitName"}),
+    "prevalidate-status": frozenset({"relativePath"}),
+    "observe-runtime-identity": frozenset({"relativePath"}),
+    "observe-route": frozenset({"relativePath"}),
+    "observe-current-pointer": frozenset({"relativePath"}),
+    "promote-active-config": frozenset({"sourceRelative", "destinationRelative"}),
+    "promote-caddy-config": frozenset({"sourceRelative", "destinationRelative"}),
+    "promote-systemd-unit": frozenset({"sourceRelative", "unitName"}),
+    "candidate-start": frozenset({"unitName", "service", "stage"}),
+    "candidate-stop": frozenset({"unitName", "service", "stage"}),
+    "route-current-cas": frozenset({"relativePath", "expectedDigest", "desiredDigest", "desiredRelative"}),
+    "ledger-activation-cas": frozenset({"service", "expectedReleaseGeneration", "requestRelative"}),
+    "ledger-stage-cas": frozenset({"service", "stage", "expectedReleaseGeneration", "requestRelative"}),
+    "ledger-recovery-cas": frozenset({"service", "stage", "expectedReleaseGeneration", "requestRelative"}),
+    "distribution-current-cas": frozenset({"relativePath", "expectedDigest", "desiredDigest", "desiredRelative"}),
+}
+EXECUTION_ACTIONS = frozenset(EXECUTION_ACTION_PARAMETERS)
+EXECUTION_INVENTORY_FIELDS = frozenset({"target", "environment", "authorityHostId", "sourceDigest", "placements"})
+EXECUTION_PLACEMENT_FIELDS = frozenset({"id", "hostId", "plane", "instance", "replicaId", "runtimeRoot", "guardRoot"})
+EXECUTION_STEP_FIELDS = frozenset({"schema", "controllerIdentity", "controllerKeyId", "attemptId", "executionGeneration", "releaseGeneration", "inventoryDigest", "placementId", "guardIncarnation", "sequence", "action", "parameters", "materialDigest"})
+EXECUTION_REQUEST_SCHEMA = "quwoquan.prod.execution-request.v1"
+EXECUTION_RESULT_SCHEMA = "quwoquan.prod.execution-result.v1"
+EXECUTION_IDENTITY_RELATIVE_PATH = "runtime/artifact-identity.json"
 AUTHORITY = "prod-hosted-service-plane"
 REQUEST_SCHEMA = "prod-hosted-release-transition-request"
 RECEIPT_SCHEMA = "prod-hosted-release-receipt"
 READBACK_SCHEMA = "prod-hosted-release-readback"
+# 只读诊断不授予首发资格；absence还需要完整inventory/入口/授权的受信前驱。
+PRIOR_OBSERVATION_SCHEMA = "prod-hosted-prior-observation"
+PRIOR_OBSERVATION_FIELDS = frozenset({
+    "schema", "authority", "service", "priorState", "reason", "generation",
+    "ledgerReadback", "historyReceiptIds", "historyDigest", "admissionEligible",
+    "readOnly",
+})
 RECEIPT_READBACK_SCHEMA = "prod-hosted-release-receipt-readback"
 STATE_SCHEMA = "prod-release-ledger"
 SOAK_REQUEST_SCHEMA = "prod-hosted-soak-request"

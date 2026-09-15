@@ -367,9 +367,18 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
                     else:
                         target[key] = value
 
+        user_namespace = next(
+            item["namespace"]
+            for item in binding["bindings"].values()
+            if item["service"] == "user-service" and item["engine"] == "postgres"
+        )
         self.assertEqual(
             merged["postgres-init"]["environment"]["QWQ_POSTGRES_DATABASES"],
-            " ".join(expected_namespaces),
+            " ".join(name for name in expected_namespaces if name != user_namespace),
+        )
+        self.assertNotIn(
+            user_namespace,
+            merged["postgres-init"]["environment"]["QWQ_POSTGRES_DATABASES"].split(),
         )
         self.assertEqual(
             merged["postgres-init"]["labels"][

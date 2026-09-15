@@ -57,6 +57,7 @@ type runtimeConfig struct {
 			// Password 的键名与 environments/prod/config.yaml 的 secretRef
 			// `sys.api-edge.redis.admission.password: API_EDGE_REDIS_PASSWORD`
 			// 同源：快照只留引用，值由部署面按该键注入。
+			Username       string `yaml:"username" env:"REDIS_USERNAME"`
 			Password       string `yaml:"password" env:"REDIS_PASSWORD"`
 			TLS            bool   `yaml:"tls"`
 			PoolSize       int    `yaml:"pool_size"`
@@ -264,6 +265,7 @@ func (config runtimeConfig) redisConfig() redisstore.Config {
 		Mode:         config.Redis.Admission.Mode,
 		Addr:         config.Redis.Admission.Addr,
 		Addrs:        append([]string(nil), config.Redis.Admission.Addrs...),
+		Username:     strings.TrimSpace(config.Redis.Admission.Username),
 		Password:     strings.TrimSpace(config.Redis.Admission.Password),
 		TLS:          config.Redis.Admission.TLS,
 		PoolSize:     config.Redis.Admission.PoolSize,

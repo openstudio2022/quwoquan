@@ -1,0 +1,25 @@
+schema: stackctl-source-allocation-contract
+plan_schema: stackctl-source-allocation-plan
+targets: [alpha-local, beta-local, gamma-local]
+plan_filename: source-allocation-plan.json
+plan_fields: [schema, target, context, materialRoot, createdAt, expiresAt]
+plan_ttl_seconds: 900
+context_fields: [candidate, candidateBytesDigest, sharedDigest, startup, startupBytesDigest, source, initializer, contractDigest, managementConnections]
+# managementConnections按四个credential role记录envRef和exact secret bytes digest；不保存密码。
+initializer:
+  root: packages/runtime-shared/source-initializer
+  manifest: manifest.json
+  executable: source-init
+  source: quwoquan_service/services/user-service/cmd/source-init
+  migrations: quwoquan_service/services/user-service/resources/migrations
+  schema: stackctl-source-initializer
+  fields: [schema, environment, target, platform, executable, files]
+credentials:
+  pg_admin: QWQ_SOURCE_PG_ADMIN_DSN
+  redis_admin: QWQ_SOURCE_REDIS_ADMIN_URL
+  old_pg: QWQ_SOURCE_OLD_PG_DSN
+  old_redis: QWQ_SOURCE_OLD_REDIS_URL
+# 仅环境owner显式确认exact plan授予本次动作；plan/摘要/资源空态不授信。
+# candidate使用现役完整loader；任何资源副作用之前锁内复验context和initializer。
+# 无startup时以null绑定，出现/消失或任何身份变化使计划失效。
+# 同计划重放因create-once材料已存在冲突，不删除/覆盖旧资源。

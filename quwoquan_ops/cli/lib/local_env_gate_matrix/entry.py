@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _data_cli_runner
+from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _ops_release_runner
 from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
     CANONICAL_TARGETS,
     DEVICE_PROFILE_FULL,
@@ -47,7 +47,7 @@ def run_local_env_gate_matrix(
     android_physical_device: str = "",
     ios_physical_device: str = "",
     device_profile: str = DEVICE_PROFILE_FULL,
-    data_fn: DataRunner = _data_cli_runner,
+    data_fn: DataRunner = _ops_release_runner,
     execution_class: str = "live",
 ) -> dict[str, Any]:
     """Run the matrix under a process-bound lease for live execution only."""

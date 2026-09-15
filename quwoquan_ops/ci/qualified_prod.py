@@ -27,6 +27,7 @@ _FACT_SCHEMAS = {
     "quwoquan_ops.prod_stage_attempt_fact.v1": ("prod_stage_attempt_fact.schema.json", "attemptId"),
     "quwoquan_ops.prod_released_fact.v1": ("prod_released_fact.schema.json", "releaseId"),
     "quwoquan_ops.prod_rollback_fact.v1": ("prod_rollback_fact.schema.json", "rollbackId"),
+    "quwoquan_ops.prod_unactivated_safe_fact.v1": ("prod_unactivated_safe_fact.schema.json", "safeStateId"),
     "quwoquan_ops.post_release_soak_fact.v1": ("post_release_soak_fact.schema.json", "soakId"),
 }
 class QualifiedProdError(ValueError):
@@ -80,6 +81,8 @@ def validate_prod_released_fact(value: Mapping[str, Any]) -> dict[str, Any]:
     return _typed_fact(value, "quwoquan_ops.prod_released_fact.v1", "ProdReleasedFact")
 def validate_prod_rollback_fact(value: Mapping[str, Any]) -> dict[str, Any]:
     return _typed_fact(value, "quwoquan_ops.prod_rollback_fact.v1", "ProdRollbackFact")
+def validate_prod_unactivated_safe_fact(value: Mapping[str, Any]) -> dict[str, Any]:
+    return _typed_fact(value, "quwoquan_ops.prod_unactivated_safe_fact.v1", "ProdUnactivatedSafeFact")
 def validate_post_release_soak_fact(value: Mapping[str, Any]) -> dict[str, Any]:
     return _typed_fact(value, "quwoquan_ops.post_release_soak_fact.v1", "PostReleaseSoakFact")
 def _timestamp(value: object, field: str) -> tuple[str, dt.datetime]:
@@ -163,13 +166,13 @@ def _artifacts(value: object) -> list[dict[str, str]]:
     return sorted(result, key=lambda item: item["platform"])
 
 
-def _factory_outputs(value: object) -> dict[str, dict[str, Any]]:
-    if not isinstance(value, Mapping):
-        raise QualifiedProdError("CandidateMaterialManifest factoryOutputs are missing")
-    if set(value) != {
-        "service", "app", "qualificationRequestOciRef",
-        "artifactBuildNumberAllocationOciRef",
-    }:
+def _factory_outputs(value: object, targets: object) -> dict[str, dict[str, Any]]:
+    from quwoquan_ops.ci.release_qualification import delivery_targets
+
+    selected = delivery_targets(targets)
+    required = {"service", "web"} | ({"app"} if "app" in selected else set())
+    common = {"qualificationRequestOciRef", "artifactBuildNumberAllocationOciRef"}
+    if not isinstance(value, Mapping) or set(value) != required | common:
         raise QualifiedProdError("CandidateMaterialManifest factoryOutputs shape drifted")
     result: dict[str, dict[str, Any]] = {}
     expected = {
@@ -177,27 +180,27 @@ def _factory_outputs(value: object) -> dict[str, dict[str, Any]]:
             "ociRef", "ociDigest", "payloadDigest", "materialDigest",
             "serviceDigest", "prodRuntimeConfigDeploymentBundle",
         },
+        "web": {
+            "ociRef", "ociDigest", "payloadDigest", "materialDigest",
+            "artifactDigest", "artifactManifest", "sourceTreeDigest",
+        },
         "app": {
             "ociRef", "ociDigest", "payloadDigest", "materialDigest",
             "artifactDigests", "artifactManifests", "sourceTreeDigest",
         },
     }
-    for kind, fields in expected.items():
+    for kind in sorted(required):
         item = value.get(kind)
-        if not isinstance(item, Mapping) or set(item) != fields:
+        if not isinstance(item, Mapping) or set(item) != expected[kind]:
             raise QualifiedProdError(f"{kind} factory output shape drifted")
         locator = _text(item.get("ociRef"), f"factoryOutputs.{kind}.ociRef")
-        oci_digest = _exact_digest(
-            item.get("ociDigest"), f"factoryOutputs.{kind}.ociDigest"
-        )
+        oci_digest = _exact_digest(item.get("ociDigest"), f"factoryOutputs.{kind}.ociDigest")
         if not locator.endswith("@" + oci_digest):
             raise QualifiedProdError(f"{kind} factory OCI locator drifted")
         for field in ("payloadDigest", "materialDigest"):
             _exact_digest(item.get(field), f"factoryOutputs.{kind}.{field}")
         result[kind] = dict(item)
-    for field in (
-        "qualificationRequestOciRef", "artifactBuildNumberAllocationOciRef"
-    ):
+    for field in common:
         locator = _text(value.get(field), f"factoryOutputs.{field}")
         if re.fullmatch(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}", locator) is None:
             raise QualifiedProdError(f"factoryOutputs.{field} is not exact OCI")
@@ -207,12 +210,12 @@ def _factory_outputs(value: object) -> dict[str, dict[str, Any]]:
 def _factory_refs(outputs: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, str]]:
     return {
         kind: {
-            "ociRef": str(outputs[kind]["ociRef"]),
-            "ociDigest": str(outputs[kind]["ociDigest"]),
-            "payloadDigest": str(outputs[kind]["payloadDigest"]),
-            "materialDigest": str(outputs[kind]["materialDigest"]),
+            "ociRef": str(item["ociRef"]),
+            "ociDigest": str(item["ociDigest"]),
+            "payloadDigest": str(item["payloadDigest"]),
+            "materialDigest": str(item["materialDigest"]),
         }
-        for kind in ("service", "app")
+        for kind, item in outputs.items()
     }
 
 
@@ -221,112 +224,293 @@ def _validated_factory_actual_materials(
     root: Path,
     material: Mapping[str, Any],
     service_material_ref: Mapping[str, str],
-    app_material_ref: Mapping[str, str],
+    web_material_ref: Mapping[str, str],
+    app_material_ref: Mapping[str, str] | None,
     repository_root: Path,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, str], dict[str, str]]:
-    """Re-run the qualification-owned actual-byte validators for formal Prod."""
+) -> tuple[dict[str, tuple[dict[str, Any], dict[str, str]]], dict[str, dict[str, Any]]]:
+    """Re-run qualification-owned actual-byte validators for selected Prod targets."""
     from quwoquan_ops.ci.release_qualification import (
-        ReleaseQualificationError,
-        _canonical_material,
-        _validate_app_factory_material,
-        _validate_hosted_allocation,
-        _validate_service_factory_material,
+        ReleaseQualificationError, _canonical_material, _validate_app_factory_material,
+        _validate_hosted_allocation, _validate_service_factory_material, validate_delivery_scope,
     )
 
-    outputs = _factory_outputs(material.get("factoryOutputs"))
+    targets = validate_delivery_scope(material, effect="service")
+    outputs = _factory_outputs(material.get("factoryOutputs"), targets)
     try:
-        request, request_exact = _exact(
-            root, material.get("qualificationRequest"), "qualificationRequest"
-        )
-        allocation, allocation_exact = _exact(
-            root,
-            material.get("artifactBuildNumberAllocation"),
-            "artifactBuildNumberAllocation",
-        )
-        service_material, service_exact = _canonical_material(
-            root, service_material_ref, "serviceFactoryMaterial"
-        )
-        app_material, app_exact = _canonical_material(
-            root, app_material_ref, "appFactoryMaterial"
-        )
+        request, request_exact = _exact(root, material.get("qualificationRequest"), "qualificationRequest")
+        validate_delivery_scope(request, material, effect="service")
+        allocation, allocation_exact = _exact(root, material.get("artifactBuildNumberAllocation"), "artifactBuildNumberAllocation")
+        service_material, service_exact = _canonical_material(root, service_material_ref, "serviceFactoryMaterial")
+        web_material, web_exact = _canonical_material(root, web_material_ref, "webFactoryMaterial")
+        if "app" in targets:
+            if app_material_ref is None:
+                raise ReleaseQualificationError("selected app factory material is missing")
+            app_material, app_exact = _canonical_material(root, app_material_ref, "appFactoryMaterial")
+        elif app_material_ref is not None:
+            raise ReleaseQualificationError("unselected app factory material is not allowed")
+        else:
+            app_material = app_exact = None
         build_number = allocation.get("artifactBuildNumber")
         if type(build_number) is not int or build_number < 1:
             raise QualifiedProdError("factory allocation build number drifted")
-        _validate_hosted_allocation(
-            allocation=allocation,
-            request=request,
-            request_exact=request_exact,
-            artifact_build_number=build_number,
-        )
-        request_locator = _text(
-            material.get("qualificationRequestOciRef"),
-            "qualificationRequestOciRef",
-        )
-        allocation_locator = _text(
-            material.get("artifactBuildNumberAllocationOciRef"),
-            "artifactBuildNumberAllocationOciRef",
-        )
-        service = _validate_service_factory_material(
-            material=service_material,
-            payload_exact=service_exact,
-            locator=str(outputs["service"]["ociRef"]),
-            locator_digest=str(outputs["service"]["ociDigest"]),
-            request=request,
-            request_exact=request_exact,
-            request_locator=request_locator,
-            request_transport_digest=request_locator.rsplit("@", 1)[-1],
-            allocation=allocation,
-            allocation_exact=allocation_exact,
-            allocation_locator=allocation_locator,
-            allocation_transport_digest=allocation_locator.rsplit("@", 1)[-1],
-            repository_root=repository_root,
-        )
-        app = _validate_app_factory_material(
-            material=app_material,
-            payload_exact=app_exact,
-            locator=str(outputs["app"]["ociRef"]),
-            locator_digest=str(outputs["app"]["ociDigest"]),
-            request=request,
-            request_locator=request_locator,
-            request_transport_digest=request_locator.rsplit("@", 1)[-1],
-            allocation=allocation,
-            allocation_locator=allocation_locator,
-            allocation_transport_digest=allocation_locator.rsplit("@", 1)[-1],
-        )
+        _validate_hosted_allocation(request_root=root, allocation=allocation, request=request,
+            request_exact=request_exact, artifact_build_number=build_number)
+        request_locator = _text(material.get("qualificationRequestOciRef"), "qualificationRequestOciRef")
+        allocation_locator = _text(material.get("artifactBuildNumberAllocationOciRef"), "artifactBuildNumberAllocationOciRef")
+        service = _validate_service_factory_material(material=service_material, payload_exact=service_exact,
+            locator=str(outputs["service"]["ociRef"]), locator_digest=str(outputs["service"]["ociDigest"]),
+            request=request, request_exact=request_exact, request_locator=request_locator,
+            request_transport_digest=request_locator.rsplit("@", 1)[-1], allocation=allocation,
+            allocation_exact=allocation_exact, allocation_locator=allocation_locator,
+            allocation_transport_digest=allocation_locator.rsplit("@", 1)[-1], repository_root=repository_root)
+        web_full = _validate_app_factory_material(material=web_material, payload_exact=web_exact,
+            locator=str(outputs["web"]["ociRef"]), locator_digest=str(outputs["web"]["ociDigest"]),
+            request=request, request_locator=request_locator,
+            request_transport_digest=request_locator.rsplit("@", 1)[-1], allocation=allocation,
+            allocation_locator=allocation_locator, allocation_transport_digest=allocation_locator.rsplit("@", 1)[-1])
+        web = {**{key: web_full[key] for key in ("ociRef", "ociDigest", "payloadDigest", "materialDigest", "sourceTreeDigest")},
+               "artifactDigest": web_full["artifactDigests"]["web"], "artifactManifest": web_full["artifactManifests"]["web"]}
+        validated = {"service": service, "web": web}
+        actual = {"service": (service_material, service_exact), "web": (web_material, web_exact)}
+        if app_material is not None and app_exact is not None:
+            app = _validate_app_factory_material(material=app_material, payload_exact=app_exact,
+                locator=str(outputs["app"]["ociRef"]), locator_digest=str(outputs["app"]["ociDigest"]),
+                request=request, request_locator=request_locator,
+                request_transport_digest=request_locator.rsplit("@", 1)[-1], allocation=allocation,
+                allocation_locator=allocation_locator, allocation_transport_digest=allocation_locator.rsplit("@", 1)[-1])
+            validated["app"] = app
+            actual["app"] = (app_material, app_exact)
     except ReleaseQualificationError as exc:
         raise QualifiedProdError(f"factory actual material validation failed: {exc}") from exc
-    if service != outputs["service"] or app != outputs["app"]:
+    if validated != outputs:
         raise QualifiedProdError("factory actual material drifted from CandidateMaterialManifest")
-    return service_material, app_material, service_exact, app_exact
+    return actual, validated
+
+
+def _initial_human_claims(
+    *, binding: Mapping[str, Any], provider: Any, verifier: Any, receipt_ref: str, now: str,
+) -> tuple[dict[str, Any], Any, str]:
+    schema = json.loads((_SCHEMA_ROOT / "prod_activation_admission_fact.schema.json").read_text())
+    try:
+        Draft202012Validator({"$ref": "#/$defs/initialHumanBinding", "$defs": schema["$defs"]}).validate(binding)
+    except ValidationError as exc:
+        raise QualifiedProdError(f"PROD.PRIOR.INVALID: initial binding {exc.message}") from exc
+    if binding["actions"] != sorted(set(binding["actions"])):
+        raise QualifiedProdError("PROD.PRIOR.INVALID: initial binding actions not canonical")
+    readback = provider.readback(receipt_ref)
+    if readback.status != "present" or readback.exact_bytes is None or not readback.provider_receipt_ref:
+        raise QualifiedProdError("PROD.PRIOR.HUMAN_AUTHORITY_UNAVAILABLE: exact readback absent")
+    try:
+        claims = dict(verifier.verify(readback.exact_bytes, readback.provider_receipt_ref))
+    except ValueError as exc:
+        raise QualifiedProdError(f"PROD.PRIOR.HUMAN_AUTHORITY_INVALID: {exc}") from exc
+    binding_digest = digest(binding)
+    _, current = _timestamp(now, "now")
+    _, expiry = _timestamp(claims.get("expires_at"), "authority.expiresAt")
+    if (claims.get("role") != "release_owner"
+            or claims.get("decision_kind") != "production_campaign_approval"
+            or claims.get("actor_authenticated") is not True
+            or claims.get("scope") != {"increment": binding["attemptId"]}
+            or claims.get("evidence_fingerprint") != binding_digest
+            or claims.get("actions") != binding["actions"]
+            or claims.get("receipt_state") not in {"available", "consumed"}
+            or (claims.get("receipt_state") == "consumed" and (
+                claims.get("winner_idempotency_key") != binding["attemptId"]
+                or claims.get("winner_command_digest") != binding_digest))
+            or expiry <= current):
+        raise QualifiedProdError("PROD.PRIOR.HUMAN_AUTHORITY_INVALID: scope/material/attempt/actions/state/expiry drifted")
+    return claims, readback, binding_digest
+
+
+def verify_initial_human_binding(
+    *, binding: Mapping[str, Any], provider: Any, verifier: Any, receipt_ref: str, now: str,
+) -> dict[str, Any]:
+    """只读验签诊断；本地 fixture/test key 永不授予首发 authority。"""
+    claims, readback, binding_digest = _initial_human_claims(
+        binding=binding, provider=provider, verifier=verifier, receipt_ref=receipt_ref, now=now
+    )
+    return {
+        "bindingDigest": binding_digest, "humanBindingVerified": True,
+        "providerReceiptRef": readback.provider_receipt_ref,
+        "authorityBytesDigest": digest(readback.exact_bytes),
+        "authorityGeneration": claims["receipt_generation"], "authorityEtag": claims["receipt_etag"],
+        "releaseEvidenceEligible": provider.release_evidence_eligible is True,
+        "consumed": claims["receipt_state"] == "consumed", "admissionEligible": False,
+        "blocker": "PROD.PRIOR.TARGET_FENCE_AND_RECOVERY_UNAVAILABLE",
+    }
+
+
+def consume_initial_human_authority(
+    *, binding: Mapping[str, Any], provider: Any, verifier: Any, receipt_ref: str, now: str,
+) -> dict[str, Any]:
+    """在连续execution slot内消费既有Human receipt；丢响应只查询exact winner。"""
+    claims, _, binding_digest = _initial_human_claims(
+        binding=binding, provider=provider, verifier=verifier, receipt_ref=receipt_ref, now=now
+    )
+    if provider.release_evidence_eligible is not True:
+        raise QualifiedProdError("PROD.PRIOR.HUMAN_AUTHORITY_INVALID: local/test authority is non-release")
+    if claims["receipt_state"] == "consumed":
+        if (claims.get("winner_idempotency_key") != binding["attemptId"]
+                or claims.get("winner_command_digest") != binding_digest):
+            raise QualifiedProdError("PROD.PRIOR.HUMAN_AUTHORITY_CONFLICT: exact winner differs")
+        return {"bindingDigest": binding_digest, "winnerAttemptId": binding["attemptId"],
+                "winnerCommandDigest": binding_digest, "authorityGeneration": claims["receipt_generation"],
+                "consumed": True, **{field: binding[field] for field in ("target", "candidateDigest",
+                    "observationDigest", "executionOwner", "executionGeneration", "releaseGeneration",
+                    "stableAdmission", "candidateMaterialManifest", "serviceMaterial", "webMaterial",
+                    "recoveryResources", "recoveryEffects")}}
+    try:
+        provider.consume(receipt_ref, expected_version=claims["receipt_etag"],
+            idempotency_key=binding["attemptId"], fingerprint=binding_digest,
+            scope={"increment": binding["attemptId"]}, action="authorize_initial_prod",
+            command_digest=binding_digest)
+    except Exception:
+        pass  # outcome unknown 必须进入同一 receipt 的 exact winner readback。
+    try:
+        winner, _, current_digest = _initial_human_claims(
+            binding=binding, provider=provider, verifier=verifier, receipt_ref=receipt_ref, now=now
+        )
+    except QualifiedProdError as exc:
+        raise QualifiedProdError(
+            "PROD.PRIOR.HUMAN_AUTHORITY_OUTCOME_UNKNOWN: exact winner/attempt not proven"
+        ) from exc
+    if (current_digest != binding_digest or winner.get("receipt_state") != "consumed"
+            or winner.get("winner_idempotency_key") != binding["attemptId"]
+            or winner.get("winner_command_digest") != binding_digest
+            or winner.get("receipt_previous_generation") != claims["receipt_generation"]):
+        raise QualifiedProdError("PROD.PRIOR.HUMAN_AUTHORITY_OUTCOME_UNKNOWN: exact winner/attempt not proven")
+    return {"bindingDigest": binding_digest, "winnerAttemptId": binding["attemptId"],
+            "winnerCommandDigest": binding_digest, "authorityGeneration": winner["receipt_generation"],
+            "consumed": True, **{field: binding[field] for field in ("target", "candidateDigest",
+                "observationDigest", "executionOwner", "executionGeneration", "releaseGeneration",
+                "stableAdmission", "candidateMaterialManifest", "serviceMaterial", "webMaterial",
+                "recoveryResources", "recoveryEffects")}}
+
+
+def validate_prior(value: object) -> dict[str, Any]:
+    schema = json.loads((_SCHEMA_ROOT / "prod_activation_admission_fact.schema.json").read_text())
+    try:
+        Draft202012Validator({"$ref": "#/$defs/prior", "$defs": schema["$defs"]}).validate(value)
+    except ValidationError as exc:
+        raise QualifiedProdError(f"PROD.PRIOR.INVALID: {exc.message}") from exc
+    return dict(value)
+
+
+def validate_absent_prior(root: Path, value: object, *, candidate: str = "") -> dict[str, Any]:
+    prior = validate_prior(value)
+    if prior["state"] != "absent":
+        raise QualifiedProdError("PROD.PRIOR.INVALID: absent prior required")
+    observations = {}
+    for field in ("inventoryObservation", "ledgerHistoryObservation", "routeObservation",
+                  "unitObservation", "autoRestartObservation", "inflightObservation"):
+        observations[field], _ = _exact(root, prior[field], f"prior.{field}")
+    authority, _ = _exact(root, prior["humanAuthority"], "prior.humanAuthority")
+    recovery, _ = _exact(root, prior["recoveryResources"], "prior.recoveryResources")
+    owner = prior["executionOwner"]
+    generation = prior["executionGeneration"]
+    common = lambda item: (item.get("status") == "complete" and item.get("target") == "prod-hosted"
+        and item.get("environment") == "prod" and item.get("executionOwner") == owner
+        and item.get("executionGeneration") == generation and item.get("releaseGeneration") == prior["expectedGeneration"]
+        and item.get("guardsContinuous") is True)
+    if not all(common(item) for item in observations.values()):
+        raise QualifiedProdError("PROD.PRIOR.UNKNOWN: incomplete/failed observation or execution guard drift")
+    if (observations["inventoryObservation"].get("completeInventory") is not True
+            or observations["ledgerHistoryObservation"].get("activeReleased") is not False
+            or observations["ledgerHistoryObservation"].get("unexplainedHistory") is not False
+            or observations["routeObservation"].get("candidateRouted") is not False
+            or observations["unitObservation"].get("candidateUnitsActive") is not False
+            or observations["autoRestartObservation"].get("candidateAutoRestartEnabled") is not False
+            or observations["inflightObservation"].get("inflightActivation") is not False):
+        raise QualifiedProdError("PROD.PRIOR.UNKNOWN: target is not proven absent")
+    observation_digest = digest({field: prior[field] for field in sorted(observations)})
+    if (prior["observationDigest"] != observation_digest
+            or authority.get("bindingDigest") != prior["humanBindingDigest"]
+            or authority.get("consumed") is not True
+            or authority.get("winnerAttemptId") != prior["attemptId"]
+            or authority.get("observationDigest") != observation_digest
+            or authority.get("candidateDigest") != candidate
+            or authority.get("target") != "prod-hosted"
+            or authority.get("executionOwner") != owner
+            or authority.get("executionGeneration") != generation
+            or authority.get("releaseGeneration") != prior["expectedGeneration"]
+            or recovery.get("status") != "ready" or recovery.get("preservePersistentResources") is not True):
+        raise QualifiedProdError("PROD.PRIOR.INVALID: Human/recovery/observation binding drifted")
+    return prior
+
+
+def admission_prior(admission: Mapping[str, Any]) -> dict[str, Any]:
+    if {"previousActiveReleasedLedger", "rollbackReadiness", "previousOciDigests"} & set(admission):
+        raise QualifiedProdError("PROD.PRIOR.INVALID: retired implicit prior fields")
+    return validate_prior(admission.get("prior"))
+
+
+def validate_present_prior(root: Path, value: object, *, service: str = "prod-stack", candidate: str = "") -> dict[str, Any]:
+    prior = validate_prior(value)
+    previous, previous_exact = _exact(root, prior["previousReleased"], "prior.previousReleased")
+    validate_prod_released_fact(previous)
+    _, _, receipt = _hosted_stage_readback(root, previous["hostedReceiptReadback"], service=service, field="prior.hostedReceiptReadback")
+    rollback, _ = _exact(root, prior["rollbackReadiness"], "prior.rollbackReadiness")
+    if (not previous["active"] or previous["revoked"] or not previous["compatible"] or not previous["digestsExist"]
+            or receipt["stage"] != "100" or receipt["triggerStage"] != "100"
+            or receipt["decision"] != "continue" or receipt["rollbackOutcome"] != "not_triggered"
+            or receipt["toCandidateDigest"] != previous["candidateId"]
+            or receipt["lastGoodCandidateDigest"] != previous["candidateId"]
+            or prior["expectedGeneration"] != receipt["committedGeneration"]
+            or prior["ociDigests"] != sorted(previous["ociDigests"])
+            or previous["candidateId"] == candidate
+            or rollback.get("schema") != "quwoquan_ops.rollback_readiness_fact.v1"
+            or rollback.get("status") != "ready" or rollback.get("previousActiveReleasedLedger") != previous_exact
+            or sorted(rollback.get("ociDigests", [])) != prior["ociDigests"]
+            or rollback.get("digestsExist") is not True or rollback.get("compatible") is not True):
+        raise QualifiedProdError("PROD.PRIOR.INVALID: present released/readback/recovery binding drifted")
+    return prior
+
+
+def create_present_prior(
+    *, root: Path, previous_released_ref: Mapping[str, str],
+    rollback_readiness_ref: Mapping[str, str], service: str = "prod-stack",
+) -> Path:
+    """只由真实released及hosted receipt派生present；不存在首发flag。"""
+    previous, previous_exact = _exact(root, previous_released_ref, "previousReleased")
+    validate_prod_released_fact(previous)
+    _, _, receipt = _hosted_stage_readback(root, previous["hostedReceiptReadback"], service=service, field="previousReceipt")
+    _, rollback_exact = _exact(root, rollback_readiness_ref, "rollbackReadiness")
+    prior = {"state": "present", "target": "prod-hosted", "environment": "prod",
+             "previousReleased": previous_exact, "rollbackReadiness": rollback_exact,
+             "expectedGeneration": receipt["committedGeneration"], "ociDigests": sorted(previous["ociDigests"])}
+    validate_present_prior(root, prior, service=service)
+    return _write_once(root / "prod/priors" / f"{digest(prior)}.json", prior)
 
 
 def create_prod_activation_admission(
     *,
     root: Path,
     release_tag_admission_ref: Mapping[str, str],
-    previous_active_released_ledger_ref: Mapping[str, str],
-    rollback_readiness_ref: Mapping[str, str],
+    prior_ref: Mapping[str, str],
     control_plane_git_sha: str,
     admitted_at: str,
     service: str = "prod-stack",
 ) -> Path:
     """Admit Prod from stable -> Qualification -> CMM factory authority."""
     root = root.resolve()
+    prior_payload, _ = _exact(root, prior_ref, "prior")
+    prior = validate_prior(prior_payload)
     tag, tag_exact = _exact(root, release_tag_admission_ref, "releaseTagAdmission")
     qualification, qualification_exact = _exact(
         root, tag.get("qualificationFact"), "releaseTagAdmission.qualificationFact"
     )
-    previous, previous_exact = _exact(
-        root, previous_active_released_ledger_ref, "previousActiveReleasedLedger"
+    candidate_identity = _exact_digest(
+        tag.get("candidateIdentity") or tag.get("candidateMaterialId"), "candidateIdentity"
     )
-    validate_prod_released_fact(previous)
-    _, _, previous_receipt = _hosted_stage_readback(
-        root,
-        previous.get("hostedReceiptReadback"),
-        service=service,
-        field="previousActiveReleasedLedger.hostedReceiptReadback",
-    )
-    rollback, rollback_exact = _exact(root, rollback_readiness_ref, "rollbackReadiness")
+    previous = previous_exact = previous_receipt = rollback = rollback_exact = None
+    if prior["state"] == "present":
+        previous, previous_exact = _exact(root, prior["previousReleased"], "prior.previousReleased")
+        validate_prod_released_fact(previous)
+        _, _, previous_receipt = _hosted_stage_readback(root, previous.get("hostedReceiptReadback"),
+            service=service, field="previousActiveReleasedLedger.hostedReceiptReadback")
+        rollback, rollback_exact = _exact(root, prior["rollbackReadiness"], "prior.rollbackReadiness")
+    else:
+        prior = validate_absent_prior(root, prior, candidate=candidate_identity)
     source = _sha(tag.get("peeledCommit"), "releaseTagAdmission.peeledCommit")
     control = _sha(control_plane_git_sha, "controlPlaneGitSha")
     tag_name = _text(tag.get("tagName"), "tagName")
@@ -351,8 +535,21 @@ def create_prod_activation_admission(
     material, material_exact = _exact(
         root, tag.get("candidateMaterialManifest"), "candidateMaterialManifest"
     )
-    outputs = _factory_outputs(material.get("factoryOutputs"))
+    from quwoquan_ops.ci.release_qualification import validate_delivery_scope, required_platforms
+    try:
+        targets = validate_delivery_scope(tag, qualification, material, effect="service")
+        if {item["platform"] for item in artifacts} != required_platforms(targets):
+            raise ValueError("deliveryTargets artifact coverage drifted")
+    except ValueError as exc:
+        raise QualifiedProdError(str(exc)) from exc
+    outputs = _factory_outputs(material.get("factoryOutputs"), targets)
     refs = _factory_refs(outputs)
+    if prior["state"] == "absent":
+        authority, _ = _exact(root, prior["humanAuthority"], "prior.humanAuthority")
+        if (authority.get("stableAdmission") != tag_exact
+                or authority.get("candidateMaterialManifest") != material_exact
+                or authority.get("candidateDigest") != candidate_identity):
+            raise QualifiedProdError("PROD.PRIOR.INVALID: Human authority stable/material binding drifted")
     if (
         qualification.get("candidateMaterialManifest") != material_exact
         or tag.get("candidateMaterialManifest") != material_exact
@@ -365,41 +562,33 @@ def create_prod_activation_admission(
         or _artifacts(material.get("artifacts")) != artifacts
         or outputs["service"]["ociRef"]
         != next(item["ociRef"] for item in artifacts if item["platform"] == "service")
-        or any(
+        or next(item["ociRef"] for item in artifacts if item["platform"] == "web") != outputs["web"]["ociRef"]
+        or ("app" in targets and any(
             item["ociRef"] != outputs["app"]["ociRef"]
-            for item in artifacts if item["platform"] in {"android", "ios", "web"}
-        )
+            for item in artifacts if item["platform"] in {"android", "ios"}
+        ))
     ):
         raise QualifiedProdError("stable material exact binding drifted")
-    if (
-        previous.get("schema") != "quwoquan_ops.prod_released_fact.v1"
-        or previous.get("terminal") != "released"
-        or previous.get("active") is not True
-        or previous.get("revoked") is not False
-        or previous.get("digestsExist") is not True
-        or previous.get("compatible") is not True
-        or previous_receipt.get("stage") != "100"
-        or previous_receipt.get("triggerStage") != "100"
-        or previous_receipt.get("decision") != "continue"
-        or previous_receipt.get("rollbackOutcome") != "not_triggered"
-        or previous_receipt.get("toCandidateDigest") != previous.get("candidateId")
-        or previous_receipt.get("lastGoodCandidateDigest") != previous.get("candidateId")
-    ):
-        raise QualifiedProdError("previous active released ledger is invalid")
-    previous_digests = sorted(
-        {_exact_digest(value, "previous.ociDigest") for value in previous.get("ociDigests", [])}
-    )
-    if not previous_digests:
-        raise QualifiedProdError("previous active released ledger has no exact digests")
-    if (
-        rollback.get("schema") != "quwoquan_ops.rollback_readiness_fact.v1"
-        or rollback.get("status") != "ready"
-        or rollback.get("previousActiveReleasedLedger") != previous_exact
-        or sorted(rollback.get("ociDigests", [])) != previous_digests
-        or rollback.get("digestsExist") is not True
-        or rollback.get("compatible") is not True
-    ):
-        raise QualifiedProdError("rollback readiness is not exact")
+    if prior["state"] == "present":
+        assert previous is not None and previous_receipt is not None and rollback is not None
+        if (previous.get("schema") != "quwoquan_ops.prod_released_fact.v1"
+                or previous.get("terminal") != "released" or previous.get("active") is not True
+                or previous.get("revoked") is not False or previous.get("digestsExist") is not True
+                or previous.get("compatible") is not True or previous_receipt.get("stage") != "100"
+                or previous_receipt.get("triggerStage") != "100" or previous_receipt.get("decision") != "continue"
+                or previous_receipt.get("rollbackOutcome") != "not_triggered"
+                or previous_receipt.get("toCandidateDigest") != previous.get("candidateId")
+                or previous_receipt.get("lastGoodCandidateDigest") != previous.get("candidateId")):
+            raise QualifiedProdError("previous active released ledger is invalid")
+        previous_digests = sorted({_exact_digest(value, "previous.ociDigest") for value in previous.get("ociDigests", [])})
+        if (not previous_digests or prior["expectedGeneration"] != previous_receipt["committedGeneration"]
+                or prior["ociDigests"] != previous_digests or previous.get("candidateId") == candidate_identity):
+            raise QualifiedProdError("PROD.PRIOR.INVALID: generation/digests drifted or candidate self-reference")
+        if (rollback.get("schema") != "quwoquan_ops.rollback_readiness_fact.v1" or rollback.get("status") != "ready"
+                or rollback.get("previousActiveReleasedLedger") != previous_exact
+                or sorted(rollback.get("ociDigests", [])) != previous_digests
+                or rollback.get("digestsExist") is not True or rollback.get("compatible") is not True):
+            raise QualifiedProdError("rollback readiness is not exact")
     current_digests = sorted(
         {item["digest"] for item in artifacts}
         | {str(refs[kind]["ociDigest"]) for kind in refs}
@@ -407,6 +596,7 @@ def create_prod_activation_admission(
     )
     body: dict[str, Any] = {
         "schema": "quwoquan_ops.prod_activation_admission_fact.v1",
+        "deliveryTargets": targets,
         "decision": "admitted",
         "stableTag": tag_name,
         "tagObjectOid": _sha(tag.get("tagObjectOid"), "tagObjectOid"),
@@ -417,11 +607,9 @@ def create_prod_activation_admission(
         "qualification": qualification_exact,
         "candidateMaterialManifest": material_exact,
         "factoryMaterials": refs,
-        "previousActiveReleasedLedger": previous_exact,
-        "rollbackReadiness": rollback_exact,
+        "prior": prior,
         "artifacts": artifacts,
         "ociDigests": current_digests,
-        "previousOciDigests": previous_digests,
         "createdBeforeStage": "canary",
         "admittedAt": _text(admitted_at, "admittedAt"),
     }
@@ -434,7 +622,8 @@ def materialize_prod_activation_input(
     root: Path,
     admission_ref: Mapping[str, str],
     service_material_ref: Mapping[str, str],
-    app_material_ref: Mapping[str, str],
+    web_material_ref: Mapping[str, str],
+    app_material_ref: Mapping[str, str] | None,
     output: Path,
     repository_root: Path | None = None,
 ) -> Path:
@@ -452,23 +641,27 @@ def materialize_prod_activation_input(
     ):
         raise QualifiedProdError("Prod admission is invalid")
     tag, _ = _exact(root, admission.get("releaseTagAdmission"), "releaseTagAdmission")
-    _exact(root, admission.get("qualification"), "qualification")
+    qualification, _ = _exact(root, admission.get("qualification"), "qualification")
     material, _ = _exact(
         root, admission.get("candidateMaterialManifest"), "candidateMaterialManifest"
     )
-    previous, _ = _exact(
-        root, admission.get("previousActiveReleasedLedger"), "previousActiveReleasedLedger"
+    from quwoquan_ops.ci.release_qualification import validate_delivery_scope
+    try:
+        targets = validate_delivery_scope(admission, tag, qualification, material, effect="service")
+        prior = admission_prior(admission)
+        candidate = tag.get("candidateIdentity") or tag.get("candidateMaterialId")
+        if prior["state"] == "present": validate_present_prior(root, prior, candidate=candidate)
+        else: validate_absent_prior(root, prior, candidate=candidate)
+    except ValueError as exc:
+        raise QualifiedProdError(str(exc)) from exc
+    previous = None
+    if prior["state"] == "present":
+        previous, _ = _exact(root, prior["previousReleased"], "previousActiveReleasedLedger")
+    actual, outputs = _validated_factory_actual_materials(
+        root=root, material=material, service_material_ref=service_material_ref,
+        web_material_ref=web_material_ref, app_material_ref=app_material_ref,
+        repository_root=repository_root,
     )
-    service_material, app_material, service_exact, app_exact = (
-        _validated_factory_actual_materials(
-            root=root,
-            material=material,
-            service_material_ref=service_material_ref,
-            app_material_ref=app_material_ref,
-            repository_root=repository_root,
-        )
-    )
-    outputs = _factory_outputs(material.get("factoryOutputs"))
     refs = _factory_refs(outputs)
     if admission.get("factoryMaterials") != refs:
         raise QualifiedProdError("Prod admission factory locator closure drifted")
@@ -486,35 +679,31 @@ def materialize_prod_activation_input(
         "releaseTagAdmission": admission["releaseTagAdmission"],
         "qualification": admission["qualification"],
         "candidateMaterialManifest": admission["candidateMaterialManifest"],
-        "serviceFactoryMaterial": {
-            **refs["service"],
-            "materializedManifest": service_exact,
-        },
-        "appFactoryMaterial": {
-            **refs["app"],
-            "materializedManifest": app_exact,
-        },
-        "previousReleased": admission["previousActiveReleasedLedger"],
-        "rollbackReadiness": admission["rollbackReadiness"],
+        "serviceFactoryMaterial": {**refs["service"], "materializedManifest": actual["service"][1]},
+        "webFactoryMaterial": {**refs["web"], "materializedManifest": actual["web"][1]},
+        "prior": admission_prior(admission),
         "stableTag": admission["stableTag"],
         "sourceGitSha": admission["sourceGitSha"],
         "sourceTree": admission["sourceTree"],
         "controlPlaneGitSha": admission["controlPlaneGitSha"],
         "candidateMaterialId": _exact_digest(material.get("materialId"), "candidateMaterialId"),
-        "previousReleasedId": _exact_digest(previous.get("releaseId"), "previousReleasedId"),
+        "previousReleasedId": (_exact_digest(previous.get("releaseId"), "previousReleasedId") if previous else None),
         "candidateDigest": _exact_digest(
             tag.get("candidateIdentity") or tag.get("candidateMaterialId"),
             "candidateIdentity",
         ),
-        "previousCandidateDigest": _exact_digest(
-            previous.get("candidateMaterialId") or previous.get("candidateId"),
-            "previous.candidateMaterialId",
-        ),
-        "serviceMaterialDigest": service_material["materialDigest"],
-        "appMaterialDigest": app_material["materialDigest"],
+        "previousCandidateDigest": (_exact_digest(previous.get("candidateMaterialId") or previous.get("candidateId"),
+            "previous.candidateMaterialId") if previous else None),
+        "serviceMaterialDigest": actual["service"][0]["materialDigest"],
+        "webMaterialDigest": actual["web"][0]["materialDigest"],
         "ociDigests": admission["ociDigests"],
-        "previousOciDigests": admission["previousOciDigests"],
     }
+    if previous is None:
+        payload.pop("previousReleasedId")
+        payload.pop("previousCandidateDigest")
+    if "app" in targets:
+        payload["appFactoryMaterial"] = {**refs["app"], "materializedManifest": actual["app"][1]}
+        payload["appMaterialDigest"] = actual["app"][0]["materialDigest"]
     destination = output.expanduser()
     if destination.is_symlink():
         raise QualifiedProdError("Prod activation input output is unsafe")
@@ -614,7 +803,7 @@ def _admission_candidate_bindings(
     tag, _ = _exact(root, admission.get("releaseTagAdmission"), "releaseTagAdmission")
     previous, _ = _exact(
         root,
-        admission.get("previousActiveReleasedLedger"),
+        admission_prior(admission)["previousReleased"],
         "previousActiveReleasedLedger",
     )
     validate_prod_released_fact(previous)
@@ -819,7 +1008,7 @@ def append_prod_stage_attempt(
             raise QualifiedProdError("first stage cannot have predecessor")
         previous, _ = _exact(
             root,
-            admission.get("previousActiveReleasedLedger"),
+            admission_prior(admission)["previousReleased"],
             "previousActiveReleasedLedger",
         )
         _, _, previous_receipt = _hosted_stage_readback(
@@ -926,6 +1115,58 @@ def create_terminal_released_fact(
     body["releaseId"] = digest(body)
     validate_prod_released_fact(body)
     return _write_once(root / "prod" / "released" / f"{body['releaseId']}.json", body)
+def create_prod_unactivated_safe_fact(
+    *, root: Path, admission_ref: Mapping[str, str], failed_attempt_ref: Mapping[str, str],
+    recovery_readback_ref: Mapping[str, str], recorded_at: str,
+) -> Path:
+    """Absent失败仅在停流readback先于停unit且资源保留后追加安全终态。"""
+    root = root.resolve()
+    admission, admission_exact = _exact(root, admission_ref, "admission")
+    prior = admission_prior(admission)
+    if prior["state"] != "absent":
+        raise QualifiedProdError("unactivated_safe is only valid for absent prior")
+    failed, failed_exact = _validated_exact_fact(root, failed_attempt_ref,
+        schema="quwoquan_ops.prod_stage_attempt_fact.v1", field="failedAttempt")
+    recovery, recovery_exact = _exact(root, recovery_readback_ref, "recoveryReadback")
+    if failed.get("admission") != admission_exact or failed.get("status") != "failed":
+        raise QualifiedProdError("unactivated_safe requires failed current admission attempt")
+    attempts = _attempts(root, str(admission["admissionId"]))
+    if not attempts or attempts[-1][2] != failed_exact:
+        raise QualifiedProdError("failed attempt is not latest append")
+    required = {"schema", "status", "target", "environment", "admission", "attempt",
+        "executionOwner", "executionGeneration", "previousGeneration", "committedGeneration",
+        "trafficStoppedAt", "trafficReadbackAt", "unitsStoppedAt", "autoRestartDisabled",
+        "inactiveConfigRemoved", "inventoryComplete", "candidateExposed", "preservedResources",
+        "coexistingWorkloadsUnchanged", "auditAppended"}
+    preserved = {"database", "volume", "media", "backup", "recoveryPoints", "audit"}
+    if (set(recovery) != required or recovery.get("schema") != "quwoquan_ops.prod_initial_recovery_readback.v1"
+            or recovery.get("status") != "passed" or recovery.get("target") != "prod-hosted"
+            or recovery.get("environment") != "prod" or recovery.get("admission") != admission_exact
+            or recovery.get("attempt") != failed_exact or recovery.get("executionOwner") != prior["executionOwner"]
+            or recovery.get("executionGeneration") != prior["executionGeneration"]
+            or recovery.get("previousGeneration") != prior["expectedGeneration"]
+            or recovery.get("committedGeneration") != prior["expectedGeneration"] + 1
+            or not (recovery["trafficStoppedAt"] <= recovery["trafficReadbackAt"] <= recovery["unitsStoppedAt"])
+            or recovery.get("autoRestartDisabled") is not True or recovery.get("inactiveConfigRemoved") is not True
+            or recovery.get("inventoryComplete") is not True or recovery.get("candidateExposed") is not False
+            or set(recovery.get("preservedResources") or []) != preserved
+            or recovery.get("coexistingWorkloadsUnchanged") is not True or recovery.get("auditAppended") is not True):
+        raise QualifiedProdError("PROD.INITIAL_RECOVERY.UNKNOWN: safe recovery readback is incomplete")
+    body = {"schema": "quwoquan_ops.prod_unactivated_safe_fact.v1", "terminal": "unactivated_safe",
+        "admission": admission_exact, "failedAttempt": failed_exact, "recoveryReadback": recovery_exact,
+        "previousGeneration": prior["expectedGeneration"], "committedGeneration": prior["expectedGeneration"] + 1,
+        "candidateId": _admission_candidate_bindings_absent(root, admission),
+        "preservedResources": sorted(preserved), "recordedAt": _text(recorded_at, "recordedAt")}
+    body["safeStateId"] = digest(body)
+    validate_prod_unactivated_safe_fact(body)
+    return _write_once(root / "prod" / "unactivated-safe" / f"{body['safeStateId']}.json", body)
+
+
+def _admission_candidate_bindings_absent(root: Path, admission: Mapping[str, Any]) -> str:
+    tag, _ = _exact(root, admission.get("releaseTagAdmission"), "releaseTagAdmission")
+    return _exact_digest(tag.get("candidateIdentity") or tag.get("candidateMaterialId"), "candidateIdentity")
+
+
 def create_prod_rollback_fact(
     *,
     root: Path,
@@ -945,7 +1186,7 @@ def create_prod_rollback_fact(
         field="failedAttempt",
     )
     previous, previous_exact = _exact(
-        root, admission.get("previousActiveReleasedLedger"), "previousReleased"
+        root, admission_prior(admission)["previousReleased"], "previousReleased"
     )
     validate_prod_released_fact(previous)
     hosted_payload, hosted_exact, receipt = _hosted_stage_readback(

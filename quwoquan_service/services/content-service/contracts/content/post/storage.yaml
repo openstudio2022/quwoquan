@@ -1,4 +1,9 @@
 backend: mongodb
+transaction:
+  scope: [data_release_query_publications, content_outbox]
+  isolation: mongo_transaction
+  mechanism: unique_constraint
+  guarantees: [publication_binding_unique_winner, command_receipt_atomicity]
 resources:
   post_store:
     engine: mongodb
@@ -13,6 +18,20 @@ resources:
     role: runtime
     required: true
 collections:
+  post_safety_states:
+    entity: PostSafetyState
+    publication_role: not_published
+    role: authoritative
+    description: Post owner内部安全资格唯一长期记录，无TTL且禁止原对象/作者ID、正文、URL。objectDigest唯一；新建只允许可信create/stage已核验安全/主体关闭/恢复资格的事务显式初始化，缺记录不allowed。真实安全决定和candidate activation/rollback事务均匹配同一记录实际$inc fenceGeneration；安全决定才递增safetyRevision，重复决定按原Post command receipt/decisionDigest幂等。仅读或无实际修改的条件检查不产生串行证据。terminated不可恢复，restricted可由原合法命令重新允许但不更新旧candidate安全绑定。HMAC稳定独立密钥及恢复完整性必须由现役部署authority提供，未交付保持not-ready。
+    indexes:
+      - {name: uq_post_safety_object, keys: {objectDigest: 1}, unique: true}
+  data_release_query_publications:
+    entity: PostReleaseCandidatePrepared
+    publication_role: not_published
+    description: Content纯准备命令唯一冻结publication依据，与content_outbox同Mongo事务。binding唯一，publicationId幂等；同binding不同snapshot拒绝，不拥有查询ready状态或active权。
+    indexes:
+    - {name: uq_data_release_query_publication, keys: {publicationId: 1}, unique: true}
+    - {name: uq_data_release_query_binding, keys: {binding.release.environment: 1, binding.release.sourceOwner: 1, binding.release.releaseId: 1, binding.release.manifestDigest: 1, binding.slice: 1, binding.providerBindingGeneration: 1, binding.schemaGeneration: 1}, unique: true}
   posts:
     publication_role: not_published
     entity: Post
@@ -155,12 +174,13 @@ collections:
     publication_role: publication_accessory
     entity: Post
     role: authoritative
-    description: Content release stage 与 Activate transaction 共享的全局单调 projection version 分配器；仅通过 data_release_sequences/content-release-projection 的事务 $inc 推进，避免并发 stage 或 rollback transition 的 aggregateVersion 冲突。
+    description: Content release stage与live物化使用的现役全局单调分配器，仅事务$inc推进。candidate冻结时取得的sourceVersion不随activation重分配；live物化序号不是对象源版本。ContentReleaseFenceChanged的envelope aggregateVersion使用after.revision，outbox传输顺序使用content_outbox_sequences，不互相替代。
   data_release_state:
+    # safetyBinding只属于现有candidate控制行，不新建安全绑定ledger。
     publication_role: not_published
     entity: Post
     role: authoritative
-    description: canonical immutable content release 的 Content owner-local 控制面。全流程为 prepared -> imported -> projected -> verified -> active，但 kind=candidate 的 status 只允许到 verified；kind=active_pointer 是每个 environment/sourceOwner 唯一 active binding，并由 application/public.ActiveReleaseFenceQueryPort 以 environment + sourceOwner exact key 提供跨服务 typed 只读 seam（transport adapter 可复用，禁止共享 Mongo）；既有 cmd/import --read-active-report 继续作为运维报告 adapter。Activate 在同一 Mongo transaction 中先把 verified candidate 原子物化到 posts/content_outbox/media_assets、对缺失旧 Post 做 tombstone，再以 revision 和 expected-current tuple CAS pointer；任一步失败全部回滚。旧单文档 active shape 必须 fail closed，禁止 dual-read；candidate stage 或失败不得改变 previous active。
+    description: canonical immutable content release 的 Content owner-local 控制面。全流程为 prepared -> imported -> projected -> verified -> active，但 kind=candidate 的 status 只允许到 verified；kind=active_pointer 是每个 environment/sourceOwner 唯一 active binding，并由 application/public.ActiveReleaseFenceQueryPort 以 environment + sourceOwner exact key 提供跨服务 typed 只读 seam（transport adapter 可复用，禁止共享 Mongo）；既有 cmd/import --read-active-report 继续作为运维报告 adapter。Activate 在同一 Mongo transaction 中先把 verified candidate 原子物化到 posts/content_outbox/media_assets、对缺失旧Post仅标记release退出的live物化不可见状态，再以revision和expected-current tuple CAS pointer；同事务追加唯一ContentReleaseFenceChanged及其active提交回执，不发PostDeleted/PostPublished、不触发权威删除级联、不改保留candidate。任一步失败全部回滚。旧单文档 active shape 必须 fail closed，禁止 dual-read；candidate stage 或失败不得改变 previous active。所有activate/rollback写入必须先经同一application admission回读当前Search completed proof与User Creator source closure，并验证其余required查询/媒体/四域闭包；缺失不进入Mongo事务。candidate行额外持有safetyBinding:PostCandidateSafetyBinding，绑定verified完整Post集合及source snapshotDigest；只有显式stage/owner重验可记录，历史缺绑定not-ready且不得query补字段。source/proof组合查询匹配当前PostSafetyState，activation事务在live物化与pointer CAS前按objectDigest排序逐项真实写入fenceGeneration并核对allowed/safetyRevision；与Post安全命令写同键产生Mongo冲突。任何不匹配拒绝整candidate，不删减集合沿用原proof。proof来源为Search preparation持久终态，Content不另建Search进度集合或pointer；source/Provider generation与candidate保留在CAS/readback期间不得被并发部署/GC改写，查询证明不冒充跨Mongo/ES事务。
     indexes:
     - name: uq_data_release_state_environment_candidate
       keys: {environment: 1, sourceOwner: 1, kind: 1, releaseId: 1, manifestDigest: 1}
@@ -176,7 +196,7 @@ collections:
     publication_role: not_published
     entity: Post
     role: append_only
-    description: 每次 prepared/imported/projected/verified/active 尝试的脱敏持久化回执；保留 duration、attempted/success count、checkpoint 与 first typed blocker。失败回执不可覆盖成功阶段，且不得推进 active pointer；same candidate exact active replay 不追加重复 active 事实。
+    description: 每次prepared/imported/projected/verified/active尝试的现役append-only回执，保持既有tuple/stage/attemptId唯一身份及duration/count/checkpoint/blocker。新的成功active回执在pointer事务内额外保存transition:ContentReleaseFenceChangedPayload、eventId:string、payloadDigest:string(sha256)，完整before/after来自同事务实际pointer而非事后推导；ReadContentReleaseCommitReceipt仅从该既有回执投影，不建第二ledger。缺完整transition的历史原件只保留审计，不补字段、不作为迟到事件提交资格；同意图精确active replay不追加重复事实。失败回执不得覆盖成功阶段或推进pointer。
     indexes:
     - name: uq_data_release_stage_receipt_attempt
       keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1, stage: 1, attemptId: 1}
@@ -187,7 +207,7 @@ collections:
     publication_role: not_published
     entity: Post
     role: projection
-    description: 按 environment/sourceOwner/releaseId/manifestDigest create-once 隔离并永久保留的 verified candidate Post 闭包；每项保存 canonical live Post 全字段与 documentDigest，verified replay 只逐项 readback 校验不得写。Activate/rollback 仅可 owner-bound ReplaceOne 已有 Data-owned Post；sync+tombstone 才对 target closure 缺失的旧 active Post 做 tombstone。
+    description: 按environment/sourceOwner/releaseId/manifestDigest create-once隔离的verified candidate Post闭包，保存canonical源字段/documentDigest；源审计releaseDigest不替代manifestDigest。prepare和lifecycle使用同一Content公开mapper，verified replay只读不得改原摘要。Activate/rollback仅owner-bound物化live，不因旧live退出写candidate墓碑。保留服从privacy安全清理；含权威删除/隐私撤权/不可公开对象的候选整体失去activation/rollback资格，不能删减集合沿用原proof或借重新prepare复活；清理义务优先，不以immutable为豁免，合法新候选重新封存。
     indexes:
     - name: uq_data_release_candidate_post
       keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1, postId: 1}
@@ -195,11 +215,14 @@ collections:
     - name: idx_data_release_candidate_post_ref
       keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1, postRef: 1}
       unique: true
+    - name: idx_data_release_candidate_post_safety_identity
+      keys: {environment: 1, sourceOwner: 1, postId: 1}
+      description: Data安全提交按canonical Post查全部保留候选引用，用于失效核验与清理清点；不把当前active当唯一目标。作者全候选索引待账户关闭集成实际使用时声明。
   data_release_candidate_outbox:
     publication_role: not_published
     entity: Post
     role: append_only
-    description: candidate-scoped Post identity facts；只冻结 target Post identity、candidate binding 与 document digest，不冻结最终 live eventId/aggregateVersion。每次 Activate/rollback 以 data_release_sequences 分配的新 activation version 和 pointer revision 生成一组 PostPublished/PostDeleted transition，再经 content_outbox_sequences 分配全序并追加至 live content_outbox；每个 activation lifecycle/outbox envelope 与 payload 均携带 sourceOwner、releaseId、manifestDigest、activationRevision，Search/Recommendation 可按 revision 追平。
+    description: candidate-scoped Post identity facts，只冻结target身份/binding/documentDigest，不是已发布对象lifecycle。每次Activate/rollback在既有pointer事务提交一条ContentReleaseFenceChanged到content_outbox并由content_outbox_sequences分配传输全序，不再为release转换产生逐Post PostPublished/PostDeleted。before/after及payloadDigest与既有active stage receipt一致；候选源版本与after.revision不互代，Search/Recommendation仅对账已准备exact候选，不补首次可读。
     indexes:
     - name: uq_data_release_candidate_outbox_event
       keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1, postId: 1}
@@ -255,13 +278,20 @@ collections:
         eventId: 1
       unique: true
 streams:
+  events.content.post_release_candidate:
+    entity: PostReleaseCandidatePrepared
+    publication_role: publication_accessory
+    role: append_only
+    idempotency_key: publicationId
+    retention_seconds: 604800
+    description: 仅由Post content_outbox dispatcher发布不可变准备事实；source准备不等于active，也不允许Search/Recommendation直读本Mongo。
   events.content.post_lifecycle:
     publication_role: publication_accessory
     entity: Post
     role: append_only
     idempotency_key: eventId
     retention_seconds: 604800
-    description: Post outbox 的唯一 durable 生命周期 transport；Circle、Recommendation 等只消费 typed event。
+    description: Content Post outbox唯一durable生命周期transport，同时承载专属ContentReleaseFenceChanged。consumer须按源event_ref的exact payload分派；fence事件aggregateId为environment/sourceOwner控制分区，普通Post事件aggregateId=postId，版本各自校验。评论/Reaction/媒体等删除consumer只处理权威PostDeleted，不能以同topic或缺postId把fence当删除/兼容事件；未知payload保留typed失败，不quiet ACK。
   events.search.recommendation_signals.dlq:
     publication_role: not_published
     entity: Post

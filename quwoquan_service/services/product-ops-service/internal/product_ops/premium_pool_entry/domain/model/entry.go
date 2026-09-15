@@ -1,7 +1,11 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
+	"math"
+	rt "quwoquan_service/runtime/search"
+	generated "quwoquan_service/services/product-ops-service/generated/product_ops/premium_pool_entry/contract/model"
 	"strings"
 	"time"
 )
@@ -25,22 +29,24 @@ var (
 )
 
 type Entry struct {
-	ContentID        string
-	Scope            string
-	Status           Status
-	QualityScore     float64
-	QualityAdmission string
-	SupplySource     string
-	SourceTaskID     string
-	AuditID          string
-	RollbackToken    string
-	FeaturedAt       time.Time
-	ExpiresAt        time.Time
-	Revision         int64
-	UpdatedAt        time.Time
+	ReleaseAdmissions []generated.ReleasePremiumAdmission
+	ContentID         string
+	Scope             string
+	Status            Status
+	QualityScore      float64
+	QualityAdmission  string
+	SupplySource      string
+	SourceTaskID      string
+	AuditID           string
+	RollbackToken     string
+	FeaturedAt        time.Time
+	ExpiresAt         time.Time
+	Revision          int64
+	UpdatedAt         time.Time
 }
 
 type UpsertInput struct {
+	ReleaseSource    *generated.ReleaseCandidateObjectIdentity
 	ContentID        string
 	Scope            string
 	QualityScore     float64
@@ -80,8 +86,46 @@ func Upsert(current *Entry, input UpsertInput, now time.Time) (Entry, error) {
 	if current != nil {
 		revision = current.Revision + 1
 	}
+	admissions := []generated.ReleasePremiumAdmission{}
+	if current != nil {
+		admissions = append(admissions, current.ReleaseAdmissions...)
+	}
+	if input.ReleaseSource != nil {
+		encoded, _ := json.Marshal(input.ReleaseSource.Release)
+		var binding rt.ReleaseCandidateBinding
+		if json.Unmarshal(encoded, &binding) != nil || binding.Validate() != nil {
+			return Entry{}, ErrInvalidArgument
+		}
+		if input.ReleaseSource.ObjectId != contentID || input.ReleaseSource.ObjectType != "content.post" || input.ReleaseSource.SourceVersion <= 0 {
+			return Entry{}, ErrInvalidArgument
+		}
+		member := generated.ReleasePremiumAdmission{Source: *input.ReleaseSource, AdmissionRevision: revision, AuditId: input.AuditID, QualityScore: input.QualityScore, Status: "active", QualityAdmission: "approved", Scope: "global", ExpiresAt: input.ExpiresAt.UTC()}
+		member.AdmissionDigest = AdmissionDigest(member)
+		found := false
+		for i, a := range admissions {
+			if a.Source.Release == member.Source.Release {
+				if a.Source != member.Source {
+					return Entry{}, ErrRevisionConflict
+				}
+				admissions[i] = member
+				found = true
+			}
+		}
+		if !found {
+			if len(admissions) >= 16 {
+				return Entry{}, ErrInvalidArgument
+			}
+			admissions = append(admissions, member)
+		}
+	} else if input.SupplySource == "qwq_data" {
+		return Entry{}, ErrInvalidArgument
+	}
+	if math.IsNaN(input.QualityScore) || math.IsInf(input.QualityScore, 0) {
+		return Entry{}, ErrInvalidArgument
+	}
 	return Entry{
-		ContentID: contentID, Scope: scope, Status: StatusActive,
+		ReleaseAdmissions: admissions,
+		ContentID:         contentID, Scope: scope, Status: StatusActive,
 		QualityScore: input.QualityScore, QualityAdmission: "approved",
 		SupplySource: strings.TrimSpace(input.SupplySource),
 		SourceTaskID: strings.TrimSpace(input.SourceTaskID),
@@ -98,6 +142,13 @@ func (entry Entry) Rollback(now time.Time) (Entry, error) {
 	entry.Status = StatusRolledBack
 	entry.Revision++
 	entry.UpdatedAt = now.UTC()
+	entry.ReleaseAdmissions = append([]generated.ReleasePremiumAdmission{}, entry.ReleaseAdmissions...)
+	for i := range entry.ReleaseAdmissions {
+		a := &entry.ReleaseAdmissions[i]
+		a.Status = string(entry.Status)
+		a.AdmissionRevision = entry.Revision
+		a.AdmissionDigest = AdmissionDigest(*a)
+	}
 	return entry, nil
 }
 
@@ -108,7 +159,22 @@ func (entry Entry) Takedown(now time.Time) (Entry, error) {
 	entry.Status = StatusTakedownEjected
 	entry.Revision++
 	entry.UpdatedAt = now.UTC()
+	entry.ReleaseAdmissions = append([]generated.ReleasePremiumAdmission{}, entry.ReleaseAdmissions...)
+	for i := range entry.ReleaseAdmissions {
+		a := &entry.ReleaseAdmissions[i]
+		a.Status = string(entry.Status)
+		a.AdmissionRevision = entry.Revision
+		a.AdmissionDigest = AdmissionDigest(*a)
+	}
 	return entry, nil
+}
+
+func AdmissionDigest(admission generated.ReleasePremiumAdmission) string {
+	digest, err := rt.CreatorCanonicalDigest(admission, "admissionDigest")
+	if err != nil {
+		return ""
+	}
+	return digest
 }
 
 func (entry Entry) ActiveAt(now time.Time) bool {

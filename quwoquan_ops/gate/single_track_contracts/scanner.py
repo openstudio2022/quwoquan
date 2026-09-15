@@ -81,6 +81,8 @@ from .constants import (
 )
 from .heuristics import (
     _custom_control_version_fields,
+    python_digest_nonvalue_spans,
+    contract_negative_prose_lines,
     _is_canonical_concatenated_sha256,
     _is_comment_line,
     _is_elasticsearch_bulk_metadata_context,
@@ -234,6 +236,8 @@ def scan_file(path: Path, inv: Inventory) -> None:
             return
     lines = text.splitlines()
     in_custom_control = is_custom_control_document(path)
+    digest_nonvalues = python_digest_nonvalue_spans(text, test_path=_is_test_path(rel)) if suffix == ".py" else []
+    negative_prose = contract_negative_prose_lines(text) if is_contract_yaml(path) else set()
 
     # Contract fields have one canonical source. ``source_keys`` encodes an
     # ordered fallback list and therefore revives wire dual-read even when the
@@ -355,6 +359,8 @@ def scan_file(path: Path, inv: Inventory) -> None:
     for match in SHA256_LITERAL.finditer(text):
         value = match.group(0)
         if CANONICAL_SHA256_DIGEST.fullmatch(value):
+            continue
+        if any(start <= match.start() and match.end() <= end for start, end in digest_nonvalues):
             continue
         line_number = text.count("\n", 0, match.start()) + 1
         if _is_sha256_algorithm_identity(lines, line_number):
@@ -699,6 +705,8 @@ def scan_file(path: Path, inv: Inventory) -> None:
             if _is_comment_line(line, suffix):
                 continue
             if not pattern.search(line):
+                continue
+            if lineno in negative_prose:
                 continue
             if _is_rejection_context(lines, lineno):
                 continue

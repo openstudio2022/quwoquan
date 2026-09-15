@@ -62,6 +62,39 @@ def _binding(
     }
 
 
+# spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-003.t7
+def test_creator_generation_is_canonical_binding_not_endpoint_hash() -> None:
+    target = _target()
+    canonical = canonical_data_plane_binding(target, target_name="prod-hosted")
+    for mode in ("local", "external", "prevalidate"):
+        projected = resolve_data_plane_environment(target, mode=mode, target_name="prod-hosted")
+        for service in ("content-service", "search-service"):
+            values = projected["environment"][service]
+            assert values["CREATOR_SEARCH_BINDING_DIGEST"] == canonical["bindingDigest"]
+            assert values["CREATOR_SEARCH_PHYSICAL_NAMESPACE"] == "quwoquan_objects-v1"
+    changed = copy.deepcopy(target)
+    for binding in changed["dataPlane"]["bindings"].values():
+        if binding["slot"].startswith("search.objects."):
+            binding["namespace"] = "quwoquan_objects-v2"
+    rebuilt = resolve_data_plane_environment(changed, mode="local", target_name="prod-hosted")
+    assert rebuilt["bindingDigest"] != canonical["bindingDigest"]
+    assert rebuilt["environment"]["search-service"]["CREATOR_SEARCH_PHYSICAL_NAMESPACE"] == "quwoquan_objects-v2"
+
+
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
+def test_recommendation_generation_uses_own_mongo_and_actual_schema():
+    topology = load_environment_topology(ROOT / "quwoquan_ops/environments/gamma/runtime.yaml")
+    target = topology["targets"]["gamma-local"]
+    canonical = canonical_data_plane_binding(target, target_name="gamma-local")
+    result = resolve_data_plane_environment(target, mode="local", target_name="gamma-local")
+    env = result["environment"]["recommendation-service"]
+    own = {b["namespace"] for b in canonical["bindings"].values() if b["service"] == "recommendation-service" and b["engine"] == "mongodb"}
+    assert env["RECOMMENDATION_RELEASE_CANDIDATE_MONGODB_NAMESPACE"] in own
+    assert env["RECOMMENDATION_RELEASE_CANDIDATE_BINDING_DIGEST"] == canonical["bindingDigest"]
+    assert env["RECOMMENDATION_RELEASE_CANDIDATE_SCHEMA_GENERATION"].startswith("sha256:")
+    assert result["environment"]["product-ops-service"]["CONTENT_SERVICE_BASE_URL"].startswith("http://content-service:")
+
+
 def _target() -> dict[str, object]:
     return {
         "dataPlane": {
@@ -1301,3 +1334,14 @@ def test_named_slot_resource_resolves_when_default_engine_slot_is_absent() -> No
         "product-ops-service/product_ops/event_record/runtime_logs "
         "is missing binding product-ops-service.elasticsearch"
     ]
+
+
+def test_content_internal_endpoint_uses_canonical_port_manifest() -> None:
+    from quwoquan_ops.cli.lib.port_manifest import compose_role_base_url, load_port_manifest
+    topology = load_environment_topology(ROOT / "quwoquan_ops/environments/gamma/runtime.yaml")
+    projected = resolve_data_plane_environment(
+        topology["targets"]["gamma-local"], mode="local", target_name="gamma-local"
+    )["environment"]
+    expected = compose_role_base_url(load_port_manifest(), "content-service")
+    assert projected["recommendation-service"]["CONTENT_SERVICE_BASE_URL"] == expected
+    assert projected["product-ops-service"]["CONTENT_SERVICE_BASE_URL"] == expected

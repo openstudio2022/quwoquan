@@ -1,5 +1,6 @@
 backend: postgres
 role: authoritative
+description: release_admissions为fields定义的ReleasePremiumAdmission有界数组，和原聚合revision/工作流/审计/receipt/outbox同PG事务。旧行只有经受管迁移证实非Data后可置空；旧标量不能补造Data审批，来源未知阻断。Data成员最多16且保留旧tuple，按原revision CAS写入，无独立active指针。
 tables:
   premium_pool_entries:
     publication_role: not_published
@@ -9,6 +10,7 @@ tables:
     - content_id
     columns:
     - {name: content_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: release_admissions, type: JSONB, constraints: [NOT_NULL]}
     - {name: scope, type: VARCHAR(16), constraints: [NOT_NULL]}
     - {name: status, type: VARCHAR(32), constraints: [NOT_NULL]}
     - {name: quality_score, type: DOUBLE PRECISION, constraints: [NOT_NULL]}

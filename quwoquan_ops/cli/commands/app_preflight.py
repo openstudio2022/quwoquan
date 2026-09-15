@@ -74,9 +74,9 @@ def register_parser(
     )
     app_debug_preflight_parser.add_argument(
         "--purpose",
-        choices=("runtime", "content_live"),
+        choices=("runtime", "content_live", "core_diagnostic"),
         default="runtime",
-        help="runtime diagnostics or strict content-live readiness",
+        help="runtime, strict content-live, or bounded non-promotable core diagnostics",
     )
     app_debug_preflight_parser.add_argument(
         "--target",

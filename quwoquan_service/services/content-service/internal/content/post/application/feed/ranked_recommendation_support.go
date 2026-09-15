@@ -150,9 +150,18 @@ func (s *FeedService) rankedRecommendationPage(
 	feedRequestID string,
 	continuation *rtrec.RankedFeedContinuation,
 	limit int,
+	supply ActiveSupplySnapshot,
 ) (transport.RankedRecommendationPage, error) {
 	if s == nil || s.rankedWindows == nil {
 		return transport.RankedRecommendationPage{}, deliveryapp.ErrRecommendationUnavailable
+	}
+	fence := transport.ReleasePinnedQueryFence{}
+	if !supply.IsEmpty() {
+		if !supply.ReleaseBoundReadbackReady() {
+			return transport.RankedRecommendationPage{}, deliveryapp.ErrRecommendationUnavailable
+		}
+		fence.Release = &transport.ReleaseCandidateBinding{Environment: supply.Environment, SourceOwner: supply.SourceOwner, ReleaseId: supply.ActiveReleaseID, ManifestDigest: supply.ManifestDigest}
+		fence.Revision = supply.Revision
 	}
 	scenario := recommendationScenario(route)
 	var (
@@ -163,6 +172,7 @@ func (s *FeedService) rankedRecommendationPage(
 		page, err = s.rankedWindows.Create(
 			ctx,
 			transport.CreateRankedRecommendationWindowCommand{
+				ContentFence:   fence,
 				IdempotencyKey: strings.TrimSpace(feedRequestID),
 				SubjectId:      rankedRecommendationSubject(req, route),
 				Scenario:       scenario,
@@ -175,15 +185,19 @@ func (s *FeedService) rankedRecommendationPage(
 		page, err = s.rankedWindows.GetPage(
 			ctx,
 			transport.GetRankedRecommendationPageQuery{
-				SubjectId:   rankedRecommendationSubject(req, route),
-				WindowId:    strings.TrimSpace(continuation.WindowID),
-				FromOrdinal: &fromOrdinal,
-				Limit:       &pageLimit,
+				ContentFence: fence,
+				SubjectId:    rankedRecommendationSubject(req, route),
+				WindowId:     strings.TrimSpace(continuation.WindowID),
+				FromOrdinal:  &fromOrdinal,
+				Limit:        &pageLimit,
 			},
 		)
 	}
 	if err != nil {
 		return transport.RankedRecommendationPage{}, err
+	}
+	if page.ContentFence.Revision != fence.Revision || (page.ContentFence.Release == nil) != (fence.Release == nil) || (fence.Release != nil && *page.ContentFence.Release != *fence.Release) {
+		return transport.RankedRecommendationPage{}, deliveryapp.ErrRecommendationUnavailable
 	}
 	if page.Scenario != scenario ||
 		(continuation != nil && page.WindowId != strings.TrimSpace(continuation.WindowID)) {

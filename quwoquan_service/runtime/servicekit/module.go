@@ -75,6 +75,16 @@ func (stack *CleanupStack) Close(ctx context.Context) error {
 // ModuleSpec 声明一个 servicehost.Module 的通用生命周期输入。
 // 领域装配（对象仓储、consumer、路由）仍由各服务 bootstrap 完成，
 // 这里只接收装配结果。
+// PreAdmissionOperation admits one canonical authenticated owner operation
+// before aggregate readiness, but only while its operation-specific dependency
+// checks pass. The normal readiness and global admission gates stay unchanged.
+type PreAdmissionOperation struct {
+	CanonicalOperationID string
+	Method               string
+	PathTemplate         string
+	RequiredHealthChecks []string
+}
+
 type ModuleSpec struct {
 	Identity Identity
 	// ListenAddr 是环境装配注入的监听地址；缺失即 fail-closed，
@@ -96,6 +106,9 @@ type ModuleSpec struct {
 	// PreAdmissionPaths 是 OpenAdmission 之前即放行的内部端点，见
 	// Module.admissionHandler 的判据说明。
 	PreAdmissionPaths []string
+	// PreAdmissionOperations 只允许 canonical authenticated owner operation
+	// 在自身依赖就绪时穿过关闭的 aggregate admission 门。
+	PreAdmissionOperations []PreAdmissionOperation
 }
 
 // HTTPServerTimeouts 是服务器超时的本包投影，避免调用方在未装配 auth 栈时
@@ -109,16 +122,17 @@ type HTTPServerTimeouts struct {
 // Module 是通用 servicehost.Module 实现：监听绑定、worker 编组、健康就绪、
 // admission 门与逆序清理。
 type Module struct {
-	name              string
-	appEnv            string
-	configDigest      string
-	server            *http.Server
-	health            *rthealth.Checker
-	listener          net.Listener
-	admission         atomic.Bool
-	preAdmissionPaths map[string]bool
-	serveError        chan error
-	readinessTimeout  time.Duration
+	name                   string
+	appEnv                 string
+	configDigest           string
+	server                 *http.Server
+	health                 *rthealth.Checker
+	listener               net.Listener
+	admission              atomic.Bool
+	preAdmissionPaths      map[string]bool
+	preAdmissionOperations []PreAdmissionOperation
+	serveError             chan error
+	readinessTimeout       time.Duration
 
 	workerStarts     []func(context.Context)
 	fallibleWorkers  []fallibleWorker
@@ -166,18 +180,23 @@ func NewModule(spec ModuleSpec) (*Module, error) {
 	if err != nil {
 		return nil, err
 	}
+	preAdmissionOperations, err := normalizePreAdmissionOperations(serviceName, spec.PreAdmissionOperations)
+	if err != nil {
+		return nil, err
+	}
 	module := &Module{
-		name:              serviceName,
-		appEnv:            spec.Identity.AppEnv,
-		configDigest:      spec.ConfigDigest,
-		health:            spec.Health,
-		preAdmissionPaths: preAdmissionPaths,
-		serveError:        make(chan error, 1),
-		readinessTimeout:  readinessTimeout,
-		workerStarts:      spec.Workers.starts,
-		fallibleWorkers:   spec.Workers.fallibles,
-		prepareMigration:  spec.PrepareMigration,
-		cleanup:           spec.Cleanups.Close,
+		name:                   serviceName,
+		appEnv:                 spec.Identity.AppEnv,
+		configDigest:           spec.ConfigDigest,
+		health:                 spec.Health,
+		preAdmissionPaths:      preAdmissionPaths,
+		preAdmissionOperations: preAdmissionOperations,
+		serveError:             make(chan error, 1),
+		readinessTimeout:       readinessTimeout,
+		workerStarts:           spec.Workers.starts,
+		fallibleWorkers:        spec.Workers.fallibles,
+		prepareMigration:       spec.PrepareMigration,
+		cleanup:                spec.Cleanups.Close,
 	}
 	module.server = &http.Server{
 		Addr:              spec.ListenAddr,
@@ -385,6 +404,71 @@ func normalizePreAdmissionPaths(serviceName string, paths []string) (map[string]
 	return normalized, nil
 }
 
+func normalizePreAdmissionOperations(serviceName string, operations []PreAdmissionOperation) ([]PreAdmissionOperation, error) {
+	normalized := make([]PreAdmissionOperation, 0, len(operations))
+	seen := map[string]bool{}
+	for _, operation := range operations {
+		operation.CanonicalOperationID = strings.TrimSpace(operation.CanonicalOperationID)
+		operation.Method = strings.ToUpper(strings.TrimSpace(operation.Method))
+		operation.PathTemplate = strings.TrimSpace(operation.PathTemplate)
+		if operation.CanonicalOperationID == "" || operation.Method == "" || !strings.HasPrefix(operation.PathTemplate, "/") || len(operation.RequiredHealthChecks) == 0 {
+			return nil, fmt.Errorf("%s pre-admission operation declaration is incomplete", serviceName)
+		}
+		key := operation.Method + " " + operation.PathTemplate
+		if seen[key] {
+			return nil, fmt.Errorf("%s pre-admission operation route %q is duplicated", serviceName, key)
+		}
+		seen[key] = true
+		checks := map[string]bool{}
+		for _, name := range operation.RequiredHealthChecks {
+			name = strings.TrimSpace(name)
+			if name == "" || checks[name] {
+				return nil, fmt.Errorf("%s pre-admission operation %s has invalid health checks", serviceName, operation.CanonicalOperationID)
+			}
+			checks[name] = true
+		}
+		normalized = append(normalized, operation)
+	}
+	return normalized, nil
+}
+
+func operationPathMatches(template, path string) bool {
+	templateParts := strings.Split(strings.Trim(template, "/"), "/")
+	pathParts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(templateParts) != len(pathParts) {
+		return false
+	}
+	for index, part := range templateParts {
+		open := strings.IndexByte(part, '{')
+		close := strings.IndexByte(part, '}')
+		if open >= 0 || close >= 0 {
+			if open < 0 || close <= open || strings.Contains(part[close+1:], "{") {
+				return false
+			}
+			prefix, suffix := part[:open], part[close+1:]
+			value := pathParts[index]
+			if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, suffix) || len(value) <= len(prefix)+len(suffix) {
+				return false
+			}
+			continue
+		}
+		if part != pathParts[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func (module *Module) preAdmissionOperationReady(request *http.Request) bool {
+	for _, operation := range module.preAdmissionOperations {
+		if request.Method != operation.Method || !operationPathMatches(operation.PathTemplate, request.URL.Path) {
+			continue
+		}
+		return module.health.CheckSelected(request.Context(), operation.RequiredHealthChecks).Status == "ok"
+	}
+	return false
+}
+
 // admissionHandler 在 OpenAdmission 之前拒绝业务流量；探针与抓取端点
 // （/healthz、/readyz、/metrics）以及声明的 pre-admission 内部端点始终放行。
 func (module *Module) admissionHandler(next http.Handler) http.Handler {
@@ -402,7 +486,7 @@ func (module *Module) admissionHandler(next http.Handler) http.Handler {
 			next.ServeHTTP(writer, request)
 			return
 		}
-		if module.preAdmissionPaths[request.URL.Path] {
+		if module.preAdmissionPaths[request.URL.Path] || module.preAdmissionOperationReady(request) {
 			next.ServeHTTP(writer, request)
 			return
 		}

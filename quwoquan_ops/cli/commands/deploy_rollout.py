@@ -116,13 +116,14 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 **timing,
             }
         try:
+            release_inventory = _stackctl.load_prod_hosted_access_manifest()
             release_plan = _stackctl.resolve_prod_hosted_plan(
-                _stackctl.load_prod_hosted_access_manifest(),
+                release_inventory,
                 instance=_stackctl.prod_hosted_instance_for_stage(rollout_stage),
                 host_ids=getattr(args, "host_id", None) or None,
                 ssh_host_override=str(getattr(args, "ssh_host", "") or ""),
             )
-            _stackctl.require_prod_hosted_release_redundancy(release_plan)
+            _stackctl.require_prod_hosted_release_inventory(release_plan, release_inventory)
         except _stackctl.ProdHostedTopologyError as error:
             timing = _stackctl._finish_timing(started_monotonic, started_at)
             return {
@@ -297,6 +298,8 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 allow_uninitialized=False,
                 deadline_epoch=promotion_deadline_epoch,
             )
+            from quwoquan_ops.cli.commands.deploy_release_state import validate_prior_ledger_position
+            validate_prior_ledger_position(prod_activation_admission, release_state_snapshot)
             to_service_factory_oci_digest = prod_activation_admission[
                 "serviceFactoryOciDigest"
             ]
@@ -542,6 +545,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     "DRY_RUN": args.dry_run,
                     "SERVICE_FACTORY_MATERIAL": str(service_factory_material_path),
                     "CANDIDATE_MATERIAL_ID": candidate_material_id,
+                    "QWQ_EXECUTION_SESSION": os.environ.get("QWQ_EXECUTION_SESSION", ""),
                     "PROD_ACTIVATION_ADMISSION_DIGEST": prod_activation_admission[
                         "prodActivationAdmissionPayloadDigest"
                     ],
@@ -756,6 +760,8 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 _stackctl._prod_hosted_placement_coverage_checks(
                     report_dir,
                     stage=rollout_stage,
+                    candidate_digest=args.to_candidate_digest,
+                    expected_plan=release_plan,
                     host=str(getattr(args, "ssh_host", "") or ""),
                     host_id=(
                         str((getattr(args, "host_id", None) or [""])[0])
@@ -793,6 +799,8 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     if args.target == "prod-hosted":
         _finalize_scope = {
             "args": args,
+            "release_plan": release_plan,
+            "release_inventory": release_inventory,
             "committed_release_state": committed_release_state,
             "dry_run_requested": dry_run_requested,
             "error": error,

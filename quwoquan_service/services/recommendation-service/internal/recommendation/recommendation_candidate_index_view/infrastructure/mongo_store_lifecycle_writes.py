@@ -72,6 +72,7 @@ class MongoCandidateLifecycleWriteOps:
         document.update(
             {
                 "_id": identity,
+                "sourcePartition": "ordinary",
                 "scenario": snapshot.scenario.strip(),
                 "contentId": snapshot.content_id.strip(),
                 "contentType": snapshot.content_type.strip(),

@@ -402,14 +402,34 @@ def build_android_gradle_snapshot(
     )
 
 
+def android_gradle_snapshot_matches_current_wrappers(
+    snapshot: AndroidGradleSnapshot,
+    *,
+    project_root: Path,
+    gradle_roots: Sequence[Path],
+) -> bool:
+    """Return whether verified seed wrapper URL/digests equal current wrappers."""
+
+    current = [
+        wrapper_identity(project_root=project_root, gradle_root=root)
+        for root in gradle_roots
+    ]
+    current.sort(key=lambda item: item["root"])
+    return snapshot.manifest.get("wrappers") == current
+
+
 def load_android_gradle_snapshot(
     *,
     project_root: Path,
     tree_root: Path,
     manifest_path: Path,
-    gradle_roots: Sequence[Path],
+    gradle_roots: Sequence[Path] | None,
 ) -> AndroidGradleSnapshot:
-    """Load one immutable managed/CAS snapshot and reject any byte drift."""
+    """Load one immutable managed/CAS snapshot and reject any byte drift.
+
+    A seed first validates against wrapper roots declared by its own manifest;
+    compatibility with current project wrapper bytes is a separate decision.
+    """
 
     encoded, _mode = _read_regular_nofollow(
         manifest_path,
@@ -421,10 +441,22 @@ def load_android_gradle_snapshot(
         raise ValueError("Android Gradle managed snapshot manifest is invalid") from exc
     if not isinstance(declared, dict) or canonical_bytes(declared) != encoded:
         raise ValueError("Android Gradle managed snapshot manifest is not canonical")
+    effective_roots = gradle_roots
+    if effective_roots is None:
+        wrappers = declared.get("wrappers")
+        if not isinstance(wrappers, list) or not wrappers:
+            raise ValueError("Android Gradle managed snapshot wrappers are invalid")
+        effective_roots = tuple(
+            project_root / _safe_relative(str(item.get("root") or ""))
+            for item in wrappers
+            if isinstance(item, Mapping)
+        )
+        if len(effective_roots) != len(wrappers):
+            raise ValueError("Android Gradle managed snapshot wrappers are invalid")
     snapshot = build_android_gradle_snapshot(
         project_root=project_root,
         tree_root=tree_root,
-        gradle_roots=gradle_roots,
+        gradle_roots=effective_roots,
     )
     if snapshot.manifest != declared or snapshot.encoded_manifest != encoded:
         raise ValueError("Android Gradle managed snapshot CAS drifted")

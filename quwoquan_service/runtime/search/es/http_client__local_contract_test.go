@@ -496,8 +496,8 @@ func TestClientSearchAddsTombstoneFilterToAdHocAndHybridBodies(t *testing.T) {
 	}}
 	// The fake only exposes indexed search, so omit PIT for transport while still
 	// exercising PIT-compatible body mutation directly.
-	EnsureNotDeletedSearchBody(body)
-	if !queryExcludesDeleted(body["query"].(map[string]any)) {
+	EnsureCurrentSearchBody(body)
+	if !queryRequiresCurrent(body["query"].(map[string]any)) {
 		t.Fatalf("PIT body lacks tombstone exclusion: %#v", body)
 	}
 	knn := body["knn"].(map[string]any)
@@ -509,7 +509,7 @@ func TestClientSearchAddsTombstoneFilterToAdHocAndHybridBodies(t *testing.T) {
 	if _, err := client.Search(context.Background(), "", searchBody); err != nil {
 		t.Fatal(err)
 	}
-	if !queryExcludesDeleted(cluster.lastSearch["query"].(map[string]any)) {
+	if !queryRequiresCurrent(cluster.lastSearch["query"].(map[string]any)) {
 		t.Fatalf("client Search did not enforce tombstone exclusion: %#v", cluster.lastSearch)
 	}
 }

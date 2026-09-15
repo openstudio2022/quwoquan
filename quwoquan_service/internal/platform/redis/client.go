@@ -466,6 +466,7 @@ func newStandaloneClient(cfg rtredis.SceneConfig) (rtredis.Client, error) {
 	}
 	opts := &goredis.Options{
 		Addr:     cfg.Addr,
+		Username: cfg.Username,
 		Password: cfg.Password,
 		DB:       cfg.DB,
 	}
@@ -481,6 +482,7 @@ func newClusterClient(cfg rtredis.SceneConfig) (rtredis.Client, error) {
 	}
 	opts := &goredis.ClusterOptions{
 		Addrs:    cfg.Addrs,
+		Username: cfg.Username,
 		Password: cfg.Password,
 	}
 	applyClusterOptions(opts, cfg)

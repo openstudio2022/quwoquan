@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"go/format"
@@ -137,16 +138,36 @@ type goldenMetricEntry struct {
 	FreshnessSeconds int `yaml:"freshness_seconds"`
 }
 
+func premiumContractObject() string { return "PremiumPoolEntry" }
+
+func generatePremiumContracts(source *contractcodegen.Source, outputDir string) error {
+	generator := contractcodegen.NewDomainGenerator(source, filepath.Join(outputDir, "product_ops", "premium_pool_entry"), contractcodegen.WithObjectFirstRoot(), contractcodegen.WithSliceEntityRefs(), contractcodegen.WithOperationContractRoots())
+	return generator.GenerateDomainModel(premiumContractObject())
+}
+
 func main() {
 	var metadataDir string
 	var outputDir string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
 	flag.StringVar(&outputDir, "output-dir", "services/product-ops-service/generated", "product-ops generated root directory")
+	check := flag.Bool("check", false, "rebuild privately and compare every output")
 	flag.Parse()
+	canonicalOutput := outputDir
+	if *check {
+		private, err := os.MkdirTemp("", "premium-codegen-check-")
+		if err != nil {
+			exitErr(err)
+		}
+		defer os.RemoveAll(private)
+		outputDir = private
+	}
 
 	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
 		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
+	}
+	if err := generatePremiumContracts(source, outputDir); err != nil {
+		exitErr(err)
 	}
 	errorPaths, err := productOpsObjectErrorPaths(
 		source.Paths("ops/product_ops/", "/errors.yaml"),
@@ -248,6 +269,35 @@ func main() {
 	rollupOutPath := filepath.Join(outputDir, "product_ops", "event_record", "rollup_catalog.go")
 	if err := os.WriteFile(rollupOutPath, rollupFormatted, 0o644); err != nil {
 		exitErr(err)
+	}
+	if *check {
+		err := filepath.WalkDir(outputDir, func(p string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			rel, err := filepath.Rel(outputDir, p)
+			if err != nil {
+				return err
+			}
+			want, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			got, err := os.ReadFile(filepath.Join(canonicalOutput, rel))
+			if err != nil {
+				return err
+			}
+			if !bytes.Equal(want, got) {
+				return fmt.Errorf("CONTRACT.CODEGEN.STALE_OUTPUT: %s", rel)
+			}
+			return nil
+		})
+		if err != nil {
+			exitErr(err)
+		}
 	}
 	fmt.Printf(
 		"codegen_product_ops_service: wrote %d errors, %d telemetry events, %d golden metrics and %d rollup jobs\n",

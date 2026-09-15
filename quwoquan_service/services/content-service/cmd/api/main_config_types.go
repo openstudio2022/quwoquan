@@ -29,14 +29,22 @@ type feedRuntimeConfig struct {
 // env 覆盖键全部由 tag 派生（服务前缀 CONTENT）。
 type config struct {
 	servicekit.BaseConfig `yaml:",inline"`
+	PostSafety            struct {
+		HMACSecretRef       string `yaml:"hmac_secret_ref" env:"POST_SAFETY_HMAC_SECRET_REF"`
+		RecoveryEvidenceRef string `yaml:"recovery_evidence_ref" env:"POST_SAFETY_RECOVERY_EVIDENCE_REF"`
+		MaterialRoot        string `yaml:"material_root" env:"POST_SAFETY_MATERIAL_ROOT"`
+		CurrentBindingRef   string `yaml:"current_binding_ref" env:"POST_SAFETY_CURRENT_BINDING_REF"`
+	} `yaml:"post_safety"`
+	CreatorSearch struct {
+		BindingDigest     string `yaml:"binding_digest" envAbsolute:"CREATOR_SEARCH_BINDING_DIGEST" required:"true"`
+		PhysicalNamespace string `yaml:"physical_namespace" envAbsolute:"CREATOR_SEARCH_PHYSICAL_NAMESPACE" required:"true"`
+	} `yaml:"creator_search"`
 
-	// Mongo 不用 servicekit.MongoConfig：content 的快照多一段 collection，
-	// 而声明即装配只识别 URI/Database 两字段的那个类型。连接仍走
-	// asm.Mongo(...)，健康检查与断连清理由骨架注册。
+	// Mongo 内嵌 canonical MongoConfig，使 servicekit 在领域构造前完成唯一
+	// client/database 装配；Collection 仍是 content 自有的集合配置。
 	Mongo struct {
-		URI        string `yaml:"uri" env:"MONGO_URI" required:"true"`
-		Database   string `yaml:"database" env:"MONGO_DATABASE" required:"true"`
-		Collection string `yaml:"collection" required:"true"`
+		servicekit.MongoConfig `yaml:",inline"`
+		Collection             string `yaml:"collection" required:"true"`
 	} `yaml:"mongo"`
 
 	// Postgres 承载举报事实存储。领域实现消费 database/sql 的 *sql.DB，

@@ -25,6 +25,16 @@ func TestVirtualHTTPRouterPreservesHostnameIdentityOnSharedPort(t *testing.T) {
 		},
 	))
 	defer chatUpstream.Close()
+	contentUpstream := httptest.NewServer(http.HandlerFunc(
+		func(writer http.ResponseWriter, request *http.Request) {
+			if request.Header.Get("Authorization") != "Bearer service-token" {
+				http.Error(writer, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			_, _ = writer.Write([]byte("content"))
+		},
+	))
+	defer contentUpstream.Close()
 
 	router, err := NewVirtualHTTPRouter(
 		VirtualHTTPRoute{
@@ -36,6 +46,11 @@ func TestVirtualHTTPRouterPreservesHostnameIdentityOnSharedPort(t *testing.T) {
 			Host:       "chat-service",
 			PublicAddr: "127.0.0.1:0",
 			Upstream:   chatUpstream.URL,
+		},
+		VirtualHTTPRoute{
+			Host:       "content-service",
+			PublicAddr: "127.0.0.1:0",
+			Upstream:   contentUpstream.URL,
 		},
 	)
 	if err != nil {
@@ -81,6 +96,71 @@ func TestVirtualHTTPRouterPreservesHostnameIdentityOnSharedPort(t *testing.T) {
 			"user",
 		)
 	}
+	if status, _ := virtualHTTPRequestPath(
+		t,
+		http.MethodGet,
+		address,
+		"content-service:18081",
+		activeReleaseFencePath+"?environment=gamma&sourceOwner=qwq_data",
+	); status != http.StatusUnauthorized {
+		t.Fatalf("closed anonymous active release fence status = %d, want %d", status, http.StatusUnauthorized)
+	}
+	if status, body := virtualHTTPRequestPathWithAuthorization(
+		t,
+		http.MethodGet,
+		address,
+		"content-service:18081",
+		activeReleaseFencePath+"?environment=gamma&sourceOwner=qwq_data",
+		"Bearer service-token",
+	); status != http.StatusOK || body != "content" {
+		t.Fatalf(
+			"closed authenticated active release fence = (%d, %q), want (%d, %q)",
+			status,
+			body,
+			http.StatusOK,
+			"content",
+		)
+	}
+	if status, _ := virtualHTTPRequestPath(
+		t,
+		http.MethodGet,
+		address,
+		"user-service:18081",
+		activeReleaseFencePath,
+	); status != http.StatusServiceUnavailable {
+		t.Fatalf("closed fence wrong service host status = %d, want %d", status, http.StatusServiceUnavailable)
+	}
+	if status, _ := virtualHTTPRequestPath(
+		t,
+		http.MethodGet,
+		address,
+		"unknown-service:18081",
+		activeReleaseFencePath,
+	); status != http.StatusMisdirectedRequest {
+		t.Fatalf("closed fence unknown host status = %d, want %d", status, http.StatusMisdirectedRequest)
+	}
+	for _, blocked := range []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{name: "post exact fence", method: http.MethodPost, path: activeReleaseFencePath},
+		{name: "similar fence path", method: http.MethodGet, path: activeReleaseFencePath + "/"},
+		{name: "other business path", method: http.MethodGet, path: "/operations/private"},
+	} {
+		blocked := blocked
+		t.Run(blocked.name, func(t *testing.T) {
+			if status, _ := virtualHTTPRequestPath(
+				t,
+				blocked.method,
+				address,
+				"content-service:18081",
+				blocked.path,
+			); status != http.StatusServiceUnavailable {
+				t.Fatalf("closed route status = %d, want %d", status, http.StatusServiceUnavailable)
+			}
+		})
+	}
 
 	router.OpenAdmission()
 	if status, body := virtualHTTPGet(t, address, "user-service:18081"); status != http.StatusOK || body != "user" {
@@ -105,9 +185,32 @@ func virtualHTTPGetPath(
 	path string,
 ) (int, string) {
 	t.Helper()
+	return virtualHTTPRequestPath(t, http.MethodGet, address, host, path)
+}
+
+func virtualHTTPRequestPath(
+	t *testing.T,
+	method string,
+	address string,
+	host string,
+	path string,
+) (int, string) {
+	t.Helper()
+	return virtualHTTPRequestPathWithAuthorization(t, method, address, host, path, "")
+}
+
+func virtualHTTPRequestPathWithAuthorization(
+	t *testing.T,
+	method string,
+	address string,
+	host string,
+	path string,
+	authorization string,
+) (int, string) {
+	t.Helper()
 	request, err := http.NewRequestWithContext(
 		context.Background(),
-		http.MethodGet,
+		method,
 		address+path,
 		nil,
 	)
@@ -115,6 +218,9 @@ func virtualHTTPGetPath(
 		t.Fatalf("NewRequestWithContext() error = %v", err)
 	}
 	request.Host = host
+	if authorization != "" {
+		request.Header.Set("Authorization", authorization)
+	}
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatalf("Do() error = %v", err)

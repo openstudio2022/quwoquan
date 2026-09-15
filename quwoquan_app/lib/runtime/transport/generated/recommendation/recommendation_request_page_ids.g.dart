@@ -27,6 +27,8 @@ class RecommendationRequestPageIds {
         'recommendation.list.recommendation.object.intersections',
     'ListRecommendationSubjectIntersections':
         'recommendation.list.recommendation.subject.intersections',
+    'ReadRecommendationReleaseReadiness':
+        'recommendation.read.recommendation.release.readiness',
     'ScoreRecommendationCandidates':
         'recommendation.score.recommendation.candidates',
     'StageRecommendationModelRelease':
@@ -55,6 +57,8 @@ class RecommendationRequestPageIds {
       'recommendation.list.recommendation.object.intersections';
   static const String listRecommendationSubjectIntersections =
       'recommendation.list.recommendation.subject.intersections';
+  static const String readRecommendationReleaseReadiness =
+      'recommendation.read.recommendation.release.readiness';
   static const String scoreRecommendationCandidates =
       'recommendation.score.recommendation.candidates';
   static const String stageRecommendationModelRelease =

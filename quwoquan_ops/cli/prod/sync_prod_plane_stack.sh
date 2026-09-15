@@ -94,7 +94,7 @@ if [[ -n "$fetch_relative_dir" ]]; then
 fi
 case "$operation" in
   sync) ;;
-  release-ledger-fetch)
+  release-ledger-fetch|release-ledger-prior-observe)
     if [[ -z "$service" || -z "$output_path" ]]; then
       echo "FAIL: release-ledger-fetch requires --service and --output-path" >&2
       exit 2
@@ -123,6 +123,12 @@ case "$operation" in
   release-ledger-receipt)
     if [[ -z "$service" || -z "$receipt_id" || -z "$output_path" ]]; then
       echo "FAIL: release-ledger-receipt requires --service, --receipt-id and --output-path" >&2
+      exit 2
+    fi
+    ;;
+  release-ledger-execution-acquire|release-ledger-execution-register|release-ledger-execution-ack|release-ledger-execution-consume|release-ledger-execution-close)
+    if [[ -z "$request_path" || -z "$output_path" || ! -s "$request_path" ]]; then
+      echo "FAIL: execution operation requires --request-path and --output-path" >&2
       exit 2
     fi
     ;;
@@ -160,6 +166,7 @@ if [[ -z "$account" || -z "$compose_root" || -z "$secret_name" ]]; then
   echo "FAIL: unable to resolve plane metadata for $plane" >&2
   exit 2
 fi
+base_compose_root="$compose_root"
 if [[ -n "$root_suffix" ]]; then
   if [[ ! "$root_suffix" =~ ^[a-z0-9][a-z0-9/-]*$ || "$root_suffix" == *"//"* || "$root_suffix" == *".."* || "$root_suffix" == */ ]]; then
     echo "FAIL: --root-suffix must be a safe relative directory path" >&2
@@ -241,7 +248,7 @@ if [[ "$operation" == release-ledger-* ]]; then
     --action "${operation#release-ledger-}"
     --service "$service"
   )
-  if [[ "$operation" == "release-ledger-commit" || "$operation" == "release-ledger-soak-commit" ]]; then
+  if [[ "$operation" == "release-ledger-commit" || "$operation" == "release-ledger-soak-commit" || "$operation" == release-ledger-execution-* ]]; then
     request_base64="$(base64 < "$request_path" | tr -d '\r\n')"
     remote_args+=(--request-base64 "$request_base64")
   elif [[ "$operation" == "release-ledger-receipt" || "$operation" == "release-ledger-soak-receipt" ]]; then
@@ -275,9 +282,13 @@ from quwoquan_ops.cli.prod.render_prod_plane_stack_lib.volume_layout import _per
 print(_persistent_media_sync_command(Path(sys.argv[1]), sys.argv[2], sys.argv[3]))
 PY
 )"
-  remote_cmd="umask 077; mkdir -p '${compose_root}' && tar -xf - -C '${compose_root}' && ${media_command}"
+  source_digest="$(tar -C "$source_dir" -cf - . | shasum -a 256 | awk '{print "sha256:" $1}')"
+  attempt_id="${QWQ_EXECUTION_ATTEMPT_ID:-}"
+  if [[ ! "$attempt_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then echo "FAIL: sync requires QWQ_EXECUTION_ATTEMPT_ID" >&2; exit 2; fi
+  staging_root="${base_compose_root%/}/staging/${attempt_id#sha256:}/${source_digest#sha256:}"
+  remote_cmd="umask 077; test ! -e '${staging_root}' || exit 3; mkdir -p '${staging_root}' && tar -xf - -C '${staging_root}' && ${media_command}"
   tar -C "$source_dir" -cf - . | "${ssh_command[@]}" "$remote_cmd"
-  echo "[sync] pushed plane=$plane compose_root=$compose_root source=$source_dir"
+  echo "[sync] staged immutable plane=$plane staging_root=$staging_root digest=$source_digest"
 fi
 
 if [[ -n "$fetch_relative_dir" ]]; then

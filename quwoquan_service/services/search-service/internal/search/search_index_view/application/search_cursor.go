@@ -31,13 +31,14 @@ type SearchCursorCodec struct {
 }
 
 type searchCursorEnvelope struct {
-	Version         int    `json:"version"`
-	QueryDigest     string `json:"queryDigest"`
-	ScopeDigest     string `json:"scopeDigest"`
-	PrincipalDigest string `json:"principalDigest"`
-	CandidateDigest string `json:"candidateDigest"`
-	PolicyDigest    string `json:"policyDigest"`
-	Offset          int    `json:"offset"`
+	Version            int    `json:"version"`
+	QueryDigest        string `json:"queryDigest"`
+	ScopeDigest        string `json:"scopeDigest"`
+	PrincipalDigest    string `json:"principalDigest"`
+	CandidateDigest    string `json:"candidateDigest"`
+	PolicyDigest       string `json:"policyDigest"`
+	ContentFenceDigest string `json:"contentFenceDigest"`
+	Offset             int    `json:"offset"`
 	// PITID pins every follow-up page to the point-in-time snapshot the
 	// pagination started on (lazy: opened on the first follow-up page). An
 	// expired snapshot fails the whole cursor closed — pagination never
@@ -87,7 +88,8 @@ func (codec *SearchCursorCodec) encodeCursor(
 		Version: searchCursorVersion, QueryDigest: queryDigest,
 		ScopeDigest: scopeDigest, PrincipalDigest: principalDigest,
 		CandidateDigest: identity.CandidateDigest, PolicyDigest: identity.PolicyDigest,
-		Offset: offset, PITID: strings.TrimSpace(pitID),
+		ContentFenceDigest: identity.ContentFenceDigest,
+		Offset:             offset, PITID: strings.TrimSpace(pitID),
 		ExpiresAt: codec.now().UTC().Add(searchCursorTTL).Unix(),
 	})
 	if err != nil {
@@ -122,7 +124,8 @@ func (codec *SearchCursorCodec) decodeCursor(
 		envelope.QueryDigest != queryDigest || envelope.ScopeDigest != scopeDigest ||
 		envelope.PrincipalDigest != principalDigest ||
 		envelope.CandidateDigest != identity.CandidateDigest ||
-		envelope.PolicyDigest != identity.PolicyDigest {
+		envelope.PolicyDigest != identity.PolicyDigest ||
+		envelope.ContentFenceDigest != identity.ContentFenceDigest {
 		return 0, "", ErrSearchCursor
 	}
 	return envelope.Offset, envelope.PITID, nil

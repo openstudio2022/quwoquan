@@ -36,6 +36,7 @@ from .ledger_store import (  # noqa: F401
     _next_stage_receipt_history,
     _validate_stage_receipt_history,
     _validated_readback,
+    observe_prior,
 )
 from .actions import (  # noqa: F401
     _parser,

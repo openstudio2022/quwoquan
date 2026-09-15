@@ -236,10 +236,127 @@ def command_content_api_consumer(args: argparse.Namespace) -> dict[str, Any]:
         }
 
 
+def _content_import_readiness(args: argparse.Namespace) -> dict[str, Any]:
+    """只验证 bounded 导入工作负载及其精确运行身份。"""
+    import quwoquan_ops.cli.stackctl as stackctl
+    from quwoquan_ops.cli.lib.runtime_container_liveness import (
+        ComposeProjectAbsent,
+        verify_running_receipt_liveness,
+    )
+
+    requirement = stackctl.load_content_release_readiness_policy().requirement_for(
+        environment=args.env
+    )
+    report_dir = (
+        Path(args.report_dir)
+        if getattr(args, "report_dir", "")
+        else stackctl.resolve_report_dir(
+            args, args.env, requirement.target
+        )
+    )
+    issues: list[str] = []
+    workload = requirement.workload
+    try:
+        receipt = stackctl.load_workload_startup_attempt(
+            requirement.target, workload
+        )
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        receipt = None
+        issues.append(f"{workload} startup receipt is unreadable: {exc}")
+    startup = (
+        receipt
+        if isinstance(receipt, dict) and receipt.get("status") == "running"
+        else {}
+    )
+    if not startup:
+        issues.append(
+            f"import prerequisite requires the running {workload} startup receipt"
+        )
+    candidate_digest = str(startup.get("candidateDigest") or "")
+    provider_runtime_digest = str(startup.get("providerRuntimeDigest") or "")
+    startup_attempt_id = str(startup.get("attemptId") or "")
+    try:
+        candidate = stackctl.active_deployment_candidate_snapshot(requirement.target)
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        candidate = None
+        issues.append(f"active candidate readback failed: {exc}")
+    active_candidate_digest = str((candidate or {}).get("baselineId") or "")
+    if not startup_attempt_id or not candidate_digest or not provider_runtime_digest:
+        issues.append("import prerequisite lacks candidate/provider/startup identities")
+    if not active_candidate_digest or candidate_digest != active_candidate_digest:
+        issues.append("import prerequisite startup candidate differs from active candidate")
+    if startup:
+        try:
+            liveness = verify_running_receipt_liveness(startup, runner=stackctl.run)
+        except (ComposeProjectAbsent, OSError, RuntimeError, TypeError, ValueError) as exc:
+            issues.append(f"bounded runtime liveness is unavailable: {exc}")
+        else:
+            if liveness is None or liveness.status != "healthy":
+                issues.extend(
+                    liveness.issues()
+                    if liveness is not None
+                    else ["bounded runtime is not running"]
+                )
+
+    health_dir = report_dir / "health"
+    result = stackctl.command_health(
+        argparse.Namespace(
+            command="health",
+            target=requirement.target,
+            scope="content-import",
+            workload=workload,
+            require_non_empty_content_feed=False,
+            output_format="json",
+            report_dir=str(health_dir),
+        )
+    )
+    report = stackctl._read_json_object(str(health_dir / "report.json"))
+    checks = [item for item in report.get("checks", []) if isinstance(item, dict)]
+    if report.get("target") != requirement.target or report.get("generationIssues") != []:
+        issues.append("import prerequisite target or generation identity is invalid")
+    import_checks = [item for item in checks if item.get("scope") == "content-import"]
+    if not import_checks or any(
+        item.get("ok") is not True or item.get("skipped")
+        for item in import_checks
+    ):
+        issues.append("content-import exact probes are missing, skipped or failed")
+    envelope = report.get("evidenceEnvelope", {})
+    if (
+        envelope.get("candidateDigest", {}).get("status") != "executed"
+        or envelope.get("candidateDigest", {}).get("value") != candidate_digest
+    ):
+        issues.append("health evidence candidate identity differs from bounded startup")
+    # startup authority 只来自 policy workload 的 canonical receipt；不得扫描
+    # 其他 workload 并从多个 running receipt 中猜测当前导入前置。
+    payload = {
+        "schema": "quwoquan_ops.ship_readiness_receipt",
+        "action": "import",
+        "environment": args.env,
+        "target": requirement.target,
+        "workload": workload,
+        "candidateDigest": candidate_digest,
+        "providerRuntimeDigest": provider_runtime_digest,
+        "startupAttemptId": startup_attempt_id,
+        "outcome": "GATE_BLOCK" if issues else "PASS",
+        "reportDir": str(report_dir.resolve()),
+        "healthRef": str((health_dir / "report.json").resolve()),
+        "healthExitCode": result["exitCode"],
+        "evidenceEnvelope": envelope,
+        "contentAcceptance": "not_evaluated",
+        "details": issues,
+        "exitCode": 2 if issues else 0,
+        "summary": "content import prerequisites " + ("blocked" if issues else "passed"),
+    }
+    stackctl.write_json(report_dir / "report.json", payload)
+    return payload
+
+
 def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
-    """验证显式环境能力和同一 release 的公开消费证据，不作导入准备前置。"""
+    """导入前基础能力与同一release公开消费证据分轴验证。"""
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    if getattr(args, "action", "verify") == "import":
+        return _content_import_readiness(args)
     policy = _stackctl.load_content_release_readiness_policy()
     requirement = policy.requirement_for(environment=args.env)
     report_dir = (
@@ -384,12 +501,19 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         probes=tuple(probes),
         report_dir=_stackctl.relpath(report_dir),
     )
+    health_envelope = health.get("evidenceEnvelope", {})
+    health_runtime = health.get("userAvailabilityReport", {}).get("evidence", {}).get("runtime", {})
+    health_startup = health_runtime.get("startupReceipt", {}) if isinstance(health_runtime, dict) else {}
     payload = {
         "schema": "quwoquan_ops.ship_readiness_receipt",
+        "action": "verify",
         "policyId": receipt.policy_id,
         "environment": receipt.environment,
         "target": receipt.target,
         "workload": receipt.workload,
+        "candidateDigest": str(health_envelope.get("candidateDigest", {}).get("value") or ""),
+        "providerRuntimeDigest": str(health_startup.get("providerRuntimeDigest") or ""),
+        "startupAttemptId": str(health_envelope.get("startupAttemptId", {}).get("value") or ""),
         "outcome": receipt.outcome.value,
         "capabilities": [item.value for item in receipt.capabilities],
         "probes": list(receipt.probes),

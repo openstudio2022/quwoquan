@@ -962,7 +962,7 @@ def test_failed_receipt_retains_bounded_search_attempt_evidence() -> None:
         "containsUnverifiedAssets": False,
         "manifestDigest": "sha256:" + "a" * 64,
         "admissionKind": "producer_handoff",
-        "handoffRef": "handoff-ref-v1:sha256:" + "c" * 64 + ":sha256:" + "d" * 64,
+        "handoffRef": "data/releases/release-a/producer_release_handoff.json=sha256:" + "d" * 64,
         "handoffArtifactRef": "data/releases/release-a/producer_release_handoff.json",
         "handoffArtifactDigest": "sha256:" + "d" * 64,
         "runId": "verify-a",

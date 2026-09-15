@@ -17,7 +17,7 @@ api_routes:
   security: {auth_mode: required}
   response_entity: PremiumPoolEntrySlice
   authorization: {principal: operator, scopes: [ops.reco.read], ownership_policy: operator_scope}
-  commercial: {status: ready}
+  commercial: {status: blocked, block_reason: Data候选准入成员与完整event迁移尚待实现验证，普通来源资格不变, gap_id: PREMIUM_RELEASE_ADMISSION_BINDING, target_story: environment-topology-and-packaging}
   reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
   error_codes: [OPS.SYSTEM.premium_pool_entry_storage_read_failed]
   privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
@@ -34,14 +34,14 @@ api_routes:
   request_body_kind: object
   response_entity: PremiumPoolEntry
   authorization: {principal: operator, scopes: [ops.reco.write], ownership_policy: operator_scope}
-  commercial: {status: ready}
+  commercial: {status: blocked, block_reason: Data候选准入成员与完整event迁移尚待实现验证，普通来源资格不变, gap_id: PREMIUM_RELEASE_ADMISSION_BINDING, target_story: environment-topology-and-packaging}
   reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
   error_codes: [OPS.USER.premium_pool_entry_invalid_argument, OPS.USER.premium_pool_entry_idempotency_conflict, OPS.USER.premium_pool_entry_revision_conflict, OPS.SYSTEM.premium_pool_entry_storage_read_failed, OPS.SYSTEM.premium_pool_entry_storage_write_failed]
   privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
   telemetry: {metric: ops_premium_pool_entry_command, trace: true, attributes: [operation, outcome]}
   slo: {latency_p95_ms: 1000, availability_percent: 99.9}
   application: {kind: command, facet: PremiumPoolEntryCommandFacade, method: upsertEntry, aggregate_owner: PremiumPoolEntry, mutation_target: PremiumPoolEntry, invariant_target: PremiumPoolEntry}
-  description: 原子提交精选池准入、workflow、audit、幂等回执与 Upsert event。
+  description: 原子提交精选池准入、workflow、audit、幂等回执与 Upsert event。Data releaseSource须由Content typed verified源重验，绑定exact tuple/source版本到releaseAdmissions，仅修改目标成员；普通来源保持原资格。缺源/漂移invalid_argument，同tuple不同摘要冲突；原标量准入不授予任何Data release资格。此扩展在迁移/实现/生成验证前不得用于Data商业准出。
 - method: POST
   path: /control-plane/product/recommendation/premium-pool/{contentId}:rollback
   operation: RollbackPremiumPoolEntry
@@ -50,7 +50,7 @@ api_routes:
   request_bindings: {path: [{name: contentId, field: contentId}]}
   response_entity: PremiumPoolEntry
   authorization: {principal: operator, scopes: [ops.reco.write], ownership_policy: operator_scope}
-  commercial: {status: ready}
+  commercial: {status: blocked, block_reason: Data候选准入成员与完整event迁移尚待实现验证，普通来源资格不变, gap_id: PREMIUM_RELEASE_ADMISSION_BINDING, target_story: environment-topology-and-packaging}
   reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
   error_codes: [OPS.USER.premium_pool_entry_invalid_argument, OPS.USER.premium_pool_entry_not_found, OPS.USER.premium_pool_entry_idempotency_conflict, OPS.USER.premium_pool_entry_revision_conflict, OPS.SYSTEM.premium_pool_entry_storage_read_failed, OPS.SYSTEM.premium_pool_entry_storage_write_failed]
   privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
@@ -66,7 +66,7 @@ api_routes:
   request_bindings: {path: [{name: contentId, field: contentId}]}
   response_entity: PremiumPoolEntryTakedownResult
   authorization: {principal: operator, scopes: [ops.reco.write], ownership_policy: distinct_dual_operator_approval}
-  commercial: {status: ready}
+  commercial: {status: blocked, block_reason: Data候选准入成员与完整event迁移尚待实现验证，普通来源资格不变, gap_id: PREMIUM_RELEASE_ADMISSION_BINDING, target_story: environment-topology-and-packaging}
   reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
   error_codes: [OPS.USER.premium_pool_entry_invalid_argument, OPS.USER.premium_pool_entry_not_found, OPS.USER.premium_pool_entry_idempotency_conflict, OPS.USER.premium_pool_entry_revision_conflict, OPS.USER.premium_pool_entry_dual_approval_required, OPS.SYSTEM.premium_pool_entry_storage_read_failed, OPS.SYSTEM.premium_pool_entry_storage_write_failed]
   privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}

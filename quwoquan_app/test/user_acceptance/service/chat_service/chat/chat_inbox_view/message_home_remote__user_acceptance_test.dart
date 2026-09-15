@@ -15,6 +15,7 @@ import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/runtime/di/chat_message_application_dependencies.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_conversation_page.dart';
 
@@ -61,8 +62,15 @@ void main() {
       }
 
       await _openChatAndWaitForConversation($, conversation);
+      final marker = 'core diagnostic ${DateTime.now().microsecondsSinceEpoch}';
+      await $(find.byKey(TestKeys.chatInputTextField)).enterText(marker);
+      await $(find.byKey(TestKeys.chatInputSendButton)).tap();
+      await $(find.text(marker))
+          .waitUntilVisible(timeout: const Duration(seconds: 20));
       await patrolGoTo($, AppRoutePaths.home);
       await _openChatAndWaitForConversation($, conversation);
+      await $(find.text(marker))
+          .waitUntilVisible(timeout: const Duration(seconds: 20));
     },
   );
 }

@@ -170,15 +170,15 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 }
 
 // ReadActiveReleaseFence exposes only the validated Content release identity.
-// It reuses ActiveSupplySnapshot so prior state, malformed identity, and
-// in-flight pointer drift retain the existing fail-closed behavior.
+// 只 pin 一次 owner pointer；不扫描 feed counts、不复用 feed cache，也不在读取
+// immutable candidate 的会话中重新选择 release。旧 shape 与 malformed identity 仍 fail closed。
 func (r *MongoActiveSupplyReader) ReadActiveReleaseFence(
 	ctx context.Context,
 	query contentpublic.ActiveReleaseFenceQuery,
 ) (contentpublic.ActiveReleaseFence, error) {
 	query.Environment = strings.TrimSpace(query.Environment)
 	query.SourceOwner = strings.TrimSpace(query.SourceOwner)
-	if r == nil || query.Environment == "" || query.SourceOwner == "" ||
+	if r == nil || r.stateCollection == nil || query.Environment == "" || query.SourceOwner == "" ||
 		query.Environment != r.environment || query.SourceOwner != r.sourceOwner {
 		return contentpublic.ActiveReleaseFence{}, &contentpublic.ActiveReleaseFenceError{
 			Reason: "query does not match configured environment and sourceOwner",
@@ -196,22 +196,20 @@ func (r *MongoActiveSupplyReader) ReadActiveReleaseFence(
 			Reason: "prior active release state requires migration",
 		}
 	}
-	snapshot, err := r.ActiveSupplySnapshot(ctx)
+	state, found, err := r.readReleaseFenceState(ctx, true)
 	if err != nil {
 		return contentpublic.ActiveReleaseFence{}, err
 	}
-	result := contentpublic.ActiveReleaseFence{
-		Environment: query.Environment, SourceOwner: query.SourceOwner,
-	}
-	if snapshot.IsEmpty() {
+	result := contentpublic.ActiveReleaseFence{Environment: query.Environment, SourceOwner: query.SourceOwner}
+	if !found {
 		return result, nil
 	}
 	result.Found = true
-	result.ReleaseID = strings.TrimSpace(snapshot.ActiveReleaseID)
-	result.ManifestDigest = strings.TrimSpace(snapshot.ManifestDigest)
-	result.Revision = snapshot.Revision
-	result.ProjectionVersion = snapshot.ProjectionVersion
-	result.ActivatedAt = snapshot.ActivatedAt.UTC()
+	result.ReleaseID = strings.TrimSpace(state.ActiveReleaseID)
+	result.ManifestDigest = strings.TrimSpace(state.ManifestDigest)
+	result.Revision = state.Revision
+	result.ProjectionVersion = state.ProjectionVersion
+	result.ActivatedAt = state.ActivatedAt.UTC()
 	if err := contentpublic.ValidateActiveReleaseFence(query, result); err != nil {
 		return contentpublic.ActiveReleaseFence{}, err
 	}
@@ -221,16 +219,20 @@ func (r *MongoActiveSupplyReader) ReadActiveReleaseFence(
 func (r *MongoActiveSupplyReader) readActiveSupplyReleaseState(
 	ctx context.Context,
 ) (activeSupplyReleaseState, bool, error) {
+	return r.readReleaseFenceState(ctx, false)
+}
+
+// 正式 fence 查询必须识别损坏 pointer；feed 的既有 active-only 查询语义保持不变。
+func (r *MongoActiveSupplyReader) readReleaseFenceState(ctx context.Context, strict bool) (activeSupplyReleaseState, bool, error) {
 	var state activeSupplyReleaseState
+	filter := bson.M{"environment": r.environment, "sourceOwner": r.sourceOwner, "kind": "active_pointer"}
+	if !strict {
+		filter["status"] = "active"
+		filter["activeReleaseId"] = bson.M{"$type": "string", "$ne": ""}
+	}
 	err := r.stateCollection.FindOne(
 		ctx,
-		bson.M{
-			"environment":     r.environment,
-			"sourceOwner":     r.sourceOwner,
-			"kind":            "active_pointer",
-			"status":          "active",
-			"activeReleaseId": bson.M{"$type": "string", "$ne": ""},
-		},
+		filter,
 		options.FindOne().SetProjection(bson.M{
 			"kind": 1, "environment": 1, "sourceOwner": 1, "status": 1,
 			"activeReleaseId": 1, "manifestDigest": 1,
