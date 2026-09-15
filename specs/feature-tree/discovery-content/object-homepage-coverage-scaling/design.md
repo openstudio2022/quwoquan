@@ -46,7 +46,7 @@
 - 对象边界：immutable candidate binding 只冻结目标对象身份、carrier、canonical coverage target 与 candidate identity；它不携带或要求 task-init 前 source/media admission、acquisition、rights 或 semantic verdict。`acquire` 由宿主 Cursor/Codex Agent 点名来源 URL 与相关性理由，脚本取得 bytes、登记 source refs 与媒体 CAS/hard facts；语义保留与结构组织由 AI 在 author 时直接完成，不存在 2.quality/3.compose 产物。
 - 单一产物：`4.draft` 每对象只有载体主产物 `page.md|draft.article.md|image_work.json|video_script.json`；author actor/invocation 与产物 exact ref/digest 只由 `002-4.draft` seal receipt 冻结，不再写 `draft_meta.json`、`author_self_check.json` 或 `agent_result_envelope.json`。`5.review` 每对象只有 `content_review.json`，统一承载 `approved|rejected`、简短 dimensions/blockingIssues 与逐资产 rights 结论；reviewer actor/invocation 及该文件 exact ref/digest 只由 `003-5.review` seal receipt 冻结，机械字段由 seal 补齐，不再建立独立 review receipt 或镜像 verdict。
 - 固定时序：唯一顺序为 `identity-only candidate binding -> task init -> acquire(1.download/) -> author(4.draft/) -> review(5.review/) -> publish -> release finalize`。acquisition/probe/digest/MIME/license 是 acquire 的机械硬事实；rights hard facts 在取得时保留，逐资产使用裁决只在独立 `content_review.json` 单写。
-- 语义主体：来源选择与相关性、创作、结构、作者人设与 review 的唯一主体是直接执行 Skill 的宿主 Cursor/Codex Agent。仓内只做 deterministic init、acquire、seal、原子 publish 与 release finalize；不得新增 resolver、projector、runner、controller、queue、registry、SDK、自动恢复或 actor projection。
+- 语义主体：来源选择与相关性、创作、结构、作者人设与 review 的唯一主体是直接执行 Skill 的宿主 Cursor/Codex Agent。仓内只做 deterministic init、acquire、seal、原子 publish 与 release finalize；不得新增 resolver、projector、runner、controller、queue、语义调度或业务完成 registry、SDK、自动恢复或 actor projection。`DEC-046` 允许的最小 SQLite 只保存具名 shard 占用与预算预留硬事实。
 - 失败恢复：source/ref/digest 或 step-wide identity/integrity 漂移时当前步骤 blocked；逐对象 approved/rejected 可混合，短缺写入 stage result artifact/typed issue，通用 receipt 仍只有 `pass|blocked`，只有零 approved 或 stage-wide identity/integrity failure 才 blocked。blocked 后用新 execution 重试，不改写旧 receipt。
 - 可测试面：local_contract 证明 candidate binding 不要求 source admission，`002-4.draft`/`003-5.review` receipts 各自冻结真实 actor 与唯一业务产物 exact refs，publish 只消费 `content_review.json` 的 approved 对象；api_integration 从 identity-only Image/Video candidate 跑通 download→review→publish 并覆盖 identity/digest drift。
 - 被否决方案：task-init 前 media admission；source-scoped semantic review；独立 review receipt 作为第二 authority；三份 draft 元数据镜像；四份 review/attestation 镜像；对象级 actor projection；仓内语义执行器或自动恢复。
@@ -61,8 +61,10 @@
 - 只读判定：`CanonicalIdentityStateQuery` 与 pool query 区分身份不存在、当前有效及存在但无效，保留最深层 typed error、exact objectRef、依赖与当前摘要；不得把 invalid 静默当作已完成或可重新创建。
 - 一次性输入：受治理 cutover 只接受覆盖全部活跃对象的精确清单，绑定 before identity/digest、依赖 refs、证据、转换或归档动作与 after 预期。转换缺证据、重复身份、漏对象、依赖未决或同时选择互斥动作均阻断；清单不是新生产队列。
 - 迁移：证据充分才保留逻辑身份及资产顺序，受测契约转换产生新版本与新摘要；原始作者、许可、来源及 review 事实不被补造。payload drift 与权利记录无效须分别验证实际证据，不能只刷新摘要或填写 passed。普通 publisher 不接受旧 schema 或特殊覆盖参数。
+- 单对象事实修正：复用 `release object-transaction` 治理入口与现有 package 的 `inputPayloadDigest`，绑定 fresh execution、target、expected version/payload、reason 与本次来源/成品输入，不建立授权 token 或第二台账；授权由宿主点名确认。builder 内部版本默认 1，治理只传 expected + 1，普通 publish CLI 不接收覆盖/版本参数。新 execution 重新 acquire/author/独立 review，不用 passed execution 的 retryOf，也不改旧 source/review。
+- 修正一致性：共同内容仓写锁覆盖 before 实际摘要/版本、身份守恒、新审核校验、locator 分配及既有 audit/apply。新包与 record 在 staging 一次生成，新增版本而不重写旧树；任一前置漂移零 pool 写。exact replay 同时复验原输入绑定、包/record/review 与当前新版本，不能只看旧 apply receipt。失败沿既有事务证据显式处理，不自动修复；命名 local_contract 以真实对象 fixture 验证 `canonical-content-identity-recovery` 的 `REQ-002/GWT-004`，运行指标为新版本/ref/摘要与 idempotent 结果，实际运营与下游证据另取。
 - 归档与资格：不能验证的对象及未闭合依赖只归档，不进入新合格池；不得以目标数量补造资格或把归档当作重审通过。归档原件与被任一保留作品、release、review 或审计引用的媒体继续受保护。
-- 原子性：在既有 staging/delta/锁/校验边界构造并验证完整新池，再以 expected-before 摘要 CAS 激活。阶段失败或并发写入保持旧状态，禁止部分可见树、整池 reset 和旁路 legacy 池；转换后通过新包、引用闭包及保护集校验，才按精确授权清理旧链，不提前宣称完成。
+- 原子性：替换仍在运行的旧根时，在既有 staging/delta/锁/校验边界验证完整新池，以 expected-before CAS 切换；失败保持旧状态。旧根已退出运行且正式独立仓已有成品时，转换后的完整新包按显式清单先依赖后引用，复用单对象 audit/apply（或受测包重放入口）顺序新增；每包原子可见，错误包不写入，已成功包不撤销。宿主依原回执恢复，不建批次事务或全批回滚系统，不另作对象激活。禁止整池 reset、交换含 Git 的仓根或旁路 legacy 池；新包、引用闭包及保护集通过后才按授权清理旧链，不提前宣称完成。
 - 历史与运行隔离：旧 Git、receipt、release、rollback 与环境绑定保护集保持原字节；新 reader 不接受旧 release 作为激活输入。历史复核按原提交或制品离线运行，迁移专用旧解析器不进入普通 reader，完成后撤下；不保留在线双读双写。
 - 验收：真实对象事务构造输入，经存储边界 fault injection 制造 drift，验证全对象清单闭包、证据不足拒绝、版本/身份/媒体保护、并发 CAS 和 staging/current-switch 故障恢复。输出逐对象结果与 before/after 摘要，不以改计数或重算旧证据冒充成功。
 - 关联要求：[`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md) 的 `REQ-001` 与 [`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-001`
@@ -91,10 +93,10 @@
 
 <a id="dec-028"></a>
 ### DEC-028 execution 内 author/reviewer 单会话，跨 execution 由宿主原生并行
-- 决策：一个 execution 的 `4.draft` 全部对象由一个真实 author actor 会话负责，一个 execution 的 `5.review` 全部对象由另一个真实 reviewer actor 会话负责；二者必须是不同 session/runId，可为同一 model family。不同 execution 可由宿主原生并行，仓库不提供 runner、fleet、claim、模型路由、worker queue、actor projection 或自动恢复。
+- 决策：一个 execution 的 `4.draft` 全部对象由一个真实 author actor 会话负责，该作者即本 execution 主会话，自主认领整批并执行获准的 init/acquire/author seal；一个 execution 的 `5.review` 全部对象由另一个自主认领的真实 reviewer actor 会话负责并自行 review seal。二者必须是不同 session/runId，可为同一 model family；宿主派发出的真实独立会话可担任该 execution 主会话，不再由另一主会话代理全部机械命令。不同 execution 可由宿主原生并行，仓库不提供 runner、fleet、语义 claim、模型路由、worker queue、actor projection 或自动恢复；`DEC-046` 的协作 claim 只校验归属/容量硬事实，不推进 execution，也不授予 actor 身份。
 - actor 真相源：`002-4.draft` receipt 的 actor/invocation 就是该 execution 的真实 author，`003-5.review` receipt 的 actor/invocation 就是其真实 reviewer；对象业务产物不复制 actor，代码也不从对象投影、聚合或补写 actor。
-- 交接：producer 跨会话只读三份 seal receipts、业务 result refs 与 immutable release handoff。后继由 Skill 固定，代码不得解释 receipt 推进流程；环境 facts 属下游 owner，不参与 producer 恢复。
-- 失败恢复：未 seal 的步骤由一个真实 actor 会话完整重做；receipt blocked 新建 execution。任何旧 sequence、checkpoint 或 execution-state projection 均不迁移。
+- 交接：producer 跨会话只读三份 seal receipts、业务 result refs 与 immutable release handoff。作者整批 seal 后直交独立 QA，有容量即续领；QA 整批 seal 后直交获准总监发布，退回项直达作者，不等待其他 execution 齐套。后继由 Skill 固定，代码不得解释 receipt 推进流程；环境 facts 属下游 owner，不参与 producer 恢复。
+- 失败恢复：未 seal 的步骤仅在原真实 actor 可核验时由同一会话续写部分产物；无法保持归属则保留原件并阻断。receipt blocked 新建 execution。不得换作者覆盖后冒充同一执行。任何旧 sequence、checkpoint 或 execution-state projection 均不迁移。
 - 可测试面：静态检查锁定零旧控制面与 actor projection，行为测试锁定 author/reviewer actor 不同、各步骤每 execution 单一 actor、create-once receipts 与并发单对象原子 IO。
 - 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-006`、`REQ-007`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
@@ -117,6 +119,7 @@
 - 配置边界：environment/target、endpoint、TLS、Provider、网络与数据隔离、能力探针、观测和 doctor 要求由环境 owner 显式配置并绑定运行配置身份；业务与内容层不按环境名分出另一链路。相同 release 在不同环境保持同一内容身份和媒体字节，配置不反向写入 producer release/cohort/handoff。`apply`、`activate`、`verify`、`rollback` 与 `replay` 是动作及其前驱关系，不是类别；完整 integration/release 验证独立消费显式 Exit，普通 managed/content-live 启动不强制该恢复证据。
 - 权利边界：acquire 机械派生逐资产 `rightsStatus`（白名单 license → verified；其它可读 license → unverified 并写 `rightsIssues`；不可读 → unknown）并保留权利六字段；publish 事务与 release build 只把这些取值当作记录事实写入唯一 manifest 与包内 `sources/<unit>/source.json`，header 只派生计数，pool record 只绑定包与 review 摘要，不复制完整权利投影，不据此拒绝对象。对象级词汇（`distributionDecision: research_allowed|commercial_allowed|blocked`、`publicationAdmission`、pool `usageScope`）保持现有取值；删除类别不授权改名、刷新既有 `payloadDigest` 或重写旧对象身份。包格式转换按 `DEC-023` 生成新版本与摘要，原权利值及原 review 保留，不能以转换伪造重审。
 - 媒体交付：release 只物化 canonical 公开媒体引用，导入投影按同一媒体契约声明公开访问。当前非商用开发验证阶段，四入口与媒体直链统一开放，不基于缺少授权记录隐藏或拒绝，不新增运营审批/放行开关；权利计数与精确资产事实原样保留，商用前的可见性治理由 [`multi-carrier-release` OPEN-026](./multi-carrier-release/spec.md#open-026) 承接，不回写 producer。
+- 摄影图片与视频的地点关联：image/video主体与可选地点身份分离，无确证地点时不产生entityRefs或主主页锚点，复用现有题材或摄影标签与公共可空字段；完整身份则校验全部依赖，半填一律拒绝。homepage与article身份规则不扩大，无物种主页、假地点、第五载体或placeMode状态机。无地点不改变review/source/media/去重和里程碑计数；离线投影不得按entityRefs首项假定必有地点。
 - 下游边界：release 绑定、active identity、managed preparation 与 preflight 不读写类别，通过现有内容 API 消费，公开内容允许普通 guest 读取；删除按内容类别设立的身份、会话、attestation、readback 与媒体隔离，不设置成功别名或 dual-read。普通 JWT/OTP、原图 view/save 权限与额度、签名授权和环境访问控制继续由原 owner 约束，不通过公开内容验收取消。
 - 失败与恢复：旧类别字段或参数不进入现役严格契约；不得通过补值、改摘要或降级投影把已封存旧 release 冒充新契约。需要新候选时由 producer 在保留原对象和 rights bytes 的前提下重新生成 release/handoff。跨 release、环境、activation/verify 或 lease 的身份错绑仍 fail closed，恢复只消费 exact 前驱，不改写既有结果。
 - 可测试观察面：local_contract 证明无类别默认调用、真实权利保留、旧选择器与专用路由拒绝、环境配置及缓存身份隔离；api_integration 对同一 active release 的四入口与公开 GET/HEAD/Range 媒体字节读回，覆盖授权记录缺失但不触发开发期隐藏。编译/安装/启动、runtime health 与双端用户可见结果分别形成新证据，旧命名类别测试不代表当前验收。
@@ -159,6 +162,8 @@
 - 对象包：manifest 单写对象身份、版本、标题/caption、实体事实、正文引用、creator/tag/entity 依赖及有序媒体，实体头并入 manifest。homepage/article 只另存最终正文，image/video 无伪正文/脚本草稿；final media 的相对引用与 exact 字节随体，完整复制不依赖 execution/library，不跨包 symlink。creator 仍是共享业务主体，独立 profile/avatar 不强行同构。
 - 来源与审计：采用来源的事实由包内 `sources/<unit>/source.json` 单写，必要证据在该 sources 单元局部拥有，不建全球 resolver；跨作品允许少量来源元数据复制。删除 `asset.refs.json`、`creator.refs.json`、`tag.refs.json`、`source_catalog.json`、`rights.json` 与生成式 `rights_snapshots` 的重复投影，真正的第三方原件进入 sources 并保持可追溯，生成 manifest 副本不算授权证据。公共 attribution 从唯一 manifest/source 派生。
 - review/record：独立 reviewer 原结论与原审核对象摘要保持原件，迁移追加 binding 而非伪造重审；现有追加式入池/退役事实收敛到 records，只绑定包/review 摘要而不复制完整 manifest/source。审核与入池是不同事实，不能删其一。旧字节转换只经 `DEC-023`，普通 reader 不接受旧旁车兜底。
+- 原作隔离：四载体共用sourceWork记录原生身份、实际取得证据及范围、有序媒体使用项；来源响应、机械摘录与宿主识别分开，不从生成的source.md冒称原网页。图片字节只持有一份资产身份，cover/inline/gallery/poster/reference是使用关系；组图members数组及正文锚点记录原序与位置，未采用页面图标不进入成品闭包，不定义DOM/通用AST或站点模式registry。
+- 渲染隔离：审核成品继续使用manifest、Markdown及有序媒体，公开目标投影归下游分发构建并绑定目标契约、投影实现与配置摘要。复用现有release/export物化，不新增转换服务；原站变化不改既有成品，目标renderer变化不刷新旧source/review。来源事实、成品采用事实和公开署名只校验同层字节及引用，禁止跨阶段全等比较导致默认值污染旧记录。
 - 理由与被否决方案：减少的是重复 authority 而不是真实证据；否决继续三旁车之外再留一套 source/rights 镜像、无媒体的不可独立包、按文件数删除 review/record、由 consumer 缓存回写 canonical。
 - 失败恢复与观测：原子包事务报告 exact 引用的来源缺失、媒体缺失、摘要漂移或越界；失败不产生部分成功包，不改已通过 review/历史 release。显式恢复在隔离目标从独立副本验摘要，verify 不产生写入；实际恢复/备份证据与源码测试分层。
 - 边界：Data 不再绑定专用身份、短签或隔离探针；共享媒体签名、到期及 Range 验签仍由原 owner 维护，不因删除 Data 路径放宽无关业务权限。旧 release 仅作隔离历史审计，不接受在线兼容激活。
@@ -245,14 +250,54 @@
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)，Runtime/Service/App 消费边界只引用原 owner contracts。
 - 关联验收：`GWT-042`，缺口保留在 `OPEN-028`，不进入 producer END。
 
+<a id="dec-045"></a>
+### DEC-045 视频与图片共享消费者题材，观看价值复用已有角度叶子
+
+- 决策：浏览与发现按用户想看的主体组织，不按拍摄或剪辑步骤组织。图片与视频共用同一套题材 `tagRefs`；不新增 Intent 轴、视频分类树或第二套入口 ID 表。
+- 边界：`tagRefs` 优先主体，其次可核验事件或行为，再按需加入已声明消费的观看价值叶子、有据地点或季节与少量可见观感。时长、画幅、音轨、器材与制作步骤保留在各自媒体或来源事实，不充当大众兴趣。Audience 画像不从作品或观看行为推断。
+- 消费：在线消费只读取 taxonomy 节点已声明的 `consumedBy`（`recall`/`scorer`/`intersection`/`search_facet`）。未声明采集与消费的 Format 内容角度只作 authoring 提示，不构成本 Story 合同入口。召回解释使用题材匹配，排序仍走既有行为与特征投影，不手写固定权重。跨载体可共享主题，载体偏好独立。文章复用同一批题材叶子，阅读问题映射现有旅行/攻略/科普叶子，不新增地貌、营造或体裁目录。
+- 执行边界：拍摄参数叶子可继续服务 EXIF 通道；视频作者不把它们选作大众兴趣。seal 只校验 `tagRefs` 能解析到既有定义，不新增视频专用拒绝规则。
+- 失败恢复：半填地点拒绝并沿用 [`GWT-046`](./multi-carrier-release/spec.md#gwt-046)。未知物种或行为只选用已有可证叶子，不另建回退合同。缺失观看价值不得用制作参数或空目录替代。
+- 被否决方案：按载体复制雪山或求偶等叶子；新建观赏或风景欣赏目录；把画幅、FPV、器材参数补成大众分类；从标题拟人词推断求偶或用户身份；把展示分组写成 Data 入口权威。
+- 可测试面：local_contract 绑定已声明 `consumedBy` 的共享叶子存在、禁止重复近义路径、查询解析到这些叶子；真实视频 author 与独立 review 读回 `tagRefs`。推荐效果由下游行为证据独立验收。
+- 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-003`
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-047`、[`GWT-048`](./multi-carrier-release/spec.md#gwt-048)
+
+<a id="dec-046"></a>
+### DEC-046 四类岗位自主整批生产与最小协作事实
+
+- 决策与理由：团队保持模板、deployment binding、当次授权/运行事实三层，Bot 名片或聊天不是执行 authority。模板只声明创作总监、创作者、独立 QA、电脑管家四类岗位，作者/QA 可有多个实例；人数、并发与账号部署不是固定七人组织。总监一次确认方向和预算、唯一发布并主动保流，作者作为本人 execution 主会话自领整批并 init/acquire/author seal，QA 自领整批并 review seal，管家只管获准工具资源。去掉代跑全部 CLI、逐题审批和全组齐套屏障，减少等待而不削弱独立审核、归属或人类授权。
+- 对象与状态：既有协作单元 `(deploymentId, generation, globalIteration, shardName)` 与 `available|claimed|draining|blocked|closed` 保持不变，`shardName` 显式、稳定、绑定不重叠范围，不从 actor/PID/path 推导；generation/iteration 变化不可迁移旧 nonce。一个 deployment 至多一个 active shard，其内多个作者持有不重叠 execution/target scope，每 execution 一个 author、一个独立 reviewer；不得增 deployment 绕上限，不新增业务语义状态机。
+- command/query 与一致性：复用 coordination 的单个 SQLite 短事务 CAS 核当前 actor、角色、execution/target 集合、generation、预算与在制容量后建立归属；同批多抢只有一个 winner，失败不留占用。作者最多两个未闭合、其中最多一个创作，送审/审核/待发布都占用；只从正式 receipts/publish proof 的 exact 绑定机械核验调用方声明的容量与释放条件，不据此选择后继或签发完成。全部有效对象 publish/readback 成功或契约明确终止且在飞写者已核才可释放，unknown 不释放；该 readback 仅为本地 canonical 事务身份/字节读回，下游 import/环境/App/API 验收不进入容量释放条件；释放/重放复用 expected state/generation/nonce，漂移零写。参数只在 Story `REQ-022` 一处拥有，不再加待审票据或多层配额。
+- 共享事实与写权限：现有任务输入/报告单写总监在用户授权内确认的方向、预算、权限、实际版本及生效范围；四类角色均可读占用、来源媒体、receipts、QA、publish proof 和异常裁定，凭证/令牌/无关隐私除外。变更先保存后通知，下一次认领/提交核当前版本，越权或版本/必要事实不可读只阻断受影响动作。作者、QA、总监、管家写 scope 独立，共享可读不授予他人写权限；在飞 actor/授权不追溯重写，紧急撤权在真实写点拒绝，不靠群消息或私聊决定。
+- 存储与事件边界：只复用现有任务输入/报告、coordination 归属硬事实、execution receipts/对象 proof/checkpoint；库保存 actor/execution/target/generation、角色 scope、预算引用与占用审计，不保存第二阶段状态、completed 清单或后继。正常通知仅作者整批→QA、QA 整批结果→总监，带 exact refs/digests 与下一动作，不把消息作为事件 authority。库损坏/缺失 fail closed，可经明确人工重建协作边界但不伪造历史 claim；不增看板服务、常驻扫描器、消息代理、自动派单器或 Envelope。
+- 总监保流与 SLO：在宿主触发能力已证时约每 10 分钟低成本增量检查，已知失败下一可执行检查即处理；两次无法解释等待或超过实测正常周期时核原生状态并定向询问。首次发现异常即在现有 checkpoint 记录 owner/下一动作/下次检查，下一检查仍未解决则明确修复、终态接续、工程/用户升级或 blocked，不仅催问。只运行单个非重入检查，Routine 另获授权，缺自动唤醒即人工唤醒并标未实现无人值守；不每 tick 建新总监或生产调用，不把 10/20 分钟作取消 TTL。
+- 失败恢复与回滚：普通输入错由本人按既有契约修正，同类确定性错误再次发生停止盲重试；已知终止先核 native 终态、receipts、原 actor/授权，由唯一 owner 按 retryOf 接续。unknown/额度耗尽保留 scope 和证据，只冻结冲突写，其他健康批继续；全局资源耗尽或 QA 全失效可暂停新增，用户为最终接管人。回退只能停止新增、保全原件并在可信安全交接点按有效授权接续，不取消未知调用、改旧 receipt 或恢复旧权限兼容层。
+- A/B/C 初始化：A 新建复用匹配实例按授权补缺，B 先证无在飞/待接管后原位更新，C 逐单元保留 scope/actor/receipts/版本至安全交接点再更新角色；新任务遵循同一新规则，不等全队同步或重派 unknown。三场景都核实际活动根、工具/媒体链、全员同版本和总监检查能力并从受支持宿主读回；初始化零生产/Routine/清理，缺管理或状态读取工具交人工清单并 blocked，源码/简介更新不等于活跃 Bot 生效。
+- 共享资源与清理：总监在用户总授权内调预算与已验证并发，管家在单独工具/环境授权内保障资源，不代管选题或发布；唯一收官者仍是获准总监。共同 publish flock 只保护同锁域单对象事务，不是跨机器 claim。后继只读审计前任 transition/nonce/receipts/产物/预算释放，清理仅限本 generation+claim 明确创建且非保护集、另获清理授权的临时字节；前任归属或终态不明保留 blocked，不以检查、TTL 或 successor 身份取得清理权。
+- 模型边界：岗位手册表达专业能力与质量优先，不控制产品模型路由。平台不披露实际模型时标未知，不采信 Bot 自报模型名，不把猜测写入 seal；“明确未知”只关闭误报风险，不关闭按岗模型选择能力。
+- 里程碑：十团队按同一全局 iteration 做有界小轮并不能替代 producer 计数；M100000 只在 homepage/article/image/video 各 `100000` 个累计唯一 finalized 对象形成 full explicit cohort、独立 immutable release 与 handoff 后成立。预算、轮次、team/shard/claim 数或媒体文件数均非替代指标。
+- 失败恢复：复建默认只读待命。部分产物保全遵循原 actor/session 规则；宿主中断不从聊天、Routine、TTL、mtime 或 daemon inflight 推断完成。原子 release 仅释放协作 claim，不修改 receipt/pool；generation/nonce 冲突、预算不足、前任清理不明或 SQLite 不可用均 fail closed。
+- 被否决方案：独立 QA 继续由创作者临时互审；新建 Grok 第二套 Skill、语义调度器、业务完成 registry、跨账号消息桥或模型路由服务；用 SQLite 行推进 producer；TTL 抢占；后继自动清理前任；把 Canvas 当正式规格；用 Duplicate 冒充跨账号 Share。
+- 建议量边界：Story `REQ-026` 拥有 1:2:3:4 与最高 50 倍的非配额规划语义，不新增计数 policy、逐实体配额或停线判据；主页身份唯一，原作拆图/换版本不增数，正式 M 档保持现有政策，不以建议量覆盖里程碑。
+- 可测试面：既有 coordination store/runtime 的并发事务与真实 task/canonical handler 写点是 local_contract seam，锁定批次/review 单 winner、两批且一创作、完整 target、独立 reviewer、同 deployment 非总监发布拒绝、缺围栏/旧代/撤权零写、幂等释放、unknown 不释放及无第二状态机。手册契约测试绑定四类岗位/共享版本/A/B/C/保流规则；原生工具缺失不能靠文本断言证明行为。
+- 观测与准出：以同质量、载体、冷热缓存条件的真实有界试点逐级验证两作者、四作者、两 QA，报告净 eligible 产速、周期、WIP、最老未闭合项、首审/返工和单位合格成本，无 native 时间标未测。慢批与异常注入须证明健康批能继续、总监下一检查有裁定，零旧代/越权正式写；local_contract、真实 Bot 生效、真实生产净增各自举证，单账号缺口由 `OPEN-035` 阻断。未来十团队宿主、外盘与 M100000 仍由 `OPEN-034` 独立保持开放，单账号自主生产增量不包含多账号/VM 扩容。
+- 多实例部署：客户端隔离只拥有 profile 生命周期，不拥有 producer 调度。每个实例绑定官方 App exact 版本/签名、独立本机 profile/data/output/workspace 根、一个 account identity ref 和一个 deployment；profile 不承载 token 的治理副本，manifest 只写 redacted 状态。深链、通知、Squirrel 更新、Keychain 与 Computer Use helper 按共享风险处理，双实例期间不更新，登录需要时单实例完成。
+- 写围栏接线：单账号多作者与多实例团队的真实 task/canonical 写入口均消费显式 DB path 与 `WriteFenceToken`，先持本机协调写者 gate，再在 SQLite `BEGIN IMMEDIATE` 短事务核 deployment/generation、actor/角色、execution/target occupancy、有效授权及容量，结束事务后才执行受 gate 保护的业务与 execution/publish flock。普通写者共享 gate，不同 execution 可重叠；release/block/recover/任务版本变更等控制变更持独占 gate，等待已有写者离开再短 CAS。锁序固定为协调 gate → SQLite 短事务（关闭）→ execution/publish 锁；禁止业务锁内反取协调 gate 或持 DB 事务等待业务锁。控制变更和业务共同采用同一 gate，锁只用于本机，不作为跨 VM 文件系统保证；缺失、blocked、stale 或越权在业务写前失败，不能因遗漏环境变量进入无保护分支。SQLite 只机械校验正式证据绑定，不据 receipt 选择下一步；全局收官 deployment 加获准总监 actor 是独立发布授权，不由同 deployment 或 claim 派生。
+- 扩容与回滚：2 -> 5 -> 10 每级独立取得账号/cloud computer、daemon、路径、外盘、锁竞争、预算和断线负例证据。任一串号、跨根写、helper/端口冲突、旧代写成功或更新替换在飞 App 时停止新增、保留 claim/证据并阻断冲突写；只在已核原生终态与明确关闭授权内关闭新增实例，不强停 unknown，不因回滚伪造 handoff。保留 profile 与证据，不自动释放或删除。
+- 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-001`、`REQ-006`、`REQ-007`、`REQ-008`、`REQ-022`、`REQ-023`、`REQ-024`、`REQ-025`、`REQ-026`
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-009`、`GWT-010`、`GWT-049`、`GWT-050`、`GWT-051`、`GWT-052`、`GWT-053`、`GWT-054`、`GWT-055`、`GWT-056`、`GWT-057`、`GWT-058`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
 - 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
 - 后续动作由调用方显式选择；失败对象本身只保留 code/message/ref/origin 诊断。
 - 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
-- 宿主中断：会话预算耗尽只停止宿主继续操作；Data 不写 deadline/job terminal。已 OPEN 未 CLOSE 的阶段由新会话按同一冻结输入重做，既有 create-once receipt 与已合格对象不受影响。
-- 重入路径：OPEN 无 CLOSE 时重做同一 stage；CLOSE blocked 后只能以新 `executionId + retryOf` 消费显式业务 refs。
+- 宿主中断：会话预算耗尽只停止宿主继续操作；Data 不写 deadline/job terminal。尚无 create-once receipt 的步骤由可核验的原 actor 按同一冻结输入续做，既有 receipt 与已合格对象不受影响。
+- 重入路径：未 seal 且原 actor 可核验时续写部分产物；无法保持归属则保留原件并阻断。receipt blocked 后只能以新 `executionId + retryOf` 消费显式业务 refs。
 
 ## 6. 质量与观测
 

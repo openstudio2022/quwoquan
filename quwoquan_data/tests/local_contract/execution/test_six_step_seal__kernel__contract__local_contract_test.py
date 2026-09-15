@@ -155,7 +155,7 @@ def test_three_seals_form_chain_and_seal_completes_review_fields(execution: Path
     assert rights["assetRef"] == "sources/zh_wikipedia__abc/assets/001_xihu.png"
     assert rights["decision"] == "approved"
     assert rights["issues"] == ["署名建议写全名"]
-    assert rights["usageScope"] == "production"
+    assert rights["usageScope"] == "research"
     assert rights["sourceUrl"] == "https://commons.wikimedia.org/wiki/File:Xihu.png"
     assert rights["license"] == "CC BY-SA 4.0"
     assert rights["termsUrl"].startswith("https://")
@@ -202,3 +202,36 @@ def test_acquire_seal_rejects_asset_digest_drift(execution: Path) -> None:
     (execution / "sources/zh_wikipedia__abc/assets/001_xihu.png").write_bytes(b"tampered")
     with pytest.raises(seal_module.SealError, match="资产字节或摘要漂移"):
         _seal(execution, "1.download", AUTHOR)
+
+
+def test_review_accepts_grok_bot_host_when_session_and_run_differ(execution: Path) -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020
+
+    Data 只校验 host/sessionId 与 runId 互异；同 host=`grok-bot` 合法。不认证原生 token，也不把花名册 UUID 当作 sessionId 格式门。
+    """
+    author = {
+        "host": "grok-bot",
+        "modelFamily": "grok",
+        "sessionId": "c16fe559-0744-4b1c-bcfe-af598722cf95",
+        "invocation": {"provider": "xai", "model": "grok", "runId": "native-run-author"},
+    }
+    reviewer = {
+        "host": "grok-bot",
+        "modelFamily": "grok",
+        "sessionId": "4ba2a463-f5e9-4836-99b6-ef21f40a7a7d",
+        "invocation": {"provider": "xai", "model": "grok", "runId": "native-run-reviewer"},
+    }
+    _seal(execution, "1.download", author)
+    _write(execution / TARGET_REF / "4.draft/draft.article.md", "# 西湖速览\n\n正文。\n")
+    _seal(execution, "4.draft", author)
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": []}
+    with pytest.raises(seal_module.SealError, match="同一 host/sessionId"):
+        _seal(
+            execution,
+            "5.review",
+            {**author, "invocation": {**author["invocation"], "runId": "native-run-reviewer"}},
+            reviews={TARGET_REF: judgement},
+        )
+    sealed = _seal(execution, "5.review", reviewer, reviews={TARGET_REF: judgement})
+    assert sealed["status"] == "created"
+    assert _seal(execution, "5.review", reviewer, reviews={TARGET_REF: judgement})["status"] == "replayed"

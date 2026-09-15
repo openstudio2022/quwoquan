@@ -30,6 +30,11 @@ _COMMANDS = {
         "register_parser",
         "内容执行与任务控制面",
     ),
+    "coordination": _CommandDefinition(
+        "content.coordination.cli",
+        "register_parser",
+        "内容生产分片认领、交接与只读时间线",
+    ),
     "filter-catalog": _CommandDefinition(
         "content.filter_catalog.handler",
         "register_parser",

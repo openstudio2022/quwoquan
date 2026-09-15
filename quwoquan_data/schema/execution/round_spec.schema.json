@@ -60,10 +60,7 @@
         "additionalProperties": false,
         "required": [
           "carrier",
-          "entityType",
-          "name",
-          "entityRef",
-          "entityId"
+          "name"
         ],
         "properties": {
           "carrier": {
@@ -107,6 +104,13 @@
           }
         },
         "allOf": [
+          {
+            "$ref": "target_set.schema.json#/$defs/entityIdentity"
+          },
+          {
+            "if": {"properties": {"carrier": {"enum": ["image", "video"]}}},
+            "else": {"required": ["entityType", "entityRef", "entityId"]}
+          },
           {
             "if": {
               "properties": {

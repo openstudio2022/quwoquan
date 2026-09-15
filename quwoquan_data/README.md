@@ -4,7 +4,7 @@
 
 ## Skill + AI Agent
 
-宿主 Cursor/Codex IDE/CLI Agent 是唯一内容语义主体：点名来源与实体相关性、创作、独立评审，并明确 approved 对象、cohort 与 milestone。Skill 的 [producer.py](../.agents/skills/content-production/scripts/producer.py) 提供 `source/download/preview/build-inputs/lint` 单阶段工具：来源取得与预览/下载可按宿主显式输入出网，本地构造与 lint 不出网；工具不创作、不判分、不推进或恢复，也不包装 seal/publish。未实现来源由宿主通用工具处理，实际入口只在各载体 `sources.md` 小节声明。
+宿主 AI（当前包括 Cursor 与本机执行的 Grok Bot）是唯一内容语义主体：点名来源与实体相关性、创作、独立评审，并明确 approved 对象、cohort 与 milestone。二者共用同一 Skill/CLI，不另建 Grok 专属流程或仓内调度器。Skill 的 [producer.py](../.agents/skills/content-production/scripts/producer.py) 提供 `source/download/preview/build-inputs/lint` 单阶段工具：来源取得与预览/下载可按宿主显式输入出网，本地构造与 lint 不出网；工具不创作、不判分、不推进或恢复，也不包装 seal/publish。未实现来源由宿主通用工具处理，实际入口只在各载体 `sources.md` 小节声明。
 
 producer 固定为六步 `init → acquire → author → review → publish → release`，`release finalize` 成功即 `END`。import/activate/readback/health、API/App UAT、EAF、sampling authority、promotion、rollback/replay 全部 out of scope；下游 owner 是 Environment Ops scheduler，Data 不创建环境 acceptance。
 

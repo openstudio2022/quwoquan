@@ -6,13 +6,23 @@ import json
 import sys
 from pathlib import Path
 
-from content.execution.task_init import TaskInitConflict, initialize_round
+from content.coordination.runtime import current_tokens, producer_call
+from content.coordination.store import CoordinationError
+from content.execution.task_init import (
+    TaskInitConflict, initialize_round, _load_submitted_document, _round_documents, _normalized_targets,
+)
 
 
 def handle_task_init(args: argparse.Namespace) -> None:
     try:
-        result = initialize_round(round_spec_path=Path(args.round))
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        current_tokens()
+        document = _load_submitted_document(Path(args.round), schema_name="round_spec")
+        batches = {}
+        for demand, bindings in _round_documents(document):
+            _targets, refs = _normalized_targets(bindings["targets"], carrier=demand["carrier"])
+            batches[demand["executionId"]] = refs
+        result = producer_call(lambda: initialize_round(submitted_round_spec=document), operation="init", batches=batches)
+    except (CoordinationError, FileNotFoundError, OSError, TypeError, ValueError, KeyError) as exc:
         print(f"task init 拒绝：{exc}", file=sys.stderr)
         raise SystemExit(3 if isinstance(exc, TaskInitConflict) else 2) from exc
     print(json.dumps(result, ensure_ascii=False, indent=2))

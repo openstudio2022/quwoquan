@@ -98,13 +98,23 @@
       "minLength": 1,
       "pattern": "^(?!.*[\\u0000-\\u001f\\u007f])\\S(?:.*\\S)?$"
     },
+    "entityIdentity": {
+      "description": "地点身份三字段完整声明，region 保持可选；无地点摄影 image/video 须连同 region 全部不声明。载体限制由外层执行。",
+      "if": {
+        "anyOf": [
+          {"required": ["entityType"]},
+          {"required": ["entityRef"]},
+          {"required": ["entityId"]},
+          {"required": ["region"]}
+        ]
+      },
+      "then": {"required": ["entityType", "entityRef", "entityId"]}
+    },
     "target": {
       "type": "object",
+      "allOf": [{"$ref": "#/$defs/entityIdentity"}],
       "required": [
-        "name",
-        "entityType",
-        "entityRef",
-        "entityId"
+        "name"
       ],
       "additionalProperties": false,
       "properties": {
@@ -144,6 +154,10 @@
     }
   },
   "allOf": [
+    {
+      "if": {"properties": {"carrier": {"enum": ["image", "video"]}}, "required": ["carrier"]},
+      "else": {"properties": {"targets": {"items": {"required": ["entityType", "entityRef", "entityId"]}}}}
+    },
     {
       "if": {
         "properties": {

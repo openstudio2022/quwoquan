@@ -4,9 +4,9 @@
 
 ## Data 内容生产边界
 
-[content-production Skill](../.agents/skills/content-production/SKILL.md) 是 producer 唯一流程真相源。本文件只声明工程不变量；阶段输入与命令由 Skill `references/pipeline.md` 拥有，派发由 `references/dispatch.md` 拥有，预算、恢复、工作区布局与收官由 `references/session.md` 拥有，载体模板与来源入口按当前 `CARRIER.md` / `sources.md` 渐进加载，不在 Data 复制步骤正文。
+[content-production Skill](../.agents/skills/content-production/SKILL.md) 是 producer 唯一流程真相源。本文件只声明工程不变量；阶段输入与命令由 Skill `references/pipeline.md` 拥有，派发由 `references/dispatch.md` 拥有，预算、恢复、工作区布局与收官由 `references/session.md` 拥有，岗位与多账号分工由 `references/team.md` 拥有，载体模板与来源入口按当前 `CARRIER.md` / `sources.md` 渐进加载，不在 Data 复制步骤正文。
 
-- 宿主 Cursor/Codex Agent 是唯一语义主体。机械代码不得决定来源、实体相关性、正文/caption/video script、review、verdict、评分、typed issue、approved、cohort、milestone、后继或恢复；不以脚本代替看媒体、创作和独立评审。
+- 宿主 AI（当前包括 Cursor 与本机执行的 Grok Bot）是唯一语义主体。机械代码不得决定来源、实体相关性、正文/caption/video script、review、verdict、评分、typed issue、approved、cohort、milestone、后继或恢复；不以脚本代替看媒体、创作和独立评审。Grok 与 Cursor 共用同一 Skill/CLI，不另建仓内调度器或第二套流程正文。
 - Data CLI 的 `task acquire` 是零网络 ingest：`quwoquan_data/scripts/content/source/**`、`content/execution/**` 与 `core/**` 不得有 HTTP/socket 出网点，由 local_contract 静态门锁定。`content/release/environment/public_api_client.py` 只验证自家服务，不是来源网络入口。
 - 来源侧机械能力归版本控制的 Skill `scripts/` 与点名载体模块；其中 `source/download/preview` 可按宿主显式输入出网，`build-inputs/lint` 只做本地构造与 advisory。未实现来源由宿主通用工具取得，不宣称自动化；不复制 Data probe/derive/CAS/seal，不包装 seal/publish。
 - Data 机械能力优先进入 `python3 quwoquan_data/scripts/cli.py <command>` 现有单阶段边界。禁止 stage-open、宿主 verifierFacts、resolver/projector/runner/controller/queue/registry/SDK、actor projection、stage-gate、execution-state reducer、自动恢复或第二轮次台账；不得用 shim/dual-read 留第二轨。
@@ -15,7 +15,7 @@
 
 ## 内容与证据
 
-- 实体类型只取 taxonomy `Entity/地点/*` 现有叶子。homepage 主源保持百科闭集（zh.wikipedia / 头条百科 `www.baike.com`），第三方文章只作 `factual_reference_only`；image/video 绑定真实作品来源。
+- 实体类型只取 taxonomy `Entity/地点/*` 现有叶子。homepage 主源闭集及顺序以既有 source registry 为准（Wikipedia → 百度百科 → 头条百科），主源身份可用不等于在线取证或绕过访问限制获准；第三方文章只作 `factual_reference_only`；image/video 绑定真实作品来源。
 - 来源访问与权利原则只由 Skill `references/sourcing.md` 拥有：访问策略、版权保留、未知权利与需授权事实只记录，不因类别阻断入池；公众可见性归运营策略。禁止技术性规避登录墙、付费墙、验证码、DRM 或反爬挑战。
 - 硬事实为 HTTPS 来源、申报 sha1（有则）与本地字节一致、bytes/sha256 精确、必填权利字段在场、独立 author/reviewer、schema/ref 与 create-once 对象身份闭包，以及显式 cohort 达到里程碑计数。权利取值、真实派生修改、水印、热度与质量评分如实记录，不伪造事实或增设质量准入门；字段与枚举只以 `schema/content/` 单一说明为准。
 - 每对象只留一个 carrier 主产物（`page.md|draft.article.md|image_work.json|video_script.json`），标题/tagRefs/creatorProfileId 由产物自身声明。author seal 校验引用与 homepage 百科主源；每对象只保留一份 seal 生成的 `content_review.json`，不允许脚本生成语义判断。
@@ -24,7 +24,7 @@
 
 ## 持久性与工程卫生
 
-- canonical 内容仓为与源码工作树平级的 `/Users/zhaoyuxi/Projects/quwoquan/publish` 独立 Git 仓，通过 `QWQ_PUBLISH_ROOT` 显式绑定仓身份；不是源码 worktree、submodule 或 symlink。缺根/错仓必须阻断，不回退 `quwoquan_data/publish`。实际迁仓的差距见 [发布仓 OPEN-027](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-027)。
+- canonical 内容仓为与源码工作树平级的 `/Users/zhaoyuxi/Projects/quwoquan/publish` 独立 Git 仓，通过 `QWQ_PUBLISH_ROOT` 显式绑定仓身份；不是源码 worktree、submodule 或 symlink。缺根/错仓必须阻断，不回退 `quwoquan_data/publish`。离线测试必须把 `QWQ_PUBLISH_ROOT`、library 与 golden 绑到独立临时根，不得默认命中正式仓。实际迁仓的差距见 [发布仓 OPEN-027](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-027)。
 - 地域实体按 `entities/<domain>/<真实行政链>/<type>/p0001/<name>/<seq>/` 管理，非地域结构仅预留 `entities/<domain>/<已有主类型路径>/p0001/<name>/<seq>/`；posts 按 `posts/<carrier>/<angle>/p0001/<name>/<seq>/`。行政链来自真实主 geoTagRef，不虚构缺层；地域适用性显式，当前不扩展非地点 producer。名称/分区/条目只作 locator，稳定 ID/ref 不变，seq 不等于版本。
 - 对象包的 `manifest.json` 单写身份、结构化实体事实、正文引用与有序媒体/依赖；正文只保留最终 `page.md`/`article.md`，image/video 无伪正文。采用来源及必要真实证据进入包内 `sources/`，最终媒体进入 `media/`；不把禁止 raw 草稿误解为禁止采用来源证据，不跨包 symlink。审核原件与追加式 `records/` 各自保留，不伪造重审或复制第二套 manifest/source authority。
 - content library（`QWQ_LIBRARY_ROOT`）用于采集复用，完整作品/release 不依赖它消费；独立 golden media（`QWQ_CARRIED_MEDIA_ROOT`）保护副本继续保留。普通 Git 不跟踪媒体，`.gitignore`/硬链接不算备份，同卷拷贝不证明抗卷损坏；异卷/远端恢复未验证就如实未建立，任何 gc/hygiene 不触碰现有保护根或任一保留作品/release 所引用媒体。

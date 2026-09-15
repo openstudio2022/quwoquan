@@ -37,6 +37,22 @@ class TaskInitConflict(TaskInitError):
     """create-once 目标已存在且字节不同。"""
 
 
+OPTIONAL_LOCATION_CARRIERS = frozenset({"image", "video"})
+_LOCATION_IDENTITY_FIELDS = ("entityRef", "entityId", "entityType", "region")
+
+
+def optional_location_content_type(content_type: object) -> bool:
+    """摄影 image/video 成品可空 entityRefs；homepage/article 仍须完整地点身份。"""
+    return str(content_type or "").strip() in OPTIONAL_LOCATION_CARRIERS
+
+
+def location_identity_omitted(target: Mapping[str, Any], *, carrier: str) -> bool:
+    """摄影 image/video 可整组省略地点；半填由调用方继续按必填校验。"""
+    return optional_location_content_type(carrier) and not any(
+        field in target for field in _LOCATION_IDENTITY_FIELDS
+    )
+
+
 def _canonical_bytes(value: object) -> bytes:
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
@@ -191,7 +207,8 @@ def execution_target_ref(target: Mapping[str, Any], *, carrier: str) -> str:
     """
     name = str(target.get("name") or "").strip()
     entity_type = str(target.get("entityType") or "").strip().strip("/")
-    if not name or len(entity_type.split("/")) != 2:
+    located = _has_entity_identity(target, carrier=carrier)
+    if not name or (located and len(entity_type.split("/")) != 2):
         raise TaskInitError(f"候选 target 非法：{entity_type}/{name}")
     if carrier == "homepage":
         entity_ref = target.get("entityRef")
@@ -218,7 +235,8 @@ def _normalized_targets(value: object, *, carrier: str) -> tuple[list[dict[str, 
             raise TaskInitError("每个 candidate target 必须是对象")
         target = dict(raw)
         target["name"] = str(target.get("name") or "").strip()
-        target["entityType"] = str(target.get("entityType") or "").strip().strip("/")
+        if "entityType" in target:
+            target["entityType"] = str(target["entityType"]).strip().strip("/")
         if carrier == "homepage":
             # region 在 publish 派生 geoTagRef；缺失或不可解析在这里就判否，不留到第 5 步。
             region = str(target.get("region") or "").strip()
@@ -236,15 +254,26 @@ def _normalized_targets(value: object, *, carrier: str) -> tuple[list[dict[str, 
         pairs.append((ref, target))
     pairs.sort(key=lambda pair: pair[0])
     targets = [target for _, target in pairs]
-    _validate_entity_bindings(targets)
+    _validate_entity_bindings(targets, carrier=carrier)
     return targets, [ref for ref, _ in pairs]
 
 
-def _validate_entity_bindings(targets: list[dict[str, Any]]) -> None:
+def _has_entity_identity(target: Mapping[str, Any], *, carrier: str) -> bool:
+    if location_identity_omitted(target, carrier=carrier):
+        return False
+    for field in ("entityRef", "entityId", "entityType"):
+        if not isinstance(target.get(field), str) or not target[field].strip():
+            raise TaskInitError(f"DATA.EXECUTION.TARGET_IDENTITY_REQUIRED: {field}")
+    return True
+
+
+def _validate_entity_bindings(targets: list[dict[str, Any]], *, carrier: str | None = None) -> None:
     """同一显式 ref/ID 必须一一绑定；分类与已声明地域不能在同一输入里相互矛盾。"""
     by_ref: dict[str, dict[str, Any]] = {}
     by_id: dict[str, str] = {}
     for target in targets:
+        if not _has_entity_identity(target, carrier=carrier or target["carrier"]):
+            continue
         entity_ref, entity_id = target["entityRef"], target["entityId"]
         previous = by_ref.setdefault(entity_ref, {})
         if by_id.setdefault(entity_id, entity_ref) != entity_ref:
@@ -453,12 +482,18 @@ def _round_documents(round_spec: dict[str, Any]) -> list[tuple[dict[str, Any], d
     return documents
 
 
-def initialize_round(*, round_spec_path: Path) -> dict[str, Any]:
+def initialize_round(*, round_spec_path: Path | None = None, submitted_round_spec: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """从一份 round spec 原子创建该轮全部 carrier execution；逐 execution 结果独立报告。
 
     单阶段批量：只在 init 这一步对显式输入做展开，不读 receipt、不推进、不恢复。
     """
-    round_spec = _load_submitted_document(round_spec_path, schema_name="round_spec")
+    if submitted_round_spec is None:
+        if round_spec_path is None:
+            raise TaskInitError("round_spec_path 或 submitted_round_spec 必须提供其一")
+        round_spec = _load_submitted_document(round_spec_path, schema_name="round_spec")
+    else:
+        round_spec = dict(submitted_round_spec)
+        assert_valid(round_spec, "execution", "round_spec", label="task init round_spec")
     results: list[dict[str, Any]] = []
     for demand, bindings in _round_documents(round_spec):
         assert_valid(demand, "execution", "carrier_demand", label="round spec derived carrier_demand")
@@ -612,4 +647,13 @@ def initialize_execution(*, submitted_demand: dict[str, Any], submitted_bindings
     return {"executionId": execution_id, "status": "created", "artifacts": list(documents)}
 
 
-__all__ = ["TaskInitConflict", "TaskInitError", "execution_target_ref", "initialize_execution", "initialize_round", "initialize_task"]
+__all__ = [
+    "TaskInitConflict",
+    "TaskInitError",
+    "execution_target_ref",
+    "initialize_execution",
+    "initialize_round",
+    "initialize_task",
+    "location_identity_omitted",
+    "optional_location_content_type",
+]

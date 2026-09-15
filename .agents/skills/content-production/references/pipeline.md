@@ -2,10 +2,30 @@
 
 只读当前阶段。工作流顺序由 [SKILL](../SKILL.md) 拥有，载体模板与评分只在各自 `CARRIER.md`；本文件拥有机械输入、写者与结果边界。下列命令从仓库根运行，`$ROUND` 指向 `.qwq_output/data/local/workspace/content-production/<shardId>/rounds/<roundId>` 的绝对路径，`$EXEC` 为已选 executionId。
 
+命令责任：创作者是本人 execution 主会话，运行获准 init/acquire/author seal；独立 QA 自行运行 review seal；总监唯一执行 publish/readback、finalize 与 Git，仍须各动作原授权。CLI 独占机械生成物，不因谁执行命令改变真实 author/reviewer 身份。正式写前核当前任务版本、原子小批归属/容量及 generation 写围栏；缺支持即 blocked，不能把本文命令或文档测试当生产准入证据。具体归属与恢复只读 [session](session.md)。
+
+## 显式协调入口与启用边界
+
+自主团队正式 CLI 已要求显式 `QWQ_CONTENT_COORDINATION_DB`、`QWQ_CONTENT_WRITE_FENCE`、`QWQ_CONTENT_ACTOR`、`QWQ_CONTENT_TASK_DIGEST` 与 `QWQ_CONTENT_BATCH_NONCES`；发布还核全局收官绑定。缺失不是单实例回退，而是拒绝。不要把这些变量直接套到未知在飞会话。
+
+- 用现有 `coordination register-deployment` 登记角色成员数组，`bind-context --help` 查看任务摘要/总监确认与四根绑定要求，`claim-batch --help` 查看作者归属及 `--review` 独立审核认领。actor 必须取真实 native 来源，不能复制测试身份或自造 runId。
+- 根与旧单值角色不能静默切换；先按 bootstrap 的 B/C 场景核旧任务、安全交接、实际参数与总监确认，再调用新入口。注册任务摘要/确认引用只提供机械绑定，不证明已从 Grok 读回总监确认。
+- 当前源码已将 producer callable 移出 SQLite 写事务；门保护、输入 exact bytes 消费、历史累计 cohort finalize 和原生终止释放的 current 验证缺口归 Story `OPEN-035`。当前 CLI 拒绝与沙箱测试通过不等于现役团队可直接启用，也不把正式根作为试验目录。
+- 区分用户动作授权、任务/角色绑定、批次原子认领、宿主工具审批和总监运营确认。已授权且有容量的作者/QA沿现有入口自主认领；不将总监逐批生成 env 文件或口头批准作为默认交接。必要的身份/generation/nonce 校验仍保留；若入口确实依赖未取得的绑定或能力，报告具体 blocker 交工程 owner，不用自造身份或删除围栏代偿。
+- “群聊不能出审批卡”等平台限制须附真实工具错误或受支持能力读回；仅会话自述标为未验证。人工在受支持私聊完成必要审批时，向团队共享动作范围、结果引用和下一责任人，不共享凭据，也不重复向总监申请同一运营许可。
+
+## 宿主命令的结果与定位
+
+工作根、工具与已知输入先用现有准确路径；仅在位置未知时有界定位，不为找一个taxonomy或围栏递归扫整个仓库/输出树。首次或工具环境变化时核 `command -v`，缺工具明示，不假定 Homebrew 在 PATH；zsh 空匹配要明确报告，不能作为“没有对象”或静默成功。
+
+多步骤 Shell 必须区分子命令退出码与外层退出码。需要传播失败的管道使用支持的 `pipefail` 或直接捕获子命令状态，不用日志截断、末尾 `ls/echo` 掩盖错误；重定向输出须把真实CLI退出码一并回传。逐项探测若明确给出失败列表，聚合退出0只表示完成探测，不证明全体候选成功。视频宿主下载示例只在 [video/sources](../carriers/video/sources.md#宿主批量下载的退出状态) 维护，不新增stage wrapper。
+
+`unknown 不等于 timeout`；外层无输出不能判定数据库锁或业务慢。先核该次原生状态和阶段：执行前快照输入等待、执行中、进程退出后流未close是不同故障。缺时间/调用关联的daemon日志仅作线索，不擅自终止或重派，也不改shell安全隔离。仅将脱敏命令目的、时间、退出码/typed结果及准确引用留在既有日志/report。
+
 ## 输入与 init
 
 - `shard.json` 仅声明范围、目标与预算，字段见 [shard schema](../schemas/shard.schema.json)，不签发授权。每轮 `round.json` 复用 [round_spec](../../../../quwoquan_data/schema/execution/round_spec.schema.json)。AI 可直接写它并 init：身份冻结不要求下载前置。
-- 每个 `target` 必须显式声明 `entityId/entityRef`，与 carrier、实体类型/名称一同原样冻结；稳定身份由调用方指定，不按名称、行政区、execution 或路径自动 hash。homepage 的 `region` 解析到 `Topic/地理/行政区/<region>`；post 仍声明 `publishAngle/publishTitle`，`publishSeq` 缺省 1，但依赖绑定显式 `entityRef`，不按同名猜实体。只列本轮实际 carrier；补齐 execution 通过 `retryOf` 显式绑定前序。
+- homepage 与 article 必须显式声明完整 `entityId/entityRef/entityType`；摄影 image/video 有据地点时同样完整声明，无确证地点时整组省略 `entityId/entityRef/entityType/region`，半填拒绝。稳定身份由调用方指定，不按名称、行政区、execution 或路径自动 hash。homepage 的 `region` 解析到 `Topic/地理/行政区/<region>`；post 仍声明 `publishAngle/publishTitle`，`publishSeq` 缺省 1，有地点时依赖绑定显式 `entityRef`，不按同名猜实体。只列本轮实际 carrier；补齐 execution 通过 `retryOf` 显式绑定前序。
 - `build-inputs` 是另一种构造输入的方法：消费候选、选择和已取得媒体的下载索引，输出一份 `round.json` 与每载体 `<carrier>/ingest.json`，不调用 init/acquire。它不是 init 的前置门；已手写 round 时，输出须逐字节相同，否则不得覆盖，改用一致输入或新轮次。
 
 ```bash
@@ -98,7 +118,7 @@ python3 .agents/skills/content-production/scripts/producer.py --workspace "$ROUN
 
 - 同 execution 的唯一 author 读已取得来源、`source_refs.json` 与资产索引，逐对象写 `4.draft/page.md|draft.article.md|image_work.json|video_script.json` 之一。标题、标签、creatorProfileId 与来源/资产选择由产物自身声明；不写第二份实体输入或 actor 旁车。
 - 模板、作品分组与六维评分以当前载体 `CARRIER.md` 为唯一正文。`lint` 只返回版式/内容建议；检查已在 execution 的草稿时，将 `--workspace` 显式设为该 execution 根、`--draft` 设为对象草稿相对路径，不复制第二份可写正文，也不使用 `..` 越界。CLI seal 才是 canonical 草稿校验者。
-- 主会话提交真实 author 的 `seal.author.json`（`actor + verdict`），不把执行 CLI 的主会话冒充作者。
+- 本 execution 创作者提交本人真实 `seal.author.json`（`actor + verdict`）并运行 author seal，不由另一主会话代跑。全部有效对象封存后一次整批直交 QA，范围引用 receipt resultRefs，已封存草稿不改，有容量即续领。
 
 ```bash
 python3 .agents/skills/content-production/scripts/producer.py --workspace ".qwq_output/data/tasks/$EXEC" lint image --draft "$TARGET/4.draft/image_work.json"
@@ -111,27 +131,27 @@ seal 校验 schema、标签/创作者引用及载体来源/资产绑定，补机
 
 独立 reviewer 单写 `<carrier>/seal.review.json`：真实 `actor`、显式 `verdict` 与按 targetRef 索引的 `reviews`。对象覆盖集合恰为 `002-4.draft` receipt 的 resultRefs；不评已退轮对象。每项只写 `decision/blockingIssues/advisories`，可选 `qualityScores/qualityNotes/safety` 与资产疑虑；不写逐对象 `content_review.json`，不另建 `review.json/actors.json`。
 
-只在关键论断缺证据、安全/隐私、素材不相关或不可播放三类拒绝。文风、长度、权利疑虑、热度与质量评分只记录，不改变 admission 或补零。reviewer 必须核实当前草稿及来源/实际媒体，不以 poster 代完整视频证据。
+只在关键论断缺证据、安全/隐私、素材不相关或不可播放三类拒绝。文风、长度、权利疑虑、热度与质量评分只记录，不改变 admission 或补零。reviewer 必须核实当前草稿及来源/实际媒体；无法读取当前 resultRefs 或实际媒体时不得 approved。不以 poster、整段解码成功或音量统计代替完整视频观看/听取。
 
 ```bash
 python3 quwoquan_data/scripts/cli.py task seal --execution-id "$EXEC" --stage 5.review --input "$ROUND/image/seal.review.json"
 ```
 
-CLI 核对独立 actor、覆盖与前序绑定，将这唯一输入 create-once 扇出 `5.review/content_review.json`，补 schema、draft digest、assetRights 与 dimensions，透传六维评分。approved/rejected 可并存，零 approved 为 blocked；reviewer 不 seal、不改草稿。
+CLI 核对独立 actor、覆盖与前序绑定，将这唯一输入 create-once 扇出 `5.review/content_review.json`，补 schema、draft digest、assetRights 与 dimensions，透传六维评分。approved/rejected 可并存，零 approved 为 blocked；QA 自行运行 review seal，不改草稿，整批结果直交总监并直接通知需修正的作者。QA 一人一次审一批，不同 QA 可并行不同 execution，不只挑短件；不建立整组齐套屏障。
 
 ## publish
 
-主会话只对显式 approved 对象逐个调用，先 homepage 再引用它的 post；已发布对象直接复用，不重复 init 或造 receipt。
+总监按原授权只对显式 approved 对象逐个调用并 readback，不重审、不等其他作者或整个窗口齐套，先 homepage 再引用它的 post；已发布对象直接复用，不重复 init 或造 receipt。publish 保存完整成品并写入同一事务记录，不是环境上线；保存后无需额外对象激活即可进入显式分发集合。pool-query 的 eligible 是完整性检查结果，不是第二次人工批准；新成品保存后立即不合格视为生产缺陷，不长期保留待激活对象。
 
 ```bash
 python3 quwoquan_data/scripts/cli.py release publish-object --execution-id "$EXEC" --target-ref "$TARGET"
 ```
 
-CLI 唯一原子事务写 `$QWQ_PUBLISH_ROOT` 指定的平级独立 Git 内容仓（本机约定 `/Users/zhaoyuxi/Projects/quwoquan/publish`），核对 `repository.json` 仓身份；缺根/错仓阻断，不回退 `quwoquan_data/publish`。实体按已核实行政链/类型/分区定位，posts 保留载体/角度/分区结构；物理 locator 不改变稳定 ID/ref，布局只由 Data policy 拥有。对象包 `manifest.json` 单写身份、结构化实体事实、正文/有序媒体与依赖；采用来源及必要真实证据进包内 `sources/`，最终媒体进 `media/`，review 原件与追加式 `records/` 保留，完整对象不依赖采集 library 消费。Skill 不改 canonical 包、不实现 publish wrapper，不把 homepage 封面复用扩大为跨 Post 去重硬门；实际去重由 canonical inventory 判定。实现/迁移差距仍由 [OPEN-025](../../../../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-025) 与 [OPEN-027](../../../../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-027) 跟踪，本说明不授权初始化、搬迁、删除旧树或宣称切换完成。
+CLI 唯一原子事务写 `$QWQ_PUBLISH_ROOT` 指定的平级独立 Git 内容仓（本机约定 `/Users/zhaoyuxi/Projects/quwoquan/publish`），核对 `repository.json` 仓身份；缺根/错仓阻断，不回退 `quwoquan_data/publish`。离线测试必须把 `QWQ_PUBLISH_ROOT`、library 与 golden 绑到独立临时根，不得默认命中正式仓，也不让生产覆盖测试保护根。实体按已核实行政链/类型/分区定位，posts 保留载体/角度/分区结构；物理 locator 不改变稳定 ID/ref，布局只由 Data policy 拥有。对象包 `manifest.json` 单写身份、结构化实体事实、正文/有序媒体与依赖；采用来源及必要真实证据进包内 `sources/`，最终媒体进 `media/`，review 原件与追加式 `records/` 保留，完整对象不依赖采集 library 消费。Skill 不改 canonical 包、不实现 publish wrapper，不把 homepage 封面复用扩大为跨 Post 去重硬门；实际去重由 canonical inventory 判定。实现/迁移差距仍由 [OPEN-025](../../../../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-025) 与 [OPEN-027](../../../../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-027) 跟踪，本说明不授权初始化、搬迁、删除旧树或宣称切换完成。
 
 ## release 与 handoff
 
-只在已获授权时进入。先保存 `release pool-query --json <path>` 原始结果，AI 显式选择 eligible objectRefs，写 [release_cohort](../../../../quwoquan_data/schema/release/release_cohort.schema.json)；禁止隐式 all-publishable。M1/M10/M100/M1000 底线依次为 `1/1/1/1`、`10/10/10/2`、`100/100/100/10`、`1000/1000/1000/100`（homepage/article/image/video），按累计唯一 finalized 对象计数。
+只由总监在正式交付点且已获原授权时进入。先保存 `release pool-query --json <path>` 原始结果，AI 显式选择 eligible objectRefs，写 [release_cohort](../../../../quwoquan_data/schema/release/release_cohort.schema.json)；禁止隐式 all-publishable。正式底线 M1/M10/M100/M1000 依次为 `1/1/1/1`、`10/10/10/2`、`100/100/100/10`、`1000/1000/1000/100`（homepage/article/image/video）；M10000 底线为 `10000/10000/10000/1000`。M100000 为四载体各至少100000个累计唯一 finalized 对象，正式计数只读 [content_distribution.policy.yaml](../../../../quwoquan_data/control_plane/_shared/content_distribution.policy.yaml)。阶段目标与自主追加边界以当前用户授权为准；1:2:3:4及50倍只属建议/规划，不改变 M 档或提前停止仍在授权内的生产。
 
 `producerBaselineRevision` 绑定真实工程 baseline，与 `producerContractDigest` 及内容仓身份/exact 内容快照分开记录；只有内容 commit 匹配所选对象实际字节才记录它，不要求工程提交包含仓外 canonical 包，也不强制双提交。提交仍需单独授权。release 不携带类别或命名就绪轨道；CLI 排序、canonical 化 objectRefs 并派生计数，不替 AI 选择 cohort 或 milestone。
 
