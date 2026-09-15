@@ -75,6 +75,17 @@ class IntegrationAppLaunchContractTest(unittest.TestCase):
         self.assertFalse(observation.passed)
         self.assertIn(launch.LAUNCH_BLOCKER, observation.first_blocker)
 
+    def test_vm_attach_does_not_fabricate_launched_or_content_pass(self) -> None:
+        _fake_launcher(self.root, "echo 'The Dart VM service is listening on http://127.0.0.1:1/'\nexit 0\n")
+        observation = launch.launch_and_observe(
+            repo_root=self.root, device=self.device, log_dir=self.root / "logs",
+            timeout_seconds=20, settle_seconds=0,
+        )
+        self.assertFalse(observation.launched)
+        self.assertFalse(observation.passed)
+        self.assertEqual(observation.phases, [])
+        self.assertIn(launch.LAUNCH_BLOCKER, observation.first_blocker)
+
     def test_gate_block_line_is_kept_as_first_blocker(self) -> None:
         _fake_launcher(self.root, (
             "echo '[canonical-executor] GATE_BLOCK: APP.DEPENDENCY.cocoapods_mixed: fixture'\n"
@@ -336,6 +347,103 @@ def test_offline_path_escape_is_rejected_before_any_read(tmp_path, ref):
     with mock.patch.object(launch, "read_repo_relative_regular_single_link", side_effect=AssertionError("must not read")):
         with pytest.raises(ValueError):
             launch._read_offline_evidence_bytes(tmp_path.resolve(), {"ref": ref, "digest": "sha256:" + "a" * 64})
+
+
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-008
+@pytest.fixture
+def installed_snapshot(tmp_path):
+    """只在临时目录构造制品边界，不冒充设备安装或页面观察。"""
+    import hashlib
+    import zipfile
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import document_digest
+    from quwoquan_ops.cli.smoke.environment_patrol_smoke.artifact_binding import artifact_payload_digest
+
+    app = tmp_path / "source"
+    assets = app / "assets/content/alpha"
+    assets.mkdir(parents=True)
+    media = b"canonical-media-bytes"
+    manifest = {"media": [{"assetId": "media-1", "assetPath": "assets/content/alpha/media/one.png",
+                           "byteLength": len(media), "sha256": "sha256:" + hashlib.sha256(media).hexdigest()}]}
+    manifest["bundleId"] = "alpha-" + document_digest(manifest).removeprefix("sha256:")
+    raw = json.dumps(manifest).encode()
+    identity = {"bundleId": manifest["bundleId"], "manifestDigest": "sha256:" + hashlib.sha256(raw).hexdigest()}
+    (assets / "manifest.json").write_bytes(raw)
+    (assets / "bundle_identity.json").write_text(json.dumps(identity))
+    payload = {"assets/content/alpha/manifest.json": raw,
+               "assets/content/alpha/bundle_identity.json": json.dumps(identity).encode(),
+               "assets/content/alpha/media/one.png": media}
+    ios = tmp_path / "installed.app"
+    for name, body in payload.items():
+        path = ios / "Frameworks/App.framework/flutter_assets" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+    android = tmp_path / "installed.apk"
+    with zipfile.ZipFile(android, "w") as package:
+        for name, body in payload.items():
+            package.writestr("assets/flutter_assets/" + name, body)
+    return SimpleNamespace(app=app, ios=ios, android=android, manifest=manifest, digest=artifact_payload_digest)
+
+
+@pytest.mark.parametrize("platform", ["ios", "android"])
+def test_installed_probe_verifies_only_artifact_bytes(installed_snapshot, platform):
+    setup = installed_snapshot
+    artifact = getattr(setup, platform)
+    with mock.patch.object(launch.subprocess, "run", side_effect=AssertionError("no device or SDK operation")):
+        result = launch.probe_installed_content(
+            artifact=artifact, platform=platform, app_root=setup.app,
+            expected_artifact_digest=setup.digest(artifact, platform),
+        )
+    assert result["installedContent"]["status"] == "verified"
+    assert result["installedContent"]["snapshot"] == setup.manifest
+    assert result["nonPromotable"] is True
+    assert result["firstBlocker"] == ""
+    assert "schema" not in result and "passed" not in result
+    for axis in ("rawLaunch", "pageContent", "apiContentReadback", "deviceBinding"):
+        assert result[axis] == "not_evaluated"
+
+
+@pytest.mark.parametrize("damage", ["digest", "media", "missing", "manifest", "platform", "no-digest"])
+def test_installed_probe_never_promotes_corrupt_or_unbound_payload(installed_snapshot, damage):
+    setup = installed_snapshot
+    artifact, platform = setup.ios, "ios"
+    digest = setup.digest(artifact, platform)
+    assets = artifact / "Frameworks/App.framework/flutter_assets/assets/content/alpha"
+    if damage == "media":
+        (assets / "media/one.png").write_bytes(b"corrupt")
+        digest = setup.digest(artifact, platform)
+    elif damage == "manifest":
+        (assets / "manifest.json").write_text("{}")
+        digest = setup.digest(artifact, platform)
+    elif damage == "missing":
+        (assets / "media/one.png").unlink()
+        digest = setup.digest(artifact, platform)
+    elif damage == "platform":
+        platform = "web"
+    else:
+        digest = "" if damage == "no-digest" else "sha256:" + "0" * 64
+    result = launch.probe_installed_content(
+        artifact=artifact, platform=platform, app_root=setup.app, expected_artifact_digest=digest,
+    )
+    assert result["installedContent"]["status"] == "failed"
+    assert "snapshot" not in result["installedContent"]
+    assert result["firstBlocker"] == launch.READBACK_BLOCKER
+    assert result["nonPromotable"] is True and result["pageContent"] == "not_evaluated"
+
+
+def test_installed_probe_retains_first_canonical_blocker(installed_snapshot):
+    from quwoquan_ops.cli.commands import app_preflight_uat_offline_pages as pages
+    from quwoquan_ops.cli.smoke.environment_patrol_smoke.artifact_binding import TestedAppArtifactBindingError
+
+    setup = installed_snapshot
+    failure = TestedAppArtifactBindingError("installed payload changed during readback")
+    with mock.patch.object(pages, "read_artifact_snapshot", side_effect=failure) as read:
+        result = launch.probe_installed_content(
+            artifact=setup.ios, platform="ios", app_root=setup.app,
+            expected_artifact_digest=setup.digest(setup.ios, "ios"),
+        )
+    assert result["firstBlocker"] == failure.code
+    assert result["installedContent"]["detail"] == failure.detail
+    assert read.call_count == 1
 
 
 if __name__ == "__main__":

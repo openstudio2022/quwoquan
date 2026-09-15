@@ -130,7 +130,7 @@ func (h *Handler) renderBodyHTML(detail postports.PostDetailSlice) string {
 	}
 	markdown := strings.TrimSpace(detail.ArticleMarkdown)
 	if markdown != "" {
-		rendered, err := RenderLegacyReadOnlyMarkdownBodyHTML(markdown, detail.MarkdownDialect, h.bodyAssetsFor(detail))
+		rendered, err := RenderCanonicalUnavailableMarkdownBodyHTML(markdown, detail.MarkdownDialect, h.bodyAssetsFor(detail))
 		if err != nil {
 			return `<p class="qwq-content-unavailable">正文语义版本不兼容，暂不可展示。</p>`
 		}

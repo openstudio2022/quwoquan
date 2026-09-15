@@ -148,6 +148,13 @@ def store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         return dict(payload)
 
     monkeypatch.setattr(integration_run, "validate_environment_acceptance_fact", fake_validate)
+    # 查找排序/政策 fixture 省略 candidate 自摘要；owner/claim 完整性由独立真实 candidate 用例覆盖。
+    def candidate_identity(**kwargs):
+        body = json.loads((tmp_path / kwargs["exact"].rsplit("=", 1)[0]).read_bytes())
+        if kwargs["owner_identity"] and body.get("ownerIdentityRef") != kwargs["owner_identity"]:
+            raise integration_run.IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "owner drift")
+        return {}, body
+    monkeypatch.setattr(integration_run, "_existing_candidate", candidate_identity)
     monkeypatch.setattr(integration_run, "OUTPUT_ROOT", tmp_path)
     return tmp_path
 
@@ -214,6 +221,52 @@ def test_newest_matching_candidate_wins(store: Path) -> None:
     found = _lookup(store)
 
     assert found is not None and found["candidate"]["candidateId"] == newer
+
+
+def test_publishable_acceptance_defaults_to_scope() -> None:
+    assert integration_run._parser().parse_args([]).readiness_level == "scope"
+    assert 'READINESS_LEVEL:-scope' in (ROOT / "Makefile").read_text(encoding="utf-8")
+
+
+def test_auto_reuse_rejects_caller_owner_drift(store: Path) -> None:
+    candidate_id = "sha256:" + "a" * 64
+    _candidate(store, candidate_id=candidate_id, created_at="2026-01-01T00:00:00Z", ownerIdentityRef="owner-a")
+    _acceptance(store, candidate_id=candidate_id, environment="alpha")
+    assert _lookup(store, owner_identity="owner-b") is None
+
+
+def test_real_candidate_owner_and_claim_validation_is_shared(tmp_path, monkeypatch):
+    from quwoquan_ops.ci.scoped_candidate.core import exact_digest
+    claim = {"paths": ["x.txt"], "expectedParent": PARENT, "ownerIdentityRef": "owner-a"}
+    claim_path = tmp_path / "claim.json"
+    claim_path.write_bytes(integration_run._canonical_bytes(claim))
+    body = {"schema": integration_run._CANDIDATE_SCHEMA, "commit": COMMIT, "tree": TREE,
+            "expectedParent": PARENT, "impactPlanDigest": IMPACT, "ownerIdentityRef": "owner-a",
+            "claimRef": "claim.json", "claimDigest": exact_digest(claim_path), "paths": ["x.txt"]}
+    body["candidateId"] = exact_digest(body)
+    candidate = tmp_path / "candidate.json"
+    candidate.write_bytes(integration_run._canonical_bytes(body))
+    identity = {"commit": COMMIT, "tree": TREE, "parent": PARENT}
+    raw = candidate.read_bytes()
+    args = dict(store=tmp_path, path=candidate, raw=raw, identity=identity, impact_plan_digest=IMPACT)
+    assert integration_run._candidate_matches_caller(**args, owner_identity="owner-a")
+    assert not integration_run._candidate_matches_caller(**args, owner_identity="owner-b")
+    with pytest.raises(integration_run.IntegrationRunError, match="owner drifted"):
+        integration_run._existing_candidate(exact=f"candidate.json={exact_digest(candidate)}", identity=identity,
+                                            impact_plan_digest=IMPACT, owner_identity="owner-b", store=tmp_path)
+    claim_path.write_bytes(integration_run._canonical_bytes({**claim, "ownerIdentityRef": "owner-b"}))
+    assert not integration_run._candidate_matches_caller(**args, owner_identity="owner-a")
+
+
+@pytest.mark.parametrize("level,review,evidence", [("fast", "", []), ("scope", "", []), ("scope", "missing.json", [])])
+def test_source_precheck_rejects_missing_required_before_git_or_environment(tmp_path, monkeypatch, level, review, evidence):
+    args = integration_run._parser().parse_args([])
+    args.readiness_level, args.review_consolidation, args.required_evidence = level, review, evidence
+    git = mock.Mock(side_effect=AssertionError("source precheck must precede Git/environment"))
+    monkeypatch.setattr(integration_run, "_readiness_local_ref", git)
+    with pytest.raises(integration_run.IntegrationRunError, match="requires scope|SOURCE_REQUIRED"):
+        integration_run._local_readiness(level=level, parent=PARENT, commit=COMMIT, run_dir=tmp_path, args=args)
+    git.assert_not_called()
 
 
 def test_reuse_flag_is_opt_in_and_summary_renders_reused_line() -> None:
@@ -503,7 +556,8 @@ def signed_release_case(monkeypatch: pytest.MonkeyPatch):
 
     try:
         with mock.patch.object(support_module.integration_run, "issue_environment_acceptance_fact", side_effect=issue_bound):
-            bundle, refs, store, signing, args = support._signed_bundle()
+            bundle, refs, store, signing, args = support._signed_bundle(real_source=True)
+        monkeypatch.setattr(integration_run, "ROOT", support.root / "source-repository")
         candidate = json.loads((store / refs["candidate"]["ref"]).read_bytes())
         lookup = {"store": store, "commit": candidate["commit"], "tree": candidate["tree"],
                   "parent": candidate["expectedParent"], "impact_plan_digest": candidate["impactPlanDigest"],
@@ -592,6 +646,107 @@ def test_bundle_cannot_relabel_signed_old_acceptance(signed_release_case, monkey
             beta_status="not_required", beta_reason=integration_run.BETA_OPTIONAL_BY_POLICY,
             lane_branch="refs/heads/lane/product-mainline", merged_lanes=[], args=setup.args)
     assert not destination.exists(), "拒绝新标签时不得先落盘 bundle"
+
+
+@pytest.mark.parametrize("valid_source", [False, True])
+def test_bundle_prevalidation_checks_source_before_zero_import(signed_release_case, monkeypatch, valid_source):
+    setup = signed_release_case
+    from quwoquan_ops.ci.scoped_candidate import core
+    # 真实 Git、claim/source 自摘要与 Ed25519 链；最终 validator 不设替身。
+    if not valid_source:
+        source_path = setup.bundle / "store" / setup.refs["sourceFact"]["ref"]
+        body = json.loads(source_path.read_bytes())
+        body["kind"] = "local_readiness_fast"
+        body.pop("sourceFactId")
+        body["sourceFactId"] = core.exact_digest(body)
+        source_path.write_bytes(integration_run._canonical_bytes(body) + b"\n")
+        manifest_path = setup.bundle / "bundle.json"
+        manifest = json.loads(manifest_path.read_bytes())
+        digest = integration_run.exact_file_digest(source_path)
+        manifest["sourceFact"]["digest"] = digest
+        for exact in manifest["storeFiles"]:
+            if exact["ref"] == manifest["sourceFact"]["ref"]:
+                exact["digest"] = digest
+        manifest.pop("bundleId")
+        manifest["bundleId"] = integration_run._sha256_hex(integration_run._canonical_bytes(manifest))
+        manifest_path.write_bytes(integration_run._canonical_bytes(manifest) + b"\n")
+    destination = mock.Mock(side_effect=AssertionError("prevalidation must not import"))
+    monkeypatch.setattr(integration_run, "_store", destination)
+    import subprocess
+    repository = setup.root / "source-repository"
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=repository, text=True, capture_output=True, check=True).stdout.strip()
+    # 模拟 integration 尚在 parent：HEAD/index/WIP 不得因完整预检变化。
+    git("checkout", "--detach", setup.candidate["expectedParent"])
+    (repository / "unrelated-wip.txt").write_bytes(b"preserve this exact WIP\n")
+    before = (git("rev-parse", "HEAD"), (repository / ".git/index").read_bytes(), git("status", "--porcelain"))
+    params = dict(bundle_dir=setup.bundle, commit=setup.candidate["commit"], tree=setup.candidate["tree"],
+                  parent=setup.candidate["expectedParent"], args=setup.import_args, keyring=setup.signing.keyring(), validate_only=True)
+    if valid_source:
+        result = integration_run._import_acceptance_bundle(**params)
+        assert result["importedFiles"] == 0
+    else:
+        with pytest.raises(integration_run.ScopedCandidateError, match="schema/level|scope readiness"):
+            integration_run._import_acceptance_bundle(**params)
+    destination.assert_not_called()
+    assert (git("rev-parse", "HEAD"), (repository / ".git/index").read_bytes(), git("status", "--porcelain")) == before
+    assert (repository / "unrelated-wip.txt").read_bytes() == b"preserve this exact WIP\n"
+    assert not (setup.bundle / "store/admissions").exists()
+
+
+@pytest.mark.parametrize("damage", ["candidate", "parent", "signature", "digest"])
+def test_bundle_prevalidation_rejects_exact_binding_damage(signed_release_case, monkeypatch, damage):
+    setup = signed_release_case
+    monkeypatch.setattr(integration_run, "_store", mock.Mock(side_effect=AssertionError("no import")))
+    params = dict(bundle_dir=setup.bundle, commit=setup.candidate["commit"], tree=setup.candidate["tree"],
+                  parent=setup.candidate["expectedParent"], args=setup.import_args, keyring=setup.signing.keyring(), validate_only=True)
+    if damage == "candidate":
+        params["commit"] = "f" * 40
+    elif damage == "parent":
+        params["parent"] = "f" * 40
+    elif damage == "signature":
+        from quwoquan_ops.tests.support.evidence_signing_test_support import create_temporary_signing
+        params["keyring"] = create_temporary_signing(setup.root / "wrong-prevalidation-key").keyring()
+    else:
+        (setup.bundle / "store" / setup.refs["alphaFact"]["ref"]).write_bytes(b"{}")
+    with pytest.raises((integration_run.IntegrationRunError, integration_run.EnvironmentSchedulerError)):
+        integration_run._import_acceptance_bundle(**params)
+
+
+@pytest.mark.parametrize("validate_only", [False, True])
+def test_prevalidation_allows_candidate_before_head_ff_but_final_import_does_not(acceptance_main, monkeypatch, validate_only):
+    setup = acceptance_main
+    from quwoquan_ops.ci.scoped_candidate import core
+    monkeypatch.setattr(core, "validate_integration_publish_origin", mock.Mock())
+    def git(*args):
+        if args[0] == "status":
+            return ""
+        if args[0] == "symbolic-ref":
+            return integration_run.DEV_REF
+        if args[0] == "ls-remote":
+            return PARENT + "\t" + integration_run.DEV_REF
+        if args[0] == "show":
+            return TREE
+        if args == ("rev-parse", "HEAD"):
+            return PARENT
+        return COMMIT
+    monkeypatch.setattr(integration_run, "_git", git)
+    validation = mock.Mock(return_value={"manifest": {"bundleId": IMPACT}, "storeFiles": 5})
+    monkeypatch.setattr(integration_run, "_import_acceptance_bundle", validation)
+    args = ["--mode", "integrate", "--candidate", COMMIT, "--acceptance-bundle", str(setup.store), "--run-id", "prevalidation"]
+    code = integration_run.main([*args, *(["--validate-bundle-only"] if validate_only else [])])
+    summary = json.loads((setup.store / "runs/prevalidation/summary.json").read_bytes())
+    assert code == (0 if validate_only else 1)
+    if validate_only:
+        assert summary["terminal"] == "bundle_validated"
+        assert validation.call_args.kwargs["validate_only"] is True
+        assert [phase["name"] for phase in summary["phases"]] == ["preflight", "validate-bundle"]
+    else:
+        assert summary["blocker"]["code"] == "INTEGRATION_RUN.INTEGRATION_IDENTITY_INVALID"
+        validation.assert_not_called()
+    setup.calls["create_publish_admission"].assert_not_called()
+    setup.calls["local_git_cas_publish"].assert_not_called()
+    setup.calls["_local_readiness"].assert_not_called()
 
 
 @pytest.mark.parametrize("damage", ["release", "rollback", "handoff"])

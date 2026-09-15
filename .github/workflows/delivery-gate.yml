@@ -234,13 +234,21 @@ jobs:
             --expected-tree-digest "sha1:${HEAD_TREE}" --expected-plan-digest "$PLAN_DIGEST"
           BOUNDARY_EXIT=$?
           set -e
+          REVIEW_ARGS=()
+          # 可选现有 Review handoff 随同一个 immutable bundle 运输，不新增 PR 作者裁决字段。
+          if test -f "$CONTROL_ROOT/qualification-bundle/review-handoff.json"; then
+            REVIEW_ARGS=(--review-handoff review-handoff.json --review-bundle-root "$CONTROL_ROOT/qualification-bundle")
+          fi
+          # producer 调用 canonical verify_code_health_delivery，完整 base→head full 报告进入 required evidence。
+          # admission 读取其 exact bytes 并重验，不接受最后一次 publish 的健康事实代替。
           python3 quwoquan_ops/ci/promotion_hosted.py hosted-authority \
+            --repository "$GITHUB_WORKSPACE" \
             --evidence-root "$CONTROL_ROOT" --head-sha "$HEAD_SHA" --base-sha "$BASE_SHA" \
             --reviews-file "$READBACK/reviews.json" --threads-file "$READBACK/threads.json" \
             --rulesets-file "$READBACK/rulesets.json" --author-login "$PR_AUTHOR" \
             --branch-policy-exit "$BRANCH_POLICY_EXIT" --changed-boundary-exit "$BOUNDARY_EXIT" \
             --impact-plan-digest "$PLAN_DIGEST" --changed-paths-digest "$CHANGED_PATHS_DIGEST" \
-            --required-evidence "${QUALIFICATION_REF}=${QUALIFICATION_DIGEST}" \
+            --required-evidence "${QUALIFICATION_REF}=${QUALIFICATION_DIGEST}" "${REVIEW_ARGS[@]}" \
             > "$RUNNER_TEMP/hosted-authority.json"
           python3 - "$RUNNER_TEMP/hosted-authority.json" <<'PY'
           import json
@@ -396,6 +404,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      actions: read
       contents: read
       packages: write
       checks: read
@@ -674,3 +683,20 @@ jobs:
             echo '- MainSourceSeal OCI bytes: published and read back before timing submission'
             echo '- source status: source-admitted; release status: not_selected'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  system_backsync:
+    name: Converge sealed main to dev1.0
+    needs: main_source_seal
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.main_source_seal.result == 'success' }}
+    # reusable job 不可提升 caller 权限；不授予 GITHUB_TOKEN ref 写入或全量 secrets。
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      packages: read
+    uses: ./.github/workflows/system-backsync.yml
+    with:
+      expected_dev_before: ${{ needs.main_source_seal.outputs.source_sha }}
+      source_sha: ${{ needs.main_source_seal.outputs.source_sha }}
+      main_source_seal_ref: ${{ needs.main_source_seal.outputs.main_source_seal_ref }}
+      main_source_seal_digest: ${{ needs.main_source_seal.outputs.main_source_seal_digest }}

@@ -26,6 +26,7 @@ from .evidence_fingerprint import (
     workspace_digests,
 )
 from .descriptor_safe_io import read_repo_relative_regular_single_link
+from .review_fingerprint import dependency_root
 
 GENERATOR_PATH = "quwoquan_ops/cli/lib/feature_tree/commands.py"
 CONTRACT_PATH = "quwoquan_ops/policies/agent_governance_contract.yaml"
@@ -228,7 +229,7 @@ def resolve_fingerprint_binding(
         relative = normalize_repo_relative_path(raw_ref, repo_root)
         try:
             raw_bytes = read_repo_relative_regular_single_link(
-                repo_root,
+                dependency_root(repo_root),
                 relative,
                 expected_directory_parts=(
                     ".qwq_output",

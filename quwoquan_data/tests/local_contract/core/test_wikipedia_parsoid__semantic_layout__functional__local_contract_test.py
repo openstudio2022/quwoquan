@@ -65,7 +65,7 @@ def test_legacy_wikitext_complex_table_stays_table_not_fact_sentences() -> None:
 |}""")
     assert any(block["type"] == "table" for block in layout["blocks"])
     assert not any(block["type"] == "listItem" and block.get("origin") == "wikitable" for block in layout["blocks"])
-    assert layout["tables"][0]["legacyComplexStructure"] is True
+    assert layout["tables"][0]["sourceComplexStructure"] is True
 
 
 def test_semantic_envelope_validates_and_opaque_raw_slice_roundtrips() -> None:

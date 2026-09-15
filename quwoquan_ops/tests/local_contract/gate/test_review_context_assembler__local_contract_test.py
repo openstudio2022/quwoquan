@@ -26,6 +26,19 @@ def _load_cli() -> ModuleType:
 review = _load_cli()
 
 
+def test_compact_health_artifact_preserves_disposition_identity() -> None:
+    from quwoquan_ops.cli.lib.review_context_assembler import _compact_artifact
+
+    finding = {
+        "code": "CODE_HEALTH.COMPLEXITY_ADVISORY", "path": "module.py",
+        "terminal": "PR_WARN", "symbol": "run", "qualifiedSymbol": "Controller.run",
+        "findingId": "sha256:" + "a" * 64, "measure": {"cognitive": 21},
+    }
+    projected = _compact_artifact({"findings": [finding]}, projection="identity")
+    assert projected["findings"][0]["findingId"] == finding["findingId"]
+    assert projected["findings"][0]["qualifiedSymbol"] == "Controller.run"
+
+
 def test_large_candidate_code_health_artifact_compresses_with_auditable_identity() -> None:
     paths = [f"quwoquan_ops/generated/path-{index}.py" for index in range(300)]
     plan = {

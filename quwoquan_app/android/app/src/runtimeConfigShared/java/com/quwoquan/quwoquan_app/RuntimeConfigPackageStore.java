@@ -224,6 +224,15 @@ final class RuntimeConfigPackageStore {
   }
 
   ReadState readState() {
+    return readState(false);
+  }
+
+  // 仅供自供给选择 CAS 前值；投影已验证 trust、结构、摘要与签名，不构成消费证据。
+  ReadState readActivePackageIdentity() {
+    return readState(true);
+  }
+
+  private ReadState readState(boolean allowStaleIdentity) {
     try {
       TrustProjection trust = loadTrustEnvelope();
       File activeFile = activePackageFile(false);
@@ -236,7 +245,7 @@ final class RuntimeConfigPackageStore {
         return ReadState.absent(absent);
       }
       JsonObject packageDocument = decodeDocument(readFile(activeFile), "runtime_config_package_malformed");
-      ActiveProjection active = validatePackage(packageDocument, trust, null);
+      ActiveProjection active = validatePackage(packageDocument, trust, null, allowStaleIdentity);
       return ReadState.present(active.readerEnvelope());
     } catch (RuntimeConfigException error) {
       return ReadState.failure(error);

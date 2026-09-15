@@ -112270,6 +112270,10 @@
             "sha256": "7e4b14e23f027b61836e4bbb0d5a5d366177c2c42a54faac94e95a6a8c791e57"
           },
           {
+            "path": "quwoquan_app/lib/service/content_service/media/media_asset/adapters/video_preview_track_bundled.dart",
+            "sha256": "202def22208f0743fd531e79e84e68ee5424e485843d64602832aa3cb8065910"
+          },
+          {
             "path": "quwoquan_app/lib/service/content_service/media/media_asset/adapters/video_preview_track_remote.dart",
             "sha256": "5f171dc9dd897ea0cc3f734f1099d9a069a76dba3214e3bfd6bd618f1b0e24f9"
           }
@@ -113832,11 +113836,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb/markdown_body.go",
-            "sha256": "8bc285905c2348638aaa5f0436e5768d3f899526ecdafad32841b52147b793f0"
+            "sha256": "b632b1b66cb68dafdb7eded3fd059296f4a174448ef78fe5a2197a411b1e155b"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb/public_web_handler.go",
-            "sha256": "42658b69a3565129a4ba049905fb8354aaab875a12587e18848af112de1f5bc7"
+            "sha256": "e0b62ae6d632166d1d7a160ca11ffdeec02f56dcaf997f540d7dcdad298a5830"
           }
         ],
         "localContract": [
@@ -113882,7 +113886,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/publicweb/markdown_block_sequence_parity__local_contract_test.go",
-            "sha256": "155556649b7078d49b4900aa14e5d95c6486786c7159b39a57ddb6fcf24fa776"
+            "sha256": "791c1d95d510ad2939c1438d78f5fd576c5abe4e2da6bc19fff580962bb3bbe3"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/publicweb/public_web_handler__local_contract_test.go",
@@ -113890,7 +113894,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/publicweb/semantic_document_render__local_contract_test.go",
-            "sha256": "8d7c9639161ebb8b41f639b63b8ff05b502b8939fce17738cf9edfa7dff9e8ab"
+            "sha256": "a3bb1f4afcd87071a4d5de8b60e60a37923e1ffdb5dd3b56adf4cd594bfe6462"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/app_config__contract__local_contract_test.go",
@@ -116940,7 +116944,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_semantic_document_adapter__local_contract_test.dart",
-            "sha256": "a4605c58ae09caad4f1a1d2d78f3620e90673b8dcbbd4ffa6a7721aea39f384c"
+            "sha256": "d8397d57b3e5f901fd213f794bad2879c0121ca48caf4cae6840bc47c6b6f0b6"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_type_labels__local_contract_test.dart",
@@ -120585,7 +120589,7 @@
         "domain": [
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model/human_contract_generated.go",
-            "sha256": "f5ba623f53cacb911c9154bd8ecdd0dc7b1cc9d689f0e3f7db7c575920147f85"
+            "sha256": "36a2383af5969b84e76e7e0893c4f0b38fbc3f8360d0274dece428eb62471fa3"
           },
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model/model.go",
@@ -130287,7 +130291,7 @@
     },
     {
       "path": "_shared/semantic_document.yaml",
-      "sha256": "a364a78495d2b1a7eeae0b13fdb5f3d2d0183fe7cb7b614dd8880bfb9016ca9f"
+      "sha256": "b8d0a7988fcf320e1698bf79ecdda7f2a5044f1a3e6de765243ac8f1c4df56df"
     },
     {
       "path": "_shared/test_fixtures/media/media/video/s/media-canary-hour-boundary-3595s/v1/descriptor.json",
@@ -132195,7 +132199,7 @@
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_section.yaml",
-      "sha256": "734ba5f3cf337b7930002b849e254dc0a624314123b5ad72788b9cb076fb6f64"
+      "sha256": "acc56e1686210081e0d1a4f265c8660617c210068b09da9629275c52b4298502"
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_timeline_item.yaml",
@@ -148377,7 +148381,7 @@
     },
     {
       "path": "_shared/semantic_document.yaml",
-      "sha256": "a364a78495d2b1a7eeae0b13fdb5f3d2d0183fe7cb7b614dd8880bfb9016ca9f",
+      "sha256": "b8d0a7988fcf320e1698bf79ecdda7f2a5044f1a3e6de765243ac8f1c4df56df",
       "mediaType": "application/yaml",
       "content": {
         "canonicalMarkdown": {
@@ -148869,7 +148873,7 @@
         },
         "implementationStatus": {
           "canonicalMarkdownCodec": "available",
-          "codegenGap": "The registered generator emits the single closed node registry, canonical directive grammar, deterministic JSON canonicalization constants, and strict Go, Dart, Python, and TypeScript DocumentEnvelope canonical codecs, strict native-block metadata binding, single-corpus validation, cross-language Markdown and safe-projection differential, and Homepage/editor/workbench/PublicWeb strict read paths are available. Legacy Markdown remains explicit read-only and is never upgraded.",
+          "codegenGap": "The registered generator emits the single closed node registry, canonical directive grammar, deterministic JSON canonicalization constants, and strict Go, Dart, Python, and TypeScript DocumentEnvelope canonical codecs, strict native-block metadata binding, single-corpus validation, cross-language Markdown and safe-projection differential, and Homepage/editor/workbench/PublicWeb strict read paths are available. Canonical-unavailable Markdown remains explicit read-only and is never upgraded.",
           "conformanceCorpus": "content_post_markdown_block_sequence_cases_v2",
           "crossLanguageCodegen": "available",
           "metadataValidator": "yaml_parse_and_service_contract_reference",
@@ -302093,13 +302097,13 @@
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_section.yaml",
-      "sha256": "734ba5f3cf337b7930002b849e254dc0a624314123b5ad72788b9cb076fb6f64",
+      "sha256": "acc56e1686210081e0d1a4f265c8660617c210068b09da9629275c52b4298502",
       "mediaType": "application/yaml",
       "content": {
         "consumers": [
           "app"
         ],
-        "description": "主页完整介绍页分节。kind 为稳定展示闭集：\noverview | keyFacts | timeline | history | relatedPeople | relatedObjects | map | gallery | body | relatedImages。\n端侧按 kind 选择渲染形态；canonical semanticDocument 在场时为唯一正文语义来源。\nbodyMarkdown 仅供存量记录 legacy read-only 消费，不得用于新写入或隐式升级 canonical。\nbody：数据工程 page.md 正文章节投影，bodyMarkdown 可含 `:::figure id=\"...\" caption=\"...\"`\n块级内嵌图指令（上图下文 + 单行原图注），assets 提供 role=inline 的图片绑定。\nrelatedImages：page.md 页尾「相关图片」小节投影，assets 全部 role=related。\n",
+        "description": "主页完整介绍页分节。kind 为稳定展示闭集：\noverview | keyFacts | timeline | history | relatedPeople | relatedObjects | map | gallery | body | relatedImages。\n端侧按 kind 选择渲染形态；canonical semanticDocument 在场时为唯一正文语义来源。\nbodyMarkdown 仅在 canonical semanticDocument 不可用时提供来源正文的只读投影，不得用于新写入或隐式升级 canonical。\nbody：数据工程 page.md 正文章节投影，bodyMarkdown 可含 `:::figure id=\"...\" caption=\"...\"`\n块级内嵌图指令（上图下文 + 单行原图注），assets 提供 role=inline 的图片绑定。\nrelatedImages：page.md 页尾「相关图片」小节投影，assets 全部 role=related。\n",
         "fields": [
           {
             "name": "kind",

@@ -5,7 +5,7 @@ description: '主页完整介绍页分节。kind 为稳定展示闭集：
 
   端侧按 kind 选择渲染形态；canonical semanticDocument 在场时为唯一正文语义来源。
 
-  bodyMarkdown 仅供存量记录 legacy read-only 消费，不得用于新写入或隐式升级 canonical。
+  bodyMarkdown 仅在 canonical semanticDocument 不可用时提供来源正文的只读投影，不得用于新写入或隐式升级 canonical。
 
   body：数据工程 page.md 正文章节投影，bodyMarkdown 可含 `:::figure id="..." caption="..."`
 

@@ -4,9 +4,11 @@
 
 ## 0. 最基础事实：Debug 启动只依赖仓库与 SDK
 
-在任意 App 工作树里，裸 SDK 的 `flutter run -d <device>`（或 Xcode / Android Studio 直接 Run）都必须能把 Debug-nonprod App 启动到 alpha 首页——这是 [`environment-topology-and-packaging` REQ-003](../../specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003) 的 `build_time_self_supply`：构建阶段在无外部 handoff 时现场签发 alpha `test_live` runtime package 与 nonprod trust 并随制品嵌入，原生 gate 在冷启动按同一 CAS/receipt 路径激活（日志 `ios_runtime_config_self_supply activated=true`、`runtimeConfigSupplyMode=build_time_self_supply`）。它不依赖下文的 PATH 注入、用户 shell 或某棵具体 worktree 的绝对路径；PATH facade 只是让 `run.sh` 全局可调用、让字面 `flutter run` 获得 managed 语义的便利层。Release/Profile、prod 与 beta/gamma 仍要求 canonical handoff，缺失即 `APP.LAUNCH.runtime_config_trust_missing`。
+在任意 App 工作树里，裸 SDK 的 `flutter run -d <device>`（或 Xcode / Android Studio 直接 Run）都必须能把 Debug-nonprod App 启动到 alpha 首页——这是 [`environment-topology-and-packaging` REQ-003](../../specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003) 的 `build_time_self_supply`：构建阶段在无外部 handoff 时现场签发 Alpha `test_live` 独立 offline bootstrap document 与 nonprod trust，以激活请求形态随制品嵌入，原生 gate 在冷启动按同一 CAS/receipt 路径激活（日志 `ios_runtime_config_self_supply activated=true`、`runtimeConfigSupplyMode=build_time_self_supply`）。它不依赖下文的 PATH 注入、用户 shell 或某棵具体 worktree 的绝对路径；PATH facade 只是让 `run.sh` 全局可调用、让字面 `flutter run` 获得 managed 语义的便利层。Release/Profile、prod 与 beta/gamma 仍要求 canonical handoff，缺失即 `APP.LAUNCH.runtime_config_trust_missing`。
 
-同一事实也是集成准入的必需项：`app` 进入 ImpactPlan scopes 时，每一级 readiness 都真实编译 iOS simulator 与 Android debug，`make integrate` 的 Alpha 准入还会在模拟器上真实启动并对首页 feed 与视频书做 Remote readback（[`local-continuous-integration` REQ-004](../../specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004)）。
+证据必须分层：`app` 进入 ImpactPlan scopes 时，readiness 验证 iOS simulator 与 Android debug 编译；lane 的 `make accept` 另行要求双端 Alpha 离线页面 raw 结果，以及独立服务/API readback。`make integrate` 消费 acceptance bundle，不把编译或源码快进解释成 Alpha 通过。上述自动 UAT 不替代本工作树裸 SDK、受管字面命令与 IDE 的开发入口验收（[`local-continuous-integration` REQ-004](../../specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004)）。
+
+覆盖安装保留旧配置时，自供给只将验签通过的 `alpha-local/nonprod` 旧身份用于 CAS：退役 Alpha 在线包可迁移为当前离线文档，当前离线包重新激活并写入完整 receipt。坏签名、未知状态与过期 Beta/Gamma 仍阻断；不得通过清空容器或伪造 receipt 使测试变绿。
 
 ## 1. 终端 PATH 注入（一次性激活）
 
@@ -138,7 +140,7 @@ run.sh --env alpha -d <ios-simulator-udid>
 
 1. 冷启动 5 分钟内、热启动 90 秒内出现 `QWQ_APP_LAUNCH_PHASE status=launched` 并保持 r/R/q attach 交互态；
 2. 模拟器截图是正常首页/欢迎页，不是启动配置错误页；
-3. 输出包含 `configurationState=complete`（或可证明已向 alpha gateway 发出真实请求）；
+3. 输出或 App 回读证明配置已完整水合、`contentSource=bundled_snapshot`，安装制品的快照与全部媒体摘要匹配；首页推荐和视频书分别观察到快照对象及正常媒体结果。Alpha gateway 请求不是离线启动或内容成功的证明；
 4. 修改一处可见 Dart 文案并按 `r` 后，模拟器内容变化。
 
 连续执行两次，中间不清缓存、不重激活。contract test、facade status、receipt、服务健康数都只算回归信号，不能替代上述用户工作树的字面命令、首帧与热重载证据。任何阶段静默超过 60 秒应作为启动缺陷处理。

@@ -104,6 +104,7 @@ abstract final class RuntimeLogCatalog {
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'publishIntentId', classification: 'INTERNAL', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'publishLocation', classification: 'PII', action: 'mask', maskStrategy: 'city_level_only', truncateChars: 0, explicit: true, visibility: <String>[]),
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'publishedAt', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'semanticDocument', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'semanticMentions', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'shareCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'sourceAttribution', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),

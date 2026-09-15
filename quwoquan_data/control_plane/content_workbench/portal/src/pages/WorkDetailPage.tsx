@@ -14,7 +14,7 @@ import { rendererFor, validateReview } from '../shared/renderers.js';
 type PrimaryTab = 'preview' | 'sources' | 'diagnostics' | 'metadata';
 type Viewport = 'desktop' | 'tablet' | 'mobile';
 function ProductPreview({ work }: { work: WorkDetail }) {
-  if (!work.semanticTree) return <div className="notice notice--warning"><strong>产品预览 unavailable</strong><span>{work.semanticValidation.code} · {work.semanticValidation.detail || 'legacy source 无 canonical semantic AST'}</span></div>;
+  if (!work.semanticTree) return <div className="notice notice--warning"><strong>产品预览 unavailable</strong><span>{work.semanticValidation.code} · {work.semanticValidation.detail || 'source 无 canonical semantic AST'}</span></div>;
   return <SemanticProductPreview envelope={work.semanticTree} />;
 }
 function EvidenceContent({ evidence, displayMode }: { evidence: SourceEvidence; displayMode: 'source-gfm' | 'raw' }) { const markdown = displayMode === 'source-gfm' && isRenderableMarkdown(evidence.mediaType, evidence.kind); const [rendered, setRendered] = useState(markdown); useEffect(() => setRendered(markdown), [evidence.evidenceId, markdown]); return <>{markdown && <div className="render-toggle"><button className={rendered ? 'active' : ''} onClick={() => setRendered(true)}>source-gfm</button><button className={!rendered ? 'active' : ''} onClick={() => setRendered(false)}>raw</button></div>}{rendered && markdown ? <QwqRichMd content={evidence.content} source /> : <pre className="raw-content">{evidence.content}</pre>}</>; }

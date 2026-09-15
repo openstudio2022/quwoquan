@@ -11,6 +11,8 @@ import json
 import os
 import sys
 import tempfile
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -38,8 +40,10 @@ def _load_reports(paths: list[Path]) -> list[dict[str, Any]]:
     return reports
 
 
-def latest_local_report(weekly_root: Path = WEEKLY_ROOT) -> dict[str, Any] | None:
+def latest_local_report(weekly_root: Path = WEEKLY_ROOT, observation_branch: str | None = None) -> dict[str, Any] | None:
     reports = _load_reports(sorted(weekly_root.glob("*/report.json")))
+    if observation_branch is not None:
+        reports = [item for item in reports if item.get("observationBranch") == observation_branch]
     if not reports:
         return None
     return max(reports, key=lambda item: (str(item["window"]["end"]), str(item.get("observedAt", ""))))
@@ -48,7 +52,9 @@ def latest_local_report(weekly_root: Path = WEEKLY_ROOT) -> dict[str, Any] | Non
 def latest_oci_report(repository: str | None) -> dict[str, Any] | None:
     if not repository:
         return None
-    with tempfile.TemporaryDirectory(prefix="qwq-code-health-hotspots-") as directory:
+    cache = ROOT / ".qwq_output/env/repo/local/code-health"
+    cache.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="hotspots-", dir=cache) as directory:
         result = pull_weekly_history(repository, limit=1, output_dir=Path(directory))
         if result["status"] != "available" or not result["reports"]:
             return None
@@ -56,7 +62,19 @@ def latest_oci_report(repository: str | None) -> dict[str, Any] | None:
     return reports[0] if reports else None
 
 
-def project(report: dict[str, Any], owner: str) -> dict[str, Any]:
+def _freshness(report: dict, now: datetime | None, max_age_days: int, current_head: str | None) -> dict:
+    try:
+        observed = datetime.fromisoformat(str(report.get("observedAt", "")).replace("Z", "+00:00"))
+        age_days = ((now or datetime.now(timezone.utc)) - observed).total_seconds() / 86400
+        status = "current" if 0 <= age_days <= max_age_days else "stale"
+    except (ValueError, TypeError):
+        age_days, status = None, "unavailable"
+    return {"status": status, "ageDays": age_days, "maxAgeDays": max_age_days,
+            "matchesCurrentHead": None if current_head is None else report["headSha"] == current_head}
+
+
+def project(report: dict[str, Any], owner: str, *, source: str = "provided", current_head: str | None = None,
+            now: datetime | None = None, max_age_days: int = 14) -> dict[str, Any]:
     """Only this owner's hotspots and weak points, with the actionable streak flag."""
     prefix = owner.rstrip("/")
     persistence = {
@@ -85,8 +103,17 @@ def project(report: dict[str, Any], owner: str) -> dict[str, Any]:
     if len(tiers) >= 2:
         thresholds = {"fileLinesAdvisory": tiers[-2], "fileLinesBlock": tiers[-1]}
     persistence_meta = report.get("hotspotPersistence") or {}
+    input_scope = report.get("inputScope")
+    measured = report.get("measurements", {}).get("hotspots", {}).get("status", "unavailable")
     return {
         "status": "available", "owner": prefix, "headSha": report["headSha"],
+        "source": source, "observationBranch": report.get("observationBranch"),
+        "freshness": _freshness(report, now, max_age_days, current_head),
+        "inputScope": input_scope or {"status": "unavailable", "reason": "legacy-report-input-scope-missing"},
+        "measurementStatus": measured, "scopeKind": "structural", "featureOwnerStatus": "unavailable",
+        "selection": {"kind": "global-top-n-projection", "topN": persistence_meta.get("topN"),
+                      "emptyMeansHealthy": False},
+        "authority": {"blocksDevelopment": False},
         "windowEnd": report["window"]["end"],
         "historyReports": persistence_meta.get("historyReports", 0),
         "historyWeeks": persistence_meta.get("historyWeeks", 0),
@@ -106,7 +133,10 @@ def render(projection: dict[str, Any]) -> str:
     lines = [
         f"code-health-hotspots: owner={projection['owner']} head={projection['headSha'][:12]} "
         f"window_end={projection['windowEnd'][:10]} history_weeks={projection['historyWeeks']} "
-        f"history_reports={projection['historyReports']} actionable={projection['actionableCount']}",
+        f"history_reports={projection['historyReports']} actionable={projection['actionableCount']} "
+        f"source={projection['source']} freshness={projection['freshness']['status']} "
+        f"measured={projection['measurementStatus']} scope=structural feature_owner=unavailable "
+        f"branch={projection['observationBranch']} empty_is_healthy=false",
     ]
     for item in projection["hotspots"]:
         flag = "ACTIONABLE" if item["actionable"] else "observe"
@@ -128,11 +158,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--weekly-root", type=Path, default=WEEKLY_ROOT)
     parser.add_argument("--oci-repository", default=os.environ.get("QWQ_CODE_HEALTH_WEEKLY_OCI", ""))
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--observation-branch", default="dev1.0")
     args = parser.parse_args(argv)
-    report = latest_local_report(args.weekly_root) or latest_oci_report(args.oci_repository or None)
+    report = latest_local_report(args.weekly_root, args.observation_branch)
+    source = "local"
+    if report is None:
+        source = "oci"
+        try:
+            report = latest_oci_report(args.oci_repository or None)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            report = None
+        if report is not None and report.get("observationBranch") != args.observation_branch:
+            report = None
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     projection = (
-        project(report, args.owner) if report is not None
-        else unavailable(args.owner, "no local weekly report and no reachable OCI weekly fact")
+        project(report, args.owner, source=source, current_head=head) if report is not None
+        else unavailable(args.owner, "no local weekly report and no reachable OCI weekly fact for observation branch")
     )
     print(json.dumps(projection, ensure_ascii=False, sort_keys=True) if args.json else render(projection), end="")
     return 0

@@ -19,19 +19,19 @@ void main() {
     expect(invalid.errorCode, 'semantic_identity_drift');
   });
 
-  test('legacy requires explicit version and rejects raw HTML', () {
+  test('canonical-unavailable markdown requires explicit version and rejects raw HTML', () {
     expect(
-      HomepageMarkdownDocumentAdapter.legacy('plain').isAvailable,
+      HomepageMarkdownDocumentAdapter.canonicalUnavailable('plain').isAvailable,
       isFalse,
     );
     expect(
-      HomepageMarkdownDocumentAdapter.legacy(
+      HomepageMarkdownDocumentAdapter.canonicalUnavailable(
         '---\nmarkdownDialect: qwq-rich-md\n---\n<p>unsafe</p>',
       ).isAvailable,
       isFalse,
     );
     expect(
-      HomepageMarkdownDocumentAdapter.legacy(
+      HomepageMarkdownDocumentAdapter.canonicalUnavailable(
         '---\nmarkdownDialect: qwq-rich-md\n---\nplain',
       ).semanticKinds,
       <String>['paragraph'],

@@ -16,7 +16,7 @@ from quwoquan_ops.ci.impact_planner_core import canonical_digest
 from .engine import REPORT_SCHEMA
 
 _SAMPLE_FIELDS = frozenset({"pullRequest", "durationSeconds", "report", "findingReviews"})
-_REVIEW_FIELDS = frozenset({"code", "path", "verdict"})
+_REVIEW_FIELDS = frozenset({"findingId", "verdict"})
 _VERDICTS = frozenset({"confirmed", "false-positive"})
 
 
@@ -32,23 +32,25 @@ def _percentile(values: list[float], fraction: float) -> float | None:
     return round(ordered[index], 3)
 
 
-def _review_verdicts(reviews: Any) -> dict[tuple[str, str], str]:
+def _review_verdicts(reviews: Any) -> dict[str, str]:
     if not isinstance(reviews, list):
         raise CalibrationError("findingReviews 必须为 list")
-    verdicts: dict[tuple[str, str], str] = {}
+    verdicts: dict[str, str] = {}
     for review in reviews:
         if not isinstance(review, dict) or set(review) != _REVIEW_FIELDS:
             raise CalibrationError("findingReview 字段不闭合")
         if review["verdict"] not in _VERDICTS:
             raise CalibrationError("findingReview.verdict 非法")
-        key = (str(review["code"]), str(review["path"]))
+        key = review["findingId"]
+        if not isinstance(key, str) or not key.startswith("sha256:") or len(key) != 71:
+            raise CalibrationError("findingReview.findingId 非法")
         if key in verdicts:
             raise CalibrationError("findingReview identity 重复")
         verdicts[key] = review["verdict"]
     return verdicts
 
 
-def _validate_sample(sample: dict[str, Any]) -> tuple[int, float, dict[str, Any], dict[tuple[str, str], str]]:
+def _validate_sample(sample: dict[str, Any]) -> tuple[int, float, dict[str, Any], dict[str, str]]:
     if set(sample) != _SAMPLE_FIELDS:
         raise CalibrationError("calibration sample 字段不闭合")
     pull_request = sample["pullRequest"]
@@ -64,7 +66,22 @@ def _validate_sample(sample: dict[str, Any]) -> tuple[int, float, dict[str, Any]
         raise CalibrationError("calibration 只接受 clean commit candidate")
     if not isinstance(report.get("headSha"), str):
         raise CalibrationError("sample headSha 缺失")
-    return pull_request, float(duration), report, _review_verdicts(sample["findingReviews"])
+    verdicts = _review_verdicts(sample["findingReviews"])
+    _validate_review_coverage(report, verdicts)
+    return pull_request, float(duration), report, verdicts
+
+
+def _validate_review_coverage(report: dict[str, Any], verdicts: dict[str, str]) -> None:
+    identities = []
+    for finding in report.get("findings") or []:
+        identity = finding.get("findingId")
+        if not isinstance(identity, str) or not identity.startswith("sha256:") or len(identity) != 71:
+            raise CalibrationError("report findingId 缺失或非法")
+        identities.append(identity)
+    if len(identities) != len(set(identities)):
+        raise CalibrationError("report findingId 重复")
+    if set(verdicts) - set(identities):
+        raise CalibrationError("findingReview 引用不存在于当前 report，未覆盖")
 
 
 class _CodeTally:
@@ -104,7 +121,7 @@ def _tally(values: list[dict[str, Any]]) -> tuple[list[float], Counter[str], dic
         for finding in report.get("findings") or []:
             code = str(finding.get("code"))
             tally = per_code.setdefault(code, _CodeTally())
-            tally.record(str(finding.get("terminal")), verdicts.get((code, str(finding.get("path")))))
+            tally.record(str(finding.get("terminal")), verdicts.get(finding["findingId"]))
     return durations, terminal_counts, per_code
 
 

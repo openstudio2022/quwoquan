@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -272,7 +273,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
             kwargs["summary"]["environments"][kwargs["environment"]] = {"executed": True}
             return {"readiness": {}}
 
-        for depth in ("alpha_integration", "abg_release_sensitive"):
+        for depth in ("no_live", "alpha_integration", "abg_release_sensitive"):
             for opted_in in (False, True):
                 with self.subTest(depth=depth, opted_in=opted_in), self._runtime_patches(), ExitStack() as patches:
                     replacements = {"_store": store, "_readiness_local_ref": "refs/heads/lane/product-mainline",
@@ -366,10 +367,12 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
             return {"ref": ref, "digest": digest(path)}
 
         candidate_id = "sha256:" + "a" * 64
-        claim = write("claims/c1.json", {"claimId": "sha256:" + "c" * 64, "paths": ["x.txt"]})
+        claim = write("claims/c1.json", {"claimId": "sha256:" + "c" * 64, "paths": ["x.txt"],
+                                            "expectedParent": parent, "ownerIdentityRef": "owner-fixture"})
         candidate_body = {
             "schema": "quwoquan_ops.exact_integration_candidate.v1", "commit": commit, "tree": tree,
             "expectedParent": parent, "claimRef": claim["ref"], "claimDigest": claim["digest"], "paths": ["x.txt"],
+            "ownerIdentityRef": "owner-fixture",
             "impactPlanDigest": "sha256:" + "9" * 64,
         }
         candidate_id = integration_run._sha256_hex(integration_run._canonical_bytes(candidate_body))
@@ -419,14 +422,79 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
             )
         return bundle_dir, facts, store
 
-    def _signed_bundle(self):
+    def _real_candidate_source(self, store: Path, refs: dict) -> tuple[str, str, str]:
+        """临时 Git 对象与 canonical planner/health；fixture 结果不是实际 lane readiness。"""
+        from quwoquan_ops.ci.scoped_candidate import core
+        from quwoquan_ops.cli.lib.local_readiness.core import _source_plan, capture_fingerprint
+        from quwoquan_ops.gate.code_health_delta.engine import analyze_delta
+        from quwoquan_ops.ci.impact_planner_core import canonical_digest
+
+        repository = self.root / "source-repository"
+        repository.mkdir()
+        def git(*args: str) -> str:
+            return subprocess.run(["git", *args], cwd=repository, text=True, capture_output=True, check=True).stdout.strip()
+        git("init", "-b", "dev1.0")
+        (repository / ".gitignore").write_text(".qwq_output/\n")
+        (repository / "x.txt").write_text("before\n")
+        git("add", ".")
+        git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "parent")
+        parent = git("rev-parse", "HEAD")
+        (repository / "x.txt").write_text("after\n")
+        git("add", "x.txt")
+        git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "candidate")
+        commit, tree = git("rev-parse", "HEAD"), git("rev-parse", "HEAD^{tree}")
+        candidate_path = core.build_head_candidate(repository=repository, policy_path=integration_run.POLICY,
+            commit=commit, expected_parent=parent, owner_identity_ref="local-contract:bundle-owner",
+            impact_plan_digest="sha256:" + "9" * 64, writer_id="bundle-fixture",
+            expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat())
+        candidate = json.loads(candidate_path.read_bytes())
+        source_store = core.store_root(repository=repository, policy_path=integration_run.POLICY)
+        def copy_exact(path: Path) -> dict:
+            relative = path.relative_to(source_store)
+            destination = store / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(path.read_bytes())
+            return {"ref": relative.as_posix(), "digest": core.exact_digest(destination)}
+        refs["candidate"] = copy_exact(candidate_path)
+        refs["claim"] = copy_exact(source_store / candidate["claimRef"])
+        updates = [{"local_ref": commit, "local_sha": commit, "remote_ref": "refs/heads/dev1.0", "remote_sha": parent}]
+        plan = _source_plan(["x.txt"], level="scope", mode="push", repo_root=repository, push_updates=updates)
+        fingerprint = capture_fingerprint(plan, repo_root=repository, mode="push", push_updates=updates, allow_missing_admission=True)
+        health = analyze_delta(repository, base=parent, head=commit, policy_path=ROOT / "quwoquan_ops/policies/code_health_policy.yaml")
+        checks = [{"id": row["id"], "status": "PASS", "exit_code": 0,
+                   **({"code_health": {"report": health, "digest": canonical_digest(health)}} if "code-health" in row["resources"] else {})}
+                  for row in plan["checks"]]
+        receipt = {"schema": "local-readiness-receipt-v2", "level": "scope", "status": "PASS", "mode": "push",
+            "source_identity": {"base": parent, "head": commit, "tree": tree, "paths": ["x.txt"], "mode": "push"},
+            "paths": ["x.txt"], "fingerprint": fingerprint, "input_stable": True, "source_execution": "immutable_capsule",
+            "plan": plan, "checks": checks, "deferred": []}
+        receipt_path = repository / ".qwq_output/env/repo/local/local-readiness/process/receipts/real.json"
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        receipt_path.write_bytes(integration_run._canonical_bytes(receipt) + b"\n")
+        source = core.create_source_fact(repository=repository, policy_path=integration_run.POLICY,
+            candidate_ref=core.store_ref(repository=repository, policy_path=integration_run.POLICY, path=candidate_path),
+            kind="local_readiness_scope", receipt_path=receipt_path, status="passed")
+        refs["sourceFact"] = copy_exact(source)
+        portable_receipt = self.root / receipt_path.relative_to(repository / ".qwq_output")
+        portable_receipt.parent.mkdir(parents=True, exist_ok=True)
+        portable_receipt.write_bytes(receipt_path.read_bytes())
+        return commit, tree, parent
+
+    def _signed_bundle(self, *, real_source: bool = False):
         """仅本地合同：临时密钥真实签发，真实验签；不连接环境，不签发运行时资格。"""
         from quwoquan_ops.tests.support.evidence_signing_test_support import create_temporary_signing
         from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import _EVIDENCE_ROLE_CONTRACT
 
         commit, tree, parent = "1" * 40, "2" * 40, "0" * 40
         bundle, refs, store = self._bundle_from_fake_store(commit=commit, tree=tree, parent=parent)
+        # 其它消费者刻意使用 transport stub 测试 schema 拒绝；只给 admission 用例真实 source。
+        if real_source:
+            commit, tree, parent = self._real_candidate_source(store, refs)
+        candidate = json.loads((store / refs["candidate"]["ref"]).read_bytes())
         signing = create_temporary_signing(self.root / "test-signing")
+        keyring_path = self.root / "source-repository/quwoquan_ops/policies/evidence_signing_keyring.yaml"
+        keyring_path.parent.mkdir(parents=True, exist_ok=True)
+        keyring_path.write_bytes(signing.keyring_path.read_bytes())
         now = datetime.now(timezone.utc)
         issued = (now - timedelta(minutes=1)).isoformat()
         expires = (now + timedelta(hours=1)).isoformat()
@@ -435,7 +503,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         args = SimpleNamespace(signer_identity=integration_run.DEFAULT_SIGNER, profile="integration", fact_ttl_hours=1)
         for environment in ("alpha", "beta"):
             fact = json.loads((store / refs[f"{environment}Fact"]["ref"]).read_bytes())
-            identity = fact["candidate"]
+            identity = {key: candidate[key] for key in ("candidateId", "commit", "tree")}
             for field, (role, statuses) in _EVIDENCE_ROLE_CONTRACT.items():
                 path = store / fact[field]["ref"]
                 path.write_bytes(integration_run._canonical_bytes({
@@ -487,9 +555,9 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         return bundle, refs, store, signing, args
 
     def test_signed_bundle_portability_and_manifest_bindings(self) -> None:
-        bundle, refs, lane, signing, args = self._signed_bundle()
-        commit, tree, parent = "1" * 40, "2" * 40, "0" * 40
+        bundle, refs, lane, signing, args = self._signed_bundle(real_source=True)
         manifest = json.loads((bundle / "bundle.json").read_bytes())
+        commit, tree, parent = manifest["commit"], manifest["tree"], manifest["expectedParent"]
         for attack in ("plan", "beta", "missing-member", "source-symlink", "target-symlink", "wrong-key"):
             with self.subTest(attack=attack):
                 copied = self.root / attack
@@ -524,8 +592,14 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertEqual(manifest["sourceReceipt"], receipt)
         receipt_bytes = (self.root / receipt["ref"].removeprefix(".qwq_output/")).read_bytes()
         self.assertEqual((bundle / "repository" / receipt["ref"]).read_bytes(), receipt_bytes)
-        target = self.root / "signed-import"
-        output = self.root / "integration-output"
+        repository = self.root / "source-repository"
+        from quwoquan_ops.ci.scoped_candidate import core
+        target = core.store_root(repository=repository, policy_path=integration_run.POLICY)
+        # 清掉本测试构造输出，仅允许 portable bundle 补齐证据；Git 对象仍保留。
+        shutil.rmtree(target)
+        target.mkdir(parents=True)
+        output = repository / ".qwq_output"
+        (output / receipt["ref"].removeprefix(".qwq_output/")).unlink()
         shutil.rmtree(lane)
         (self.root / receipt["ref"].removeprefix(".qwq_output/")).unlink()
         with mock.patch.object(integration_run, "_store", return_value=target), mock.patch.object(integration_run, "OUTPUT_ROOT", output):
@@ -534,12 +608,10 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertEqual(result["candidate"]["commit"], commit)
         self.assertEqual(again["importedFiles"], 0)
         self.assertEqual((output / receipt["ref"].removeprefix(".qwq_output/")).read_bytes(), receipt_bytes)
-        # 只替换本地 store 定位；执行真正 admission，不调用 publish、不触碰任何 ref。
-        from quwoquan_ops.ci.scoped_candidate import core
-        with mock.patch.object(core, "_claim_root", return_value=target):
-            admission = integration_run.create_publish_admission(repository=ROOT, policy_path=integration_run.POLICY,
-                candidate_ref=refs["candidate"], source_fact_refs=[refs["sourceFact"]],
-                alpha_fact_ref=refs["alphaFact"], beta_fact_ref=refs["betaFact"], expected_remote_oid=parent)
+        # 完整 admission 真实校验临时仓库 Git、receipt、签名链；不 mock 验证器、不发布。
+        admission = integration_run.create_publish_admission(repository=repository, policy_path=integration_run.POLICY,
+            candidate_ref=refs["candidate"], source_fact_refs=[refs["sourceFact"]],
+            alpha_fact_ref=refs["alphaFact"], beta_fact_ref=refs["betaFact"], expected_remote_oid=parent)
         self.assertEqual(json.loads(admission.read_bytes())["decision"], "admitted")
 
     def test_real_policy_beta_issuance_and_expiry(self) -> None:
@@ -739,6 +811,48 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
                     self.assertRaises(integration_run.IntegrationRunError) as blocked:
                 integration_run._readiness_local_ref(args=acceptance, commit=commit)
             self.assertEqual(blocked.exception.code, "INTEGRATION_RUN.LANE_IDENTITY_INVALID")
+
+    def test_real_merge_freezes_only_declared_local_lane_sources(self) -> None:
+        repository = self.root / "combination"
+        repository.mkdir()
+        def git(*args):
+            return subprocess.run(["git", *args], cwd=repository, check=True, capture_output=True, text=True).stdout.strip()
+        git("init", "-b", "lane/engineering")
+        git("config", "user.name", "Contract")
+        git("config", "user.email", "contract@example.invalid")
+        (repository / "base").write_text("base", encoding="utf-8")
+        git("add", "base")
+        git("commit", "-m", "base")
+        parent = git("rev-parse", "HEAD")
+        git("checkout", "-b", "lane/data-engineering")
+        (repository / "data").write_text("data", encoding="utf-8")
+        git("add", "data")
+        git("commit", "-m", "data")
+        source = git("rev-parse", "HEAD")
+        git("checkout", "lane/engineering")
+        (repository / "code").write_text("code", encoding="utf-8")
+        git("add", "code")
+        git("commit", "-m", "code")
+        before = git("rev-parse", "HEAD")
+        git("merge", "--no-ff", "lane/data-engineering", "-m", "combine")
+        combined = git("rev-parse", "HEAD")
+        self.assertNotIn(combined, (parent, source, before))
+        with mock.patch.object(integration_run, "ROOT", repository):
+            frozen = integration_run._merged_lanes(values=["lane/data-engineering"], lane_branch="lane/engineering", commit=combined, remote="origin")
+            git("update-ref", "refs/heads/lane/data-engineering", combined)
+            self.assertEqual(frozen[1]["commit"], source)
+            git("branch", "-D", "lane/data-engineering")
+            git("update-ref", "refs/remotes/origin/lane/data-engineering", source)
+            with self.assertRaises(integration_run.IntegrationRunError):
+                integration_run._merged_lanes(values=["lane/data-engineering"], lane_branch="lane/engineering", commit=combined, remote="origin")
+            git("branch", "lane/not-declared", combined)
+            with self.assertRaises(integration_run.IntegrationRunError):
+                integration_run._merged_lanes(values=["lane/not-declared"], lane_branch="lane/engineering", commit=combined, remote="origin")
+        for old in (before, source):
+            with self.assertRaises(integration_run.IntegrationRunError):
+                integration_run.validate_bundle_identity({"commit": old, "tree": git("rev-parse", f"{old}^{{tree}}"), "expectedParent": parent},
+                                                        commit=combined, tree=git("rev-parse", "HEAD^{tree}"), parent=parent)
+        self.assertEqual(git("rev-parse", "HEAD"), combined)
 
     def test_attestation_exact_readback_is_required_without_category(self) -> None:
         attestation = _attestation(self.root, "rel-candidate")

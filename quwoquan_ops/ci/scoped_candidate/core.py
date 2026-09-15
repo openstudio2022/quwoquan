@@ -19,7 +19,11 @@ from typing import Any
 
 import yaml
 
-from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import NOT_REQUIRED_REASON_CODES
+from quwoquan_ops.ci import integration_qualification as qualification
+from quwoquan_ops.cli.lib.evidence_signing import (
+    ENVIRONMENT_OPS_IDENTITY, KEYRING_RELATIVE_PATH, EvidenceSigningError,
+    ed25519_environment_verifier, load_keyring,
+)
 
 _SHA_RE = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -335,7 +339,7 @@ def build_candidate(
     if _git(repository, "rev-parse", "HEAD").stdout.strip() != head_before or _index_digest(repository) != index_before:
         raise ScopedCandidateError("SCOPED_CANDIDATE.SCOPE_DRIFT", "default HEAD or index changed during candidate construction")
     body: dict[str, Any] = {
-        "schema": _SCHEMA, "claimRef": str(claim_ref.relative_to(repository)),
+        "schema": _SCHEMA, "claimRef": claim_ref.relative_to(root).as_posix(),
         "claimDigest": exact_digest(claim_ref), "ownerIdentityRef": owner_identity_ref,
         "expectedParent": parent, "commit": commit, "tree": tree,
         "paths": list(paths), "pathsDigest": exact_digest({"paths": list(paths)}),
@@ -390,6 +394,87 @@ _SOURCE_FACT_SCHEMA = "quwoquan_ops.integration_source_fact.v1"
 _SOURCE_FACT_KINDS = ("local_readiness_fast", "local_readiness_scope", "commit_gate")
 
 
+def _validate_source_receipt(repository: Path, candidate: dict[str, Any], kind: str, receipt: dict[str, Any], status: str) -> None:
+    """只消费真实终态与 exact push 证据，不把调用方 wrapper 当成结论。"""
+    def require(condition: bool, detail: str) -> None:
+        if not condition:
+            raise ScopedCandidateError("SCOPED_CANDIDATE.SOURCE_RECEIPT", detail)
+
+    require(kind.startswith("local_readiness_"), "commit_gate has no candidate-bound receipt contract")
+    level = kind.removeprefix("local_readiness_")
+    require(receipt.get("schema") == "local-readiness-receipt-v2" and receipt.get("level") == level, "readiness schema/level mismatch")
+    require(receipt.get("status") == {"passed": "PASS", "failed": "FAIL"}[status], "source receipt terminal differs from wrapper")
+    expected = {"base": candidate["expectedParent"], "head": candidate["commit"],
+                "tree": candidate["tree"], "paths": candidate["paths"], "mode": "push"}
+    require(receipt.get("source_identity") == expected and receipt.get("mode") == "push", "source receipt candidate identity mismatch")
+    require(receipt.get("paths") == candidate["paths"], "source receipt range mismatch")
+    require(_git(repository, "rev-parse", f"{candidate['commit']}^{{tree}}").stdout.strip() == candidate["tree"], "candidate tree mismatch")
+    require(list(_changed_paths(repository, candidate["expectedParent"], candidate["tree"])) == candidate["paths"], "candidate changed paths mismatch")
+    from quwoquan_ops.cli.lib.evidence_fingerprint import validate_evidence_fingerprint, EvidenceFingerprintError
+    try:
+        fingerprint = validate_evidence_fingerprint(receipt.get("fingerprint"))
+    except EvidenceFingerprintError as exc:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.SOURCE_RECEIPT", "invalid readiness fingerprint") from exc
+    require(fingerprint["digest_payload"]["git"] == {"head_sha": candidate["commit"], "merge_base_sha": candidate["expectedParent"]}, "readiness fingerprint candidate mismatch")
+    if status == "failed":
+        return
+    require(receipt.get("input_stable") is True and receipt.get("source_execution") == "immutable_capsule", "source receipt is not stable immutable execution")
+    checks = _validate_source_checks(repository, candidate, receipt, level)
+    _validate_source_health(repository, candidate, checks, fingerprint)
+
+
+def _validate_source_checks(repository: Path, candidate: dict[str, Any], receipt: dict[str, Any], level: str) -> list[dict[str, Any]]:
+    def require(condition: bool, detail: str) -> None:
+        if not condition:
+            raise ScopedCandidateError("SCOPED_CANDIDATE.SOURCE_RECEIPT", detail)
+    plan = receipt.get("plan")
+    require(isinstance(plan, dict), "source receipt missing plan")
+    require(plan.get("paths") == candidate["paths"] and plan.get("mode") == "push" and plan.get("level") == level, "source plan identity mismatch")
+    from quwoquan_ops.cli.lib.local_readiness.core import canonicalize_plan, LocalReadinessError
+    updates = [{"local_ref": candidate["commit"], "local_sha": candidate["commit"],
+                "remote_ref": "refs/heads/dev1.0", "remote_sha": candidate["expectedParent"]}]
+    try:
+        canonicalize_plan(plan, repo_root=repository, push_updates=updates)
+    except (LocalReadinessError, ValueError) as exc:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.SOURCE_RECEIPT", "source receipt canonical checks drifted") from exc
+    checks = receipt.get("checks")
+    planned = plan.get("checks")
+    require(isinstance(checks, list) and isinstance(planned, list) and bool(planned), "source receipt missing required checks")
+    require(all(isinstance(item, dict) for item in checks + planned), "source receipt invalid check")
+    require([item.get("id") for item in checks] == [item.get("id") for item in planned], "source receipt required checks incomplete")
+    require(all(item.get("status") == "PASS" and item.get("exit_code") == 0 for item in checks), "source receipt contains failed check")
+    require(level == "fast" or receipt.get("deferred") == plan.get("deferred") == [], "source receipt still deferred")
+    return checks
+
+
+def _validate_source_health(repository: Path, candidate: dict[str, Any], checks: list[dict[str, Any]], fingerprint: dict[str, Any]) -> None:
+    from quwoquan_ops.cli.lib.evidence_fingerprint import validate_evidence_fingerprint, EvidenceFingerprintError
+    def require(condition: bool, detail: str) -> None:
+        if not condition:
+            raise ScopedCandidateError("SCOPED_CANDIDATE.SOURCE_RECEIPT", detail)
+    health = [item for item in checks if item.get("code_health") is not None]
+    require(len(health) == 1, "source receipt requires one full code health report")
+    evidence = health[0]["code_health"]
+    require(isinstance(evidence, dict) and isinstance(evidence.get("report"), dict), "invalid code health evidence")
+    report = evidence["report"]
+    # 健康报告使用 canonical JSON digest（含浮点数），不另造阈值或扫描器。
+    from quwoquan_ops.ci.impact_planner_core import canonical_digest
+    from quwoquan_ops.gate.code_health_delta.git_delta import changes
+    require(evidence.get("digest") == canonical_digest(report), "code health report digest mismatch")
+    require(report.get("schema") == "quwoquan.code-health-delta" and report.get("terminal") in {"PASS", "PR_WARN"}, "code health terminal is not admissible")
+    require(report.get("baseSha") == candidate["expectedParent"] and report.get("headSha") == candidate["commit"], "code health range mismatch")
+    require(report.get("mode") == "full" and report.get("candidateSource") == "commit" and report.get("mergeParents") == [], "code health must measure full actual push delta")
+    changed = [item.path for item in changes(repository, candidate["expectedParent"], candidate["commit"])]
+    require(report.get("changedPaths") == changed and bool(changed), "code health empty or incomplete scan")
+    require(report.get("changedPathsDigest") == canonical_digest(changed), "code health paths digest mismatch")
+    try:
+        health_fingerprint = validate_evidence_fingerprint(report.get("evidenceFingerprint"))
+    except EvidenceFingerprintError as exc:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.SOURCE_RECEIPT", "invalid code health fingerprint") from exc
+    require(health_fingerprint["digest_payload"]["git"] == fingerprint["digest_payload"]["git"], "code health fingerprint candidate mismatch")
+    require(not any(item.get("terminal") == "GATE_BLOCK" for item in report.get("findings", [])), "code health contains blocker finding")
+
+
 def create_source_fact(
     *, repository: Path, policy_path: Path, candidate_ref: Mapping[str, str], kind: str,
     receipt_path: Path, status: str,
@@ -408,14 +493,16 @@ def create_source_fact(
     if status not in {"passed", "failed"}:
         raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "source fact status must be passed or failed")
     receipt = receipt_path.resolve()
-    if not receipt.is_file() or receipt.is_symlink():
+    if not receipt.is_file() or receipt_path.is_symlink():
         raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "source receipt must be a regular file")
     try:
         receipt_ref = receipt.relative_to(repository).as_posix()
     except ValueError as exc:
         raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "source receipt must live inside the repository output root") from exc
+    _validate_source_receipt(repository, candidate, kind, _read_json(receipt), status)
     body: dict[str, Any] = {
         "schema": _SOURCE_FACT_SCHEMA, "kind": kind, "status": status,
+        "expectedParent": candidate["expectedParent"], "pathsDigest": candidate["pathsDigest"],
         "candidateId": _digest(candidate.get("candidateId"), "candidateId"),
         "candidate": {"ref": candidate_ref["ref"], "digest": candidate_digest},
         "commit": candidate["commit"], "tree": candidate["tree"],
@@ -448,82 +535,187 @@ def create_publish_admission(
 ) -> Path:
     repository = _repo_root(repository)
     root = _claim_root(repository, policy_path)
-    candidate, candidate_digest = _load_exact_ref(root, candidate_ref, "candidate")
-    if candidate.get("schema") != _SCHEMA:
-        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "candidate schema is invalid")
+    body = _publish_admission_body(
+        root, candidate_ref, source_fact_refs, alpha_fact_ref, beta_fact_ref, expected_remote_oid,
+    )
+    _validate_admission_chain(repository, root, body)
+    return _write_create_once(root / "admissions" / f"{body['admissionId']}.json", body)
+
+
+def _publish_admission_body(
+    root: Path, candidate_ref: Mapping[str, str], source_fact_refs: Sequence[Mapping[str, str]],
+    alpha_fact_ref: Mapping[str, str], beta_fact_ref: Mapping[str, str], expected_remote_oid: str,
+) -> dict[str, Any]:
+    """预检和正式签发共用候选绑定；构造内存对象不签发资格。"""
+    candidate, candidate_exact = qualification._exact_ref(root, candidate_ref, "candidate")
     candidate_id = _digest(candidate.get("candidateId"), "candidateId")
     expected_remote_oid = _sha(expected_remote_oid, "expectedRemoteOid")
-    if candidate.get("expectedParent") != expected_remote_oid:
-        raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "candidate parent does not equal remote-before")
-    normalized_sources: list[dict[str, str]] = []
-    if not source_fact_refs:
-        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "at least one source fact is required")
-    now = datetime.now(timezone.utc)
-    for index, exact_ref in enumerate(source_fact_refs):
-        fact, digest = _load_exact_ref(root, exact_ref, f"sourceFacts[{index}]")
-        if fact.get("status") != "passed" or fact.get("candidateId") != candidate_id:
-            raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "source fact is not passed for this candidate")
-        normalized_sources.append({"ref": exact_ref["ref"], "digest": digest})
-    normalized_environment: dict[str, dict[str, str]] = {}
-    for environment, exact_ref, allowed in (
-        ("alpha", alpha_fact_ref, {"passed"}),
-        ("beta", beta_fact_ref, {"passed", "not_required"}),
-    ):
-        fact, digest = _load_exact_ref(root, exact_ref, environment)
-        expires_at = fact.get("expiresAt")
-        signer = fact.get("signer")
-        candidate_binding = fact.get("candidate")
-        if (
-            fact.get("schema") != "quwoquan_ops.environment_acceptance_fact.v2"
-            or fact.get("environment") != environment
-            or fact.get("status") not in allowed
-            or not isinstance(candidate_binding, Mapping)
-            or candidate_binding.get("candidateId") != candidate_id
-            or candidate_binding.get("commit") != candidate.get("commit")
-            or candidate_binding.get("tree") != candidate.get("tree")
-            or not isinstance(signer, Mapping)
-            or not signer.get("identity")
-            or not signer.get("signature")
-            or not isinstance(expires_at, str)
-        ):
-            raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"{environment} fact is not admissible for this candidate")
-        try:
-            expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"{environment} fact expiry is invalid") from exc
-        if expiry.tzinfo is None or expiry <= now:
-            raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"{environment} fact expired")
-        if (
-            not isinstance(fact.get("cleanupEvidence"), Mapping)
-            or not isinstance(fact.get("leaseClosureEvidence"), Mapping)
-        ):
-            raise ScopedCandidateError(
-                "SCOPED_CANDIDATE.STALE",
-                f"{environment} cleanup or lease evidence is incomplete",
-            )
-        if fact.get("status") == "not_required" and fact.get("reasonCode") not in NOT_REQUIRED_REASON_CODES:
-            raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"{environment} not_required reason is invalid")
-        normalized_environment[environment] = {"ref": exact_ref["ref"], "digest": digest}
+    normalized_sources = list(source_fact_refs)
+    normalized_environment = {"alpha": dict(alpha_fact_ref), "beta": dict(beta_fact_ref)}
     body: dict[str, Any] = {
-        "schema": _ADMISSION_SCHEMA, "candidate": {"ref": candidate_ref["ref"], "digest": candidate_digest},
+        "schema": _ADMISSION_SCHEMA, "candidate": candidate_exact,
         "candidateId": candidate_id, "expectedRemoteOid": expected_remote_oid,
         "targetRef": "refs/heads/dev1.0", "commit": candidate["commit"], "tree": candidate["tree"],
         "sourceFacts": normalized_sources, "environmentFacts": normalized_environment,
         "decision": "admitted", "createdAt": _utc_now(),
     }
     body["admissionId"] = exact_digest(body)
-    return _write_create_once(root / "admissions" / f"{body['admissionId']}.json", body)
+    return body
 
 
-def _validated_admission(repository: Path, admission_ref: Path) -> dict[str, Any]:
-    admission = _read_json(admission_ref)
-    if admission.get("schema") != _ADMISSION_SCHEMA or admission.get("decision") != "admitted":
-        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "publish admission is invalid")
-    if admission.get("targetRef") != "refs/heads/dev1.0":
-        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "publish ref drifted")
-    _sha(admission.get("expectedRemoteOid"), "expectedRemoteOid")
-    _sha(admission.get("commit"), "commit")
-    _digest(admission.get("admissionId"), "admissionId")
+def validate_publish_inputs(
+    *, repository: Path, store_root: Path, candidate_ref: Mapping[str, str],
+    source_fact_refs: Sequence[Mapping[str, str]], alpha_fact_ref: Mapping[str, str],
+    beta_fact_ref: Mapping[str, str], expected_remote_oid: str, receipt_root: Path | None = None,
+) -> None:
+    """只读验证 portable bundle 的完整发布前驱；不导入、不落 admission、不移动 ref。
+
+    Git 与 keyring 仍取真实 repository；receipt_root 仅指定传输包内的原始回执根，
+    不改变 candidate 的源码身份，也不允许回退到另一个回执位置。
+    """
+    repository = _repo_root(repository)
+    body = _publish_admission_body(
+        store_root, candidate_ref, source_fact_refs, alpha_fact_ref, beta_fact_ref, expected_remote_oid,
+    )
+    _validate_admission_chain(repository, store_root, body, receipt_root=receipt_root)
+
+
+def _identity_digest(payload: Mapping[str, Any], field: str) -> None:
+    body = dict(payload)
+    identity = body.pop(field, None)
+    if identity != exact_digest(body):
+        raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"{field} self digest drifted")
+
+
+def _validate_candidate_binding(repository: Path, root: Path, admission: dict[str, Any]) -> dict[str, Any]:
+    candidate, _ = qualification._exact_ref(root, admission.get("candidate"), "candidate")
+    _identity_digest(candidate, "candidateId")
+    if candidate.get("schema") != _SCHEMA or any(
+        candidate.get(key) != admission.get(key) for key in ("candidateId", "commit", "tree")
+    ) or candidate.get("expectedParent") != admission.get("expectedRemoteOid"):
+        raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "candidate identity differs from admission")
+    before = _sha(admission.get("expectedRemoteOid"), "expectedRemoteOid")
+    after = _sha(admission.get("commit"), "commit")
+    if before == after:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "candidate must advance remote-before")
+    _git(repository, "merge-base", "--is-ancestor", before, after)
+    if _git(repository, "rev-parse", f"{after}^{{tree}}").stdout.strip() != candidate.get("tree"):
+        raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "candidate Git tree drifted")
+    paths = list(_changed_paths(repository, before, candidate["tree"]))
+    if not paths or paths != candidate.get("paths") or exact_digest({"paths": paths}) != candidate.get("pathsDigest"):
+        raise ScopedCandidateError("SCOPED_CANDIDATE.SCOPE_DRIFT", "candidate Git paths drifted")
+    claim, _ = qualification._exact_ref(root, {"ref": candidate.get("claimRef"), "digest": candidate.get("claimDigest")}, "claim")
+    _identity_digest(claim, "claimId")
+    if claim.get("schema") != "quwoquan_ops.scoped_path_claim.v1" or any(
+        claim.get(key) != candidate.get(key) for key in ("expectedParent", "ownerIdentityRef", "paths", "pathsDigest")
+    ):
+        raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "claim candidate binding drifted")
+    # claim 是构造期互斥证据；accept 终态可释放，不把 release 错当 EAF 失效。
+    return candidate
+
+
+def _validate_admission_sources(repository: Path, root: Path, admission: dict[str, Any], candidate: dict[str, Any],
+                                *, receipt_root: Path | None = None) -> None:
+    refs = admission.get("sourceFacts")
+    if not isinstance(refs, list) or not refs:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.SOURCE_RECEIPT", "source facts are required")
+    receipt_base = repository if receipt_root is None else receipt_root
+    kinds: set[str] = set()
+    for exact in refs:
+        fact, _ = qualification._exact_ref(root, exact, "sourceFact")
+        _identity_digest(fact, "sourceFactId")
+        kind = fact.get("kind")
+        if fact.get("schema") != _SOURCE_FACT_SCHEMA or fact.get("status") != "passed" or kind not in _SOURCE_FACT_KINDS or kind in kinds:
+            raise ScopedCandidateError("SCOPED_CANDIDATE.SOURCE_RECEIPT", "source fact schema/status/kind drifted")
+        kinds.add(kind)
+        if fact.get("candidate") != admission["candidate"] or any(
+            fact.get(key) != candidate.get(key) for key in ("candidateId", "commit", "tree", "expectedParent", "pathsDigest")
+        ):
+            raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "source fact candidate binding drifted")
+        receipt_ref = fact.get("receipt")
+        receipt_path = repository / _normalize_path(repository, receipt_ref.get("ref") if isinstance(receipt_ref, Mapping) else None)
+        if not receipt_path.is_relative_to(repository / ".qwq_output"):
+            raise ScopedCandidateError("SCOPED_CANDIDATE.SOURCE_RECEIPT", "source receipt must be repository output")
+        receipt, _ = qualification._exact_ref(
+            receipt_base, receipt_ref, "sourceReceipt",
+        )
+        _validate_source_receipt(repository, candidate, kind, receipt, "passed")
+    if "local_readiness_scope" not in kinds:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.SOURCE_RECEIPT", "complete scope readiness is required")
+
+
+def _validate_admission_chain(repository: Path, root: Path, admission: dict[str, Any],
+                              *, receipt_root: Path | None = None) -> None:
+    try:
+        _identity_digest(admission, "admissionId")
+        if admission.get("schema") != _ADMISSION_SCHEMA or admission.get("decision") != "admitted" or admission.get("targetRef") != "refs/heads/dev1.0":
+            raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "publish admission schema/decision/ref drifted")
+        candidate = _validate_candidate_binding(repository, root, admission)
+        _validate_admission_sources(repository, root, admission, candidate, receipt_root=receipt_root)
+        _validate_admission_environments(repository, root, admission, candidate)
+    except (qualification.IntegrationQualificationError, EvidenceSigningError) as exc:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", str(exc)) from exc
+
+
+def _validate_admission_environments(repository: Path, root: Path, admission: dict[str, Any], candidate: dict[str, Any]) -> None:
+    refs = admission.get("environmentFacts")
+    if not isinstance(refs, Mapping) or set(refs) != {"alpha", "beta"}:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "Alpha/Beta chain is required")
+    verifier = ed25519_environment_verifier(load_keyring(repository / KEYRING_RELATIVE_PATH), [ENVIRONMENT_OPS_IDENTITY])
+    now = datetime.now(timezone.utc)
+    for environment in ("alpha", "beta"):
+        fact, _ = qualification._load_acceptance(root, refs[environment], environment, accepted_at=now,
+            signature_verifier=verifier, expected_signer_identity=ENVIRONMENT_OPS_IDENTITY)
+        if qualification._timestamp(fact.get("issuedAt"), "issuedAt")[1] > now:
+            raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"{environment} fact is not yet valid")
+        expected = {"candidate": {key: candidate[key] for key in ("candidateId", "commit", "tree")},
+                    "impactPlanDigest": candidate.get("impactPlanDigest"), "nonPromotable": False,
+                    "predecessor": None if environment == "alpha" else refs["alpha"]}
+        if any(fact.get(key) != value for key, value in expected.items()):
+            raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"{environment} candidate/impact/predecessor drifted")
+        if environment == "alpha" and fact.get("status") != "passed":
+            raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "Alpha must pass")
+
+
+def _validated_admission(repository: Path, admission_ref: Path, policy_path: Path | None = None,
+                         expected_digest: str | None = None) -> dict[str, Any]:
+    policy_path = policy_path or Path(__file__).resolve().parents[2] / "policies/scoped_candidate_policy.yaml"
+    root = _claim_root(repository, policy_path)
+    try:
+        relative = admission_ref.absolute().relative_to(root).as_posix()
+        admission, _ = qualification._exact_ref(root, {"ref": relative, "digest": expected_digest or exact_digest(admission_ref)}, "admission")
+    except (ValueError, OSError) as exc:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"admission exact reference invalid: {exc}") from exc
+    _validate_admission_chain(repository, root, admission)
+    return admission
+
+
+def validate_integration_publish_origin(repository: Path, remote: str, remote_url: str | None = None) -> None:
+    """本地 source 检查不替代 hosted 身份保护；禁止非规范 worktree/remote。"""
+    from quwoquan_ops.cli.lib.local_worktree_inventory import load_policy, resolve_project_root
+    policy = load_policy()
+    project = resolve_project_root(repository, policy)
+    hub = project / policy.bare_hub_directory
+    common = Path(_git(repository, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()).resolve()
+    if repository != project / policy.integration_directory or common != hub.resolve() or remote != "origin":
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "publisher requires canonical integration worktree and origin")
+    urls = _git(repository, "remote", "get-url", "--push", "--all", "origin").stdout.splitlines()
+    authority = _git(repository, "--git-dir", str(hub), "config", "--get-all", "remote.origin.url").stdout.splitlines()
+    if len(urls) != 1 or urls != authority or (remote_url is not None and remote_url != urls[0]):
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "origin push identity differs from canonical hub origin")
+
+
+def validate_publish_update(*, repository: Path, policy_path: Path, admission_ref: Mapping[str, str],
+                            before: str, after: str, ref: str, remote: str, remote_url: str) -> dict[str, Any]:
+    """hook 与 publisher 的 exact update 校验边界；不接受 env boolean。"""
+    repository = _repo_root(repository)
+    validate_integration_publish_origin(repository, remote, remote_url)
+    root = _claim_root(repository, policy_path)
+    relative = _normalize_path(root, admission_ref.get("ref"))
+    digest = _digest(admission_ref.get("digest"), "admission.digest")
+    admission = _validated_admission(repository, root / relative, policy_path, digest)
+    if (admission["expectedRemoteOid"], admission["commit"], admission["targetRef"]) != (before, after, ref):
+        raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "admission before/after/ref differs from push update")
     return admission
 
 
@@ -564,6 +756,13 @@ def local_ref_cas_publish(
     return {"before": before, "after": after, "readback": readback, "terminal": "published"}
 
 
+def _validate_publisher_readback_identity(readback: Mapping[str, Any], admission: Mapping[str, Any]) -> None:
+    expected = {"admissionId": admission["admissionId"], "targetRef": admission["targetRef"],
+                "beforeOid": admission["expectedRemoteOid"], "afterOid": admission["commit"]}
+    if any(readback.get(key) != value for key, value in expected.items()):
+        raise ScopedCandidateError("SCOPED_CANDIDATE.PUBLISHER_UNAVAILABLE", "publisher readback identity drifted")
+
+
 def hosted_broker_cas_publish(
     *, repository: Path, policy_path: Path, admission_ref: Path,
     broker_url: str, token_provider: Callable[[], str],
@@ -573,7 +772,7 @@ def hosted_broker_cas_publish(
     """调用受信 publisher 一次，并用精确 readback 收敛未知网络结果。"""
     repository = _repo_root(repository)
     root = _claim_root(repository, policy_path)
-    admission = _validated_admission(repository, admission_ref)
+    admission = _validated_admission(repository, admission_ref, policy_path)
     url = broker_url.strip()
     if not url.startswith("https://") or "?" in url or "#" in url:
         raise ScopedCandidateError("SCOPED_CANDIDATE.PUBLISHER_UNAVAILABLE", "broker URL must be exact HTTPS")
@@ -630,6 +829,7 @@ def hosted_broker_cas_publish(
     if state != "after":
         code = "SCOPED_CANDIDATE.CAS_CONFLICT" if state == "other" else "SCOPED_CANDIDATE.PUBLISHER_UNAVAILABLE"
         raise ScopedCandidateError(code, f"publisher terminal readback is {state}")
+    _validate_publisher_readback_identity(readback_payload, admission)
     if response_payload is not None and (
         not isinstance(response_payload, dict)
         or response_payload.get("admissionId") != admission["admissionId"]
@@ -684,7 +884,9 @@ def local_git_cas_publish(
     """
     repository = _repo_root(repository)
     root = _claim_root(repository, policy_path)
-    admission = _validated_admission(repository, admission_ref)
+    validate_integration_publish_origin(repository, remote)
+    admission_digest = exact_digest(admission_ref)
+    admission = _validated_admission(repository, admission_ref, policy_path, admission_digest)
     if admission["targetRef"] != ref:
         raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "publish ref drifted")
     before = str(admission["expectedRemoteOid"])
@@ -707,9 +909,16 @@ def local_git_cas_publish(
         raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "local integration branch is neither expected parent nor candidate")
     if _git(repository, "rev-parse", ref).stdout.strip() != after:
         raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "local fast-forward did not land on the candidate")
+    _validated_admission(repository, admission_ref, policy_path, admission_digest)
+    validate_integration_publish_origin(repository, remote)
+    publish_env = os.environ.copy()
+    publish_env.pop("QWQ_ACCEPTANCE_PUBLISH", None)
+    publish_env["QWQ_PUBLISH_ADMISSION_REF"] = admission_ref.relative_to(root).as_posix()
+    publish_env["QWQ_PUBLISH_ADMISSION_DIGEST"] = admission_digest
     push = subprocess.run(
         ["git", "push", f"--force-with-lease={ref}:{before}", remote, f"{ref}:{ref}"],
         cwd=repository, text=True, capture_output=True, check=False,
+        env=publish_env,
     )
     observed = _remote_ref_oid(repository, remote, ref)
     state = _terminal_readback(before=before, after=after, readback=observed or "")

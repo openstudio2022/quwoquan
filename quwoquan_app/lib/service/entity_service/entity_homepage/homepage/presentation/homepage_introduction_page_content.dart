@@ -173,7 +173,7 @@ class _IntroductionSectionCard extends StatelessWidget {
   }
 }
 
-/// Homepage canonical/legacy 正文的单一适配入口。canonical payload 在场时
+/// Homepage canonical / canonical-unavailable 正文的单一适配入口。canonical payload 在场时
 /// 必须完整验证；任何失败均 typed unavailable，绝不回退 bodyMarkdown。
 class HomepageMarkdownDocumentAdapter {
   HomepageMarkdownDocumentAdapter._({required this.document, this.errorCode});
@@ -244,7 +244,7 @@ class HomepageMarkdownDocumentAdapter {
     );
   }
 
-  factory HomepageMarkdownDocumentAdapter.legacy(String markdown) {
+  factory HomepageMarkdownDocumentAdapter.canonicalUnavailable(String markdown) {
     final result = const QwqMarkdownParser().parse(
       markdown,
       requireVersion: true,
@@ -252,7 +252,7 @@ class HomepageMarkdownDocumentAdapter {
     return HomepageMarkdownDocumentAdapter._(
       document: result.document.hasBlockingDiagnostics ? null : result.document,
       errorCode: result.document.hasBlockingDiagnostics
-          ? 'legacy_semantic_unavailable'
+          ? 'canonical_unavailable_markdown_invalid'
           : null,
     );
   }
@@ -354,7 +354,7 @@ class HomepageMarkdownContent extends StatelessWidget {
     final canonical = semanticDocument;
     final projection = canonical != null
         ? HomepageMarkdownDocumentAdapter.canonical(canonical)
-        : HomepageMarkdownDocumentAdapter.legacy(markdown ?? '');
+        : HomepageMarkdownDocumentAdapter.canonicalUnavailable(markdown ?? '');
     if (!projection.isAvailable) {
       return Semantics(
         identifier: 'homepage_markdown_semantic_unavailable',

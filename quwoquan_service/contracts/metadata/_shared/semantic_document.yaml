@@ -17,7 +17,7 @@ implementationStatus:
     deterministic JSON canonicalization constants, and strict Go, Dart, Python, and TypeScript
     DocumentEnvelope canonical codecs, strict native-block metadata binding, single-corpus validation,
     cross-language Markdown and safe-projection differential, and Homepage/editor/workbench/PublicWeb
-    strict read paths are available. Legacy Markdown remains explicit read-only and is never upgraded.
+    strict read paths are available. Canonical-unavailable Markdown remains explicit read-only and is never upgraded.
 
 closedSets:
   processingDispositions:

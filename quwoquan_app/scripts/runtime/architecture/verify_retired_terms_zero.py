@@ -81,6 +81,8 @@ RETIRED_IDENTIFIER = re.compile(
 def _is_runtime_source(path: Path) -> bool:
     if any(part in SKIP_DIR_NAMES for part in path.parts):
         return False
+    if path.name == "package-lock.json":
+        return False
     if path.suffix not in SOURCE_SUFFIXES:
         return False
     return not (

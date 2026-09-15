@@ -24,7 +24,7 @@
     "hardFailSeconds": 300,
     "expectedWallSecondsModel": {
       "crossArea": "L0_static_parallel + L0_impacted_tests_parallel + summary <= 300 hard; 180 soft target",
-      "notes": "L0 phases share one process-group deadline. Directory local_contract suites are deferred to canonical scoped/Delivery profiles."
+      "notes": "Each L0 parallel phase receives its declared bounded budget from phase start, capped by the unchanged gate-wide hard deadline; every job remains isolated by the process-group deadline runner. Directory local_contract suites are deferred to canonical scoped/Delivery profiles."
     },
     "regressionCapture": {
       "local": "impacted suite + fixed smoke static checks",

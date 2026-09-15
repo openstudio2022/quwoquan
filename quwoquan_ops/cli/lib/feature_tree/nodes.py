@@ -24,7 +24,7 @@ class Node:
 
     @property
     def rel(self) -> str:
-        return self.spec.relative_to(context.REPO_ROOT).as_posix()
+        return self.spec.relative_to(context.repository_root()).as_posix()
 
 
 def _visible_dirs(path: Path) -> list[Path]:
@@ -35,8 +35,8 @@ def _visible_dirs(path: Path) -> list[Path]:
 
 
 def discover_nodes() -> list[Node]:
-    nodes = [Node(0, "app-root", context.TREE_ROOT)]
-    for l1 in _visible_dirs(context.TREE_ROOT):
+    nodes = [Node(0, "app-root", context.tree_root())]
+    for l1 in _visible_dirs(context.tree_root()):
         if l1.name == "templates":
             continue
         if not (l1 / "spec.md").is_file():
@@ -56,7 +56,7 @@ def node_for_spec(path: Path, nodes: Iterable[Node]) -> Node | None:
     resolved = path.resolve()
     # 工程路径不可能是目录原生spec节点；先做物理边界检查，避免大候选
     # 每条源码路径都逐个resolve全树节点。实际target仍解析symlink，不缓存事实。
-    if not resolved.is_relative_to(context.TREE_ROOT.resolve()):
+    if not resolved.is_relative_to(context.tree_root().resolve()):
         return None
     values = list(nodes)
     for node in values:

@@ -30,6 +30,7 @@ def _blockers(findings: Iterable[dict[str, Any]]) -> list[str]:
             f"- `{finding['code']}` `{finding['path']}`"
             + (f" ({detail})" if detail else "")
             + f"\n  - recovery: `{finding.get('recovery', '')}`"
+            + f"\n  - findingId: `{finding['findingId']}`"
         )
     return lines
 
@@ -47,13 +48,14 @@ def _advisories(findings: list[dict[str, Any]]) -> list[str]:
             symbol = f"::{finding['symbol']}" if finding.get("symbol") else ""
             detail = _measure(finding)
             lines.append(f"  - `{finding['path']}{symbol}`" + (f" ({detail})" if detail else ""))
+            lines.append(f"    - findingId: `{finding['findingId']}`")
         if len(items) > _ADVISORY_PREVIEW:
             lines.append(f"  - … 另有 {len(items) - _ADVISORY_PREVIEW} 条，见 report.json")
     return lines
 
 
 def debt_delta(report: dict[str, Any]) -> dict[str, int]:
-    """Net maintainability debt this candidate adds (+) or removes (-), from findings only."""
+    """提取当前告警的新增/恶化计数；不将其称为扣除消除项后的净债务。"""
     findings = report["findings"]
     complex_functions = 0
     for finding in findings:
@@ -80,7 +82,7 @@ def debt_delta(report: dict[str, Any]) -> dict[str, int]:
 def review_skeleton(report: dict[str, Any]) -> str:
     """Pre-filled ``findingReviews`` JSON for ``make calibrate-code-health``; verdict left blank."""
     reviews = [
-        {"code": finding["code"], "path": finding["path"], "verdict": ""}
+        {"findingId": finding["findingId"], "verdict": ""}
         for finding in report["findings"]
         if finding["terminal"] in {"PR_WARN", "GATE_BLOCK"}
     ]
@@ -102,18 +104,42 @@ def render_candidate(report: dict[str, Any]) -> str:
         lines.append(f"- base: merge-base with `{resolution.get('ref')}`")
     lines.extend([
         f"- changed files: {summary['changedFiles']} (handwritten {summary['handwrittenFiles']}, "
-        f"churn {summary['handwrittenChurn']}, owner scopes {len(summary.get('handwrittenScopes', []))})",
-        f"- new-line duplication: {summary['duplicationPercent']}% "
-        f"({summary['duplicatedLines']}/{summary['measuredNewLines']} measured lines)",
-        "",
-        "## 债务 delta",
-        "",
-        f"- 新增高复杂函数: {delta['newComplexFunctions']:+d}",
-        f"- 复杂度恶化函数: {delta['worsenedFunctions']:+d}",
-        f"- 新越过 block 的文件: {delta['newOversizedFiles']:+d}",
-        f"- 重复的新行: {delta['duplicatedNewLines']:+d}",
-        "",
+        f"churn {summary['handwrittenChurn']}, structural scopes {len(summary.get('handwrittenScopes', []))})",
     ])
+    if report['mode'] == 'full':
+        lines.extend([
+            f"- new-line duplication: {summary['duplicationPercent']}% "
+            f"({summary['duplicatedLines']}/{summary['measuredNewLines']} measured lines)",
+            "", "## 债务 delta", "",
+            f"- 新增高复杂函数: {delta['newComplexFunctions']:+d}",
+            f"- 复杂度恶化函数: {delta['worsenedFunctions']:+d}",
+            f"- 重复的新行: {delta['duplicatedNewLines']:+d}",
+            "- 上述为新增/恶化信号，不是净债务余额。",
+        ])
+    else:
+        lines.extend([
+            "- new-line duplication: unavailable（fast 未测量）",
+            "- 复杂度: unavailable（fast 未测量）",
+            "", "## 债务 delta", "",
+        ])
+    lines.extend([f"- 新越过 block 的文件: {delta['newOversizedFiles']:+d}", ""])
+    measured_delta = report.get("debtDelta") or {}
+    if measured_delta:
+        labels = {"introduced": "新增", "worsened": "恶化", "resolved": "消除", "improved": "改善", "unchanged": "持平"}
+        lines.append("### 可比较的阈值债务变化（各位置分别判定）")
+        for key, label in labels.items():
+            lines.append(f"- {label}: {measured_delta['summary'][key]}")
+        lines.append(f"- 测量范围: `{measured_delta['scope']}`")
+        lines.append(f"- 未测: {', '.join(measured_delta['unmeasured'])}")
+        lines.append("")
+    coverage = report.get("analysisCoverage") or {}
+    if coverage:
+        lines.append("### 分析能力边界")
+        for status, count in sorted(Counter(coverage["complexity"].values()).items()):
+            lines.append(f"- 复杂度 `{status}`: {count} 个路径")
+        lines.append(f"- 重复检测: `{coverage['duplication']}`")
+        lines.append(f"- 入口检测: `{coverage['repositoryEntry']['scope']}`；不是全仓调用图")
+        lines.append("")
     blockers = _blockers(report["findings"])
     lines.append(f"## Blockers ({len(blockers)})")
     lines.append("")
@@ -144,6 +170,36 @@ def _int_or_dash(value: Any) -> str:
     return "-" if value is None else str(value)
 
 
+def _weekly_measurements(report: dict[str, Any]) -> list[str]:
+    lines = [f"- 观察分支: `{report.get('observationBranch') or 'unavailable'}`"]
+    for name, measure in sorted((report.get("measurements") or {}).items()):
+        lines.append(f"- {name}: `{measure['status']}` ({measure.get('reason', '见 exact evidence')})")
+    return lines
+
+
+def _dead_code_observation(report: dict[str, Any]) -> list[str]:
+    reachability = (report.get("measurements") or {}).get("reachability", {})
+    if reachability.get("status") == "unavailable":
+        return ["## Dead code candidates — unavailable", "", f"- {reachability.get('reason', '未采集 exact 可达性证据')}", ""]
+    dead = report.get("deadCodeCandidates", [])
+    reasons = Counter(item["reason"] for item in dead)
+    return [f"## Dead code candidates ({len(dead)})", "",
+            *(f"- {reason}: {count}" for reason, count in sorted(reasons.items())), ""]
+
+
+def _module_rows(report: dict[str, Any]) -> list[str]:
+    weak = {item["ownerScope"]: item for item in report.get("ownerScopeWeakPoints", [])}
+    modules = report.get("modules") or {}
+    lines = ["| structural scope | tracked files | physical lines | >advisory | >block | complex | cloneLines | dead |",
+             "|---|---|---|---|---|---|---|---|"]
+    for scope in sorted(set(modules) | set(weak)):
+        values = {**weak.get(scope, {}), **modules.get(scope, {})}
+        cells = [_int_or_dash(values.get(key)) for key in
+                 ("files", "physicalLines", "overAdvisory", "overBlock", "overComplexity", "cloneLines", "deadCandidates")]
+        lines.append(f"| `{scope}` | " + " | ".join(cells) + " |")
+    return lines
+
+
 def render_weekly(report: dict[str, Any]) -> str:
     summary = report["summary"]
     lines = [
@@ -159,12 +215,14 @@ def render_weekly(report: dict[str, Any]) -> str:
         "|---|---|---|",
     ]
     for item in report["growthHistory"]:
-        lines.append(f"| {item['ageWeeks']} | {item['files']} | {item['sourceLoc']} |")
+        lines.append(f"| {item['ageWeeks']} | {_int_or_dash(item['files'])} | {_int_or_dash(item['sourceLoc'])} |")
     lines.append("")
-    lines.append("## 分类行数")
+    lines.append("## 分类行数（物理行，非 cloc code）")
     lines.append("")
     for name, item in sorted(report["categories"].items()):
         lines.append(f"- {name}: files={item['files']} lines={item['lines']}")
+    lines.append("")
+    lines.extend(_weekly_measurements(report))
     lines.append("")
     ratchet = report.get("ratchet") or {}
     lines.append(f"## 棘轮指标（对比上期：{ratchet.get('comparisonStatus', 'insufficient-history')}）")
@@ -179,15 +237,11 @@ def render_weekly(report: dict[str, Any]) -> str:
             f"{_DIRECTION_LABEL.get(item['direction'], item['direction'])} |"
         )
     lines.append("")
-    lines.append("## Owner scope 薄弱点 Top 5")
+    lines.append("## 全模块结构 scope 健康事实")
     lines.append("")
-    lines.append("| ownerScope | files | >advisory | >block | complex | cloneLines | dead |")
-    lines.append("|---|---|---|---|---|---|---|")
-    for item in report.get("ownerScopeWeakPoints", []):
-        lines.append(
-            f"| `{item['ownerScope']}` | {item['files']} | {item['overAdvisory']} | {item['overBlock']} | "
-            f"{item['overComplexity']} | {item['cloneLines']} | {item['deadCandidates']} |"
-        )
+    lines.append("结构 scope 不等同于已解析的 Feature owner；未测证据不能推导为健康。")
+    lines.append("")
+    lines.extend(_module_rows(report))
     lines.append("")
     persistence = {
         item["path"]: item["consecutiveWeeksInTopN"]
@@ -203,12 +257,7 @@ def render_weekly(report: dict[str, Any]) -> str:
             f"{item['maxCognitive']} | {item['changeFrequency']} | {item['churn']} |"
         )
     lines.append("")
-    dead = report.get("deadCodeCandidates", [])
-    reasons = Counter(item["reason"] for item in dead)
-    lines.append(f"## Dead code candidates ({len(dead)})")
-    lines.append("")
-    lines.extend(f"- {reason}: {count}" for reason, count in sorted(reasons.items()))
-    lines.append("")
+    lines.extend(_dead_code_observation(report))
     outcomes = report.get("deliveryOutcomes") or {}
     lines.append("## Delivery outcomes")
     lines.append("")

@@ -2,14 +2,21 @@
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/shared-worktree-scoped-candidate/spec.md#gwt-001.t2
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t3
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t4
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-006.t1
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-006.t2
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-006.t3
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
+import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 
@@ -24,6 +31,7 @@ from quwoquan_ops.ci.scoped_candidate import (
     hosted_broker_cas_publish,
     local_git_cas_publish,
     local_ref_cas_publish,
+    release_claim,
     store_ref,
     store_root,
 )
@@ -106,25 +114,199 @@ def candidate_exact(target: Path, candidate_ref: Path) -> dict[str, str]:
     return store_ref(repository=target, policy_path=POLICY, path=candidate_ref)
 
 
-def environment_fact(candidate: dict[str, object], environment: str, status: str) -> dict[str, object]:
-    return {
-        "schema": "quwoquan_ops.environment_acceptance_fact.v2",
-        "environment": environment,
-        "status": status,
-        "candidate": {
-            "candidateId": candidate["candidateId"],
-            "commit": candidate["commit"],
-            "tree": candidate["tree"],
-        },
-        "signer": {"identity": "spiffe://quwoquan.local/environment-ops", "signature": "dsse:test"},
-        "expiresAt": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
-        "cleanupEvidence": {"ref": "cleanup.json", "digest": DIGEST},
-        "leaseClosureEvidence": {"ref": "lease.json", "digest": DIGEST},
+def environment_fact(target: Path, candidate: dict[str, object], environment: str, status: str, *, prefix: str = "") -> dict[str, object]:
+    from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import _EVIDENCE_ROLE_CONTRACT, DSSE_PAYLOAD_TYPE
+    from quwoquan_ops.cli.lib.evidence_signing import ENVIRONMENT_OPS_IDENTITY, KEYRING_RELATIVE_PATH
+    from quwoquan_ops.ci.environment_scheduler import dsse_pae
+    from quwoquan_ops.tests.support.evidence_signing_test_support import create_temporary_signing
+    signing = create_temporary_signing(target / ".qwq_output/signing")
+    keyring = target / KEYRING_RELATIVE_PATH
+    keyring.parent.mkdir(parents=True, exist_ok=True)
+    keyring.write_bytes(signing.keyring_path.read_bytes())
+    now = datetime.now(timezone.utc)
+    binding = {key: candidate[key] for key in ("candidateId", "commit", "tree")}
+    roles = {field: write_fact(target, f"{prefix}{environment}-{role}.json", {
+        "role": role, "status": sorted(statuses)[0], "environment": environment,
+        "profile": "integration", "impactPlanDigest": DIGEST, **binding,
+    }) for field, (role, statuses) in _EVIDENCE_ROLE_CONTRACT.items()}
+    case = write_fact(target, f"{prefix}{environment}-case.json", {
+        "objectId": "admission-case", "specRef": "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-002.t1",
+        "caseId": "admission-case", "producer": "ops", "layer": "environment_acceptance", "status": "passed",
+        "target": {"kind": "operation", "id": "admission-case"}, "commitSha": candidate["commit"],
+        "contractGraphSourceHash": "4" * 64, "deploymentTarget": f"{environment}-local", "baselineId": "admission-test",
+        "packageDigest": DIGEST, "configurationDigest": DIGEST, "candidateManifestSha256": "7" * 64,
+        "candidateDigest": candidate["candidateId"], "environment": environment, "provider": "first-party-https",
+        "startedAt": now.isoformat(), "completedAt": now.isoformat(), "runnerIdentity": "environment-scheduler",
+        "artifactSha256": "8" * 64, "receiptRef": f"environment/{environment}/case.json",
+    })
+    root = store_root(repository=target, policy_path=POLICY)
+    body = {
+        "schema": "quwoquan_ops.environment_acceptance_fact.v2", "environment": environment,
+        "status": status, "profile": "integration", "candidate": binding, "impactPlanDigest": DIGEST,
+        "caseResultRefs": [case], **roles, "nonPromotable": False,
+        "predecessor": None if environment == "alpha" else {"ref": f"{prefix}alpha.json", "digest": exact_digest(root / f"{prefix}alpha.json")},
+        "issuedAt": (now - timedelta(minutes=1)).isoformat(), "expiresAt": (now + timedelta(hours=1)).isoformat(),
         **({"reasonCode": "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED"} if status == "not_required" else {}),
     }
+    payload = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+    body["signer"] = {"identity": ENVIRONMENT_OPS_IDENTITY, "payloadType": DSSE_PAYLOAD_TYPE,
+        "payload": base64.b64encode(payload).decode(), "signature": signing.signer(ENVIRONMENT_OPS_IDENTITY)(dsse_pae(DSSE_PAYLOAD_TYPE, payload))}
+    body["factId"] = exact_digest(body)
+    return body
 
 
-def test_publish_admission_and_local_cas_have_one_winner(tmp_path: Path) -> None:
+@pytest.fixture
+def source_receipt_boundary(monkeypatch: pytest.MonkeyPatch):
+    """只隔离昂贵 readiness 执行；不替换 admission/EAF/签名验证或 source wrapper 绑定。"""
+    from quwoquan_ops.ci.scoped_candidate import core
+    monkeypatch.setattr(core, "_validate_source_receipt", lambda *args: None)
+
+
+def source_fact(target: Path, candidate: dict[str, object], candidate_ref: Path, *, prefix: str = "") -> dict[str, str]:
+    receipt = target / f".qwq_output/{prefix}receipt.json"
+    receipt.write_text('{"status":"PASS"}\n')
+    body = {"schema": "quwoquan_ops.integration_source_fact.v1", "kind": "local_readiness_scope", "status": "passed",
+        **{key: candidate[key] for key in ("candidateId", "commit", "tree", "expectedParent", "pathsDigest")},
+        "candidate": candidate_exact(target, candidate_ref), "receipt": {"ref": receipt.relative_to(target).as_posix(), "digest": exact_digest(receipt)},
+        "createdAt": datetime.now(timezone.utc).isoformat()}
+    body["sourceFactId"] = exact_digest(body)
+    return write_fact(target, f"{prefix}source.json", body)
+
+
+def independent_admission(target: Path, candidate_ref: Path, prefix: str) -> Path:
+    """各候选的回执、source、EAF 及其引用分别落盘；仅共享临时签名信任根。"""
+    candidate = json.loads(candidate_ref.read_text())
+    source = source_fact(target, candidate, candidate_ref, prefix=prefix)
+    alpha = write_fact(target, f"{prefix}alpha.json", environment_fact(target, candidate, "alpha", "passed", prefix=prefix))
+    beta = write_fact(target, f"{prefix}beta.json", environment_fact(target, candidate, "beta", "not_required", prefix=prefix))
+    return create_publish_admission(
+        repository=target, policy_path=POLICY, candidate_ref=candidate_exact(target, candidate_ref),
+        source_fact_refs=[source], alpha_fact_ref=alpha, beta_fact_ref=beta,
+        expected_remote_oid=candidate["expectedParent"],
+    )
+
+
+@pytest.fixture
+def competing_admissions(tmp_path: Path, source_receipt_boundary) -> tuple[Path, str, list[Path]]:
+    """真实 Git/签名合同夹具，不代表完整 readiness 或真实 Alpha/Beta 环境验收。"""
+    target, parent = repo(tmp_path)
+    admissions = []
+    for label, owned_path in (("a", "owned.txt"), ("b", "foreign.txt")):
+        claimed = claim(target, parent, [owned_path], writer=label)
+        (target / owned_path).write_text(f"candidate {label}\n")
+        candidate_ref = build_candidate(
+            repository=target, policy_path=POLICY, claim_ref=claimed, owner_identity_ref=OWNER,
+            impact_plan_digest=DIGEST, message=label, author_name="Test", author_email="test@example.com",
+        )
+        admissions.append(independent_admission(target, candidate_ref, f"{label}-"))
+    bodies = [json.loads(path.read_text()) for path in admissions]
+    for key in ("candidateId", "commit", "tree", "admissionId"):
+        assert bodies[0][key] != bodies[1][key]
+    root = store_root(repository=target, policy_path=POLICY)
+    for body in bodies:
+        assert body["expectedRemoteOid"] == parent
+        assert git(target, "rev-parse", f"{body['commit']}^") == parent
+        beta = json.loads((root / body["environmentFacts"]["beta"]["ref"]).read_text())
+        assert beta["status"] == "not_required"
+        assert beta["reasonCode"] == "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED"
+        assert beta["predecessor"] == body["environmentFacts"]["alpha"]
+    return target, parent, admissions
+
+
+def test_distinct_admissions_compete_at_atomic_git_cas(competing_admissions, monkeypatch: pytest.MonkeyPatch) -> None:
+    target, parent, admissions = competing_admissions
+    root = store_root(repository=target, policy_path=POLICY)
+    # B 已创建后再次验真 A；引用不能通过覆盖共同 source/EAF 文件来换绑。
+    before_facts = {path: path.read_bytes() for path in root.glob("*.json")}
+    receipts = {path: path.read_bytes() for path in (target / ".qwq_output").glob("*-receipt.json")}
+    assert len(receipts) == 2
+    barrier = Barrier(2, timeout=20)
+    real_run = subprocess.run
+    updates = {}
+
+    def synchronized_run(args, **kwargs):
+        if args[:2] != ["git", "update-ref"]:
+            return real_run(args, **kwargs)
+        assert args[2] == "refs/heads/dev1.0" and args[4] == parent
+        # 两方都完成真实 admission/签名校验和旧 ref 读取，再同时进入 Git 原子 CAS。
+        barrier.wait()
+        completed = real_run(args, **kwargs)
+        updates[args[3]] = completed
+        return completed
+
+    def publish(path):
+        try:
+            return local_ref_cas_publish(repository=target, admission_ref=path, allow_test_adapter=True)
+        except ScopedCandidateError as error:
+            return error
+
+    with monkeypatch.context() as race_patch:
+        race_patch.setattr(subprocess, "run", synchronized_run)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(publish, admissions))
+    winners = [result for result in outcomes if isinstance(result, dict)]
+    losers = [result for result in outcomes if isinstance(result, ScopedCandidateError)]
+    assert len(winners) == len(losers) == 1
+    winner = winners[0]
+    assert winner == {"before": parent, "after": winner["after"], "readback": winner["after"], "terminal": "published"}
+    assert losers[0].code == "SCOPED_CANDIDATE.CAS_CONFLICT"
+    assert len(updates) == 2
+    assert updates[winner["after"]].returncode == 0
+    loser_commit = next(commit for commit in updates if commit != winner["after"])
+    assert updates[loser_commit].returncode != 0
+    assert git(target, "rev-parse", "refs/heads/dev1.0") == winner["after"]
+    loser_admission = next(path for path in admissions if json.loads(path.read_text())["commit"] == loser_commit)
+    with pytest.raises(ScopedCandidateError, match="CAS_CONFLICT"):
+        local_ref_cas_publish(repository=target, admission_ref=loser_admission, allow_test_adapter=True)
+    assert git(target, "rev-parse", "refs/heads/dev1.0") == winner["after"]
+    assert all(path.read_bytes() == contents for path, contents in {**before_facts, **receipts}.items())
+
+
+@pytest.mark.parametrize("donor", [0, 1], ids=["candidate-a", "candidate-b"])
+@pytest.mark.parametrize("old_fact", ["source", "alpha", "beta"])
+def test_merged_candidate_rejects_each_old_fact(competing_admissions, donor: int, old_fact: str) -> None:
+    target, parent, admissions = competing_admissions
+    root = store_root(repository=target, policy_path=POLICY)
+    bodies = [json.loads(path.read_text()) for path in admissions]
+    before_facts = {path: path.read_bytes() for path in root.glob("*.json")}
+    a, b = (body["commit"] for body in bodies)
+    tree = git(target, "merge-tree", "--write-tree", a, b)
+    commit = git(target, "commit-tree", tree, "-p", a, "-p", b, "-m", "combine A and B")
+    assert git(target, "show", "-s", "--format=%P", commit) == f"{a} {b}"
+    assert git(target, "show", f"{commit}:owned.txt") == "candidate a"
+    assert git(target, "show", f"{commit}:foreign.txt") == "candidate b"
+    for body in bodies:
+        candidate = json.loads((root / body["candidate"]["ref"]).read_text())
+        release_claim(repository=target, policy_path=POLICY, claim_ref=root / candidate["claimRef"], reason="combine candidates")
+    merged_ref = build_head_candidate(
+        repository=target, policy_path=POLICY, commit=commit, expected_parent=parent,
+        owner_identity_ref=OWNER, impact_plan_digest=DIGEST, writer_id="merged",
+        expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+    )
+    # 先用 C 自己的完整签名事实准入，避免负例被无效夹具提前拒绝。
+    merged_admission = independent_admission(target, merged_ref, "c-")
+    merged = json.loads(merged_admission.read_text())
+    old = bodies[donor]
+    sources = old["sourceFacts"] if old_fact == "source" else merged["sourceFacts"]
+    environments = {**merged["environmentFacts"]}
+    if old_fact != "source":
+        environments[old_fact] = old["environmentFacts"][old_fact]
+    before_admissions = set((root / "admissions").iterdir())
+    with pytest.raises(ScopedCandidateError, match="binding drifted|candidate/impact/predecessor drifted") as rejected:
+        create_publish_admission(
+            repository=target, policy_path=POLICY, candidate_ref=merged["candidate"],
+            source_fact_refs=sources, alpha_fact_ref=environments["alpha"], beta_fact_ref=environments["beta"],
+            expected_remote_oid=parent,
+        )
+    assert rejected.value.code == "SCOPED_CANDIDATE.STALE"
+    assert set((root / "admissions").iterdir()) == before_admissions
+    assert all(path.read_bytes() == contents for path, contents in before_facts.items())
+    assert git(target, "rev-parse", "refs/heads/dev1.0") == parent
+    result = local_ref_cas_publish(repository=target, admission_ref=merged_admission, allow_test_adapter=True)
+    assert result["readback"] == commit
+
+
+def test_same_admission_replay_is_rejected(tmp_path: Path, source_receipt_boundary) -> None:
     target, parent = repo(tmp_path)
     claim_ref = claim(target, parent, ["owned.txt"])
     (target / "owned.txt").write_text("candidate\n")
@@ -135,9 +317,9 @@ def test_publish_admission_and_local_cas_have_one_winner(tmp_path: Path) -> None
     )
     candidate = json.loads(candidate_ref.read_text())
     candidate_exact_ref = candidate_exact(target, candidate_ref)
-    source = write_fact(target, "source.json", {"status": "passed", "candidateId": candidate["candidateId"]})
-    alpha = write_fact(target, "alpha.json", environment_fact(candidate, "alpha", "passed"))
-    beta = write_fact(target, "beta.json", environment_fact(candidate, "beta", "not_required"))
+    source = source_fact(target, candidate, candidate_ref)
+    alpha = write_fact(target, "alpha.json", environment_fact(target, candidate, "alpha", "passed"))
+    beta = write_fact(target, "beta.json", environment_fact(target, candidate, "beta", "not_required"))
     admission_ref = create_publish_admission(
         repository=target, policy_path=POLICY, candidate_ref=candidate_exact_ref,
         source_fact_refs=[source], alpha_fact_ref=alpha, beta_fact_ref=beta,
@@ -166,7 +348,7 @@ class BrokerResponse:
         return self._raw.read(amount)
 
 
-def test_hosted_broker_publish_reconciles_unknown_mutation_outcome(tmp_path: Path) -> None:
+def test_hosted_broker_publish_reconciles_unknown_mutation_outcome(tmp_path: Path, source_receipt_boundary) -> None:
     target, parent = repo(tmp_path)
     claim_ref = claim(target, parent, ["owned.txt"])
     (target / "owned.txt").write_text("candidate\n")
@@ -176,9 +358,9 @@ def test_hosted_broker_publish_reconciles_unknown_mutation_outcome(tmp_path: Pat
         impact_plan_digest=DIGEST, message="candidate", author_name="Candidate", author_email="candidate@example.com",
     )
     candidate = json.loads(candidate_ref.read_text())
-    source = write_fact(target, "source.json", {"status": "passed", "candidateId": candidate["candidateId"]})
-    alpha = write_fact(target, "alpha.json", environment_fact(candidate, "alpha", "passed"))
-    beta = write_fact(target, "beta.json", environment_fact(candidate, "beta", "not_required"))
+    source = source_fact(target, candidate, candidate_ref)
+    alpha = write_fact(target, "alpha.json", environment_fact(target, candidate, "alpha", "passed"))
+    beta = write_fact(target, "beta.json", environment_fact(target, candidate, "beta", "not_required"))
     admission_ref = create_publish_admission(
         repository=target, policy_path=POLICY,
         candidate_ref=candidate_exact(target, candidate_ref),
@@ -214,7 +396,7 @@ def test_hosted_broker_publish_reconciles_unknown_mutation_outcome(tmp_path: Pat
     assert result["readbackOid"] == candidate["commit"]
 
 
-def test_hosted_broker_publish_blocks_before_and_other_readback(tmp_path: Path) -> None:
+def test_hosted_broker_publish_blocks_before_and_other_readback(tmp_path: Path, source_receipt_boundary) -> None:
     target, parent = repo(tmp_path)
     claim_ref = claim(target, parent, ["owned.txt"])
     (target / "owned.txt").write_text("candidate\n")
@@ -224,9 +406,9 @@ def test_hosted_broker_publish_blocks_before_and_other_readback(tmp_path: Path) 
         impact_plan_digest=DIGEST, message="candidate", author_name="Candidate", author_email="candidate@example.com",
     )
     candidate = json.loads(candidate_ref.read_text())
-    source = write_fact(target, "source.json", {"status": "passed", "candidateId": candidate["candidateId"]})
-    alpha = write_fact(target, "alpha.json", environment_fact(candidate, "alpha", "passed"))
-    beta = write_fact(target, "beta.json", environment_fact(candidate, "beta", "not_required"))
+    source = source_fact(target, candidate, candidate_ref)
+    alpha = write_fact(target, "alpha.json", environment_fact(target, candidate, "alpha", "passed"))
+    beta = write_fact(target, "beta.json", environment_fact(target, candidate, "beta", "not_required"))
     admission_ref = create_publish_admission(
         repository=target, policy_path=POLICY,
         candidate_ref=candidate_exact(target, candidate_ref),
@@ -249,6 +431,215 @@ def test_hosted_broker_publish_blocks_before_and_other_readback(tmp_path: Path) 
                 broker_url="https://publisher.example.invalid/v1/integration-publishes",
                 token_provider=lambda: "oidc-token", opener=opener,
             )
+
+
+def admitted_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    target, parent = repo(tmp_path)
+    claimed = claim(target, parent, ["owned.txt"])
+    (target / "owned.txt").write_text("candidate\n")
+    path = build_candidate(repository=target, policy_path=POLICY, claim_ref=claimed, owner_identity_ref=OWNER,
+        impact_plan_digest=DIGEST, message="candidate", author_name="Test", author_email="test@example.com")
+    candidate = json.loads(path.read_text())
+    source = source_fact(target, candidate, path)
+    alpha = write_fact(target, "alpha.json", environment_fact(target, candidate, "alpha", "passed"))
+    beta = write_fact(target, "beta.json", environment_fact(target, candidate, "beta", "not_required"))
+    admission = create_publish_admission(repository=target, policy_path=POLICY, candidate_ref=candidate_exact(target, path),
+        source_fact_refs=[source], alpha_fact_ref=alpha, beta_fact_ref=beta, expected_remote_oid=parent)
+    return target, admission
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-008
+@pytest.mark.parametrize("attack", [None, "claim", "receipt", "symlink", "missing-receipt", "fast"])
+def test_portable_publish_prevalidation_is_read_only_and_uses_full_chain(
+    tmp_path: Path, source_receipt_boundary, attack: str | None,
+) -> None:
+    from quwoquan_ops.ci.scoped_candidate import core
+    target, path = admitted_fixture(tmp_path)
+    body = json.loads(path.read_text())
+    root = store_root(repository=target, policy_path=POLICY)
+    bundle = tmp_path / "portable"
+    sealed_store = bundle / "store"
+    shutil.copytree(root, sealed_store)
+    source = json.loads((sealed_store / body["sourceFacts"][0]["ref"]).read_text())
+    receipt_ref = source["receipt"]
+    receipt_path = bundle / "repository" / receipt_ref["ref"]
+    receipt_path.parent.mkdir(parents=True)
+    receipt_path.write_bytes((target / receipt_ref["ref"]).read_bytes())
+    candidate = json.loads((sealed_store / body["candidate"]["ref"]).read_text())
+    if attack == "claim":
+        (sealed_store / candidate["claimRef"]).write_text("{}")
+    elif attack == "receipt":
+        receipt_path.write_text("{}")
+    elif attack == "symlink":
+        receipt_path.unlink()
+        receipt_path.symlink_to(target / receipt_ref["ref"])
+    elif attack == "missing-receipt":
+        receipt_path.unlink()
+    elif attack == "fast":
+        source["kind"] = "local_readiness_fast"
+        source.pop("sourceFactId")
+        source["sourceFactId"] = exact_digest(source)
+        source_path = sealed_store / body["sourceFacts"][0]["ref"]
+        source_path.write_text(json.dumps(source, sort_keys=True, separators=(",", ":")) + "\n")
+        body["sourceFacts"][0]["digest"] = exact_digest(source_path)
+    def snapshot(base: Path) -> dict[str, str]:
+        return {p.relative_to(base).as_posix(): exact_digest(p) for p in base.rglob("*") if p.is_file()}
+    before_store, before_bundle = snapshot(root), snapshot(bundle)
+    before_ref, before_index = git(target, "rev-parse", "HEAD"), (target / ".git/index").read_bytes()
+    inputs = dict(repository=target, store_root=sealed_store, candidate_ref=body["candidate"],
+        source_fact_refs=body["sourceFacts"], alpha_fact_ref=body["environmentFacts"]["alpha"],
+        beta_fact_ref=body["environmentFacts"]["beta"], expected_remote_oid=body["expectedRemoteOid"],
+        receipt_root=bundle / "repository")
+    if attack is None:
+        assert core.validate_publish_inputs(**inputs) is None
+    else:
+        with pytest.raises(ScopedCandidateError):
+            core.validate_publish_inputs(**inputs)
+    assert snapshot(root) == before_store and snapshot(bundle) == before_bundle
+    assert git(target, "rev-parse", "HEAD") == before_ref
+    assert (target / ".git/index").read_bytes() == before_index
+
+
+def rewrite_admission(path: Path, body: dict[str, object]) -> None:
+    body.pop("admissionId", None)
+    body["admissionId"] = exact_digest(body)
+    path.write_text(json.dumps(body, sort_keys=True, separators=(",", ":")) + "\n")
+
+
+@pytest.mark.parametrize("tamper", ["admissionId", "candidate-digest", "source-digest", "receipt", "signature", "expired", "future", "cleanup", "lease", "tree", "before", "ref"])
+def test_final_publish_revalidates_entire_admission(tmp_path: Path, source_receipt_boundary, tamper: str) -> None:
+    from quwoquan_ops.ci.scoped_candidate import core
+    target, path = admitted_fixture(tmp_path)
+    body = json.loads(path.read_text())
+    root = store_root(repository=target, policy_path=POLICY)
+    if tamper == "admissionId":
+        body["admissionId"] = DIGEST
+        path.write_text(json.dumps(body, sort_keys=True, separators=(",", ":")) + "\n")
+    else:
+        if tamper == "candidate-digest":
+            body["candidate"]["digest"] = DIGEST
+        elif tamper == "source-digest":
+            body["sourceFacts"][0]["digest"] = DIGEST
+        elif tamper == "receipt":
+            (target / ".qwq_output/receipt.json").write_text('{"status":"FAIL"}\n')
+        elif tamper in {"tree", "before", "ref"}:
+            body[{"tree": "tree", "before": "expectedRemoteOid", "ref": "targetRef"}[tamper]] = "refs/heads/main" if tamper == "ref" else "f" * 40
+        else:
+            alpha = json.loads((root / "alpha.json").read_text())
+            if tamper == "signature":
+                alpha["signer"]["signature"] = "ed25519:" + base64.b64encode(b"0" * 64).decode()
+            elif tamper in {"expired", "future"}:
+                alpha["expiresAt" if tamper == "expired" else "issuedAt"] = (datetime.now(timezone.utc) + timedelta(hours=-2 if tamper == "expired" else 2)).isoformat()
+            else:
+                evidence = root / alpha["cleanupEvidence" if tamper == "cleanup" else "leaseClosureEvidence"]["ref"]
+                evidence.write_text('{}\n')
+            alpha.pop("factId")
+            if tamper in {"expired", "future"}:
+                from quwoquan_ops.tests.support.evidence_signing_test_support import create_temporary_signing
+                from quwoquan_ops.ci.environment_scheduler import dsse_pae
+                signer = alpha.pop("signer")
+                payload = json.dumps(alpha, sort_keys=True, separators=(",", ":")).encode()
+                signer["payload"] = base64.b64encode(payload).decode()
+                signer["signature"] = create_temporary_signing(target / ".qwq_output/signing").signer(signer["identity"])(dsse_pae(signer["payloadType"], payload))
+                alpha["signer"] = signer
+            alpha["factId"] = exact_digest(alpha)
+            body["environmentFacts"]["alpha"] = write_fact(target, "alpha.json", alpha)
+        rewrite_admission(path, body)
+    before = git(target, "rev-parse", "refs/heads/dev1.0")
+    with pytest.raises(ScopedCandidateError):
+        local_ref_cas_publish(repository=target, admission_ref=path, allow_test_adapter=True)
+    assert git(target, "rev-parse", "refs/heads/dev1.0") == before
+    with pytest.raises(ScopedCandidateError):
+        hosted_broker_cas_publish(repository=target, policy_path=POLICY, admission_ref=path,
+            broker_url="https://publisher.example.invalid", token_provider=lambda: pytest.fail("must reject before token/network"))
+
+
+@pytest.mark.parametrize("entry", ["admit", "publish-local", "publish-broker"])
+def test_direct_cli_cannot_bypass_admission_validation(tmp_path: Path, source_receipt_boundary, monkeypatch, entry: str) -> None:
+    from quwoquan_ops.cli import integration_candidate as cli
+    from quwoquan_ops.ci.scoped_candidate import core
+    target, path = admitted_fixture(tmp_path)
+    monkeypatch.setattr(cli, "ROOT", target)
+    monkeypatch.setattr(cli, "POLICY", POLICY)
+    monkeypatch.setattr(core, "validate_integration_publish_origin", lambda *args: None)
+    body = json.loads(path.read_text())
+    (target / ".qwq_output/receipt.json").write_text('{"status":"FAIL"}\n')
+    if entry == "admit":
+        exact = lambda value: value["ref"] + "=" + value["digest"]
+        args = ["admit", "--candidate", exact(body["candidate"]), "--source-fact", exact(body["sourceFacts"][0]),
+            "--alpha-fact", exact(body["environmentFacts"]["alpha"]), "--beta-fact", exact(body["environmentFacts"]["beta"]),
+            "--expected-remote-oid", body["expectedRemoteOid"]]
+    else:
+        args = ["publish", "--admission-ref", candidate_exact(target, path)["ref"]]
+        if entry == "publish-broker":
+            args += ["--adapter", "hosted-broker", "--broker-url", "https://publisher.example.invalid"]
+    assert cli.main(args) == 1
+
+
+@pytest.mark.parametrize("drift", [None, "before", "after", "ref", "digest"])
+def test_hook_uses_same_exact_admission_chain(tmp_path: Path, source_receipt_boundary, monkeypatch, drift) -> None:
+    from quwoquan_ops.ci.scoped_candidate import core
+    from quwoquan_ops.gate import verify_git_branch_policy as gate
+    target, path = admitted_fixture(tmp_path)
+    body = json.loads(path.read_text())
+    monkeypatch.setattr(gate, "ROOT", target)
+    monkeypatch.setattr(core, "validate_integration_publish_origin", lambda *args: None)
+    # 临时仓库仅缺 policy 文件，不改变验证器。
+    policy = target / "quwoquan_ops/policies/scoped_candidate_policy.yaml"
+    policy.write_bytes(POLICY.read_bytes())
+    exact = candidate_exact(target, path)
+    env = {"QWQ_PUBLISH_ADMISSION_REF": exact["ref"], "QWQ_PUBLISH_ADMISSION_DIGEST": exact["digest"]}
+    before, after, ref = body["expectedRemoteOid"], body["commit"], body["targetRef"]
+    if drift == "before": before = "f" * 40
+    if drift == "after": after = "f" * 40
+    if drift == "ref": ref = "refs/heads/main"
+    if drift == "digest": env["QWQ_PUBLISH_ADMISSION_DIGEST"] = DIGEST
+    if drift:
+        with pytest.raises(ScopedCandidateError):
+            gate._verify_acceptance_update(env, before, after, ref, "origin", "remote")
+    else:
+        gate._verify_acceptance_update(env, before, after, ref, "origin", "remote")
+
+
+@pytest.mark.parametrize("remote,url,push_urls", [("other", "url", ["url"]), ("origin", "other", ["url"]), ("origin", "url", ["url", "other"])])
+def test_origin_identity_rejects_alias_url_and_multiple_targets(tmp_path: Path, monkeypatch, remote, url, push_urls) -> None:
+    from quwoquan_ops.ci.scoped_candidate import core
+    target = tmp_path / "integration"
+    hub = tmp_path / "quwoquan.git"
+    def fake_git(repository, *args, **kwargs):
+        value = str(hub) if args[0] == "rev-parse" else "\n".join(push_urls) if args[0] == "remote" else "url"
+        return subprocess.CompletedProcess(args, 0, value + "\n", "")
+    monkeypatch.setattr(core, "_git", fake_git)
+    with pytest.raises(ScopedCandidateError):
+        core.validate_integration_publish_origin(target, remote, url)
+
+
+def test_local_publisher_rejects_noncanonical_worktree_before_network(tmp_path: Path, source_receipt_boundary, monkeypatch) -> None:
+    from quwoquan_ops.ci.scoped_candidate import core
+    target, path = admitted_fixture(tmp_path)
+    monkeypatch.setattr(core, "_remote_ref_oid", lambda *args: pytest.fail("no network before identity validation"))
+    with pytest.raises(ScopedCandidateError, match="canonical integration"):
+        local_git_cas_publish(repository=target, policy_path=POLICY, admission_ref=path)
+
+
+def test_final_publish_checks_ff_even_when_local_branch_already_is_candidate(tmp_path: Path, source_receipt_boundary, monkeypatch) -> None:
+    from quwoquan_ops.ci.scoped_candidate import core
+    target, path = admitted_fixture(tmp_path)
+    body = json.loads(path.read_text())
+    candidate_path = store_root(repository=target, policy_path=POLICY) / body["candidate"]["ref"]
+    candidate = json.loads(candidate_path.read_text())
+    git(target, "update-ref", "refs/heads/dev1.0", candidate["commit"])
+    orphan = git(target, "commit-tree", candidate["tree"], "-m", "unrelated root")
+    candidate["expectedParent"] = orphan
+    candidate.pop("candidateId")
+    candidate["candidateId"] = exact_digest(candidate)
+    candidate_path.write_text(json.dumps(candidate, sort_keys=True, separators=(",", ":")) + "\n")
+    body.update(expectedRemoteOid=orphan, candidateId=candidate["candidateId"], candidate=candidate_exact(target, candidate_path))
+    rewrite_admission(path, body)
+    monkeypatch.setattr(core, "validate_integration_publish_origin", lambda *args: None)
+    monkeypatch.setattr(core, "_remote_ref_oid", lambda *args: pytest.fail("FF must be checked before remote readback"))
+    with pytest.raises(ScopedCandidateError, match="merge-base"):
+        local_git_cas_publish(repository=target, policy_path=POLICY, admission_ref=path)
 
 
 def committed_candidate(target: Path) -> tuple[str, str]:
@@ -300,29 +691,37 @@ def test_source_fact_binds_receipt_to_candidate_and_keeps_receipt_verdict(tmp_pa
     receipt = target / ".qwq_output/env/repo/local/local-readiness/receipt.json"
     receipt.parent.mkdir(parents=True)
     receipt.write_text('{"result":"ok"}\n')
-    fact_ref = create_source_fact(
-        repository=target, policy_path=POLICY, candidate_ref=candidate_exact(target, candidate_ref),
-        kind="local_readiness_scope", receipt_path=receipt, status="passed",
-    )
-    fact = json.loads(fact_ref.read_text())
-    assert fact["status"] == "passed" and fact["commit"] == commit
-    assert fact["candidateId"] == json.loads(candidate_ref.read_text())["candidateId"]
-    assert fact["receipt"]["digest"] == exact_digest(receipt)
-    failed = create_source_fact(
-        repository=target, policy_path=POLICY, candidate_ref=candidate_exact(target, candidate_ref),
-        kind="commit_gate", receipt_path=receipt, status="failed",
-    )
-    alpha = write_fact(target, "alpha.json", environment_fact(json.loads(candidate_ref.read_text()), "alpha", "passed"))
-    beta = write_fact(target, "beta.json", environment_fact(json.loads(candidate_ref.read_text()), "beta", "not_required"))
-    with pytest.raises(ScopedCandidateError, match="STALE"):
-        create_publish_admission(
-            repository=target, policy_path=POLICY, candidate_ref=candidate_exact(target, candidate_ref),
-            source_fact_refs=[store_ref(repository=target, policy_path=POLICY, path=failed)],
-            alpha_fact_ref=alpha, beta_fact_ref=beta, expected_remote_oid=parent,
-        )
+    for kind, status in (("local_readiness_scope", "passed"), ("commit_gate", "failed")):
+        with pytest.raises(ScopedCandidateError, match="SOURCE_RECEIPT"):
+            create_source_fact(
+                repository=target, policy_path=POLICY, candidate_ref=candidate_exact(target, candidate_ref),
+                kind=kind, receipt_path=receipt, status=status,
+            )
+    assert list((store_root(repository=target, policy_path=POLICY) / "source-facts").iterdir()) == []
 
 
-def test_local_git_publish_is_expected_old_cas_with_readback(tmp_path: Path) -> None:
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-007.t4
+@pytest.mark.parametrize("payload", [{"status": "FAIL"}, {"status": "PASS"}, {"result": "ok"}])
+def test_source_fact_rejects_false_passed_wrapper(tmp_path: Path, payload: dict[str, object]) -> None:
+    target, _ = repo(tmp_path)
+    parent, commit = committed_candidate(target)
+    candidate_ref = build_head_candidate(
+        repository=target, policy_path=POLICY, commit=commit, expected_parent=parent,
+        owner_identity_ref=OWNER, impact_plan_digest=DIGEST, writer_id="integration",
+        expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+    )
+    receipt = target / ".qwq_output/receipt.json"
+    receipt.write_text(json.dumps(payload))
+    with pytest.raises(ScopedCandidateError, match="SOURCE_RECEIPT"):
+        create_source_fact(repository=target, policy_path=POLICY,
+                           candidate_ref=candidate_exact(target, candidate_ref),
+                           kind="local_readiness_fast", receipt_path=receipt, status="passed")
+
+
+def test_local_git_publish_is_expected_old_cas_with_readback(tmp_path: Path, source_receipt_boundary, monkeypatch: pytest.MonkeyPatch) -> None:
+    from quwoquan_ops.ci.scoped_candidate import core
+    # 本测试只覆盖 transport CAS；规范路径另有独立负向用例。
+    monkeypatch.setattr(core, "validate_integration_publish_origin", lambda *args: None)
     target, _ = repo(tmp_path)
     remote = tmp_path / "hub.git"
     git(tmp_path, "init", "--bare", "-b", "dev1.0", str(remote))
@@ -335,9 +734,9 @@ def test_local_git_publish_is_expected_old_cas_with_readback(tmp_path: Path) -> 
         owner_identity_ref=OWNER, impact_plan_digest=DIGEST, writer_id="integration", expires_at=expires,
     )
     candidate = json.loads(candidate_ref.read_text())
-    source = write_fact(target, "source.json", {"status": "passed", "candidateId": candidate["candidateId"]})
-    alpha = write_fact(target, "alpha.json", environment_fact(candidate, "alpha", "passed"))
-    beta = write_fact(target, "beta.json", environment_fact(candidate, "beta", "not_required"))
+    source = source_fact(target, candidate, candidate_ref)
+    alpha = write_fact(target, "alpha.json", environment_fact(target, candidate, "alpha", "passed"))
+    beta = write_fact(target, "beta.json", environment_fact(target, candidate, "beta", "not_required"))
     admission_ref = create_publish_admission(
         repository=target, policy_path=POLICY, candidate_ref=candidate_exact(target, candidate_ref),
         source_fact_refs=[source], alpha_fact_ref=alpha, beta_fact_ref=beta, expected_remote_oid=parent,

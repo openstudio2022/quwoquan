@@ -10,7 +10,7 @@ import fcntl
 import re
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -221,7 +221,32 @@ def _current_dev_identity(
     *,
     dev_ref: str = "refs/heads/dev1.0",
 ) -> dict[str, str]:
-    head = _git(repository, "rev-parse", dev_ref)
+    # origin 是已发布身份的唯一权威；tracking ref 和本地候选不能替代实时读回。
+    try:
+        completed = subprocess.run(
+            ["git", "ls-remote", "--exit-code", "--refs", "origin", dev_ref],
+            cwd=repository, text=True, capture_output=True, check=False,
+            timeout=30, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise EnvironmentExecutionError(
+            "ENVIRONMENT_EXECUTION.DEV_AUTHORITY_UNAVAILABLE",
+            "cannot read published origin dev identity",
+        ) from exc
+    rows = [line.split() for line in completed.stdout.splitlines()]
+    if (completed.returncode != 0 or len(rows) != 1 or len(rows[0]) != 2
+            or rows[0][1] != dev_ref or re.fullmatch(r"[0-9a-f]{40}", rows[0][0]) is None):
+        raise EnvironmentExecutionError(
+            "ENVIRONMENT_EXECUTION.DEV_AUTHORITY_UNAVAILABLE",
+            "origin did not return one exact published dev head",
+        )
+    head = rows[0][0]
+    if _git(repository, "rev-parse", dev_ref) != head:
+        raise EnvironmentExecutionError(
+            "ENVIRONMENT_EXECUTION.DEV_HEAD_DRIFT",
+            "local dev candidate differs from published origin dev head",
+        )
+    # 内容寻址的 commit 对象确定 tree；不 fetch、不更新任何 ref。
     tree = _git(repository, "show", "-s", "--format=%T", head)
     return {"ref": dev_ref, "head": head, "tree": tree}
 
@@ -244,7 +269,7 @@ def _assert_expected_dev(
     ):
         raise EnvironmentExecutionError(
             "ENVIRONMENT_EXECUTION.DEV_HEAD_DRIFT",
-            "expected dev identity differs from current refs/heads/dev1.0",
+            "expected dev identity differs from published origin dev head/tree",
         )
     return current
 
@@ -335,6 +360,21 @@ def _signer(identity: str, *, keyring_path: Path, unavailable_code: str):
         raise EnvironmentExecutionError(unavailable_code, exc.detail) from exc
 
 
+def _published_dev_signer(
+    repository: Path, current: Mapping[str, str], signer: Callable[[bytes], str],
+) -> Callable[[bytes], str]:
+    """复用签名 stage：复读失败时签名字节不返回，issuer 无事实可落盘。
+
+    这是有限时点校验而非远端锁；promotion 消费时仍须复核远端 currentness。
+    """
+    def guarded(payload: bytes) -> str:
+        _assert_expected_dev(repository, expected_head=current["head"], expected_tree=current["tree"])
+        signature = signer(payload)
+        _assert_expected_dev(repository, expected_head=current["head"], expected_tree=current["tree"])
+        return signature
+    return guarded
+
+
 def _handle_request(args: argparse.Namespace) -> dict[str, object]:
     if args.environment == "gamma":
         if args.expected_dev_head is None or args.expected_dev_tree is None:
@@ -356,6 +396,9 @@ def _handle_request(args: argparse.Namespace) -> dict[str, object]:
                 "ENVIRONMENT_EXECUTION.GAMMA_IDENTITY_DRIFT",
                 "Gamma candidate is not current exact dev1.0 identity",
             )
+        _assert_expected_dev(
+            args.repository, expected_head=current["head"], expected_tree=current["tree"],
+        )
     elif args.expected_dev_head is not None or args.expected_dev_tree is not None:
         raise EnvironmentExecutionError(
             "ENVIRONMENT_EXECUTION.INVALID_ARGUMENT",
@@ -525,6 +568,8 @@ def _handle_issue(args: argparse.Namespace) -> dict[str, object]:
         keyring_path=args.signing_keyring,
         unavailable_code="ENVIRONMENT_EXECUTION.ACCEPTANCE_SIGNER_UNAVAILABLE",
     )
+    if request["environment"] == "gamma":
+        signer = _published_dev_signer(args.repository, current, signer)
     path = issue_environment_acceptance_fact(
         store_root=args.store_root,
         request_ref=args.request,
@@ -611,7 +656,7 @@ def _handle_qualify(args: argparse.Namespace) -> dict[str, object]:
         publish_result_ref=args.publish_result,
         gamma_acceptance_ref=args.gamma_acceptance,
         signer_identity=args.qualification_signer_identity,
-        signer=signer,
+        signer=_published_dev_signer(args.repository, current, signer),
         environment_signature_verifier=environment_verifier,
         expected_environment_signer_identities=expected_environment_signers,
         issued_at=args.issued_at,

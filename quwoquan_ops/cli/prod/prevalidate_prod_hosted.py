@@ -793,6 +793,72 @@ def _install_unit(
             "exitCode": result.returncode, "status": "passed"}
 
 
+def _initializer_failure(container: dict[str, Any]) -> tuple[str, bool] | None:
+    """一次性初始化只接受已退出、非 running 且严格整数零的终态。"""
+    status = container.get("status")
+    if container.get("error") or status in {"dead", "stopped"}:
+        return "INITIALIZATION_FAILED", True
+    if status != "exited":
+        return "INITIALIZATION_PENDING", False
+    if (container.get("running") is not False
+            or type(container.get("exitCode")) is not int or container["exitCode"] != 0):
+        return "INITIALIZATION_FAILED", True
+    return None
+
+
+def _container_state_failure(
+    service: str, container: dict[str, Any], *, provider_bound: bool,
+) -> tuple[str, bool] | None:
+    """状态首因优先于健康例外；Provider 不能豁免 OOM、退出或缺失探针。"""
+    if container.get("oomKilled") is True:
+        return "CONTAINER_OOM", True
+    if service in {"mongo-init", "object-storage-init"}:
+        return _initializer_failure(container)
+    if container.get("error"):
+        return "CONTAINER_START_FAILED", True
+    if container.get("running") is not True:
+        exited = container.get("status") in {"exited", "dead", "stopped"}
+        return ("CONTAINER_EXITED" if exited else "CONTAINER_UNSCHEDULED"), exited
+    health = container.get("health")
+    if health in {None, "", "not-configured"}:
+        return "HEALTHCHECK_NOT_CONFIGURED", True
+    if health == "healthy" or (provider_bound and health in {"starting", "unhealthy"}):
+        return None
+    return "CONTAINER_UNHEALTHY", False
+
+
+def _required_runtime_services(
+    projection: PlaneProjection, spec: dict[str, Any], *, data_mode: str,
+) -> list[str]:
+    """运行闭包不含仅交付镜像的服务，去重保留首次声明顺序。"""
+    required = list(projection.startup_services)
+    if projection.name == "service":
+        required.append("gamma-proxy")
+        if data_mode == "isolated":
+            required.extend((spec.get("isolatedData") or {}).get("services") or [])
+    return list(dict.fromkeys(required))
+
+
+def _runtime_image_failures(
+    projection: PlaneProjection, delivered: dict[str, Any], by_service: dict[str, Any],
+) -> list[tuple[str, str]]:
+    """交付闭包全部校验 digest，只有已观测到的启动容器比较运行镜像身份。"""
+    failures: list[tuple[str, str]] = []
+    digests = delivered.get("remoteImageContentDigests") or {}
+    if delivered.get("contentDigestVerified") is not True:
+        failures.append(("IMAGE_DELIVERY_UNVERIFIED", ""))
+    for service in projection.startup_services + projection.image_only_services:
+        try:
+            expected = normalize_image_id(digests.get(service))
+            if service not in projection.startup_services or service not in by_service:
+                continue
+            if normalize_image_id(by_service[service].get("imageId")) != expected:
+                failures.append(("IMAGE_DIGEST_MISMATCH", service))
+        except ValueError:
+            failures.append(("IMAGE_ID_INVALID", service))
+    return failures
+
+
 def _runtime_blockers(
     report: dict[str, Any], projection: PlaneProjection, spec: dict[str, Any],
     delivered: dict[str, Any], *, data_mode: str,
@@ -810,57 +876,41 @@ def _runtime_blockers(
         if service in by_service:
             add("CONTAINER_DUPLICATE", service, terminal=True)
         by_service[service] = item
-    required = list(projection.startup_services)
-    initializers = {"mongo-init", "object-storage-init"}
-    if projection.name == "service":
-        required.append("gamma-proxy")
-        if data_mode == "isolated":
-            required.extend((spec.get("isolatedData") or {}).get("services") or [])
     provider_bound = set((spec.get("readinessPolicy") or {}).get("providerBoundServices") or [])
-    for service in dict.fromkeys(required):
+    for service in _required_runtime_services(projection, spec, data_mode=data_mode):
         container = by_service.get(service)
         if container is None:
             add("CONTAINER_UNSCHEDULED", service)
             continue
-        state = {key: container.get(key) for key in ("status", "running", "exitCode", "health", "error")}
-        if container.get("oomKilled") is True:
-            add("CONTAINER_OOM", service, terminal=True, **state)
-        elif service in initializers:
-            if container.get("error"):
-                add("INITIALIZATION_FAILED", service, terminal=True, **state)
-            elif container.get("status") == "exited":
-                if container.get("running") is not False or type(container.get("exitCode")) is not int or container["exitCode"] != 0:
-                    add("INITIALIZATION_FAILED", service, terminal=True, **state)
-            elif container.get("status") in {"dead", "stopped"}:
-                add("INITIALIZATION_FAILED", service, terminal=True, **state)
-            else:
-                add("INITIALIZATION_PENDING", service, **state)
-        elif container.get("error"):
-            add("CONTAINER_START_FAILED", service, terminal=True, **state)
-        elif container.get("running") is not True:
-            add("CONTAINER_EXITED" if container.get("status") in {"exited", "dead", "stopped"} else "CONTAINER_UNSCHEDULED",
-                service, terminal=container.get("status") in {"exited", "dead", "stopped"}, **state)
-        elif container.get("health") in {None, "", "not-configured"}:
-            add("HEALTHCHECK_NOT_CONFIGURED", service, terminal=True, **state)
-        elif container.get("health") != "healthy" and not (
-            service in provider_bound and container.get("health") in {"starting", "unhealthy"}
-        ):
-            add("CONTAINER_UNHEALTHY", service, **state)
-    digests = delivered.get("remoteImageContentDigests") or {}
-    if delivered.get("contentDigestVerified") is not True:
-        add("IMAGE_DELIVERY_UNVERIFIED", terminal=True)
-    for service in projection.startup_services + projection.image_only_services:
-        try:
-            expected = normalize_image_id(digests.get(service))
-            if service in projection.startup_services and service in by_service:
-                if normalize_image_id(by_service[service].get("imageId")) != expected:
-                    add("IMAGE_DIGEST_MISMATCH", service, terminal=True)
-        except ValueError:
-            add("IMAGE_ID_INVALID", service, terminal=True)
+        failure = _container_state_failure(service, container, provider_bound=service in provider_bound)
+        if failure is not None:
+            code, terminal = failure
+            state = {key: container.get(key) for key in ("status", "running", "exitCode", "health", "error")}
+            add(code, service, terminal=terminal, **state)
+    for code, service in _runtime_image_failures(projection, delivered, by_service):
+        add(code, service, terminal=True)
     unit = report.get("unit") or {}
     if unit.get("enabled") is not True or unit.get("active") is not True:
         add("UNIT_NOT_READY", unit=unit.get("name"), enabled=unit.get("enabled"), active=unit.get("active"))
     return blockers
+
+
+def _inspect_readiness_runtime(
+    args: argparse.Namespace, name: str, placement: DeploymentReplica,
+    remaining: float, first_reason: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """单次只读检查绑定 placement 和剩余预算，传输失败保留已有首因。"""
+    argv = ["python3", "quwoquan_ops/cli/prod/inspect_prod_plane_runtime.py",
+            "--plane", name, "--instance", "prevalidate", "--host-id", placement.host_id,
+            "--replica-id", placement.replica_id, "--key-dir", str(args.key_dir)]
+    if args.host:
+        argv.extend(["--host", args.host])
+    try:
+        step = _run(argv, phase="readiness", timeout=min(COMMAND_TIMEOUT_SECONDS, remaining))
+        return json.loads(step["stdout"])
+    except PrevalidationError as error:
+        error.blocker["firstReason"] = first_reason or dict(error.blocker)
+        raise
 
 
 def _wait_for_readiness(
@@ -878,21 +928,10 @@ def _wait_for_readiness(
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
-            argv = ["python3", "quwoquan_ops/cli/prod/inspect_prod_plane_runtime.py",
-                    "--plane", name, "--instance", "prevalidate", "--host-id", placement.host_id,
-                    "--replica-id", placement.replica_id, "--key-dir", str(args.key_dir)]
-            if args.host:
-                argv.extend(["--host", args.host])
-            try:
-                step = _run(argv, phase="readiness", timeout=min(COMMAND_TIMEOUT_SECONDS, remaining))
-                report = json.loads(step["stdout"])
-            except PrevalidationError as error:
-                error.blocker["firstReason"] = first_reason or dict(error.blocker)
-                raise
+            report = _inspect_readiness_runtime(args, name, placement, remaining, first_reason)
             runtime[name] = report
             latest.extend(_runtime_blockers(report, projection, spec, image_reports.get(name) or {}, data_mode=args.data_mode))
-            if latest and first_reason is None:
-                first_reason = latest[0]
+            first_reason = first_reason or next(iter(latest), None)
             terminal = next((item for item in latest if item["terminal"]), None)
             if terminal:
                 raise PrevalidationError(

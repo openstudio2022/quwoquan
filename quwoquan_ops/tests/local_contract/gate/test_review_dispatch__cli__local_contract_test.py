@@ -799,10 +799,15 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             },
             reviewer_role="developer",
         )
-        self.assertGreater(
-            long_finding["assembled_input_byte_count"],
-            baseline["assembled_input_byte_count"],
-        )
+        # 压缩策略可同时缩短 context；不能要求带长 finding 的压缩结果更大。
+        # 真正不变量是 finding 身份未丢、压缩有审计记录且最终字节计量准确。
+        projected = long_finding["assembled_input"]["evidence_summary"]
+        self.assertEqual(projected["count"], 1)
+        self.assertEqual(projected["findings"][0]["id"], "F-LONG")
+        self.assertEqual(projected["findings"][0]["path"], "README.md")
+        self.assertEqual(projected["findings"][0]["severity"], "PR_WARN")
+        self.assertTrue(projected["findings"][0]["summary"])
+        self.assertNotEqual(long_finding["assembled_input_digest"], baseline["assembled_input_digest"])
         self.assertLessEqual(long_finding["assembled_input_byte_count"], 24576)
         self.assertTrue(long_finding["compression"]["applied"])
         from lib.review_context_assembler import canonical_json_bytes, sha256_digest
@@ -1019,6 +1024,58 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
         self.assertEqual(2, result.returncode)
         self.assertIn("REVIEW.OUTPUT_PATH_OUTSIDE_RUNTIME_ROOT", result.stderr)
         self.assertFalse((_REPO_ROOT / forbidden).exists())
+
+
+class ExplicitReviewRangeTest(unittest.TestCase):
+    """# spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-007"""
+
+    def test_real_refs_dev_at_head_main_at_base_validate_without_global_root_patch(self):
+        _OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=_OUTPUT_ROOT) as directory:
+            repository = Path(directory)
+            def git(*args):
+                return subprocess.check_output(["git", *args], cwd=repository, text=True).strip()
+            git("init", "-b", "main")
+            git("config", "user.name", "Review test")
+            git("config", "user.email", "review@example.invalid")
+            git("commit", "--allow-empty", "-m", "base")
+            base = git("rev-parse", "HEAD")
+            git("checkout", "-b", "dev1.0")
+            git("commit", "--allow-empty", "-m", "head")
+            head = git("rev-parse", "HEAD")
+            git("update-ref", "refs/remotes/origin/dev1.0", head)
+            self.assertEqual(head, git("merge-base", "HEAD", "origin/dev1.0"))
+            self.assertEqual(base, git("merge-base", "HEAD", "main"))
+            identity = {"base_sha": base, "head_sha": head, "head_tree": git("rev-parse", "HEAD^{tree}")}
+            self.assertEqual(identity, _cli.validate_git_range(identity, repo_root=repository))
+            with self.assertRaisesRegex(ValueError, "tree"):
+                _cli.validate_git_range({**identity, "head_tree": "0" * 40}, repo_root=repository)
+            git("commit", "--allow-empty", "-m", "new head")
+            with self.assertRaisesRegex(ValueError, "stale"):
+                _cli.validate_git_range(identity, repo_root=repository)
+            future = git("rev-parse", "HEAD")
+            git("checkout", "--detach", head)
+            with self.assertRaisesRegex(ValueError, "Git 校验失败"):
+                _cli.validate_git_range({**identity, "base_sha": future}, repo_root=repository)
+
+    def test_real_producers_bind_explicit_base_and_default_development_remains(self):
+        def git(*args):
+            return subprocess.check_output(["git", *args], cwd=_REPO_ROOT, text=True).strip()
+        identity = {"base_sha": git("rev-parse", "HEAD^"), "head_sha": git("rev-parse", "HEAD"),
+                    "head_tree": git("rev-parse", "HEAD^{tree}")}
+        plan = _plan("dev", "POST", ["README.md"], git_range=identity)
+        current = _cli.validate_current_review_plan(plan, _registry, phase="consolidation")
+        self.assertEqual(identity, plan["git_range"])
+        self.assertEqual(identity["base_sha"], plan["merge_base_sha"])
+        self.assertEqual(identity["base_sha"], current["digest_payload"]["git"]["merge_base_sha"])
+        other = _plan("dev", "POST", ["README.md"], git_range={**identity, "base_sha": identity["head_sha"]})
+        self.assertNotEqual(plan["fingerprint"], other["fingerprint"])
+        default = _plan("dev", "POST", ["README.md"])
+        self.assertNotIn("git_range", default)
+        self.assertEqual(_cli._merge_base_sha(), default["merge_base_sha"])
+        plan["git_range"]["base_sha"] = identity["head_sha"]
+        with self.assertRaisesRegex(ValueError, "range"):
+            _cli.validate_current_review_plan(plan, _registry, phase="consolidation")
 
 
 if __name__ == "__main__":

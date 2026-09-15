@@ -61,6 +61,108 @@ def _commit_all(repo: Path, message: str) -> str:
     return subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
 
 
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-007.t1
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-007.t2
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-007.t3
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-007.t4
+@pytest.mark.parametrize("mode,relative,lines,terminal", [
+    ("push", "quwoquan_ops/cli/large.py", 2101, "FAIL"),
+    ("push", "quwoquan_ops/cli/small.py", 3, "PASS"),
+    ("push", "notes.txt", 3, "PASS"),
+    ("staged", "quwoquan_ops/cli/small.py", 3, "PASS"),
+])
+def test_real_health_capsule_exact_delta(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str, relative: str, lines: int, terminal: str) -> None:
+    import shutil
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init(repo)
+    # 复制真实执行器及其依赖，不替代扫描或阈值；只隔离其他 readiness 检查。
+    for source in (ROOT / "quwoquan_ops").rglob("*.py"):
+        if any(part in {"tests", "__pycache__"} for part in source.relative_to(ROOT).parts):
+            continue
+        destination = repo / source.relative_to(ROOT)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+    shutil.copytree(ROOT / "quwoquan_ops/policies", repo / "quwoquan_ops/policies")
+    base = _commit_all(repo, "health executor")
+    source = repo / relative
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("".join(f"value_{index} = {index}\n" for index in range(lines)))
+    subprocess.run(["git", "add", relative], cwd=repo, check=True)
+    head = _commit_all(repo, "candidate") if mode == "push" else base
+    updates = parse_push_updates(f"refs/heads/dev1.0 {head} refs/heads/dev1.0 {base}\n") if mode == "push" else None
+    original = __import__("lib.local_readiness.core", fromlist=["_run_check"])._run_check
+    observed = []
+    def execute(check, log_path, *, repo_root, execution_env=None, timeout_seconds=None):
+        if "code-health" in check["resources"]:
+            if mode == "push":
+                assert subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=no"], cwd=repo_root) == b""
+            if lines > 2000:
+                # 真实干净 capsule 中旧命令确实空 delta 假绿；新绑定必须扫描并阻断。
+                legacy_report = log_path.with_suffix(".legacy.json")
+                legacy_report.parent.mkdir(parents=True, exist_ok=True)
+                legacy = subprocess.run([sys.executable, "-B", "quwoquan_ops/gate/verify_incremental_code_health.py",
+                    "--base", "HEAD", "--head", "HEAD", "--working-tree", "--mode", "fast",
+                    "--output", str(legacy_report)], cwd=repo_root, env={**os.environ, **(execution_env or {})}, capture_output=True)
+                assert legacy.returncode == 0
+                assert json.loads(legacy_report.read_text())["changedPaths"] == []
+            result = original(check, log_path, repo_root=repo_root, execution_env=execution_env, timeout_seconds=timeout_seconds)
+            observed.append(result)
+            return result
+        return {"id": check["id"], "status": "PASS", "exit_code": 0}
+    monkeypatch.setattr("lib.local_readiness.core._run_check", execute)
+    monkeypatch.setenv("PATH", str(Path(sys.executable).parent) + os.pathsep + os.environ["PATH"])
+    plan = plan_readiness(level="fast", paths=[relative], repo_root=repo, mode=mode, push_updates=updates)
+    receipt = run_readiness(plan, repo_root=repo, push_updates=updates, state_root=tmp_path / "state")
+    assert observed, "非空 push/staged 范围没有执行健康检查"
+    assert receipt["status"] == terminal
+    report = observed[0]["code_health"]["report"]
+    assert report["baseSha"] == base and report["headSha"] == head
+    assert report["changedPaths"] == [relative]
+    assert report["mode"] == ("full" if mode == "push" else "fast")
+    assert report["candidateSource"] == ("commit" if mode == "push" else "index")
+    if mode == "push":
+        assert receipt["source_identity"] == {"base": base, "head": head, "tree": subprocess.check_output(["git", "rev-parse", f"{head}^{{tree}}"], cwd=repo, text=True).strip(), "paths": [relative], "mode": "push"}
+        from quwoquan_ops.ci.scoped_candidate.core import build_head_candidate, create_source_fact, store_ref, ScopedCandidateError
+        policy = ROOT / "quwoquan_ops/policies/scoped_candidate_policy.yaml"
+        candidate = build_head_candidate(repository=repo, policy_path=policy, commit=head, expected_parent=base,
+            owner_identity_ref="fixture-owner", impact_plan_digest="sha256:" + "a" * 64,
+            writer_id="health-fixture", expires_at="2099-01-01T00:00:00+00:00")
+        receipt_path = repo / ".qwq_output/receipt.json"
+        receipt_path.write_text(json.dumps(receipt))
+        kwargs = dict(repository=repo, policy_path=policy, candidate_ref=store_ref(repository=repo, policy_path=policy, path=candidate),
+                      kind="local_readiness_fast", receipt_path=receipt_path, status="passed")
+        if terminal == "FAIL":
+            with pytest.raises(ScopedCandidateError, match="SOURCE_RECEIPT"):
+                create_source_fact(**kwargs)
+        else:
+            assert json.loads(create_source_fact(**kwargs).read_text())["status"] == "passed"
+            import copy
+            mutations = [
+                ("identity_tree", lambda value: value["source_identity"].update(tree="0" * 40)),
+                ("identity_base", lambda value: value["source_identity"].update(base=head)),
+                ("identity_paths", lambda value: value["source_identity"].update(paths=[])),
+                ("missing_health", lambda value: value["checks"][0].pop("code_health")),
+                ("failed_check", lambda value: value["checks"][0].update(status="FAIL")),
+            ]
+            for _label, mutate in mutations:
+                changed = copy.deepcopy(receipt)
+                mutate(changed)
+                receipt_path.write_text(json.dumps(changed))
+                with pytest.raises(ScopedCandidateError, match="SOURCE_RECEIPT"):
+                    create_source_fact(**kwargs)
+            from quwoquan_ops.ci.impact_planner_core import canonical_digest
+            for field, value in (("mode", "fast"), ("changedPaths", []), ("baseSha", head),
+                                 ("headSha", base), ("terminal", "GATE_BLOCK"), ("candidateSource", "working-tree")):
+                changed = copy.deepcopy(receipt)
+                evidence = changed["checks"][0]["code_health"]
+                evidence["report"][field] = value
+                evidence["digest"] = canonical_digest(evidence["report"])
+                receipt_path.write_text(json.dumps(changed))
+                with pytest.raises(ScopedCandidateError, match="SOURCE_RECEIPT"):
+                    create_source_fact(**kwargs)
+
+
 def test_dirty_unstaged_byte_cannot_affect_staged_execution(monkeypatch: pytest.MonkeyPatch) -> None:
     with _repo() as directory:
         repo = Path(directory)
@@ -203,8 +305,10 @@ def test_data_release_readiness_is_local_and_promotion_does_not_repeat_data_gate
         (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     )
     jobs = workflow["jobs"]
-    # 回同步走 integration FF 通道（make promotion-backsync），Gate 只剩两 job。
-    assert list(jobs) == ["promotion_verify", "main_source_seal"]
+    # 受管回同步只消费已成功 seal，不重复 Data 检查或在本地裸推。
+    assert list(jobs) == ["promotion_verify", "main_source_seal", "system_backsync"]
+    assert jobs["system_backsync"]["needs"] == "main_source_seal"
+    assert jobs["system_backsync"]["uses"] == "./.github/workflows/system-backsync.yml"
     assert jobs["promotion_verify"]["if"] == (
         "${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_review' }}"
     )

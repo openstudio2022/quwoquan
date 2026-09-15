@@ -9,14 +9,14 @@
 ## 1. 用户价值
 
 作为开发、测试或运维角色，
-我希望 lane worktree 与 integration 都能在明确文件范围内并行构造 exact candidate，既可由受信 publisher 在本地环境准入后 CAS 更新 `dev1.0`，也可由唯一 integration 工作区以可证明的 non-force fast-forward 普通 push 提交源码，再把具备完整资格链的已集成可用源码快速晋级到 `main`，
-从而既不强迫跨模块修复返回原 worktree，也不让未验字节、并行覆盖或 main 最新状态直接进入 Prod。
+我希望六个物理工作树共享远端 `origin/dev1.0`，lane 以本地 `lane/*` 身份构造 exact candidate 并完成 Alpha，唯一 integration 工作区只消费 acceptance bundle 以 non-force fast-forward 更新 `origin/dev1.0`，再把具备完整资格链的已集成可用源码晋级到 `main`，
+从而既不强迫跨模块修复返回原 worktree，也不让未验字节、裸源码直推或 main 最新状态直接进入 Prod。
 
 ## 2. 范围与非目标
 
 ### In Scope
 
-- `dev1.0` 集成分支、`main` 可用源码分支与六条长期 lane 分支的唯一角色、合法 promotion 边以及白名单外任何分支的禁令。
+- 远端闭集（仅 `origin/dev1.0` 与 `origin/main`）、本地六条 `lane/*` 检出/验收 identity、`dev1.0`/`main` 角色、唯一 promotion 边，以及白名单外任何分支的禁令。
 - 人工 direct push、PR head/base、系统 fast-forward backsync 与 Prod source admission 的可观察准入结果。
 - 非法边、非 fast-forward、远端状态不可证明与 SHA 不可达 `main` 时的 fail-closed 终态。
 - GitHub 托管 refs、branch protection/ruleset 与 system actor 权限的只读 readback 和当前有效性证明。
@@ -32,24 +32,37 @@
 <a id="req-001"></a>
 ### REQ-001 分支角色与 scoped candidate
 
-- 本地与远端只允许 `dev1.0`、`main` 与六条长期 `lane/*`。lane 是长期来源工作面，integration 是跨模块集成工作面；两者都可按不重叠整文件 scope 构造 candidate。lane 仍只推同名 lane；唯一 `integration/` 工作区可从匹配本地 `refs/heads/dev1.0` 以普通认证 Git push 更新远端同名分支，但只允许 non-force fast-forward。
-- `dev1.0` 是唯一集成 ref，接受 `trusted_integration_publisher_cas`、`integration_worktree_fast_forward` 与 `system_fast_forward_backsync` 三条通道；publisher 保留为 exact candidate + Alpha/Beta 准入通道，但不再是唯一 writer。`main` 是最新 source-admitted 源码，只接受 `dev1.0 -> main` promotion PR，不是 Prod source selector。
+- 执行与保证边界：日常 dev 合入由本地 `accept → bundle → integrate` 与 hook 强制验收和 admission；下述缺证据零写约束指受管本地入口，不是 GitHub 对任意凭据的保证。dev 的旧 `04. Lane Gate` required check 按授权撤除，远端 lane 在权威读回证明其 exact tip 已可达已发布 dev 且未发布增量已保全后可删除，不以专用 publisher/broker 或 hosted 替代门先到位为条件。服务端必须保留 dev 禁删/禁 non-FF 与 main promotion 强制；普通已授权写凭据仍可能绕过本地流程直接 FF dev，服务端不能保证每次 dev 更新均经过 Alpha。该缺口保持 OPEN-004 `track`，不阻塞本地有效验收后的日常 dev 合入，也不产生任何环境/生产资格。
+
+- 本地允许 `dev1.0`、`main` 与六条长期 `lane/*`。远端闭集只允许 `origin/dev1.0` 与 `origin/main`；存量 `origin/lane/*` 只是 leftover，不得作为写入目标。lane 是长期来源工作面与本地检出/验收 identity（Git 禁止同分支多工作树），不是独立远端交付线；六条本地 lane 的 upstream 统一指向 `origin/dev1.0`。integration 是已验候选的集成消费工作面；源码 writer 必须在现有 lane 按不重叠整文件 scope 交付最终 candidate，不能因 integration/dev 是合法环境 consumer 就把它当 lane acceptance producer。lane 不推远端；唯一 `integration/` 工作区更新远端 `dev1.0` 必须消费验真的 acceptance bundle 与 publish admission，只允许 non-force fast-forward。`QWQ_ACCEPTANCE_PUBLISH=1` 等布尔环境变量不构成 admission 或授权，无 bundle 的裸 `git push` 零写。
+- `dev1.0` 是唯一集成 ref，接受 `trusted_integration_publisher_cas`、`integration_worktree_fast_forward` 与 `system_fast_forward_backsync` 三条通道；后两条都必须绑定已验收 admission 或受管 system actor，裸源码直推不是 writer。`main` 是最新 source-admitted 源码，只接受 `dev1.0 -> main` promotion PR，不是 Prod source selector。
 - 每个 candidate 必须绑定 expected `origin/dev1.0` parent、exact commit/tree、scope、changed paths、owner、ImpactPlan、source facts 与私有 index identity；scope 外 tree 逐字继承 parent。parent 或 scope generation 漂移使 candidate 和全部环境事实失效。
 - 同一 worktree 可有多个不重叠文件 writer；同文件、父子路径、rename/delete、生成物、Git index/HEAD/ref、环境、设备、package 与外部 mutation 竞争只能有一个 winner。未知 dirty、无 owner 或越界字节不得被隐式纳入 candidate。
 
 <a id="req-002"></a>
 ### REQ-002 集成、promotion 与回同步准入
 
-- trusted publisher 只在 source facts 与 required Alpha/Beta `EnvironmentAcceptanceFact` 均绑定同一 candidate、签名和 cleanup 闭合时，以 expected remote OID 执行一次非 force fast-forward CAS 并 exact readback。唯一 integration 工作区的普通认证 direct push 必须 head/base 均为 `dev1.0`、本地来源精确为 `refs/heads/dev1.0`，并使用 pre-push update line 的 before/after OID 调用 Git ancestry authority；相等可幂等通过，缺 OID、authority 不可用、非快进、force、删除、来源不匹配、lane→dev、任意 `main` direct push、未知 remote/ref 或 unknown result 盲重试全部拒绝。
+- trusted publisher 只在 source facts 与 required Alpha/Beta `EnvironmentAcceptanceFact` 均绑定同一 candidate、签名和 cleanup 闭合时，以 expected remote OID 执行一次非 force fast-forward CAS 并 exact readback。唯一 integration 工作区写入 `origin/dev1.0` 必须先持有同一 candidate 的 publish admission；最终 publisher 独立重算 admission 自摘要并验证 exact 前驱引用、签名/有效期、candidate commit/tree 与 before/after、规范 integration 路径、本地 `refs/heads/dev1.0` 来源和目标 remote/ref，不能只依赖 bundle 导入或 pre-push。`make integrate … PUBLISH=1` 只表达发布意图，`QWQ_ACCEPTANCE_PUBLISH=1` 不替代上述验证。pre-push 使用 update line 的 before/after OID 调用 Git ancestry authority，publisher 自身也必须证明 non-force fast-forward；expected-old 约束不能替代 ancestry。相等可幂等通过；缺失/伪造/过期/漂移 admission、仅 env=1、缺 OID、authority 不可用、非快进、force、删除、来源不匹配、lane 同名推送、lane→dev、任意 `main` direct push、未知 remote/ref 或 unknown result 盲重试全部拒绝，远端 OID 不变。
 - CAS loser必须从新parent重建candidate与环境事实；网络结果按remote=`before|after|other`回读收口，不得stash、reset、自动merge或吸收其他writer字节。
-- `dev1.0 -> main` 是唯一 promotion PR 边，只接受 current dev head 的 `IntegrationQualificationFact`。promotion 成功后，`main -> dev1.0` 的回同步只能是无 force 的 fast-forward：当前由唯一 integration 工作区按自身 FF 通道执行（校验远端 main 头是恰好一次两父 merge 且第二父等于本地 `dev1.0` 头，`--ff-only` 后推送并读回 `after`），受管 system actor 通道保留同一 expected-before 语义但尚无 caller（见 OPEN-004）。两者都是 equal 幂等成功，分叉或漂移零写阻断，不得 reset、stash 或自动 merge。
-- integration worktree direct fast-forward push 仅把源码提交到 `dev1.0`，不签发 `integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion、release 或 Prod authority。需要 main promotion/发布时仍必须走 exact candidate + Alpha/Beta、current dev head Gamma 与既有后续资格链。main合入结果也仅为`source-admitted`；Prod source admission必须从不可移动正式SemVer标签的AdmissionFact解析可达main的peeled commit和exact OCI digests；dev-only、RC-only、main HEAD、裸SHA或缺唯一promotion绑定均不得进入Prod。
-- 带资格的合入是「本地验收 → integration 发布」两阶段，与 publisher 通道共用同一事实形态；两个阶段可以在同一 integration 工作区执行，不要求上游工作树发起。验收来源为 branch policy 允许的本地 lane 或 integration 分支（当前分支 head 即 exact candidate；scope 为相对 baseline 的全部 changed paths，claim 仍走同一 append-only generation）以 `make accept` 在远端 ref 尚未移动前完成：ImpactPlan 派生集成深度、本地 readiness source fact、Alpha `EnvironmentAcceptanceFact` 必跑、Beta 仅显式 `BETA=1` 才真跑（否则 typed `not_required`），终态 `accepted` 并把 candidate/claim/source fact/两份 EAF 及其全部 case/named 证据按 store 相对路径打成 portable acceptance bundle（`bundle.json` 记录 candidate 身份、expectedParent、lane 来源、每文件 exact digest 与 `bundleId`）。integration 工作区（分支 `dev1.0`，HEAD 已 fast-forward 到该 candidate）以 `make integrate ACCEPTANCE_BUNDLE=<dir>` 只做消费：逐字节按 manifest digest 导入本工作树 store（create-once，已存在且字节不同即 `INTEGRATION_RUN.BUNDLE_DRIFT`）、以仓内 keyring 验签并复核 EAF 全部引用与 candidate 绑定、要求 `commit/tree == HEAD` 且 `expectedParent == 当前远端 dev1.0`（否则 `BUNDLE_CANDIDATE_MISMATCH` / `BUNDLE_STALE`，后者须在合入新 `dev1.0` 的 head 上重新 `make accept`），然后形成 publish admission，以 expected-old lease 的 non-force fast-forward push 更新远端并按 `before|after|other` 精确读回，只有读回 `after` 才写入 publish result。integrate 消费阶段不启动任何环境、不接受 Data release 输入；同一工作区的 acceptance 阶段可生产自身合法 bundle。缺 bundle 即 `INTEGRATION_RUN.ACCEPTANCE_REQUIRED`。该 publish result 与 publisher CAS 的结果同 schema，可作为 current dev head Gamma 与 `IntegrationQualificationFact` 的前驱；缺 admission 的裸直推、读回 `before`（零写）或 `other`（他方先行）都不产生任何事实。lane→`dev1.0` 的 Pull Request 是评审与可见性载体，并承载 hosted 静态/合同复算 required check（`required_integration_checks`，只复算治理、影响面与 ops 本地合同，不启动任何环境）；合入本身由 integration 工作区按该通道执行——远端 `dev1.0` 一旦包含 lane head，PR 即由 hosted 侧标记为 merged，环境证据只来自 lane bundle 中的 Alpha/Beta 事实。
-- Alpha/Beta 的验收签发可在当前合法 lane 或 integration 工作区进行（`--mode acceptance`，不 admit、不更新远端 `dev1.0`、拒绝 `--publish`），Data handoff 必须经 current/exact-byte 消费验证，不要求与 producer 同物理工作树；integration 工作区独占 admit/publish 及其后的集成验证——集成验证只有两级：`gamma-local` 对 current exact `dev1.0` head 的 Gamma，以及可选的 prod canary 放量。用户可显式把多个 lane head 合并为一个 candidate 后一次验收，`--merged-lanes lane/<name>` 逐一记录来源且每个都必须是 candidate 的祖先，bundle 的 `mergedLanes` 随之进入 integration summary。lane 已裸 fast-forward 落地后仍可对同一 head 验收，须显式 `--baseline <上一个已验收基线>`，否则 `INTEGRATION_RUN.NOTHING_TO_ACCEPT`；不得为在 `dev1.0` 分支上跑通 ship admission 而放宽 `validate_current` 或复制他方 lane 的证据字节（见 [L2 DEC-014](../design.md#dec-014)）。
+- `dev1.0 -> main` 是唯一 promotion PR 边，只接受 current dev head 的 `IntegrationQualificationFact`。promotion 成功后，`main -> dev1.0` 的回同步只能由受管 system backsync 消费已验真的 `MainSourceSeal`，以专用身份和 expected-before 执行无 force 的 fast-forward 并读回 `after`；不得由 integration 的普通 acceptance 通道、裸 `make promotion-backsync` push 或 env=1 代替。equal 幂等成功，分叉或漂移零写阻断，不得 reset、stash 或自动 merge。其 caller、凭据隔离与真实执行证据未闭合时保持 OPEN-004，不宣称 main→dev 闭环完成；确认 dev 发布读回后再同步 integration 与本地 lane。
+- integration worktree 的 admission publish 仅消费已验收事实并把源码提交到 `origin/dev1.0`；`integrationEligibility` 只能由同一 exact admission 建立，不由 push 成功推导，publish 不重新签发 Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion、release 或 Prod authority。需要 main promotion/发布时仍必须走 exact candidate + Alpha/Beta、current dev head Gamma 与既有后续资格链。main合入结果也仅为`source-admitted`；Prod source admission必须从不可移动正式SemVer标签的AdmissionFact解析可达main的peeled commit和exact OCI digests；dev-only、RC-only、main HEAD、裸SHA或缺唯一promotion绑定均不得进入Prod。生产金丝雀仍在 `main` + stable tag 之后的现行正式链上，内部用户与其他用户一视同仁，本 Story 不新增生产前驱。
+- 写入 `origin/dev1.0` 的唯一带资格通道是「lane 验收 → integration 发布」两段式，与 publisher 通道共用同一事实形态。lane 工作树（当前分支为该 lane，head 即 exact candidate；scope 为相对**上次已发布** `origin/dev1.0` head 的全部 changed paths，claim 仍走同一 append-only generation）以 `make accept` 在远端 ref 尚未移动前完成：ImpactPlan 派生集成深度、本地 readiness source fact、Alpha `EnvironmentAcceptanceFact` 必跑、Beta 仅显式 `BETA=1` 才真跑（否则 typed `not_required`），`04. Lane Gate` 的静态治理、ImpactPlan/changed boundary、canonical full Code Health Delta 与 ops 合同检查集合左移到 accept，在同一 exact candidate 上去重执行；required 缺项或失败不得 accepted。本地验真器检查 current exact 证据与 admission，不重跑完整套件；dev 旧 `04. Lane Gate` required check 按授权撤除，专用 publisher/broker 与 hosted 资格强制缺口保持 OPEN-004 `track`，不阻塞本地合入或已可达 dev 的远端 lane 删除，终态 `accepted` 并把 candidate/claim/source fact/两份 EAF 及其全部 case/named 证据按 store 相对路径打成 portable acceptance bundle（`bundle.json` 记录 candidate 身份、expectedParent、lane 来源、每文件 exact digest 与 `bundleId`）。integration 工作区（分支 `dev1.0`）以 `make integrate ACCEPTANCE_BUNDLE=<dir>` 只做消费：在移动本地 HEAD 前先校验 bundle、candidate 与当前远端 parent，验证通过才允许本地 FF 到 candidate；逐字节按 manifest digest 导入本工作树 store（create-once，已存在且字节不同即 `INTEGRATION_RUN.BUNDLE_DRIFT`）、以仓内 keyring 验签并复核 EAF 全部引用与 candidate 绑定、要求 `commit/tree == HEAD` 且 `expectedParent == 当前远端 dev1.0`（否则 `BUNDLE_CANDIDATE_MISMATCH` / `BUNDLE_STALE`，后者须在合入新 `dev1.0` 的 head 上重新 `make accept`），然后形成 publish admission，以 expected-old lease 的 non-force fast-forward push 更新远端并按 `before|after|other` 精确读回，只有读回 `after` 才写入 publish result。integration 不启动任何环境、不接受 Data release 输入；缺 bundle 即 `INTEGRATION_RUN.ACCEPTANCE_REQUIRED`，无 bundle 不得以任何方式移动 `origin/dev1.0`。该 publish result 与 publisher CAS 的结果同 schema，可作为 current dev head Gamma 与 `IntegrationQualificationFact` 的前驱；缺 admission 的裸直推、读回 `before`（零写）或 `other`（他方先行）都不产生任何事实。`lane/* -> dev1.0` 不再是合法 PR 写入边；唯一 promotion 边是 `dev1.0 -> main`。
+- Alpha/Beta 的签发位置是产出最终源码 candidate 并合法消费 Data release handoff 的 lane 工作树（不要求等于内容 producer 工作树）（`--mode acceptance`，不 admit、不写 `dev1.0`、拒绝 `--publish`）；integration 工作区独占 admit/publish 及其后的集成验证——集成验证只有两级：`gamma-local` 对 current exact `dev1.0` head 的 Gamma（沿用现有 integration/release 剖面，不升级 nightly/全设备），以及 main + stable tag 之后现行正式链上的 prod canary。用户可显式把多个 lane head 合并为一个 candidate 后一次验收，`--merged-lanes lane/<name>` 逐一记录来源且每个都必须是 candidate 的祖先，bundle 的 `mergedLanes` 随之进入 integration summary。可发布 candidate 的 parent 固定当前远端 head；candidate 已等于该 head 时，显式历史 `--baseline` 只作诊断（否则 `INTEGRATION_RUN.NOTHING_TO_ACCEPT`），仅祖先关系不证明成功验收/发布基线，不得重绑旧事实作为发布前驱；不得为在 `dev1.0` 分支上跑通 ship admission 而放宽 `validate_current` 或复制他方 lane 的证据字节（见 [L2 DEC-014](../design.md#dec-014)）。
 - 集成深度仍唯一由 `quwoquan_ops/ci/impact_planner_core.py` 的 `derive_integration_depth` 派生（`data|topology` → `abg_release_sensitive`；`app|service|portal` → `alpha_integration`；五 scope 全空 → `no_live`，不启动环境），但不再决定 Beta 是否真跑或政策跳过的原因码：需要环境验收时 Alpha 必跑；Beta 只在显式 `--beta` 时真跑，否则无论集成深度为何都签 `status=not_required`、`reasonCode=ACCEPTANCE.BETA_OPTIONAL_BY_POLICY`。事实合同保留 `IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED` 表达 ImpactPlan 本身的免环境结论，但不得代替本通道未 opt-in 的政策原因；签发（`environment_scheduler`）、schema（`environment_acceptance_fact.schema.json`）与 admission（`create_publish_admission`）消费同一原因码闭集，其余原因码 fail closed，Alpha/Gamma 不得 `not_required`。`integrationEligibility` 是本地 readiness 正交维度（producer=`trusted_integration_publisher`，状态 `not_evaluated|eligible|blocked`），只在 exact candidate 的 publish admission 绑定 passed source fact 与 Alpha/Beta 事实之后由 publisher/integration FF 通道写成 `eligible`；裸直推、L0/L1/L2 source readiness 与 Environment Ops 的 `environmentReadiness` 都不得推导该维度。
 - Alpha/Beta/Gamma `EnvironmentAcceptanceFact` 与 `IntegrationQualificationFact` 的签名只接受 Ed25519（`ed25519:<base64>`），signer identity 与其 active 公钥的唯一真相源是仓内 `quwoquan_ops/policies/evidence_signing_keyring.yaml`；私钥只在本地仓外由 `make evidence-signing-bootstrap` 生成，hosted Delivery Gate 只用 PR head exact bytes 中的 keyring 验签、不持有任何 secret。两个 identity 的 active 公钥不得相同；retired key 不参与验签（见 [L2 DEC-010](../design.md#dec-010)）。
-- lane 与 `dev1.0` 之间只有两条本地同步通道，均由 Workflow Skill 显式执行、不由 hook 或 commit 隐式触发：`sync-lane-from-dev` 在当前 lane 工作树把本地 `dev1.0` 同步进本 lane（lane 已是 `dev1.0` 祖先时 `--ff-only`，否则普通 merge 并只在本 lane 解决冲突；工作树存在与本次变更重叠的脏文件、或已有进行中 merge/rebase 时零写阻断，禁止 reset/stash/clean）；`integrate-lane-to-dev` 只在唯一 integration 工作区把 lane head fast-forward 进 `dev1.0`，按本 REQ 的 publish admission 或裸 fast-forward 通道推送后，再对其余 lane 执行回同步。回同步只对「无进行中 merge、工作树干净或脏文件与本次 ff 不重叠、且是新 `dev1.0` 祖先」的 lane 执行 `--ff-only` 并推送同名远端；分叉或重叠脏树的 lane 只产出 typed 结果（`skipped_diverged` / `skipped_dirty_overlap`），由该 lane 自己的会话运行 `sync-lane-from-dev` 解决，任何通道都不得在他人工作树里自动 merge、覆盖或清理字节。
-- 同一 exact candidate 的 readiness receipt 与 Alpha/Beta `EnvironmentAcceptanceFact` 可被 lane 的后续 `make accept REUSE=1` 复用：复用只按 candidate commit/tree、ImpactPlan digest 与 receipt fingerprint 精确匹配，命中即跳过重跑并在 summary 标记 `reused`；任一输入漂移都必须重跑，不得按时间窗、分支名或「最近一次」复用。因 OPEN-006 类外部阻断未能签发 Alpha 事实时，integration 工作区仍可按裸 fast-forward 通道推送源码并保留首个 typed blocker，但不得写出 publish result 或任何资格事实。
+- lane 与 `dev1.0` 的同步只由 Workflow Skill 显式执行，不由 hook 或 commit 隐式触发。`sync-lane-from-dev` fetch 后冻结已发布 `origin/dev1.0` exact SHA，常规只把该 SHA 以 `--ff-only` 同步进当前 lane；不得回落到本地未发布 `dev1.0`。分叉时须获显式授权，由当前 lane 合并同一已发布 SHA、仅在自身工作树解决冲突并重新验收。重叠脏文件或进行中 merge/rebase 零写阻断，禁止 reset/stash/clean。`integrate-lane-to-dev` 只在唯一 integration 工作区先验真 bundle 与远端 parent，再本地 FF、admit/publish；只有远端读回 `after` 才以该次冻结的已发布 exact SHA 回同步。回同步执行与渲染共用该 SHA，只对「无进行中 merge/rebase、工作树干净或脏文件与本次 ff 不重叠、且是该 SHA 祖先」的 lane 本地 `--ff-only`，**不推**远端 `lane/*`；不提供先移动本地 ref 后报 push 失败的废弃 push 接口。分叉或重叠脏树只产出 `skipped_diverged` / `skipped_dirty_overlap`，由该 lane 自己的会话处理，任何通道都不得在他人工作树里自动 merge、覆盖或清理字节。
+- 同一 exact candidate 的 readiness receipt 与 Alpha/Beta `EnvironmentAcceptanceFact` 可被 lane 的后续 `make accept REUSE=1` 复用：复用只按 candidate commit/tree、ImpactPlan digest 与 receipt fingerprint 精确匹配，命中即跳过重跑并在 summary 标记 `reused`；任一输入漂移都必须重跑，不得按时间窗、分支名或「最近一次」复用。因 OPEN-006 类外部阻断未能签发 Alpha 事实时，保留首个 typed blocker，**不得**因此放宽裸推或在无 bundle 时移动 `origin/dev1.0`。
+
+<a id="req-003"></a>
+### REQ-003 最终组合候选、完整输入重验与消费边界
+
+- 单 lane 已验候选由 integration 原样 FF，只有 commit/tree/expected parent、scope/owner、内容及投影、config、测试/工具链、恢复基线、签名有效期均匹配时复用原 Alpha/Beta，不重新运行环境。多 lane 批量交付先显式授权一条现有汇总 lane，冻结参与本地 identity 的 exact SHA 并合并成最终 C，再执行 C 的 Alpha；来源均须为 C 祖先，冻结后 lane 前移不改变本批次来源，不读 `refs/remotes/<remote>/lane/*` fallback，不新增工作树或改变 scope owner。
+- A/B 的旧 bundle 不能合成 C 的通过结论；merge、冲突解决、rebase、squash、新修复或 parent/commit 改变，即使 tree 相同仍重验 Alpha。CAS loser 收到 `BUNDLE_STALE` 后须同步新 published parent、形成新候选并重验，不能改旧 bundle parent。integration 发现冲突回汇总 lane，不在发布时 merge/修改/重建源码；未参与的 lane 不因本批组合而重测。
+- Beta 在包含 Data milestone 的整条链均显式 opt-in：未选时只以绑定同 candidate/release 的既有政策 `not_required` 与 Alpha/内容前驱进入 Gamma，Gamma 自身完整内容、UAT、恢复/cleanup 检查不省略；不得冒充 Beta passed。选中失败阻断本次 accepted，不能自动降为未选；opt-out 是留存历史的新显式请求。由未选改选 Beta 时，只在完整 exact runtime 前驱仍可恢复时复用 Alpha 并补跑 Beta，否则重新验收，不把复用不可用当成功。
+- 默认可发布 source 检查、full required 与 admission 前纯预检遵循 [`local-continuous-integration` REQ-005](../../development-workflow-governance/local-continuous-integration/spec.md#req-005)；`no_live` 不产生 accepted/bundle。任何完整输入漂移拒绝旧事实，旧签名事实字节保持不变；自动 reuse 与显式 candidate 对 caller owner/claim 漂移作相同拒绝。
+- producer source provenance 与当前 consumer candidate/environment 身份独立验真；沿用 Data sealed reader 与 Ops handoff 原入口，不将 producer baseline/当前源码 HEAD 相等作为跨工作树内容消费前提，也不关闭 currentness。Data 独占来源原件、审核成品与版本化渲染投影，本 Story 不改来源 schema 或新增映射；所选 release、投影 schema/构建输入、API/Alpha/App 版本与媒体摘要是验收输入，任一变化使受影响事实失效。
+- Gamma 启动、签 IQF 与 promotion 前均对账已发布远端 dev exact head，不以本地未发布 dev 为基线。dev 前移后旧运行仅留诊断，不为新 head 签资格；仅重跑新 head 的 Gamma，不重复其已有效的 Alpha/可选 Beta。晋级窗口只串行共享 publish ref/环境/设备，不暂停六工作树编辑；MainSourceSeal 受管 backsync 不伪造 lane Alpha。
+- 服务端正式发布与 App 正式分发解耦、单机正式生产与首发恢复由集成/release owner 在现有合同同轨实现；服务闭包完整时不以无关 App 商店物料阻塞，模拟器仅提供真实 AUT 业务证据、不授予 App 分发资格。保留 main/stable、签名、selected Provider、法务、账号/数据隔离、容量、健康、备份恢复与灰度技术门；不要求额外第二主机、不声称 HA。内容首次无恢复基线与服务首次无 `ProdReleasedFact` 分别验真，不以封装 ID 不同证明不同内容恢复，不伪造 previous released；合同与真实证据未闭合前保持对应 OPEN。
 
 - integration 显式提供 `--merged-lanes` 表示本树多工作树合并验收：先验证每个来源head是候选祖先，再真实执行Alpha与Beta，不复用旧环境结果、不受Beta opt-in默认跳过影响；Gamma和生产由后继阶段真实执行。没有显式合并来源时不自动扫描上游；单树未变输入复用仍必须有可验签、未过期且覆盖输入一致的事实，跨candidate适用性由同一事实合同验证，不改写历史candidateId。相关跨候选复用与四环境完整后继仍由OPEN-011承接，不把入口放行当作全部闭环。
 
@@ -66,8 +79,8 @@
 - GIVEN 两个writer基于同一expected dev parent声明候选scope。
 - WHEN 它们构造并请求发布candidate。
 - THEN 不重叠整文件scope可分别形成只含本scope字节的exact commit；同路径、父子、rename/delete、共享生成物或Git ref竞争只有一个winner。
-- AND source及required Alpha/Beta事实完全匹配的candidate可由trusted publisher CAS写入dev；匹配integration worktree的普通认证push仅在before/after OID可证明non-force fast-forward时写入源码。direct push不产生任何集成、晋级、发布或Prod资格；parent漂移、未知dirty、越界字节、签名或cleanup缺失仍不得冒充publisher准入。
-- AND 本地 lane 或 integration 工作树 `make accept` 以当前政策允许的来源分支 head 为 exact candidate，main/未知分支/普通 detached 或 head 不匹配均拒绝；integration 未显式合并其他 lane 时来源列表为空，不伪造上游来源；该来源本身不授予环境资格。验收（scope 等于相对 baseline 的全部 changed paths，baseline 非祖先时拒绝），Alpha 真跑、Beta 只在 `--beta` 时真跑，否则无论集成深度为何都以 `ACCEPTANCE.BETA_OPTIONAL_BY_POLICY` 签 typed `not_required`；终态 `accepted` 产出 acceptance bundle，不 admit、不写 `dev1.0`；用户显式合并多 lane 时 `--merged-lanes` 中每个 lane 都必须是 candidate 祖先。
+- AND source及required Alpha/Beta事实完全匹配的candidate可由trusted publisher CAS写入dev；integration worktree 仅在 publisher 独立验真 publish admission 的自摘要、exact 前驱/签名/有效期、candidate/tree、before/after、规范路径与 remote 后，且 before/after OID 可证明 non-force fast-forward 时写入 `origin/dev1.0`。无 admission 的裸 `git push`、仅设置 `QWQ_ACCEPTANCE_PUBLISH=1`、伪造/过期/漂移 admission 的远端 OID 均不变。push 成功不自行产生集成、晋级、发布或 Prod 资格；parent漂移、未知dirty、越界字节、签名或cleanup缺失仍不得冒充publisher准入。
+- AND lane 工作树 `make accept` 以 lane head 为 exact candidate（scope 等于相对 baseline 的全部 changed paths，baseline 非祖先时拒绝），Alpha 真跑、Beta 只在 `--beta` 时真跑，否则无论集成深度为何都以 `ACCEPTANCE.BETA_OPTIONAL_BY_POLICY` 签 typed `not_required`；终态 `accepted` 产出 acceptance bundle，不 admit、不写 `dev1.0`；用户显式合并多 lane 时 `--merged-lanes` 中每个 lane 都必须是 candidate 祖先。
 - AND integration 工作区 `make integrate ACCEPTANCE_BUNDLE=…` 只导入并复核 bundle：manifest `bundleId` 与每个 store 文件的 exact digest 一致、create-once 导入、EAF 以仓内 keyring 验签且引用/candidate 绑定成立、`commit/tree == HEAD`、`expectedParent == 远端 before`；任一漂移 typed 拒绝（`BUNDLE_DRIFT` / `BUNDLE_CANDIDATE_MISMATCH` / `BUNDLE_STALE`），缺 bundle 为 `ACCEPTANCE_REQUIRED`，acceptance 专用输入出现在 integrate 为 `INPUT_INVALID`；integration 相位只有 preflight → import-bundle → admit（→ publish），不出现任何环境相位。
 - AND 携带 passed source fact 与 Alpha/Beta 事实的 admission 经 expected-old lease fast-forward push 后，读回 `after` 才写出 publish result，读回 `before` 为零写 STALE/不可用，读回 `other` 为 CAS 冲突且不得 stash、reset 或自动 merge。
 - AND 该 publish result 与 publisher CAS 结果同 schema，可作为 current dev head Gamma 与 `IntegrationQualificationFact` 的前驱；没有 admission 的裸直推、失败的 source fact 或环境事实缺失都不能进入 admission。
@@ -78,8 +91,8 @@
 
 - GIVEN current dev head已有匹配的IntegrationQualificationFact且main base稳定。
 - WHEN 创建`dev1.0 -> main` promotion并完成merge。
-- THEN 唯一required context只验branch/tree/evidence/approval/ruleset并生成MainSourceSeal，随后回同步（integration FF 通道或受管 system actor）以expected-before无force fast-forward更新dev；equal幂等，分叉或漂移零写阻断。
-- AND `dev1.0 -> main` 与 `lane/* -> dev1.0` 各有独立的 required check：前者由 `required_promotion_checks` 唯一声明并展开为 main ruleset 期望值，后者由 `required_integration_checks` 唯一声明（`04. Lane Gate`，见 `local-continuous-integration#gwt-005`）；两者不共享 workflow 或名字。reusable `system-backsync.yml` 只引用 GitHub Actions 合法上下文，其 `QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF` 由 `github.repository`/`github.ref` 拼装（当前无 caller，见 OPEN-004），静态门禁拒绝任何非 `container|services|status` 的 `job.*` 属性，actionlint 拦截解析期即失效的其余上下文/属性/类型错误。
+- THEN 唯一 required context 只验 branch/tree/evidence/approval/ruleset 并生成 MainSourceSeal，随后受管 system actor 消费该 exact seal，以 expected-before 无 force fast-forward 更新 dev；equal 幂等，分叉或漂移零写阻断。读回 dev 的 `after` 后，integration 与本地 lane 才能同步同一已发布 SHA。
+- AND 唯一 promotion required check 由 `required_promotion_checks` 声明并展开为 main ruleset 期望值。`04. Lane Gate`（`required_integration_checks`）的检查集合左移到 lane `make accept`，不再依赖 `lane/* -> dev1.0` PR；本地 accept/bundle/integrate/hook 拒绝缺项或失败，完整套件不重复执行。dev 旧 `04. Lane Gate` required check 可按授权撤除，已可达 dev 的远端 lane 可在保全增量后删除，无需等待 hosted 替代门。hosted 资格强制缺口保持 OPEN-004 `track`，普通授权凭据仍可 FF dev，不能声称服务端保证 Alpha；dev 禁删/禁 non-FF 与 main promotion 强制须独立权威读回。reusable `system-backsync.yml` 只引用 GitHub Actions 合法上下文，其 `QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF` 由 `github.repository`/`github.ref` 拼装；caller 与真实回执缺口见 OPEN-004，静态门禁拒绝任何非 `container|services|status` 的 `job.*` 属性，actionlint 拦截解析期即失效的其余上下文/属性/类型错误。
 
 <a id="gwt-003"></a>
 ### GWT-003 main可用源码与Prod版本选择分离
@@ -94,16 +107,35 @@
 
 - GIVEN `ProductVersionManifest` 已激活且 main 上存在 create-only RC `ReleaseTagAdmissionFact`。
 - WHEN 产品选择该 RC 进入资格工厂。
-- THEN 资格工厂必须绑定 package acceptance、provider、UAT 与 supply-chain 四类事实及 Android keystore，缺任一类不得签发 `QualificationFact`，也不得创建 stable tag。
+- THEN 资格工厂按 release owner 冻结的发布 scope 绑定 package acceptance、provider、UAT 与 supply-chain 事实；服务闭包完整时不以无关 App 商店物料/Android keystore 阻塞服务发布，App 分发仍须自身平台签名与真机/渠道资格。scope 合同未同轨完成前保持 OPEN-005，不能自行跳过旧校验；缺范围内任一 required 事实不得签发 `QualificationFact` 或 stable tag。
 - AND 晋级 ratchet 与 hosted CI 超时/缓存/soak 占用不得用假样本或放宽例外收紧；未达 `quwoquan_ops/policies/promotion_timing_ratchet.yaml` 声明的窗口与最低 eligible 次数前保持现行阈值。
 
 <a id="gwt-005"></a>
 ### GWT-005 lane 回同步三态零写与 candidate 事实复用
 
-- GIVEN 新 `dev1.0` 头已就位，六条 lane 分别处于「干净且为祖先」「脏文件与 ff 不重叠且为祖先」「脏文件与 ff 重叠」「已分叉」四种状态。
+- GIVEN `origin/dev1.0` 的已发布头已精确读回并冻结，六条 lane 分别处于「干净且为祖先」「脏文件与 ff 不重叠且为祖先」「脏文件与 ff 重叠」「已分叉」四种状态，本地 `dev1.0` 还可能含未发布提交。
 - WHEN 在 integration 工作区执行回同步。
-- THEN 前两种 lane 被 `--ff-only` 推进到新 `dev1.0` 并推送同名远端；后两种 lane 的 HEAD、index 与工作树字节零变化，结果分别为 `skipped_dirty_overlap` 与 `skipped_diverged`；渲染模式只输出命令不移动任何 ref。
+- THEN 前两种 lane 被本地 `--ff-only` 推进到同一已发布 exact SHA，绝不传播本地未发布 `dev1.0`，**不推**远端 `lane/*`；后两种 lane 的 HEAD、index 与工作树字节零变化，分别为 `skipped_dirty_overlap` 与 `skipped_diverged`；进行中 merge/rebase 也零写阻断。渲染模式只输出绑定同一 SHA 的命令，不移动任何 ref；废弃 `--push` 输入在任何本地 ref 写入前拒绝，不出现先 ff 后 `push_failed`。
 - AND 同一 exact candidate 在 lane 的第二次 `make accept REUSE=1` 复用 readiness receipt 与已签发 Alpha 事实并标记 `reused`；candidate commit、ImpactPlan digest 或 fingerprint 任一漂移都重跑，不复用。
+- AND `make accept` 默认 parent 是 `git ls-remote origin refs/heads/dev1.0` 的上次已发布 head；一次成功 publish 读回 `after` 后，下一次 readiness delta 排除已发布变化，integrate 不重跑 readiness。尚未发布的差异增长时 readiness 输入可以增长，不承诺常量范围或常量耗时；同 parent 的另一候选在他方发布后 stale，必须同步新 parent 并重新验收。
+
+<a id="gwt-006"></a>
+### GWT-006 最终组合重验、政策 Beta 与远端漂移
+
+- GIVEN A/B 基于同一已发布 parent，用户选定现有汇总 lane 并冻结参与本地 SHA。
+- WHEN 真实 Git 合并生成 C，再执行 C 的 accept 并由 integration 原样 FF。
+- THEN A/B bundle 均不能代表 C；C Alpha 执行一次，未选 Beta 执行零次且只产生匹配政策事实，选中则真跑一次、失败不 accepted；integration 环境调用零次。冻结后来源 lane 前移不改变本批 SHA，远端 lane fallback 不可达。
+- AND merge/rebase/squash 即使 tree 相同仍使旧 Alpha 不可复用；同候选完整输入匹配可复用，内容/投影/config/测试/工具链/恢复基线或有效期漂移拒绝旧事实，旧字节不变。Beta 从未选改选不把旧 not_required 当 passed，完整 runtime 前驱不可恢复时明确重验。
+- AND 两个不同 candidate/admission 竞争同 parent 的真实 CAS 只有一个成功，另一方 stale/parent 漂移拒绝且远端不被覆盖；重验只针对同步后的新候选。Gamma 期间 dev 前移使旧 IQF 不可签发或用于新 head；新 head 有效 Alpha/Beta 不重复。
+
+<a id="gwt-007"></a>
+### GWT-007 内容 provenance 与当前消费身份独立成立
+
+- GIVEN Data sealed 内容及其 exact Ops authority 与当前源码 candidate，二者可来自不同合法工作树。
+- WHEN 汇总 lane 验收或 integration/dev 进行 Gamma 环境消费。
+- THEN 分别校验 producer immutable provenance 与 current consumer owner/claim/candidate/config；同 SHA 他方 owner、直接 producer JSON、歧义 artifact、摘要/currentness 漂移均拒绝，不关闭 validate_current 或复制输出装身份。dev consumer 不能成为新增源码的 lane acceptance producer。
+- AND 单 exact handoff 唯一解析同 release attestation；内容 unchanged 不制造新 release，正常更新恢复到真实成功的不同内容基线；仅封装 ID/digest 不同而 cohort/对象相同不证明恢复版本不同，首次无基线须独立权威证明与合法恢复输入。
+- AND milestone 未选 Beta 的同 release Alpha→Gamma 有真实政策跳过与内容前驱并执行 Gamma 全部检查，不伪造 Beta passed；新 source/投影输入进入当前验收，Data 来源 schema 不在工程侧复制。服务 scope、App 分发与单机首发各由原 owner 以自身技术证据验收，不从本 GWT 源码通过推导下游完成。
 
 ## 6. 依赖
 
@@ -119,8 +151,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：仓内 decision-table 已覆盖普通 lane 同名 push、匹配 integration worktree 的 direct fast-forward push，以及可证明 system fast-forward backsync；尚缺真实 scoped candidate、trusted publisher CAS、`dev1.0 -> main` PR/check、promotion 后 system CAS backsync，以及 hosted 八条分支权威清单与干净 clone 复现回执。Hosted 仍需证明 non-fast-forward、delete/force 与 `main` direct push 保护，但 direct fast-forward dev push 不再定义为非法。`promotion_verify` 对 `integration_qualification.py` 的接线已收口：signer identity 的 canonical 真相源是 `quwoquan_ops/policies/evidence_signing_keyring.yaml`（Ed25519 公钥，见 [L2 DEC-010](../design.md#dec-010)），workflow 以 `--signing-keyring` 与四个 `--expected-*-signer-identity` 逐一传入，不再需要 verification key env 或 repository secret；`verify_workflow_cli_arguments.py` 已能静态展开该脚本常量循环内的 required 并对该调用判绿；workflow 里的 `QUALIFICATION_SIGNER_IDENTITY` / `ENVIRONMENT_SIGNER_IDENTITY` 字面常量由 `test_delivery_gate_signer_identity` 锁定为 keyring 已登记且 purpose 匹配的 identity 并逐一透传；`deploy-prod-auto.yml` / `release-qualification.yml` 的 `${{ github.run_started_at }}` 已改为 shell 侧 `date -u`。仍缺：真实 `dev1.0 -> main` PR/check 回执与 hosted readback 证据。
-- 完成判定：`GWT-001.t1..t2` 与 `GWT-002.t1..t2` 具备 decision-table local contract；`integration_qualification.py` 的合同测试覆盖 workflow 调用形态（keyring 验签）；当前最终 SHA 的 hosted readback 证明 lane PR/check、promotion PR/check、system actor、八条 refs 闭集以及 dev non-FF/force/delete 与 main direct-push 保护，真实 system backsync 证明 CAS 与 ref before/after。
+- 影响或价值：仓内 decision-table 已覆盖拒绝 lane 同名远端推送、无 admission 的 integration 裸 push 零写，以及可证明 system fast-forward backsync；尚缺真实 scoped candidate、trusted publisher CAS、`dev1.0 -> main` PR/check、promotion 后 system CAS backsync，以及 hosted 两条远端分支权威清单与干净 clone 复现回执。Hosted 仍需证明 non-fast-forward、delete/force 与 `main` direct push 保护；存量 `origin/lane/*` 的删除属另授权 hosted 操作。`promotion_verify` 对 `integration_qualification.py` 的接线已收口：signer identity 的 canonical 真相源是 `quwoquan_ops/policies/evidence_signing_keyring.yaml`（Ed25519 公钥，见 [L2 DEC-010](../design.md#dec-010)），workflow 以 `--signing-keyring` 与四个 `--expected-*-signer-identity` 逐一传入，不再需要 verification key env 或 repository secret；`verify_workflow_cli_arguments.py` 已能静态展开该脚本常量循环内的 required 并对该调用判绿；workflow 里的 `QUALIFICATION_SIGNER_IDENTITY` / `ENVIRONMENT_SIGNER_IDENTITY` 字面常量由 `test_delivery_gate_signer_identity` 锁定为 keyring 已登记且 purpose 匹配的 identity 并逐一透传；`deploy-prod-auto.yml` / `release-qualification.yml` 的 `${{ github.run_started_at }}` 已改为 shell 侧 `date -u`。仍缺：真实 `dev1.0 -> main` PR/check 回执与 hosted readback 证据。
+- 完成判定：`GWT-001.t1..t2` 与 `GWT-002.t1..t2` 具备 decision-table local contract；`integration_qualification.py` 的合同测试覆盖 workflow 调用形态（keyring 验签）；当前最终 SHA 的 hosted readback 证明 promotion PR/check、system actor、远端两条 refs 闭集以及 dev non-FF/force/delete 与 main direct-push 保护，真实 system backsync 证明 CAS 与 ref before/after。
 
 <a id="open-002"></a>
 ### OPEN-002 private-free GitHub 托管分支保护
@@ -128,7 +160,7 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 阻断边界：仅阻断 `formalProd` 与“GitHub 原生保护已闭合”声明；不阻断已由 Hosted API 精确证明的 promotion source validation。
+- 阻断边界：未证明 dev 禁删/禁 non-FF、main promotion 强制与正式 source/tag authority 时，仍阻断对应 `formalProd` 准出和“GitHub 原生保护已闭合”声明；专用 publisher/broker 尚未实现的 dev 资格强制仅归 OPEN-004 `track`，不额外阻断有效本地验收后的 dev 日常合入，也不替代任何真实生产技术前驱。
 - 影响或价值：仓内 hook/Actions 不能冒充服务端保护。当前 source admission 必须逐次从 Hosted API 证明 exact merge SHA、最终 `dev1.0` head、绑定该 head 的 approval、canonical required workflow run/attempt/check identity、当前 main reachability、repository default branch 与当前 workflow attempt；历史 bootstrap create、普通 lane push与integration worktree direct fast-forward push都缺唯一promotion binding且不具备release eligibility。Hosted ruleset仍须证明`dev1.0` non-fast-forward、force/delete与`main` direct push被阻断；合法matching integration fast-forward不再被定义为绕过publisher或非法更新。托管ruleset的适用条件、bypass actor与required check readback未精确闭合前，不能签发正式Prod。
 - 完成判定：`GWT-002.t1..t2` 与 `GWT-003.t1..t2` 的 GitHub refs、适用 ruleset/branch protection 与 system actor 权限均由托管 API readback 证明；在此之前 `hostedProtectionVerified=false / formalProd=false` 保持不变。
 
@@ -138,18 +170,18 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：六条固定 lane 已开放。retained worktree 的 mandatory fast-forward resync 已有执行面（`make lane-resync-execute` 与 `integrate-lane-to-dev` Skill，三态零写由 `GWT-005.t1` 绑定），但尚缺 hosted readback、六条 lane canary 与 integration/abort 终态证据；该观察证据不改变 lane→dev、main direct push、non-fast-forward、force/delete禁令，也不把integration direct fast-forward push升级为任何资格事实。
-- 完成判定：`GWT-001.t3`、`GWT-001.t4`、`GWT-005.t1` 持续由 local contract 绑定；hosted readback 证明 canonical active，六条 lane 各至少完成一次 canary，integration 或 abort 后均证明 worktree retained、lane fast-forward 到新的 `dev1.0`。
+- 影响或价值：六条固定 lane 工作树与本地 identity 已开放；远端 `lane/*` 已退役为 leftover，回同步只 ff 本地、不推远端。尚缺 hosted 删除存量 `origin/lane/*` 的 readback、六条 lane canary 与 integration/abort 终态证据；该观察证据不改变 main direct push、non-fast-forward、force/delete 禁令，也不把 admission publish 升级为任何资格事实。
+- 完成判定：`GWT-001.t3`、`GWT-001.t4`、`GWT-005.t1` 持续由 local contract 绑定；hosted readback 证明远端闭集仅 `dev1.0`/`main`，六条 lane 工作树 retained 且本地 fast-forward 到新的 `origin/dev1.0`。
 - 依赖：[`objective-execution` OPEN-002](../../development-workflow-governance/objective-execution/spec.md#open-002) 的六并发证据、[`local-worktree-lifecycle-governance`](../../system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md) 的 worktree 授权提醒、Delivery Gate exact candidate evidence。
 
 <a id="open-004"></a>
-### OPEN-004 受管 system backsync 与 hosted publisher broker 尚无执行面
+### OPEN-004 hosted 资格强制与受管 system backsync 执行证据缺口
 
 - 类型：`external_blocker`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：`dev1.0` 三条写入通道中，trusted publisher CAS 需要 hosted authenticated broker，受管 system backsync 需要专用 `SYSTEM_BACKSYNC_DEPLOY_KEY` 与 `system-backsync` Environment；两者当前都没有外部执行面。现行闭环全部由 integration 工作区 FF 通道承担（`make integrate` 发布、`make promotion-backsync` 回同步），reusable `system-backsync.yml` 保留合同但无 caller。`DEC-011` 把 `dev1.0` ruleset 设为 `required_status_checks=[04. Lane Gate]` 后，promotion 产生的 main merge commit 不带该 check，`make promotion-backsync` 的直推会被 ruleset 拒绝：回同步只能由专用 system backsync actor 以其自身 bypass 语义执行。`dev1.0` ruleset 上那条无规格来源的 `DeployKey`/`always` bypass（既不是该 actor，也让 `release-controller` 可写 key 获得强推能力）已由 admin 移除并以 `--require-bypass-observable` 读回证明（`hosted-integration-ruleset-receipt` evidenceDigest `sha256:d4021fe5c652bf482a8f1827da220b2f18cd678d54480539c9da30aff2b92fa7`，`bypassActorsObservable=true`），同时把 `04. Lane Gate` 设为 strict required check；`04. Lane Gate` 只读 governance job 的 readback 首次于 run `34078890252` 通过。本 OPEN 余下的是 system backsync actor 与 publisher broker 的执行面。
-- 完成判定：`GWT-001.t2` 的 publisher CAS 与 `GWT-002.t2` 的 system actor 回同步各有一次真实 hosted 执行回执，且与 integration FF 通道产生的 publish result / 回同步读回同 schema、同终态；system backsync actor 的 bypass 不得同时豁免 `non_fast_forward`/`deletion`（GitHub bypass 按 ruleset 整体生效，因此 `required_status_checks` 须放入独立 ruleset 并只给该 actor bypass），且 `04. Lane Gate` 的 ruleset readback 显式接受这一结构与该唯一 actor。
+- 影响或价值：尚缺隔离的专用 publisher/broker、hosted exact evidence 准入的外部执行面与负向拒绝回执；普通已授权写凭据仍可直接 FF dev，服务端不能证明 Alpha 必经。本地 accept/bundle/integrate/hook 仍强制完整验收和 admission，dev 旧 `04. Lane Gate` required check 按授权撤除，已可达已发布 dev 且增量已保全的远端 lane 可删除；这两类动作与日常有效本地合入均不等待 hosted 替代门。本项为显式接受的 `track` 风险，不把本地 PASS 或历史 strict-check receipt 冒充服务端资格强制。受管 system backsync 的专用身份、合法 caller 与真实 MainSourceSeal→dev 回执另须取证，缺失时只阻断该回同步动作/闭环声明，不连带阻断 dev 日常合入。
+- 完成判定：`GWT-001.t2` 有隔离 publisher/broker 的真实 hosted 准入与缺失/失败/伪造/漂移证据拒绝回执，证明普通写凭据不能绕过资格强制后才可关闭该风险；同一 candidate 完整套件仍只在 accept 执行一次。`GWT-002.t2` 另证明 system backsync 消费验真 MainSourceSeal、expected-before FF 与 before/after 读回；所有受管身份都不得绕过 dev `non_fast_forward`/`deletion` 或 main promotion 保护。生产仍保留 main/stable、签名物料、health、Provider 与回滚技术门，administrative 简化不能关闭这些未实测项。
 - 依赖：hosted broker 凭据与 URL、dedicated deploy key、`system-backsync` Environment、ruleset bypass actor 只登记该 deploy key。
 
 <a id="open-005"></a>
@@ -158,20 +190,20 @@
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：`06. RC Qualification Factory` 尚缺 package acceptance、provider、UAT、supply-chain 四类事实生产者与 Android keystore，因此不得签发 `QualificationFact` 或 stable tag。`deploy-prod-auto.yml` 的 job timeout 小于内部 deadline；soak 占用自托管 runner；ARM 上 QEMU 编 amd64；`validate-deploy` 重复 verify；`app_pipeline` 五个 macOS job 无缓存且 nonprod 产物不进 CMM；多次 Environment 审批串行。`promotion_timing_ratchet.yaml` 的窗口与最低 eligible 次数尚未满足，不得收紧阈值。
-- 完成判定：`GWT-004.t1` 的四类事实与 keystore 各有真实生产者与 hosted 回执；`GWT-004.t2` 的 ratchet 达到 `promotion_timing_ratchet.yaml` 声明的窗口与最低 eligible 次数后单调收紧一次，且 CI 超时/缓存/soak 占用不再用假样本或放宽例外。
+- 影响或价值：`06. RC Qualification Factory` 尚缺按发布 scope 绑定的 package acceptance、provider、UAT、supply-chain 真实事实与 service/App 解耦接线；Android keystore 缺口只归需要它的 App 分发范围。由集成/release owner 完成既有 request/material/qualification/stable/activation 合同同轨调整，服务 RC 先封存构建再验收，不形成构建前要求该构建验收事实的循环；未接线前不能自行跳过旧门或签发 `QualificationFact`/stable tag。单机正式生产与首发恢复另由原 owner 证明，不从 scope 调整推导生产通过。`deploy-prod-auto.yml` 的 job timeout 小于内部 deadline；soak 占用自托管 runner；ARM 上 QEMU 编 amd64；`validate-deploy` 重复 verify；`app_pipeline` 五个 macOS job 无缓存且 nonprod 产物不进 CMM；多次 Environment 审批串行。`promotion_timing_ratchet.yaml` 的窗口与最低 eligible 次数尚未满足，不得收紧阈值。
+- 完成判定：`GWT-004.t1` 的范围内四类事实各有真实生产者与 hosted 回执，service-only 无 App 商店物料可合法通过，未知 scope/缺服务物料/模拟器冒充分发资格均拒绝，App 分发所需 keystore 另有真实证明；`GWT-004.t2` 的 ratchet 达到 `promotion_timing_ratchet.yaml` 声明的窗口与最低 eligible 次数后单调收紧一次，且 CI 超时/缓存/soak 占用不再用假样本或放宽例外。
 - 依赖：[`OPEN-004`](#open-004)、GHCR `write:packages`。
 
 <a id="open-006"></a>
-### OPEN-006 本机没有满足当前 Data release 合同的 immutable release，模式二 Alpha 在 ship apply 处阻断
+### OPEN-006 exact 内容交接、恢复基线解析与真实 Alpha 验收未闭合
 
-- 类型：`external_blocker`
+- 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 阻断边界：只阻断 Alpha/Beta `EnvironmentAcceptanceFact` 的真实签发与其后的 publish admission；不阻断 L1 readiness、exact candidate、打包（`sourceRevision == candidate` 已证明）、`up`/`down` 与 Ed25519 keyring 验签本身。
-- 影响或价值：现役 DEC-041 已删除 release 类别，DEC-042 使用独立内容仓。旧 research/commercial/production attestation 与源码内旧 publish 包均不能充当当前输入；尚缺新协议下真实 candidate/rollback release、lane Alpha 消费与恢复回执。不得改旧 header、receipt 或摘要冒充新契约，也不以仅源码快进推导环境资格。
-- 完成判定：`GWT-001.t6..t7` 使用当前无类别、显式 cohort、完整 source/media/review/record 的两份 immutable release，绑定 `RELEASE_ATTESTATION`、`ROLLBACK_RELEASE_ATTESTATION` 与 candidate `RELEASE_HANDOFF_REF`，在 producer lane 完成真实 Alpha（Beta 仅 `BETA=1`）并形成 accepted bundle；`GWT-001.t9..t12` 再独立证明 integration 消费 bundle 发布并读回 after。普通源码通道不要求 bundle，但不关闭本环境资格缺口。
-- 依赖：`quwoquan_data/scripts/content/release/canonical/release_header.py` 的 `selectionScope ∈ {target_environment, explicit_cohort}`；empty_baseline writer 的恢复由 Data lane 决定，不阻断本 OPEN。
+- 阻断边界：缺有效内容输入、恢复基线或验收结果时，阻断对应 Alpha/Beta `EnvironmentAcceptanceFact` 与后续本地 publish admission；不据此否定独立 source、构建或 runtime health 结果，也不以它们代替 UAT/部署完成。
+- 影响或价值：Data producer handoff 已有 sealed 内容验真，但不是 Ops `handoff-ref-v1` authority；`release_runtime` 仍先验该 authority 且 `validate_current=True`，accept 仍分别要求 candidate/rollback attestation。尚缺 [DEC-014](../design.md#dec-014) 的单 exact handoff→同 release attestation 解析、从已验证成功发布/activation 记录冻结 rollback、producer source 与 consumer environment identity 分别验真的正式接线，以及真实 Alpha/UAT/恢复报告。不能把 producer finalize 当自动环境交接，不能关闭 current 校验或复制别的工作树输出来装身份；若跨工作树合同不兼容，由原 owner 在同一验真入口正式修正后再消费。
+- 完成判定：`GWT-001.t6..t7` 的 consumer 只需一个 exact Ops handoff，能唯一解析完整 source/media/review/record 对应的内容 release 与同 release attestation；正常内容更新恢复到 distinct 的已成功基线，首次权威证明无基线时才要求显式合法恢复输入。源码热修且内容未变时引用当前已发布 immutable 内容，解释为 `unchanged/no_data_change` 而不是新 release 或内容回滚完成，不强制造两份不同 Data release；不得扫描 latest 或将待验 candidate 当伪 rollback。直接 producer JSON、摘要/签名/currentness 漂移、恢复记录损坏、healthy 但 UAT 失败及 cleanup 失败均有拒绝证据，合法输入有真实 Alpha（Beta 仅 `BETA=1`）与既有 accepted bundle；`GWT-001.t9..t12` 再独立证明 integration publish/readback。新增设计未实现前保持本 OPEN，不自动产生语义 review/cohort，不放宽发布 scope 内的生产技术门。Beta 全链可选前驱、合法跨工作树消费、最终组合与 source/投影绑定仍须按 GWT-006/GWT-007 取得 current 合同及真实报告；设计冻结不关闭本 OPEN。
+- 依赖：Data producer handoff/release attestation owner、Ops handoff authority/current consumer owner、目标环境成功 activation/发布记录与原恢复入口；仅首次无基线的合法 empty-baseline 输入仍由现有 owner 提供，不新增总控或 receipt。
 
 <a id="open-008"></a>
 ### OPEN-008 lane acceptance bundle → integration admit/publish 尚缺一次真实 hosted 发布回执
@@ -179,7 +211,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：[L2 DEC-014](../design.md#dec-014) 的两段式已落地：`make accept` 在 lane 工作树终态 `accepted` 并写出 portable acceptance bundle；`make integrate ACCEPTANCE_BUNDLE=…` 只导入 bundle（create-once、digest 复核、keyring 验签、`expectedParent == 远端 before`）后 admit → publish，不再自己跑环境，也不再需要 Data release 输入，因此不会在 `dev1.0` 分支上撞到 ship handoff admission 的 `CANDIDATE.OWNER_DRIFT`。local contract 已覆盖 bundle round-trip、digest/manifest/commit/parent 漂移、缺 bundle 与 acceptance 专用输入的 typed 拒绝、integrate 相位闭集。尚缺的是一次真实闭环：同一 candidate 在 lane 工作树 `make accept` 产出 bundle，再由 integration 工作区消费并 fast-forward 发布到远端 `dev1.0`、读回 `after`。
+- 影响或价值：[L2 DEC-014](../design.md#dec-014) 的两段式已有部分源码与历史 local contract 证据，不能据此宣称 current admission 加固、Lane Gate 左移或真实发布已完成：`make accept` 在 lane 工作树终态 `accepted` 并写出 portable acceptance bundle；`make integrate ACCEPTANCE_BUNDLE=…` 只导入 bundle（create-once、digest 复核、keyring 验签、`expectedParent == 远端 before`）后 admit → publish，不再自己跑环境，也不再需要 Data release 输入，因此不会在 `dev1.0` 分支上撞到 ship handoff admission 的 `CANDIDATE.OWNER_DRIFT`。local contract 已覆盖 bundle round-trip、digest/manifest/commit/parent 漂移、缺 bundle 与 acceptance 专用输入的 typed 拒绝、integrate 相位闭集。当前新增的默认 scope/pure prevalidate、no_live 非发布终态、真实多 lane 合并/双候选 CAS、Beta 全链可选与远端 Gamma fencing 仍需 current 证据，GWT-006/GWT-007 与 local CI GWT-008 未取证不称完成；尚缺的是一次真实闭环：同一 candidate 在 lane 工作树 `make accept` 产出 bundle，再由 integration 工作区消费并 fast-forward 发布到远端 `dev1.0`、读回 `after`。
 - 完成判定：`GWT-001.t6..t12`——真实 lane `make accept` 的 summary（终态 `accepted`、`acceptanceBundle` 路径）与 integration `make integrate ACCEPTANCE_BUNDLE=… PUBLISH=1` 的 summary（相位 preflight → import-bundle → admit → publish，publish result 读回 `after`，`acceptanceBundle.bundleId` 等于 lane bundle）各一份，且远端 `dev1.0` 读回等于该 candidate。
 - 依赖：[L2 DEC-014](../design.md#dec-014)；[`OPEN-006`](#open-006) 的 Alpha 真实签发。
 
@@ -199,8 +231,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：模式二把 candidate scope 定义为相对远端 `dev1.0` 的全部 changed paths，因此每当本地 `dev1.0` 领先远端而未发布，下一次 `make integrate` 的 `readiness-fast` 都要覆盖累计差异；连续多次 integrate 运行中 changed paths 从数十涨到数百、`readiness-fast` 墙钟从数分钟涨到十余分钟并以 `INTEGRATION_RUN.L1_FAILED` 终止，进一步阻止发布、形成恶性循环。readiness receipt 与 Alpha 事实按 candidate 复用只消除同一 candidate 的重跑，不缩小 scope 本身。尚缺：candidate scope 相对「上一次已发布或已签发事实的 exact parent」的增量派生实现，以及证明 `readiness-fast` 输入规模不随未发布提交数单调增长的 local contract 验收证据。
-- 完成判定：`GWT-005.t2` 持续绑定；candidate scope 可以按「相对上一次已发布/已签发事实的 exact parent」增量派生且仍绑定 100% changed paths 的 workspace digests，或 integration 工作区在每次成功 admission 后即刻发布使远端不再落后；两者之一落地并由 local contract 证明 `readiness-fast` 输入规模不再随未发布提交数单调增长。
+- 影响或价值：accept 默认 parent 取上次已发布 `origin/dev1.0` head 是既有合同，不能把 parent 选取自身当成效率改进，也不能保证未发布差异增长时输入为常量。尚缺成功 publish 前后的 paths/墙钟对照，以及 [DEC-014](../design.md#dec-014) 的同 exact 构建产品 build-once、既有原始报告/bundle refs 去重消费与三层 summary 展示的实现和验收证据；不以新增 fact/receipt 包装代替执行成本下降。
+- 完成判定：`GWT-005.t2` 的 local contract 绑定默认远端 parent 与裸推零写，真实两次 accept 的 baseline/candidate/changed paths/墙钟报告和中间 publish `after` 证明排除已发布变化；构建日志/调用计数证明同 exact 产品只构建一次，平台/架构、环境相关编译输入或签名不同不假复用。源码热修且内容未变不生产伪新 Data release；单候选 summary 只用现有 readiness/sourceFact、environments/reports、publish/readback 展示 source/environment/deploy，保留原始报告与 bundle refs 的 schema/digest/signature/currentness/cleanup 校验，不增同义状态事实。healthy 而 UAT 失败不显示整体成功；未发布差异增长允许成本增长，未取得真实执行证据不关闭本 OPEN。
 - 依赖：[`OPEN-006`](#open-006) 解除后的真实 Alpha 签发；`quwoquan_ops/ci/scoped_candidate/` 的 parent 语义。
 
 <a id="open-011"></a>

@@ -32,7 +32,7 @@ Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-
 
 - 验证与影响面匹配，分开报告源码/契约、本地测试、编译/打包/安装/启动、runtime health、release/import/readback 和真实设备/UAT；上游 PASS 不代表下游闭环。
 - 任一 required 证据失败时保留首个 typed blocker，不用旧 receipt、旧 plan 或旧指纹冒充当前完成。
-- 开发期 POST 默认零 Reviewer，只报告命名 evidence；仅显式 `/review` 或准出（lane→`dev1.0` PR、handoff、release）派审，形态归 review Skill。
+- 开发期 POST 默认零 Reviewer，只报告命名 evidence；仅显式 `/review` 或准出（lane acceptance/integration 发布、handoff、release）派审，形态归 review Skill。
 - 无法证明时返回 `GATE_BLOCK`。失败门禁不包装为成功，也不因工作树其他红项隐藏本任务结果。
 
 ## 共享工作树与安全
@@ -46,9 +46,9 @@ Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-
 
 ## Git 不变量
 
-- 本地与远端只允许`dev1.0`、`main`与六条长期`lane/*`；lane只推同名lane。`dev1.0`只接受trusted publisher CAS、`integration/`匹配本地ref的non-force fast-forward push与managed system backsync三条通道，非快进、force/delete或来源不匹配一律阻断；`main`本地只读、禁止direct push，唯一promotion边为`dev1.0 -> main`；Prod只消费main-reachable stable tag AdmissionFact绑定的exact OCI digests。
+- 本地允许`dev1.0`、`main`与六条长期`lane/*`；六 lane 仅作检出/验收 identity，upstream 统一指向 `origin/dev1.0`，远端闭集只允许 `origin/dev1.0` 与 `origin/main`，lane 不推远端。本地受管入口对 `dev1.0` 只接受trusted publisher CAS、`integration/`持有 acceptance bundle 的non-force fast-forward publish与managed system backsync三条通道，无bundle的裸push、非快进、force/delete或来源不匹配一律阻断；`main`本地只读、禁止direct push，唯一promotion边为`dev1.0 -> main`；Prod只消费main-reachable stable tag AdmissionFact绑定的exact OCI digests。
 - 新建 linked worktree 或再次 clone 每次都须先取得用户明确授权，并以 `QWQ_WORKTREE_AUTHZ="<授权理由>" <command>` 执行。clone 后先运行 `make install-hooks`。
-- 裸push仅提交源码、不签发资格；带资格通道按 `daily-merge-release-strategy` REQ-002 执行 lane `make accept` → integration `make integrate ACCEPTANCE_BUNDLE=… PUBLISH=1`。Beta 仅 `BETA=1`，Gamma/生产后置。同步使用 `sync-lane-from-dev`、`integrate-lane-to-dev`；明确授权的仅源码合入不强制 bundle/admission。
+- 无验真 bundle/admission 不得按普通发布通道移动 `origin/dev1.0`，env=1 不证明 admission。带资格通道只读 `daily-merge-release-strategy` REQ-002；Lane Gate 检查左移 accept，日常 dev 由本地 accept/bundle/integrate/hook 强制；可按授权撤 dev 旧 `04` required check、删除已可达 dev 且增量保全的远端 lane，不等待专用 publisher/broker。服务端普通授权凭据仍可 FF，不能保证 Alpha；hosted 资格强制保持 OPEN-track，不阻有效本地合入，dev 禁删/禁非 FF 与 main promotion 强制不变。Gamma/IQF 后只经 `dev1.0 -> main` PR，MainSourceSeal 后只经受管 system backsync 回 dev。同步使用既有两个同步 Skill，目标固定为本轮已发布 `origin/dev1.0` exact SHA，不回落本地未发布 dev；回同步只 FF 安全本地 identity，不推 lane，不恢复 source-only 或 lane PR 依赖。
 - 只有用户明确要求时才创建提交；提交按 `commit` Skill 执行，不用 `--no-verify` 作为常规通道。
 
 ## 沟通

@@ -232,7 +232,7 @@ def static_checks(flags: dict[str, bool], paths: list[str] | None = None) -> lis
         else any(flags[f"has_{scope}"] for scope in ("app", "service", "data", "portal"))
     )
     if source_changed:
-        checks.append("code_health_delta_fast")
+        checks.extend(["code_health_delta_fast", "retired_terms_zero"])
     if flags["has_specs"]:
         checks.append("feature_tree")
     for scope in ("app", "service", "ops", "data"):
@@ -361,6 +361,13 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
         "test_local_worktree_lifecycle__gate__local_contract_test.py",
     )
     source_mappings = (
+        (
+            "quwoquan_app/scripts/runtime/architecture/verify_retired_terms_zero.py",
+            (
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_retired_terms_zero__gate__local_contract_test.py",
+            ),
+        ),
         ("quwoquan_ops/hooks/worktree_", worktree_lifecycle_tests),
         ("quwoquan_ops/hooks/post-commit", worktree_lifecycle_tests),
         ("quwoquan_ops/hooks/run_install_hooks.sh", worktree_lifecycle_tests),

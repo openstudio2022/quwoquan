@@ -12,7 +12,21 @@ source_categories:
   - docs
 classification:
   source_extensions: [.py, .go, .dart, .ts, .tsx, .js, .jsx, .swift, .java, .kt, .kts, .sh]
-  generated_markers: [/generated/, _generated.go, .g.dart, .g.go, .freezed.dart, /gen/, lib/l10n/app_localizations]
+  # 仅登记已有生成来源；outputs 精确取自 manifest，不依赖 generated header 或目录名。
+  generated_manifests:
+    - {path: quwoquan_app/tool/app_launch_contract_codegen/generated_manifest.json, root: '', generator: 'tools/codegen_app_metadata --app-launch-contract-only'}
+    - {path: quwoquan_app/tool/app_identity_codegen/generated_manifest.json, root: quwoquan_app, generator: 'tools/codegen_app_metadata --app-identity-only'}
+    - {path: quwoquan_app/tool/cloud_codegen/generated_manifest.json, root: quwoquan_app, generator: app-only-emitter}
+    - {path: quwoquan_app/tool/shell_navigation_codegen/generated_manifest.json, root: quwoquan_app, generator: tools/codegen_app_metadata}
+    - {path: quwoquan_app/tool/graphql_read_codegen/generated_manifest.json, root: quwoquan_app, generator: codegen_graphql_app_client}
+    - {path: quwoquan_app/tool/graphql_read_codegen/search_generated_manifest.json, root: quwoquan_app, generator: codegen_graphql_app_search_client}
+    - {path: quwoquan_service/generated/event_constants_manifest.json, root: quwoquan_service, generator: tools/codegen_event_constants}
+  # 旧生成入口的来源登记，不证明输出摘要一致或已重生成；report 必须单列未验证状态。
+  generated_exact_sources:
+    quwoquan_app/lib/l10n/app_localizations.dart: quwoquan_app/l10n.yaml
+    quwoquan_app/lib/l10n/app_localizations_en.dart: quwoquan_app/l10n.yaml
+    quwoquan_app/lib/l10n/app_localizations_zh.dart: quwoquan_app/l10n.yaml
+    quwoquan_service/runtime/observability/operation_privacy_generated.go: quwoquan_service/tools/codegen_operation_privacy/main.go
   vendor_markers: [/vendor/, /Pods/, /node_modules/, /.dart_tool/]
   test_markers: [/test/, /tests/, /RunnerTests/, /androidTest/, _test.go, _test.dart, _test.py, __local_contract_test.py, __api_integration_test.py, __user_acceptance_test.py]
   contract_markers: [/contracts/, /schema/, /schemas/, /metadata/]

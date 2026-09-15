@@ -1,26 +1,11 @@
 #!/usr/bin/env python3
-"""Fail-closed readback：证明 dev1.0 ruleset 真把 `04. Lane Gate` 设为 hosted required check。
+"""手动只读 dev 保护：唯一 active ruleset 仅含 deletion/non_fast_forward，无 bypass。
 
-触发范围：`.github/workflows/lane-gate.yml` governance job 在每个 `lane/* -> dev1.0` PR 上以
-只读 `github.token` 运行；本地可用 `GITHUB_TOKEN="$(gh auth token)"` 对真实仓库读回。
-它不接入 `gate_repo.sh`（需要 hosted API），其合同经 `make test-gate-companion-local-contract`
-进入 gate 链。
-
-阻断条件（任一即 `GATE_BLOCK`，lane PR 的 check 转红）：按 GitHub ref_name 语义
-（`~ALL`/`~DEFAULT_BRANCH`/fnmatch，exclude 优先）对 `refs/heads/dev1.0` 生效的 active branch
-ruleset 不唯一；`bypass_actors` 可见且非空；缺 `deletion`/`non_fast_forward`；出现 `pull_request`
-规则（会封死 daily-merge-release-strategy 定义的 integration fast-forward 通道）；
-`required_status_checks` 不恰为 `branch_policy.yaml#required_integration_checks`（GitHub Actions
-producer）、非 strict 或 `do_not_enforce_on_create` 不为 false。
-
-GitHub 只向对 ruleset 有 write 权限的调用者返回 `bypass_actors`；governance job 的只读
-`github.token` 读不到该字段。不可见时本脚本不假装已证明为空，而是在收据
-`ruleset.bypassActorsObservable=false` 如实留痕并打印到 stdout；bypass 为空的证明由 admin 侧以
-`--require-bypass-observable` 读回承担（不可见即阻断）。
-
-修复方式：每条阻断的 `recovery=` 直接给出要在 GitHub ruleset 上做的改动；本脚本不写任何
-hosted 配置，也不签发 release authority。main ruleset、approval 与 threads 的读回由
-`quwoquan_ops/ci/promotion_hosted.py hosted-authority` 在 03. Delivery Gate 内单轨承担。
+本地 accept/bundle/integrate/hook 强制验收；旧 Lane Gate required check 已按授权退役。
+普通已授权凭据可直接 FF dev，服务端 Alpha 资格强制属于 OPEN-track，不阻塞本地有效合入。
+本入口不检查 Alpha、不签发 admission，不调用检查套件或写 hosted 配置。
+只读 token 的 bypass 字段缺席/null 明确留痕；admin 用 --require-bypass-observable 证明为空。
+main promotion 与生产技术门仍由既有 promotion_hosted 单轨承担，不在此放宽。
 """
 from __future__ import annotations
 
@@ -51,8 +36,7 @@ RECOVERY_WRITE_TOKEN = "rerun_readback_with_ruleset_write_token"
 RECOVERY_PAGINATE = "reduce_rulesets_below_page_size_or_paginate_readback"
 RECOVERY_RULESET = (
     "configure the dev1.0 branch ruleset: exactly one active ruleset for refs/heads/dev1.0, "
-    "rules deletion + non_fast_forward + required_status_checks(strict, GitHub Actions context "
-    "from branch_policy.yaml#required_integration_checks), no pull_request rule, no bypass actors"
+    "rules deletion + non_fast_forward only, no required_status_checks or pull_request rule, no bypass actors"
 )
 
 
@@ -218,6 +202,8 @@ def _verify_bypass_actors(ruleset: Mapping[str, Any], *, branch: str, require_ob
     GitHub 只向对 ruleset 有 write 权限的调用者返回 bypass_actors；只读 token 下该字段缺席或为 null。
     """
     bypass_actors = ruleset.get("bypass_actors")
+    if bypass_actors is not None and not isinstance(bypass_actors, list):
+        raise _block(f"{branch} ruleset bypass_actors has invalid type", recovery=RECOVERY_RULESET)
     observable = isinstance(bypass_actors, list)
     if observable and bypass_actors != []:
         raise _block(
@@ -237,33 +223,10 @@ def _verify_bypass_actors(ruleset: Mapping[str, Any], *, branch: str, require_ob
 def _verify_required_checks(
     ruleset: Mapping[str, Any], *, branch: str, required_checks: tuple[str, ...],
 ) -> None:
-    required = _rule(ruleset, "required_status_checks").get("parameters") or {}
-    checks = required.get("required_status_checks") if isinstance(required, dict) else None
-    if (
-        required.get("strict_required_status_checks_policy") is not True
-        or required.get("do_not_enforce_on_create") is not False
-        or not isinstance(checks, list)
-    ):
-        observed_shape = {
-            key: required.get(key)
-            for key in ("strict_required_status_checks_policy", "do_not_enforce_on_create")
-        }
-        raise _block(
-            f"{branch} required-check protection is incomplete (strict + enforce-on-create required; "
-            f"observed {json.dumps(observed_shape, sort_keys=True)}, checks list {isinstance(checks, list)})",
-            recovery=RECOVERY_RULESET,
-        )
-    observed = {
-        str(item.get("context")): item.get("integration_id")
-        for item in checks if isinstance(item, dict)
-    }
-    expected = {name: GITHUB_ACTIONS_APP_ID for name in required_checks}
-    if observed != expected:
-        raise _block(
-            f"{branch} required checks must be exactly {sorted(expected)} produced by GitHub Actions "
-            f"(observed {sorted(observed)})",
-            recovery=RECOVERY_RULESET,
-        )
+    if required_checks:
+        raise _block(f"{branch} policy must retire required_integration_checks", recovery=RECOVERY_RULESET)
+    if _rules(ruleset, "required_status_checks"):
+        raise _block(f"{branch} must not require hosted status checks; acceptance is enforced locally", recovery=RECOVERY_RULESET)
 
 
 def _verify_ruleset(
@@ -294,13 +257,14 @@ def _verify_ruleset(
             recovery=RECOVERY_RULESET,
         )
     _verify_required_checks(ruleset, branch=branch, required_checks=required_checks)
+    if ruleset.get("rules") != [{"type": "deletion"}, {"type": "non_fast_forward"}] and ruleset.get("rules") != [{"type": "non_fast_forward"}, {"type": "deletion"}]:
+        raise _block(f"{branch} rules must contain only deletion and non_fast_forward", recovery=RECOVERY_RULESET)
     return {
         "id": int(ruleset["id"]), "name": str(ruleset["name"]), "branch": branch,
-        "requiredChecks": [
-            {"name": name, "integrationId": GITHUB_ACTIONS_APP_ID}
-            for name in required_checks
-        ],
-        "mergeExecutor": "integration_fast_forward_push",
+        "requiredChecks": [],
+        "mergeExecutor": "ordinary_authorized_fast_forward_push",
+        "deletionProtected": True,
+        "nonFastForwardProtected": True,
         "bypassActorsObservable": bypass_observable,
         "updatedAt": str(ruleset.get("updated_at") or ""),
     }
@@ -324,13 +288,7 @@ def verify_hosted_integration_ruleset(
     *, repository: str, token: str, policy: BranchPolicy | None = None,
     require_bypass_observable: bool = False,
 ) -> dict[str, Any]:
-    """只读回 dev1.0 ruleset：lane PR 的 required check 必须由 hosted 强制。
-
-    `branch_policy.yaml#required_integration_checks` 只是仓内声明，若 hosted ruleset 未把
-    同名 check 设为 required_status_checks，lane PR 的复算就只是可见证据而非阻断。
-    收据顶层 `requiredIntegrationChecksEnforced` 只证明 required_status_checks 规则形状；
-    bypass 为空的证明以 `ruleset.bypassActorsObservable` 为界，不可见时不在本收据内。
-    """
+    """读回授权后的 dev 最小保护；不将空 required check 集合说成 Alpha 强制。"""
     if not repository or "/" not in repository or not token:
         raise _block("repository and authenticated GitHub token are required")
     branch_policy = policy or load_policy()
@@ -345,7 +303,10 @@ def verify_hosted_integration_ruleset(
         "schema": RECEIPT_SCHEMA,
         "repository": repository,
         "branch": branch,
-        "requiredIntegrationChecksEnforced": True,
+        "requiredIntegrationChecksEnforced": False,
+        "hostedAlphaEnforced": False,
+        "acceptanceEnforcement": "local_accept_bundle_integrate_hook",
+        "hostedPublisherEnforcement": "open_track_not_blocking_local_dev",
         "ruleset": ruleset,
     })
 

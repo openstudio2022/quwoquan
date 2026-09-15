@@ -20,11 +20,10 @@ const list = (params: URLSearchParams, key: string): string[] =>
 
 export function parseFilters(search: string): WorkbenchFilters {
   const params = new URLSearchParams(search);
-  const legacyTag = params.get('tagRef');
   return {
     contentFormIds: list(params, 'contentFormIds'),
     sourcePlatforms: list(params, 'sourcePlatforms'),
-    tagRefs: list(params, 'tagRefs').concat(legacyTag ? [legacyTag] : []),
+    tagRefs: list(params, 'tagRefs'),
     tagMatch: params.get('tagMatch') === 'direct' ? 'direct' : 'subtree',
     versions: list(params, 'versions'),
     humanStates: list(params, 'humanStates'),

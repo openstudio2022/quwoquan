@@ -19,7 +19,7 @@
 - 基于 canonical EvidenceFingerprint 的精确输入缓存、回执新鲜度与资源互斥。
 - Go、Python、Dart、Portal 与 spec/contract 的本地影响规划和执行。
 - 仓库级 workflow lint 配置由本 Story 唯一拥有，作为 canonical workflow 静态检查的受版本控制输入。
-- code-health delta 在 L0 快判、L1 完整检查、PR clean candidate 与 scheduled report-only 间的分层调度。
+- code-health delta 在 L0 快判、L1 完整检查、accept exact candidate 与 scheduled report-only 间的分层调度。
 
 ### Out of Scope
 
@@ -49,22 +49,34 @@
 <a id="req-003"></a>
 ### REQ-003 Git hook 只做边界检查，回执在准出消费
 
-- 硬门只在准出（lane→`dev1.0` PR、交接、发布）。本地 git hooks 不消费 `scope_ready`/`release_ready` 回执，也不自动运行全面测试：pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），失败时只给出唯一恢复命令；pre-push 只运行 branch policy：普通 lane push 只校验同名远端，不要求同时推送全部 lane；匹配 `integration/dev1.0` 的普通认证 direct push 仅在 local/remote 均为 `dev1.0`、update line before/after OID 存在且 Git ancestry 证明 non-force fast-forward 时放行，相等幂等；缺 OID、authority 不可用、非快进、force/delete、来源不匹配、lane→dev、`main` direct push 或未知 ref 全部阻断。trusted publisher CAS 与可证明的受管 system fast-forward backsync 继续放行。
+- 硬门只在准出（lane `make accept` → integration bundle 发布、交接、发布），不再依赖 lane PR。本地 git hooks 不消费 `scope_ready`/`release_ready` 回执，也不自动运行全面测试：pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），失败时只给出唯一恢复命令；pre-push 只运行 branch policy，拒绝任何远端 lane 创建/更新。匹配 `integration/dev1.0` 只有持有已验真的 exact publish admission、本地/远端均为 `dev1.0`、update line before/after OID 存在且 ancestry 证明 non-force fast-forward 才放行，相等幂等；仅 env=1 不能证明 admission，最终 publisher 仍独立复验。缺 admission/OID、authority 不可用、非快进、force/delete、来源不匹配、lane→dev、`main` direct push 或未知 ref 全部阻断。受信 publisher 与消费 MainSourceSeal 的受管 system backsync 各按 canonical 资格边界执行，不存在 source-only 旁路。
 - `--local-commit` 必须只校验当前 HEAD 非 detached、Git authority 可读且分支属于 `allowed_local_branches`，不得枚举或治理其他 local/remote-tracking refs；无参数默认模式继续执行全 ref 治理，`--pre-push` 必须消费 canonical integration update contract。L0 `commit_gate.sh` 的提交前 branch 检查也必须使用 `--local-commit`。
-- `sourceReadiness.status=scope_ready|release_ready` 仍由显式 CLI 产出并绑定精确输入 fingerprint，供 Skill 报告与交接消费；integration worktree direct fast-forward push 不生产 readiness 或资格事实，`integrationEligibility` 只能由 exact candidate + Alpha/Beta admission 建立，`promotionEligibility` 只能由 current dev head 的 IntegrationQualificationFact 建立，GitHub Delivery Gate 只验后者的不可变身份。
-- L0 的 code-health 快判不得网络安装工具且以 p95 30 秒为目标；L1 执行完整 candidate delta；scheduled 全仓热点只 report-only。指标与阈值唯一引用系统架构能力的 `REQ-008` 与 `DEC-031`，本 Story 不复制。`lane/* -> dev1.0` 的 hosted 复算由 `.github/workflows/lane-gate.yml`（`04. Lane Gate`）承担：它在 exact PR head 上重建 ImpactPlan、校验 changed boundary、以 `verify_code_health_delivery.py` 绑定同一 `changed_paths_digest`/`impact_plan_digest` 复算 `code-health-delta`，并分片执行 `quwoquan_ops/tests/local_contract/**`；该 check 名称由 `branch_policy.yaml#required_integration_checks` 唯一声明，与 `required_promotion_checks` 互斥；该声明是否真被 hosted 强制，由同一 workflow 的 governance job 从 dev1.0 ruleset 读回证明（`GWT-005`），不由仓内文件自证。本地 PASS 不替代该 hosted 复算。
+- `sourceReadiness.status=scope_ready|release_ready` 仍由显式 CLI 产出并绑定精确输入 fingerprint，供 Skill 报告与交接消费；integration worktree 的验真 admission publish 不重新生产 readiness 或环境事实，`integrationEligibility` 只能由 exact candidate + Alpha/Beta admission 建立，`promotionEligibility` 只能由 current dev head 的 IntegrationQualificationFact 建立，GitHub Delivery Gate 只验后者的不可变身份。
+- L0 的 code-health 快判不得网络安装工具且以 p95 30 秒为目标；L1 执行完整 candidate delta；scheduled 全仓热点只 report-only。指标与阈值唯一引用系统架构能力的 `REQ-008` 与 `DEC-031`，本 Story 不复制。既有 `.github/workflows/lane-gate.yml`（`04. Lane Gate`）的静态治理、ImpactPlan/changed boundary、canonical full `code-health-delta` 与 ops local_contract 检查集合必须左移 lane `make accept`，绑定同一 exact candidate 与 `changed_paths_digest`/`impact_plan_digest`，复用 canonical planner/runner 去重执行，缺项或失败不得 accepted。日常 dev 由本地 accept/bundle/integrate/hook 验真 current exact source/EAF/admission，不重跑完整套件，不依赖远端 lane 或 lane PR。dev 旧 `04. Lane Gate` required check 按授权撤除，已可达 dev 且增量保全的远端 lane 可删除；专用 publisher/broker 和 hosted 资格强制保持 daily-merge OPEN-004 `track`，不阻塞该本地通道，也不是远端拓扑调整的先决条件。普通授权凭据仍可服务端 FF dev，不能保证 Alpha；dev 禁删/禁 non-FF 和 main promotion 强制继续权威读回，required 集合仍只读 canonical policy。
 - 影响分类的边界：`classify_impacts` 只把 changed paths 分类成"触及了哪些运行时 scope"的事实，未知根级路径的运行时触及为零；把它升到 `R3` 并要求全 scope 是 Delivery 的 fail-closed 决策，只在 `build_delivery_impact_plan` 施加。本地 L-1/L0 复用同一分类做秒级 focused 反馈，不得为陌生根文件扇出全部 scope。
 - staged 中某个已修改文件继续改变内容时，即使 `git status` 文本不变，也必须判定旧回执失效。
+- push readiness（包括 `level=fast`）的 code-health 必须以 actual push before/after 精确 OID 执行 canonical `full` 报告；不可用 capsule 的 HEAD/index/dev1.0 自比较或 `auto` 代替。staged 仍以 HEAD→index 执行 `fast`。报告与 receipt 必须绑定同一 base/head/tree、完整 changed paths 与执行 mode；非空源码变化不得空扫描，纯非源码变化可以有零生产源码计量，但必须保留真实变化范围。
+- 公共 source fact producer 必须读取真实 readiness receipt，核对自身终态、exact candidate base/head/tree/paths、全部 required check 与内嵌 code-health 子报告（含 digest、终态与 full 模式）；调用方传入 `status=passed` 不构成证据。失败回执、伪 passed wrapper、错 candidate、漏范围、缺健康子结果或空源码扫描均拒绝签发 passed fact。
+- 已有 ops `local_contract` companion、仅依赖源码字节、无需网络/编译器/设备/环境、fail-closed 且不增长豁免、实测可容纳于现有 L0 预算的晚发现扫描，必须左移到显式 L0，并由同一 check id/命令进入 local readiness；不扩大 Git hook 职责，不把 code-health 快判的 30 秒目标解释成整套 L0 预算。`retired_terms_zero` 在`quwoquan_app/`、`quwoquan_service/`、`quwoquan_data/`、`quwoquan_ops/` 四棵工程树变更时选中，扫描范围与检测语义仍归现有扫描器；fast/scope/release 在编译前消费相同检查，失败不生成 PASS。`gate_repo.sh` 在合法 scope/phase 参数校验后、重型治理/测试和工具链检查前执行一次该扫描，不再放在 `run_app`；该 companion 随 Lane Gate 检查集合在 accept 执行，hosted 只验 exact 结果，不新增第二个 hosted 扫描入口。
 
 <a id="req-004"></a>
 ### REQ-004 App 可编译、可启动、内容可访问是 `app` scope 的基础准入事实
 
-- 只要 `app` 进入 ImpactPlan scopes，每一级 readiness（含 integrate 默认的 `fast`）都必须真实编译 App：darwin 主机执行 `scope_build:app-compile-ios-simulator`（`flutter build ios --simulator --debug --flavor nonprod --no-pub --no-codesign`），所有主机执行 `scope_build:app-package-smoke`（`flutter build apk --debug --flavor nonprod --no-pub`）。两者都以裸 SDK 直接构建：Debug-nonprod 的 trust 与 alpha 供给由 [`environment-topology-and-packaging` REQ-003](../../runtime-config/environment-topology-and-packaging/spec.md#req-003) 的构建期自供给在构建阶段现场签发，readiness 不注入 handoff、不依赖 PATH facade，也不得为此放宽 trust gate 或新增 skip 条件。`fast` 的超时上限为此抬到 900 秒；Android 构建仍要求 Gradle 依赖可解析（联网或 `app-dependency-sync` 快照），解析失败按 typed blocker 记账，不得静默跳过。
+- 只要 `app` 进入 ImpactPlan scopes，每一级 readiness（含显式 `fast`；可发布 accept 默认 `scope`）都必须真实编译 App：darwin 主机执行 `scope_build:app-compile-ios-simulator`（`flutter build ios --simulator --debug --flavor nonprod --no-pub --no-codesign`），所有主机执行 `scope_build:app-package-smoke`（`flutter build apk --debug --flavor nonprod --no-pub`）。两者都以裸 SDK 直接构建：Debug-nonprod 的 trust 与 alpha 供给由 [`environment-topology-and-packaging` REQ-003](../../runtime-config/environment-topology-and-packaging/spec.md#req-003) 的构建期自供给在构建阶段现场签发，readiness 不注入 handoff、不依赖 PATH facade，也不得为此放宽 trust gate 或新增 skip 条件。`fast` 的超时上限为此抬到 900 秒；Android 构建仍要求 Gradle 依赖可解析（联网或 `app-dependency-sync` 快照），解析失败按 typed blocker 记账，不得静默跳过。
 - lane 工作树 `make accept` 的 Alpha App 准入先执行 `alpha.offline-android` 与 `alpha.offline-ios`：显式指定不同的 Android emulator 与 iOS simulator，绑定同一 exact candidate，经 canonical `stackctl app-content-uat --content-source bundled_snapshot --uat-profile rehearsal` 真实启动并完成每端 13 个必需页面用例，共 26 份 raw `ReadinessCaseResult`。每份结果必须有 exact artifact、device、launch、snapshot、native execution 与 screenshot 闭包，保持 `nonPromotable=true`；日志终态、单端成功、planned/dry-run 或缺失/漂移闭包均不得替代双端矩阵。服务环境变更前必须校验该离线证据轴。
+- 双端离线编排不得因首端失败而短路另一端；每端保留实际 phase、命令 result 与已有 receipt，缺报告不得覆盖命令 payload 的 `firstBlocker`。两端尝试后仍抛出首个异常并保留原 typed blocker；另一端成功不使离线轴通过，任何端失败都不得签发 Alpha fact 或 acceptance bundle。裸 `flutter run` 启动与页面 UAT 是独立证据，本编排不补造未执行的裸 SDK PASSED。
 - Alpha API 轴独立执行：`health` 之后、同一 runtime 仍在线时，`alpha.content-readback` 经 Alpha 网关读取首页 feed（`GET /content/feed?sort=recommend&channelId=recommend`）与视频书（`GET /content/feed?identity=work&type=video`），要求 HTTP 200 且集合非空，并产生独立 `content-readback:home-feed+video-book` raw result。双端 26 raw 与独立 API 证据一起进入 Alpha `EnvironmentAcceptanceFact.caseResultRefs`，互不替代；设备不可用、离线闭包失败或任一 API readback 失败均为 typed blocker，不以服务 health、facade status 或旧 receipt 冒充通过。
 - `make accept` / integrate 汇总中的 `wallClockSeconds` 以顶层单次执行的 monotonic 起止差计量，包含退出前的清理；嵌套 phase 只用于诊断，禁止累加其 duration 冒充总耗时或预算。
 - smoke/integration 的环境巡检消费 [`config-and-reliability-governance` REQ-002](../../../platform-ops-governance/config-and-reliability-governance/spec.md#req-002) 的完整 runtime scope，不把正式分发材料作为日常准入前提；release profile 与显式 all/release/distribution 的严格判据不变。
 - 数据工程 release 进入环境的 handoff 准出必须引用同一 candidate 的 App readback evidence ref；"服务健康"或"release-readiness PASS"都不能单独证明用户可见内容可访问。
+
+<a id="req-005"></a>
+### REQ-005 可发布验收默认完整 scope，预检与 admission 同一纯校验
+
+- `make accept` 与 CLI 默认 `scope`，产生与最终 admission 一致的 `local_readiness_scope` source fact；仅 `fast_green`、改写 fact kind、required 缺项/失败、`deferred` 非空或缺有效 Review consolidation 都不得 accepted。完整 Lane Gate 与 canonical full Code Health 在同一 exact candidate 上去重执行，开始 Alpha 前拒绝已可判定的 source/Review 缺口。
+- `--validate-bundle-only` 与正式 admission 复用同一纯验真逻辑，除 bundle 摘要、签名与 candidate/parent 外，检查完整 scope receipt、required checks、Review 及 Alpha/Beta 前驱；缺 scope 的 fast-only bundle 在任何本地 HEAD/index/WIP 变化前拒绝。预检不 import、不签 admission、不移动 ref；正式发布仍重新复核，不能由预检成功推导发布成功。
+- `no_live` 仅是 ImpactPlan 的免环境诊断结果，不是可发布终态；无 passed Alpha 就不得 `accepted`、bundle 或 integration eligibility。显式 fast/历史 baseline 诊断与完整可发布验收分开报告，不用成功退出掩盖没有发布后继。
+- 显式 candidate 与自动 reuse 使用同一 current caller owner/claim 检查；同 SHA 不等于同 owner。生产来源 provenance 与当前 consumer 身份分别验真，不放宽 `validate_current`，不把 dev consumer 加入源码 producer lane 闭集。
 
 ## 4. 契约引用
 
@@ -98,9 +110,9 @@
 
 - GIVEN 开发者在 lane worktree 上暂存改动并提交或推送。
 - WHEN pre-commit 或 pre-push 运行。
-- THEN pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），pre-push 只运行既有 `--pre-push` branch policy；普通 lane push 不要求 all lanes，匹配 integration worktree 的 `dev1.0 -> dev1.0` non-force fast-forward direct push 与可证明的 system fast-forward backsync 可通过，非快进/delete/force、lane→dev和main direct push被拒绝；两者都不读取 readiness 回执，秒级完成。
+- THEN pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），pre-push 只运行既有 `--pre-push` branch policy；远端 lane 创建/更新均拒绝，匹配 integration worktree 且持有验真 admission 的 `dev1.0 -> dev1.0` non-force fast-forward publish 与消费 MainSourceSeal 的受管 system backsync 可通过，而仅 env=1、裸 push、非快进/delete/force、lane→dev 和 main direct push 被拒绝；两者都不读取 readiness 回执，秒级完成。
 - AND 合法 current lane 即使存在非法陈旧 local/remote-tracking refs 也通过 `--local-commit`；非法当前分支、detached HEAD 或 Git authority 不可读必须失败；无参数默认模式仍拒绝额外 refs。
-- AND 任一边界检查失败都阻断并只返回一个稳定 recovery。hook 不读取 readiness receipt、也不输出 readiness PASS，缺少 `scope_ready`/`release_ready` 不构成 lane 提交或推送的阻断理由。
+- AND 任一边界检查失败都阻断并只返回一个稳定 recovery。hook 不读取 readiness receipt、也不输出 readiness PASS，缺少 `scope_ready`/`release_ready` 不构成 lane 本地提交的阻断理由，但不解除远端 lane 写入禁令或 admission 要求。
 
 <a id="gwt-004"></a>
 ### GWT-004 hosted 复算只对 exact dev1.0 快进范围发布 typed fact
@@ -112,15 +124,42 @@
 - THEN fact 只是 report-only 事实（`blocksPush=false`），不拦截已发生的 push；是否进入 promotion `required_evidence_refs` 由交付链 owner 单独裁决，本 Story 不据此声称集成准出。
 
 <a id="gwt-005"></a>
-### GWT-005 lane PR 的 hosted 复算是 fail-closed 的 required check
+### GWT-005 accept 完整执行 Lane Gate，hosted 保证范围如实读回
 
-- GIVEN 一个 `lane/* -> dev1.0` 的 Pull Request，其 exact head 与 merge-base 可从 Hosted 事件精确读回。
-- WHEN `04. Lane Gate` 在该 PR 上执行。
-- THEN 它只由 `pull_request: branches: [dev1.0]` 触发，在 exact PR head 的 clean checkout 上重跑 branch/supply-chain/workflow/artifact/脚本治理与 Feature Tree；ImpactPlan 由 `detect_ci_impacted_scopes.py` 以 `--execution-profile pr` 生成并经 `--validate-impact-plan` 与 `verify_ci_changed_boundary.py` 四个 required 参数校验；`code-health-delta` 以 `verify_code_health_delivery.py` 绑定同一 `changed_paths_digest` 与 `impact_plan_digest` 复算；`quwoquan_ops/tests/local_contract/**` 经 `delivery_gate_data_shard.py --scope ops` 取模分片执行。
-- AND `lane_gate_summary` 以 `always()` 汇总且对全部三个 job 只接受 `success`；任一 job 失败、`code-health-delta` 返回 `GATE_BLOCK`、或分片为空时该 check 失败，PR 不可合入。GWT-004 的 push 后复算是 report-only 事实，不替代本 check。
-- AND 该 check 名称与 `branch_policy.yaml#required_integration_checks` 唯一声明一致，与 `required_promotion_checks` 不共享 workflow 或名字；job 间不通过 Actions artifact 交换结果，digest 在需要处就地重算。
+- GIVEN 本地 lane 的 exact candidate 与上次已发布 `origin/dev1.0` parent，且没有远端 lane 或 lane PR 作为前驱。
+- WHEN lane 执行 `make accept`，随后 integration 消费其 bundle 请求发布。
+- THEN accept 在同一 exact candidate 上执行 branch/supply-chain/workflow/artifact/脚本治理与 Feature Tree；canonical ImpactPlan 与 `verify_ci_changed_boundary.py` 校验同一 before/after 的完整 changed paths；`verify_code_health_delivery.py` 绑定同一 `changed_paths_digest`/`impact_plan_digest` 执行 full delta；ops local_contract 经 canonical 分片器执行。相同检查 id/command 与 exact 输入去重，不重复完整套件；宿主能力缺口仍保持 OPEN-004，不能以空分片或静默排除伪装完成。
+- AND required 检查缺项、失败、`GATE_BLOCK` 或应非空的分片为空时拒绝 accepted/source PASS；本地 integrate/hook 验 current exact 证据闭包、签名/有效期、expected parent 与身份，缺失/失败/伪造/漂移事实拒绝受管发布，但不把它外推为普通授权凭据的服务端 FF 也会被拒绝。GWT-004 push 后 report-only fact 不替代本准入，开发机自报 success 也不能替代服务端保护。
+- AND integration 与 promotion check 的名称/职责只读 `branch_policy.yaml` 各自 required 集合，不共享第二真相源；按授权撤除 dev 旧 `04. Lane Gate` required check，可达 dev 且增量已保全的远端 lane 可删除，不等待 hosted 替代门。专用 publisher/broker 未接线保持 daily-merge OPEN-004 `track`，不阻塞日常本地合入，不恢复 lane PR 依赖，也不保证服务端 Alpha 必经。
 - AND workflow 对仓内 Python CLI 的每次直接调用都必须覆盖该脚本全部常量 required 选项（含 `for x in <字符串常量元组>` 内 f-string 声明的成组 required，静态展开后比对）；`verify_workflow_cli_arguments.py` 在 L0 只对本次 staged 的 workflow 判定、在 `gate_repo.sh` 全量判定，漏传即 `GATE_BLOCK`。任一 step 在自身 `run`/`env`/`with` 中引用 `steps.<自身 id>.outputs` 由 `verify_github_supply_chain.py` 静态阻断（表达式在 step 开始前求值，恒为空串）。
-- AND 仓内 `required_integration_checks` 声明不能自证 hosted 强制：governance job 以只读 `github.token` 运行 `verify_hosted_integration_ruleset.py`，读回全部 ruleset（列表满一页即阻断，不静默截断）与 repository `default_branch`（读不到即阻断），按 GitHub ref_name 语义判定唯一对 `refs/heads/dev1.0` 生效的 active branch ruleset：`~ALL`、`~DEFAULT_BRANCH`、GitHub 方言 fnmatch（`File::FNM_PATHNAME`：`*`/`?` 不跨 `/`，`**/` 匹配任意层级，`[...]` 按字面），exclude 优先——字面 include 比对或 Python `fnmatch` 都会漏掉以 `refs/heads/**/*` 等通配命中并带 `pull_request` 规则的影子 ruleset；要求该唯一 ruleset 的 `ref_name` 恰为 `{include:[refs/heads/dev1.0], exclude:[]}`、`required_status_checks` 恰为 `04. Lane Gate`（GitHub Actions producer）、`strict_required_status_checks_policy=true`、`do_not_enforce_on_create=false`、含 `deletion` 与 `non_fast_forward`、`bypass_actors` 可见时为空、且**没有** `pull_request` 规则（该规则会封死 `daily-merge-release-strategy` 定义的 integration fast-forward 通道）；任一不满足即 `GATE_BLOCK`，本 check 转红，且每条阻断的 detail 文本唯一指向该失败形状并带 observed 值。GitHub 只向对 ruleset 有 write 权限的调用者返回 `bypass_actors`，只读 `github.token` 读不到该字段：不可见不视为已证明为空，readback 只在字段可见且非空时阻断，并在收据以 `ruleset.bypassActorsObservable` 如实标记、同时打印到 stdout；bypass 为空的证明由 admin 侧以 `--require-bypass-observable`（不可见即阻断，recovery 为换 ruleset write 权限 token）读回承担：在每次 `dev1.0` ruleset 变更后与每次 promotion 前执行，收据落 `.qwq_output/env/repo/runs/lane-gate/hosted-integration-ruleset-admin.json`，其 `evidenceDigest` 是"bypass 为空"这一事实在文档中唯一可引用的证据；不得据此给 governance job 提权。readback 收据 schema 为 `hosted-integration-ruleset-receipt`（字段 `branch`、`requiredIntegrationChecksEnforced`、`ruleset.requiredChecks`、`ruleset.mergeExecutor=integration_fast_forward_push`、`ruleset.bypassActorsObservable`、`evidenceDigest`），其中 `requiredIntegrationChecksEnforced` 只证明 required_status_checks 规则形状、不含 bypass 证明；收据只作证据不签发任何 release authority。由此 hosted 侧只允许已带本 check SUCCESS 的 lane head 快进进入 `dev1.0`，integration 通道的 admission 与本 check 是叠加而非替代。
+- AND 仓内 `required_integration_checks` 声明不能自证 hosted 强制：只读 governance 通过 `verify_hosted_integration_ruleset.py` 读回全部 ruleset（列表满一页即阻断，不静默截断）与 repository `default_branch`（读不到即阻断），按 GitHub ref_name 语义判定适用规则：`~ALL`、`~DEFAULT_BRANCH`、GitHub 方言 fnmatch（`File::FNM_PATHNAME`：`*`/`?` 不跨 `/`，`**/` 匹配任意层级，`[...]` 按字面），exclude 优先，拒绝未声明的影子规则。权威 readback 必须证明 dev 旧 `04. Lane Gate` required check 已撤、`deletion`/`non_fast_forward` 仍强制且无 lane PR 限制，并独立证明 main promotion 保护未被削弱。普通授权写凭据可 FF dev 的剩余能力须如实报告为不能保证 Alpha；专用 broker/hosted 资格强制归 OPEN-track，不作为上述迁移或有效本地合入的前置。仍 required 的保护不可证即 `GATE_BLOCK`，detail 唯一指向失败形状并带 observed 值。GitHub 只向具有 ruleset write 权限的调用者返回 `bypass_actors`：缺席/null 必须显式不可见，不能折成 `[]`；可见的未声明 actor 必须拒绝。只读 receipt 的 `ruleset.bypassActorsObservable` 如实标记并输出 stdout，`requiredIntegrationChecksEnforced` 只证明 required_status_checks 形状、不含 bypass 证明。admin 以 `--require-bypass-observable` 在每次规则变更后及 promotion 前读回（不可见即阻断，recovery 为换相应权限 token），由 `.qwq_output/env/repo/runs/lane-gate/hosted-integration-ruleset-admin.json` 的 current `evidenceDigest` 证明空集合或 canonical 专用 actor 集合；不得据此提升只读 job 权限。`hosted-integration-ruleset-receipt` 继续绑定 branch、required checks、integration fast-forward executor、可见性和 evidence digest，不签发 release authority；历史 receipt 不证明当前保护。
+
+<a id="gwt-006"></a>
+### GWT-006 退役标识在本地廉价检查阶段失败
+
+- GIVEN 四棵工程树的变更触发退役标识扫描，检测器与零豁免语义保持不变。
+- WHEN 执行显式 L0 或 fast/scope/release local readiness。
+- THEN 选择器与 readiness plan 均包含同一 `retired_terms_zero` 检查；扫描器自身变更同时选中 companion，混合路径不重复调度。
+- THEN 被扫描运行时源码含退役标识时，真实扫描命令返回非零，L0 保留失败且 readiness 不发 PASS；合法标识、纯注释与既有测试目录排除不误报。
+- THEN 根级文档不选择此扫描，spec 变更仍保留 Feature Tree 检查，Git hooks 的 staged/branch boundary 不变。
+- THEN `gate_repo.sh` 在合法 scope/phase 校验后、工具链检查与重型测试前恰调用一次扫描，`run_app` 不再重复；扫描失败时后续阶段不执行。
+
+<a id="gwt-007"></a>
+### GWT-007 干净 push capsule 与 source fact 不得空 delta 假绿
+
+- GIVEN actual push parent→candidate 新增超过既有硬上限的手写源码，capsule 的 HEAD/index/工作树均为 candidate 且干净。
+- WHEN 执行 push readiness（包括 fast 等级）并消费真实 receipt。
+- THEN 现有 canonical full code-health 报告扫描真实范围并阻断，report base/head 与 receipt tree/paths 绑定实际 push；公共 source fact 即使收到 passed wrapper 也拒绝。
+- AND 健康源码、合法纯非源码变化与 staged 快判各有真实执行正例；空扫描、错 base/head/tree/paths/mode、缺健康子报告或失败子结果均不可签发 passed source fact。
+
+<a id="gwt-008"></a>
+### GWT-008 默认 scope 与纯预检阻断不可发布证据
+
+- GIVEN lane exact candidate 的默认 accept，或携带 fast-only/缺 scope/缺 required/Review/deferred 的 bundle。
+- WHEN 执行 readiness、validate-only 与最终 admission。
+- THEN 默认实际执行完整 scope/full required 并产生匹配 `local_readiness_scope`，不得仅改 fact kind；可判定 source/Review 缺口在 Alpha 前拒绝。上述无效 bundle 在本地 HEAD/index/WIP 移动前失败，预检不 import/admit/ref mutation，正式入口仍再次验证。
+- AND no_live 或显式 fast 诊断即使源码检查成功，也不得 accepted、bundle 或 eligible；不存在无 Alpha 的发布成功终态。
+- AND 显式 candidate 与自动 reuse 对 caller owner/claim 漂移给出一致拒绝；合法不可变 producer 内容与当前 consumer 分开验真，不因同 SHA 接受他方身份，不从 dev 环境消费权推导源码生产权。
 
 ## 6. 依赖
 
@@ -157,8 +196,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：`lane/* -> dev1.0` 的 PR 前阻断已由 `04. Lane Gate`（`GWT-005`）承担，`10. Code Health Integration Recompute` 对每次 `dev1.0` 快进复算 exact before/after 并发布 typed fact（`GWT-004`）；但两者之间仍缺一环：`integration/` 工作区的 direct fast-forward push 不经 PR，此时只有 push 后的 report-only fact，而 `03. Delivery Gate` 的 `required_evidence_refs` 尚未要求该 fact，于是经该通道进入 `dev1.0` 的新增或恶化代码健康债在 promotion 前仍不阻断。
-- 完成判定：`GWT-005` 持续证明 lane PR 的 hosted required check fail-closed；`GWT-004.t3` 继续成立（fact report-only、不冒充准出）；交付链 owner 把 dev1.0 head 对应的 code-health fact 纳入 promotion `required_evidence_refs` 并由其自身规格证明 `GATE_BLOCK` fact 使 promotion admission 失败；不得以本地回执、warn-only 或降低阈值替代。
+- 影响或价值：`10. Code Health Integration Recompute` 的 push 后 exact before/after fact 仍是 report-only（GWT-004），不能代替 accept 的 full delta 或 main base→current dev head 的完整 promotion range。尚缺 Lane Gate 左移 accept 与 hosted 验真的 current 接线验收证据；REQ-005/GWT-008 的默认 scope、完整 required/Review、pure prevalidate、no_live 拒绝与双路径 owner 对账也须 current 执行证明，冻结规格不代表实现通过；交付链已有完整 promotion range 的 producer/reader 增量，但其 required evidence 与 PR_WARN 裁决闭包仍须由该 owner 独立证明，不能沿用历史 lane PR 通过作为完成依据。
+- 完成判定：`GWT-008.t1..t6` 具备 current 默认 scope、纯预检零 mutation、no_live 拒绝与双路径 owner 验真证据，缺口未证前保持 OPEN；`GWT-005` 证明 accept 缺失/失败健康证据不得 accepted、本地 integrate 对漂移证据拒绝、hosted 剩余 FF 能力如实披露；`GWT-004.t3` 继续成立（fact report-only、不冒充准出）；交付链 owner 以自身 SIT 证明 promotion `required_evidence_refs` 消费 main base→current dev head 完整 full 报告与既有 Review disposition，缺失/错范围/`GATE_BLOCK` 或未裁决 `PR_WARN` 均拒绝。不得把最后一次 push fact、本地 wrapper passed、warn-only 或降阈值替代完整准入。
 - 依赖：`deliver-deploy-prod-pipeline` 的 promotion admission 契约与 `quwoquan_ops/ci/verify_code_health_integration.py`。
 
 <a id="open-004"></a>
@@ -167,9 +206,9 @@
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：`04. Lane Gate` 在 `ubuntu-latest` 上执行 ops local_contract 四分片（首跑 5269 通过 / 23 失败）。23 个失败全部来自 10 个把开发机事实写成前提的合同：macOS `sandbox-exec`、APFS `cp -c`、Flutter/Go/Dart 二进制、本机受管根证书、设备矩阵 preflight。它们已在 `quwoquan_ops/policies/gates/lane_gate_ops_contract_exclusions.yaml` 逐条声明缺失的宿主能力并从 lane 分片排除。排除不等于别处会补跑：`gate_repo.sh` 没有 ops local_contract 的整目录 pytest，10 个合同中只有 `test_app_generated_manifest` 经 `make test-gate-companion-local-contract` 进入 gate 链，`test_app_dependency_capsule` 仅被手动 target `verify-app-dual-platform-usability-baseline` 点名，其余 8 个只在 L0 commit-gate 按影响面选中或开发机手动 pytest 时执行。因此 lane PR 对这 10 个合同没有 hosted 复算，其中 9 个在任何门禁链中也没有稳定执行点。
-- 完成判定：`GWT-005` 持续证明排除清单之外的全部 ops local_contract 文件（当前 607 个文件中的 597 个，首跑对应 5269 个用例）在 hosted 上 fail-closed；排除清单只减不增，每条被删除的前提是该合同改为按宿主能力 `skipif`（并让 skip 可见于回执）或 lane 门禁获得 hosted macOS runner；`test_lane_gate_exclusions_are_declared_real_ops_files_and_only_narrow_ops` 持续证明清单指向真实文件且不影响 data/全量。
-- 依赖：hosted macOS runner 预算，或 10 个合同的 owner 为其补 `skipif` 与 skip 可见性。
+- 影响或价值：`04. Lane Gate` 在 `ubuntu-latest` 上执行 ops local_contract 四分片（首跑 5269 通过 / 23 失败）。23 个失败全部来自 10 个把开发机事实写成前提的合同：macOS `sandbox-exec`、APFS `cp -c`、Flutter/Go/Dart 二进制、本机受管根证书、设备矩阵 preflight。它们已在 `quwoquan_ops/policies/gates/lane_gate_ops_contract_exclusions.yaml` 逐条声明缺失的宿主能力并从 lane 分片排除。排除不等于别处会补跑：`gate_repo.sh` 没有 ops local_contract 的整目录 pytest，10 个合同中只有 `test_app_generated_manifest` 经 `make test-gate-companion-local-contract` 进入 gate 链，`test_app_dependency_capsule` 仅被手动 target `verify-app-dual-platform-usability-baseline` 点名，其余 8 个只在 L0 commit-gate 按影响面选中或开发机手动 pytest 时执行。这些是历史 hosted 覆盖缺口；取消 lane PR、把检查集合移到 accept 不能自动证明它们已有稳定执行点。
+- 完成判定：`GWT-005` 在同一 exact candidate 的 accept receipt 中证明完整 ops 合同集合实际执行、应非空分片非空且失败拒绝 accepted；宿主能力排除只减不增，required 能力缺失必须 typed 阻断，非 required skip 必须按 canonical 合同可见，不把 skipped 写成 passed。hosted 仅验该 exact 闭包，不重复完整套件；现有排除清单合同持续证明声明指向真实文件且不影响 data/全量。未取得 current 本地接线与执行证据前保留本 OPEN，历史数量不当作当前通过数。
+- 依赖：accept 宿主工具链/设备能力与各合同 owner 的接线、合法 skip 可见性；hosted 替代验真门见 daily-merge OPEN-004。
 
 <a id="open-005"></a>
 ### OPEN-005 `gate_repo.sh` 全量对 `main` 基线的门禁自证仍有 13 个 unproven gate
@@ -200,3 +239,13 @@
 - 影响或价值：落地后独立评审在 dev1.0 基线里指出三处把外部失败折成空集合而无 typed 留痕的路径，均在本增量相邻但未改动：`.github/workflows/code-health-weekly.yml` 拉取 workflow runs 失败时 `|| echo '[]'`（weekly 报告会把 API 失败当作「无运行」）；`quwoquan_ops/gate/commit_gate_select.py` 的 `git diff --cached` 非零退出返回 `[]`（L0 会把 git 失败当作「无 staged 改动」而空跑）；`quwoquan_ops/gate/verify_workflow_cli_arguments.py` 的 `_run_blocks` 对 `yaml.YAMLError` 返回 `[]`（workflow 解析失败时该门禁对该文件零判定；解析期失效本身由 `verify_workflow_actionlint.sh` 拦截，故为可见性缺口而非漏放）。同一增量新增的 `report_code_health_weekly.discover_local_previous` 同形态问题已在 candidate 内修复为与 `_load_previous` 同轨抛错。
 - 完成判定：三处改为 typed 失败（非零退出或显式 `skipped`/`failed` 字段）并各补一条让其变红的负例：`GWT-002` 下 L0 对 `git diff --cached` 失败返回 typed 失败而非空跑（`test_commit_gate_select` 锁定）；`GWT-005` 下 `verify_workflow_cli_arguments.py` 对 YAML 解析失败给出 typed 判定而非零判定；weekly 报告在 runs 拉取失败时标注 `deliveryRunsStatus=unavailable` 而非空样本（`GWT-004.t3` 的 report-only 语义保持）。
 - 依赖：无外部依赖；按最低 owner 拆入各自 focused contract。
+
+<a id="open-008"></a>
+### OPEN-008 其余晚发现静态扫描的有界左移
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：`run_app` 在 analyzer 之后仍执行 `verify_concept_naming.py`、`verify_runtime_host_literals.py` 及 Dart 语义棘轮；这些检查的依赖、companion 和累计预算尚未逐一证实，不能因退役词扫描已左移而声称全部本地首判。
+- 完成判定：按 `REQ-003` 对现有晚发现扫描逐条核对输入、依赖、companion、失败负例与实测预算；合格者经 `OPEN-006` 的数据化选择表进入最早可执行层，并由 `GWT-006` 同类执行证据证明首判与失败传播；需 analyzer、超预算或缺 companion 者留在原层，明确原因与最低 owner 的缺口，不增加 allowlist 或放宽预算。
+- 依赖：`OPEN-006` 的选择表收敛与各检测器 owner 的 companion；不得为此新增中央 check registry、常驻 worker 或重复 hosted 扫描。

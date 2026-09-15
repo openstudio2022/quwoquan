@@ -74,6 +74,7 @@ FIELD_PRIVACY_POLICIES = (
     {"objectId": "content.post", "field": "publishIntentId", "classification": "INTERNAL", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},
     {"objectId": "content.post", "field": "publishLocation", "classification": "PII", "action": "mask", "maskStrategy": "city_level_only", "truncateChars": 0, "explicit": True, "visibility": ()},
     {"objectId": "content.post", "field": "publishedAt", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},
+    {"objectId": "content.post", "field": "semanticDocument", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},
     {"objectId": "content.post", "field": "semanticMentions", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},
     {"objectId": "content.post", "field": "shareCount", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},
     {"objectId": "content.post", "field": "sourceAttribution", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},

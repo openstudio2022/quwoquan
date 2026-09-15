@@ -104,7 +104,6 @@ validate_data_phase_configuration || exit $?
 # Python script governance derives independent app/service/ops/data
 # boundaries. A scoped Delivery job validates its own boundary; the aggregate
 # local gate keeps the strict whole-repository check.
-if [[ "$service_phase" != "packaging" ]]; then
 case "$scope" in
   all) python_script_scope="all" ;;
   service) python_script_scope="service" ;;
@@ -117,6 +116,10 @@ case "$scope" in
     ;;
 esac
 
+# 纯源码扫描先于工具链与重型门禁；所有合法 scope（含 service packaging）同轨执行。
+python3 -B quwoquan_app/scripts/runtime/architecture/verify_retired_terms_zero.py
+
+if [[ "$service_phase" != "packaging" ]]; then
 run_vertical_architecture_ratchet() {
   local vertical_scope="$1"
   echo "[gate] vertical architecture static ratchet (scope=$vertical_scope)"
@@ -455,7 +458,6 @@ run_app() {
     lib test/patrol test/canonical/user_acceptance test/canonical/support/runtime/patrol)
   # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）
   if command -v python3 >/dev/null 2>&1; then
-    python3 quwoquan_app/scripts/runtime/architecture/verify_retired_terms_zero.py || exit 1
     python3 quwoquan_app/scripts/runtime/architecture/verify_concept_naming.py || exit 1
     python3 quwoquan_app/scripts/tag_service/tag/verify_cloud_tag_strict_typing.py || exit 1
     python3 quwoquan_app/scripts/runtime/observability/verify_dart_semantic.py || exit 1

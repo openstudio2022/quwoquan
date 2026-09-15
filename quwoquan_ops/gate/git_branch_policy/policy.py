@@ -239,9 +239,9 @@ def _string_set(
 def _required_checks(
     payload: Mapping[str, object], key: str,
 ) -> tuple[RequiredPromotionCheck, ...]:
-    """`required_promotion_checks`（main ruleset）与 `required_integration_checks`（dev1.0
-    lane PR）共用同一 name+workflow 形状，但各自是独立集合：前者被 hosted release
-    authority 展开成 main-branch ruleset 期望值，往里加 lane check 会让校验失配。
+    """main promotion 必须有 required check；dev 本地验收强制，hosted 集合可为空。
+
+    两者仍使用独立的 name+workflow 集合，空 dev 集合不表示服务端保证 Alpha。
     """
     raw = payload.get(key)
     if not isinstance(raw, list):
@@ -256,8 +256,10 @@ def _required_checks(
                 workflow=_required_string(value, "workflow"),
             )
         )
-    if not rows or len(rows) != len(set(rows)):
-        raise ValueError(f"branch policy {key} must be non-empty and duplicate-free")
+    if not rows and key != "required_integration_checks":
+        raise ValueError(f"branch policy {key} must be non-empty")
+    if len(rows) != len(set(rows)):
+        raise ValueError(f"branch policy {key} must be duplicate-free")
     if len({row.name for row in rows}) != len(rows):
         raise ValueError(f"branch policy {key} names must be duplicate-free")
     if len({row.workflow for row in rows}) != len(rows):
@@ -399,7 +401,7 @@ def _integration_branch_updates(payload: Mapping[str, object]) -> IntegrationBra
         "system_fast_forward_backsync",
     ) or (
         updates.ordinary_direct_push
-        != "matching_integration_fast_forward_only"
+        != "exact_admission_integration_fast_forward_only"
     ):
         raise ValueError(
             "branch policy integration_branch_updates must accept exactly trusted "
@@ -430,7 +432,7 @@ def _persistent_lane_admission(
         return None
     expected = {
         "isolation": "branch_per_writer",
-        "promotion": "declared_pull_request_edge_only",
+        "promotion": "exact_acceptance_bundle_integration_publish_only",
         "resync": "mandatory_fast_forward_after_integration_or_abort",
         "resync_scope": "clean_or_non_overlapping_ancestor_only",
         "worktree_lifecycle": "retained",
@@ -521,6 +523,15 @@ def load_policy_bytes(raw: bytes) -> BranchPolicy:
         persistent_lane_admission=_persistent_lane_admission(payload),
         failure_codes=_failure_codes(payload),
     )
+    _validate_role_branches(policy)
+    _validate_workflow_separation(policy)
+    _validate_pull_request_edges(policy)
+    _validate_persistent_lane_topology(policy)
+    _validate_backsync_topology(policy)
+    return policy
+
+
+def _validate_role_branches(policy: BranchPolicy) -> None:
     for branch_name in (
         policy.integration_branch,
         policy.release_branch,
@@ -537,6 +548,9 @@ def load_policy_bytes(raw: bytes) -> BranchPolicy:
         raise ValueError(
             "branch policy source_admission_branch must equal release_branch"
         )
+
+
+def _validate_workflow_separation(policy: BranchPolicy) -> None:
     if not policy.production_workflow.startswith(
         ".github/workflows/"
     ) or not policy.production_workflow.endswith((".yml", ".yaml")):
@@ -557,6 +571,9 @@ def load_policy_bytes(raw: bytes) -> BranchPolicy:
             "branch policy required_promotion_checks and required_integration_checks "
             "must not share a check name"
         )
+
+
+def _validate_pull_request_edges(policy: BranchPolicy) -> None:
     for edge in policy.allowed_pull_request_edges:
         if edge.base not in policy.allowed_remote:
             raise ValueError(
@@ -570,29 +587,43 @@ def load_policy_bytes(raw: bytes) -> BranchPolicy:
             raise ValueError(
                 f"branch policy PR head pattern {edge.head!r} is not a declared pull-request prefix"
             )
+
+
+def _validate_persistent_lane_topology(policy: BranchPolicy) -> None:
     if policy.persistent_lane_admission is not None:
         if policy.pull_request_prefixes != {"lane/"}:
             raise ValueError(
                 "branch policy persistent lane admission requires the exact lane/ prefix"
             )
-        expected_branches = FIXED_PERSISTENT_LANE_BRANCHES | {
+        expected_local = FIXED_PERSISTENT_LANE_BRANCHES | {
             policy.integration_branch,
             policy.release_branch,
         }
-        if policy.allowed_local != expected_branches or policy.allowed_remote != expected_branches:
+        expected_remote = {
+            policy.integration_branch,
+            policy.release_branch,
+        }
+        if policy.allowed_local != expected_local:
             raise ValueError(
                 "branch policy persistent lane admission requires exactly the six fixed "
-                "lane branches plus integration and release"
+                "lane branches plus integration and release locally"
+            )
+        if policy.allowed_remote != expected_remote:
+            raise ValueError(
+                "branch policy persistent lane admission requires remote closed set "
+                "of integration and release only"
             )
         expected_edges = {
-            PullRequestEdge(head="lane/*", base=policy.integration_branch),
             PullRequestEdge(head=policy.integration_branch, base=policy.release_branch),
         }
         if set(policy.allowed_pull_request_edges) != expected_edges:
             raise ValueError(
-                "branch policy persistent lane admission requires exactly the declared "
-                "lane integration and integration promotion edges"
+                "branch policy persistent lane admission requires exactly the "
+                "integration promotion edge"
             )
+
+
+def _validate_backsync_topology(policy: BranchPolicy) -> None:
     if policy.integration_branch == policy.release_branch:
         if policy.system_backsync is not None:
             raise ValueError(
@@ -608,16 +639,11 @@ def load_policy_bytes(raw: bytes) -> BranchPolicy:
             raise ValueError(
                 "branch policy system_backsync must be release -> integration and fast-forward-only"
             )
-    return policy
 
 
 def load_policy(path: Path) -> BranchPolicy:
     """Read policy bytes once, then delegate to the sole parser."""
     return load_policy_bytes(path.read_bytes())
-
-
-def _matches_pull_request_prefix(branch: str | None, prefixes: frozenset[str]) -> bool:
-    return bool(branch) and any(branch.startswith(prefix) for prefix in prefixes)
 
 
 def pull_request_context_from_environment(
@@ -669,7 +695,27 @@ def evaluate_transition(
         beforeOid=transition.before_oid,
         afterOid=transition.after_oid,
     )
-    if transition.event == "pull_request":
+    # 各事件共享不可变上下文，不共享来源授权；闭包只产生纯判定结果。
+    def blocked(failure: str) -> BranchDecision:
+        return BranchDecision(
+            status="blocked", reason_code=policy.failure_code(failure),
+            recovery_action=RECOVERY_BY_FAILURE_KEY[failure], string_context=context,
+        )
+
+    def fast_forward(rejection: str) -> BranchDecision:
+        if transition.before_oid == transition.after_oid:
+            return BranchDecision(status="allowed", string_context=context)
+        if is_ancestor is None:
+            return blocked("authority_unavailable")
+        try:
+            ancestor = is_ancestor(transition.before_oid, transition.after_oid)
+        except (OSError, RuntimeError, subprocess.SubprocessError):
+            return blocked("authority_unavailable")
+        if ancestor:
+            return BranchDecision(status="allowed", string_context=context)
+        return blocked(rejection)
+
+    def pull_request() -> BranchDecision:
         if (
             transition.head in policy.allowed_local
             and transition.head in policy.allowed_remote
@@ -680,21 +726,9 @@ def evaluate_transition(
             )
         ):
             return BranchDecision(status="allowed", string_context=context)
-        return BranchDecision(
-            status="blocked",
-            reason_code=policy.failure_code("ref_not_allowed"),
-            recovery_action=RECOVERY_BY_FAILURE_KEY["ref_not_allowed"],
-            string_context=context,
-        )
-    if transition.event == "direct_push":
-        if (
-            transition.head == transition.base
-            and transition.head in policy.allowed_local
-            and _matches_pull_request_prefix(
-                transition.head, policy.pull_request_prefixes
-            )
-        ):
-            return BranchDecision(status="allowed", string_context=context)
+        return blocked("ref_not_allowed")
+
+    def direct_push() -> BranchDecision:
         if (
             transition.actor_kind == "integration_worktree"
             and transition.head == policy.integration_branch
@@ -706,41 +740,11 @@ def evaluate_transition(
                 or transition.before_oid == ZERO_SHA
                 or transition.after_oid == ZERO_SHA
             ):
-                return BranchDecision(
-                    status="blocked",
-                    reason_code=policy.failure_code("direct_push_not_allowed"),
-                    recovery_action=RECOVERY_BY_FAILURE_KEY["direct_push_not_allowed"],
-                    string_context=context,
-                )
-            if transition.before_oid == transition.after_oid:
-                return BranchDecision(status="allowed", string_context=context)
-            if is_ancestor is None:
-                return BranchDecision(
-                    status="blocked",
-                    reason_code=policy.failure_code("authority_unavailable"),
-                    recovery_action=RECOVERY_BY_FAILURE_KEY["authority_unavailable"],
-                    string_context=context,
-                )
-            try:
-                ancestor = is_ancestor(
-                    transition.before_oid, transition.after_oid
-                )
-            except (OSError, RuntimeError, subprocess.SubprocessError):
-                return BranchDecision(
-                    status="blocked",
-                    reason_code=policy.failure_code("authority_unavailable"),
-                    recovery_action=RECOVERY_BY_FAILURE_KEY["authority_unavailable"],
-                    string_context=context,
-                )
-            if ancestor:
-                return BranchDecision(status="allowed", string_context=context)
-        return BranchDecision(
-            status="blocked",
-            reason_code=policy.failure_code("direct_push_not_allowed"),
-            recovery_action=RECOVERY_BY_FAILURE_KEY["direct_push_not_allowed"],
-            string_context=context,
-        )
-    if transition.event == "system_backsync":
+                return blocked("direct_push_not_allowed")
+            return fast_forward("direct_push_not_allowed")
+        return blocked("direct_push_not_allowed")
+
+    def system_backsync() -> BranchDecision:
         backsync = policy.system_backsync
         if (
             transition.actor_kind != "system"
@@ -750,41 +754,13 @@ def evaluate_transition(
             or not transition.before_oid
             or not transition.after_oid
         ):
-            return BranchDecision(
-                status="blocked",
-                reason_code=policy.failure_code("ref_not_allowed"),
-                recovery_action=RECOVERY_BY_FAILURE_KEY["ref_not_allowed"],
-                string_context=context,
-            )
-        if transition.before_oid == transition.after_oid:
-            return BranchDecision(status="allowed", string_context=context)
-        if is_ancestor is None:
-            return BranchDecision(
-                status="blocked",
-                reason_code=policy.failure_code("authority_unavailable"),
-                recovery_action=RECOVERY_BY_FAILURE_KEY["authority_unavailable"],
-                string_context=context,
-            )
-        try:
-            ancestor = is_ancestor(transition.before_oid, transition.after_oid)
-        except (OSError, RuntimeError, subprocess.SubprocessError):
-            return BranchDecision(
-                status="blocked",
-                reason_code=policy.failure_code("authority_unavailable"),
-                recovery_action=RECOVERY_BY_FAILURE_KEY["authority_unavailable"],
-                string_context=context,
-            )
-        if ancestor:
-            return BranchDecision(status="allowed", string_context=context)
-        return BranchDecision(
-            status="blocked",
-            reason_code=policy.failure_code("backsync_not_fast_forward"),
-            recovery_action=RECOVERY_BY_FAILURE_KEY["backsync_not_fast_forward"],
-            string_context=context,
-        )
-    return BranchDecision(
-        status="blocked",
-        reason_code=policy.failure_code("policy_invalid"),
-        recovery_action=RECOVERY_BY_FAILURE_KEY["policy_invalid"],
-        string_context=context,
-    )
+            return blocked("ref_not_allowed")
+        return fast_forward("backsync_not_fast_forward")
+
+    if transition.event == "pull_request":
+        return pull_request()
+    if transition.event == "direct_push":
+        return direct_push()
+    if transition.event == "system_backsync":
+        return system_backsync()
+    return blocked("policy_invalid")

@@ -383,7 +383,7 @@ def _source_descriptors(raw: dict[str, Any], directory: Path) -> tuple[list[dict
     if not descriptors:
         attribution = raw.get("sourceAttribution")
         if isinstance(attribution, dict):
-            descriptors.append({"sourceUnitId": "sourceAttribution", "title": str(attribution.get("attributionText") or attribution.get("platform") or "sourceAttribution"), "platform": str(attribution.get("platform") or "未声明"), "canonicalUrl": attribution.get("sourcePostUrl") if isinstance(attribution.get("sourcePostUrl"), str) and attribution.get("sourcePostUrl").startswith("https://") else None, "sourceUseMode": "legacy_attribution", "rightsClue": str(attribution.get("rightsBasis") or "unknown"), "fetchedAt": "unknown", "evidenceState": "missing", "adopted": True, "evidence": [], "defaultEvidenceId": None})
+            descriptors.append({"sourceUnitId": "sourceAttribution", "title": str(attribution.get("attributionText") or attribution.get("platform") or "sourceAttribution"), "platform": str(attribution.get("platform") or "未声明"), "canonicalUrl": attribution.get("sourcePostUrl") if isinstance(attribution.get("sourcePostUrl"), str) and attribution.get("sourcePostUrl").startswith("https://") else None, "sourceUseMode": "attribution_record_only", "rightsClue": str(attribution.get("rightsBasis") or "unknown"), "fetchedAt": "unknown", "evidenceState": "missing", "adopted": True, "evidence": [], "defaultEvidenceId": None})
         else: descriptors.append({"sourceUnitId": "undeclared", "title": "未声明", "platform": "未声明", "canonicalUrl": None, "sourceUseMode": "unknown", "rightsClue": "unknown", "fetchedAt": "unknown", "evidenceState": "missing", "adopted": True, "evidence": [], "defaultEvidenceId": None})
     return descriptors, evidence_locators
 

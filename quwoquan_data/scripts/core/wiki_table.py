@@ -190,7 +190,7 @@ def _consume_table_block(
             "figureCount": figure_count,
             "mappingDecision": "groupedDirectory" if grouped_directory else "table",
             "groupedDirectory": grouped_directory,
-            "legacyComplexStructure": bool(has_complex_attrs or saw_nested_table),
+            "sourceComplexStructure": bool(has_complex_attrs or saw_nested_table),
         }
     )
     return idx

@@ -2,6 +2,7 @@
 from copy import deepcopy
 from pathlib import Path
 
+import pytest
 import yaml
 
 from quwoquan_ops.gate.verify_ci_cd_evidence_contracts import (
@@ -45,7 +46,7 @@ def test_promotion_workflow_separates_pre_merge_gate_from_main_push_sealing() ->
         "pull_request_review": {"types": ["submitted", "dismissed"]},
         "push": {"branches": ["main"]},
     }
-    assert list(workflow["jobs"]) == ["promotion_verify", "main_source_seal"]
+    assert list(workflow["jobs"]) == ["promotion_verify", "main_source_seal", "system_backsync"]
     assert workflow["jobs"]["promotion_verify"]["name"] == "03. Delivery Gate"
     assert policy["required_promotion_checks"] == [
         {"name": "03. Delivery Gate", "workflow": ".github/workflows/delivery-gate.yml"}
@@ -96,6 +97,9 @@ def test_pull_request_gate_only_qualifies_exact_current_dev_head() -> None:
     )
     positions = [commands.index(token) for token in ordered]
     assert positions == sorted(positions)
+    authority = commands.split("promotion_hosted.py hosted-authority", 1)[1].split("PY", 1)[0]
+    assert '--repository "$GITHUB_WORKSPACE"' in authority
+    assert '--head-sha "$HEAD_SHA" --base-sha "$BASE_SHA"' in authority
     assert '--transport-tag "base-${BASE_SHA}-head-${HEAD_SHA}"' in commands
     assert "actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}" in commands
     assert "PR_INPUTS_JSON" in commands
@@ -128,7 +132,7 @@ def test_main_push_consumes_exact_admission_before_issuing_seal_and_timing() -> 
 
     assert job["if"] == "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
     assert job["permissions"] == {
-        "contents": "read", "packages": "write",
+        "actions": "read", "contents": "read", "packages": "write",
         "checks": "read", "pull-requests": "read",
     }
     checkout = next(step for step in job["steps"] if "uses" in step)
@@ -172,6 +176,84 @@ def test_main_push_consumes_exact_admission_before_issuing_seal_and_timing() -> 
     }
 
 
+def test_backsync_caller_only_consumes_successful_exact_source_seal() -> None:
+    _, workflow = _workflow()
+    caller = workflow["jobs"]["system_backsync"]
+    assert caller["needs"] == "main_source_seal"
+    assert caller["if"] == (
+        "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' "
+        "&& needs.main_source_seal.result == 'success' }}"
+    )
+    assert caller["uses"] == "./.github/workflows/system-backsync.yml"
+    assert caller["with"] == {
+        "expected_dev_before": "${{ needs.main_source_seal.outputs.source_sha }}",
+        "source_sha": "${{ needs.main_source_seal.outputs.source_sha }}",
+        "main_source_seal_ref": "${{ needs.main_source_seal.outputs.main_source_seal_ref }}",
+        "main_source_seal_digest": "${{ needs.main_source_seal.outputs.main_source_seal_digest }}",
+    }
+    assert caller["permissions"] == {
+        "actions": "read", "checks": "read", "contents": "read", "packages": "read",
+    }
+    assert "secrets" not in caller  # 专用 key 只来自 callee 的 system-backsync Environment。
+    assert "steps" not in caller and "runs-on" not in caller
+    callee = yaml.safe_load((ROOT / ".github/workflows/system-backsync.yml").read_text())
+    assert caller["permissions"] == callee["jobs"]["backsync"]["permissions"]
+    assert set(caller["with"]) == set(callee[True]["workflow_call"]["inputs"])
+
+
+@pytest.mark.parametrize("field,value", [
+    ("needs", "promotion_verify"),
+    ("if", "${{ always() }}"),
+    ("uses", "./.github/workflows/system-backsync.yml@main"),
+    ("permissions", {"contents": "write"}),
+    ("permissions", {"contents": "read", "checks": "read", "packages": "read"}),
+    ("secrets", "inherit"),
+    ("continue-on-error", True),
+    ("steps", []),
+])
+def test_static_gate_rejects_backsync_identity_permissions_or_failure_masking(field: str, value: object) -> None:
+    text, workflow = _workflow()
+    workflow["jobs"]["system_backsync"][field] = value
+    assert any("backsync" in detail.lower() for detail in _finding_details(text, workflow))
+
+
+@pytest.mark.parametrize("field", ["expected_dev_before", "source_sha", "main_source_seal_ref", "main_source_seal_digest"])
+@pytest.mark.parametrize("mutation", ["missing", "foreign"])
+def test_static_gate_rejects_backsync_exact_input_drift(field: str, mutation: str) -> None:
+    text, workflow = _workflow()
+    inputs = workflow["jobs"]["system_backsync"]["with"]
+    if mutation == "missing":
+        del inputs[field]
+    else:
+        inputs[field] = "${{ github.event.before }}"
+    assert any("backsync" in detail.lower() for detail in _finding_details(text, workflow))
+
+
+def test_backsync_documentation_separates_local_dev_from_hosted_authority() -> None:
+    text = (ROOT / ".github/workflows/CI_CD_SECRETS.md").read_text()
+    for required in (
+        "dev 不再要求 `04. Lane Gate` 或 lane PR",
+        "本地工作流要求的 Alpha 资格不等于服务端强制",
+        "caller 已接线，外部身份保持 OPEN-track",
+        "`make promotion-backsync` 仅 local resync",
+        "未收敛/分叉时本地 HEAD 零写",
+        "main 技术门不因此放宽",
+        "`bypassActorsObservable=false`、`bypassActors=null`",
+    ):
+        assert required in text
+    for retired in ("当前无 caller", "暂无 caller", "不再调用 reusable backsync", "八条允许 refs", "经既有 pre-push FF 通道推送"):
+        assert retired not in text
+
+
+def test_static_gate_requires_backsync_and_seal_readback_permissions() -> None:
+    text, workflow = _workflow()
+    missing = deepcopy(workflow)
+    del missing["jobs"]["system_backsync"]
+    assert any("backsync" in detail.lower() for detail in _finding_details(text, missing))
+    del workflow["jobs"]["main_source_seal"]["permissions"]["actions"]
+    assert any("permissions" in detail for detail in _finding_details(text, workflow))
+
+
 def test_static_gate_rejects_missing_or_fabricated_post_merge_evidence() -> None:
     text, workflow = _workflow()
     assert _finding_details(text, workflow) == []
@@ -198,9 +280,9 @@ def test_static_gate_rejects_missing_or_fabricated_post_merge_evidence() -> None
     runner_in_job_env["jobs"]["promotion_verify"]["env"]["EVIDENCE_ROOT"] = "${{ runner.temp }}/x"
     assert any("runner context" in detail for detail in _finding_details(text, runner_in_job_env))
 
-    extra_backsync = deepcopy(workflow)
-    extra_backsync["jobs"]["system_backsync"] = {"uses": "./.github/workflows/system-backsync.yml"}
-    assert any("integration worktree fast-forward" in detail for detail in _finding_details(text, extra_backsync))
+    incomplete_backsync = deepcopy(workflow)
+    incomplete_backsync["jobs"]["system_backsync"] = {"uses": "./.github/workflows/system-backsync.yml"}
+    assert any("backsync" in detail.lower() for detail in _finding_details(text, incomplete_backsync))
 
     fake_readback_workflow = deepcopy(workflow)
     seal_step = next(

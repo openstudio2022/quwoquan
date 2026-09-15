@@ -58,7 +58,7 @@ func TestPublicWebMarkdownMatchesSharedSemanticBlockSequence(t *testing.T) {
 					Caption: asset.Caption,
 				}
 			}
-			rendered, err := publicweb.RenderLegacyReadOnlyMarkdownBodyHTML(fixtureCase.Markdown, "qwq-rich-md", assets)
+			rendered, err := publicweb.RenderCanonicalUnavailableMarkdownBodyHTML(fixtureCase.Markdown, "qwq-rich-md", assets)
 			if err != nil {
 				t.Fatalf("render: %v", err)
 			}
@@ -75,7 +75,7 @@ func TestPublicWebMarkdownMatchesSharedSemanticBlockSequence(t *testing.T) {
 }
 
 func TestPublicWebMarkdownRejectsUnclosedCallout(t *testing.T) {
-	rendered, err := publicweb.RenderLegacyReadOnlyMarkdownBodyHTML(
+	rendered, err := publicweb.RenderCanonicalUnavailableMarkdownBodyHTML(
 		":::callout type=\"tip\"\n未闭合提示。",
 		"qwq-rich-md", nil,
 	)

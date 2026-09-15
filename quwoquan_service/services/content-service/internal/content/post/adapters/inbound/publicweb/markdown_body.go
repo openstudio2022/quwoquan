@@ -36,12 +36,12 @@ var (
 // BodyAsset 是正文图片的公网渲染输入。
 type BodyAsset struct{ URL, Caption string }
 
-// RenderLegacyReadOnlyMarkdownBodyHTML 仅为历史 articleMarkdown wire 提供安全、
+// RenderCanonicalUnavailableMarkdownBodyHTML 仅在 canonical envelope 不可用时为 articleMarkdown wire 提供安全、
 // 只读的 HTML 投影。它不构造或冒充 canonical semantic envelope；未知结构与
 // raw HTML 均拒绝展示。
 
 // RenderCanonicalMarkdownBodyHTML strictly parses canonical Markdown before safe projection.
-// Legacy Markdown remains exclusively owned by RenderLegacyReadOnlyMarkdownBodyHTML.
+// Canonical-unavailable Markdown is exclusively owned by RenderCanonicalUnavailableMarkdownBodyHTML.
 func RenderCanonicalMarkdownBodyHTML(markdown string, available map[semantic.CapabilityID]bool, assets map[string]BodyAsset) (string, error) {
 	doc, err := postapplication.ParseCanonicalMarkdown(markdown)
 	if err != nil {
@@ -50,14 +50,14 @@ func RenderCanonicalMarkdownBodyHTML(markdown string, available map[semantic.Cap
 	return RenderSemanticDocumentBodyHTML(doc, available, assets)
 }
 
-func RenderLegacyReadOnlyMarkdownBodyHTML(markdown, dialect string, assets map[string]BodyAsset) (string, error) {
+func RenderCanonicalUnavailableMarkdownBodyHTML(markdown, dialect string, assets map[string]BodyAsset) (string, error) {
 	if strings.TrimSpace(dialect) == "" {
 		return "", errors.New("SEMANTIC_DOCUMENT.INCOMPATIBLE.DIALECT_MISSING")
 	}
 	if strings.TrimSpace(dialect) != "qwq-rich-md" {
 		return "", fmt.Errorf("SEMANTIC_DOCUMENT.INCOMPATIBLE.DIALECT: %s", dialect)
 	}
-	nodes, err := parseLegacyReadOnlyMarkdown(markdown)
+	nodes, err := parseCanonicalUnavailableMarkdown(markdown)
 	if err != nil {
 		return "", err
 	}
@@ -80,7 +80,7 @@ func RenderSemanticDocumentBodyHTML(doc semantic.DocumentEnvelope, available map
 	return renderSemanticNodes(doc.Nodes, assets)
 }
 
-func parseLegacyReadOnlyMarkdown(markdown string) ([]semantic.SemanticNode, error) {
+func parseCanonicalUnavailableMarkdown(markdown string) ([]semantic.SemanticNode, error) {
 	lines := strings.Split(strings.ReplaceAll(markdown, "\r\n", "\n"), "\n")
 	index := 0
 	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "---" {

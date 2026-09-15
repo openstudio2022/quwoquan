@@ -41,7 +41,7 @@ def _fake_cloc(tmp_path: Path) -> Path:
 def _weekly(repo: Path, head: str, cloc: Path, previous: list[dict] = ()) -> dict:
     return analyze_weekly(
         repo, head=head, policy=load_policy(policy_path(repo)), cloc_executable=str(cloc),
-        observed_at=OBSERVED, previous_reports=list(previous),
+        observed_at=OBSERVED, previous_reports=list(previous), observation_branch="master",
     )
 
 
@@ -128,8 +128,9 @@ def test_candidate_markdown_leads_with_blockers_and_debt_delta(tmp_path: Path) -
     delta = debt_delta(report)
     assert delta["newOversizedFiles"] == 1 and delta["newComplexFunctions"] == 1
     skeleton = json.loads(review_skeleton(report))
-    assert {(item["code"], item["verdict"]) for item in skeleton} >= {
-        ("CODE_HEALTH.NEW_FILE_OVER_BLOCK", ""), ("CODE_HEALTH.COMPLEXITY_ADVISORY", ""),
+    assert {(item["findingId"], item["verdict"]) for item in skeleton} == {
+        (item["findingId"], "") for item in report["findings"]
+        if item["terminal"] in {"GATE_BLOCK", "PR_WARN"}
     }
     assert "```json" in markdown
 
@@ -191,6 +192,7 @@ def test_weekly_markdown_and_cli_write_summary(tmp_path: Path, monkeypatch: pyte
     code = report_code_health_weekly.main([
         "--head", head, "--policy", str(policy_path(repo)), "--cloc", str(cloc),
         "--previous", str(previous_path), "--output", str(output), "--summary-markdown", str(summary),
+        "--observation-branch", str(first["observationBranch"]),
     ])
     assert code == 0
     report = json.loads(output.read_text(encoding="utf-8"))
@@ -198,6 +200,88 @@ def test_weekly_markdown_and_cli_write_summary(tmp_path: Path, monkeypatch: pyte
     assert markdown == render_weekly(report)
     assert "## 棘轮指标（对比上期：comparable）" in markdown
     assert "| overCyclomaticAdvisory | 1 | 0 | ↓ 改善 |" in markdown
-    assert "## Owner scope 薄弱点 Top 5" in markdown
+    assert "## 全模块结构 scope 健康事实" in markdown
     assert "`quwoquan_ops/ci`" in markdown
     assert "history=1" in capsys.readouterr().out
+
+
+def test_fast_candidate_does_not_render_unmeasured_duplication_as_zero(tmp_path: Path) -> None:
+    """快速检查没有复杂度/重复测量，不得以零值展示健康。"""
+    repo, base = init_repo(tmp_path)
+    write(repo, "quwoquan_ops/ci/simple.py", "value = 1\n")
+    head = commit(repo)
+    report = analyze_delta(repo, base=base, head=head, policy_path=policy_path(repo), mode="fast")
+    markdown = render_candidate(report)
+    assert "new-line duplication: unavailable" in markdown
+    assert "new-line duplication: 0" not in markdown
+    assert "复杂度: unavailable" in markdown
+
+
+def test_weekly_projection_keeps_modules_beyond_top_five(tmp_path: Path) -> None:
+    """spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/incremental-code-health-governance/spec.md#gwt-006.t1"""
+    repo, _base = init_repo(tmp_path)
+    for index in range(7):
+        write(repo, f"quwoquan_service/services/example-{index}/main.go", "package main\nfunc run() {}\n")
+    write(repo, "specs/docs_only/spec.md", "# Documentation module\n")
+    write(repo, "quwoquan_app/tests_only/test_value.py", "def test_value():\n    assert 1 == 1\n")
+    report = _weekly(repo, commit(repo), _fake_cloc(tmp_path))
+    markdown = render_weekly(report)
+    assert "specs/docs_only" in markdown
+    assert "quwoquan_app/tests_only" in markdown
+    for index in range(7):
+        assert f"quwoquan_service/services/example-{index}" in markdown
+    assert "未测证据不能推导为健康" in markdown
+    assert "Dead code candidates — unavailable" in markdown
+    assert "Dead code candidates (0)" not in markdown
+
+
+def test_candidate_reports_removed_debt_without_netting_new_blocker(tmp_path: Path) -> None:
+    """spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/incremental-code-health-governance/spec.md#gwt-004.t2"""
+    repo, _base = init_repo(tmp_path)
+    write(repo, "quwoquan_ops/ci/old.py", _complex_source(20))
+    base = commit(repo)
+    (repo / "quwoquan_ops/ci/old.py").unlink()
+    block = load_policy(policy_path(repo))["thresholds"]["file_lines"]["block"]
+    write(repo, "quwoquan_ops/ci/huge.py", "value = 1\n" * (block + 1))
+    report = analyze_delta(repo, base=base, head=commit(repo), policy_path=policy_path(repo), mode="full")
+    assert report["terminal"] == "GATE_BLOCK"
+    assert report["debtDelta"]["summary"]["resolved"] > 0
+    markdown = render_candidate(report)
+    assert "消除:" in markdown
+    assert "不跨位置" in markdown or "各位置分别判定" in markdown
+    assert "historical-duplication-debt" in markdown
+
+
+def test_calibration_cli_consumes_finding_identity_and_rejects_old_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from quwoquan_ops.gate import run_code_health_calibration as cli
+
+    repo, base = init_repo(tmp_path)
+    write(repo, "quwoquan_ops/ci/hot.py", _complex_source(20))
+    head = commit(repo)
+    report = analyze_delta(repo, base=base, head=head, policy_path=policy_path(repo), mode="full")
+    finding = next(item for item in report["findings"] if item["terminal"] == "PR_WARN")
+    monkeypatch.setattr(cli, "ROOT", repo)
+    monkeypatch.setattr(cli, "_git", lambda *args: head if args[0] == "rev-parse" else f"{head} {base} {base}")
+    reviews = tmp_path / "reviews.json"
+    output = tmp_path / "calibration.json"
+    reviews.write_text(json.dumps({f"1:{finding['findingId']}": "confirmed"}))
+    args = ["--sample", f"1={head}", "--reviews", str(reviews), "--policy", str(policy_path(repo)), "--output", str(output)]
+    assert cli.main(args) == 0
+    actual = json.loads(output.read_text())
+    assert actual["samples"][0]["findingReviews"] == [{"findingId": finding["findingId"], "verdict": "confirmed"}]
+    reviews.write_text(json.dumps({f"1:{finding['code']}:{finding['path']}": "confirmed"}))
+    assert cli.main(args) == 2
+
+
+def test_delta_cli_rejects_directory_in_exact_changed_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    from quwoquan_ops.gate import verify_incremental_code_health as cli
+
+    repo, base = init_repo(tmp_path)
+    write(repo, "quwoquan_ops/ci/hot.py", _complex_source(20))
+    head = commit(repo)
+    monkeypatch.setattr(cli, "ROOT", repo)
+    output = tmp_path / "report.json"
+    assert cli.main(["--base", base, "--head", head, "--policy", str(policy_path(repo)),
+                     "--changed-file", "quwoquan_ops/ci", "--output", str(output)]) == 2
+    assert "exact file" in capsys.readouterr().err
+    assert not output.exists()

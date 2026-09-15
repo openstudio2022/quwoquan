@@ -123,7 +123,9 @@ def test_weekly_report_is_clean_candidate_report_only(tmp_path: Path) -> None:
     assert later_report["identityDigest"] == report["identityDigest"]
     assert later_report["observedAt"] != report["observedAt"]
     assert report["ratchet"]["comparisonStatus"] == "insufficient-history"
-    assert report["hotspotPersistence"] == {"historyReports": 0, "historyWeeks": 0, "topN": 20, "items": []}
+    assert report["hotspotPersistence"]["historyReports"] == 0
+    assert report["summary"]["deadCandidateCount"] is None
+    assert report["measurements"]["coverage"]["status"] == "unavailable"
     assert report["sizeDistribution"]["tiers"] == [800, 1000, 2000]
     assert report["sizeDistribution"]["production"]["files"] == 1
     assert report["ownerScopeWeakPoints"][0]["ownerScope"] == "quwoquan_ops/ci"
@@ -137,6 +139,206 @@ def test_weekly_report_is_clean_candidate_report_only(tmp_path: Path) -> None:
         observed_at=observed_at,
     )
     assert changed_delivery["identityDigest"] != report["identityDigest"]
+    source.write_text("dirty = 2\n" * 10, encoding="utf-8")
+    fast = analyze_weekly(repo, head=head, policy=load_policy(policy_path), mode="fast", observation_branch="dev1.0")
+    assert fast["inputScope"]["worktreeBytesIncluded"] is False
+    assert fast["summary"]["cloneGroupCount"] is None
+    assert fast["complexitySummary"]["functionCount"] is None
+    assert fast["measurements"]["complexity"]["status"] == "unavailable"
+    assert all(item["status"] == "unavailable" and item["sourceLoc"] is None for item in fast["growthHistory"])
+    assert fast["modules"]["quwoquan_ops/ci"]["physicalLines"] == 4
+    assert fast["ownerScopeWeakPoints"][0]["overComplexity"] is None
+    assert source.read_text() == "dirty = 2\n" * 10
+    incompatible = {**fast, "headSha": "previous", "implementationDigest": "old-analyzer"}
+    checked = analyze_weekly(repo, head=head, policy=load_policy(policy_path), mode="fast",
+                             observation_branch="dev1.0", previous_reports=[incompatible])
+    assert checked["ratchet"]["comparisonStatus"] == "incomparable"
+    assert checked["ratchet"]["incomparableReports"][0]["reasons"] == ["implementationDigest"]
+    assert checked["hotspotPersistence"]["historyReports"] == 0
+    assert all(item["direction"] == "n/a" for item in checked["ratchet"]["metrics"].values())
+    assert checked["measurementSpec"]["sourceLocLegacyComparable"] is False
+
+
+def test_weekly_reads_exact_blobs_in_dirty_worktree(tmp_path: Path) -> None:
+    from quwoquan_ops.gate.code_health_delta.weekly import _commit_blobs
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    _git(tmp_path, "config", "user.name", "Fixture")
+    source = tmp_path / "example.py"
+    source.write_text("value = 1\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "base")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    source.write_text("dirty = 2\n")
+    assert _commit_blobs(tmp_path, head, ["example.py"])["example.py"] == b"value = 1\n"
+    assert source.read_text() == "dirty = 2\n"
+
+
+def test_module_facts_are_complete_and_conserve_all_dimensions() -> None:
+    from quwoquan_ops.gate.code_health_delta.weekly import aggregate_file_facts, owner_scope_weak_points
+    production = {f"quwoquan_ops/module{i}/value.py": b"value = 1\n" for i in range(8)}
+    scopes = owner_scope_weak_points(production, {}, {}, [], load_policy(POLICY_PATH))
+    assert len(scopes) == 8
+    facts = [{"path": path, "category": "handwritten-production", "language": "Python",
+              "moduleScope": path.rsplit("/", 1)[0], "physicalLines": 1} for path in production]
+    result = aggregate_file_facts(facts)
+    assert result["conservation"]["status"] == "available"
+    assert len(result["modules"]) == 8
+    for dimension in ("categories", "languages", "modules"):
+        assert sum(row["files"] for row in result[dimension].values()) == 8
+        assert sum(row["physicalLines"] for row in result[dimension].values()) == 8
+    assert all(row["owner"]["status"] == "unavailable" for row in result["modules"].values())
+
+
+def test_unsupported_complexity_is_not_zero_pass() -> None:
+    from quwoquan_ops.gate.code_health_delta.weekly import _score_hotspots
+    complexity, _ = _score_hotspots({"a.swift": b"func a() {}\n"}, {}, {}, load_policy(POLICY_PATH))
+    assert complexity["a.swift"]["status"] == "unavailable"
+    assert complexity["a.swift"]["maxCyclomatic"] is None
+
+
+def test_cloc_reads_exact_canonical_sources_with_duplicate_paths(tmp_path: Path) -> None:
+    import shutil
+    import pytest
+    from quwoquan_ops.gate.code_health_delta.weekly import _cloc
+    if shutil.which("cloc") is None:
+        pytest.skip("cloc unavailable")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    _git(tmp_path, "config", "user.name", "Fixture")
+    for path in ("src/coverage/a.py", "src/coverage/b.py"):
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("value = 1\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "base")
+    (tmp_path / "src/coverage/a.py").write_text("dirty = 2\n" * 10)
+    result = _cloc(tmp_path, _git(tmp_path, "rev-parse", "HEAD"), "cloc", load_policy(POLICY_PATH))
+    assert result["files"] == 2
+    assert result["sourceLoc"] == 2
+    assert result["countDuplicatePaths"] is True
+
+
+def test_history_rejects_changed_analyzer_toolchain_and_measurement_scope() -> None:
+    from quwoquan_ops.gate.code_health_delta.weekly import _comparable_history
+    current = {"headSha": "new", "policyDigest": "policy", "implementationDigest": "impl",
+               "toolchainDigest": "tools", "measurementSpecDigest": "scope", "mode": "full",
+               "generatedSourcesDigest": "new-source", "observationBranch": "dev1.0"}
+    previous = {**current, "headSha": "old", "generatedSourcesDigest": "old-source"}
+    accepted, state = _comparable_history(current, [previous])
+    assert accepted == [previous] and state["status"] == "comparable"
+    for field in ("implementationDigest", "toolchainDigest", "measurementSpecDigest", "policyDigest"):
+        accepted, state = _comparable_history(current, [{**previous, field: "changed"}])
+        assert accepted == [] and state["status"] == "incomparable"
+        assert field in state["excluded"][0]["reasons"]
+    accepted, state = _comparable_history(current, [{"headSha": "legacy"}])
+    assert accepted == [] and state["status"] == "incomparable"
+
+
+def test_runtime_provenance_does_not_pollute_authoring_policy_identity() -> None:
+    from quwoquan_ops.gate.code_health_delta.weekly import _report_identity
+    policy = load_policy(POLICY_PATH)
+    kwargs = dict(head_sha="head", window={}, delivery_run_pages=None, tools={})
+    first = _report_identity(policy=policy, **kwargs)
+    dirty = {**policy, "_generated_provenance": {"fake.py": "dirty-source"}, "_generated_sources_digest": "dirty"}
+    second = _report_identity(policy=dirty, **kwargs)
+    assert first["policyDigest"] == second["policyDigest"]
+    assert first["identityDigest"] == second["identityDigest"]
+
+
+def test_generated_source_digest_reads_commit_not_dirty_source(tmp_path: Path) -> None:
+    from quwoquan_ops.gate.code_health_delta.weekly import _classification_policy, _report_identity
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    _git(tmp_path, "config", "user.name", "Fixture")
+    source = tmp_path / "generator.py"
+    source.write_text("version = 1\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "source")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    policy = load_policy(POLICY_PATH)
+    policy["classification"] = {**policy["classification"],
+                                "generated_exact_sources": {"generated.py": "generator.py"}, "generated_manifests": []}
+    first = _classification_policy(tmp_path, head, policy, ["generator.py"])
+    source.write_text("version = 2\n")
+    dirty = {**policy, "_generated_provenance": {"fake.py": "fake"}, "_generated_sources_digest": "fake"}
+    second = _classification_policy(tmp_path, head, dirty, ["generator.py"])
+    assert first == second
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "source update")
+    changed = _classification_policy(tmp_path, _git(tmp_path, "rev-parse", "HEAD"), policy, ["generator.py"])
+    assert first["_generated_sources_digest"] != changed["_generated_sources_digest"]
+    kwargs = dict(head_sha=head, window={}, policy=policy, delivery_run_pages=None, tools={})
+    original = _report_identity(**kwargs, generated_sources_digest=first["_generated_sources_digest"])
+    new = _report_identity(**kwargs, generated_sources_digest=changed["_generated_sources_digest"])
+    assert original["policyDigest"] == new["policyDigest"]
+    assert original["identityDigest"] != new["identityDigest"]
+
+
+def test_weekly_r2_generated_outputs_bind_exact_commit_bytes(tmp_path: Path) -> None:
+    import hashlib
+    from quwoquan_ops.gate.code_health_delta.weekly import _classification_policy
+    from quwoquan_ops.gate.code_health_delta.classification import classify_path
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    _git(tmp_path, "config", "user.name", "Fixture")
+    body = b"generated_value = 1\n"
+    (tmp_path / "generated.py").write_bytes(body)
+    (tmp_path / "manifest.json").write_text(json.dumps({"generator": "fixture-generator", "outputs": [
+        {"path": "generated.py", "sha256": hashlib.sha256(body).hexdigest()},
+        {"path": "missing.py", "sha256": hashlib.sha256(body).hexdigest()},
+    ]}))
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "valid generated output")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+    policy = load_policy(POLICY_PATH)
+    policy["classification"] = {**policy["classification"], "generated_exact_sources": {},
+                                "generated_manifests": [{"path": "manifest.json", "generator": "fixture-generator", "root": ""}]}
+    tracked = ["generated.py", "manifest.json"]
+    exact = _classification_policy(tmp_path, head, policy, tracked)
+    assert classify_path("generated.py", exact) == "generated"
+    assert exact["_generated_statuses"]["generated.py"]["status"] == "manifest-output-verified"
+    assert exact["_generated_statuses"]["missing.py"]["status"] == "output-unavailable"
+    (tmp_path / "generated.py").write_text("tampered = 2\n")
+    assert _classification_policy(tmp_path, head, policy, tracked) == exact
+    report = analyze_weekly(tmp_path, head=head, policy=policy, mode="fast")
+    assert report["generatedClassification"]["statuses"]["generated.py"]["status"] == "manifest-output-verified"
+    assert report["categories"]["generated"]["files"] == 1
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "tampered output")
+    tampered_head = _git(tmp_path, "rev-parse", "HEAD")
+    tampered = _classification_policy(tmp_path, tampered_head, policy, tracked)
+    assert classify_path("generated.py", tampered) == "handwritten-production"
+    assert tampered["_generated_statuses"]["generated.py"]["status"] == "output-digest-mismatch"
+    assert tampered["_generated_sources_digest"] != exact["_generated_sources_digest"]
+    (tmp_path / "generated.py").write_bytes(body)
+    report = analyze_weekly(tmp_path, head=tampered_head, policy=policy, mode="fast")
+    assert report["generatedClassification"]["statuses"]["generated.py"]["status"] == "output-digest-mismatch"
+    assert report["categories"]["handwritten-production"]["files"] == 1
+
+
+def test_self_reported_exact_evidence_never_grants_verified_owner() -> None:
+    from quwoquan_ops.gate.code_health_delta.weekly import _optional_evidence, _attach_owner_evidence
+    evidence = {"headSha": "head", "exactRef": "nonexistent:sha256:fake", "modules": {
+        "scope": {"ownerIdentityRef": "missing.json", "resolvedOwner": "fake-owner", "status": "available"}}}
+    measurement = _optional_evidence(evidence, "head")
+    assert measurement["status"] == "supplied-unverified"
+    modules = {"scope": {"owner": {"status": "unavailable"}}}
+    _attach_owner_evidence(modules, measurement)
+    assert modules["scope"]["owner"]["status"] != "available"
+
+
+def test_missing_delivery_is_unavailable_not_zero_pass() -> None:
+    result = delivery_outcomes(None, end=datetime(2026, 9, 5, tzinfo=timezone.utc))
+    assert result["status"] == "unavailable"
+    assert result["regressionFlags"] is None
+
+
+def test_weekly_history_never_mixes_observation_branches() -> None:
+    from quwoquan_ops.gate.code_health_delta.weekly import _ordered_previous, WEEKLY_SCHEMA
+    reports = [{"schema": WEEKLY_SCHEMA, "headSha": "old", "observationBranch": "main",
+                "window": {"end": "2026-09-01T00:00:00+00:00"}}]
+    assert _ordered_previous(reports, "current", observation_branch="dev1.0") == []
 
 
 def test_delivery_outcomes_marks_missing_window_as_insufficient_history() -> None:
@@ -176,6 +378,11 @@ def test_weekly_workflow_slurps_pages_and_preserves_report_only_artifact_contrac
     workflow = (ROOT / ".github/workflows/code-health-weekly.yml").read_text(encoding="utf-8")
 
     assert "gh api --paginate --slurp" in workflow
+    assert "ref: dev1.0" in workflow
+    assert '--head "$OBSERVATION_HEAD"' in workflow
+    assert '--observation-branch "$OBSERVATION_BRANCH"' in workflow
+    assert 'code-health-weekly-dev1.0' in workflow
+    assert '--head "${{ github.sha }}"' not in workflow
     # lane-gate 是 candidate 验证的真正承载者，治理副作用（失败率/重跑/时长）必须以它为对象。
     assert "lane-gate.yml code-health-integration.yml app_pipeline.yml service_pipeline.yml" in workflow
     assert "delivery-gate.yml/runs" not in workflow

@@ -21,8 +21,10 @@ fi
 if [[ -z "$HARD_BUDGET" ]]; then
   HARD_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("hardFailSeconds",300)))' "$BUDGETS_JSON")"
 fi
-if ! [[ "$SOFT_BUDGET" =~ ^[0-9]+$ && "$HARD_BUDGET" =~ ^[1-9][0-9]*$ ]]; then
-  echo "[commit-gate] FAIL: budgets must be non-negative soft and positive hard integers" >&2
+STATIC_PHASE_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("phaseBudgetsSeconds",{}).get("L0_static_parallel",120)))' "$BUDGETS_JSON")"
+TEST_PHASE_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("phaseBudgetsSeconds",{}).get("L0_impacted_tests_parallel",160)))' "$BUDGETS_JSON")"
+if ! [[ "$SOFT_BUDGET" =~ ^[0-9]+$ && "$HARD_BUDGET" =~ ^[1-9][0-9]*$ && "$STATIC_PHASE_BUDGET" =~ ^[1-9][0-9]*$ && "$TEST_PHASE_BUDGET" =~ ^[1-9][0-9]*$ ]]; then
+  echo "[commit-gate] FAIL: budgets must be non-negative soft and positive hard/phase integers" >&2
   exit 2
 fi
 
@@ -160,6 +162,9 @@ run_static_check() {
         python3 -B quwoquan_ops/gate/verify_workflow_cli_arguments.py "${workflow_args[@]}"
       fi
       ;;
+    retired_terms_zero)
+      python3 -B quwoquan_app/scripts/runtime/architecture/verify_retired_terms_zero.py
+      ;;
     code_health_delta_fast)
       changed_args=()
       while IFS= read -r changed; do
@@ -196,19 +201,24 @@ run_static_check() {
 }
 
 export -f run_static_check log
-export ROOT HARD_DEADLINE PROCESS_GROUP_GRACE_SECONDS DEADLINE_RUNNER
+export ROOT PROCESS_GROUP_GRACE_SECONDS DEADLINE_RUNNER
 
 STATIC_PIDS=()
 STATIC_NAMES=()
 STATIC_DIR="$REPORT_DIR/static"
 mkdir -p "$STATIC_DIR"
+STATIC_STARTED=$(date +%s)
+STATIC_PHASE_DEADLINE=$((STATIC_STARTED + STATIC_PHASE_BUDGET))
+if [[ "$STATIC_PHASE_DEADLINE" -gt "$HARD_DEADLINE" ]]; then
+  STATIC_PHASE_DEADLINE="$HARD_DEADLINE"
+fi
 if [[ "${#STATIC_CHECKS[@]}" -gt 0 ]]; then
   for check in "${STATIC_CHECKS[@]}"; do
     [[ "$check" == "branch_policy" ]] && continue
     (
       result_json="$STATIC_DIR/$check.result.json"
       if python3 -B "$DEADLINE_RUNNER" \
-        --deadline-epoch-seconds "$HARD_DEADLINE" \
+        --deadline-epoch-seconds "$STATIC_PHASE_DEADLINE" \
         --grace-seconds "$PROCESS_GROUP_GRACE_SECONDS" \
         --result-json "$result_json" \
         -- bash -c 'run_static_check "$1"' _ "$check" \
@@ -225,7 +235,6 @@ if [[ "${#STATIC_CHECKS[@]}" -gt 0 ]]; then
   done
 fi
 
-STATIC_STARTED=$(date +%s)
 STATIC_FAIL=0
 if [[ "${#STATIC_PIDS[@]}" -gt 0 ]]; then
   for i in "${!STATIC_PIDS[@]}"; do
@@ -263,6 +272,11 @@ TEST_DIR="$REPORT_DIR/tests"
 mkdir -p "$TEST_DIR"
 TEST_PIDS=()
 TEST_NAMES=()
+TEST_STARTED=$(date +%s)
+TEST_PHASE_DEADLINE=$((TEST_STARTED + TEST_PHASE_BUDGET))
+if [[ "$TEST_PHASE_DEADLINE" -gt "$HARD_DEADLINE" ]]; then
+  TEST_PHASE_DEADLINE="$HARD_DEADLINE"
+fi
 
 start_test_job() {
   local name="$1"
@@ -270,7 +284,7 @@ start_test_job() {
   (
     result_json="$TEST_DIR/$name.result.json"
     if python3 -B "$DEADLINE_RUNNER" \
-      --deadline-epoch-seconds "$HARD_DEADLINE" \
+      --deadline-epoch-seconds "$TEST_PHASE_DEADLINE" \
       --grace-seconds "$PROCESS_GROUP_GRACE_SECONDS" \
       --result-json "$result_json" \
       -- "$@" >"$TEST_DIR/$name.log" 2>&1; then
@@ -382,7 +396,6 @@ fi
 
 start_test_job "smoke_marker" bash -c 'echo smoke-ok'
 
-TEST_STARTED=$(date +%s)
 TEST_FAIL=0
 if [[ "${#TEST_PIDS[@]}" -eq 0 ]]; then
   log "no impacted tests selected"

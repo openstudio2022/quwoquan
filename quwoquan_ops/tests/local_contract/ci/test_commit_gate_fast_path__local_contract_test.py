@@ -18,6 +18,7 @@ COMMIT_SELECT = ROOT / "quwoquan_ops" / "gate" / "commit_gate_select.py"
 MAKEFILE = ROOT / "Makefile"
 BUDGETS = ROOT / "quwoquan_ops" / "environments" / "pr_gate_timing_budgets.json"
 BASELINE = ROOT / "quwoquan_ops" / "environments" / "commit_gate_timing_baseline.json"
+SLA_VERIFICATION = ROOT / "quwoquan_ops" / "environments" / "commit_gate_sla_verification.json"
 FLUTTER_GUARD = ROOT / "quwoquan_app" / "scripts" / "env" / "run_flutter_test_guarded.py"
 DELIVERY_GATE = ROOT / ".github" / "workflows" / "delivery-gate.yml"
 
@@ -100,6 +101,14 @@ sys.exit(17 if service == os.environ["SERVICE_CHECK_FAILURE"] else 0)
         self.assertNotIn("data_verify) python3 quwoquan_data/scripts/cli.py verify all ;;", source)
         from quwoquan_ops.ci.local_readiness_planner import STATIC_COMMANDS
         self.assertEqual(STATIC_COMMANDS["data_verify"][0][-3:], ["all", "--scope", "source"])
+
+    def test_retired_terms_case_matches_readiness_command(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-006.t1
+        from quwoquan_ops.ci.local_readiness_planner import STATIC_COMMANDS
+
+        source = COMMIT_GATE.read_text(encoding="utf-8")
+        body = source.split("    retired_terms_zero)\n", 1)[1].split(";;", 1)[0].strip()
+        self.assertEqual(body.split(), STATIC_COMMANDS["retired_terms_zero"][0])
 
     def test_makefile_gate_does_not_embed_test_local_contract(self) -> None:
         source = MAKEFILE.read_text(encoding="utf-8")
@@ -240,6 +249,29 @@ sys.exit(17 if service == os.environ["SERVICE_CHECK_FAILURE"] else 0)
         self.assertNotIn("verify_local_worktree_lifecycle.py", source)
         self.assertNotRegex(source, r"(?m)^\s*make gate\b")
         self.assertNotIn("gate_repo.sh --scope all", source)
+
+    def test_parallel_phases_receive_independent_bounded_deadlines(self) -> None:
+        source = COMMIT_GATE.read_text(encoding="utf-8")
+
+        self.assertIn('get("L0_static_parallel",120)', source)
+        self.assertIn('get("L0_impacted_tests_parallel",160)', source)
+        self.assertIn("STATIC_PHASE_DEADLINE=$((STATIC_STARTED + STATIC_PHASE_BUDGET))", source)
+        self.assertIn("TEST_PHASE_DEADLINE=$((TEST_STARTED + TEST_PHASE_BUDGET))", source)
+        self.assertIn('[[ "$STATIC_PHASE_DEADLINE" -gt "$HARD_DEADLINE" ]]', source)
+        self.assertIn('[[ "$TEST_PHASE_DEADLINE" -gt "$HARD_DEADLINE" ]]', source)
+        self.assertEqual(source.count('--deadline-epoch-seconds "$STATIC_PHASE_DEADLINE"'), 1)
+        self.assertEqual(source.count('--deadline-epoch-seconds "$TEST_PHASE_DEADLINE"'), 1)
+        self.assertNotIn('--deadline-epoch-seconds "$HARD_DEADLINE"', source)
+        self.assertLess(
+            source.index("TEST_STARTED=$(date +%s)"),
+            source.index('start_test_job "flutter_impacted"'),
+        )
+        sla_notes = json.loads(SLA_VERIFICATION.read_text(encoding="utf-8"))["sla"][
+            "expectedWallSecondsModel"
+        ]["notes"]
+        self.assertIn("from phase start", sla_notes)
+        self.assertIn("capped by the unchanged gate-wide hard deadline", sla_notes)
+        self.assertNotIn("share one process-group deadline", sla_notes)
 
     def test_commit_gate_resolves_a_real_pytest_runtime_and_redirects_cache(self) -> None:
         source = COMMIT_GATE.read_text(encoding="utf-8")

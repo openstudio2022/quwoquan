@@ -60,7 +60,7 @@ bash quwoquan_ops/gate/gate_repo.sh
 ```text
 quwoquan/
   quwoquan.git/       bare hub（不得作为 Cursor 工作区）
-  integration/        dev1.0，可提交并仅快进推送的集成工作区
+  integration/        dev1.0，验真 acceptance bundle 后仅快进发布的集成工作区
   product-mainline/   lane/product-mainline
   data-engineering/   lane/data-engineering
   engineering/        lane/engineering
@@ -73,10 +73,11 @@ quwoquan/
 
 ## 分支治理
 
-- 本地与远端只允许 `dev1.0`、`main` 与六条声明的长期 `lane/*` 分支：lane 与 integration 都可构造 exact scoped candidate，发布晋级只走 `dev1.0 -> main` PR；canonical `integration_branch_updates` 永久合同允许 trusted integration publisher CAS、匹配 `integration/dev1.0` 的普通认证 non-force fast-forward push，以及 promotion 后可证明的 system fast-forward backsync 更新 `dev1.0`。lane 仍只可推同名 lane。
+- 本地保留 `dev1.0`、只读 `main` 与六条长期 `lane/*`；六 lane 仅为检出/验收 identity，upstream 统一指向 `origin/dev1.0`。远端闭集仅 `dev1.0`/`main`，不得推送 lane，也不依赖 lane PR。lane 与 integration 可按不重叠整文件 scope 构造 exact candidate；canonical 更新合同区分受信 publisher、验真 acceptance admission 的 integration FF 发布与受管 system backsync，不存在 source-only 旁路。
 - `main` 只表示 source-admitted 的最新可用源码；Prod 唯一 selector 是 `ReleaseTagAdmissionFact` 中绑定的 main-reachable stable tag peeled commit 与 exact OCI digests。禁止白名单外分支、lane 直达 `main`、绕过 promotion PR 直接更新 `main`，也禁止以 `main HEAD` 或裸 SHA 选择 Prod。仓内 gate 只证明仓库合同，Hosted ruleset/readback 仍须独立验真。
-- 本地执行 `bash quwoquan_ops/hooks/run_install_hooks.sh` 后，`pre-commit` 只做 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），`pre-push` 只做 branch policy：普通 lane 只推同名远端；`integration/` 仅可从匹配本地 `refs/heads/dev1.0` 向远端同名分支执行普通认证 non-force fast-forward push，并使用 update line 的 before/after OID 证明 ancestry；缺 OID、authority 不可用、非快进、force/delete、来源不匹配、`main` direct push 或未知 ref 全部阻断。trusted publisher CAS 与可证明的受管 system fast-forward backsync 仍保留；两类 hook 都不消费 readiness 回执，秒级完成。
-- `--local-commit` 只要求当前 HEAD 非 detached、Git authority 可读且分支属于 allowed local branches，不枚举或治理其他 local/remote-tracking refs；无参数默认模式仍执行全 ref 治理，`--pre-push` 直接执行永久更新合同。integration 工作区 direct fast-forward push 只移动源码 ref，不生产或授予 `integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion、release 或 Prod authority；需要晋级/发布时仍须 exact candidate + Alpha/Beta、current dev head Gamma 与后续既有资格链。
-- 硬门只在准出，且全部位于本地 Environment Ops 执行面：进入 `dev1.0` 的 exact candidate 由 `make integrate` 在远端 ref 移动前完成本地 readiness（exact delta）、Alpha（ImpactPlan 判定 `abg_release_sensitive` 时含 Beta）`EnvironmentAcceptanceFact` 与 publish admission，再以 expected-old lease fast-forward 发布并读回；lane→`dev1.0` PR 只是评审载体，hosted 侧不设 lane required check。`dev1.0 -> main` 前由 `make gate-release ENV=gamma` 承接全量 local_contract（L2）与 Gamma；GitHub `03. Delivery Gate` 只验真不可变证据。L0 `make commit-gate`（预算 180 秒，硬顶 300 秒）由 commit Skill 在用户要求提交时显式运行，并使用同一 `--local-commit` 当前分支边界，不挂 git hook。
+- 本地执行 `bash quwoquan_ops/hooks/run_install_hooks.sh` 后，`pre-commit` 只做 staged boundary（secret/PII、generated/cache 边界与 `--local-commit` 当前 HEAD 检查），`pre-push` 只做 branch policy，不重跑 readiness：拒绝远端 lane、main direct push 与未知 ref；integration 只有 exact admission、匹配 dev 来源/remote 和 before/after non-force FF 证明才可发布。最终 publisher 独立验真 admission 自摘要、前驱引用/签名/有效期、candidate/tree、规范路径/remote 和 ancestry；仅 `QWQ_ACCEPTANCE_PUBLISH=1` 不构成资格。缺证据、漂移、non-FF、force/delete 均阻断。
+- `--local-commit` 只检查当前 HEAD 非 detached、Git authority 可读且属于 allowed local branches，不枚举其他陈旧 refs；全 ref 治理仍由无参数默认模式执行。同步 Skill 与 lane resync 每轮冻结 fetch/权威读回后的已发布 `origin/dev1.0` exact SHA，不回落本地未发布 dev；常规仅 FF，分叉须当前 lane 显式授权合并并重新验收。脏重叠、分叉或进行中操作在跨 lane 回同步中零写，保留 WIP，不推远端 lane。
+- 质量生产与发布分开：lane `make accept` 对同一 exact candidate 去重执行 required 本地 readiness、Lane Gate 完整检查集合、Alpha（必跑）与 Beta（仅 `BETA=1`），形成 portable acceptance bundle；integration 在移动 HEAD 前先验 bundle/远端 parent，通过才本地 FF，并由 `make integrate ACCEPTANCE_BUNDLE=… PUBLISH=1` admit/publish/readback。本地 accept/bundle/integrate/hook 强制验真且不重跑完整套件。可按授权撤 dev 旧 `04. Lane Gate` required check、删除已可达已发布 dev 且未发布增量已保全的远端 lane，不等待专用 publisher/broker；hosted 资格强制仍是 daily-merge OPEN-004 `track`，不阻塞有效本地验收后的日常合入。服务端普通授权凭据仍可 FF dev，不能保证 Alpha 必经；dev 禁删/禁 non-FF 与 main promotion 强制继续保留。
+- 后续闭环是已发布 current dev head 的 Gamma → IQF → `dev1.0 -> main` PR/Delivery Gate → MainSourceSeal → 受管 system backsync → 已发布 dev → integration/本地 lane。缺前驱不得推进，dev 发布不等于 main 合入或 Prod 成功；生产仍沿 main + stable tag 的现行正式链。生产治理仅作 `administrative` 简化：合并冗余人工审批和重复 CI，不削弱 main/stable、签名物料、health、Provider、回滚等技术门，也不授予直接放量权。成功 publish 后下一次 readiness 排除已发布变化，但未发布差异增长时不保证常量范围/耗时。L0 `make commit-gate`（预算 180 秒，硬顶 300 秒）只由 commit Skill 在用户明确要求提交时运行，不挂 Git hook。
 
 规格入口见 `specs/feature-tree/README.md`，Codex/Cursor 执行约束见 `AGENTS.md` 与 `.cursor/commands/*.md`。

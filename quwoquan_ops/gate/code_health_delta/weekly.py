@@ -5,6 +5,8 @@ import hashlib
 import json
 import math
 import subprocess
+import tempfile
+import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,7 +14,9 @@ from typing import Any, Iterable
 
 from quwoquan_ops.ci.impact_planner_core import canonical_digest
 
-from .classification import classify_path
+from .classification import (
+    classify_path, generated_provenance, generated_output_declarations, generated_classification_report,
+)
 from .metrics import function_metrics, line_count, reuse_scope_key
 
 
@@ -34,16 +38,26 @@ def _tracked_paths(repo: Path, head: str) -> list[str]:
     return sorted((item.decode("utf-8") for item in raw.split(b"\0") if item), key=lambda value: value.encode("utf-8"))
 
 
-def _clean_current_blobs(repo: Path, head: str, paths: Iterable[str]) -> dict[str, bytes]:
-    if _git(repo, "rev-parse", "HEAD").strip() != head:
-        raise ValueError("weekly analysis requires head to equal checked-out HEAD")
-    if _git(repo, "status", "--porcelain", "--untracked-files=no").strip():
-        raise ValueError("weekly analysis requires a clean tracked candidate")
+def _commit_blobs(repo: Path, head: str, paths: Iterable[str]) -> dict[str, bytes]:
+    """分批读取 exact commit 对象；既不读取工作树字节，也不移动 HEAD/index。"""
+    selected = list(paths)
     result: dict[str, bytes] = {}
-    for path in paths:
-        candidate = repo / path
-        if candidate.is_file() and not candidate.is_symlink():
-            result[path] = candidate.read_bytes()
+    for start in range(0, len(selected), 64):
+        batch = selected[start:start + 64]
+        completed = subprocess.run(
+            ["git", "cat-file", "--batch"], cwd=repo,
+            input="".join(f"{head}:{path}\n" for path in batch).encode(), capture_output=True, check=True,
+        )
+        cursor = 0
+        for path in batch:
+            end = completed.stdout.index(b"\n", cursor)
+            header = completed.stdout[cursor:end].split()
+            if len(header) != 3 or header[1] != b"blob":
+                raise ValueError(f"exact blob unavailable: {head}:{path}")
+            size = int(header[2])
+            cursor = end + 1
+            result[path] = completed.stdout[cursor:cursor + size]
+            cursor += size + 1
     return result
 
 
@@ -64,8 +78,48 @@ def _historical_commits(repo: Path, head: str, end: datetime, weeks: Iterable[in
     return values
 
 
-def _cloc(repo: Path, sha: str, executable: str) -> dict[str, Any]:
-    raw = _run(repo, executable, "--git", sha, "--skip-uniqueness", "--timeout=0", "--json", "--quiet")
+def _classification_policy(repo: Path, sha: str, policy: dict[str, Any], paths: list[str]) -> dict[str, Any]:
+    rules = policy["classification"]
+    sources = set(rules.get("generated_exact_sources", {}).values())
+    sources.update(item["path"] for item in rules.get("generated_manifests", []))
+    authoring = _authoring_policy(policy)
+    tracked = set(paths)
+    blobs = _commit_blobs(repo, sha, sorted(sources.intersection(tracked)))
+    declarations = generated_output_declarations(authoring, blobs.get)
+    outputs = set(declarations)
+    # 两阶段都绑定同一 sha；声明缺失输出只返回 None，不借工作树或旧提交补齐。
+    blobs.update(_commit_blobs(repo, sha, sorted((outputs & tracked) - blobs.keys())))
+    source_digests = {path: "sha256:" + hashlib.sha256(blobs[path]).hexdigest() if path in blobs else None
+                      for path in sorted(sources | outputs)}
+    statuses: dict[str, Any] = {}
+    provenance = generated_provenance(authoring, blobs.get, statuses=statuses)
+    return {**authoring, "_generated_provenance": provenance, "_generated_statuses": statuses,
+            "_generated_sources_digest": canonical_digest(source_digests)}
+
+
+def _cloc(repo: Path, sha: str, executable: str, policy: dict[str, Any]) -> dict[str, Any]:
+    # cloc 对所有历史点使用同一 canonical 输入范围，避免覆盖率源码与内容输出误伤。
+    tracked = _tracked_paths(repo, sha)
+    classification_policy = _classification_policy(repo, sha, policy, tracked)
+    paths = [path for path in tracked
+             if classify_path(path, classification_policy) in {"handwritten-production", "test"}]
+    cache = repo / ".qwq_output/env/repo/local/code-health"
+    cache.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="cloc-input-", dir=cache) as directory:
+        root = Path(directory)
+        materialized = []
+        for offset in range(0, len(paths), 32):
+            for path, body in _commit_blobs(repo, sha, paths[offset:offset + 32]).items():
+                target = root / "source" / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(body)
+                materialized.append(str(target))
+        manifest = root / "paths.txt"
+        manifest.write_text("\n".join(materialized) + "\n", encoding="utf-8")
+        config = root / "cloc-options.txt"
+        config.write_text("", encoding="utf-8")
+        raw = _run(repo, executable, "--skip-uniqueness", "--timeout=0", "--json", "--quiet",
+                   f"--list-file={manifest}", f"--config={config}")
     payload = json.loads(str(raw))
     summary = payload.get("SUM")
     if not isinstance(summary, dict):
@@ -73,6 +127,7 @@ def _cloc(repo: Path, sha: str, executable: str) -> dict[str, Any]:
     header = payload.get("header") or {}
     return {
         "sha": sha,
+        "generatedSourcesDigest": classification_policy["_generated_sources_digest"],
         "files": int(summary.get("nFiles", 0)),
         "blank": int(summary.get("blank", 0)),
         "comment": int(summary.get("comment", 0)),
@@ -87,7 +142,7 @@ def _numstat(repo: Path, base: str | None, head: str) -> list[tuple[str, int, in
     if base:
         args.extend([base, head])
     else:
-        args.extend([f"{head}^{{tree}}"])
+        args = ["diff-tree", "--root", "--no-commit-id", "-r", "--numstat", "-z", "--no-renames", head]
     raw = _run(repo, "git", *args, text=False)
     assert isinstance(raw, bytes)
     result = []
@@ -153,19 +208,6 @@ def _clone_facts(blobs: dict[str, bytes], block_lines: int) -> tuple[dict[str, i
     return {path: len(lines) for path, lines in covered_lines.items()}, len(cloned_digests)
 
 
-def _dead_candidates(repo: Path) -> list[dict[str, str]]:
-    try:
-        from quwoquan_ops.gate.python_script_governance.report import derive_report
-        report = derive_report(repo, ("app", "service", "ops", "data"))
-        return [
-            {"path": item["path"], "reason": "python-script-governance-orphan-candidate"}
-            for item in report.get("scripts", [])
-            if item.get("orphanCandidate")
-        ]
-    except Exception as exc:  # report-only keeps typed unavailable evidence
-        return [{"path": "<unavailable>", "reason": f"python-script-governance:{type(exc).__name__}"}]
-
-
 def _workflow_runs(pages: object) -> list[dict[str, Any]]:
     runs: list[dict[str, Any]] = []
     for page in pages if isinstance(pages, list) else [pages]:
@@ -219,8 +261,9 @@ def delivery_outcomes(
     days: int = 28,
     regression_percent: float = 10.0,
 ) -> dict[str, Any]:
-    if pages is None:
-        return {"status": "not-provided", "comparisonStatus": "insufficient-history", "regressionFlags": None}
+    if pages is None or (isinstance(pages, dict) and pages.get("status") == "unavailable"):
+        return {"status": "unavailable", "reason": "delivery-evidence-not-provided",
+                "comparisonStatus": "insufficient-history", "regressionFlags": None}
     runs = _workflow_runs(pages)
     end_utc = end.astimezone(timezone.utc)
     current_start = end_utc - timedelta(days=days)
@@ -277,12 +320,12 @@ def _lookup(report: dict[str, Any], path: tuple[str, ...]) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def _ordered_previous(previous_reports: Iterable[dict[str, Any]], current_head: str) -> list[dict[str, Any]]:
+def _ordered_previous(previous_reports: Iterable[dict[str, Any]], current_head: str, *, observation_branch: str | None = None) -> list[dict[str, Any]]:
     ordered = []
     for report in previous_reports:
         if not isinstance(report, dict) or report.get("schema") != WEEKLY_SCHEMA:
             raise ValueError("previous weekly report schema 非法")
-        if report.get("headSha") == current_head:
+        if report.get("headSha") == current_head or report.get("observationBranch") != observation_branch:
             continue
         ordered.append(report)
     return sorted(ordered, key=lambda item: str(item["window"]["end"]), reverse=True)
@@ -367,7 +410,7 @@ def owner_scope_weak_points(
     dead_candidates: list[dict[str, str]],
     policy: dict[str, Any],
     *,
-    limit: int = 5,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
     """Aggregate weak points per owner scope so reviewers see where debt concentrates."""
     advisory = policy["thresholds"]["file_lines"]["advisory"]
@@ -385,7 +428,7 @@ def owner_scope_weak_points(
         scope["overBlock"] += lines > block
         metric = complexity.get(path, {})
         scope["overComplexity"] += (
-            metric.get("maxCyclomatic", 0) > cyclomatic or metric.get("maxCognitive", 0) > cognitive
+            (metric.get("maxCyclomatic") or 0) > cyclomatic or (metric.get("maxCognitive") or 0) > cognitive
         )
         scope["cloneLines"] += clone_lines.get(path, 0)
     for item in dead_candidates:
@@ -402,6 +445,23 @@ def owner_scope_weak_points(
     return ranked[:limit]
 
 
+def _file_complexity(path: str, body: bytes) -> dict[str, Any]:
+    import ast
+    suffix = Path(path).suffix
+    status = "available" if suffix == ".py" else "partial" if suffix in {".go", ".dart", ".java", ".ts", ".tsx", ".js", ".jsx"} else "unavailable"
+    if suffix == ".py":
+        try:
+            ast.parse(body.decode("utf-8"))
+        except (SyntaxError, UnicodeError):
+            status = "unavailable"
+    functions = function_metrics(path, body) if status != "unavailable" else []
+    result = {"functions": len(functions), "maxCyclomatic": max((item.cyclomatic for item in functions), default=0),
+              "maxCognitive": max((item.cognitive for item in functions), default=0)}
+    if status == "unavailable":
+        result = {key: None for key in result}
+    return {**result, "status": status, "analyzer": "python-ast" if suffix == ".py" else "brace-heuristic-partial"}
+
+
 def _score_hotspots(
     production: dict[str, bytes],
     churn: dict[str, dict[str, int]],
@@ -413,11 +473,10 @@ def _score_hotspots(
     complexity: dict[str, dict[str, int]] = {}
     hotspots = []
     for path, body in production.items():
-        functions = function_metrics(path, body)
-        maximum_cyclomatic = max((item.cyclomatic for item in functions), default=0)
-        maximum_cognitive = max((item.cognitive for item in functions), default=0)
+        complexity[path] = _file_complexity(path, body)
+        maximum_cyclomatic = complexity[path]["maxCyclomatic"] or 0
+        maximum_cognitive = complexity[path]["maxCognitive"] or 0
         lines = line_count(body)
-        complexity[path] = {"functions": len(functions), "maxCyclomatic": maximum_cyclomatic, "maxCognitive": maximum_cognitive}
         activity = churn.get(path, {"added": 0, "deleted": 0, "churn": 0, "changeFrequency": 0})
         health = max(
             1.0,
@@ -436,26 +495,119 @@ def _score_hotspots(
     return complexity, hotspots
 
 
+LANGUAGES = {".py": "Python", ".go": "Go", ".dart": "Dart", ".ts": "TypeScript", ".tsx": "TypeScript",
+             ".js": "JavaScript", ".jsx": "JavaScript", ".swift": "Swift", ".java": "Java", ".kt": "Kotlin",
+             ".kts": "Kotlin", ".sh": "Shell", ".md": "Markdown", ".json": "JSON", ".yaml": "YAML", ".yml": "YAML"}
+
+
+def aggregate_file_facts(facts: list[dict[str, Any]]) -> dict[str, Any]:
+    """所有维度只聚合同一逐文件物理行事实，不与 cloc code 混算。"""
+    result: dict[str, Any] = {}
+    for dimension, key in (("categories", "category"), ("languages", "language"), ("modules", "moduleScope")):
+        rows: dict[str, dict[str, Any]] = {}
+        for fact in facts:
+            row = rows.setdefault(fact[key], {"files": 0, "physicalLines": 0})
+            row["files"] += 1
+            row["physicalLines"] += fact["physicalLines"]
+            if dimension == "modules":
+                row["scopeKind"] = "structural"
+                row["owner"] = {"status": "unavailable", "reason": "exact-feature-owner-not-provided"}
+        result[dimension] = rows
+    total = {"files": len(facts), "physicalLines": sum(item["physicalLines"] for item in facts)}
+    for dimension in ("categories", "languages", "modules"):
+        if any(sum(row[key] for row in result[dimension].values()) != value for key, value in total.items()):
+            raise ValueError(f"weekly aggregation conservation failed: {dimension}")
+    result["conservation"] = {"status": "available", "matched": True, **total}
+    return result
+
+
+def _optional_evidence(evidence: object, head: str) -> dict[str, Any]:
+    # 接收外部已有 exact 证据，不从代码规模推测 coverage 或 architecture 健康。
+    if not isinstance(evidence, dict):
+        return {"status": "unavailable", "reason": "exact-evidence-not-provided"}
+    if evidence.get("headSha") != head or not evidence.get("exactRef"):
+        return {"status": "unavailable", "reason": "evidence-head-or-exact-ref-mismatch"}
+    return {"status": "supplied-unverified", "evidence": evidence, "authority": "none",
+            "reason": "self-reported-head-and-ref-not-resolved-or-verified"}
+
+
+def _growth_history(repo: Path, head: str, end: datetime, executable: str, policy: dict[str, Any], fast: bool) -> list[dict[str, Any]]:
+    history = []
+    for age in (13, 4, 1, 0):
+        commits = _historical_commits(repo, head, end, (age,))
+        row: dict[str, Any] = {"ageWeeks": age, "status": "unavailable", "files": None, "sourceLoc": None,
+                               "inputCategories": ["handwritten-production", "test"], "countDuplicatePaths": True,
+                               "sourceLocScope": MEASUREMENT_SPEC["sourceLoc"], "legacyScopeComparable": False}
+        if fast or not commits:
+            row["reason"] = "fast-not-measured" if fast else "historical-commit-missing"
+        else:
+            sha = commits[0][1]
+            row.update(sha=sha, committerDate=_commit_time(repo, sha).isoformat(timespec="seconds"))
+            try:
+                row.update(_cloc(repo, sha, executable, policy), status="available")
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                row["reason"] = f"cloc-unavailable:{type(exc).__name__}"
+        history.append(row)
+    return history
+
+
+MEASUREMENT_SPEC = {
+    "schema": "quwoquan.weekly-measurement.v2",
+    "physicalLines": "all-tracked-blob-text-lines; binary-not-applicable; includes-vendor",
+    "sourceLoc": "cloc-code; canonical-handwritten-production-and-test-only; duplicate-paths-counted",
+    "sourceLocLegacyComparable": False,
+    "clocOptions": ["--skip-uniqueness", "--timeout=0", "--json", "--quiet", "exact-blob-list", "empty-config"],
+    "classification": "authoring-policy-plus-per-commit-generated-source-and-output-blobs; manifest-sha256-v2",
+    "history": "first-parent-committer-date; 90-day-churn",
+}
+
+
+def _authoring_policy(policy: dict[str, Any]) -> dict[str, Any]:
+    """运行时派生键不属于 authoring policy，不能把工作树 provenance 带进身份。"""
+    return {key: value for key, value in policy.items() if not key.startswith("_")}
+
+
+def _comparable_history(current: dict, previous: list[dict]) -> tuple[list[dict], dict]:
+    keys = ("observationBranch", "mode", "policyDigest", "implementationDigest", "toolchainDigest", "measurementSpecDigest")
+    accepted, excluded = [], []
+    for report in previous:
+        reasons = [key for key in keys if key not in report or report[key] != current.get(key)]
+        if reasons:
+            excluded.append({"headSha": report.get("headSha"), "reasons": reasons})
+        else:
+            accepted.append(report)
+    status = "comparable" if accepted else "incomparable" if excluded else "insufficient-history"
+    return accepted, {"status": status, "excluded": excluded, "acceptedReports": len(accepted),
+                      "snapshotIdentityRequiredEqual": False}
+
+
 def _report_identity(
     *, head_sha: str, window: dict[str, Any], policy: dict[str, Any], delivery_run_pages: object, tools: dict[str, Any],
+    observation_branch: str | None = None, evidence: object = None, mode: str = "full",
+    generated_sources_digest: str | None = None,
 ) -> dict[str, str]:
     """身份只绑定输入（head、窗口、policy、实现、delivery 数据、工具），不绑定观测时刻。"""
-    policy_digest = canonical_digest(policy)
+    policy_digest = canonical_digest(_authoring_policy(policy))
     implementation_digest = canonical_digest({
         f"quwoquan_ops/gate/code_health_delta/{name}": "sha256:" + hashlib.sha256(
             Path(__file__).with_name(name).read_bytes()
         ).hexdigest()
-        for name in ("weekly.py", "metrics.py", "classification.py")
+        for name in ("weekly.py", "metrics.py", "classification.py", "policy.py")
     })
+    toolchain_digest = canonical_digest(tools)
+    measurement_spec_digest = canonical_digest(MEASUREMENT_SPEC)
     delivery_outcomes_digest = canonical_digest(delivery_run_pages)
     identity = canonical_digest({
         "headSha": head_sha, "window": window, "policyDigest": policy_digest,
         "implementationDigest": implementation_digest, "deliveryOutcomesDigest": delivery_outcomes_digest,
-        "tools": tools,
+        "tools": tools, "observationBranch": observation_branch, "evidence": evidence, "mode": mode,
+        "measurementSpecDigest": measurement_spec_digest, "generatedSourcesDigest": generated_sources_digest,
     })
     return {
         "identityDigest": identity, "policyDigest": policy_digest,
         "implementationDigest": implementation_digest, "deliveryOutcomesDigest": delivery_outcomes_digest,
+        "toolchainDigest": toolchain_digest, "measurementSpecDigest": measurement_spec_digest,
+        "generatedSourcesDigest": generated_sources_digest,
     }
 
 
@@ -464,6 +616,80 @@ def _observed_value(observed_at: datetime | None) -> str:
     if observed.tzinfo is None or observed.utcoffset() is None:
         raise ValueError("observed_at must include timezone")
     return observed.astimezone(timezone.utc).isoformat(timespec="microseconds")
+
+
+def _complexity_status(metrics: Iterable[dict[str, Any]]) -> str:
+    statuses = {item["status"] for item in metrics}
+    if not statuses or statuses == {"unavailable"}:
+        return "unavailable"
+    return "available" if statuses == {"available"} else "partial"
+
+
+def _source_facts(repo: Path, head: str, paths: list[str], policy: dict[str, Any]) -> tuple[list, dict, dict, str, dict]:
+    classification_policy = _classification_policy(repo, head, policy, paths)
+    production: dict[str, bytes] = {}
+    tests: dict[str, bytes] = {}
+    facts = []
+    for offset in range(0, len(paths), 16):
+        for path, body in _commit_blobs(repo, head, paths[offset:offset + 16]).items():
+            category = classify_path(path, classification_policy)
+            binary = b"\0" in body[:8192]
+            facts.append({"path": path, "category": category, "language": LANGUAGES.get(Path(path).suffix, "Other"),
+                          "moduleScope": reuse_scope_key(path), "physicalLines": 0 if binary else line_count(body),
+                          "physicalLinesStatus": "not-applicable-binary" if binary else "available", "bytes": len(body)})
+            if not binary and category == "handwritten-production":
+                production[path] = body
+            elif not binary and category == "test":
+                tests[path] = body
+    return (facts, production, tests, classification_policy["_generated_sources_digest"],
+            generated_classification_report(classification_policy, paths))
+
+
+def _attach_owner_evidence(modules: dict, measurement: dict) -> None:
+    if measurement["status"] != "supplied-unverified":
+        return
+    owners = measurement["evidence"].get("modules", {})
+    if not isinstance(owners, dict):
+        return
+    for scope, row in modules.items():
+        evidence = owners.get(scope)
+        if isinstance(evidence, dict) and evidence.get("ownerIdentityRef") and evidence.get("resolvedOwner"):
+            row["owner"] = {"status": "supplied-unverified", "authority": "none",
+                            "reason": "owner-ref-not-resolved-or-verified", "suppliedEvidence": evidence}
+
+
+def _measurement_states(supplied: dict, head: str, mode: str, complexity: dict) -> dict:
+    result = {name: _optional_evidence(supplied.get(name), head)
+              for name in ("coverage", "architecture", "reachability", "owner")}
+    for name in ("duplication", "hotspots", "complexity"):
+        result[name] = {"status": "unavailable" if mode == "fast" else "available",
+                        "reason": "fast-not-measured" if mode == "fast" else "builtin-observation"}
+    result["complexity"].update(files=complexity, status=_complexity_status(complexity.values()))
+    return result
+
+
+def _decorate_weak_points(rows: list, modules: dict, complexity: dict, mode: str) -> None:
+    for row in rows:
+        row.update(scopeKind="structural", owner=modules[row["ownerScope"]]["owner"], deadCandidates=None)
+        scoped = [item for path, item in complexity.items() if reuse_scope_key(path) == row["ownerScope"]]
+        row["complexityStatus"] = _complexity_status(scoped)
+        if row["complexityStatus"] == "unavailable":
+            row["overComplexity"] = None
+        if mode == "fast":
+            row["cloneLines"] = None
+
+
+def _complexity_summary(complexity: dict, thresholds: dict, production_count: int) -> dict:
+    status = _complexity_status(complexity.values())
+    result = {
+        "functionCount": sum(item["functions"] or 0 for item in complexity.values()),
+        "overCyclomaticAdvisory": sum((item["maxCyclomatic"] or 0) > thresholds["cyclomatic_advisory"] for item in complexity.values()),
+        "overCognitiveAdvisory": sum((item["maxCognitive"] or 0) > thresholds["cognitive_advisory"] for item in complexity.values()),
+    }
+    if status == "unavailable":
+        result = {key: None for key in result}
+    return {**result, "status": status,
+            "unavailableFiles": production_count - sum(item["status"] != "unavailable" for item in complexity.values())}
 
 
 def analyze_weekly(
@@ -475,52 +701,59 @@ def analyze_weekly(
     delivery_run_pages: object = None,
     observed_at: datetime | None = None,
     previous_reports: Iterable[dict[str, Any]] = (),
+    observation_branch: str | None = None,
+    mode: str = "full",
+    existing_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     repo = repo.resolve()
     head_sha = _git(repo, "rev-parse", "--verify", f"{head}^{{commit}}").strip()
     end = _commit_time(repo, head_sha)
     start = end - timedelta(days=90)
     paths = _tracked_paths(repo, head_sha)
-    all_blobs = _clean_current_blobs(repo, head_sha, paths)
-    classified = {path: classify_path(path, policy) for path in all_blobs}
-    production = {path: body for path, body in all_blobs.items() if classified[path] == "handwritten-production"}
-    test_blobs = {path: body for path, body in all_blobs.items() if classified[path] == "test"}
-    categories: dict[str, dict[str, int]] = {name: {"files": 0, "lines": 0} for name in policy["source_categories"]}
-    for path, body in all_blobs.items():
-        categories[classified[path]]["files"] += 1
-        categories[classified[path]]["lines"] += line_count(body)
-    history = [
-        {"ageWeeks": age, "committerDate": _commit_time(repo, sha).isoformat(timespec="seconds"), **_cloc(repo, sha, cloc_executable)}
-        for age, sha in _historical_commits(repo, head_sha, end, (13, 4, 1, 0))
-    ]
-    clone_lines, clone_groups = _clone_facts(production, policy["thresholds"]["duplication"]["block_lines"])
-    complexity, hotspots = _score_hotspots(production, _churn(repo, head_sha, start), clone_lines, policy)
+    if mode not in {"full", "fast"}:
+        raise ValueError("weekly mode must be full or fast")
+    policy = _authoring_policy(policy)
+    file_facts, production, test_blobs, sources_digest, generated_classification = _source_facts(repo, head_sha, paths, policy)
+    aggregates = aggregate_file_facts(file_facts)
+    history = _growth_history(repo, head_sha, end, cloc_executable, policy, mode == "fast")
+    clone_lines, clone_groups = ({}, None) if mode == "fast" else _clone_facts(production, policy["thresholds"]["duplication"]["block_lines"])
+    complexity, hotspots = ({}, []) if mode == "fast" else _score_hotspots(production, _churn(repo, head_sha, start), clone_lines, policy)
     top = sorted(hotspots, key=lambda item: (-item["score"], item["path"]))[: policy["report"]["weekly_top_hotspots"]]
-    tools = {"cloc": history[-1]["clocVersion"] if history else "unavailable", "builtinMetrics": 1}
-    dead_candidates = _dead_candidates(repo)
+    tools = {"cloc": history[-1].get("clocVersion", "unavailable"), "builtinMetrics": 1,
+             "python": list(sys.version_info[:3]), "git": _git(repo, "--version").strip()}
+    # 现有治理扫描读取工作树，不能冒充此 exact commit 的可达性证据。
+    dead_candidates: list[dict[str, str]] = []
+    supplied = existing_evidence or {}
+    measurements = _measurement_states(supplied, head_sha, mode, complexity)
+    _attach_owner_evidence(aggregates["modules"], measurements["owner"])
+    for fact in file_facts:
+        fact["complexity"] = complexity.get(fact["path"], {"status": "unavailable", "reason": "fast-or-nonproduction-not-measured"})
     window = {"start": start.isoformat(timespec="seconds"), "end": end.isoformat(timespec="seconds"), "days": 90}
     observed_value = _observed_value(observed_at)
     tiers = list(policy["report"]["size_observation_tiers"])
-    previous = _ordered_previous(previous_reports, head_sha)
+    previous = _ordered_previous(previous_reports, head_sha, observation_branch=observation_branch)
     complexity_thresholds = policy["thresholds"]["complexity"]
     report = {
         "schema": WEEKLY_SCHEMA, "terminal": "REPORT_ONLY",
-        "headSha": head_sha, "window": window,
-        **_report_identity(head_sha=head_sha, window=window, policy=policy, delivery_run_pages=delivery_run_pages, tools=tools),
+        "headSha": head_sha, "window": window, "observationBranch": observation_branch, "mode": mode,
+        "inputScope": {"kind": "exact-git-commit-blobs", "headSha": head_sha, "worktreeBytesIncluded": False,
+                       "trackedPaths": len(paths), "measurementMode": mode},
+        "fileFacts": file_facts, **aggregates, "measurements": measurements,
+        "generatedClassification": generated_classification,
+        **_report_identity(head_sha=head_sha, window=window, policy=policy, delivery_run_pages=delivery_run_pages, tools=tools,
+                           observation_branch=observation_branch, evidence=supplied, mode=mode,
+                           generated_sources_digest=sources_digest),
+        "measurementSpec": MEASUREMENT_SPEC,
         "policyId": policy["policy_id"], "observedAt": observed_value,
         "tools": tools,
-        "growthHistory": history, "categories": categories,
-        "summary": {"trackedFiles": len(paths), "handwrittenProductionFiles": len(production), "cloneGroupCount": clone_groups, "deadCandidateCount": len(dead_candidates)},
+        "growthHistory": history,
+        "summary": {"trackedFiles": len(paths), "handwrittenProductionFiles": len(production), "cloneGroupCount": clone_groups, "deadCandidateCount": None},
         "sizeDistribution": {
             "tiers": tiers,
             "production": _size_distribution(production, tiers),
             "test": _size_distribution(test_blobs, tiers),
         },
-        "complexitySummary": {
-            "functionCount": sum(item["functions"] for item in complexity.values()),
-            "overCyclomaticAdvisory": sum(item["maxCyclomatic"] > complexity_thresholds["cyclomatic_advisory"] for item in complexity.values()),
-            "overCognitiveAdvisory": sum(item["maxCognitive"] > complexity_thresholds["cognitive_advisory"] for item in complexity.values()),
-        },
+        "complexitySummary": _complexity_summary(complexity, complexity_thresholds, len(production)),
         "topHotspots": top, "deadCodeCandidates": dead_candidates,
         "ownerScopeWeakPoints": owner_scope_weak_points(production, complexity, clone_lines, dead_candidates, policy),
         "deliveryOutcomes": delivery_outcomes(
@@ -530,7 +763,13 @@ def analyze_weekly(
         "generatedAt": observed_value,
         "authority": {"blocksPullRequests": False, "createsOwnerOpen": False, "automaticRemediation": False},
     }
+    report["categories"] = {name: {**row, "lines": row["physicalLines"]} for name, row in aggregates["categories"].items()}
+    _decorate_weak_points(report["ownerScopeWeakPoints"], aggregates["modules"], complexity, mode)
+    previous, comparison = _comparable_history(report, previous)
+    report["historyComparison"] = comparison
     report["ratchet"] = ratchet_trend(report, previous, tiers)
+    report["ratchet"]["comparisonStatus"] = comparison["status"]
+    report["ratchet"]["incomparableReports"] = comparison["excluded"]
     report["hotspotPersistence"] = {
         "historyReports": len(previous),
         "historyWeeks": len(_weekly_top_paths(previous, _iso_week(window["end"]))),

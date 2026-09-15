@@ -34,6 +34,7 @@ from lib.evidence_fingerprint import (  # noqa: E402
     validate_ref,
     workspace_digests,
 )
+from lib.review_fingerprint import repository_inputs, source_root, dependency_root, validate_git_range
 from lib.candidate_evidence import read_candidate_closure  # noqa: E402
 import review_dispatch as review_dispatch_module  # noqa: E402
 from lib.descriptor_safe_io import (  # noqa: E402
@@ -233,6 +234,7 @@ def _fingerprint(
         raise EvidenceRunnerError(
             "exact plan bytes identity 为 evidence fingerprint 重算必填输入"
         )
+    repo_root = source_root(repo_root)
     # 闭包位于Git忽略目录，workspace摘要不能代替每个边界的有界exact-byte读回。
     try:
         read_candidate_closure(plan["candidate_evidence_identity"]["ref"], repo_root=repo_root)
@@ -240,7 +242,7 @@ def _fingerprint(
         raise EvidenceRunnerError(f"{getattr(exc, 'code', 'CANDIDATE.STALE')}: {exc}") from exc
     current_plan = review_dispatch_module.recompute_plan_fingerprint(plan, registry)
     payload = current_plan["digest_payload"]
-    generator_path = Path(__file__).resolve()
+    generator_path = repo_root / "quwoquan_ops/cli/evidence_runner.py"
     try:
         generator_ref = generator_path.relative_to(repo_root.resolve())
     except ValueError:
@@ -328,6 +330,15 @@ def _assert_same_fingerprint(
             )
 
 
+def _plan_source(plan: dict, repo_root: Path) -> dict:
+    source = _workspace_source_classification(repo_root)
+    identity = plan.get("git_range")
+    if identity is not None:
+        exact = validate_git_range(identity, repo_root=repo_root)
+        source.update(head_sha=exact["head_sha"], merge_base_sha=exact["base_sha"])
+    return source
+
+
 def _assert_plan_source_range(
     plan: dict[str, Any], source: dict[str, Any]
 ) -> None:
@@ -340,6 +351,7 @@ def _assert_plan_source_range(
         )
 
 
+@repository_inputs
 def run_plan(
     plan: dict[str, Any],
     *,
@@ -350,6 +362,7 @@ def run_plan(
     plan_bytes: bytes | None = None,
     plan_ref: str | None = None,
 ) -> dict[str, Any]:
+    cwd = source_root(cwd)
     if registry is None:
         raise EvidenceRunnerError("registry 为 canonical evidence 执行必填输入")
     if plan_bytes is None or plan_ref is None:
@@ -446,7 +459,7 @@ def run_plan(
 
     started_at = _now()
     repo_root = cwd.resolve()
-    source = _workspace_source_classification(repo_root)
+    source = _plan_source(plan, repo_root)
     _assert_plan_source_range(plan, source)
     evidence_class, admission_eligible = _evidence_classification(source)
     execution_fingerprint = _fingerprint(

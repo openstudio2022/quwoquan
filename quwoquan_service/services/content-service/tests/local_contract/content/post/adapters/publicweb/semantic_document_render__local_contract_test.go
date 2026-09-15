@@ -10,9 +10,9 @@ import (
 	publicweb "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb"
 )
 
-func TestLegacyReadOnlyMarkdownProjectionPreservesSupportedSequenceAndSafeHTML(t *testing.T) {
+func TestCanonicalUnavailableMarkdownProjectionPreservesSupportedSequenceAndSafeHTML(t *testing.T) {
 	markdown := "# 标题\n\n正文[^route]。\n\n术语\n: 定义\n\n| 地点 | 天数 |\n| :--- | ---: |\n| 西湖 | 2 |\n\n:::directory\ngroup:journey label=\"行程\"\n- [第一章](#chapter-1)\n:::\n\n[^route]: 路线说明。"
-	html, err := publicweb.RenderLegacyReadOnlyMarkdownBodyHTML(markdown, "qwq-rich-md", nil)
+	html, err := publicweb.RenderCanonicalUnavailableMarkdownBodyHTML(markdown, "qwq-rich-md", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestSemanticConsumerFailsClosedOnVersionOffsetCapabilityAndExperimentalNode
 	}
 }
 
-func TestLegacyReadOnlyMarkdownProjectionRejectsUnsafeOrUnknownInput(t *testing.T) {
+func TestCanonicalUnavailableMarkdownProjectionRejectsUnsafeOrUnknownInput(t *testing.T) {
 	cases := []struct{ name, markdown, dialect, code string }{
 		{"missing_dialect", "正文", "", "DIALECT_MISSING"},
 		{"unknown_directive", ":::timeline\n- 08:00\n:::", "qwq-rich-md", "UNSUPPORTED.NODE"},
@@ -95,7 +95,7 @@ func TestLegacyReadOnlyMarkdownProjectionRejectsUnsafeOrUnknownInput(t *testing.
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			html, err := publicweb.RenderLegacyReadOnlyMarkdownBodyHTML(tc.markdown, tc.dialect, nil)
+			html, err := publicweb.RenderCanonicalUnavailableMarkdownBodyHTML(tc.markdown, tc.dialect, nil)
 			if err == nil || html != "" || !strings.Contains(err.Error(), tc.code) {
 				t.Fatalf("html=%q err=%v", html, err)
 			}

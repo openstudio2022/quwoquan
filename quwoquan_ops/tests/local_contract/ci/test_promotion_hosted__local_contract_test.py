@@ -93,6 +93,44 @@ def test_bundle_extract_rejects_drift_and_unsafe_members(tmp_path: Path) -> None
         extract_bundle(stage=_write_stage(tmp_path / "d3", unsafe, escape), output_dir=tmp_path / "o3")
 
 
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001
+def test_review_bundle_preserves_original_report_bytes_and_rejects_missing_dependencies(tmp_path: Path) -> None:
+    from quwoquan_ops.ci.promotion_hosted import review_bundle_evidence
+    from quwoquan_ops.cli.lib.agent_governance_contract import contract_schema_version, contract_section
+    from quwoquan_ops.ci.verify_code_health_delivery import read_review_evidence
+
+    control = tmp_path / "control"
+    bundle = control / "qualification-bundle"
+    bundle.mkdir(parents=True)
+    report_raw = b'{\n  "schema": "quwoquan.code-health-delta",\n  "terminal": "PR_WARN"\n}\n'
+    (bundle / "health.json").write_bytes(report_raw)
+    exact_owner = bundle / ".qwq_output/owner.json"
+    exact_owner.parent.mkdir()
+    exact_owner.write_bytes(b"{}")
+    receipt = {"evidence": [{"artifact": {"kind": "code-health-report-v1", "ref": "health.json"}}]}
+    (bundle / "receipt.json").write_text(json.dumps(receipt, indent=2))
+    for ref in ("plan.json", "review.json", "consolidation.json", "owner.json", "candidate.json", "impact.json"):
+        (bundle / ref).write_bytes(b"{}")
+    handoff = {field: None for field in contract_section("handoff_manifest")["required_fields"]}
+    handoff.update(schema_version=contract_schema_version("handoff_manifest"), review_plan_ref="plan.json",
+        review_consolidation_ref="consolidation.json", evidence_receipt_refs=["receipt.json"],
+        reviewer_result_refs=["review.json"], owner_identity_ref=".qwq_output/owner.json", candidate_evidence_ref="candidate.json",
+        candidate_closure=[{"ref": "impact.json", "canonical_json": "{}"}])
+    (bundle / "handoff.json").write_text(json.dumps(handoff))
+    evidence = review_bundle_evidence(bundle_root=bundle, evidence_root=control, handoff_ref="handoff.json")
+    exact = next(item for item in evidence if item["ref"].endswith("/health.json"))
+    assert exact["digest"] == digest(report_raw)
+    assert read_review_evidence(control, exact)[0]["terminal"] == "PR_WARN"
+    manifest = build_bundle_tar(bundle_root=bundle, output_file=tmp_path / "bundle.tar")
+    stage = _write_stage(tmp_path, manifest, (tmp_path / "bundle.tar").read_bytes())
+    extract_bundle(stage=stage, output_dir=tmp_path / "readback")
+    assert (tmp_path / "readback/health.json").read_bytes() == report_raw
+    assert (tmp_path / "readback/.qwq_output/owner.json").read_bytes() == b"{}"
+    (bundle / "impact.json").unlink()
+    with pytest.raises((ValueError, OSError)):
+        review_bundle_evidence(bundle_root=bundle, evidence_root=control, handoff_ref="handoff.json")
+
+
 def test_hosted_authority_semantics_follow_readback_not_assertion() -> None:
     reviews = [
         {"user": {"login": "author"}, "state": "APPROVED", "commit_id": HEAD},
@@ -129,13 +167,43 @@ def test_hosted_authority_semantics_follow_readback_not_assertion() -> None:
     assert ruleset_fact(rulesets=[], head_sha=HEAD, base_sha=BASE)["requiredCheckEnforced"] is False
 
 
+@pytest.mark.parametrize("bypass", ["missing", None, [], [{"actor_type": "DeployKey"}], {}, ""])
+def test_ruleset_bypass_observation_never_fabricates_empty(bypass: object) -> None:
+    # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#open-007
+    ruleset = {
+        "enforcement": "active", "target": "branch",
+        "conditions": {"ref_name": {"include": ["refs/heads/main"], "exclude": []}},
+        "rules": [
+            {"type": "pull_request"},
+            {"type": "required_status_checks", "parameters": {
+                "strict_required_status_checks_policy": True,
+                "required_status_checks": [{"context": "03. Delivery Gate", "integration_id": 15368}],
+            }},
+        ],
+    }
+    if bypass != "missing":
+        ruleset["bypass_actors"] = bypass
+    fact = ruleset_fact(rulesets=[ruleset], head_sha=HEAD, base_sha=BASE)
+    observable = isinstance(bypass, list)
+    assert fact["bypassActorsObservable"] is observable
+    assert fact["bypassActors"] == (bypass if observable else None)
+    assert fact["rulesets"][0]["bypassActorsObservable"] is observable
+    # required check 的形状可证，不意味着不可见的 bypass 为空。
+    assert fact["requiredCheckEnforced"] is True
+    assert fact["status"] == ("passed" if observable and not bypass else "failed")
+
+
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=repo, text=True, capture_output=True, check=True).stdout.strip()
 
 
-def test_gate_produced_facts_are_accepted_by_promotion_admit(tmp_path: Path) -> None:
+@pytest.mark.parametrize("bypass", [[], "missing", None, [{"actor_type": "DeployKey"}]])
+def test_gate_produced_facts_are_accepted_by_promotion_admit(tmp_path: Path, bypass: object) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
+    policy = repo / "quwoquan_ops/policies/code_health_policy.yaml"
+    policy.parent.mkdir(parents=True)
+    policy.write_bytes((Path(__file__).resolve().parents[4] / "quwoquan_ops/policies/code_health_policy.yaml").read_bytes())
     _git(repo, "init", "-b", "main")
     _git(repo, "config", "user.name", "t")
     _git(repo, "config", "user.email", "t@example.com")
@@ -202,16 +270,34 @@ def test_gate_produced_facts_are_accepted_by_promotion_admit(tmp_path: Path) -> 
             "strict_required_status_checks_policy": True,
             "required_status_checks": [{"context": "03. Delivery Gate", "integration_id": 15368}]}}],
     }]))
+    ruleset_rows = json.loads((readback / "rulesets.json").read_text())
+    if bypass == "missing":
+        ruleset_rows[0].pop("bypass_actors")
+    else:
+        ruleset_rows[0]["bypass_actors"] = bypass
+    (readback / "rulesets.json").write_text(json.dumps(ruleset_rows))
     facts = write_hosted_authority_facts(
-        evidence_root=store, head_sha=head, base_sha=base, reviews_file=readback / "reviews.json",
+        repository=repo, evidence_root=store, head_sha=head, base_sha=base, reviews_file=readback / "reviews.json",
         threads_file=readback / "threads.json", rulesets_file=readback / "rulesets.json", author_login="author",
         branch_policy_exit=0, changed_boundary_exit=0, impact_plan_digest="sha256:" + "5" * 64,
         changed_paths_digest="sha256:" + "6" * 64, required_evidence=[qualification_ref],
     )
     assert {name: value["status"] for name, value in facts.items()} == {
-        "approval": "passed", "threads": "passed", "ruleset": "passed", "boundary": "passed", "required-evidence": "passed",
+        "approval": "passed", "threads": "passed", "ruleset": "passed" if bypass == [] else "failed",
+        "boundary": "passed", "required-evidence": "passed",
     }
     exact = {name: {"ref": value["ref"], "digest": value["digest"]} for name, value in facts.items()}
+    if bypass != []:
+        with pytest.raises(PromotionEvidenceError, match="ruleset does not bind promotion range"):
+            create_promotion_admission(
+                repository=repo, evidence_root=store, qualification_ref=qualification_ref,
+                head_sha=head, base_sha=base, synthetic_merge_sha=merge,
+                approval_fact_ref=exact["approval"], thread_fact_ref=exact["threads"],
+                ruleset_fact_ref=exact["ruleset"], boundary_fact_ref=exact["boundary"],
+                required_evidence=[exact["required-evidence"]],
+                promotion_ready_at=now.isoformat().replace("+00:00", "Z"),
+            )
+        return
     admission = create_promotion_admission(
         repository=repo, evidence_root=store, qualification_ref=qualification_ref,
         head_sha=head, base_sha=base, synthetic_merge_sha=merge,
@@ -223,9 +309,12 @@ def test_gate_produced_facts_are_accepted_by_promotion_admit(tmp_path: Path) -> 
     body = json.loads(admission.read_text())
     assert body["decision"] == "admitted" and body["headSha"] == head and body["baseSha"] == base
     assert body["authority"]["approval"] == exact["approval"]
-    # 边界失败的事实不得被 promotion-admit 接受
+    # 边界失败的事实不得被 promotion-admit 接受；前驱也必须真实物化。
+    failed_qualification = tmp_path / "control-failed" / qualification_ref["ref"]
+    failed_qualification.parent.mkdir(parents=True)
+    failed_qualification.write_bytes(qualification_path.read_bytes())
     failed = write_hosted_authority_facts(
-        evidence_root=tmp_path / "control-failed", head_sha=head, base_sha=base, reviews_file=readback / "reviews.json",
+        repository=repo, evidence_root=tmp_path / "control-failed", head_sha=head, base_sha=base, reviews_file=readback / "reviews.json",
         threads_file=readback / "threads.json", rulesets_file=readback / "rulesets.json", author_login="author",
         branch_policy_exit=0, changed_boundary_exit=2, impact_plan_digest="sha256:" + "5" * 64,
         changed_paths_digest="sha256:" + "6" * 64, required_evidence=[qualification_ref],

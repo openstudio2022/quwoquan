@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import subprocess
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +60,15 @@ def policy_text_with(**overrides: dict[str, Any]) -> str:
     for section, values in overrides.items():
         document["thresholds"][section].update(values)
     return yaml.safe_dump(document, allow_unicode=True, sort_keys=False)
+
+
+def write_launch_generated(repo: Path, relative: str, body: str) -> Path:
+    """构造已登记 launch generator 的 exact output，而非假 generated 目录。"""
+    write(repo, "quwoquan_app/tool/app_launch_contract_codegen/generated_manifest.json", json.dumps({
+        "generator": "tools/codegen_app_metadata --app-launch-contract-only",
+        "outputs": [{"path": relative, "sha256": "sha256:" + hashlib.sha256(body.encode()).hexdigest()}],
+    }))
+    return write(repo, relative, body)
 
 
 def policy_path(repo: Path) -> Path:
