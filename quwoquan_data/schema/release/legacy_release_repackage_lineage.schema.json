@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/legacy_release_repackage_lineage.schema.json",
+  "title": "Exact lineage for a governed legacy sealed release repackage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "sourceRepositoryId",
+    "sourceRepositoryEvidenceRef",
+    "sourceRepositoryEvidenceDigest",
+    "sourceReleaseId",
+    "sourceHandoffId",
+    "sourceHandoffDigest",
+    "sourceCohortDigest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.legacy_release_repackage_lineage"
+    },
+    "sourceReleaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceHandoffId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceHandoffDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceCohortDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceRepositoryId": {
+      "$ref": "../publish/repository.schema.json#/properties/repositoryId"
+    },
+    "sourceRepositoryEvidenceDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceRepositoryEvidenceRef": {
+      "type": "string",
+      "pattern": "^\\.repository-authorities/[A-Za-z0-9][A-Za-z0-9._-]*\\.json$"
+    }
+  }
+}

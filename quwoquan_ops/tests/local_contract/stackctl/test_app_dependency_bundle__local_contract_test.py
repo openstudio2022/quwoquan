@@ -55,6 +55,12 @@ def _fixture(
         "schema": bundle.APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA,
         "claim": "PREPARED_NOT_ACTIVE",
         "attemptId": "abc",
+        "platforms": ["android", "ios"],
+        "platformInputs": {
+            "android": {key: identity[key] for key in identity},
+            "ios": {key: identity[key] for key in identity if key != "nativeResolutionInputDigest"},
+        },
+        "nonPromotable": False,
         "components": components,
         "activationEvidence": {
             "requiredActiveRef": "env/repo/local/app-dependency-sync/cache/active.json",
@@ -66,6 +72,12 @@ def _fixture(
         "schema": bundle.APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA,
         "attemptId": "abc",
         **identity,
+        "platforms": ["android", "ios"],
+        "platformInputs": {
+            "android": {key: identity[key] for key in identity},
+            "ios": {key: identity[key] for key in identity if key != "nativeResolutionInputDigest"},
+        },
+        "nonPromotable": False,
         "components": components,
         "receiptRef": receipt_ref.as_posix(),
         "receiptDigest": _digest_bytes(_canonical_bytes(receipt)),
@@ -85,6 +97,23 @@ def test_active_bundle_selects_all_five_components_once(
     assert [name for name, _path in loaded.component_roots] == list(
         bundle.APP_DEPENDENCY_COMPONENTS
     )
+
+
+@pytest.mark.parametrize("damage", ["platform_input", "qualification"])
+def test_bundle_rejects_self_consistent_receipt_with_wrong_platform_identity(tmp_path, monkeypatch, damage):
+    repo, root, active = _fixture(tmp_path, monkeypatch)
+    if damage == "platform_input":
+        active["platformInputs"]["ios"]["flutterVersion"] = "0.0.0"
+    else:
+        active["nonPromotable"] = True
+    receipt = tmp_path / "output" / active["receiptRef"]
+    payload = json.loads(receipt.read_text())
+    payload.update(platformInputs=active["platformInputs"], nonPromotable=active["nonPromotable"])
+    _write_json(receipt, payload)
+    active["receiptDigest"] = _digest_bytes(_canonical_bytes(payload))
+    _write_json(root / "active.json", active)
+    with pytest.raises(ValueError, match="platform .* drifted"):
+        bundle.load_active_dependency_bundle(repo_root=repo)
 
 
 def test_active_bundle_rejects_cross_generation_component(
@@ -360,3 +389,75 @@ def test_active_bundle_rejects_unsafe_component_ref(
 
     with pytest.raises(ValueError, match="snapshotRef is unsafe"):
         bundle.load_active_dependency_bundle(repo_root=repo)
+
+
+def test_ios_only_bundle_ignores_android_native_input_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, root, active = _fixture(tmp_path, monkeypatch)
+    active["platforms"] = ["ios"]
+    active["platformInputs"] = {"ios": active["platformInputs"]["ios"]}
+    active["nonPromotable"] = True
+    active["components"] = {
+        name: declaration
+        for name, declaration in active["components"].items()
+        if name in bundle.dependency_components_for_platforms(("ios",))
+    }
+    receipt = Path(tmp_path / "output" / active["receiptRef"])
+    receipt_payload = json.loads(receipt.read_text(encoding="utf-8"))
+    for field in ("platforms", "platformInputs", "nonPromotable", "components"):
+        receipt_payload[field] = active[field]
+    receipt_payload["activationEvidence"]["requiredActiveRef"] = (
+        "env/repo/local/app-dependency-sync/cache/active-ios.json"
+    )
+    _write_json(receipt, receipt_payload)
+    active["receiptDigest"] = _digest_bytes(_canonical_bytes(receipt_payload))
+    _write_json(root / "active-ios.json", active)
+    monkeypatch.setattr(bundle, "_current_source_identity", lambda _root: {
+        "flutterVersion": "3.47.0",
+        "flutterCommandResolutionDigest": "sha256:" + "1" * 64,
+        "productionPubResolutionInputDigest": "sha256:" + "2" * 64,
+        "patrolPubResolutionInputDigest": "sha256:" + "3" * 64,
+        "nativeResolutionInputDigest": "sha256:" + "f" * 64,
+    })
+
+    loaded = bundle.load_active_dependency_bundle(
+        repo_root=repo, required_platforms=("ios",)
+    )
+
+    assert loaded.active["platforms"] == ["ios"]
+    assert "androidGradle" not in dict(loaded.component_roots)
+
+
+def test_android_only_bundle_cannot_satisfy_ios_or_all(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, root, active = _fixture(tmp_path, monkeypatch)
+    active["platforms"] = ["android"]
+    active["platformInputs"] = {"android": active["platformInputs"]["android"]}
+    active["nonPromotable"] = True
+    active["components"] = {
+        name: declaration
+        for name, declaration in active["components"].items()
+        if name in bundle.dependency_components_for_platforms(("android",))
+    }
+    receipt = Path(tmp_path / "output" / active["receiptRef"])
+    receipt_payload = json.loads(receipt.read_text(encoding="utf-8"))
+    for field in ("platforms", "platformInputs", "nonPromotable", "components"):
+        receipt_payload[field] = active[field]
+    receipt_payload["activationEvidence"]["requiredActiveRef"] = (
+        "env/repo/local/app-dependency-sync/cache/active-android.json"
+    )
+    _write_json(receipt, receipt_payload)
+    active["receiptDigest"] = _digest_bytes(_canonical_bytes(receipt_payload))
+    _write_json(root / "active-android.json", active)
+    _write_json(root / "active.json", active)
+
+    with pytest.raises(bundle.AppDependencyBundleMissingError) as ios_error:
+        bundle.load_active_dependency_bundle(repo_root=repo, required_platforms=("ios",))
+    assert ios_error.value.field == "activePointer"
+    with pytest.raises(bundle.AppDependencyBundleMissingError) as all_error:
+        bundle.load_active_dependency_bundle(
+            repo_root=repo, required_platforms=("android", "ios")
+        )
+    assert all_error.value.field == "platformCoverage"

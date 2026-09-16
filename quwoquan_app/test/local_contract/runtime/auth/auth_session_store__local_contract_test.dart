@@ -33,6 +33,7 @@ class PrivateAuthStorage extends FlutterSecureStorage {
   final calls = <String>[];
   int writes = 0;
   bool failWrite = false;
+  bool dropSyntheticWrite = false;
   bool failRead = false;
   bool failDelete = false;
   Completer<void>? readRelease;
@@ -72,6 +73,7 @@ class PrivateAuthStorage extends FlutterSecureStorage {
     if (writeRelease != null) await writeRelease!.future;
     if (failWrite) throw StateError('private storage failure');
     writes++;
+    if (dropSyntheticWrite && key.endsWith('synthetic_session')) return;
     if (value == null) {
       values.remove(key);
     } else {
@@ -553,7 +555,25 @@ void main() {
         isFalse,
       );
       storage.failWrite = false;
+      storage.dropSyntheticWrite = true;
+      await expectLater(
+        controller.applySyntheticSession(result),
+        throwsStateError,
+      );
+      expect(
+        container.read(authSessionControllerProvider).isAuthenticated,
+        isFalse,
+      );
+      storage.dropSyntheticWrite = false;
+      final beforeReadback = storage.calls.length;
       await controller.applySyntheticSession(result);
+      final syntheticReads = storage.calls
+          .skip(beforeReadback)
+          .where((key) => key.endsWith('synthetic_session'));
+      expect(
+        syntheticReads.length,
+        greaterThanOrEqualTo(3),
+      ); // 提交前read、write、提交后read。
       final state = container.read(authSessionControllerProvider);
       expect(state.isAuthenticated, isTrue);
       expect(state.hasTrustedSession, isFalse);

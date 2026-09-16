@@ -40,6 +40,7 @@ class CandidateRanker(Protocol):
         session_id: str,
         limit: int,
         content_fence: ReleasePinnedQueryFence,
+        request_context: RecommendationRequestContext,
     ) -> RankingResult: ...
 
 
@@ -166,19 +167,28 @@ class Facade:
                 )
             return self._page(existing, from_ordinal=0, limit=limit)
 
-        ranking = self._ranker.rank(
-            subject_id=normalized_subject,
-            scenario=normalized_scenario,
-            session_id=window_id,
-            limit=MAX_WINDOW_ITEMS,
-            content_fence=content_fence.model_copy(deep=True),
-        )
         admitted_at = self._now().astimezone(timezone.utc)
         request_context = RecommendationRequestContext(
             viewport_profile=normalized_viewport,
             device_class=normalized_device,
             coarse_region="unknown",
             time_bucket=f"h{admitted_at.hour:02d}",
+            profile_revision="unknown",
+        )
+        ranking = self._ranker.rank(
+            subject_id=normalized_subject,
+            scenario=normalized_scenario,
+            session_id=window_id,
+            limit=MAX_WINDOW_ITEMS,
+            content_fence=content_fence.model_copy(deep=True),
+            request_context=request_context,
+        )
+        admitted_at = max(admitted_at, ranking.feature_snapshot_at.astimezone(timezone.utc))
+        request_context = RecommendationRequestContext(
+            viewport_profile=request_context.viewport_profile,
+            device_class=request_context.device_class,
+            coarse_region=request_context.coarse_region,
+            time_bucket=request_context.time_bucket,
             profile_revision=self._normalize_profile_revision(ranking.profile_revision),
         )
         context_digest = self._context_digest(request_context)

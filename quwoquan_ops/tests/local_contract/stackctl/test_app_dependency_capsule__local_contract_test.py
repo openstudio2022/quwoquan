@@ -156,6 +156,23 @@ def _activate_snapshot(repo: Path, output: Path, archive_sha: str) -> None:
         "schema": dependency_bundle.APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA,
         "claim": "PREPARED_NOT_ACTIVE",
         "attemptId": "face",
+        "platforms": ["android", "ios"],
+        "platformInputs": {
+            "android": {
+                "flutterVersion": "3.47.0",
+                "flutterCommandResolutionDigest": "sha256:" + "b" * 64,
+                "productionPubResolutionInputDigest": wrapper["resolutionInputDigest"],
+                "patrolPubResolutionInputDigest": "sha256:" + "e" * 64,
+                "nativeResolutionInputDigest": "sha256:" + "f" * 64,
+            },
+            "ios": {
+                "flutterVersion": "3.47.0",
+                "flutterCommandResolutionDigest": "sha256:" + "b" * 64,
+                "productionPubResolutionInputDigest": wrapper["resolutionInputDigest"],
+                "patrolPubResolutionInputDigest": "sha256:" + "e" * 64,
+            },
+        },
+        "nonPromotable": False,
         "components": components,
         "activationEvidence": {
             "requiredActiveRef": "env/repo/local/app-dependency-sync/cache/active.json",
@@ -173,6 +190,9 @@ def _activate_snapshot(repo: Path, output: Path, archive_sha: str) -> None:
         "productionPubResolutionInputDigest": wrapper["resolutionInputDigest"],
         "patrolPubResolutionInputDigest": "sha256:" + "e" * 64,
         "nativeResolutionInputDigest": "sha256:" + "f" * 64,
+        "platforms": receipt["platforms"],
+        "platformInputs": receipt["platformInputs"],
+        "nonPromotable": False,
         "components": components,
         "receiptRef": receipt_ref,
         "receiptDigest": _digest_bytes(_canonical_bytes(receipt)),
@@ -249,7 +269,7 @@ def _stable_flutter_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         input_capsule,
         "verify_dependency_bundle_capsule",
-        lambda *, capsule_root, manifest_entries: pub_cache_store.capsule_dependency_snapshot(
+        lambda *, capsule_root, manifest_entries, required_platforms: pub_cache_store.capsule_dependency_snapshot(
             capsule_root=capsule_root,
             manifest_entries=manifest_entries,
         ),

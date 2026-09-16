@@ -45,7 +45,7 @@ class IsolatedControlTest(unittest.TestCase):
                             'digest': 'sha256:' + hashlib.sha256(content).hexdigest(), 'size': len(content), 'mode': 0o444})
         source_digest, count = _digest_record([(p, 'file', v) for p, v in files.items()])
         roots = ['quwoquan_app/assets']
-        self.manifest = {'schema': 'stackctl-package-input-capsule.v1',
+        self.manifest = {'schema': 'stackctl-package-input-capsule.v2', 'dependencyPlatforms': ['android', 'ios'],
             'baselineId': _baseline_id(_capsule_identity_payload(roots=roots, input_digest=source_digest, input_count=count)),
             'sourceRevision': 'b'*40, 'workspaceStatusDigest': 'sha256:'+'c'*64,
             'deploymentInputDigest': source_digest, 'deploymentInputFileCount': count,
@@ -67,7 +67,8 @@ class IsolatedControlTest(unittest.TestCase):
             report_path=self.root/'attempt/report.json', terminal_receipt_path=self.root/'attempt/terminal.json',
             platform='android', device_id='emulator-private', build_projection_policy_id=launch.FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID,
             build_projection_seal_path=self.root/'attempt/seal.json', expected_build_projection_digest=None,
-            rehearsal_space_selection={'mode':'isolated', 'instanceId':'private-space', 'snapshotDigest':self.snapshot})
+            rehearsal_space_selection={'mode':'isolated', 'instanceId':'private-space', 'snapshotDigest':self.snapshot,
+                'caseId':'login-success', 'lifecycleGeneration':'1', 'observationBinding': 'sha256:' + 'a'*64})
         self.binding = {'control_ref':self.control['controlRef'], 'control_digest':self.control['controlDigest'], 'output_root':str(self.root),
             'device_id':'emulator-private', 'candidate_digest':evidence['candidateDigest'], 'attempt_ref':self.control['launchAttemptRef'],
             'report_ref':self.control['launchReportRef'], 'capsule_ref':str(self.capsule/'manifest.json')}

@@ -270,7 +270,6 @@ android {
     // 共同编译。宿主必须读到与生产 App 同一实现产出的 package，否则页面 suite 证明不了
     // 生产启动路径；隔离成独立目录使宿主能只纳入这一闭包，而不牵入本工程其余依赖。
     sourceSets.getByName("main").java.srcDir("src/runtimeConfigShared/java")
-
     flavorDimensions += "identityTarget"
     productFlavors {
         generatedAndroidIdentityTargets.forEach { identityTarget ->
@@ -282,6 +281,14 @@ android {
             }
         }
     }
+    generatedAndroidIdentityTargets
+        .filter { identityTarget ->
+            val identity = appIdentity(identityTarget)
+            identity.environment == "alpha" && identity.buildMode != "release"
+        }
+        .forEach { identityTarget ->
+            sourceSets.getByName(flavorName(identityTarget)).java.srcDir("src/alphaUat/java")
+        }
 
     defaultConfig {
         manifestPlaceholders["qwqModeLabel"] = ""
@@ -462,6 +469,8 @@ dependencies {
     )
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.test:core:1.5.0")
+    testImplementation("org.robolectric:robolectric:4.12.2")
     // Keep versions aligned with Patrol's strict AndroidX test resolution.
     androidTestImplementation("androidx.test:runner:1.5.1")
     androidTestImplementation("androidx.test:rules:1.2.0")

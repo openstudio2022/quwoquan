@@ -264,7 +264,6 @@ type PostSourceAttributionSlice struct {
 	AttributionText               string    `json:"attributionText,omitempty" bson:"attributionText,omitempty"`
 	RightsBasis                   string    `json:"rightsBasis,omitempty" bson:"rightsBasis,omitempty"`
 	CommercialAuthorizationStatus string    `json:"commercialAuthorizationStatus,omitempty" bson:"commercialAuthorizationStatus,omitempty"`
-	PublicationAdmission          string    `json:"publicationAdmission,omitempty" bson:"publicationAdmission,omitempty"`
 	AuthorizationProofURL         string    `json:"authorizationProofUrl,omitempty" bson:"authorizationProofUrl,omitempty"`
 	TermsURL                      string    `json:"termsUrl,omitempty" bson:"termsUrl,omitempty"`
 	DerivedModifications          []string  `json:"derivedModifications" bson:"derivedModifications"`

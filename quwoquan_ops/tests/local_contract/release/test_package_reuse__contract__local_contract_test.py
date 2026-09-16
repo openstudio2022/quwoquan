@@ -159,9 +159,19 @@ class PackageReuseContractTest(unittest.TestCase):
             )
         )
 
-    def _write(self, services: list[str] | None = None) -> Path:
+    def _write(
+        self,
+        services: list[str] | None = None,
+        *,
+        dependency_platforms: tuple[str, ...] | None = None,
+    ) -> Path:
         capsule = self.candidate_root / package_reuse.PACKAGE_INPUT_CAPSULE_DIRECTORY
         if not capsule.exists():
+            extra = (
+                {}
+                if dependency_platforms is None
+                else {"dependency_platforms": dependency_platforms}
+            )
             package_reuse.materialize_package_input_capsule(
                 package_reuse.deployment_input_roots(
                     "alpha",
@@ -171,6 +181,7 @@ class PackageReuseContractTest(unittest.TestCase):
                     else ["content-service", "user-service"],
                 ),
                 capsule_root=capsule,
+                **extra,
             )
         path = package_reuse.write_package_fingerprint(
             "alpha",
@@ -366,6 +377,10 @@ class PackageReuseContractTest(unittest.TestCase):
             snapshot.call_args.kwargs["timeout_seconds"],
             package_reuse.CURRENTNESS_TIMEOUT_SECONDS,
         )
+        self.assertEqual(
+            snapshot.call_args.kwargs["dependency_platforms"],
+            ("android", "ios"),
+        )
         self.validate_candidate_manifest.reset_mock()
         expected_snapshot = package_reuse.verify_package_input_capsule(
             self.candidate_root / package_reuse.PACKAGE_INPUT_CAPSULE_DIRECTORY
@@ -386,11 +401,52 @@ class PackageReuseContractTest(unittest.TestCase):
             package_reuse.CURRENTNESS_TIMEOUT_SECONDS,
         )
         self.assertEqual(
+            successful_snapshot.call_args.kwargs["dependency_platforms"],
+            ("android", "ios"),
+        )
+        self.assertEqual(
             self.validate_candidate_manifest.call_args.kwargs[
                 "currentness_timeout_seconds"
             ],
             package_reuse.CURRENTNESS_TIMEOUT_SECONDS,
         )
+
+    def test_currentness_uses_verified_capsule_platforms_and_rejects_tamper(self) -> None:
+        self._write(dependency_platforms=("ios",))
+        captured: dict[str, object] = {}
+
+        def snapshot(**kwargs):
+            captured.update(kwargs)
+            return package_reuse.verify_package_input_capsule(
+                self.candidate_root / package_reuse.PACKAGE_INPUT_CAPSULE_DIRECTORY
+            )
+
+        with mock.patch.object(package_reuse, "workspace_snapshot", side_effect=snapshot):
+            ok, detail = package_reuse.can_reuse_package(
+                "alpha",
+                "alpha-local",
+                purpose="currentness",
+            )
+        self.assertTrue(ok, detail)
+        self.assertEqual(captured["dependency_platforms"], ("ios",))
+
+        capsule = self.candidate_root / package_reuse.PACKAGE_INPUT_CAPSULE_DIRECTORY
+        manifest = json.loads((capsule / "manifest.json").read_text(encoding="utf-8"))
+        manifest["dependencyPlatforms"] = ["android"]
+        path = capsule / "manifest.json"
+        path.chmod(0o600)
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        path.chmod(0o444)
+        forbidden = mock.Mock(side_effect=AssertionError("dependency read forbidden"))
+        with mock.patch.object(package_reuse, "workspace_snapshot", forbidden):
+            ok, detail = package_reuse.can_reuse_package(
+                "alpha",
+                "alpha-local",
+                purpose="currentness",
+            )
+        self.assertFalse(ok)
+        self.assertIn("fingerprint rejected", detail)
+        forbidden.assert_not_called()
 
     def test_runtime_diagnostic_can_skip_source_capsule_reread(self) -> None:
         self._write()

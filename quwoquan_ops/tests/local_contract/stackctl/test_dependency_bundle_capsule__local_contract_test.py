@@ -305,6 +305,34 @@ def test_loader_explicit_pod_uses_declared_physical_directory_not_ambient_path(
     }
 
 
+@pytest.mark.parametrize("required,extra", [
+    (("ios",), "dependency:android-gradle-v1"),
+    (("android",), capsule.IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PRODUCTION_HOST]),
+])
+def test_capsule_rejects_unselected_platform_before_expanding_bytes(tmp_path, required, extra):
+    with pytest.raises(ValueError, match="unselected platform"):
+        capsule.verify_dependency_bundle_capsule(
+            capsule_root=tmp_path, required_platforms=required,
+            manifest_entries=[{"logicalPath": extra}],
+        )
+
+
+def test_ios_capsule_verification_never_loads_android(tmp_path, monkeypatch):
+    pub = SimpleNamespace(encoded_sync_manifest=b"pub")
+    pod = object()
+    monkeypatch.setattr(capsule, "capsule_dependency_snapshot", lambda **_: pub)
+    monkeypatch.setattr(capsule, "patrol_capsule_snapshot", lambda **_: pub)
+    monkeypatch.setattr(capsule, "_ios_capsule_snapshot", lambda **_: pod)
+    def forbidden(**kwargs):
+        pytest.fail("iOS-only cannot expand Android component")
+    monkeypatch.setattr(capsule, "capsule_android_gradle_snapshot", forbidden)
+    verified = capsule.verify_dependency_bundle_capsule(
+        capsule_root=tmp_path, manifest_entries=[], required_platforms=("ios",),
+    )
+    assert verified.android_gradle is None
+    assert verified.production_ios_pods is pod
+
+
 def test_digest_identity_contains_all_five_component_markers() -> None:
     snapshots = SimpleNamespace(
         production_pub=SimpleNamespace(encoded_sync_manifest=b"a"),

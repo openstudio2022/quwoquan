@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "coordination"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.repackage_task_context"
+    },
+    "coordination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "authorizationRef",
+        "authorizationDigest",
+        "confirmationRef",
+        "confirmationDigest",
+        "confirmedBy",
+        "allowedActions",
+        "revokedActors"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "authorizationRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confirmationRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confirmationDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "confirmedBy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allowedActions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "const": "repackage"
+          }
+        },
+        "revokedActors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "authorizationDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

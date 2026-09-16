@@ -71,7 +71,7 @@ def _bind_fake_producer_semantic_readback(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(
         artifact_helpers,
         "_current_build_input_identity",
-        lambda: {
+        lambda *, build_product_id: {
             "sourceGitSha": revision,
             "sourceTreeDigest": tree,
             "sourceCapsuleDigest": "sha256:" + "3" * 64,

@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -117,6 +119,130 @@ def discover_exact_project(
             f"{target}: {', '.join(sorted(projects))}"
         )
     return next(iter(projects))
+
+
+# 独立观察不复用 teardown 的唯一 project / removable admission，也不改变修复行为。
+_RESOURCE_ID = re.compile(r"[0-9a-f]{64}")
+_CONTAINER_OBSERVATION = (
+    '{"id":{{json .Id}},"name":{{json .Name}},"state":{{json .State.Status}},'
+    '"project":{{json (index .Config.Labels "com.docker.compose.project")}},'
+    '"service":{{json (index .Config.Labels "com.docker.compose.service")}},'
+    '"worktree":{{json (index .Config.Labels "com.docker.compose.project.working_dir")}}}'
+)
+_NETWORK_OBSERVATION = (
+    '{"id":{{json .Id}},"name":{{json .Name}},'
+    '"project":{{json (index .Labels "com.docker.compose.project")}},'
+    '"network":{{json (index .Labels "com.docker.compose.network")}},'
+    '"attachments":{ {{$sep := ""}}{{range $id, $_ := .Containers}}'
+    '{{$sep}}{{json $id}}:null{{$sep = ","}}{{end}} }}'
+)
+
+
+def require_resource_observation_authority() -> None:
+    from ..host_locks import require_canonical_runtime_authority
+
+    require_canonical_runtime_authority()
+    # context/config 覆盖同样能重定向 daemon，不能只检查 DOCKER_HOST。
+    if os.environ.get("DOCKER_CONTEXT") or os.environ.get("DOCKER_CONFIG"):
+        raise ValueError("resource observation rejects Docker context/config overrides")
+
+
+def _observation_text(row: Mapping[str, Any], key: str, *, required: bool = False) -> str:
+    value = row.get(key)
+    if value is None and not required:
+        return ""
+    if not isinstance(value, str) or (required and not value):
+        raise ValueError("resource observation field is invalid")
+    if len(value) > 4096 or any(ord(char) < 32 for char in value):
+        raise ValueError("resource observation field is unsafe")
+    return value
+
+
+def _observed_resource(row: Mapping[str, Any], kind: str) -> dict[str, Any]:
+    identity = _observation_text(row, "id", required=True)
+    if _RESOURCE_ID.fullmatch(identity) is None:
+        raise ValueError("resource identity is not exact")
+    result = {"id": identity, "name": _observation_text(row, "name", required=True),
+              "project": _observation_text(row, "project"), "ownerStatus": "unknown"}
+    if kind == "container":
+        result.update(state=_observation_text(row, "state", required=True),
+                      service=_observation_text(row, "service"),
+                      worktree=_observation_text(row, "worktree"))
+        if result["worktree"]:
+            result["ownerStatus"] = "unverified_worktree_label"
+    else:
+        attachments = row.get("attachments")
+        if not isinstance(attachments, dict) or any(
+            not isinstance(key, str) or _RESOURCE_ID.fullmatch(key) is None for key in attachments
+        ):
+            raise ValueError("network attachments are invalid")
+        result.update(network=_observation_text(row, "network"),
+                      attachedContainerIds=sorted(attachments))
+    return result
+
+
+def _observe_resource_kind(kind: str, *, run_command: Callable[[list[str]], Any],
+                           endpoint: str) -> list[dict[str, Any]]:
+    listing = (["ps", "--all", "--no-trunc", "--quiet"] if kind == "container"
+               else ["network", "ls", "--no-trunc", "--quiet"])
+    prefix = ["docker", "--host", endpoint]
+    # 受管执行器为每次只读查询加有界 deadline；底层错误文本绝不进入报告。
+    def query(argv: list[str]) -> Any:
+        return run_command(argv, timeout_seconds=15)
+
+    def identities() -> list[str]:
+        values = _list_ids(prefix + listing, run_command=query, label=kind)
+        if any(_RESOURCE_ID.fullmatch(value) is None for value in values):
+            raise ValueError("resource listing identity is not exact")
+        return values
+
+    expected = identities()
+    rows: list[dict[str, Any]] = []
+    template = _CONTAINER_OBSERVATION if kind == "container" else _NETWORK_OBSERVATION
+    for start in range(0, len(expected), 64):
+        result = query(prefix + [kind, "inspect", "--format", template, *expected[start:start + 64]])
+        if result.returncode != 0:
+            raise ValueError("resource inspection failed")
+        for line in str(result.stdout).splitlines():
+            value = json.loads(line)
+            if not isinstance(value, dict):
+                raise ValueError("resource inspection is not an object")
+            rows.append(_observed_resource(value, kind))
+    if sorted(row["id"] for row in rows) != expected or identities() != expected:
+        raise ValueError("resource inventory changed or is partial")
+    return sorted(rows, key=lambda row: row["id"])
+
+
+def observe_host_resources(*, run_command: Callable[[list[str]], Any]) -> dict[str, Any]:
+    """宿主全量只读观察；标签不是 owner 证明，成功也不授予接管资格。"""
+    report: dict[str, Any] = {
+        "schema": "stackctl-local-resource-observation", "readOnly": True,
+        "admissionEligible": False, "complete": False, "status": "blocked",
+        "containers": [], "networks": [], "issues": [],
+        "firstBlocker": "", "inventoryScope": "host_all_containers_and_networks",
+    }
+    stage = "authority"
+    try:
+        require_resource_observation_authority()
+        stage = "daemon"
+        result = run_command(["docker", "context", "inspect", "--format",
+                              "{{json .Endpoints.docker.Host}}"], timeout_seconds=15)
+        if result.returncode != 0:
+            raise ValueError("daemon context unavailable")
+        endpoint = json.loads(result.stdout)
+        if not isinstance(endpoint, str) or not endpoint.startswith("unix:///"):
+            raise ValueError("only a local Unix daemon is admitted")
+        # 固定本次 daemon endpoint，避免多次查询之间 current context 改变。
+        for kind in ("container", "network"):
+            stage = kind
+            report[kind + "s"] = _observe_resource_kind(kind, run_command=run_command, endpoint=endpoint)
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError):
+        # 不复制 stderr、原始 inspect 或异常内容，避免错误回显秘密。
+        report["firstBlocker"] = "resource_observation_unavailable"
+        report["issues"] = [f"{stage} observation failed; inventory is incomplete"]
+        return report
+    report.update(status="observed", complete=True)
+    return report
 
 
 def _labels(value: object, *, project: str, label: str) -> dict[str, str]:

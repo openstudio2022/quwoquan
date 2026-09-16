@@ -62,6 +62,7 @@ def register_parser(
             "release",
             "prior",
             "content",
+            "resources",
             "all",
         ],
         default="all",
@@ -80,6 +81,7 @@ def register_parser(
             "release",
             "prior",
             "content",
+            "resources",
             "all",
         ],
     )
@@ -136,6 +138,41 @@ def _command_content_inventory(args: argparse.Namespace) -> dict[str, Any]:
             "reportDir": _stackctl.relpath(report_dir), "contentInventory": inventory, **timing}
 
 
+def _command_resource_inventory(args: argparse.Namespace) -> dict[str, Any]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.orphan_compose_teardown.inventory import (
+        observe_host_resources, require_resource_observation_authority,
+    )
+
+    if (args.target not in {"alpha-local", "beta-local", "gamma-local"}
+            or getattr(args, "ssh_host", "") or getattr(args, "host_id", "")):
+        return {"exitCode": 2, "summary": "GATE_BLOCK: resources requires a canonical local target"}
+    try:
+        # 必须在 report resolver 前拒绝 authority override，避免向另一根写报告。
+        require_resource_observation_authority()
+    except (OSError, ValueError):
+        return {"exitCode": 2, "summary": "GATE_BLOCK: resource observation authority rejected"}
+    started_monotonic, started_at = _stackctl._start_timing()
+    resources = observe_host_resources(run_command=_stackctl.run)
+    environment = str(_stackctl.get_target(_stackctl.load_environment_topology(), args.target)["env"])
+    report_dir = _stackctl.resolve_report_dir(args, environment, args.target)
+    timing = _stackctl._finish_timing(started_monotonic, started_at)
+    details = resources["issues"] or ["host resources observed; not takeover, startup or release admission"]
+    status = "ok" if resources["complete"] else "failed"
+    summary = f"stackctl inspect resources {status} for {args.target}"
+    _stackctl.write_json(report_dir / "report.json", {
+        "command": "inspect", "target": args.target, "scope": "resources",
+        "readOnly": True, "inspection": {"resources": resources},
+        "findings": resources["issues"], **timing,
+    })
+    _stackctl._write_summary_bundle(
+        report_dir, command="inspect", target=args.target, status=status,
+        summary=summary, details=details, extra={"scope": "resources"}, timing=timing,
+    )
+    return {"exitCode": 0 if resources["complete"] else 1, "summary": summary,
+            "details": details, "reportDir": _stackctl.relpath(report_dir), **timing}
+
+
 def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
@@ -164,9 +201,10 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             },
         }
 
-    # 内容只读盘点绝不进入 availability/candidate 聚合，其内部可能隐式 derive。
-    if args.scope == "content":
-        return _command_content_inventory(args)
+    # 独立只读盘点绝不进入 availability/candidate 聚合，其内部可能隐式 derive。
+    inventory_command = {"content": _command_content_inventory, "resources": _command_resource_inventory}.get(args.scope)
+    if inventory_command is not None:
+        return inventory_command(args)
 
     topology = _stackctl.load_environment_topology()
     target = _stackctl.get_target(topology, args.target)

@@ -186,6 +186,9 @@
         }
       },
       "description": "handoff 自身之外的完整 release 文件清单；离线校验据此拒绝缺失、额外、链接与摘要漂移。"
+    },
+    "repackageLineage": {
+      "$ref": "legacy_release_repackage_lineage.schema.json"
     }
   },
   "$defs": {

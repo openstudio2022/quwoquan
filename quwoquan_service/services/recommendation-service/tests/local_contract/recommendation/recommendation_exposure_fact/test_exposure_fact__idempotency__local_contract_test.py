@@ -63,6 +63,7 @@ def _fact(*, ordinal: int = 0, subject_id: str = "account-001") -> ExposureFact:
         feature_snapshot_at=now,
         feature_snapshot_digest=canonical_snapshot_digest(user_snapshot, item_snapshot),
         ranking_snapshot_digest="a" * 64,
+        policy_digest="sha256:" + "b" * 64,
         user_feature_snapshot=user_snapshot,
         item_feature_snapshot=item_snapshot,
         exposed_at=now,

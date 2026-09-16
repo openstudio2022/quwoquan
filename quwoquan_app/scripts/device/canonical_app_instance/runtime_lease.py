@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import re
 import signal
@@ -152,14 +151,105 @@ def direct_runtime_lease(*, target: str, device: str, application_id: str,
         consumer_action("release", **exact)
 
 
-@contextlib.contextmanager
-def selected_device_lock(device: str, application_id: str) -> Iterator[None]:
-    from quwoquan_ops.cli.lib.host_locks import acquire_device_lock, HostLockBusyError
+def _control_lock_manifest(*, control_ref: str, handoff: dict[str, object], device: str, device_kind: str):
+    import build_launcher_handoff as control_contract
+    from quwoquan_ops.cli.lib.package_reuse.input_capsule import verify_package_input_capsule
+    from quwoquan_ops.cli.commands.app_preflight_uat_launch import verify_app_content_launch_projection
 
+    # Supervisor 已创建 attempt；此处不重复 fresh-output 预检，仅复验现役控制和来源。
+    if control_ref:
+        control = control_contract._read_private_launch_control(
+            Path(control_ref), Path(os.environ["QWQ_OUTPUT_ROOT"]).resolve())
+        offline = control_contract._validate_launch_control_fields(control)
+        control_contract._validate_launch_control_identity(
+            control, os.environ.get("QWQ_CANONICAL_LAUNCH_CONTROL_DIGEST", ""))
+        control_contract._validate_launch_control_digests(control, offline)
+        control_contract._validate_launch_control_source_paths(
+            control, ROOT, os.environ.get("QWQ_PACKAGE_SOURCE_CAPSULE_MANIFEST", ""))
+        control_contract._validate_launch_control_projection_evidence(control)
+        projection = verify_app_content_launch_projection(
+            projection_root=ROOT, evidence_path=Path(control["sourceProjectionEvidenceRef"]),
+            reject_unmanifested=False)
+        for field in ("candidateDigest", "sourceRevision", "sourceCapsuleDigest", "sourceCapsuleManifestDigest",
+                      "sourceCapsuleManifestRef", "sourceProjectionRoot"):
+            if projection.get(field) != control.get(field):
+                raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: control/projection identity drifted")
+        platform = {"android_emulator": "android", "android_physical": "android-physical"}.get(device_kind, device_kind)
+        if any(control.get(key) != value for key, value in (
+            ("environment", handoff.get("environment")), ("target", handoff.get("target")),
+            ("deviceId", device), ("platform", platform),
+        )):
+            raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: control/invocation identity drifted")
+        manifest_ref = Path(control["sourceCapsuleManifestRef"])
+        manifest = verify_package_input_capsule(manifest_ref.parent)
+        if (manifest.get("sourceRevision") != control["sourceRevision"]
+                or manifest.get("deploymentInputDigest") != control["sourceCapsuleDigest"]):
+            raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: control/capsule identity drifted")
+        return manifest
+
+
+def _workspace_lock_manifest(workspace_manifest: str):
+    from quwoquan_ops.cli.lib.package_reuse.input_capsule import verify_package_input_capsule
+    from quwoquan_ops.cli.commands.app_preflight_uat_launch import _projection_manifest_entries
+
+    if workspace_manifest:
+        # run.sh 已准备依赖/生成文件，复验 source CAS 而非要求投影仍是空白 source-only 树。
+        manifest_ref = Path(workspace_manifest)
+        output = Path(os.environ["QWQ_OUTPUT_ROOT"]).resolve()
+        if (manifest_ref.is_symlink() or manifest_ref.name != "manifest.json"
+                or not manifest_ref.resolve().is_relative_to(output) or not ROOT.is_relative_to(output)):
+            raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: workspace projection path is unsafe")
+        manifest = verify_package_input_capsule(manifest_ref.parent)
+        for entry in _projection_manifest_entries(manifest, capsule_root=manifest_ref.parent):
+            path = ROOT / entry["repoRelative"]
+            if path.parent.resolve() != path.parent:
+                raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: workspace source parent is linked")
+            if entry["kind"] == "file":
+                if (path.is_symlink() or not path.is_file() or path.read_bytes() != entry["content"]
+                        or bool(path.stat().st_mode & 0o111) != bool(entry["projectionMode"] & 0o111)):
+                    raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: workspace source CAS drifted")
+            elif (not path.is_symlink() or os.readlink(path).encode() != entry["content"]
+                  or not path.resolve(strict=True).is_relative_to(ROOT)):
+                raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: workspace source link drifted")
+        return manifest
+
+
+def verified_lock_identity(*, handoff: dict[str, object], device: str, device_kind: str):
+    """锁诊断只消费 worktree 或重新校验过的 immutable source，不信任裸 JSON。"""
+    from quwoquan_ops.cli.lib.host_locks import HostLockOwner
+    from quwoquan_ops.cli.lib.common import utc_now
+    from quwoquan_ops.cli.lib.worktree_identity import resolve_worktree_identity
+
+    control_ref = os.environ.get("QWQ_CANONICAL_LAUNCH_CONTROL", "")
+    workspace_manifest = os.environ.get("QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST", "")
+    if control_ref:
+        manifest = _control_lock_manifest(control_ref=control_ref, handoff=handoff, device=device, device_kind=device_kind)
+    elif workspace_manifest:
+        manifest = _workspace_lock_manifest(workspace_manifest)
+    else:
+        identity = resolve_worktree_identity(ROOT)
+        if identity.worktree_root != str(ROOT):
+            raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: launcher root is not a worktree")
+        return identity
+    revision = str(manifest.get("sourceRevision") or "")
+    if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: source revision is not exact")
+    return HostLockOwner(pid=os.getpid(), worktree=str(ROOT), lane="immutable-source-projection",
+                         head_sha=revision, started_at=utc_now())
+
+
+@contextlib.contextmanager
+def selected_device_lock(
+    device: str, application_id: str, *, identity: object
+) -> Iterator[None]:
+    from quwoquan_ops.cli.lib.host_locks import (
+        acquire_device_lock, HostLockBusyError,
+    )
     try:
-        # git identity 只用作 holder 诊断；设备锁的路径不含环境，跨环境同设备互斥。
         with runtime_authority_environment():
-            lock = acquire_device_lock(device=device, app=application_id)
+            lock = acquire_device_lock(
+                device=device, app=application_id, identity=identity
+            )
     except HostLockBusyError as error:
         raise CanonicalExecutorError(f"APP.LAUNCH.device_in_use: {error}") from error
     with lock:
@@ -186,7 +276,8 @@ def run_canonical(*, acquire_runtime: bool = True) -> int:
         source = contract["content_source_policy"].get(environment)
         if source not in {"remote", "bundled_snapshot"}:
             raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: content source policy missing")
-        with selected_device_lock(args.device, args.application_id):
+        identity = verified_lock_identity(handoff=handoff, device=args.device, device_kind=args.device_kind)
+        with selected_device_lock(args.device, args.application_id, identity=identity):
             lease = (
                 direct_runtime_lease(
                     target=str(target), device=args.device, application_id=args.application_id,
@@ -198,7 +289,7 @@ def run_canonical(*, acquire_runtime: bool = True) -> int:
                 return run_app_instance.main()
     except KeyboardInterrupt:
         return 130
-    except (OSError, RuntimeError, ValueError) as error:
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError) as error:
         print(f"[canonical-executor] GATE_BLOCK: {error}", file=sys.stderr, flush=True)
         return 2
     finally:

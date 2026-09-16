@@ -257,7 +257,7 @@ def register_parser(
     # 分发类全部从 metadata 解析，旧环境/分项构建参数不得作为兼容入口。
     package_parser.add_argument("--build-product-id", default="")
     package_parser.add_argument(
-        "--app-platform", choices=["android", "ios", "web"], default=""
+        "--app-platform", choices=["android", "ios", "all", "web"], default=""
     )
     package_parser.add_argument(
         "--app-build-mode", choices=["debug", "profile", "release"], default=""
@@ -439,6 +439,11 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 "runtime candidates are full-only; --service cannot create or activate a runtime candidate"
             ],
         }
+    app_platform = str(getattr(args, "app_platform", "") or "all")
+    if app_platform not in {"all", "android", "ios"} or (env_name != "alpha" and app_platform != "all"):
+        return {"exitCode": 2, "summary": "stackctl runtime package platform blocked",
+                "details": ["single-platform runtime packaging is Alpha-only; other environments require all"]}
+    dependency_platforms = ("android", "ios") if app_platform == "all" else (app_platform,)
     args.include_services = True
     # 打包会把服务镜像层写进 Docker 数据盘；容量不足时构建会以镜像层写失败、
     # 拉取中断等形态失败，前置判定让报告直接指向容量。
@@ -547,6 +552,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 package_snapshot = _stackctl.materialize_package_input_capsule(
                     package_input_roots,
                     capsule_root=capsule_staging_root,
+                    dependency_platforms=dependency_platforms,
                 )
             except (
                 OSError,

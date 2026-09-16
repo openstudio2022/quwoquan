@@ -62,7 +62,6 @@ type sourceAttribution struct {
 	AttributionText               string   `json:"attributionText"`
 	RightsBasis                   string   `json:"rightsBasis"`
 	CommercialAuthorizationStatus string   `json:"commercialAuthorizationStatus"`
-	PublicationAdmission          string   `json:"publicationAdmission"`
 	AuthorizationProofURL         *string  `json:"authorizationProofUrl"`
 	TermsURL                      *string  `json:"termsUrl"`
 	DerivedModifications          []string `json:"derivedModifications"`
@@ -155,7 +154,7 @@ func projectAttribution(value *postports.PostSourceAttributionSlice) (*sourceAtt
 		{"sourcePostUrl", value.SourcePostURL}, {"originalAssetUrl", value.OriginalAssetURL},
 		{"attributionText", value.AttributionText}, {"rightsBasis", value.RightsBasis},
 		{"commercialAuthorizationStatus", value.CommercialAuthorizationStatus},
-		{"publicationAdmission", value.PublicationAdmission}, {"watermarkStatus", value.WatermarkStatus},
+		{"watermarkStatus", value.WatermarkStatus},
 		{"audioRightsStatus", value.AudioRightsStatus}, {"modelReleaseStatus", value.ModelReleaseStatus},
 		{"propertyReleaseStatus", value.PropertyReleaseStatus}, {"takedownPolicy", value.TakedownPolicy},
 	}
@@ -177,8 +176,8 @@ func projectAttribution(value *postports.PostSourceAttributionSlice) (*sourceAtt
 		SourcePostURL: value.SourcePostURL, OriginalAssetURL: value.OriginalAssetURL,
 		AttributionText: value.AttributionText, RightsBasis: value.RightsBasis,
 		CommercialAuthorizationStatus: value.CommercialAuthorizationStatus,
-		PublicationAdmission:          value.PublicationAdmission, AuthorizationProofURL: nullable(value.AuthorizationProofURL),
-		TermsURL: nullable(value.TermsURL), DerivedModifications: append([]string{}, value.DerivedModifications...),
+		AuthorizationProofURL:         nullable(value.AuthorizationProofURL),
+		TermsURL:                      nullable(value.TermsURL), DerivedModifications: append([]string{}, value.DerivedModifications...),
 		WatermarkKind: nullable(value.WatermarkKind), WatermarkNote: nullable(value.WatermarkNote),
 		WatermarkStatus: value.WatermarkStatus, AudioRightsStatus: value.AudioRightsStatus,
 		ModelReleaseStatus: value.ModelReleaseStatus, PropertyReleaseStatus: value.PropertyReleaseStatus,

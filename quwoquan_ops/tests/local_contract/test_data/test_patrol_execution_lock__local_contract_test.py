@@ -9,6 +9,7 @@ from unittest import mock
 
 from quwoquan_ops.cli.lib.host_locks import (
     HOST_LOCK_ROOT_ENV,
+    HostLockBusyError,
     acquire_host_lock,
     app_dependency_sync_lock_path,
 )
@@ -144,7 +145,7 @@ class PatrolExecutionLockContractTest(unittest.TestCase):
                 ),
                 mock.patch.object(patrol_execution_lock, "REPO_ROOT", worktree),
                 acquire_host_lock(
-                    app_dependency_sync_lock_path(),
+                    app_dependency_sync_lock_path("ios"),
                     fields={"resource": "flutter-cocoapods-gradle"},
                     worktree_path=worktree,
                 ),
@@ -173,7 +174,7 @@ class PatrolExecutionLockContractTest(unittest.TestCase):
                     try:
                         dependency_attempts.append(
                             real_acquire(
-                                app_dependency_sync_lock_path(),
+                                app_dependency_sync_lock_path("ios"),
                                 fields={"resource": "dependency-sync-race-probe"},
                                 worktree_path=worktree,
                             )
@@ -199,7 +200,7 @@ class PatrolExecutionLockContractTest(unittest.TestCase):
                     target="homepage-feed",
                 )
                 self.addCleanup(patrol_lock.close)
-                dependency_path = app_dependency_sync_lock_path()
+                dependency_path = app_dependency_sync_lock_path("ios")
 
             self.assertEqual(dependency_attempts, [])
             with self.assertRaises(patrol_execution_lock.HostLockBusyError):
@@ -215,6 +216,33 @@ class PatrolExecutionLockContractTest(unittest.TestCase):
                 worktree_path=worktree,
             )
             dependency_lock.close()
+
+    def test_ios_consumer_does_not_require_android_dependency_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            worktree, _ = _worktree_pair(root)
+            with (
+                mock.patch.dict(os.environ, {HOST_LOCK_ROOT_ENV: str(root / "locks")}),
+                mock.patch.object(patrol_execution_lock, "REPO_ROOT", worktree),
+                acquire_host_lock(app_dependency_sync_lock_path("android"), worktree_path=worktree),
+            ):
+                with acquire_patrol_execution_lock(env_name="alpha", target="ios-uat", platforms=("ios",)):
+                    with self.assertRaises(HostLockBusyError):
+                        acquire_host_lock(app_dependency_sync_lock_path("ios"), worktree_path=worktree)
+
+    def test_partial_platform_acquisition_is_released_when_second_lock_busy(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            worktree, _ = _worktree_pair(root)
+            with (
+                mock.patch.dict(os.environ, {HOST_LOCK_ROOT_ENV: str(root / "locks")}),
+                mock.patch.object(patrol_execution_lock, "REPO_ROOT", worktree),
+                acquire_host_lock(app_dependency_sync_lock_path("ios"), worktree_path=worktree),
+            ):
+                with self.assertRaises(RuntimeError):
+                    acquire_patrol_execution_lock(env_name="alpha", target="both")
+                with acquire_host_lock(app_dependency_sync_lock_path("android"), worktree_path=worktree):
+                    pass
 
     def test_explicit_lock_path_preserves_independent_mutex_injection(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:

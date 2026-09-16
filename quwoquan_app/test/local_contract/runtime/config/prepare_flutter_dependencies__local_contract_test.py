@@ -20,6 +20,43 @@ from quwoquan_ops.cli.lib.package_reuse.ios_pod_identity import CocoaPodsIdentit
 from quwoquan_app.scripts.device import verify_flutter_dependencies as verify
 
 
+def test_postbuild_cleanup_preserves_receipt_evidence_and_external_targets(tmp_path):
+    root = tmp_path.resolve() / "quwoquan_app/.dart_tool/qwq_ios_cocoapods_dependency"
+    parent = root / "production/user-home/.config/swiftpm"
+    parent.mkdir(parents=True)
+    external = tmp_path / "external"
+    external.mkdir()
+    (external / "sentinel").write_text("preserve")
+    for name in ("cache", "security", "configuration"):
+        (parent / name).symlink_to(external, target_is_directory=True)
+    refs = [root / "dependency-projection-expectation.json",
+            root / "dependency-projection-prebuild-readback.json",
+            root / "postbuild/readback.json"]
+    for ref in refs:
+        ref.parent.mkdir(parents=True, exist_ok=True)
+        ref.write_text("exact evidence")
+
+    verify.retire_swiftpm_user_links(projection_root=tmp_path.resolve())
+
+    assert all(ref.read_text() == "exact evidence" for ref in refs)
+    assert (external / "sentinel").read_text() == "preserve"
+    assert not any(path.is_symlink() for path in parent.iterdir())
+
+
+def test_postbuild_cleanup_rejects_symlinked_private_parent(tmp_path):
+    root = tmp_path.resolve()
+    external = root / "outside"
+    external.mkdir()
+    retained = external / "security"
+    retained.write_text("must remain")
+    parent = root / "quwoquan_app/.dart_tool/qwq_ios_cocoapods_dependency/production/user-home/.config"
+    parent.mkdir(parents=True)
+    (parent / "swiftpm").symlink_to(external, target_is_directory=True)
+    with pytest.raises(ValueError, match="unsafe SwiftPM state parent"):
+        verify.retire_swiftpm_user_links(projection_root=root)
+    assert retained.read_text() == "must remain"
+
+
 def test_pub_get_is_offline_locked_and_does_not_resolve_examples(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -218,7 +255,7 @@ def test_prune_cross_platform_generated_tooling_rejects_symlinked_parent(
     assert sentinel.read_text(encoding="utf-8") == "must remain"
 
 
-def test_run_sh_requests_patrol_projection_only_for_canonical_uat_actor() -> None:
+def test_run_sh_requests_patrol_projection_only_for_android_uat_actor() -> None:
     repo_root = Path(__file__).resolve().parents[5]
     source = (repo_root / "quwoquan_app/run.sh").read_text(encoding="utf-8")
     branch_start = source.index('DEPENDENCY_PATROL_ARGUMENT=""')
@@ -226,7 +263,7 @@ def test_run_sh_requests_patrol_projection_only_for_canonical_uat_actor() -> Non
     dependency_block = source[branch_start:invocation_end]
 
     assert (
-        'if [[ "${QWQ_CANONICAL_LAUNCH_ACTOR:-}" == "app-content-uat" ]]'
+        'if [[ "${QWQ_CANONICAL_LAUNCH_ACTOR:-}" == "app-content-uat" && "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]'
         in dependency_block
     )
     assert 'DEPENDENCY_PATROL_ARGUMENT="--include-patrol"' in dependency_block
@@ -562,6 +599,7 @@ def test_command_verifier_revalidates_persists_and_reloads(
     monkeypatch.setattr(verify, "revalidate_dependency_projection_cas", revalidate)
     monkeypatch.setattr(verify, "write_dependency_projection_cas_readback", write)
     monkeypatch.setattr(verify, "load_dependency_projection_cas_readback", load)
+    monkeypatch.setattr(verify, "retire_swiftpm_user_links", lambda **_: calls.append("cleanup"))
 
     result = verify.main(
         [
@@ -579,7 +617,7 @@ def test_command_verifier_revalidates_persists_and_reloads(
     )
 
     assert result == 0
-    assert calls == ["revalidate", "write", "load"]
+    assert calls == ["revalidate", "write", "load"] + (["cleanup"] if phase == "postbuild" else [])
     output = capsys.readouterr().out
     assert str(evidence.evidence_path) in output
     assert evidence.evidence_digest in output

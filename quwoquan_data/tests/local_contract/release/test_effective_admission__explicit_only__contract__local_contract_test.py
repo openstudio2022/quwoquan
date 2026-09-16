@@ -37,7 +37,6 @@ def _attribution() -> dict[str, object]:
         "attributionText": "历史作者 / Wikimedia Commons",
         "rightsBasis": "CC BY-SA 4.0",
         "commercialAuthorizationStatus": "verified",
-        "publicationAdmission": "production_release",
         "watermarkStatus": "absent",
         "audioRightsStatus": "no_audio",
         "modelReleaseStatus": "not_required",
@@ -105,7 +104,6 @@ def _write_post(
         "rightsResult": "passed",
         "rightsAuthorityRef": "posts/article/history/1/content_review.json",
         "rightsAuthorityDigest": content_review_sha,
-        "usageScope": "production",
         "evidenceRef": "content_review.json",
         "evidenceDigest": content_review_sha,
         "payloadDigest": payload_digest,
@@ -117,7 +115,7 @@ def _write_post(
         "sourceAttribution": _attribution(),
     }
     record.update(pool_record_overrides or {})
-    write_json(root / "_pool/versions/1.json", record)
+    write_json(root / "records/1.json", record)
     return root, manifest
 
 
@@ -128,7 +126,7 @@ def test_pre_sequence_sidecar_shape_fails_closed(tmp_path: Path) -> None:
         tmp_path / "publish",
         pool_record_overrides={"version": 1},
     )
-    record_path = root / "_pool/versions/1.json"
+    record_path = root / "records/1.json"
     import json as json_module
 
     document = json_module.loads(record_path.read_text(encoding="utf-8"))
@@ -156,7 +154,7 @@ def test_explicit_record_is_the_only_admission_truth(tmp_path: Path) -> None:
     assert effective.source == "explicit"
     assert effective.record is not None
     assert is_pool_record_admitted(effective.record)
-    assert effective.record["usageScope"] == "production"
+    assert "usageScope" not in effective.record
 
 
 def test_missing_record_yields_no_inferred_admission(tmp_path: Path) -> None:
@@ -177,11 +175,11 @@ def test_missing_record_yields_no_inferred_admission(tmp_path: Path) -> None:
 
 def test_attribution_gate_requires_complete_attribution() -> None:
     complete = EffectiveAdmission(
-        record={"usageScope": "production", "sourceAttribution": _attribution()},
+        record={"sourceAttribution": _attribution()},
         source="explicit",
     )
     incomplete = EffectiveAdmission(
-        record={"usageScope": "production", "sourceAttribution": {}},
+        record={"sourceAttribution": {}},
         source="explicit",
     )
 

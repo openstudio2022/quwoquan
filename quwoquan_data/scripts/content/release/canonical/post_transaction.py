@@ -288,19 +288,6 @@ def build_post_object_transaction_package(
                 raise ObjectTransactionError(
                     f"post asset 缺 canonical modelReleaseStatus：{asset_id}"
                 )
-            distribution_decision = str(
-                raw.get("distributionDecision")
-                or primary_source.get("distributionDecision")
-                or ""
-            ).strip()
-            if distribution_decision not in {
-                "research_allowed",
-                "commercial_allowed",
-                "blocked",
-            }:
-                raise ObjectTransactionError(
-                    f"post asset 缺 canonical distributionDecision：{asset_id}"
-                )
             # 真实使用限制原样记录，不由对象权利词汇选择另一发布链。
             # 权利状态只作记录事实写入 rights.json / rights_snapshots：非 verified、有审计问题
             # 或缺 https 证明都不拒绝对象，公众可见性由下游运营运行时配置按这些事实决定。
@@ -344,7 +331,6 @@ def build_post_object_transaction_package(
                     "height": height,
                 },
                 "authorizationProof": authorization_proof,
-                "distributionDecision": distribution_decision,
                 "rightsAuditStatus": rights_audit_status.value,
                 "rightsAuditIssues": rights_audit_issues,
                 "modelReleaseStatus": model_release_status,

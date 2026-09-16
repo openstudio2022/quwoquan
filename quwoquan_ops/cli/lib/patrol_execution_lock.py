@@ -38,9 +38,9 @@ def patrol_execution_lock_path() -> Path:
 class PatrolExecutionLock:
     """Workspace lock retaining dependency-sync exclusion until close."""
 
-    def __init__(self, workspace_lock: HostLock, dependency_guard: HostLock | None) -> None:
+    def __init__(self, workspace_lock: HostLock, dependency_guards: list[HostLock]) -> None:
         self._workspace_lock = workspace_lock
-        self._dependency_guard = dependency_guard
+        self._dependency_guards = dependency_guards
 
     @property
     def path(self) -> Path:
@@ -57,9 +57,9 @@ class PatrolExecutionLock:
         try:
             self._workspace_lock.close()
         finally:
-            if self._dependency_guard is not None:
-                self._dependency_guard.close()
-                self._dependency_guard = None
+            for guard in reversed(self._dependency_guards):
+                guard.close()
+            self._dependency_guards.clear()
 
     def __enter__(self) -> "PatrolExecutionLock":
         return self
@@ -73,24 +73,33 @@ def acquire_patrol_execution_lock(
     env_name: str,
     target: str,
     lock_path: Path | None = None,
+    platforms: tuple[str, ...] = ("android", "ios"),
 ) -> PatrolExecutionLock:
     """Serialize Flutter builds that share the App build workspace."""
 
+    if (not platforms or len(set(platforms)) != len(platforms)
+            or any(platform not in {"android", "ios"} for platform in platforms)):
+        raise ValueError("invalid Patrol dependency platform plan")
     path = Path(lock_path) if lock_path is not None else patrol_execution_lock_path()
-    dependency_guard: HostLock | None = None
+    dependency_guards: list[HostLock] = []
     if lock_path is None:
         try:
-            dependency_guard = acquire_host_lock(
-                app_dependency_sync_lock_path(),
-                fields={"resource": "patrol-build-workspace-admission"},
-                worktree_path=REPO_ROOT,
-            )
-        except HostLockBusyError as error:
-            holder = str(error).partition(": ")[2]
-            raise RuntimeError(
-                "Patrol build workspace is already in use: "
-                f"dependency-sync {holder or 'unknown'}",
-            ) from error
+            for platform in sorted(platforms):
+                dependency_guards.append(acquire_host_lock(
+                    app_dependency_sync_lock_path(platform),
+                    fields={"resource": "patrol-build-workspace-admission", "platform": platform},
+                    worktree_path=REPO_ROOT,
+                ))
+        except BaseException as error:
+            for guard in reversed(dependency_guards):
+                guard.close()
+            if isinstance(error, HostLockBusyError):
+                holder = str(error).partition(": ")[2]
+                raise RuntimeError(
+                    "Patrol build workspace is already in use: "
+                    f"dependency-sync {holder or 'unknown'}",
+                ) from error
+            raise
     try:
         workspace_lock = acquire_host_lock(
             path,
@@ -101,17 +110,17 @@ def acquire_patrol_execution_lock(
             worktree_path=REPO_ROOT,
         )
     except HostLockBusyError as error:
-        if dependency_guard is not None:
-            dependency_guard.close()
+        for guard in reversed(dependency_guards):
+            guard.close()
         holder = str(error).partition(": ")[2]
         raise RuntimeError(
             f"Patrol build workspace is already in use: {holder or 'unknown'}",
         ) from error
     except BaseException:
-        if dependency_guard is not None:
-            dependency_guard.close()
+        for guard in reversed(dependency_guards):
+            guard.close()
         raise
-    return PatrolExecutionLock(workspace_lock, dependency_guard)
+    return PatrolExecutionLock(workspace_lock, dependency_guards)
 
 
 __all__ = [

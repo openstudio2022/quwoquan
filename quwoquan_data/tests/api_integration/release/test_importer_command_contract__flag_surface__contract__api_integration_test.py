@@ -10,6 +10,7 @@ Go flag 解析层立即失败并被捕获。附带未知 flag 负例证明探测
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +30,10 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
 
 from content.release.environment import importers  # noqa: E402
 from content.release.model import ImportMode  # noqa: E402
+from quwoquan_ops.cli.lib import output_paths  # noqa: E402
+from quwoquan_ops.cli.lib.startup_attempt_receipt import (  # noqa: E402
+    load_candidate_oci_image_composition,
+)
 
 GO_FLAG_ERROR_TOKENS = (
     "flag provided but not defined",
@@ -40,6 +45,25 @@ UNREACHABLE_MONGO = (
     "mongodb://127.0.0.1:1/flag-probe?serverSelectionTimeoutMS=200&connectTimeoutMS=200"
 )
 UNREACHABLE_POSTGRES = "postgres://flag-probe@127.0.0.1:1/flag-probe?connect_timeout=1"
+CANDIDATE_ENVIRONMENT = "gamma"
+CANDIDATE_TARGET = f"{CANDIDATE_ENVIRONMENT}-local"
+
+
+def _candidate_service_core_image_ref() -> str:
+    """读取 Ops 现役 candidate 的 service-core packaged image binding。"""
+    active = json.loads(
+        output_paths.active_candidate_manifest_path(CANDIDATE_TARGET).read_text(
+            encoding="utf-8"
+        )
+    )
+    candidate_root = Path(str(active["candidateDir"]))
+    composition = load_candidate_oci_image_composition(
+        candidate_root / "packages/runtime-shared/oci-images.json",
+        expected_environment=CANDIDATE_ENVIRONMENT,
+        expected_target=CANDIDATE_TARGET,
+        expected_candidate_digest=str(active["baselineId"]),
+    )
+    return str(composition["ociImages"]["service-core"]["ref"])
 
 
 def _assembled_commands(tmp_path: Path) -> list[tuple[list[str], Path]]:
@@ -52,6 +76,7 @@ def _assembled_commands(tmp_path: Path) -> list[tuple[list[str], Path]]:
     run = tmp_path / "runs/apply-a"
     (release / "payload").mkdir(parents=True)
     commands: list[tuple[list[str], Path]] = []
+    candidate_image_ref = _candidate_service_core_image_ref()
 
     def record_run(command: list[str], **kwargs: object) -> SimpleNamespace:
         commands.append((list(command), Path(str(kwargs["cwd"]))))
@@ -82,23 +107,25 @@ def _assembled_commands(tmp_path: Path) -> list[tuple[list[str], Path]]:
 
         importers.run_tag_importer(
             release=release,
-            env="alpha",
+            env=CANDIDATE_ENVIRONMENT,
             run=run,
             mongo_uri=UNREACHABLE_MONGO,
             dry_run=True,
+            importer_image_ref=candidate_image_ref,
         )
         importers.run_creator_importer(
             release=release,
-            env="alpha",
+            env=CANDIDATE_ENVIRONMENT,
             run=run,
             mongo_uri=UNREACHABLE_MONGO,
             postgres_dsn=UNREACHABLE_POSTGRES,
             media_avatar_base_url="https://cdn.example.invalid",
             dry_run=True,
+            importer_image_ref=candidate_image_ref,
         )
         importers.run_content_importer(
             release=release,
-            env="alpha",
+            env=CANDIDATE_ENVIRONMENT,
             run=run,
             mongo_uri=UNREACHABLE_MONGO,
             media_avatar_base_url="https://cdn.example.invalid",
@@ -108,16 +135,18 @@ def _assembled_commands(tmp_path: Path) -> list[tuple[list[str], Path]]:
             creator_candidate_receipt=run / "creator-import.json",
             homepage_import_report=run / "homepage-import.json",
             homepage_candidate_receipt=None,
+            importer_image_ref=candidate_image_ref,
         )
         importers.run_homepage_importer(
             release=release,
-            env="alpha",
+            env=CANDIDATE_ENVIRONMENT,
             run=run,
             run_id="apply-a",
             mongo_uri=UNREACHABLE_MONGO,
             media_image_base_url="https://cdn.example.invalid",
             dry_run=True,
             mode=ImportMode.UPSERT,
+            importer_image_ref=candidate_image_ref,
         )
     assert len(commands) == 4
     content_command = commands[2][0]

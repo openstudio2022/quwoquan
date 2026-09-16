@@ -1868,8 +1868,9 @@ evidence-signing-bootstrap:
 # RELEASE_HANDOFF_REF（candidate release 的 authoritative handoff-ref-v1）；私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT。
 # 可选：BASELINE=<sha>、BETA=1、MERGED_LANES="lane/a lane/b"、CANDIDATE、OWNER_IDENTITY、
 # READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
-# App 影响面必填 ANDROID_DEVICE_ID / IOS_DEVICE_ID；CANDIDATE_REF=store-ref=sha256:digest 复用预先冻结候选，不再申请 claim。
-# REUSE=1 仅复用同 commit/tree/parent/ImpactPlan/profile 且签名与引用有效的事实，不改变 Beta opt-in。
+# APP_PLATFORM=all（默认）要求双端设备；ios/android 仅要求所选端设备，平台声明绑定签名 acceptanceBinding。
+# CANDIDATE_REF=store-ref=sha256:digest 复用预先冻结候选，不再申请 claim。
+# REUSE=1 仅复用同 commit/tree/parent/ImpactPlan/profile/平台计划 且签名与引用有效的事实，不改变 Beta opt-in。
 .PHONY: accept
 accept:
 	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
@@ -1880,6 +1881,7 @@ accept:
 		--mode acceptance \
 		--candidate "$(or $(CANDIDATE),HEAD)" \
 		$(if $(CANDIDATE_REF),--candidate-ref "$(CANDIDATE_REF)",) \
+		--app-platform "$(or $(APP_PLATFORM),all)" \
 		$(if $(ANDROID_DEVICE_ID),--android-device-id "$(ANDROID_DEVICE_ID)",) \
 		$(if $(IOS_DEVICE_ID),--ios-device-id "$(IOS_DEVICE_ID)",) \
 		$$( [ -n "$(BASELINE)" ] && printf -- '--baseline %s' "$(BASELINE)" ) \

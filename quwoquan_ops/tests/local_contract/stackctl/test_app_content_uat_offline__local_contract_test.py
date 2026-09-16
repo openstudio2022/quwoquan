@@ -27,22 +27,14 @@ SCREENSHOT_DIGEST = "sha256:" + hashlib.sha256(SCREENSHOT).hexdigest()
 
 
 @pytest.mark.parametrize("platform", ["android", "ios"])
-def test_rehearsal_required_cases_keep_unimplemented_evidence_blocked(platform: str) -> None:
+def test_gwt008_cases_are_executable_with_launcher_owned_relay(platform: str) -> None:
     plans = {plan["caseId"]: plan for plan in _plans(_launch_identity(platform))}
-    assert not {"login-unavailable", "private-unavailable", "write-unavailable"} & plans.keys()
-    for case in ("login-success", "login-error", "private-continuation", "local-write",
-                 "otp-expiry", "identity-restart", "network-refusal", "otp-refusal",
-                 "push-refusal", "remote-refusal", "outbox-refusal"):
-        plan = plans[case]
-        assert plan["specRef"].endswith("#gwt-008")
-        assert plan["executionBlocker"].startswith("APP.UAT.")
-        with pytest.raises(ValueError, match="APP.UAT."):
-            pages.require_executable_page_plan(plan)
-    cancel = plans["login-cancel"]
-    assert cancel["executionBlocker"] == ""
-    assert cancel["specRef"].endswith("#gwt-008")
-    pages.require_executable_page_plan(cancel)
-
+    for case in {"login-success", "login-error", "private-continuation", "local-write", "otp-expiry",
+                 "identity-restart", "network-refusal", "otp-refusal", "push-refusal", "remote-refusal",
+                 "outbox-refusal"}:
+        assert plans[case]["executionBlocker"] == ""
+        pages.require_executable_page_plan(plans[case])
+        assert plans[case]["nativeContract"]["caseId"] == case
 
 @pytest.mark.parametrize("platform", ["android", "ios"])
 @pytest.mark.parametrize("mode", ["correct", "incorrect"])
@@ -52,12 +44,8 @@ def test_native_ui_otp_input_contract_is_value_free_and_redacted(platform: str, 
     pages._validate_step_observation(step, {"operation": "input-otp", "selector": "otp-field", "observed": "input-redacted"})
     with pytest.raises(ValueError):
         pages._validate_step_observation(step, {"operation": "input-otp", "selector": "otp-field", "observed": "000000"})
-    # 同一 plan validator 负责两端；未授予演练空间的 case 不得借输入 API 变成可执行。
     plan = next(plan for plan in _plans(_launch_identity(platform)) if plan["caseId"] == "login-error")
-    plan["executionBlocker"] = ""
-    plan["planDigest"] = pages.document_digest({key: value for key, value in plan.items() if key != "planDigest"})
-    with pytest.raises(ValueError):
-        pages.validate_page_plan(plan)
+    pages.validate_page_plan(plan)
 
 
 @pytest.mark.parametrize("platform", ["android", "ios"])
@@ -73,23 +61,21 @@ def test_native_input_rejects_undeclared_parameters(platform: str, change: dict)
         pages.validate_page_plan(plan)
 
 
-def test_both_native_hosts_block_input_until_redacted_execution_is_available() -> None:
+def test_both_native_hosts_emit_only_non_authorizing_terminal_result() -> None:
     android = (ROOT / "quwoquan_app/test_host/patrol/android/app/src/androidTest/java/com/quwoquan/testhost/patrol/ProductionHomepageExternalAutTest.java").read_text()
     ios = (ROOT / "quwoquan_app/test_host/patrol/ios/RunnerUITests/RunnerUITests.m").read_text()
     for source in (android, ios):
-        assert "redacted native input execution is unavailable" in source
-        assert "sourceSelector" in source and "incorrect" in source
-        assert "input-redacted" in source
-    assert "field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT" not in android
-    assert "[field typeText:" not in ios
-    assert "fields.size()" in android and "field.isEditable() && field.isEnabled()" in android
-    assert "fields.count" in ios and "field.enabled && field.hittable" in ios
+        assert "actualObservation" not in source
+        assert "external-uat-terminal-result" in source and "terminalRef" in source
+        assert "capability" not in source.lower() and "verifier" not in source.lower()
 
 
-def test_input_plan_cannot_reach_native_command_through_low_level_executor(tmp_path: Path) -> None:
+def test_input_plan_rejects_cross_attempt_before_native_command(tmp_path: Path) -> None:
     binding = _launch_identity()
     plan = next(plan for plan in _plans(binding) if plan["caseId"] == "login-success")
-    with pytest.raises(ValueError, match="authorized rehearsal identity"):
+    plan["launchAttemptId"] = "foreign-attempt"
+    plan["planDigest"] = pages.document_digest({key: value for key, value in plan.items() if key != "planDigest"})
+    with pytest.raises(ValueError, match="cross AUT/attempt"):
         pages._execute_native_page(plan=plan, launch=binding, context={}, case_dir=tmp_path)
     assert not list(tmp_path.iterdir())
 
@@ -97,7 +83,7 @@ def test_input_plan_cannot_reach_native_command_through_low_level_executor(tmp_p
 @pytest.fixture
 def private_offline_projection(tmp_path):
     """仅私有source capsule，无签名材料、真实构建或设备。"""
-    from quwoquan_ops.cli.lib.package_reuse.input_capsule import _digest_record, _baseline_id, _capsule_identity_payload
+    from quwoquan_ops.cli.lib.package_reuse.input_capsule import _digest_record, _baseline_id, _capsule_identity_payload, PACKAGE_INPUT_CAPSULE_SCHEMA
     capsule, root = tmp_path / "capsule", tmp_path / "projection"
     raw = b'{"privateSnapshot":true}\n'
     pin = "sha256:" + hashlib.sha256(raw).hexdigest()
@@ -114,10 +100,11 @@ def private_offline_projection(tmp_path):
                         "digest": "sha256:" + hashlib.sha256(content).hexdigest(), "size": len(content), "mode": 0o444})
     source_digest, count = _digest_record([(path, "file", content) for path, content in files.items()])
     roots = ["quwoquan_app/assets"]
-    manifest = {"schema": "stackctl-package-input-capsule.v1", "sourceRevision": "b" * 40,
+    manifest = {"schema": PACKAGE_INPUT_CAPSULE_SCHEMA, "sourceRevision": "b" * 40,
                 "baselineId": _baseline_id(_capsule_identity_payload(roots=roots, input_digest=source_digest, input_count=count)),
                 "workspaceStatusDigest": DIGEST, "deploymentInputDigest": source_digest,
-                "deploymentInputFileCount": count, "deploymentInputRoots": roots, "entries": entries}
+                "deploymentInputFileCount": count, "deploymentInputRoots": roots, "entries": entries,
+                "dependencyPlatforms": ["android", "ios"]}
     (capsule / "manifest.json").write_text(json.dumps(manifest))
     pd, pc = launch._projection_cas(manifest=manifest, capsule_root=capsule, projection_root=root, reject_unmanifested=True)
     evidence = {"schema": "quwoquan_ops.app_content_uat_source_projection.v1", "contentSource": "bundled_snapshot",
@@ -145,13 +132,72 @@ def test_offline_launch_forwards_private_selection_without_signing_or_device(tmp
     monkeypatch.setattr(stackctl, "run", no_launch)
     with pytest.raises(RuntimeError, match="test-stop-before-system"):
         offline._launch(args, runtime, projection, tmp_path / "run", tmp_path)
-    control = json.loads((tmp_path / "run/attempt-1/control.json").read_text())
+    control_path, = (tmp_path / "run/case-launches/login-success/generation-1").glob("*/attempt-1/control.json")
+    control = json.loads(control_path.read_text())
     assert control["deviceId"] == args.device_id and control["candidateDigest"] == DIGEST
     if isolated:
-        assert control["rehearsalSpaceSelection"] == {"mode": "isolated", "instanceId": "private-test-space", "snapshotDigest": pin}
+        selection = control["rehearsalSpaceSelection"]
+        assert selection["mode"] == "isolated" and selection["snapshotDigest"] == pin
+        assert selection["caseId"] == "login-success" and selection["lifecycleGeneration"] == "1"
+        assert selection["instanceId"] == "private-test-space-login-success-1"
+        assert selection["observationBinding"].startswith("sha256:")
     else:
         assert "rehearsalSpaceSelection" not in control
     assert not (tmp_path / "run/attempt-1/attempt.json").exists()
+
+
+@pytest.mark.parametrize("isolated", [False, True])
+def test_every_case_generation_and_repeated_login_gets_fresh_control(tmp_path, monkeypatch, private_offline_projection, isolated):
+    from quwoquan_ops.cli import stackctl
+    runtime, projection, _ = private_offline_projection
+    args = argparse.Namespace(platform="ios-simulator", device_id="private-device", isolated_rehearsal=isolated,
+        rehearsal_instance_id="private-test-space" if isolated else "")
+    def stop(*_, **__):
+        raise RuntimeError("stop-before-device")
+    monkeypatch.setattr(stackctl, "run", stop)
+    controls = []
+    for case, generation in (("login-success", 1), ("login-error", 1), ("login-success", 1), ("identity-restart", 2)):
+        with pytest.raises(RuntimeError, match="stop-before-device"):
+            offline._launch(args, runtime, projection, tmp_path / "run", tmp_path, case_id=case, generation=generation)
+        current = set((tmp_path / "run").rglob("control.json"))
+        fresh, = current - {path for path, _ in controls}
+        controls.append((fresh, fresh.read_bytes()))
+    assert len(controls) == 4
+    assert len({json.loads(raw)["launchAttemptRef"] for _, raw in controls}) == 4
+    assert all(path.read_bytes() == raw for path, raw in controls)
+
+
+def test_restart_generations_preserve_space_but_not_observation(tmp_path, private_offline_projection):
+    runtime, projection, _ = private_offline_projection
+    args = argparse.Namespace(platform="ios-simulator", device_id="private-device", isolated_rehearsal=True,
+        rehearsal_instance_id="private-test-space")
+    one = offline._isolated_selection(args, runtime, projection, case_id="identity-restart", generation=1,
+        attempt_ref=str(tmp_path / "one"))
+    two = offline._isolated_selection(args, runtime, projection, case_id="identity-restart", generation=2,
+        attempt_ref=str(tmp_path / "two"))
+    assert one["instanceId"] == two["instanceId"]
+    assert one["snapshotDigest"] == two["snapshotDigest"]
+    assert one["observationBinding"] != two["observationBinding"]
+    assert one["lifecycleGeneration"] != two["lifecycleGeneration"]
+
+
+@pytest.mark.parametrize("platform", ["ios", "android"])
+def test_native_driver_acquires_only_selected_platform_before_build(tmp_path, monkeypatch, platform):
+    from quwoquan_ops.cli.lib import patrol_execution_lock
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"baselineId": DIGEST}))
+    observed = []
+    def lock(**kwargs):
+        observed.append(kwargs)
+        raise RuntimeError("stop-before-build")
+    monkeypatch.setattr(patrol_execution_lock, "acquire_patrol_execution_lock", lock)
+    projection = {"sourceCapsuleManifestRef": str(manifest), "candidateDigest": DIGEST,
+        "sourceRevision": "a" * 40, "sourceCapsuleDigest": DIGEST, "sourceCapsuleWorkspaceStatusDigest": DIGEST}
+    with pytest.raises(RuntimeError, match="stop-before-build"):
+        pages._prepare_native_driver(args=argparse.Namespace(), projection=projection, launch={},
+            artifact=tmp_path / "artifact", report_dir=tmp_path / "run", output_root=tmp_path,
+            device={"targetPlatform": platform})
+    assert observed == [{"env_name": "alpha", "target": "offline-native-pages", "platforms": (platform,)}]
 
 
 @pytest.mark.parametrize("change", [
@@ -232,18 +278,15 @@ def test_isolated_cli_rejects_partial_or_cross_target_before_dispatch(monkeypatc
     assert result["exitCode"] == 2 and result["firstBlocker"] == "APP.LAUNCH.receipt_invalid"
 
 
-def test_isolated_selection_does_not_authorize_native_pages_without_aut_observation(tmp_path, monkeypatch):
+def test_isolated_selection_enters_native_pages_only_with_case_bound_launch(monkeypatch, tmp_path):
+    binding = {"launchAttemptId": "attempt-1", "canonicalProcessId": 7}
     monkeypatch.setattr(offline, "_candidate", lambda *args: {})
     monkeypatch.setattr(offline, "_prepare_launch", lambda *args: ({}, {}))
-    monkeypatch.setattr(offline, "_launch", lambda *args: {})
-    monkeypatch.setattr(pages, "execute_offline_page_cases", lambda **kwargs: pytest.fail("missing AUT observation must block native pages"))
-    result = offline.run_offline_app_content_uat(
-        args=argparse.Namespace(dry_run=False, platform="android", device_id="private-device", isolated_rehearsal=True),
-        report_dir=tmp_path, output_root=tmp_path, issues=[],
-    )
-    assert result["exitCode"] == 2
-    assert "three-storage" in result["details"][0]
-    assert result["rawResultRefs"] == {}
+    monkeypatch.setattr(offline, "_launch", lambda *args, **kwargs: binding)
+    observed = {}
+    monkeypatch.setattr(pages, "execute_offline_page_cases", lambda **kwargs: observed.update(kwargs) or {"status": "gate_block", "exitCode": 2, "firstBlocker": "APP.UAT.page_artifact_binding_missing"})
+    offline.run_offline_app_content_uat(args=argparse.Namespace(dry_run=False, platform="android", device_id="private-device", isolated_rehearsal=True), report_dir=tmp_path, output_root=tmp_path, issues=[])
+    assert observed["launch"] == binding
 
 
 def test_home_video_and_tab_roundtrip_are_required_real_journeys() -> None:
@@ -296,9 +339,9 @@ def test_offline_dry_run_needs_no_backend_or_candidate(tmp_path: Path) -> None:
         args=argparse.Namespace(dry_run=True, platform="android", device_id="emulator-test"),
         report_dir=tmp_path, output_root=tmp_path, issues=[],
     )
-    assert result["status"] == "gate_block"
-    assert result["blockedCases"]
-    assert result["exitCode"] == 2
+    assert result["status"] == "planned"
+    assert result["blockedCases"] == []
+    assert result["exitCode"] == 0
     assert result["nonPromotable"] is True
     assert result["rawResultRefs"] == {}
     assert result["preconditions"] == ["exact_candidate", "signed_bundled_snapshot", "managed_device"]
@@ -350,16 +393,49 @@ def test_offline_control_rejects_mixed_authority(tmp_path: Path, change: dict[st
         _control(tmp_path, value)
 
 
+def _actual_observation(plan: dict[str, object], binding: dict[str, object]) -> dict[str, object]:
+    contract = plan["nativeContract"]
+    restart = plan["caseId"] == "identity-restart"
+    details = {
+        "ui-control": "unique-editable-control",
+        "rehearsal-session-readback": "session-established",
+        "rehearsal-auth-error-readback": "recoverable-error-observed",
+        "continuation-query-readback": "continued-once-readback",
+        "local-command-query-readback": "command-query-readback",
+        "monotonic-clock": "elapsed-300s-challenge-expired",
+        "native-process": "cold-restart-new-process",
+        "rehearsal-challenge-readback": "challenge-expired",
+        "native-network-attempt": "refused-at-side-effect-boundary",
+        "native-otp-delivery-attempt": "refused-at-side-effect-boundary",
+        "native-push-registration-attempt": "refused-at-side-effect-boundary",
+        "native-remote-transport-attempt": "refused-at-side-effect-boundary",
+        "native-connected-outbox-attempt": "refused-at-side-effect-boundary",
+    }
+    return {"schema": "quwoquan_ops.alpha_gwt008_native_observation.v1", "caseId": plan["caseId"],
+        "contractDigest": contract["contractDigest"], "applicationId": binding["applicationId"], "deviceId": binding["deviceId"],
+        "candidateDigest": binding["candidateDigest"], "artifactDigest": binding["artifactDigest"],
+        "launchAttemptBefore": binding["launchAttemptId"], "processIdBefore": binding["canonicalProcessId"],
+        "launchAttemptAfter": "restart-attempt" if restart else binding["launchAttemptId"],
+        "processIdAfter": binding["canonicalProcessId"] + 1 if restart else binding["canonicalProcessId"],
+        "observations": [{"source": source, "status": "observed", "detail": details[source]} for source in contract["observationSources"]],
+        "logSummary": "input-redacted"}
+
 def _native_marker(plan: dict[str, object], binding: dict[str, object]) -> str:
+    if "nativeContract" in plan:
+        body = {"schema": "external-uat-terminal-result", "planDigest": plan["planDigest"],
+            "caseId": plan["caseId"], "launchAttemptId": binding["launchAttemptId"],
+            "generation": plan["nativeContract"]["generation"], "processId": binding["canonicalProcessId"],
+            "deviceId": binding["deviceId"], "sessionId": plan["nativeContract"]["sessionId"],
+            "status": "passed", "screenshotDigest": SCREENSHOT_DIGEST}
+        terminal = {**body, "terminalDigest": pages.document_digest(body),
+                    "terminalRef": "runner-terminal:" + str(plan["planDigest"])}
+        return "QWQ_EXTERNAL_UAT_TERMINAL " + json.dumps(terminal, ensure_ascii=False)
     observations = []
     for step in plan["steps"]:
         observed = step["selector"].removeprefix("text-prefix:")
-        if step["operation"] == "playback":
-            observed += " 2:07 / 2:07"
-        elif step["operation"] == "seek":
-            observed += " 0:30 / 2:07"
-        elif step["operation"] == "tab-roundtrip":
-            observed += ' geometry={"initial":[80,10],"middle":[10],"further":[10],"restored":[80,10]}'
+        if step["operation"] == "playback": observed += " 2:07 / 2:07"
+        elif step["operation"] == "seek": observed += " 0:30 / 2:07"
+        elif step["operation"] == "tab-roundtrip": observed += ' geometry={"initial":[80,10],"middle":[10],"further":[10],"restored":[80,10]}'
         observations.append({**step, "observed": observed})
     return "QWQ_OFFLINE_PAGE " + json.dumps({
         **{key: binding[key] for key in ("candidateDigest", "artifactDigest", "deviceId", "launchAttemptId")},
@@ -368,8 +444,7 @@ def _native_marker(plan: dict[str, object], binding: dict[str, object]) -> str:
         "planDigest": plan["planDigest"], "platform": binding["platform"],
         "applicationId": binding["applicationId"], "status": "passed",
         "processIdBefore": binding["canonicalProcessId"], "processIdAfter": binding["canonicalProcessId"],
-        "observations": observations,
-    }, ensure_ascii=False)
+        "observations": observations}, ensure_ascii=False)
 
 
 def _launch_identity(platform: str = "android") -> dict[str, object]:
@@ -383,6 +458,266 @@ def _launch_identity(platform: str = "android") -> dict[str, object]:
 def _plans(binding: dict[str, object]) -> list[dict[str, object]]:
     snapshot = json.loads((ROOT / "quwoquan_app/assets/content/alpha/manifest.json").read_bytes())
     return pages.build_offline_page_plans(snapshot=snapshot, app_root=ROOT / "quwoquan_app", launch=binding)
+
+
+@pytest.mark.parametrize("fail_launch", [False, True])
+def test_page_lock_handoff_uses_real_exclusive_flock(tmp_path, monkeypatch, fail_launch):
+    from contextlib import ExitStack
+    from quwoquan_ops.cli.lib import host_locks
+    monkeypatch.setenv(host_locks.HOST_LOCK_ROOT_ENV, str(tmp_path / "locks"))
+    def acquire(*_):
+        return host_locks.acquire_device_lock(device="device", app="app", worktree_path=ROOT)
+    monkeypatch.setattr(pages, "_acquire_page_device_lock", acquire)
+    owned = ExitStack()
+    owned.enter_context(acquire())
+    def launch_case(case, generation):
+        with acquire():
+            with pytest.raises(host_locks.HostLockBusyError):
+                acquire()
+            if fail_launch:
+                raise ValueError("APP.LAUNCH.compile_failed")
+        return {"deviceId": "device", "applicationId": "app"}
+    try:
+        if fail_launch:
+            with pytest.raises(ValueError, match="compile_failed"):
+                pages._launch_between_page_locks(owned=owned, device_id="device", application_id="app",
+                    launch_case=launch_case, case_id="default-entry", generation=1)
+        else:
+            pages._launch_between_page_locks(owned=owned, device_id="device", application_id="app",
+                launch_case=launch_case, case_id="default-entry", generation=1)
+            with pytest.raises(host_locks.HostLockBusyError):
+                acquire()
+    finally:
+        owned.close()
+    with acquire():
+        pass
+
+
+def test_page_lock_handoff_does_not_release_intervening_owner(tmp_path, monkeypatch):
+    from contextlib import ExitStack
+    from quwoquan_ops.cli.lib import host_locks
+    monkeypatch.setenv(host_locks.HOST_LOCK_ROOT_ENV, str(tmp_path / "locks"))
+    def acquire(*_):
+        return host_locks.acquire_device_lock(device="device", app="app", worktree_path=ROOT)
+    monkeypatch.setattr(pages, "_acquire_page_device_lock", acquire)
+    owned = ExitStack()
+    owned.enter_context(acquire())
+    intervening = []
+    def launch_case(*_):
+        intervening.append(acquire())
+        return {"deviceId": "device", "applicationId": "app"}
+    try:
+        with pytest.raises(host_locks.HostLockBusyError):
+            pages._launch_between_page_locks(owned=owned, device_id="device", application_id="app",
+                launch_case=launch_case, case_id="default-entry", generation=1)
+        owned.close()
+        with pytest.raises(host_locks.HostLockBusyError):
+            acquire()
+    finally:
+        for lock in intervening:
+            lock.close()
+        owned.close()
+
+
+def test_bounded_case_parser_and_diagnostic_never_becomes_full_acceptance(tmp_path, monkeypatch):
+    from quwoquan_ops.cli import stackctl
+    from quwoquan_ops.cli.lib.integration_app_launch import _validate_offline_receipt_status
+    parser = stackctl.build_parser()
+    args = parser.parse_args(['app-content-uat', '--device-id', 'SIM-EXACT', '--case', 'default-entry', '--dry-run'])
+    assert offline.selected_offline_cases(args) == ('default-entry',)
+    with pytest.raises(SystemExit):
+        parser.parse_args(['app-content-uat', '--device-id', 'SIM-EXACT', '--case', 'unknown'])
+    binding, candidate, projection, commands = _live_boundaries(monkeypatch, tmp_path)
+    result = pages.execute_offline_page_cases(args=argparse.Namespace(platform='android', device_id=binding['deviceId'],
+        offline_cases=['default-entry']), candidate=candidate, launch=binding, projection=projection,
+        report_dir=tmp_path / 'selected', output_root=tmp_path)
+    assert result['status'] == 'diagnostic_passed', result
+    assert len(commands) == 1 and result['rawCoverage']['alpha-local']['missing'] == len(offline.OFFLINE_REQUIRED_CASES) - 1
+    with pytest.raises(ValueError):
+        _validate_offline_receipt_status({**result, 'schema': 'quwoquan_ops.app_content_uat_receipt',
+            'contentSource': 'bundled_snapshot', 'targets': ['alpha-local'], 'nonPromotable': True,
+            'status': 'passed', 'profile': 'rehearsal'})
+
+
+def test_fresh_page_attempt_does_not_restore_previous_process_navigation():
+    snapshot = json.loads((ROOT / "quwoquan_app/assets/content/alpha/manifest.json").read_bytes())
+    plans = pages.build_offline_page_plans(snapshot=snapshot, app_root=ROOT / "quwoquan_app",
+        launch=_launch_identity(), fresh_launch=True)
+    article = next(plan for plan in plans if plan["caseId"] == "article-detail")
+    assert {"operation": "tap", "selector": "works-top-back"} not in article["steps"]
+    pages.validate_page_plan(article)
+
+
+def test_native_restart_plan_preserves_successor_relay_identity():
+    from quwoquan_ops.cli.commands import app_preflight_uat_offline_native_contract as native
+    launch = {**_launch_identity("ios"), "generation": 2, "sessionId": "fresh-session",
+              "observationBinding": DIGEST, "launchAttemptId": "fresh-attempt", "canonicalProcessId": 9000}
+    plan = next(plan for plan in _plans(launch) if plan["caseId"] == "identity-restart")
+    contract = plan["nativeContract"]
+    assert (contract["generation"], contract["sessionId"], contract["observationBinding"]) == (2, "fresh-session", DIGEST)
+    assert [step["operation"] for step in plan["steps"]] == ["visible"]
+    session = native.admit_launch(contract, launch, signing_digest=DIGEST, lifecycle_digest=DIGEST)
+    assert session.admission["platform"] == "ios-simulator"
+    session.revoke()
+
+
+def test_identity_restart_generation_two_is_restore_only():
+    first = next(plan for plan in _plans(_launch_identity("ios")) if plan["caseId"] == "identity-restart")
+    assert {step["operation"] for step in first["steps"]} >= {"restart", "input-otp"}
+    successor = {**_launch_identity("ios"), "generation": 2, "sessionId": "fresh-session",
+                 "observationBinding": DIGEST, "launchAttemptId": "fresh-attempt"}
+    second = next(plan for plan in _plans(successor) if plan["caseId"] == "identity-restart")
+    assert [step["operation"] for step in second["steps"]] == ["visible"]
+    assert not any(step.get("operation") in {"restart", "input-otp"} for step in second["steps"])
+
+
+def test_supervised_restart_page_does_not_consume_relay(tmp_path, monkeypatch):
+    launch = {**_launch_identity("android"), "generation": 1, "sessionId": "s", "observationBinding": DIGEST}
+    plan = next(plan for plan in _plans(launch) if plan["caseId"] == "identity-restart")
+    calls = []
+    monkeypatch.setattr(pages, "_relay_runtime", lambda **_: calls.append("relay"))
+    def native(command, *, cwd, env, timeout_seconds, log_path):
+        log_path.write_text("OK (1 test)\nINSTRUMENTATION_CODE: -1\n" + _native_marker(plan, launch))
+        return {"exitCode": 0, "command": command}
+    monkeypatch.setattr(pages, "run_command", native)
+    monkeypatch.setattr(pages, "native_page_screenshot", lambda *_: SCREENSHOT)
+    evidence, result = pages._execute_native_page(
+        plan=plan, launch=launch, context={"host": tmp_path, "environment": {}, "adb": "/sealed/adb"},
+        case_dir=tmp_path, consume_relay=False)
+    assert calls == []
+    assert "launcherComparison" not in result
+    assert evidence["caseId"] == "identity-restart"
+
+
+def test_death_probes_are_distinct_and_readback_error_is_not_death():
+    from quwoquan_ops.cli.commands.app_preflight_uat_process import (
+        confirm_canonical_app_process_absent,
+        confirm_host_process_table_absent,
+        observe_canonical_app_process_id,
+    )
+    launch = {**_launch_identity("ios"), "canonicalProcessId": 4312}
+
+    def empty(command, **_kwargs):
+        return subprocess.CompletedProcess(command, 0, "   8  -  other.service\n", "")
+
+    with pytest.raises(ValueError, match="is not running"):
+        observe_canonical_app_process_id(
+            platform="ios", device_id=launch["deviceId"], application_id=launch["applicationId"], runner=empty)
+    assert confirm_canonical_app_process_absent(
+        platform="ios", device_id=launch["deviceId"], application_id=launch["applicationId"],
+        expected_pid=4312, runner=empty) is True
+
+    def two(command, **_kwargs):
+        line = "  {pid}      -  UIKitApplication:" + launch["applicationId"] + "[cafe][rb-legacy]\n"
+        return subprocess.CompletedProcess(command, 0, line.format(pid=4312) + line.format(pid=4313), "")
+
+    with pytest.raises(ValueError, match="one launchd process"):
+        observe_canonical_app_process_id(
+            platform="ios", device_id=launch["deviceId"], application_id=launch["applicationId"], runner=two)
+    with pytest.raises(ValueError, match="teardown_pid_alive"):
+        confirm_canonical_app_process_absent(
+            platform="ios", device_id=launch["deviceId"], application_id=launch["applicationId"],
+            expected_pid=4312, runner=two)
+
+    def unreadable(command, **_kwargs):
+        return subprocess.CompletedProcess(command, 1, "", "denied")
+
+    with pytest.raises(ValueError, match="unreadable"):
+        observe_canonical_app_process_id(
+            platform="ios", device_id=launch["deviceId"], application_id=launch["applicationId"], runner=unreadable)
+    with pytest.raises(ValueError, match="teardown_pid_alive"):
+        confirm_canonical_app_process_absent(
+            platform="ios", device_id=launch["deviceId"], application_id=launch["applicationId"],
+            expected_pid=4312, runner=unreadable)
+
+    def ps_unreadable(command, **_kwargs):
+        return subprocess.CompletedProcess(command, 2, "", "ps: failed")
+
+    with pytest.raises(ValueError, match="unreadable"):
+        confirm_host_process_table_absent(process_id=4312, runner=ps_unreadable)
+    assert confirm_host_process_table_absent(
+        process_id=4312, runner=lambda command, **_: subprocess.CompletedProcess(command, 1, "", "")) is True
+    assert confirm_host_process_table_absent(
+        process_id=4312, runner=lambda command, **_: subprocess.CompletedProcess(command, 0, "4312\n", "")) is False
+
+    class BrokenBroker:
+        def peer_absent(self):
+            raise ConnectionError("container unreadable")
+
+    with pytest.raises(ValueError, match="broker readback failed"):
+        pages._broker_peer_absent(transport=BrokenBroker())
+    with pytest.raises(ValueError, match="broker death probe is unavailable"):
+        pages._broker_peer_absent(transport=object())
+    assert pages._broker_peer_absent(transport=type("Gone", (), {"peer_absent": lambda self: True})()) is True
+
+
+def test_relay_runtime_rejects_missing_producer_session_before_admission():
+    launch = _launch_identity("ios")
+    plan = next(plan for plan in _plans(launch) if plan["caseId"] == "login-success")
+    with pytest.raises(ValueError, match="APP.UAT.relay_scope_mismatch"):
+        pages._relay_runtime(plan=plan, launch=launch, context={"relayFactory": lambda **_: None}, terminal={})
+
+
+@pytest.mark.parametrize("second_status", ["passed", "failed"])
+def test_restart_supervision_cannot_promote_failed_successor(monkeypatch, second_status):
+    from types import SimpleNamespace
+    from quwoquan_ops.cli.commands import app_preflight_uat_offline_native_contract as native
+    launch = {**_launch_identity("ios"), "generation": 1}
+    first_plan = next(plan for plan in _plans(launch) if plan["caseId"] == "identity-restart")
+    first = native.admit_launch(first_plan["nativeContract"], launch, signing_digest=DIGEST, lifecycle_digest=DIGEST)
+    successor = {**launch, "generation": 2, "caseId": "identity-restart", "launchAttemptId": "second-attempt",
+                 "canonicalProcessId": 9001, "continuityDigest": DIGEST}
+    second_plan = next(plan for plan in _plans(successor) if plan["caseId"] == "identity-restart")
+    second = native.admit_launch(second_plan["nativeContract"], successor, signing_digest=DIGEST, lifecycle_digest=DIGEST)
+    def relay(**kwargs):
+        session = kwargs["session"]
+        session.consumed = True
+        session.terminal_digest = DIGEST
+        session.revoke()
+        return {"status": "passed" if session is first else second_status, "comparisonDigest": DIGEST}
+    monkeypatch.setattr(native, "execute_launcher_relay", relay)
+    arguments = dict(attempt1_session=first, attempt1_plan=first_plan, attempt1_terminal=native.TerminalReference({}),
+        attempt1_transport=SimpleNamespace(disconnected=True), expected_attempt1={}, terminate_aut=lambda _: None,
+        death_readbacks=[lambda: True] * 3, launch_next=lambda *_: successor,
+        prepare_attempt2=lambda _: (second_plan, second, native.TerminalReference({}), SimpleNamespace()),
+        expected_attempt2={}, continuity_digest=DIGEST)
+    if second_status == "passed":
+        result = native.supervise_identity_restart(**arguments)
+        assert result["attempt2"]["status"] == "passed" and result["teardown"]["state"] == "terminated"
+    else:
+        with pytest.raises(ValueError, match="APP.UAT.restart_identity_mismatch"):
+            native.supervise_identity_restart(**arguments)
+
+
+def test_relaunched_case_emits_its_own_exact_attempt_binding(tmp_path, monkeypatch):
+    launch, candidate, projection, _ = _live_boundaries(monkeypatch, tmp_path)
+    collected = []
+    def relaunch(case, generation):
+        value = {**launch, "launchAttemptId": case + "-attempt", "canonicalProcessId": 9000 + len(collected)}
+        path = tmp_path / (case + "-attempt.json")
+        payload = {"attemptId": value["launchAttemptId"]}
+        pages.write_create_once_json(path, payload)
+        value.update(launchAttemptRef=str(path), launchAttemptDigest=pages.document_digest(payload))
+        return value
+    def collect(**kwargs):
+        if len(collected) == 2:
+            raise ValueError("APP.UAT.relay_peer_rejected: stop at boundary")
+        refs = kwargs["receipt"]
+        bound = json.loads((tmp_path / refs["launchBindingRef"]["ref"]).read_bytes())
+        target = read_target_uat_binding(tmp_path / refs["targetUatBindingRefs"]["alpha-local"]["ref"])
+        attempt = json.loads((tmp_path / target["launchAttempt"]["ref"]).read_bytes())
+        assert bound["launchAttemptId"] == kwargs["plan"]["launchAttemptId"] == attempt["attemptId"]
+        collected.append(refs["targetUatBindingRefs"]["alpha-local"])
+        return {"ref": "contract-evidence.json", "digest": DIGEST}, "2026-09-16T00:00:00+00:00"
+    monkeypatch.setattr(pages, "_collect_offline_page_evidence", collect)
+    receipt = pages.execute_offline_page_cases(args=argparse.Namespace(platform="android", device_id=launch["deviceId"]),
+        candidate=candidate, launch=launch, projection=projection, report_dir=tmp_path / "pages-run",
+        output_root=tmp_path, launch_case=relaunch)
+    assert receipt["firstBlocker"] == "APP.UAT.relay_peer_rejected", receipt
+    assert len(collected) == 2 and collected[0] != collected[1]
+    for row, binding in zip(receipt["pageResultRefs"], collected):
+        raw = json.loads((tmp_path / row["result"]["ref"]).read_bytes())
+        assert raw["targetUatBindingDigest"] == binding["digest"]
 
 
 def test_plans_derive_all_cases_from_current_snapshot_and_typed_routes() -> None:
@@ -497,27 +832,30 @@ def test_live_dispatch_calls_real_executor_and_produces_full_acceptance_refs(mon
     binding, candidate, projection, commands = _live_boundaries(monkeypatch, tmp_path, platform)
     monkeypatch.setattr(offline, "_candidate", lambda *_: candidate)
     monkeypatch.setattr(offline, "_prepare_launch", lambda *_: ({}, projection))
-    monkeypatch.setattr(offline, "_launch", lambda *_: binding)
+    monkeypatch.setattr(offline, "_launch", lambda *_, **__: binding)
     monkeypatch.setattr(offline, "_verify_source", lambda *_: None)
     receipt = offline.run_offline_app_content_uat(args=argparse.Namespace(dry_run=False, platform="android" if platform == "android" else "ios-simulator", device_id=binding["deviceId"]),
         report_dir=tmp_path / "uat", output_root=tmp_path, issues=[])
     assert receipt["status"] == "gate_block", receipt
-    assert receipt["firstBlocker"] == "APP.UAT.page_artifact_binding_missing"
-    supported = sum(not offline.offline_case_blocker(case) for case in offline.OFFLINE_REQUIRED_CASES)
-    assert len(commands) == supported
+    assert receipt["firstBlocker"] == "APP.UAT.relay_peer_rejected"
+    # fake native command不注入runtime_verified platform adapter，必须在首个GWT-008 case fail closed。
+    supported = sum("nativeContract" not in plan and not plan["executionBlocker"] for plan in _plans(binding))
+    assert len(commands) == supported  # 缺 relay admission 必须在首个 GWT-008 UI 命令之前阻断。
     assert len(receipt["rawResultRefs"]["alpha-local"]) == supported
     assert len(receipt["rawResultDigests"]["alpha-local"]) == supported
     assert len(receipt["pageResultRefs"]) == supported
-    assert receipt["blockedCases"]
+    assert receipt.get("blockedCases") in ({}, [], None) or not receipt["blockedCases"]
     results = [json.loads((tmp_path / ref["ref"]).read_bytes()) for ref in receipt["rawResultRefs"]["alpha-local"]]
-    target = receipt["targetUatBindingRefs"]["alpha-local"]
-    typed_binding = read_target_uat_binding(tmp_path / target["ref"])
+    typed_bindings = []
+    for row in receipt["pageResultRefs"]:
+        evidence = json.loads((tmp_path / row["evidence"]["ref"]).read_bytes())
+        typed_bindings.append(read_target_uat_binding(tmp_path / evidence["targetUatBinding"]["ref"]))
     with pytest.raises(ValueError, match="incomplete"):
-        pages.validate_offline_page_coverage(results=results, bindings=[typed_binding], candidate=candidate, platforms=[platform])
+        pages.validate_offline_page_coverage(results=results, bindings=typed_bindings, candidate=candidate, platforms=[platform])
     if platform == "ios":
         assert not list(tmp_path.glob("*.external-aut.*.xctestrun"))
     with pytest.raises(ValueError, match="incomplete"):
-        pages.validate_offline_page_coverage(results=results, bindings=[typed_binding], candidate=candidate)
+        pages.validate_offline_page_coverage(results=results, bindings=typed_bindings, candidate=candidate)
     for ref, digest in zip(receipt["rawResultRefs"]["alpha-local"], receipt["rawResultDigests"]["alpha-local"], strict=True):
         assert pages._file_digest(tmp_path / ref["ref"]) == digest["digest"]
     for row in receipt["pageResultRefs"]:
@@ -548,35 +886,96 @@ def test_live_identity_drift_blocks_before_driver_access(monkeypatch: pytest.Mon
     assert receipt["rawResultRefs"] == {"alpha-local": []}
 
 
-@pytest.mark.parametrize("path,accepted", [
-    ("quwoquan_app/lib/new_adapter.dart", False),
-    ("quwoquan_ops/cli/new_runner.py", False),
-    ("quwoquan_app/assets/new_content.png", False),
-    ("quwoquan_app/test/local_contract/design_system/feedback/error_states/failures/new_source.dart", False),
-    ("quwoquan_app/test/local_contract/design_system/feedback/error_states/failures/new_masterImage.png", False),
-    ("quwoquan_app/test/local_contract/design_system/feedback/error_states/failures/app_page_error_state_dark_masterImage.png", True),
-])
-def test_candidate_freeze_rejects_untracked_source_but_not_known_diagnostics(monkeypatch: pytest.MonkeyPatch, path: str, accepted: bool) -> None:
+def test_candidate_source_allows_live_worktree_dirt_when_git_objects_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+
     def check_output(command, **_):
-        if command[1:] == ["rev-parse", "HEAD"]:
-            return "a" * 40
-        if command[1:] == ["rev-parse", "HEAD^{tree}"]:
+        commands.append(list(command))
+        if command[1:3] == ["rev-parse", "--verify"]:
             return "b" * 40
-        assert command[1:] == ["ls-files", "--others", "--exclude-standard", "-z"]
-        return path + "\0"
+        raise AssertionError(command)
+
+    def run(*_, **__):
+        raise AssertionError("live worktree must not be inspected")
+
     monkeypatch.setattr(offline.subprocess, "check_output", check_output)
-    monkeypatch.setattr(offline.subprocess, "run", lambda *_, **__: subprocess.CompletedProcess([], 0))
-    if accepted:
+    monkeypatch.setattr(offline.subprocess, "run", run)
+    offline._verify_source({"commit": "a" * 40, "tree": "b" * 40}, ROOT)
+    assert commands == [["git", "rev-parse", "--verify", "a" * 40 + "^{tree}"]]
+
+
+def test_candidate_source_rejects_tree_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        offline.subprocess,
+        "check_output",
+        lambda command, **_: "c" * 40,
+    )
+    with pytest.raises(ValueError, match="candidate tree mismatch"):
         offline._verify_source({"commit": "a" * 40, "tree": "b" * 40}, ROOT)
-    else:
-        with pytest.raises(ValueError, match="untracked source"):
-            offline._verify_source({"commit": "a" * 40, "tree": "b" * 40}, ROOT)
+
+
+def test_candidate_export_copies_commit_bytes_not_live_dirt(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "owned.txt").write_text("committed\n")
+    subprocess.run(["git", "init", "-b", "dev1.0"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "owned.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, capture_output=True)
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    (repo / "owned.txt").write_text("live-dirty\n")
+    (repo / "foreign.txt").write_text("untracked\n")
+    checkout = tmp_path / "checkout"
+    offline._export_candidate_tree(
+        commit=commit, repository=repo, destination=checkout, roots=("owned.txt",)
+    )
+    assert (checkout / "owned.txt").read_text() == "committed\n"
+    assert not (checkout / "foreign.txt").exists()
 
 
 def test_first_typed_launch_error_is_not_replaced(tmp_path: Path) -> None:
     receipt = offline.run_offline_app_content_uat(args=argparse.Namespace(dry_run=False, platform="android", device_id="emulator-test"),
         report_dir=tmp_path, output_root=tmp_path, issues=["APP.DEPENDENCY.bundle_stale: field=source"])
     assert receipt["firstBlocker"] == "APP.DEPENDENCY.bundle_stale"
+
+
+def test_projection_seal_log_is_not_masked_as_receipt_invalid() -> None:
+    log = (
+        "ValueError: App build projection derived output rejected by policy: "
+        "quwoquan_app/test_host/patrol/.dart_tool\n"
+        "APP.LAUNCH.receipt_invalid: partial build projection seal identity\n"
+    )
+    assert offline.first_typed_blocker(log) == "APP.LAUNCH.projection_seal_rejected"
+    escaped = "App build projection symlink escapes build root: quwoquan_app/.dart_tool/qwq_ios_cocoapods_dependency/production/user-home/.config/swiftpm/configuration"
+    assert offline.first_typed_blocker(escaped) == "APP.LAUNCH.projection_seal_rejected"
+
+
+def test_diagnostic_compile_launch_uses_selected_case_not_login_success(monkeypatch, tmp_path):
+    launches: list[str] = []
+
+    def capture_launch(*args, **kwargs):
+        launches.append(str(kwargs.get("case_id") or "missing"))
+        return {"launchAttemptId": "attempt-1"}
+
+    monkeypatch.setattr(offline, "_candidate", lambda *args: {
+        "candidateId": "sha256:" + "a" * 64, "commit": "c" * 40, "tree": "d" * 40,
+    })
+    monkeypatch.setattr(offline, "_prepare_launch", lambda *args: ({}, {}))
+    monkeypatch.setattr(offline, "_launch", capture_launch)
+    monkeypatch.setattr(offline, "_verify_source", lambda *args: None)
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.commands.app_preflight_uat_offline_pages.execute_offline_page_cases",
+        lambda **kwargs: {"status": "diagnostic_passed", "exitCode": 0},
+    )
+    args = argparse.Namespace(
+        dry_run=False, platform="ios-simulator", device_id="E0C937A3-F805-4E04-A469-B7706AB79F0A",
+        offline_cases=["default-entry"], isolated_rehearsal=False, rehearsal_instance_id="",
+    )
+    offline.run_offline_app_content_uat(args=args, report_dir=tmp_path, output_root=tmp_path, issues=[])
+    assert launches == ["default-entry"]
 
 
 @pytest.mark.parametrize("drift", ["aut", "driver", "screenshot", "projection"])
@@ -625,7 +1024,7 @@ def test_native_sources_prevalidate_all_steps_and_check_canonical_pid() -> None:
     android = (ROOT / "quwoquan_app/test_host/patrol/android/app/src/androidTest/java/com/quwoquan/testhost/patrol/ProductionHomepageExternalAutTest.java").read_text()
     ios = (ROOT / "quwoquan_app/test_host/patrol/ios/RunnerUITests/RunnerUITests.m").read_text()
     assert android.count("private static String observedNode(") == 1
-    assert android.index('matches("visible|tap|scroll|seek|playback|back|reveal|tab-roundtrip|input-otp")') < android.index("int before = requireSingleRunningPid(automation, target);")
+    assert android.index('matches("visible|tap|scroll|seek|playback|back|reveal|tab-roundtrip|input-otp|wait|restart|observe")') < android.index("int before = requireSingleRunningPid(automation, target);")
     assert 'plan.getInt("canonicalProcessId"), before' in android
     assert 'Assume.assumeTrue(explicitlySelected || arguments.containsKey("qwqOfflinePagePlan"))' in android
     assert 'XCTAssertEqualObjects(before, plan[@"canonicalProcessId"])' in ios
@@ -766,11 +1165,11 @@ def test_video_restores_home_through_canonical_top_back_before_next_case(case_id
     ]
 
 
-def test_local_write_requires_readback_not_legacy_capability_refusal() -> None:
+def test_local_write_requires_action_and_same_run_readback() -> None:
     plan = next(plan for plan in _plans(_launch_identity()) if plan["caseId"] == "local-write")
-    assert "query/readback" in plan["executionBlocker"]
-    with pytest.raises(ValueError, match="query/readback"):
-        pages.require_executable_page_plan(plan)
+    assert [step["operation"] for step in plan["steps"]][-2:] == ["tap", "visible"]
+    assert plan["steps"][-2]["selector"] == plan["steps"][-1]["selector"]
+    pages.require_executable_page_plan(plan)
 
 
 def test_creator_avatar_binds_feed_tap_and_decoded_profile_to_same_identity() -> None:
@@ -838,3 +1237,44 @@ def test_android_snapshot_reads_actual_apk_and_rejects_corrupted_media(tmp_path:
         pages.read_artifact_snapshot(artifact=corrupt, platform="android", expected_artifact_digest=pages._file_digest(corrupt), app_root=app)
     with pytest.raises(ValueError, match="artifact digest drifted"):
         pages.read_artifact_snapshot(artifact=apk, platform="android", expected_artifact_digest=DIGEST, app_root=app)
+
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-008
+def test_gwt008_native_contract_rejects_cross_aut_attempt_parameter_drift_and_sensitive_logs() -> None:
+    from quwoquan_ops.cli.commands import app_preflight_uat_offline_native_contract as native
+    launch = {**_launch_identity(), "snapshotDigest": DIGEST}
+    contract = native.build_native_case_contract("login-success", launch)
+    for field, value in (("applicationId", "foreign.aut"), ("launchAttemptId", "foreign-attempt")):
+        changed = {**contract, field: value}
+        changed["contractDigest"] = native._digest({k: v for k, v in changed.items() if k != "contractDigest"})
+        with pytest.raises(ValueError, match="cross AUT/attempt"):
+            native.validate_native_case_contract(changed, launch=launch)
+    changed = {**contract, "runnerTimeoutSeconds": 121}
+    with pytest.raises(ValueError, match="drifted"):
+        native.validate_native_case_contract(changed, launch=launch)
+    actual = {
+        "schema": "quwoquan_ops.alpha_gwt008_native_observation.v1", "caseId": "login-success",
+        "contractDigest": contract["contractDigest"], "applicationId": launch["applicationId"], "deviceId": launch["deviceId"],
+        "candidateDigest": DIGEST, "artifactDigest": DIGEST, "launchAttemptBefore": launch["launchAttemptId"],
+        "processIdBefore": launch["canonicalProcessId"], "launchAttemptAfter": launch["launchAttemptId"],
+        "processIdAfter": launch["canonicalProcessId"],
+        "observations": [{"source": "ui-control", "status": "observed", "detail": "unique-editable-control"},
+                         {"source": "rehearsal-session-readback", "status": "observed", "detail": "session-established"}],
+        "logSummary": "input-redacted",
+    }
+    native.validate_actual_observation(actual, contract=contract)
+    actual["logSummary"] = "otp=123456"
+    with pytest.raises(ValueError, match="not redacted"):
+        native.validate_actual_observation(actual, contract=contract)
+
+
+def test_gwt008_expiry_and_restart_contracts_preserve_real_boundaries() -> None:
+    from quwoquan_ops.cli.commands import app_preflight_uat_offline_native_contract as native
+    launch = {**_launch_identity(), "snapshotDigest": DIGEST}
+    expiry = native.build_native_case_contract("otp-expiry", launch)
+    assert expiry["minimumObservedWaitSeconds"] == 300 and expiry["runnerTimeoutSeconds"] >= 330
+    changed = {**expiry, "minimumObservedWaitSeconds": 299}
+    changed["contractDigest"] = native._digest({k: v for k, v in changed.items() if k != "contractDigest"})
+    with pytest.raises(ValueError, match="wait budget"):
+        native.validate_native_case_contract(changed, launch=launch)
+    restart = native.build_native_case_contract("identity-restart", launch)
+    assert restart["restartPolicy"] == "cold-restart-new-launch-attempt-and-pid"

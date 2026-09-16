@@ -469,13 +469,13 @@ def test_projection_is_private_forced_offline_and_has_no_global_fallback(
         invocations=[
             GradleInvocation(
                 gradle_root=projection / "quwoquan_app/android",
-                tasks=("clean", "assembleNonprodDebug"),
+                tasks=("clean", "assembleAlphaDebug"),
             )
         ],
         offline=True,
         environment=environment,
     )[0]
-    assert "--offline clean assembleNonprodDebug" in result.stdout
+    assert "--offline clean assembleAlphaDebug" in result.stdout
     with pytest.raises(ValueError, match="global cache fallback"):
         private_gradle_environment(
             gradle_user_home=Path.home() / ".gradle",
@@ -1146,21 +1146,33 @@ def test_package_capsule_writer_is_fresh_read_only_and_cas_verified(
         )
 
 
-def test_dependency_bundle_sync_covers_only_production_app_package(
+def test_dependency_bundle_sync_covers_current_alpha_production_and_test_dependencies(
     tmp_path: Path,
 ) -> None:
     invocations = canonical_android_dependency_bundle_invocations(tmp_path)
     assert invocations == (
         GradleInvocation(
             gradle_root=tmp_path / "quwoquan_app/android",
-            tasks=(":app:assembleNonprodDebug",),
+            tasks=(
+                ":app:assembleAlphaDebug",
+                ":app:assembleAlphaDebugDebugAndroidTest",
+            ),
         ),
     )
-    assert all(
-        "AndroidTest" not in task and "test_host" not in str(item.gradle_root)
-        for item in invocations
-        for task in item.tasks
+    identity = json.loads(
+        (
+            Path(__file__).resolve().parents[4]
+            / "quwoquan_app/android/app/app_identity.generated.json"
+        ).read_text(encoding="utf-8")
     )
+    assert "alpha/debug" in identity["identityTargets"]
+    assert "nonprod/debug" not in identity["identityTargets"]
+    build_script = (
+        Path(__file__).resolve().parents[4]
+        / "quwoquan_app/android/app/build.gradle.kts"
+    ).read_text(encoding="utf-8")
+    assert "create(flavorName(identityTarget))" in build_script
+    assert "identity.buildMode != variantBuilder.buildType" in build_script
 
 
 def test_managed_snapshot_loader_rejects_noncanonical_or_stale_manifest(

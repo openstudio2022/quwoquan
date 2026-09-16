@@ -132,7 +132,8 @@ def _source_projection(
             }
         )
     manifest = {
-        "schema": "stackctl-package-input-capsule.v1",
+        "schema": "stackctl-package-input-capsule.v2",
+        "dependencyPlatforms": ["android", "ios"],
         "baselineId": _digest("a"),
         "sourceRevision": "b" * 40,
         "workspaceStatusDigest": _digest("c"),

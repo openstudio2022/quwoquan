@@ -167,11 +167,15 @@ def build_provenance_digest(
     )
 
 
-def _current_build_input_identity() -> dict[str, str]:
-    """Read the source closure and pinned Flutter identity used by the producer."""
+def _current_build_input_identity(*, build_product_id: str) -> dict[str, str]:
+    """按 canonical build product 重读 producer 同平台的源码与 Flutter 身份。"""
 
     try:
-        source = workspace_snapshot(deployment_roots=app_source_capsule_roots())
+        product = resolve_build_product(build_product_id)
+        source = workspace_snapshot(
+            deployment_roots=app_source_capsule_roots(),
+            dependency_platforms=(product.platform,) if product.platform in {"android", "ios"} else ("android", "ios"),
+        )
         tree = subprocess.run(
             ["git", "rev-parse", "HEAD^{tree}"],
             cwd=Path(__file__).resolve().parents[3],
@@ -605,7 +609,7 @@ def validate_app_artifact_build_receipt(
     else:
         raise ValueError("AppArtifactManifest platform is invalid")
 
-    current = _current_build_input_identity()
+    current = _current_build_input_identity(build_product_id=expected_build_product_id)
     claimed_inputs = {
         "sourceGitSha": str(manifest.get("sourceGitSha") or ""),
         "sourceTreeDigest": str(manifest.get("sourceTreeDigest") or ""),

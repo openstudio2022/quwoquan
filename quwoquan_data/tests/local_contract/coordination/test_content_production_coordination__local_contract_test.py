@@ -198,3 +198,14 @@ def test_legacy_deployment_without_reservation_cannot_claim_in_multi_instance_mo
     with pytest.raises(ConflictError) as missing:
         store.claim("i1", "team-a", "c1", deployment_id="d1")
     assert missing.value.code == "COORDINATION.RESOURCE_RESERVATION_REQUIRED"
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-062.t13
+def test_target_occupancy_is_global_across_iterations(tmp_path: Path) -> None:
+    store=CoordinationStore(tmp_path/"db.sqlite")
+    for iteration in ("i1","i2"):
+        store.register_iteration(iteration,f"approval://{iteration}")
+        store.register_shard(iteration,"s","s",f"scope://{iteration}",0,["entities/shared"])
+    store.claim("i1","team-1","c1")
+    with pytest.raises(ConflictError) as conflict:
+        store.claim("i2","team-2","c2")
+    assert conflict.value.code=="COORDINATION.TARGET_OCCUPIED"

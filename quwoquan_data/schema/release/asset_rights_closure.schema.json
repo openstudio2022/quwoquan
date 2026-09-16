@@ -122,7 +122,6 @@
         "snapshot",
         "asset",
         "authorizationProof",
-        "distributionDecision",
         "modelReleaseStatus",
         "rightsAuditStatus",
         "rightsAuditIssues"
@@ -239,13 +238,6 @@
         "authorizationProof": {
           "type": "string",
           "pattern": "^(https://.*)?$"
-        },
-        "distributionDecision": {
-          "enum": [
-            "research_allowed",
-            "commercial_allowed",
-            "blocked"
-          ]
         },
         "modelReleaseStatus": {
           "enum": [

@@ -26,6 +26,7 @@ from quwoquan_ops.cli.lib.feature_tree import gitio as ft_gitio  # noqa: E402
 from quwoquan_ops.cli.lib.evidence_fingerprint import (  # noqa: E402
     validate_evidence_fingerprint,
 )
+from quwoquan_ops.cli.lib import feature_context_fingerprint as context_fingerprint  # noqa: E402
 from quwoquan_ops.cli.lib.feature_context_fingerprint import (  # noqa: E402
     validate_content_addressed_ref,
     validate_current_feature_context_fingerprint,
@@ -900,7 +901,7 @@ def test_manifest_over_budget_after_receipt_compaction_fails_closed(
     receipt = validate_evidence_fingerprint(
         ft_commands.build_feature_context_fingerprint(
             {
-                "schema_version": 3,
+                "schema_version": ft_commands.contract_schema_version("feature_context_manifest"),
                 "target": "README.md",
                 "resolved_owner": "specs/feature-tree/spec.md",
                 "owner_chain": [],
@@ -912,7 +913,7 @@ def test_manifest_over_budget_after_receipt_compaction_fails_closed(
         )
     )
     manifest = {
-        "schema_version": 3,
+        "schema_version": ft_commands.contract_schema_version("feature_context_manifest"),
         "target": "x" * 9000,
         "resolved_owner": "specs/feature-tree/spec.md",
         "owner_chain": [],
@@ -920,6 +921,7 @@ def test_manifest_over_budget_after_receipt_compaction_fails_closed(
         "applicable_agents": [],
         "open_items": [],
         "evidence_fingerprint": ft_commands.embedded_fingerprint_binding(receipt),
+        "closure_identity": None,
     }
     writes: list[str] = []
 
@@ -943,3 +945,69 @@ def test_manifest_over_budget_after_receipt_compaction_fails_closed(
     ) == 2
     assert "feature context manifest 超出 8KiB 预算" in capsys.readouterr().err
     assert writes == []
+
+
+def test_multi_carrier_release_gwt_020_publishes_lossless_bounded_manifest(
+    monkeypatch,
+) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t1
+    target = (
+        "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/"
+        "multi-carrier-release/spec.md#gwt-020"
+    )
+    outputs: dict[str, bytes] = {}
+
+    def capture(content: bytes, *, subdirectory: str | None = None) -> Path:
+        key = subdirectory or "manifest"
+        outputs[key] = content
+        relative = f"{subdirectory}/" if subdirectory else ""
+        return (
+            ROOT
+            / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint"
+            / relative
+            / f"{hashlib.sha256(content).hexdigest()}.json"
+        )
+
+    monkeypatch.setattr(ft_commands, "_write_content_addressed_bytes", capture)
+    monkeypatch.setattr(
+        ft_commands,
+        "_write_content_addressed_json",
+        lambda payload, *, subdirectory=None: capture(
+            ft_commands.canonical_json_bytes(payload), subdirectory=subdirectory
+        ),
+    )
+    assert feature_tree.command_context(
+        argparse.Namespace(target=target, format="manifest")
+    ) == 0
+
+    raw = outputs["manifest"]
+    manifest = json.loads(raw)
+    assert len(raw) <= 8192
+    assert manifest["target"].endswith("multi-carrier-release/spec.md")
+    assert manifest["resolved_owner"] == manifest["target"]
+    assert "feature-context-closure" in outputs
+    closure = json.loads(outputs["feature-context-closure"])
+    assert closure["owner_chain"][-1]["path"] == manifest["resolved_owner"]
+    assert closure["canonical_contexts"]
+    assert closure["open_items"]
+    assert manifest["closure_identity"]["byte_count"] == len(
+        outputs["feature-context-closure"]
+    )
+
+    monkeypatch.setattr(
+        context_fingerprint,
+        "read_repo_relative_regular_single_link",
+        lambda *_args, **_kwargs: outputs["feature-context-closure"],
+    )
+    hydrated = context_fingerprint.resolve_feature_context_manifest(
+        manifest, repo_root=ROOT
+    )
+    assert hydrated["owner_chain"] == closure["owner_chain"]
+    assert hydrated["canonical_contexts"] == closure["canonical_contexts"]
+    assert hydrated["applicable_agents"] == closure["applicable_agents"]
+    assert hydrated["open_items"] == closure["open_items"]
+
+    drifted = json.loads(raw)
+    drifted["closure_identity"]["context_count"] += 1
+    with pytest.raises(ValueError, match="count 漂移"):
+        context_fingerprint.resolve_feature_context_manifest(drifted, repo_root=ROOT)

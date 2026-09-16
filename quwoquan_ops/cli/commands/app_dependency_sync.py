@@ -54,6 +54,8 @@ from quwoquan_ops.cli.lib.package_reuse.dependency_bundle import (
     APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA,
     APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA,
     APP_DEPENDENCY_COMPONENTS,
+    APP_DEPENDENCY_PLATFORMS,
+    dependency_active_pointer_name, dependency_components_for_platforms,
     AppDependencyBundleMissingError,
     component_declaration,
     load_active_dependency_bundle,
@@ -144,6 +146,7 @@ class DependencyComponentBuildContext:
     generation_root: Path
     flutter_identity: Mapping[str, str]
     source_identity: Mapping[str, str]
+    platforms: tuple[str, ...] = ("android", "ios")
     android_gradle_seed_root: Path | None = None
     progress: DependencyBuildProgress = field(default_factory=DependencyBuildProgress)
     deadline: float = field(
@@ -158,12 +161,13 @@ BundlePublisher = Callable[..., tuple[dict[str, Any], dict[str, Any], Path, Path
 def register_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
-    subparsers.add_parser(
+    parser = subparsers.add_parser(
         "app-dependency-sync",
-        help=(
-            "explicitly fetch, replay, and atomically activate the five locked "
-            "App dependency components"
-        ),
+        help="fetch, replay, and activate locked App dependencies for one platform plan",
+    )
+    parser.add_argument(
+        "--platform", choices=[*APP_DEPENDENCY_PLATFORMS, "all"], default="all",
+        help="dependency platform plan; managed callers must pass an explicit platform",
     )
 
 
@@ -210,22 +214,24 @@ def _atomic_json(path: Path, value: dict[str, Any], *, mode: int) -> None:
 
 @contextlib.contextmanager
 def _sync_lock(
-    *, on_wait: Callable[[str, float], None] | None = None
+    *, platforms: tuple[str, ...] = ("android", "ios"),
+    on_wait: Callable[[str, float], None] | None = None,
 ) -> Any:
-    """Serialize dependency sync and the shared Flutter build workspace."""
+    """Serialize only the selected platform resources; all acquires in stable order."""
 
     held = []
     try:
-        held.append(
-            acquire_host_lock_bounded(
-                app_dependency_sync_lock_path(),
-                timeout_seconds=_LOCK_TIMEOUT_SECONDS,
-                poll_seconds=1.0,
-                fields={"resource": "flutter-cocoapods-gradle"},
-                worktree_path=_LOCK_OWNER_WORKTREE,
-                on_wait=on_wait,
+        for platform in sorted(platforms):
+            held.append(
+                acquire_host_lock_bounded(
+                    app_dependency_sync_lock_path(platform),
+                    timeout_seconds=_LOCK_TIMEOUT_SECONDS,
+                    poll_seconds=1.0,
+                    fields={"resource": f"flutter-{platform}-dependencies"},
+                    worktree_path=_LOCK_OWNER_WORKTREE,
+                    on_wait=on_wait,
+                )
             )
-        )
         yield tuple(held)
     except HostLockBusyError as exc:
         raise ValueError(
@@ -404,6 +410,7 @@ def _validate_component_bindings(
     manifests: Mapping[str, Mapping[str, Any]],
     declarations: Mapping[str, Mapping[str, Any]],
     source_identity: Mapping[str, str],
+    platforms: tuple[str, ...],
 ) -> None:
     expected_schemas = {
         "productionPub": PUB_CACHE_SYNC_MANIFEST_SCHEMA,
@@ -412,7 +419,9 @@ def _validate_component_bindings(
         "patrolIosPods": IOS_POD_CAPSULE_SCHEMA,
         "androidGradle": ANDROID_GRADLE_SYNC_SCHEMA,
     }
-    for name, schema in expected_schemas.items():
+    selected = dependency_components_for_platforms(platforms)
+    for name in selected:
+        schema = expected_schemas[name]
         if manifests[name].get("schema") != schema:
             raise ValueError(f"APP.DEPENDENCY.component_binding_invalid: {name} schema")
     flutter_fields = {
@@ -450,6 +459,8 @@ def _validate_component_bindings(
         ),
     }
     for name, (host, upstream_digest) in ios_bindings.items():
+        if name not in selected:
+            continue
         manifest = manifests[name]
         if (
             manifest.get("dependencyHost") != host
@@ -459,8 +470,8 @@ def _validate_component_bindings(
             raise ValueError(
                 f"APP.DEPENDENCY.component_binding_invalid: {name} upstream"
             )
-    android = manifests["androidGradle"]
-    if (
+    android = manifests.get("androidGradle")
+    if android is not None and (
         android.get("nativeResolutionInputDigest")
         != source_identity["nativeResolutionInputDigest"]
         or android.get("upstreamDependencyDigests") != pub_manifest_digests
@@ -475,7 +486,8 @@ def _component_declarations(
     context: DependencyComponentBuildContext,
     component_roots: Mapping[str, Path],
 ) -> dict[str, dict[str, Any]]:
-    if set(component_roots) != set(APP_DEPENDENCY_COMPONENTS):
+    expected_components = dependency_components_for_platforms(context.platforms)
+    if set(component_roots) != set(expected_components):
         raise ValueError("APP.DEPENDENCY.component_set_incomplete")
     active_root = context.generation_root.parent.parent
     assert_real_directory(active_root, label="dependency bundle active root")
@@ -488,7 +500,7 @@ def _component_declarations(
     manifests: dict[str, dict[str, Any]] = {}
     declarations: dict[str, dict[str, Any]] = {}
     seen: set[Path] = set()
-    for name in APP_DEPENDENCY_COMPONENTS:
+    for name in expected_components:
         root = Path(component_roots[name]).expanduser().absolute()
         expected = context.generation_root / name
         if root != expected or root in seen:
@@ -505,6 +517,7 @@ def _component_declarations(
         manifests=manifests,
         declarations=declarations,
         source_identity=context.source_identity,
+        platforms=context.platforms,
     )
     return declarations
 
@@ -517,11 +530,13 @@ def _publish_dependency_generation(
     attempt_id: str,
     source_identity: Mapping[str, str],
     components: Mapping[str, Mapping[str, Any]],
+    platforms: tuple[str, ...],
+    platform_inputs: Mapping[str, Mapping[str, str]],
     progress: _PublicationProgress,
     before_active_write: Callable[[], None],
 ) -> tuple[dict[str, Any], dict[str, Any], Path, Path]:
     def atomic_json(path: Path, value: dict[str, Any]) -> None:
-        if path == active_root / "active.json":
+        if path == active_root / dependency_active_pointer_name(platforms):
             before_active_write()
             progress.active_write_started = True
         _atomic_json(path, value, mode=0o600)
@@ -532,6 +547,9 @@ def _publish_dependency_generation(
         attempt_id=attempt_id,
         source_identity=source_identity,
         components=components,
+        platforms=platforms,
+        platform_inputs=platform_inputs,
+        non_promotable=platforms != ("android", "ios"),
         atomic_json=atomic_json,
     )
 
@@ -585,7 +603,9 @@ def command_app_dependency_sync(
 ) -> dict[str, Any]:
     """Build all five closures, persist receipt v3, then switch active v2."""
 
-    del args
+    selector = str(getattr(args, "platform", "all") or "all")
+    platforms = ("android", "ios") if selector == "all" else (selector,)
+    dependency_components_for_platforms(platforms)
     repo_root = Path(__file__).resolve().parents[3]
     attempt_id = uuid.uuid4().hex
     work_root: Path | None = None
@@ -638,6 +658,7 @@ def command_app_dependency_sync(
             fields = [
                 "[app-dependency-sync]",
                 f"attemptId={attempt_id}",
+                f"platforms={','.join(platforms)}",
                 f"phase={phase}",
                 f"state={state}",
             ]
@@ -669,7 +690,7 @@ def command_app_dependency_sync(
         live_source_seal = _builder.resolution_seal(repo_root)
         failed_phase = "dependency-sync-lock"
         emit_progress("dependency-sync-lock", state="acquiring")
-        with _sync_lock(on_wait=wait_progress):
+        with _sync_lock(platforms=platforms, on_wait=wait_progress):
             emit_progress("dependency-sync-lock", state="acquired")
             failed_phase = "toolchain-identity"
             emit_progress("toolchain-identity")
@@ -686,10 +707,10 @@ def command_app_dependency_sync(
                 )
             )
             android_gradle_seed_root: Path | None = None
-            if component_builder is None:
+            if component_builder is None and "android" in platforms:
                 try:
                     seed_bundle = load_active_dependency_bundle(
-                        repo_root=repo_root, require_current_source=False
+                        repo_root=repo_root, require_current_source=False, required_platforms=("android",)
                     )
                 except AppDependencyBundleMissingError:
                     seed_bundle = None
@@ -699,7 +720,7 @@ def command_app_dependency_sync(
                 ):
                     android_gradle_seed_root = seed_bundle.component_root("androidGradle")
             active_root = managed_dependency_bundle_root().absolute()
-            active_path = active_root / "active.json"
+            active_path = active_root / dependency_active_pointer_name(platforms)
             work_root = active_root / "work" / attempt_id
             work_root.mkdir(parents=True, mode=0o700)
             snapshots_root = active_root / "snapshots"
@@ -720,21 +741,24 @@ def command_app_dependency_sync(
                 generation_root=generation_root,
                 flutter_identity=dict(flutter_identity),
                 source_identity=source_identity,
+                platforms=platforms,
                 android_gradle_seed_root=android_gradle_seed_root,
                 progress=progress,
                 deadline=deadline,
             )
             failed_phase = progress.current_phase
             if component_builder is None:
-                with _attempt_android_runtime_trust(
-                    repo_root,
-                    attempt_id=attempt_id,
-                    cleanup_warnings=cleanup_warnings,
-                ) as trust_root:
-                    sensitive_failure_values.append(str(trust_root))
-                    roots = _build_dependency_components(
-                        context, trust_root=trust_root
+                trust_context = (
+                    _attempt_android_runtime_trust(
+                        repo_root, attempt_id=attempt_id, cleanup_warnings=cleanup_warnings
                     )
+                    if "android" in platforms
+                    else contextlib.nullcontext(None)
+                )
+                with trust_context as trust_root:
+                    if trust_root is not None:
+                        sensitive_failure_values.append(str(trust_root))
+                    roots = _build_dependency_components(context, trust_root=trust_root)
             else:
                 roots = component_builder(context)
             failed_phase = "live-source-readback"
@@ -774,6 +798,14 @@ def command_app_dependency_sync(
                     attempt_id=attempt_id,
                     source_identity=source_identity,
                     components=components,
+                    platforms=platforms,
+                    platform_inputs={platform: {
+                        "flutterVersion": source_identity["flutterVersion"],
+                        "flutterCommandResolutionDigest": source_identity["flutterCommandResolutionDigest"],
+                        "productionPubResolutionInputDigest": source_identity["productionPubResolutionInputDigest"],
+                        "patrolPubResolutionInputDigest": source_identity["patrolPubResolutionInputDigest"],
+                        **({"nativeResolutionInputDigest": source_identity["nativeResolutionInputDigest"]} if platform == "android" else {}),
+                    } for platform in platforms},
                     progress=publication_progress,
                     before_active_write=lambda: _builder.assert_live_resolution_seal(
                         repo_root=repo_root,
@@ -860,9 +892,10 @@ def command_app_dependency_sync(
             "summary": "App dependency sync completed",
             "details": [
                 f"attemptId={attempt_id}",
+                f"platforms={','.join(platforms)}",
                 *(
                     f"{name}.treeDigest={components[name]['treeDigest']}"
-                    for name in APP_DEPENDENCY_COMPONENTS
+                    for name in dependency_components_for_platforms(platforms)
                 ),
                 f"receipt={receipt_path}",
                 f"active={active_path}",

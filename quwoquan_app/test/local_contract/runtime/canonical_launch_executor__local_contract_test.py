@@ -791,6 +791,28 @@ class CanonicalLaunchExecutorContractTest(
         )
         self.assertNotIn("QWQ_APP_RUNTIME_ENV", validated_input)
 
+    def test_ios_build_child_environment_preserves_external_profile_trust(self) -> None:
+        driver = executor.IOSSimulatorPlatformDriver(
+            device_id="simulator-1",
+            application_id="com.leadwise.quwoquan.nonprod.debug",
+            entrypoint="lib/main_prod.dart",
+        )
+        with mock.patch.object(
+            activation,
+            "validate_cocoapods_child_environment",
+            return_value=(mock.sentinel.identity, {"PATH": "/exact/bin"}),
+        ):
+            child = driver.build_child_environment(
+                {
+                    "PATH": "/hostile/bin",
+                    "QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH": "/tmp/external-trust.json",
+                }
+            )
+        self.assertEqual(
+            child["QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH"],
+            "/tmp/external-trust.json",
+        )
+
     def test_ios_builds_use_projection_private_xcode_build_settings(self) -> None:
         projection_root = Path(tempfile.gettempdir()).resolve() / "qwq-projections"
         projected_app_dirs = (

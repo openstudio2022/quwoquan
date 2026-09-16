@@ -242,7 +242,7 @@ func validateAppLaunchRuntimeConfigContracts(
 		space.Fields["instanceId"].Format != "rehearsal_instance_id" {
 		return fmt.Errorf("offline rehearsal space must bind explicit mode, snapshot and isolated instance")
 	}
-	if err := requireExactStringSet("offline rehearsal fields", space.RequiredFields, []string{"mode", "snapshotDigest", "instanceId"}); err != nil {
+	if err := requireExactStringSet("offline rehearsal fields", space.RequiredFields, []string{"mode", "snapshotDigest", "instanceId", "caseId", "lifecycleGeneration", "observationBinding"}); err != nil {
 		return err
 	}
 	if err := requireExactStringSet("offline runtime fields", mapSchemaFieldKeys(offline.Fields["runtime"].Fields), []string{"appRuntimeEnv"}); err != nil {
@@ -530,16 +530,23 @@ func validateAppManagedPreparationSchema(schema appLaunchSchemaContract) error {
 
 func appLaunchNamedSchemas(schemas appLaunchSchemas) map[string]appLaunchSchemaContract {
 	return map[string]appLaunchSchemaContract{
-		"rehearsal_storage_observation":     schemas.RehearsalStorageObservation,
-		"runtime_config_trust_envelope":     schemas.RuntimeConfigTrustEnvelope,
-		"runtime_config_package":            schemas.RuntimeConfigPackage,
-		"offline_bootstrap_document":        schemas.OfflineBootstrapDocument,
-		"runtime_config_activation_request": schemas.RuntimeConfigActivationRequest,
-		"runtime_config_activation_receipt": schemas.RuntimeConfigActivationReceipt,
-		"app_launch_attempt":                schemas.AppLaunchAttempt,
-		"app_effective_launch_manifest":     schemas.AppEffectiveLaunchManifest,
-		"app_launcher_handoff":              schemas.AppLauncherHandoff,
-		"app_managed_preparation":           schemas.AppManagedPreparation,
+		"external_uat_managed_launch_admission": schemas.ExternalUATManagedLaunchAdmission,
+		"external_uat_terminal_result":          schemas.ExternalUATTerminalResult,
+		"external_uat_broker_query":             schemas.ExternalUATBrokerQuery,
+		"external_uat_sealed_snapshot":          schemas.ExternalUATSealedSnapshot,
+		"external_uat_broker_result":            schemas.ExternalUATBrokerResult,
+		"external_uat_teardown_receipt":         schemas.ExternalUATTeardownReceipt,
+		"external_uat_comparison_result":        schemas.ExternalUATComparisonResult,
+		"rehearsal_storage_observation":         schemas.RehearsalStorageObservation,
+		"runtime_config_trust_envelope":         schemas.RuntimeConfigTrustEnvelope,
+		"runtime_config_package":                schemas.RuntimeConfigPackage,
+		"offline_bootstrap_document":            schemas.OfflineBootstrapDocument,
+		"runtime_config_activation_request":     schemas.RuntimeConfigActivationRequest,
+		"runtime_config_activation_receipt":     schemas.RuntimeConfigActivationReceipt,
+		"app_launch_attempt":                    schemas.AppLaunchAttempt,
+		"app_effective_launch_manifest":         schemas.AppEffectiveLaunchManifest,
+		"app_launcher_handoff":                  schemas.AppLauncherHandoff,
+		"app_managed_preparation":               schemas.AppManagedPreparation,
 	}
 }
 

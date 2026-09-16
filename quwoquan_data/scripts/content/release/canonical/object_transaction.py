@@ -11,7 +11,6 @@ from typing import Any
 from content.release.canonical.content_pool_record import (
     append_pool_record,
     build_canonical_pool_record,
-    pool_usage_scope,
 )
 from content.release.canonical.entity_transaction_sources import (
     safe_asset_id as _safe_asset_id,
@@ -26,6 +25,7 @@ from content.release.canonical.entity_transaction_support import (
     _image_dimensions,
     _project_entity_creator_closure,
 )
+from content.execution.workspace import target_descriptor_for
 from content.release.canonical.object_source_identity import (
     freeze_execution_source_identity,
 )
@@ -86,10 +86,17 @@ def build_entity_object_transaction_package(
     if execution_root.name != execution_id:
         raise ObjectTransactionError("execution root 与 executionId 不一致")
     canonical_target_ref = object_ref.removeprefix("/entity/").strip("/")
+    process_ref = f"entities/{canonical_target_ref}"
+    try:
+        descriptor = target_descriptor_for(execution_id, process_ref)
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise ObjectTransactionError(str(exc)) from exc
+    if descriptor["contentVersion"] != version:
+        raise ObjectTransactionError("DATA.IDENTITY.REVISION_TUPLE_MISMATCH")
     source_identity = freeze_execution_source_identity(
         execution_root=execution_root,
         execution_manifest=execution_manifest,
-        target_ref=f"entities/{canonical_target_ref}",
+        target_ref=process_ref,
     )
     rel = _safe_rel(object_ref.removeprefix("/entity/"), label="objectRef")
     if len(rel.parts) < 3:
@@ -122,6 +129,8 @@ def build_entity_object_transaction_package(
     canonical_ref = logical_object_ref(entity, "entities")
     if not str(entity.get("entityId") or ""):
         raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: entityId must be frozen by init")
+    if entity.get("entityId") != descriptor.get("entityId") or entity.get("entityRef") != descriptor.get("entityRef"):
+        raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: descriptor entity binding")
     content_review_source = object_source / "5.review/content_review.json"
     source_assets = _source_assets_by_ref(execution_root)
     review_authority = validate_review_authority(
@@ -129,7 +138,7 @@ def build_entity_object_transaction_package(
         manifest=source_manifest,
         object_kind="entity",
         execution_id=execution_id,
-        object_ref=f"entities/{canonical_target_ref}",
+        object_ref=str(descriptor["canonicalObjectRef"]),
         source_assets=source_assets,
     )
 
@@ -293,19 +302,6 @@ def build_entity_object_transaction_package(
                 raise ObjectTransactionError(
                     f"asset {asset_id} 缺 canonical modelReleaseStatus"
                 )
-            distribution_decision = str(
-                raw.get("distributionDecision")
-                or source_asset.get("distributionDecision")
-                or ""
-            ).strip()
-            if distribution_decision not in {
-                "research_allowed",
-                "commercial_allowed",
-                "blocked",
-            }:
-                raise ObjectTransactionError(
-                    f"asset {asset_id} 缺 canonical distributionDecision"
-                )
             # 权利状态只作记录事实写入 rights.json：非 verified、有审计问题或缺 https 证明
             # 都不拒绝对象，公众可见性由下游运营运行时配置按这些事实决定。
             rights_row = {
@@ -347,7 +343,6 @@ def build_entity_object_transaction_package(
                     "height": height,
                 },
                 "authorizationProof": authorization_proof,
-                "distributionDecision": distribution_decision,
                 "rightsAuditStatus": rights_audit_status.value,
                 "rightsAuditIssues": rights_audit_issues,
                 "modelReleaseStatus": model_release_status,
@@ -452,9 +447,6 @@ def build_entity_object_transaction_package(
                 "admission": {
                     "processResult": "completed",
                     "qualityResult": "passed",
-                    "usageScope": pool_usage_scope(
-                        {"sourceAttribution": source_attribution}, rights_rows,
-                    ),
                     "rightsResult": "passed",
                     "rightsAuthorityRef": review_authority["ref"],
                     "rightsAuthorityDigest": review_authority["digest"],

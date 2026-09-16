@@ -56,13 +56,60 @@ type postManifest struct {
 	PublishAngle          string                             `json:"publishAngle"`
 	PublishSeq            int                                `json:"publishSeq"`
 	ArticleAssetManifest  *ArticleAssetManifestDoc           `json:"articleAssetManifest"`
+	VideoBindings         []VideoBindingDoc                  `json:"videoBindings"`
 	CreatedAt             string                             `json:"createdAt"`
 	UpdatedAt             string                             `json:"updatedAt"`
 	PublishedAt           string                             `json:"publishedAt"`
 }
 
+// validateRetiredPostManifestClassification 拒绝 Data schema 已退休的对象分类字段。
+func validateRetiredPostManifestClassification(raw []byte, ref string) error {
+	var manifest map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return err
+	}
+	for _, name := range []string{"variantPurpose", "releaseClass", "productLifecycleState", "readinessPhase"} {
+		if _, exists := manifest[name]; exists {
+			return fmt.Errorf("%s: retired object classification field %s is not allowed", ref, name)
+		}
+	}
+	for parent, names := range map[string][]string{
+		"admission":         {"usageScope"},
+		"sourceAttribution": {"publicationAdmission"},
+	} {
+		rawObject, exists := manifest[parent]
+		if !exists {
+			continue
+		}
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(rawObject, &object); err != nil {
+			return fmt.Errorf("%s: %s: %w", ref, parent, err)
+		}
+		for _, name := range names {
+			if _, exists := object[name]; exists {
+				return fmt.Errorf("%s: retired object classification field %s.%s is not allowed", ref, parent, name)
+			}
+		}
+	}
+	if rawAssets, exists := manifest["assets"]; exists {
+		var assets []map[string]json.RawMessage
+		if err := json.Unmarshal(rawAssets, &assets); err != nil {
+			return fmt.Errorf("%s: assets: %w", ref, err)
+		}
+		for index, asset := range assets {
+			if _, exists := asset["distributionDecision"]; exists {
+				return fmt.Errorf("%s: retired object classification field assets[%d].distributionDecision is not allowed", ref, index)
+			}
+		}
+	}
+	return nil
+}
+
 // decodeReleaseSourceAttribution 不让 encoding/json 静默丢弃退休字段或新修改事实。
 func decodeReleaseSourceAttribution(raw []byte, ref string) (postmodel.SourceAttribution, error) {
+	if err := validateRetiredPostManifestClassification(raw, ref); err != nil {
+		return postmodel.SourceAttribution{}, err
+	}
 	var envelope struct {
 		SourceAttribution json.RawMessage `json:"sourceAttribution"`
 	}
@@ -113,7 +160,7 @@ func validateReleaseSourceFacts(raw []byte) error {
 	}
 	for _, name := range []string{
 		"isOriginal", "originalCreatorName", "platform", "sourcePostUrl", "originalAssetUrl",
-		"attributionText", "rightsBasis", "commercialAuthorizationStatus", "publicationAdmission",
+		"attributionText", "rightsBasis", "commercialAuthorizationStatus",
 		"watermarkStatus", "audioRightsStatus", "modelReleaseStatus", "propertyReleaseStatus",
 		"collectedAt", "takedownPolicy", "derivedModifications",
 	} {
@@ -152,27 +199,63 @@ func validateReleaseSourceFacts(raw []byte) error {
 	return nil
 }
 
+type VideoBindingDoc struct {
+	AssetID       string `json:"assetId"`
+	SectionAnchor string `json:"sectionAnchor"`
+	Role          string `json:"role"`
+}
+
+func validateImportedPostManifestShape(m postManifest, postRef string) error {
+	if !slices.Contains([]string{"article", "image", "video"}, m.ContentType) {
+		return fmt.Errorf("%s: contentType must be article, image or video", postRef)
+	}
+	if m.ContentType != "video" {
+		return nil
+	}
+	if len(m.VideoBindings) == 0 {
+		return fmt.Errorf("%s: videoBindings must contain at least one binding", postRef)
+	}
+	assetsByID := make(map[string]AssetManifestItem, len(m.Assets))
+	for _, asset := range m.Assets {
+		assetsByID[asset.AssetID] = asset
+	}
+	for index, binding := range m.VideoBindings {
+		assetID := strings.TrimSpace(binding.AssetID)
+		if assetID == "" {
+			return fmt.Errorf("%s: videoBindings[%d].assetId is required", postRef, index)
+		}
+		asset, exists := assetsByID[assetID]
+		if !exists || !strings.EqualFold(strings.TrimSpace(asset.Kind), "video") {
+			return fmt.Errorf("%s: videoBindings[%d].assetId must resolve to a video asset", postRef, index)
+		}
+		if binding.Role != "" && !slices.Contains([]string{"cover", "embedded", "node", "shortVideo"}, binding.Role) {
+			return fmt.Errorf("%s: videoBindings[%d].role is invalid", postRef, index)
+		}
+	}
+	return nil
+}
+
 type ContentAdmission struct {
-	ProcessResult  string `json:"processResult" bson:"processResult"`
-	QualityResult  string `json:"qualityResult" bson:"qualityResult"`
-	UsageScope     string `json:"usageScope" bson:"usageScope"`
-	EvidenceRef    string `json:"evidenceRef" bson:"evidenceRef"`
-	EvidenceDigest string `json:"evidenceDigest" bson:"evidenceDigest"`
+	ProcessResult         string `json:"processResult" bson:"processResult"`
+	QualityResult         string `json:"qualityResult" bson:"qualityResult"`
+	UsageScope            string `json:"usageScope" bson:"usageScope"`
+	RightsResult          string `json:"rightsResult" bson:"rightsResult"`
+	RightsAuthorityRef    string `json:"rightsAuthorityRef" bson:"rightsAuthorityRef"`
+	RightsAuthorityDigest string `json:"rightsAuthorityDigest" bson:"rightsAuthorityDigest"`
+	EvidenceRef           string `json:"evidenceRef" bson:"evidenceRef"`
+	EvidenceDigest        string `json:"evidenceDigest" bson:"evidenceDigest"`
 }
 
 func normalizeImportedContentPoolRecord(m *postManifest, postRef string) error {
 	if strings.TrimSpace(m.ContentID) == "" || m.Version < 1 ||
 		m.PoolSourceType != "data" || m.PoolStatus != "active" ||
 		m.Admission.ProcessResult != "completed" || m.Admission.QualityResult != "passed" ||
+		m.Admission.RightsResult != "passed" ||
+		strings.TrimSpace(m.Admission.RightsAuthorityRef) == "" ||
+		!sha256Pattern.MatchString(strings.TrimSpace(m.Admission.RightsAuthorityDigest)) ||
 		!sha256Pattern.MatchString(strings.TrimSpace(m.Admission.EvidenceDigest)) ||
 		strings.TrimSpace(m.Admission.EvidenceRef) == "" {
 		return fmt.Errorf("%s: canonical content pool admission is incomplete", postRef)
-	}
-	if m.VariantPurpose != "original" && m.VariantPurpose != "commercial_variant" {
-		return fmt.Errorf("%s: canonical content variantPurpose is invalid", postRef)
-	}
-	if !slices.Contains([]string{"research", "commercial", "production"}, m.Admission.UsageScope) {
-		return fmt.Errorf("%s: canonical content usageScope record is invalid", postRef)
 	}
 	return nil
 }

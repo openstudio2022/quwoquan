@@ -12,7 +12,6 @@
     "identity",
     "lifecycle",
     "admission",
-    "scope",
     "digests",
     "refs",
     "contentLibrary"
@@ -126,26 +125,6 @@
         },
         "evidenceDigest": {
           "$ref": "#/$defs/digest"
-        }
-      }
-    },
-    "scope": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "usageScope",
-        "variantPurpose"
-      ],
-      "properties": {
-        "usageScope": {
-          "enum": ["research", "commercial"]
-        },
-        "variantPurpose": {
-          "enum": [
-            "not_applicable",
-            "original",
-            "commercial_variant"
-          ]
         }
       }
     },
@@ -355,13 +334,6 @@
             "properties": {
               "carrier": {
                 "const": "homepage"
-              }
-            }
-          },
-          "scope": {
-            "properties": {
-              "variantPurpose": {
-                "const": "not_applicable"
               }
             }
           }

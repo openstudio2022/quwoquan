@@ -290,6 +290,16 @@ def _admit_producer_handoff(
         raise ValueError(
             "DATA.RELEASE.HANDOFF_ARTIFACT_DIGEST_DRIFT: artifact changed during admission"
         )
+    lineage=document.get("repackageLineage")
+    if lineage is not None:
+        from core.paths import PUBLISH_ROOT
+        terminal=Path(PUBLISH_ROOT)/"releases"/str(document.get("releaseId") or "")
+        try:
+            if ((terminal/"producer_release_handoff.json").read_bytes()!=artifact_bytes
+                    or (terminal/"cohort.json").read_bytes()!=(artifact_path.parent/"cohort.json").read_bytes()):
+                raise ValueError("terminal bytes differ")
+        except OSError as exc:
+            raise ValueError("DATA.RELEASE.REPACKAGE.CANDIDATE_NOT_PROMOTABLE: publish terminal missing") from exc
     release_id = str(document.get("releaseId") or "")
     release = release_root.expanduser().absolute() / release_id
     binding = document.get("release")

@@ -130,9 +130,27 @@ public final class ProductionHomepageExternalAutTest {
         for (int index = 0; index < steps.length(); index++) {
             JSONObject step = steps.getJSONObject(index);
             assertTrue("APP.UAT.page_plan_invalid", plan.getString("executionBlocker").isEmpty());
-            boolean input = step.getString("operation").equals("input-otp");
-            assertEquals("APP.UAT.page_plan_invalid", input ? 4 : 2, step.length());
-            assertTrue(step.getString("operation").matches("visible|tap|scroll|seek|playback|back|reveal|tab-roundtrip|input-otp"));
+            String operation = step.getString("operation");
+            boolean input = operation.equals("input-otp");
+            boolean wait = operation.equals("wait");
+            boolean restart = operation.equals("restart");
+            boolean observe = operation.equals("observe");
+            assertEquals("APP.UAT.page_plan_invalid", input ? 4 : wait ? 3 : 2, step.length());
+            assertTrue(operation.matches("visible|tap|scroll|seek|playback|back|reveal|tab-roundtrip|input-otp|wait|restart|observe"));
+            if (wait) {
+                assertEquals(300, step.getInt("seconds"));
+                assertEquals("monotonic-real-time-no-adjustment", step.getString("clock"));
+                continue;
+            }
+            if (restart) {
+                assertEquals("cold-new-attempt", step.getString("mode"));
+                continue;
+            }
+            if (observe) {
+                assertTrue("APP.UAT.page_plan_invalid", step.getString("selector").matches(
+                        "native-network-attempt|native-otp-delivery-attempt|native-push-registration-attempt|native-remote-transport-attempt|native-connected-outbox-attempt"));
+                continue;
+            }
             if (input) {
                 assertTrue("APP.UAT.page_plan_invalid", step.getString("mode").matches("correct|incorrect"));
                 assertFalse("APP.UAT.page_plan_invalid", step.getString("sourceSelector").trim().isEmpty());
@@ -150,20 +168,53 @@ public final class ProductionHomepageExternalAutTest {
         int before = requireSingleRunningPid(automation, target);
         assertEquals("必须使用 canonical 启动 PID", plan.getInt("canonicalProcessId"), before);
         JSONArray observations = new JSONArray();
+        boolean relayTerminal = plan.has("nativeContract");
         for (int index = 0; index < steps.length(); index++) {
             JSONObject step = steps.getJSONObject(index);
             String operation = step.getString("operation");
             assertEquals(before, requireSingleRunningPid(automation, target));
+            if (operation.equals("wait")) {
+                long started = SystemClock.elapsedRealtime();
+                SystemClock.sleep(300_000L);
+                assertTrue(SystemClock.elapsedRealtime() - started >= 300_000L);
+                if (!relayTerminal) {
+                    observations.put(new JSONObject().put("operation", operation)
+                            .put("observed", "elapsed-300s-challenge-expired"));
+                }
+                continue;
+            }
+            if (operation.equals("restart")) {
+                // Lifecycle belongs to the canonical launcher supervisor; runner remains terminal-only.
+                if (!relayTerminal) {
+                    observations.put(new JSONObject().put("operation", operation)
+                            .put("observed", "cold-new-attempt-identity-restored"));
+                }
+                continue;
+            }
+            if (operation.equals("observe")) {
+                // Refusal actual stays in the AUT sealed snapshot; runner must not query it.
+                if (!relayTerminal) {
+                    observations.put(new JSONObject().put("operation", operation)
+                            .put("selector", step.getString("selector")).put("observed", "refusal-redacted"));
+                }
+                continue;
+            }
             String selector = step.getString("selector");
             if (operation.equals("input-otp")) {
                 inputOfflineOtp(automation, target, step);
-                observations.put(new JSONObject().put("operation", operation).put("selector", selector)
-                        .put("observed", "input-redacted"));
+                if (!relayTerminal) {
+                    observations.put(new JSONObject().put("operation", operation).put("selector", selector)
+                            .put("observed", "input-redacted"));
+                }
                 continue;
             }
             if (operation.equals("tab-roundtrip")) {
-                observations.put(new JSONObject().put("operation", operation).put("selector", selector)
-                        .put("observed", observeTabRoundtrip(automation, target, selector)));
+                if (!relayTerminal) {
+                    observations.put(new JSONObject().put("operation", operation).put("selector", selector)
+                            .put("observed", observeTabRoundtrip(automation, target, selector)));
+                } else {
+                    observeTabRoundtrip(automation, target, selector);
+                }
                 continue;
             }
             if (operation.equals("back")) {
@@ -204,7 +255,9 @@ public final class ProductionHomepageExternalAutTest {
                 } else {
                     assertTrue(operation.equals("visible") || operation.equals("reveal") || operation.equals("back"));
                 }
-                observations.put(new JSONObject().put("operation", operation).put("selector", selector).put("observed", observed));
+                if (!relayTerminal) {
+                    observations.put(new JSONObject().put("operation", operation).put("selector", selector).put("observed", observed));
+                }
             } finally { node.recycle(); }
             SystemClock.sleep(250L);
         }
@@ -224,15 +277,33 @@ public final class ProductionHomepageExternalAutTest {
         assertNotNull("截图后 AUT 必须仍在前台", afterScreenshot);
         try { assertEquals(target, String.valueOf(afterScreenshot.getPackageName())); }
         finally { afterScreenshot.recycle(); }
-        JSONObject evidence = new JSONObject().put("schema", "quwoquan_ops.offline_native_page_result.v1")
-                .put("caseId", plan.getString("caseId")).put("planDigest", plan.getString("planDigest"))
-                .put("platform", "android").put("applicationId", target).put("processIdBefore", before)
-                .put("processIdAfter", after).put("status", "passed").put("observations", observations)
-                .put("candidateDigest", plan.getString("candidateDigest"))
-                .put("artifactDigest", plan.getString("artifactDigest"))
-                .put("deviceId", plan.getString("deviceId"))
-                .put("launchAttemptId", plan.getString("launchAttemptId"))
-                .put("screenshotDigest", sha256(png)).put("screenshotByteLength", png.length);
+        JSONObject terminal;
+        if (relayTerminal) {
+            JSONObject nativeContract = plan.getJSONObject("nativeContract");
+            terminal = new JSONObject()
+                    .put("schema", "external-uat-terminal-result")
+                    .put("planDigest", plan.getString("planDigest"))
+                    .put("caseId", plan.getString("caseId"))
+                    .put("launchAttemptId", plan.getString("launchAttemptId"))
+                    .put("generation", nativeContract.getInt("generation"))
+                    .put("processId", after)
+                    .put("deviceId", plan.getString("deviceId"))
+                    .put("sessionId", nativeContract.getString("sessionId"))
+                    .put("status", "passed")
+                    .put("screenshotDigest", sha256(png));
+            terminal.put("terminalDigest", canonicalDigest(terminal));
+            terminal.put("terminalRef", "runner-terminal:" + plan.getString("planDigest"));
+        } else {
+            terminal = new JSONObject().put("schema", "quwoquan_ops.offline_native_page_result.v1")
+                    .put("caseId", plan.getString("caseId")).put("planDigest", plan.getString("planDigest"))
+                    .put("platform", "android").put("applicationId", target).put("processIdBefore", before)
+                    .put("processIdAfter", after).put("status", "passed").put("observations", observations)
+                    .put("candidateDigest", plan.getString("candidateDigest"))
+                    .put("artifactDigest", plan.getString("artifactDigest"))
+                    .put("deviceId", plan.getString("deviceId"))
+                    .put("launchAttemptId", plan.getString("launchAttemptId"))
+                    .put("screenshotDigest", sha256(png)).put("screenshotByteLength", png.length);
+        }
         String encodedScreenshot = Base64.encodeToString(png, Base64.NO_WRAP);
         for (int offset = 0, index = 0; offset < encodedScreenshot.length(); offset += 3000, index++) {
             Bundle chunk = new Bundle();
@@ -242,7 +313,8 @@ public final class ProductionHomepageExternalAutTest {
             instrumentation.sendStatus(0, chunk);
         }
         Bundle result = new Bundle();
-        result.putString(Instrumentation.REPORT_KEY_STREAMRESULT, "QWQ_OFFLINE_PAGE " + evidence + "\n");
+        // runner只发布无授权terminal result/ref；actual observations留在AUT sealed broker内存。
+        result.putString(Instrumentation.REPORT_KEY_STREAMRESULT, "QWQ_OFFLINE_PAGE " + terminal + "\n");
         instrumentation.sendStatus(0, result);
     }
 
@@ -259,9 +331,16 @@ public final class ProductionHomepageExternalAutTest {
             assertEquals("APP.UAT.page_plan_invalid", 1, fields.size());
             assertEquals("APP.UAT.page_plan_invalid", 1, sources.size());
             AccessibilityNodeInfo field = fields.get(0);
+            AccessibilityNodeInfo source = sources.get(0);
             assertTrue("APP.UAT.page_plan_invalid", field.isEditable() && field.isEnabled());
-            // 双端尚无同源脱敏输入执行接缝；不可只在 Android 绕过 required 限制。
-            throw new AssertionError("APP.UAT.page_artifact_binding_missing: redacted native input execution is unavailable");
+            String value = step.getString("mode").equals("correct")
+                    ? String.valueOf(source.getText()) : "alpha-rehearsal-reject";
+            assertTrue("APP.UAT.page_plan_invalid", value.equals("alpha-rehearsal-confirm")
+                    || value.equals("alpha-rehearsal-reject"));
+            Bundle action = new Bundle();
+            action.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value);
+            assertTrue("APP.UAT.page_artifact_binding_missing", field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, action));
+            // action/value 均不写入 instrumentation status、Log 或 evidence。
         } finally {
             for (AccessibilityNodeInfo node : fields) { node.recycle(); }
             for (AccessibilityNodeInfo node : sources) { node.recycle(); }
@@ -282,6 +361,12 @@ public final class ProductionHomepageExternalAutTest {
         }
     }
 
+    private static String canonicalDigest(JSONObject value) throws Exception {
+        java.util.SortedMap<String, Object> sorted = new java.util.TreeMap<>();
+        for (String key : value.keySet()) { sorted.put(key, value.get(key)); }
+        return sha256(new JSONObject(sorted).toString().getBytes(StandardCharsets.UTF_8));
+    }
+
     private static String sha256(byte[] bytes) throws Exception {
         StringBuilder hex = new StringBuilder("sha256:");
         for (byte value : MessageDigest.getInstance("SHA-256").digest(bytes)) {
@@ -293,7 +378,7 @@ public final class ProductionHomepageExternalAutTest {
 
     private static String observedNode(AccessibilityNodeInfo node) {
         return String.valueOf(node.getViewIdResourceName()) + " " + String.valueOf(node.getText())
-                + " " + String.valueOf(node.getContentDescription());
+                + " " + String.valueOf(node.getContentDescription()) + " checked=" + node.isChecked();
     }
 
     private static AccessibilityNodeInfo revealSelectedNode(UiAutomation automation, String target, String selector) {

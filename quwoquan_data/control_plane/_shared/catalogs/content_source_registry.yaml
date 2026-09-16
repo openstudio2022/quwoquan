@@ -248,22 +248,6 @@ lanePolicies:
       watermarkStatusRequired: absent
       attributionRequired: true
       audioRightsEvidenceRequired: true
-    publicationAdmissionMatrix:
-      - { sourceId: wikimedia_commons_video, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: youtube, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: vimeo, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: bilibili, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: douyin, sourceKind: douyin, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: tiktok, sourceKind: tiktok, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: weibo, sourceKind: weibo, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: toutiao_video, sourceKind: toutiao, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: pexels_videos, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: pixabay_videos, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: pond5, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: storyblocks, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: travel_vlog, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: chinese_tourism_vertical, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: cctv_video, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
     rankingSignals:
       - visual_relevance
       - play_count
@@ -280,7 +264,7 @@ lanePolicies:
     promptFacts:
       - 视频广泛检索通用视频平台、素材库、官方账号和垂类视频源。
       - 抖音、TikTok、微博、今日头条及中国旅行垂类只接收可合法取得、无 DRM、未绕过访问控制的资产；水印按实际观察记录，不以水印状态代替来源或播放校验。
-      - 外部源视频必须冻结原创者、来源帖、原始资产、音频权利和下架策略；publicationAdmission 保留 research_release/commercial_release 权利事实，逐资产如实记录商业授权及证明，不由发布类别推导授权或补造审批。
+      - 外部源视频必须冻结原创者、来源帖、原始资产、音频权利和下架策略；逐资产如实记录商业授权及证明，不由对象类别推导授权或补造审批。
 
 siteCrawlProfilePolicy:
   sourceRoot: sources/{vertical}/{sourceId}

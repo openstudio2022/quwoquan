@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/target_descriptor.schema.json",
+  "description": "Immutable process locator to canonical identity and independent content version mapping.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "processRef",
+    "canonicalObjectRef",
+    "entityRef",
+    "entityId",
+    "expectedCurrentVersion",
+    "versionAuthority",
+    "contentVersion",
+    "mappingDigest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.target_descriptor"
+    },
+    "processRef": {
+      "type": "string",
+      "pattern": "^(?:entities/[^/]+/[^/]+/[^/]+|posts/(?:article|image|video)/[^/]+/[^/]+/[1-9][0-9]*)$"
+    },
+    "canonicalObjectRef": {
+      "type": "string",
+      "pattern": "^(?:entities/(?!\\.{1,2}(?:/|$))[^/]+(?:/(?!\\.{1,2}(?:/|$))[^/]+)*/[1-9][0-9]*|posts/(?:article|image|video)/(?!\\.{1,2}(?:/|$))[^/]+(?:/(?!\\.{1,2}(?:/|$))[^/]+)*/[1-9][0-9]*)$"
+    },
+    "entityRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^/entity/(?!/)(?!\\.{1,2}(?:/|$))(?!.*?/\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001f\\u007f])\\S(?:.*[^/\\s])?$"
+    },
+    "entityId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "expectedCurrentVersion": {
+      "description": "CAS 当前版本 authority。initial_create 必须为 null；correction 必须为正整数，next contentVersion 由 writer 严格派生为该值加一。",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "versionAuthority": {
+      "description": "版本 authority 的冻结来源；不得来自 reviewer、publish tree、publishSeq 或运行期猜测。",
+      "enum": [
+        "initial_create",
+        "round_spec.targets.requiredVersion"
+      ]
+    },
+    "contentVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "mappingDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "processRef": {
+            "pattern": "^entities/"
+          }
+        },
+        "required": [
+          "processRef"
+        ]
+      },
+      "then": {
+        "properties": {
+          "entityRef": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "versionAuthority": {
+            "const": "initial_create"
+          }
+        },
+        "required": [
+          "versionAuthority"
+        ]
+      },
+      "then": {
+        "properties": {
+          "expectedCurrentVersion": {
+            "type": "null"
+          },
+          "contentVersion": {
+            "const": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "versionAuthority": {
+            "const": "round_spec.targets.requiredVersion"
+          }
+        },
+        "required": [
+          "versionAuthority"
+        ]
+      },
+      "then": {
+        "properties": {
+          "expectedCurrentVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  ]
+}

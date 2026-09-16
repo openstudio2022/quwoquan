@@ -85,6 +85,7 @@ public class MainActivity extends FlutterFragmentActivity {
   private volatile String currentRuntimeConfigSupplyMode = "unknown";
   private volatile long currentDartAttemptStartedElapsedMs;
   private RuntimeConfigMethodChannel runtimeConfigMethodChannel;
+  private AutoCloseable alphaGwt008NativeEvidenceDriver;
   private long firstFrameForegroundRemainingMs = FLUTTER_FIRST_FRAME_DEADLINE_MS;
   private long foregroundStartedElapsedMs;
 
@@ -134,6 +135,7 @@ public class MainActivity extends FlutterFragmentActivity {
             + startupAttemptLogSuffix());
     registerStartupTimingsChannel(flutterEngine);
     registerNativeRuntimeConfigChannel(flutterEngine);
+    registerOptionalAlphaGwt008NativeEvidenceChannel(flutterEngine);
     observeNativeFlutterFirstFrame(flutterEngine);
     // 由应用自有注册器明确装配启动必需插件；GeneratedPluginRegistrant 保持 Flutter
     // 原样生成且不参与此引擎装配，重插件继续由 StartupDeferredPluginRegistry 按需注册。
@@ -349,6 +351,22 @@ public class MainActivity extends FlutterFragmentActivity {
                   break;
               }
             });
+  }
+
+  private void registerOptionalAlphaGwt008NativeEvidenceChannel(@NonNull FlutterEngine engine) {
+    // 保持main/Release源码闭包不引用UAT实现；只有Alpha candidate变体打包该package-private类。
+    String implementationName = getPackageName() + ".Alpha" + "Gwt008NativeEvidenceDriver";
+    try {
+      Class<?> type = Class.forName(implementationName);
+      java.lang.reflect.Method register =
+          type.getDeclaredMethod("register", Context.class, FlutterEngine.class);
+      register.setAccessible(true);
+      alphaGwt008NativeEvidenceDriver = (AutoCloseable) register.invoke(null, this, engine);
+    } catch (ClassNotFoundException ignored) {
+      // 非Alpha或Release制品必须走此分支，broker不可达。
+    } catch (ReflectiveOperationException error) {
+      throw new IllegalStateException("APP.UAT.relay_non_uat_excluded", error);
+    }
   }
 
   private void registerNativeRuntimeConfigChannel(@NonNull FlutterEngine flutterEngine) {
@@ -726,6 +744,14 @@ public class MainActivity extends FlutterFragmentActivity {
     if (smsRetrieverOtpPlugin != null) {
       smsRetrieverOtpPlugin.stop();
       smsRetrieverOtpPlugin = null;
+    }
+    if (alphaGwt008NativeEvidenceDriver != null) {
+      try {
+        alphaGwt008NativeEvidenceDriver.close();
+      } catch (Exception ignored) {
+        // close是幂等吊销；异常不能延长broker生命周期。
+      }
+      alphaGwt008NativeEvidenceDriver = null;
     }
     startupWatchdogExecutor.shutdownNow();
     super.onDestroy();

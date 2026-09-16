@@ -95,6 +95,49 @@ def _target_refs(root: Path) -> list[str]:
     return list(refs)
 
 
+def _descriptor_bindings(execution_id: str, root: Path) -> list[dict[str, Any]]:
+    target_set = _read_json(root / "0.plan/target_set.json", label="target_set")
+    bindings: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for binding in target_set["targetDescriptors"]:
+        ref = str(binding["ref"])
+        raw = _regular(root / ref, label=ref).read_bytes()
+        if sha256(raw) != binding["digest"]:
+            raise SealError(f"DATA.IDENTITY.DESCRIPTOR_DIGEST_DRIFT: {ref}")
+        descriptor = _read_json(root / ref, label=ref)
+        try:
+            assert_valid(descriptor, "execution", "target_descriptor", label=ref)
+        except ValueError as exc:
+            raise SealError(str(exc)) from exc
+        mapping = {key: value for key, value in descriptor.items() if key != "mappingDigest"}
+        if descriptor["mappingDigest"] != sha256(canonical_bytes(mapping)):
+            raise SealError(f"DATA.IDENTITY.MAPPING_DIGEST_DRIFT: {ref}")
+        expected = descriptor["expectedCurrentVersion"]
+        next_version = descriptor["contentVersion"]
+        if descriptor["versionAuthority"] == "initial_create":
+            valid_version = expected is None and next_version == 1
+        else:
+            valid_version = isinstance(expected, int) and not isinstance(expected, bool) and expected >= 1 and next_version == expected + 1
+        if not valid_version:
+            raise SealError(f"DATA.IDENTITY.REVISION_DESCRIPTOR_AUTHORITY_INVALID: {ref}")
+        process_ref = str(descriptor["processRef"])
+        if process_ref in seen:
+            raise SealError(f"DATA.IDENTITY.DESCRIPTOR_AMBIGUOUS: {process_ref}")
+        seen.add(process_ref)
+        bindings.append({
+            **binding,
+            **{key: descriptor[key] for key in (
+                "processRef", "canonicalObjectRef", "entityRef", "entityId", "contentVersion", "mappingDigest"
+            )},
+        })
+    if seen != set(target_set["targetRefs"]):
+        raise SealError("DATA.IDENTITY.DESCRIPTOR_SET_MISMATCH")
+    return sorted(bindings, key=lambda row: row["processRef"])
+
+def _descriptor_by_process(bindings: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {str(row["processRef"]): row for row in bindings}
+
+
 def _actor_key(actor: dict[str, Any]) -> tuple[str, str, str]:
     invocation = actor.get("invocation") or {}
     return (
@@ -425,6 +468,7 @@ def _complete_review(
     root: Path,
     author: dict[str, Any],
     reviewer: dict[str, Any],
+    descriptor: dict[str, Any],
 ) -> dict[str, Any]:
     """reviewer 只写 decision/blockingIssues/advisories（可选 safety、assetRights[].issues）；
     assetRights 按对象实际引用的资产机械补齐，dimensions 缺省为单维。"""
@@ -455,7 +499,6 @@ def _complete_review(
                 **{k: v for k, v in row.items() if k not in _RIGHTS_TRANSCRIPTION_FIELDS},
                 "assetRef": ref,
                 "decision": row.get("decision") or "approved",
-                "usageScope": row.get("usageScope") or "research",
                 "issues": row.get("issues") if isinstance(row.get("issues"), list) else [],
                 "sourceUrl": source.get("sourceUrl") or source.get("url"),
                 "license": source.get("license"),
@@ -473,7 +516,8 @@ def _complete_review(
         "schema": "quwoquan_data.content_review",
         "stage": "5.review",
         "executionId": execution_id,
-        "objectRef": target_ref,
+        "objectRef": descriptor["canonicalObjectRef"],
+        "objectIdentity": {"entityRef": descriptor["entityRef"], "entityId": descriptor["entityId"]} if descriptor["entityRef"] is not None else None,
         "author": author,
         "reviewer": reviewer,
         "candidateBindings": {
@@ -487,6 +531,15 @@ def _complete_review(
         "advisories": advisories,
         "assetRights": completed_rights,
     }
+    if completed["objectIdentity"] is None:
+        completed.pop("objectIdentity")
+    expected_revision = descriptor["contentVersion"]
+    revision = completed.get("objectRevision")
+    if not isinstance(revision, dict) or revision.get("contentRevision") != expected_revision:
+        raise SealError(f"DATA.IDENTITY.REVISION_TUPLE_MISMATCH: {target_ref}")
+    for disposition in completed.get("dispositions") or []:
+        if disposition.get("objectRef") != descriptor["canonicalObjectRef"] or (disposition.get("objectRevision") or {}).get("contentRevision") != expected_revision:
+            raise SealError(f"DATA.IDENTITY.DISPOSITION_MISMATCH: {target_ref}")
     return completed
 
 
@@ -498,6 +551,7 @@ def _seal_review(
     reviewer: dict[str, Any],
     reviews: dict[str, Any],
     author_receipt: dict[str, Any],
+    descriptors: dict[str, dict[str, Any]],
 ) -> tuple[list[dict[str, str]], int]:
     """把 execution 级 reviews 扇出为逐对象 content_review.json 并补齐机械字段。
 
@@ -533,7 +587,7 @@ def _seal_review(
         _assert_semantic_report_closes(root, judgement, target_ref=target_ref)
         completed = _complete_review(
             dict(judgement), execution_id=execution_id, target_ref=target_ref, root=root,
-            author=dict(author), reviewer=dict(reviewer),
+            author=dict(author), reviewer=dict(reviewer), descriptor=descriptors[target_ref],
         )
         try:
             assert_valid(completed, "content", "content_review", label=review_ref)
@@ -623,6 +677,8 @@ def seal_stage(*, execution_id: str, stage: str, input_path: Path | None = None,
         raise SealError(f"{stage} seal 不接受 reviews")
 
     with _lock(root / RECEIPT_DIRECTORY / ".seal.lock"):
+        descriptor_bindings = _descriptor_bindings(execution_id, root)
+        descriptors = _descriptor_by_process(descriptor_bindings)
         prior, predecessor = _load_prior_receipts(root, stage)
         if stage == "1.download":
             result_refs, acquire_issues = _seal_acquire(root, target_refs)
@@ -646,7 +702,7 @@ def seal_stage(*, execution_id: str, stage: str, input_path: Path | None = None,
                 )
         else:
             result_refs, approved = _seal_review(
-                root, execution_id, target_refs, reviewer=actor, reviews=reviews, author_receipt=prior[1]
+                root, execution_id, target_refs, reviewer=actor, reviews=reviews, author_receipt=prior[1], descriptors=descriptors
             )
             if verdict == "pass" and approved == 0:
                 raise SealError("review pass 必须至少有一个 approved 对象")
@@ -661,6 +717,7 @@ def seal_stage(*, execution_id: str, stage: str, input_path: Path | None = None,
             "verdict": verdict,
             "typedIssues": typed_issues,
             "resultRefs": sorted(result_refs, key=lambda row: row["ref"]),
+            "targetDescriptors": descriptor_bindings,
         }
         assert_valid(receipt, "execution", "stage_receipt", label=receipt_name(stage))
         status = _write_create_or_same(root / RECEIPT_DIRECTORY / receipt_name(stage), canonical_bytes(receipt))

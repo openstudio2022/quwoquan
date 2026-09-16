@@ -30,7 +30,7 @@ def _attribution() -> dict:
     return {"isOriginal": False, "originalCreatorName": "真实作者", "platform": "Wikimedia Commons",
         "sourcePostUrl": "https://example.test/work", "originalAssetUrl": "https://example.test/asset.jpg",
         "attributionText": "作者 / 来源", "rightsBasis": "CC BY-SA 4.0", "commercialAuthorizationStatus": "verified",
-        "publicationAdmission": "commercial_release", "watermarkStatus": "absent", "watermarkKind": "none",
+"watermarkStatus": "absent", "watermarkKind": "none",
         "audioRightsStatus": "no_audio", "modelReleaseStatus": "not_required", "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-09-09T00:00:00Z", "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
         "derivedModifications": [], "termsUrl": "https://example.test/terms", "authorizationProofUrl": "https://example.test/proof"}
@@ -60,7 +60,7 @@ def _record(publish: Path, ref: str, manifest: dict) -> dict:
         "recordSequence": 1, "contentVersion": manifest["version"], "status": "active", "processResult": "completed",
         "qualityResult": "passed", "eligibilityResult": "passed", "rightsResult": "passed",
         "rightsAuthorityRef": ref + "/content_review.json", "rightsAuthorityDigest": _digest(root / "content_review.json"),
-        "usageScope": "commercial", "evidenceRef": "content_review.json", "evidenceDigest": _digest(root / "content_review.json"),
+"evidenceRef": "content_review.json", "evidenceDigest": _digest(root / "content_review.json"),
         "payloadDigest": digest, "canonicalObjectDigest": digest,
         "sourceIdentity": {**identity, "identityDigest": source_identity_digest(identity)}, "sourceAttribution": _attribution()}
     write_json(root / "records/1.json", record)
@@ -77,8 +77,11 @@ def _homepage(publish: Path, name: str) -> str:
             "canonicalUrl": source, "sourceUrl": source, "title": name, "fetchedAt": "2026-09-09T00:00:00Z",
             "snapshotHash": "sha256:" + "a" * 64, "policyRevision": "encyclopedia-primary", "sourceUseMode": "factual_reference_only"},
         "sourceAttribution": _attribution()})
-    _record(publish, ref, {"entityId": "entity:stable:" + name, "entityRef": "/entity/地点/景区/" + name,
-        "version": 1, "contentType": "homepage", "assets": []})
+    facts = json.loads((publish / ref / "_entity.json").read_text(encoding="utf-8"))
+    _record(publish, ref, {**facts, "schema": "quwoquan_data.entity_object",
+        "entityId": "entity:stable:" + name, "version": 1, "contentType": "homepage",
+        "geographyMode": "administrative", "sourceRefs": ["sources/wiki/source.json"],
+        "finalContentRef": "page.md", "assets": []})
     return ref
 
 
@@ -86,7 +89,7 @@ def _post(publish: Path, index: int, entity: str) -> str:
     ref = f"posts/article/摄影/离线帖子{index}/1"
     _record(publish, ref, {"contentId": f"opaque-content-id-{index}", "version": 1, "contentIdentity": "work",
         "title": f"真实标题{index}", "contentType": "article", "authorId": "author", "creatorProfileId": "author", "generator": "agent",
-        "variantPurpose": "original", "publishMediaMode": "text_only", "assets": [], "entityRefs": ["/entity/" + entity.removeprefix("entities/")]})
+"publishMediaMode": "text_only", "assets": [], "entityRefs": ["/entity/" + entity.removeprefix("entities/")]})
     return ref
 
 
@@ -161,6 +164,10 @@ def test_readonly_stable_asset_reference_reuse_is_independent_positive(tmp_path:
     assert result["preflight"][0]["imageConflicts"] == []
     assert result["preflight"][0]["identity"]["state"] == "absent"
     assert _snapshot(tmp_path) == before
+    if ref.startswith("entities/"):
+        candidate.update(entityId=candidate["contentId"], entityRef="/entity/" + ref.removeprefix("entities/"))
+    else:
+        candidate["objectRef"] = ref.removeprefix("posts/")
     run = tmp_path / "run"
     write_json(run / "manifest.json", candidate)
     entry = {"operation": "create", "destination": ref + "/manifest.json", "blobRef": "manifest.json", "sha256": _digest(run / "manifest.json")}
@@ -202,6 +209,10 @@ def test_readonly_and_publish_recheck_reject_image_identity_conflicts(tmp_path: 
     ref = "posts/image/摄影/新作品/1"
     result = query_pool(publish, target_refs=[ref], candidates=[{"objectRef": ref, "manifest": candidate}])
     assert any(expected in issue["code"] for issue in result["preflight"][0]["imageConflicts"])
+    if ref.startswith("entities/"):
+        candidate.update(entityId=candidate["contentId"], entityRef="/entity/" + ref.removeprefix("entities/"))
+    else:
+        candidate["objectRef"] = ref.removeprefix("posts/")
     run = tmp_path / "run"
     write_json(run / "manifest.json", candidate)
     entry = {"operation": "create", "destination": ref + "/manifest.json", "blobRef": "manifest.json", "sha256": _digest(run / "manifest.json")}
@@ -212,7 +223,8 @@ def test_readonly_and_publish_recheck_reject_image_identity_conflicts(tmp_path: 
 
 
 def test_explicit_logical_version_update_not_path_only_exemption(tmp_path: Path) -> None:
-    existing = _image()
+    existing = {**_image(), "objectRef": "image/摄影/同作品/1"}
+    _repository(tmp_path)
     write_json(tmp_path / "posts/image/摄影/同作品/1/manifest.json", existing)
     with readonly_image_inventory(tmp_path) as connection:
         candidate = {**existing, "version": 2}
@@ -240,12 +252,14 @@ def test_cli_preflight_is_readonly_and_does_not_auto_approve(tmp_path: Path, cap
     write_json(request, {"candidates": [{"objectRef": ref, "manifest": _image()}]})
     parser = argparse.ArgumentParser()
     register_parser(parser.add_subparsers())
+    _repository(tmp_path / "publish")
+    before_publish = _snapshot(tmp_path / "publish")
     args = parser.parse_args(["release", "pool-query", "--publish-root", str(tmp_path / "publish"), "--target-ref", ref, "--candidate-file", str(request)])
     args.handler(args)
     result = json.loads(capsys.readouterr().out)
     assert result["preflight"][0]["imageConflicts"] == []
     assert "approved" not in result and "decision" not in result
-    assert not (tmp_path / "publish").exists()
+    assert _snapshot(tmp_path / "publish") == before_publish
 
 
 def test_publish_rechecks_dependencies_after_successful_readonly_preflight(tmp_path: Path) -> None:
@@ -256,6 +270,10 @@ def test_publish_rechecks_dependencies_after_successful_readonly_preflight(tmp_p
     result = query_pool(publish, candidates=[{"objectRef": ref, "manifest": candidate}])
     assert result["preflight"][0]["dependencyIssues"] == []
     (publish / entity / "records/1.json").unlink()
+    if ref.startswith("entities/"):
+        candidate.update(entityId=candidate["contentId"], entityRef="/entity/" + ref.removeprefix("entities/"))
+    else:
+        candidate["objectRef"] = ref.removeprefix("posts/")
     run = tmp_path / "run"
     write_json(run / "manifest.json", candidate)
     entry = {"operation": "create", "destination": ref + "/manifest.json", "blobRef": "manifest.json", "sha256": _digest(run / "manifest.json")}

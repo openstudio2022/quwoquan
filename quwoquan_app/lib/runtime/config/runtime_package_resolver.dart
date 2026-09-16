@@ -140,7 +140,26 @@ final class OfflineBootstrapDocument implements RuntimeConfigDocument {
         space['instanceId'] is! String ||
         !RegExp(r'^[a-zA-Z0-9_-]{1,80}$')
             .hasMatch(space['instanceId'] as String) ||
-        (space['mode'] == 'standard') != (space['instanceId'] == 'default')) {
+        space['caseId'] is! String ||
+        !(((jsonDecode(appLaunchManifestJson)
+                        as Map<String, dynamic>)['schemas']
+                    as Map<
+                      String,
+                      dynamic
+                    >)['offline_bootstrap_document']['fields']['rehearsalSpace']['fields']['caseId']['allowed_values']
+                as List)
+            .contains(space['caseId']) ||
+        space['lifecycleGeneration'] is! String ||
+        !RegExp(r'^(?:0|[1-9][0-9]{0,15})$')
+            .hasMatch(space['lifecycleGeneration'] as String) ||
+        space['observationBinding'] is! String ||
+        !RegExp(r'^(?:|sha256:[0-9a-f]{64})$')
+            .hasMatch(space['observationBinding'] as String) ||
+        (space['mode'] == 'standard') != (space['instanceId'] == 'default') ||
+        (space['mode'] == 'standard') != (space['caseId'] == 'none') ||
+        (space['mode'] == 'standard') !=
+            (space['lifecycleGeneration'] == '0') ||
+        (space['mode'] == 'standard') != (space['observationBinding'] == '')) {
       invalid.add('rehearsalSpace');
     }
     final runtime = input['runtime'];
@@ -424,11 +443,17 @@ final class VerifiedRehearsalSpace {
     required this.mode,
     required this.snapshotDigest,
     required this.instanceId,
+    required this.caseId,
+    required this.lifecycleGeneration,
+    required this.observationBinding,
   });
 
   final String mode;
   final String snapshotDigest;
   final String instanceId;
+  final String caseId;
+  final String lifecycleGeneration;
+  final String observationBinding;
   bool get isIsolated => mode == 'isolated';
 }
 
@@ -652,6 +677,9 @@ class RuntimePackageResolver {
         mode: selected['mode']!,
         snapshotDigest: selected['snapshotDigest']!,
         instanceId: selected['instanceId']!,
+        caseId: selected['caseId']!,
+        lifecycleGeneration: selected['lifecycleGeneration']!,
+        observationBinding: selected['observationBinding']!,
       );
     }
     return ResolvedRuntimePackage._(

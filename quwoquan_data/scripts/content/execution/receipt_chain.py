@@ -155,6 +155,7 @@ def _validate_documents(
             })
 
     predecessor: dict[str, str] | None = None
+    descriptor_state: dict[str, tuple[str, str, str, object, object, int, str]] | None = None
     for index, (receipt, raw) in enumerate(receipts, start=1):
         stage = _STAGES[index - 1]
         name = f"{index:03d}-{stage}.json"
@@ -169,6 +170,32 @@ def _validate_documents(
             raise ReceiptChainError(f"receipt identity/sequence/predecessor 漂移：{name}")
         if index < len(receipts) and receipt.get("verdict") != "pass":
             raise ReceiptChainError(f"非 terminal receipt 必须为 pass：{name}")
+        current_descriptors: dict[str, tuple[str, str, str, object, object, int, str]] = {}
+        for binding in receipt.get("targetDescriptors") or []:
+            label = f"{execution_id} {name} targetDescriptors"
+            key_tuple = _binding_key(binding, label=label)
+            descriptor_raw = resolve(binding, label)
+            if digest_bytes(descriptor_raw) != key_tuple[2]:
+                raise ReceiptChainError(f"{label} exact bytes digest 漂移")
+            try:
+                descriptor = json.loads(descriptor_raw)
+                assert_valid(descriptor, "execution", "target_descriptor", label=label)
+            except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+                raise ReceiptChainError(str(exc)) from exc
+            for field in ("processRef", "canonicalObjectRef", "entityRef", "entityId", "contentVersion", "mappingDigest"):
+                if binding.get(field) != descriptor.get(field):
+                    raise ReceiptChainError(f"DATA.IDENTITY.RECEIPT_DESCRIPTOR_MISMATCH: {field}")
+            used.add(key_tuple)
+            if key_tuple not in snapshot_omissions:
+                captured.setdefault(key_tuple, {"scope": key_tuple[0], "ref": key_tuple[1], "digest": key_tuple[2], "contentBase64": base64.b64encode(descriptor_raw).decode("ascii")})
+            key = str(binding["processRef"])
+            identity = tuple(binding[field] for field in ("ref", "digest", "canonicalObjectRef", "entityRef", "entityId", "contentVersion", "mappingDigest"))
+            if key in current_descriptors:
+                raise ReceiptChainError(f"DATA.IDENTITY.DESCRIPTOR_DUPLICATE: {key}")
+            current_descriptors[key] = identity
+        if descriptor_state is not None and current_descriptors != descriptor_state:
+            raise ReceiptChainError("DATA.IDENTITY.RECEIPT_DESCRIPTOR_MISMATCH")
+        descriptor_state = current_descriptors
         for binding in receipt.get("resultRefs") or []:
             verify_ref(binding, label=f"{execution_id} {name} resultRefs")
         predecessor = {"scope": "execution", "ref": f"{_RECEIPT_DIRECTORY}/{name}", "digest": digest_bytes(raw)}
@@ -325,8 +352,18 @@ def validate_publish_review_chain(
         assert_valid(review, "content", "content_review", label=review_ref)
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
         raise ReceiptChainError(f"{review_ref}: {exc}") from exc
-    if review.get("executionId") != execution_id or review.get("objectRef") != normalized_ref:
-        raise ReceiptChainError("content_review target identity drift")
+    descriptor_rows = review_receipt.get("targetDescriptors") or []
+    descriptor = next((row for row in descriptor_rows if row.get("processRef") == normalized_ref), None)
+    if descriptor is None:
+        raise ReceiptChainError("DATA.IDENTITY.DESCRIPTOR_MISSING")
+    if review.get("executionId") != execution_id or review.get("objectRef") != descriptor.get("canonicalObjectRef"):
+        raise ReceiptChainError("DATA.IDENTITY.PAYLOAD_IDENTITY_DRIFT")
+    revision = review.get("objectRevision") or {}
+    if revision.get("contentRevision") != descriptor.get("contentVersion"):
+        raise ReceiptChainError("DATA.IDENTITY.REVISION_TUPLE_MISMATCH")
+    identity = review.get("objectIdentity")
+    if descriptor.get("entityRef") is not None and identity != {"entityRef": descriptor.get("entityRef"), "entityId": descriptor.get("entityId")}:
+        raise ReceiptChainError("DATA.IDENTITY.PAYLOAD_IDENTITY_DRIFT")
     expected = {"scope": "execution", "ref": review_ref, "digest": digest_bytes(review_raw)}
     if sum(1 for row in review_receipt.get("resultRefs") or [] if row == expected) != 1:
         raise ReceiptChainError("review receipt 未 exact 绑定 content_review")

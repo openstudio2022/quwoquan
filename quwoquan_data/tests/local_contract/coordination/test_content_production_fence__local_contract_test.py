@@ -443,6 +443,79 @@ def _produce(context, monkeypatch, index, *, seal_author=True, actor_document=No
     return root, inputs
 
 
+def _review_semantics(
+    root: Path, target_ref: str, *, reviewer: dict[str, object], decision: str, blocking_issues: list[str]
+) -> dict[str, object]:
+    import json
+    from content.execution import seal
+
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
+    revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    refs_document = json.loads((root / target_ref / "1.download/source_refs.json").read_bytes())
+    counts = {"title": 0, "heading": 0, "paragraph": 1, "list": 0, "tableLogicalCell": 0, "footnote": 0, "media": 0}
+    report_rows = []
+    for row in refs_document["sources"]:
+        source_ref = row["sourceRef"]
+        source_digest = seal.sha256((root / source_ref).read_bytes())
+        sequence_digest = seal.sha256(seal.canonical_bytes({
+            "objectRef": target_ref, "sourceRef": source_ref,
+            "sourceDigest": source_digest, "objectRevision": revision,
+        }))
+        report_rows.append({
+            "sourceRef": source_ref, "sourceDigest": source_digest, "parseStatus": "complete",
+            "dialect": "markdown", "dialectVersion": "1", "capabilities": ["paragraph"],
+            "sourceCounts": counts, "draftCounts": counts,
+            "sourceSequenceDigest": sequence_digest, "draftSequenceDigest": sequence_digest,
+        })
+    carrier = "homepage" if target_ref.startswith("entities/") else "article"
+    semantic_report: dict[str, object] = {
+        "reviewedCarrier": carrier, "carrierCompatible": True, "sources": report_rows,
+        "issues": [] if decision == "approved" else [{
+            "code": "SEMANTIC_COVERAGE_GAP",
+            "message": blocking_issues[0],
+            "ref": target_ref,
+        }],
+    }
+    if carrier == "homepage":
+        semantic_report["homepageFidelity"] = {
+            "title": True, "headingTree": True, "paragraphOrder": True, "links": True,
+            "nestedLists": True, "tableLogicalGrid": True, "footnotes": True, "mediaCaptionOrder": True,
+        }
+        draft_name = "page.md"
+    else:
+        semantic_report["articleIntent"] = {
+            "independent": True, "intent": "景区导览",
+            "rationale": "测试草稿对采用来源作独立导览表达，而非百科原文复制",
+        }
+        draft_name = "draft.article.md"
+    draft_digest = seal.sha256((root / target_ref / "4.draft" / draft_name).read_bytes())
+    source_set_digest = seal.sha256(seal.canonical_bytes([row["sourceDigest"] for row in report_rows]))
+    approved = decision == "approved"
+    disposition = {
+        "issueId": f"{carrier}-{'semantic-exact' if approved else 'coverage-gap'}-r1",
+        "objectRef": target_ref,
+        "sourceAnchor": {"origin": "source-set", "start": 0, "end": len(report_rows), "selector": target_ref},
+        "sourceDigest": source_set_digest, "targetDigest": draft_digest,
+        "detectedType": "SEMANTIC_EXACT" if approved else "SEMANTIC_COVERAGE_GAP",
+        "proposedMapping": None, "lossFields": [] if approved else ["sourceEvidence"],
+        "severity": "info" if approved else "error",
+        "actor": {"actorId": reviewer["sessionId"], "actorType": "independent_reviewer"},
+        "reason": (
+            f"reviewed {carrier} draft revision 1 against every acquired source revision"
+            if approved else blocking_issues[0]
+        ),
+        "policyVersion": "1.0.0",
+        "reviewStatus": "reviewed_confirmed" if approved else "reviewed_rejected",
+        "outcome": "auto_continue" if approved else "definitive_reject",
+        "processingDisposition": "preserved" if approved else "blocked_unsafe",
+        "protocol": protocol, "objectRevision": revision,
+    }
+    return {
+        "semanticReport": semantic_report, "protocol": protocol,
+        "objectRevision": revision, "dispositions": [disposition],
+    }
+
+
 def test_atomic_batch_winner_and_other_author_remains_independent(tmp_path, monkeypatch):
     """spec_ref: multi-carrier-release/spec.md#gwt-054"""
     context = _autonomy(tmp_path, monkeypatch)
@@ -488,7 +561,12 @@ def test_real_seals_allow_second_batch_but_review_does_not_release_end_to_end_ca
         store.claim_batch(_tokens(claim, [targets[0]]), execution_id=_execution(0), actor=actor_key(_actor("qa-b")), nonce="steal", task_digest=digest, review=True)
     _env(context, monkeypatch, 0, actor="qa", review=True)
     review = inputs / "review.json"
-    review.write_text(json.dumps({"actor": _actor("qa"), "verdict": "pass", "reviews": {targets[0]: {"decision": "approved", "blockingIssues": [], "advisories": []}}}))
+    reviewer = _actor("qa")
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": []}
+    judgement.update(_review_semantics(
+        root, targets[0], reviewer=reviewer, decision="approved", blocking_issues=[]
+    ))
+    review.write_text(json.dumps({"actor": reviewer, "verdict": "pass", "reviews": {targets[0]: judgement}}))
     _handle_seal(argparse.Namespace(execution_id=_execution(0), input=str(review), stage="5.review"))
     assert batch_facts(review_batch, roots)["review_sealed"]
     assert not batch_facts(review_batch, roots)["closed"]
@@ -646,7 +724,11 @@ def test_actual_homepage_publish_proof_frees_capacity_and_drift_retains_it(tmp_p
     # 使用已有真实对象 fixture，只替换测试 actor；生产 receipt 仍由 seal 内核生成。
     monkeypatch.setattr(fixture, "AUTHOR", _actor("homepage_creator"))
     monkeypatch.setattr(fixture, "REVIEWER", _actor("qa"))
-    ref = execution_target_ref({"name": "西湖", "entityType": "地点/景区", "entityId": "entity:xihu", "entityRef": "/entity/travel/stable/xihu"}, carrier="homepage")
+    def reviewed_homepage_ref(target):
+        process_ref = execution_target_ref(target, carrier="homepage")
+        return process_ref.replace("entities/地点/景区/", "entities/地点/", 1) + "/1"
+
+    ref = reviewed_homepage_ref({"name": "西湖", "entityType": "地点/景区", "entityId": "entity:xihu", "entityRef": "/entity/travel/stable/xihu"})
     execution_id = "20260912--travel-homepage-correction--local--pilot-001"
     store.release("i1", "s1", "team-a", 1, "unused-shard", handoff_ref="scope-not-started", remaining=False)
     candidate = {"carrier": "homepage", "name": "西湖", "entityType": "地点/景区", "region": "中国/浙江省/杭州市",
@@ -654,13 +736,17 @@ def test_actual_homepage_publish_proof_frees_capacity_and_drift_retains_it(tmp_p
     candidates = [candidate]
     if mixed:
         candidates.append({**candidate, "name": "未核实景区", "entityId": "entity:rejected", "entityRef": "/entity/travel/stable/rejected"})
-    refs = [execution_target_ref(value, carrier="homepage") for value in candidates]
+    refs = [reviewed_homepage_ref(value) for value in candidates]
     store.register_shard("i1", "homepage", "主页小批", "scope://homepage", 2, refs)
     homepage_claim = store.claim("i1", "team-a", "homepage-claim", deployment_id="d1", shard_id="homepage")
     tokens = [WriteFenceToken("i1", "homepage", "d1", "team-a", homepage_claim["generation"], value) for value in refs]
     store.claim_batch(tokens, execution_id=execution_id, actor=roles["homepage_creator"][0], nonce="home-author", task_digest=digest)
     from content.execution import task_init, seal
     from content.source.acquire import acquire
+    monkeypatch.setattr(
+        task_init, "execution_target_ref",
+        lambda target, *, carrier: reviewed_homepage_ref(target),
+    )
     round_path = output / "round.json"
     round_path.write_text(json.dumps({"schema": "quwoquan_data.round_spec", "executions": {"homepage": execution_id}, "targets": candidates}))
     task_init.initialize_round(round_spec_path=round_path)
@@ -688,13 +774,19 @@ def test_actual_homepage_publish_proof_frees_capacity_and_drift_retains_it(tmp_p
     monkeypatch.setenv("QWQ_CONTENT_ACTOR", json.dumps(_actor("qa")))
     monkeypatch.setenv("QWQ_CONTENT_BATCH_NONCES", json.dumps({execution_id: "home-review"}))
     review = tmp_path / "home-review.json"
+    reviewer = _actor("qa")
     judgements = {ref: {"decision": "approved", "blockingIssues": [], "advisories": []}}
     if mixed:
         judgements[refs[1]] = {"decision": "rejected", "blockingIssues": ["关键事实缺少来源证据"], "advisories": []}
-    payload = {"actor": _actor("qa"), "verdict": "pass", "reviews": judgements}
+    payload = {"actor": reviewer, "verdict": "pass", "reviews": judgements}
     if mixed == "all-rejected":
         judgements[ref] = {"decision": "rejected", "blockingIssues": ["关键事实缺证"], "advisories": []}
         payload.update(verdict="blocked", typedIssues=[{"code": "DATA.SEAL.REVIEW_REJECTED", "message": "本批无批准对象"}])
+    for target_ref, judgement in judgements.items():
+        judgement.update(_review_semantics(
+            root, target_ref, reviewer=reviewer, decision=judgement["decision"],
+            blocking_issues=judgement["blockingIssues"],
+        ))
     review.write_text(json.dumps(payload))
     _handle_seal(argparse.Namespace(execution_id=execution_id, stage="5.review", input=str(review)))
     assert not batch_facts(batch, roots)["closed"]

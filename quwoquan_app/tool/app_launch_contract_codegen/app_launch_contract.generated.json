@@ -1,6 +1,6 @@
 {
   "schema": "qwq.app-launch-contract.generated",
-  "sourceDigest": "sha256:de6827d5b1ee327eb67c40db3af9cc92c79f16472321794b56aa2e33a12d87a4",
+  "sourceDigest": "sha256:be2dcf14cb7875cf40410182a65a7edfdbd9576e0fefcc80c278a0941cb85035",
   "sources": [
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml",
@@ -8,7 +8,7 @@
     },
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml",
-      "sha256": "sha256:4445f240f7468444ddd865e9787953170330e05ef1561493c3f11169aa6164e0"
+      "sha256": "sha256:b11f53ff410eb788e54dc130dcc03fb8fb6c10af26ab399858318e84995d94d9"
     }
   ],
   "environments": [
@@ -167,6 +167,13 @@
     "app_launch_attempt": "app-launch-attempt",
     "app_launcher_handoff": "app-launcher-handoff",
     "app_managed_preparation": "quwoquan_ops.app_managed_preparation.v1",
+    "external_uat_broker_query": "external-uat-broker-query",
+    "external_uat_broker_result": "external-uat-broker-result",
+    "external_uat_comparison_result": "external-uat-comparison-result",
+    "external_uat_managed_launch_admission": "external-uat-managed-launch-admission",
+    "external_uat_sealed_snapshot": "external-uat-sealed-snapshot",
+    "external_uat_teardown_receipt": "external-uat-teardown-receipt",
+    "external_uat_terminal_result": "external-uat-terminal-result",
     "offline_bootstrap_document": "app-offline-bootstrap-document",
     "rehearsal_storage_observation": "rehearsal-storage-observation",
     "runtime_config_activation_receipt": "app-runtime-config-activation-receipt",
@@ -269,6 +276,108 @@
       "createdAt",
       "status",
       "firstBlocker"
+    ],
+    "external_uat_broker_query": [
+      "schema",
+      "contractDigest",
+      "admissionDigest",
+      "terminalDigest",
+      "caseId",
+      "launchAttemptId",
+      "generation",
+      "observationBinding",
+      "processId",
+      "deviceId",
+      "sessionId",
+      "sequence",
+      "challenge",
+      "mac"
+    ],
+    "external_uat_broker_result": [
+      "schema",
+      "status",
+      "admissionDigest",
+      "terminalDigest",
+      "snapshot",
+      "snapshotDigest",
+      "consumed",
+      "revoked",
+      "errorCode",
+      "resultDigest"
+    ],
+    "external_uat_comparison_result": [
+      "schema",
+      "caseId",
+      "admissionDigest",
+      "terminalDigest",
+      "brokerResultDigest",
+      "expectedDigest",
+      "status",
+      "nonPromotable",
+      "comparisonDigest",
+      "errorCode"
+    ],
+    "external_uat_managed_launch_admission": [
+      "schema",
+      "contractDigest",
+      "candidateDigest",
+      "artifactDigest",
+      "packageIdentity",
+      "signingDigest",
+      "platform",
+      "deviceId",
+      "sessionId",
+      "caseId",
+      "launchAttemptId",
+      "generation",
+      "observationBinding",
+      "processId",
+      "lifecycleReceiptDigest",
+      "admittedAtMonotonicMs",
+      "expiresAtMonotonicMs",
+      "admissionDigest"
+    ],
+    "external_uat_sealed_snapshot": [
+      "schema",
+      "caseId",
+      "launchAttemptId",
+      "generation",
+      "observationBinding",
+      "processId",
+      "snapshotDigest",
+      "observations",
+      "sealedAtMonotonicMs"
+    ],
+    "external_uat_teardown_receipt": [
+      "schema",
+      "transactionId",
+      "admissionDigest",
+      "launchAttemptId",
+      "generation",
+      "processId",
+      "state",
+      "predecessorResultDigest",
+      "requestedAtMonotonicMs",
+      "terminatedAtMonotonicMs",
+      "processTableConfirmed",
+      "lifecycleConfirmed",
+      "brokerDisconnected",
+      "receiptDigest",
+      "errorCode"
+    ],
+    "external_uat_terminal_result": [
+      "schema",
+      "planDigest",
+      "caseId",
+      "launchAttemptId",
+      "generation",
+      "processId",
+      "deviceId",
+      "sessionId",
+      "status",
+      "screenshotDigest",
+      "terminalDigest",
+      "terminalRef"
     ],
     "offline_bootstrap_document": [
       "schema",
@@ -480,7 +589,8 @@
         "selection仅离线control可选；旧合法无selection control保持standard，无control普通开发启动保持standard/default。显式isolated请求必须携带完整control与mode=isolated选择，missing/mismatch拒绝而非fallback。",
         "control不签发用户授权；只承载现役app-content-uat受管调用已获准选择。candidate/device/attempt沿用原字段，禁止authorized标志、人工理由或第二批准文档。",
         "signing material准备之前逐项验证control私有ref/digest、实际target/device/attempt/report/candidate/source身份，source projection完整CAS与capsule摘要以及对应身份字段必须交叉一致。snapshotDigest从projection内manifest及identity逐字节校验获得，不信runner值或待签文档自证。",
-        "签名App文档仍仅消费offline_bootstrap_document.rehearsalSpace；线上不接受selection或isolated请求，旧active不自动迁移/清理。"
+        "签名App文档仍仅消费offline_bootstrap_document.rehearsalSpace；线上不接受selection或isolated请求，旧active不自动迁移/清理。",
+        "isolated caseId/lifecycleGeneration/observationBinding 均由 canonical launcher 按当前 candidate/device/attempt/snapshot 派生并签入；App 与 runner 只消费该绑定。跨case、旧generation、旧attempt或自报摘要一律拒绝。"
       ],
       "offline_replace_field": "packageDigest",
       "offline_source_field": "contentSource",
@@ -488,8 +598,27 @@
       "selection": {
         "additional_fields": false,
         "fields": {
+          "caseId": {
+            "allowed_values": [
+              "login-success",
+              "login-error",
+              "private-continuation",
+              "local-write",
+              "otp-expiry",
+              "identity-restart",
+              "network-refusal",
+              "otp-refusal",
+              "push-refusal",
+              "remote-refusal",
+              "outbox-refusal"
+            ],
+            "type": "string"
+          },
           "instanceId": {
             "format": "rehearsal_instance_id",
+            "type": "string"
+          },
+          "lifecycleGeneration": {
             "type": "string"
           },
           "mode": {
@@ -497,6 +626,10 @@
               "standard",
               "isolated"
             ],
+            "type": "string"
+          },
+          "observationBinding": {
+            "format": "sha256_identity",
             "type": "string"
           },
           "snapshotDigest": {
@@ -507,7 +640,10 @@
         "required_fields": [
           "mode",
           "instanceId",
-          "snapshotDigest"
+          "snapshotDigest",
+          "caseId",
+          "lifecycleGeneration",
+          "observationBinding"
         ]
       },
       "selection_field": "rehearsalSpaceSelection"
@@ -560,6 +696,269 @@
       },
       "identity_format": "sha256:\u003c64-lowercase-hex\u003e",
       "input_encoding": "utf-8"
+    },
+    "external_uat_observation_relay": {
+      "actual_owner": "aut",
+      "case_catalog": {
+        "identity-restart": "gwt-008-case-identity-restart",
+        "local-write": "gwt-008-case-local-write",
+        "login-error": "gwt-008-case-login-error",
+        "login-success": "gwt-008-case-login-success",
+        "network-refusal": "gwt-008-case-network-refusal",
+        "otp-expiry": "gwt-008-case-otp-expiry",
+        "otp-refusal": "gwt-008-case-otp-refusal",
+        "outbox-refusal": "gwt-008-case-outbox-refusal",
+        "private-continuation": "gwt-008-case-private-continuation",
+        "push-refusal": "gwt-008-case-push-refusal",
+        "remote-refusal": "gwt-008-case-remote-refusal"
+      },
+      "comparison_owner": "launcher",
+      "digest_domains": {
+        "admission": "external-uat-admission-v1",
+        "comparison": "external-uat-comparison-v1",
+        "handshake": "external-uat-handshake-v1",
+        "observation": "external-uat-observation-v1",
+        "relay": "external-uat-relay-v1",
+        "teardown": "external-uat-teardown-v1",
+        "terminal": "external-uat-terminal-v1"
+      },
+      "enabled_targets": [
+        "android-emulator",
+        "ios-simulator"
+      ],
+      "expected_binding_policy": "canonical_case_semantics_only_no_candidate_device_attempt_generation_pid_or_actual_inputs",
+      "expected_matcher": "exact_ordered_rows_v1",
+      "expected_observation_schema": "external-uat-expected-observation-v1",
+      "expected_observations": {
+        "identity-restart": {
+          "observations": [
+            {
+              "detail": "session-established",
+              "source": "rehearsal-session-readback",
+              "status": "observed"
+            }
+          ]
+        },
+        "local-write": {
+          "observations": [
+            {
+              "detail": "command-query-readback",
+              "source": "local-command-query-readback",
+              "status": "observed"
+            }
+          ]
+        },
+        "login-error": {
+          "observations": [
+            {
+              "detail": "unique-editable-control",
+              "source": "ui-control",
+              "status": "observed"
+            },
+            {
+              "detail": "recoverable-error-observed",
+              "source": "rehearsal-auth-error-readback",
+              "status": "observed"
+            }
+          ]
+        },
+        "login-success": {
+          "observations": [
+            {
+              "detail": "unique-editable-control",
+              "source": "ui-control",
+              "status": "observed"
+            },
+            {
+              "detail": "session-established",
+              "source": "rehearsal-session-readback",
+              "status": "observed"
+            }
+          ]
+        },
+        "network-refusal": {
+          "observations": [
+            {
+              "attemptCount": 1,
+              "detail": "refused-at-side-effect-boundary",
+              "source": "native-network-attempt",
+              "status": "observed"
+            }
+          ]
+        },
+        "otp-expiry": {
+          "observations": [
+            {
+              "detail": "elapsed-300s-challenge-expired",
+              "source": "monotonic-clock",
+              "status": "observed"
+            },
+            {
+              "detail": "challenge-expired",
+              "source": "rehearsal-challenge-readback",
+              "status": "observed"
+            }
+          ]
+        },
+        "otp-refusal": {
+          "observations": [
+            {
+              "attemptCount": 1,
+              "detail": "refused-at-side-effect-boundary",
+              "source": "native-otp-delivery-attempt",
+              "status": "observed"
+            }
+          ]
+        },
+        "outbox-refusal": {
+          "observations": [
+            {
+              "attemptCount": 1,
+              "detail": "refused-at-side-effect-boundary",
+              "source": "native-connected-outbox-attempt",
+              "status": "observed"
+            }
+          ]
+        },
+        "private-continuation": {
+          "observations": [
+            {
+              "detail": "continued-once-readback",
+              "source": "continuation-query-readback",
+              "status": "observed"
+            }
+          ]
+        },
+        "push-refusal": {
+          "observations": [
+            {
+              "attemptCount": 1,
+              "detail": "refused-at-side-effect-boundary",
+              "source": "native-push-registration-attempt",
+              "status": "observed"
+            }
+          ]
+        },
+        "remote-refusal": {
+          "observations": [
+            {
+              "attemptCount": 1,
+              "detail": "refused-at-side-effect-boundary",
+              "source": "native-remote-transport-attempt",
+              "status": "observed"
+            }
+          ]
+        }
+      },
+      "failure_codes": {
+        "APP.UAT.relay_admission_mismatch": "managed launch admission identity mismatch",
+        "APP.UAT.relay_consumed": "relay query was already consumed",
+        "APP.UAT.relay_contract_drift": "canonical contract digest mismatch",
+        "APP.UAT.relay_expired": "relay TTL expired",
+        "APP.UAT.relay_mac_invalid": "challenge transcript MAC is invalid or replayed",
+        "APP.UAT.relay_non_uat_excluded": "broker is unavailable in non-UAT or Release artifacts",
+        "APP.UAT.relay_not_sealed": "AUT snapshot is not sealed",
+        "APP.UAT.relay_peer_rejected": "transport peer is not the admitted launcher relay",
+        "APP.UAT.relay_process_died": "launcher, AUT or broker died before terminal completion",
+        "APP.UAT.relay_revoked": "relay was revoked",
+        "APP.UAT.relay_scope_mismatch": "case, binding, candidate, device, session or PID mismatch",
+        "APP.UAT.relay_sensitive_field": "snapshot requested or contained a sensitive field",
+        "APP.UAT.relay_snapshot_conflict": "create-once snapshot bytes conflict",
+        "APP.UAT.relay_stale": "relay generation or attempt is stale",
+        "APP.UAT.relay_terminal_invalid": "runner terminal result or ref is invalid",
+        "APP.UAT.relay_terminal_replayed": "terminal ref was already consumed",
+        "APP.UAT.relay_timeout": "relay query or teardown timed out",
+        "APP.UAT.restart_identity_mismatch": "generation-2 attempt/PID or continuity binding mismatch",
+        "APP.UAT.teardown_pid_alive": "exact PID remains alive after termination budget",
+        "APP.UAT.teardown_pid_reused": "PID identity is ambiguous or reused",
+        "APP.UAT.teardown_predecessor_invalid": "teardown predecessor is not a consumed attempt-1 relay"
+      },
+      "max_query_count": 1,
+      "native_rendezvous": {
+        "carrier": "canonical_startup_safe_terminal",
+        "constraints": [
+          "carrier仅保存公开rendezvous及不可逆摘要，不包含secret/verifier/challenge/MAC或actual；host从当前signed control、启动receipt和native readback绑定host launchAttemptId与Dart startupAttemptId。",
+          "native只接受启动前受管控制绑定的launcher PID及进程启动身份，不允许首次同UID连接自行登记；host反向核对server peer PID/euid与exact device安装制品和lifecycle，不以socket名、App Group membership或PID单独授权。",
+          "socketName仅basename；容器由exact simctl App Group读回解析，拒绝symlink、非socket及路径逃逸；未知平台或未验证carrier禁止猜测路径/session。"
+        ],
+        "diagnostic_case_policy": "explicit_subset_candidate_bound_non_promotable_full_acceptance_rejected",
+        "observation_admission_method": "requireObservationAdmission",
+        "public_fields": [
+          "processId",
+          "processStartedAtMonotonicMs",
+          "sessionId",
+          "socketName",
+          "startupAttemptId",
+          "launchAttemptId",
+          "launcherPid",
+          "canonicalLaunchControlDigest",
+          "effectiveLaunchManifestDigest"
+        ],
+        "session_owner": "aut_native_csprng",
+        "startup_binding_method": "bindStartupObservation",
+        "startup_environment": [
+          "QWQ_UAT_LAUNCHER_PID",
+          "QWQ_UAT_HOST_ATTEMPT",
+          "QWQ_UAT_CONTROL_DIGEST"
+        ]
+      },
+      "non_uat_broker_policy": "source_linker_entitlement_manifest_artifact_excluded",
+      "observation_lifetime_seconds": {
+        "default": 120,
+        "otp-expiry": 360
+      },
+      "observation_policy": [
+        "初始admitLaunch/armRelay仅授权当前epoch收集AUT内存事实，不授予query；必须在任何case动作或事实采集前完成host/native双向身份校验与ack。",
+        "admittedAtMonotonicMs/expiresAtMonotonicMs仅界定不可续期观察epoch；上限来自observation_lifetime_seconds，不得用它们授权读取snapshot。",
+        "AUT在当前epoch内真实业务终态create-once seal时，native自产sealedAtMonotonicMs并仅此一次开启ttl_seconds查询窗；查询要求sealed且处于该60秒窗口，不重签、不续期、不吸收旧epoch或预授权前事实。",
+        "observation过期、query过期、首错、进程死亡及单次消费均清零verifier；seal后的查询窗口可越过观察截止，但不得晚于seal时间加ttl_seconds。",
+        "generation-2保持generation-1的rehearsal instanceId与snapshot，仅更新host launchAttemptId、Dart startupAttemptId、native PID/session及observationBinding；恢复阶段禁止再次登录来证明身份连续。"
+      ],
+      "operations": [
+        "admitLaunch",
+        "armRelay",
+        "publishTerminalRef",
+        "sealObservation",
+        "querySealedObservation",
+        "compareAndReport",
+        "revokeRelay",
+        "requestTeardown",
+        "confirmTerminated",
+        "coldLaunchNextGeneration"
+      ],
+      "platform_adapters": {
+        "android-emulator": {
+          "peer": "adbd_uid_pid_and_launcher_mac",
+          "transport": "adb_attempt_forward_package_private_unix_socket"
+        },
+        "ios-simulator": {
+          "peer": "local_peertoken_pid_euid_and_launcher_mac",
+          "transport": "host_app_group_attempt_random_unix_socket"
+        }
+      },
+      "raw_result_policy": "nonPromotable",
+      "recovery": [
+        "首错立即revoke并清零launcher/AUT内存secret，关闭本transaction forward/socket；不续期、不重签同attempt、不切换transport。",
+        "terminal ref只定位闭集terminal result，runner不得持有capability、query、actual、revoke或comparison。",
+        "expectedObservation由本catalog按expected_observation_schema、caseId、matcher与闭集observations机械摘要；不得从actual、runner、截图、日志、contractDigest或动态launch identity反推。",
+        "identity-restart只有terminated teardown receipt可作为generation2 predecessor；不force-stop、不hot restart、不清App数据。"
+      ],
+      "secret_policy": "launcher_and_aut_memory_only",
+      "states": [
+        "admitted",
+        "armed",
+        "terminal_published",
+        "observation_sealed",
+        "queried",
+        "compared",
+        "revoked",
+        "termination_requested",
+        "terminated",
+        "next_generation_launched",
+        "failed"
+      ],
+      "terminal_ref_policy": "non_authorizing_single_consumer",
+      "ttl_seconds": 60
     },
     "launch_blockers": {
       "APP.DEPENDENCY.bundle_missing": "启动未获得经验证的 source capsule 与原子依赖 bundle。",
@@ -1486,12 +1885,535 @@
         ],
         "schema_value": "quwoquan_ops.app_managed_preparation.v1"
       },
+      "external_uat_broker_query": {
+        "additional_fields": false,
+        "constraints": [
+          "仅launcher构造且sequence固定为1；challenge/MAC只存在launcher/AUT内存与socket frame。"
+        ],
+        "fields": {
+          "admissionDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "caseId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "challenge": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "contractDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "deviceId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "generation": {
+            "type": "integer"
+          },
+          "launchAttemptId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "mac": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "observationBinding": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "processId": {
+            "type": "integer"
+          },
+          "schema": {
+            "const": "external-uat-broker-query",
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "sessionId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "terminalDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          }
+        },
+        "required_fields": [
+          "schema",
+          "contractDigest",
+          "admissionDigest",
+          "terminalDigest",
+          "caseId",
+          "launchAttemptId",
+          "generation",
+          "observationBinding",
+          "processId",
+          "deviceId",
+          "sessionId",
+          "sequence",
+          "challenge",
+          "mac"
+        ],
+        "schema_value": "external-uat-broker-query"
+      },
+      "external_uat_broker_result": {
+        "additional_fields": false,
+        "constraints": [
+          "observed只允许一次且随后consumed/revoked；rejected不返回snapshot或旧值，errorCode必须来自failure_codes。"
+        ],
+        "fields": {
+          "admissionDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "consumed": {
+            "type": "boolean"
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "resultDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "revoked": {
+            "type": "boolean"
+          },
+          "schema": {
+            "const": "external-uat-broker-result",
+            "type": "string"
+          },
+          "snapshot": {
+            "schema_ref": "external_uat_sealed_snapshot",
+            "type": "object"
+          },
+          "snapshotDigest": {
+            "format": "optional_sha256_identity",
+            "type": "string"
+          },
+          "status": {
+            "allowed_values": [
+              "observed",
+              "rejected"
+            ],
+            "type": "string"
+          },
+          "terminalDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          }
+        },
+        "required_fields": [
+          "schema",
+          "status",
+          "admissionDigest",
+          "terminalDigest",
+          "snapshot",
+          "snapshotDigest",
+          "consumed",
+          "revoked",
+          "errorCode",
+          "resultDigest"
+        ],
+        "schema_value": "external-uat-broker-result"
+      },
+      "external_uat_comparison_result": {
+        "additional_fields": false,
+        "constraints": [
+          "仅launcher比较expected与AUT actual；nonPromotable必须为true，actual不得返回runner或写入terminal result。"
+        ],
+        "fields": {
+          "admissionDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "brokerResultDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "caseId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "comparisonDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "expectedDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "nonPromotable": {
+            "type": "boolean"
+          },
+          "schema": {
+            "const": "external-uat-comparison-result",
+            "type": "string"
+          },
+          "status": {
+            "allowed_values": [
+              "passed",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "terminalDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          }
+        },
+        "required_fields": [
+          "schema",
+          "caseId",
+          "admissionDigest",
+          "terminalDigest",
+          "brokerResultDigest",
+          "expectedDigest",
+          "status",
+          "nonPromotable",
+          "comparisonDigest",
+          "errorCode"
+        ],
+        "schema_value": "external-uat-comparison-result"
+      },
+      "external_uat_managed_launch_admission": {
+        "additional_fields": false,
+        "constraints": [
+          "仅canonical launcher从host-side exact install/launch readback创建；generation和PID为正数，admittedAtMonotonicMs/expiresAtMonotonicMs约束不可续期观察epoch，上限为external_uat_observation_relay.observation_lifetime_seconds；初始admission不授予query，只有同epoch native seal才一次开启ttl_seconds查询窗口。"
+        ],
+        "fields": {
+          "admissionDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "admittedAtMonotonicMs": {
+            "type": "integer"
+          },
+          "artifactDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "candidateDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "caseId": {
+            "allowed_values": [
+              "login-success",
+              "login-error",
+              "private-continuation",
+              "local-write",
+              "otp-expiry",
+              "identity-restart",
+              "network-refusal",
+              "otp-refusal",
+              "push-refusal",
+              "remote-refusal",
+              "outbox-refusal"
+            ],
+            "type": "string"
+          },
+          "contractDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "deviceId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "expiresAtMonotonicMs": {
+            "type": "integer"
+          },
+          "generation": {
+            "type": "integer"
+          },
+          "launchAttemptId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "lifecycleReceiptDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "observationBinding": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "packageIdentity": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "platform": {
+            "allowed_values": [
+              "android-emulator",
+              "ios-simulator"
+            ],
+            "type": "string"
+          },
+          "processId": {
+            "type": "integer"
+          },
+          "schema": {
+            "const": "external-uat-managed-launch-admission",
+            "type": "string"
+          },
+          "sessionId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "signingDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          }
+        },
+        "required_fields": [
+          "schema",
+          "contractDigest",
+          "candidateDigest",
+          "artifactDigest",
+          "packageIdentity",
+          "signingDigest",
+          "platform",
+          "deviceId",
+          "sessionId",
+          "caseId",
+          "launchAttemptId",
+          "generation",
+          "observationBinding",
+          "processId",
+          "lifecycleReceiptDigest",
+          "admittedAtMonotonicMs",
+          "expiresAtMonotonicMs",
+          "admissionDigest"
+        ],
+        "schema_value": "external-uat-managed-launch-admission"
+      },
+      "external_uat_sealed_snapshot": {
+        "additional_fields": false,
+        "constraints": [
+          "AUT actual owner从真实gateway create-once seal；字段闭集脱敏，禁止runner expected、secret、PII、自由文本和seal后mutation。"
+        ],
+        "fields": {
+          "caseId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "generation": {
+            "type": "integer"
+          },
+          "launchAttemptId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "observationBinding": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "observations": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "processId": {
+            "type": "integer"
+          },
+          "schema": {
+            "const": "external-uat-sealed-snapshot",
+            "type": "string"
+          },
+          "sealedAtMonotonicMs": {
+            "type": "integer"
+          },
+          "snapshotDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          }
+        },
+        "required_fields": [
+          "schema",
+          "caseId",
+          "launchAttemptId",
+          "generation",
+          "observationBinding",
+          "processId",
+          "snapshotDigest",
+          "observations",
+          "sealedAtMonotonicMs"
+        ],
+        "schema_value": "external-uat-sealed-snapshot"
+      },
+      "external_uat_teardown_receipt": {
+        "additional_fields": false,
+        "append_only_transitions": true,
+        "constraints": [
+          "terminated要求PID1消失、lifecycle终止与broker断连三证据；只有terminal terminated可作为generation2 cold launch predecessor。"
+        ],
+        "fields": {
+          "admissionDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "brokerDisconnected": {
+            "type": "boolean"
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "integer"
+          },
+          "launchAttemptId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "lifecycleConfirmed": {
+            "type": "boolean"
+          },
+          "predecessorResultDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "processId": {
+            "type": "integer"
+          },
+          "processTableConfirmed": {
+            "type": "boolean"
+          },
+          "receiptDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "requestedAtMonotonicMs": {
+            "type": "integer"
+          },
+          "schema": {
+            "const": "external-uat-teardown-receipt",
+            "type": "string"
+          },
+          "state": {
+            "allowed_values": [
+              "termination_requested",
+              "terminated",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "terminatedAtMonotonicMs": {
+            "type": "integer"
+          },
+          "transactionId": {
+            "min_length": 1,
+            "type": "string"
+          }
+        },
+        "required_fields": [
+          "schema",
+          "transactionId",
+          "admissionDigest",
+          "launchAttemptId",
+          "generation",
+          "processId",
+          "state",
+          "predecessorResultDigest",
+          "requestedAtMonotonicMs",
+          "terminatedAtMonotonicMs",
+          "processTableConfirmed",
+          "lifecycleConfirmed",
+          "brokerDisconnected",
+          "receiptDigest",
+          "errorCode"
+        ],
+        "schema_value": "external-uat-teardown-receipt"
+      },
+      "external_uat_terminal_result": {
+        "additional_fields": false,
+        "constraints": [
+          "runner只产生本闭集且terminalRef无授权；禁止actual、capability、secret、challenge、MAC、expected或comparison字段。"
+        ],
+        "fields": {
+          "caseId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "deviceId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "generation": {
+            "type": "integer"
+          },
+          "launchAttemptId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "planDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "processId": {
+            "type": "integer"
+          },
+          "schema": {
+            "const": "external-uat-terminal-result",
+            "type": "string"
+          },
+          "screenshotDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "sessionId": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "status": {
+            "allowed_values": [
+              "passed",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "terminalDigest": {
+            "format": "sha256_identity",
+            "type": "string"
+          },
+          "terminalRef": {
+            "min_length": 1,
+            "type": "string"
+          }
+        },
+        "required_fields": [
+          "schema",
+          "planDigest",
+          "caseId",
+          "launchAttemptId",
+          "generation",
+          "processId",
+          "deviceId",
+          "sessionId",
+          "status",
+          "screenshotDigest",
+          "terminalDigest",
+          "terminalRef"
+        ],
+        "schema_value": "external-uat-terminal-result"
+      },
       "offline_bootstrap_document": {
         "additional_fields": false,
         "constraints": [
           "只允许 content_source_policy 与 runtime_document_content_sources 共同指定的 Alpha bundled_snapshot；签名覆盖 contentSource、rehearsalSpace、profile、target、source identity 与 trustEnvelopeDigest。",
           "rehearsalSpace 必须显式声明；普通构建供给 mode=standard、instanceId=default，isolated 必须为非 default 的 rehearsal_instance_id（完整匹配 [a-zA-Z0-9_-]{1,80}）。snapshotDigest 必须与制品内固定且已验证的 offline manifest digest 完全一致。缺字段、非法 mode、跨 snapshot/source 或 isolated/default 错配均拒绝，不将缺席解释为 standard，不向在线 package 增加此字段。",
-          "canonical launcher 选择 isolated 的授权继续绑定现役 candidate/device/attempt 控制面；签名文档只携带空间选择，不携带审阅理由、合成用户或第二授权记录。普通构建仅生成 standard；不能从环境变量、runner 回显或 APP_INSTANCE_ID 猜 isolated。",
+          "canonical launcher 选择 isolated 的授权继续绑定现役 candidate/device/attempt 控制面；签名文档只携带空间选择，不携带审阅理由、合成用户或第二授权记录。普通构建固定 caseId=none、lifecycleGeneration=0、observationBinding空；isolated 必须携带控制面签发的非空 case/generation/binding，不能从环境变量、runner 回显或 APP_INSTANCE_ID 猜 isolated。",
           "resolver 验签与空间校验必须先于业务 auth/pending/rehearsal 存储；仅从已消费的配置投影 mode/snapshotDigest/instanceId。该配置观察不是存储已消费证明；AUT 全链观察仍须由三类存储共同消费绑定后提供，未接线不得报告隔离成功。",
           "使用 runtime_config_package 相同 canonical payloadDigest 与 Ed25519 签名算法及独立制品 trust envelope；trustEnvelopeDigest 必须匹配实际制品 envelope。没有 issuedAt/expiresAt，禁止任何 endpoint 字段（包括空值），不获得网络能力。",
           "通过同一 activation/CAS/active receipt/read 链消费；没有第二 store、在线失败 fallback 或远端 readiness authority。在线 package 的 freshness 不变。",
@@ -1521,8 +2443,28 @@
           "rehearsalSpace": {
             "additional_fields": false,
             "fields": {
+              "caseId": {
+                "allowed_values": [
+                  "none",
+                  "login-success",
+                  "login-error",
+                  "private-continuation",
+                  "local-write",
+                  "otp-expiry",
+                  "identity-restart",
+                  "network-refusal",
+                  "otp-refusal",
+                  "push-refusal",
+                  "remote-refusal",
+                  "outbox-refusal"
+                ],
+                "type": "string"
+              },
               "instanceId": {
                 "format": "rehearsal_instance_id",
+                "type": "string"
+              },
+              "lifecycleGeneration": {
                 "type": "string"
               },
               "mode": {
@@ -1530,6 +2472,10 @@
                   "standard",
                   "isolated"
                 ],
+                "type": "string"
+              },
+              "observationBinding": {
+                "format": "optional_sha256_identity",
                 "type": "string"
               },
               "snapshotDigest": {
@@ -1540,7 +2486,10 @@
             "required_fields": [
               "mode",
               "snapshotDigest",
-              "instanceId"
+              "instanceId",
+              "caseId",
+              "lifecycleGeneration",
+              "observationBinding"
             ],
             "type": "object"
           },

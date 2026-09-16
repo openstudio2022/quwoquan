@@ -555,6 +555,41 @@ def _manifest_budget_nodes(nodes: list[Any]) -> list[Any]:
     return list(nodes)
 
 
+
+def _compact_manifest_for_budget(payload: dict[str, object]) -> int:
+    import hashlib
+    from lib.evidence_fingerprint import canonical_json_bytes
+    from lib.feature_context_fingerprint import (
+        feature_context_closure,
+        feature_context_closure_identity,
+        referenced_fingerprint_binding,
+    )
+
+    size = len(_serialize_manifest_for_budget(payload))
+    if size > MANIFEST_BYTE_BUDGET:
+        receipt = payload["evidence_fingerprint"]["receipt"]
+        receipt_digest = hashlib.sha256(canonical_json_bytes(receipt)).hexdigest()
+        payload["evidence_fingerprint"] = referenced_fingerprint_binding(
+            receipt,
+            receipt_ref=(
+                ".qwq_output/env/repo/runs/feature-tree/"
+                f"by-fingerprint/receipts/{receipt_digest}.json"
+            ),
+        )
+        size = len(_serialize_manifest_for_budget(payload))
+    if size > MANIFEST_BYTE_BUDGET:
+        closure = feature_context_closure(payload)
+        payload["closure_identity"] = feature_context_closure_identity(closure)
+        for field in ("owner_chain", "canonical_contexts", "applicable_agents", "open_items"):
+            payload[field] = []
+        size = len(_serialize_manifest_for_budget(payload))
+    return size
+
+
+def _serialize_manifest_for_budget(payload: dict[str, object]) -> bytes:
+    from lib.feature_tree.commands import _serialize_context_manifest
+    return _serialize_context_manifest(payload).encode("utf-8")
+
 def check_manifest_budget() -> list[str]:
     issues: list[str] = []
     commands_path = ROOT / "quwoquan_ops/cli/lib/feature_tree/commands.py"
@@ -567,6 +602,7 @@ def check_manifest_budget() -> list[str]:
     manifest_contract = contract.get("feature_context_manifest") or {}
     configured = manifest_contract.get("max_bytes")
     required_fields = manifest_contract.get("required_fields")
+    optional_fields = manifest_contract.get("optional_fields") or []
     if configured != MANIFEST_BYTE_BUDGET:
         issues.append(
             "agent governance contract 的 manifest max_bytes 必须精确为 8192，"
@@ -606,28 +642,11 @@ def check_manifest_budget() -> list[str]:
                 )
                 if budget_fingerprint is None:
                     budget_fingerprint = payload["evidence_fingerprint"]["receipt"]
-                if set(payload) != set(required_fields):
+                if not set(required_fields) <= set(payload) <= set(required_fields) | set(optional_fields):
                     issues.append(
                         f"{target}: manifest 字段与 agent governance contract 不一致"
                     )
-                size = len(
-                    _serialize_context_manifest(payload).encode("utf-8")
-                )
-                if size > MANIFEST_BYTE_BUDGET:
-                    import hashlib
-                    from lib.evidence_fingerprint import canonical_json_bytes
-                    from lib.feature_context_fingerprint import referenced_fingerprint_binding
-
-                    receipt = payload["evidence_fingerprint"]["receipt"]
-                    receipt_digest = hashlib.sha256(canonical_json_bytes(receipt)).hexdigest()
-                    payload["evidence_fingerprint"] = referenced_fingerprint_binding(
-                        receipt,
-                        receipt_ref=(
-                            ".qwq_output/env/repo/runs/feature-tree/"
-                            f"by-fingerprint/receipts/{receipt_digest}.json"
-                        ),
-                    )
-                    size = len(_serialize_context_manifest(payload).encode("utf-8"))
+                size = _compact_manifest_for_budget(payload)
                 if size > MANIFEST_BYTE_BUDGET:
                     issues.append(f"{target}: 默认 manifest {size} bytes 超过 8192 bytes")
         except (ImportError, OSError, ValueError) as error:

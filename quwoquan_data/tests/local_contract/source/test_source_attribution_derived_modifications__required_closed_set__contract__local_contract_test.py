@@ -39,7 +39,6 @@ ATTRIBUTION = {
     "attributionText": "摄影师甲 / CC BY-SA 4.0",
     "rightsBasis": "CC BY-SA 4.0",
     "commercialAuthorizationStatus": "verified",
-    "publicationAdmission": "commercial_release",
     "authorizationProofUrl": "https://media.example/proofs/hailuogou",
     "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
     "watermarkStatus": "absent",
@@ -87,15 +86,13 @@ def test_repeated_member_is_refused_so_one_modification_is_stated_once() -> None
         canonical_source_attribution(_attribution(["crop", "crop"]))
 
 
-@pytest.mark.parametrize("publication", ["research_release", "commercial_release"])
-def test_frozen_publication_is_preserved_by_schema_and_pool_reader(publication: str) -> None:
+def test_retired_publication_admission_is_rejected_fail_closed() -> None:
     from content.release.canonical.pool_source_attribution import source_attribution_complete
 
-    value = {**_attribution([]), "publicationAdmission": publication}
-    assert canonical_source_attribution(value) == value
-    assert source_attribution_complete({"sourceAttribution": value}) is True
+    value = {**_attribution([]), "publicationAdmission": "research_release"}
     with pytest.raises(ValueError, match="publicationAdmission"):
-        canonical_source_attribution({**value, "publicationAdmission": "production_release"})
+        canonical_source_attribution(value)
+    assert source_attribution_complete({"sourceAttribution": value}) is False
 
 
 @pytest.mark.parametrize("invalid", [
@@ -120,29 +117,18 @@ def test_production_keeps_unverified_audio_and_exact_watermark_facts() -> None:
     assert canonical_source_attribution(value) == value
 
 
-def test_data_and_service_source_attribution_authoring_contracts_agree() -> None:
-    # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-043
+def test_data_authoring_contract_has_no_object_classification_fields() -> None:
     import json
-    import yaml
 
     schema = json.loads((DATA_ROOT / "schema/content/post_manifest.schema.json").read_text())
-    contract_path = DATA_ROOT.parent / "quwoquan_service/services/content-service/contracts/content/post/fields.yaml"
-    contract = yaml.safe_load(contract_path.read_text())
     attribution = schema["$defs"]["sourceAttribution"]
-    fields = {row["name"]: row for row in contract["value_objects"]["SourceAttribution"]["fields"]}
-    assert set(fields) == set(attribution["properties"])
-    assert {name for name, row in fields.items() if "NOT_NULL" in row["constraints"]} == set(attribution["required"])
-    # Service 透传已冻结对象权利记录，不以 DTO enum 重新归类；Data authoring 校验原有词汇。
-    assert fields["publicationAdmission"]["type"] == "string"
-    assert set(attribution["properties"]["publicationAdmission"]["enum"]) == {"research_release", "commercial_release"}
-    for name in ("derivedModifications", "watermarkKind"):
-        expected = attribution["properties"][name]
-        if name == "derivedModifications":
-            expected = expected["items"]
-        assert set(contract["enums"][fields[name]["enum_ref"]]["values"]) == set(expected["enum"])
-    media = {row["name"]: row for row in contract["value_objects"]["PostMediaItem"]["fields"]}
-    assert media["caption"]["type"] == "string" and "NULLABLE" in media["caption"]["constraints"]
-    assert schema["properties"]["assets"]["items"]["properties"]["caption"]["type"] == "string"
+    assert "publicationAdmission" not in attribution["properties"]
+    assert "publicationAdmission" not in attribution["required"]
+    assert "variantPurpose" not in schema["properties"]
+    assert "distributionDecision" not in schema["properties"]["assets"]["items"]["properties"]
+    assert set(schema["properties"]["assets"]["items"]["properties"]["usageScope"]["enum"]) == {
+        "internal_reference", "app_publish", "editorial"
+    }
 
 
 def test_write_side_materializes_nothing_done_as_empty_array() -> None:

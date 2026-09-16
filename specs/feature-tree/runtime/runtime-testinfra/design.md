@@ -97,6 +97,21 @@
 - 影响 Story：[`performance-load-harness`](./performance-load-harness/spec.md)、[`fault-injection-harness`](./fault-injection-harness/spec.md)
 - 关联验收：`SIT-002`
 
+<a id="dec-006"></a>
+### DEC-006 容量与 HA 证据按层、数据来源及故障模型裁定
+
+- 决策：复用现役三层测试与 `stackctl loadtest` / `stackctl drill` 编排，不新增性能测试层、中央案例清单或旁路负载模型。local_contract 只证明确定性逻辑，真实引擎/自动 worker/恢复成本归 api_integration 与环境证据，真实用户呈现归 owning user_acceptance；结果均绑定同候选及实际输入。
+- 决策：私有隔离 persistence adapter/迁移/容量专项可消费获授权、manifest/digest 绑定的离线 storage benchmark 制品；其直接存储构造仅限专项隔离目标，不是 DEC-003 的环境数据准备，也不产生业务准入事实。环境 E2E 仍走领域公开 command/event，Prod/共享目标 seed 与在线投影预填仍禁止。
+- 决策：容量画像明确千级/万级出边、千万入边、冷热/热点/churn、批准资源与业务 baseline/peak/spike。全 attempt 与单意图分别计量，预算裁决包含错误/拒绝/超时/重试、实际扫描、可见区刷新 QPS、队列/缓存/连接成本及全过程正确性；端到端 P99 只由同事实实测，不相加分项分位数。
+- 决策：HA 先固定故障域、最大失效范围、复制与 durable 确认前提、旧主 fencing 及受管恢复入口，再消费 owning RPO/RTO。业务写恢复、缓存冷恢复、consumer 追赶和备份恢复分别度量；单节点承诺不外推地域灾难。PG/Mongo authority、Redis 旧代际回退与毒事件/失租 worker 必须用对应反例验真。
+- 理由：大数据装载、HTTP 成功、配置 majority 或拥有多个副本只证明前置形态；混用离线与环境结果、漏掉失败分母、忽略实际 scan 或相加分位数均会制造不可兑现的容量与 HA 承诺。
+- 被否决方案：直接 seed 共享/生产数据库以凑千万基数、用 mock/手动 drain 证明生产自动收敛、只统计成功请求、以 limit 代表扫描上限、用清空 Redis 代替旧代际提升，以及在 harness 复制业务延迟或 RPO/RTO 数字。
+- 约束与影响：所有阈值引用 [performance-load-harness 的 owning Story/contract 依赖](./performance-load-harness/spec.md#req-005)，未批准业务峰值仅能产安全容量曲线。故障实施不扩大 DEC-005 与 fault-injection-harness 的现役闭集；未支持的数据库切主/备份恢复 profile 必须先由其 owner 完成契约、恢复设计和授权，不得用手工 kill 绕过。
+- 失败、恢复与回滚：缺来源、资源、故障授权或 required 证据时保留首个 typed blocker；超出预算停止本次受控负载/注入并走已验证恢复入口，不能中断其他 owner 实例。恢复失败隔离本次目标，不补写成功回执；数据重建保持 authority、receipt、outbox、quota 与抑制事实一致，回滚不得抹去已确认新写。
+- 测量与测试 seam：harness 本地测试验证结果分母、分层分类、禁止生产 mutation、预算退出和百分位对照；真实运行以公开 operation/存储适配器及受管故障端口提供执行计划、逐事实 readback、时间线与恢复水位，运行证据不得由静态解析自证。持续超 owning SLO、恢复无进展或正确性偏差立即触发具名阻断与告警。
+- 关联要求：[performance-load-harness REQ-003](./performance-load-harness/spec.md#req-003)、[REQ-004](./performance-load-harness/spec.md#req-004)、[REQ-005](./performance-load-harness/spec.md#req-005)、[REQ-006](./performance-load-harness/spec.md#req-006)。
+- 关联验收：[GWT-002](./performance-load-harness/spec.md#gwt-002)、[GWT-003](./performance-load-harness/spec.md#gwt-003)、[GWT-004](./performance-load-harness/spec.md#gwt-004)；影响 Story：[`performance-load-harness`](./performance-load-harness/spec.md)、[`fault-injection-harness`](./fault-injection-harness/spec.md)、[`test-data-provisioning-and-isolation`](./test-data-provisioning-and-isolation/spec.md)。合同及运行缺口统一指向最低可关闭 owner [performance-load-harness OPEN-002](./performance-load-harness/spec.md#open-002)，不新增执行台账。
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

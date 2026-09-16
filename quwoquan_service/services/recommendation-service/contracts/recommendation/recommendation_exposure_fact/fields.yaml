@@ -122,6 +122,13 @@ fields:
   constraints: [NOT_NULL]
   description: 包含候选集合、序位、模型身份与逐项特征摘要的窗口级 canonical SHA-256
   role: append_only_fact
+- name: policyDigest
+  source: context.policyDigest
+  type: string
+  format: canonical_sha256
+  constraints: [NOT_NULL]
+  description: FeedPageDelivered 原样传播的唯一推荐策略内容摘要；与排序窗口同源，用于曝光与转化归因。
+  role: append_only_fact
 - name: userFeatureSnapshot
   source: context.userFeatureSnapshot
   type: object

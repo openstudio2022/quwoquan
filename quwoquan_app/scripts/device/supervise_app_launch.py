@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import json
 import queue
 import re
 import signal
@@ -150,9 +151,21 @@ class _SafeTerminalTracker:
         self.launch_digest = launch_digest
         self.dart_attempt: dict[str, str] | None = None
         self.dart_marker = ""
+        self.native_rendezvous = None
+        self.pending_terminal_line = None
 
     def observe(self, line: str, launch_attempt: dict[str, object]) -> None:
         if not self.required:
+            return
+        marker = 'QWQ_EXTERNAL_UAT_RENDEZVOUS '
+        if marker in line:
+            value = json.loads(line.split(marker, 1)[1])
+            if self.native_rendezvous is not None and self.native_rendezvous != value:
+                raise _SafeTerminalIdentityError('APP.UAT.relay_scope_mismatch: native rendezvous changed')
+            self.native_rendezvous = value
+            if self.pending_terminal_line is not None:
+                pending, self.pending_terminal_line = self.pending_terminal_line, None
+                self.observe(pending, launch_attempt)
             return
         for raw_attempt in extract_dart_startup_attempts(line):
             attempt = {key: str(value) for key, value in raw_attempt.items()}
@@ -203,6 +216,9 @@ class _SafeTerminalTracker:
                 f"{terminal_identity.get('surface')!r}; expected router_shell"
             )
         expected = self._validate_terminal_identity(terminal_identity)
+        if self.platform == 'ios' and os.environ.get('QWQ_UAT_LAUNCHER_PID') and self.native_rendezvous is None:
+            self.pending_terminal_line = line
+            return
         assert self.receipt_path is not None
         if self.receipt_path.exists() or self.receipt_path.is_symlink():
             existing = read_startup_terminal_receipt(
@@ -228,6 +244,7 @@ class _SafeTerminalTracker:
             canonical_terminal=canonical_terminal_for_surface(surface),
             hot_restart=False,
             observed_marker_digest=marker_digest(raw_marker),
+            native_rendezvous=self.native_rendezvous,
         )
         write_startup_terminal_receipt(self.receipt_path, receipt)
 
@@ -635,8 +652,11 @@ def main() -> int:
             log_handles.append(log_path.open("w", encoding="utf-8"))
         if settle_pending_interruption():
             return 130
+        child_environment = dict(os.environ)
+        child_environment["QWQ_UAT_HOST_ATTEMPT"] = str(read_app_launch_attempt(args.receipt)["attemptId"])
         child = subprocess.Popen(
             command,
+            env=child_environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

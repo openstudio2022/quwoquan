@@ -5,11 +5,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
 from quwoquan_ops.cli.lib.readiness_case_result import write_create_once_json
@@ -24,6 +26,16 @@ OFFLINE_REQUIRED_CASES = (
 )
 
 
+def selected_offline_cases(args: argparse.Namespace) -> tuple[str, ...]:
+    selected = getattr(args, "offline_cases", None)
+    if selected is None:
+        return OFFLINE_REQUIRED_CASES
+    if (not isinstance(selected, (list, tuple)) or not selected or len(set(selected)) != len(selected)
+            or any(case not in OFFLINE_REQUIRED_CASES for case in selected)):
+        raise ValueError("APP.UAT.page_plan_invalid: diagnostic case selection is invalid")
+    return tuple(case for case in OFFLINE_REQUIRED_CASES if case in selected)
+
+
 def offline_case_spec_ref(case_id: str) -> str:
     if case_id not in OFFLINE_REQUIRED_CASES:
         raise ValueError("APP.UAT.page_plan_invalid: unknown required case")
@@ -31,17 +43,9 @@ def offline_case_spec_ref(case_id: str) -> str:
 
 
 def offline_case_blocker(case_id: str) -> str:
-    """缺真实接缝仍留在同一 required 集合，绝不以观察截图签发成功。"""
-    if case_id in {"login-success", "login-error"}:
-        return "APP.UAT.page_artifact_binding_missing: authorized rehearsal identity input source is absent"
-    if case_id in {"private-continuation", "local-write"}:
-        return "APP.UAT.page_artifact_binding_missing: local action query/readback seam is absent"
-    if case_id == "otp-expiry":
-        return "APP.UAT.page_artifact_binding_missing: real 300-second challenge observation is absent"
-    if case_id == "identity-restart":
-        return "APP.UAT.page_artifact_binding_missing: cross-process launch attempt and identity binding is absent"
-    if case_id.endswith("-refusal"):
-        return "APP.UAT.page_artifact_binding_missing: actual external side-effect refusal observation is absent"
+    """编排缺口已接到 launcher-only relay；无 blocker 的格才进入 native 执行。"""
+    if case_id not in OFFLINE_REQUIRED_CASES:
+        raise ValueError("APP.UAT.page_plan_invalid: unknown required case")
     return ""
 
 
@@ -74,38 +78,85 @@ def _candidate(args: argparse.Namespace, repository: Path) -> dict[str, Any]:
 
 
 def _verify_source(candidate: Mapping[str, Any], repository: Path) -> None:
-    def git(*arguments: str) -> str:
-        return subprocess.check_output(["git", *arguments], cwd=repository, text=True).strip()
+    commit = str(candidate.get("commit") or "")
+    tree = str(candidate.get("tree") or "")
+    if len(commit) != 40 or len(tree) != 40:
+        raise ValueError("APP.LAUNCH.receipt_invalid: candidate commit/tree identity is invalid")
+    try:
+        actual = subprocess.check_output(
+            ["git", "rev-parse", "--verify", f"{commit}^{{tree}}"],
+            cwd=repository,
+            text=True,
+        ).strip()
+    except subprocess.CalledProcessError as exc:
+        raise ValueError("APP.LAUNCH.receipt_invalid: candidate commit is unreadable") from exc
+    if actual != tree:
+        raise ValueError("APP.LAUNCH.receipt_invalid: candidate tree mismatch")
 
-    if git("rev-parse", "HEAD") != candidate.get("commit") or git("rev-parse", "HEAD^{tree}") != candidate.get("tree"):
-        raise ValueError("APP.LAUNCH.receipt_invalid: candidate commit/tree differs from current source")
-    result = subprocess.run(["git", "diff", "--quiet", str(candidate["commit"]), "--"], cwd=repository, check=False)
-    if result.returncode != 0:
-        raise ValueError("APP.LAUNCH.receipt_invalid: tracked source changed after candidate freeze")
-    # 不按扩展名或整个 failures 目录豁免：新增源码、配置与资产都属于候选漂移。
-    untracked = git("ls-files", "--others", "--exclude-standard", "-z").split("\0")
-    unexpected = [path for path in untracked if path and not _known_diagnostic_image(path)]
-    if unexpected:
-        raise ValueError("APP.LAUNCH.receipt_invalid: untracked source after candidate freeze: " + ", ".join(unexpected))
+
+def _export_candidate_tree(
+    *,
+    commit: str,
+    repository: Path,
+    destination: Path,
+    roots: Sequence[str],
+) -> Path:
+    if destination.exists() or destination.is_symlink():
+        raise ValueError("APP.LAUNCH.receipt_invalid: candidate source checkout must be new")
+    destination.mkdir(parents=True)
+    existing: list[str] = []
+    for root in roots:
+        probe = subprocess.run(
+            ["git", "cat-file", "-e", f"{commit}:{root}"],
+            cwd=repository,
+            capture_output=True,
+            check=False,
+        )
+        if probe.returncode == 0:
+            existing.append(str(root))
+    if not existing:
+        raise ValueError("APP.LAUNCH.receipt_invalid: candidate source roots missing")
+    archive = subprocess.Popen(
+        ["git", "archive", "--format=tar", commit, "--", *existing],
+        cwd=repository,
+        stdout=subprocess.PIPE,
+    )
+    try:
+        extracted = subprocess.run(
+            ["tar", "-x", "-C", str(destination)],
+            stdin=archive.stdout,
+            capture_output=True,
+            check=False,
+        )
+    finally:
+        if archive.stdout is not None:
+            archive.stdout.close()
+        archive.wait()
+    if archive.returncode != 0 or extracted.returncode != 0:
+        raise ValueError("APP.LAUNCH.receipt_invalid: candidate source export failed")
+    return destination
 
 
-def _known_diagnostic_image(path: str) -> bool:
-    prefix = "quwoquan_app/test/local_contract/design_system/feedback/error_states/failures/"
-    name = path.removeprefix(prefix)
-    return path.startswith(prefix) and re.fullmatch(
-        r"app_page_error_state_(?:dark|light)_(?:masterImage|testImage|isolatedDiff|maskedDiff)\.png", name
-    ) is not None
+_PROJECTION_SEAL_MARKERS = (
+    "derived output rejected by policy",
+    "symlink escapes build root",
+    "partial build projection seal identity",
+    "build projection seal failed",
+)
 
 
 def first_typed_blocker(error: object, *, fallback: str = "APP.UAT.page_artifact_binding_missing") -> str:
+    text = str(error)
+    if any(marker in text for marker in _PROJECTION_SEAL_MARKERS):
+        return "APP.LAUNCH.projection_seal_rejected"
     code = getattr(error, "code", "")
     if isinstance(code, str) and re.fullmatch(r"[A-Z][A-Z0-9_]*(?:\.[A-Za-z0-9_]+){2,}", code):
         return code
-    match = re.search(r"\b[A-Z][A-Z0-9_]*(?:\.[A-Za-z0-9_]+){2,}\b", str(error))
+    match = re.search(r"\b[A-Z][A-Z0-9_]*(?:\.[A-Za-z0-9_]+){2,}\b", text)
     return match.group(0) if match else fallback
 
 
-def _prepare_launch(candidate: Mapping[str, Any], report_dir: Path, output_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+def _prepare_launch(candidate: Mapping[str, Any], report_dir: Path, output_root: Path, platform: str = "ios-simulator") -> tuple[dict[str, Any], dict[str, Any]]:
     from quwoquan_ops.cli.lib.app_source_capsule import app_source_capsule_roots
     from quwoquan_ops.cli.lib.package_reuse import materialize_package_input_capsule, workspace_snapshot
     from quwoquan_ops.cli.commands.app_preflight_uat_launch import materialize_app_content_launch_projection
@@ -113,12 +164,35 @@ def _prepare_launch(candidate: Mapping[str, Any], report_dir: Path, output_root:
 
     graph = "quwoquan_service/generated/contract_graph.json"
     roots = (*app_source_capsule_roots(), graph)
-    before = workspace_snapshot(deployment_roots=roots)
-    capsule = materialize_package_input_capsule(roots, capsule_root=(report_dir / "source-capsule").absolute())
-    after = workspace_snapshot(deployment_roots=roots)
+    dependency_platform = "android" if platform.startswith("android") else "ios"
+    _verify_source(candidate, stackctl.ROOT)
+    checkout = _export_candidate_tree(
+        commit=str(candidate["commit"]),
+        repository=stackctl.ROOT,
+        destination=(report_dir / "candidate-source").absolute(),
+        roots=roots,
+    )
+    snapshot_kwargs = {
+        "deployment_roots": roots,
+        "dependency_platforms": (dependency_platform,),
+        "source_revision": str(candidate["commit"]),
+        "source_root": checkout,
+        "source_tree": str(candidate["tree"]),
+    }
+    before = workspace_snapshot(**snapshot_kwargs)
+    capsule = materialize_package_input_capsule(
+        roots, capsule_root=(report_dir / "source-capsule").absolute(),
+        dependency_platforms=(dependency_platform,),
+        source_revision=str(candidate["commit"]),
+        source_root=checkout,
+        source_tree=str(candidate["tree"]),
+    )
+    after = workspace_snapshot(**snapshot_kwargs)
     if before != after:
         raise ValueError("APP.LAUNCH.receipt_invalid: source changed while freezing App capsule")
-    _verify_source(candidate, stackctl.ROOT)
+    graph_path = checkout / graph
+    if not graph_path.is_file():
+        raise ValueError("APP.LAUNCH.receipt_invalid: candidate contract graph missing")
     runtime = {
         "contentSource": "bundled_snapshot", "environment": "alpha", "target": "alpha-local",
         "candidateDigest": candidate["candidateId"], "sourceRevision": candidate["commit"],
@@ -126,7 +200,7 @@ def _prepare_launch(candidate: Mapping[str, Any], report_dir: Path, output_root:
         "sourceCapsuleDigest": capsule["deploymentInputDigest"],
         "sourceCapsuleWorkspaceStatusDigest": capsule["workspaceStatusDigest"],
         "sourceCapsuleManifestRef": str(Path(capsule["capsuleRoot"]) / "manifest.json"),
-        "contractGraphDigest": _sha(stackctl.ROOT / graph),
+        "contractGraphDigest": _sha(graph_path),
     }
     projection = materialize_app_content_launch_projection(
         runtime_binding=runtime, output_root=output_root,
@@ -136,7 +210,8 @@ def _prepare_launch(candidate: Mapping[str, Any], report_dir: Path, output_root:
 
 
 def _isolated_selection(args: argparse.Namespace, runtime: Mapping[str, Any],
-                        projection: Mapping[str, Any]) -> dict[str, str] | None:
+                        projection: Mapping[str, Any], *, case_id: str,
+                        generation: int, attempt_ref: str) -> dict[str, str] | None:
     """只投影已获准调用的选择；pin来自已验证capsule，不签发授权或信任。"""
     requested = getattr(args, "isolated_rehearsal", False)
     instance = getattr(args, "rehearsal_instance_id", "")
@@ -167,11 +242,21 @@ def _isolated_selection(args: argparse.Namespace, runtime: Mapping[str, Any],
     pin = _sha(manifest)
     if json.loads(identity.read_bytes()).get("manifestDigest") != pin:
         raise ValueError("APP.LAUNCH.receipt_invalid: isolated snapshot identity drifted")
-    return {"mode": "isolated", "instanceId": instance, "snapshotDigest": pin}
+    if case_id not in OFFLINE_REQUIRED_CASES or generation <= 0:
+        raise ValueError("APP.LAUNCH.receipt_invalid: invalid rehearsal case lifecycle")
+    binding = "sha256:" + hashlib.sha256(json.dumps([
+        "gwt008-observation", runtime["candidateDigest"], args.device_id,
+        case_id, str(generation), attempt_ref, pin,
+    ], separators=(",", ":")).encode()).hexdigest()
+    selected_instance = f"{instance}-{case_id}" if case_id == "identity-restart" else f"{instance}-{case_id}-{generation}"
+    return {"mode": "isolated", "instanceId": selected_instance,
+            "snapshotDigest": pin, "caseId": case_id,
+            "lifecycleGeneration": str(generation), "observationBinding": binding}
 
 
 def _launch(args: argparse.Namespace, runtime: Mapping[str, Any], projection: Mapping[str, Any],
-            report_dir: Path, output_root: Path) -> dict[str, Any]:
+            report_dir: Path, output_root: Path, *, case_id: str = "login-success",
+            generation: int = 1) -> dict[str, Any]:
     from quwoquan_ops.cli.commands.app_preflight_uat_launch import (
         FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID, FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
         write_app_content_launch_control,
@@ -180,8 +265,12 @@ def _launch(args: argparse.Namespace, runtime: Mapping[str, Any], projection: Ma
     from quwoquan_ops.cli.commands.app_preflight_uat_support import _app_content_canonical_launch_command
     import quwoquan_ops.cli.stackctl as stackctl
 
-    selection = _isolated_selection(args, runtime, projection)
-    attempt = report_dir / "attempt-1" / "attempt.json"
+    if case_id not in OFFLINE_REQUIRED_CASES or type(generation) is not int or generation <= 0:
+        raise ValueError("APP.LAUNCH.receipt_invalid: invalid case/generation")
+    # UUID 只分配 fresh 输出路径，不充当 session、观察摘要或授权。
+    attempt = report_dir / "case-launches" / case_id / f"generation-{generation}" / uuid4().hex / "attempt-1" / "attempt.json"
+    selection = _isolated_selection(args, runtime, projection, case_id=case_id,
+        generation=generation, attempt_ref=str(attempt.absolute()))
     report = attempt.with_name("report.json")
     policy = FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID if args.platform == "android" else FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID
     control = write_app_content_launch_control(
@@ -209,8 +298,12 @@ def _launch(args: argparse.Namespace, runtime: Mapping[str, Any], projection: Ma
         environment="alpha", target="alpha-local", device_id=args.device_id,
         attempt_path=attempt, report_path=report, output_root=output_root, app_root=app_root, launch_control=control,
     )
+    # 只传公开进程身份，secret不进入环境；native将在启动时固定expected peer。
+    if selection is not None and args.platform == 'ios-simulator':
+        environment["QWQ_UAT_LAUNCHER_PID"] = str(os.getpid())
     result = stackctl.run(command, cwd=app_root, env=environment)
-    (report_dir / "canonical-launch.log").write_text((result.stdout or "") + (result.stderr or ""), encoding="utf-8")
+    with attempt.with_name("canonical-launch.log").open("x", encoding="utf-8") as log:
+        log.write((result.stdout or "") + (result.stderr or ""))
     if result.returncode:
         output = (result.stdout or "") + "\n" + (result.stderr or "")
         raise ValueError(first_typed_blocker(output, fallback="APP.LAUNCH.receipt_invalid")
@@ -235,6 +328,10 @@ def run_offline_app_content_uat(*, args: argparse.Namespace, report_dir: Path, o
         "summary": "Offline App content UAT is planned", "reportDir": str(report_dir),
     }
     try:
+        selected = selected_offline_cases(args)
+        diagnostic = getattr(args, "offline_cases", None) is not None
+        if diagnostic:
+            receipt.update(diagnostic=True, selectedCases=list(selected), profile="diagnostic")
         if issues:
             raise ValueError(issues[0])
         if args.platform not in {"android", "ios-simulator"}:
@@ -246,14 +343,23 @@ def run_offline_app_content_uat(*, args: argparse.Namespace, report_dir: Path, o
             raise ValueError(receipt["blockedCases"][0]["firstBlocker"])
         if not getattr(args, "dry_run", False):
             candidate = _candidate(args, stackctl.ROOT)
-            runtime, projection = _prepare_launch(candidate, report_dir, output_root)
-            binding = _launch(args, runtime, projection, report_dir, output_root)
-            if getattr(args, "isolated_rehearsal", False):
-                raise ValueError("APP.UAT.page_artifact_binding_missing: isolated AUT three-storage consumption observation is absent; native input remains blocked")
+            if diagnostic:
+                selection = {"candidateDigest": candidate["candidateId"], "commitSha": candidate["commit"],
+                    "platform": args.platform, "deviceId": args.device_id, "cases": list(selected)}
+                selection["selectionDigest"] = "sha256:" + hashlib.sha256(json.dumps(selection, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+                receipt["diagnosticSelection"] = selection
+            runtime, projection = _prepare_launch(
+                candidate, report_dir, output_root, args.platform
+            )
+            binding = _launch(args, runtime, projection, report_dir, output_root,
+                              case_id=selected[0], generation=1)
             from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import execute_offline_page_cases
             receipt.update(execute_offline_page_cases(
                 args=args, candidate=candidate, launch=binding, projection=projection,
                 report_dir=report_dir, output_root=output_root,
+                launch_case=lambda case_id, generation: _launch(
+                    args, runtime, projection, report_dir, output_root,
+                    case_id=case_id, generation=generation),
             ))
             _verify_source(candidate, stackctl.ROOT)
     except (OSError, RuntimeError, TypeError, ValueError, KeyError) as error:

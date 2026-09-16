@@ -14,6 +14,7 @@ from .agent_governance_contract import (
     contract_schema_version,
     contract_section,
     declared_object,
+    validate_feature_context_manifest,
 )
 from .evidence_fingerprint import (
     EvidenceFingerprintError,
@@ -31,6 +32,8 @@ from .review_fingerprint import dependency_root
 GENERATOR_PATH = "quwoquan_ops/cli/lib/feature_tree/commands.py"
 CONTRACT_PATH = "quwoquan_ops/policies/agent_governance_contract.yaml"
 
+_CLOSURE_DIRECTORY = ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/feature-context-closure"
+
 _CONTENT_ADDRESSED_REF_RE = re.compile(
     r"^\.qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
     r"(?P<receipt>receipts/)?(?P<digest>[0-9a-f]{64})\.json$"
@@ -43,13 +46,20 @@ def validate_content_addressed_ref(
     raw_bytes: bytes,
     repo_root: Path,
     receipt: bool = False,
+    closure: bool = False,
 ) -> str:
     """验证 immutable ref 的物理位置、raw bytes 摘要与 canonical bytes。"""
 
     relative = normalize_repo_relative_path(raw_ref, repo_root)
-    match = _CONTENT_ADDRESSED_REF_RE.fullmatch(relative)
-    if match is None or bool(match.group("receipt")) is not receipt:
-        kind = "receipt" if receipt else "manifest"
+    if closure:
+        match = re.fullmatch(
+            re.escape(_CLOSURE_DIRECTORY) + r"/(?P<digest>[0-9a-f]{64})\.json",
+            relative,
+        )
+    else:
+        match = _CONTENT_ADDRESSED_REF_RE.fullmatch(relative)
+    if match is None or (not closure and bool(match.group("receipt")) is not receipt):
+        kind = "closure" if closure else ("receipt" if receipt else "manifest")
         raise EvidenceFingerprintError(
             f"feature context {kind} ref 不是 canonical content-addressed path：{relative}"
         )
@@ -66,6 +76,90 @@ def validate_content_addressed_ref(
         raise EvidenceFingerprintError("feature context ref 不是 exact canonical JSON bytes")
     return relative
 
+
+
+def feature_context_closure(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": contract_schema_version("feature_context_closure"),
+        **{key: payload[key] for key in (
+            "target", "resolved_owner", "owner_chain", "canonical_contexts",
+            "applicable_agents", "open_items",
+        )},
+    }
+
+
+def feature_context_closure_identity(document: dict[str, Any]) -> dict[str, Any]:
+    raw = canonical_json_bytes(document)
+    digest = canonical_digest(document)
+    return declared_object(
+        {
+            "ref": f"{_CLOSURE_DIRECTORY}/{digest[7:]}.json",
+            "canonical_bytes_sha256": digest,
+            "byte_count": len(raw),
+            "owner_chain_count": len(document["owner_chain"]),
+            "context_count": len(document["canonical_contexts"]),
+            "agent_count": len(document["applicable_agents"]),
+            "open_item_count": len(document["open_items"]),
+            "scope_digest": canonical_digest({
+                key: document[key] for key in ("target", "resolved_owner")
+            }),
+        },
+        "feature_context_manifest",
+        "closure_identity_fields",
+    )
+
+
+def resolve_feature_context_manifest(
+    payload: dict[str, Any], *, repo_root: Path
+) -> dict[str, Any]:
+    """有界读取并验证完整 owner/context/open 闭包。"""
+    validate_feature_context_manifest(payload)
+    identity = payload.get("closure_identity")
+    if identity is None:
+        return payload
+    expected = f"{_CLOSURE_DIRECTORY}/{identity['canonical_bytes_sha256'][7:]}.json"
+    if identity["ref"] != expected:
+        raise EvidenceFingerprintError("feature context closure ref 非 canonical")
+    try:
+        raw = read_repo_relative_regular_single_link(
+            dependency_root(repo_root), expected,
+            expected_directory_parts=tuple(_CLOSURE_DIRECTORY.split("/")),
+            max_bytes=min(
+                int(contract_section("feature_context_closure")["max_bytes"]),
+                identity["byte_count"],
+            ),
+            require_current_name=True,
+        )
+    except (OSError, ValueError) as exc:
+        raise EvidenceFingerprintError(f"feature context closure 无法读取：{exc}") from exc
+    if len(raw) != identity["byte_count"]:
+        raise EvidenceFingerprintError("feature context closure length 漂移")
+    validate_content_addressed_ref(expected, raw_bytes=raw, repo_root=repo_root, closure=True)
+    document = json.loads(raw.decode("utf-8"))
+    if canonical_digest(document) != identity["canonical_bytes_sha256"]:
+        raise EvidenceFingerprintError("feature context closure digest 漂移")
+    if document.get("schema_version") != contract_schema_version("feature_context_closure"):
+        raise EvidenceFingerprintError("feature context closure schema_version 非法")
+    counts = {
+        "owner_chain_count": len(document.get("owner_chain", [])),
+        "context_count": len(document.get("canonical_contexts", [])),
+        "agent_count": len(document.get("applicable_agents", [])),
+        "open_item_count": len(document.get("open_items", [])),
+    }
+    if any(identity[key] != value for key, value in counts.items()):
+        raise EvidenceFingerprintError("feature context closure count 漂移")
+    scope = {key: document.get(key) for key in ("target", "resolved_owner")}
+    if canonical_digest(scope) != identity["scope_digest"] or any(
+        document.get(key) != payload.get(key) for key in scope
+    ):
+        raise EvidenceFingerprintError("feature context closure scope 漂移")
+    if feature_context_closure_identity(document) != identity:
+        raise EvidenceFingerprintError("feature context closure identity 漂移")
+    hydrated = dict(payload)
+    for key in ("owner_chain", "canonical_contexts", "applicable_agents", "open_items"):
+        hydrated[key] = document[key]
+    validate_feature_context_manifest(hydrated)
+    return hydrated
 
 
 def _git(repo_root: Path, *args: str) -> str:
@@ -161,6 +255,10 @@ def validate_current_feature_context_fingerprint(
 ) -> dict[str, Any]:
     """Validate stable owner identity; current workspace bytes are intentionally ignored."""
 
+    hydrated = resolve_feature_context_manifest(payload, repo_root=repo_root)
+    if hydrated is not payload:
+        payload.clear()
+        payload.update(hydrated)
     actual = resolve_fingerprint_binding(
         payload.get("evidence_fingerprint"), repo_root=repo_root
     )

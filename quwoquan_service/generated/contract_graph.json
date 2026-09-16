@@ -2603,7 +2603,7 @@
             "idempotency": "event_id",
             "implementation": {
               "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_exposure_fact/adapters/inbound/stream/feed_page_delivered_consumer.py",
-              "sha256": "78b6e9d0ba73d659399c1e10e8dea46255ef71732f3d32ef49cc87b623d162f8"
+              "sha256": "24d49175f7e4f35b23dbe97f31767eced31e0d6ad5b652cda6f401c45b6115ed"
             }
           }
         ]
@@ -62959,6 +62959,7 @@
               "featureSnapshotAt",
               "featureSnapshotDigest",
               "rankingSnapshotDigest",
+              "policyDigest",
               "userFeatureSnapshot",
               "itemFeatureSnapshot",
               "exposedAt",
@@ -123289,7 +123290,7 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/ranked_recommendation_window/domain/discovery_tuning.py",
-            "sha256": "8da0d24b128a6f4ebb2899a71bc4feffb2c58a0529756df700d161ec79081ded"
+            "sha256": "a47e4f62552e6c6e210cd5d3d98564f55532a4073120cc110780bde3a92a9750"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/ranked_recommendation_window/domain/experiment_policy.py",
@@ -123315,7 +123316,7 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/ranked_recommendation_window/infrastructure/mongo_ranker.py",
-            "sha256": "760ff71f0f0b49569b8a8db0e73ee41be514b8a6808a7f09a22efb6a14c31bc0"
+            "sha256": "23559603122ac3fb52a3c8a71c6560037e66f1bde92a8ec361eccd8dbb675bbc"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/ranked_recommendation_window/infrastructure/redis_experiment_policy_stream.py",
@@ -123338,7 +123339,7 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/ranked_recommendation_window/application/facade.py",
-            "sha256": "cd5e64320f308bb6549d9003ec063368a1a332863adc34f66ea34186cceac780"
+            "sha256": "c4e8c601754a7ce35acf366e58959deeb917986ffc02636cd31df293a20ecb6e"
           }
         ],
         "transport": [
@@ -123382,11 +123383,11 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/ranked_recommendation_window/test_mongo_ranker__discovery_tuning__local_contract_test.py",
-            "sha256": "3e186a5b2f7b813d11f9e28e2e7843e9115fb21d29a3974fedb0ae18dd2757a1"
+            "sha256": "fd9397261b84e9f67b7d7970f1870db7e3bf4dec1a1e146bd0977736ec21cfa5"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/ranked_recommendation_window/test_mongo_ranker__snapshot__local_contract_test.py",
-            "sha256": "3dea5fec74f64a5354704fd38ac682b8001263b14d279b6ae01a94edd6be5627"
+            "sha256": "1ea2182f310e45761e3009a2331d410b6dc692cca46cef6e7446c84a524c9bc4"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/ranked_recommendation_window/test_quota_config__local_contract_test.py",
@@ -123394,11 +123395,11 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/ranked_recommendation_window/test_ranked_window__lifecycle__local_contract_test.py",
-            "sha256": "74949238e6c22267c578c677540ceac96217f08ef91fc29339f6e32d89aef910"
+            "sha256": "dcd54ba9e8b2e32fc623ad4eaacb9b492c38b90d749799bb18734a5d73329888"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/ranked_recommendation_window/test_ranked_window_http__local_contract_test.py",
-            "sha256": "e182515e81efcd55fce1a92ba6c923673ccd89a9b5bb381350c5a8cfa728161c"
+            "sha256": "ce7e8d460edb8ee0ea3c5aac1bc8b064669159b2011a88e1e38ba1020187237f"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/ranked_recommendation_window/test_redis_window_store__privacy__local_contract_test.py",
@@ -123698,7 +123699,7 @@
         "domain": [
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_exposure_fact/domain/fact.py",
-            "sha256": "f0ca0d515793e85860882a72ef4373325741f7c7b8a77794542a5e9a84e52273"
+            "sha256": "e1ec17ea8bfd527a88988717c333a7d8bee3ef67ecfe2761afa9429f548b422c"
           }
         ],
         "store": [
@@ -123708,7 +123709,7 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_exposure_fact/infrastructure/mongo_store.py",
-            "sha256": "8f8dadcf2536307a81751459d3bd515f5043125d6868d6819c8a64b4fb1b4911"
+            "sha256": "8df6205c08a113b2e4f18d9d84427a0037ff584deb7af090a95fef25f3b68e2f"
           }
         ],
         "outbox": [],
@@ -123725,13 +123726,13 @@
         "transport": [
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_exposure_fact/adapters/inbound/stream/feed_page_delivered_consumer.py",
-            "sha256": "78b6e9d0ba73d659399c1e10e8dea46255ef71732f3d32ef49cc87b623d162f8"
+            "sha256": "24d49175f7e4f35b23dbe97f31767eced31e0d6ad5b652cda6f401c45b6115ed"
           }
         ],
         "localContract": [
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_exposure_fact/test_exposure_fact__idempotency__local_contract_test.py",
-            "sha256": "d5ff330ca3a465e13b3ab94c8701c077bb68025df89f09e2df6170a0013db60d"
+            "sha256": "305ac59929f556d9d0f93d8fc69dd9fcf53d6f825a15a8c110d79f8ec63fd6a9"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_exposure_fact/test_exposure_fact_error_semantics__local_contract_test.py",
@@ -123739,13 +123740,13 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_exposure_fact/test_feed_page_delivered_consumer__durability__local_contract_test.py",
-            "sha256": "c47d0230a79ef8c544ab510c4ead7ff7552fd008e70f6e971cf955f6b531a40e"
+            "sha256": "61a65ac0d5f795a29b0b10a17c470a2cde60ec9a6a9d2f9d863fcc62b5e5d8d9"
           }
         ],
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_exposure_fact/test_mongo_exposure_fact__api_integration_test.py",
-            "sha256": "78248d85c439fc3c85a71587eab2605c58902068fc4fe860bb2221f7ceb90aff"
+            "sha256": "4da6ad7ca98edaf4d63e2d41df112e69d563981215604c6f51b1da417b5a0db1"
           }
         ]
       },
@@ -132430,7 +132431,7 @@
     },
     {
       "path": "_control_plane/product/config.yaml",
-      "sha256": "c17949c27c2e23accd5568156929d383a2ff57b113c901d2b0ddab0a1c881313"
+      "sha256": "a7112667b1d98b4f532b2fd0d63234f80cfc3fb7a37d8c20a1447594d7ec1812"
     },
     {
       "path": "_control_plane/product/control_plane.yaml",
@@ -135530,7 +135531,7 @@
     },
     {
       "path": "recommendation/recommendation/ranked_recommendation_window/object.yaml",
-      "sha256": "d5382c5036908045774804d09232a77f399265669c9d50cc1aa79125cbc0b336"
+      "sha256": "739dabd88804b119e00a3108221cd07d5796fef1bc187772ca321c8f3f319043"
     },
     {
       "path": "recommendation/recommendation/ranked_recommendation_window/operations.yaml",
@@ -135578,11 +135579,11 @@
     },
     {
       "path": "recommendation/recommendation/recommendation_exposure_fact/fields.yaml",
-      "sha256": "4565ea5c99a960eab4748d3ed73e5a6d707d3b0e046d232d4edb688d418255ce"
+      "sha256": "a4eee904c51ee1d5c54fb2038c856a6142479d83b91ff8a4e4fb501f276dad74"
     },
     {
       "path": "recommendation/recommendation/recommendation_exposure_fact/object.yaml",
-      "sha256": "b859aaf6c93476aecac5b75647cd6221477c031e4585395b8a77e4ae925b88cf"
+      "sha256": "75cf67566b73cb9a2a4b4e529698bcaef826a6702e65a883066e4b684dc84b7a"
     },
     {
       "path": "recommendation/recommendation/recommendation_exposure_fact/operations.yaml",
@@ -137264,7 +137265,7 @@
     },
     {
       "path": "_control_plane/product/config.yaml",
-      "sha256": "c17949c27c2e23accd5568156929d383a2ff57b113c901d2b0ddab0a1c881313",
+      "sha256": "a7112667b1d98b4f532b2fd0d63234f80cfc3fb7a37d8c20a1447594d7ec1812",
       "mediaType": "application/yaml",
       "content": {
         "configs": [
@@ -137343,6 +137344,20 @@
             "rollout": "progressive",
             "scope": "environment",
             "type": "float",
+            "ui_editable": true
+          },
+          {
+            "default": 3,
+            "description": "用户画像中 action/state 行为计数不超过该值时启用质量先验；计数严格大于阈值即退出冷启动。",
+            "key": "ops.reco.discovery.rank.cold_start_max_behavior_count",
+            "maximum": 100,
+            "minimum": 0,
+            "owner": "recommendation",
+            "reload": "hot",
+            "risk_level": "medium",
+            "rollout": "progressive",
+            "scope": "environment",
+            "type": "int",
             "ui_editable": true
           },
           {
@@ -379336,7 +379351,7 @@
     },
     {
       "path": "recommendation/recommendation/ranked_recommendation_window/object.yaml",
-      "sha256": "d5382c5036908045774804d09232a77f399265669c9d50cc1aa79125cbc0b336",
+      "sha256": "739dabd88804b119e00a3108221cd07d5796fef1bc187772ca321c8f3f319043",
       "mediaType": "application/yaml",
       "content": {
         "access": {
@@ -379367,6 +379382,8 @@
           "contextDigest 为冻结 RecommendationRequestContext 五字段的 SHA-256 小写 64 位 hex；输入使用 UTF-8 canonical JSON（字段名排序、无多余空白、无可选字段遗漏，值均为已规范字符串），不使用原始 query、客户端时钟或无分隔拼接。timeBucket/profileRevision 精确定义仅在 fields.yaml 的该类型声明。",
           "requestDigest 必须在既有规范 subjectId/scenario/limit 载荷中加入 contextDigest；幂等命中先读原窗口，复用其中冻结的 timeBucket/profileRevision/coarseRegion/policy/model/feature identity，仅比较本次规范化客户端字段形成的 requestDigest。同 key 换 viewport/device 必须 conflict；相同载荷跨小时、画像或配置更新仍返回原窗口，不重新 admission、重读画像或重排。",
           "rankingSnapshotDigest 必须同时覆盖 contextDigest、policyDigest、实际 model/feature identity、原始评分输入摘要和后处理后的稳定 ordinal/contentId/score；不把后处理媒体尺寸塞入模型 CandidateInput。windowId 与冻结 contextDigest 在 create-once 记录中一一绑定，缓存按原 windowId 唯一读写且必须验证该绑定，不能用同 key 覆盖不同上下文。",
+          "ranker 与跨进程模型请求必须消费同一冻结 requestContext，至少原样携带 viewportProfile、deviceClass、coarseRegion、timeBucket；禁止在 Facade 到 scorer 边界重新填 unknown/default。",
+          "冷启动按画像 action:/state: 稀疏行为计数执行：计数小于等于 ops.reco.discovery.rank.cold_start_max_behavior_count 时对基础分叠加候选 qualityScore 受控先验，严格大于阈值时停用；阈值、active 判定与计数必须进入评分 context 和 rankingSnapshotDigest。",
           "Content 必须把返回 contextDigest 冻结进 FeedDeliveryPage.scopeHash 和 nextCursor/previousCursor AEAD authenticated context；request、幂等、ranking、window、cursor 和 cache 共享同一摘要，不把原地域拼入任何 key，旧缺失摘要窗口 fail-closed。",
           "首版仅在现役 ranker 输出后，对 viewportProfile=landscape 且 canonical 主媒体 width\u003eheight 的 image/video 应用 ops.reco.discovery.rank.context_landscape_media_boost；有效值来自 recommendation-service/config/schema.yaml，default=1.0、范围 [1.0,1.25]。其余候选乘数 1.0，不过滤候选、不改变训练/模型请求，保留基础排序和既有多样性约束。",
           "policyDigest 在既有权威 policy 内容身份基础上必须绑定本次实际生效的 context_landscape_media_boost 参数值（规范数值而非配置更新时间）；参数越界拒绝 admission，不静默截断。同窗续页与幂等重放不重读热配置；新首刷才使用新 policyDigest，1.0 为明确零 boost，不新增 device/region/time boost 配置或另一套策略源。",
@@ -381787,7 +381804,7 @@
     },
     {
       "path": "recommendation/recommendation/recommendation_exposure_fact/fields.yaml",
-      "sha256": "4565ea5c99a960eab4748d3ed73e5a6d707d3b0e046d232d4edb688d418255ce",
+      "sha256": "a4eee904c51ee1d5c54fb2038c856a6142479d83b91ff8a4e4fb501f276dad74",
       "mediaType": "application/yaml",
       "content": {
         "description": "Content 确认 FeedDeliveryPage 后由 Recommendation 形成的不可变交付曝光事实。",
@@ -381977,6 +381994,17 @@
             "constraints": [
               "NOT_NULL"
             ],
+            "description": "FeedPageDelivered 原样传播的唯一推荐策略内容摘要；与排序窗口同源，用于曝光与转化归因。",
+            "format": "canonical_sha256",
+            "name": "policyDigest",
+            "role": "append_only_fact",
+            "source": "context.policyDigest",
+            "type": "string"
+          },
+          {
+            "constraints": [
+              "NOT_NULL"
+            ],
             "description": "本次候选在线评分实际消费的稀疏用户特征；训练只允许消费此不可变快照",
             "name": "userFeatureSnapshot",
             "role": "append_only_fact",
@@ -382016,7 +382044,7 @@
     },
     {
       "path": "recommendation/recommendation/recommendation_exposure_fact/object.yaml",
-      "sha256": "b859aaf6c93476aecac5b75647cd6221477c031e4585395b8a77e4ae925b88cf",
+      "sha256": "75cf67566b73cb9a2a4b4e529698bcaef826a6702e65a883066e4b684dc84b7a",
       "mediaType": "application/yaml",
       "content": {
         "access": {
@@ -382043,6 +382071,7 @@
           "只有 FeedPageDelivered 可形成曝光，候选生成、排序或被 Content 丢弃都不得记为曝光。",
           "同一 deliveryPageId、ordinal 与 contentId 至多追加一次，重放保持同一 exposure identity；windowId 与 rankingSnapshotDigest 必须绑定实际排序窗口。",
           "experimentBucket 只接受 FeedPageDelivered 携带的服务端权威分配结果；modelBucket 只记录实际执行轨道，二者不得互相回填或覆盖。",
+          "policyDigest 必须从 FeedPageDelivered 原样固化并满足 canonical SHA-256 字形，不得缺省、重算或以 model release 代替。",
           "账号关闭阻断事实生效后不得为该 subject 追加新曝光；关闭事实先持久化，再硬删除历史可识别曝光，closure checkpoint 阻止旧事件重建。"
         ],
         "description": "Content 确认 FeedDeliveryPage 后由 Recommendation 幂等追加的交付曝光事实，绑定模型发布、窗口序号与目标。",

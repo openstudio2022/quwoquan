@@ -451,7 +451,6 @@ def _fixture(root: Path) -> dict[str, Path]:
                     "postId": post_id,
                     "contentId": f"content-{post_id}",
                     "contentVersion": 1,
-                    "usageScope": "production",
                     "contentType": content_type,
                     "authorId": "author-a",
                 }

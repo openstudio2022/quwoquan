@@ -65,9 +65,32 @@ def read_task_context(ref, digest, roles):
             or not isinstance(context.get("confirmationRef"), str) or not context["confirmationRef"].strip()
             or context.get("confirmedBy") not in roles["director"]
             or not isinstance(context.get("allowedActions"), list)
-            or not set(context["allowedActions"]) <= {"init", "acquire", "1.download", "4.draft", "5.review", "publish", "finalize"}
+            or not set(context["allowedActions"]) <= {"init", "acquire", "1.download", "4.draft", "5.review", "publish", "finalize", "repackage"}
             or not isinstance(context.get("revokedActors", []), list)):
         raise CoordinationError("COORDINATION.TASK_CONFIRMATION_REQUIRED", str(path))
+    return context
+
+
+
+def read_repackage_task_context(ref, digest, roles, *, authorization_ref: str, authorization_digest: str):
+    path=Path(ref)
+    try:
+        if path.is_symlink(): raise OSError("task symlink")
+        raw=path.read_bytes(); document=json.loads(raw)
+        from core.schema import assert_valid
+        assert_valid(document,"execution","repackage_task_context",label="repackage task context")
+    except (OSError,ValueError,TypeError,KeyError) as exc:
+        raise CoordinationError("COORDINATION.REPACKAGE_TASK_INVALID",str(path)) from exc
+    if "sha256:"+hashlib.sha256(raw).hexdigest()!=digest:
+        raise CoordinationError("COORDINATION.TASK_VERSION_STALE",str(path))
+    context=document["coordination"]
+    confirmation=Path(context["confirmationRef"])
+    from .authority import verify_authority_artifact
+    verify_authority_artifact(str(confirmation),context["confirmationDigest"],purpose="content-repackage-confirmation")
+    verify_authority_artifact(authorization_ref,authorization_digest,purpose="content-repackage-user-authorization")
+    if (context["confirmedBy"] not in roles["director"] or context["authorizationRef"]!=authorization_ref
+            or context["authorizationDigest"]!=authorization_digest):
+        raise CoordinationError("COORDINATION.REPACKAGE_AUTHORITY_MISMATCH",str(path))
     return context
 
 
@@ -228,6 +251,23 @@ def producer_call(write_callable: Callable[[], R], *, operation: str, batches: d
     return CoordinationStore(os.environ[DB_ENV]).fenced_producer_write(
         tokens, write_callable, actor=actor, task_digest=task_digest, roots=roots,
         operation=operation, batches=batches, nonces=nonces,
+    )
+
+
+def governed_repackage_call(write_callable: Callable[[], R], *, target_refs: list[str], release_id: str) -> R:
+    """核验 director/global closer/current generation/root binding 与 exact cohort fence；不认领或重绑 execution。"""
+    tokens = current_tokens()
+    try:
+        actor = actor_key(_document(os.environ.get("QWQ_CONTENT_ACTOR", "{}")))
+        task_digest = os.environ.get("QWQ_CONTENT_TASK_DIGEST", "")
+        if os.environ.get(CLOSER_ENV) != tokens[0].deployment_id:
+            raise CoordinationError("COORDINATION.GLOBAL_CLOSER_REQUIRED", tokens[0].deployment_id)
+        roots = actual_roots()
+    except (OSError, KeyError, TypeError, ValueError) as exc:
+        raise CoordinationError("COORDINATION.PRODUCER_CONTEXT_INVALID", str(exc)) from exc
+    return CoordinationStore(os.environ[DB_ENV]).fenced_governed_repackage(
+        tokens, write_callable, actor=actor, task_digest=task_digest, roots=roots,
+        target_refs=target_refs, release_id=release_id,
     )
 
 

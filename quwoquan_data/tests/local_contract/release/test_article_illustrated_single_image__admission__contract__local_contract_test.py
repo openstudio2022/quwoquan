@@ -22,25 +22,34 @@ from content.release.canonical.object_transaction_contract import ObjectTransact
 
 
 def _cover(asset_id: str = "cover") -> dict:
-    return {"assetId": asset_id, "kind": "image", "role": "cover", "sourceRef": "sources/x/source.md"}
+    return {"assetId": asset_id, "kind": "image", "role": "cover", "sourceRefs": ["sources/x/source.md"]}
 
 
 def _detail(asset_id: str) -> dict:
-    return {"assetId": asset_id, "kind": "image", "role": "detail", "sourceRef": "sources/x/source.md"}
+    return {"assetId": asset_id, "kind": "image", "role": "detail", "sourceRefs": ["sources/x/source.md"]}
 
 
 def test_pool_query_admits_single_image_article(tmp_path: Path) -> None:
     post_ref = "article/人文/单图文章/1"
-    manifest = tmp_path / "posts" / post_ref / "manifest.json"
+    manifest = tmp_path / "posts" / "article" / "人文" / "p0001" / "单图文章" / "1" / "manifest.json"
     manifest.parent.mkdir(parents=True)
-    manifest.write_text(json.dumps({"publishMediaMode": "illustrated", "assets": [_cover()]}), encoding="utf-8")
+    manifest.write_text(
+        json.dumps({"objectRef": post_ref, "version": 1, "publishMediaMode": "illustrated", "assets": [_cover()]}),
+        encoding="utf-8",
+    )
 
     assert pool_query._illustrated_article_issue(tmp_path, post_ref) == ""
 
-    manifest.write_text(json.dumps({"publishMediaMode": "illustrated", "assets": [_cover(), _detail("d1"), _detail("d2")]}), encoding="utf-8")
+    manifest.write_text(
+        json.dumps({"objectRef": post_ref, "version": 1, "publishMediaMode": "illustrated", "assets": [_cover(), _detail("d1"), _detail("d2")]}),
+        encoding="utf-8",
+    )
     assert pool_query._illustrated_article_issue(tmp_path, post_ref) == ""
 
-    manifest.write_text(json.dumps({"publishMediaMode": "illustrated", "assets": [_detail("d1")]}), encoding="utf-8")
+    manifest.write_text(
+        json.dumps({"objectRef": post_ref, "version": 1, "publishMediaMode": "illustrated", "assets": [_detail("d1")]}),
+        encoding="utf-8",
+    )
     assert "needs exactly 1 cover" in pool_query._illustrated_article_issue(tmp_path, post_ref)
 
 

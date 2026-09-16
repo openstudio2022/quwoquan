@@ -92,6 +92,46 @@ def load_frozen_target_set(execution_id: str) -> dict[str, Any]:
     return value
 
 
+
+def load_target_descriptors(execution_id: str) -> tuple[dict[str, Any], ...]:
+    """Read each immutable descriptor once and verify ref, bytes, digest and mapping."""
+    target_set = load_frozen_target_set(execution_id)
+    root = execution_root(execution_id)
+    rows: list[dict[str, Any]] = []
+    for binding in target_set["targetDescriptors"]:
+        path = root / str(binding["ref"])
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"DATA.IDENTITY.DESCRIPTOR_MISSING: {binding['ref']}")
+        raw = path.read_bytes()
+        digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+        if digest != binding["digest"]:
+            raise ValueError(f"DATA.IDENTITY.DESCRIPTOR_DIGEST_DRIFT: {binding['ref']}")
+        value = json.loads(raw)
+        assert_valid(value, "execution", "target_descriptor", label=str(path))
+        payload = {key: value[key] for key in value if key != "mappingDigest"}
+        mapping_digest = "sha256:" + hashlib.sha256((json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()).hexdigest()
+        if value["mappingDigest"] != mapping_digest:
+            raise ValueError(f"DATA.IDENTITY.MAPPING_DIGEST_DRIFT: {binding['ref']}")
+        expected = value["expectedCurrentVersion"]
+        next_version = value["contentVersion"]
+        if value["versionAuthority"] == "initial_create":
+            valid_version = expected is None and next_version == 1
+        else:
+            valid_version = isinstance(expected, int) and not isinstance(expected, bool) and expected >= 1 and next_version == expected + 1
+        if not valid_version:
+            raise ValueError(f"DATA.IDENTITY.REVISION_DESCRIPTOR_AUTHORITY_INVALID: {binding['ref']}")
+        rows.append(value)
+    if sorted(row["processRef"] for row in rows) != sorted(target_set["targetRefs"]):
+        raise ValueError("DATA.IDENTITY.DESCRIPTOR_SET_MISMATCH")
+    return tuple(sorted(rows, key=lambda row: row["processRef"]))
+
+
+def target_descriptor_for(execution_id: str, process_ref: str) -> dict[str, Any]:
+    matches = [row for row in load_target_descriptors(execution_id) if row["processRef"] == process_ref]
+    if len(matches) != 1:
+        raise ValueError(f"DATA.IDENTITY.DESCRIPTOR_AMBIGUOUS: {process_ref}")
+    return matches[0]
+
 def load_frozen_execution_manifest(execution_id: str) -> dict[str, Any]:
     path = execution_manifest_path(execution_id)
     if not path.is_file():

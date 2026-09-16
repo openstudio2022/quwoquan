@@ -19,7 +19,7 @@ func TestAppLaunchRehearsalSpaceRequiresExplicitBoundSelection(t *testing.T) {
 	if !strings.Contains(strings.Join(contract.SchemaRequiredFields["offline_bootstrap_document"], ","), "rehearsalSpace") {
 		t.Fatal("空间缺席不能解释为普通启动")
 	}
-	if err := requireExactStringSet("space", contract.OfflineRehearsalSpaceFields, []string{"mode", "snapshotDigest", "instanceId"}); err != nil {
+	if err := requireExactStringSet("space", contract.OfflineRehearsalSpaceFields, []string{"mode", "snapshotDigest", "instanceId", "caseId", "lifecycleGeneration", "observationBinding"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, key := range contract.SchemaRequiredFields["runtime_config_package"] {
@@ -31,7 +31,7 @@ func TestAppLaunchRehearsalSpaceRequiresExplicitBoundSelection(t *testing.T) {
 		{"mode", "allowed_values: [standard, isolated]", "allowed_values: [standard, isolated, fallback]"},
 		{"snapshot", "snapshotDigest: { type: string, format: sha256_identity }", "snapshotDigest: { type: string }"},
 		{"instance", "instanceId: { type: string, format: rehearsal_instance_id }", "instanceId: { type: string }"},
-		{"missing", "required_fields: [mode, snapshotDigest, instanceId]", "required_fields: [mode, snapshotDigest]"},
+		{"missing", "required_fields: [mode, snapshotDigest, instanceId, caseId, lifecycleGeneration, observationBinding]", "required_fields: [mode, snapshotDigest]"},
 	} {
 		t.Run(mutation.name, func(t *testing.T) {
 			metadataDir := copyAppLaunchContractTestSources(t, t.TempDir())

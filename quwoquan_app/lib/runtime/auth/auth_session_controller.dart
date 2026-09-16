@@ -76,6 +76,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       _syncDeviceActorId(stored.installId);
       if (_store.isIsolated) {
         state = _syntheticState(stored);
+        await ref.read(syntheticSessionRestoredObserverProvider)?.call(state);
         return;
       }
       if (_offlineContent) {
@@ -178,6 +179,16 @@ class AuthSessionController extends Notifier<AuthSessionState> {
           },
         );
         requireIntent?.call();
+        final committed = await _store.read();
+        _store.requireCurrentStorage();
+        requireIntent?.call();
+        if (committed.ownerId != result.accountId ||
+            committed.activePersonaId != result.personaId ||
+            committed.identityOrigin != 'synthetic' ||
+            committed.accessToken.isNotEmpty ||
+            committed.refreshToken.isNotEmpty) {
+          throw StateError('Synthetic auth commit readback mismatch');
+        }
         if (!ref.mounted || generation != _explicitLoginGeneration) {
           throw const CloudOperationCancelledException();
         }

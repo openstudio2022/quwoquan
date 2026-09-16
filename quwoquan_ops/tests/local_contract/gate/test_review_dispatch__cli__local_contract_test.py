@@ -30,6 +30,14 @@ import yaml
 
 from quwoquan_ops.cli.lib.evidence_fingerprint import canonical_json_bytes
 from quwoquan_ops.cli.lib.candidate_evidence import build_candidate_evidence
+from quwoquan_ops.cli.lib.feature_context_fingerprint import (
+    feature_context_closure,
+    feature_context_closure_identity,
+)
+from quwoquan_ops.cli.lib.feature_tree.content_addressed_writer import (
+    _write_content_addressed_bytes,
+    _write_content_addressed_json,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CLI = _REPO_ROOT / "quwoquan_ops/cli/review_dispatch.py"
@@ -63,11 +71,25 @@ _DISCOVERED_NODES = tuple(_discover_feature_nodes())
 
 
 def _write_owner_fixture(manifest: dict[str, object]) -> str:
+    max_bytes = int(_governance_contract["feature_context_manifest"]["max_bytes"])
     raw = canonical_json_bytes(manifest)
-    root = _REPO_ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint"
-    root.mkdir(parents=True, exist_ok=True)
-    path = root / (hashlib.sha256(raw).hexdigest() + ".json")
-    path.write_bytes(raw)
+    if len(raw) > max_bytes:
+        closure = feature_context_closure(manifest)
+        _write_content_addressed_json(
+            closure, subdirectory="feature-context-closure"
+        )
+        manifest["closure_identity"] = feature_context_closure_identity(closure)
+        for field in (
+            "owner_chain",
+            "canonical_contexts",
+            "applicable_agents",
+            "open_items",
+        ):
+            manifest[field] = []
+        raw = canonical_json_bytes(manifest)
+    if len(raw) > max_bytes:
+        raise AssertionError(f"fixture manifest exceeds {max_bytes} bytes")
+    path = _write_content_addressed_bytes(raw)
     ref = path.relative_to(_REPO_ROOT).as_posix()
     _MANIFEST_REFS[id(manifest)] = ref
     return ref
@@ -224,6 +246,31 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                     {"path": "README.md", "anchor": None, "kind": "spec"}
                 ),
             )
+
+    def test_owner_manifest_consumer_rejects_bare_over_budget_manifest(self) -> None:
+        manifest = _context_manifest()
+        manifest["closure_identity"] = None
+        manifest["canonical_contexts"] = [
+            {
+                "path": "README.md",
+                "anchor": f"fixture-{index}-" + "x" * 128,
+                "kind": "spec",
+            }
+            for index in range(128)
+        ]
+        raw = canonical_json_bytes(manifest)
+        self.assertGreater(len(raw), 8192)
+        with self.assertRaises(_cli.ReviewDispatchError) as blocked:
+            _cli._review_owner_manifest.normalize_contexts(
+                manifest,
+                manifest_ref=_owner_manifest_ref(raw),
+                expected_scope="README.md",
+                required=False,
+                reader=lambda _ref: raw,
+            )
+        self.assertEqual(
+            "REVIEW.CONTEXT_MANIFEST_BUDGET_EXCEEDED", blocked.exception.code
+        )
 
     def test_manifest_and_previous_plan_inputs_fail_closed(self) -> None:
         legacy_manifest = {
@@ -948,7 +995,9 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             ) as reader,
             mock.patch.object(_cli, "validate_feature_context_manifest"),
             mock.patch.object(
-                _cli, "validate_current_feature_context_fingerprint"
+                _cli,
+                "validate_current_feature_context_fingerprint",
+                wraps=_cli.validate_current_feature_context_fingerprint,
             ),
         ):
             candidate = build_candidate_evidence(ref, [str(manifest["target"])], repo_root=_REPO_ROOT)

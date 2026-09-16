@@ -45,7 +45,7 @@ class _Store:
 
 
 class _Ranker:
-    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int, content_fence):
+    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int, content_fence, request_context):
         assert limit == 300
         return RankingResult(
             experiment_bucket="model",

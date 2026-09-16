@@ -35,8 +35,6 @@ class PoolCandidate:
     version: int
     content_type: str
     author_id: str
-    variant_purpose: str
-    usage_scope: str
     selection_identity_digest: str
     canonical_object_digest: str
     content_library_binding_digest: str
@@ -89,8 +87,6 @@ def _candidate(
         version=handoff.content_version,
         content_type=handoff.carrier,
         author_id=handoff.author_id,
-        variant_purpose=handoff.variant_purpose,
-        usage_scope=handoff.usage_scope,
         selection_identity_digest=handoff.selection_identity_digest,
         canonical_object_digest=handoff.canonical_object_digest,
         content_library_binding_digest=handoff.content_library_binding_digest,

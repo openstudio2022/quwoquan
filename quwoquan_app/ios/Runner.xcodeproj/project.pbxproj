@@ -31,6 +31,7 @@
 		C0A190030000000000000001 /* NativeOrientationContract.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A190040000000000000001 /* NativeOrientationContract.generated.swift */; };
 		E0B9738373BF7739A728C839 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 65A68B43EFE0767F808C76CA /* Pods_RunnerTests.framework */; };
 		E8C1035A2F11000100000001 /* NativeRecoveryVersionResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C1035A2F11000100000002 /* NativeRecoveryVersionResponse.swift */; };
+		A6F008010000000000000001 /* AlphaGwt008NativeEvidenceDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F008020000000000000001 /* AlphaGwt008NativeEvidenceDriver.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -96,6 +97,7 @@
 		C0A110020000000000000001 /* CommercialAuthPlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CommercialAuthPlugin.swift; sourceTree = "<group>"; };
 		C0A110040000000000000001 /* AppSceneDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppSceneDelegate.swift; sourceTree = "<group>"; };
 		C0A110050000000000000001 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
+		C0A110050000000000000002 /* RunnerAlphaUAT.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RunnerAlphaUAT.entitlements; sourceTree = "<group>"; };
 		C0A110070000000000000001 /* AliyunOneTapRuntimeBridge.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AliyunOneTapRuntimeBridge.m; sourceTree = "<group>"; };
 		C0A110080000000000000001 /* AliyunOneTapRuntimeBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AliyunOneTapRuntimeBridge.h; sourceTree = "<group>"; };
 		C0A1100A0000000000000001 /* AliyunOneTapPlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AliyunOneTapPlugin.swift; sourceTree = "<group>"; };
@@ -113,6 +115,7 @@
 		E686B2AEF520C7C4A77AA39E /* Pods-Runner.release-prod.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release-prod.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release-prod.xcconfig"; sourceTree = "<group>"; };
 		E84325E727BDD10F7D98A55D /* Release-nonprod.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Release-nonprod.xcconfig"; path = "Flutter/Release-nonprod.xcconfig"; sourceTree = "<group>"; };
 		E8C1035A2F11000100000002 /* NativeRecoveryVersionResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeRecoveryVersionResponse.swift; sourceTree = "<group>"; };
+		A6F008020000000000000001 /* AlphaGwt008NativeEvidenceDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlphaGwt008NativeEvidenceDriver.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -232,12 +235,14 @@
 				C0A140040000000000000001 /* NativeRuntimeConfigActivationCoordinator.swift */,
 				C0A140060000000000000001 /* NativeRuntimeConfigChannel.swift */,
 				E8C1035A2F11000100000002 /* NativeRecoveryVersionResponse.swift */,
+				A6F008020000000000000001 /* AlphaGwt008NativeEvidenceDriver.swift */,
 				C0A130020000000000000001 /* NativeRuntimeCanonicalJSON.swift */,
 				C0A120020000000000000001 /* AppDelegate+IncomingCall.swift */,
 				C0A120040000000000000001 /* IncomingCallPushCoordinator.swift */,
 				C0A110040000000000000001 /* AppSceneDelegate.swift */,
 				C0A110020000000000000001 /* CommercialAuthPlugin.swift */,
 				C0A110050000000000000001 /* Runner.entitlements */,
+				C0A110050000000000000002 /* RunnerAlphaUAT.entitlements */,
 				C0A110070000000000000001 /* AliyunOneTapRuntimeBridge.m */,
 				C0A110080000000000000001 /* AliyunOneTapRuntimeBridge.h */,
 				C0A1100A0000000000000001 /* AliyunOneTapPlugin.swift */,
@@ -490,6 +495,7 @@
 				C0A140050000000000000001 /* NativeRuntimeConfigChannel.swift in Sources */,
 				C0A130010000000000000001 /* NativeRuntimeCanonicalJSON.swift in Sources */,
 				E8C1035A2F11000100000001 /* NativeRecoveryVersionResponse.swift in Sources */,
+				A6F008010000000000000001 /* AlphaGwt008NativeEvidenceDriver.swift in Sources */,
 				C0A120010000000000000001 /* AppDelegate+IncomingCall.swift in Sources */,
 				C0A120030000000000000001 /* IncomingCallPushCoordinator.swift in Sources */,
 				C0A110030000000000000001 /* AppSceneDelegate.swift in Sources */,
@@ -788,7 +794,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Runner/RunnerAlphaUAT.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
@@ -798,7 +804,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "$(QWQ_IOS_APPLICATION_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG QWQ_STARTUP_GATE_TEST_CONTROL";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG QWQ_STARTUP_GATE_TEST_CONTROL QWQ_EXTERNAL_UAT_BROKER";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;

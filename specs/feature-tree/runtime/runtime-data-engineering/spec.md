@@ -46,7 +46,7 @@
 
 - tagRef、canonicalEntityId、entityRef、内容语义 relationEdge、creator/avatar 与 post media 均来自 discovery owner 的 canonical object/release projection；本域只验证并导入，不创建这些业务事实。
 - 作者池准入只保存 `processResult`、`qualityResult`、版本、证据引用与状态；只有 `completed + passed + active` 可进入新 release。头像只做格式、可读取、清晰度、安全和内容质量检查，不保存 Research/Commercial 范围，不参与作者或内容的 Prod 准入，也不产生内容 commercial variant。
-- 内容池准入只保存 `processResult`、`qualityResult`、`usageScope=research|commercial`、版本、证据引用与状态；未知或缺商用证明一律是 `research`，`commercial` 必须由 receipt 中公开可审计的商用发布权证明支持。
+- 内容池准入只保存 `processResult`、`qualityResult`、版本、证据引用与状态，不保存或推导对象级 Research/Commercial 分类维；本域只验证 canonical projection 中 `rightsStatus`、`commercialAuthorizationStatus`、`authorizationProof`、`license`、水印、`accessPolicy` 与 `authorizationRequired` 等权利事实，未知事实保持 unknown/typed missing，不映射为 research、commercial 或其它替代标签。
 - `contentId`/`authorId` 是稳定身份，有效变化只追加递增版本；同一追加键相同 digest 可幂等重放，不同 digest 返回 typed conflict，禁止覆盖旧版本。
 - discovery owner 的 canonical 包携带最终媒体，content library 仅作采集复用；完整包及 release 消费不依赖原库。本域 importer/service/App 只读包或目标环境 materialization 的 identity/digest/ref，不得取得 canonical/library/recovery/release rebuild 写权；随体媒体缺失或摘要漂移时 fail closed，不隐式补库或修复包。
 - alpha/beta/gamma/prod 的 importer/query 只消费 immutable release identity；本域不得自建 release、重采样 cohort、推导 milestone、写 acceptance，且无 environment fixture/self-seed 旁路。Manifest 只决定召回资格，不直接提供首页列表或搜索结果。
@@ -115,7 +115,7 @@
 - WHEN runtime importer、Content outbox、Search、Recommendation、Homepage 与 App media projection 消费它。
 - THEN tag/entity/creator/post/media exact closure，Post 与 durable outbox 原子提交，各 consumer readback 同一 release identity；不创建 pool/milestone/UAT/acceptance 事实。
 - THEN 随体媒体缺失或任何 digest/ref 漂移时 fail closed；原 library 不在场不阻断完整包消费，不从缓存、旧 release、fixture、SourcePool、execution/campaign/provider/model 补值。
-- THEN Research/Commercial、milestone cohort 与 UAT sample 只从上游 immutable release facts读取，本域不重采样或晋级。
+- THEN milestone cohort 与 UAT sample 只从上游 immutable release facts 读取，本域不重采样或晋级；对象级 Research/Commercial 旧 enum 在新 reader fail closed，不保存、映射或恢复分类维。
 - THEN consumer rollback/replay 全部回到同一 previous release identity。
 - THEN raw UAT 与 acceptance 只由 canonical owner 写，本域 integration PASS 不代填。
 - THEN runtime query 不暴露 SourcePool、execution/campaign/provider/model 生产身份。

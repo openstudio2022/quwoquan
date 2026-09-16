@@ -102,15 +102,6 @@ def _validated_pool_record(
     eligibility = record.get("eligibilityResult")
     if eligibility not in POOL_ELIGIBILITY_VALUES:
         raise ObjectTransactionError("DATA.POOL.RECORD_ELIGIBILITY_INVALID")
-    usage_scope = record.get("usageScope")
-    if actual_type == "author":
-        if usage_scope is not None:
-            raise ObjectTransactionError("DATA.POOL.AUTHOR_SCOPE_FORBIDDEN")
-    elif eligibility == "passed":
-        if usage_scope not in {"research", "commercial"}:
-            raise ObjectTransactionError("DATA.POOL.RECORD_USAGE_SCOPE_INVALID")
-    elif usage_scope is not None:
-        raise ObjectTransactionError("DATA.POOL.PENDING_SCOPE_MUST_BE_NULL")
     if record.get("status") not in {"active", "retired", "deleted"}:
         raise ObjectTransactionError("DATA.POOL.RECORD_STATUS_INVALID")
     if actual_type in {"homepage", "content"}:
@@ -123,6 +114,9 @@ def _validated_pool_record(
             "sourceDigest",
             "entityCatalogDigest",
             "identityDigest",
+            "descriptorRef",
+            "descriptorDigest",
+            "mappingDigest",
         }
         if (
             not isinstance(source_identity, Mapping)

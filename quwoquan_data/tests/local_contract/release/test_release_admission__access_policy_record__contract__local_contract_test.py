@@ -118,7 +118,14 @@ def test_post_transaction_transcribes_access_policy_into_rights_closure(tmp_path
         package_root=package,
     )
 
-    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
-    recorded = rights["assets"][0]
+    object_root = package / "object"
+    published_manifest = json.loads(
+        (object_root / "manifest.json").read_text(encoding="utf-8")
+    )
+    source = json.loads(
+        (object_root / published_manifest["sourceRefs"][0]).read_text(encoding="utf-8")
+    )
+    recorded = source["assets"][0]
+    assert recorded["assetId"] == published_manifest["assets"][0]["assetId"]
     assert recorded["accessPolicy"] == "tos_restricted"
-    assert_valid(rights, "release", "asset_rights_closure")
+    assert_valid(source, "publish", "source")

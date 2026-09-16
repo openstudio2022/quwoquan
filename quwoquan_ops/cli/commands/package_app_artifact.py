@@ -353,8 +353,8 @@ def _build_from_capsule(
     flutter_executable = flutter_identity["executable"]
     capsule_root = attempt_dir / "input-capsule"
     capsule = materialize_package_input_capsule(
-        _CAPSULE_ROOTS,
-        capsule_root=capsule_root,
+        _CAPSULE_ROOTS, capsule_root=capsule_root,
+        dependency_platforms=(platform,) if platform in {"android", "ios"} else ("android", "ios"),
     )
     log_path = attempt_dir / "compile.log"
     temporary_workspace = tempfile.TemporaryDirectory(
@@ -899,7 +899,10 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
     try:
-        source_start = workspace_snapshot(deployment_roots=_CAPSULE_ROOTS)
+        source_start = workspace_snapshot(
+            deployment_roots=_CAPSULE_ROOTS,
+            dependency_platforms=(platform,) if platform in {"android", "ios"} else ("android", "ios"),
+        )
         source_git_sha, source_tree_digest = _git_identity()
         hosted_build_number = bool(
             os.environ.get("QWQ_ARTIFACT_BUILD_NUMBER", "").strip()
@@ -934,7 +937,10 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
             artifact_build_number=build_number,
             attempt_dir=attempt_dir,
         )
-        source_end = workspace_snapshot(deployment_roots=_CAPSULE_ROOTS)
+        source_end = workspace_snapshot(
+            deployment_roots=_CAPSULE_ROOTS,
+            dependency_platforms=(platform,) if platform in {"android", "ios"} else ("android", "ios"),
+        )
         end_git_sha, end_tree_digest = _git_identity()
         if (
             source_start != source_end

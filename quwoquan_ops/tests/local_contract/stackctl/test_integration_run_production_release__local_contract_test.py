@@ -151,6 +151,48 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertEqual(call[call.index("--content-id") + 1], "data_post_" + "d" * 64)
         self.assertEqual(call[call.index("--readiness-receipt") + 1], str(report))
 
+    def test_package_recovery_preserves_alpha_platform_and_defaults_other_environments_to_all(self) -> None:
+        for environment, selector, expected in (("alpha", "ios", "ios"), ("alpha", "android", "android"),
+                                                ("alpha", "all", "all"), ("prod", "ios", "all")):
+            calls = []
+            def stackctl(*argv, **kwargs):
+                calls.append(argv)
+                failed = len(calls) == 1
+                return integration_run.StackctlResult(argv[0], {
+                    "exitCode": 2 if failed else 0,
+                    "details": ["App dependency bundle missing"] if failed else [],
+                }, "")
+            with self.subTest(environment=environment, selector=selector), mock.patch.object(integration_run, "_stackctl", side_effect=stackctl):
+                integration_run._package_with_dependency_recovery(environment=environment,
+                    args=SimpleNamespace(app_platform=selector, release_attestation="a", rollback_release_attestation="b"),
+                    log_dir=self.root, phases=integration_run.Phases())
+            self.assertEqual([call[0] for call in calls], ["package", "app-dependency-sync", "package"])
+            self.assertEqual(calls[1], ("app-dependency-sync", "--platform", expected))
+            for call in (calls[0], calls[2]):
+                self.assertEqual(call[call.index("--app-platform") + 1], expected)
+
+    def test_acceptance_reuse_requires_exact_platform_plan_and_rejects_legacy_inputs(self) -> None:
+        store_patch = mock.patch.object(integration_run, "_store", return_value=self.root)
+        store_patch.start()
+        self.addCleanup(store_patch.stop)
+        args = SimpleNamespace(release_attestation=_attestation(self.root, "candidate"),
+            rollback_release_attestation=_attestation(self.root, "rollback"),
+            release_handoff_ref=VALID_REF, workload="full")
+        all_inputs = integration_run._acceptance_release_inputs(args)
+        self.assertEqual(all_inputs["appAcceptancePlan"]["requiredPlatforms"], ["android", "ios"])
+        args.app_platform = "ios"
+        ios_inputs = integration_run._acceptance_release_inputs(args)
+        self.assertNotEqual(all_inputs, ios_inputs)
+        package = integration_run._write_canonical(self.root / "package.json", {"kind": "package"})
+        readiness = integration_run._write_canonical(self.root / "readiness.json", {"kind": "readiness"})
+        for label, inputs in (("ios", ios_inputs), ("all", all_inputs),
+                              ("legacy", {key: value for key, value in ios_inputs.items() if key != "appAcceptancePlan"})):
+            runtime = integration_run._write_canonical(self.root / (label + ".json"), {"source": {
+                "acceptanceBinding": {"inputs": inputs, "packageManifest": package, "releaseReadiness": readiness}}})
+            fact = {"runtimeIdentity": runtime}
+            self.assertEqual(integration_run._acceptance_binds_inputs(store=self.root, fact=fact, inputs=ios_inputs), label == "ios")
+            self.assertEqual(integration_run._acceptance_binds_inputs(store=self.root, fact=fact, inputs=all_inputs), label == "all")
+
     def test_package_identity_accepts_reused_candidate_only_from_an_ancestor(self) -> None:
         # 候选身份内容寻址：data-only 候选复用祖先 commit 打出的同一不可变候选是合法的；
         # 非复用或非祖先的 sourceRevision 仍是身份漂移。

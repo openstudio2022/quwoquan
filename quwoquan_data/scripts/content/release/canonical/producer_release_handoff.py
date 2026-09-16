@@ -306,14 +306,12 @@ def _validate_query_against_sealed(
     refs = query.get("refs")
     digests = query.get("digests")
     admission = query.get("admission")
-    scope = query.get("scope")
     content_library = query.get("contentLibrary")
     if (
         not isinstance(identity, Mapping)
         or not isinstance(refs, Mapping)
         or not isinstance(digests, Mapping)
         or not isinstance(admission, Mapping)
-        or not isinstance(scope, Mapping)
         or not isinstance(content_library, Mapping)
         or identity.get("objectType") != expected_type
         or identity.get("objectRef") != projected_ref
@@ -335,11 +333,6 @@ def _validate_query_against_sealed(
         label="queryDocument.refs.poolRecordRef",
     )
     identity_field = "entityId" if expected_type == "homepage" else "contentId"
-    expected_variant = (
-        "not_applicable"
-        if expected_type == "homepage"
-        else str(manifest.get("variantPurpose") or "")
-    )
     if (
         manifest.get(identity_field) != identity.get("objectId")
         or manifest.get("version") != identity.get("contentVersion")
@@ -351,9 +344,6 @@ def _validate_query_against_sealed(
         or pool_record.get("canonicalObjectDigest") != digests.get("canonicalObjectDigest")
         or pool_record.get("payloadDigest") != digests.get("payloadDigest")
         or not isinstance(manifest.get("admission"), Mapping)
-        or scope.get("usageScope") != pool_record.get("usageScope")
-        or scope.get("usageScope") != manifest["admission"].get("usageScope")
-        or scope.get("variantPurpose") != expected_variant
         or (expected_type == "content" and identity.get("authorId") != manifest.get("creatorProfileId"))
     ):
         raise _error("DATA.RELEASE.HANDOFF_POOL_IDENTITY_DRIFT", object_ref)
@@ -469,12 +459,6 @@ def _validate_query_against_sealed(
             ),
             require_approved=True,
         )
-        if scope.get("usageScope") not in {"research", "commercial"} or any(
-            review.get("usageScope") not in {"research", "commercial"}
-            for review in content_review.get("assetRights", [])
-            if isinstance(review, Mapping)
-        ):
-            raise ObjectTransactionError("production content review usageScope drift")
     except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
         raise _error("DATA.RELEASE.HANDOFF_POOL_RIGHTS_DRIFT", str(exc)) from exc
 

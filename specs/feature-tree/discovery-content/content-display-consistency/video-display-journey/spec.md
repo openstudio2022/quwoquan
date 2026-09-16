@@ -17,7 +17,7 @@
 - 首页混合流、视频频道、通用视频卡、作品浏览器的视频未播放封面展示。
 - `thumbnailUrl` 优先、同源 `coverUrl` 回退、点击后进入真实视频播放的展示合同。
 - 用户上传视频与数据工程导入视频在 feed/read model 中使用同一封面合同。
-- 关注、点赞、收藏、评论数、转发数和重入状态在列表、浏览器、作者详情间同步。
+- 关注、点赞、评论数、转发数和重入状态在列表、浏览器、作者详情间同步；不恢复 Post 收藏，既有实体「想去」不属于本次新增能力。
 
 ### Out of Scope
 
@@ -67,6 +67,13 @@
 - 数据工程导入视频与用户上传视频使用同一展示合同，不能通过入口差异维护第二套封面字段。
 - 封面展示、点击播放、错误恢复和停留/互动行为必须具备 `referralSource` / `feedRequestId` / trace 传递，支撑推荐与运营分析。
 
+<a id="req-006"></a>
+### REQ-006 视频全入口共享命令与读失败语义
+
+- 首页、视频频道、竖/横屏控制区、作者作品、搜索/路由直达与评论内 Post 点赞均经 [动作意图 REQ-003](../content-action-intent-contract/spec.md#req-003) 的 typed coordinator 与真实 surface；不维护视频专用 writer/outbox。
+- 本人状态、pending 与统计按 [状态同步 REQ-003](../viewer-profile-state-sync-contract/spec.md#req-003) 至 [REQ-006](../viewer-profile-state-sync-contract/spec.md#req-006) 处理；无 pending 的读失败不制造待同步，数字未知只占位数字、本人未知不盲 toggle。
+- 互动读失败不重建播放器、不丢当前播放位置；目标真正失权时按内容资格进入不可访问，不用旧缓存或乐观按钮继续放行。actor 切换和旧回调同样受分区/epoch 保护。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/discovery_feed.yaml`
@@ -102,10 +109,10 @@
 ### GWT-002 视频 feed、沉浸浏览器与作者详情状态一致
 
 - GIVEN 用户在视频频道或首页打开一个视频 post，并进入视频沉浸式浏览器。
-- GIVEN 该视频 post 具备作者、关注、点赞、收藏、评论数和转发数等互动状态。
-- WHEN 用户在视频沉浸式浏览器点赞、收藏、关注作者，进入作者详情后再返回。
-- THEN 视频频道、首页卡片、沉浸浏览器和作者详情展示同一 post 与作者状态。
-- THEN 关注、点赞、收藏状态跨页面同步；作者详情关注变更返回后浏览器展示同步更新。
+- GIVEN 该视频 post 具备真实作者身份、本人关系/点赞结果和有来源的互动统计，不存在 Post 收藏事实。
+- WHEN 用户在竖屏或显式横向浏览器点赞、关注作者，进入作者详情或评论后再返回。
+- THEN 各页面共享同一 actor/target 状态；关注只有 receipt 确认才改变最终关系，点赞按钮乐观但数字保持有效服务端基线，统计追齐后不额外 +1。
+- THEN 作者详情的较新确认返回后同步更新；旧 Feed、capability、viewer 返回值不得覆盖，读取失败不伪 pending、不清已接纳意图，Post 收藏入口不回归。
 - THEN 竖屏浏览操作的滑动顺序与视频频道 feed 一致，滑动到底按同一数据源加载更多；显式横向全屏专注当前媒体，禁止切作品与切集，收起后恢复浏览操作。
 
 <a id="gwt-003"></a>
@@ -147,6 +154,14 @@
 - THEN 页面、控件、焦点协调器不得直接调用原生 controller 的 play/pause/seek；过期 generation 回调不得影响当前作品。
 - THEN 当前视频会话按 viewport epoch、post、media delivery identity 与 episode index 原子绑定；评论分屏、过滤移除/恢复和 mediaItems 重排恢复同一媒体时不得回到第 1 集或复用已失效会话，计时器按 post/episode/session generation 取消，切页或切集不得让上一媒体的延迟回调影响当前媒体；普通重建不重新显示短视频轨道，不再保留首次进入或切集开启五秒时长窗口的旧轨。
 
+<a id="gwt-005"></a>
+### GWT-005 视频直达与模式往返保持真实互动结果
+
+- GIVEN 同一 actor 由 Feed、作者作品、搜索/路由直达视频，或在评论内操作宿主 Post，视频可正常播放。
+- WHEN 竖/横屏往返、点赞/关注、本人附着或统计子读失败、另一设备确认变更后回到前台。
+- THEN 各入口经真实 surface 的同一 coordinator；关注云确认、点赞按钮乐观但数字不 +1，无 pending 的读失败只降级对应区块，不重建播放器或丢播放位置。
+- AND 当前 unknown、确认版本与 actor 分区跨模式保留；旧页面结果不能覆盖新确认。目标已失权进入不可访问，不用旧缓存继续授权，Post 收藏不回归。
+
 ## 6. 依赖
 
 - 前置要求：[`content-display-consistency`](../spec.md) 的范围、要求与 SIT。
@@ -154,6 +169,17 @@
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
 
 ## 7. 开放事项
+
+本次互动增量的待实现测试：`quwoquan_app/test/local_contract/journeys/cross_page_interaction_consistency/cross_page_interaction_consistency__local_contract_test.dart` 与 `quwoquan_app/test/local_contract/journeys/viewer_profile_state_sync/viewer_profile_state_sync__local_contract_test.dart` 扩展绑定本 Story `GWT-002`、`GWT-005`；`quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart` 证明同 actor receipt/readback；`quwoquan_app/test/user_acceptance/service/content_service/content/content_reaction/like_post__user_acceptance_test.dart` 和 `quwoquan_app/test/user_acceptance/journeys/profile/profile_journey__user_acceptance_test.dart` 扩展视频直达、横向、评论/作者往返的双真机子句并绑定对应 `spec_ref`。这些是后续断言落点，不是已实现/通过记录。
+
+<a id="open-005"></a>
+### OPEN-005 视频全入口的互动结果分型证据缺失
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：`REQ-006`、`GWT-005` 尚缺真实 surface、统计失败/unknown、actor 隔离、目标撤权与播放器不重建的组合证据。
+- 完成判定：视频入口逐项 local_contract/API/双真机直接绑定 `GWT-005`，并与 `OPEN-002` 的新 `GWT-002` 同候选取证；已有播放或几何证据不替代互动闭环。
 
 <a id="open-001"></a>
 ### OPEN-001 视频未播放态展示同源封面并点击后播放
@@ -171,7 +197,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：四环境 Remote-only 状态同步与重入保持均由同一 typed port 合同覆盖，测试 double 仅在测试树中且不维护页面级第二状态源。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 完成判定：`REQ-002` 与 `GWT-002` 的当前语义满足且真实测试 `spec_ref` 有效；旧 Post 收藏与数字即时 +1 断言不证明本次规格。
 
 <a id="open-003"></a>
 ### OPEN-003 数据工程导入视频与用户上传视频展示合同一致

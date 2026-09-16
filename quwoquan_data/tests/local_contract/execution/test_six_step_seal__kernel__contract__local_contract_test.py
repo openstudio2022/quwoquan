@@ -54,6 +54,13 @@ def execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(paths, "DATA_EXECUTIONS_ROOT", tasks)
     root = tasks / EXECUTION_ID
     _write(root / "execution_manifest.json", _canonical({"schema": "quwoquan_data.content_execution_manifest", "executionId": EXECUTION_ID}))
+    descriptor_payload = {
+        "schema": "quwoquan_data.target_descriptor", "processRef": TARGET_REF, "canonicalObjectRef": TARGET_REF,
+        "entityRef": "/entity/hangzhou-west-lake", "entityId": "entity:hangzhou-west-lake", "expectedCurrentVersion": None, "versionAuthority": "initial_create", "contentVersion": 1,
+    }
+    descriptor = {**descriptor_payload, "mappingDigest": _sha(_canonical(descriptor_payload))}
+    descriptor_ref = "0.plan/target-descriptors/" + hashlib.sha256(TARGET_REF.encode()).hexdigest() + ".json"
+    _write(root / descriptor_ref, _canonical(descriptor))
     target_set = {
         "schema": "quwoquan_data.target_set",
         "executionId": EXECUTION_ID,
@@ -64,6 +71,7 @@ def execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "targetCount": 1,
         "targetRefs": [TARGET_REF],
         "targets": [{"name": "西湖", "entityType": "地点/景区", "entityRef": "/entity/hangzhou-west-lake", "entityId": "entity:hangzhou-west-lake", "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1}],
+        "targetDescriptors": [{"scope": "execution", "ref": descriptor_ref, "digest": _sha(_canonical(descriptor))}],
     }
     _write(root / "0.plan/target_set.json", _canonical(target_set))
 
@@ -195,7 +203,7 @@ def test_three_seals_form_chain_and_seal_completes_review_fields(execution: Path
     assert rights["assetRef"] == "sources/zh_wikipedia__abc/assets/001_xihu.png"
     assert rights["decision"] == "approved"
     assert rights["issues"] == ["署名建议写全名"]
-    assert rights["usageScope"] == "research"
+    assert "usageScope" not in rights
     assert rights["sourceUrl"] == "https://commons.wikimedia.org/wiki/File:Xihu.png"
     assert rights["license"] == "CC BY-SA 4.0"
     assert rights["termsUrl"].startswith("https://")
@@ -297,7 +305,7 @@ def test_review_accepts_grok_bot_host_when_session_and_run_differ(execution: Pat
     _seal(execution, "1.download", author)
     _write(execution / TARGET_REF / "4.draft/draft.article.md", "# 西湖速览\n\n正文。\n")
     _seal(execution, "4.draft", author)
-    judgement = {"decision": "approved", "blockingIssues": [], "advisories": []}
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": _semantic_report(execution), **_semantic_bindings()}
     with pytest.raises(seal_module.SealError, match="同一 host/sessionId"):
         _seal(
             execution,
@@ -308,3 +316,14 @@ def test_review_accepts_grok_bot_host_when_session_and_run_differ(execution: Pat
     sealed = _seal(execution, "5.review", reviewer, reviews={TARGET_REF: judgement})
     assert sealed["status"] == "created"
     assert _seal(execution, "5.review", reviewer, reviews={TARGET_REF: judgement})["status"] == "replayed"
+
+
+def test_review_rejects_revision_jump_from_descriptor(execution: Path) -> None:
+    _seal(execution, "1.download", AUTHOR)
+    _write(execution / TARGET_REF / "4.draft/draft.article.md", "# 西湖速览\n\n正文。\n")
+    _seal(execution, "4.draft", AUTHOR)
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": _semantic_report(execution), **_semantic_bindings()}
+    judgement["objectRevision"]["contentRevision"] = 2
+    judgement["dispositions"][0]["objectRevision"]["contentRevision"] = 2
+    with pytest.raises(seal_module.SealError, match="DATA.IDENTITY.REVISION_TUPLE_MISMATCH"):
+        _seal(execution, "5.review", REVIEWER, reviews={TARGET_REF: judgement})

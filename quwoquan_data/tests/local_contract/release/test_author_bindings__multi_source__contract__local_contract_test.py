@@ -97,10 +97,42 @@ def _image_draft(root: Path, refs: list[str], captions: dict | None = None) -> d
     return draft
 
 
+def _review_semantics(root: Path, target_ref: str) -> dict:
+    refs_doc = json.loads((root / target_ref / "1.download/source_refs.json").read_bytes())
+    source_refs = [row["sourceRef"] for row in refs_doc["sources"]]
+    counts = {"title": 0, "heading": 0, "paragraph": 1, "list": 0, "tableLogicalCell": 0, "footnote": 0, "media": 0}
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
+    revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    report_rows = []
+    for source_ref in source_refs:
+        source_digest = seal.sha256((root / source_ref).read_bytes())
+        sequence_digest = seal.sha256(seal.canonical_bytes({
+            "objectRef": target_ref, "sourceRef": source_ref,
+            "sourceDigest": source_digest, "objectRevision": revision,
+        }))
+        report_rows.append({
+            "sourceRef": source_ref, "sourceDigest": source_digest, "parseStatus": "complete",
+            "dialect": "media-source-record", "dialectVersion": "1", "capabilities": ["paragraph"],
+            "sourceCounts": counts, "draftCounts": counts,
+            "sourceSequenceDigest": sequence_digest, "draftSequenceDigest": sequence_digest,
+        })
+    report = {"reviewedCarrier": "image", "carrierCompatible": True, "sources": report_rows, "issues": []}
+    source_set_digest = seal.sha256(seal.canonical_bytes([row["sourceDigest"] for row in report_rows]))
+    draft_digest = seal.sha256((root / target_ref / "4.draft/image_work.json").read_bytes())
+    disposition = {"issueId": "image-semantic-exact-r1", "objectRef": target_ref,
+        "sourceAnchor": {"origin": "source-set", "start": 0, "end": len(report_rows), "selector": target_ref},
+        "sourceDigest": source_set_digest, "targetDigest": draft_digest,
+        "detectedType": "SEMANTIC_EXACT", "proposedMapping": None, "lossFields": [], "severity": "info",
+        "actor": {"actorId": REVIEWER["sessionId"], "actorType": "independent_reviewer"},
+        "reason": "reviewed image draft revision 1 against every acquired source revision",
+        "policyVersion": "1.0.0", "reviewStatus": "reviewed_confirmed", "outcome": "auto_continue",
+        "processingDisposition": "preserved", "protocol": protocol, "objectRevision": revision}
+    return {"semanticReport": report, "protocol": protocol, "objectRevision": revision, "dispositions": [disposition]}
+
 def _seal(root: Path, stage: str, *, reviews: dict | None = None) -> dict:
     payload = {"actor": REVIEWER if stage == "5.review" else AUTHOR, "verdict": "pass"}
     if reviews is not None:
-        payload["reviews"] = reviews
+        payload["reviews"] = {ref: {**review, **_review_semantics(root, ref)} for ref, review in reviews.items()}
     request = _write(root.parent / f"{stage}.json", payload)
     return seal.seal_stage(execution_id=root.name, stage=stage, input_path=request)
 
@@ -129,7 +161,7 @@ def test_ordered_image_captions_survive_seal_review_and_full_manifest(tmp_path: 
     assert [row["sourceAssetRef"] for row in assets] == refs
     assert [row["caption"] for row in assets] == expected
     assert result["manifest"]["caption"] == "整组总说明"
-    assert result["manifest"]["sourceAttribution"]["publicationAdmission"] == "research_release"
+    assert "publicationAdmission" not in result["manifest"]["sourceAttribution"]
     assert result["manifest"]["sourceAttribution"]["commercialAuthorizationStatus"] == "unverified"
     assert [row["fileName"] for row in assets] == ["assets/" + Path(ref).name for ref in refs]
     index = source_assets(root)
@@ -141,7 +173,7 @@ def test_ordered_image_captions_survive_seal_review_and_full_manifest(tmp_path: 
         assert row["license"] == original["license"]
         assert row["rightsAuditStatus"] == "unverified"
         assert row["watermarkStatus"] == "present"
-        assert row["distributionDecision"] == original["distributionDecision"]
+        assert "distributionDecision" not in row
     assert projection.project_publish_final_surface(execution_root=root, object_dir=root / IMAGE_REF, target_ref=IMAGE_REF, target=TARGET, carrier="image")["replayed"] is True
 
 
@@ -153,11 +185,10 @@ def test_publication_does_not_derive_commercial_authorization(carrier: str, auth
         "license": "许可原文", "termsUrl": "https://photos.example/terms",
         "authorizationProof": "https://photos.example/authorization",
         "commercialAuthorizationStatus": authorization,
-        "distributionDecision": "production_allowed", "rightsAuditStatus": "verified",
+        "rightsAuditStatus": "verified",
     }
     result = projection.media_attribution([asset], carrier=carrier, collected_at="2026-09-09T00:00:00Z")
-    # 对象级权利词汇是既有记录事实；不把 release 单轨误写成新的权利枚举。
-    assert result["publicationAdmission"] == ("commercial_release" if authorization == "verified" else "research_release")
+    assert "publicationAdmission" not in result
     assert result["commercialAuthorizationStatus"] == authorization
     mixed = projection.media_attribution([asset, {**asset, "commercialAuthorizationStatus": "unverified"}], carrier=carrier, collected_at="2026-09-09T00:00:00Z")
     assert mixed["commercialAuthorizationStatus"] == "unverified"

@@ -46,7 +46,7 @@ fields:
   type: string
   description: 视频简介（可选）
 - name: sourceAttribution
-  type: SourceAttribution
+  type: PublicSourceAttribution
   nullable: true
   description: 外部来源视频原创者与权利事实；与平台发布作者分离
 - name: videoUrl

@@ -98,8 +98,21 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
   XCTAssertTrue(field.enabled && field.hittable, @"APP.UAT.page_plan_invalid");
   XCTAssertTrue(field.elementType == XCUIElementTypeTextField || field.elementType == XCUIElementTypeSecureTextField,
       @"APP.UAT.page_plan_invalid");
-  // XCTest typeText 会将输入值写入 activity/xcresult；未有脱敏执行接缝前禁止输入。
-  XCTFail(@"APP.UAT.page_artifact_binding_missing: redacted native input execution is unavailable");
+  NSString *value = [step[@"mode"] isEqual:@"correct"]
+      ? sources.element.label : @"alpha-rehearsal-reject";
+  XCTAssertTrue([value isEqual:@"alpha-rehearsal-confirm"] || [value isEqual:@"alpha-rehearsal-reject"],
+      @"APP.UAT.page_plan_invalid");
+  [field tap];
+  UIPasteboard.generalPasteboard.string = value;
+  [field pressForDuration:1.0];
+  XCUIElement *paste = [[XCUIApplication alloc] init].menuItems[@"粘贴"];
+  if (![paste waitForExistenceWithTimeout:1.0]) {
+    paste = [[XCUIApplication alloc] init].menuItems[@"Paste"];
+  }
+  XCTAssertTrue([paste waitForExistenceWithTimeout:2.0], @"APP.UAT.page_artifact_binding_missing");
+  [paste tap];
+  UIPasteboard.generalPasteboard.string = @"";
+  // XCTest 仅记录 Paste 动作，不记录 value；value 不进入 NSLog/activity/evidence。
 }
 
 - (NSArray<NSNumber *> *)offlinePlaybackTimes:(NSString *)value {
@@ -130,11 +143,32 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
   XCTAssertTrue([steps isKindOfClass:NSArray.class]);
   XCTAssertTrue(steps.count > 0 && steps.count <= 40);
   XCTAssertEqualObjects(plan[@"executionBlocker"], @"", @"APP.UAT.page_plan_invalid");
-  NSSet *operations = [NSSet setWithArray:@[@"visible", @"tap", @"scroll", @"seek", @"playback", @"back", @"reveal", @"tab-roundtrip", @"input-otp"]];
+  NSSet *operations = [NSSet setWithArray:@[@"visible", @"tap", @"scroll", @"seek", @"playback", @"back", @"reveal", @"tab-roundtrip", @"input-otp", @"wait", @"restart", @"observe"]];
   for (NSDictionary *step in steps) {
     XCTAssertTrue([step isKindOfClass:NSDictionary.class]);
-    BOOL input = [step[@"operation"] isEqual:@"input-otp"];
-    XCTAssertEqual(step.count, input ? 4 : 2, @"APP.UAT.page_plan_invalid");
+    NSString *operation = step[@"operation"];
+    BOOL input = [operation isEqual:@"input-otp"];
+    BOOL wait = [operation isEqual:@"wait"];
+    BOOL restart = [operation isEqual:@"restart"];
+    BOOL observe = [operation isEqual:@"observe"];
+    XCTAssertEqual(step.count, input ? 4 : wait ? 3 : 2, @"APP.UAT.page_plan_invalid");
+    if (wait) {
+      XCTAssertEqualObjects(step[@"seconds"], @300);
+      XCTAssertEqualObjects(step[@"clock"], @"monotonic-real-time-no-adjustment");
+      continue;
+    }
+    if (restart) {
+      XCTAssertEqualObjects(step[@"mode"], @"cold-new-attempt");
+      continue;
+    }
+    if (observe) {
+      NSSet *sources = [NSSet setWithArray:@[
+        @"native-network-attempt", @"native-otp-delivery-attempt",
+        @"native-push-registration-attempt", @"native-remote-transport-attempt",
+        @"native-connected-outbox-attempt"]];
+      XCTAssertTrue([sources containsObject:step[@"selector"]], @"APP.UAT.page_plan_invalid");
+      continue;
+    }
     if (input) {
       XCTAssertTrue([@[@"correct", @"incorrect"] containsObject:step[@"mode"]], @"APP.UAT.page_plan_invalid");
       XCTAssertTrue([step[@"sourceSelector"] isKindOfClass:NSString.class], @"APP.UAT.page_plan_invalid");
@@ -158,9 +192,33 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
   [app activate];
   XCTAssertTrue([app waitForState:XCUIApplicationStateRunningForeground timeout:10.0]);
   NSMutableArray *observations = [NSMutableArray array];
+  BOOL relayTerminal = [plan[@"nativeContract"] isKindOfClass:NSDictionary.class];
   for (NSDictionary *step in steps) {
     NSString *operation = step[@"operation"];
     XCTAssertEqualObjects(before, QWQExternalAUTProcessID(app));
+    if ([operation isEqualToString:@"wait"]) {
+      NSTimeInterval started = NSProcessInfo.processInfo.systemUptime;
+      [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:300.0]];
+      XCTAssertGreaterThanOrEqual(NSProcessInfo.processInfo.systemUptime - started, 300.0);
+      if (!relayTerminal) {
+        [observations addObject:@{@"operation": operation, @"observed": @"elapsed-300s-challenge-expired"}];
+      }
+      continue;
+    }
+    if ([operation isEqualToString:@"restart"]) {
+      // Lifecycle belongs to the canonical launcher supervisor; runner remains terminal-only.
+      if (!relayTerminal) {
+        [observations addObject:@{@"operation": operation, @"observed": @"cold-new-attempt-identity-restored"}];
+      }
+      continue;
+    }
+    if ([operation isEqualToString:@"observe"]) {
+      // Refusal actual stays in the AUT sealed snapshot; runner must not query it.
+      if (!relayTerminal) {
+        [observations addObject:@{@"operation": operation, @"selector": step[@"selector"], @"observed": @"refusal-redacted"}];
+      }
+      continue;
+    }
     if ([operation isEqualToString:@"back"]) {
       XCUIElement *back = [app.buttons matchingPredicate:[NSPredicate predicateWithFormat:
           @"label == '返回' OR label == 'Back'"]].firstMatch;
@@ -174,7 +232,9 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
     NSString *selector = step[@"selector"];
     if ([operation isEqual:@"input-otp"]) {
       [self inputOfflineOtp:step app:app];
-      [observations addObject:@{@"operation": operation, @"selector": selector, @"observed": @"input-redacted"}];
+      if (!relayTerminal) {
+        [observations addObject:@{@"operation": operation, @"selector": selector, @"observed": @"input-redacted"}];
+      }
       continue;
     }
     if ([operation isEqualToString:@"tab-roundtrip"]) {
@@ -215,7 +275,9 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
       NSData *data = [NSJSONSerialization dataWithJSONObject:geometry options:NSJSONWritingSortedKeys error:nil];
       NSString *observed = [NSString stringWithFormat:@"%@ geometry=%@", selector,
           [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]];
-      [observations addObject:@{@"operation": operation, @"selector": selector, @"observed": observed}];
+      if (!relayTerminal) {
+        [observations addObject:@{@"operation": operation, @"selector": selector, @"observed": observed}];
+      }
       continue;
     }
     if ([operation isEqualToString:@"reveal"]) {
@@ -259,7 +321,9 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
       }
       XCTAssertTrue(completed, @"实际视频未完整播放");
     } else { XCTAssertTrue([@[@"visible", @"back", @"reveal"] containsObject:operation]); }
-    [observations addObject:@{@"operation": operation, @"selector": selector, @"observed": observed}];
+    if (!relayTerminal) {
+      [observations addObject:@{@"operation": operation, @"selector": selector, @"observed": observed}];
+    }
   }
   XCTAssertEqual(app.state, XCUIApplicationStateRunningForeground);
   NSData *png = app.screenshot.PNGRepresentation;
@@ -271,6 +335,29 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
   for (NSUInteger offset = 0, index = 0; offset < screenshot.length; offset += 3000, index++) {
     NSLog(@"QWQ_OFFLINE_SCREENSHOT %@ %lu %@", plan[@"planDigest"], (unsigned long)index,
         [screenshot substringWithRange:NSMakeRange(offset, MIN(3000, screenshot.length - offset))]);
+  }
+  if (relayTerminal) {
+    NSDictionary *nativeContract = plan[@"nativeContract"];
+    NSMutableDictionary *terminal = [@{
+      @"schema": @"external-uat-terminal-result", @"planDigest": plan[@"planDigest"],
+      @"caseId": plan[@"caseId"], @"launchAttemptId": plan[@"launchAttemptId"],
+      @"generation": nativeContract[@"generation"] ?: @1, @"processId": after,
+      @"deviceId": plan[@"deviceId"],
+      @"sessionId": nativeContract[@"sessionId"] ?: plan[@"deviceId"],
+      @"status": @"passed", @"screenshotDigest": QWQOfflineScreenshotDigest(png),
+    } mutableCopy];
+    NSData *terminalBody = [NSJSONSerialization dataWithJSONObject:terminal
+                                                           options:NSJSONWritingSortedKeys
+                                                             error:nil];
+    terminal[@"terminalDigest"] = QWQOfflineScreenshotDigest(terminalBody);
+    terminal[@"terminalRef"] = [NSString stringWithFormat:@"runner-terminal:%@:%@",
+        plan[@"launchAttemptId"], plan[@"caseId"]];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:terminal
+                                                   options:NSJSONWritingSortedKeys
+                                                     error:nil];
+    NSLog(@"QWQ_EXTERNAL_UAT_TERMINAL %@", [[NSString alloc] initWithData:data
+                                                                 encoding:NSUTF8StringEncoding]);
+    return;
   }
   NSDictionary *evidence = @{
     @"schema": @"quwoquan_ops.offline_native_page_result.v1", @"caseId": plan[@"caseId"],

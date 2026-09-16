@@ -232,8 +232,7 @@
           "acquisitionStatus",
           "rightsStatus",
           "authorizationRequired",
-          "distributionDecision",
-          "sourceUrl",
+            "sourceUrl",
           "platform",
           "creator",
           "capturedAt",
@@ -271,13 +270,6 @@
           },
           "authorizationRequired": {
             "type": "boolean"
-          },
-          "distributionDecision": {
-            "enum": [
-              "research_allowed",
-              "commercial_allowed",
-              "blocked"
-            ]
           },
           "sourceUrl": {
             "type": "string",

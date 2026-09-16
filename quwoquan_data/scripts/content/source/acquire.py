@@ -42,9 +42,8 @@ from core.video_variants import (
     probe_video,
     video_needs_derivative,
 )
-from governance.coverage.distribution import (
-    AcquisitionStatus, RightsStatus, distribution_decision, load_content_distribution_policy,
-)
+from governance.coverage.distribution import load_content_distribution_policy
+
 
 
 def _asset_record_defaults() -> dict[str, str]:
@@ -273,7 +272,6 @@ def _attribution(source: dict[str, Any], *, platform: str, collected_at: str, ha
         "attributionText": f"{creator} / {platform} / {license_name}",
         "rightsBasis": license_name,
         "commercialAuthorizationStatus": str(source.get("commercialAuthorizationStatus") or defaults["commercialAuthorizationStatus"]),
-        "publicationAdmission": "commercial_release" if str(source.get("commercialAuthorizationStatus") or defaults["commercialAuthorizationStatus"]) == "verified" else "research_release",
         "authorizationProofUrl": source.get("authorizationProof") or None,
         "termsUrl": license_url,
         "watermarkStatus": str(source["watermarkStatus"]),
@@ -456,11 +454,6 @@ def _asset_row(
         "audioRightsStatus": attribution["audioRightsStatus"],
         "rightsStatus": rights_status,
         "authorizationRequired": rights_status != "verified" or not media["authorizationProof"],
-        "distributionDecision": distribution_decision(
-            acquisition_status=AcquisitionStatus.ACQUIRED,
-            rights_status=RightsStatus(rights_status),
-            authorization_proof=str(media["authorizationProof"] or ""),
-        ).value,
         "rightsIssues": rights_issues,
         "relevance": relevance,
         "caption": media.get("description") or acquired["title"],

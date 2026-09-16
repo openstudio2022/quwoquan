@@ -16,6 +16,10 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 from content.release.canonical import post_promotion as subject
+from content.release.canonical.canonical_inventory import (
+    canonical_inventory_path,
+    load_or_bootstrap_inventory,
+)
 from content.release.canonical.image_identity import (
     canonical_asset_manifest_row,
 )
@@ -24,6 +28,20 @@ from content.release.canonical.object_transaction_contract import (
 )
 from core.image_deduplication import perceptual_hash_distance
 from core.io import write_json
+
+
+def _publish_repository(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / ".git").mkdir()
+    write_json(
+        root / "repository.json",
+        {
+            "schema": "quwoquan_data.publish_repository.v2",
+            "repositoryId": "image-canonical-identity-cross-execution-test",
+            "layoutVersion": 2,
+        },
+    )
+    return root
 
 
 def _manifest(
@@ -75,13 +93,15 @@ def test_cross_execution_exact_image_identity_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = _publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     existing = publish / "posts/image/摄影/既有图片/1"
     write_json(
         existing / "manifest.json",
         _manifest(digest="sha256:" + "a" * 64, perceptual_hash="0" * 16),
     )
+    load_or_bootstrap_inventory(publish)
+    assert canonical_inventory_path(publish).is_file()
     write_json(
         package / "object/manifest.json",
         _manifest(
@@ -90,7 +110,10 @@ def test_cross_execution_exact_image_identity_is_rejected(
     )
     monkeypatch.setattr(subject, "PUBLISH_ROOT", publish)
 
-    with pytest.raises(ObjectTransactionError, match="duplicated by sha256"):
+    with pytest.raises(
+        ObjectTransactionError,
+        match=r"DATA\.POOL\.IMAGE_SHA256_DUPLICATE",
+    ):
         subject._assert_cross_publish_image_unique(
             package_root=package,
             canonical_post=publish / "posts/image/摄影/新图片/1",
@@ -104,7 +127,7 @@ def test_cross_execution_perceptual_duplicate_is_rejected(
     asset_id: str,
     error: str,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = _publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     write_json(
         publish / "posts/image/摄影/既有图片/1/manifest.json",
@@ -129,7 +152,7 @@ def test_cross_execution_perceptual_duplicate_is_rejected(
 def test_cross_execution_stable_binding_reference_reuse_is_allowed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, carrier: str,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = _publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     existing = _manifest(digest="sha256:" + "a" * 64, perceptual_hash="0" * 16)
     write_json(publish / "posts/image/摄影/原作品/1/manifest.json", existing)
@@ -143,7 +166,7 @@ def test_cross_execution_stable_binding_reference_reuse_is_allowed(
 def test_cross_execution_explicit_logical_version_is_allowed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = _publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     existing = _manifest(digest="sha256:" + "a" * 64, perceptual_hash="0" * 16)
     write_json(publish / "posts/image/摄影/同作品/1/manifest.json", existing)
@@ -156,7 +179,7 @@ def test_commercial_image_requires_perceptual_identity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = _publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     write_json(
         package / "object/manifest.json",
@@ -175,7 +198,7 @@ def test_existing_image_manifest_without_perceptual_hash_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = _publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     write_json(
         publish / "posts/image/摄影/旧图片/1/manifest.json",

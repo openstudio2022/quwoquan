@@ -56,7 +56,27 @@ def _manifest(
     }
 
 
+def _publish_repository(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / ".git").mkdir(exist_ok=True)
+    (root / "repository.json").write_text(
+        json.dumps(
+            {
+                "schema": "quwoquan_data.publish_repository.v2",
+                "repositoryId": "canonical-video-inventory-test",
+                "layoutVersion": 2,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return root
+
+
 def _write_manifest(publish: Path, relative: str, manifest: dict[str, object]) -> bytes:
+    _publish_repository(publish)
     payload = (json.dumps(manifest, ensure_ascii=False, sort_keys=True) + "\n").encode()
     destination = publish / relative
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -189,8 +209,7 @@ def test_stable_video_and_poster_reference_reuse_is_independent_positive(tmp_pat
 def test_duplicate_increment_rolls_back_inventory_and_both_indexes(
     tmp_path: Path,
 ) -> None:
-    publish = tmp_path / "publish"
-    publish.mkdir()
+    publish = _publish_repository(tmp_path / "publish")
     inventory = load_or_bootstrap_inventory(publish)
     first = _manifest("execution-first", content="duplicate", poster="poster-first")
     first_ref = "posts/video/体验/原子视频一/1/manifest.json"
@@ -238,8 +257,7 @@ def test_duplicate_increment_rolls_back_inventory_and_both_indexes(
 def test_video_index_state_tamper_and_stale_inventory_fence_fail_closed(
     tmp_path: Path,
 ) -> None:
-    publish = tmp_path / "publish"
-    publish.mkdir()
+    publish = _publish_repository(tmp_path / "publish")
     base = load_or_bootstrap_inventory(publish)
 
     stale_path = publish / "posts/video/体验/stale/1/note.md"
@@ -290,8 +308,7 @@ def test_video_index_state_tamper_and_stale_inventory_fence_fail_closed(
 
 
 def test_poster_binding_must_match_the_exact_manifest_asset(tmp_path: Path) -> None:
-    publish = tmp_path / "publish"
-    publish.mkdir()
+    publish = _publish_repository(tmp_path / "publish")
     manifest = _manifest("execution-binding", content="binding", poster="poster")
     video = manifest["assets"][0]  # type: ignore[index]
     assert isinstance(video, dict)

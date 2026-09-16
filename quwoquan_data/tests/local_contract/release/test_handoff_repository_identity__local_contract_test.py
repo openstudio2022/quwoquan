@@ -31,8 +31,10 @@ def test_repository_marker_has_no_duplicate_producer_contract_digest(tmp_path):
 def _release(root: Path, revision: str):
     from local_contract.release.test_producer_release_detachment__contract__local_contract_test import _sealed_handoff_fixture
     from core.release_layout import objects_merkle, payload_digest
-    logical_ref = "entities/travel/test/home"
-    sealed, row, _, _, _ = _sealed_handoff_fixture(root, logical_ref=logical_ref, review_ref="entities/地点/景区/original")
+    logical_ref = "entities/地点/景区/p0001/entity-a/1"
+    sealed, row, _, _, _ = _sealed_handoff_fixture(
+        root, logical_ref=logical_ref, review_ref=logical_ref,
+    )
     counts = {"homepage": 1, "article": 0, "image": 0, "video": 0, "total": 1}
     targets = {key: value for key, value in counts.items() if key != "total"}
     cohort = {"schema": "quwoquan_data.release_cohort", "objectRefs": [logical_ref],
@@ -94,8 +96,11 @@ def test_writer_binds_identity_and_rejects_replay_from_another_repository(tmp_pa
         handoff.validate_producer_release_handoff(document, repo_root=tmp_path, output_root=output, release_root=releases, expected_repository_id="content-b")
     other = tmp_path / "another-publish"
     _repository(other, "content-b")
-    with pytest.raises(handoff.ProducerReleaseHandoffError, match="CREATE_ONCE_CONFLICT"):
+    with pytest.raises(
+        handoff.ProducerReleaseHandoffError, match="CREATE_ONCE_CONFLICT",
+    ) as cross_repository:
         handoff.write_producer_release_handoff(**{**kwargs, "publish_root": other})
+    assert "REPOSITORY_IDENTITY_MISMATCH" in str(cross_repository.value.__cause__)
     assert path.read_bytes() == original
     import argparse
     from content.release.canonical.handler_cli import register_parser

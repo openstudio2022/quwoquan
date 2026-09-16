@@ -105,7 +105,6 @@
           "license",
           "termsUrl",
           "authorizationProof",
-          "usageScope",
           "decision",
           "issues"
         ],
@@ -132,12 +131,6 @@
               "null"
             ],
             "pattern": "^https://"
-          },
-          "usageScope": {
-            "enum": [
-              "research",
-              "commercial"
-            ]
           },
           "decision": {
             "enum": [

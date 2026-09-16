@@ -1,4 +1,4 @@
-"""Alpha 合入不得用日志、单平台或服务回读代替离线页面矩阵。
+"""Alpha 合入不得用日志、未声明的单平台或服务回读代替 required 离线矩阵。
 
 spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-007
 """
@@ -44,10 +44,13 @@ def supported_offline_producer(monkeypatch):
         for plan in plans:
             if original_blocker(plan["caseId"]):
                 plan["executionBlocker"] = ""
-                plan["steps"] = [
+                from quwoquan_ops.cli.commands.app_preflight_uat_offline_native_contract import build_native_case_contract
+                plan["nativeContract"] = build_native_case_contract(plan["caseId"], plan)
+                plan["steps"] = ([{"operation": "observe", "selector": plan["nativeContract"]["observationSources"][0]}]
+                    if plan["caseId"].endswith("-refusal") else [
                     {"operation": "tap", "selector": "local-contract-action"},
                     {"operation": "visible", "selector": "local-contract-readback"},
-                ]
+                ])
                 plan["planDigest"] = pages.document_digest({key: value for key, value in plan.items() if key != "planDigest"})
             pages.validate_page_plan(plan)
         return plans
@@ -57,10 +60,9 @@ def supported_offline_producer(monkeypatch):
     monkeypatch.setattr(pages, "build_offline_page_plans", supported_plans)
 
 
-def test_current_unsupported_required_cases_reject_even_complete_claimed_passes():
+def test_required_cases_accept_complete_claimed_passes_once_orchestration_is_executable():
     results, bindings = _matrix()
-    with pytest.raises(ValueError, match="unsupported required case"):
-        validate_offline_page_coverage(results=results, bindings=bindings, candidate=_CANDIDATE)
+    validate_offline_page_coverage(results=results, bindings=bindings, candidate=_CANDIDATE)
 
 
 def _matrix():
@@ -144,6 +146,52 @@ def test_native_terminal_requires_exact_process_plan_and_step_coverage():
         validate_native_page_result(encode(terminal) + "\n" + encode(terminal), plan=plan, launch=launch)
 
 
+def _actual_observation(plan: dict[str, object], binding: dict[str, object]) -> dict[str, object]:
+    contract = plan["nativeContract"]
+    restart = plan["caseId"] == "identity-restart"
+    details = {
+        "ui-control": "unique-editable-control",
+        "rehearsal-session-readback": "session-established",
+        "rehearsal-auth-error-readback": "recoverable-error-observed",
+        "continuation-query-readback": "continued-once-readback",
+        "local-command-query-readback": "command-query-readback",
+        "monotonic-clock": "elapsed-300s-challenge-expired",
+        "native-process": "cold-restart-new-process",
+        "rehearsal-challenge-readback": "challenge-expired",
+        "native-network-attempt": "refused-at-side-effect-boundary",
+        "native-otp-delivery-attempt": "refused-at-side-effect-boundary",
+        "native-push-registration-attempt": "refused-at-side-effect-boundary",
+        "native-remote-transport-attempt": "refused-at-side-effect-boundary",
+        "native-connected-outbox-attempt": "refused-at-side-effect-boundary",
+    }
+    return {"schema": "quwoquan_ops.alpha_gwt008_native_observation.v1", "caseId": plan["caseId"],
+        "contractDigest": contract["contractDigest"], "applicationId": binding["applicationId"], "deviceId": binding["deviceId"],
+        "candidateDigest": binding["candidateDigest"], "artifactDigest": binding["artifactDigest"],
+        "launchAttemptBefore": binding["launchAttemptId"], "processIdBefore": binding["canonicalProcessId"],
+        "launchAttemptAfter": "restart-attempt" if restart else binding["launchAttemptId"],
+        "processIdAfter": binding["canonicalProcessId"] + 1 if restart else binding["canonicalProcessId"],
+        "observations": [{"source": source, "status": "observed", "detail": details[source]} for source in contract["observationSources"]],
+        "logSummary": "input-redacted"}
+
+def _relay_comparison(plan, launch, native):
+    from quwoquan_ops.cli.commands import app_preflight_uat_offline_native_contract as relay
+    # 只构造 native port 响应；摘要、scope、comparison 均经过生产校验器。
+    session = relay.admit_launch(plan["nativeContract"], launch, signing_digest=_DIGEST, lifecycle_digest=_DIGEST,
+        now_ms=1, clock_ms=lambda: 2)
+    session.verify_terminal(native, plan)
+    snapshot = {"schema": "external-uat-sealed-snapshot", "caseId": plan["caseId"],
+        "launchAttemptId": launch["launchAttemptId"], "generation": plan["nativeContract"]["generation"],
+        "observationBinding": plan["nativeContract"]["observationBinding"], "processId": launch["canonicalProcessId"],
+        "observations": plan["nativeContract"]["expectedObservation"]["observations"], "sealedAtMonotonicMs": 2}
+    snapshot["snapshotDigest"] = relay.digest(snapshot)
+    broker = {"schema": "external-uat-broker-result", "status": "observed", "admissionDigest": session.admission["admissionDigest"],
+        "terminalDigest": native["terminalDigest"], "snapshot": snapshot, "snapshotDigest": snapshot["snapshotDigest"],
+        "consumed": True, "revoked": True, "errorCode": ""}
+    broker["resultDigest"] = relay.digest(broker)
+    comparison = relay.compare_and_report(session, broker, plan["nativeContract"]["expectedObservation"])
+    return {**comparison, "admission": session.admission, "brokerResult": broker}
+
+
 def _receipt_matrix(root):
     from quwoquan_ops.cli.integration_run import exact_file_digest
     from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import document_digest, build_offline_page_plans
@@ -191,6 +239,15 @@ def _receipt_matrix(root):
             result["carrier"] = plan["carrier"]
             observations = []
             for step in plan["steps"]:
+                if step["operation"] == "input-otp":
+                    observations.append({"operation": "input-otp", "selector": step["selector"], "observed": "input-redacted"})
+                    continue
+                if step["operation"] == "wait":
+                    observations.append({"operation": "wait", "observed": "elapsed-300s-challenge-expired"})
+                    continue
+                if step["operation"] == "restart":
+                    observations.append({"operation": "restart", "observed": "cold-new-attempt-identity-restored"})
+                    continue
                 observed = step["selector"].removeprefix("text-prefix:")
                 if step["operation"] == "playback":
                     observed += " 2:07 / 2:07"
@@ -199,12 +256,18 @@ def _receipt_matrix(root):
                 elif step["operation"] == "tab-roundtrip":
                     observed += ' geometry={"initial":[80,10],"middle":[10],"further":[10],"restored":[80,10]}'
                 observations.append({**step, "observed": observed})
-            native = {"schema": "quwoquan_ops.offline_native_page_result.v1", "caseId": case, "planDigest": plan["planDigest"],
-                      **{key: launch[key] for key in ("candidateDigest", "artifactDigest", "deviceId", "launchAttemptId")},
-                      "screenshotDigest": _SCREENSHOT_DIGEST, "screenshotByteLength": len(_SCREENSHOT),
-                      "platform": platform, "applicationId": "com.example.app", "status": "passed",
-                      "processIdBefore": 123, "processIdAfter": 123,
-                      "observations": observations}
+            if "nativeContract" in plan:
+                body = {"schema": "external-uat-terminal-result", "planDigest": plan["planDigest"], "caseId": case,
+                        "launchAttemptId": launch["launchAttemptId"], "generation": plan["nativeContract"]["generation"],
+                        "processId": 123, "deviceId": launch["deviceId"], "sessionId": plan["nativeContract"]["sessionId"],
+                        "status": "passed", "screenshotDigest": _SCREENSHOT_DIGEST}
+                native = {**body, "terminalDigest": document_digest(body), "terminalRef": "runner-terminal:" + case}
+            else:
+                native = {"schema": "quwoquan_ops.offline_native_page_result.v1", "caseId": case, "planDigest": plan["planDigest"],
+                          **{key: launch[key] for key in ("candidateDigest", "artifactDigest", "deviceId", "launchAttemptId")},
+                          "screenshotDigest": _SCREENSHOT_DIGEST, "screenshotByteLength": len(_SCREENSHOT),
+                          "platform": platform, "applicationId": "com.example.app", "status": "passed",
+                          "processIdBefore": 123, "processIdAfter": 123, "observations": observations}
             prefix = f"{platform}/{case}"
             execution = {"plan": write(prefix + "/plan.json", plan), "nativeResult": write(prefix + "/native.json", native),
                          "launchBinding": launch_ref, "targetUatBinding": binding_ref,
@@ -212,7 +275,37 @@ def _receipt_matrix(root):
                          "autBefore": aut, "autAfter": aut, "command": {"exitCode": 0},
                          "screenshot": write(prefix + "/screenshot.png", _SCREENSHOT),
                          "log": write(prefix + "/native.log", ("QWQ_OFFLINE_SCREENSHOT " + plan["planDigest"] + " 0 "
-                            + base64.b64encode(_SCREENSHOT).decode() + "\nQWQ_OFFLINE_PAGE " + json.dumps(native)).encode())}
+                            + base64.b64encode(_SCREENSHOT).decode() + ("\nQWQ_EXTERNAL_UAT_TERMINAL " if "nativeContract" in plan else "\nQWQ_OFFLINE_PAGE ") + json.dumps(native)).encode())}
+            if "nativeContract" in plan:
+                comparison = _relay_comparison(plan, launch, native)
+                if case != "identity-restart":
+                    execution["command"]["launcherComparison"] = comparison
+                else:
+                    from quwoquan_ops.cli.commands import app_preflight_uat_offline_native_contract as relay
+                    continuity = document_digest({key: launch[key] for key in ("candidateDigest", "artifactDigest", "applicationId", "deviceId")})
+                    successor_attempt = {"attemptId": platform + "-second", "status": "stopped"}
+                    successor = {**launch, "launchAttemptId": successor_attempt["attemptId"], "launchAttemptDigest": document_digest(successor_attempt),
+                        "canonicalProcessId": 124, "caseId": case, "generation": 2, "continuityDigest": continuity}
+                    second_plan = next(item for item in build_offline_page_plans(snapshot=snapshot, app_root=app_root, launch=successor) if item["caseId"] == case)
+                    second_body = {**body, "planDigest": second_plan["planDigest"], "launchAttemptId": successor["launchAttemptId"], "generation": 2, "processId": 124}
+                    second_native = {**second_body, "terminalDigest": document_digest(second_body), "terminalRef": "runner-terminal:second"}
+                    second_prefix = prefix + "/second"
+                    refs = {"launchBinding": write(second_prefix + "/launch.json", successor),
+                        "launchAttempt": write(second_prefix + "/attempt.json", successor_attempt),
+                        "plan": write(second_prefix + "/plan.json", second_plan), "nativeResult": write(second_prefix + "/native.json", second_native),
+                        "screenshot": write(second_prefix + "/screenshot.png", _SCREENSHOT), "command": {"exitCode": 0},
+                        "log": write(second_prefix + "/native.log", ("QWQ_OFFLINE_SCREENSHOT " + second_plan["planDigest"] + " 0 " + base64.b64encode(_SCREENSHOT).decode()
+                            + "\nQWQ_EXTERNAL_UAT_TERMINAL " + json.dumps(second_native)).encode())}
+                    first_session = relay.RelaySession(admission=comparison["admission"])
+                    first_session.terminal_digest = native["terminalDigest"]
+                    first_session.consumed = True
+                    first_session.revoke()
+                    teardown = relay.build_teardown_receipt(session=first_session,
+                        predecessor_result_digest=comparison["comparisonDigest"], transaction_id=_DIGEST,
+                        requested_at_ms=3, terminated_at_ms=4, readbacks=[True] * 3, broker_disconnected=True)
+                    execution["command"].update(successorEvidence=refs, launcherSupervision={
+                        "attempt1": comparison, "teardown": teardown, "attempt2": _relay_comparison(second_plan, successor, second_native),
+                        "continuityDigest": continuity, "nonPromotable": True})
             evidence = write(result["artifactPath"], execution)
             raw_ref = write(f"{platform}/raw/{case}.json", result)
             slot = platform + ":" + case
@@ -229,6 +322,65 @@ def _receipt_matrix(root):
     return receipts, write
 
 
+@pytest.mark.parametrize("damage", ["session", "attempt", "broker", "missing-successor"])
+def test_acceptance_rejects_relay_drift_and_missing_successor(tmp_path, supported_offline_producer, damage):
+    from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
+    receipts, write = _receipt_matrix(tmp_path)
+    receipt = json.loads((tmp_path / receipts["ios"]["ref"]).read_bytes())
+    case = "identity-restart" if damage == "missing-successor" else "login-success"
+    page = next(row for row in receipt["pageResultRefs"] if row["slotId"] == "ios:" + case)
+    execution = json.loads((tmp_path / page["evidence"]["ref"]).read_bytes())
+    if damage == "missing-successor":
+        del execution["command"]["successorEvidence"]
+    else:
+        comparison = execution["command"]["launcherComparison"]
+        if damage == "broker":
+            comparison["brokerResult"]["snapshot"]["observations"] = []
+        else:
+            from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import document_digest
+            comparison["admission"]["sessionId" if damage == "session" else "launchAttemptId"] = "another"
+            comparison["admission"]["admissionDigest"] = document_digest({k: v for k, v in comparison["admission"].items() if k != "admissionDigest"})
+    page["evidence"] = write(page["evidence"]["ref"], execution)
+    receipts["ios"] = write(receipts["ios"]["ref"], receipt)
+    with pytest.raises(ValueError, match="APP.UAT."):
+        offline_receipt_evidence(root=tmp_path, receipts={"ios": receipts["ios"]}, candidate=_CANDIDATE,
+            devices={"ios": "ios-device"}, required_platforms=("ios",))
+
+
+def test_acceptance_consumes_distinct_per_page_attempt_not_initial_anchor(tmp_path, supported_offline_producer):
+    from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import document_digest
+    receipts, write = _receipt_matrix(tmp_path)
+    receipt = json.loads((tmp_path / receipts["ios"]["ref"]).read_bytes())
+    page = receipt["pageResultRefs"][0]
+    execution = json.loads((tmp_path / page["evidence"]["ref"]).read_bytes())
+    launch = json.loads((tmp_path / execution["launchBinding"]["ref"]).read_bytes())
+    plan = json.loads((tmp_path / execution["plan"]["ref"]).read_bytes())
+    native = json.loads((tmp_path / execution["nativeResult"]["ref"]).read_bytes())
+    binding = json.loads((tmp_path / execution["targetUatBinding"]["ref"]).read_bytes())
+    attempt = {"attemptId": "fresh-page-attempt", "status": "stopped"}
+    launch.update(launchAttemptId=attempt["attemptId"], launchAttemptDigest=document_digest(attempt))
+    binding["launchAttempt"] = write("ios/fresh/attempt.json", attempt)
+    binding.pop("bindingId")
+    binding["bindingId"] = document_digest({k: v for k, v in binding.items() if k != "createdAt"})
+    plan["launchAttemptId"] = attempt["attemptId"]
+    plan["planDigest"] = document_digest({k: v for k, v in plan.items() if k != "planDigest"})
+    native.update(launchAttemptId=attempt["attemptId"], planDigest=plan["planDigest"])
+    execution.update(launchBinding=write("ios/fresh/launch.json", launch), targetUatBinding=write("ios/fresh/binding.json", binding),
+        plan=write(execution["plan"]["ref"], plan), nativeResult=write(execution["nativeResult"]["ref"], native),
+        log=write(execution["log"]["ref"], ("QWQ_OFFLINE_SCREENSHOT " + plan["planDigest"] + " 0 " + base64.b64encode(_SCREENSHOT).decode()
+            + "\nQWQ_OFFLINE_PAGE " + json.dumps(native)).encode()))
+    page["evidence"] = write(page["evidence"]["ref"], execution)
+    raw = json.loads((tmp_path / page["result"]["ref"]).read_bytes())
+    raw["targetUatBindingDigest"] = target_uat_binding_digest(binding)
+    page["result"] = write(page["result"]["ref"], raw)
+    receipt["rawResultDigests"]["alpha-local"][0]["digest"] = page["result"]["digest"]
+    receipts["ios"] = write(receipts["ios"]["ref"], receipt)
+    evidence = offline_receipt_evidence(root=tmp_path, receipts={"ios": receipts["ios"]}, candidate=_CANDIDATE,
+        devices={"ios": "ios-device"}, required_platforms=("ios",))
+    assert len(evidence["bindings"]) == 2
+
+
 def test_acceptance_consumes_actual_dual_platform_raw_closure(tmp_path, supported_offline_producer):
     from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
     receipts, _ = _receipt_matrix(tmp_path)
@@ -242,7 +394,9 @@ def test_acceptance_consumes_actual_dual_platform_raw_closure(tmp_path, supporte
         assert result["specRef"] == offline_case_spec_ref(result["caseId"])
     for platform in ("android", "ios"):
         plan = json.loads((tmp_path / platform / "local-write/plan.json").read_bytes())
-        assert plan["steps"][-1]["selector"] == "local-contract-readback"
+        assert plan["steps"][-2]["operation"] == "tap"
+        assert plan["steps"][-1]["operation"] == "visible"
+        assert plan["steps"][-2]["selector"] == plan["steps"][-1]["selector"]
         assert plan["specRef"].endswith("#gwt-008")
 
 
@@ -307,7 +461,8 @@ def test_integration_offline_orchestration_forwards_exact_candidate_and_devices(
     with pytest.raises(subject.IntegrationRunError):
         subject._validate_offline_axis(store=tmp_path / "store", axis=axis, candidate={**_CANDIDATE, "tree": "f" * 40})
     store = tmp_path / "store"
-    runtime = subject._write_canonical(store / "runtime.json", {"source": {"offlinePages": axis}})
+    runtime = subject._write_canonical(store / "runtime.json", {"source": {"offlinePages": axis,
+        "acceptanceBinding": {"inputs": {"appAcceptancePlan": subject._app_acceptance_plan()}}}})
     fact = {"environment": "alpha", "runtimeIdentity": runtime, "caseResultRefs": axis["cases"]}
     with pytest.raises(subject.IntegrationRunError, match="cannot replace required Alpha API"):
         subject._offline_fact_refs(store=store, fact=fact, candidate=_CANDIDATE)
@@ -627,8 +782,14 @@ def test_environment_doctor_cleanup_preserve_first_blocker(environment_inspectio
 
 
 @pytest.mark.parametrize("scope", ["all", "release", "distribution"])
-def test_explicit_distribution_scopes_still_fail_on_missing_materials(environment_inspection, scope):
+def test_explicit_distribution_scopes_still_fail_on_missing_materials(environment_inspection, scope, monkeypatch):
+    import tempfile
+    import uuid
+
     setup = environment_inspection
+    # 测试缓存可位于仓内；正式 distribution 根必须在仓外，本测试仅查询不存在的路径。
+    missing = Path(tempfile.gettempdir()) / ("qwq-missing-distribution-" + uuid.uuid4().hex)
+    monkeypatch.setattr(setup.stackctl, "_official_distribution_root", lambda *args, **kwargs: (missing, True))
     if scope == "distribution":
         args = setup.parser.parse_args(["verify", "--env", "alpha", "--target", "alpha-local",
             "--kind", scope, "--distribution-root", str(setup.root / "missing-distribution"),
@@ -648,3 +809,75 @@ def test_runtime_scope_alias_keeps_the_full_inspection_set(environment_inspectio
     report = json.loads((setup.host / "env/alpha/runs/inspect/report.json").read_text())
     assert set(report["inspection"]) == {"logs", "network", "data", "metrics", "config", "security", "userAvailability"}
     setup.distribution.assert_not_called()
+
+
+def test_ios_only_acceptance_does_not_require_or_execute_android(tmp_path, monkeypatch, supported_offline_producer):
+    from argparse import Namespace
+    from quwoquan_ops.cli import integration_run as subject
+
+    receipts, _write = _receipt_matrix(tmp_path)
+    commands = []
+    def stackctl(*args, **kwargs):
+        commands.append(args)
+        return subject.StackctlResult(
+            "app-content-uat",
+            {"exitCode": 0, "reportDir": str(tmp_path / "ios")},
+            "",
+        )
+
+    monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
+    monkeypatch.setattr(subject, "_store", lambda: tmp_path / "store")
+    monkeypatch.setattr(subject, "_stackctl", stackctl)
+    axis = subject._alpha_offline_pages(
+        candidate=_CANDIDATE,
+        candidate_ref={"ref": "candidates/exact.json", "digest": _DIGEST},
+        args=Namespace(app_platform="ios", android_device_id="", ios_device_id="ios-device"),
+        run_dir=tmp_path,
+        phases=subject.Phases(),
+    )
+
+    assert set(axis["devices"]) == {"ios"}
+    assert len(commands) == 1
+    assert commands[0][commands[0].index("--platform") + 1] == "ios-simulator"
+    assert axis["caseCount"] == len(OFFLINE_REQUIRED_CASES)
+    assert subject._validate_offline_axis(store=tmp_path / "store", axis=axis, candidate=_CANDIDATE,
+                                          app_plan=subject._app_acceptance_plan("ios"))
+    for plan in (None, subject._app_acceptance_plan("android"),
+                 {**subject._app_acceptance_plan("all"), "requiredPlatforms": ["ios"]}):
+        with pytest.raises(subject.IntegrationRunError):
+            subject._validate_offline_axis(store=tmp_path / "store", axis=axis, candidate=_CANDIDATE, app_plan=plan)
+    from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
+    with pytest.raises(ValueError, match="explicit selected platform"):
+        offline_receipt_evidence(root=tmp_path, receipts={"ios": receipts["ios"]},
+                                 candidate=_CANDIDATE, devices={"ios": "ios-device"})
+
+
+@pytest.mark.parametrize("damage", ["missing-case", "wrong-platform"])
+def test_ios_declared_plan_still_requires_every_exact_ios_case(tmp_path, supported_offline_producer, damage):
+    from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
+    receipts, write = _receipt_matrix(tmp_path)
+    receipt = json.loads((tmp_path / receipts["ios"]["ref"]).read_bytes())
+    if damage == "missing-case":
+        receipt["rawResultRefs"]["alpha-local"].pop()
+        selected = {"ios": write(receipts["ios"]["ref"], receipt)}
+    else:
+        selected = {"ios": receipts["android"]}
+    with pytest.raises(ValueError):
+        offline_receipt_evidence(root=tmp_path, receipts=selected, candidate=_CANDIDATE,
+                                 devices={"ios": "ios-device"}, required_platforms=("ios",))
+
+
+def test_offline_fact_rejects_legacy_axis_without_signed_platform_plan(tmp_path, monkeypatch):
+    from quwoquan_ops.cli import integration_run as subject
+    monkeypatch.setattr(subject, "_store", lambda: tmp_path)
+    runtime = subject._write_canonical(tmp_path / "runtime.json", {"source": {"offlinePages": {}}})
+    with pytest.raises(subject.IntegrationRunError, match="signed Alpha acceptance platform plan is missing"):
+        subject._offline_fact_refs(store=tmp_path,
+            fact={"environment": "alpha", "runtimeIdentity": runtime}, candidate=_CANDIDATE)
+
+
+@pytest.mark.parametrize("selector", ["web", "", "IOS", "android,ios", None])
+def test_offline_plan_rejects_unknown_selector_before_device_execution(selector):
+    from quwoquan_ops.cli import integration_run as subject
+    with pytest.raises(subject.IntegrationRunError, match="invalid Alpha app platform"):
+        subject._app_acceptance_plan(selector)

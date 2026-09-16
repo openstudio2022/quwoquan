@@ -49,15 +49,14 @@ func TestLoadSourceAttributionRejectsMissingNullAndInvalidDataFacts(t *testing.T
 		"isOriginal": false, "originalCreatorName": "摄影师", "platform": "Commons",
 		"sourcePostUrl": "https://example.com/source", "originalAssetUrl": "https://example.com/image.jpg",
 		"attributionText": "摄影师 / CC BY 4.0", "rightsBasis": "CC BY 4.0",
-		"commercialAuthorizationStatus": "unverified", "publicationAdmission": "production_release",
-		"derivedModifications": []string{}, "watermarkStatus": "unknown", "audioRightsStatus": "unverified",
+		"commercialAuthorizationStatus": "unverified",
+		"derivedModifications":          []string{}, "watermarkStatus": "unknown", "audioRightsStatus": "unverified",
 		"modelReleaseStatus": "unknown", "propertyReleaseStatus": "unknown",
 		"collectedAt": "2026-09-09T00:00:00Z", "takedownPolicy": "notice_and_takedown",
 	}
-	// 旧对象权利记录可继续只读，不要求重写成固定 production_release 标签。
 	for _, admission := range []string{"research_release", "commercial_release", "production_release"} {
-		t.Run("preserve/"+admission, func(t *testing.T) {
-			facts := make(map[string]any, len(valid))
+		t.Run("reject/"+admission, func(t *testing.T) {
+			facts := make(map[string]any, len(valid)+1)
 			for key, value := range valid {
 				facts[key] = value
 			}
@@ -68,9 +67,8 @@ func TestLoadSourceAttributionRejectsMissingNullAndInvalidDataFacts(t *testing.T
 			}
 			root := t.TempDir()
 			writeFile(t, filepath.Join(root, "posts/article/测试/来源/1/manifest.json"), string(raw))
-			posts, err := LoadPosts(root, nil)
-			if err != nil || len(posts) != 1 || posts[0].SourceAttribution.PublicationAdmission != admission {
-				t.Fatalf("rights record changed: posts=%+v err=%v", posts, err)
+			if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(err.Error(), "publicationAdmission") {
+				t.Fatalf("retired publication admission accepted: %v", err)
 			}
 		})
 	}
@@ -152,14 +150,18 @@ func dataSourceAttributionSchema(t *testing.T) dataAttributionSchema {
 func TestSourceAttributionGeneratedFieldsMatchDataSchema(t *testing.T) {
 	schema := dataSourceAttributionSchema(t)
 	model := reflect.TypeOf(postmodel.SourceAttribution{})
-	if model.NumField() != len(schema.Properties) {
-		t.Fatalf("Data/Service attribution field count drift: %d != %d", model.NumField(), len(schema.Properties))
-	}
+	modelFields := make(map[string]bool, model.NumField())
 	for index := 0; index < model.NumField(); index++ {
 		name := strings.Split(model.Field(index).Tag.Get("json"), ",")[0]
-		if _, exists := schema.Properties[name]; !exists {
-			t.Fatalf("Service attribution field absent from Data schema: %s", name)
+		modelFields[name] = true
+	}
+	for name := range schema.Properties {
+		if !modelFields[name] {
+			t.Fatalf("Data attribution field absent from Service model: %s", name)
 		}
+	}
+	if !modelFields["publicationAdmission"] {
+		t.Fatal("test expects generated model retirement to remain Wave B")
 	}
 }
 
@@ -188,7 +190,6 @@ func TestLoadArticlePreservesCompleteSourceAttribution(t *testing.T) {
 				"attributionText":"摄影师甲 / CC BY-SA 4.0",
 				"rightsBasis":"CC BY-SA 4.0",
 				"commercialAuthorizationStatus":"verified",
-				"publicationAdmission":"production_release",
 				"authorizationProofUrl":"https://media.example/proofs/dujiangyan",
 				"termsUrl":"https://creativecommons.org/licenses/by-sa/4.0/",
 				"derivedModifications":["resize"],
@@ -222,7 +223,6 @@ func TestLoadArticlePreservesCompleteSourceAttribution(t *testing.T) {
 		got.AttributionText != "摄影师甲 / CC BY-SA 4.0" ||
 		got.RightsBasis != "CC BY-SA 4.0" ||
 		got.CommercialAuthorizationStatus != "verified" ||
-		got.PublicationAdmission != "production_release" ||
 		got.AuthorizationProofUrl != "https://media.example/proofs/dujiangyan" ||
 		got.TermsUrl != "https://creativecommons.org/licenses/by-sa/4.0/" ||
 		len(got.DerivedModifications) != 1 || got.DerivedModifications[0] != "resize" ||

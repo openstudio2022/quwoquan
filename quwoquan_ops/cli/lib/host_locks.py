@@ -144,10 +144,14 @@ def named_host_lock_path(namespace: str, resource: str) -> Path:
     )
 
 
-def app_dependency_sync_lock_path() -> Path:
-    """Return the host-wide Flutter/CocoaPods/Gradle sync lock."""
+def app_dependency_sync_lock_path(platform: str | None = None) -> Path:
+    """返回平台级依赖锁；无参数调用对应共享工具链资源。"""
 
-    return named_host_lock_path("app-dependency-sync", "toolchain")
+    if platform is None:
+        return named_host_lock_path("app-dependency-sync", "toolchain")
+    if platform not in {"android", "ios"}:
+        raise ValueError("invalid App dependency sync lock platform")
+    return named_host_lock_path("app-dependency-sync", f"toolchain-{platform}")
 
 
 def _pid_is_live(pid: int) -> bool:
@@ -191,8 +195,13 @@ def read_lock_holder(path: Path) -> str | None:
 def current_lock_owner(
     *,
     worktree_path: Path | str | None = None,
-    identity: WorktreeIdentity | None = None,
+    identity: WorktreeIdentity | HostLockOwner | None = None,
 ) -> HostLockOwner:
+    if isinstance(identity, HostLockOwner):
+        return HostLockOwner(
+            pid=os.getpid(), worktree=identity.worktree, lane=identity.lane,
+            head_sha=identity.head_sha, started_at=utc_now(),
+        )
     resolved = identity or resolve_worktree_identity(worktree_path)
     if resolved.worktree_root is None:
         raise WorktreeIdentityError("bare repository cannot own a host resource")
@@ -210,7 +219,7 @@ def acquire_host_lock(
     *,
     fields: dict[str, str] | None = None,
     worktree_path: Path | str | None = None,
-    identity: WorktreeIdentity | None = None,
+    identity: WorktreeIdentity | HostLockOwner | None = None,
 ) -> HostLock:
     """Acquire ``path`` exclusively and non-blockingly.
 
@@ -246,7 +255,7 @@ def acquire_host_lock_bounded(
     poll_seconds: float = 0.1,
     fields: dict[str, str] | None = None,
     worktree_path: Path | str | None = None,
-    identity: WorktreeIdentity | None = None,
+    identity: WorktreeIdentity | HostLockOwner | None = None,
     on_wait: Callable[[str, float], None] | None = None,
 ) -> HostLock:
     """Acquire a host resource within a wall-clock bound, reporting its holder."""
@@ -280,7 +289,7 @@ def acquire_device_lock(
     device: str,
     app: str,
     worktree_path: Path | str | None = None,
-    identity: WorktreeIdentity | None = None,
+    identity: WorktreeIdentity | HostLockOwner | None = None,
 ) -> HostLock:
     return acquire_host_lock(
         device_lock_path(device, app),
@@ -294,7 +303,7 @@ def acquire_local_runtime_lock(
     *,
     target: str,
     worktree_path: Path | str | None = None,
-    identity: WorktreeIdentity | None = None,
+    identity: WorktreeIdentity | HostLockOwner | None = None,
 ) -> HostLock:
     return acquire_host_lock(
         local_runtime_lock_path(target),

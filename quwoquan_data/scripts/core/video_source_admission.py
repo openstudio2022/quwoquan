@@ -11,10 +11,6 @@ VIDEO_SOURCE_KINDS = {
     "toutiao",
     "tourism_video_site",
 }
-PUBLICATION_ADMISSIONS = {
-    "research_release",
-    "commercial_release",
-}
 REQUIRED_EVIDENCE = {
     "directly_downloadable_asset",
     "media_probe",
@@ -70,38 +66,16 @@ def _video_sources(registry: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
     }
 
 
-def video_publication_admission(
-    registry: Mapping[str, Any],
-    *,
-    source_id: str,
+def _video_source(
+    registry: Mapping[str, Any], *, source_id: str, source_kind: str
 ) -> Mapping[str, Any]:
-    matrix = _video_policy(registry).get("publicationAdmissionMatrix")
-    for row in matrix if isinstance(matrix, list) else []:
-        if (
-            isinstance(row, Mapping)
-            and str(row.get("sourceId") or "").strip() == source_id
-        ):
-            return row
-    raise ValueError(
-        f"video source is absent from publication admission matrix: {source_id}"
-    )
-
-
-def _video_source_and_admission(
-    registry: Mapping[str, Any],
-    *,
-    source_id: str,
-    source_kind: str,
-) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     source = _video_sources(registry).get(source_id)
     if source is None:
         raise ValueError(f"video source is not registered: {source_id}")
-    row = video_publication_admission(registry, source_id=source_id)
-    if str(row.get("sourceKind") or "") != source_kind:
-        raise ValueError(
-            f"video sourceKind mismatch for {source_id}: {source_kind}"
-        )
-    return source, row
+    declared_kind = str(source.get("sourceKind") or "").strip()
+    if declared_kind and declared_kind != source_kind:
+        raise ValueError(f"video sourceKind mismatch for {source_id}: {source_kind}")
+    return source
 
 
 def assert_video_acquisition_path_allowed(
@@ -112,10 +86,8 @@ def assert_video_acquisition_path_allowed(
     acquisition_path: str,
 ) -> None:
     """Validate only how bytes were acquired, never their release status."""
-    source, _row = _video_source_and_admission(
-        registry,
-        source_id=source_id,
-        source_kind=source_kind,
+    source = _video_source(
+        registry, source_id=source_id, source_kind=source_kind
     )
     paths = {
         str(value)
@@ -126,27 +98,6 @@ def assert_video_acquisition_path_allowed(
             f"video acquisition path {acquisition_path} is not allowed "
             f"for source {source_id}"
         )
-
-
-def assert_video_distribution_use_allowed(
-    registry: Mapping[str, Any],
-    *,
-    source_id: str,
-    source_kind: str,
-    publication_admission: str,
-) -> None:
-    """严格校验唯一发布值；授权状态不作为取得或入池成功证明。"""
-    _source, row = _video_source_and_admission(
-        registry,
-        source_id=source_id,
-        source_kind=source_kind,
-    )
-    admissions = {
-        str(value)
-        for value in row.get("publicationAdmissions") or []
-    }
-    if publication_admission not in PUBLICATION_ADMISSIONS:
-        raise ValueError(f"invalid publication admission record: {publication_admission}")
 
 
 def verify_video_publication_admission(
@@ -185,52 +136,18 @@ def verify_video_publication_admission(
         issues.append("lanePolicies.video.invariant is incomplete or unsafe")
 
     sources = _video_sources(registry)
-    matrix = policy.get("publicationAdmissionMatrix")
-    matrix_rows = [
-        row
-        for row in matrix if isinstance(row, Mapping)
-    ] if isinstance(matrix, list) else []
-    matrix_ids = [
-        str(row.get("sourceId") or "").strip()
-        for row in matrix_rows
-    ]
-    if set(matrix_ids) != set(sources):
-        issues.append(
-            "lanePolicies.video.publicationAdmissionMatrix sourceIds must "
-            "exactly match registered video sources"
-        )
-    if len(matrix_ids) != len(set(matrix_ids)):
-        issues.append(
-            "lanePolicies.video.publicationAdmissionMatrix has duplicate sourceId"
-        )
-    for row in matrix_rows:
-        source_id = str(row.get("sourceId") or "").strip()
-        source_kind = str(row.get("sourceKind") or "").strip()
-        admissions = {
-            str(value)
-            for value in row.get("publicationAdmissions") or []
-        }
-        if source_kind not in VIDEO_SOURCE_KINDS:
-            issues.append(f"video matrix {source_id}: invalid sourceKind")
-        if not admissions <= PUBLICATION_ADMISSIONS:
-            issues.append(
-                f"video matrix {source_id}: invalid publicationAdmissions"
-            )
-        source = sources.get(source_id) or {}
-        acquisition_paths = {
-            str(value)
-            for value in source.get("acquisitionPaths") or []
-        }
-        expected_acquisition_paths = VIDEO_ACQUISITION_PATHS_BY_FETCH_MODE.get(
-            str(source.get("fetchMode") or "")
-        )
+    if "publicationAdmissionMatrix" in policy:
+        issues.append("lanePolicies.video.publicationAdmissionMatrix is retired")
+    for source_id, source in sources.items():
+        source_kind = str(source.get("sourceKind") or "").strip()
+        if source_kind and source_kind not in VIDEO_SOURCE_KINDS:
+            issues.append(f"video source {source_id}: invalid sourceKind")
+        acquisition_paths = {str(value) for value in source.get("acquisitionPaths") or []}
+        expected_acquisition_paths = VIDEO_ACQUISITION_PATHS_BY_FETCH_MODE.get(str(source.get("fetchMode") or ""))
         if acquisition_paths != expected_acquisition_paths:
             issues.append(
-                f"video source {source_id}: acquisition paths must "
-                f"equal {sorted(expected_acquisition_paths or set())}"
+                f"video source {source_id}: acquisition paths must equal {sorted(expected_acquisition_paths or set())}"
             )
-        if admissions != PUBLICATION_ADMISSIONS:
-            issues.append(f"video matrix {source_id}: publication rights record vocabulary is incomplete")
     return issues
 
 
@@ -238,7 +155,5 @@ __all__ = [
     "VIDEO_ACQUISITION_PATHS_BY_FETCH_MODE",
     "VIDEO_SOURCE_KINDS",
     "assert_video_acquisition_path_allowed",
-    "assert_video_distribution_use_allowed",
     "verify_video_publication_admission",
-    "video_publication_admission",
 ]

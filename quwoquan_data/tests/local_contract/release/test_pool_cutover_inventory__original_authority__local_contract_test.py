@@ -24,25 +24,32 @@ def _review() -> dict:
             "qualityScores": {"readability": 4}, "qualityNotes": "原 reviewer 原话",
             "assetRights": [{"assetRef": "sources/a/assets/a.jpg", "sourceUrl": "https://example.org/a",
                              "license": "CC BY 4.0", "termsUrl": "https://example.org/terms",
-                             "authorizationProof": None, "usageScope": "research",
+                             "authorizationProof": None,
                              "decision": "rejected", "issues": ["原权利问题保留"]}]}
 
 
-def test_conversion_changes_only_mechanical_scope_and_preserves_all_judgments() -> None:
+@pytest.mark.parametrize("scope", ["research", "commercial"])
+def test_conversion_removes_known_review_classification_and_preserves_judgments(
+        scope: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    # 该最小历史 review fixture 只隔离转换语义；完整现行 schema 由真实对象测试覆盖。
+    monkeypatch.setattr(subject, "assert_valid", lambda *args, **kwargs: None)
     original = _review()
+    original["assetRights"][0].update(usageScope=scope, distributionDecision="blocked")
     frozen = copy.deepcopy(original)
     converted = subject.convert_review_document(original)
     assert original == frozen
-    assert converted["assetRights"][0]["usageScope"] == "production"
-    converted["assetRights"][0]["usageScope"] = "research"
-    assert converted == frozen
+    assert "usageScope" not in converted["assetRights"][0]
+    assert "distributionDecision" not in converted["assetRights"][0]
+    restored = copy.deepcopy(converted)
+    restored["assetRights"][0].update(usageScope=scope, distributionDecision="blocked")
+    assert restored == frozen
 
 
-@pytest.mark.parametrize("scope", [None, "", "editorial", "unknown"])
-def test_conversion_never_invents_missing_or_unknown_scope(scope: object) -> None:
+@pytest.mark.parametrize("scope", ["production", "default", "unknown", None])
+def test_conversion_rejects_invalid_review_scope(scope: object) -> None:
     review = _review()
     review["assetRights"][0]["usageScope"] = scope
-    with pytest.raises(ValueError, match="REVIEW_SCOPE_UNSUPPORTED"):
+    with pytest.raises(ValueError, match="RETIRED_CLASSIFICATION_VALUE_INVALID"):
         subject.convert_review_document(review)
 
 
@@ -158,30 +165,84 @@ def test_text_conversion_preserves_original_review_and_validates_current_record(
     assert not any(path.name in {"asset.refs.json", "tag.refs.json", "creator.refs.json"} for path in converted)
 
 
-def test_legacy_text_conversion_changes_only_bound_metadata(original: dict) -> None:
-    from content.release.canonical.pool_cutover_text_conversion import convert_text_object
-    from content.release.canonical.content_pool_record import pool_payload_digest
-    root = original["active"] / HOME
+def _install_legacy_classification(original: dict, *, invalid_scope: str | None = None) -> None:
+    root, execution = original["active"] / HOME, original["execution"]
+    review_path = execution / HOME / "5.review/content_review.json"
+    review_digest = _digest_file(review_path)
+    receipt_path = execution / "_shared/receipts/003-5.review.json"
+    receipt = _read_json(receipt_path)
+    binding = {"scope": "execution", "ref": HOME + "/5.review/content_review.json", "digest": review_digest}
+    receipt["resultRefs"] = [binding if row.get("ref") == binding["ref"] else row for row in receipt["resultRefs"]]
+    _write(receipt_path, receipt)
+
+    publication = "commercial_release"
     manifest = _read_json(root / "manifest.json")
-    manifest["admission"]["usageScope"] = "research"
-    manifest["sourceAttribution"]["publicationAdmission"] = "research_release"
+    manifest["admission"].update(usageScope=invalid_scope or "commercial", evidenceDigest=review_digest,
+                                 rightsAuthorityDigest=review_digest)
+    manifest.update(variantPurpose="commercial_variant")
+    manifest["sourceAttribution"]["publicationAdmission"] = publication
     _write(root / "manifest.json", manifest)
     entity = _read_json(root / "_entity.json")
-    entity["sourceAttribution"] = manifest["sourceAttribution"]
+    entity["sourceAttribution"]["publicationAdmission"] = publication
     _write(root / "_entity.json", entity)
-    record = _read_json(root / "_pool/versions/1.json")
-    record.update(usageScope="research", sourceAttribution=manifest["sourceAttribution"],
-                  payloadDigest=pool_payload_digest(root), canonicalObjectDigest=pool_payload_digest(root))
-    _write(root / "_pool/versions/1.json", record)
-    before = _tree_digest(root)
+
+    record_path = root / "_pool/versions/1.json"
+    record = _read_json(record_path)
+    record.update(usageScope="commercial", sourceAttribution=manifest["sourceAttribution"],
+                  evidenceDigest=review_digest, rightsAuthorityDigest=review_digest,
+                  payloadDigest=subject.original_pool_payload_digest(root))
+    _write(record_path, record)
+
+
+def _without_classification(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _without_classification(item) for key, item in value.items()
+                if key not in {"usageScope", "distributionDecision", "publicationAdmission", "variantPurpose"}}
+    if isinstance(value, list):
+        return [_without_classification(item) for item in value]
+    return value
+
+
+def test_legacy_text_conversion_removes_only_known_classification(original: dict) -> None:
+    from content.release.canonical.pool_cutover_text_conversion import convert_text_object
+    root = original["active"] / HOME
+    _install_legacy_classification(original)
+    before_digest = _tree_digest(root)
+    before_bytes = {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    before_manifest = _read_json(root / "manifest.json")
+    before_review = _read_json(root / "content_review.json")
+    before_rights = _read_json(root / "rights.json")
+
     result = convert_text_object(object_root=root, execution_root=original["execution"], object_ref=HOME)
-    import json
     successor = json.loads(result[Path("manifest.json")])
-    assert successor["admission"]["usageScope"] == "production"
-    assert successor["sourceAttribution"]["publicationAdmission"] == "production_release"
-    assert result[Path("content_review.json")] == (root / "content_review.json").read_bytes()
-    assert _tree_digest(root) == before
-    assert subject.text_conversion_inventory(_inventory(original), original["active"], original["execution"].parent)["counts"] == {"converted_in_memory": 1}
+    successor_review = json.loads(result[Path("content_review.json")])
+    successor_rights = json.loads(result[Path("rights.json")])
+    successor_record = json.loads(result[Path("_pool/versions/1.json")])
+
+    assert _tree_digest(root) == before_digest
+    assert {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()} == before_bytes
+    assert successor["version"] == before_manifest["version"] + 1
+    assert successor_record["contentVersion"] == successor["version"]
+    assert successor_record["payloadDigest"] != _read_json(root / "_pool/versions/1.json")["payloadDigest"]
+    assert _without_classification(successor) == _without_classification({**before_manifest, "version": successor["version"]})
+    assert _without_classification(successor_review) == _without_classification(before_review)
+    assert _without_classification(successor_rights) == _without_classification(before_rights)
+    for document in (successor, successor_review, successor_rights, successor_record):
+        encoded = json.dumps(document, ensure_ascii=False)
+        assert not any(field in encoded for field in ("publicationAdmission", "distributionDecision", "variantPurpose"))
+    assert "usageScope" not in successor.get("admission", {})
+    assert "usageScope" not in successor_record
+    assert successor_review == before_review
+    assert successor["admission"]["evidenceDigest"] == _digest_file(root / "content_review.json")
+
+
+@pytest.mark.parametrize("value", ["production", "default", "unknown"])
+def test_legacy_text_conversion_rejects_invalid_classification(original: dict, value: str) -> None:
+    from content.release.canonical.pool_cutover_text_conversion import convert_text_object
+    _install_legacy_classification(original, invalid_scope=value)
+    with pytest.raises(ValueError, match="RETIRED_CLASSIFICATION_VALUE_INVALID"):
+        convert_text_object(object_root=original["active"] / HOME,
+                            execution_root=original["execution"], object_ref=HOME)
 
 
 def test_text_conversion_refuses_digest_refresh_as_repair(original: dict) -> None:

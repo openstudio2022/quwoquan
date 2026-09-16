@@ -19,7 +19,7 @@ _ACTIVE_LOCK_IDENTITIES: ContextVar[frozenset[str]] = ContextVar(
 
 
 @contextmanager
-def canonical_publish_lock(publish_root: Path | None = None) -> Iterator[None]:
+def canonical_publish_lock(publish_root: Path | None = None, *, blocking: bool = True) -> Iterator[None]:
     """Fence the whole-root audit/apply sequence across workers and executions."""
     from core.paths import publish_lock_path
 
@@ -31,7 +31,10 @@ def canonical_publish_lock(publish_root: Path | None = None) -> Iterator[None]:
         return
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+        except BlockingIOError as exc:
+            raise RuntimeError("DATA.RELEASE.REPACKAGE.NATIVE_WRITER_LOCK_CONFLICT") from exc
         token = _ACTIVE_LOCK_IDENTITIES.set(active | {identity})
         try:
             yield

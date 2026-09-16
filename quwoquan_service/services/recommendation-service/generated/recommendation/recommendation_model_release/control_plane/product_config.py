@@ -82,6 +82,20 @@ _PRODUCT_CONFIG_JSON = r'''{
       "ui_editable": true
     },
     {
+      "default": 3,
+      "description": "用户画像中 action/state 行为计数不超过该值时启用质量先验；计数严格大于阈值即退出冷启动。",
+      "key": "ops.reco.discovery.rank.cold_start_max_behavior_count",
+      "maximum": 100,
+      "minimum": 0,
+      "owner": "recommendation",
+      "reload": "hot",
+      "risk_level": "medium",
+      "rollout": "progressive",
+      "scope": "environment",
+      "type": "int",
+      "ui_editable": true
+    },
+    {
       "default": 1,
       "key": "ops.reco.discovery.rank.context_landscape_media_boost",
       "maximum": 1.25,

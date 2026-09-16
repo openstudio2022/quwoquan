@@ -49,8 +49,8 @@ func TestInternalPersistedGetPostExecutesExactOwnerReadSlice(t *testing.T) {
 			OriginalCreatorName: "摄影师甲", Platform: "Wikimedia Commons",
 			SourcePostURL: "https://example.com/source", OriginalAssetURL: "https://example.com/image.jpg",
 			AttributionText: "摄影师甲 / CC BY 4.0", RightsBasis: "CC BY 4.0",
-			CommercialAuthorizationStatus: "unverified", PublicationAdmission: "production_release",
-			DerivedModifications: []string{"crop", "resize"}, WatermarkKind: "author_signature",
+			CommercialAuthorizationStatus: "unverified",
+			DerivedModifications:          []string{"crop", "resize"}, WatermarkKind: "author_signature",
 			WatermarkNote: "保留作者签名", WatermarkStatus: "present", AudioRightsStatus: "no_audio",
 			ModelReleaseStatus: "not_required", PropertyReleaseStatus: "not_required",
 			CollectedAt: time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC), TakedownPolicy: "notice_and_takedown",
@@ -98,7 +98,7 @@ func TestInternalPersistedGetPostExecutesExactOwnerReadSlice(t *testing.T) {
 	modifications := attribution["derivedModifications"].([]any)
 	if len(modifications) != 2 || modifications[0] != "crop" || modifications[1] != "resize" ||
 		attribution["watermarkKind"] != "author_signature" || attribution["watermarkNote"] != "保留作者签名" ||
-		attribution["commercialAuthorizationStatus"] != "unverified" || attribution["publicationAdmission"] != "production_release" {
+		attribution["commercialAuthorizationStatus"] != "unverified" {
 		t.Fatalf("GraphQL source attribution facts drifted: %v", attribution)
 	}
 	if _, exists := attribution["riskAcceptanceId"]; exists {

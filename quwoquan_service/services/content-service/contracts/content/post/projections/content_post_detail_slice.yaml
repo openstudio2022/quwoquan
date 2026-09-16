@@ -27,7 +27,7 @@ fields:
   - {name: coverUrl, type: string, nullable: true}
   - {name: thumbnailUrl, type: string, nullable: true}
   - {name: videoUrl, type: string, nullable: true}
-  - {name: sourceAttribution, type: SourceAttribution, nullable: true}
+  - {name: sourceAttribution, type: PublicSourceAttribution, nullable: true}
   - {name: width, type: int, nullable: true}
   - {name: height, type: int, nullable: true}
   - {name: durationMs, type: int, nullable: true}

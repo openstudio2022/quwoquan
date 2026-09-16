@@ -254,6 +254,15 @@ def _release_id(attestation: Path) -> str:
     return release_id
 
 
+def _app_acceptance_plan(app_platform: str = "all") -> dict[str, Any]:
+    """Alpha 的声明计划随 acceptanceBinding 被 EAF 签名，不以设备集合授予范围。"""
+    if app_platform not in {"all", "android", "ios"}:
+        raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "invalid Alpha app platform selector")
+    return {"environment": "alpha", "appPlatform": app_platform,
+            "requiredPlatforms": ["android", "ios"] if app_platform == "all" else [app_platform],
+            "specRef": "specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004"}
+
+
 def _acceptance_release_inputs(args: argparse.Namespace) -> dict[str, Any]:
     """只比较有角色的 exact 输入，不把路径、releaseId 集合或源码身份当作内容身份。"""
     from quwoquan_ops.cli.lib.deployment_candidate_manifest import _release_binding
@@ -263,7 +272,8 @@ def _acceptance_release_inputs(args: argparse.Namespace) -> dict[str, Any]:
         binding = _release_binding(str(path), label=role)
         bindings[role] = {key: value for key, value in binding.items() if key != "attestationRef"}
     return {"release": bindings, "handoffRef": _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref"),
-            "workload": args.workload}
+            "workload": args.workload,
+            "appAcceptancePlan": _app_acceptance_plan(getattr(args, "app_platform", "all"))}
 
 
 def _acceptance_binds_inputs(*, store: Path, fact: Mapping[str, Any], inputs: Mapping[str, Any]) -> bool:
@@ -582,9 +592,12 @@ def _assert_package_identity(*, packaged_revision: str, candidate_commit: str, p
 def _package_with_dependency_recovery(*, environment: str, args: argparse.Namespace, log_dir: Path, phases: Phases) -> StackctlResult:
     """打包；App 依赖 bundle 缺失/过期时执行一次有界 canonical `app-dependency-sync` 再重试，其余失败原样阻断。"""
 
+    app_platform = getattr(args, "app_platform", "all") if environment == "alpha" else "all"
+    _app_acceptance_plan(app_platform)
+
     def package() -> StackctlResult:
         return _stackctl(
-            "package", "--env", environment, "--include-services",
+            "package", "--env", environment, "--include-services", "--app-platform", app_platform,
             "--release-attestation", str(args.release_attestation),
             "--rollback-release-attestation", str(args.rollback_release_attestation), log_dir=log_dir,
         )
@@ -593,7 +606,7 @@ def _package_with_dependency_recovery(*, environment: str, args: argparse.Namesp
     details = " ".join(str(item) for item in (result.payload.get("details") or []))
     if result.exit_code != 0 and "App dependency bundle" in details:
         phases.run(f"{environment}.app-dependency-sync", lambda: _require_ok(
-            _stackctl("app-dependency-sync", log_dir=log_dir / "app-dependency-sync"), "INTEGRATION_RUN.APP_DEPENDENCY_SYNC_FAILED",
+            _stackctl("app-dependency-sync", "--platform", app_platform, log_dir=log_dir / "app-dependency-sync"), "INTEGRATION_RUN.APP_DEPENDENCY_SYNC_FAILED",
         ))
         result = package()
     return _require_ok(result, "INTEGRATION_RUN.PACKAGE_FAILED")
@@ -601,12 +614,18 @@ def _package_with_dependency_recovery(*, environment: str, args: argparse.Namesp
 
 def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping[str, str],
                          args: argparse.Namespace, run_dir: Path, phases: Phases) -> dict[str, Any]:
-    """服务启动前执行双端页面；证据保持 rehearsal，绝不补写服务 runtime identity。"""
+    """服务启动前执行声明平台页面；证据保持 rehearsal，不补写服务 runtime identity。"""
     from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
 
-    devices = {"android": args.android_device_id, "ios": args.ios_device_id}
-    if not all(devices.values()) or len(set(devices.values())) != 2:
-        raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_DEVICE_UNAVAILABLE", "explicit distinct --android-device-id and --ios-device-id are required")
+    app_platform = getattr(args, "app_platform", "all")
+    requested = tuple(_app_acceptance_plan(app_platform)["requiredPlatforms"])
+    available = {"android": args.android_device_id, "ios": args.ios_device_id}
+    devices = {platform: available[platform] for platform in requested}
+    if not all(devices.values()) or len(set(devices.values())) != len(devices):
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.APP_LAUNCH_DEVICE_UNAVAILABLE",
+            f"explicit distinct device ids are required for app-platform={app_platform}",
+        )
     receipts = {}
     evidence_root = None
     first_error = None
@@ -658,7 +677,8 @@ def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping
     if first_error is not None:
         raise first_error
     try:
-        evidence = offline_receipt_evidence(root=evidence_root, receipts=receipts, candidate=candidate, devices=devices)
+        evidence = offline_receipt_evidence(root=evidence_root, receipts=receipts, candidate=candidate,
+                                            devices=devices, required_platforms=requested)
     except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
         raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", str(exc)) from exc
     # 将原始闭包 exact 复制到 store；不改 raw 路径、摘要或 nonPromotable。
@@ -674,17 +694,25 @@ def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping
             "required": True, "nonPromotable": True, "caseCount": len(evidence["cases"])}
 
 
-def _validate_offline_axis(*, store: Path, axis: Mapping[str, Any], candidate: Mapping[str, Any]) -> list[dict[str, str]]:
+def _validate_offline_axis(*, store: Path, axis: Mapping[str, Any], candidate: Mapping[str, Any],
+                           app_plan: Mapping[str, Any] | None = None) -> list[dict[str, str]]:
     from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
     from quwoquan_ops.cli.commands.app_preflight_uat_offline import OFFLINE_REQUIRED_CASES
 
     try:
         expected_root = f"offline-page-evidence/{candidate['candidateId'].removeprefix('sha256:')}"
-        if (axis.get("root") != expected_root or axis.get("required") is not True
-                or axis.get("nonPromotable") is not True or axis.get("caseCount") != 2 * len(OFFLINE_REQUIRED_CASES)):
+        plan = _app_acceptance_plan() if app_plan is None else app_plan
+        if plan != _app_acceptance_plan(plan.get("appPlatform", "")):
+            raise ValueError("offline acceptance platform plan is missing or drifted")
+        expected_platforms = tuple(plan["requiredPlatforms"])
+        if (set(axis.get("devices") or {}) != set(expected_platforms)
+                or set(axis.get("receipts") or {}) != set(expected_platforms)
+                or axis.get("root") != expected_root or axis.get("required") is not True
+                or axis.get("nonPromotable") is not True
+                or axis.get("caseCount") != len(expected_platforms) * len(OFFLINE_REQUIRED_CASES)):
             raise ValueError("required offline evidence axis is missing or drifted")
         evidence = offline_receipt_evidence(root=_bundle_path(store, expected_root), receipts=axis["receipts"],
-                                            candidate=candidate, devices=axis["devices"])
+                                            candidate=candidate, devices=axis["devices"], required_platforms=expected_platforms)
         expected_cases = [{"ref": expected_root + "/" + exact["ref"], "digest": exact["digest"]} for exact in evidence["cases"]]
         if axis["files"] != evidence["files"] or axis.get("cases") != expected_cases:
             raise ValueError("offline evidence closure drifted")
@@ -729,7 +757,8 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
     app_cases: list[dict[str, str]] = []
     release_inputs = _acceptance_release_inputs(args)
     if environment == "alpha" and "app" in scopes:
-        _validate_offline_axis(store=store, axis=offline_pages or {}, candidate=candidate)
+        _validate_offline_axis(store=store, axis=offline_pages or {}, candidate=candidate,
+                               app_plan=_app_acceptance_plan(getattr(args, "app_platform", "all")))
         env_summary["offlinePages"] = dict(offline_pages or {})
     try:
         package = phases.run(f"{environment}.package", lambda: _package_with_dependency_recovery(
@@ -977,7 +1006,10 @@ def _offline_fact_refs(*, store: Path, fact: Mapping[str, Any], candidate: Mappi
     app_required = bool(classify_impacts(candidate.get("paths", []))["scopes"]["app"])
     if axis is None and not app_required:
         return []
-    refs = _validate_offline_axis(store=store, axis=axis or {}, candidate=candidate)
+    app_plan = (runtime.get("source") or {}).get("acceptanceBinding", {}).get("inputs", {}).get("appAcceptancePlan")
+    if not isinstance(app_plan, Mapping):
+        raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", "signed Alpha acceptance platform plan is missing")
+    refs = _validate_offline_axis(store=store, axis=axis or {}, candidate=candidate, app_plan=app_plan)
     _validate_offline_fact_case_refs(axis=axis or {}, fact=fact)
     service_cases = [_read_store_object(store, exact, "Alpha raw case") for exact in fact["caseResultRefs"]]
     _validate_alpha_readback_case(cases=service_cases, candidate=candidate)
@@ -1318,9 +1350,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--writer", default="integration")
     parser.add_argument("--publish", action="store_true", help="admit 后以 local-git CAS 发布到远端 dev1.0")
     parser.add_argument("--reuse", action="store_true",
-                        help="acceptance 专用：复用同 commit/tree/parent/ImpactPlan/profile 的有效 Alpha/Beta 事实；"
+                        help="acceptance 专用：复用同 commit/tree/parent/ImpactPlan/profile/平台计划 的有效 Alpha/Beta 事实；"
                              "Beta 状态必须匹配本次 --beta 政策，summary 标记 reused")
     parser.add_argument("--run-id", default="")
+    parser.add_argument("--app-platform", choices=("android", "ios", "all"), default="all",
+                        help="Alpha App acceptance 平台；默认双端，显式单平台不要求另一端证据")
     parser.add_argument("--android-device-id", default="", help="Alpha 离线 UAT 的 exact Android emulator serial；不自动发现")
     parser.add_argument("--ios-device-id", default="", help="Alpha 离线 UAT 的 exact iOS simulator UDID；不自动发现")
     return parser

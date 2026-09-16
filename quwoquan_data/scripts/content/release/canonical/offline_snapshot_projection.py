@@ -75,7 +75,7 @@ def project_post(source: CanonicalSource, ref: str, media: dict[str, dict], vali
             "createdAt": m["createdAt"], "updatedAt": m["updatedAt"], "publishedAt": m["publishedAt"], "contentVertical": m["vertical"]}
     detail = {**view, "status": "published", "visibility": "public", "viewCount": 0,
               "tagRefs": m["tagRefs"], "entityRefs": m["entityRefs"],
-              "sourceAttribution": {f["name"]: m["sourceAttribution"][f["name"]] for f in validator.types["SourceAttribution"]["fields"] if f["name"] in m["sourceAttribution"]}}
+              "sourceAttribution": {f["name"]: m["sourceAttribution"][f["name"]] for f in validator.types["PublicSourceAttribution"]["fields"] if f["name"] in m["sourceAttribution"]}}
     if m["entityRefs"]:
         homepage_ref = m["entityRefs"][0]
         entity = source.json("entities/" + homepage_ref.removeprefix("/entity/") + "/manifest.json")

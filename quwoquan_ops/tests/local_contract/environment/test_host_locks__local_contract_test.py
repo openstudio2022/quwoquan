@@ -109,6 +109,22 @@ def test_dead_pid_record_is_taken_over(
         lock.close()
 
 
+def test_projection_lock_owner_retains_mutual_exclusion(tmp_path, monkeypatch) -> None:
+    from quwoquan_ops.cli.lib.host_locks import HostLockOwner
+
+    monkeypatch.setenv(HOST_LOCK_ROOT_ENV, str(tmp_path / "locks"))
+    owner = HostLockOwner(
+        pid=2147483646, worktree=str(tmp_path / "projection"),
+        lane="immutable-source-projection", head_sha="a" * 40, started_at="old",
+    )
+    with acquire_device_lock(device="ios-device", app="app.id", identity=owner) as lock:
+        record = parse_holder_record(lock.record)
+        assert record["pid"] == str(os.getpid())
+        assert record["headSha"] == "a" * 40
+        with pytest.raises(HostLockBusyError):
+            acquire_device_lock(device="ios-device", app="app.id", identity=owner)
+
+
 def test_holder_liveness_recognizes_dead_pid() -> None:
     assert holder_record_is_live(
         "pid=2147483646 worktree=/tmp/dead lane=lane/refactor"

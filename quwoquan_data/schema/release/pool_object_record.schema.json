@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema", "objectType", "objectId", "objectRef", "recordSequence", "contentVersion", "status",
-    "processResult", "qualityResult", "eligibilityResult", "usageScope",
+    "processResult", "qualityResult", "eligibilityResult",
     "evidenceRef", "evidenceDigest", "payloadDigest"
   ],
   "properties": {
@@ -23,7 +23,6 @@
     "rightsResult": {"const": "passed"},
     "rightsAuthorityRef": {"type": "string", "minLength": 1},
     "rightsAuthorityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "usageScope": {"type": ["string", "null"], "enum": ["research", "commercial", null]},
     "evidenceRef": {"type": "string", "minLength": 1},
     "evidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "payloadDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
@@ -42,13 +41,16 @@
     "sourceIdentity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["executionId", "sourceRevision", "sourceDigest", "entityCatalogDigest", "identityDigest"],
+      "required": ["executionId", "sourceRevision", "sourceDigest", "entityCatalogDigest", "identityDigest", "descriptorRef", "descriptorDigest", "mappingDigest"],
       "properties": {
         "executionId": {"type": "string", "minLength": 1},
         "sourceRevision": {"$ref": "#/$defs/digest"},
         "sourceDigest": {"$ref": "#/$defs/digest"},
         "entityCatalogDigest": {"$ref": "#/$defs/digest"},
-        "identityDigest": {"$ref": "#/$defs/digest"}
+        "identityDigest": {"$ref": "#/$defs/digest"},
+        "descriptorRef": {"type": "string", "pattern": "^0\\.plan/target-descriptors/[a-f0-9]{64}\\.json$"},
+        "descriptorDigest": {"$ref": "#/$defs/digest"},
+        "mappingDigest": {"$ref": "#/$defs/digest"}
       }
     }
   }

@@ -23,7 +23,7 @@ IOS_SIMULATOR_VM_LOOKUP_TIMEOUT_SECONDS = 15.0
 _VM_AUTH_CODE_INLINE_PATTERN = re.compile(r"(?i)(authCode=)[^\s\"'\\]+")
 _VM_SERVICE_URI_PATTERN = re.compile(r"(?:ws|http)s?://(?:127\.0\.0\.1|localhost|\[::1\]):[0-9]+/[^\s\"'\\]+")
 _LSOF_PID_PATTERN = re.compile(r"^p(?P<pid>[1-9][0-9]*)$", re.MULTILINE)
-_IOS_STARTUP_MARKERS = ("ios_dart_startup_attempt ", "ios_startup_safe_terminal ", "ios_startup_safe_terminal_rejected ")
+_IOS_STARTUP_MARKERS = ("ios_dart_startup_attempt ", "ios_startup_safe_terminal ", "ios_startup_safe_terminal_rejected ", "QWQ_EXTERNAL_UAT_RENDEZVOUS ")
 _VM_LOG_PREFIX = "The Dart VM service is listening on "
 
 
@@ -40,15 +40,32 @@ def redact_vm_service_tokens(line: str) -> str:
     return _VM_AUTH_CODE_INLINE_PATTERN.sub(r"\1<redacted-vm-service-auth-code>", redacted)
 
 
+def _verified_simulator_uat_child_environment(environment: dict[str, str]) -> dict[str, str]:
+    launcher_pid = os.environ.get("QWQ_UAT_LAUNCHER_PID", "")
+    if not launcher_pid:
+        return environment
+    host_attempt = os.environ.get("QWQ_UAT_HOST_ATTEMPT", "")
+    control_digest = os.environ.get("QWQ_CANONICAL_LAUNCH_CONTROL_DIGEST", "")
+    if not launcher_pid.isdecimal() or int(launcher_pid) <= 0:
+        raise CanonicalExecutorError("APP.UAT.relay_admission_mismatch: launcher PID invalid")
+    if not host_attempt or re.fullmatch(r"sha256:[0-9a-f]{64}", control_digest) is None:
+        raise CanonicalExecutorError("APP.UAT.relay_admission_mismatch: startup identity incomplete")
+    environment["SIMCTL_CHILD_QWQ_UAT_LAUNCHER_PID"] = launcher_pid
+    environment["SIMCTL_CHILD_QWQ_UAT_HOST_ATTEMPT"] = host_attempt
+    environment["SIMCTL_CHILD_QWQ_UAT_CONTROL_DIGEST"] = control_digest
+    return environment
+
+
 def launch_selected_simulator_application(device_id: str, application_id: str) -> IOSSimulatorLaunch:
     device, app = device_id.strip(), application_id.strip()
     if not device or not app:
         raise CanonicalExecutorError("iOS Simulator launch requires device and application identity")
+    environment = _verified_simulator_uat_child_environment(compile_environment(os.environ))
     _terminate_selected_application(device, app)
     start = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S%z")
     command = ["xcrun", "simctl", "launch", "--terminate-running-process", device, app]
     try:
-        result = subprocess.run(command, cwd=APP_DIR, env=compile_environment(os.environ), capture_output=True, text=True, check=False)
+        result = subprocess.run(command, cwd=APP_DIR, env=environment, capture_output=True, text=True, check=False)
     except OSError as error:
         raise CanonicalExecutorError("unable to launch selected iOS Simulator application") from error
     if result.returncode != 0:
@@ -152,7 +169,7 @@ def resolve_ios_simulator_debug_url(launch: IOSSimulatorLaunch, *, timeout_secon
 
 
 def read_ios_simulator_startup_evidence(launch: IOSSimulatorLaunch) -> tuple[str, ...]:
-    records = _device_log(launch, 'eventMessage CONTAINS "ios_dart_startup_attempt" OR eventMessage CONTAINS "ios_startup_safe_terminal"', timeout=15)
+    records = _device_log(launch, 'eventMessage CONTAINS "ios_dart_startup_attempt" OR eventMessage CONTAINS "ios_startup_safe_terminal" OR eventMessage CONTAINS "QWQ_EXTERNAL_UAT_RENDEZVOUS"', timeout=15)
     return tuple(dict.fromkeys(redact_vm_service_tokens(row["eventMessage"]).strip() for row in records
                                if any(marker in row["eventMessage"] for marker in _IOS_STARTUP_MARKERS)))
 

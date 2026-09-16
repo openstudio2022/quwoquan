@@ -49,7 +49,7 @@ def _package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(post_transaction, "PUBLISH_ROOT", publish)
     monkeypatch.setattr(post_transaction, "OUTPUT_ROOT", tmp_path / "output")
     _freeze_fixture_target(execution)
-    (publish / ".git").mkdir()
+    (publish / ".git").mkdir(exist_ok=True)
     _write_json(publish / "repository.json", {
         "schema": "quwoquan_data.publish_repository.v2", "repositoryId": "test-publish",
         "layoutVersion": 2,
@@ -118,7 +118,7 @@ def test_real_post_builder_carries_single_manifest_sources_media_and_record(tmp_
         assert fact["sourceAsset"] in source_assets
         assert fact["licenseName"] == fact["sourceAsset"]["license"]
         assert fact["author"] == fact["sourceAsset"]["creator"]
-        assert fact["distributionDecision"] == fact["sourceAsset"]["distributionDecision"]
+        assert "distributionDecision" not in fact
         original_manifest = json.loads((execution / "posts" / POST_REF / "manifest.json").read_bytes())
         original_asset = next(row for row in original_manifest["assets"] if row["assetId"] == asset["assetId"])
         assert fact["rightsAuditStatus"] == original_asset["rightsAuditStatus"]
@@ -230,7 +230,7 @@ def _admit_dependencies(package: Path, publish: Path):
         "creatorProfileId": post["creatorProfileId"], "primarySource": {"sourceKind": "wikipedia", "entityName": "西湖", "extractor": "wikipedia_api",
         "canonicalUrl": url, "sourceUrl": url, "title": "西湖", "fetchedAt": "2026-07-18T04:00:00Z", "snapshotHash": "sha256:" + "a" * 64,
         "policyRevision": "encyclopedia-primary", "sourceUseMode": "factual_reference_only"},
-        "admission": {"processResult": "completed", "qualityResult": "passed", "rightsResult": "passed", "usageScope": "research",
+        "admission": {"processResult": "completed", "qualityResult": "passed", "rightsResult": "passed",
         "evidenceRef": "content_review.json", "evidenceDigest": digest, "rightsAuthorityRef": f"entities/{ref}/content_review.json", "rightsAuthorityDigest": digest}}
     _write_json(root / "manifest.json", manifest)
     (root / "page.md").write_text("# 西湖\n\n测试来源正文。\n", encoding="utf-8")

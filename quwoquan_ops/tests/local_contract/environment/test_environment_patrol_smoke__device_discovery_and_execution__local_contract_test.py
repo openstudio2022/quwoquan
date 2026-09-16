@@ -50,6 +50,15 @@ def _managed_result(
 
 
 class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
+    def test_release_uat_defines_exclude_retired_classification(self) -> None:
+        destinations = {destination for destination, _ in smoke.RELEASE_APP_UAT_DEFINES}
+        define_names = {define_name for _, define_name in smoke.RELEASE_APP_UAT_DEFINES}
+
+        self.assertNotIn("data_release_class", destinations)
+        self.assertNotIn("product_lifecycle_state", destinations)
+        self.assertNotIn("DATA_RELEASE_CLASS", define_names)
+        self.assertNotIn("PRODUCT_LIFECYCLE_STATE", define_names)
+
     def test_core_readback_requires_and_forwards_one_release_envelope(self) -> None:
         release_values = {
             destination: f"value-{index}"

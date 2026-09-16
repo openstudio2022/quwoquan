@@ -26,7 +26,7 @@
             "required": [
               "schema", "objectType", "objectId", "objectRef", "recordSequence", "contentVersion",
               "status", "processResult", "qualityResult", "eligibilityResult",
-              "usageScope", "evidenceRef", "evidenceDigest", "payloadDigest"
+"evidenceRef", "evidenceDigest", "payloadDigest"
             ],
             "properties": {
               "schema": {"const": "quwoquan_data.pool_object_record"},
@@ -39,20 +39,22 @@
               "processResult": {"enum": ["completed", "failed"]},
               "qualityResult": {"enum": ["passed", "failed"]},
               "eligibilityResult": {"enum": ["passed", "pending", "failed"]},
-              "usageScope": {"type": ["string", "null"], "enum": ["research", "commercial", null]},
-              "evidenceRef": {"type": "string", "minLength": 1},
+                        "evidenceRef": {"type": "string", "minLength": 1},
               "evidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
               "payloadDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
               "canonicalObjectDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
               "sourceIdentity": {
                 "type": "object", "additionalProperties": false,
-                "required": ["executionId", "sourceRevision", "sourceDigest", "entityCatalogDigest", "identityDigest"],
+                "required": ["executionId", "sourceRevision", "sourceDigest", "entityCatalogDigest", "identityDigest", "descriptorRef", "descriptorDigest", "mappingDigest"],
                 "properties": {
                   "executionId": {"type": "string", "minLength": 1},
                   "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
                   "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
                   "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-                  "identityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+                  "identityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                  "descriptorRef": {"type": "string", "pattern": "^0\\.plan/target-descriptors/[a-f0-9]{64}\\.json$"},
+                  "descriptorDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                  "mappingDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
                 }
               },
               "sourceAttribution": {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"}

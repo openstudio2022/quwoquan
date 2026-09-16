@@ -66,13 +66,28 @@ def build_canonical(root: Path) -> Path:
 
 
 def _content_review() -> dict:
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
+    revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    digest = "sha256:" + "1" * 64
+    actor = lambda session: {"host": "cursor", "modelFamily": "gpt", "sessionId": session,
+                             "invocation": {"provider": "openai", "model": "gpt-5", "runId": session + "-run"}}
     return {
         "schema": "quwoquan_data.content_review",
         "stage": "5.review",
         "executionId": "20260711--travel-homepage-coverage--cn-test--pilot-001",
         "objectRef": f"entities/{OBJECT_REF}",
         "decision": "approved",
-        "draft": {"ref": "4.draft/page.md", "digest": "sha256:" + "1" * 64},
+        "author": actor("author"), "reviewer": actor("reviewer"),
+        "candidateBindings": {"origin": "execution_draft", "page": {"ref": "4.draft/page.md", "digest": digest},
+                              "manifest": None, "semanticDocument": None},
+        "protocol": protocol, "objectRevision": revision,
+        "dispositions": [{"issueId": "semantic-exact", "objectRef": f"entities/{OBJECT_REF}",
+            "sourceDigest": digest, "targetDigest": digest, "detectedType": "SEMANTIC_EXACT",
+            "proposedMapping": None, "lossFields": [], "severity": "info",
+            "actor": {"actorId": "reviewer", "actorType": "independent_reviewer"},
+            "reason": "fixture preserves reviewed work", "policyVersion": "1.0.0",
+            "reviewStatus": "reviewed_confirmed", "outcome": "auto_continue",
+            "processingDisposition": "preserved", "protocol": protocol, "objectRevision": revision}],
         "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
         "blockingIssues": [],
         "assetRights": [{
@@ -81,7 +96,6 @@ def _content_review() -> dict:
             "license": "CC BY-SA 4.0",
             "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
             "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
-            "usageScope": "research",
             "decision": "approved",
             "issues": [],
         }],
@@ -224,7 +238,6 @@ def build_package(
                         "https://commons.wikimedia.org/w/index.php?"
                         "title=File:Example.jpg&oldid=1"
                     ),
-                    "distributionDecision": "research_allowed",
                     "modelReleaseStatus": "not_required",
                     "rightsAuditStatus": "verified",
                     "rightsAuditIssues": [],

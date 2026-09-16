@@ -1,7 +1,7 @@
 """纯文本旧对象的受限离线转换，返回新对象 bytes，不写任何路径。
 
-只接受已验证原 receipt/review/record/source 且无媒体的对象。旧 review 保持原字节，
-不创建 execution、reviewer、裁决、授权或 receipt。完整池/package 预验仍是调用方责任。
+只接受已验证原 receipt/review/record/source 且无媒体的对象。successor review 仅在存在
+闭集旧分类时机械删字段；不创建 execution、reviewer、裁决、授权或 receipt。完整池/package 预验仍是调用方责任。
 """
 from __future__ import annotations
 
@@ -11,22 +11,22 @@ from pathlib import Path
 
 from content.release.canonical.object_transaction_contract import _digest_bytes, _json_bytes, _read_json, _tree_digest
 from content.release.canonical.pool_cutover import _absolute, _relative, _regular_tree, _source_digest
-from content.release.canonical.pool_cutover_inventory import _fail, _inspect_content
+from content.release.canonical.pool_cutover_inventory import (
+    _convert_asset_classification, _fail, _inspect_content, _remove_retired_classification, convert_review_document,
+)
 from core.schema import assert_valid
 
 _SIDECARS = {"assetRefsRef": "asset.refs.json", "creatorRefsRef": "creator.refs.json", "tagRefsRef": "tag.refs.json"}
 
 
-def _classification(value: dict, key: str, allowed: set[str]) -> None:
-    if value.get(key) not in allowed:
-        _fail("TEXT_CONVERSION_UNSUPPORTED", f"{key}={value.get(key)!r}")
-
-
-def _attribution(document: dict) -> None:
+def _attribution(document: dict, path: str) -> None:
     attribution = document.get("sourceAttribution")
     if not isinstance(attribution, dict):
         _fail("TEXT_CONVERSION_SOURCE_MISSING", "sourceAttribution")
-    _classification(attribution, "publicationAdmission", {"research_release", "commercial_release"})
+    _remove_retired_classification(
+        attribution, "publicationAdmission", {"research_release", "commercial_release"},
+        f"{path}.sourceAttribution.publicationAdmission",
+    )
     if "riskAcceptanceId" in attribution:
         if attribution["riskAcceptanceId"] is not None:
             _fail("TEXT_CONVERSION_UNSUPPORTED", "non-null riskAcceptanceId requires exact adjudication")
@@ -36,8 +36,12 @@ def _attribution(document: dict) -> None:
 def _manifest(original: dict, entity: dict | None) -> dict:
     result = copy.deepcopy(original)
     result["version"] += 1
-    _classification(result["admission"], "usageScope", {"research", "commercial"})
-    _attribution(result)
+    _remove_retired_classification(result["admission"], "usageScope", {"research", "commercial"},
+                                   "manifest.admission.usageScope")
+    _remove_retired_classification(result, "variantPurpose", {"original", "commercial_variant"},
+                                   "manifest.variantPurpose")
+    _attribution(result, "manifest")
+    _convert_asset_classification(result.get("assets"), "manifest.assets")
     for key, expected in _SIDECARS.items():
         if key in result and result.pop(key) != expected:
             _fail("TEXT_CONVERSION_UNSUPPORTED", key)
@@ -50,7 +54,10 @@ def _manifest(original: dict, entity: dict | None) -> dict:
             if key in result and result[key] != entity[key]:
                 _fail("TEXT_CONVERSION_ENTITY_BINDING_DRIFT", key)
             result[key] = copy.deepcopy(entity[key])
-    if _source_digest(original) != _source_digest(result):
+    source_predecessor = copy.deepcopy(original)
+    _attribution(source_predecessor, "predecessor")
+    _convert_asset_classification(source_predecessor.get("assets"), "predecessor.assets")
+    if _source_digest(source_predecessor) != _source_digest(result):
         _fail("TEXT_CONVERSION_SOURCE_DRIFT", "source identity changed")
     return result
 
@@ -85,7 +92,8 @@ def convert_text_object(*, object_root: Path, execution_root: Path, object_ref: 
     result = _text_bytes(root, ref, original["finalContentRef"])
     entity = json.loads(result[Path("_entity.json")]) if ref.startswith("entities/") else None
     if entity is not None:
-        _attribution(entity)
+        _attribution(entity, "entity")
+        _convert_asset_classification(entity.get("assets"), "entity.assets")
         assert_valid(entity, "publish", "entity", label=ref)
         result[Path("_entity.json")] = _json_bytes(entity)
     manifest = _manifest(original, entity)
@@ -93,18 +101,25 @@ def convert_text_object(*, object_root: Path, execution_root: Path, object_ref: 
     if entity is None:
         assert_valid(manifest, "content", "post_manifest", label=ref)
     rights = json.loads(result[Path("rights.json")])
+    _convert_asset_classification(rights.get("assets"), "rights.assets")
     assert_valid(rights, "release", "asset_rights_closure", label=ref)
     if rights["assets"] or rights.get("publishMediaMode") != "text_only":
         _fail("TEXT_CONVERSION_MEDIA_FORBIDDEN", "rights assets")
-    # 保留原 review 的每个字节；没有刷新 review digest 或代签 receipt 的分支。
-    if result[Path("content_review.json")] != (execution / ref / "5.review/content_review.json").read_bytes():
-        _fail("TEXT_CONVERSION_REVIEW_DRIFT", ref)
+    result[Path("rights.json")] = _json_bytes(rights)
+    # 旧 review 已由原 receipt/execution exact bytes 验真；successor 只机械删分类，不产生新判断。
+    original_review = json.loads(result[Path("content_review.json")])
+    result[Path("content_review.json")] = _json_bytes(convert_review_document(original_review))
+    review_digest = _digest_bytes(result[Path("content_review.json")])
+    manifest["admission"].update(evidenceDigest=review_digest, rightsAuthorityDigest=review_digest)
+    result[Path("manifest.json")] = _json_bytes(manifest)
     digest = _digest_bytes(_json_bytes([{"path": path.as_posix(), "sha256": _digest_bytes(raw), "bytes": len(raw)}
                                       for path, raw in sorted(result.items())]))
     records = [_read_json(p) for p in (root / "_pool/versions").glob("*.json")]
     record = copy.deepcopy(max(records, key=lambda row: row["recordSequence"]))
+    _remove_retired_classification(record, "usageScope", {"research", "commercial"}, "record.usageScope")
     record.update(recordSequence=1, contentVersion=manifest["version"], payloadDigest=digest,
-                  canonicalObjectDigest=digest, sourceAttribution=manifest["sourceAttribution"])
+                  canonicalObjectDigest=digest, sourceAttribution=manifest["sourceAttribution"],
+                  evidenceDigest=review_digest, rightsAuthorityDigest=review_digest)
     assert_valid(record, "release", "pool_object_record", label=ref)
     result[Path("_pool/versions/1.json")] = _json_bytes(record)
     if _tree_digest(root) != before_digest:

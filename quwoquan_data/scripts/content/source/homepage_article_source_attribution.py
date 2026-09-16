@@ -40,7 +40,6 @@ def encyclopedia_source_attribution(
         "attributionText": f"正文事实来源：{platform}（{creator}）",
         "rightsBasis": "CC BY-SA 4.0" if wikipedia else "factual_reference_only",
         "commercialAuthorizationStatus": "verified" if wikipedia else "unverified",
-        "publicationAdmission": "commercial_release" if wikipedia else "research_release",
         "authorizationProofUrl": url if wikipedia else None,
         "termsUrl": (
             "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use"

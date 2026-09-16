@@ -93,7 +93,7 @@ func TestInternalGraphQLRequiresVerifiedAPIEdgeCredentialAndReadsPostSlice(t *te
 		t.Fatal(err)
 	}
 	facts := base.Data.Post.Attribution
-	if facts["commercialAuthorizationStatus"] != "unverified" || facts["publicationAdmission"] != "production_release" ||
+	if facts["commercialAuthorizationStatus"] != "unverified" ||
 		facts["watermarkKind"] != "author_signature" || facts["watermarkNote"] != "保留作者签名" {
 		t.Fatalf("importer -> BSON query -> GraphQL lost source facts: %s", body)
 	}

@@ -419,6 +419,9 @@ class IOSPlatformDriver(CommandPlatformDriver):
                 )
             }
         )
+        ios_trust = str(environment.get("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH") or "").strip()
+        if ios_trust:
+            child_environment["QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH"] = ios_trust
         return child_environment
 
 

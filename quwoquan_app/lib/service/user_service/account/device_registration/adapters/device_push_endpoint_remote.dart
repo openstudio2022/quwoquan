@@ -3,6 +3,7 @@ import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/runtime/transport/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/runtime/platform/push_endpoint_gateway.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/runtime/alpha_rehearsal/alpha_rehearsal_observation.dart';
 
 typedef DevicePushInvocationContextFactory =
     CloudOperationInvocationContext Function(String clientPageId);
@@ -20,6 +21,9 @@ final class RemoteDevicePushEndpointWriter implements DevicePushEndpointWriter {
 
   @override
   Future<void> upsert(DevicePushEndpoint endpoint) async {
+    AlphaRehearsalObservation.current?.recordRefusal(
+      'native-push-registration-attempt',
+    );
     final snapshot = clientContextSnapshot();
     await client.userDeviceRegistrationUpsertDevicePushEndpoint(
       DevicePushEndpointUpsertCommand(

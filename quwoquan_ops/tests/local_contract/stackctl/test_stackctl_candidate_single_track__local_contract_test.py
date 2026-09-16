@@ -96,6 +96,56 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
             report_dir=str(report_dir),
         )
 
+    def test_runtime_capsule_uses_selected_alpha_platform_and_default_all(self) -> None:
+        for selector, required in (("", ("android", "ios")), ("all", ("android", "ios")),
+                                   ("ios", ("ios",)), ("android", ("android",))):
+            with self.subTest(selector=selector), tempfile.TemporaryDirectory() as temporary:
+                args = stackctl.build_parser().parse_args(["package", "--env", "alpha"] +
+                    (["--app-platform", selector] if selector else []))
+                with (
+                    mock.patch.object(stackctl, "local_runtime_capacity_evidence", return_value={"issues": []}),
+                    mock.patch.object(stackctl, "validate_release_attestations", return_value={}),
+                    mock.patch.object(stackctl, "acquire_local_runtime_use_lock", return_value=mock.Mock()),
+                    mock.patch.object(stackctl, "_target_package_lock", return_value=contextlib.nullcontext()),
+                    mock.patch.object(stackctl, "deployment_input_roots", return_value=[]),
+                    mock.patch.object(stackctl, "_resolve_graphql_read_signing_for_local_target", return_value={}),
+                    mock.patch.object(stackctl, "deployment_candidate_dir", return_value=Path(temporary) / "candidate"),
+                    mock.patch.object(stackctl, "materialize_package_input_capsule", side_effect=ValueError("test boundary")) as capsule,
+                ):
+                    result = stackctl.command_package(args)
+                self.assertEqual(result["exitCode"], 2)
+                self.assertEqual(capsule.call_args.kwargs["dependency_platforms"], required)
+
+    def test_artifact_start_and_end_snapshots_use_build_product_platform(self) -> None:
+        from quwoquan_ops.cli.commands import package_app_artifact as artifact
+
+        for platform in ("ios", "android"):
+            with (
+                self.subTest(platform=platform),
+                tempfile.TemporaryDirectory() as temporary,
+                mock.patch.dict(os.environ, {"QWQ_ARTIFACT_BUILD_NUMBER": ""}),
+                mock.patch.object(artifact, "workspace_snapshot", side_effect=[{}, ValueError("end snapshot boundary")]) as snapshot,
+                mock.patch.object(artifact, "_git_identity", return_value=("a" * 40, "sha1:" + "b" * 40)),
+                mock.patch.object(artifact, "_version", return_value=("1.0.0", "1")),
+                mock.patch.object(stackctl, "deployment_target_path", return_value=Path(temporary)),
+                mock.patch.object(artifact, "_build_from_capsule", return_value={}) as build,
+            ):
+                result = artifact.command_package_app_artifact(argparse.Namespace(build_product_id=platform + "-nonprod-app"
+                    if platform == "ios" else "android-nonprod-apk"))
+            self.assertEqual(result["exitCode"], 2)
+            self.assertTrue(any("end snapshot boundary" in detail for detail in result["details"]))
+            self.assertEqual(snapshot.call_count, 2)
+            self.assertTrue(all(call.kwargs["dependency_platforms"] == (platform,) for call in snapshot.call_args_list))
+            self.assertEqual(build.call_args.kwargs["platform"], platform)
+
+    def test_non_alpha_runtime_refuses_single_platform_before_mutation(self) -> None:
+        for environment in ("beta", "gamma", "prod"):
+            args = stackctl.build_parser().parse_args(["package", "--env", environment, "--app-platform", "ios"])
+            with mock.patch.object(stackctl, "local_runtime_capacity_evidence", side_effect=AssertionError("no mutation")):
+                result = stackctl.command_package(args)
+            self.assertEqual(result["exitCode"], 2)
+            self.assertIn("Alpha-only", result["details"][0])
+
     def test_internal_candidate_schemas_are_canonical_and_unversioned(self) -> None:
         self.assertEqual(
             deployment_candidate_manifest.CANDIDATE_MANIFEST_SCHEMA,
@@ -151,6 +201,9 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
             }
 
             with (
+                mock.patch.object(stackctl, "_resolve_graphql_read_signing_for_local_target", return_value={}),
+                mock.patch.object(stackctl, "local_runtime_capacity_evidence", return_value={"issues": []}),
+                mock.patch.object(stackctl, "acquire_local_runtime_use_lock", return_value=mock.Mock()),
                 mock.patch.object(
                     stackctl,
                     "deployment_input_roots",

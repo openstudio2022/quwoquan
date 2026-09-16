@@ -1,40 +1,27 @@
 from __future__ import annotations
 
-import pytest
-
 from core.schema import load_schema, validate_strict
 
 
-@pytest.mark.parametrize("scope", ["research", "commercial"])
-def test_frozen_pool_scope_is_preserved(scope: str) -> None:
+def test_pool_admission_has_no_object_usage_scope() -> None:
     schema = load_schema("content", "pool_admission")
-    assert validate_strict(scope, schema["$defs"]["usageScope"]) == []
-    assert validate_strict("production", schema["$defs"]["usageScope"])
+    assert "usageScope" not in schema.get("$defs", {})
+    admission = {
+        "processResult": "completed", "qualityResult": "passed",
+        "rightsResult": "passed",
+        "rightsAuthorityRef": "posts/article/test/content_review.json",
+        "rightsAuthorityDigest": "sha256:" + "b" * 64,
+        "evidenceRef": "metadata_adoption.json",
+        "evidenceDigest": "sha256:" + "a" * 64,
+    }
+    content_admission = schema["$defs"]["contentAdmission"]
+    assert validate_strict(admission, content_admission, _root_schema=schema) == []
+    assert validate_strict({**admission, "usageScope": "research"}, content_admission, _root_schema=schema)
 
 
-@pytest.mark.parametrize("decision", ["research_allowed", "commercial_allowed"])
-def test_manifest_asset_preserves_distribution_record(decision: str) -> None:
+def test_manifest_asset_keeps_three_value_usage_scope_and_rejects_distribution() -> None:
     schema = load_schema("content", "post_manifest")
-    asset = {"assetId": "a", "fileName": "a.png", "distributionDecision": decision}
-    assert validate_strict(asset, schema["properties"]["assets"]["items"], _root_schema=schema) == []
-    assert validate_strict({**asset, "distributionDecision": "production_allowed"}, schema["properties"]["assets"]["items"], _root_schema=schema)
-
-
-def test_external_pointer_keeps_referenced_schema_local_defs() -> None:
-    schema = load_schema("content", "post_manifest")
-    admission_schema = schema["properties"]["admission"]
-
-    assert validate_strict(
-        {
-            "processResult": "completed",
-            "qualityResult": "passed",
-            "usageScope": "research",
-            "rightsResult": "passed",
-            "rightsAuthorityRef": "posts/article/test/content_review.json",
-            "rightsAuthorityDigest": "sha256:" + "b" * 64,
-            "evidenceRef": "metadata_adoption.json",
-            "evidenceDigest": "sha256:" + "a" * 64,
-        },
-        admission_schema,
-        _root_schema=schema,
-    ) == []
+    asset_schema = schema["properties"]["assets"]["items"]
+    for scope in ("internal_reference", "app_publish", "editorial"):
+        assert validate_strict({"assetId": "a", "fileName": "a.png", "usageScope": scope}, asset_schema, _root_schema=schema) == []
+    assert "distributionDecision" not in asset_schema["properties"]

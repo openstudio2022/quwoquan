@@ -1018,6 +1018,84 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             )
 
 
+class NativeRendezvousMappingContractTest(unittest.TestCase):
+    def test_native_carrier_rejects_host_startup_and_pid_drift(self):
+        from startup_terminal_receipt import validate_native_rendezvous
+        attempt = {'attemptId': 'host-1', 'platform': 'ios', 'launchDigest': 'sha256:' + 'a' * 64}
+        value = {'processId': 42, 'processStartedAtMonotonicMs': 10, 'sessionId': '12345678-1234-1234-1234-123456789abc',
+            'socketName': 'gwt008-42-12345678-1234-1234.sock', 'startupAttemptId': 'dart-1', 'launchAttemptId': 'host-1',
+            'launcherPid': 12, 'canonicalLaunchControlDigest': 'sha256:' + 'b' * 64,
+            'effectiveLaunchManifestDigest': attempt['launchDigest']}
+        self.assertEqual(validate_native_rendezvous(value, launch_attempt=attempt, startup_attempt_id='dart-1'), value)
+        for field, changed in [('launchAttemptId', 'host-2'), ('startupAttemptId', 'dart-2'), ('processId', 0),
+            ('socketName', '../other.sock'), ('canonicalLaunchControlDigest', 'unverified')]:
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                validate_native_rendezvous({**value, field: changed}, launch_attempt=attempt, startup_attempt_id='dart-1')
+
+
+class SafeTerminalNativeRendezvousFlushContractTest(unittest.TestCase):
+    """iOS UAT 在原生 rendezvous 到达前不得把 Dart safe-terminal 写成终态回执。"""
+
+    def test_ios_uat_holds_terminal_until_native_rendezvous(self) -> None:
+        import supervise_app_launch as supervise
+
+        digest = "sha256:" + "a" * 64
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        receipt = Path(temporary.name).resolve() / "startup-terminal.json"
+        tracker = supervise._SafeTerminalTracker(
+            required=True,
+            receipt_path=receipt,
+            platform="ios",
+            launch_provenance="canonical_launcher",
+            runtime_config_supply_mode="external_runtime_package",
+            launch_digest=digest,
+        )
+        launch_attempt = {
+            "attemptId": "host-1",
+            "platform": "ios",
+            "deviceId": "simulator-2",
+            "applicationId": "com.example.app",
+            "launchProvenance": "canonical_launcher",
+            "runtimeConfigSupplyMode": "external_runtime_package",
+            "launchDigest": digest,
+            "artifactDigest": "sha256:" + "c" * 64,
+        }
+        dart = (
+            "ios_dart_startup_attempt attemptId=dart-1 launchProvenance=canonical_launcher "
+            "runtimeConfigSupplyMode=external_runtime_package hotRestart=false "
+            f"configurationState=complete effectiveLaunchManifestDigest={digest}"
+        )
+        terminal = (
+            "ios_startup_safe_terminal surface=router_shell elapsedMs=12 "
+            "attemptId=dart-1 launchProvenance=canonical_launcher "
+            "runtimeConfigSupplyMode=external_runtime_package"
+        )
+        rendezvous = {
+            "processId": 42,
+            "processStartedAtMonotonicMs": 10,
+            "sessionId": "12345678-1234-1234-1234-123456789abc",
+            "socketName": "gwt008-42-12345678-1234-1234.sock",
+            "startupAttemptId": "dart-1",
+            "launchAttemptId": "host-1",
+            "launcherPid": 12,
+            "canonicalLaunchControlDigest": "sha256:" + "b" * 64,
+            "effectiveLaunchManifestDigest": digest,
+        }
+        with mock.patch.dict(os.environ, {"QWQ_UAT_LAUNCHER_PID": "12"}):
+            tracker.observe(dart, launch_attempt)
+            tracker.observe(terminal, launch_attempt)
+            self.assertFalse(receipt.exists())
+            tracker.observe(
+                "QWQ_EXTERNAL_UAT_RENDEZVOUS " + json.dumps(rendezvous),
+                launch_attempt,
+            )
+        self.assertTrue(receipt.exists())
+        payload = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(payload["nativeRendezvous"]["processId"], 42)
+        self.assertEqual(payload["startupAttemptId"], "dart-1")
+
+
 class CanonicalLaunchControlContractTest(unittest.TestCase):
     """REQ-008：提取后的 control 仍绑定 source、私有证据和 fresh 输出。"""
 
@@ -1061,6 +1139,83 @@ class CanonicalLaunchControlContractTest(unittest.TestCase):
         return [str(self.root), str(self.root), str(self.control_path), self._digest(value),
                 str(self.control["launchAttemptRef"]), str(self.control["launchReportRef"]),
                 str(self.capsule)]
+
+    def test_lock_identity_revalidates_control_before_using_projection_owner(self) -> None:
+        from canonical_app_instance import runtime_lease as lease
+        from quwoquan_ops.cli.commands import app_preflight_uat_launch as projections
+        from quwoquan_ops.cli.lib.package_reuse import input_capsule
+        arguments = self._arguments()
+        environment = {"QWQ_CANONICAL_LAUNCH_CONTROL": str(self.control_path),
+            "QWQ_CANONICAL_LAUNCH_CONTROL_DIGEST": arguments[3], "QWQ_OUTPUT_ROOT": str(self.root),
+            "QWQ_PACKAGE_SOURCE_CAPSULE_MANIFEST": str(self.capsule)}
+        manifest = {"sourceRevision": self.control["sourceRevision"], "deploymentInputDigest": self.control["sourceCapsuleDigest"]}
+        with mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(lease, "ROOT", self.root), \
+                mock.patch.object(projections, "verify_app_content_launch_projection", return_value=self.control) as verify, \
+                mock.patch.object(input_capsule, "verify_package_input_capsule", return_value=manifest):
+            identity = lease.verified_lock_identity(handoff={"environment": "alpha", "target": "alpha-local"},
+                device="device-contract", device_kind="android_emulator")
+            self.assertEqual(identity.head_sha, self.control["sourceRevision"])
+            self.assertEqual(identity.lane, "immutable-source-projection")
+            verify.assert_called_once()
+            verify.reset_mock()
+            self.control_path.write_text(json.dumps({**self.control, "sourceRevision": "f" * 40}))
+            with self.assertRaisesRegex(ValueError, "digest mismatch"):
+                lease.verified_lock_identity(handoff={"environment": "alpha", "target": "alpha-local"},
+                    device="device-contract", device_kind="android_emulator")
+            verify.assert_not_called()
+
+    def test_direct_canonical_run_needs_no_uat_control_and_preserves_device_lock(self) -> None:
+        from canonical_app_instance import runtime_lease as lease
+        import run_app_instance
+        from quwoquan_ops.cli.lib import host_locks
+        environment = {host_locks.HOST_LOCK_ROOT_ENV: str(self.root / "locks")}
+        command = ["launcher", "--device-kind", "ios-simulator", "--device", "direct-device",
+                   "--application-id", "com.quwoquan", "--entrypoint", "lib/main.dart"]
+        def execute():
+            with self.assertRaises(host_locks.HostLockBusyError):
+                host_locks.acquire_device_lock(device="direct-device", app="com.quwoquan", worktree_path=ROOT)
+            return 0
+        with mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(sys, "argv", command), \
+                mock.patch.object(lease, "load_handoff", return_value={"environment": "alpha", "target": "alpha-local"}), \
+                mock.patch.object(run_app_instance, "main", side_effect=execute):
+            self.assertEqual(lease.run_canonical(acquire_runtime=False), 0)
+            with host_locks.acquire_device_lock(device="direct-device", app="com.quwoquan", worktree_path=ROOT):
+                pass
+
+    def test_workspace_projection_checks_real_source_bytes_without_control(self) -> None:
+        from canonical_app_instance import runtime_lease as lease
+        from quwoquan_ops.cli.lib.package_reuse import input_capsule
+        capsule = self.root / "capsule"
+        source = capsule / "repo/quwoquan_app/main.py"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"pass\n")
+        manifest_ref = capsule / "manifest.json"
+        manifest_ref.write_text("{}")
+        projection = self.root / "projection"
+        copied = projection / "quwoquan_app/main.py"
+        copied.parent.mkdir(parents=True)
+        copied.write_bytes(source.read_bytes())
+        copied.chmod(0o600)
+        manifest = {"sourceRevision": "a" * 40, "entries": [{"capsulePath": "repo/quwoquan_app/main.py",
+            "logicalPath": "quwoquan_app/main.py", "kind": "file", "mode": 0o444, "size": 5,
+            "digest": "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest()}]}
+        env = {"QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST": str(manifest_ref), "QWQ_OUTPUT_ROOT": str(self.root)}
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(lease, "ROOT", projection), \
+                mock.patch.object(input_capsule, "verify_package_input_capsule", return_value=manifest):
+            identity = lease.verified_lock_identity(handoff={}, device="device", device_kind="ios-simulator")
+            self.assertEqual(identity.head_sha, "a" * 40)
+            copied.write_bytes(b"drift\n")
+            with self.assertRaisesRegex(RuntimeError, "source CAS drifted"):
+                lease.verified_lock_identity(handoff={}, device="device", device_kind="ios-simulator")
+
+    def test_projection_cannot_borrow_parent_worktree_identity(self) -> None:
+        from canonical_app_instance import runtime_lease as lease
+        from quwoquan_ops.cli.lib.worktree_identity import resolve_worktree_identity
+        identity = resolve_worktree_identity(ROOT)
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(lease, "ROOT", self.root), \
+                mock.patch("quwoquan_ops.cli.lib.worktree_identity.resolve_worktree_identity", return_value=identity):
+            with self.assertRaisesRegex(RuntimeError, "not a worktree"):
+                lease.verified_lock_identity(handoff={}, device="device", device_kind="ios-simulator")
 
     def test_offline_control_exports_only_validated_source_and_capsule(self) -> None:
         for platform, policy in (

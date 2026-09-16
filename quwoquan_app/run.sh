@@ -1860,7 +1860,7 @@ DEPENDENCY_RETRY=0
 if [[ -z "$QWQ_CANONICAL_EXPECTED_BUILD_PROJECTION_DIGEST" ]]; then
   echo "[run] projecting the atomic App dependency bundle and replaying it offline..."
   DEPENDENCY_PATROL_ARGUMENT=""
-  if [[ "${QWQ_CANONICAL_LAUNCH_ACTOR:-}" == "app-content-uat" ]]; then
+  if [[ "${QWQ_CANONICAL_LAUNCH_ACTOR:-}" == "app-content-uat" && "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
     DEPENDENCY_PATROL_ARGUMENT="--include-patrol"
   fi
   if ! DEPENDENCY_EXPORTS="$(
@@ -2398,7 +2398,6 @@ if ! verify_dependency_projection_after_command postbuild; then
   fi
   exit 2
 fi
-
 # The process group is fully stopped when the supervisor returns. Seal the
 # resulting tree at a fresh path so a permitted iOS retry can compare its
 # pre-build tree with attempt-1 rather than trusting a stale source-only digest.

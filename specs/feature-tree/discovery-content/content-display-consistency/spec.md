@@ -13,6 +13,8 @@
 ### In Scope
 
 - 由本目录 Story 组合交付“content-display-journey-consistency”的独立业务结果。
+- 全入口 typed 意图、同 verified actor 私有状态、durable pending/unknown 恢复，以及正文、本人态和统计的分层展示与有界刷新。
+- Post 收藏不回归；实体「想去」保持现役 owner，本次不增加想去功能。
 
 ### Out of Scope
 
@@ -45,6 +47,9 @@
 ### REQ-001 内容展示一致性能力组合结果
 
 - 本能力必须组合直属 Story 与公开契约，交付“统一文章、圈子流、沉浸式浏览器与作者主页之间的展示和状态交接”所定义的业务结果；失败终态必须可区分且不得伪造成功。
+- [状态同步](./viewer-profile-state-sync-contract/spec.md#req-003) 拥有同 actor 分区、逐对象 hydrate、persist 成功、singleflight/epoch 与 unknown 恢复的展示结果；[动作意图](./content-action-intent-contract/spec.md#req-003) 拥有全部现役入口的 typed coordinator/metadata surface 绑定；[视频旅程](./video-display-journey/spec.md#req-006) 验证模式往返不丢上述事实。
+- 关注云确认、点赞按钮乐观与统计新鲜度各自可观察；公共内容、本人互动、命令投递和统计分层，不把无命令读失败画成 pending。REST 与公共 GraphQL 加私有互动组合均保持受信 actor 边界。
+- 源绝对期限与有界可见刷新组合交付跨设备收敛；5 秒前台新鲜度仍需批准容量下端到端实测，不由某个 reader/缓存成功推出。
 
 <a id="req-002"></a>
 ### REQ-002 两类来源进入媒体浏览器或文章阅读器时都必须传入
@@ -74,6 +79,9 @@
 - GIVEN 执行“content display journey consistency 能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“content display journey consistency 能力”对应动作。
 - THEN 直属 Story 共同交付“统一文章、圈子流、沉浸式浏览器与作者主页之间的展示和状态交接”，失败终态可区分且不产生伪成功事实。
+- AND Feed/详情/作者作品/搜索直达/视频各方向/评论入口的同 actor 意图共用 coordinator，surface 与目标合法，切身份和旧网络/磁盘/capability 不覆盖较新确认。
+- AND 没有命令的读失败不产生 pending；Post 按钮可乐观但数字只读服务端事实，Comment 三态独立，公共 GraphQL 与私有切片不泄漏 actor，receipt 确认不等待统计。
+- AND 引用 `viewer-profile-state-sync-contract` 的 `GWT-002`～`GWT-007`、`content-action-intent-contract` 的 `GWT-002`、`GWT-003` 与 `video-display-journey` 的 `GWT-005`；三层/设备和容量各自取证，缺证据保留最低 Story OPEN。
 
 ## 8. 开放事项
 

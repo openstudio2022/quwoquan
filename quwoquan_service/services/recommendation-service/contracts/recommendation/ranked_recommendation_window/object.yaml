@@ -33,6 +33,8 @@ business_rules:
 - contextDigest 为冻结 RecommendationRequestContext 五字段的 SHA-256 小写 64 位 hex；输入使用 UTF-8 canonical JSON（字段名排序、无多余空白、无可选字段遗漏，值均为已规范字符串），不使用原始 query、客户端时钟或无分隔拼接。timeBucket/profileRevision 精确定义仅在 fields.yaml 的该类型声明。
 - requestDigest 必须在既有规范 subjectId/scenario/limit 载荷中加入 contextDigest；幂等命中先读原窗口，复用其中冻结的 timeBucket/profileRevision/coarseRegion/policy/model/feature identity，仅比较本次规范化客户端字段形成的 requestDigest。同 key 换 viewport/device 必须 conflict；相同载荷跨小时、画像或配置更新仍返回原窗口，不重新 admission、重读画像或重排。
 - rankingSnapshotDigest 必须同时覆盖 contextDigest、policyDigest、实际 model/feature identity、原始评分输入摘要和后处理后的稳定 ordinal/contentId/score；不把后处理媒体尺寸塞入模型 CandidateInput。windowId 与冻结 contextDigest 在 create-once 记录中一一绑定，缓存按原 windowId 唯一读写且必须验证该绑定，不能用同 key 覆盖不同上下文。
+- ranker 与跨进程模型请求必须消费同一冻结 requestContext，至少原样携带 viewportProfile、deviceClass、coarseRegion、timeBucket；禁止在 Facade 到 scorer 边界重新填 unknown/default。
+- "冷启动按画像 action:/state: 稀疏行为计数执行：计数小于等于 ops.reco.discovery.rank.cold_start_max_behavior_count 时对基础分叠加候选 qualityScore 受控先验，严格大于阈值时停用；阈值、active 判定与计数必须进入评分 context 和 rankingSnapshotDigest。"
 - Content 必须把返回 contextDigest 冻结进 FeedDeliveryPage.scopeHash 和 nextCursor/previousCursor AEAD authenticated context；request、幂等、ranking、window、cursor 和 cache 共享同一摘要，不把原地域拼入任何 key，旧缺失摘要窗口 fail-closed。
 - 首版仅在现役 ranker 输出后，对 viewportProfile=landscape 且 canonical 主媒体 width>height 的 image/video 应用 ops.reco.discovery.rank.context_landscape_media_boost；有效值来自 recommendation-service/config/schema.yaml，default=1.0、范围 [1.0,1.25]。其余候选乘数 1.0，不过滤候选、不改变训练/模型请求，保留基础排序和既有多样性约束。
 - policyDigest 在既有权威 policy 内容身份基础上必须绑定本次实际生效的 context_landscape_media_boost 参数值（规范数值而非配置更新时间）；参数越界拒绝 admission，不静默截断。同窗续页与幂等重放不重读热配置；新首刷才使用新 policyDigest，1.0 为明确零 boost，不新增 device/region/time boost 配置或另一套策略源。

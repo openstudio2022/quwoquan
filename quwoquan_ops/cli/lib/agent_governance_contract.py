@@ -22,6 +22,7 @@ def load_agent_governance_contract() -> dict[str, Any]:
         raise ValueError("agent governance contract schema_version 必须为 1")
     for section in (
         "feature_context_manifest",
+        "feature_context_closure",
         "candidate_evidence_manifest",
         "candidate_path_set",
         "review_plan",
@@ -272,7 +273,7 @@ def _validate_evidence_fingerprint_contract(definition: dict[str, Any]) -> None:
         "review-tracked-untracked-deleted",
         "retired-review-algorithm-not-consumed",
         "handoff-stale-missing-fingerprint-and-recovery-failure",
-        "feature-manifest-v4-content-addressed-owner-identity-and-budget",
+        "feature-manifest-v5-content-addressed-owner-identity-and-budget",
         "named-evidence-dedup-drift-failure-and-result",
         "handoff-six-trigger-producer-and-ordinary-noop",
         "human-decision-create-once-tamper-ref-drift",
@@ -366,6 +367,34 @@ def validate_schema_version(payload: dict[str, Any], section: str) -> None:
         )
 
 
+
+def _validate_feature_context_closure_identity(identity: object) -> None:
+    if identity is None:
+        return
+    if not isinstance(identity, dict):
+        raise TypeError("feature_context_manifest.closure_identity 必须为映射或 null")
+    validate_declared_fields(
+        identity, "feature_context_manifest", "closure_identity_fields"
+    )
+    count_fields = (
+        "byte_count", "owner_chain_count", "context_count",
+        "agent_count", "open_item_count",
+    )
+    if any(type(identity[field]) is not int or identity[field] < 0 for field in count_fields):
+        raise ValueError("feature context closure count/length 必须为非负整数")
+    maximum = int(contract_section("feature_context_closure")["max_bytes"])
+    if identity["byte_count"] <= 0 or identity["byte_count"] > maximum:
+        raise ValueError("feature context closure byte_count 超出资源边界")
+    digest_fields = ("canonical_bytes_sha256", "scope_digest")
+    if any(
+        not isinstance(identity[field], str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", identity[field]) is None
+        for field in digest_fields
+    ):
+        raise ValueError("feature context closure digest 非法")
+    if not isinstance(identity["ref"], str) or not identity["ref"]:
+        raise ValueError("feature context closure ref 必须非空")
+
 def validate_feature_context_manifest(payload: dict[str, Any]) -> None:
     """Validate one manifest at the producer and every consumer boundary."""
 
@@ -396,6 +425,7 @@ def validate_feature_context_manifest(payload: dict[str, Any]) -> None:
     for field in ("target", "resolved_owner"):
         if not isinstance(payload[field], str) or not payload[field]:
             raise TypeError(f"feature_context_manifest.{field} 必须为非空字符串")
+    _validate_feature_context_closure_identity(payload.get("closure_identity"))
     binding = payload["evidence_fingerprint"]
     if not isinstance(binding, dict):
         raise TypeError("feature_context_manifest.evidence_fingerprint 必须为映射")

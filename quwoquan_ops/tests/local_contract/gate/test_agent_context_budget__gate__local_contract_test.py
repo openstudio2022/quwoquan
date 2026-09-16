@@ -392,18 +392,21 @@ class AgentContextBudgetGateTest(unittest.TestCase):
             encoding="utf-8"
         )
         for required in (
-            "主会话",
-            "同时最多两个不重叠 author",
-            "review 串行",
+            "主会话保持 execution owner",
+            "多 author/QA 可并行不同小批",
+            "每作者最多两个未闭合批且最多一个创作",
+            "同 shard 仅不重叠 execution 写者",
+            "同 execution/review scope 单写",
+            "派发前按 receipt/artifact 去重",
             "不嵌套派发",
             "不包装 seal/publish",
-            "`starting up` 不是进度也不是失败",
-            "不得据此补发相同或替代调用",
-            "找首个未闭合步骤继续",
-            "已有 receipt 或 reviewer 产物的工作单元不得再次派发",
+            "`starting up` 不是进度/失败",
+            "不得再次派发",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, text)
+        self.assertNotIn("同时最多两个不重叠 author", text)
+        self.assertNotIn("review 串行", text)
 
     def test_mutation_skills_require_unique_owner_before_writing(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t3

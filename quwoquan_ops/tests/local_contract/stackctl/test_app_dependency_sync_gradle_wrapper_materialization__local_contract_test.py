@@ -24,7 +24,10 @@ def test_android_builder_materializes_pinned_flutter_identity_before_sync(
     invocations = (
         SimpleNamespace(
             gradle_root=projection / "quwoquan_app/android",
-            tasks=(":app:assembleNonprodDebug",),
+            tasks=(
+                ":app:assembleAlphaDebug",
+                ":app:assembleAlphaDebugDebugAndroidTest",
+            ),
         ),
     )
     calls: list[tuple[str, object]] = []
@@ -60,10 +63,9 @@ def test_android_builder_materializes_pinned_flutter_identity_before_sync(
         assert kwargs["invocations"] == invocations
         assert kwargs["verified_seed"] is None
         assert kwargs["seed_wrapper_distribution"] is False
-        assert all(
-            "AndroidTest" not in task and "test_host" not in str(item.gradle_root)
-            for item in kwargs["invocations"]
-            for task in item.tasks
+        assert kwargs["invocations"][0].tasks == (
+            ":app:assembleAlphaDebug",
+            ":app:assembleAlphaDebugDebugAndroidTest",
         )
         return SimpleNamespace(
             snapshot=SimpleNamespace(manifest={}),
@@ -108,7 +110,10 @@ def test_valid_active_with_current_wrapper_drift_skips_seed_and_runs_fresh_onlin
     )
     invocation = SimpleNamespace(
         gradle_root=projection / "quwoquan_app/android",
-        tasks=(":app:assembleNonprodDebug",),
+        tasks=(
+            ":app:assembleAlphaDebug",
+            ":app:assembleAlphaDebugDebugAndroidTest",
+        ),
     )
     monkeypatch.setattr(
         sync._builder,

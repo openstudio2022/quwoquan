@@ -9,6 +9,12 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_cloud_contracts/generated/values/user/account/authentication_challenge.values.dart';
 import 'package:quwoquan_cloud_contracts/generated/values/user/account/account_session.values.dart';
 
+/// 只通知已完成Auth提交和readback；组合根可绑定当前启动scope观察，不给页面查询权。
+final syntheticLoginCommittedObserverProvider =
+    Provider<Future<void> Function(SyntheticSessionResult)?>((ref) => null);
+final syntheticLoginObservationAdmissionProvider =
+    Provider<Future<void> Function()?>((ref) => null);
+
 /// 非电话本地确认表单；不读取环境，不调用短信、AutoFill或Remote登录。
 class SyntheticLoginForm extends ConsumerStatefulWidget {
   const SyntheticLoginForm({
@@ -83,6 +89,8 @@ class _SyntheticLoginFormState extends ConsumerState<SyntheticLoginForm> {
     });
     try {
       _check();
+      await ref.read(syntheticLoginObservationAdmissionProvider)?.call();
+      _check();
       if (_challenge == null) {
         _begin ??= BeginSyntheticChallenge(
           identity: SyntheticIdentityLabel(value: _identity.text),
@@ -105,6 +113,14 @@ class _SyntheticLoginFormState extends ConsumerState<SyntheticLoginForm> {
         _check();
         _committedResult = result;
         await _auth.applySyntheticSession(result, requireIntent: _check);
+        _check();
+        final committed = ref.read(authSessionControllerProvider);
+        if (!committed.isAuthenticated ||
+            committed.ownerId != result.accountId ||
+            committed.activePersonaId != result.personaId) {
+          throw StateError('Synthetic auth state readback mismatch');
+        }
+        await ref.read(syntheticLoginCommittedObserverProvider)?.call(result);
         _check();
         setState(() {
           _terminal = true;

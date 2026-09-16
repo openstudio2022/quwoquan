@@ -147,7 +147,6 @@
           "postId",
           "contentId",
           "contentVersion",
-          "usageScope",
           "contentType",
           "authorId"
         ],
@@ -168,12 +167,6 @@
           "contentVersion": {
             "type": "integer",
             "minimum": 1
-          },
-          "usageScope": {
-            "enum": [
-              "research",
-              "commercial"
-            ]
           },
           "contentType": {
             "enum": [

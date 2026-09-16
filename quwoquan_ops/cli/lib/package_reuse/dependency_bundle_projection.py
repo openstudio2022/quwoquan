@@ -243,7 +243,14 @@ def materialize_dependency_bundle_projection(
     snapshots = verified_capsule.dependency_snapshots
     if snapshots is None:
         raise ValueError("App dependency verified capsule snapshots are missing")
-    production_pub, patrol_pub, _production_ios, _patrol_ios, _android = snapshots
+    production_pub = snapshots.production_pub
+    patrol_pub = snapshots.patrol_pub
+    _production_ios = snapshots.production_ios_pods
+    _patrol_ios = snapshots.patrol_ios_pods
+    if platform == "ios" and (_production_ios is None or _patrol_ios is None):
+        raise ValueError("App dependency capsule lacks required iOS coverage")
+    if platform == "android" and snapshots.android_gradle is None:
+        raise ValueError("App dependency capsule lacks required Android coverage")
 
     production_cache = materialize_capsule_pub_cache(
         capsule_root=capsule_root,

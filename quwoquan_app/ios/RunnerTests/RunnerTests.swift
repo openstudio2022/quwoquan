@@ -107,6 +107,140 @@ class RunnerTests: XCTestCase {
     XCTAssertNil(parseIOSRecovery(untrustedRecovery))
   }
 
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-008
+  #if targetEnvironment(simulator) && QWQ_EXTERNAL_UAT_BROKER
+  func testGwt008BrokerUsesAttemptRandomRestrictedUnixSocket() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let driver = AlphaGwt008NativeEvidenceDriver()
+    let path = try driver.startUATBroker(
+      socketDirectory: directory,
+      randomComponent: "01234567-89ab-cdef-0123456789ab"
+    )
+    var mode: UInt16 = 0
+    XCTAssertEqual(lstat(path, nil), 0)
+    let attributes = try FileManager.default.attributesOfItem(atPath: path)
+    mode = (attributes[.posixPermissions] as? NSNumber)?.uint16Value ?? 0
+    XCTAssertEqual(mode, 0o600)
+    XCTAssertTrue(path.hasSuffix(".sock"))
+    XCTAssertFalse(path.contains("verifier"))
+    driver.revoke()
+    XCTAssertFalse(FileManager.default.fileExists(atPath: path))
+  }
+
+  func testGwt008StartBrokerWithoutHostIdentityIsRejected() {
+    let driver = AlphaGwt008NativeEvidenceDriver()
+    XCTAssertThrowsError(try driver.startUATBroker()) {
+      XCTAssertEqual($0 as? AlphaGwt008NativeEvidenceDriver.Failure, .typed("APP.UAT.relay_admission_mismatch"))
+    }
+  }
+
+  func testGwt008NativeEvidenceCreateOnceAndExactFence() throws {
+    let now: TimeInterval = 100
+    let pid = ProcessInfo.processInfo.processIdentifier
+    let driver = AlphaGwt008NativeEvidenceDriver(processId: pid, startedUptime: 1.5, now: { now })
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    var admission = gwt008Admission(pid: pid, nowMs: 100_000)
+    let body = admission
+    admission["admissionDigest"] = try gwt008Digest(body)
+    _ = try driver.arm(admission: admission, verifierHex: String(repeating: "ab", count: 32),
+                       launcherPid: getpid(), socketDirectory: directory,
+                       randomComponent: "01234567-89ab-cdef-0123456789ab")
+    let snapshot: [String: Any] = [
+      "schema": "external-uat-sealed-snapshot", "caseId": "login-success",
+      "launchAttemptId": "attempt-1", "generation": 1,
+      "observationBinding": gwt008DigestValue("binding"),
+      "observations": [["source": "auth", "status": "observed", "detail": "local-success"]],
+    ]
+    var injected = snapshot; injected["processId"] = pid
+    XCTAssertThrowsError(try driver.sealObservation(injected))
+    injected = snapshot; injected["sealedAtMonotonicMs"] = 100_001
+    XCTAssertThrowsError(try driver.sealObservation(injected))
+    let first = try driver.sealObservation(snapshot)
+    var nativeSnapshot = snapshot
+    nativeSnapshot["processId"] = pid
+    nativeSnapshot["sealedAtMonotonicMs"] = Int64(100_000)
+    XCTAssertEqual(first, try gwt008Digest(nativeSnapshot))
+    XCTAssertEqual(try driver.sealObservation(snapshot), first)
+    var conflict = snapshot; conflict["observations"] = []
+    XCTAssertThrowsError(try driver.sealObservation(conflict))
+  }
+
+  func testGwt008ObservationAndQueryDeadlinesAreIndependent() throws {
+    var now: TimeInterval = 100
+    let pid = getpid()
+    let driver = AlphaGwt008NativeEvidenceDriver(processId: pid, now: { now })
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { driver.revoke(); try? FileManager.default.removeItem(at: directory) }
+    var admission = gwt008Admission(pid: pid, nowMs: 100_000)
+    admission["caseId"] = "otp-expiry"
+    admission["expiresAtMonotonicMs"] = Int64(460_000)
+    admission["admissionDigest"] = try gwt008Digest(admission)
+    _ = try driver.arm(admission: admission, verifierHex: String(repeating: "ab", count: 32),
+                       launcherPid: getpid(), socketDirectory: directory)
+    now = 400
+    let snapshot: [String: Any] = ["schema": "external-uat-sealed-snapshot", "caseId": "otp-expiry",
+      "launchAttemptId": "attempt-1", "generation": 1, "observationBinding": gwt008DigestValue("binding"),
+      "observations": [["source": "monotonic-clock", "status": "observed", "detail": "elapsed-300s-challenge-expired"]]]
+    let sealed = try driver.sealObservation(snapshot)
+    now = 459
+    XCTAssertEqual(try driver.sealObservation(snapshot), sealed)
+    now = 461
+    XCTAssertThrowsError(try driver.query([:], peerPid: pid, peerEuid: geteuid())) {
+      XCTAssertEqual($0 as? AlphaGwt008NativeEvidenceDriver.Failure, .typed("APP.UAT.relay_expired"))
+    }
+  }
+
+  func testGwt008RejectsStaleAdmissionAndSensitiveSnapshot() throws {
+    let pid = ProcessInfo.processInfo.processIdentifier
+    let driver = AlphaGwt008NativeEvidenceDriver(processId: pid, now: { 100 })
+    var admission = gwt008Admission(pid: pid, nowMs: 100_000)
+    admission["expiresAtMonotonicMs"] = 99_999
+    admission["admissionDigest"] = try gwt008Digest(admission)
+    XCTAssertThrowsError(try driver.arm(admission: admission,
+      verifierHex: String(repeating: "ab", count: 32), launcherPid: getpid(),
+      socketDirectory: FileManager.default.temporaryDirectory,
+      randomComponent: "01234567-89ab-cdef-0123456789ab"))
+  }
+
+  func testGwt008NativeEvidenceBindsAttemptAndRedactsInput() throws {
+    let driver = AlphaGwt008NativeEvidenceDriver(processId: 42, startedUptime: 1.5)
+    let process = try driver.processObservation(attemptId: "attempt-1")
+    XCTAssertEqual(process["processId"] as? Int32, 42)
+    XCTAssertEqual(process["launchAttemptId"] as? String, "attempt-1")
+    let observation = try driver.redactedInputObservation([
+      "contractDigest": canonicalDigest("a"), "caseId": "login-success",
+      "selector": "rehearsal-confirm-input", "sourceSelector": "alpha-rehearsal-confirm", "mode": "correct",
+    ])
+    XCTAssertEqual(observation["observed"] as? String, "input-redacted")
+    XCTAssertFalse(String(describing: observation).contains("123456"))
+  }
+
+  private func gwt008Admission(pid: pid_t, nowMs: Int64) -> [String: Any] {
+    let digest = gwt008DigestValue("value")
+    return [
+      "schema": "external-uat-managed-launch-admission", "contractDigest": digest,
+      "candidateDigest": digest, "artifactDigest": digest, "packageIdentity": "com.leadwise.quwoquan.alpha.debug",
+      "signingDigest": digest, "platform": "ios-simulator", "deviceId": "simulator-1",
+      "sessionId": "session-1", "caseId": "login-success", "launchAttemptId": "attempt-1",
+      "generation": 1, "observationBinding": gwt008DigestValue("binding"), "processId": pid,
+      "lifecycleReceiptDigest": digest, "admittedAtMonotonicMs": nowMs,
+      "expiresAtMonotonicMs": nowMs + 60_000,
+    ]
+  }
+
+  private func gwt008Digest(_ value: [String: Any]) throws -> String {
+    let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .withoutEscapingSlashes])
+    return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+  }
+
+  private func gwt008DigestValue(_ value: String) -> String {
+    "sha256:" + SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+  }
+  #endif
+
   private func startupTerminalEvent(_ surface: String) -> String {
     "{\"eventName\":\"startup_safe_terminal\",\"surface\":\"\(surface)\"}"
   }

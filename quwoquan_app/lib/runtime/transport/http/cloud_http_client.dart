@@ -7,6 +7,7 @@ import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/config/app_content_source.dart';
 import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
 import 'package:quwoquan_app/runtime/auth/rehearsal_auth_port.dart';
+import 'package:quwoquan_app/runtime/alpha_rehearsal/alpha_rehearsal_observation.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/runtime/codec/cloud_json_body_decoder.dart';
 import 'package:quwoquan_app/runtime/codec/cloud_response_decoder.dart';
@@ -755,6 +756,9 @@ class CloudHttpClient {
   void _requireNetworkCapability() {
     if (CloudRuntimeConfig.isHydrated &&
         CloudRuntimeConfig.contentSource == AppContentSource.bundledSnapshot) {
+      AlphaRehearsalObservation.current?.recordRefusal(
+        'native-network-attempt',
+      );
       throw contentCapabilityUnavailable('http_transport');
     }
   }
@@ -782,6 +786,9 @@ class CloudHttpClient {
     }
     if (token == null || token.isEmpty) return sanitizedHeaders;
     if (isRehearsalCredential(token)) {
+      AlphaRehearsalObservation.current?.recordRefusal(
+        'native-remote-transport-attempt',
+      );
       throw contentCapabilityUnavailable('remote_transport');
     }
     return <String, String>{

@@ -879,3 +879,7 @@ final authSessionControllerProvider =
     NotifierProvider<AuthSessionController, AuthSessionState>(
       AuthSessionController.new,
     );
+
+/// Isolated restore 完成后由启动组合根观察；默认不采集。
+final syntheticSessionRestoredObserverProvider =
+    Provider<Future<void> Function(AuthSessionState)?>((ref) => null);

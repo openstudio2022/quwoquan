@@ -22,12 +22,6 @@ extractors:
   - qunar_html
   - ctrip_sight_html
   - generic_html
-articlePublicationAdmissions:
-  - research_release
-  - commercial_release
-  - controlled_trial
-  - reference_only
-  - blocked
 creatorExpansionPolicies:
   # Creator expansion is always derived from one entity-relevant accepted work;
   # it is never an author-first source axis and never confers relevance or rights
@@ -50,7 +44,6 @@ sites:
     siteCrawlProfile:
       crawlAllowed: true
       contentLanes: [article]
-      articlePublicationAdmission: research_release
       allowedPaths:
         - https://zh.wikipedia.org/wiki/*
       fetchMode: mediawiki_api
@@ -95,7 +88,6 @@ sites:
     siteCrawlProfile:
       crawlAllowed: true
       contentLanes: [homepage, article]
-      articlePublicationAdmission: research_release
       allowedPaths:
         - https://zh.wikivoyage.org/wiki/*
       fetchMode: mediawiki_api
@@ -268,7 +260,6 @@ sites:
     siteCrawlProfile:
       crawlAllowed: false
       contentLanes: [article, image, video]
-      articlePublicationAdmission: controlled_trial
       allowedPaths:
         - https://www.mafengwo.cn/i/*
       fetchMode: platform_reference
@@ -306,7 +297,6 @@ sites:
     siteCrawlProfile:
       crawlAllowed: false
       contentLanes: [article, image, video]
-      articlePublicationAdmission: controlled_trial
       allowedPaths:
         - https://you.ctrip.com/*
       fetchMode: platform_reference
@@ -344,7 +334,6 @@ sites:
     siteCrawlProfile:
       crawlAllowed: true
       contentLanes: [article]
-      articlePublicationAdmission: research_release
       allowedPaths:
         - https://you.ctrip.com/sight/*/*.html
       fetchMode: html
@@ -391,7 +380,6 @@ sites:
     siteCrawlProfile:
       crawlAllowed: false
       contentLanes: [article, image, video]
-      articlePublicationAdmission: reference_only
       allowedPaths:
         - https://www.xiaohongshu.com/explore/*
         - https://www.xiaohongshu.com/search_result*
@@ -436,7 +424,6 @@ sites:
     siteCrawlProfile:
       crawlAllowed: false
       contentLanes: [article, image, video]
-      articlePublicationAdmission: reference_only
       allowedPaths:
         - https://www.toutiao.com/article/*
         - https://www.toutiao.com/*
@@ -480,7 +467,6 @@ sites:
     siteCrawlProfile:
       crawlAllowed: false
       contentLanes: [article, image, video]
-      articlePublicationAdmission: reference_only
       allowedPaths:
         - https://weibo.com/*
         - https://www.weibo.com/*
@@ -660,7 +646,6 @@ sites:
     siteCrawlProfile:
       crawlAllowed: true
       contentLanes: [article, image]
-      articlePublicationAdmission: research_release
       allowedPaths:
         - https://touch.travel.qunar.com/*
         - https://travel.qunar.com/*

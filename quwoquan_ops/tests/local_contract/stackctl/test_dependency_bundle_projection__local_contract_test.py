@@ -31,12 +31,12 @@ def _stub_capsule(
         "verify_package_input_capsule_with_dependencies",
         lambda _root: SimpleNamespace(
             manifest={"entries": [{"logicalPath": "fixture"}]},
-            dependency_snapshots=(
-                production,
-                patrol,
-                object(),
-                object(),
-                object(),
+            dependency_snapshots=SimpleNamespace(
+                production_pub=production,
+                patrol_pub=patrol,
+                production_ios_pods=object(),
+                patrol_ios_pods=object(),
+                android_gradle=object(),
             ),
         ),
     )
@@ -51,6 +51,24 @@ def _stub_capsule(
         lambda **_kwargs: tmp_path / "patrol-pub",
     )
     return manifest, production, patrol
+
+
+@pytest.mark.parametrize("platform", ["ios", "android"])
+def test_projection_rejects_missing_required_platform_before_materialization(tmp_path, monkeypatch, platform):
+    manifest, production, patrol = _stub_capsule(tmp_path, monkeypatch)
+    monkeypatch.setattr(projection, "verify_package_input_capsule_with_dependencies", lambda _: SimpleNamespace(
+        manifest={"entries": [{"logicalPath": "fixture"}]},
+        dependency_snapshots=SimpleNamespace(
+            production_pub=production, patrol_pub=patrol,
+            production_ios_pods=None, patrol_ios_pods=None, android_gradle=None,
+        ),
+    ))
+    with pytest.raises(ValueError, match="lacks required"):
+        projection.materialize_dependency_bundle_projection(
+            manifest_path=manifest, projection_root=tmp_path / "projection",
+            private_state_root=tmp_path / "state", platform=platform, base_environment={},
+        )
+    assert not (tmp_path / "state").exists()
 
 
 def test_android_projection_forces_one_private_gradle_home_for_both_hosts(

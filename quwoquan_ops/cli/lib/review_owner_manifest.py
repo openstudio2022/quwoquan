@@ -203,6 +203,10 @@ def normalize_contexts(
             "REVIEW.OWNER_MANIFEST_STALE",
             "owner manifest ref canonical bytes 已被替换",
         )
+    try:
+        validate_current_fingerprint(manifest, repo_root=repo_root)
+    except EvidenceFingerprintError as exc:
+        _refuse("IDENTITY.MIGRATION_REQUIRED", str(exc))
     target = _repo_relative(str(manifest["target"]), repo_root=repo_root)
     if expected_scope and target != _repo_relative(expected_scope, repo_root=repo_root):
         _refuse(
@@ -215,10 +219,6 @@ def normalize_contexts(
             "REVIEW.OWNER_MANIFEST_TARGET_MISMATCH",
             "owner manifest resolved_owner 必须等于 owner_chain 末节点",
         )
-    try:
-        validate_current_fingerprint(manifest, repo_root=repo_root)
-    except EvidenceFingerprintError as exc:
-        _refuse("IDENTITY.MIGRATION_REQUIRED", str(exc))
     contexts: list[dict[str, Any]] = []
     for raw in manifest["canonical_contexts"]:
         relative = _repo_relative(str(raw["path"]), repo_root=repo_root)

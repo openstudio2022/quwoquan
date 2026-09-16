@@ -490,7 +490,7 @@ def test_process_result_preserves_typed_network_cause(
         context.progress.begin("gradle-online-resolution")
         raise ValueError(
             "APP.DEPENDENCY.android_sync_failed: cause=network_unreachable; "
-            "host=quwoquan_app/android; task=:app:assembleNonprodDebug"
+            "host=quwoquan_app/android; task=:app:assembleAlphaDebug"
         )
 
     result = sync.command_app_dependency_sync(

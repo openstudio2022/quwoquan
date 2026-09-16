@@ -29,6 +29,19 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     offline.add_argument("--check", action="store_true", help="只读验证现有导出和制品摘要，不刷新文件")
     offline.set_defaults(handler=owner.handle_export_offline)
 
+    repackage = commands.add_parser(
+        "repackage-legacy",
+        help="受治理地把明示支持的 legacy sealed release 重建为不同 current-schema release",
+    )
+    for flag in ("source-root", "repository-id", "source-release-id", "source-handoff-digest",
+                 "source-cohort-digest", "source-repository-evidence-ref", "source-repository-evidence-digest",
+                 "target-release-id", "producer-baseline-revision"):
+        repackage.add_argument("--" + flag, required=True)
+    repackage.add_argument("--milestone", choices=("M1", "M10", "M100", "M1000", "M10000"), required=True)
+    repackage.add_argument("--publish-root")
+    repackage.add_argument("--release-root")
+    repackage.set_defaults(handler=owner.handle_repackage_legacy)
+
     finalize = commands.add_parser(
         "finalize",
         help="一次完成 pool-build、release-integrity 与 create-once producer handoff",

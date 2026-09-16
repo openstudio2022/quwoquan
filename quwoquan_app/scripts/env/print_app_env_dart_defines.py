@@ -371,7 +371,7 @@ def build_offline_bootstrap_document(
         "launchPolicy": launch_policy, "contentSource": contract["content_source_policy"][environment],
         "sourceGitSha": source_git_sha, "sourceTreeDigest": source_tree_digest,
         "trustEnvelopeDigest": runtime_config_trust_envelope_digest(trust, contract),
-        "rehearsalSpace": selected if selected is not None else {"mode": "standard", "snapshotDigest": snapshot_digest, "instanceId": "default"},
+        "rehearsalSpace": selected if selected is not None else {"mode": "standard", "snapshotDigest": snapshot_digest, "instanceId": "default", "caseId": "none", "lifecycleGeneration": "0", "observationBinding": ""},
         "runtime": {"appRuntimeEnv": environment}, "payloadDigest": "",
         "signatureAlgorithm": "ed25519", "signatureKeyId": signing.key_id,
         "trustedPublicKeys": keyring, "signature": "",

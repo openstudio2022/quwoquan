@@ -101,6 +101,8 @@ def _ios_simulator_process_id(
         for line in str(result.stdout or "").splitlines()
         if (match := service.fullmatch(line)) is not None
     ]
+    if not matches:
+        raise ValueError("canonical iOS Simulator App is not running")
     if len(matches) != 1:
         raise ValueError(
             "canonical iOS Simulator App did not expose one launchd process"
@@ -168,6 +170,8 @@ def _ios_physical_process_id(
         and not isinstance(process.get("processIdentifier"), bool)
         and int(process["processIdentifier"]) > 0
     ] if isinstance(running, list) else []
+    if not process_ids:
+        raise ValueError("canonical iOS physical App is not running")
     if len(process_ids) != 1:
         raise ValueError("canonical iOS physical App did not expose one process")
     return int(process_ids[0])
@@ -195,7 +199,7 @@ def observe_canonical_app_process_id(
             runner=runner,
             adb_resolver=adb_resolver,
         )
-    if normalized_platform == "ios-simulator":
+    if normalized_platform in {"ios", "ios-simulator"}:
         return _ios_simulator_process_id(
             device_id=normalized_device,
             application_id=normalized_application,
@@ -210,3 +214,83 @@ def observe_canonical_app_process_id(
     raise ValueError(
         f"canonical App process observation does not support {platform or '<missing>'}"
     )
+
+
+def confirm_host_process_table_absent(
+    *,
+    process_id: int,
+    runner: CommandRunner = subprocess.run,
+) -> bool:
+    """Host process table is independent of simctl/launchd lifecycle."""
+
+    if type(process_id) is not int or isinstance(process_id, bool) or process_id <= 0:
+        raise ValueError("APP.UAT.teardown_pid_alive: process table identity is invalid")
+    result = _run_read_only(["ps", "-p", str(process_id), "-o", "pid="], runner=runner)
+    if result.returncode not in (0, 1):
+        raise ValueError("APP.UAT.teardown_pid_alive: process table is unreadable")
+    tokens = str(result.stdout or "").split()
+    if not tokens:
+        return True
+    if tokens != [str(process_id)]:
+        raise ValueError("APP.UAT.teardown_pid_alive: process table readback is ambiguous")
+    return False
+
+
+def confirm_canonical_app_process_absent(
+    *,
+    platform: str,
+    device_id: str,
+    application_id: str,
+    expected_pid: int,
+    runner: CommandRunner = subprocess.run,
+    adb_resolver: AdbResolver = resolve_android_debug_bridge,
+) -> bool:
+    """Confirmed absence is death; unreadable/ambiguous readback is not death."""
+
+    if type(expected_pid) is not int or isinstance(expected_pid, bool) or expected_pid <= 0:
+        raise ValueError("APP.UAT.teardown_pid_alive: lifecycle identity is invalid")
+    try:
+        observed = observe_canonical_app_process_id(
+            platform=platform,
+            device_id=device_id,
+            application_id=application_id,
+            runner=runner,
+            adb_resolver=adb_resolver,
+        )
+    except ValueError as error:
+        if "is not running" in str(error):
+            return True
+        raise ValueError("APP.UAT.teardown_pid_alive: platform lifecycle readback failed") from error
+    if type(observed) is not int or isinstance(observed, bool) or observed <= 0:
+        raise ValueError("APP.UAT.teardown_pid_alive: platform lifecycle readback is invalid")
+    return observed != expected_pid
+
+
+def confirm_android_lifecycle_absent(
+    *,
+    device_id: str,
+    application_id: str,
+    expected_pid: int,
+    runner: CommandRunner = subprocess.run,
+    adb_resolver: AdbResolver = resolve_android_debug_bridge,
+) -> bool:
+    """dumpsys activity processes is the Android lifecycle source, not pidof."""
+
+    if type(expected_pid) is not int or isinstance(expected_pid, bool) or expected_pid <= 0:
+        raise ValueError("APP.UAT.teardown_pid_alive: Android lifecycle identity is invalid")
+    adb = str(adb_resolver() or "").strip()
+    if not adb:
+        raise ValueError("APP.UAT.teardown_pid_alive: Android lifecycle observation requires adb")
+    normalized_application = str(application_id or "").strip()
+    if not str(device_id or "").strip() or not normalized_application:
+        raise ValueError("APP.UAT.teardown_pid_alive: Android lifecycle identity is incomplete")
+    result = _run_read_only(
+        [adb, "-s", device_id, "shell", "dumpsys", "activity", "processes"],
+        runner=runner,
+    )
+    if result.returncode != 0:
+        raise ValueError("APP.UAT.teardown_pid_alive: Android lifecycle is unreadable")
+    text = str(result.stdout or "")
+    if normalized_application not in text:
+        return True
+    return str(expected_pid) not in text

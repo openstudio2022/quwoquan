@@ -23,6 +23,7 @@ from internal.recommendation.ranked_recommendation_window.domain.model import (
     RankedCandidate,
     RankingResult,
     ReleasePinnedQueryFence,
+    RecommendationRequestContext,
     validate_content_fence,
 )
 from internal.recommendation.ranked_recommendation_window.domain.experiment_policy import (
@@ -142,6 +143,7 @@ class MongoCandidateRanker:
         session_id: str,
         limit: int,
         content_fence: ReleasePinnedQueryFence,
+        request_context: RecommendationRequestContext,
     ) -> RankingResult:
         content_fence = validate_content_fence(content_fence)
         now = self._now().astimezone(timezone.utc)
@@ -161,6 +163,8 @@ class MongoCandidateRanker:
         }:
             raise ValueError("unsupported recommendation ranking scenario")
         profile = self._feature_profiles.read_for_scoring(subject_id.strip())
+        behavior_count = self._behavior_count(profile)
+        cold_start = behavior_count <= self._tuning.cold_start_max_behavior_count
         if content_fence.release is not None:
             documents = self._candidates.list_release_for_ranking(content_fence, subject_id=subject_id.strip(), scenario=normalized_scenario, limit=limit)
         else:
@@ -229,6 +233,12 @@ class MongoCandidateRanker:
             context={
                 "requestHour": now.hour,
                 "requestDayOfWeek": now.weekday(),
+                "viewportProfile": request_context.viewport_profile,
+                "deviceClass": request_context.device_class,
+                "coarseRegion": request_context.coarse_region,
+                "timeBucket": request_context.time_bucket,
+                "coldStart": cold_start,
+                "behaviorCount": behavior_count,
             },
         )
         user_snapshot = dict(request.userFeatures or {})
@@ -265,6 +275,8 @@ class MongoCandidateRanker:
             }
         if set(scores) != set(candidate_ids):
             raise RuntimeError("model scoring result does not match the candidate snapshot")
+        if cold_start:
+            scores = self._apply_quality_prior(scores, candidates)
         scores = self._apply_new_content_boost(scores, candidates)
         ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
         ranked = self._apply_author_diversity(ranked, candidates)
@@ -300,6 +312,12 @@ class MongoCandidateRanker:
                 "whitelistEnabled": self._tuning.whitelist_enabled,
             },
             "profileCheckpoint": int(profile.get("checkpoint") or 0),
+            "requestContext": request_context.canonical_document(),
+            "coldStart": {
+                "active": cold_start,
+                "behaviorCount": behavior_count,
+                "maximumBehaviorCount": self._tuning.cold_start_max_behavior_count,
+            },
             "ranked": [
                 {
                     "contentId": candidate.content_id,
@@ -389,6 +407,34 @@ class MongoCandidateRanker:
             if len(merged) >= limit:
                 break
         return merged
+
+    @staticmethod
+    def _behavior_count(profile: Mapping[str, Any]) -> int:
+        sparse = profile.get("sparseFeatures") or {}
+        if not isinstance(sparse, Mapping):
+            raise RuntimeError("feature profile sparseFeatures must be a mapping")
+        total = 0.0
+        for key, value in sparse.items():
+            if not str(key).startswith(("action:", "state:")):
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)) or float(value) < 0:
+                raise RuntimeError("feature profile behavior count is invalid")
+            total += float(value)
+        return int(total)
+
+    @staticmethod
+    def _apply_quality_prior(
+        scores: dict[str, float],
+        candidates: list[CandidateInput],
+    ) -> dict[str, float]:
+        quality_by_content = {
+            str(candidate.contentId): float(candidate.qualityScore or 0.0)
+            for candidate in candidates
+        }
+        return {
+            content_id: score + quality_by_content[content_id]
+            for content_id, score in scores.items()
+        }
 
     def _model_scores(
         self,

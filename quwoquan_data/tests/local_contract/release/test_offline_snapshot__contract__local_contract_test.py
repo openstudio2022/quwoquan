@@ -106,8 +106,7 @@ def _fixture_review(ref, execution_id, draft_ref, raw):
 def _bind_review(manifest, ref, review_raw):
     manifest["admission"] = {"evidenceDigest": digest_bytes(review_raw), "evidenceRef": "content_review.json",
                              "processResult": "completed", "qualityResult": "passed", "rightsResult": "passed",
-                             "rightsAuthorityDigest": digest_bytes(review_raw), "rightsAuthorityRef": ref + "/content_review.json",
-                             "usageScope": "research"}
+                             "rightsAuthorityDigest": digest_bytes(review_raw), "rightsAuthorityRef": ref + "/content_review.json"}
 
 
 def _media_asset(root, asset_id, kind):
@@ -136,7 +135,7 @@ def _fixture_sources(root, assets):
                 "sourceUrl": "https://example.org/offline-test-double", "sourceUseMode": "factual_reference_only",
                 "fetchedAt": STAMP, "metadata": {"testDouble": True, "productionAdmission": False},
                 "assets": [{**{key: row[key] for key in ("assetId", "sha256", "bytes", "mimeType")},
-                            "attribution": "合成测试媒体，不代表第三方版权许可", "distributionDecision": "research_allowed"} for row in assets],
+                            "attribution": "合成测试媒体，不代表第三方版权许可"} for row in assets],
                 "evidence": [{"path": "evidence.json", "sha256": digest_bytes(evidence), "bytes": len(evidence), "kind": "source_excerpt"}]}
     assert_valid(document, "publish", "source")
     _put(root / "sources/fixture/source.json", document)
@@ -285,6 +284,7 @@ def legacy_source(tmp_path, current_source):
         path = _put(execution / receipt_ref, receipt)
         predecessor = {"scope": "execution", "ref": receipt_ref, "digest": digest_bytes(path.read_bytes())}
     record = _json(METADATA_ROOT / TEMPLATES[0] / "_pool/versions/1.json")
+    record.pop("usageScope", None)
     record.update(objectId=original["contentId"], objectRef=ref.removeprefix("posts/"),
                   sourceIdentity=original["sourceIdentity"], sourceAttribution=original["sourceAttribution"],
                   payloadDigest=_legacy_payload_digest(root), canonicalObjectDigest=_legacy_payload_digest(root),
@@ -384,7 +384,7 @@ def test_current_schema_cohort_complete_and_deterministic(tmp_path, current_sour
         assert source_attribution["document"] == _json(CanonicalSource(current_source).object_path(ref) / "manifest.json")["sourceAttribution"]
     video = bundle["posts"][2]["detail"]
     assert video["sourceAttribution"]["commercialAuthorizationStatus"] == "unverified"
-    assert video["sourceAttribution"]["publicationAdmission"] == "research_release"
+    assert "publicationAdmission" not in video["sourceAttribution"]
     assert all(m["canonicalReference"].startswith("media/") and "://" not in m["canonicalReference"] for m in bundle["media"])
     result = export_bundle(first, tmp_path / "alpha")
     assert export_bundle(first, tmp_path / "alpha", check=True) == result
@@ -403,6 +403,33 @@ def test_current_schema_cohort_complete_and_deterministic(tmp_path, current_sour
         assert "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest() == m["sha256"]
     assert export_bundle(first, tmp_path / "alpha") == result
     print("TEST_DOUBLE_OFFLINE_EXPORT_IDENTITY=" + json.dumps(result, ensure_ascii=False, sort_keys=True))
+
+
+@pytest.mark.parametrize(("authorization_status", "proof_url"), [
+    ("unverified", None),
+    ("verified", "https://example.org/offline-test-double/authorization-proof"),
+])
+def test_current_source_attribution_public_branches_are_exact(
+    current_source, authorization_status, proof_url
+):
+    for ref in POST_REFS:
+        manifest_path = CanonicalSource(current_source).object_path(ref) / "manifest.json"
+        manifest = _json(manifest_path)
+        manifest["sourceAttribution"]["commercialAuthorizationStatus"] = authorization_status
+        manifest["sourceAttribution"]["authorizationProofUrl"] = proof_url
+        assert_valid(manifest, "content", "post_manifest")
+        _put(manifest_path, manifest)
+
+    bundle = build_bundle(
+        repo=ROOT, publish_root=current_source, selection=selection(),
+        source_revision=REVISION, library_root=current_source / "absent-library",
+        carried_root=current_source / "absent-carried",
+    ).manifest
+    for post in bundle["posts"]:
+        attribution = post["detail"]["sourceAttribution"]
+        assert attribution["commercialAuthorizationStatus"] == authorization_status
+        assert attribution["authorizationProofUrl"] == proof_url
+        assert "publicationAdmission" not in attribution
 
 
 @pytest.mark.parametrize("fault", ["missing", "corrupt"])
@@ -590,14 +617,14 @@ def test_array_enum_transcribes_required_modifications_without_default(current_s
     validator = PublicContractValidator(ROOT)
     manifest = _json(CanonicalSource(current_source).object_path(POST_REFS[2]) / "manifest.json")
     attribution = manifest["sourceAttribution"]
-    validator.validate_type(attribution, "SourceAttribution")
+    validator.validate_type(attribution, "PublicSourceAttribution")
     assert attribution["derivedModifications"] == ["format_conversion", "video_frame_extraction"]
     for wrong in (None, ["invented_edit"]):
         with pytest.raises(OfflineSnapshotError, match="PUBLIC_PROJECTION_INVALID"):
-            validator.validate_type({**attribution, "derivedModifications": wrong}, "SourceAttribution")
+            validator.validate_type({**attribution, "derivedModifications": wrong}, "PublicSourceAttribution")
     del attribution["derivedModifications"]
     with pytest.raises(OfflineSnapshotError, match="PUBLIC_PROJECTION_INVALID"):
-        validator.validate_type(attribution, "SourceAttribution")
+        validator.validate_type(attribution, "PublicSourceAttribution")
 
 
 def test_layout_two_resolution_records_physical_refs_and_rejects_collision(current_source):

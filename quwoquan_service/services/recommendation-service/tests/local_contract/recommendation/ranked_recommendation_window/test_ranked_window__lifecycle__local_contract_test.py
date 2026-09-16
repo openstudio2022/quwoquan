@@ -99,7 +99,7 @@ class _Ranker:
     def __init__(self) -> None:
         self.calls = 0
 
-    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int, content_fence: ReleasePinnedQueryFence):
+    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int, content_fence: ReleasePinnedQueryFence, request_context: RecommendationRequestContext):
         self.calls += 1
         return _ranking()
 
@@ -414,7 +414,12 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
 
 # spec_ref: specs/feature-tree/recommendation-platform/spec.md
 class _CheckpointRanker(_Ranker):
+    def __init__(self) -> None:
+        super().__init__()
+        self.request_context = None
+
     def rank(self, **kwargs):
+        self.request_context = kwargs["request_context"]
         result = super().rank(**kwargs)
         return RankingResult(
             experiment_bucket=result.experiment_bucket,
@@ -434,9 +439,10 @@ class _CheckpointRanker(_Ranker):
 def test_request_context_is_canonical_frozen_and_replayed_across_clock_change() -> None:
     clock = [datetime(2026, 7, 31, 23, 59, tzinfo=timezone.utc)]
     store = _Store()
+    ranker = _CheckpointRanker()
     facade = Facade(
         store=store,
-        ranker=_CheckpointRanker(),
+        ranker=ranker,
         subject_closures=_Closures(),
         exclusion_profiles=_ExclusionProfiles(),
         window_id_factory=lambda _key: "window-context",
@@ -450,6 +456,9 @@ def test_request_context_is_canonical_frozen_and_replayed_across_clock_change() 
         limit=2,
         viewport_profile=None,
         device_class="tablet",
+    )
+    assert ranker.request_context == RecommendationRequestContext(
+        "unknown", "tablet", "unknown", "h23", "unknown"
     )
     assert store.window.request_context == RecommendationRequestContext(
         "unknown", "tablet", "unknown", "h23", "42"

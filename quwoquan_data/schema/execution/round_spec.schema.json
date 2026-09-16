@@ -101,6 +101,32 @@
           "publishSeq": {
             "type": "integer",
             "minimum": 1
+          },
+          "requiredContentId": {
+            "description": "Same-identity republish expected contentId; must be paired with requiredVersion.",
+            "type": "string",
+            "minLength": 1
+          },
+          "requiredVersion": {
+            "description": "Expected independent content version; publishSeq is not a version.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "requiredPublishTitle": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^/]+$"
+          },
+          "forbidMint": {
+            "type": "boolean"
+          },
+          "requiredAssets": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/requiredAsset"
+            }
           }
         },
         "allOf": [
@@ -108,8 +134,23 @@
             "$ref": "target_set.schema.json#/$defs/entityIdentity"
           },
           {
-            "if": {"properties": {"carrier": {"enum": ["image", "video"]}}},
-            "else": {"required": ["entityType", "entityRef", "entityId"]}
+            "if": {
+              "properties": {
+                "carrier": {
+                  "enum": [
+                    "image",
+                    "video"
+                  ]
+                }
+              }
+            },
+            "else": {
+              "required": [
+                "entityType",
+                "entityRef",
+                "entityId"
+              ]
+            }
           },
           {
             "if": {
@@ -130,6 +171,28 @@
                 "publishTitle"
               ]
             }
+          },
+          {
+            "if": {
+              "anyOf": [
+                {
+                  "required": [
+                    "requiredContentId"
+                  ]
+                },
+                {
+                  "required": [
+                    "requiredVersion"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "required": [
+                "requiredContentId",
+                "requiredVersion"
+              ]
+            }
           }
         ]
       }
@@ -139,6 +202,36 @@
     "executionId": {
       "type": "string",
       "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
+    },
+    "requiredAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "assetId",
+        "sha256",
+        "kind"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "video"
+          ]
+        }
+      }
     }
   }
 }

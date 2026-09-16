@@ -23,7 +23,6 @@ def asset_license_fields(source: Mapping[str, Any]) -> dict[str, Any]:
         "usageScope": str(source.get("usageScope") or "app_publish"),
         "modelReleaseStatus": str(source.get("modelReleaseStatus") or "not_required"),
         "propertyReleaseStatus": str(source.get("propertyReleaseStatus") or "unverified"),
-        "distributionDecision": str(source.get("distributionDecision") or ""),
         "rightsAuditStatus": str(source.get("rightsStatus") or source.get("rightsAuditStatus") or "").strip(),
         "rightsAuditIssues": [str(value) for value in source.get("rightsIssues") or source.get("rightsAuditIssues") or [] if str(value)],
     }
@@ -71,7 +70,6 @@ def media_attribution(
         "attributionText": f"{creator} · {platform} · {license_name}",
         "rightsBasis": license_name,
         "commercialAuthorizationStatus": authorization,
-        "publicationAdmission": "commercial_release" if authorization == "verified" else "research_release",
         "authorizationProofUrl": proof or None,
         "termsUrl": terms_url or None,
         **{k: rights[k] for k in ("watermarkStatus", "watermarkKind", "audioRightsStatus")},

@@ -38,6 +38,7 @@ def _fields(*, valid_digest: bool = True) -> dict[bytes, bytes]:
         "modelChannel": "champion",
         "modelReleaseId": "release-001",
         "rankingSnapshotDigest": "a" * 64,
+        "policyDigest": "sha256:" + "b" * 64,
         "featureSnapshotAt": "2026-07-31T07:59:59Z",
         "userFeatureSnapshot": user_snapshot,
         "items": [
@@ -173,6 +174,7 @@ def test_consumer_persists_exposure_and_projects_before_ack() -> None:
     assert fact.window_id == "window-001"
     assert fact.target_id == "post-001"
     assert fact.experiment_bucket == "model"
+    assert fact.policy_digest == "sha256:" + "b" * 64
     assert projector.calls[0]["exposure_fact_id"] == fact.exposure_id
     assert redis.acked == [(FEED_PAGE_DELIVERED_STREAM, CONSUMER_GROUP, "1000-0")]
 

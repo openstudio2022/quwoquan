@@ -1379,6 +1379,92 @@ value_objects:
         type: string
         constraints:
           - NOT_NULL
+  PublicSourceAttribution:
+    fields:
+      - name: isOriginal
+        type: bool
+        constraints:
+          - NOT_NULL
+      - name: originalCreatorId
+        type: string
+        constraints:
+          - NULLABLE
+      - name: originalCreatorName
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: originalCreatorProfileUrl
+        type: string
+        constraints:
+          - NULLABLE
+      - name: platform
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: sourcePostUrl
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: originalAssetUrl
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: attributionText
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: rightsBasis
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: commercialAuthorizationStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: authorizationProofUrl
+        type: string
+        constraints:
+          - NULLABLE
+      - name: termsUrl
+        type: string
+        constraints:
+          - NULLABLE
+      - name: derivedModifications
+        type: '[]enum'
+        enum_ref: SourceDerivedModification
+        constraints: [NOT_NULL]
+        description: 发布字节相对原始素材的修改事实；显式空数组表示无修改，缺席非法。
+      - name: watermarkKind
+        type: enum
+        enum_ref: SourceWatermarkKind
+        constraints: [NULLABLE]
+      - name: watermarkNote
+        type: string
+        constraints: [NULLABLE]
+      - name: watermarkStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: audioRightsStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: modelReleaseStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: propertyReleaseStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: collectedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+      - name: takedownPolicy
+        type: string
+        constraints:
+          - NOT_NULL
   SearchIntentProjection:
     description: 用户最近一次搜索查询与真实点击形成的 24 小时短期推荐特征；独立 TTL 物理回收。
     fields:

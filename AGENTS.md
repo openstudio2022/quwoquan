@@ -8,15 +8,14 @@
 
 只读/控制型 Skill 对 `make feature-context TARGET=<exact-path>` 的 owner 解析 best-effort，无 owner 时记录 typed 结果继续只读；任何 mutation 或送审 Skill 写入前必须持有唯一 current owner identity ref，否则 `GATE_BLOCK`。细则归 REQ-002 与各 Skill PRE。
 
-Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-tree/README.md)。各层只拥有本层 Journey/DOM/SIT/GWT 与设计决定；不建 backlog 或完成台账，版本化 Human/Review registry 只在各自 owner 内拥有映射。
+Feature Tree/owner 算法见 [`specs/feature-tree/README.md`](specs/feature-tree/README.md)；各层只拥有本层规格与决定，不建 backlog/完成台账。
 
 ## 工作流选择
 
 `.agents/skills/<name>/SKILL.md` 是 Workflow Skill 的唯一 authoring source 与宿主发现面；自然语言与显式入口加载同一 Skill body 并进入同一生命周期。
 
-- 始终选择当前最早且足以闭环的 Skill；目标、证据或阻断改变时按 metadata 切换，而不是沿用错误流程。
-- Skill 就地声明输入、执行、完成证据、失败停止和条件性交接；根与子树规则不复制步骤、不声明自然语言路由。
-- 工作流切换只改变执行契约，不扩大用户授权；提交、发布、外部写入、不可逆动作和高风险环境操作仍须满足原有明确授权与确认边界。
+- 选择最早且足以闭环的 Skill；目标、证据或阻断改变即按 metadata 切换。
+- Skill 就地拥有五段流程；其他规则层不复制步骤或路由。切换 Skill 不扩大提交、发布、外部/不可逆/高风险动作授权。
 
 ## 真相源与修改顺序
 
@@ -46,9 +45,9 @@ Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-
 
 ## Git 不变量
 
-- 本地允许`dev1.0`、`main`与六条长期`lane/*`；六 lane 仅作检出/验收 identity，upstream 统一指向 `origin/dev1.0`，远端闭集只允许 `origin/dev1.0` 与 `origin/main`，lane 不推远端。本地受管入口对 `dev1.0` 只接受trusted publisher CAS、`integration/`持有 acceptance bundle 的non-force fast-forward publish与managed system backsync三条通道，无bundle的裸push、非快进、force/delete或来源不匹配一律阻断；`main`本地只读、禁止direct push，唯一promotion边为`dev1.0 -> main`；Prod只消费main-reachable stable tag AdmissionFact绑定的exact OCI digests。
+- 本地分支闭集为 `dev1.0`、只读 `main` 与六条长期 `lane/*`；lane upstream 统一为 `origin/dev1.0` 且不推远端，远端仅 `dev1.0/main`。`dev1.0` 只接受 trusted publisher CAS、持 bundle 的 integration non-force FF publish、managed backsync；其他 push、force/delete、来源不符均拒绝。唯一 promotion 为 `dev1.0 -> main`；Prod 只消费 main-reachable stable tag AdmissionFact 的 exact OCI digests。
 - 新建 linked worktree 或再次 clone 每次都须先取得用户明确授权，并以 `QWQ_WORKTREE_AUTHZ="<授权理由>" <command>` 执行。clone 后先运行 `make install-hooks`。
-- 无验真 bundle/admission 不得按普通发布通道移动 `origin/dev1.0`，env=1 不证明 admission。带资格通道只读 `daily-merge-release-strategy` REQ-002；Lane Gate 检查左移 accept，日常 dev 由本地 accept/bundle/integrate/hook 强制；可按授权撤 dev 旧 `04` required check、删除已可达 dev 且增量保全的远端 lane，不等待专用 publisher/broker。服务端普通授权凭据仍可 FF，不能保证 Alpha；hosted 资格强制保持 OPEN-track，不阻有效本地合入，dev 禁删/禁非 FF 与 main promotion 强制不变。Gamma/IQF 后只经 `dev1.0 -> main` PR，MainSourceSeal 后只经受管 system backsync 回 dev。同步使用既有两个同步 Skill，目标固定为本轮已发布 `origin/dev1.0` exact SHA，不回落本地未发布 dev；回同步只 FF 安全本地 identity，不推 lane，不恢复 source-only 或 lane PR 依赖。
+- bundle/admission、Lane Gate 左移、dev 发布资格与回同步只读 `daily-merge-release-strategy` REQ-002 及两个同步 Skill；`env=1` 不证明 admission。普通凭据可 FF 但不证明 Alpha；hosted 强制缺口保持 OPEN-track，dev 禁删/禁 non-FF、main promotion 不变。同步目标只取本轮已发布 `origin/dev1.0` exact SHA；Gamma/IQF 后走 promotion PR，MainSourceSeal 后走 managed backsync。
 - 只有用户明确要求时才创建提交；提交按 `commit` Skill 执行，不用 `--no-verify` 作为常规通道。
 
 ## 沟通

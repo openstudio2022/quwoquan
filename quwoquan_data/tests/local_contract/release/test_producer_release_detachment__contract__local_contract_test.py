@@ -322,7 +322,6 @@ def test_release_asset_admission_allows_identical_asset_reuse_across_objects(
         "acquisitionStatus": "acquired",
         "rightsStatus": "verified",
         "authorizationRequired": False,
-        "distributionDecision": "research_allowed",
         "rightsIssues": [],
         "generated": False,
     }
@@ -389,7 +388,6 @@ def test_release_asset_admission_rejects_reused_id_with_identity_drift(
         "acquisitionStatus": "acquired",
         "rightsStatus": "verified",
         "authorizationRequired": False,
-        "distributionDecision": "research_allowed",
         "rightsIssues": [],
         "generated": False,
     }
@@ -467,7 +465,7 @@ def _sealed_handoff_fixture(
         "processResult": "completed", "qualityResult": "passed", "rightsResult": "passed",
         "rightsAuthorityRef": f"{review_ref}/content_review.json",
         "rightsAuthorityDigest": review_digest, "evidenceRef": "content_review.json",
-        "evidenceDigest": review_digest, "usageScope": "research",
+        "evidenceDigest": review_digest,
     }
     manifest = {
         "entityId": "entity-a", "version": 1, "executionId": execution_id,
@@ -489,7 +487,6 @@ def _sealed_handoff_fixture(
         status="active", process_result="completed", quality_result="passed",
         eligibility_result="passed", rights_result="passed",
         rights_authority_ref=admission["rightsAuthorityRef"], rights_authority_digest=review_digest,
-        usage_scope="research", variant_purpose="not_applicable",
         evidence_ref="content_review.json", evidence_digest=review_digest,
         payload_digest=digest, canonical_object_digest=digest, selection_identity_digest=digest,
         canonical_object_ref=logical_ref, manifest_ref=f"{logical_ref}/manifest.json",
@@ -783,7 +780,7 @@ def test_handoff_rejects_drift_even_when_query_and_pool_agree(
             review["assetRights"] = [{
                 "assetRef": "sources/a/assets/cover.jpg", "sourceUrl": "https://example.test/cover.jpg",
                 "license": "CC BY 4.0", "termsUrl": "https://example.test/terms",
-                "authorizationProof": None, "usageScope": "research", "decision": "approved", "issues": [],
+                "authorizationProof": None, "decision": "approved", "issues": [],
             }]
         review_raw = json.dumps(review, ensure_ascii=False, sort_keys=True).encode()
         (sealed / logical_ref / "content_review.json").write_bytes(review_raw)
@@ -820,7 +817,7 @@ def test_handoff_review_locator_keeps_source_and_asset_digest_bindings(
     manifest.update(assets=[asset], sourceRefs=[source_ref], publishMediaMode="illustrated")
     bindings = [binding.as_document() for binding in project_content_library_bindings([asset])]
     row["queryDocument"]["contentLibrary"].update(bindings=bindings, bindingDigest=canonical_digest(bindings))
-    review["assetRights"] = [{**source_asset, "assetRef": asset_ref, "usageScope": "research",
+    review["assetRights"] = [{**source_asset, "assetRef": asset_ref,
                               "decision": "approved", "issues": []}]
     review_raw = json.dumps(review, ensure_ascii=False, sort_keys=True).encode()
     (sealed / logical_ref / "content_review.json").write_bytes(review_raw)

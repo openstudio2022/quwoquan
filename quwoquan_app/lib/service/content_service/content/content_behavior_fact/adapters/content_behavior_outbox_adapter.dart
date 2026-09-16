@@ -9,6 +9,7 @@ import 'package:quwoquan_app/service/content_service/content/content_behavior_fa
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/alpha_rehearsal/alpha_rehearsal_observation.dart';
 import 'package:quwoquan_app/runtime/transport/actor_queue/actor_queue_storage.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -152,6 +153,9 @@ final class DurableContentBehaviorRepository extends BehaviorRepository
   }
 
   Future<void> _flushPending() async {
+    AlphaRehearsalObservation.current?.recordRefusal(
+      'native-connected-outbox-attempt',
+    );
     if (_disposed) return;
     final box = await _ensureQueueBox();
     if (_disposed || box == null) {

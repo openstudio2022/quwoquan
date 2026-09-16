@@ -146,16 +146,23 @@ type appLaunchSchemaContract struct {
 }
 
 type appLaunchSchemas struct {
-	RehearsalStorageObservation    appLaunchSchemaContract `yaml:"rehearsal_storage_observation"`
-	RuntimeConfigTrustEnvelope     appLaunchSchemaContract `yaml:"runtime_config_trust_envelope"`
-	RuntimeConfigPackage           appLaunchSchemaContract `yaml:"runtime_config_package"`
-	OfflineBootstrapDocument       appLaunchSchemaContract `yaml:"offline_bootstrap_document"`
-	RuntimeConfigActivationRequest appLaunchSchemaContract `yaml:"runtime_config_activation_request"`
-	RuntimeConfigActivationReceipt appLaunchSchemaContract `yaml:"runtime_config_activation_receipt"`
-	AppLaunchAttempt               appLaunchSchemaContract `yaml:"app_launch_attempt"`
-	AppEffectiveLaunchManifest     appLaunchSchemaContract `yaml:"app_effective_launch_manifest"`
-	AppLauncherHandoff             appLaunchSchemaContract `yaml:"app_launcher_handoff"`
-	AppManagedPreparation          appLaunchSchemaContract `yaml:"app_managed_preparation"`
+	ExternalUATManagedLaunchAdmission appLaunchSchemaContract `yaml:"external_uat_managed_launch_admission"`
+	ExternalUATTerminalResult         appLaunchSchemaContract `yaml:"external_uat_terminal_result"`
+	ExternalUATBrokerQuery            appLaunchSchemaContract `yaml:"external_uat_broker_query"`
+	ExternalUATSealedSnapshot         appLaunchSchemaContract `yaml:"external_uat_sealed_snapshot"`
+	ExternalUATBrokerResult           appLaunchSchemaContract `yaml:"external_uat_broker_result"`
+	ExternalUATTeardownReceipt        appLaunchSchemaContract `yaml:"external_uat_teardown_receipt"`
+	ExternalUATComparisonResult       appLaunchSchemaContract `yaml:"external_uat_comparison_result"`
+	RehearsalStorageObservation       appLaunchSchemaContract `yaml:"rehearsal_storage_observation"`
+	RuntimeConfigTrustEnvelope        appLaunchSchemaContract `yaml:"runtime_config_trust_envelope"`
+	RuntimeConfigPackage              appLaunchSchemaContract `yaml:"runtime_config_package"`
+	OfflineBootstrapDocument          appLaunchSchemaContract `yaml:"offline_bootstrap_document"`
+	RuntimeConfigActivationRequest    appLaunchSchemaContract `yaml:"runtime_config_activation_request"`
+	RuntimeConfigActivationReceipt    appLaunchSchemaContract `yaml:"runtime_config_activation_receipt"`
+	AppLaunchAttempt                  appLaunchSchemaContract `yaml:"app_launch_attempt"`
+	AppEffectiveLaunchManifest        appLaunchSchemaContract `yaml:"app_effective_launch_manifest"`
+	AppLauncherHandoff                appLaunchSchemaContract `yaml:"app_launcher_handoff"`
+	AppManagedPreparation             appLaunchSchemaContract `yaml:"app_managed_preparation"`
 }
 
 type appLaunchMetadata struct {
@@ -178,6 +185,7 @@ type appLaunchMetadata struct {
 	LaunchBlockers                map[string]string                     `yaml:"launch_blockers"`
 	RuntimeConfigErrorCodes       map[string]string                     `yaml:"runtime_config_error_codes"`
 	RehearsalStorageReadback      yaml.Node                             `yaml:"rehearsal_storage_readback"`
+	ExternalUATObservationRelay   yaml.Node                             `yaml:"external_uat_observation_relay"`
 	AppContentUATLaunchControl    yaml.Node                             `yaml:"app_content_uat_launch_control"`
 	Schemas                       appLaunchSchemas                      `yaml:"schemas"`
 }
