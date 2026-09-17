@@ -350,6 +350,24 @@ def test_isolated_selection_enters_native_pages_only_with_case_bound_launch(monk
     assert observed["launch"] == binding
 
 
+def test_homepage_recommendation_reveals_feed_article_before_visible() -> None:
+    plans = {plan["caseId"]: plan for plan in _plans(_launch_identity())}
+    plan = plans["homepage-recommendation"]
+    snapshot = json.loads((ROOT / "quwoquan_app/assets/content/alpha/manifest.json").read_bytes())
+    recommended = next(row["orderedPostIds"] for row in snapshot["channels"] if row["channelId"] == "recommend")
+    article = next(row["detail"] for row in snapshot["posts"]
+                   if row["projection"]["postId"] in recommended and row["detail"]["contentType"] == "article")
+    assert [step["operation"] for step in plan["steps"]][-2:] == ["reveal", "visible"]
+    assert plan["steps"][-2] == {"operation": "reveal", "selector": article["title"]}
+    assert plan["steps"][-1] == {"operation": "visible", "selector": article["title"]}
+    pages.validate_page_plan(plan)
+    stripped = {**plan, "steps": [step for step in plan["steps"] if step["operation"] != "reveal"]}
+    stripped["planDigest"] = pages.document_digest(
+        {key: value for key, value in stripped.items() if key != "planDigest"})
+    with pytest.raises(ValueError, match="required page journey"):
+        pages.validate_page_plan(stripped)
+
+
 def test_home_video_and_tab_roundtrip_are_required_real_journeys() -> None:
     plans = {plan["caseId"]: plan for plan in _plans(_launch_identity())}
     video = plans["homepage-video-playback"]
@@ -1069,8 +1087,8 @@ def test_seed_launch_does_not_unlock_the_same_first_case_again(monkeypatch, tmp_
         ),
         report_dir=tmp_path / "uat", output_root=tmp_path, issues=[],
     )
-    assert launches == [("default-entry", 1), ("article-detail", 1)]
-    assert unlocked == [("article-detail", 1)]
+    assert launches == [("default-entry", 1)]
+    assert unlocked == []
     assert receipt["status"] == "diagnostic_passed"
     assert receipt["status"] != "passed"
     assert receipt.get("diagnostic") is True

@@ -283,7 +283,8 @@ def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
     # 每例停留在观察终态供截图；下一例才恢复同一进程的导航状态。
     cases = [
         ("default-entry", "homepage", route("home"), [visible(home)], []),
-        ("homepage-recommendation", "homepage", route("home"), [*base, visible(article["title"])], []),
+        ("homepage-recommendation", "homepage", route("home"),
+         [*base, reveal(article["title"]), visible(article["title"])], []),
         ("premium-video-book", "video", route("videoBook"), open_video, exit_video),
         ("article-detail", "article", route("workBrowserPathTemplate", workId=article["postId"]),
          [*base, reveal(article["title"]), tap(article["title"]), visible("text-prefix:" + article_excerpt)], [step("back", home)]),

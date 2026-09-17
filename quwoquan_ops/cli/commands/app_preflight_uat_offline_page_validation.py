@@ -78,7 +78,7 @@ def _validate_required_operations(plan: Mapping[str, Any]) -> None:
         required.add("tap")
     if case_id.endswith("-refusal"):
         required.add("observe")
-    if case_id in {"article-detail", "image-detail", "creator-avatar", "pagination-end"}:
+    if case_id in {"homepage-recommendation", "article-detail", "image-detail", "creator-avatar", "pagination-end"}:
         required.add("reveal")
     if case_id in {"video-complete", "video-seek", "homepage-video-playback"}:
         required.add("seek" if case_id == "video-seek" else "playback")
