@@ -56,7 +56,7 @@ final class ContentPostViewData {
 
   factory ContentPostViewData.fromWire(
     ContentPostProjection wire, {
-    SourceAttribution? sourceAttribution,
+    PublicSourceAttribution? sourceAttribution,
   }) {
     final type = wire.contentType.trim();
     final rawMedia = wire.mediaUrls ?? const <String>[];
@@ -189,7 +189,7 @@ final class ContentPostViewData {
   final String? recallPath;
   final String? supplySource;
   final List<IntersectionReason>? intersectionReasons;
-  final SourceAttribution? sourceAttribution;
+  final PublicSourceAttribution? sourceAttribution;
 
   /// 主实体锚点（canonical homepage 引用）：想去 CTA 与实体跳转的意图信号源；
   /// 无实体锚点的内容两字段均为 null，想去入口不渲染、不做本地推断。

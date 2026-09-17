@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: f6058929d12b4eee312cd457c4084450df8d955d035bbda8b9063ca76f9a5cc6
+// ContractGraph SHA256: 9c5de8f5c183509c64b735b76f630a90c299af088bdcfaecc55b7ef5e9e8926a
 
 library;
 
@@ -2801,7 +2801,7 @@ final class ContentPostDetailSlice {
   final String? coverUrl;
   final String? thumbnailUrl;
   final String? videoUrl;
-  final SourceAttribution? sourceAttribution;
+  final PublicSourceAttribution? sourceAttribution;
   final int? width;
   final int? height;
   final int? durationMs;
@@ -3039,7 +3039,7 @@ final class ContentPostDetailSlice {
           : _requiredString(map["videoUrl"], '$path.videoUrl'),
       sourceAttribution: map["sourceAttribution"] == null
           ? null
-          : SourceAttribution.fromWire(
+          : PublicSourceAttribution.fromWire(
               _requiredObject(
                 map["sourceAttribution"],
                 '$path.sourceAttribution',
@@ -6596,6 +6596,198 @@ final class ProfileInteractionReadFactAck {
   };
 }
 
+final class PublicSourceAttribution {
+  const PublicSourceAttribution({
+    required this.isOriginal,
+    this.originalCreatorId,
+    required this.originalCreatorName,
+    this.originalCreatorProfileUrl,
+    required this.platform,
+    required this.sourcePostUrl,
+    required this.originalAssetUrl,
+    required this.attributionText,
+    required this.rightsBasis,
+    required this.commercialAuthorizationStatus,
+    this.authorizationProofUrl,
+    this.termsUrl,
+    required this.derivedModifications,
+    this.watermarkKind,
+    this.watermarkNote,
+    required this.watermarkStatus,
+    required this.audioRightsStatus,
+    required this.modelReleaseStatus,
+    required this.propertyReleaseStatus,
+    required this.collectedAt,
+    required this.takedownPolicy,
+  });
+
+  final bool isOriginal;
+  final String? originalCreatorId;
+  final String originalCreatorName;
+  final String? originalCreatorProfileUrl;
+  final String platform;
+  final String sourcePostUrl;
+  final String originalAssetUrl;
+  final String attributionText;
+  final String rightsBasis;
+  final String commercialAuthorizationStatus;
+  final String? authorizationProofUrl;
+  final String? termsUrl;
+  final List<SourceDerivedModification> derivedModifications;
+  final SourceWatermarkKind? watermarkKind;
+  final String? watermarkNote;
+  final String watermarkStatus;
+  final String audioRightsStatus;
+  final String modelReleaseStatus;
+  final String propertyReleaseStatus;
+  final DateTime collectedAt;
+  final String takedownPolicy;
+
+  factory PublicSourceAttribution.fromWire(
+    Map<String, Object?> map, [
+    String path = "PublicSourceAttribution",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "isOriginal",
+      "originalCreatorId",
+      "originalCreatorName",
+      "originalCreatorProfileUrl",
+      "platform",
+      "sourcePostUrl",
+      "originalAssetUrl",
+      "attributionText",
+      "rightsBasis",
+      "commercialAuthorizationStatus",
+      "authorizationProofUrl",
+      "termsUrl",
+      "derivedModifications",
+      "watermarkKind",
+      "watermarkNote",
+      "watermarkStatus",
+      "audioRightsStatus",
+      "modelReleaseStatus",
+      "propertyReleaseStatus",
+      "collectedAt",
+      "takedownPolicy",
+    }, path);
+    return PublicSourceAttribution(
+      isOriginal: _requiredBool(map["isOriginal"], '$path.isOriginal'),
+      originalCreatorId: map["originalCreatorId"] == null
+          ? null
+          : _requiredString(
+              map["originalCreatorId"],
+              '$path.originalCreatorId',
+            ),
+      originalCreatorName: _requiredString(
+        map["originalCreatorName"],
+        '$path.originalCreatorName',
+      ),
+      originalCreatorProfileUrl: map["originalCreatorProfileUrl"] == null
+          ? null
+          : _requiredString(
+              map["originalCreatorProfileUrl"],
+              '$path.originalCreatorProfileUrl',
+            ),
+      platform: _requiredString(map["platform"], '$path.platform'),
+      sourcePostUrl: _requiredString(
+        map["sourcePostUrl"],
+        '$path.sourcePostUrl',
+      ),
+      originalAssetUrl: _requiredString(
+        map["originalAssetUrl"],
+        '$path.originalAssetUrl',
+      ),
+      attributionText: _requiredString(
+        map["attributionText"],
+        '$path.attributionText',
+      ),
+      rightsBasis: _requiredString(map["rightsBasis"], '$path.rightsBasis'),
+      commercialAuthorizationStatus: _requiredString(
+        map["commercialAuthorizationStatus"],
+        '$path.commercialAuthorizationStatus',
+      ),
+      authorizationProofUrl: map["authorizationProofUrl"] == null
+          ? null
+          : _requiredString(
+              map["authorizationProofUrl"],
+              '$path.authorizationProofUrl',
+            ),
+      termsUrl: map["termsUrl"] == null
+          ? null
+          : _requiredString(map["termsUrl"], '$path.termsUrl'),
+      derivedModifications: List<SourceDerivedModification>.unmodifiable(
+        _requiredList(
+          map["derivedModifications"],
+          '$path.derivedModifications',
+        ).asMap().entries.map(
+          (entry) => SourceDerivedModification.fromWire(
+            entry.value,
+            '$path.derivedModifications' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      watermarkKind: map["watermarkKind"] == null
+          ? null
+          : SourceWatermarkKind.fromWire(
+              map["watermarkKind"],
+              '$path.watermarkKind',
+            ),
+      watermarkNote: map["watermarkNote"] == null
+          ? null
+          : _requiredString(map["watermarkNote"], '$path.watermarkNote'),
+      watermarkStatus: _requiredString(
+        map["watermarkStatus"],
+        '$path.watermarkStatus',
+      ),
+      audioRightsStatus: _requiredString(
+        map["audioRightsStatus"],
+        '$path.audioRightsStatus',
+      ),
+      modelReleaseStatus: _requiredString(
+        map["modelReleaseStatus"],
+        '$path.modelReleaseStatus',
+      ),
+      propertyReleaseStatus: _requiredString(
+        map["propertyReleaseStatus"],
+        '$path.propertyReleaseStatus',
+      ),
+      collectedAt: _requiredTimestamp(map["collectedAt"], '$path.collectedAt'),
+      takedownPolicy: _requiredString(
+        map["takedownPolicy"],
+        '$path.takedownPolicy',
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "isOriginal": isOriginal,
+    if (originalCreatorId != null) "originalCreatorId": originalCreatorId!,
+    "originalCreatorName": originalCreatorName,
+    if (originalCreatorProfileUrl != null)
+      "originalCreatorProfileUrl": originalCreatorProfileUrl!,
+    "platform": platform,
+    "sourcePostUrl": sourcePostUrl,
+    "originalAssetUrl": originalAssetUrl,
+    "attributionText": attributionText,
+    "rightsBasis": rightsBasis,
+    "commercialAuthorizationStatus": commercialAuthorizationStatus,
+    if (authorizationProofUrl != null)
+      "authorizationProofUrl": authorizationProofUrl!,
+    if (termsUrl != null) "termsUrl": termsUrl!,
+    "derivedModifications": derivedModifications
+        .map((value) => value.wireName)
+        .toList(growable: false),
+    if (watermarkKind != null) "watermarkKind": watermarkKind!.wireName,
+    if (watermarkNote != null) "watermarkNote": watermarkNote!,
+    "watermarkStatus": watermarkStatus,
+    "audioRightsStatus": audioRightsStatus,
+    "modelReleaseStatus": modelReleaseStatus,
+    "propertyReleaseStatus": propertyReleaseStatus,
+    "collectedAt": collectedAt.toUtc().toIso8601String(),
+    "takedownPolicy": takedownPolicy,
+  };
+}
+
 final class ReceivedCommentPageSlice {
   const ReceivedCommentPageSlice({
     required this.items,
@@ -6718,206 +6910,6 @@ final class ReportCommandResult {
     "version": version,
     "status": status.wireName,
     "replayed": replayed,
-  };
-}
-
-final class SourceAttribution {
-  const SourceAttribution({
-    required this.isOriginal,
-    this.originalCreatorId,
-    required this.originalCreatorName,
-    this.originalCreatorProfileUrl,
-    required this.platform,
-    required this.sourcePostUrl,
-    required this.originalAssetUrl,
-    required this.attributionText,
-    required this.rightsBasis,
-    required this.commercialAuthorizationStatus,
-    required this.publicationAdmission,
-    this.authorizationProofUrl,
-    this.termsUrl,
-    required this.derivedModifications,
-    this.watermarkKind,
-    this.watermarkNote,
-    required this.watermarkStatus,
-    required this.audioRightsStatus,
-    required this.modelReleaseStatus,
-    required this.propertyReleaseStatus,
-    required this.collectedAt,
-    required this.takedownPolicy,
-  });
-
-  final bool isOriginal;
-  final String? originalCreatorId;
-  final String originalCreatorName;
-  final String? originalCreatorProfileUrl;
-  final String platform;
-  final String sourcePostUrl;
-  final String originalAssetUrl;
-  final String attributionText;
-  final String rightsBasis;
-  final String commercialAuthorizationStatus;
-  final String publicationAdmission;
-  final String? authorizationProofUrl;
-  final String? termsUrl;
-  final List<SourceDerivedModification> derivedModifications;
-  final SourceWatermarkKind? watermarkKind;
-  final String? watermarkNote;
-  final String watermarkStatus;
-  final String audioRightsStatus;
-  final String modelReleaseStatus;
-  final String propertyReleaseStatus;
-  final DateTime collectedAt;
-  final String takedownPolicy;
-
-  factory SourceAttribution.fromWire(
-    Map<String, Object?> map, [
-    String path = "SourceAttribution",
-  ]) {
-    _rejectUnknownFields(map, const <String>{
-      "isOriginal",
-      "originalCreatorId",
-      "originalCreatorName",
-      "originalCreatorProfileUrl",
-      "platform",
-      "sourcePostUrl",
-      "originalAssetUrl",
-      "attributionText",
-      "rightsBasis",
-      "commercialAuthorizationStatus",
-      "publicationAdmission",
-      "authorizationProofUrl",
-      "termsUrl",
-      "derivedModifications",
-      "watermarkKind",
-      "watermarkNote",
-      "watermarkStatus",
-      "audioRightsStatus",
-      "modelReleaseStatus",
-      "propertyReleaseStatus",
-      "collectedAt",
-      "takedownPolicy",
-    }, path);
-    return SourceAttribution(
-      isOriginal: _requiredBool(map["isOriginal"], '$path.isOriginal'),
-      originalCreatorId: map["originalCreatorId"] == null
-          ? null
-          : _requiredString(
-              map["originalCreatorId"],
-              '$path.originalCreatorId',
-            ),
-      originalCreatorName: _requiredString(
-        map["originalCreatorName"],
-        '$path.originalCreatorName',
-      ),
-      originalCreatorProfileUrl: map["originalCreatorProfileUrl"] == null
-          ? null
-          : _requiredString(
-              map["originalCreatorProfileUrl"],
-              '$path.originalCreatorProfileUrl',
-            ),
-      platform: _requiredString(map["platform"], '$path.platform'),
-      sourcePostUrl: _requiredString(
-        map["sourcePostUrl"],
-        '$path.sourcePostUrl',
-      ),
-      originalAssetUrl: _requiredString(
-        map["originalAssetUrl"],
-        '$path.originalAssetUrl',
-      ),
-      attributionText: _requiredString(
-        map["attributionText"],
-        '$path.attributionText',
-      ),
-      rightsBasis: _requiredString(map["rightsBasis"], '$path.rightsBasis'),
-      commercialAuthorizationStatus: _requiredString(
-        map["commercialAuthorizationStatus"],
-        '$path.commercialAuthorizationStatus',
-      ),
-      publicationAdmission: _requiredString(
-        map["publicationAdmission"],
-        '$path.publicationAdmission',
-      ),
-      authorizationProofUrl: map["authorizationProofUrl"] == null
-          ? null
-          : _requiredString(
-              map["authorizationProofUrl"],
-              '$path.authorizationProofUrl',
-            ),
-      termsUrl: map["termsUrl"] == null
-          ? null
-          : _requiredString(map["termsUrl"], '$path.termsUrl'),
-      derivedModifications: List<SourceDerivedModification>.unmodifiable(
-        _requiredList(
-          map["derivedModifications"],
-          '$path.derivedModifications',
-        ).asMap().entries.map(
-          (entry) => SourceDerivedModification.fromWire(
-            entry.value,
-            '$path.derivedModifications' + '[${entry.key}]',
-          ),
-        ),
-      ),
-      watermarkKind: map["watermarkKind"] == null
-          ? null
-          : SourceWatermarkKind.fromWire(
-              map["watermarkKind"],
-              '$path.watermarkKind',
-            ),
-      watermarkNote: map["watermarkNote"] == null
-          ? null
-          : _requiredString(map["watermarkNote"], '$path.watermarkNote'),
-      watermarkStatus: _requiredString(
-        map["watermarkStatus"],
-        '$path.watermarkStatus',
-      ),
-      audioRightsStatus: _requiredString(
-        map["audioRightsStatus"],
-        '$path.audioRightsStatus',
-      ),
-      modelReleaseStatus: _requiredString(
-        map["modelReleaseStatus"],
-        '$path.modelReleaseStatus',
-      ),
-      propertyReleaseStatus: _requiredString(
-        map["propertyReleaseStatus"],
-        '$path.propertyReleaseStatus',
-      ),
-      collectedAt: _requiredTimestamp(map["collectedAt"], '$path.collectedAt'),
-      takedownPolicy: _requiredString(
-        map["takedownPolicy"],
-        '$path.takedownPolicy',
-      ),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "isOriginal": isOriginal,
-    if (originalCreatorId != null) "originalCreatorId": originalCreatorId!,
-    "originalCreatorName": originalCreatorName,
-    if (originalCreatorProfileUrl != null)
-      "originalCreatorProfileUrl": originalCreatorProfileUrl!,
-    "platform": platform,
-    "sourcePostUrl": sourcePostUrl,
-    "originalAssetUrl": originalAssetUrl,
-    "attributionText": attributionText,
-    "rightsBasis": rightsBasis,
-    "commercialAuthorizationStatus": commercialAuthorizationStatus,
-    "publicationAdmission": publicationAdmission,
-    if (authorizationProofUrl != null)
-      "authorizationProofUrl": authorizationProofUrl!,
-    if (termsUrl != null) "termsUrl": termsUrl!,
-    "derivedModifications": derivedModifications
-        .map((value) => value.wireName)
-        .toList(growable: false),
-    if (watermarkKind != null) "watermarkKind": watermarkKind!.wireName,
-    if (watermarkNote != null) "watermarkNote": watermarkNote!,
-    "watermarkStatus": watermarkStatus,
-    "audioRightsStatus": audioRightsStatus,
-    "modelReleaseStatus": modelReleaseStatus,
-    "propertyReleaseStatus": propertyReleaseStatus,
-    "collectedAt": collectedAt.toUtc().toIso8601String(),
-    "takedownPolicy": takedownPolicy,
   };
 }
 

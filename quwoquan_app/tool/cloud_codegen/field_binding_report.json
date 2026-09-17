@@ -1,6 +1,6 @@
 {
   "generator": "app-only-emitter",
-  "contractGraphSha256": "4251892534f972fb72ebf206cd5729f984f4ff21894f4e2e0886fc1636ce39a3",
+  "contractGraphSha256": "9c5de8f5c183509c64b735b76f630a90c299af088bdcfaecc55b7ef5e9e8926a",
   "bindings": [
     {
       "generatedPath": "lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",
@@ -1918,18 +1918,7 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
-      "dartClass": "ReportCommandResult",
-      "dartField": "status",
-      "dartType": "ReportStatus",
-      "enumRef": "ReportStatus",
-      "contractType": "enum",
-      "contractSource": "",
-      "clientDartType": "",
-      "typed": true
-    },
-    {
-      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
-      "dartClass": "SourceAttribution",
+      "dartClass": "PublicSourceAttribution",
       "dartField": "derivedModifications",
       "dartType": "List\u003cSourceDerivedModification\u003e",
       "enumRef": "SourceDerivedModification",
@@ -1940,10 +1929,21 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
-      "dartClass": "SourceAttribution",
+      "dartClass": "PublicSourceAttribution",
       "dartField": "watermarkKind",
       "dartType": "SourceWatermarkKind?",
       "enumRef": "SourceWatermarkKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ReportCommandResult",
+      "dartField": "status",
+      "dartType": "ReportStatus",
+      "enumRef": "ReportStatus",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",

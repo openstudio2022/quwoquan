@@ -17,7 +17,6 @@ void main() {
       'attributionText': '摄影师 / CC BY 4.0',
       'rightsBasis': 'CC BY 4.0',
       'commercialAuthorizationStatus': 'unverified',
-      'publicationAdmission': 'research_release',
       'derivedModifications': <String>['crop', 'resize'],
       'watermarkKind': 'author_signature',
       'watermarkNote': '保留作者签名',
@@ -28,7 +27,7 @@ void main() {
       'collectedAt': '2026-09-09T00:00:00.000Z',
       'takedownPolicy': 'notice_and_takedown',
     };
-    final attribution = SourceAttribution.fromWire(wire);
+    final attribution = PublicSourceAttribution.fromWire(wire);
     expect(attribution.toWire()['derivedModifications'], <String>[
       'crop',
       'resize',
@@ -37,25 +36,20 @@ void main() {
     expect(attribution.watermarkNote, '保留作者签名');
     expect(attribution.commercialAuthorizationStatus, 'unverified');
     expect(attribution.rightsBasis, 'CC BY 4.0');
-    expect(attribution.publicationAdmission, 'research_release');
     expect(attribution.toWire(), wire);
     // 来源权利记录不是 release 类别，解码不得重写或升级原始权利事实。
     final commerciallyAuthorizedWire = <String, Object?>{
       ...wire,
       'commercialAuthorizationStatus': 'verified',
-      'publicationAdmission': 'commercial_release',
     };
-    final commerciallyAuthorized = SourceAttribution.fromWire(
+    final commerciallyAuthorized = PublicSourceAttribution.fromWire(
       commerciallyAuthorizedWire,
     );
-    expect(commerciallyAuthorized.publicationAdmission, 'commercial_release');
     expect(commerciallyAuthorized.commercialAuthorizationStatus, 'verified');
     expect(commerciallyAuthorized.rightsBasis, 'CC BY 4.0');
     expect(commerciallyAuthorized.toWire(), commerciallyAuthorizedWire);
     for (final invalid in <Map<String, Object?>>[
-      <String, Object?>{...wire, 'publicationAdmission': 42},
-      <String, Object?>{...wire, 'publicationAdmission': null},
-      <String, Object?>{...wire}..remove('publicationAdmission'),
+      <String, Object?>{...wire, 'publicationAdmission': 'research_release'},
       <String, Object?>{...wire, 'riskAcceptanceId': null},
       <String, Object?>{...wire, 'derivedModifications': null},
       <String, Object?>{
@@ -65,11 +59,11 @@ void main() {
       <String, Object?>{...wire}..remove('derivedModifications'),
     ]) {
       expect(
-        () => SourceAttribution.fromWire(invalid),
+        () => PublicSourceAttribution.fromWire(invalid),
         throwsA(isA<FormatException>()),
       );
     }
-    final unchanged = SourceAttribution.fromWire(<String, Object?>{
+    final unchanged = PublicSourceAttribution.fromWire(<String, Object?>{
       ...wire,
       'derivedModifications': <String>[],
     });
@@ -95,7 +89,6 @@ void main() {
           'attributionText': '摄影师甲 / CC BY 4.0',
           'rightsBasis': 'CC BY 4.0',
           'commercialAuthorizationStatus': 'unverified',
-          'publicationAdmission': 'research_release',
           'derivedModifications': <String>['crop', 'resize'],
           'watermarkKind': 'author_signature',
           'watermarkNote': '保留作者签名',
@@ -136,8 +129,6 @@ void main() {
     final attribution = payload.post.sourceAttribution!;
     expect(attribution.commercialAuthorizationStatus, 'unverified');
     expect(attribution.rightsBasis, 'CC BY 4.0');
-    expect(attribution.publicationAdmission, 'research_release');
-    expect(attribution.toWire()['publicationAdmission'], 'research_release');
     expect(attribution.derivedModifications, <SourceDerivedModification>[
       SourceDerivedModification.crop,
       SourceDerivedModification.resize,

@@ -956,7 +956,7 @@ ContentPostViewData _videoPost({
       'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
   String coverUrl =
       'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
-  SourceAttribution? sourceAttribution,
+  PublicSourceAttribution? sourceAttribution,
   List<IntersectionReason>? intersectionReasons,
 }) {
   return ContentPostViewData.fromWire(
@@ -3543,7 +3543,7 @@ void main() {
     final post = _videoPost(
       width: 1920,
       height: 1080,
-      sourceAttribution: SourceAttribution(
+      sourceAttribution: PublicSourceAttribution(
         isOriginal: false,
         originalCreatorName: '山海旅行者',
         platform: '头条',
@@ -3552,7 +3552,6 @@ void main() {
         attributionText: attributionText,
         rightsBasis: 'risk_accepted_attribution_only',
         commercialAuthorizationStatus: 'not_verified',
-        publicationAdmission: 'research_release',
         derivedModifications: const <SourceDerivedModification>[],
         watermarkStatus: 'absent',
         audioRightsStatus: 'replaced_with_licensed_track',

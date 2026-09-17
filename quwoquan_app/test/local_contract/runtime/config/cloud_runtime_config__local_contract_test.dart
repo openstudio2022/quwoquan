@@ -153,6 +153,9 @@ Future<Map<String, Object?>> _signedOffline({
       'mode': 'standard',
       'snapshotDigest': offlineContentManifestDigest,
       'instanceId': 'default',
+      'caseId': 'none',
+      'lifecycleGeneration': '0',
+      'observationBinding': '',
     },
     'runtime': <String, String>{'appRuntimeEnv': 'alpha'},
     'payloadDigest': '',
@@ -218,6 +221,9 @@ void main() {
             final space = document['rehearsalSpace']! as Map;
             space['mode'] = 'isolated';
             space['instanceId'] = 'synthetic-space-A';
+            space['caseId'] = 'login-success';
+            space['lifecycleGeneration'] = '1';
+            space['observationBinding'] = 'sha256:${'a' * 64}';
           }
         },
       );
