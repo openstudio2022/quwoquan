@@ -19,6 +19,27 @@ from quwoquan_ops.cli.lib.app_dependency_toolchain import (
 from quwoquan_ops.cli.lib.package_reuse.ios_pod_identity import CocoaPodsIdentity
 from quwoquan_app.scripts.device import verify_flutter_dependencies as verify
 
+_HOSTED_LOCK = (
+    "packages:\n"
+    "  fixture_pkg:\n"
+    "    dependency: transitive\n"
+    "    description:\n"
+    "      name: fixture_pkg\n"
+    f"      sha256: {'a' * 64}\n"
+    "      url: https://pub.flutter-io.cn\n"
+    "    source: hosted\n"
+    "    version: 1.2.3\n"
+)
+
+
+def _write_hosted_locks(root: Path) -> None:
+    production = root / "quwoquan_app/pubspec.lock"
+    patrol = root / "quwoquan_app/test_host/patrol/pubspec.lock"
+    production.parent.mkdir(parents=True, exist_ok=True)
+    patrol.parent.mkdir(parents=True, exist_ok=True)
+    production.write_text(_HOSTED_LOCK, encoding="utf-8")
+    patrol.write_text(_HOSTED_LOCK, encoding="utf-8")
+
 
 def test_postbuild_cleanup_preserves_receipt_evidence_and_external_targets(tmp_path):
     root = tmp_path.resolve() / "quwoquan_app/.dart_tool/qwq_ios_cocoapods_dependency"
@@ -99,6 +120,7 @@ def test_projected_pub_gets_include_patrol_only_when_explicitly_requested(
         calls.append((package_root, dict(environment)))
 
     monkeypatch.setattr(prepare, "_run_pub_get", pub_get)
+    _write_hosted_locks(tmp_path)
     projection = SimpleNamespace(
         production_environment={"HOST": "production"},
         patrol_environment={"HOST": "patrol"},
@@ -111,7 +133,10 @@ def test_projected_pub_gets_include_patrol_only_when_explicitly_requested(
         include_patrol=False,
     )
     assert calls == [
-        (tmp_path / "quwoquan_app", {"HOST": "production"}),
+        (
+            tmp_path / "quwoquan_app",
+            {"HOST": "production", "PUB_HOSTED_URL": "https://pub.flutter-io.cn"},
+        ),
     ]
 
     calls.clear()
@@ -122,8 +147,14 @@ def test_projected_pub_gets_include_patrol_only_when_explicitly_requested(
         include_patrol=True,
     )
     assert calls == [
-        (tmp_path / "quwoquan_app", {"HOST": "production"}),
-        (tmp_path / "quwoquan_app/test_host/patrol", {"HOST": "patrol"}),
+        (
+            tmp_path / "quwoquan_app",
+            {"HOST": "production", "PUB_HOSTED_URL": "https://pub.flutter-io.cn"},
+        ),
+        (
+            tmp_path / "quwoquan_app/test_host/patrol",
+            {"HOST": "patrol", "PUB_HOSTED_URL": "https://pub.flutter-io.cn"},
+        ),
     ]
 
 
@@ -505,6 +536,7 @@ def test_ios_uat_main_projects_both_pub_hosts_then_replays_both_pod_hosts(
         load_readback,
     )
 
+    _write_hosted_locks(tmp_path / "repo")
     result = prepare.main(
         [
             "--source-capsule-manifest",

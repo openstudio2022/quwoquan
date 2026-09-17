@@ -30,7 +30,7 @@ from quwoquan_ops.cli.lib.target_uat_binding import (
 from quwoquan_ops.cli.smoke.environment_patrol_smoke import external_aut_driver as driver
 from quwoquan_ops.cli.smoke.environment_patrol_smoke import artifact_binding as artifacts
 from quwoquan_ops.cli.smoke.environment_patrol_smoke.execution import run_command
-from quwoquan_ops.cli.lib.package_reuse.pub_cache_capsule import lock_hosted_url
+from quwoquan_ops.cli.lib.package_reuse.pub_cache_capsule import seal_lock_hosted_url
 RUNNER_SOURCE = "quwoquan_ops/cli/commands/app_preflight_uat_offline_pages.py"
 RUNNER_IDENTITY = "stackctl.offline-native-pages.v1"
 ANDROID_PAGE_METHOD = "executesOfflinePageCaseInCanonicalProductionProcess"
@@ -347,10 +347,7 @@ def _offline_pub_command_environment(
 ) -> dict[str, str]:
     """Seal offline pub get to the lock's hosted cache namespace, not pub.dev."""
 
-    sealed = dict(environment)
-    sealed.pop("FLUTTER_STORAGE_BASE_URL", None)
-    sealed["PUB_HOSTED_URL"] = lock_hosted_url(lock_path)
-    return sealed
+    return seal_lock_hosted_url(environment, lock_path=lock_path)
 
 
 def _run_native_command(command: list[str], *, cwd: Path, environment: dict[str, str],

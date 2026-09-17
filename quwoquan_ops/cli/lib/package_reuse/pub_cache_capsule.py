@@ -171,6 +171,17 @@ def lock_hosted_url(lock_path: Path) -> str:
     return urls[0]
 
 
+def seal_lock_hosted_url(
+    environment: Mapping[str, str], *, lock_path: Path
+) -> dict[str, str]:
+    """Force offline pub get onto the lock cache namespace, not ambient pub.dev."""
+
+    sealed = dict(environment)
+    sealed.pop("FLUTTER_STORAGE_BASE_URL", None)
+    sealed["PUB_HOSTED_URL"] = lock_hosted_url(lock_path)
+    return sealed
+
+
 def _safe_relative(value: str) -> str:
     path = PurePosixPath(value)
     if (

@@ -27,8 +27,9 @@ from .ios_pod_projection import (
     materialize_ios_pod_projection,
     run_offline_cocoapods_install,
 )
+from .patrol_pub_cache import PATROL_HOST_RELATIVE
 from .patrol_pub_projection import materialize_capsule_patrol_pub_cache
-from .pub_cache_capsule import _digest_bytes
+from .pub_cache_capsule import _digest_bytes, seal_lock_hosted_url
 from .pub_cache_projection import materialize_capsule_pub_cache
 
 _PROXY_KEYS = frozenset(
@@ -271,6 +272,11 @@ def materialize_dependency_bundle_projection(
         state_root=private / "flutter" / IOS_POD_PRODUCTION_HOST,
     )
     production_environment["PUB_CACHE"] = str(production_cache)
+    production_lock = projection / "quwoquan_app/pubspec.lock"
+    if production_lock.is_file():
+        production_environment = seal_lock_hosted_url(
+            production_environment, lock_path=production_lock
+        )
     patrol_cache: Path | None = None
     patrol_environment: dict[str, str] | None = None
     if include_patrol:
@@ -285,6 +291,11 @@ def materialize_dependency_bundle_projection(
             state_root=private / "flutter" / IOS_POD_PATROL_HOST,
         )
         patrol_environment["PUB_CACHE"] = str(patrol_cache)
+        patrol_lock = projection / PATROL_HOST_RELATIVE / "pubspec.lock"
+        if patrol_lock.is_file():
+            patrol_environment = seal_lock_hosted_url(
+                patrol_environment, lock_path=patrol_lock
+            )
 
     gradle_home: Path | None = None
     if platform == "android":
