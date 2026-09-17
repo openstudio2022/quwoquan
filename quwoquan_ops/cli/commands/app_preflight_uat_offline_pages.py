@@ -944,12 +944,11 @@ def execute_offline_page_cases(*, args: argparse.Namespace, candidate: Mapping[s
                 continue
             case_id = seed_plan["caseId"]
             case_launch = launch
-            # generation-1 全部复用 seed 启动的同一制品。每格再走 canonical
-            # flutter compile 会改 Runner.app，把后续格打成
-            # successor artifact changed；页面执行由 native driver 冷启动 AUT。
+            # generation-1 复用 seed 制品后，native driver 只 Activate 同一 AUT。
+            # iOS 会恢复上一格终态（视频书藏底栏），因此必须保留上一格 restore。
             # identity-restart 的 generation-2 仍经 launch_case 冷启动。
             case_plans = build_offline_page_plans(snapshot=snapshot, app_root=app_root, launch=case_launch,
-                                                  fresh_launch=launch_case is not None)
+                                                  fresh_launch=False)
             plan = next(item for item in case_plans if item["caseId"] == case_id)
             require_executable_page_plan(plan)
             case_dir = report_dir / "pages" / case_id

@@ -336,7 +336,8 @@ def test_isolated_cli_rejects_partial_or_cross_target_before_dispatch(monkeypatc
 def test_generation_one_cases_share_seed_launch_and_do_not_recompile(tmp_path, monkeypatch):
     source = Path(pages.__file__).read_text(encoding="utf-8")
     assert "if launch_case is not None and case_id != selected[0]:" not in source
-    assert "generation-1 全部复用 seed 启动的同一制品" in source
+    assert "generation-1 复用 seed 制品后，native driver 只 Activate 同一 AUT" in source
+    assert "fresh_launch=False" in source
 
 
 def test_isolated_selection_enters_native_pages_only_with_case_bound_launch(monkeypatch, tmp_path):
@@ -624,6 +625,18 @@ def test_fresh_page_attempt_does_not_restore_previous_process_navigation():
         launch=_launch_identity(), fresh_launch=True)
     article = next(plan for plan in plans if plan["caseId"] == "article-detail")
     assert {"operation": "tap", "selector": "works-top-back"} not in article["steps"]
+    pages.validate_page_plan(article)
+
+
+def test_reused_generation_one_article_detail_restores_hidden_video_book_chrome():
+    snapshot = json.loads((ROOT / "quwoquan_app/assets/content/alpha/manifest.json").read_bytes())
+    plans = pages.build_offline_page_plans(snapshot=snapshot, app_root=ROOT / "quwoquan_app",
+        launch=_launch_identity(), fresh_launch=False)
+    article = next(plan for plan in plans if plan["caseId"] == "article-detail")
+    assert article["steps"][:2] == [
+        {"operation": "tap", "selector": "works-top-back"},
+        {"operation": "visible", "selector": "qwq.surface.home"},
+    ]
     pages.validate_page_plan(article)
 
 
