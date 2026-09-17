@@ -256,7 +256,7 @@ def _isolated_selection(args: argparse.Namespace, runtime: Mapping[str, Any],
 
 def _launch(args: argparse.Namespace, runtime: Mapping[str, Any], projection: Mapping[str, Any],
             report_dir: Path, output_root: Path, *, case_id: str = "login-success",
-            generation: int = 1) -> dict[str, Any]:
+            generation: int = 1, expected_build_projection_digest: str | None = None) -> dict[str, Any]:
     from quwoquan_ops.cli.commands.app_preflight_uat_launch import (
         FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID, FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
         write_app_content_launch_control,
@@ -278,7 +278,8 @@ def _launch(args: argparse.Namespace, runtime: Mapping[str, Any], projection: Ma
         control_path=attempt.with_name("control.json"), attempt_path=attempt, report_path=report,
         terminal_receipt_path=attempt.with_name("startup-terminal.json"), platform=args.platform,
         device_id=args.device_id, build_projection_policy_id=policy,
-        build_projection_seal_path=attempt.with_name("build-projection-seal.json"), expected_build_projection_digest=None,
+        build_projection_seal_path=attempt.with_name("build-projection-seal.json"),
+        expected_build_projection_digest=expected_build_projection_digest,
         rehearsal_space_selection=selection,
     )
     if selection is not None:
@@ -301,6 +302,15 @@ def _launch(args: argparse.Namespace, runtime: Mapping[str, Any], projection: Ma
     # 只传公开进程身份，secret不进入环境；native将在启动时固定expected peer。
     if selection is not None and args.platform == 'ios-simulator':
         environment["QWQ_UAT_LAUNCHER_PID"] = str(os.getpid())
+    if expected_build_projection_digest is not None and args.platform == "ios-simulator":
+        # 复用密封投影的启动不再自己物化依赖，因此 CocoaPods 身份必须由 launcher
+        # 冻结后传入；与 canonical hot-restart 重试同一条身份路径。
+        from quwoquan_ops.cli.lib.app_dependency_toolchain import (
+            COCOAPODS_ENVIRONMENT_KEYS, cocoapods_environment, resolve_cocoapods_identity,
+        )
+        frozen = cocoapods_environment(resolve_cocoapods_identity(), base=os.environ)
+        environment["PATH"] = frozen["PATH"]
+        environment.update({key: frozen[key] for key in COCOAPODS_ENVIRONMENT_KEYS})
     result = stackctl.run(command, cwd=app_root, env=environment)
     with attempt.with_name("canonical-launch.log").open("x", encoding="utf-8") as log:
         log.write((result.stdout or "") + (result.stderr or ""))
@@ -357,9 +367,16 @@ def run_offline_app_content_uat(*, args: argparse.Namespace, report_dir: Path, o
             receipt.update(execute_offline_page_cases(
                 args=args, candidate=candidate, launch=binding, projection=projection,
                 report_dir=report_dir, output_root=output_root,
+                # 每格 fresh 启动复用首次已密封的构建投影：私有依赖投影只允许 fresh
+                # 目标，重投影会撞已存在的 pub cache/CocoaPods 状态；expected digest
+                # 仍逐字节证明整棵树未漂移。
                 launch_case=lambda case_id, generation: _launch(
                     args, runtime, projection, report_dir, output_root,
-                    case_id=case_id, generation=generation),
+                    case_id=case_id, generation=generation,
+                    expected_build_projection_digest=str(
+                        binding["buildProjectionSeal"]["buildProjectionDigest"]
+                    ),
+                ),
             ))
             _verify_source(candidate, stackctl.ROOT)
     except (OSError, RuntimeError, TypeError, ValueError, KeyError) as error:

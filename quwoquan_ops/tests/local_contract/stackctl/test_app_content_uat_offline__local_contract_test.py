@@ -178,6 +178,32 @@ def test_every_case_generation_and_repeated_login_gets_fresh_control(tmp_path, m
     assert all(path.read_bytes() == raw for path, raw in controls)
 
 
+def test_successor_case_launch_reuses_sealed_projection_with_frozen_cocoapods(
+    tmp_path, monkeypatch, private_offline_projection
+):
+    from quwoquan_ops.cli import stackctl
+    from quwoquan_ops.cli.lib.app_dependency_toolchain import COCOAPODS_ENVIRONMENT_KEYS
+
+    runtime, projection, _ = private_offline_projection
+    args = argparse.Namespace(platform="ios-simulator", device_id="private-device",
+                              isolated_rehearsal=False, rehearsal_instance_id="")
+    observed: dict[str, str] = {}
+
+    def stop(command, *, cwd, env):
+        observed.update(env)
+        raise RuntimeError("stop-before-device")
+
+    monkeypatch.setattr(stackctl, "run", stop)
+    with pytest.raises(RuntimeError, match="stop-before-device"):
+        offline._launch(args, runtime, projection, tmp_path / "run", tmp_path,
+                        case_id="login-error", generation=1,
+                        expected_build_projection_digest="sha256:" + "c" * 64)
+    control_path, = (tmp_path / "run/case-launches/login-error/generation-1").glob("*/attempt-1/control.json")
+    control = json.loads(control_path.read_text())
+    assert control["expectedBuildProjectionDigest"] == "sha256:" + "c" * 64
+    assert set(COCOAPODS_ENVIRONMENT_KEYS) <= set(observed)
+
+
 def test_restart_generations_preserve_space_but_not_observation(tmp_path, private_offline_projection):
     runtime, projection, _ = private_offline_projection
     args = argparse.Namespace(platform="ios-simulator", device_id="private-device", isolated_rehearsal=True,
