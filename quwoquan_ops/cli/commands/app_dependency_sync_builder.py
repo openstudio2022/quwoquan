@@ -715,6 +715,8 @@ def seed_cocoapods_private_state(
         if component not in IOS_POD_COMPONENTS:
             raise ValueError(f"APP.DEPENDENCY.ios_pod_seed_component_invalid: {component}")
         nodes.extend(_scan_component(component, Path(capsule_root) / component))
+    # copy_ios_pod_component 以 relative 排序复验，节点顺序必须与之一致。
+    nodes.sort(key=lambda item: item.relative)
     snapshot = IosPodSnapshot(
         manifest={},
         encoded_manifest=b"{}",

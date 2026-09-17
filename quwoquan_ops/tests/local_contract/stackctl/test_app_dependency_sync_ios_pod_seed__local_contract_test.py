@@ -30,6 +30,28 @@ def test_seed_cocoapods_private_state_copies_home_and_cache_when_lock_matches(
     assert (cache / "Pods/CryptoSwift/marker.txt").read_text(encoding="utf-8") == "cache-seed"
 
 
+def test_seed_cocoapods_private_state_orders_nodes_like_capsule_manifest(
+    tmp_path: Path,
+) -> None:
+    capsule = tmp_path / "capsule"
+    _write(capsule / "Podfile.lock", "LOCK\n")
+    # 目录树顺序与 relative 字符串顺序不一致时，复制复验必须仍然匹配。
+    _write(capsule / "home/repos/trunk/marker.txt", "trunk-seed")
+    _write(capsule / "home/repos-legacy.txt", "legacy-seed")
+    _write(capsule / "cache/Pods/CryptoSwift/marker.txt", "cache-seed")
+    expected = tmp_path / "Podfile.lock"
+    expected.write_text("LOCK\n", encoding="utf-8")
+    home = tmp_path / "pod-home"
+    assert seed_cocoapods_private_state(
+        capsule_root=capsule,
+        expected_lock=expected,
+        home=home,
+        cache=tmp_path / "pod-cache",
+    )
+    assert (home / "repos-legacy.txt").read_text(encoding="utf-8") == "legacy-seed"
+    assert (home / "repos/trunk/marker.txt").read_text(encoding="utf-8") == "trunk-seed"
+
+
 def test_seed_cocoapods_private_state_rejects_stale_lock(tmp_path: Path) -> None:
     capsule = tmp_path / "capsule"
     _write(capsule / "Podfile.lock", "OLD\n")
