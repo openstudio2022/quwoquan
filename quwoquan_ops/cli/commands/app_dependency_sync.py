@@ -148,6 +148,7 @@ class DependencyComponentBuildContext:
     source_identity: Mapping[str, str]
     platforms: tuple[str, ...] = ("android", "ios")
     android_gradle_seed_root: Path | None = None
+    ios_pod_seed_roots: Mapping[str, Path] | None = None
     progress: DependencyBuildProgress = field(default_factory=DependencyBuildProgress)
     deadline: float = field(
         default_factory=lambda: time.monotonic() + _SYNC_TOTAL_DEADLINE_SECONDS
@@ -707,6 +708,22 @@ def command_app_dependency_sync(
                 )
             )
             android_gradle_seed_root: Path | None = None
+            ios_pod_seed_roots: Mapping[str, Path] | None = None
+            if component_builder is None and "ios" in platforms:
+                try:
+                    ios_seed_bundle = load_active_dependency_bundle(
+                        repo_root=repo_root, require_current_source=False, required_platforms=("ios",)
+                    )
+                except AppDependencyBundleMissingError:
+                    ios_seed_bundle = None
+                if ios_seed_bundle is not None and all(
+                    ios_seed_bundle.active.get(field) == source_identity[field]
+                    for field in ("flutterVersion", "flutterCommandResolutionDigest")
+                ):
+                    ios_pod_seed_roots = {
+                        "production": ios_seed_bundle.component_root("productionIosPods"),
+                        "patrol": ios_seed_bundle.component_root("patrolIosPods"),
+                    }
             if component_builder is None and "android" in platforms:
                 try:
                     seed_bundle = load_active_dependency_bundle(
@@ -743,6 +760,7 @@ def command_app_dependency_sync(
                 source_identity=source_identity,
                 platforms=platforms,
                 android_gradle_seed_root=android_gradle_seed_root,
+                ios_pod_seed_roots=ios_pod_seed_roots,
                 progress=progress,
                 deadline=deadline,
             )
