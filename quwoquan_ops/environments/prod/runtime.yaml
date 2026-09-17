@@ -76,6 +76,10 @@
         "mediaOrigin": "http://127.0.0.1:20110",
         "contentService": "http://127.0.0.1:20220"
       },
+      "buildImages": {
+        "goBaseImage": "golang:1.24-bookworm",
+        "alpineBaseImage": "alpine:3.21"
+      },
       "playbackCanary": {
         "source": "published-release",
         "workIdEnv": "VIDEO_PLAYBACK_CANARY_WORK_ID",

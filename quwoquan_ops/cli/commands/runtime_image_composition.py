@@ -298,6 +298,7 @@ def _build_missing_runtime_images(
             "build",
             "--tag",
             str(descriptor["ref"]),
+            "--pull=false",
             "--file",
             str(dockerfile),
         ]

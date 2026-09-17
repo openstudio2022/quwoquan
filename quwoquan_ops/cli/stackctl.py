@@ -409,6 +409,7 @@ from quwoquan_ops.cli.commands import (
     provider_conformance_domain as provider_conformance_domain_commands,
 )
 from quwoquan_ops.cli.commands import repair_domain as repair_domain_commands
+from quwoquan_ops.cli.commands import docker_dependencies as docker_dependencies_commands
 from quwoquan_ops.cli.commands import doctor as doctor_commands
 from quwoquan_ops.cli.commands import down_domain as down_domain_commands
 from quwoquan_ops.cli.commands import down_shared as down_shared_commands
@@ -488,6 +489,7 @@ from quwoquan_ops.cli.commands.diagnostics_shared import (
     _script_probe_plan_for_target, _service_health_checks_for_target,
     validate_read_only_user_availability_report,
 )
+from quwoquan_ops.cli.commands.docker_dependencies import command_docker_dependencies
 from quwoquan_ops.cli.commands.doctor import command_doctor
 from quwoquan_ops.cli.commands.down_domain import (
     _bind_local_teardown_runtime, _bounded_workload_down_decision, _command_down_unlocked,
@@ -802,6 +804,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     drill_commands.register_parser(subparsers)
 
+    docker_dependencies_commands.register_parser(subparsers)
     doctor_commands.register_parser(subparsers)
 
     prod_hosted_plan_commands.register_parser(subparsers)

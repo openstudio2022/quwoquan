@@ -695,6 +695,29 @@ def _command_package_unlocked(
                 "Provider and observability runtime packages were not materialized"
             )
         try:
+            from quwoquan_ops.cli.lib.docker_dependencies import (
+                DockerDependencyError,
+                ensure_prepared,
+            )
+
+            try:
+                lock_root = package_source_root
+                registry_file = (
+                    package_source_root
+                    / "quwoquan_ops/policies/registry.env"
+                )
+                if not registry_file.is_file():
+                    lock_root = _stackctl.ROOT
+                docker_cache = ensure_prepared(source_root=lock_root)
+            except DockerDependencyError as exc:
+                raise RuntimeError(
+                    "stackctl package OCI build blocked: docker base-image cache "
+                    f"is unavailable: {exc}"
+                ) from exc
+            details.append(
+                "docker base-image cache "
+                + str(docker_cache.get("status") or "ready")
+            )
             image_manifest_path, image_manifest = _stackctl._build_package_bound_local_images(
                 env_name,
                 target_name,

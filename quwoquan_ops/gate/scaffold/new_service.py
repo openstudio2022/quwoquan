@@ -165,17 +165,19 @@ func TestObjectQuery(t *testing.T) {{
 \tif recorder.Code != 200 {{ t.Fatalf("unexpected status %d", recorder.Code) }}
 }}
 ''',
-        "build/Dockerfile": f'''ARG GO_BASE_IMAGE=golang:1.24-bookworm
-FROM ${{GO_BASE_IMAGE}} AS builder
+        "build/Dockerfile": f'''ARG GO_BASE_IMAGE
+ARG ALPINE_BASE_IMAGE
+FROM --platform=${{BUILDPLATFORM}} ${{GO_BASE_IMAGE}} AS builder
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /build/quwoquan_service
 COPY quwoquan_service/go.mod quwoquan_service/go.sum ./
 RUN go mod download
 COPY quwoquan_service/ ./
-RUN CGO_ENABLED=0 go build -o /out/api ./services/{service}/cmd/standalone-api
+RUN CGO_ENABLED=0 GOOS=${{TARGETOS}} GOARCH=${{TARGETARCH}} go build -o /out/api ./services/{service}/cmd/standalone-api
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM ${{ALPINE_BASE_IMAGE}}
 COPY --from=builder /out/api /app/api
-USER nonroot:nonroot
 ENTRYPOINT ["/app/api"]
 ''',
     }
@@ -396,6 +398,9 @@ spec:
     build:
       context: ../../..
       dockerfile: quwoquan_service/services/{service}/build/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${{QWQ_COMPOSE_GO_BASE_IMAGE:?QWQ_COMPOSE_GO_BASE_IMAGE is required}}"
+        ALPINE_BASE_IMAGE: "${{QWQ_COMPOSE_ALPINE_BASE_IMAGE:?QWQ_COMPOSE_ALPINE_BASE_IMAGE is required}}"
     environment:
       SERVICE_NAME: {service}
       APP_ENV: "${{QWQ_COMPOSE_ENV:-alpha}}"

@@ -56,6 +56,8 @@
 .PHONY: fetch-app-bundled-fonts
 .PHONY: verify-app-bundled-fonts
 .PHONY: check-app-bundled-fonts-updates
+.PHONY: prepare-docker-dependencies
+.PHONY: check-docker-dependencies-outdated
 .PHONY: verify-app-web-offline-resources
 .PHONY: verify-quwoquan-data
 .PHONY: verify-markdown-article-no-article-document verify-article-contract-purity
@@ -409,6 +411,12 @@ verify-test-data-performance:
 
 fetch-app-bundled-fonts:
 	@python3 quwoquan_app/scripts/cli.py fonts fetch
+
+prepare-docker-dependencies:
+	@python3 quwoquan_ops/cli/stackctl.py docker-dependencies --action prepare
+
+check-docker-dependencies-outdated:
+	@python3 quwoquan_ops/cli/stackctl.py docker-dependencies --action check-outdated
 
 verify-app-bundled-fonts:
 	@python3 quwoquan_app/scripts/cli.py fonts verify

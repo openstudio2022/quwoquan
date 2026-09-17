@@ -1,0 +1,48 @@
+{
+  "schema": "quwoquan-docker-dependencies-lock-v1",
+  "generatedAt": "2026-09-17T06:06:26.772155Z",
+  "dependencies": {
+    "golang:1.24-bookworm": {
+      "repository": "docker.io/library/golang",
+      "tag": "1.24-bookworm",
+      "digest": "sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac",
+      "pulledAt": "2026-09-17T06:06:15.120007Z",
+      "source": "docker.m.daocloud.io"
+    },
+    "alpine:3.21": {
+      "repository": "docker.io/library/alpine",
+      "tag": "3.21",
+      "digest": "sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d",
+      "pulledAt": "2026-09-17T06:06:21.015888Z",
+      "source": "docker.m.daocloud.io"
+    },
+    "alpine:3.22": {
+      "repository": "docker.io/library/alpine",
+      "tag": "3.22",
+      "digest": "sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce",
+      "pulledAt": "2026-09-17T06:06:26.719035Z",
+      "source": "docker.m.daocloud.io"
+    },
+    "postgres:16-alpine": {
+      "repository": "docker.io/library/postgres",
+      "tag": "16-alpine",
+      "digest": "sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685",
+      "pulledAt": "2026-09-17T06:31:11.933883Z",
+      "source": "local-docker-cache"
+    },
+    "mongo:7-jammy": {
+      "repository": "docker.io/library/mongo",
+      "tag": "7-jammy",
+      "digest": "sha256:406a4fdca9fc763443268f000218d3849ef8996f66ed9e92ba0b501b446ab822",
+      "pulledAt": "2026-09-17T06:31:11.933883Z",
+      "source": "local-docker-cache"
+    },
+    "redis:7.2-alpine": {
+      "repository": "docker.io/library/redis",
+      "tag": "7.2-alpine",
+      "digest": "sha256:ccd6aa8d45ff3f033d6fa15b8cc1a50579f65c89f38cf9bb607a954c4f2128ed",
+      "pulledAt": "2026-09-17T06:31:11.933883Z",
+      "source": "local-docker-cache"
+    }
+  }
+}
