@@ -178,7 +178,8 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
       continue;
     }
     if (input) {
-      XCTAssertTrue([@[@"correct", @"incorrect"] containsObject:step[@"mode"]], @"APP.UAT.page_plan_invalid");
+      NSArray *modes = @[@"correct", @"incorrect"];
+      XCTAssertTrue([modes containsObject:step[@"mode"]], @"APP.UAT.page_plan_invalid");
       XCTAssertTrue([step[@"sourceSelector"] isKindOfClass:NSString.class], @"APP.UAT.page_plan_invalid");
       XCTAssertGreaterThan([step[@"sourceSelector"] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length, 0, @"APP.UAT.page_plan_invalid");
       XCTAssertFalse([step[@"sourceSelector"] hasPrefix:@"text-prefix:"], @"APP.UAT.page_plan_invalid");
@@ -188,7 +189,8 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
     XCTAssertTrue([step[@"selector"] isKindOfClass:NSString.class]);
     XCTAssertGreaterThan([step[@"selector"] length], 0);
     if ([step[@"selector"] hasPrefix:@"text-prefix:"]) {
-      XCTAssertTrue([@[@"visible", @"seek", @"playback"] containsObject:step[@"operation"]]);
+      NSArray *prefixOperations = @[@"visible", @"seek", @"playback"];
+      XCTAssertTrue([prefixOperations containsObject:step[@"operation"]]);
       XCTAssertGreaterThan([[step[@"selector"] substringFromIndex:@"text-prefix:".length] length], 0);
     }
   }
@@ -328,7 +330,10 @@ static NSString *QWQExternalAUTStateName(XCUIApplicationState state) {
         [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.15]];
       }
       XCTAssertTrue(completed, @"实际视频未完整播放");
-    } else { XCTAssertTrue([@[@"visible", @"back", @"reveal"] containsObject:operation]); }
+    } else {
+      NSArray *passiveOperations = @[@"visible", @"back", @"reveal"];
+      XCTAssertTrue([passiveOperations containsObject:operation]);
+    }
     if (!relayTerminal) {
       [observations addObject:@{@"operation": operation, @"selector": selector, @"observed": observed}];
     }

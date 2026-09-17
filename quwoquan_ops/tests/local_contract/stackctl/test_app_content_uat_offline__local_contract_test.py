@@ -1055,6 +1055,10 @@ def test_ios_patrol_runner_defaults_isolation_macros_to_zero() -> None:
     assert "#define FULL_ISOLATION 0" in prefix
     assert "#define CLEAR_PERMISSIONS 1" not in prefix
     assert "#define FULL_ISOLATION 1" not in prefix
+    # XCTest 宏按逗号切参；`@["a", "b"]` 写进 XCTAssert* 会在编译期拆坏。
+    assert "XCTAssertTrue([@[" not in ios
+    assert "XCTAssertFalse([@[" not in ios
+    assert "XCTAssertEqual([@[" not in ios
 
 
 def test_native_sources_prevalidate_all_steps_and_check_canonical_pid() -> None:
