@@ -268,7 +268,9 @@ def _launch(args: argparse.Namespace, runtime: Mapping[str, Any], projection: Ma
     if case_id not in OFFLINE_REQUIRED_CASES or type(generation) is not int or generation <= 0:
         raise ValueError("APP.LAUNCH.receipt_invalid: invalid case/generation")
     # UUID 只分配 fresh 输出路径，不充当 session、观察摘要或授权。
-    attempt = report_dir / "case-launches" / case_id / f"generation-{generation}" / uuid4().hex / "attempt-1" / "attempt.json"
+    # 复用密封投影必须走 attempt-2：binding 拒绝对 attempt-1 预声明 digest。
+    attempt_name = "attempt-2" if expected_build_projection_digest is not None else "attempt-1"
+    attempt = report_dir / "case-launches" / case_id / f"generation-{generation}" / uuid4().hex / attempt_name / "attempt.json"
     selection = _isolated_selection(args, runtime, projection, case_id=case_id,
         generation=generation, attempt_ref=str(attempt.absolute()))
     report = attempt.with_name("report.json")
@@ -361,22 +363,28 @@ def run_offline_app_content_uat(*, args: argparse.Namespace, report_dir: Path, o
             runtime, projection = _prepare_launch(
                 candidate, report_dir, output_root, args.platform
             )
+            seed_case = selected[0]
             binding = _launch(args, runtime, projection, report_dir, output_root,
-                              case_id=selected[0], generation=1)
-            from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import execute_offline_page_cases
-            receipt.update(execute_offline_page_cases(
-                args=args, candidate=candidate, launch=binding, projection=projection,
-                report_dir=report_dir, output_root=output_root,
-                # 每格 fresh 启动复用首次已密封的构建投影：私有依赖投影只允许 fresh
-                # 目标，重投影会撞已存在的 pub cache/CocoaPods 状态；expected digest
-                # 仍逐字节证明整棵树未漂移。
-                launch_case=lambda case_id, generation: _launch(
+                              case_id=seed_case, generation=1)
+            def launch_successor(case_id: str, generation: int) -> dict[str, Any]:
+                # seed 已启动首格；同 case generation-1 不得再 unlock-launch。
+                # 单次 launched 只是启动证据，不能当作 Alpha 24 格 PASS。
+                if case_id == seed_case and generation == 1:
+                    return binding
+                return _launch(
                     args, runtime, projection, report_dir, output_root,
                     case_id=case_id, generation=generation,
                     expected_build_projection_digest=str(
                         binding["buildProjectionSeal"]["buildProjectionDigest"]
                     ),
-                ),
+                )
+            from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import execute_offline_page_cases
+            receipt.update(execute_offline_page_cases(
+                args=args, candidate=candidate, launch=binding, projection=projection,
+                report_dir=report_dir, output_root=output_root,
+                # 后续格 fresh 启动复用首次已密封的构建投影；expected digest
+                # 仍逐字节证明整棵树未漂移。
+                launch_case=launch_successor,
             ))
             _verify_source(candidate, stackctl.ROOT)
     except (OSError, RuntimeError, TypeError, ValueError, KeyError) as error:

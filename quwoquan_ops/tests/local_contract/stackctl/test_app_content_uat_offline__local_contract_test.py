@@ -198,9 +198,10 @@ def test_successor_case_launch_reuses_sealed_projection_with_frozen_cocoapods(
         offline._launch(args, runtime, projection, tmp_path / "run", tmp_path,
                         case_id="login-error", generation=1,
                         expected_build_projection_digest="sha256:" + "c" * 64)
-    control_path, = (tmp_path / "run/case-launches/login-error/generation-1").glob("*/attempt-1/control.json")
+    control_path, = (tmp_path / "run/case-launches/login-error/generation-1").glob("*/attempt-2/control.json")
     control = json.loads(control_path.read_text())
     assert control["expectedBuildProjectionDigest"] == "sha256:" + "c" * 64
+    assert not any((tmp_path / "run").rglob("attempt-1/control.json"))
     assert set(COCOAPODS_ENVIRONMENT_KEYS) <= set(observed)
 
 
@@ -832,7 +833,11 @@ def _live_boundaries(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, platform: 
     binding = _launch_identity(platform)
     attempt = tmp_path / "attempt.json"
     pages.write_create_once_json(attempt, {"attemptId": "offline-attempt"})
-    binding.update(launchAttemptRef=str(attempt), launchAttemptDigest=pages.document_digest(json.loads(attempt.read_bytes())))
+    binding.update(
+        launchAttemptRef=str(attempt),
+        launchAttemptDigest=pages.document_digest(json.loads(attempt.read_bytes())),
+        buildProjectionSeal={"buildProjectionDigest": "sha256:" + "c" * 64},
+    )
     candidate = {"candidateId": DIGEST, "commit": "a" * 40, "tree": "b" * 40}
     projection = {"sourceProjectionRoot": str(ROOT), "candidateDigest": DIGEST, "sourceRevision": candidate["commit"]}
     snapshot = json.loads((ROOT / "quwoquan_app/assets/content/alpha/manifest.json").read_bytes())
@@ -1030,6 +1035,75 @@ def test_diagnostic_compile_launch_uses_selected_case_not_login_success(monkeypa
     )
     offline.run_offline_app_content_uat(args=args, report_dir=tmp_path, output_root=tmp_path, issues=[])
     assert launches == ["default-entry"]
+
+
+def test_seed_launch_does_not_unlock_the_same_first_case_again(monkeypatch, tmp_path):
+    binding, candidate, projection, _commands = _live_boundaries(monkeypatch, tmp_path)
+    launches: list[tuple[object, object]] = []
+    unlocked: list[tuple[str, int]] = []
+
+    def capture_launch(*_args, **kwargs):
+        launches.append((kwargs.get("case_id"), kwargs.get("generation", 1)))
+        return binding
+
+    def spy_unlock(*, owned, device_id, application_id, launch_case, case_id, generation):
+        unlocked.append((case_id, generation))
+        return launch_case(case_id, generation)
+
+    monkeypatch.setattr(offline, "_candidate", lambda *_: candidate)
+    monkeypatch.setattr(offline, "_prepare_launch", lambda *_: ({}, projection))
+    monkeypatch.setattr(offline, "_launch", capture_launch)
+    monkeypatch.setattr(offline, "_verify_source", lambda *_: None)
+    monkeypatch.setattr(pages, "_launch_between_page_locks", spy_unlock)
+    receipt = offline.run_offline_app_content_uat(
+        args=argparse.Namespace(
+            dry_run=False, platform="android", device_id=binding["deviceId"],
+            offline_cases=["default-entry", "article-detail"],
+            isolated_rehearsal=False, rehearsal_instance_id="",
+        ),
+        report_dir=tmp_path / "uat", output_root=tmp_path, issues=[],
+    )
+    assert launches == [("default-entry", 1), ("article-detail", 1)]
+    assert unlocked == [("article-detail", 1)]
+    assert receipt["status"] == "diagnostic_passed"
+    assert receipt["status"] != "passed"
+    assert receipt.get("diagnostic") is True
+
+
+@pytest.mark.parametrize("kind,platform", [
+    ("private-state", "web"),
+    ("pub-cache", "web"),
+    ("ios-pods", "ios"),
+])
+def test_first_materialize_blocks_dirty_destination_before_compile_when_expected_digest_unset(
+    tmp_path, monkeypatch, kind, platform
+):
+    from quwoquan_ops.cli.lib.package_reuse import dependency_bundle_projection as projection
+
+    capsule = tmp_path / "capsule"
+    capsule.mkdir()
+    manifest = capsule / "manifest.json"
+    manifest.write_text("{}\n", encoding="ascii")
+    root = tmp_path / "projection"
+    private = tmp_path / "state"
+    if kind == "private-state":
+        private.mkdir()
+    elif kind == "pub-cache":
+        (root / "quwoquan_app/.dart_tool/qwq_pub_cache").mkdir(parents=True)
+    else:
+        (root / "quwoquan_app/ios/Pods").mkdir(parents=True)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("capsule verify/compile must not run on a dirty destination")
+
+    monkeypatch.setattr(projection, "verify_package_input_capsule_with_dependencies", forbidden)
+    monkeypatch.setattr(projection, "materialize_capsule_pub_cache", forbidden)
+    with pytest.raises(ValueError, match="APP.DEPENDENCY.projection_failed: destination must be fresh"):
+        projection.materialize_dependency_bundle_projection(
+            manifest_path=manifest, projection_root=root, private_state_root=private,
+            platform=platform, base_environment={"PATH": "/usr/bin:/bin"},
+            expected_digest=None,
+        )
 
 
 @pytest.mark.parametrize("drift", ["aut", "driver", "screenshot", "projection"])
