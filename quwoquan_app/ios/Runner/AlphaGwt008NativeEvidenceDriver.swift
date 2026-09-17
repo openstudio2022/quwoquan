@@ -357,7 +357,9 @@ final class AlphaGwt008NativeEvidenceDriver {
   }
 
   private func cleanupSecrets() {
-    verifier?.resetBytes(in: 0..<(verifier?.count ?? 0))
+    guard var secret = verifier else { return }
+    secret.resetBytes(in: 0..<secret.count)
+    verifier = secret
     verifier = nil
   }
 
