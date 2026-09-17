@@ -333,6 +333,12 @@ def test_isolated_cli_rejects_partial_or_cross_target_before_dispatch(monkeypatc
     assert result["exitCode"] == 2 and result["firstBlocker"] == "APP.LAUNCH.receipt_invalid"
 
 
+def test_generation_one_cases_share_seed_launch_and_do_not_recompile(tmp_path, monkeypatch):
+    source = Path(pages.__file__).read_text(encoding="utf-8")
+    assert "if launch_case is not None and case_id != selected[0]:" not in source
+    assert "generation-1 全部复用 seed 启动的同一制品" in source
+
+
 def test_isolated_selection_enters_native_pages_only_with_case_bound_launch(monkeypatch, tmp_path):
     binding = {"launchAttemptId": "attempt-1", "canonicalProcessId": 7}
     monkeypatch.setattr(offline, "_candidate", lambda *args: {})

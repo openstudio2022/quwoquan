@@ -943,8 +943,10 @@ def execute_offline_page_cases(*, args: argparse.Namespace, candidate: Mapping[s
                 continue
             case_id = seed_plan["caseId"]
             case_launch = launch
-            if launch_case is not None:
-                case_launch = launch_unlocked(case_id, 1)
+            # generation-1 全部复用 seed 启动的同一制品。每格再走 canonical
+            # flutter compile 会改 Runner.app，把后续格打成
+            # successor artifact changed；页面执行由 native driver 冷启动 AUT。
+            # identity-restart 的 generation-2 仍经 launch_case 冷启动。
             case_plans = build_offline_page_plans(snapshot=snapshot, app_root=app_root, launch=case_launch,
                                                   fresh_launch=launch_case is not None)
             plan = next(item for item in case_plans if item["caseId"] == case_id)
