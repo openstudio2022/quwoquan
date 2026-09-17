@@ -60,16 +60,12 @@ _DEPENDENCY_COMPONENT_KINDS = {
     "patrolIosPods": "iosPods",
     "androidGradle": "androidGradle",
 }
+# iOS content-live / canonical launcher 只投影生产 host。run.sh 仅在
+# actor=app-content-uat 且 device=android* 时传 --include-patrol；iOS 收据
+# 不得再要求 patrolPub/patrolIosPods，否则已启动的 production 回执会被误拒。
 _PLATFORM_REQUIRED_DEPENDENCY_COMPONENTS = {
     "android": frozenset({"productionPub", "patrolPub", "androidGradle"}),
-    "ios-simulator": frozenset(
-        {
-            "productionPub",
-            "patrolPub",
-            "productionIosPods",
-            "patrolIosPods",
-        }
-    ),
+    "ios-simulator": frozenset({"productionPub", "productionIosPods"}),
 }
 _CONTRACT_GRAPH_LOGICAL_PATH = "quwoquan_service/generated/contract_graph.json"
 
