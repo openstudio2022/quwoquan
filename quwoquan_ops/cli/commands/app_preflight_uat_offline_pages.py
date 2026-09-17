@@ -30,6 +30,7 @@ from quwoquan_ops.cli.lib.target_uat_binding import (
 from quwoquan_ops.cli.smoke.environment_patrol_smoke import external_aut_driver as driver
 from quwoquan_ops.cli.smoke.environment_patrol_smoke import artifact_binding as artifacts
 from quwoquan_ops.cli.smoke.environment_patrol_smoke.execution import run_command
+from quwoquan_ops.cli.lib.package_reuse.pub_cache_capsule import lock_hosted_url
 RUNNER_SOURCE = "quwoquan_ops/cli/commands/app_preflight_uat_offline_pages.py"
 RUNNER_IDENTITY = "stackctl.offline-native-pages.v1"
 ANDROID_PAGE_METHOD = "executesOfflinePageCaseInCanonicalProductionProcess"
@@ -341,6 +342,17 @@ def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
     return plans
 
 
+def _offline_pub_command_environment(
+    environment: Mapping[str, str], *, lock_path: Path
+) -> dict[str, str]:
+    """Seal offline pub get to the lock's hosted cache namespace, not pub.dev."""
+
+    sealed = dict(environment)
+    sealed.pop("FLUTTER_STORAGE_BASE_URL", None)
+    sealed["PUB_HOSTED_URL"] = lock_hosted_url(lock_path)
+    return sealed
+
+
 def _run_native_command(command: list[str], *, cwd: Path, environment: dict[str, str],
                         log_path: Path, timeout: float = 300) -> dict[str, Any]:
     from quwoquan_ops.cli.commands.app_preflight_uat_offline import first_typed_blocker
@@ -432,6 +444,11 @@ def _prepare_native_driver(*, args: argparse.Namespace, projection: Mapping[str,
             envelope=envelope, ambient_environment={}, dependency_environment=envelope["dependencyEnvironment"], command_environment={},
         )
         flutter = envelope["flutterExecutable"]
+        environment = _offline_pub_command_environment(environment, lock_path=host / "pubspec.lock")
+        production_environment = _offline_pub_command_environment(
+            dependencies.production_environment,
+            lock_path=root / "quwoquan_app/pubspec.lock",
+        )
         # 宿主只嵌入已验真 AUT 的公开信任封套；不请求在线包或伪造登录材料。
         trust_root = report_dir / "native-material"
         trust_path = trust_root / "qwq_runtime/runtime-config-trust.json"
@@ -452,7 +469,7 @@ def _prepare_native_driver(*, args: argparse.Namespace, projection: Mapping[str,
         ios_results = None
         if platform == "ios":
             commands.append(_run_native_command([flutter, "pub", "get", "--offline", "--enforce-lockfile"],
-                cwd=root / "quwoquan_app", environment=dependencies.production_environment,
+                cwd=root / "quwoquan_app", environment=production_environment,
                 log_path=report_dir / "native-production-pub.log", timeout=120))
             ios_results = replay_ios_dependency_projections(dependency_projection=dependencies, pod_executable=pod)
         expectation = prepare_dependency_projection_cas_evidence(

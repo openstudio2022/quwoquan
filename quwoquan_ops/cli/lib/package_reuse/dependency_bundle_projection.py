@@ -149,7 +149,15 @@ def _private_flutter_environment(
         key: value
         for key, value in base.items()
         if key not in _PROXY_KEYS
-        and key not in {"HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "PATH"}
+        and key
+        not in {
+            "HOME",
+            "XDG_CONFIG_HOME",
+            "XDG_CACHE_HOME",
+            "PATH",
+            "PUB_HOSTED_URL",
+            "FLUTTER_STORAGE_BASE_URL",
+        }
     }
     environment.update(
         {

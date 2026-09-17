@@ -22,6 +22,17 @@ from quwoquan_ops.cli.lib.target_uat_binding import read_target_uat_binding
 
 ROOT = Path(__file__).resolve().parents[4]
 DIGEST = "sha256:" + "a" * 64
+_HOSTED_LOCK = (
+    "packages:\n"
+    "  fixture_pkg:\n"
+    "    dependency: transitive\n"
+    "    description:\n"
+    "      name: fixture_pkg\n"
+    f"      sha256: {'a' * 64}\n"
+    "      url: https://pub.flutter-io.cn\n"
+    "    source: hosted\n"
+    "    version: 1.2.3\n"
+)
 SCREENSHOT = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9o0AAAAASUVORK5CYII=")
 SCREENSHOT_DIGEST = "sha256:" + hashlib.sha256(SCREENSHOT).hexdigest()
 
@@ -179,6 +190,23 @@ def test_restart_generations_preserve_space_but_not_observation(tmp_path, privat
     assert one["snapshotDigest"] == two["snapshotDigest"]
     assert one["observationBinding"] != two["observationBinding"]
     assert one["lifecycleGeneration"] != two["lifecycleGeneration"]
+
+
+def test_offline_pub_command_environment_seals_lock_url_not_ambient(tmp_path):
+    lock = tmp_path / "pubspec.lock"
+    lock.write_text(_HOSTED_LOCK, encoding="utf-8")
+    sealed = pages._offline_pub_command_environment(
+        {
+            "PUB_CACHE": str(tmp_path / "qwq_pub_cache"),
+            "PUB_HOSTED_URL": "https://ambient-pub.invalid",
+            "FLUTTER_STORAGE_BASE_URL": "https://ambient-flutter.invalid",
+            "HOME": str(tmp_path / "private-home"),
+        },
+        lock_path=lock,
+    )
+    assert sealed["PUB_CACHE"] == str(tmp_path / "qwq_pub_cache")
+    assert sealed["PUB_HOSTED_URL"] == "https://pub.flutter-io.cn"
+    assert "FLUTTER_STORAGE_BASE_URL" not in sealed
 
 
 @pytest.mark.parametrize("platform", ["ios", "android"])

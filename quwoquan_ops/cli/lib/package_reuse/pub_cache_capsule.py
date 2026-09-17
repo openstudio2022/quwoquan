@@ -161,6 +161,16 @@ def _lock_model(lock_path: Path) -> tuple[bytes, str, list[dict[str, str]]]:
     return encoded, _digest_bytes(encoded), hosted
 
 
+def lock_hosted_url(lock_path: Path) -> str:
+    """Return the single hosted-Pub URL sealed by one pubspec.lock."""
+
+    _encoded, _digest, hosted = _lock_model(lock_path)
+    urls = sorted({item["url"] for item in hosted})
+    if len(urls) != 1:
+        raise ValueError("App dependency hosted URL is not unique")
+    return urls[0]
+
+
 def _safe_relative(value: str) -> str:
     path = PurePosixPath(value)
     if (

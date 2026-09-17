@@ -95,6 +95,7 @@ from .pub_cache_capsule import (  # noqa: F401
     build_pub_cache_snapshot,
     copy_snapshot_tree_with_lock,
     dependency_required,
+    lock_hosted_url,
 )
 from .pub_cache_projection import (  # noqa: F401
     materialize_capsule_pub_cache,

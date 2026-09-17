@@ -30,6 +30,7 @@ from quwoquan_ops.cli.lib.package_reuse.pub_cache_capsule import (
     build_pub_cache_snapshot,
     copy_snapshot_tree_with_lock,
     is_canonical_pub_cache_transient,
+    lock_hosted_url,
 )
 
 
@@ -89,6 +90,27 @@ def _repo(tmp_path: Path) -> tuple[Path, str]:
         check=True,
     )
     return root, archive_sha
+
+
+def test_lock_hosted_url_requires_one_https_host(tmp_path: Path) -> None:
+    repo, _archive_sha = _repo(tmp_path)
+    lock = repo / "quwoquan_app/pubspec.lock"
+    assert lock_hosted_url(lock) == "https://pub.flutter-io.cn"
+    drifted = tmp_path / "drifted.lock"
+    drifted.write_text(
+        lock.read_text(encoding="utf-8")
+        + "  other_pkg:\n"
+        "    dependency: transitive\n"
+        "    description:\n"
+        "      name: other_pkg\n"
+        f"      sha256: {'c' * 64}\n"
+        "      url: https://pub.dev\n"
+        "    source: hosted\n"
+        "    version: 1.0.0\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="hosted URL is not unique"):
+        lock_hosted_url(drifted)
 
 
 def _activate_snapshot(repo: Path, output: Path, archive_sha: str) -> None:

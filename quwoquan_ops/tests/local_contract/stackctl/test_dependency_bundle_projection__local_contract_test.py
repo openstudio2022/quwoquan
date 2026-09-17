@@ -134,6 +134,8 @@ def test_web_projection_uses_fresh_flutter_home_and_ignores_global_config(
             "HOME": "/developer/home",
             "XDG_CONFIG_HOME": "/developer/config",
             "HTTP_PROXY": "http://developer-proxy.invalid",
+            "PUB_HOSTED_URL": "https://ambient-pub.invalid",
+            "FLUTTER_STORAGE_BASE_URL": "https://ambient-flutter.invalid",
             "PATH": "/usr/bin:/bin",
         },
     )
@@ -144,6 +146,8 @@ def test_web_projection_uses_fresh_flutter_home_and_ignores_global_config(
     )
     assert result.production_environment["FLUTTER_SWIFT_PACKAGE_MANAGER"] == "false"
     assert "HTTP_PROXY" not in result.production_environment
+    assert "PUB_HOSTED_URL" not in result.production_environment
+    assert "FLUTTER_STORAGE_BASE_URL" not in result.production_environment
 
 
 def test_patrol_projection_expands_user_home_shorthand_in_private_path(
