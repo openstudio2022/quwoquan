@@ -1048,6 +1048,16 @@ def test_android_zero_shell_exit_without_junit_terminal_is_blocked(monkeypatch: 
             context={"host": tmp_path, "environment": {}, "adb": "/sealed/adb"}, case_dir=tmp_path)
 
 
+def test_ios_native_driver_xcodebuild_pins_products_under_derived_data(tmp_path: Path) -> None:
+    host = tmp_path / "patrol-host"
+    command = pages.ios_native_driver_xcodebuild_command(
+        host=host, device_id="E0C937A3-F805-4E04-A469-B7706AB79F0A")
+    derived = (host / "build/ios_integ").resolve()
+    assert command[command.index("-derivedDataPath") + 1] == str(derived)
+    assert "SYMROOT=" + str(derived / "Build/Products") in command
+    assert "OBJROOT=" + str(derived / "Build/Intermediates.noindex") in command
+
+
 def test_ios_patrol_runner_defaults_isolation_macros_to_zero() -> None:
     ios = (ROOT / "quwoquan_app/test_host/patrol/ios/RunnerUITests/RunnerUITests.m").read_text()
     prefix = ios.split("PATROL_INTEGRATION_TEST_IOS_RUNNER", 1)[0]

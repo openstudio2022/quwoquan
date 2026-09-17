@@ -37,6 +37,23 @@ ANDROID_PAGE_METHOD = "executesOfflinePageCaseInCanonicalProductionProcess"
 IOS_PAGE_METHOD = "testExecutesOfflinePageCaseInCanonicalProductionProcess"
 
 
+def ios_native_driver_xcodebuild_command(*, host: Path, device_id: str) -> list[str]:
+    """把 products 钉在私有 derivedData，避免 Xcode 写到共享 DerivedData。"""
+    derived = (Path(host) / "build/ios_integ").resolve()
+    return [
+        "xcodebuild", "build-for-testing",
+        "-workspace", "ios/Runner.xcworkspace",
+        "-scheme", "Runner",
+        "-configuration", "Debug",
+        "-sdk", "iphonesimulator",
+        "-destination", "platform=iOS Simulator,id=" + device_id,
+        "-derivedDataPath", str(derived),
+        "SYMROOT=" + str(derived / "Build/Products"),
+        "OBJROOT=" + str(derived / "Build/Intermediates.noindex"),
+        "CODE_SIGNING_ALLOWED=NO",
+    ]
+
+
 from quwoquan_ops.cli.commands.app_preflight_uat_offline_page_validation import (
     _validate_identity_journey, _validate_native_result_identity, _validate_page_step,
     _validate_page_steps, _validate_playback_observation, _validate_step_observation,
@@ -488,9 +505,8 @@ def _prepare_native_driver(*, args: argparse.Namespace, projection: Mapping[str,
         else:
             commands.append(_run_native_command([flutter, "build", "ios", "--debug", "--simulator", "--no-codesign", "--no-pub", "--config-only"],
                 cwd=host, environment=environment, log_path=report_dir / "native-config.log", timeout=120))
-            commands.append(_run_native_command(["xcodebuild", "build-for-testing", "-workspace", "ios/Runner.xcworkspace", "-scheme", "Runner",
-                "-configuration", "Debug", "-sdk", "iphonesimulator", "-destination", "platform=iOS Simulator,id=" + device["id"],
-                "-derivedDataPath", str(host / "build/ios_integ"), "CODE_SIGNING_ALLOWED=NO"],
+            commands.append(_run_native_command(
+                ios_native_driver_xcodebuild_command(host=host, device_id=device["id"]),
                 cwd=host, environment=environment, log_path=report_dir / "native-build.log", timeout=900))
         source = {"root": "quwoquan_app/test_host/patrol", "rootIdentityDigest": document_digest({"root": str(host)}),
                   "sourceDigest": native_projection["sourceProjectionDigest"], "sourceFileCount": native_projection["sourceProjectionFileCount"]}
