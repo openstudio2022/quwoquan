@@ -1058,6 +1058,13 @@ def test_ios_native_driver_xcodebuild_pins_products_under_derived_data(tmp_path:
     assert "OBJROOT=" + str(derived / "Build/Intermediates.noindex") in command
 
 
+def test_patrol_host_seals_sqlite3_to_system_source() -> None:
+    text = (ROOT / "quwoquan_app/test_host/patrol/pubspec.yaml").read_text()
+    assert "source: system" in text
+    assert "hooks:" in text
+    assert "sqlite3:" in text
+
+
 def test_ios_patrol_runner_defaults_isolation_macros_to_zero() -> None:
     ios = (ROOT / "quwoquan_app/test_host/patrol/ios/RunnerUITests/RunnerUITests.m").read_text()
     prefix = ios.split("PATROL_INTEGRATION_TEST_IOS_RUNNER", 1)[0]

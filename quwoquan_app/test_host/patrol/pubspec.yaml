@@ -84,6 +84,16 @@ dependency_overrides:
   dart_style: ^3.1.12
   material_color_utilities: ^0.13.1
 
+hooks:
+  user_defines:
+    sqlite3:
+      # Patrol 宿主当解析根时不会继承 app 的 hook；必须同样切到系统 SQLite，
+      # 否则 iOS build-for-testing 会在线拉 GitHub precompiled dylib。
+      source: system
+      name: sqlite3
+      name_android: sqlite
+      name_windows: winsqlite3
+
 flutter:
   config:
     enable-swift-package-manager: false
