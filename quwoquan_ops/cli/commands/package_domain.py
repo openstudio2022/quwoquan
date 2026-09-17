@@ -474,6 +474,8 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         requested_release_bindings = _stackctl.validate_release_attestations(
             release_attestation_path,
             rollback_attestation_path,
+            environment=env_name,
+            target=target_name,
         )
         _package_stage("after release attestation reads")
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:

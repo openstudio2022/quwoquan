@@ -876,6 +876,8 @@ def _command_package_unlocked(
         _stackctl.validate_release_attestations(
             str(getattr(args, "release_attestation", "") or ""),
             str(getattr(args, "rollback_release_attestation", "") or ""),
+            environment=env_name,
+            target=target_name,
         )
         contract_graph_digest = _stackctl.canonical_contract_graph_digest()
         fingerprint = _stackctl.write_package_fingerprint(

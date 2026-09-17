@@ -61,8 +61,35 @@ def canonical_contract_graph_digest() -> str:
 def validate_release_attestations(
     release_attestation: str,
     rollback_release_attestation: str,
+    *,
+    environment: str = "",
+    target: str = "",
 ) -> dict[str, dict[str, str]]:
-    """Fail before package/build work when immutable release inputs are absent."""
+    """Fail before package/build work when immutable release inputs are absent.
+    
+    Alpha local offline is exempt per environment-topology-and-packaging spec REQ-002:
+    "dev-session does not create or activate immutable candidate, also not require
+    Data release attestation" and "Alpha offline does not request Remote".
+    """
+    
+    # Alpha local offline exemption: dev-session path does not require attestation
+    is_alpha_local = environment == "alpha" and target == "alpha-local"
+    if is_alpha_local and not release_attestation.strip() and not rollback_release_attestation.strip():
+        # Return empty binding for alpha-local offline scenario
+        return {
+            "candidate": {
+                "releaseId": "",
+                "releaseDigest": "",
+                "attestationRef": "",
+                "attestationDigest": "",
+            },
+            "rollback": {
+                "releaseId": "",
+                "releaseDigest": "",
+                "attestationRef": "",
+                "attestationDigest": "",
+            },
+        }
 
     candidate = _release_binding(release_attestation, label="candidate")
     rollback = _release_binding(
