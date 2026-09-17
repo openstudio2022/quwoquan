@@ -1048,6 +1048,15 @@ def test_android_zero_shell_exit_without_junit_terminal_is_blocked(monkeypatch: 
             context={"host": tmp_path, "environment": {}, "adb": "/sealed/adb"}, case_dir=tmp_path)
 
 
+def test_ios_patrol_runner_defaults_isolation_macros_to_zero() -> None:
+    ios = (ROOT / "quwoquan_app/test_host/patrol/ios/RunnerUITests/RunnerUITests.m").read_text()
+    prefix = ios.split("PATROL_INTEGRATION_TEST_IOS_RUNNER", 1)[0]
+    assert "#define CLEAR_PERMISSIONS 0" in prefix
+    assert "#define FULL_ISOLATION 0" in prefix
+    assert "#define CLEAR_PERMISSIONS 1" not in prefix
+    assert "#define FULL_ISOLATION 1" not in prefix
+
+
 def test_native_sources_prevalidate_all_steps_and_check_canonical_pid() -> None:
     android = (ROOT / "quwoquan_app/test_host/patrol/android/app/src/androidTest/java/com/quwoquan/testhost/patrol/ProductionHomepageExternalAutTest.java").read_text()
     ios = (ROOT / "quwoquan_app/test_host/patrol/ios/RunnerUITests/RunnerUITests.m").read_text()

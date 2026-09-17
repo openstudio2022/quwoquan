@@ -14,6 +14,14 @@ static NSString *QWQOfflineScreenshotDigest(NSData *data) {
   return hex;
 }
 
+// patrol_cli 通过 OTHER_CFLAGS -D 注入这两项；本 host 走 stackctl xcodebuild，
+// 编译单元必须默认 0，禁止卸生产 AUT、禁止清权限。
+#ifndef CLEAR_PERMISSIONS
+#define CLEAR_PERMISSIONS 0
+#endif
+#ifndef FULL_ISOLATION
+#define FULL_ISOLATION 0
+#endif
 PATROL_INTEGRATION_TEST_IOS_RUNNER(RunnerUITests)
 
 static NSString *const QWQExternalAUTMarker = @"QWQ_EXTERNAL_AUT ";
