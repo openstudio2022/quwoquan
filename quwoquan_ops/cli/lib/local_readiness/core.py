@@ -407,7 +407,8 @@ def capture_fingerprint(
         review_consolidation,
         required_evidence,
         repo_root=repo_root,
-        required=execution["level"] in {"scope", "release"},
+        # source-admitted 的 scope 只要求 owner + candidate；Review 仅 release 准出必填。
+        required=execution["level"] == "release",
         allow_missing=allow_missing_admission,
     )
     all_paths = sorted(
