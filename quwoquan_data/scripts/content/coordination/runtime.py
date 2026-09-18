@@ -165,6 +165,7 @@ def batch_facts(batch, roots):
         return result
     from core.schema import assert_valid
     from content.execution.receipt_chain import _independent_actors, digest_bytes
+    from content.execution.workspace import target_descriptor_for
     _independent_actors(author["actor"], review["actor"])
     expected_reviews = {f"{ref}/5.review/content_review.json" for ref in result["review_targets"]}
     bindings = review["resultRefs"]
@@ -176,7 +177,8 @@ def batch_facts(batch, roots):
         raw = (root / review_ref).read_bytes()
         judgement = json.loads(raw)
         assert_valid(judgement, "content", "content_review", label=review_ref)
-        if (judgement["executionId"] != batch["execution_id"] or judgement["objectRef"] != ref
+        expected_object_ref = target_descriptor_for(batch["execution_id"], ref)["canonicalObjectRef"]
+        if (judgement["executionId"] != batch["execution_id"] or judgement["objectRef"] != expected_object_ref
                 or {"scope": "execution", "ref": review_ref, "digest": digest_bytes(raw)} not in bindings):
             raise CoordinationError("COORDINATION.RECEIPT_TARGET_DRIFT", ref)
         if judgement["decision"] == "approved":

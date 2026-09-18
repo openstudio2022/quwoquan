@@ -451,6 +451,9 @@ def _review_semantics(
 
     protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
     revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    from content.execution.workspace import target_descriptor_for
+
+    object_ref = target_descriptor_for(root.name, target_ref)["canonicalObjectRef"]
     refs_document = json.loads((root / target_ref / "1.download/source_refs.json").read_bytes())
     counts = {"title": 0, "heading": 0, "paragraph": 1, "list": 0, "tableLogicalCell": 0, "footnote": 0, "media": 0}
     report_rows = []
@@ -458,7 +461,7 @@ def _review_semantics(
         source_ref = row["sourceRef"]
         source_digest = seal.sha256((root / source_ref).read_bytes())
         sequence_digest = seal.sha256(seal.canonical_bytes({
-            "objectRef": target_ref, "sourceRef": source_ref,
+            "objectRef": object_ref, "sourceRef": source_ref,
             "sourceDigest": source_digest, "objectRevision": revision,
         }))
         report_rows.append({
@@ -473,7 +476,7 @@ def _review_semantics(
         "issues": [] if decision == "approved" else [{
             "code": "SEMANTIC_COVERAGE_GAP",
             "message": blocking_issues[0],
-            "ref": target_ref,
+            "ref": object_ref,
         }],
     }
     if carrier == "homepage":
@@ -493,8 +496,8 @@ def _review_semantics(
     approved = decision == "approved"
     disposition = {
         "issueId": f"{carrier}-{'semantic-exact' if approved else 'coverage-gap'}-r1",
-        "objectRef": target_ref,
-        "sourceAnchor": {"origin": "source-set", "start": 0, "end": len(report_rows), "selector": target_ref},
+        "objectRef": object_ref,
+        "sourceAnchor": {"origin": "source-set", "start": 0, "end": len(report_rows), "selector": object_ref},
         "sourceDigest": source_set_digest, "targetDigest": draft_digest,
         "detectedType": "SEMANTIC_EXACT" if approved else "SEMANTIC_COVERAGE_GAP",
         "proposedMapping": None, "lossFields": [] if approved else ["sourceEvidence"],
