@@ -469,7 +469,17 @@ def _atomic_json(path: Path, value: Any) -> None:
     try:
         os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(value, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            # admit 用 qualification._exact_ref 要求 compact canonical + 末尾换行；
+            # indent=2 的 receipt 会让 source-admitted bundle 在 integration 被拒。
+            handle.write(
+                json.dumps(
+                    value,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+            )
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
