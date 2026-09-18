@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -824,24 +825,34 @@ def run_readiness(
             fingerprint=current,
             push_updates=push_updates,
         ) as (execution_root, execution_env, _source_entries):
-            for index, check in enumerate(canonical["checks"]):
+            def _execute(index_and_check: tuple[int, dict[str, Any]]) -> tuple[int, dict[str, Any]]:
+                index, check = index_and_check
                 remaining = (
                     None
                     if wall_clock_deadline is None
                     else wall_clock_deadline - time.monotonic()
                 )
                 if remaining is not None and remaining <= 0:
-                    break
-                result = _run_check(
+                    return index, {
+                        "id": check["id"],
+                        "status": "FAIL",
+                        "exit_code": 124,
+                        "elapsed_ms": 0,
+                        "timed_out": True,
+                        "outcome": "timeout",
+                    }
+                return index, _run_check(
                     check,
                     root / "process/runs" / run_id / f"{index:03d}-{check['id'].replace(':', '-')}.log",
                     repo_root=execution_root,
                     execution_env=execution_env,
                     timeout_seconds=remaining,
                 )
-                results.append(result)
-                if result["status"] != "PASS":
-                    break
+
+            workers = min(8, max(1, len(canonical["checks"])))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                completed = list(pool.map(_execute, enumerate(canonical["checks"])))
+            results = [item for _, item in sorted(completed)]
         end = capture_fingerprint(
             canonical,
             repo_root=repo_root,

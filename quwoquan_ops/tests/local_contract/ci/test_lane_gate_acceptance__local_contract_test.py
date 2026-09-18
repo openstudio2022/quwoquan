@@ -42,6 +42,27 @@ def test_push_includes_all_hosted_governance_and_four_exact_ops_shards():
                    for check in checks.values())
 
 
+def test_push_source_admitted_drops_app_service_runtime_suites() -> None:
+    plan = planner.build_impact_plan(
+        [
+            "quwoquan_app/lib/runtime/value.dart",
+            "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache/close_cache.go",
+        ],
+        level="scope",
+    )
+    assert any(check["id"] == "focused:dart" for check in plan["checks"])
+    assert any(check["id"].startswith("focused:go:") for check in plan["checks"])
+    assert any(check["id"].startswith("scope_build:") for check in plan["checks"])
+    pushed = planner.bind_source_health_plan(plan, mode="push", base=BASE, head=HEAD)
+    assert not any(
+        check["id"] == "focused:dart"
+        or check["id"].startswith("focused:go:")
+        or check["id"].startswith("scope_build:")
+        for check in pushed["checks"]
+    )
+    assert any(check["id"].startswith("lane_gate:ops-local-contract:") for check in pushed["checks"])
+
+
 def test_old_fast_receipt_check_identity_cannot_equal_push_lane_gate():
     plan = _plan()
     staged = planner.bind_source_health_plan(plan, mode="staged", base=BASE, head=HEAD)
@@ -89,13 +110,13 @@ def test_existing_runner_executes_required_once_then_reuses_exact_cache(tmp_path
     monkeypatch.setattr(core, "_run_check", execute)
     plan = core.plan_readiness(paths=["source.txt"], level="fast", mode="push", repo_root=repo, push_updates=updates, state_root=state)
     receipt = core.run_readiness(plan, repo_root=repo, push_updates=updates, state_root=state)
-    assert calls == [check["id"] for check in plan["checks"]]
+    assert sorted(calls) == sorted(check["id"] for check in plan["checks"])
     assert len(calls) == len(set(calls))
     assert receipt["status"] == ("FAIL" if failure else "PASS")
     if not failure:
         second = core.run_readiness(plan, repo_root=repo, push_updates=updates, state_root=state)
         assert second["cache_hit"] is True
-        assert calls == [check["id"] for check in plan["checks"]]
+        assert sorted(calls) == sorted(check["id"] for check in plan["checks"])
     legacy = {**plan, "checks": [check for check in plan["checks"] if not check["id"].startswith("lane_gate:")]}
     with pytest.raises(core.LocalReadinessError, match="canonical planner"):
         core.run_readiness(legacy, repo_root=repo, push_updates=updates, state_root=state)

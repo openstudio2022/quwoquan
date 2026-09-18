@@ -454,6 +454,15 @@ def _bind_lane_gate(plan: dict[str, Any], *, base: str, head: str) -> dict[str, 
                for path in check["command"][4:]}
     checks = []
     for check in plan["checks"]:
+        # source-admitted push 只左移 Lane Gate：静态治理、ImpactPlan 边界、
+        # Code Health 与 ops 合同。App/Service 全量测试与 iOS/APK 编译留给
+        # live Alpha / release，不挡 origin/dev1.0 写入。
+        if (
+            check["id"] == "focused:dart"
+            or check["id"].startswith("focused:go:")
+            or check["id"].startswith("scope_build:")
+        ):
+            continue
         if tuple(check["command"]) in commands or check["id"] == "static:branch_policy":
             continue
         if check["id"] == "focused:python":
