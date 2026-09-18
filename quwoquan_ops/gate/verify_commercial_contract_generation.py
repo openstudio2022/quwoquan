@@ -17,6 +17,7 @@ GO_DESCRIPTORS = (
     ROOT
     / "quwoquan_service/generated/operationsecurity/descriptors.g.go"
 )
+GO_DESCRIPTOR_DIR = GO_DESCRIPTORS.parent
 DART_CLIENT = (
     ROOT
     / "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/"
@@ -95,6 +96,20 @@ def _has_typed_upgrade_descriptor(
     ) is not None
 
 
+def _go_descriptor_sources() -> list[Path]:
+    """官方生成物已把 CanonicalOperationID 拆到 chunk 文件；入口文件只保留 SHA 与分发。"""
+
+    chunks = sorted(GO_DESCRIPTOR_DIR.glob("descriptors.chunk*.g.go"))
+    return [GO_DESCRIPTORS, *chunks]
+
+
+def _go_descriptor_operation_ids(sources: list[Path] | None = None) -> set[str]:
+    ids: set[str] = set()
+    for path in sources or _go_descriptor_sources():
+        ids.update(re.findall(r'CanonicalOperationID:\s+"([^"]+)"', path.read_text(encoding="utf-8")))
+    return ids
+
+
 def _generated_request_encoder_name(method_name: str) -> str:
     if not method_name:
         return ""
@@ -137,9 +152,7 @@ def main() -> int:
     go_source = GO_DESCRIPTORS.read_text(encoding="utf-8")
     if f'const ContractGraphSHA256 = "{graph_sha}"' not in go_source:
         failures.append("Go security descriptor Graph hash is stale")
-    go_ids = set(
-        re.findall(r'CanonicalOperationID:\s+"([^"]+)"', go_source)
-    )
+    go_ids = _go_descriptor_operation_ids()
     if go_ids != graph_ids:
         failures.append(
             "Go descriptor operation set differs from ContractGraph: "

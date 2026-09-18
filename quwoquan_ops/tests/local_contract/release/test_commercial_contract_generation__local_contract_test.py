@@ -178,6 +178,25 @@ Future<void> realtimeConnectionWebSocketUpgrade(
             )
         )
 
+    def test_go_descriptor_ids_include_chunk_files(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as raw:
+            directory = Path(raw)
+            (directory / "descriptors.g.go").write_text(
+                'const ContractGraphSHA256 = "abc"\n', encoding="utf-8"
+            )
+            (directory / "descriptors.chunk000.g.go").write_text(
+                'CanonicalOperationID: "content.post.GetFeed",\n', encoding="utf-8"
+            )
+            ids = MODULE._go_descriptor_operation_ids(
+                [
+                    directory / "descriptors.g.go",
+                    directory / "descriptors.chunk000.g.go",
+                ]
+            )
+        self.assertEqual(ids, {"content.post.GetFeed"})
+
 
 if __name__ == "__main__":
     unittest.main()
