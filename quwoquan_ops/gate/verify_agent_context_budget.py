@@ -713,6 +713,23 @@ def _load_registry() -> tuple[dict[str, Any] | None, list[str]]:
     return registry, []
 
 
+def _checklist_location_issues(label: str, checklist: object) -> list[str]:
+    """派发 checklist 只能取 roles/ 下的分级判定文件。
+
+    `references/guides/**` 是按需正文，不进 Reviewer 派发上下文；一旦被当作
+    checklist 引用，正文字节就会计入单 Reviewer 预算，且分级标签门禁（只扫
+    `roles/*/checklists/*/*.md`）对它不生效，等于绕过判据绑定。
+    """
+
+    value = str(checklist or "")
+    if not value or value.startswith("roles/"):
+        return []
+    return [
+        f"registry.yaml: {label} checklist 必须位于 roles/，"
+        f"不得指向按需正文或其他载体: {value}"
+    ]
+
+
 def check_checklists_and_registry() -> list[str]:
     registry, issues = _load_registry()
     if registry is None:
@@ -811,6 +828,7 @@ def check_checklists_and_registry() -> list[str]:
                 issues.append(f"registry.yaml: profiles.{profile} 引用未知 workflow {workflow}")
             if not (ROOT / ".agents/skills/review/references" / str(checklist)).is_file():
                 issues.append(f"registry.yaml: profiles.{profile} checklist 不存在: {checklist}")
+            issues.extend(_checklist_location_issues(f"profiles.{profile}", checklist))
 
     workflows = registry.get("workflows") or {}
     if not isinstance(workflows, dict):
@@ -861,6 +879,10 @@ def check_checklists_and_registry() -> list[str]:
             issues.append(f"registry.yaml: primary 角色 {role} 缺 ROLE.md")
         if checklist and not (ROOT / ".agents/skills/review/references" / checklist).is_file():
             issues.append(f"registry.yaml: workflows.{workflow} primary checklist 不存在: {checklist}")
+        if checklist:
+            issues.extend(
+                _checklist_location_issues(f"workflows.{workflow} primary", checklist)
+            )
 
     # 检查全部 checklist，但不再要求磁盘文件反向注册成 inventory。
     for path in sorted(roles_root.glob("*/checklists/*/*.md")):

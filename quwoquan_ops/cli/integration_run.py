@@ -234,6 +234,79 @@ def _stackctl(*args: str, env: Mapping[str, str] | None = None, log_dir: Path) -
 
 # DEC-041：release 不携带类别；acceptance 只消费显式 immutable 身份。
 HANDOFF_REF_RE = re.compile(r"^data/releases/[^/]+/producer_release_handoff\.json=sha256:[0-9a-f]{64}$")
+UNCHANGED_DATA_CHANGE = "unchanged/no_data_change"
+_DATA_ENGINEERING_OUTPUT = ROOT.parent / "data-engineering" / ".qwq_output"
+
+
+def _canonical_release_attestation(root: Path, release_id: str) -> Path:
+    return Path(root) / "data/releases" / release_id / "attestations/release.json"
+
+
+def _root_owns_attestation(root: Path, release_id: str, attestation: Path) -> bool:
+    """producer 树持有与 handed attestation 逐字节相同的 canonical 文件。"""
+    local = _canonical_release_attestation(root, release_id)
+    try:
+        return local.is_file() and local.read_bytes() == attestation.read_bytes()
+    except OSError:
+        return False
+
+
+def _producer_data_output_candidates(release_id: str, attestation: Path) -> list[Path]:
+    """只枚举只读候选根；不扫描 latest，不把他树字节拷进本树。"""
+    attestation = Path(attestation).expanduser().resolve()
+    candidates: list[Path] = []
+    suffix = ("data", "releases", release_id, "attestations", "release.json")
+    parts = attestation.parts
+    if len(parts) >= 5 and parts[-5:] == suffix:
+        candidates.append(Path(*parts[:-5]))
+    neighbor = attestation.parent / "data/releases" / release_id / "attestations/release.json"
+    if neighbor.is_file():
+        candidates.append(attestation.parent)
+    candidates.append(OUTPUT_ROOT)
+    if _DATA_ENGINEERING_OUTPUT.is_dir():
+        candidates.append(_DATA_ENGINEERING_OUTPUT)
+    return candidates
+
+
+def _producer_data_output_root(release_id: str, attestation: Path, *, handoff_ref: str = "") -> Path:
+    """定位 producer-owned Data output root；本树 `.qwq_output/data/releases` 不是准入条件。"""
+    attestation = Path(attestation).expanduser().resolve()
+    seen: set[Path] = set()
+    for root in _producer_data_output_candidates(release_id, attestation):
+        try:
+            resolved = root.expanduser().resolve()
+        except OSError:
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if not _root_owns_attestation(resolved, release_id, attestation):
+            continue
+        if handoff_ref:
+            _assert_producer_handoff(resolved, handoff_ref)
+        return resolved
+    raise IntegrationRunError(
+        "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE",
+        f"immutable release {release_id} is absent from producer-owned Data roots or its attestation differs; "
+        "this worktree Data root is not required and trees must not be copied to impersonate identity",
+    )
+
+
+def _assert_producer_handoff(output_root: Path, handoff_ref: str) -> None:
+    relative, digest = handoff_ref.rsplit("=", 1)
+    path = Path(output_root) / relative
+    try:
+        actual = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE",
+            f"producer handoff {relative} is unreadable under {output_root}: {exc}",
+        ) from exc
+    if actual != digest:
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE",
+            f"producer handoff digest differs from {handoff_ref}",
+        )
 
 
 def _release_id(attestation: Path) -> str:
@@ -244,14 +317,46 @@ def _release_id(attestation: Path) -> str:
     except (OSError, TypeError, ValueError) as exc:
         raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", str(exc)) from exc
     release_id = binding["releaseId"]
-    local = OUTPUT_ROOT / "data/releases" / release_id / "attestations/release.json"
-    if not local.is_file() or local.read_bytes() != attestation.read_bytes():
-        raise IntegrationRunError(
-            "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE",
-            f"immutable release {release_id} is absent from {OUTPUT_ROOT / 'data/releases'} or its attestation differs; "
-            "ship apply only executes releases present in this worktree's Data root",
-        )
+    _producer_data_output_root(release_id, attestation)
     return release_id
+
+
+def _data_release_output_ref(path: Path) -> str:
+    """readiness 可落在 producer output root；不得因此复制 Data 树。"""
+    try:
+        return _output_ref(path)
+    except ValueError:
+        return str(path.resolve())
+
+
+def _activated_data_release_readiness(
+    *, environment: str, release_id: str, handoff_ref: str, roots: Sequence[Path],
+) -> Path | None:
+    """已激活且 handoff 吻合时复用既有 readiness，避免重复 apply。"""
+    seen: set[Path] = set()
+    for root in roots:
+        try:
+            resolved = Path(root).expanduser().resolve()
+        except OSError:
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        base = resolved / "env" / environment / "runs/data-release" / release_id
+        if not base.is_dir():
+            continue
+        for path in sorted(base.glob("*/release-readiness.json"), reverse=True):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(payload, dict) or str(payload.get("releaseId") or "") != release_id:
+                continue
+            recorded = str(payload.get("handoffRef") or payload.get("dataReleaseHandoffRef") or "")
+            if recorded and recorded != handoff_ref:
+                continue
+            return path
+    return None
 
 
 def _app_acceptance_plan(app_platform: str = "all") -> dict[str, Any]:
@@ -304,10 +409,11 @@ def _handoff_ref(value: str, *, label: str) -> str:
     return ref
 
 
-def _content_release(*args: str, log_dir: Path, label: str) -> None:
-    """环境发布仅经 Ops-owned stackctl content-release。"""
+def _content_release(*args: str, log_dir: Path, label: str, output_root: Path | None = None) -> None:
+    """环境发布仅经 Ops-owned stackctl content-release。跨树时 QWQ_OUTPUT_ROOT 指向 producer root。"""
 
-    result = _stackctl("content-release", *args, log_dir=log_dir)
+    env = {"QWQ_OUTPUT_ROOT": str(output_root)} if output_root is not None else None
+    result = _stackctl("content-release", *args, env=env, log_dir=log_dir)
     if result.exit_code != 0:
         detail = " ".join(str(item) for item in result.payload.get("details", []))[-400:]
         raise IntegrationRunError(
@@ -316,9 +422,13 @@ def _content_release(*args: str, log_dir: Path, label: str) -> None:
         )
 
 
+def _release_readiness_path(output_root: Path, environment: str, release_id: str, verify_run: str) -> Path:
+    return Path(output_root) / "env" / environment / "runs/data-release" / release_id / verify_run / "release-readiness.json"
+
+
 def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespace, log_dir: Path,
                         previous_readiness: Path | None, candidate_root: Path | None = None) -> Path:
-    """candidate release 进入环境：`ship apply --handoff-ref … --import --full-sync` → `ship activate` → `ship verify`。
+    """candidate release 进入环境：producer root 只读 admit；已激活且 handoff 吻合则跳过重复 apply。
 
     handoff-ref 是现役 Data CLI 唯一的 release 准入身份；attestation 只用于 stackctl package 的候选绑定，
     两者必须指向同一 releaseId（由 ship 侧对 handoff 做 exact 校验）。返回 release-readiness 回执路径。
@@ -326,12 +436,24 @@ def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespa
 
     release_id = _release_id(args.release_attestation)
     handoff_ref = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
+    producer_root = _producer_data_output_root(release_id, args.release_attestation)
+    handoff_path = producer_root / handoff_ref.rsplit("=", 1)[0]
+    if handoff_path.is_file():
+        _assert_producer_handoff(producer_root, handoff_ref)
     import_run, activate_run, verify_run = f"{run_id}-import", f"{run_id}-activate", f"{run_id}-verify"
+    existing = _activated_data_release_readiness(
+        environment=environment, release_id=release_id, handoff_ref=handoff_ref,
+        roots=(OUTPUT_ROOT, producer_root),
+    )
+    if existing is not None:
+        return existing
     candidate_args = ("--runtime-candidate-root", str(candidate_root)) if candidate_root is not None else ()
     _content_release("apply", "--handoff-ref", handoff_ref, "--env", environment, "--run-id", import_run,
-               *candidate_args, "--import", "--full-sync", log_dir=log_dir, label=f"{environment}-apply")
+               *candidate_args, "--import", "--full-sync", log_dir=log_dir, label=f"{environment}-apply",
+               output_root=producer_root)
     _content_release("activate", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
-               "--run-id", activate_run, *candidate_args, log_dir=log_dir, label=f"{environment}-activate")
+               "--run-id", activate_run, *candidate_args, log_dir=log_dir, label=f"{environment}-activate",
+               output_root=producer_root)
     _bootstrap_premium_pool(environment=environment, release_id=release_id, import_run=import_run,
                             attestation=args.release_attestation, log_dir=log_dir)
     # ship verify 的 --import-run-id 指向 completed 的 activate run（其 result.importRunId 再指回 apply run）；
@@ -339,9 +461,17 @@ def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespa
     verify_args = ["verify", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", activate_run,
                    "--run-id", verify_run, *candidate_args]
     if previous_readiness is not None:
-        verify_args.extend(["--previous-environment-readiness", _output_ref(previous_readiness)])
-    _content_release(*verify_args, log_dir=log_dir, label=f"{environment}-verify")
-    readiness = OUTPUT_ROOT / "env" / environment / "runs/data-release" / release_id / verify_run / "release-readiness.json"
+        try:
+            previous_ref = _output_ref(previous_readiness)
+        except ValueError:
+            previous_ref = str(previous_readiness)
+        verify_args.extend(["--previous-environment-readiness", previous_ref])
+    _content_release(*verify_args, log_dir=log_dir, label=f"{environment}-verify", output_root=producer_root)
+    readiness = _release_readiness_path(producer_root, environment, release_id, verify_run)
+    if not readiness.is_file():
+        fallback = _release_readiness_path(OUTPUT_ROOT, environment, release_id, verify_run)
+        if fallback.is_file():
+            readiness = fallback
     if not readiness.is_file():
         raise IntegrationRunError("INTEGRATION_RUN.DATA_RELEASE_FAILED", f"release readiness receipt missing: {readiness}")
     return readiness
@@ -791,7 +921,7 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
             environment=environment, run_id=summary["runId"], args=args, log_dir=log_dir, previous_readiness=previous_readiness,
             candidate_root=Path(str(active["candidateDir"])),
         ))
-        env_summary["dataRelease"] = {"readiness": _output_ref(readiness), "digest": exact_file_digest(readiness)}
+        env_summary["dataRelease"] = {"readiness": _data_release_output_ref(readiness), "digest": exact_file_digest(readiness)}
         health = phases.run(f"{environment}.health", lambda: _require_ok(_stackctl("health", "--target", target, "--scope", "full", log_dir=log_dir), "INTEGRATION_RUN.HEALTH_FAILED"))
         env_summary["reports"]["health"] = _report_source(health)
         runtime = _health_runtime(health=health, environment=environment, candidate=candidate, expected_baseline=baseline)
@@ -837,7 +967,7 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
     acceptance_binding = {
         "inputs": release_inputs,
         "packageManifest": {"ref": package_snapshot.relative_to(OUTPUT_ROOT).as_posix(), "digest": exact_file_digest(package_snapshot)},
-        "releaseReadiness": {"ref": readiness.relative_to(OUTPUT_ROOT).as_posix(), "digest": exact_file_digest(readiness)},
+        "releaseReadiness": {"ref": _data_release_output_ref(readiness), "digest": exact_file_digest(readiness)},
     }
 
     def evidence(role: str, status: str, source: StackctlResult) -> dict[str, str]:
@@ -1193,7 +1323,7 @@ def _write_acceptance_bundle(*, run_dir: Path, candidate_ref: Mapping[str, str],
     store = _store()
     if getattr(args, "release_attestation", None) is not None or (summary.get("reused") or {}).get("alpha"):
         inputs = _acceptance_release_inputs(args)
-        if (summary.get("dataReleases") != sorted(binding["releaseId"] for binding in inputs["release"].values())
+        if (summary.get("dataReleases") != sorted({binding["releaseId"] for binding in inputs["release"].values()})
                 or summary.get("dataReleaseHandoffRef") != inputs["handoffRef"]):
             raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "reused release labels differ from exact inputs")
         for fact_ref in (alpha_ref, beta_ref):
@@ -1379,9 +1509,11 @@ def _prepare_signing(args: argparse.Namespace, summary: dict[str, Any]) -> tuple
     for label, path in (("release", args.release_attestation), ("rollback", args.rollback_release_attestation)):
         if path is None or not path.is_file():
             raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{label} attestation is required in acceptance mode and must be a file: {path}")
-    release_ids = {_release_id(args.release_attestation), _release_id(args.rollback_release_attestation)}
-    if len(release_ids) != 2:
-        raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "release and rollback attestations must name two different releases")
+    candidate_id = _release_id(args.release_attestation)
+    rollback_id = _release_id(args.rollback_release_attestation)
+    release_ids = {candidate_id, rollback_id}
+    if candidate_id == rollback_id:
+        summary["dataChange"] = UNCHANGED_DATA_CHANGE
     summary["dataReleases"] = sorted(release_ids)
     summary["dataReleaseHandoffRef"] = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
     return keyring, signer

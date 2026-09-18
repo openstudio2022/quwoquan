@@ -140,7 +140,7 @@ run_static_check() {
   local check="$1"
   case "$check" in
     branch_policy) return 0 ;;
-    feature_tree) make verify-feature-tree ;;
+    feature_tree) make verify-feature-tree CONTENT_REVIEW_ARGS=--changes ;;
     python_script_governance_app|python_script_governance_service|python_script_governance_ops|python_script_governance_data)
       local governance_scope="${check#python_script_governance_}"
       python3 -B quwoquan_ops/gate/verify_python_script_governance.py \

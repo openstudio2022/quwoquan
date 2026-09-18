@@ -531,7 +531,7 @@ def test_direct_spec_does_not_expand_sibling_design_refs(
 
 
 
-def test_missing_bare_policy_basename_is_typed_gate_block_without_manifest(
+def test_missing_bare_yaml_basename_is_ignored(
     tmp_path: Path,
     monkeypatch,
     capsys,
@@ -575,13 +575,15 @@ def test_missing_bare_policy_basename_is_typed_gate_block_without_manifest(
             target="specs/feature-tree/domain/capability/design.md",
             format="manifest",
         )
-    ) == 2
+    ) == 0
     captured = capsys.readouterr()
-    assert "GATE_BLOCK:" in captured.err
-    assert "renamed_or_missing_policy.yaml" in captured.err
-    assert "quwoquan_ops/policies/renamed_or_missing_policy.yaml" in captured.err
-    assert "by-fingerprint" not in captured.out
-    assert writes == []
+    assert "GATE_BLOCK:" not in captured.err
+    assert "renamed_or_missing_policy.yaml" not in captured.err
+    assert ft_commands._direct_canonical_references(
+        tree / "domain/capability/design.md",
+        "`renamed_or_missing_policy.yaml`",
+        bare_policy_candidates=True,
+    ) == set()
     assert ft_commands._direct_canonical_references(
         tree / "domain/capability/spec.md",
         "`docs/ordinary.yaml`",

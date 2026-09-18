@@ -205,10 +205,23 @@ def _compose_build_environment() -> dict[str, str]:
             )
         return value.strip()
 
+    from quwoquan_ops.cli.lib.docker_dependencies import (
+        DockerDependencyError,
+        locked_python_base_image,
+    )
+
+    try:
+        python_base_image = locked_python_base_image()
+    except DockerDependencyError as exc:
+        raise RuntimeError(
+            f"GATE_BLOCK: locked python base image is unavailable: {exc}"
+        ) from exc
+
     media_delivery = urlsplit(str(public_bases["mediaImage"]))
     return {
         "QWQ_COMPOSE_GO_BASE_IMAGE": required_image("goBaseImage"),
         "QWQ_COMPOSE_ALPINE_BASE_IMAGE": required_image("alpineBaseImage"),
+        "QWQ_COMPOSE_PYTHON_BASE_IMAGE": python_base_image,
         "QWQ_COMPOSE_PUBLIC_WEB_BASE_URL": str(public_bases["publicWeb"]),
         "QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL": str(public_bases["mediaAvatar"]),
         "QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL": urlunsplit(

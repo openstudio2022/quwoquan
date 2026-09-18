@@ -4,12 +4,15 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_caption_widgets.dart';
 
 Widget _host(Widget child, {double width = 320}) => CupertinoApp(
   home: CupertinoPageScaffold(
-    child: Center(child: SizedBox(width: width, child: child)),
+    child: Center(
+      child: SizedBox(width: width, child: child),
+    ),
   ),
 );
 
@@ -51,20 +54,25 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('收起态「全文」入口为沉浸次级白而非品牌色', (tester) async {
+  testWidgets('收起态「全文」入口为 worksAccent 且与配文同字重', (tester) async {
     await pumpCollapsed(tester, '这是一段足够长的说明文字。' * 20);
 
     final richText = tester.widget<RichText>(_captionRichText());
     final entrySpan = _findSpanWithText(richText.text, CommunityText.fullText);
     expect(entrySpan, isNotNull);
-    expect(entrySpan!.style!.color, isNot(AppColors.primaryColor));
-    expect(
-      entrySpan.style!.color,
-      AppColors.immersiveForeground.withValues(alpha: 0.7),
+    expect(entrySpan!.style!.color, AppColors.worksAccent);
+    expect(entrySpan.style!.color, isNot(AppColors.primaryColor));
+    expect(entrySpan.style!.fontWeight, AppTypography.regular);
+    final ellipsisSpan = _findSpanWithText(
+      richText.text,
+      CommunityText.ellipsis,
     );
+    expect(ellipsisSpan, isNotNull);
+    expect(ellipsisSpan!.style!.fontWeight, FontWeight.normal);
+    expect(ellipsisSpan.style!.color, AppColors.white);
   });
 
-  testWidgets('展开态「收起」入口为沉浸次级白而非品牌色', (tester) async {
+  testWidgets('展开态「收起」入口为 worksAccent 且与配文同字重', (tester) async {
     await tester.pumpWidget(
       _host(
         MediaCaptionBlock(
@@ -86,11 +94,9 @@ void main() {
     );
     final entrySpan = _findSpanWithText(richText.text, CommunityText.collapse);
     expect(entrySpan, isNotNull);
-    expect(entrySpan!.style!.color, isNot(AppColors.primaryColor));
-    expect(
-      entrySpan.style!.color,
-      AppColors.immersiveForeground.withValues(alpha: 0.7),
-    );
+    expect(entrySpan!.style!.color, AppColors.worksAccent);
+    expect(entrySpan.style!.color, isNot(AppColors.primaryColor));
+    expect(entrySpan.style!.fontWeight, AppTypography.regular);
   });
 
   testWidgets('收起态「全文」恒在末行行尾单行呈现，不断字不换行', (tester) async {

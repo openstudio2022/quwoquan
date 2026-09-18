@@ -1,4 +1,4 @@
-"""四环境共享的 Docker 基础镜像锁与预热。
+"""各 runtime target 共享的 Docker 基础镜像锁与预热。
 
 类似 Flutter `pub cache`：package 只消费本机已缓存镜像；缺失时先预热再继续。
 升级检查是独立动作，不在 package 路径强制更新。
@@ -30,6 +30,7 @@ _DEFAULT_MIRRORS = (
 _REQUIRED_LOCAL_KEYS = (
     "golang:1.24-bookworm",
     "alpine:3.21",
+    "python:3.11-slim-bookworm",
     "postgres:16-alpine",
     "mongo:7-jammy",
     "redis:7.2-alpine",
@@ -71,6 +72,7 @@ def load_registry_env(path: Path | None = None) -> dict[str, str]:
         "QWQ_REGISTRY_MIRROR_HOSTS",
         "QWQ_GO_BASE_IMAGE",
         "QWQ_ALPINE_BASE_IMAGE",
+        "QWQ_PYTHON_BASE_IMAGE",
         "QWQ_POSTGRES_IMAGE",
         "QWQ_MONGO_IMAGE",
         "QWQ_REDIS_IMAGE",
@@ -114,6 +116,18 @@ def load_lock_file(path: Path | None = None) -> dict[str, Any]:
             + ", ".join(missing_required)
         )
     return payload
+
+
+def locked_python_base_image(source_root: Path | None = None) -> str:
+    """package/compose 注入的 Python 基础镜像，只接受 registry 与 lock 的同一 pin。"""
+    registry = load_registry_env(registry_env_path(source_root))
+    pin = str(registry["QWQ_PYTHON_BASE_IMAGE"]).strip()
+    lock = load_lock_file(lock_file_path(source_root))
+    if pin not in lock["dependencies"]:
+        raise DockerDependencyError(
+            f"docker dependency lock missing required image: {pin}"
+        )
+    return pin
 
 
 def mirror_hosts(registry: Mapping[str, str] | None = None) -> tuple[str, ...]:
@@ -374,36 +388,34 @@ def check_outdated(
     }
 
 
-def four_env_build_images(source_root: Path | None = None) -> dict[str, dict[str, str]]:
-    """读取四环境 local/prod-hosted 的 buildImages，供统一性契约测试。"""
+def load_target_build_images(source_root: Path | None = None) -> dict[str, dict[str, str]]:
+    """读取各 runtime target 声明的 buildImages，供统一性契约测试。"""
+    # 环境闭集的唯一声明源是 environment_topology；延迟导入使 package 预热路径
+    # 不必为读几个 manifest 承担该模块 import 期的目录扫描与文件读取。
+    from quwoquan_ops.cli.lib.environment_topology import ENVIRONMENTS
+
     root = source_root or ROOT
-    environments = {
-        "alpha-local": root / "quwoquan_ops/environments/alpha/runtime.yaml",
-        "beta-local": root / "quwoquan_ops/environments/beta/runtime.yaml",
-        "gamma-local": root / "quwoquan_ops/environments/gamma/runtime.yaml",
-        "prod-sim": root / "quwoquan_ops/environments/prod/runtime.yaml",
-        "prod-hosted": root / "quwoquan_ops/environments/prod/runtime.yaml",
-    }
     images: dict[str, dict[str, str]] = {}
-    for target, path in environments.items():
+    for env_name in ENVIRONMENTS:
+        path = root / f"quwoquan_ops/environments/{env_name}/runtime.yaml"
         payload = json.loads(path.read_text(encoding="utf-8"))
         targets = payload.get("targets")
-        if not isinstance(targets, dict):
+        if not isinstance(targets, dict) or not targets:
             raise DockerDependencyError(f"{path} has no targets")
-        target_payload = targets.get(target)
-        if not isinstance(target_payload, dict):
-            raise DockerDependencyError(f"{path} missing target {target}")
-        build_images = target_payload.get("buildImages")
-        if not isinstance(build_images, dict):
-            raise DockerDependencyError(f"{target} buildImages policy must be an object")
-        go_image = str(build_images.get("goBaseImage") or "").strip()
-        alpine_image = str(build_images.get("alpineBaseImage") or "").strip()
-        if not go_image or not alpine_image:
-            raise DockerDependencyError(
-                f"{target}.buildImages.goBaseImage/alpineBaseImage must be non-empty"
-            )
-        images[target] = {
-            "goBaseImage": go_image,
-            "alpineBaseImage": alpine_image,
-        }
+        for target, target_payload in targets.items():
+            if not isinstance(target_payload, dict):
+                raise DockerDependencyError(f"{path} target {target} must be an object")
+            build_images = target_payload.get("buildImages")
+            if not isinstance(build_images, dict):
+                raise DockerDependencyError(f"{target} buildImages policy must be an object")
+            go_image = str(build_images.get("goBaseImage") or "").strip()
+            alpine_image = str(build_images.get("alpineBaseImage") or "").strip()
+            if not go_image or not alpine_image:
+                raise DockerDependencyError(
+                    f"{target}.buildImages.goBaseImage/alpineBaseImage must be non-empty"
+                )
+            images[str(target)] = {
+                "goBaseImage": go_image,
+                "alpineBaseImage": alpine_image,
+            }
     return images

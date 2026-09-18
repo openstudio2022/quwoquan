@@ -374,8 +374,10 @@ def test_home_video_and_tab_roundtrip_are_required_real_journeys() -> None:
     video = plans["homepage-video-playback"]
     snapshot = json.loads((ROOT / "quwoquan_app/assets/content/alpha/manifest.json").read_bytes())
     recommended = next(row["orderedPostIds"] for row in snapshot["channels"] if row["channelId"] == "recommend")
-    post = next(row["detail"] for row in snapshot["posts"]
-                if row["projection"]["postId"] in recommended and row["detail"]["contentType"] == "video")
+    posts = {row["projection"]["postId"]: row["detail"] for row in snapshot["posts"]}
+    article = next(posts[identity] for identity in recommended if posts[identity]["contentType"] == "article")
+    post = next(posts[identity] for identity in recommended[recommended.index(article["postId"]) + 1:]
+                if posts[identity]["contentType"] == "video")
     assert post["postId"] in video["route"]
     assert video["steps"][-3] == {"operation": "tap", "selector": post["title"]}
     assert [step["operation"] for step in video["steps"]][-3:] == ["tap", "visible", "playback"]
@@ -638,6 +640,34 @@ def test_reused_generation_one_article_detail_restores_hidden_video_book_chrome(
         {"operation": "visible", "selector": "qwq.surface.home"},
     ]
     pages.validate_page_plan(article)
+
+
+def test_article_detail_observes_work_browser_chrome_not_excluded_excerpt():
+    snapshot = json.loads((ROOT / "quwoquan_app/assets/content/alpha/manifest.json").read_bytes())
+    plans = pages.build_offline_page_plans(snapshot=snapshot, app_root=ROOT / "quwoquan_app",
+        launch=_launch_identity(), fresh_launch=False)
+    article = next(plan for plan in plans if plan["caseId"] == "article-detail")
+    assert article["steps"][-1] == {"operation": "visible", "selector": "works-top-back"}
+    assert not any(str(step.get("selector") or "").startswith("text-prefix:") for step in article["steps"])
+    pages.validate_page_plan(article)
+
+
+def test_feed_journeys_reveal_image_and_video_after_article():
+    snapshot = json.loads((ROOT / "quwoquan_app/assets/content/alpha/manifest.json").read_bytes())
+    recommended = next(row["orderedPostIds"] for row in snapshot["channels"] if row["channelId"] == "recommend")
+    posts = {row["projection"]["postId"]: row["detail"] for row in snapshot["posts"]}
+    article = next(posts[identity] for identity in recommended if posts[identity]["contentType"] == "article")
+    start = recommended.index(article["postId"]) + 1
+    image = next(posts[identity] for identity in recommended[start:] if posts[identity]["contentType"] == "image")
+    video = next(posts[identity] for identity in recommended[start:] if posts[identity]["contentType"] == "video")
+    assert recommended.index(image["postId"]) > recommended.index(article["postId"])
+    plans = {plan["caseId"]: plan for plan in pages.build_offline_page_plans(
+        snapshot=snapshot, app_root=ROOT / "quwoquan_app", launch=_launch_identity(), fresh_launch=False)}
+    assert {"operation": "tap", "selector": "关注"} not in plans["homepage-recommendation"]["steps"]
+    assert {"operation": "reveal", "selector": image["title"]} in plans["image-detail"]["steps"]
+    assert {"operation": "reveal", "selector": video["title"]} in plans["homepage-video-playback"]["steps"]
+    for case_id in ("homepage-recommendation", "image-detail", "homepage-video-playback", "creator-avatar"):
+        pages.validate_page_plan(plans[case_id])
 
 
 def test_native_restart_plan_preserves_successor_relay_identity():

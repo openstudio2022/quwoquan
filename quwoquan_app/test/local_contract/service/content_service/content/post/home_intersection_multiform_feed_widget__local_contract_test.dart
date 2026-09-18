@@ -193,6 +193,40 @@ TextSpan _spanByText(RichText richText, String text) {
 int _fontWeightValue(TextSpan span) =>
     span.style?.fontWeight?.value ?? FontWeight.normal.value;
 
+void _expectQuietInlineTextAction(
+  WidgetTester tester,
+  Finder action, {
+  required bool expanded,
+}) {
+  final labelRich = tester.widget<RichText>(
+    find.descendant(of: action, matching: find.byType(RichText)),
+  );
+  final context = tester.element(action);
+  final sloganAccent =
+      CupertinoTheme.of(context).brightness == Brightness.dark
+      ? AppColors.profileSloganAccentDark
+      : AppColors.profileSloganAccentLight;
+  if (expanded) {
+    final span = _spanByText(labelRich, CommunityText.collapse);
+    expect(_fontWeightValue(span), FontWeight.normal.value);
+    expect(span.style?.color, sloganAccent);
+    expect(span.style?.color, isNot(AppColors.primaryColor));
+    expect(span.style?.color, isNot(AppColors.iosAccent(context)));
+    return;
+  }
+  final ellipsis = _spanByText(labelRich, CommunityText.ellipsis);
+  final fullText = _spanByText(labelRich, CommunityText.fullText);
+  expect(_fontWeightValue(ellipsis), FontWeight.normal.value);
+  expect(_fontWeightValue(fullText), FontWeight.normal.value);
+  expect(ellipsis.style?.color, isNot(AppColors.primaryColor));
+  expect(ellipsis.style?.color, isNot(AppColors.iosAccent(context)));
+  expect(ellipsis.style?.color, isNot(sloganAccent));
+  expect(fullText.style?.color, sloganAccent);
+  expect(fullText.style?.color, isNot(AppColors.primaryColor));
+  expect(fullText.style?.color, isNot(AppColors.iosAccent(context)));
+  expect(fullText.style?.color, isNot(ellipsis.style?.color));
+}
+
 IntersectionReason _canonicalReason({
   required String dimension,
   required String intersectionId,
@@ -2195,6 +2229,43 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('首页全文与收起入口保持正文字重且非品牌强调', (tester) async {
+    // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-unified-feed/spec.md#gwt-003
+    await tester.binding.setSurfaceSize(const Size(320, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final body = List.filled(8, '你好👨‍👩‍👧‍👦👍🏽e\u0301 مرحبا ').join();
+    await tester.pumpWidget(
+      _buildFeed(
+        _microPost(id: 'inline-weight', bodyValue: body, imageUrls: const []),
+      ),
+    );
+    await tester.pump();
+
+    final collapsed = find.byKey(const ValueKey('home-post-full-text'));
+    expect(collapsed, findsOneWidget);
+    _expectQuietInlineTextAction(tester, collapsed, expanded: false);
+
+    await tester.tap(collapsed);
+    await tester.pump();
+    final expanded = find.byKey(const ValueKey('home-post-collapse'));
+    expect(expanded, findsOneWidget);
+    _expectQuietInlineTextAction(tester, expanded, expanded: true);
+
+    await tester.pumpWidget(
+      _buildFeed(
+        _articleLayoutPost(
+          id: 'article_weight',
+          bodyValue:
+              '这是一段用于样式测试的长文摘要，用来确保全文入口出现。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行。',
+        ),
+      ),
+    );
+    await tester.pump();
+    final articleAction = find.byKey(const ValueKey('home-article-full-text'));
+    expect(articleAction, findsOneWidget);
+    _expectQuietInlineTextAction(tester, articleAction, expanded: false);
+  });
 
   testWidgets('文章整卡与全文入口点击进入同一沉浸 pageflip 打开链路', (tester) async {
     // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-unified-feed/spec.md#gwt-003

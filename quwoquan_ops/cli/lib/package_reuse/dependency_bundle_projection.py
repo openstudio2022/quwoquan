@@ -27,10 +27,13 @@ from .ios_pod_projection import (
     materialize_ios_pod_projection,
     run_offline_cocoapods_install,
 )
-from .patrol_pub_cache import PATROL_HOST_RELATIVE
+from .android_gradle_capsule import ANDROID_GRADLE_PROJECTION_RELATIVE
+from .patrol_pub_cache import PATROL_HOST_RELATIVE, PATROL_PUB_PROJECTION_RELATIVE
 from .patrol_pub_projection import materialize_capsule_patrol_pub_cache
-from .pub_cache_capsule import _digest_bytes, seal_lock_hosted_url
+from .pub_cache_capsule import PUB_CACHE_PROJECTION_RELATIVE, _digest_bytes, seal_lock_hosted_url
 from .pub_cache_projection import materialize_capsule_pub_cache
+
+_PROJECTION_FAILED = "APP.DEPENDENCY.projection_failed"
 
 _PROXY_KEYS = frozenset(
     {
@@ -220,6 +223,54 @@ def _ios_projection(
     return projection, result, environment
 
 
+def _projection_destinations(
+    *,
+    projection_root: Path,
+    private_state_root: Path,
+    platform: str,
+    include_patrol: bool,
+) -> tuple[Path, ...]:
+    """本次首次投影会写入的私有目标；复用路径不得再进入本函数。"""
+
+    destinations = [
+        private_state_root,
+        projection_root / PUB_CACHE_PROJECTION_RELATIVE,
+        private_state_root / "flutter" / IOS_POD_PRODUCTION_HOST,
+    ]
+    if include_patrol:
+        destinations.append(projection_root / PATROL_PUB_PROJECTION_RELATIVE)
+        destinations.append(private_state_root / "flutter" / IOS_POD_PATROL_HOST)
+    if platform == "android":
+        destinations.append(projection_root / ANDROID_GRADLE_PROJECTION_RELATIVE)
+    if platform == "ios":
+        hosts = [IOS_POD_PRODUCTION_HOST]
+        if include_patrol:
+            hosts.append(IOS_POD_PATROL_HOST)
+        for host in hosts:
+            destinations.append(private_state_root / host)
+            destinations.append((projection_root / IOS_PODFILE_RELATIVES[host]).parent / "Pods")
+    return tuple(destinations)
+
+
+def _require_fresh_projection_destinations(
+    *,
+    projection_root: Path,
+    private_state_root: Path,
+    platform: str,
+    include_patrol: bool,
+) -> None:
+    """无 expected digest 的首次 materialize 必须在编译前 typed 阻断脏目标。"""
+
+    for destination in _projection_destinations(
+        projection_root=projection_root,
+        private_state_root=private_state_root,
+        platform=platform,
+        include_patrol=include_patrol,
+    ):
+        if destination.exists() or destination.is_symlink():
+            raise ValueError(f"{_PROJECTION_FAILED}: destination must be fresh")
+
+
 def materialize_dependency_bundle_projection(
     *,
     manifest_path: Path,
@@ -230,6 +281,7 @@ def materialize_dependency_bundle_projection(
     pod_executable: str | Path | None = None,
     include_patrol: bool = False,
     replay_ios: bool = True,
+    expected_digest: str | None = None,
 ) -> AppDependencyProjection:
     """Verify the complete package capsule, then project only private closures.
 
@@ -247,6 +299,15 @@ def materialize_dependency_bundle_projection(
     capsule_root = manifest_ref.parent
     projection = projection_root.expanduser().absolute()
     private = private_state_root.expanduser().absolute()
+    # 首次投影（expected digest 未设）在任何 capsule verify / 编译前阻断脏目标，
+    # 避免 pub get / pod install 之后才把 sibling attempt 打成 0/24。
+    if not expected_digest:
+        _require_fresh_projection_destinations(
+            projection_root=projection,
+            private_state_root=private,
+            platform=platform,
+            include_patrol=include_patrol,
+        )
     verified_capsule = verify_package_input_capsule_with_dependencies(capsule_root)
     entries = _manifest_entries(verified_capsule.manifest)
     snapshots = verified_capsule.dependency_snapshots

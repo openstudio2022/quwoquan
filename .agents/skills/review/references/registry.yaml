@@ -191,6 +191,17 @@ profiles:
         design: roles/ops/checklists/design/gate.md
         dev: roles/ops/checklists/dev/gate.md
 
+  product-ops:
+    paths:
+      - quwoquan_service/services/product-ops-service/**
+      - quwoquan_ops/portal/src/domains/product/**
+    specialist:
+      role: operations
+      priority: 85
+      required: false
+      checklists:
+        dev: roles/operations/checklists/dev/product-ops.md
+
   data-pipeline:
     paths:
       - quwoquan_data/**

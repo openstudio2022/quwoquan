@@ -79,10 +79,11 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         attestation = _attestation(self.root, "rel-production")
         calls: list[tuple[str, ...]] = []
 
-        def fake_ship(*args: str, log_dir: Path, label: str) -> None:
+        def fake_ship(*args: str, log_dir: Path, label: str, output_root: Path | None = None) -> None:
             calls.append(tuple(args))
+            target = output_root or self.root
             if args[0] == "verify":
-                readiness = self.root / "env/alpha/runs/data-release/rel-production/run-1-verify/release-readiness.json"
+                readiness = target / "env/alpha/runs/data-release/rel-production/run-1-verify/release-readiness.json"
                 readiness.parent.mkdir(parents=True, exist_ok=True)
                 readiness.write_text("{}", encoding="utf-8")
 
@@ -903,6 +904,76 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         with self.assertRaises(integration_run.IntegrationRunError) as blocked:
             integration_run._release_id(attestation)
         self.assertEqual(blocked.exception.code, "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE")
+
+    def test_release_id_reads_producer_root_without_copying_this_worktree(self) -> None:
+        producer = self.root / "producer-output"
+        attestation = _attestation(producer, "rel-candidate")
+        self.assertFalse((self.root / "data/releases").exists())
+        self.assertEqual(integration_run._release_id(attestation), "rel-candidate")
+        self.assertFalse((self.root / "data/releases").exists())
+        self.assertEqual(
+            integration_run._producer_data_output_root("rel-candidate", attestation),
+            producer.resolve(),
+        )
+
+    def test_unchanged_hotfix_allows_the_same_data_release_id(self) -> None:
+        attestation = _attestation(self.root, "rel-same")
+        args = integration_run._parser().parse_args([
+            "--mode", "acceptance", "--release-attestation", str(attestation),
+            "--rollback-release-attestation", str(attestation), "--release-handoff-ref", VALID_REF,
+        ])
+        summary: dict[str, object] = {}
+        with self._runtime_patches():
+            integration_run._prepare_signing(args, summary)
+        self.assertEqual(summary["dataReleases"], ["rel-same"])
+        self.assertEqual(summary["dataChange"], integration_run.UNCHANGED_DATA_CHANGE)
+        self.assertEqual(summary["dataReleaseHandoffRef"], VALID_REF)
+
+    def test_apply_is_skipped_when_already_activated_matches_handoff(self) -> None:
+        attestation = _attestation(self.root, "rel-production")
+        existing = self.root / "env/alpha/runs/data-release/rel-production/prior-verify/release-readiness.json"
+        existing.parent.mkdir(parents=True, exist_ok=True)
+        existing.write_text(json.dumps({"releaseId": "rel-production", "handoffRef": VALID_REF}), encoding="utf-8")
+        calls: list[tuple[str, ...]] = []
+
+        def fake_ship(*args: str, log_dir: Path, label: str, output_root: Path | None = None) -> None:
+            calls.append(tuple(args))
+
+        args = SimpleNamespace(release_attestation=attestation, release_handoff_ref=VALID_REF)
+        with mock.patch.object(integration_run, "_content_release", side_effect=fake_ship):
+            readiness = integration_run._apply_data_release(
+                environment="alpha", run_id="run-1", args=args, log_dir=self.root / "logs", previous_readiness=None,
+            )
+        self.assertEqual(readiness, existing)
+        self.assertEqual(calls, [])
+
+    def test_ship_output_root_points_at_producer_data_root(self) -> None:
+        producer = self.root / "producer-output"
+        attestation = _attestation(producer, "rel-production")
+        seen_roots: list[Path] = []
+        calls: list[tuple[str, ...]] = []
+
+        def fake_ship(*args: str, log_dir: Path, label: str, output_root: Path | None = None) -> None:
+            calls.append(tuple(args))
+            if output_root is not None:
+                seen_roots.append(Path(output_root))
+            if args[0] == "verify":
+                readiness = Path(output_root or self.root) / "env/alpha/runs/data-release/rel-production/run-1-verify/release-readiness.json"
+                readiness.parent.mkdir(parents=True, exist_ok=True)
+                readiness.write_text("{}", encoding="utf-8")
+
+        args = SimpleNamespace(release_attestation=attestation, release_handoff_ref=VALID_REF)
+        with (
+            mock.patch.object(integration_run, "_content_release", side_effect=fake_ship),
+            mock.patch.object(integration_run, "_bootstrap_premium_pool", return_value=None),
+        ):
+            readiness = integration_run._apply_data_release(
+                environment="alpha", run_id="run-1", args=args, log_dir=self.root / "logs", previous_readiness=None,
+            )
+        self.assertTrue(readiness.is_file())
+        self.assertTrue(all(root == producer.resolve() for root in seen_roots))
+        self.assertEqual([call[0] for call in calls], ["apply", "activate", "verify"])
+        self.assertFalse((self.root / "data/releases").exists())
 
 
 if __name__ == "__main__":

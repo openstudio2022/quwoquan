@@ -216,14 +216,6 @@ def _dart_text(app_root: Path, relative: str, symbol: str) -> str:
     return matches[0]
 
 
-def _snapshot_article_excerpt(article: Mapping[str, Any]) -> str:
-    body = str(article.get("articleMarkdown") or article.get("body") or "")
-    paragraphs = [line.strip() for line in body.splitlines() if len(line.strip()) > 25 and not line.startswith(("#", "---", "title:", "tagRefs:", "creatorProfileId:"))]
-    if not paragraphs:
-        raise ValueError("APP.UAT.page_plan_invalid: article has no readable body")
-    return paragraphs[0][:28]
-
-
 def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
                              launch: Mapping[str, Any], fresh_launch: bool = False) -> list[dict[str, Any]]:
     """用制品快照对象与已有页面文案/typed route 构造黑盒旅程，不创建用户。"""
@@ -258,8 +250,18 @@ def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
         if not selected:
             raise ValueError("APP.UAT.page_plan_invalid: snapshot lacks required " + channel + "/" + kind)
         return selected[0]
-    article, image, video = post("article"), post("image"), post("video", "premium")
-    home_video = post("video")
+    def post_after(kind: str, predecessor: Mapping[str, Any], channel: str = "recommend") -> Mapping[str, Any]:
+        order = channels[channel]
+        start = order.index(predecessor["postId"]) + 1
+        selected = [posts[identity] for identity in order[start:] if posts[identity]["contentType"] == kind]
+        if not selected:
+            raise ValueError("APP.UAT.page_plan_invalid: snapshot lacks " + channel + "/" + kind + " after predecessor")
+        return selected[0]
+    article = post("article")
+    # iOS reveal 只向下滑；generation-1 复用 AUT 时上一格停在文章卡。
+    # 图/首页视频取文章之后的对象，避免再切「关注」（关注面没有「推荐」）。
+    image, video = post_after("image", article), post("video", "premium")
+    home_video = post_after("video", article)
     following = text("ui_text_constants_discovery", "homeTabFollowing")
     if channels.get("campus"):
         raise ValueError("APP.UAT.page_plan_invalid: canonical empty channel is no longer empty")
@@ -279,15 +281,16 @@ def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
     open_video = [tap(premium), visible(video["title"])]
     # 视频书主动隐藏底栏；只点击 canonical 顶栏返回，再观察首页已恢复。
     exit_video = [tap("works-top-back"), visible(home)]
-    article_excerpt = _snapshot_article_excerpt(article)
     # 每例停留在观察终态供截图；下一例才恢复同一进程的导航状态。
+    # 文章详情走 Work Browser 沉浸顶栏；正文在 pageflip 纹理上 ExcludeSemantics，
+    # 不能再用 markdown excerpt 的 text-prefix 断言。
     cases = [
         ("default-entry", "homepage", route("home"), [visible(home)], []),
         ("homepage-recommendation", "homepage", route("home"),
          [*base, reveal(article["title"]), visible(article["title"])], []),
         ("premium-video-book", "video", route("videoBook"), open_video, exit_video),
         ("article-detail", "article", route("workBrowserPathTemplate", workId=article["postId"]),
-         [*base, reveal(article["title"]), tap(article["title"]), visible("text-prefix:" + article_excerpt)], [step("back", home)]),
+         [*base, reveal(article["title"]), tap(article["title"]), visible("works-top-back")], [step("back", home)]),
         ("image-detail", "image", route("workBrowserPathTemplate", workId=image["postId"]),
          [*open_image, visible(success[1])], [step("back", home)]),
         ("homepage-video-playback", "video", route("workBrowserPathTemplate", workId=home_video["postId"]),

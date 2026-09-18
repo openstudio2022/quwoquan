@@ -1217,6 +1217,66 @@ class CanonicalLaunchControlContractTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not a worktree"):
                 lease.verified_lock_identity(handoff={}, device="device", device_kind="ios-simulator")
 
+    def test_source_isolation_lock_identity_without_git(self) -> None:
+        from app_source_isolation import SourceIsolationError
+        from canonical_app_instance import runtime_lease as lease
+        from canonical_app_instance.arguments import CanonicalExecutorError
+        revision = "b" * 40
+        (self.root / "source-isolation.json").write_text("{}", encoding="utf-8")
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(lease, "ROOT", self.root), \
+                mock.patch("app_source_isolation.verify_projection_identity", return_value=(revision, "sha1:" + "c" * 40)) as verify, \
+                mock.patch("quwoquan_ops.cli.lib.worktree_identity.resolve_worktree_identity") as resolve:
+            identity = lease.verified_lock_identity(handoff={}, device="device", device_kind="ios-simulator")
+            self.assertEqual(identity.head_sha, revision)
+            self.assertEqual(identity.lane, "immutable-source-projection")
+            self.assertEqual(identity.worktree, str(self.root))
+            verify.assert_called_once_with(self.root)
+            resolve.assert_not_called()
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(lease, "ROOT", self.root), \
+                mock.patch("app_source_isolation.verify_projection_identity", side_effect=SourceIsolationError("drifted")) as verify, \
+                mock.patch("quwoquan_ops.cli.lib.worktree_identity.resolve_worktree_identity") as resolve:
+            with self.assertRaisesRegex(CanonicalExecutorError, "APP.LAUNCH.identity_invalid"):
+                lease.verified_lock_identity(handoff={}, device="device", device_kind="ios-simulator")
+            verify.assert_called_once()
+            resolve.assert_not_called()
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(lease, "ROOT", self.root), \
+                mock.patch("app_source_isolation.verify_projection_identity", return_value=("not-a-sha", "sha1:x")) as verify, \
+                mock.patch("quwoquan_ops.cli.lib.worktree_identity.resolve_worktree_identity") as resolve:
+            with self.assertRaisesRegex(CanonicalExecutorError, "source revision is not exact"):
+                lease.verified_lock_identity(handoff={}, device="device", device_kind="ios-simulator")
+            verify.assert_called_once()
+            resolve.assert_not_called()
+
+    def test_source_isolation_lock_identity_without_git(self) -> None:
+        from app_source_isolation import SourceIsolationError
+        from canonical_app_instance import runtime_lease as lease
+        from canonical_app_instance.arguments import CanonicalExecutorError
+        revision = "b" * 40
+        (self.root / "source-isolation.json").write_text("{}", encoding="utf-8")
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(lease, "ROOT", self.root), \
+                mock.patch("app_source_isolation.verify_projection_identity", return_value=(revision, "sha1:" + "c" * 40)) as verify, \
+                mock.patch("quwoquan_ops.cli.lib.worktree_identity.resolve_worktree_identity") as resolve:
+            identity = lease.verified_lock_identity(handoff={}, device="device", device_kind="ios-simulator")
+            self.assertEqual(identity.head_sha, revision)
+            self.assertEqual(identity.lane, "immutable-source-projection")
+            self.assertEqual(identity.worktree, str(self.root))
+            verify.assert_called_once_with(self.root)
+            resolve.assert_not_called()
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(lease, "ROOT", self.root), \
+                mock.patch("app_source_isolation.verify_projection_identity", side_effect=SourceIsolationError("drifted")) as verify, \
+                mock.patch("quwoquan_ops.cli.lib.worktree_identity.resolve_worktree_identity") as resolve:
+            with self.assertRaisesRegex(CanonicalExecutorError, "APP.LAUNCH.identity_invalid"):
+                lease.verified_lock_identity(handoff={}, device="device", device_kind="ios-simulator")
+            verify.assert_called_once()
+            resolve.assert_not_called()
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(lease, "ROOT", self.root), \
+                mock.patch("app_source_isolation.verify_projection_identity", return_value=("not-a-sha", "sha1:x")) as verify, \
+                mock.patch("quwoquan_ops.cli.lib.worktree_identity.resolve_worktree_identity") as resolve:
+            with self.assertRaisesRegex(CanonicalExecutorError, "source revision is not exact"):
+                lease.verified_lock_identity(handoff={}, device="device", device_kind="ios-simulator")
+            verify.assert_called_once()
+            resolve.assert_not_called()
+
     def test_offline_control_exports_only_validated_source_and_capsule(self) -> None:
         for platform, policy in (
             ("android", "flutter-android-3.47-gradle-8.14-agp-8.11.1"),

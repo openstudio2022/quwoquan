@@ -9,15 +9,19 @@ import pytest
 from quwoquan_ops.cli.lib.host_locks import (
     HOST_LOCK_ROOT_ENV,
     HostLockBusyError,
+    HostLockOwner,
     acquire_device_lock,
     acquire_host_lock,
     acquire_host_lock_bounded,
+    current_lock_owner,
     device_lock_path,
     holder_record_is_live,
     local_runtime_lock_path,
     named_host_lock_path,
     parse_holder_record,
+    publish_declared_lock_owner,
 )
+from quwoquan_ops.cli.lib.worktree_identity import WorktreeIdentityError
 
 
 def _git(path: Path, *args: str) -> str:
@@ -109,9 +113,81 @@ def test_dead_pid_record_is_taken_over(
         lock.close()
 
 
-def test_projection_lock_owner_retains_mutual_exclusion(tmp_path, monkeypatch) -> None:
-    from quwoquan_ops.cli.lib.host_locks import HostLockOwner
+def test_declared_projection_owner_used_when_worktree_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    projection = tmp_path / "projection"
+    projection.mkdir()
+    (projection / "source-isolation.json").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_WORKTREE", "old")
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_LANE", "old")
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_HEAD_SHA", "old")
+    publish_declared_lock_owner(
+        HostLockOwner(
+            pid=1,
+            worktree=str(projection),
+            lane="immutable-source-projection",
+            head_sha="a" * 40,
+            started_at="old",
+        )
+    )
+    owner = current_lock_owner(worktree_path=tmp_path / "not-a-repo")
+    assert os.environ["QWQ_HOST_LOCK_OWNER_WORKTREE"] == str(projection)
+    assert owner.worktree == str(projection)
+    assert owner.lane == "immutable-source-projection"
+    assert owner.head_sha == "a" * 40
+    assert owner.pid == os.getpid()
 
+
+def test_declared_projection_owner_rejected_when_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    missing = tmp_path / "not-a-repo"
+    monkeypatch.delenv("QWQ_HOST_LOCK_OWNER_WORKTREE", raising=False)
+    monkeypatch.delenv("QWQ_HOST_LOCK_OWNER_LANE", raising=False)
+    monkeypatch.delenv("QWQ_HOST_LOCK_OWNER_HEAD_SHA", raising=False)
+    with pytest.raises(WorktreeIdentityError):
+        current_lock_owner(worktree_path=missing)
+
+    projection = tmp_path / "projection"
+    projection.mkdir()
+    (projection / "source-isolation.json").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_WORKTREE", str(projection))
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_LANE", "lane/ops")
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_HEAD_SHA", "a" * 40)
+    with pytest.raises(WorktreeIdentityError):
+        current_lock_owner(worktree_path=missing)
+
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_LANE", "immutable-source-projection")
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_HEAD_SHA", "not-a-sha")
+    with pytest.raises(WorktreeIdentityError):
+        current_lock_owner(worktree_path=missing)
+
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_HEAD_SHA", "a" * 40)
+    (projection / "source-isolation.json").unlink()
+    with pytest.raises(WorktreeIdentityError):
+        current_lock_owner(worktree_path=missing)
+
+
+def test_live_worktree_ignores_declared_projection_owner(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    live, _other = _worktree_pair(tmp_path)
+    projection = tmp_path / "projection"
+    projection.mkdir()
+    (projection / "source-isolation.json").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_WORKTREE", str(projection))
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_LANE", "immutable-source-projection")
+    monkeypatch.setenv("QWQ_HOST_LOCK_OWNER_HEAD_SHA", "a" * 40)
+    owner = current_lock_owner(worktree_path=live)
+    assert owner.worktree == str(live.resolve())
+    assert owner.lane == "lane/ops"
+
+
+def test_projection_lock_owner_retains_mutual_exclusion(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv(HOST_LOCK_ROOT_ENV, str(tmp_path / "locks"))
     owner = HostLockOwner(
         pid=2147483646, worktree=str(tmp_path / "projection"),

@@ -164,8 +164,6 @@ entries:
 - spec: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md
   anchor: GWT-003
 - spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md
   anchor: GWT-002

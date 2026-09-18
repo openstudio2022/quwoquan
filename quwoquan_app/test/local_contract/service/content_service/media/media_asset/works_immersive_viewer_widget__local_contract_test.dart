@@ -11,6 +11,7 @@
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-017.t5
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018.t1
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018.t4
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-020
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-021
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-024
@@ -2414,7 +2415,68 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     _consumeImageLoadExceptions(tester);
     expect(find.textContaining('第二张独立说明'), findsNothing);
-    expect(find.textContaining('封面正文'), findsNothing);
+    expect(find.textContaining('封面正文'), findsOneWidget);
+  });
+
+  testWidgets('图片沉浸配文优先逐图 caption，缺席回退作品 body', (tester) async {
+    // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018.t4
+    final bodyOnly = _photoPost(
+      id: 'photo-body-fallback',
+      title: '九曲溪竹筏',
+      body: '九曲溪的竹筏从星村码头出发。',
+    );
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [bodyOnly],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(bodyOnly)],
+          onUserTap: (
+            _, {
+            avatarUrl,
+            avatarAssetId,
+            avatarAccessMode,
+            displayName,
+            backgroundUrl,
+          }) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await _pumpImmersiveViewerFirstFrames(tester);
+    expect(find.text('九曲溪竹筏'), findsOneWidget);
+    expect(find.text('九曲溪的竹筏从星村码头出发。'), findsOneWidget);
+
+    final assetCaption = _photoPost(
+      id: 'photo-asset-caption',
+      title: '标题不应当配文',
+      body: '作品正文不应出现',
+      captions: const <String?>['逐图说明A'],
+    );
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [assetCaption],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(assetCaption)],
+          onUserTap: (
+            _, {
+            avatarUrl,
+            avatarAssetId,
+            avatarAccessMode,
+            displayName,
+            backgroundUrl,
+          }) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await _pumpImmersiveViewerFirstFrames(tester);
+    expect(find.text('标题不应当配文'), findsOneWidget);
+    expect(find.text('逐图说明A'), findsOneWidget);
+    expect(find.text('作品正文不应出现'), findsNothing);
   });
 
   testWidgets('首页进入视频书沉浸浏览器后上下滑动切换推荐流且不弹旧禁用提示', (tester) async {
@@ -2468,7 +2530,10 @@ void main() {
     _consumeImageLoadExceptions(tester);
     expect(find.text('second image caption'), findsOneWidget);
     expect(find.text('second body'), findsNothing);
-    expect(find.text('dto body'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('works-status-content-canvas-photo-2')),
+      findsOneWidget,
+    );
     expect(find.textContaining('不支持上下切换'), findsNothing);
   });
 

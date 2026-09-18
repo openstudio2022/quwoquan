@@ -114,11 +114,11 @@ class MediaCaptionBlock extends StatelessWidget {
     );
   }
 
-  /// 「全文」/「收起」入口样式：沉浸前景次级层级（REQ-019，非品牌色），
-  /// 以字重与透明度区别于正文，不喧宾夺主。
+  /// 「全文」/「收起」入口样式：与深色 mention 同一 worksAccent，
+  /// 字重与配文同为 regular，不用系统/品牌 primary。
   TextStyle _entryStyle(TextStyle captionStyle) => captionStyle.copyWith(
-    color: AppColors.immersiveForeground.withValues(alpha: 0.7),
-    fontWeight: AppTypography.medium,
+    color: AppColors.worksAccent,
+    fontWeight: AppTypography.regular,
   );
 
   Widget _buildExpandableCaption(

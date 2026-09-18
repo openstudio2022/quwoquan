@@ -883,6 +883,49 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         issues = self.module.check_checklists_and_registry()
         self.assertTrue(any("profiles.ghost 引用未知 workflow ghost" in issue for issue in issues), issues)
 
+    def test_profile_checklist_outside_roles_is_rejected(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t3
+        self._use_fixture_root()
+        registry = self._valid_registry()
+        self._write(".agents/skills/review/references/guides/probe.md", "# guide\n")
+        registry["profiles"]["ghost"] = {
+            "paths": ["Makefile"],
+            "specialist": {
+                "role": "probe",
+                "priority": 1,
+                "required": False,
+                "checklists": {"dev": "guides/probe.md"},
+            },
+        }
+        self._write(
+            ".agents/skills/review/references/registry.yaml",
+            self.module.yaml.safe_dump(registry, sort_keys=False),
+        )
+        issues = self.module.check_checklists_and_registry()
+        self.assertTrue(
+            any("profiles.ghost checklist 必须位于 roles/" in issue for issue in issues),
+            issues,
+        )
+
+    def test_primary_checklist_outside_roles_is_rejected(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t3
+        self._use_fixture_root()
+        registry = self._valid_registry()
+        self._write(".agents/skills/review/references/guides/probe.md", "# guide\n")
+        registry["workflows"]["dev"]["primary"]["checklist"] = "guides/probe.md"
+        self._write(
+            ".agents/skills/review/references/registry.yaml",
+            self.module.yaml.safe_dump(registry, sort_keys=False),
+        )
+        issues = self.module.check_checklists_and_registry()
+        self.assertTrue(
+            any(
+                "workflows.dev primary checklist 必须位于 roles/" in issue
+                for issue in issues
+            ),
+            issues,
+        )
+
     def test_registry_requires_v2_limits(self) -> None:
         self._use_fixture_root()
         registry = self._valid_registry()

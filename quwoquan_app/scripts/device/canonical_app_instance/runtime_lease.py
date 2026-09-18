@@ -214,6 +214,34 @@ def _workspace_lock_manifest(workspace_manifest: str):
         return manifest
 
 
+def _isolation_lock_owner():
+    """direct 投影只消费 source-isolation.json 的审计身份，不探测投影内 .git。"""
+    from app_source_isolation import SourceIsolationError, verify_projection_identity
+    from quwoquan_ops.cli.lib.common import utc_now
+    from quwoquan_ops.cli.lib.host_locks import HostLockOwner, IMMUTABLE_SOURCE_PROJECTION_LANE
+
+    try:
+        revision, _tree = verify_projection_identity(ROOT)
+    except (
+        SourceIsolationError,
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        subprocess.SubprocessError,
+    ) as error:
+        raise CanonicalExecutorError(f"APP.LAUNCH.identity_invalid: {error}") from error
+    if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: source revision is not exact")
+    return HostLockOwner(
+        pid=os.getpid(),
+        worktree=str(ROOT),
+        lane=IMMUTABLE_SOURCE_PROJECTION_LANE,
+        head_sha=revision,
+        started_at=utc_now(),
+    )
+
+
 def verified_lock_identity(*, handoff: dict[str, object], device: str, device_kind: str):
     """锁诊断只消费 worktree 或重新校验过的 immutable source，不信任裸 JSON。"""
     from quwoquan_ops.cli.lib.host_locks import HostLockOwner
@@ -226,6 +254,8 @@ def verified_lock_identity(*, handoff: dict[str, object], device: str, device_ki
         manifest = _control_lock_manifest(control_ref=control_ref, handoff=handoff, device=device, device_kind=device_kind)
     elif workspace_manifest:
         manifest = _workspace_lock_manifest(workspace_manifest)
+    elif (ROOT / "source-isolation.json").is_file():
+        return _isolation_lock_owner()
     else:
         identity = resolve_worktree_identity(ROOT)
         if identity.worktree_root != str(ROOT):
@@ -277,6 +307,9 @@ def run_canonical(*, acquire_runtime: bool = True) -> int:
         if source not in {"remote", "bundled_snapshot"}:
             raise CanonicalExecutorError("APP.LAUNCH.identity_invalid: content source policy missing")
         identity = verified_lock_identity(handoff=handoff, device=args.device, device_kind=args.device_kind)
+        from quwoquan_ops.cli.lib.host_locks import HostLockOwner, publish_declared_lock_owner
+        if isinstance(identity, HostLockOwner):
+            publish_declared_lock_owner(identity)
         with selected_device_lock(args.device, args.application_id, identity=identity):
             lease = (
                 direct_runtime_lease(

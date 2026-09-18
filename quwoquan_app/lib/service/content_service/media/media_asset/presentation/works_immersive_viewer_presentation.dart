@@ -776,8 +776,12 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       if (total == 0) return '';
       final index = (_photoInnerIndex[post.id] ?? _defaultImageIndexFor(post))
           .clamp(0, total - 1);
-      // 图集只显示当前资产真实 caption，不拿作品 title/body 充当逐图说明。
-      return item.imageCaptionAt(index) ?? '';
+      // 图集优先当前资产真实 caption；缺席回退作品 body，不用 title 冒充配文。
+      final assetCaption = item.imageCaptionAt(index);
+      if (assetCaption != null && assetCaption.isNotEmpty) {
+        return assetCaption;
+      }
+      return _bodyForPost(post);
     }
     return _bodyForPost(post);
   }

@@ -154,11 +154,12 @@ def _resolved_direct_reference(
             )
         return None
 
-    # selected canonical source segment 中的裸 YAML basename 只可能指向唯一
-    # quwoquan_ops/policies 文件；即使目标缺失也必须作为 candidate fail-closed。
-    # 带目录的普通 YAML 仍按其原路径判断，不映射到 policies。
+    # 裸 YAML basename 只在 quwoquan_ops/policies/<name> 已存在时才是
+    # canonical policy 引用；缺失当作散文忽略。带目录的 YAML 仍按原路径判断。
     if "/" not in path_text and path_text.endswith(".yaml"):
         candidate = context.REPO_ROOT / "quwoquan_ops" / "policies" / path_text
+        if not candidate.is_file():
+            return None
         candidate_type = True
     elif path_text.startswith(
         ("specs/", "quwoquan_app/", "quwoquan_service/", "quwoquan_data/", "quwoquan_ops/")

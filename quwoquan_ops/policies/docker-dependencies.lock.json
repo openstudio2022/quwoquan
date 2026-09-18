@@ -1,6 +1,6 @@
 {
   "schema": "quwoquan-docker-dependencies-lock-v1",
-  "generatedAt": "2026-09-17T06:06:26.772155Z",
+  "generatedAt": "2026-09-17T16:55:55.336613Z",
   "dependencies": {
     "golang:1.24-bookworm": {
       "repository": "docker.io/library/golang",
@@ -14,6 +14,13 @@
       "tag": "3.21",
       "digest": "sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d",
       "pulledAt": "2026-09-17T06:06:21.015888Z",
+      "source": "docker.m.daocloud.io"
+    },
+    "python:3.11-slim-bookworm": {
+      "repository": "docker.io/library/python",
+      "tag": "3.11-slim-bookworm",
+      "digest": "sha256:528257d48c1da0dcecc2e725d1ae34498d60c965f1241e39cd6a85a8859bdf84",
+      "pulledAt": "2026-09-17T16:55:55.246935Z",
       "source": "docker.m.daocloud.io"
     },
     "alpine:3.22": {

@@ -825,9 +825,15 @@ class _HomeInlineTextAction extends StatelessWidget {
       final scaler = MediaQuery.textScalerOf(context);
       final locale = Localizations.maybeLocaleOf(context);
       final effectiveStyle = DefaultTextStyle.of(context).style.merge(style);
-      final actionStyle = effectiveStyle.copyWith(
-        color: AppColors.iosAccent(context),
-        fontWeight: AppTypography.semiBold,
+      final bodyInlineStyle = effectiveStyle.copyWith(
+        fontWeight: AppTypography.regular,
+      );
+      final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+      final actionStyle = bodyInlineStyle.copyWith(
+        color: isDark
+            ? AppColors.profileSloganAccentDark
+            : AppColors.profileSloganAccentLight,
+        fontWeight: AppTypography.regular,
       );
       final painter = TextPainter(
         text: TextSpan(text: text, style: effectiveStyle),
@@ -840,11 +846,16 @@ class _HomeInlineTextAction extends StatelessWidget {
       painter.dispose();
       if (!overflowed) return Text(text, style: effectiveStyle);
 
-      final label = expanded
-          ? CommunityText.collapse
-          : '${CommunityText.ellipsis}${CommunityText.fullText}';
+      final labelSpan = expanded
+          ? TextSpan(text: CommunityText.collapse, style: actionStyle)
+          : TextSpan(
+              children: [
+                TextSpan(text: CommunityText.ellipsis, style: bodyInlineStyle),
+                TextSpan(text: CommunityText.fullText, style: actionStyle),
+              ],
+            );
       final labelPainter = TextPainter(
-        text: TextSpan(text: label, style: actionStyle),
+        text: labelSpan,
         textDirection: direction,
         textScaler: scaler,
         locale: locale,
@@ -862,17 +873,22 @@ class _HomeInlineTextAction extends StatelessWidget {
         child: SizedBox(
           width: actionSize.width / placeholderScale,
           height: actionSize.height / placeholderScale,
-          child: CupertinoButton(
+          child: Semantics(
             key: actionKey,
-            padding: EdgeInsets.zero,
-            minimumSize: Size.zero,
-            alignment: AlignmentDirectional.bottomStart,
-            onPressed: onTap,
-            child: Text(
-              label,
-              style: actionStyle,
-              textScaler: TextScaler.noScaling,
-              maxLines: 1,
+            button: true,
+            label: expanded ? CommunityText.collapse : CommunityText.fullText,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Align(
+                alignment: AlignmentDirectional.bottomStart,
+                child: Text.rich(
+                  labelSpan,
+                  style: bodyInlineStyle,
+                  textScaler: TextScaler.noScaling,
+                  maxLines: 1,
+                ),
+              ),
             ),
           ),
         ),

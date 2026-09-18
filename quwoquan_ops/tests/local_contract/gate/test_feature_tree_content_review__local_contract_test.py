@@ -499,6 +499,25 @@ def test_central_business_metadata_reference_is_blocked(
     ]
 
 
+def test_changes_only_blocks_dirty_specs_and_keeps_unrelated_failures_in_report() -> None:
+    dirty = reviewer.Review(path="specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md", kind="L2 Business Capability")
+    dirty.issues.append("使用会话或历史时间口径")
+    stale = reviewer.Review(path="specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md", kind="L1 Domain Service")
+    stale.issues.append("使用历史状态或阶段性计划口径")
+    assert reviewer.blocking_reviews([dirty, stale], changes_only=False) == [dirty, stale]
+
+    def fake_changed() -> list[str]:
+        return [dirty.path]
+
+    import quwoquan_ops.cli.lib.feature_tree.gitio as gitio
+    previous = gitio.git_changed_paths
+    gitio.git_changed_paths = fake_changed
+    try:
+        assert reviewer.blocking_reviews([dirty, stale], changes_only=True) == [dirty]
+    finally:
+        gitio.git_changed_paths = previous
+
+
 def test_committed_feature_tree_templates_follow_the_same_section_contract() -> None:
     reviews = reviewer.review_templates()
 

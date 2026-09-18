@@ -10,5 +10,7 @@
   check: 读取具体 path/symbol、依赖方向及 DEC/contract；命中依赖环、私有存储穿透、无行为抽象或第二配置源时判失败，不以主观 SOLID 分数裁决。
 - [MUST] 声明 replacement 时说明旧入口、接替入口、消费者迁移及实现/配置/测试退役或保留依据。
   check: 按 canonical `candidate_review_closure` 读取 replacement 与当前扫描/测试证据；声明替换却缺证据或 unknown 动态入口自动删除时判失败。无替换不虚构删除清单，结构化字段通过不替代行为等价判断。
+- [MUST NOT] 新增 DEC、类型或公开 API 名把可变闭集的当前基数写成身份。
+  check: 读取新增名称及其成员来源；基数进入标识符，或成员集合脱离唯一 canonical 声明源另立平行表时判失败，冻结协议 id 与契约字面量除外。
 - [MUST] 失败恢复、观测与回滚能被真实测试或命名 evidence 证明。
   evidence: feature-tree

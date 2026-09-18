@@ -1,4 +1,4 @@
-"""Docker 基础镜像锁、四环境 buildImages 与 stackctl 预热入口。
+"""Docker 基础镜像锁、各 runtime target 的 buildImages 与 stackctl 预热入口。
 
 spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-002
 """
@@ -13,7 +13,7 @@ from subprocess import CompletedProcess
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
-from quwoquan_ops.cli.lib import docker_dependencies
+from quwoquan_ops.cli.lib import docker_dependencies, environment_topology
 from quwoquan_ops.gate.scaffold import new_service
 
 
@@ -29,8 +29,19 @@ class DockerDependenciesContractTest(unittest.TestCase):
             "golang:1.24-bookworm",
         )
         self.assertEqual(registry["QWQ_ALPINE_BASE_IMAGE"], "alpine:3.21")
+        self.assertEqual(
+            registry["QWQ_PYTHON_BASE_IMAGE"],
+            "python:3.11-slim-bookworm",
+        )
+        self.assertIn(
+            "python:3.11-slim-bookworm",
+            docker_dependencies._REQUIRED_LOCAL_KEYS,
+        )
         for name in docker_dependencies._REQUIRED_LOCAL_KEYS:
             self.assertIn(name, lock["dependencies"])
+        python_lock = lock["dependencies"]["python:3.11-slim-bookworm"]
+        self.assertEqual(python_lock["repository"], "docker.io/library/python")
+        self.assertEqual(python_lock["tag"], "3.11-slim-bookworm")
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn(
             "python3 quwoquan_ops/cli/stackctl.py docker-dependencies --action prepare",
@@ -41,13 +52,29 @@ class DockerDependenciesContractTest(unittest.TestCase):
             makefile,
         )
 
-    def test_four_local_targets_declare_go_and_alpine_build_images(self) -> None:
-        images = docker_dependencies.four_env_build_images()
-        for target in ("alpha-local", "beta-local", "gamma-local", "prod-sim"):
-            self.assertEqual(images[target]["goBaseImage"], "golang:1.24-bookworm")
-            self.assertEqual(images[target]["alpineBaseImage"], "alpine:3.21")
-        self.assertIn("golang:1.24-bookworm", images["prod-hosted"]["goBaseImage"])
-        self.assertIn("alpine:3.22", images["prod-hosted"]["alpineBaseImage"])
+    def test_runtime_targets_declare_go_and_alpine_build_images(self) -> None:
+        images = docker_dependencies.load_target_build_images()
+        self.assertEqual(set(images), set(environment_topology.TARGETS))
+        registry = docker_dependencies.load_registry_env()
+        topology = environment_topology.load_environment_topology()
+        for target, pins in images.items():
+            backend = str(
+                environment_topology.get_target(topology, target).get("backend") or ""
+            )
+            if backend == "local":
+                # 本地 target 与 registry 声明的基础镜像共享同一 pin。
+                self.assertEqual(
+                    pins["goBaseImage"], registry["QWQ_GO_BASE_IMAGE"], target
+                )
+                self.assertEqual(
+                    pins["alpineBaseImage"], registry["QWQ_ALPINE_BASE_IMAGE"], target
+                )
+                continue
+            # hosted target 用 digest 锁定发布镜像；go 仍是 registry 声明的同一镜像，
+            # alpine 允许自有版本，但两者都必须钉到 digest。
+            self.assertIn(registry["QWQ_GO_BASE_IMAGE"], pins["goBaseImage"], target)
+            for name in ("goBaseImage", "alpineBaseImage"):
+                self.assertRegex(pins[name], r"@sha256:[0-9a-f]{64}$", f"{target}.{name}")
 
     def test_service_dockerfiles_do_not_default_base_image_args(self) -> None:
         dockerfiles = sorted(
@@ -57,12 +84,46 @@ class DockerDependenciesContractTest(unittest.TestCase):
             ROOT / "quwoquan_service/control-plane/platform-ops/build/Dockerfile"
         )
         dockerfiles.append(ROOT / "quwoquan_service/cmd/service-core/Dockerfile")
+        python_dockerfiles = 0
         for dockerfile in dockerfiles:
             text = dockerfile.read_text(encoding="utf-8")
-            if "ARG GO_BASE_IMAGE" not in text:
-                continue
-            self.assertIn("ARG GO_BASE_IMAGE\n", text, dockerfile)
-            self.assertIn("ARG ALPINE_BASE_IMAGE\n", text, dockerfile)
+            if "ARG GO_BASE_IMAGE" in text:
+                self.assertIn("ARG GO_BASE_IMAGE\n", text, dockerfile)
+                self.assertIn("ARG ALPINE_BASE_IMAGE\n", text, dockerfile)
+            if "ARG PYTHON_BASE_IMAGE" in text:
+                python_dockerfiles += 1
+                self.assertIn("ARG PYTHON_BASE_IMAGE\n", text, dockerfile)
+                self.assertNotIn("ARG PYTHON_BASE_IMAGE=", text, dockerfile)
+        self.assertGreaterEqual(python_dockerfiles, 1)
+        compose = (
+            ROOT
+            / "quwoquan_service/services/recommendation-service/deploy/compose.yaml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'PYTHON_BASE_IMAGE: "${QWQ_COMPOSE_PYTHON_BASE_IMAGE:?QWQ_COMPOSE_PYTHON_BASE_IMAGE is required}"',
+            compose,
+        )
+        self.assertNotIn(":-python:", compose)
+
+    def test_package_env_injects_locked_python_base_image(self) -> None:
+        pin = docker_dependencies.locked_python_base_image()
+        self.assertEqual(pin, "python:3.11-slim-bookworm")
+        topology = environment_topology.load_environment_topology()
+        for target in ("alpha-local", "beta-local", "gamma-local"):
+            environment = stackctl._gamma_env_from_port_manifest(topology, target)
+            self.assertEqual(
+                environment["QWQ_COMPOSE_PYTHON_BASE_IMAGE"],
+                pin,
+                target,
+            )
+        from quwoquan_ops.cli.alpha.content_release_runtime import (
+            _compose_build_environment,
+        )
+
+        self.assertEqual(
+            _compose_build_environment()["QWQ_COMPOSE_PYTHON_BASE_IMAGE"],
+            pin,
+        )
 
     def test_scaffold_dockerfile_requires_injected_base_images(self) -> None:
         text = Path(new_service.__file__).read_text(encoding="utf-8")
@@ -144,10 +205,14 @@ class DockerDependenciesContractTest(unittest.TestCase):
                 result["dependencies"]["golang:1.24-bookworm"]["status"],
                 "pulled",
             )
+            self.assertEqual(
+                result["dependencies"]["python:3.11-slim-bookworm"]["status"],
+                "pulled",
+            )
             self.assertTrue(
                 any(
                     argv[:2] == ["docker", "pull"]
-                    and argv[2].startswith("docker.m.daocloud.io/")
+                    and argv[2].startswith("docker.m.daocloud.io/library/python:")
                     for argv in calls
                 )
             )
@@ -157,6 +222,26 @@ class DockerDependenciesContractTest(unittest.TestCase):
                     "sha256:"
                 )
             )
+            self.assertTrue(
+                saved["dependencies"]["python:3.11-slim-bookworm"]["digest"].startswith(
+                    "sha256:"
+                )
+            )
+
+    def test_lock_file_rejects_missing_python_base_image(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            lock_path = Path(temporary) / "docker-dependencies.lock.json"
+            payload = docker_dependencies.load_lock_file()
+            dependencies = dict(payload["dependencies"])
+            dependencies.pop("python:3.11-slim-bookworm", None)
+            payload["dependencies"] = dependencies
+            lock_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(docker_dependencies.DockerDependencyError) as raised:
+                docker_dependencies.load_lock_file(lock_path)
+            self.assertIn("python:3.11-slim-bookworm", str(raised.exception))
 
     def test_ensure_prepared_skips_pull_when_cache_is_warm(self) -> None:
         def fake_run(argv: list[str], **_kwargs: object) -> CompletedProcess[str]:

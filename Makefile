@@ -1335,7 +1335,7 @@ feature-tree-content-review:
 
 verify-feature-tree:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py verify --changes
-	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree_content_review.py
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree_content_review.py $(CONTENT_REVIEW_ARGS)
 
 verify:
 	@$(MAKE) verify-global-increment-constraints
