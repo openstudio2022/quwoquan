@@ -732,6 +732,23 @@ def _canonical_receipt_from_pointer(path: Path, *, state_root: Path) -> Path:
     return receipt
 
 
+_GIT_SENSITIVE_RESOURCES = frozenset({"feature-tree", "impact-plan", "code-health"})
+
+
+def _partition_readiness_checks(
+    checks: list[dict[str, Any]],
+) -> tuple[list[tuple[int, dict[str, Any]]], list[tuple[int, dict[str, Any]]]]:
+    git_sensitive: list[tuple[int, dict[str, Any]]] = []
+    remainder: list[tuple[int, dict[str, Any]]] = []
+    for index, check in enumerate(checks):
+        resources = set(check.get("resources") or [])
+        if resources & _GIT_SENSITIVE_RESOURCES:
+            git_sensitive.append((index, check))
+        else:
+            remainder.append((index, check))
+    return git_sensitive, remainder
+
+
 def run_readiness(
     plan: dict[str, Any],
     *,
@@ -849,9 +866,16 @@ def run_readiness(
                     timeout_seconds=remaining,
                 )
 
-            workers = min(8, max(1, len(canonical["checks"])))
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                completed = list(pool.map(_execute, enumerate(canonical["checks"])))
+            git_sensitive, remainder = _partition_readiness_checks(canonical["checks"])
+            completed: list[tuple[int, dict[str, Any]]] = []
+            # feature-tree / impact-boundary / code-health 先看干净 capsule；
+            # 并行 pytest 会改 worktree 与共享 index，不能和 git status 门禁叠跑。
+            for batch in (git_sensitive, remainder):
+                if not batch:
+                    continue
+                workers = min(8, max(1, len(batch)))
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    completed.extend(pool.map(_execute, batch))
             results = [item for _, item in sorted(completed)]
         end = capture_fingerprint(
             canonical,

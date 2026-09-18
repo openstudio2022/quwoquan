@@ -291,6 +291,37 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
 
         self.assertTrue(classify_impacts([chinese_path])["scopes"]["data"])
 
+    def test_renames_include_both_paths_for_lane_impact(self) -> None:
+        from quwoquan_ops.ci import detect_ci_impacted_scopes as module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            env = {
+                "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
+                "HOME": tmp, "PATH": "/usr/bin:/bin:/usr/local/bin",
+            }
+
+            def git(*args: str) -> str:
+                return subprocess.run(
+                    ["git", *args], cwd=repo, check=True, capture_output=True, text=True, env=env
+                ).stdout.strip()
+
+            git("init", "-q", "-b", "main")
+            (repo / "old.txt").write_text("body\n", encoding="utf-8")
+            git("add", "-A")
+            git("commit", "-q", "-m", "seed")
+            base = git("rev-parse", "HEAD")
+            git("mv", "old.txt", "new.txt")
+            git("commit", "-q", "-m", "rename")
+            head = git("rev-parse", "HEAD")
+            original_root = module.ROOT
+            module.ROOT = repo
+            try:
+                self.assertEqual(module.git_changed_files(base, head), ["new.txt", "old.txt"])
+            finally:
+                module.ROOT = original_root
+
     def test_dot_segment_is_canonicalized_and_nfc_paths_share_identity(self) -> None:
         dotted = run_detect("./quwoquan_app/lib/main.dart")
         self.assertEqual(dotted.returncode, 0, dotted.stderr)

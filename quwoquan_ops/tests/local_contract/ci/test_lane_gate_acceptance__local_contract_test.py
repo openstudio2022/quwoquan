@@ -27,17 +27,27 @@ def test_push_includes_all_hosted_governance_and_four_exact_ops_shards():
     for scope in ("app", "service", "ops", "data"):
         assert "static:python_script_governance_" + scope in checks
     assert "lane_gate:feature-tree" in checks
+    generated = {
+        check["id"]: check
+        for check in planner._lane_gate_checks(
+            base=BASE, head=HEAD, paths=["quwoquan_ops/cli/integration_run.py"]
+        )
+    }
     for shard in range(4):
-        check = checks[f"lane_gate:ops-local-contract:{shard}"]
-        assert check["command"][4:] == sharded_test_files(planner.ROOT, 4, shard, "ops", lane_gate=True)
-        assert check["timeout_seconds"] == 900
+        assert f"lane_gate:ops-local-contract:{shard}" not in checks
+        shard_check = generated[f"lane_gate:ops-local-contract:{shard}"]
+        assert shard_check["command"][4:] == sharded_test_files(planner.ROOT, 4, shard, "ops", lane_gate=True)
     health = [check for check in checks.values() if "code-health" in check["resources"]]
     assert len(health) == 1 and "full" in health[0]["command"]
     assert BASE in health[0]["command"] and HEAD in health[0]["command"]
     assert not any(item["work"].startswith("quwoquan_ops/tests/local_contract") for item in plan["deferred"])
     commands = [tuple(check["command"]) for check in checks.values()]
     assert len(commands) == len(set(commands))
-    covered = {path for shard in range(4) for path in checks[f"lane_gate:ops-local-contract:{shard}"]["command"][4:]}
+    covered = {
+        path
+        for shard in range(4)
+        for path in generated[f"lane_gate:ops-local-contract:{shard}"]["command"][4:]
+    }
     assert not any(check["id"] == "focused:python" and covered.intersection(check["command"][4:])
                    for check in checks.values())
 
@@ -60,7 +70,7 @@ def test_push_source_admitted_drops_app_service_runtime_suites() -> None:
         or check["id"].startswith("scope_build:")
         for check in pushed["checks"]
     )
-    assert any(check["id"].startswith("lane_gate:ops-local-contract:") for check in pushed["checks"])
+    assert not any(check["id"].startswith("lane_gate:ops-local-contract:") for check in pushed["checks"])
 
 
 def test_old_fast_receipt_check_identity_cannot_equal_push_lane_gate():
@@ -80,16 +90,16 @@ def test_ops_selector_empty_fails_closed():
 
 
 def test_ops_selection_is_bound_into_complete_commands():
-    plan = _plan()
-    original = planner.bind_source_health_plan(plan, mode="push", base=BASE, head=HEAD)
+    paths = ["quwoquan_ops/cli/integration_run.py"]
+    original = planner._lane_gate_checks(base=BASE, head=HEAD, paths=paths)
     def changed(root, count, shard, scope, lane_gate):
         return [*sharded_test_files(root, count, shard, scope, lane_gate=lane_gate), "quwoquan_ops/tests/local_contract/ci/test_new__local_contract_test.py"]
     with mock.patch("quwoquan_ops.gate.delivery_gate_data_shard.sharded_test_files", side_effect=changed):
-        drift = planner.bind_source_health_plan(plan, mode="push", base=BASE, head=HEAD)
-    assert planner._canonical_digest(original["checks"]) != planner._canonical_digest(drift["checks"])
+        drift = planner._lane_gate_checks(base=BASE, head=HEAD, paths=paths)
+    assert planner._canonical_digest(original) != planner._canonical_digest(drift)
 
 
-@pytest.mark.parametrize("failure", [None, "lane_gate:ops-local-contract:3"])
+@pytest.mark.parametrize("failure", [None, "lane_gate:feature-tree"])
 def test_existing_runner_executes_required_once_then_reuses_exact_cache(tmp_path, monkeypatch, failure):
     from quwoquan_ops.tests.local_contract.ci import test_local_readiness__execution__local_contract_test as support
     from lib.local_readiness import core
@@ -120,6 +130,28 @@ def test_existing_runner_executes_required_once_then_reuses_exact_cache(tmp_path
     legacy = {**plan, "checks": [check for check in plan["checks"] if not check["id"].startswith("lane_gate:")]}
     with pytest.raises(core.LocalReadinessError, match="canonical planner"):
         core.run_readiness(legacy, repo_root=repo, push_updates=updates, state_root=state)
+
+
+def test_git_sensitive_checks_are_partitioned_ahead_of_pytest() -> None:
+    from lib.local_readiness import core
+
+    checks = [
+        {"id": "focused:python", "resources": ["python-tests"]},
+        {"id": "lane_gate:feature-tree", "resources": ["feature-tree"]},
+        {"id": "lane_gate:impact-boundary", "resources": ["impact-plan"]},
+        {"id": "static:code-health-delta", "resources": ["code-health"]},
+        {"id": "lane_gate:verify_git_branch_policy", "resources": ["ops-static"]},
+    ]
+    git_sensitive, remainder = core._partition_readiness_checks(checks)
+    assert [check["id"] for _, check in git_sensitive] == [
+        "lane_gate:feature-tree",
+        "lane_gate:impact-boundary",
+        "static:code-health-delta",
+    ]
+    assert [check["id"] for _, check in remainder] == [
+        "focused:python",
+        "lane_gate:verify_git_branch_policy",
+    ]
 
 
 def test_exact_impact_boundary_rejects_incomplete_range_before_scan():

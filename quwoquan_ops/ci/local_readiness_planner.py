@@ -448,15 +448,24 @@ def _lane_gate_checks(*, base: str, head: str, paths: list[str]) -> list[dict[st
 
 
 def _bind_lane_gate(plan: dict[str, Any], *, base: str, head: str) -> dict[str, Any]:
-    required = _lane_gate_checks(base=base, head=head, paths=plan["paths"])
+    generated = _lane_gate_checks(base=base, head=head, paths=plan["paths"])
+    covered = {
+        path
+        for check in generated
+        if check["id"].startswith("lane_gate:ops-local-contract:")
+        for path in check["command"][4:]
+    }
+    required = [
+        check
+        for check in generated
+        if not check["id"].startswith("lane_gate:ops-local-contract:")
+    ]
     commands = {tuple(check["command"]) for check in required}
-    covered = {path for check in required if check["id"].startswith("lane_gate:ops-local-contract:")
-               for path in check["command"][4:]}
     checks = []
     for check in plan["checks"]:
-        # source-admitted push 只左移 Lane Gate：静态治理、ImpactPlan 边界、
-        # Code Health 与 ops 合同。App/Service 全量测试与 iOS/APK 编译留给
-        # live Alpha / release，不挡 origin/dev1.0 写入。
+        # source-admitted push 只左移治理脚本、ImpactPlan 边界与 Code Health。
+        # App/Service 全量套件、iOS/APK 编译以及 ops 四片（含 Gamma/prod 合同）
+        # 留给 live Alpha / L2，不挡 origin/dev1.0 写入。
         if (
             check["id"] == "focused:dart"
             or check["id"].startswith("focused:go:")
@@ -466,7 +475,7 @@ def _bind_lane_gate(plan: dict[str, Any], *, base: str, head: str) -> dict[str, 
         if tuple(check["command"]) in commands or check["id"] == "static:branch_policy":
             continue
         if check["id"] == "focused:python":
-            # ops 全集已经由四片覆盖；只保留非 ops 的原聚焦测试，避免同 candidate 重跑。
+            # source-admitted 不跑 ops 四片；这里同步剔除，避免 focused:python 把全集补回来。
             prefix, files = check["command"][:4], check["command"][4:]
             files = [path for path in files if path not in covered]
             if not files:
