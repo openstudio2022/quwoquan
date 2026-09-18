@@ -999,6 +999,16 @@ def test_selector_plan_is_stable_for_equivalent_input_order() -> None:
     assert first == second
 
 
+def test_focused_dart_uses_check_override_within_scope_ceiling() -> None:
+    plan = build_impact_plan(
+        ["quwoquan_app/lib/runtime/value.dart"],
+        level="scope",
+    )
+    check = next(item for item in plan["checks"] if item["id"] == "focused:dart")
+    assert check["timeout_seconds"] == 1800
+    assert check["timeout_seconds"] <= 1800
+
+
 def test_user_service_focused_go_uses_check_override_within_fast_ceiling() -> None:
     plan = build_impact_plan(
         [
