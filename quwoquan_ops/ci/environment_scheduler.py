@@ -20,7 +20,7 @@ from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
     DSSE_PAYLOAD_TYPE,
     ENVIRONMENTS,
     NO_LIVE_ENVIRONMENT_REQUIRED,
-    NOT_REQUIRED_REASON_CODES,
+    not_required_allowed,
 )
 from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
     SCHEMA as ACCEPTANCE_SCHEMA,
@@ -802,13 +802,10 @@ def issue_environment_acceptance_fact(
             "ENVIRONMENT_SCHEDULER.ACCEPTANCE_INVALID", "nonPromotable must be boolean"
         )
     if status == "not_required":
-        if (
-            request["environment"] != "beta"
-            or reason_code not in NOT_REQUIRED_REASON_CODES
-        ):
+        if not not_required_allowed(str(request["environment"]), str(reason_code or "")):
             raise EnvironmentSchedulerError(
                 "ENVIRONMENT_SCHEDULER.NOT_REQUIRED_INVALID",
-                "only Beta may use typed no-live or policy-optional not_required",
+                "only typed Alpha deferral or Beta no-live/policy-optional may be not_required",
             )
     elif reason_code is not None:
         raise EnvironmentSchedulerError(

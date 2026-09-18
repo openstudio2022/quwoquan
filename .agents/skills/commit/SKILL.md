@@ -15,7 +15,7 @@ metadata:
 ## 执行
 
 1. PRE 确认用户明确要求提交与精确 scope；若存在本轮 owner manifest / Review evidence 则一并引用，缺失不阻断，不在 commit 生成替代证据。
-2. 重新检查 branch、HEAD、脏树、untracked、secret/PII、所有权与活跃 writer，只用显式 pathspec 暂存当前 scope；记录 lane 相对本地 `dev1.0` 的 ahead/behind，behind 超过 `worktree_policy.yaml#resync_reminder_behind_commits` 时只建议先 `sync-lane-from-dev`，不自动同步、不阻断提交。
+2. 重新检查 branch、HEAD、脏树、untracked、secret/PII、所有权与活跃 writer，只用显式 pathspec 暂存当前 scope。`git fetch origin` 后冻结已发布 `origin/dev1.0` exact SHA；当前 lane HEAD 若不是该 published SHA 的后代（behind / 非祖先）则 `GATE_BLOCK`，先 `sync-lane-from-dev`。不自动同步、不清理他人字节，也不回落到本地未发布 `dev1.0`。
 3. 检视 staged diff 与生成物身份，执行 L0 `quwoquan_ops/gate/commit_gate.sh`；pre-commit 的 staged boundary 与 L0 都不用 `--no-verify` 绕过。
 4. 按仓库风格提交，随后核对 SHA、提交文件与剩余工作树，不清理他人变更。
 
@@ -25,7 +25,7 @@ metadata:
 
 ## 失败与停止
 
-无明确授权、secret/所有权风险、无法精确暂存、staged boundary 或 L0 失败时 `GATE_BLOCK`，不创建提交。
+无明确授权、secret/所有权风险、无法精确暂存、staged boundary、L0 失败，或当前 lane 落后已发布 `origin/dev1.0` 时 `GATE_BLOCK`，不创建提交。
 
 ## 条件性交接
 

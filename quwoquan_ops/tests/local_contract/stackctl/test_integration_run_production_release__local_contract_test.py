@@ -268,6 +268,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         accept_block = makefile.split("\naccept:\n", 1)[1].split("\n.PHONY", 1)[0]
         self.assertIn("--mode acceptance", accept_block)
         self.assertIn("--baseline %s", accept_block)
+        self.assertIn("'--alpha'", accept_block)
         self.assertIn("'--beta'", accept_block)
         self.assertIn("MERGED_LANES", accept_block)
         self.assertNotIn("--publish", accept_block)
@@ -329,21 +330,28 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
                     patches.enter_context(mock.patch("subprocess.run", return_value=SimpleNamespace(returncode=0)))
                     patches.enter_context(mock.patch.object(integration_run, "store_ref", return_value=refs["candidate"]))
                     run = patches.enter_context(mock.patch.object(integration_run, "_run_environment", side_effect=run_environment))
-                    skip = patches.enter_context(mock.patch.object(integration_run, "_not_required_beta", return_value={}))
+                    skip_alpha = patches.enter_context(mock.patch.object(integration_run, "_not_required_alpha", return_value={}))
+                    skip_beta = patches.enter_context(mock.patch.object(integration_run, "_not_required_beta", return_value={}))
                     bundle = patches.enter_context(mock.patch.object(integration_run, "_write_acceptance_bundle",
                         side_effect=integration_run.IntegrationRunError("TEST.BUNDLE_REACHED", "stop before bundle")))
                     run_id = f"policy-{depth}-{opted_in}"
                     argv = ["--mode", "acceptance", "--release-attestation", str(release), "--rollback-release-attestation", str(rollback),
                             "--release-handoff-ref", VALID_REF, *(["--beta"] if opted_in else [])]
                     self.assertEqual(self._blocker(run_id, argv), "TEST.BUNDLE_REACHED")
-                    self.assertEqual([call.kwargs["environment"] for call in run.call_args_list], ["alpha", "beta"] if opted_in else ["alpha"])
+                    self.assertEqual([call.kwargs["environment"] for call in run.call_args_list], ["alpha", "beta"] if opted_in else [])
                     self.assertEqual(bundle.call_args.kwargs["beta_status"], "passed" if opted_in else "not_required")
+                    self.assertEqual(bundle.call_args.kwargs["alpha_status"], "passed" if opted_in else "not_required")
                     if opted_in:
-                        skip.assert_not_called()
+                        skip_alpha.assert_not_called()
+                        skip_beta.assert_not_called()
                         self.assertIsNone(bundle.call_args.kwargs["beta_reason"])
+                        self.assertIsNone(bundle.call_args.kwargs["alpha_reason"])
                     else:
-                        skip.assert_called_once()
-                        self.assertEqual(skip.call_args.kwargs["reason_code"], integration_run.BETA_OPTIONAL_BY_POLICY)
+                        skip_alpha.assert_called_once()
+                        skip_beta.assert_called_once()
+                        self.assertEqual(skip_alpha.call_args.kwargs["reason_code"], integration_run.ALPHA_LIVE_DEFERRED)
+                        self.assertEqual(skip_beta.call_args.kwargs["reason_code"], integration_run.BETA_OPTIONAL_BY_POLICY)
+                        self.assertEqual(bundle.call_args.kwargs["alpha_reason"], integration_run.ALPHA_LIVE_DEFERRED)
                         self.assertEqual(bundle.call_args.kwargs["beta_reason"], integration_run.BETA_OPTIONAL_BY_POLICY)
 
     def test_beta_is_explicit_opt_in_with_typed_reason(self) -> None:

@@ -195,8 +195,19 @@ def validate_manifest_fact(manifest: Mapping[str, Any], fact: Mapping[str, Any],
                 "predecessor": None if environment == "alpha" else manifest["alphaFact"]}
     if any(fact.get(key) != value for key, value in expected.items()):
         raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", f"{environment} signed fact differs from manifest")
-    if environment == "alpha" and fact.get("status") != "passed":
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "Alpha must pass")
+    if environment == "alpha":
+        from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import source_admitted_alpha
+
+        if not source_admitted_alpha(fact):
+            raise IntegrationRunError(
+                "INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH",
+                "Alpha must be passed or typed ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV",
+            )
+        declared = manifest.get("alpha")
+        if declared is not None and declared != {
+            "status": fact.get("status"), "executed": fact.get("status") == "passed", "reasonCode": fact.get("reasonCode")
+        }:
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "Alpha policy differs from signed fact")
     if environment == "beta" and manifest["beta"] != {
         "status": fact.get("status"), "executed": fact.get("status") == "passed", "reasonCode": fact.get("reasonCode")
     }:

@@ -23,9 +23,9 @@ from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
     ACCEPTANCE_PROFILES,
     DSSE_PAYLOAD_TYPE,
     ENVIRONMENTS,
-    NOT_REQUIRED_REASON_CODES,
     PREDECESSOR,
     SCHEMA,
+    not_required_allowed,
 )
 from quwoquan_ops.cli.lib.readiness_case_result import (
     ReadinessCaseResultError,
@@ -186,10 +186,8 @@ def validate_environment_acceptance_fact(
     profile = _text(fact.get("profile"), "profile", error_type=error_type, code=invalid_code)
     if profile not in ACCEPTANCE_PROFILES:
         _fail(error_type, invalid_code, "profile is unknown")
-    if status == "not_required" and (
-        environment != "beta" or fact.get("reasonCode") not in NOT_REQUIRED_REASON_CODES
-    ):
-        _fail(error_type, invalid_code, "only typed Beta no-live or policy-optional may be not_required")
+    if status == "not_required" and not not_required_allowed(environment, str(fact.get("reasonCode") or "")):
+        _fail(error_type, invalid_code, "only typed Alpha deferral or Beta no-live/policy-optional may be not_required")
 
     candidate = fact.get("candidate")
     if not isinstance(candidate, Mapping) or set(candidate) != _CANDIDATE_KEYS:

@@ -258,15 +258,28 @@ def test_real_candidate_owner_and_claim_validation_is_shared(tmp_path, monkeypat
     assert not integration_run._candidate_matches_caller(**args, owner_identity="owner-a")
 
 
-@pytest.mark.parametrize("level,review,evidence", [("fast", "", []), ("scope", "", []), ("scope", "missing.json", [])])
-def test_source_precheck_rejects_missing_required_before_git_or_environment(tmp_path, monkeypatch, level, review, evidence):
+@pytest.mark.parametrize("level,review,evidence,match", [
+    ("fast", "", [], "requires scope"),
+    ("scope", "missing.json", [], "SOURCE_REQUIRED|Review"),
+])
+def test_source_precheck_rejects_missing_required_before_git_or_environment(tmp_path, monkeypatch, level, review, evidence, match):
     args = integration_run._parser().parse_args([])
     args.readiness_level, args.review_consolidation, args.required_evidence = level, review, evidence
     git = mock.Mock(side_effect=AssertionError("source precheck must precede Git/environment"))
     monkeypatch.setattr(integration_run, "_readiness_local_ref", git)
-    with pytest.raises(integration_run.IntegrationRunError, match="requires scope|SOURCE_REQUIRED"):
+    with pytest.raises(integration_run.IntegrationRunError, match=match):
         integration_run._local_readiness(level=level, parent=PARENT, commit=COMMIT, run_dir=tmp_path, args=args)
     git.assert_not_called()
+
+
+def test_source_precheck_allows_scope_without_review(tmp_path, monkeypatch):
+    args = integration_run._parser().parse_args([])
+    args.readiness_level, args.review_consolidation, args.required_evidence = "scope", "", []
+    git = mock.Mock(side_effect=AssertionError("source precheck passed; readiness may start"))
+    monkeypatch.setattr(integration_run, "_readiness_local_ref", git)
+    with pytest.raises(AssertionError, match="source precheck passed"):
+        integration_run._local_readiness(level="scope", parent=PARENT, commit=COMMIT, run_dir=tmp_path, args=args)
+    git.assert_called_once()
 
 
 def test_reuse_flag_is_opt_in_and_summary_renders_reused_line() -> None:
@@ -364,7 +377,7 @@ def acceptance_main(store: Path, monkeypatch: pytest.MonkeyPatch):
         "_impact_plan": ({"integration_depth": "abg_release_sensitive", "plan_digest": IMPACT, "scopes": ["app", "data"]}, plan_path),
         "_local_readiness": (store / "readiness.json", {"cache_hit": True}),
         "build_head_candidate": new_candidate_path, "create_source_fact": store / "source.json", "release_claim": None,
-        "_not_required_beta": {}, "_issue": {"ref": "issued.json", "digest": IMPACT},
+        "_not_required_alpha": {}, "_not_required_beta": {}, "_issue": {"ref": "issued.json", "digest": IMPACT},
         "_alpha_offline_pages": {"caseCount": 26},
     }
     calls = {}
@@ -428,9 +441,12 @@ def test_acceptance_main_reuse_honors_beta_opt_in(acceptance_main, opted_in: boo
         fresh = not opted_in and existing_beta in {"passed", "no-live"}
         assert summary["reused"]["candidate"] is (not fresh)
         assert summary["reused"]["alpha"] is (not fresh)
-        assert [call.kwargs["environment"] for call in setup.calls["_run_environment"].call_args_list] == (["alpha"] if fresh else [])
+        assert [call.kwargs["environment"] for call in setup.calls["_run_environment"].call_args_list] == (
+            ["alpha", "beta"] if opted_in and not reused_beta else []
+        )
         if fresh:
-            assert setup.calls["_run_environment"].call_args.kwargs["scopes"] == ("app", "data")
+            setup.calls["_not_required_alpha"].assert_called()
+            setup.calls["_not_required_beta"].assert_called()
         rendered = (setup.store / "runs/policy-reuse/summary.md").read_text(encoding="utf-8")
         assert "- mergedLanes:" in rendered and "- reused:" in rendered
     assert summary["reused"]["readiness"] is True
@@ -456,7 +472,7 @@ def test_existing_candidate_is_used_before_pages_without_claim_or_release(accept
     exact = {"ref": "fresh-candidate.json", "digest": IMPACT}
     existing = mock.Mock(return_value=(exact, candidate))
     monkeypatch.setattr(integration_run, "_existing_candidate", existing)
-    assert integration_run.main([*setup.argv, "--candidate-ref", exact["ref"] + "=" + IMPACT]) == 0
+    assert integration_run.main([*setup.argv, "--alpha", "--candidate-ref", exact["ref"] + "=" + IMPACT]) == 0
     setup.calls["build_head_candidate"].assert_not_called()
     setup.calls["release_claim"].assert_not_called()
     assert setup.calls["create_source_fact"].call_args.kwargs["candidate_ref"] == exact
@@ -470,7 +486,7 @@ def test_existing_candidate_is_used_before_pages_without_claim_or_release(accept
 def test_offline_failure_stops_before_services_and_fact_issuance(acceptance_main) -> None:
     setup = acceptance_main
     setup.calls["_alpha_offline_pages"].side_effect = integration_run.IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", "missing case")
-    assert integration_run.main(setup.argv) == 1
+    assert integration_run.main([*setup.argv, "--alpha"]) == 1
     setup.calls["_run_environment"].assert_not_called()
     setup.calls["_issue"].assert_not_called()
     setup.calls["_write_acceptance_bundle"].assert_not_called()
@@ -511,7 +527,7 @@ def test_wall_clock_counts_nested_phases_once_and_includes_cleanup(acceptance_ma
 
     setup.calls["_run_environment"].side_effect = environment
     setup.calls["release_claim"].side_effect = lambda **kwargs: elapsed(5)
-    assert integration_run.main(setup.argv) == (1 if failed else 0)
+    assert integration_run.main([*setup.argv, "--alpha"]) == (1 if failed else 0)
     summary = json.loads((setup.store / "runs/policy-reuse/summary.json").read_bytes())
     assert summary["wallClockSeconds"] == 11.0
     assert sum(phase["durationSeconds"] for phase in summary["phases"]) == 10.0
@@ -764,7 +780,12 @@ def test_changed_inputs_rerun_instead_of_reusing_or_blocking(acceptance_main, da
     assert integration_run.main([*setup.argv, "--reuse", *(["--beta"] if opted_in else [])]) == 0
     summary = json.loads((setup.store / "runs/policy-reuse/summary.json").read_bytes())
     assert summary["reused"]["candidate"] is False and summary["reused"]["alpha"] is False
-    assert [call.kwargs["environment"] for call in setup.calls["_run_environment"].call_args_list] == (["alpha", "beta"] if opted_in else ["alpha"])
+    assert [call.kwargs["environment"] for call in setup.calls["_run_environment"].call_args_list] == (
+        ["alpha", "beta"] if opted_in else []
+    )
+    if not opted_in:
+        setup.calls["_not_required_alpha"].assert_called()
+        setup.calls["_not_required_beta"].assert_called()
 
 
 @pytest.mark.parametrize("damage", ["none", "expired", "wrong-key", "evidence-drift"])

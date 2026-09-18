@@ -233,6 +233,113 @@
           ]
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "factId",
+        "environment",
+        "profile",
+        "status",
+        "candidate",
+        "impactPlanDigest",
+        "caseResultRefs",
+        "runtimeIdentity",
+        "dataLifecycle",
+        "providerReadiness",
+        "observabilityReadiness",
+        "inspectEvidence",
+        "doctorEvidence",
+        "cleanupEvidence",
+        "leaseClosureEvidence",
+        "predecessor",
+        "expiresAt",
+        "nonPromotable",
+        "issuedAt",
+        "signer",
+        "reasonCode"
+      ],
+      "properties": {
+        "schema": {
+          "const": "quwoquan_ops.environment_acceptance_fact.v2"
+        },
+        "factId": {
+          "$ref": "#/$defs/digest"
+        },
+        "environment": {
+          "const": "alpha"
+        },
+        "profile": {
+          "enum": [
+            "smoke",
+            "integration",
+            "release"
+          ]
+        },
+        "status": {
+          "const": "not_required"
+        },
+        "candidate": {
+          "$ref": "#/$defs/candidate"
+        },
+        "impactPlanDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "caseResultRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/exactRef"
+          }
+        },
+        "runtimeIdentity": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "dataLifecycle": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "providerReadiness": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "observabilityReadiness": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "inspectEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "doctorEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "cleanupEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "leaseClosureEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "predecessor": {
+          "type": "null"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nonPromotable": {
+          "type": "boolean"
+        },
+        "issuedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "signer": {
+          "$ref": "#/$defs/signer"
+        },
+        "reasonCode": {
+          "const": "ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV"
+        }
+      }
     }
   ],
   "$defs": {

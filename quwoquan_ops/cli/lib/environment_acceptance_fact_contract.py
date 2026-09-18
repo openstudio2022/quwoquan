@@ -8,6 +8,7 @@ accepted here.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
 SCHEMA_PATH = (
@@ -24,7 +25,32 @@ PREDECESSOR = {"alpha": None, "beta": "alpha", "gamma": "beta"}
 NO_LIVE_ENVIRONMENT_REQUIRED = "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED"
 # lane 验收默认只真跑 Alpha；ImpactPlan 判定 Beta 敏感但用户未显式 opt-in 时，Beta 以该原因码写 typed not_required。
 BETA_OPTIONAL_BY_POLICY = "ACCEPTANCE.BETA_OPTIONAL_BY_POLICY"
-NOT_REQUIRED_REASON_CODES = frozenset({NO_LIVE_ENVIRONMENT_REQUIRED, BETA_OPTIONAL_BY_POLICY})
+# 源码合入 origin/dev1.0 默认不启 Alpha live；环境/UAT/Data 激活后移到已发布 SHA。
+ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV = "ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV"
+NOT_REQUIRED_REASON_CODES = frozenset(
+    {NO_LIVE_ENVIRONMENT_REQUIRED, BETA_OPTIONAL_BY_POLICY, ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV}
+)
+
+
+def not_required_allowed(environment: str, reason_code: str) -> bool:
+    """Alpha 仅允许延后到已发布 dev；Beta 允许 no-live 或政策跳过；Gamma 不得 not_required。"""
+    if environment == "beta":
+        return reason_code in {NO_LIVE_ENVIRONMENT_REQUIRED, BETA_OPTIONAL_BY_POLICY}
+    if environment == "alpha":
+        return reason_code == ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV
+    return False
+
+
+def source_admitted_alpha(fact: Mapping[str, object] | None) -> bool:
+    """写入 origin/dev1.0 承认 Alpha passed，或 typed 延后到已发布 SHA。"""
+    if not isinstance(fact, Mapping):
+        return False
+    status = fact.get("status")
+    if status == "passed":
+        return True
+    return status == "not_required" and fact.get("reasonCode") == ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV
+
+
 _DIGEST_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
 _GIT_OID_RE = re.compile(r"^[a-f0-9]{40}(?:[a-f0-9]{24})?$")
 _IDENTITY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
@@ -79,6 +105,7 @@ _FACT_KEYS_BY_STATUS = {
 
 __all__ = [
     "ACCEPTANCE_PROFILES",
+    "ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV",
     "BETA_OPTIONAL_BY_POLICY",
     "DSSE_PAYLOAD_TYPE",
     "ENVIRONMENTS",
@@ -87,4 +114,6 @@ __all__ = [
     "PREDECESSOR",
     "SCHEMA",
     "SCHEMA_PATH",
+    "not_required_allowed",
+    "source_admitted_alpha",
 ]

@@ -855,7 +855,7 @@ def run_readiness(
         stable = end["digest"] == current["digest"]
         queue_observation = _assert_scope_queue_closed(canonical, state_root=root)
         status = "PASS" if len(results) == len(canonical["checks"]) and all(item["status"] == "PASS" for item in results) and stable and (level == "fast" or not canonical["deferred"]) else "FAIL"
-        admission_paths, admission_identity = _load_review_inputs(review_consolidation, required_evidence, repo_root=repo_root, required=level in {"scope", "release"})
+        admission_paths, admission_identity = _load_review_inputs(review_consolidation, required_evidence, repo_root=repo_root, required=level == "release")
         from .source_inputs import push_source_identity
         receipt = {
             "schema": RECEIPT_SCHEMA,

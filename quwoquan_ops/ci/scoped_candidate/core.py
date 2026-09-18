@@ -673,8 +673,14 @@ def _validate_admission_environments(repository: Path, root: Path, admission: di
                     "predecessor": None if environment == "alpha" else refs["alpha"]}
         if any(fact.get(key) != value for key, value in expected.items()):
             raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"{environment} candidate/impact/predecessor drifted")
-        if environment == "alpha" and fact.get("status") != "passed":
-            raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "Alpha must pass")
+        if environment == "alpha":
+            from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import source_admitted_alpha
+
+            if not source_admitted_alpha(fact):
+                raise ScopedCandidateError(
+                    "SCOPED_CANDIDATE.STALE",
+                    "Alpha must be passed or typed ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV",
+                )
 
 
 def _validated_admission(repository: Path, admission_ref: Path, policy_path: Path | None = None,
