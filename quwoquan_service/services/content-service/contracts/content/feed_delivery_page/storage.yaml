@@ -31,9 +31,11 @@ redis_cache:
   description: >-
     未压缩 FeedDeliveryPage JSON；items 仅保存稳定对象引用的共享 envelope 与交付决策，
     不保存可变 Post/Homepage 投影；Post 与 Homepage 共用 max_items，不存在对象卡 sidecar。
-    scopeHash 含经服务端校验的 clientPresentationContract.contractDigest，不同能力声明隔离。
-    同一 key 只允许相同 payload 幂等胜出；分片满只拒绝 contender，禁止跨 scope 淘汰；
-    key 与 payload 不含协议版本信封。
+    同一 key 只允许相同 payload 幂等胜出。
+    分片满只拒绝 contender，禁止跨 scope 淘汰；key 与 payload 不含协议版本信封。
+    scopeHash 按 fields.yaml#scopeHash 包含经服务端校验的 clientPresentationContract.contractDigest 与原排序窗口冻结 contextDigest，因此不同能力声明或不同冻结上下文不能命中同页 cache；原地域不进入 key。
+    contextDigest 与 scopeHash 随 outboundCursor/previousCursor 的 AEAD authenticated context 绑定，续页先还原并校验冻结 scope，不能用新 viewport/device/timeBucket/profileRevision 改写 cache 身份或重排。
+    命中缓存也必须验证该冻结摘要与页身份一致；不得接收缺少 context 绑定的旧页，不新增旧 key fallback。
 - key: rec:feed_delivery_page_index:{fdp-<quotaShard>}
   key_prefix: 'rec:feed_delivery_page_index:'
   hash_tag: fdp-<quotaShard>

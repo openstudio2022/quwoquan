@@ -50,6 +50,7 @@ class VideoPlayerWidget extends ConsumerStatefulWidget {
   final VideoPlaybackOverlayMode overlayMode;
   final Duration? verifiedDuration;
   final double? aspectRatio;
+  final BoxFit fit;
   final VideoViewType? viewType;
 
   /// 任务 B · 播放启动成功回调：startupLatency 为从初始化到可播放的耗时，
@@ -80,6 +81,7 @@ class VideoPlayerWidget extends ConsumerStatefulWidget {
     this.overlayMode = VideoPlaybackOverlayMode.none,
     this.verifiedDuration,
     this.aspectRatio,
+    this.fit = BoxFit.contain,
     this.viewType,
     this.onPlaybackStarted,
     this.onPlaybackFailed,

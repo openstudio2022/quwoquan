@@ -1,12 +1,12 @@
 {
   "generator": "app-only-emitter",
-  "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+  "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
   "outputs": [
     {
       "path": "lib/runtime/errors/generated/assistant/assistant_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "5b03324a759ee52210a96aac99d685c8609d5fba7b6b76bbe7658fc7136d7114",
       "bytes": 13404
     },
@@ -14,7 +14,7 @@
       "path": "lib/runtime/errors/generated/chat/chat_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "8f0cddae8b66715b018414d7ccca5fb45a430e261de0a1c1918112c96705d278",
       "bytes": 8750
     },
@@ -22,7 +22,7 @@
       "path": "lib/runtime/errors/generated/circle/circle_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "1f3530ee6512401df41f19f0712a3a621d462f25c50ab29780aff8fecf5d947b",
       "bytes": 2845
     },
@@ -30,7 +30,7 @@
       "path": "lib/runtime/errors/generated/circle/circle_membership_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "84d9e13905b25f3a866549e47617f4711c4466f94b54a3c7f1373eb51e4692b0",
       "bytes": 4131
     },
@@ -38,7 +38,7 @@
       "path": "lib/runtime/errors/generated/circle/gathering_plan_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "e0e44acfe9087915ba41ceb3107c5cdf7b2aff58b87ec4b49a56855ac7c3a9f5",
       "bytes": 5475
     },
@@ -46,15 +46,15 @@
       "path": "lib/runtime/errors/generated/content/content_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "ef95ad3f45af052149e97cf5d66085dc22f4d33e9e1fa2e277af1c9332dc3e67",
-      "bytes": 29786
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "efdbd40125185fcc06ddf0ce9a1ffde8707cef8e66a606729bd61481b03099a5",
+      "bytes": 34714
     },
     {
       "path": "lib/runtime/errors/generated/entity/entity_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "0827aa27aa6b3aa19e75aaca17b35181937176c6fc19a682cd760bad2aca4612",
       "bytes": 5887
     },
@@ -62,7 +62,7 @@
       "path": "lib/runtime/errors/generated/integration/integration_location_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "7a1be3d3ef75b1a9c6ec3c33208d3037804eaa8d374680eaeb0852403776432e",
       "bytes": 4594
     },
@@ -70,7 +70,7 @@
       "path": "lib/runtime/errors/generated/notification/notification_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "b62ce800baf8ceb66ed6ba4e34881e4d15c54263286f6b8cd571f6c292fa183a",
       "bytes": 2967
     },
@@ -78,7 +78,7 @@
       "path": "lib/runtime/errors/generated/ops/ops_event_record_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "5fa0ac2adbb457bbdb894f621ea3114febf70c488ec6f2836b8222fc830b332a",
       "bytes": 5600
     },
@@ -86,7 +86,7 @@
       "path": "lib/runtime/errors/generated/rtc/rtc_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "3ffcbaeb0cdbd2b91c938ce3b51f2486352a4efebeb14b73248d2bf3dba8d5e4",
       "bytes": 2170
     },
@@ -94,7 +94,7 @@
       "path": "lib/runtime/errors/generated/search/search_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "e8b480d35bbc8977f368cd35bf9696f7f7696452d75cb2a535809345f6fccc58",
       "bytes": 3047
     },
@@ -102,7 +102,7 @@
       "path": "lib/runtime/errors/generated/tag/tag_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "aa2c73536c9cdc5e8671aad5c8ffa67793fae1a3417d04da212a27496d4c731e",
       "bytes": 4610
     },
@@ -110,15 +110,15 @@
       "path": "lib/runtime/errors/generated/user/user_errors.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "bd5a94dc40f2f109a7fca2349776f95d086598efc4dd918705718cd62aa91315",
-      "bytes": 21486
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "1e6ee293578ef94aeecf7843d2bde9c0fd550928644864c340bf1bc8bd8a527e",
+      "bytes": 21977
     },
     {
       "path": "lib/runtime/observability/generated/app_telemetry_catalog.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "cc978f212c8ac74c18328f2eea6d988bb66349b426dd63e1782640188b22191d",
       "bytes": 63121
     },
@@ -126,7 +126,7 @@
       "path": "lib/runtime/transport/generated/assistant/assistant_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "e4d064710236a90dec2b7a1cfefae840664c8c361dcab4062e3ec6ce7e2ebd83",
       "bytes": 8129
     },
@@ -134,7 +134,7 @@
       "path": "lib/runtime/transport/generated/chat/chat_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "ff7445f31660f1ad638fc4f1f12cd936e3a23bd5b12f3a84f990eeec22a6158e",
       "bytes": 5639
     },
@@ -142,7 +142,7 @@
       "path": "lib/runtime/transport/generated/circle/circle_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "f521faacfff30ee595797fd82e855afce9a0f5c6a24d903e4bc405f00688a77a",
       "bytes": 12578
     },
@@ -150,7 +150,7 @@
       "path": "lib/runtime/transport/generated/client_content_presentation_contract.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "32841819b48f2a6dd339395227cbe342d619b7fec3d2a023cf29fddc23c2de6b",
       "bytes": 4865
     },
@@ -158,7 +158,7 @@
       "path": "lib/runtime/transport/generated/cloud_api_defaults.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "f19a59335151cdca4b84f6a2cc9c0b8920e33a2fa29793c4362b11d3c5f7aba5",
       "bytes": 384
     },
@@ -166,15 +166,15 @@
       "path": "lib/runtime/transport/generated/content/content_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "7961e88e7bcbcf37dc33b7af02dca33959769cbb7acccf1f27625d5474945f4c",
-      "bytes": 13202
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "ecd004a2942a71d94af4b9ab4c9c011f1568093d82e30e704f117f5b91e1130a",
+      "bytes": 13476
     },
     {
       "path": "lib/runtime/transport/generated/entity/entity_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "7d000b84ad3057ea60f45760144609d7b73b6e6dbc5a10a1599a8fea71eabaea",
       "bytes": 4573
     },
@@ -182,7 +182,7 @@
       "path": "lib/runtime/transport/generated/gateway/gateway_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "5fa8f581b5a9b6ac00fcb4f7c541780fcb7130ceaf8cf1c42f92aac4b1f708d9",
       "bytes": 487
     },
@@ -190,7 +190,7 @@
       "path": "lib/runtime/transport/generated/integration/integration_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "d9d4533ce353494c49d20ab26f708ee072f67bf50394e12eb8df0f2a76bf9fc7",
       "bytes": 5126
     },
@@ -198,7 +198,7 @@
       "path": "lib/runtime/transport/generated/notification/notification_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "0ee80472f1c90b2e2a1568e7308c898f0674403ea023057942179c2ffda9d206",
       "bytes": 2475
     },
@@ -206,7 +206,7 @@
       "path": "lib/runtime/transport/generated/ops/ops_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "00d63dd4e397817eb68126c53c93d2ea84732e99dfe053707c129a5b2fa4aa73",
       "bytes": 10249
     },
@@ -214,7 +214,7 @@
       "path": "lib/runtime/transport/generated/realtime/realtime_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "5b384af40cf94cce443de0282f61f1fe529d7fc63429345c7421c307c84bd752",
       "bytes": 1436
     },
@@ -222,7 +222,7 @@
       "path": "lib/runtime/transport/generated/recommendation/recommendation_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "0e446482c21b0ff704b971c69d46007939d12f876fed25e1d59c3fcb4fa47ef2",
       "bytes": 3463
     },
@@ -230,7 +230,7 @@
       "path": "lib/runtime/transport/generated/rtc/rtc_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "2254f8a053d28fd5d6d2275d9cedbdd10f837dd7d6c904a4758c8575e4feba39",
       "bytes": 1848
     },
@@ -238,7 +238,7 @@
       "path": "lib/runtime/transport/generated/search/search_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "f0f93047bc1dc4d311c046a5478e28c37e1c342c3689ca99a76c975de0b16b08",
       "bytes": 1705
     },
@@ -246,7 +246,7 @@
       "path": "lib/runtime/transport/generated/tag/tag_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "20ec63e6f90ec5ccd85b87325a00529dec6d26cfaebb9c62734233dca10b5855",
       "bytes": 1955
     },
@@ -254,15 +254,15 @@
       "path": "lib/runtime/transport/generated/user/user_request_page_ids.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "8b7a4116b064bf8715a1d92c264ab0d692688543439a44b6941e200fa1e0a862",
-      "bytes": 12661
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "0a2e62e205a42678a6aeefa1649e2f2bdcf2688afb1b33f860d87bd70c715079",
+      "bytes": 12991
     },
     {
       "path": "lib/service/assistant_service/assistant/assistant_preference/domain/generated/assistant_preference_snapshot.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "85de01e47ffc7e522bce42d999fc693fa634f4565e46e7a51a17fd674591fac9",
       "bytes": 1564
     },
@@ -270,7 +270,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "c4c641217dd4e1a807fa1c423abfc4591af4dc1b7f662cbbb6b0c011405f392b",
       "bytes": 14519
     },
@@ -278,7 +278,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/answer_boundary_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "e7f94cae559486e7dd38e81de7a277de0469542608aaa419dd4520858ddc0dce",
       "bytes": 7987
     },
@@ -286,7 +286,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/assistant_journey.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "5514800449796987415b90b987fbddcb85797105b9f2309da84a3ff69bf0054c",
       "bytes": 24282
     },
@@ -294,7 +294,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/context_assembly_result.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "74432fff619d9352a4f8989c2414b3442b63100d1ecfd2491861b6feb3df36b6",
       "bytes": 11642
     },
@@ -302,7 +302,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/context_continuity_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "323a9e9ac0cd1597c26e1815dca84472613cf1440eb1bf9107a0610a21414e9b",
       "bytes": 8955
     },
@@ -310,7 +310,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/context_fill_task.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "d8cf51651e0c01bc75a7be54f71b32bd37f930a33a57ffb1c5d88133039cc1eb",
       "bytes": 6506
     },
@@ -318,7 +318,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/dialogue_round_script.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "f165648bd409a6eabee9153ade7be8638b94050b340fcbd602803c5566de2cfb",
       "bytes": 9221
     },
@@ -326,7 +326,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/planner_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "6f050303a33b58a4636055f9bc87b575bd1de471ebc73da180079ea6f72024ea",
       "bytes": 4438
     },
@@ -334,7 +334,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/react_observation.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "f20548a40de36908cf77025078bb0dbd678b59b2d3dbf7199605920074884f14",
       "bytes": 2602
     },
@@ -342,7 +342,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/recall_result.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "aee4df88bda0c8ae3064d1a2d670eb6e6c95ec7e2fd43ec569ba07e6f72651dd",
       "bytes": 2582
     },
@@ -350,7 +350,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/run_artifacts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "68f24dcac0c44863e29ffa41cd19f2bdc322b245a717c5649d533c6ac0439d68",
       "bytes": 108958
     },
@@ -358,7 +358,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/run_artifacts_map_stable_keys.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "4e5564e1ffceb1d2260804487795270e3958091b980154dc8d023259cf30af74",
       "bytes": 1089
     },
@@ -366,7 +366,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/skill_run.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "81748b2cfd4e2d5eb282c2d539ba304cf731587e6f0f75f5084de73d3f4337bc",
       "bytes": 2146
     },
@@ -374,7 +374,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/slot_schema.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "80bb2f07b3cf97eca2862de5d1f505de963013358f14d6efd09fb825ed4bc5bb",
       "bytes": 11947
     },
@@ -382,7 +382,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/subagent_plan.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "fd5659f9bfe8477685c4f2c12af13deed7effb5e4ce4726bc5e800f10675fda4",
       "bytes": 6116
     },
@@ -390,7 +390,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/synthesis_readiness_result.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "fe46d04e5889f540df50f04df651f8636a2d8f7713e9f670d2ee57c913d9ef45",
       "bytes": 2312
     },
@@ -398,7 +398,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/system_context_envelope.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "aebb9a341be62c86c4f5d9fab93e59b5bc3bc5e35476245d5bd07955146a4946",
       "bytes": 17696
     },
@@ -406,7 +406,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/tool_assessment.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "81be23c964834b130319ebc92c44e2fa6ba2e2ecc5ff7d763e6c0b87d63349a2",
       "bytes": 7195
     },
@@ -414,7 +414,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_run/domain/generated/understanding_result.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "7ca28b7fbd85431d1b4bfadb5f79e49db994a21a8fe1be511d5d09ade1ddac75",
       "bytes": 13758
     },
@@ -422,7 +422,7 @@
       "path": "lib/service/assistant_service/assistant/assistant_turn_view/domain/generated/assistant_turn.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "2d0b6baffe8558f7a7b5450edf67b2e8214f1acb8bf7e428a5e9d8a9086dcca8",
       "bytes": 74084
     },
@@ -430,7 +430,7 @@
       "path": "lib/service/circle_service/circle_management/circle/presentation/generated/circle_ui_config.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "a67d0e1c17ae39549bd499c8be316a759bbb434fad3ab1f20893956dcf52449a",
       "bytes": 2057
     },
@@ -438,7 +438,7 @@
       "path": "lib/service/content_service/content/post/adapters/generated/article_detail_wire_keys.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "40c194c6acf1968a119fea8b8a644994d537497c1ee838426b34ad83eaa429ee",
       "bytes": 901
     },
@@ -446,7 +446,7 @@
       "path": "lib/service/content_service/content/post/application/generated/content_feed_category_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "9774af777f0f4fe6efbc997f941182d523f1b06dab3cdc1c04211afc194a2a92",
       "bytes": 354
     },
@@ -454,7 +454,7 @@
       "path": "lib/service/content_service/content/post/application/public/generated/content_feed_delivery_category_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "7ab2bf944f14976d81802f35c8bf22dd1ab0fc8a63795b1a901c76105594d92d",
       "bytes": 401
     },
@@ -462,7 +462,7 @@
       "path": "lib/service/content_service/content/post/application/public/generated/content_media_playback_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "f3f3e89c365bcfe11194969c8ab863469f4deff88b99b56ee5095e8d23969c1a",
       "bytes": 346
     },
@@ -470,7 +470,7 @@
       "path": "lib/service/content_service/content/post/application/public/generated/content_media_post_projection_keys.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "a9258b110aacae7e91d0308fe0ffbcd124bdcd3ab6a12ccff2859fa1003d4b37",
       "bytes": 649
     },
@@ -478,7 +478,7 @@
       "path": "lib/service/content_service/content/post/domain/generated/content_post_snapshot_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "d229b622286e5c68f45b84f9659c8e420f265a30bc4171c2ea91eb9a380dd3d5",
       "bytes": 337
     },
@@ -486,7 +486,7 @@
       "path": "lib/service/content_service/content/post/domain/generated/content_publication_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "6b991c036829235b1bf4f3e8f4584c7a2d07643b7f27caccbdbf0c26b0c83043",
       "bytes": 962
     },
@@ -494,7 +494,7 @@
       "path": "lib/service/content_service/content/post/presentation/generated/content_ui_config.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "5a0dff25d0a533d46f8bdcd3144ce6d1bfbf3659966f2236bb1bc2d96ab69a8a",
       "bytes": 19312
     },
@@ -502,7 +502,7 @@
       "path": "lib/service/content_service/content/post/presentation/generated/surface_layout_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "e1d2daf4e374767983f40579e63a33ad9acaebc82aae041a2c5055e8bfcf2a48",
       "bytes": 3854
     },
@@ -510,7 +510,7 @@
       "path": "lib/service/content_service/media/media_asset/application/generated/content_image_variant_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "5b4123f18d02aa17635ad81db25b409e8b4165b73f1917239a80c0b9b2a22b64",
       "bytes": 1670
     },
@@ -518,7 +518,7 @@
       "path": "lib/service/content_service/media/media_upload_session/application/generated/content_media_upload_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "38df239342addaf033223b133652a48f6bbe73ddde786d83a26541c27529414c",
       "bytes": 1511
     },
@@ -526,7 +526,7 @@
       "path": "lib/service/entity_service/entity_homepage/homepage/application/public/generated/homepage_ui_config.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "e7c4895c63823734b831cd4be89a857322e54431807b6c9df320f6a997e8577d",
       "bytes": 2546
     },
@@ -534,7 +534,7 @@
       "path": "lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/generated/intersection_client_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "5ae00c75aeace5e36e6a40cb404fcb56839d2be3fc9aff7e82a8e91b78af2709",
       "bytes": 8661
     },
@@ -542,7 +542,7 @@
       "path": "lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/impact_help_type_metadata.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "9f983929d5c24e7d01ad486c5edfe8c327e946c8b31d9aef1de12fa86bd9bd37",
       "bytes": 1486
     },
@@ -550,7 +550,7 @@
       "path": "lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/intersection_display_metadata.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "13ed11a79bd6a9c1b2e42423675ea661825a69fb7eab91f2c514d58bcac80b7d",
       "bytes": 3383
     },
@@ -558,7 +558,7 @@
       "path": "lib/service/search_service/search/search_index_view/application/generated/search_execution_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "6b8811604022cf12ce8e233789a15a60bf4ec35b49390369a059ce32dc10dfe7",
       "bytes": 6703
     },
@@ -566,7 +566,7 @@
       "path": "lib/service/search_service/search/search_index_view/presentation/generated/search_display_metadata.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "75fa53ae8a0e32158263a1c563dd4bc9357c6b9b2a2a8b914400896146c22945",
       "bytes": 5970
     },
@@ -574,7 +574,7 @@
       "path": "lib/service/user_service/account/user_account/application/public/generated/user_profile_ui_config.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "5e30f1e5b3e55d36fba9c0456da59cfcadae60a50a20c9350e7eddb31f2ac761",
       "bytes": 9036
     },
@@ -582,127 +582,143 @@
       "path": "packages/quwoquan_cloud_contracts/lib/generated/assistant_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "8efe1e0501fa5a08950cc70c277bea3c0ce61cff4024bed099c3ccfada69139e",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "53be96da96ab5b571b2178862e98b3c232611fc66ad6145c0f168f02b806b804",
       "bytes": 242
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/chat_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "ee80b8bb29372d0176569284c0f8a4ee1f6a1fa9eb9c3bd529b920ce1d2c202a",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "df426f6da40eb7681606fed57d82281d938aafaf65d17c31acfe5eeeb1e40537",
       "bytes": 227
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/circle_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "2bbd654fee0547ec111cb726eaf8a1d93d491e9102154d399c2cae9bd59d9620",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "c2269ee642f5b345c66ed0dece8fd25d9cb8fe7d23e090f0123d612fc5c072b7",
       "bytes": 233
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/content_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "e960edf8d0e464c99e2691b2fdfe8715c2f2e83f636b6c52cf2e599937c9bdf9",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "9ffa61ac74bb4c30fb5eba4e8994d1f265c443a36a765f3056c2a5fe911390b7",
       "bytes": 236
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/content_preview_track_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "1a1bf243e9367f76ff544a791ccb22f1a9a51e0d2c791cc05e659e474b3c1116",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "2956b3bc53a4b888fa8d677ddc34f1b864b5dc3075923ff97b4bb55de8fa383c",
       "bytes": 245
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/entity_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "8d74d282986831c2b272441152ece46a825307e794efa6f3a966dbd4b7c49386",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "2681dad35bbd300b0731b5624b4fc1cccca8eebe7fabe65dee4a6d2742834c1d",
       "bytes": 233
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/gateway_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "7849b1d8de96aeb98165645f6ee4499bb7678fb832690c09d253bc35cf4bce3d",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "5542797c8ebd5298ccd298a985cd38c5e1929459b8ec09319a56c09b1be1a8a8",
       "bytes": 236
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/integration_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "9228f9ff767a58c27c825ee2e0172f4bb9866ff3b82497e6ce3d0590b066e227",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "d0465fd7c32b5e16d17e91e58c2cbb0c310a89a502f34e962f3b681a018dfba7",
       "bytes": 248
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/notification_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "1b128290cae0b1a9c4cbc583a88f01e8a558c8c73541ea4a6f36521ccfe81e8b",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "62225fd0033eedbedcf3653b45f1e10af22817d5841bff7e075ea3f787cac2ce",
       "bytes": 251
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/ops_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "61031cfb9e8e1379471ccda85d7e7a7d9f1a3bb0c7be345bdc5ee2b1e2d5d275",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "444eaa53dd67a43f015f0ecdf7a30f0846208598103cf1250cd9da1d3c79f09b",
       "bytes": 224
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/realtime_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "3559ec981fad13304aebe93a85b7792b23fd734bb115f0264775c4112510f70a",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "4ba66e4eaede2c4bfb0d1a1aa4d91a8b067b3672d219e1591b38389e81c4c802",
       "bytes": 239
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/rtc_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "0f3eae4d1b734c1089cb4ad31cffdc7f9ae8c7e46a7001483321b0a53c7a4e91",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "d394d01e9599546fdc91b7edf15295f96ea6fa90f7fc9515ed8704e0365405cf",
       "bytes": 224
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/search_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "e85c6a372b0f56030782a2fdb4a514f0d15be24fc49f6ab734378e999af194ca",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "ac625e2385dab4a80141d0a56be8f1f83a5fe4e40e0d63fb9960b1e1191deb10",
       "bytes": 301
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/tag_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "531116b26d3f33088ba9d90e6517ab797ee35697e16d1b29877b52441026d9fc",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "39fb2fdc6ee263bca4e76518e8219be24f8af2e08ac12691a18b6e7839997aa4",
       "bytes": 224
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/generated/user_contracts.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "443d1bc967f3ac240d9fcc47e4b9cac4f36f14afaa0d450707b85cb14c0b4084",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "fb0ab29d1f7492b148be73fea605668724e0a6d901d7a527b124ccae2be23208",
       "bytes": 227
+    },
+    {
+      "path": "packages/quwoquan_cloud_contracts/lib/generated/values/user/account/account_session.values.dart",
+      "owner": "app-only-emitter",
+      "generator": "app-only-emitter",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "352aee6b2b5dc95694c807457e3a86d4e71a4b1ff4ee6d65d59f76d6f873e0f7",
+      "bytes": 185
+    },
+    {
+      "path": "packages/quwoquan_cloud_contracts/lib/generated/values/user/account/authentication_challenge.values.dart",
+      "owner": "app-only-emitter",
+      "generator": "app-only-emitter",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "50c8da87e9c7edbb843f6303dff95157ef9f692ba8af118b702db0bdedb7e4ee",
+      "bytes": 203
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/assistant/assistant_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "870563643e35d49377d9169cce00d1e107fa181484d3ca7a6d540977ce2ba4b5",
       "bytes": 1674
     },
@@ -710,55 +726,55 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/chat/chat_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "77d8f779f533b9c13d7bbcae656d8af3377868d8775b795512fd71a020556179",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "8a8221cfe07c15eda51c225030d0a6c364c77dddb0b6866a32394ca15e0c06a7",
       "bytes": 90600
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "e14bdeb45521b7689d055ee913304c96f332b320670a4c94ca14d8df1e840290",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "6d018265f478a2a551131d24b098a0b2bd65ba385eab51b189d6f9e058e99ea9",
       "bytes": 190923
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "7447cca9ccaed00be05187f38300595da1866990de15bac6422561ad8abe7099",
-      "bytes": 221569
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "a61c6446034968522da35de1c9d9c23685587b7a2c4f54c07b881df4fb619f62",
+      "bytes": 231656
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/content/preview_track_manifest_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "f10fb645d503f4c2c1750008a52a2a31d74ffd3921065288a9ca1b383a5cb80b",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "1a019ee271d97c3cdfc1d999fa1864d50cca1ae78bdc0a51a729cbb38879d2bd",
       "bytes": 9975
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/entity/entity_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "2073bb50a4daaa8c806d18030b0a2f936ea2bd88a849304deafbf2dd961ea8dc",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "ead6b9abfc6c9ce04c83347ea0036323149b172dfadc2a2e4c277821225086ee",
       "bytes": 98034
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/gateway/gateway_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "35b41879b157b7be1770486bdbe4a3f288e5ffa67ef29c21d48d2d9fd0f29872",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "3b8e431fe22590423f8ae2e8ce92dac7bad24c61aff96465034441747b9cfc92",
       "bytes": 11393
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_api_responses.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "ec383fd55e6fae48ccee4d02cc5eceeb6c26f520733d53fbea6402f2b18b8808",
       "bytes": 199011
     },
@@ -766,7 +782,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_presentation_document.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "b1239d7c5fc6f42e3efba8c1920bd28f60ed461bcce7f7ac380e1559b5f6b896",
       "bytes": 6467
     },
@@ -774,7 +790,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_presentation_node.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "195d43f6b0c4e071f168263e962a868923fa4b4cd5424fa4b2b39e91da11b4ec",
       "bytes": 36655
     },
@@ -782,7 +798,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_presentation_template.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "f1c9f3b572d39a4ba35f06b2eb103f02302a94f89135c28a463ec5f249d22ea7",
       "bytes": 11642
     },
@@ -790,7 +806,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_process_timeline.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "1a956460d464464883eb7cc7f206b02f2fe4398c40cc6cb22cd95ad5bd18465c",
       "bytes": 7385
     },
@@ -798,7 +814,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_run.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "fad95ba82c6461e214edd9dc293b2b42e49db151f93067731ead048947a9e467",
       "bytes": 8623
     },
@@ -806,7 +822,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_run_runtime.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "c40541d3e4eeff3ccfeba1ba653ea5c117d10150811d007a8d1cf31029c5d4bc",
       "bytes": 33100
     },
@@ -814,7 +830,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_runtime_enums.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "2fd1b6c36ddfb5a9df596c98616386f0cfa662a3fb023bb3f7f569cb608b126f",
       "bytes": 138081
     },
@@ -822,7 +838,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_runtime_failure.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "7d8337e2c15acd103a90bc87bda4f1a13017498284127ae1fe400f2ec3a25afd",
       "bytes": 5316
     },
@@ -830,7 +846,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_session.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "d1303f4190539bd0f1897810bfa74622250a47672bed97465efc0b7805f65b70",
       "bytes": 5770
     },
@@ -838,7 +854,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_skill_context.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "d732037988b9c8ba61e8c75e15f2b4813ce2ad32be0f1388f982109da03f552e",
       "bytes": 9149
     },
@@ -846,7 +862,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_skill_manifest.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "5236df1b4fe9ac84014403af0faa77c3f9b9914b8e452fb894236a36e60df56a",
       "bytes": 13340
     },
@@ -854,7 +870,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_stream_event.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "cd4aae609eedf8ad804bf6dc14684c4ae89364b61af861c2fae3f1e636646bf4",
       "bytes": 5914
     },
@@ -862,7 +878,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_structured_response_wire.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "7816a78917ec24fde42f979273e6582ae14963c2f8b85f689dca450eb619a2c4",
       "bytes": 9007
     },
@@ -870,7 +886,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_surface_capabilities.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "df6665f18d8d9e255bd6f942b6a46d57192cdec2f9c2829d2fddb4caf917fdb4",
       "bytes": 5886
     },
@@ -878,7 +894,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_tool_metadata.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "2bb17ea8dea7a486f3140a65f1befb132975684ab8b79212c653374027dca99e",
       "bytes": 31343
     },
@@ -886,7 +902,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_trace_event.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "8bd1d1f5e0fd5287d259dcd6e2bf04060ef13b084ef2e59f82339e40d66e274a",
       "bytes": 7019
     },
@@ -894,7 +910,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_web_exploration.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "469b75817ab517134a2660e4219da6876556d7929952b0677b4a5c7e514181ef",
       "bytes": 16505
     },
@@ -902,7 +918,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/device_context.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "a3b228ffc987959ba9b4faeaf46675f79375c11c9d39d0034c5c0232731c3c5b",
       "bytes": 5707
     },
@@ -910,7 +926,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/skill_subscription.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "267dcf07f63d82600edf4ccc1bb9a30db233ac120c0932e4e83013b374f22857",
       "bytes": 23129
     },
@@ -918,7 +934,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/tool_use.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "f3bf0539aca96ae45f4b090fb9f062e9433d1bcf38032e778aa6e664fa826d3d",
       "bytes": 7074
     },
@@ -926,23 +942,23 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/content_post_get_feed_policy.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "d68217ef418644d40a972637723243c8ec5172585589ca418fa4ee9bc9df4322",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "7333203e4c142f1c1ed23de35dbb6a97d88b0ddae6d26adf81742766286e6459",
       "bytes": 381
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "f6621973855b80e07f4fccbc647cc3927149a3c18a8e42671797766ab4c278cc",
-      "bytes": 1011526
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "6be1b056740480a33f2ee60b11c63c27c11e605a914cbb386a8e45c7d8d6af3e",
+      "bytes": 1023433
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/realtime/chat_realtime_events.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "33b71f6312626dbbec554417eea0efd57f237bbf4db83286eba5c5a9f29ec646",
       "bytes": 30652
     },
@@ -950,7 +966,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/realtime/feed_realtime_patch.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "f8947ac7b9b41c72a61ef5122568caed81113e0713b67fbb79e6181392c8ab63",
       "bytes": 9322
     },
@@ -958,7 +974,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/realtime/realtime_event_catalog.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "6e265f317fd6fcbd362fdc31b22976c2c941483e2b38c62042ae875bcd209266",
       "bytes": 12256
     },
@@ -966,7 +982,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/realtime/rtc_signal_payloads.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "911705ee412c76346d26d3a797ae7da09a2e8a052c1cf73130038baf2864c356",
       "bytes": 19044
     },
@@ -974,7 +990,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/realtime/shared_realtime_event_enums.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "9481b8e15e8e92f3b3526426adcfa96d7fd6e59d7d5a09d405ef61c8beb90d71",
       "bytes": 888
     },
@@ -982,7 +998,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/recommendation/intersection_contract_vocabulary.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "d8b85755674f2c71fa4ce98220b5ce8451d4658af1fcfad24c9709f243f7923c",
       "bytes": 7343
     },
@@ -990,7 +1006,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/recommendation/intersection_feedback_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "0679600d01a249a2e4c9361bf14b4ec00012451109f0dcb4ce69e7ecf4d5fc0e",
       "bytes": 640
     },
@@ -998,119 +1014,119 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/assistant/assistant_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "29f7a38e9ac5cd67ef8c049b63ffdb6f2d944ece96c0d4cc133f673e382d2f8e",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "d6a3fc1b90e908d32168bff5c1eaa1897c39ab543f991509c275b1cf831664b4",
       "bytes": 107216
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/chat/chat_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "edfeac6dae4209ba74a7764784569cbc69df3acaa4461cdfc42defb1d25944a7",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "a2becc6395598ef1fe52bf7e920e7cbda44ce83b217adb49b95ded4cd37fe6f4",
       "bytes": 66893
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/circle/circle_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "eb0195bb64a34ce4e53c034eb25e4146dd519571d29d5a052d940b277279ce21",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "5330933776ff9b4246fc5e0febee7cfd5927af5bffe6a2b6c29b2c4fae2c92e8",
       "bytes": 157303
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "9bd75c2010ecded4342b01a74307d88744c635fcc68267fcbcbdcf07d4327d04",
-      "bytes": 135557
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "9aa7ac96af613829739c526a194413a49d1a50b03819e4629b98a0a10e45e457",
+      "bytes": 145540
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/entity/entity_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "5745f77a1521ab212ee932dc5d93bffcff79267feeafa1d65bf2bbcf710f39a2",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "1119e7ac0b6f140e574cfbd1acf1200465e284f89e6b018d9e2eba5488f0cdc5",
       "bytes": 41476
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/gateway/gateway_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "898a2acd0dabdba8df3b1f426aa6ef98ae3ef862f73678f5024ef65f449028e2",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "68989a8733df0fdb98a5a3c47087d57f3a75223368d72b2585abede9a175c3e1",
       "bytes": 5313
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/integration/integration_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "4ebc05ecfea34d3e73de90c12ab6e1fa644806842064d10b27076c197a5b4909",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "8a486b6e74848983c89645912b2401d3c7060a82076dffd7c3043e726759bd3f",
       "bytes": 17148
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/notification/notification_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "90d45ec5a33ff49745aae6435edae1355179966f5f9812da8fed089373be9cd3",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "b73e66cb0a9df6a6a2998a6daa351d75d459ed3bdc9ceace3a8636e6d4442d9f",
       "bytes": 6948
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/ops/ops_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "83bdc2629fc1c3b5f1e05423cb5aad95c87ceefa0c6da2efc1acccb522dd9987",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "b5b8d8afb3f12b2fbbe48688130105993dd9824f4d29ac1b79ef1ecf9c84274a",
       "bytes": 170358
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/realtime/realtime_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "723ebd24b296b5f84f1f9a18e6072e0bdb5c7b3b461039924115203cddbfe07b",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "de38217899293975341e7aa55a06d51175a95c62efc5415c5378c431e0d4f3cc",
       "bytes": 3135
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/rtc/rtc_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "3046961d62b503d16a7ecf7aa2b47d924a9c8a45c102e0b00214f20f970fb1a3",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "8b919c9151aef904e732052457bd2f047384dd698a92651270ec48b6e1317acb",
       "bytes": 14296
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/search/search_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "1e9e3a4f8e0d271ebf89a4fb01337d56444aabe1c39b92b11774dbd0ecb6141c",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "31b96b61497ba44f5d8a03430480e40ca41b5d57eb5d63ddc30392f33bd17514",
       "bytes": 18238
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/tag/tag_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "0d918ebf402c35d2b5d84098c0b7653b53de910cb106f219c8026db857a8a70c",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "eef89cbd4e24910541165be04abd5cb5c5f684a0afd5142f2ac53f5f59f0cb28",
       "bytes": 7465
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/user/user_operation_contracts.g.requests.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "21a0526ba35ad94193b829ff18b4a2ceb07a757e3de6570ffd2c4713a6a4374a",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "fbaf1557e9099a3aa63b72694bcc1aa720f7fbfe6c237132f08bd7552eba4d0d",
       "bytes": 134393
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_citation.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "4b8292df1fc9cd866d613d380e31410ae5ef298342de7156d7d8d0af23bd50ab",
       "bytes": 5685
     },
@@ -1118,7 +1134,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_content_hit.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "bf3fd08c42ec779c5a146e738c6592b07a41428d7701ebb08239d667ab92a534",
       "bytes": 7747
     },
@@ -1126,7 +1142,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_degrade_signal.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "e49b88d459560762406e725ed43ca507995c90dab2bf654a1fbac18c4710dc7e",
       "bytes": 2195
     },
@@ -1134,7 +1150,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_evidence.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "5e9c678cf01c78f1c64e642521ae0c73061684c898694ff3e05cca3c89eb4faa",
       "bytes": 1682
     },
@@ -1142,7 +1158,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_facet.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "3495e5aa319260356a5d74c44a82ced1a99a4ad7fe1546cdd7ecca455ac24ff6",
       "bytes": 1900
     },
@@ -1150,7 +1166,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_geo_point.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "25a384d91fad5c19c92ae403dbad96c106c764a8f2cd25c0d45f7f0b5cc1f97f",
       "bytes": 1563
     },
@@ -1158,7 +1174,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_hit.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "c242d0e9246c2e69af9fe7965f19083eda0feefccb4ba0781f51da2462656a79",
       "bytes": 11897
     },
@@ -1166,7 +1182,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_intersection_reason.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "b57753b3ee0241ab69189cc575398436adb3f3b8b747a6e6e17b3422204b408e",
       "bytes": 3350
     },
@@ -1174,7 +1190,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_mode.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "ce8b2c7a26e77bb552ff08c6fbe37eb4dc3a845f9d0ffa591493ff6120484827",
       "bytes": 281
     },
@@ -1182,7 +1198,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_payload.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "8d41e5b450cd3c58f5f1917000a1b62169485e7682edeb07ae1f908906f8de88",
       "bytes": 8583
     },
@@ -1190,7 +1206,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_provenance.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "8f06200e66284623bdf27154decbc5fed4d732990cb58327bcacc5fd0fe6d68b",
       "bytes": 1961
     },
@@ -1198,7 +1214,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_rank_reason.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "68207d39c1d4cb5f198b1be45d7b93aa32272ebcaa052c29098f261b8657e3b9",
       "bytes": 2056
     },
@@ -1206,7 +1222,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/owner_search_interpreted_query.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "35c2052a1c8bf06dc8d3dcde4414e862726619b1ee1dd8ae9b268816c9ea5963",
       "bytes": 4641
     },
@@ -1214,7 +1230,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/search_contract_vocabulary.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "572ebc854502b5dea04feb80f286ce94c20929aeb7a5d1d53b6a2cbc8493b3a1",
       "bytes": 3419
     },
@@ -1222,7 +1238,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search/search_response_view.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "b33db69de84478f0455581e1e7139097f765a30b60f8a4c01684fd4a67de5969",
       "bytes": 8619
     },
@@ -1230,7 +1246,7 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/search_feedback_event_type.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
       "sha256": "3dce74a8572cf0f5b478530a342d3c16ffbb37dab7c2dd05f1faad3a7170d841",
       "bytes": 332
     },
@@ -1238,88 +1254,104 @@
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/shared_operation_enums.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "4ac6b686bc9fe462c218d2949d77ea303c04f14d1f37cc6f4a0d00353b771837",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "0e5900e4cbd7ae5d626b61f89bbe0f00b4194e7eb4d7a349a977454c9d6244b3",
       "bytes": 8196
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/generated/shared_operation_types.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "7d4364e3ab84122c18c728e8b043fb6049d1defa271ea73faeff382a0496aed8",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "6752d0cc2d671db133e38adf7e3f57cced95177a462c191e41f75881ea134151",
       "bytes": 7111
+    },
+    {
+      "path": "packages/quwoquan_cloud_contracts/lib/src/generated/values/user/account/account_session.values.g.dart",
+      "owner": "app-only-emitter",
+      "generator": "app-only-emitter",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "a59a0a09531e9ff8e12fafafee84912e3a4595d2a2d6a253c60c7aa41820c3eb",
+      "bytes": 7900
+    },
+    {
+      "path": "packages/quwoquan_cloud_contracts/lib/src/generated/values/user/account/authentication_challenge.values.g.dart",
+      "owner": "app-only-emitter",
+      "generator": "app-only-emitter",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "4b4e75029d582fc5d7b52aacb8f57f15565a8e9e141db669f23789d41f18a46b",
+      "bytes": 8197
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/integration/integration_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "7aec60a233cb682b1f753d67447b67c985662345d66fcc241b0a4226305a08af",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "971448d09653ebec233a6427ad3ee478f4984647c8889d486f624d00f121fc03",
       "bytes": 22926
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/notification/notification_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "6539aed715d8f728885deb20cc50cd4eefccf87889f78c03ea8ae95db487ada6",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "d9fc6595912f7b52928ac2d91c6d14fb5cb56c3868c218d1732a16c789c74f24",
       "bytes": 22161
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/ops/ops_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "40088bf4c162cef19f7cdc79ed1cfb44c6c2f58f181097ca215fa3399d63eff8",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "94bd2e8f2bd79faaacd52de7d9250b5d9b17c445507ecf1421e1f5f32781d148",
       "bytes": 13423
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/realtime/realtime_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "991e88bb22a0d091146c7205349dc447197661d142cf9dc0d71f8389d0f6abf6",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "c44daa8203cb856696fff1b20d40ab76777cf6d98fdabfe89a84f8163cb087e1",
       "bytes": 4332
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/recommendation/recommendation_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "da2694f416daa0c218c2d39b1058c629f1cf8c955cdc6bc0a2d05a1a64c9e13b",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "5e081e0330ca28072b75eb9ff3fe61d543ca7f246a8aeb8c27b0dcdb56d837c2",
       "bytes": 42202
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/rtc/rtc_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "b29d4c2b76c9b2dcd1d81dc898c3722b5c0b34c1909ba6141de9a15f2351b648",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "109a487a80994b3f7d1f9b5bca7faf45263a03d21a27491474266c1c8aafcaae",
       "bytes": 18377
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/search/search_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "b1608a8693b5979fd2a0b61deee49cff8b6eaf01a5f0b0c928b6424427c15fa9",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "ed062a0dd5b4b34e0c46421956b7838e5391edcac440eb9c0af75c33e93dfc39",
       "bytes": 8125
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/tag/tag_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "a47e85e439805b50262226eea8d189fa279d8b0833e94aa7b5c461bf74a2b826",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "7cc21ad9242a77b80dc7402af6bee88e027e97fcacd77603fc297d7e1bdfa70e",
       "bytes": 13223
     },
     {
       "path": "packages/quwoquan_cloud_contracts/lib/src/user/user_operation_contracts.g.dart",
       "owner": "app-only-emitter",
       "generator": "app-only-emitter",
-      "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-      "sha256": "0f75e27df12026043f326f8d634e974604073fb18bcf74a893a292b6c5fb1eac",
+      "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+      "sha256": "1de6b7e11c4e436aa1e5b1576567da221998083faf927f2593c63ba3d92538ab",
       "bytes": 158445
     }
   ]

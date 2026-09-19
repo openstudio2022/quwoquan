@@ -80,6 +80,13 @@ def _apply_handoff_identity(
     env["QWQ_RUNTIME_CONFIG_SUPPLY_MODE"] = str(
         handoff["runtimeConfigSupplyMode"]
     )
+    from quwoquan_ops.cli.lib.app_identity import resolve_app_identity
+    identity = resolve_app_identity(platform="ios", environment=environment,
+                                    build_mode="release" if environment == "prod" else "debug")
+    env["CONFIGURATION"] = identity.configuration
+    env["PRODUCT_BUNDLE_IDENTIFIER"] = identity.application_id
+    env["FLUTTER_TARGET"] = str(handoff["entrypoint"])
+    env["BUILT_PRODUCTS_DIR"] = str(artifact_root / "products")
     env["QWQ_APP_BUILD_PROFILE"] = str(handoff["buildProfile"])
     env["QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH"] = str(
         _write_trust_envelope(artifact_root, trust_envelope)
@@ -147,6 +154,13 @@ def _install_direct_handoff(
         ensure_ascii=False,
         separators=(",", ":"),
     )
+    from quwoquan_ops.cli.lib.app_identity import resolve_app_identity
+    identity = resolve_app_identity(platform="ios", environment=runtime_environment,
+                                    build_mode="release" if runtime_environment == "prod" else "debug")
+    environment["CONFIGURATION"] = identity.configuration
+    environment["PRODUCT_BUNDLE_IDENTIFIER"] = identity.application_id
+    environment["FLUTTER_TARGET"] = str(handoff["entrypoint"])
+    environment["BUILT_PRODUCTS_DIR"] = str(artifact_root / "products")
     environment["QWQ_APP_BUILD_PROFILE"] = str(handoff["buildProfile"])
     environment["QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH"] = str(
         _write_trust_envelope(artifact_root, trust_envelope)

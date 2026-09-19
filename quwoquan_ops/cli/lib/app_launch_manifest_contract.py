@@ -750,6 +750,13 @@ def validate_runtime_config_package(
         runtime_document_content_source(package, selected_contract)
     except LaunchManifestContractError as error:
         issues.append(str(error))
+    if offline:
+        space = package.get("rehearsalSpace")
+        if isinstance(space, dict) and (
+            (space.get("mode") == "standard" and space.get("instanceId") != "default")
+            or (space.get("mode") == "isolated" and space.get("instanceId") == "default")
+        ):
+            issues.append("offline rehearsal mode/instance binding is invalid")
     if offline and isinstance(runtime_config_trust_envelope, dict):
         trust_issues = validate_runtime_config_trust_envelope(runtime_config_trust_envelope, selected_contract)
         if not trust_issues and package.get("trustEnvelopeDigest") != runtime_config_trust_envelope_digest(runtime_config_trust_envelope, selected_contract):

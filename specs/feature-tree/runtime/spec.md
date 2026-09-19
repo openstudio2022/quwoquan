@@ -25,6 +25,26 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 - 跨域写入：目标领域公开 command；禁止直写目标存储。
 - 跨域读取：目标领域公开 query/projection。
 
+### 工程归属
+
+- Ops：`Makefile`（仓库级薄构建、测试与门禁编排门面；不拥有其调用的 Feature 行为、契约或测试）、`README.md`（仓库级入口说明）
+- App：`quwoquan_app`（仅拥有 App 项目级构建与平台壳，不作为业务 domain fallback）、`quwoquan_app/lib/runtime`、`quwoquan_app/lib/design_system`、`quwoquan_app/lib/l10n`、`quwoquan_app/lib/service/integration_service`
+- Metadata：`quwoquan_service/contracts/metadata/_shared`
+- Metadata（协作引用，不用于代码归属）：`quwoquan_service/services/integration-service/contracts`
+- Service：`quwoquan_service`（跨域基础设施、生成链与未被更具体 L1 路径认领的 Service 工程根）、`quwoquan_service/contracts`
+- Service：`quwoquan_service/services/integration-service`（外部能力机制进程）
+- Service（协作引用，不用于代码归属）：`quwoquan_service/runtime`、`quwoquan_ops`
+- Agent：`AGENTS.md`（全仓执行不变量）、`specs/feature-tree/README.md`（Feature Tree 结构与 owner 算法）、`.agents`（Workflow Skill 唯一 authoring source/宿主发现面与 Reviewer 中性真相源）、`.codex`、`.cursor`（仅两宿主的一行命令入口与 Reviewer projection；Workflow 语义只归 `.agents/skills`）、`.github/actionlint.yaml`（仓库级 workflow lint 配置）
+- Agent：`quwoquan_ops/policies/agent_governance_contract.yaml`、`quwoquan_ops/policies/human_agent_delivery_contract.yaml`、`quwoquan_ops/policies/objective_execution_contract.yaml`、`quwoquan_ops/policies/hotl_admission_contract.yaml`、`quwoquan_ops/policies/local_readiness_contract.yaml`、`quwoquan_ops/policies/governance_pipeline_admission_contract.yaml`
+- Agent：`quwoquan_ops/cli/feature_tree.py`、`quwoquan_ops/cli/human_agent_delivery.py`、`quwoquan_ops/cli/objective_execution.py`、`quwoquan_ops/cli/hotl_admission.py`、`quwoquan_ops/cli/local_readiness.py`、`quwoquan_ops/cli/governance_pipeline_admission.py`、`quwoquan_ops/cli/evidence_runner.py`、`quwoquan_ops/cli/handoff_manifest.py`、`quwoquan_ops/cli/handoff_consumer.py`、`quwoquan_ops/cli/lib/feature_tree`、`quwoquan_ops/cli/lib/agent_governance_contract.py`、`quwoquan_ops/cli/lib/evidence_fingerprint.py`、`quwoquan_ops/cli/lib/evidence_generation.py`、`quwoquan_ops/cli/lib/review_fingerprint.py`、`quwoquan_ops/cli/lib/review_terminal_contract.py`、`quwoquan_ops/cli/lib/human_agent_delivery`、`quwoquan_ops/cli/lib/objective_execution`、`quwoquan_ops/cli/lib/hotl_admission`、`quwoquan_ops/cli/lib/local_readiness`、`quwoquan_ops/cli/lib/governance_pipeline_admission`、`quwoquan_ops/cli/review_dispatch.py`、`quwoquan_ops/cli/review_consolidator.py`
+- Agent：`quwoquan_ops/ci/local_readiness_planner.py`、`quwoquan_ops/hooks/local_readiness_after_edit.py`、`quwoquan_ops/gate/verify_agent_context_budget.py`、`quwoquan_ops/gate/verify_handoff_manifest.py`、`quwoquan_ops/gate/verify_human_agent_delivery_eval.py`、`quwoquan_ops/gate/verify_objective_execution.py`、`quwoquan_ops/gate/verify_hotl_admission.py`、`quwoquan_ops/gate/verify_governance_pipeline_admission.py`、`quwoquan_ops/tools/generate_agent_adapters.py`
+- Agent：`quwoquan_ops/policies/code_health_policy.yaml`、`quwoquan_ops/gate/code_health_delta`、`quwoquan_ops/gate/verify_incremental_code_health.py`、`quwoquan_ops/gate/run_code_health_calibration.py`、`quwoquan_ops/gate/report_code_health_weekly.py`、`quwoquan_ops/tests/local_contract/gate/test_incremental_code_health__gate__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_actionlint_feature_owner__local_contract_test.py`
+- Agent：`quwoquan_ops/tests/local_contract/gate/test_feature_tree__directory_native__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_feature_tree__clause_binding__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_review_consolidator__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_evidence_fingerprint__contract__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_named_evidence_runner__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_handoff_manifest__gate__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_handoff_manifest_producer__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_agent_context_budget__gate__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_agent_adapter_generator__tool__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_human_agent_delivery__contract_router__governance__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_human_agent_delivery__commercial_evidence_projection__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_human_agent_delivery_calibration__gate__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_human_agent_delivery_eval__gate__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_objective_execution__journal_authority__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_objective_execution__executor_admission__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_objective_execution__gate__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_hotl_admission__contract__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_hotl_admission__evaluator__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_governance_pipeline_admission__evaluator__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_governance_pipeline_admission__contract_cli_gate__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_governance_pipeline_admission__evidence_bundle__local_contract_test.py`、`quwoquan_ops/tests/local_contract/ci/test_local_readiness__core__local_contract_test.py`
+- 测试：
+  - `local_contract`：`quwoquan_service/runtime`、`quwoquan_app/test/local_contract/journeys/connector_management`、`quwoquan_app/test/local_contract/runtime/media_orientation_policy__local_contract_test.dart`
+  - `api_integration`：`quwoquan_ops/tests`
+  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/journeys/app_startup`
+
 ## 3. Journey / Scenario 职责
 
 - [`JNY-001 / SCN-004`](../spec.md#scn-004)
@@ -170,6 +190,15 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 - 外部能力必须经能力专属 typed Port 与登记的 Provider Adapter；运行时不得扫描 metadata
 - 日志/指标/追踪字段统一可检索
 
+<a id="req-003"></a>
+### REQ-003 App 自有手机页面全生命周期固定正向竖屏
+
+- Android/iOS 手机的 App 自有页面统一固定 `portraitUp`，从原生启动、Flutter 首帧和启动失败恢复到路由往返、前后台恢复与热重启均不因手机姿态切换方向。
+- runtime 只提供全局固定方向入口；不接受调用方方向集合，不提供横屏临时租约，不捕获或恢复传感器/原生窗口观测方向。迟到完成、失败或重入不能重放历史方向策略。
+- 媒体内部显式旋转只属于内容展示，不写系统方向；首页、登录、拍摄、通话等页面不获得方向例外。页面方向与相机素材编码方向、EXIF/视频旋转元数据解耦，不锁定或改写素材采集朝向。
+- 原生键盘、分享、授权和外部 Provider 界面由平台管理；App 不强制旋转系统 UI，返回时不释放自己的固定方向。Android 透明回调 Activity 继承后方 App Activity 方向，不对透明窗口另行申请方向锁。
+- 手机固定方向与平板平台能力分开验收：iPad 保留多任务所需原生方向声明，不为锁定方向擅自禁用多任务；Android target API 36 起最小宽度至少 600dp 的大屏可忽略方向限制。窗口真实尺寸变化按实际约束排版，不据此引入传感器模式。平台 API 完成只证明请求被处理，不证明设备实际锁定。
+
 ## 6. 领域验收
 
 <a id="dom-001"></a>
@@ -183,6 +212,30 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 - 禁止结果：domain/application 不依赖 adapters/infrastructure 或 Vendor SDK。
 - 独立机制进程不拥有业务 aggregate，不复制业务对象真相源。
 - 环境和 rollout stage 只作为三层测试证据维度。
+
+<a id="dom-002"></a>
+### DOM-002 原生启动与 Flutter 固定方向入口一致
+
+- 条件：Android/iOS 手机启动或 Flutter 热重启，包括运行配置水合失败进入启动恢复。
+- 可观察结果：Android 启动门和主 Activity 声明 `portrait`，透明回调 Activity 使用 `behind`；iPhone 原生支持方向只有 `UIInterfaceOrientationPortrait`。Flutter 在运行配置水合和首帧之前请求且只请求 `[DeviceOrientation.portraitUp]`。
+- 禁止结果：bootstrap 或恢复逻辑登记空方向集合、四方向或临时横屏；API 返回被标记为实际窗口锁定成功。
+- 证据层：原生声明/启动接线源码契约与真实平台通道消息属于 `local_contract`；原生冷启动至首帧无旋转的设备证据由 `OPEN-005` 承接。
+
+<a id="dom-003"></a>
+### DOM-003 重入与迟到完成不能释放固定方向
+
+- 条件：连续固定请求、页面往返、paused/resumed、平台请求延迟完成或失败后再次调用。
+- 可观察结果：resumed 经唯一全局入口重申正向竖屏；并发、超时、失败或迟到完成均不会写入另一方向集合、捕获观测方向或重放释放租约。失败保留为异常，后续请求仍可执行，不被未完成请求队列阻塞。
+- 禁止结果：系统弹窗往返、媒体退出、热重启触发横屏或传感器恢复；局部媒体旋转进入条件依赖方向平台请求。
+- 证据层：真实生命周期通知及平台通道/延迟完成 seam 的 `local_contract` 证明请求序列；页面与热重启真实设备观察由 `OPEN-005` 承接。
+
+<a id="dom-004"></a>
+### DOM-004 手机锁向不冒领素材、系统 UI 或平板平台事实
+
+- 条件：手机四向摆放并访问首页、媒体、登录、拍摄等 App 自有页面，打开系统分享/授权或拍摄素材；另在 iPad 多任务与 Android 大屏运行同一候选。
+- 可观察结果：手机 App 自有页面始终正向竖屏，素材显示/EXIF/视频旋转元数据保持真实拍摄朝向，系统 UI 行为由平台管理；平板按平台支持度和实际窗口分别记录，不能宣称方向 API 已锁定多任务或大屏窗口。
+- 禁止结果：为锁页面改写 capture orientation/素材元数据、关闭 iPad 多任务、强制旋转系统弹窗，或用 `local_contract` PASS 替代真实设备结论。
+- 证据层：`user_acceptance`；当前缺口及设备完成判定由 `OPEN-005` 承接。
 
 ## 7. 开放事项
 
@@ -220,3 +273,12 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 - 准出影响：`track`
 - 影响或价值：`quwoquan_service/contracts/metadata/_schemas/readiness_result_bundle.schema.json` 要求 `producer=service, layer=api_integration` 的结果携带 `releaseId/releaseDigest/importRunId/verifyRunId/objectRef/objectDigest` 且禁止 `platform/deviceClass/deviceRegistered`，而 `internal/metadata/readiness/model.go` 的 `ReadinessCaseResult` 无前四个字段、`platform/deviceClass/deviceRegistered` 恒输出，`evaluate.go` 亦以 platform/deviceClass 做执行槽匹配与身份校验。Go 模型尚缺这四个字段与按 producer/layer 区分的执行槽键，`tools/evaluate_readiness` 的 `TestCLIRequiresTheSignedSnapshotReceiptAndEvidenceChain` 因此报 `READINESS.BUNDLE.DECODE_FAILED`，evaluate_readiness 无法接受任何 Go 侧构造的 service/api_integration 结果。
 - 完成判定：以 schema 为 authoring source，`ReadinessCaseResult` 与评估器按 producer/layer 区分执行槽键与必填身份（service/api_integration 以 release/import/verify/object 绑定，不再要求设备身份），`go test ./tools/evaluate_readiness/... ./internal/metadata/readiness/...` 通过，Python 侧 `quwoquan_ops` 现有 bundle 产出（`release_bound_data_evidence.py` 等）通过同一 schema 校验，且 `DOM-001` 中「环境和 rollout stage 只作为三层测试证据维度」子句仍成立。
+
+<a id="open-005"></a>
+### OPEN-005 全 App 手机固定方向的原生与真实设备验收
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`DOM-002`、`DOM-003` 的源码/通道消息证据不证明原生首帧、真实手机路由/前后台/热重启和素材拍摄朝向；`DOM-004` 尚需同候选 Android/iOS 手机与平板平台限制观察。不用旧设备回执冒充当前候选证据。
+- 完成判定：同候选 Android/iOS 手机横放冷启动至首帧、四向转动、页面往返、前后台、热重启与媒体进出满足 `DOM-002`、`DOM-003` 的固定正向竖屏结果；拍摄图片 EXIF/视频旋转元数据和系统 UI 往返满足 `DOM-004`，并分别报告 iPad 多任务与 Android 大屏方向限制是否被平台忽略，附真实 `user_acceptance` 证据而非请求成功日志。

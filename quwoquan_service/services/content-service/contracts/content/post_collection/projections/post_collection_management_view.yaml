@@ -1,0 +1,11 @@
+read_model: PostCollectionManagementView
+description: 仅认证合集 owner 可读的完整编排视图；失权成员只保留已拥有的关系引用，不返回成员私有内容。
+source_entities: [PostCollection, Post]
+consumers: [app]
+fields:
+- {name: collectionId, type: string, nullable: false}
+- {name: name, type: string, nullable: false}
+- {name: coverAssetId, type: string, nullable: true}
+- {name: visibility, type: enum, enum_ref: PostCollectionVisibility, nullable: false}
+- {name: version, type: int64, nullable: false}
+- {name: members, type: '[]PostCollectionManagedMember', nullable: false}

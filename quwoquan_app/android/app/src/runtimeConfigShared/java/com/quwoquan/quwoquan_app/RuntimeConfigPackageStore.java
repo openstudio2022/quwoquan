@@ -36,6 +36,11 @@ import java.util.regex.Pattern;
 final class RuntimeConfigPackageStore {
   static final String PACKAGE_FILE_NAME = "runtime-config-package.json";
   static final String TRUST_FILE_NAME = "runtime-config-trust.json";
+  static final String PREVIOUS_LAYOUT_MIGRATION_HISTORY_DIRECTORY =
+      "runtime-config-historical-migration-history";
+  static final String PREVIOUS_LAYOUT_MIGRATION_PACKAGE_FILE_NAME = "package.json";
+  static final String PREVIOUS_LAYOUT_MIGRATION_RECEIPT_FILE_NAME = "active-receipt.json";
+  static final String PREVIOUS_LAYOUT_MIGRATION_AUDIT_FILE_NAME = "audit.json";
   static final String ASSET_ROOT = "qwq_runtime";
   static final int MAX_BYTES = 1024 * 1024;
   static final String ABSENT_REASON = registeredErrorCode("runtime_config_package_missing");
@@ -64,6 +69,8 @@ final class RuntimeConfigPackageStore {
       AppLaunchContract.RUNTIME_CONFIG_TRUST_ENVELOPE_REQUIRED_FIELDS;
   private static final List<String> PACKAGE_FIELDS =
       AppLaunchContract.RUNTIME_CONFIG_PACKAGE_REQUIRED_FIELDS;
+  private static final List<String> PREVIOUS_LAYOUT_OFFLINE_PACKAGE_FIELDS =
+      previousLayoutOfflinePackageFields();
   private static final List<String> RUNTIME_FIELDS =
       AppLaunchContract.RUNTIME_CONFIG_PACKAGE_RUNTIME_REQUIRED_FIELDS;
   private static final Set<String> WEBSOCKET_RUNTIME_FIELDS =
@@ -274,7 +281,22 @@ final class RuntimeConfigPackageStore {
   }
 
   String readCurrentActiveDigest() throws RuntimeConfigException {
-    return currentActiveDigest(loadTrustEnvelope());
+    return currentActiveDigest(loadTrustEnvelope(), null);
+  }
+
+  String readCanonicalActivationPreviousLayoutPredecessorDigest() throws RuntimeConfigException {
+    TrustProjection trust = loadTrustEnvelope();
+    File activeFile = activePackageFile(false);
+    if (activeFile == null) {
+      throw new RuntimeConfigException("runtime_config_schema_mismatch");
+    }
+    byte[] storedBytes = readFile(activeFile);
+    JsonObject current = decodeDocument(storedBytes, "runtime_config_package_malformed");
+    ActiveProjection historical = validatePackage(current, trust, null, true, true);
+    if (!MessageDigest.isEqual(storedBytes, canonicalJsonBytes(current))) {
+      throw new RuntimeConfigException("runtime_config_schema_mismatch");
+    }
+    return historical.packageDigest;
   }
 
   synchronized ActivationResult activate(
@@ -298,6 +320,20 @@ final class RuntimeConfigPackageStore {
       String expectedActiveDigest,
       ActivationCommitter committer)
       throws RuntimeConfigException {
+    return activateCanonical(
+        packageDocument, expectedPackageDigest, expectedTrustEnvelopeDigest,
+        expectedActiveDigest, null, null, committer);
+  }
+
+  synchronized ActivationResult activateCanonical(
+      JsonObject packageDocument,
+      String expectedPackageDigest,
+      String expectedTrustEnvelopeDigest,
+      String expectedActiveDigest,
+      String verifiedPreviousLayoutPredecessorDigest,
+      byte[] verifiedPreviousLayoutReceipt,
+      ActivationCommitter committer)
+      throws RuntimeConfigException {
     if (packageDocument == null) {
       throw new RuntimeConfigException("runtime_config_package_malformed");
     }
@@ -318,7 +354,7 @@ final class RuntimeConfigPackageStore {
       throw new RuntimeConfigException("runtime_config_trust_digest_mismatch");
     }
 
-    String currentDigest = currentActiveDigest(trust);
+    String currentDigest = currentActiveDigest(trust, verifiedPreviousLayoutPredecessorDigest);
     if (!MessageDigest.isEqual(
         currentDigest.getBytes(StandardCharsets.UTF_8),
         expectedActiveDigest.getBytes(StandardCharsets.UTF_8))) {
@@ -326,6 +362,10 @@ final class RuntimeConfigPackageStore {
     }
 
     validatePackage(packageDocument, trust, expectedPackageDigest);
+    if (verifiedPreviousLayoutPredecessorDigest != null) {
+      preservePreviousLayoutMigrationHistory(
+          trust, verifiedPreviousLayoutPredecessorDigest, verifiedPreviousLayoutReceipt);
+    }
     byte[] canonicalPackage = canonicalJsonBytes(packageDocument);
     WriteResult writeResult = writeActivePackage(canonicalPackage);
 
@@ -405,14 +445,124 @@ final class RuntimeConfigPackageStore {
     return "runtime-config-failure|" + state.error.code;
   }
 
-  private String currentActiveDigest(TrustProjection trust) throws RuntimeConfigException {
+  private String currentActiveDigest(
+      TrustProjection trust, String verifiedPreviousLayoutPredecessorDigest)
+      throws RuntimeConfigException {
     File activeFile = activePackageFile(false);
     if (activeFile == null) {
       return "";
     }
-    JsonObject current = decodeDocument(readFile(activeFile), "runtime_config_package_malformed");
-    // CAS 前值只需要身份：时间窗过期的旧包必须仍可被替换，不得死锁激活。
-    return validatePackage(current, trust, null, true).packageDigest;
+    byte[] storedBytes = readFile(activeFile);
+    JsonObject current = decodeDocument(storedBytes, "runtime_config_package_malformed");
+    try {
+      // CAS 前值只需要身份：时间窗过期的旧包必须仍可被替换，不得死锁激活。
+      return validatePackage(current, trust, null, true).packageDigest;
+    } catch (RuntimeConfigException error) {
+      if (verifiedPreviousLayoutPredecessorDigest == null
+          || !"runtime_config_schema_mismatch".equals(error.code)) {
+        throw error;
+      }
+      ActiveProjection historical = validatePackage(current, trust, null, true, true);
+      if (!MessageDigest.isEqual(storedBytes, canonicalJsonBytes(current))
+          || !MessageDigest.isEqual(
+              historical.packageDigest.getBytes(StandardCharsets.UTF_8),
+              verifiedPreviousLayoutPredecessorDigest.getBytes(StandardCharsets.UTF_8))) {
+        throw new RuntimeConfigException("runtime_config_schema_mismatch");
+      }
+      return historical.packageDigest;
+    }
+  }
+
+  private void preservePreviousLayoutMigrationHistory(
+      TrustProjection trust, String expectedPackageDigest, byte[] canonicalReceipt)
+      throws RuntimeConfigException {
+    if (canonicalReceipt == null || canonicalReceipt.length == 0) {
+      throw new RuntimeConfigException("runtime_config_activation_receipt_mismatch");
+    }
+    File activeFile = activePackageFile(false);
+    if (activeFile == null) {
+      throw new RuntimeConfigException("runtime_config_active_digest_conflict");
+    }
+    byte[] canonicalPackage = readFile(activeFile);
+    JsonObject packageDocument =
+        decodeDocument(canonicalPackage, "runtime_config_package_malformed");
+    ActiveProjection historical = validatePackage(packageDocument, trust, null, true, true);
+    if (!MessageDigest.isEqual(canonicalPackage, canonicalJsonBytes(packageDocument))
+        || !MessageDigest.isEqual(
+            historical.packageDigest.getBytes(StandardCharsets.UTF_8),
+            expectedPackageDigest.getBytes(StandardCharsets.UTF_8))) {
+      throw new RuntimeConfigException("runtime_config_active_digest_conflict");
+    }
+    String receiptDigest = sha256Identity(canonicalReceipt);
+    JsonObject audit = new JsonObject();
+    audit.addProperty("packageDigest", historical.packageDigest);
+    audit.addProperty("receiptDigest", receiptDigest);
+    byte[] canonicalAudit = canonicalJsonBytes(audit);
+    File historyDirectory = previousLayoutMigrationHistoryDirectory(historical.packageDigest);
+    preserveHistoryFile(
+        new File(historyDirectory, PREVIOUS_LAYOUT_MIGRATION_PACKAGE_FILE_NAME), canonicalPackage);
+    preserveHistoryFile(
+        new File(historyDirectory, PREVIOUS_LAYOUT_MIGRATION_RECEIPT_FILE_NAME), canonicalReceipt);
+    preserveHistoryFile(
+        new File(historyDirectory, PREVIOUS_LAYOUT_MIGRATION_AUDIT_FILE_NAME), canonicalAudit);
+  }
+
+  private File previousLayoutMigrationHistoryDirectory(String packageDigest)
+      throws RuntimeConfigException {
+    try {
+      File canonicalRoot = noBackupRoot.getCanonicalFile();
+      if (!canonicalRoot.isDirectory() || Files.isSymbolicLink(canonicalRoot.toPath())) {
+        throw new RuntimeConfigException("runtime_config_package_path_invalid");
+      }
+      File historyRoot =
+          new File(canonicalRoot, PREVIOUS_LAYOUT_MIGRATION_HISTORY_DIRECTORY).getCanonicalFile();
+      if (!historyRoot.exists()) {
+        if (!historyRoot.mkdir()) {
+          throw new RuntimeConfigException("runtime_config_activation_write_failed");
+        }
+        fsyncDirectory(canonicalRoot);
+      }
+      if (!historyRoot.isDirectory() || Files.isSymbolicLink(historyRoot.toPath())) {
+        throw new RuntimeConfigException("runtime_config_activation_write_failed");
+      }
+      File directory =
+          new File(historyRoot, packageDigest.substring("sha256:".length())).getCanonicalFile();
+      if (!directory.getPath().startsWith(historyRoot.getPath() + File.separator)) {
+        throw new RuntimeConfigException("runtime_config_activation_write_failed");
+      }
+      if (!directory.exists()) {
+        if (!directory.mkdir()) {
+          throw new RuntimeConfigException("runtime_config_activation_write_failed");
+        }
+        fsyncDirectory(historyRoot);
+      }
+      if (!directory.isDirectory() || Files.isSymbolicLink(directory.toPath())) {
+        throw new RuntimeConfigException("runtime_config_activation_write_failed");
+      }
+      return directory;
+    } catch (IOException error) {
+      throw new RuntimeConfigException("runtime_config_activation_write_failed", error);
+    }
+  }
+
+  private void preserveHistoryFile(File destination, byte[] expected)
+      throws RuntimeConfigException {
+    try {
+      if (destination.exists()) {
+        if (!Files.isRegularFile(destination.toPath(), LinkOption.NOFOLLOW_LINKS)
+            || Files.isSymbolicLink(destination.toPath())
+            || !MessageDigest.isEqual(readFile(destination), expected)) {
+          throw new RuntimeConfigException("runtime_config_activation_write_failed");
+        }
+        return;
+      }
+      atomicWriter.write(destination, expected);
+      if (!MessageDigest.isEqual(readFile(destination), expected)) {
+        throw new RuntimeConfigException("runtime_config_activation_write_failed");
+      }
+    } catch (IOException error) {
+      throw new RuntimeConfigException("runtime_config_activation_write_failed", error);
+    }
   }
 
   private WriteResult writeActivePackage(byte[] canonicalPackage) throws RuntimeConfigException {
@@ -495,7 +645,7 @@ final class RuntimeConfigPackageStore {
   private ActiveProjection validatePackage(
       JsonObject packageDocument, TrustProjection trust, String expectedPackageDigest)
       throws RuntimeConfigException {
-    return validatePackage(packageDocument, trust, expectedPackageDigest, false);
+    return validatePackage(packageDocument, trust, expectedPackageDigest, false, false);
   }
 
   // allowStaleIdentity 只供激活流程读取 CAS 前值：豁免 expiresAt 时间窗，
@@ -507,11 +657,26 @@ final class RuntimeConfigPackageStore {
       String expectedPackageDigest,
       boolean allowStaleIdentity)
       throws RuntimeConfigException {
+    return validatePackage(
+        packageDocument, trust, expectedPackageDigest, allowStaleIdentity, false);
+  }
+
+  private ActiveProjection validatePackage(
+      JsonObject packageDocument,
+      TrustProjection trust,
+      String expectedPackageDigest,
+      boolean allowStaleIdentity,
+      boolean allowPreviousLayoutOfflinePredecessor)
+      throws RuntimeConfigException {
     String schema = stringValue(packageDocument, "schema");
     boolean offline = AppLaunchContract.SCHEMA_VALUES.get("offline_bootstrap_document").equals(schema);
+    List<String> expectedFields = offline
+        ? (allowPreviousLayoutOfflinePredecessor
+            ? PREVIOUS_LAYOUT_OFFLINE_PACKAGE_FIELDS
+            : AppLaunchContract.OFFLINE_BOOTSTRAP_DOCUMENT_REQUIRED_FIELDS)
+        : PACKAGE_FIELDS;
     if ((!offline && !PACKAGE_SCHEMA.equals(schema))
-        || !exactFields(packageDocument, offline
-            ? AppLaunchContract.OFFLINE_BOOTSTRAP_DOCUMENT_REQUIRED_FIELDS : PACKAGE_FIELDS)) {
+        || !exactFields(packageDocument, expectedFields)) {
       throw new RuntimeConfigException("runtime_config_schema_mismatch");
     }
     if (!SIGNATURE_ALGORITHM.equals(stringValue(packageDocument, "signatureAlgorithm"))) {
@@ -901,6 +1066,16 @@ final class RuntimeConfigPackageStore {
 
   private static boolean exactFields(JsonObject object, List<String> expected) {
     return object.keySet().size() == expected.size() && object.keySet().containsAll(expected);
+  }
+
+  private static List<String> previousLayoutOfflinePackageFields() {
+    List<String> fields =
+        new ArrayList<>(AppLaunchContract.OFFLINE_BOOTSTRAP_DOCUMENT_REQUIRED_FIELDS);
+    if (!fields.remove("rehearsalSpace")) {
+      throw new IllegalStateException(
+          "Generated offline bootstrap schema is missing rehearsalSpace");
+    }
+    return Collections.unmodifiableList(fields);
   }
 
   static String registeredErrorCode(String code) {

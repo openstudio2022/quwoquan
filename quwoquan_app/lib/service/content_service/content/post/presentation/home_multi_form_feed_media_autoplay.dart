@@ -1,5 +1,31 @@
 part of 'home_multi_form_feed.dart';
 
+@visibleForTesting
+typedef HomeFeedVideoScrollSignalForTesting = _HomeFeedVideoScrollSignal;
+
+/// 只暴露真实 gate 的输入与播放意图，不创建媒体、数据源或环境 fixture。
+@visibleForTesting
+Widget homeFeedVideoAutoPlayGateForTesting({
+  required GlobalKey key,
+  required String videoId,
+  required ValueListenable<HomeFeedVideoScrollSignalForTesting> scrollSignal,
+  required HomeFeedVideoFocusCoordinator coordinator,
+  required DateTime Function() now,
+  required Widget Function(bool initialize, bool autoPlay) builder,
+  bool hasPlayableSource = true,
+}) => _HomeFeedVideoFocusScope(
+  coordinator: coordinator,
+  child: _HomeFeedVideoAutoPlayGate(
+    key: key,
+    videoId: videoId,
+    scrollSignal: scrollSignal,
+    hasPlayableSource: hasPlayableSource,
+    now: now,
+    onFastScrollSuppressed: (_) {},
+    builder: (playback) => builder(playback.initialize, playback.autoPlay),
+  ),
+);
+
 class _HomeFeedVideoAutoPlayGateState
     extends State<_HomeFeedVideoAutoPlayGate> {
   final GlobalKey _measureKey = GlobalKey();
@@ -15,11 +41,16 @@ class _HomeFeedVideoAutoPlayGateState
   bool _localWantsAutoPlay = false;
   DateTime? _lastFastScrollSuppressionLoggedAt;
 
+  bool _isActive = true;
+  int _generation = 0;
+  bool _evaluationScheduled = false;
+  bool _focusUpdateScheduled = false;
+
   @override
   void initState() {
     super.initState();
     widget.scrollSignal.addListener(_handleSignalChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _evaluate());
+    _scheduleEvaluation();
   }
 
   @override
@@ -27,54 +58,122 @@ class _HomeFeedVideoAutoPlayGateState
     super.didChangeDependencies();
     final coordinator = _HomeFeedVideoFocusScope.maybeOf(context);
     if (!identical(coordinator, _focusCoordinator)) {
-      _focusCoordinator?.removeListener(_handleFocusChanged);
+      _resetQualification();
+      _releaseFocus();
       _focusCoordinator = coordinator;
       _focusCoordinator?.addListener(_handleFocusChanged);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _evaluate();
-      });
     }
+    _scheduleEvaluation();
   }
 
   @override
   void didUpdateWidget(covariant _HomeFeedVideoAutoPlayGate oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(widget.scrollSignal, oldWidget.scrollSignal)) {
+    final signalChanged = !identical(
+      widget.scrollSignal,
+      oldWidget.scrollSignal,
+    );
+    if (signalChanged && _isActive) {
       oldWidget.scrollSignal.removeListener(_handleSignalChanged);
       widget.scrollSignal.addListener(_handleSignalChanged);
     }
-    if (widget.videoId != oldWidget.videoId) {
+    if (signalChanged ||
+        widget.videoId != oldWidget.videoId ||
+        widget.hasPlayableSource != oldWidget.hasPlayableSource) {
+      _resetQualification();
       _focusCoordinator?.withdraw(oldWidget.videoId);
     }
-    if (widget.hasPlayableSource != oldWidget.hasPlayableSource ||
-        widget.videoId != oldWidget.videoId) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _evaluate());
-    }
+    _scheduleEvaluation();
+  }
+
+  @override
+  void deactivate() {
+    // mounted 在离树后、dispose 前仍为 true，必须先封住回调再同步撤回焦点。
+    _isActive = false;
+    widget.scrollSignal.removeListener(_handleSignalChanged);
+    _resetQualification();
+    _releaseFocus();
+    super.deactivate();
+  }
+
+  @override
+  void activate() {
+    super.activate();
+    _isActive = true;
+    widget.scrollSignal.addListener(_handleSignalChanged);
+    // inherited scope 由随后的 didChangeDependencies 重新绑定，不沿用旧父树。
+    _scheduleEvaluation();
   }
 
   @override
   void dispose() {
-    _recheckTimer?.cancel();
-    widget.scrollSignal.removeListener(_handleSignalChanged);
-    _focusCoordinator?.removeListener(_handleFocusChanged);
-    _focusCoordinator?.withdraw(widget.videoId);
+    if (_isActive) {
+      widget.scrollSignal.removeListener(_handleSignalChanged);
+    }
+    _isActive = false;
+    _resetQualification();
+    _releaseFocus();
     super.dispose();
   }
 
+  void _resetQualification() {
+    _generation++;
+    _evaluationScheduled = false;
+    _focusUpdateScheduled = false;
+    _recheckTimer?.cancel();
+    _recheckTimer = null;
+    _prewarmVisibleSince = null;
+    _visibleSince = null;
+    _localWantsInitialize = false;
+    _localWantsAutoPlay = false;
+    _playback = const _HomeFeedVideoPlaybackState.idle();
+  }
+
+  void _releaseFocus() {
+    final coordinator = _focusCoordinator;
+    _focusCoordinator = null;
+    coordinator?.removeListener(_handleFocusChanged);
+    coordinator?.withdraw(widget.videoId);
+  }
+
+  void _scheduleEvaluation() {
+    if (!_isActive || !mounted || _evaluationScheduled) return;
+    _evaluationScheduled = true;
+    final generation = _generation;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isActive || !mounted || generation != _generation) return;
+      _evaluationScheduled = false;
+      _evaluate();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
   void _handleSignalChanged() {
-    _evaluate();
+    if (!_isActive || !mounted) return;
+    _recheckTimer?.cancel();
+    _recheckTimer = null;
+    final signal = widget.scrollSignal.value;
+    if (signal.isDragging ||
+        signal.isScrolling ||
+        signal.velocityPxPerSecond.abs() >
+            homeFeedVideoAutoPlayMaxVelocityPxPerSecond) {
+      // 暂停意图同步生效，几何可以合帧，但不得等帧后测量才请求暂停。
+      _localWantsAutoPlay = false;
+      _applyFocus();
+    }
+    _scheduleEvaluation();
   }
 
   void _handleFocusChanged() {
-    // 协调器活跃卡片变化：仅据缓存的本地意愿 + 是否活跃刷新播放态，不重新申报，
-    // 避免 report -> notify -> report 的反馈环。
+    // 只消费缓存意图，不重新 report，避免焦点通知反馈环。
     _applyFocus();
   }
 
   void _evaluate() {
-    if (!mounted) return;
+    if (!_isActive || !mounted) return;
     _recheckTimer?.cancel();
-    final now = DateTime.now();
+    _recheckTimer = null;
+    final now = widget.now();
     final visibleFraction = _visibleFraction();
     final isPrewarmVisible =
         visibleFraction >= homeFeedVideoPrewarmMinVisibleFraction;
@@ -175,10 +274,17 @@ class _HomeFeedVideoAutoPlayGateState
         scrollRemaining,
         fastScrollRemaining,
       );
-      if (wait > Duration.zero) {
-        _recheckTimer = Timer(wait, _evaluate);
-      }
+      if (wait > Duration.zero) _scheduleRecheck(wait);
     }
+  }
+
+  void _scheduleRecheck(Duration wait) {
+    final generation = _generation;
+    _recheckTimer = Timer(wait, () {
+      if (!_isActive || !mounted || generation != _generation) return;
+      _recheckTimer = null;
+      _scheduleEvaluation();
+    });
   }
 
   void _recordFastScrollSuppressed({
@@ -186,7 +292,7 @@ class _HomeFeedVideoAutoPlayGateState
     required double velocityPxPerSecond,
     required Duration cooldownRemaining,
   }) {
-    final now = DateTime.now();
+    final now = widget.now();
     final last = _lastFastScrollSuppressionLoggedAt;
     if (last != null && now.difference(last) < const Duration(seconds: 1)) {
       return;
@@ -203,7 +309,20 @@ class _HomeFeedVideoAutoPlayGateState
   }
 
   void _applyFocus() {
-    if (!mounted) return;
+    if (!_isActive || !mounted) return;
+    // withdraw 可发生于兄弟的 deactivate/build/layout；安全帧后再消费最新意图，
+    // 不捕获旧播放状态，也不在框架树锁定时 setState。
+    if (WidgetsBinding.instance.schedulerPhase == .persistentCallbacks) {
+      if (_focusUpdateScheduled) return;
+      _focusUpdateScheduled = true;
+      final generation = _generation;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_isActive || !mounted || generation != _generation) return;
+        _focusUpdateScheduled = false;
+        _applyFocus();
+      });
+      return;
+    }
     final coordinator = _focusCoordinator;
     // 协调器缺失时（理论上不出现于首页 feed）退化为本地判定，保持组件可用。
     final isActive =
@@ -240,7 +359,9 @@ class _HomeFeedVideoAutoPlayGateState
     final context = _measureKey.currentContext;
     if (context == null) return AppSpacing.zero;
     final renderObject = context.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) {
+    if (renderObject is! RenderBox ||
+        !renderObject.attached ||
+        !renderObject.hasSize) {
       return AppSpacing.zero;
     }
     final height = renderObject.size.height;

@@ -94,6 +94,19 @@ def execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(paths, "DATA_EXECUTIONS_ROOT", tasks)
     root = tasks / EXECUTION_ID
     _write(root / "execution_manifest.json", _canonical({"schema": "quwoquan_data.content_execution_manifest", "executionId": EXECUTION_ID}))
+    target_rows = [
+        {"name": "西湖", "entityType": "地点/景区", "entityRef": "/entity/hangzhou-west-lake", "entityId": "entity:hangzhou-west-lake", "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1},
+        {"name": "灵隐寺", "entityType": "地点/景区", "entityRef": "/entity/lingyin-temple", "entityId": "entity:lingyin-temple", "publishAngle": "导览", "publishTitle": "灵隐寺速览", "publishSeq": 1},
+        {"name": "六和塔", "entityType": "地点/景区", "entityRef": "/entity/liuhe-tower", "entityId": "entity:liuhe-tower", "publishAngle": "导览", "publishTitle": "六和塔速览", "publishSeq": 1},
+    ]
+    descriptor_bindings = []
+    for process_ref, target in zip(TARGETS, target_rows, strict=True):
+        payload = {"schema": "quwoquan_data.target_descriptor", "processRef": process_ref, "canonicalObjectRef": process_ref, "entityRef": target["entityRef"], "entityId": target["entityId"], "expectedCurrentVersion": None, "versionAuthority": "initial_create", "contentVersion": 1}
+        descriptor = {**payload, "mappingDigest": _sha(_canonical(payload))}
+        descriptor_ref = "0.plan/target-descriptors/" + hashlib.sha256(process_ref.encode()).hexdigest() + ".json"
+        raw = _canonical(descriptor)
+        _write(root / descriptor_ref, raw)
+        descriptor_bindings.append({"scope": "execution", "ref": descriptor_ref, "digest": _sha(raw)})
     target_set = {
         "schema": "quwoquan_data.target_set",
         "executionId": EXECUTION_ID,
@@ -103,11 +116,8 @@ def execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "candidateBinding": {"scope": "output", "ref": "data/local/workspace/x.json", "digest": "sha256:" + "1" * 64, "candidateCount": 3},
         "targetCount": 3,
         "targetRefs": TARGETS,
-        "targets": [
-            {"name": "西湖", "entityType": "地点/景区", "entityRef": "/entity/hangzhou-west-lake", "entityId": "entity:hangzhou-west-lake", "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1},
-            {"name": "灵隐寺", "entityType": "地点/景区", "entityRef": "/entity/lingyin-temple", "entityId": "entity:lingyin-temple", "publishAngle": "导览", "publishTitle": "灵隐寺速览", "publishSeq": 1},
-            {"name": "六和塔", "entityType": "地点/景区", "entityRef": "/entity/liuhe-tower", "entityId": "entity:liuhe-tower", "publishAngle": "导览", "publishTitle": "六和塔速览", "publishSeq": 1},
-        ],
+        "targets": target_rows,
+        "targetDescriptors": descriptor_bindings,
     }
     _write(root / "0.plan/target_set.json", _canonical(target_set))
     plan_ref = "sources/plans/" + "a" * 64 + ".json"

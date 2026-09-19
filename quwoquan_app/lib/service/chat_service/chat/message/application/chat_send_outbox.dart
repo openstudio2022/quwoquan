@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/alpha_rehearsal/alpha_rehearsal_observation.dart';
 import 'package:quwoquan_app/runtime/platform/temporary_file_cleanup.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_provider.dart';
@@ -135,6 +136,9 @@ class ChatSendOutbox {
 
   /// 顺序重发全部队列项；单项失败停止本轮（保持发送顺序），等待下次触发。
   Future<void> drainQueue() async {
+    AlphaRehearsalObservation.current?.recordRefusal(
+      'native-connected-outbox-attempt',
+    );
     final box = _box;
     if (_terminallyPurged || box == null || _draining) return;
     _draining = true;

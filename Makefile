@@ -56,6 +56,8 @@
 .PHONY: fetch-app-bundled-fonts
 .PHONY: verify-app-bundled-fonts
 .PHONY: check-app-bundled-fonts-updates
+.PHONY: prepare-docker-dependencies
+.PHONY: check-docker-dependencies-outdated
 .PHONY: verify-app-web-offline-resources
 .PHONY: verify-quwoquan-data
 .PHONY: verify-markdown-article-no-article-document verify-article-contract-purity
@@ -409,6 +411,12 @@ verify-test-data-performance:
 
 fetch-app-bundled-fonts:
 	@python3 quwoquan_app/scripts/cli.py fonts fetch
+
+prepare-docker-dependencies:
+	@python3 quwoquan_ops/cli/stackctl.py docker-dependencies --action prepare
+
+check-docker-dependencies-outdated:
+	@python3 quwoquan_ops/cli/stackctl.py docker-dependencies --action check-outdated
 
 verify-app-bundled-fonts:
 	@python3 quwoquan_app/scripts/cli.py fonts verify
@@ -1329,7 +1337,7 @@ feature-tree-content-review:
 
 verify-feature-tree:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py verify --changes
-	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree_content_review.py
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree_content_review.py $(CONTENT_REVIEW_ARGS)
 
 verify:
 	@$(MAKE) verify-global-increment-constraints
@@ -1862,34 +1870,39 @@ evidence-signing-bootstrap:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/evidence_signing_bootstrap.py \
 		$$( [ "$${ROTATE:-0}" = "1" ] && printf -- '--rotate' ) $(EVIDENCE_SIGNING_ARGS)
 
-# lane 工作树验收：对 exact candidate（默认 HEAD，必须是当前 lane 分支 head）做本地 readiness + Alpha 真实验证并签发
-# EnvironmentAcceptanceFact，终态 accepted 并产出 portable acceptance bundle；不 admit、不 publish。
-# Beta 只在 BETA=1 时真跑，否则以 typed not_required 闭合。
+# lane 工作树验收：对 exact candidate（默认 HEAD，必须是当前 lane 分支 head）做本地 readiness，并签发
+# typed Alpha/Beta EnvironmentAcceptanceFact，终态 accepted 并产出 portable acceptance bundle；不 admit、不 publish。
+# 默认不启 live：Alpha=ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV，Beta=ACCEPTANCE.BETA_OPTIONAL_BY_POLICY。
+# ALPHA=1 / BETA=1 才真跑对应环境；此时必填 RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION /
+# RELEASE_HANDOFF_REF。私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT。
 # 验收在产出 Data handoff 的 lane 工作树完成，release 不携带类别或命名就绪轨道。
-# 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION（两份不同的 immutable Data release attestation）、
-# RELEASE_HANDOFF_REF（candidate release 的 authoritative handoff-ref-v1）；私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT。
-# 可选：BASELINE=<sha>、BETA=1、MERGED_LANES="lane/a lane/b"、CANDIDATE、
+# 可选：BASELINE=<sha>、ALPHA=1、BETA=1、MERGED_LANES="lane/a lane/b"、CANDIDATE、
 # READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
-# App 影响面必填 ANDROID_DEVICE_ID / IOS_DEVICE_ID；CANDIDATE_REF=store-ref=sha256:digest 复用预先冻结候选，不再申请 claim。
-# REUSE=1 仅复用同 commit/tree/parent/ImpactPlan/profile 且签名与引用有效的事实，不改变 Beta opt-in。
+# APP_PLATFORM / 设备 ID 只在 live Alpha 时使用；默认源码合入不要求设备。
+# CANDIDATE_REF=store-ref=sha256:digest 复用预先冻结候选，不再申请 claim。
+# REUSE=1 仅复用同 commit/tree/parent/ImpactPlan/profile/平台计划 且签名与引用有效的事实。
 .PHONY: accept
 accept:
-	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
-		echo "[accept] GATE_BLOCK: RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填（两份不同的 immutable Data release attestation）" >&2; exit 2; fi
-	@if [ -z "$(RELEASE_HANDOFF_REF)" ]; then \
-		echo "[accept] GATE_BLOCK: RELEASE_HANDOFF_REF 必填（candidate release 的 authoritative handoff-ref-v1）" >&2; exit 2; fi
+	@if [ "$${ALPHA:-0}" = "1" ] || [ "$${BETA:-0}" = "1" ]; then \
+		if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
+			echo "[accept] GATE_BLOCK: live Alpha/Beta 时 RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填" >&2; exit 2; fi; \
+		if [ -z "$(RELEASE_HANDOFF_REF)" ]; then \
+			echo "[accept] GATE_BLOCK: live Alpha/Beta 时 RELEASE_HANDOFF_REF 必填" >&2; exit 2; fi; \
+	fi
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
 		--mode acceptance \
 		--candidate "$(or $(CANDIDATE),HEAD)" \
 		$(if $(CANDIDATE_REF),--candidate-ref "$(CANDIDATE_REF)",) \
+		--app-platform "$(or $(APP_PLATFORM),all)" \
 		$(if $(ANDROID_DEVICE_ID),--android-device-id "$(ANDROID_DEVICE_ID)",) \
 		$(if $(IOS_DEVICE_ID),--ios-device-id "$(IOS_DEVICE_ID)",) \
 		$$( [ -n "$(BASELINE)" ] && printf -- '--baseline %s' "$(BASELINE)" ) \
+		$$( [ "$${ALPHA:-0}" = "1" ] && printf -- '--alpha' ) \
 		$$( [ "$${BETA:-0}" = "1" ] && printf -- '--beta' ) \
 		$$( for lane in $(MERGED_LANES); do printf -- '--merged-lanes %s ' "$$lane"; done ) \
-		--release-attestation "$(RELEASE_ATTESTATION)" \
-		--rollback-release-attestation "$(ROLLBACK_RELEASE_ATTESTATION)" \
-		--release-handoff-ref "$(RELEASE_HANDOFF_REF)" \
+		$(if $(RELEASE_ATTESTATION),--release-attestation "$(RELEASE_ATTESTATION)",) \
+		$(if $(ROLLBACK_RELEASE_ATTESTATION),--rollback-release-attestation "$(ROLLBACK_RELEASE_ATTESTATION)",) \
+		$(if $(RELEASE_HANDOFF_REF),--release-handoff-ref "$(RELEASE_HANDOFF_REF)",) \
 		--readiness-level "$${READINESS_LEVEL:-scope}" \
 		--profile "$${PROFILE:-integration}" \
 		$$( [ "$${REUSE:-0}" = "1" ] && printf -- '--reuse' ) \

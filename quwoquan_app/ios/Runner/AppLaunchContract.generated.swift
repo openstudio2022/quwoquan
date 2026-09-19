@@ -2,7 +2,7 @@
 import Foundation
 
 enum AppLaunchContract {
-  static let sourceDigest = "sha256:3060c668589ff5bc24da05a355b395a73f02903f578ca89705b36c578d45d73f"
+  static let sourceDigest = "sha256:bbedc25e6bb4087b226ce50e11c33ddb1ff70cc0237d66a0e8e320c67e4b9c92"
   static let environments: [String] = [
     "alpha",
     "beta",
@@ -166,7 +166,15 @@ enum AppLaunchContract {
     "app_launch_attempt": "app-launch-attempt",
     "app_launcher_handoff": "app-launcher-handoff",
     "app_managed_preparation": "quwoquan_ops.app_managed_preparation.v1",
+    "external_uat_broker_query": "external-uat-broker-query",
+    "external_uat_broker_result": "external-uat-broker-result",
+    "external_uat_comparison_result": "external-uat-comparison-result",
+    "external_uat_managed_launch_admission": "external-uat-managed-launch-admission",
+    "external_uat_sealed_snapshot": "external-uat-sealed-snapshot",
+    "external_uat_teardown_receipt": "external-uat-teardown-receipt",
+    "external_uat_terminal_result": "external-uat-terminal-result",
     "offline_bootstrap_document": "app-offline-bootstrap-document",
+    "rehearsal_storage_observation": "rehearsal-storage-observation",
     "runtime_config_activation_receipt": "app-runtime-config-activation-receipt",
     "runtime_config_activation_request": "app-runtime-config-activation-request",
     "runtime_config_package": "app-runtime-config-package",
@@ -267,6 +275,108 @@ enum AppLaunchContract {
     "status",
     "firstBlocker",
   ]
+  static let externalUatBrokerQueryRequiredFields: [String] = [
+    "schema",
+    "contractDigest",
+    "admissionDigest",
+    "terminalDigest",
+    "caseId",
+    "launchAttemptId",
+    "generation",
+    "observationBinding",
+    "processId",
+    "deviceId",
+    "sessionId",
+    "sequence",
+    "challenge",
+    "mac",
+  ]
+  static let externalUatBrokerResultRequiredFields: [String] = [
+    "schema",
+    "status",
+    "admissionDigest",
+    "terminalDigest",
+    "snapshot",
+    "snapshotDigest",
+    "consumed",
+    "revoked",
+    "errorCode",
+    "resultDigest",
+  ]
+  static let externalUatComparisonResultRequiredFields: [String] = [
+    "schema",
+    "caseId",
+    "admissionDigest",
+    "terminalDigest",
+    "brokerResultDigest",
+    "expectedDigest",
+    "status",
+    "nonPromotable",
+    "comparisonDigest",
+    "errorCode",
+  ]
+  static let externalUatManagedLaunchAdmissionRequiredFields: [String] = [
+    "schema",
+    "contractDigest",
+    "candidateDigest",
+    "artifactDigest",
+    "packageIdentity",
+    "signingDigest",
+    "platform",
+    "deviceId",
+    "sessionId",
+    "caseId",
+    "launchAttemptId",
+    "generation",
+    "observationBinding",
+    "processId",
+    "lifecycleReceiptDigest",
+    "admittedAtMonotonicMs",
+    "expiresAtMonotonicMs",
+    "admissionDigest",
+  ]
+  static let externalUatSealedSnapshotRequiredFields: [String] = [
+    "schema",
+    "caseId",
+    "launchAttemptId",
+    "generation",
+    "observationBinding",
+    "processId",
+    "snapshotDigest",
+    "observations",
+    "sealedAtMonotonicMs",
+  ]
+  static let externalUatTeardownReceiptRequiredFields: [String] = [
+    "schema",
+    "transactionId",
+    "admissionDigest",
+    "launchAttemptId",
+    "generation",
+    "processId",
+    "state",
+    "predecessorResultDigest",
+    "requestedAtMonotonicMs",
+    "terminatedAtMonotonicMs",
+    "processTableConfirmed",
+    "lifecycleConfirmed",
+    "brokerDisconnected",
+    "receiptDigest",
+    "errorCode",
+  ]
+  static let externalUatTerminalResultRequiredFields: [String] = [
+    "schema",
+    "planDigest",
+    "caseId",
+    "launchAttemptId",
+    "generation",
+    "processId",
+    "deviceId",
+    "sessionId",
+    "status",
+    "screenshotDigest",
+    "terminalDigest",
+    "terminalRef",
+  ]
   static let offlineBootstrapDocumentRequiredFields: [String] = [
     "schema",
     "environment",
@@ -274,6 +384,7 @@ enum AppLaunchContract {
     "target",
     "launchPolicy",
     "contentSource",
+    "rehearsalSpace",
     "sourceGitSha",
     "sourceTreeDigest",
     "trustEnvelopeDigest",
@@ -283,6 +394,15 @@ enum AppLaunchContract {
     "signatureKeyId",
     "trustedPublicKeys",
     "signature",
+  ]
+  static let rehearsalStorageObservationRequiredFields: [String] = [
+    "schema",
+    "status",
+    "configurationState",
+    "startupAttemptId",
+    "generation",
+    "bindingDigest",
+    "consumers",
   ]
   static let runtimeConfigActivationReceiptRequiredFields: [String] = [
     "schema",
@@ -397,4 +517,6 @@ enum AppLaunchContract {
     "failed",
     "stopped",
   ]
+  static let rehearsalStorageObservationChannel = "quwoquan/startup/timings"
+  static let rehearsalStorageObservationMethod = "readRehearsalStorageObservation"
 }

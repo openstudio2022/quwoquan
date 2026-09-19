@@ -100,39 +100,94 @@ def _normalized_input_roots(values: Sequence[str]) -> list[str]:
     return roots
 
 
+def _frozen_source_identity(
+    *,
+    source_revision: str | None = None,
+    source_root: Path | None = None,
+    source_tree: str | None = None,
+) -> tuple[str, Path, str] | None:
+    """Live workspace 与 candidate git tree 必须成对出现，禁止只改其中一个身份。"""
+
+    present = (
+        source_revision is not None,
+        source_root is not None,
+        source_tree is not None,
+    )
+    if not any(present):
+        return None
+    if not all(present):
+        raise ValueError("frozen source identity is incomplete")
+    revision = str(source_revision)
+    tree = str(source_tree)
+    if len(revision) != 40 or len(tree) != 40:
+        raise ValueError("frozen source identity is invalid")
+    root = Path(source_root)
+    if not root.is_absolute() or root.is_symlink() or not root.is_dir():
+        raise ValueError("frozen source root must be an absolute directory")
+    return revision, root, tree
+
+
 def _enumerated_deployment_inputs(
     roots: Sequence[str],
+    *,
+    source_root: Path | None = None,
+    source_tree: str | None = None,
 ) -> tuple[list[str], list[tuple[str, Path, str]]]:
     normalized_roots = _normalized_input_roots(roots)
     repo_roots = [value for value in normalized_roots if not Path(value).is_absolute()]
     external_roots = [
         Path(value) for value in normalized_roots if Path(value).is_absolute()
     ]
-    result = subprocess.run(
-        [
-            "git",
-            "ls-files",
-            "-z",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "--",
-            *repo_roots,
-        ],
-        cwd=_pkg.ROOT,
-        capture_output=True,
-        check=False,
-    )
+    frozen_root: Path | None = None
+    if source_root is not None or source_tree is not None:
+        if source_root is None or source_tree is None:
+            raise ValueError("frozen source identity is incomplete")
+        if external_roots:
+            raise ValueError("frozen source does not accept external roots")
+        frozen_root = Path(source_root)
+        result = subprocess.run(
+            [
+                "git",
+                "ls-tree",
+                "-r",
+                "--name-only",
+                "-z",
+                str(source_tree),
+                "--",
+                *repo_roots,
+            ],
+            cwd=_pkg.ROOT,
+            capture_output=True,
+            check=False,
+        )
+        enumerate_error = "cannot enumerate frozen deployment inputs"
+    else:
+        result = subprocess.run(
+            [
+                "git",
+                "ls-files",
+                "-z",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "--",
+                *repo_roots,
+            ],
+            cwd=_pkg.ROOT,
+            capture_output=True,
+            check=False,
+        )
+        enumerate_error = "cannot enumerate managed deployment inputs"
     if result.returncode != 0:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         raise ValueError(
-            "cannot enumerate managed deployment inputs"
-            + (f": {detail}" if detail else "")
+            enumerate_error + (f": {detail}" if detail else "")
         )
     entries: list[tuple[str, Path, str]] = []
+    source_base = frozen_root if frozen_root is not None else _pkg.ROOT
     for encoded in sorted(value for value in result.stdout.split(b"\0") if value):
         relative = os.fsdecode(encoded)
-        path = _pkg.ROOT / relative
+        path = source_base / relative
         # ``git ls-files --cached`` also reports tracked files deleted from the
         # live worktree.  A package capsule represents the bytes that actually
         # exist at capture time; keeping a deleted index entry here makes an
@@ -156,7 +211,9 @@ def _enumerated_deployment_inputs(
     return normalized_roots, entries
 
 
-def _safe_capsule_source(path: Path, *, logical_path: str) -> os.stat_result:
+def _safe_capsule_source(
+    path: Path, *, logical_path: str, source_root: Path | None = None
+) -> os.stat_result:
     try:
         metadata = path.lstat()
     except OSError as exc:
@@ -167,7 +224,12 @@ def _safe_capsule_source(path: Path, *, logical_path: str) -> os.stat_result:
             raise ValueError(
                 f"external deployment input symlink is forbidden: {logical_path}"
             )
-        if not resolved.is_relative_to(_pkg.ROOT.resolve()):
+        bound_root = (
+            Path(source_root).resolve()
+            if source_root is not None
+            else _pkg.ROOT.resolve()
+        )
+        if not resolved.is_relative_to(bound_root):
             raise ValueError(
                 f"deployment input symlink escapes repository: {logical_path}"
             )
@@ -178,7 +240,12 @@ def _safe_capsule_source(path: Path, *, logical_path: str) -> os.stat_result:
         )
     if not logical_path.startswith("external:"):
         resolved = path.resolve(strict=True)
-        if not resolved.is_relative_to(_pkg.ROOT.resolve()):
+        bound_root = (
+            Path(source_root).resolve()
+            if source_root is not None
+            else _pkg.ROOT.resolve()
+        )
+        if not resolved.is_relative_to(bound_root):
             raise ValueError(f"deployment input escapes repository: {logical_path}")
     return metadata
 
@@ -244,8 +311,19 @@ def _capsule_identity_payload(
     roots: Sequence[str],
     input_digest: str,
     input_count: int,
+    dependency_platforms: Sequence[str] = ("android", "ios"),
 ) -> dict[str, object]:
+    from .dependency_bundle import dependency_components_for_platforms
+
+    if (not isinstance(dependency_platforms, (tuple, list))
+            or any(not isinstance(value, str) for value in dependency_platforms)):
+        raise ValueError("App dependency platform plan must be a string sequence")
+    platforms = tuple(dependency_platforms)
+    dependency_components_for_platforms(platforms)
+    if platforms != tuple(sorted(platforms)):
+        raise ValueError("App dependency platform plan must have canonical order")
     return {
+        "dependencyPlatforms": list(platforms),
         "deploymentInputRoots": list(roots),
         "deploymentInputDigest": input_digest,
         "deploymentInputFileCount": input_count,
@@ -308,17 +386,13 @@ def _dependency_manifest_payloads(bundle: AppDependencyBundle) -> dict[str, obje
         "dependency:dart-pub-cache-v2": manifests["productionPub"],
         "dependency:patrol-host-dart-pub-cache-v1": manifests["patrolPub"],
     }
-    if "androidGradle" not in manifests:
-        result.update({
-            IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PRODUCTION_HOST]: manifests["productionIosPods"],
-            IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PATROL_HOST]: manifests["patrolIosPods"],
-        })
-        return result
-    android_wrapper = manifests["androidGradle"]
-    android = android_wrapper.get("dependency")
-    if not isinstance(android, Mapping):
-        android = android_wrapper
-    result["dependency:android-gradle-v1"] = dict(android)
+    if "productionIosPods" in manifests and "patrolIosPods" in manifests:
+        result[IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PRODUCTION_HOST]] = manifests["productionIosPods"]
+        result[IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PATROL_HOST]] = manifests["patrolIosPods"]
+    if "androidGradle" in manifests:
+        android_wrapper = manifests["androidGradle"]
+        android = android_wrapper.get("dependency")
+        result["dependency:android-gradle-v1"] = dict(android) if isinstance(android, Mapping) else android_wrapper
     return result
 
 
@@ -344,11 +418,14 @@ def _current_cocoapods_manifest_identity() -> dict[str, object]:
 def _assert_current_cocoapods_identity(
     manifests: Mapping[str, object],
 ) -> None:
-    current = _current_cocoapods_manifest_identity()
-    for logical in (
+    ios_logicals = (
         IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PRODUCTION_HOST],
         IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PATROL_HOST],
-    ):
+    )
+    if not any(logical in manifests for logical in ios_logicals):
+        return
+    current = _current_cocoapods_manifest_identity()
+    for logical in ios_logicals:
         manifest = manifests.get(logical)
         if not isinstance(manifest, Mapping) or manifest.get("cocoaPods") != current:
             raise ValueError(
@@ -564,6 +641,8 @@ def _read_private_managed_request(
     if not isinstance(request, Mapping) or request.get("schema") != _MANAGED_RESULT_SCHEMA:
         raise ValueError("managed package capsule request is invalid")
     operation = str(request.get("operation") or "")
+    raw_platforms = request.get("dependencyPlatforms", ["android", "ios"])
+    dependency_platforms = tuple(str(item) for item in raw_platforms) if isinstance(raw_platforms, list) else ()
     staging = Path(str(request.get("staging") or ""))
     result_path = Path(str(request.get("resultPath") or ""))
     if (
@@ -580,6 +659,10 @@ def _read_private_managed_request(
         or result_path != root / "result.json"
     ):
         raise ValueError("managed package capsule request attempt binding mismatch")
+    if not dependency_platforms or any(
+        platform not in {"android", "ios"} for platform in dependency_platforms
+    ):
+        raise ValueError("managed package dependency platform plan is invalid")
     request_path.unlink()
     return request
 
@@ -592,7 +675,7 @@ def _run_capsule_managed_operation(
     source_capsule: Path | None = None,
     records: Sequence[Mapping[str, object]] = (),
     expected_snapshot: Mapping[str, object] | None = None,
-    platforms: tuple[str, ...] = ("android", "ios"),
+    dependency_platforms: tuple[str, ...] = ("android", "ios"),
 ) -> dict[str, object]:
     timeout = remaining_managed_deadline_seconds(timeout)
     control_root = _managed_control_root(staging, operation)
@@ -610,7 +693,7 @@ def _run_capsule_managed_operation(
         "expectedSnapshot": dict(expected_snapshot)
         if expected_snapshot is not None
         else None,
-        "platforms": list(platforms),
+        "dependencyPlatforms": list(dependency_platforms),
         "resultPath": str(result_path),
     }
     encoded_request = _canonical_json_bytes(request)
@@ -740,21 +823,27 @@ def _write_managed_result(
 
 def _managed_child(request: Mapping[str, object]) -> int:
     operation = str(request.get("operation") or "")
+    raw_platforms = request.get("dependencyPlatforms", ["android", "ios"])
+    dependency_platforms = tuple(str(item) for item in raw_platforms) if isinstance(raw_platforms, list) else ()
+    if not dependency_platforms or any(platform not in {"android", "ios"} for platform in dependency_platforms):
+        raise ValueError("managed package dependency platform plan is invalid")
     staging = Path(str(request.get("staging") or ""))
     repo_root = Path(str(request.get("repoRoot") or ""))
     _pkg.ROOT = repo_root
     print(f"[package-capsule-stage] {operation}: started", file=sys.stderr, flush=True)
     try:
         if operation == "load-active":
-            platforms = tuple(str(item) for item in request.get("platforms", []))
-            bundle = load_active_dependency_bundle(repo_root=repo_root, required_platforms=platforms)
+            bundle = load_active_dependency_bundle(
+                repo_root=repo_root, required_platforms=dependency_platforms
+            )
             manifests = _dependency_manifest_payloads(bundle)
-            if set(platforms) == {"ios"} or set(platforms) == {"android", "ios"}:
+            if set(dependency_platforms) == {"ios"} or set(dependency_platforms) == {"android", "ios"}:
                 _assert_current_cocoapods_identity(manifests)
             payload = {"manifests": manifests}
         elif operation == "materialize-active":
-            platforms = tuple(str(item) for item in request.get("platforms", []))
-            snapshots = load_managed_dependency_snapshots(repo_root=repo_root, platforms=platforms)
+            snapshots = load_managed_dependency_snapshots(
+                repo_root=repo_root, required_platforms=dependency_platforms
+            )
             payload = {
                 "records": copy_dependency_bundle_to_capsule(
                     snapshots=snapshots, capsule_root=staging
@@ -774,11 +863,12 @@ def _managed_child(request: Mapping[str, object]) -> int:
             raw_records = request.get("records")
             if not isinstance(raw_records, list):
                 raise ValueError("reusable dependency records are invalid")
+            verification_args = {
+                "capsule_root": staging,
+                "manifest_entries": [dict(item) for item in raw_records if isinstance(item, Mapping)],
+            }
             verify_dependency_bundle_capsule(
-                capsule_root=staging,
-                manifest_entries=[
-                    dict(item) for item in raw_records if isinstance(item, Mapping)
-                ],
+                **verification_args, required_platforms=dependency_platforms
             )
             payload = {"records": raw_records}
         elif operation == "verify-full":
@@ -836,11 +926,25 @@ def materialize_package_input_capsule(
     roots: Sequence[str],
     *,
     capsule_root: Path,
-    platforms: tuple[str, ...] = ("android", "ios"),
+    dependency_platforms: tuple[str, ...] = ("android", "ios"),
+    source_revision: str | None = None,
+    source_root: Path | None = None,
+    source_tree: str | None = None,
 ) -> dict[str, object]:
     """Copy one source closure into a read-only, content-addressed capsule."""
 
-    normalized_roots, source_entries = _enumerated_deployment_inputs(roots)
+    frozen = _frozen_source_identity(
+        source_revision=source_revision,
+        source_root=source_root,
+        source_tree=source_tree,
+    )
+    _capsule_identity_payload(roots=(), input_digest="", input_count=0,
+                             dependency_platforms=dependency_platforms)
+    normalized_roots, source_entries = _enumerated_deployment_inputs(
+        roots,
+        source_root=None if frozen is None else frozen[1],
+        source_tree=None if frozen is None else frozen[2],
+    )
     dependencies_required = dependency_required(_pkg.ROOT, normalized_roots)
     active_manifests: dict[str, object] | None = None
     timeout = _dependency_load_timeout_seconds()
@@ -864,7 +968,8 @@ def materialize_package_input_capsule(
                 flush=True,
             )
             active_payload = _run_capsule_managed_operation(
-                "load-active", staging=staging, timeout=timeout, platforms=platforms
+                "load-active", staging=staging, timeout=timeout,
+                dependency_platforms=dependency_platforms
             )
             raw_manifests = active_payload.get("manifests")
             if not isinstance(raw_manifests, dict):
@@ -873,7 +978,11 @@ def materialize_package_input_capsule(
         records: list[dict[str, object]] = []
         digest_entries: list[tuple[str, str, bytes]] = []
         for logical_path, source, relative in source_entries:
-            metadata = _safe_capsule_source(source, logical_path=logical_path)
+            metadata = _safe_capsule_source(
+                source,
+                logical_path=logical_path,
+                source_root=None if frozen is None else frozen[1],
+            )
             destination = staging / relative
             if stat.S_ISLNK(metadata.st_mode):
                 target = os.readlink(source)
@@ -917,8 +1026,8 @@ def materialize_package_input_capsule(
                         "clone-verify-dependencies",
                         staging=staging,
                         source_capsule=reused_capsule,
-                        records=candidate_records,
-                        timeout=timeout,
+                        records=candidate_records, timeout=timeout,
+                        dependency_platforms=dependency_platforms,
                     )
                 except PackageDependencyInputTimeoutError:
                     raise
@@ -945,7 +1054,8 @@ def materialize_package_input_capsule(
                     flush=True,
                 )
                 payload = _run_capsule_managed_operation(
-                    "materialize-active", staging=staging, timeout=timeout, platforms=platforms
+                    "materialize-active", staging=staging, timeout=timeout,
+                    dependency_platforms=dependency_platforms
                 )
                 raw_records = payload.get("records")
                 if not isinstance(raw_records, list):
@@ -959,39 +1069,45 @@ def materialize_package_input_capsule(
                 digest_entries.append((str(record["logicalPath"]), "file", content))
                 records.append(record)
         input_digest, input_count = _digest_record(digest_entries)
-        revision = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=_pkg.ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        source_revision = revision.stdout.strip()
-        if revision.returncode != 0 or len(source_revision) != 40:
-            raise ValueError("cannot resolve workspace source revision")
-        repo_roots = [
-            value for value in normalized_roots if not Path(value).is_absolute()
-        ]
-        status = subprocess.run(
-            [
-                "git",
-                "status",
-                "--porcelain=v2",
-                "-z",
-                "--untracked-files=all",
-                "--",
-                *repo_roots,
-            ],
-            cwd=_pkg.ROOT,
-            capture_output=True,
-            check=False,
-        )
-        if status.returncode != 0:
-            raise ValueError("cannot resolve workspace index/worktree state")
+        if frozen is None:
+            revision = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=_pkg.ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            source_revision = revision.stdout.strip()
+            if revision.returncode != 0 or len(source_revision) != 40:
+                raise ValueError("cannot resolve workspace source revision")
+            repo_roots = [
+                value for value in normalized_roots if not Path(value).is_absolute()
+            ]
+            status = subprocess.run(
+                [
+                    "git",
+                    "status",
+                    "--porcelain=v2",
+                    "-z",
+                    "--untracked-files=all",
+                    "--",
+                    *repo_roots,
+                ],
+                cwd=_pkg.ROOT,
+                capture_output=True,
+                check=False,
+            )
+            if status.returncode != 0:
+                raise ValueError("cannot resolve workspace index/worktree state")
+            status_stdout = status.stdout
+        else:
+            source_revision, _frozen_root, _source_tree = frozen
+            status_stdout = b""
         identity = _capsule_identity_payload(
             roots=normalized_roots,
             input_digest=input_digest,
             input_count=input_count,
+            dependency_platforms=dependency_platforms,
         )
         baseline_id = _baseline_id(identity)
         manifest = {
@@ -999,7 +1115,7 @@ def materialize_package_input_capsule(
             "baselineId": baseline_id,
             "sourceRevision": source_revision,
             "workspaceStatusDigest": "sha256:"
-            + hashlib.sha256(status.stdout).hexdigest(),
+            + hashlib.sha256(status_stdout).hexdigest(),
             **identity,
             "entries": records,
         }
@@ -1042,8 +1158,8 @@ def materialize_package_input_capsule(
             verified_payload = _run_capsule_managed_operation(
                 "verify-full",
                 staging=capsule_root,
-                expected_snapshot=manifest,
-                timeout=timeout,
+                expected_snapshot=manifest, timeout=timeout,
+                dependency_platforms=dependency_platforms,
             )
             if (
                 verified_payload.get("baselineId") != manifest["baselineId"]
@@ -1072,6 +1188,10 @@ def _read_capsule_manifest(capsule_root: Path) -> dict[str, object]:
         raise ValueError("package input capsule manifest fields mismatch")
     if value.get("schema") != PACKAGE_INPUT_CAPSULE_SCHEMA:
         raise ValueError("package input capsule schema mismatch")
+    platforms = value.get("dependencyPlatforms")
+    if not isinstance(platforms, list):
+        raise ValueError("package input capsule platform plan is missing")
+    _capsule_identity_payload(roots=(), input_digest="", input_count=0, dependency_platforms=platforms)
     return value
 
 
@@ -1150,8 +1270,8 @@ def _verify_package_input_capsule(
     dependency_snapshots: VerifiedDependencySnapshots | None = None
     if app_lock.exists():
         dependency_snapshots = verify_dependency_bundle_capsule(
-            capsule_root=capsule_root,
-            manifest_entries=raw_entries,
+            capsule_root=capsule_root, manifest_entries=raw_entries,
+            required_platforms=tuple(manifest["dependencyPlatforms"]),
         )
     elif dependency_entries or (capsule_root / "dependencies").exists():
         raise ValueError("App dependency capsule exists without App pubspec.lock")
@@ -1160,6 +1280,7 @@ def _verify_package_input_capsule(
         roots=_normalized_input_roots(list(manifest.get("deploymentInputRoots") or [])),
         input_digest=digest,
         input_count=count,
+        dependency_platforms=manifest["dependencyPlatforms"],
     )
     if (
         digest != manifest.get("deploymentInputDigest")
@@ -1175,6 +1296,7 @@ def _verify_package_input_capsule(
             "deploymentInputRoots",
             "deploymentInputDigest",
             "deploymentInputFileCount",
+            "dependencyPlatforms",
         ):
             if expected_snapshot.get(field) != manifest.get(field):
                 raise ValueError(f"package input capsule {field} mismatch")

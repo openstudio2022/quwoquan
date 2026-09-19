@@ -107,6 +107,140 @@ class RunnerTests: XCTestCase {
     XCTAssertNil(parseIOSRecovery(untrustedRecovery))
   }
 
+  // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-008
+  #if targetEnvironment(simulator) && QWQ_EXTERNAL_UAT_BROKER
+  func testGwt008BrokerUsesAttemptRandomRestrictedUnixSocket() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let driver = AlphaGwt008NativeEvidenceDriver()
+    let path = try driver.startUATBroker(
+      socketDirectory: directory,
+      randomComponent: "01234567-89ab-cdef-0123456789ab"
+    )
+    var mode: UInt16 = 0
+    XCTAssertEqual(lstat(path, nil), 0)
+    let attributes = try FileManager.default.attributesOfItem(atPath: path)
+    mode = (attributes[.posixPermissions] as? NSNumber)?.uint16Value ?? 0
+    XCTAssertEqual(mode, 0o600)
+    XCTAssertTrue(path.hasSuffix(".sock"))
+    XCTAssertFalse(path.contains("verifier"))
+    driver.revoke()
+    XCTAssertFalse(FileManager.default.fileExists(atPath: path))
+  }
+
+  func testGwt008StartBrokerWithoutHostIdentityIsRejected() {
+    let driver = AlphaGwt008NativeEvidenceDriver()
+    XCTAssertThrowsError(try driver.startUATBroker()) {
+      XCTAssertEqual($0 as? AlphaGwt008NativeEvidenceDriver.Failure, .typed("APP.UAT.relay_admission_mismatch"))
+    }
+  }
+
+  func testGwt008NativeEvidenceCreateOnceAndExactFence() throws {
+    let now: TimeInterval = 100
+    let pid = ProcessInfo.processInfo.processIdentifier
+    let driver = AlphaGwt008NativeEvidenceDriver(processId: pid, startedUptime: 1.5, now: { now })
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    var admission = gwt008Admission(pid: pid, nowMs: 100_000)
+    let body = admission
+    admission["admissionDigest"] = try gwt008Digest(body)
+    _ = try driver.arm(admission: admission, verifierHex: String(repeating: "ab", count: 32),
+                       launcherPid: getpid(), socketDirectory: directory,
+                       randomComponent: "01234567-89ab-cdef-0123456789ab")
+    let snapshot: [String: Any] = [
+      "schema": "external-uat-sealed-snapshot", "caseId": "login-success",
+      "launchAttemptId": "attempt-1", "generation": 1,
+      "observationBinding": gwt008DigestValue("binding"),
+      "observations": [["source": "auth", "status": "observed", "detail": "local-success"]],
+    ]
+    var injected = snapshot; injected["processId"] = pid
+    XCTAssertThrowsError(try driver.sealObservation(injected))
+    injected = snapshot; injected["sealedAtMonotonicMs"] = 100_001
+    XCTAssertThrowsError(try driver.sealObservation(injected))
+    let first = try driver.sealObservation(snapshot)
+    var nativeSnapshot = snapshot
+    nativeSnapshot["processId"] = pid
+    nativeSnapshot["sealedAtMonotonicMs"] = Int64(100_000)
+    XCTAssertEqual(first, try gwt008Digest(nativeSnapshot))
+    XCTAssertEqual(try driver.sealObservation(snapshot), first)
+    var conflict = snapshot; conflict["observations"] = []
+    XCTAssertThrowsError(try driver.sealObservation(conflict))
+  }
+
+  func testGwt008ObservationAndQueryDeadlinesAreIndependent() throws {
+    var now: TimeInterval = 100
+    let pid = getpid()
+    let driver = AlphaGwt008NativeEvidenceDriver(processId: pid, now: { now })
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { driver.revoke(); try? FileManager.default.removeItem(at: directory) }
+    var admission = gwt008Admission(pid: pid, nowMs: 100_000)
+    admission["caseId"] = "otp-expiry"
+    admission["expiresAtMonotonicMs"] = Int64(460_000)
+    admission["admissionDigest"] = try gwt008Digest(admission)
+    _ = try driver.arm(admission: admission, verifierHex: String(repeating: "ab", count: 32),
+                       launcherPid: getpid(), socketDirectory: directory)
+    now = 400
+    let snapshot: [String: Any] = ["schema": "external-uat-sealed-snapshot", "caseId": "otp-expiry",
+      "launchAttemptId": "attempt-1", "generation": 1, "observationBinding": gwt008DigestValue("binding"),
+      "observations": [["source": "monotonic-clock", "status": "observed", "detail": "elapsed-300s-challenge-expired"]]]
+    let sealed = try driver.sealObservation(snapshot)
+    now = 459
+    XCTAssertEqual(try driver.sealObservation(snapshot), sealed)
+    now = 461
+    XCTAssertThrowsError(try driver.query([:], peerPid: pid, peerEuid: geteuid())) {
+      XCTAssertEqual($0 as? AlphaGwt008NativeEvidenceDriver.Failure, .typed("APP.UAT.relay_expired"))
+    }
+  }
+
+  func testGwt008RejectsStaleAdmissionAndSensitiveSnapshot() throws {
+    let pid = ProcessInfo.processInfo.processIdentifier
+    let driver = AlphaGwt008NativeEvidenceDriver(processId: pid, now: { 100 })
+    var admission = gwt008Admission(pid: pid, nowMs: 100_000)
+    admission["expiresAtMonotonicMs"] = 99_999
+    admission["admissionDigest"] = try gwt008Digest(admission)
+    XCTAssertThrowsError(try driver.arm(admission: admission,
+      verifierHex: String(repeating: "ab", count: 32), launcherPid: getpid(),
+      socketDirectory: FileManager.default.temporaryDirectory,
+      randomComponent: "01234567-89ab-cdef-0123456789ab"))
+  }
+
+  func testGwt008NativeEvidenceBindsAttemptAndRedactsInput() throws {
+    let driver = AlphaGwt008NativeEvidenceDriver(processId: 42, startedUptime: 1.5)
+    let process = try driver.processObservation(attemptId: "attempt-1")
+    XCTAssertEqual(process["processId"] as? Int32, 42)
+    XCTAssertEqual(process["launchAttemptId"] as? String, "attempt-1")
+    let observation = try driver.redactedInputObservation([
+      "contractDigest": canonicalDigest("a"), "caseId": "login-success",
+      "selector": "rehearsal-confirm-input", "sourceSelector": "alpha-rehearsal-confirm", "mode": "correct",
+    ])
+    XCTAssertEqual(observation["observed"] as? String, "input-redacted")
+    XCTAssertFalse(String(describing: observation).contains("123456"))
+  }
+
+  private func gwt008Admission(pid: pid_t, nowMs: Int64) -> [String: Any] {
+    let digest = gwt008DigestValue("value")
+    return [
+      "schema": "external-uat-managed-launch-admission", "contractDigest": digest,
+      "candidateDigest": digest, "artifactDigest": digest, "packageIdentity": "com.leadwise.quwoquan.alpha.debug",
+      "signingDigest": digest, "platform": "ios-simulator", "deviceId": "simulator-1",
+      "sessionId": "session-1", "caseId": "login-success", "launchAttemptId": "attempt-1",
+      "generation": 1, "observationBinding": gwt008DigestValue("binding"), "processId": pid,
+      "lifecycleReceiptDigest": digest, "admittedAtMonotonicMs": nowMs,
+      "expiresAtMonotonicMs": nowMs + 60_000,
+    ]
+  }
+
+  private func gwt008Digest(_ value: [String: Any]) throws -> String {
+    let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .withoutEscapingSlashes])
+    return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+  }
+
+  private func gwt008DigestValue(_ value: String) -> String {
+    "sha256:" + SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+  }
+  #endif
+
   private func startupTerminalEvent(_ surface: String) -> String {
     "{\"eventName\":\"startup_safe_terminal\",\"surface\":\"\(surface)\"}"
   }
@@ -652,6 +786,66 @@ class RunnerTests: XCTestCase {
     }
   }
 
+  func testIdempotentExplicitActivationPublishesExactActiveReceiptOverFailedLaunchReceipt() throws {
+    let activeReceipt: [String: Any] = [
+      "status": "activated",
+      "requestDigest": canonicalDigest("a"),
+      "validationIssues": [],
+    ]
+    let activeReceiptBefore = try canonicalJSONData(activeReceipt)
+    var launchReceipt: [String: Any] = [
+      "status": "failed",
+      "requestDigest": canonicalDigest("9"),
+      "validationIssues": ["runtime_config_activation_write_failed"],
+    ]
+
+    try NativeRuntimeConfigActivationCoordinator.publishAlreadyActivatedReceipt(
+      activeReceipt,
+      write: { receipt, name in
+        XCTAssertEqual(name, "runtime-config-activation-receipt.json")
+        launchReceipt = receipt
+      }
+    )
+
+    XCTAssertEqual(try canonicalJSONData(launchReceipt), activeReceiptBefore)
+    XCTAssertEqual(
+      try canonicalJSONData(activeReceipt),
+      activeReceiptBefore,
+      "幂等显式 activation 只能复制已验证 active receipt，不得重写其身份"
+    )
+  }
+
+  func testIdempotentExplicitActivationReceiptWriteFailureBlocksWithoutChangingActive() throws {
+    let activeReceipt: [String: Any] = [
+      "status": "activated",
+      "requestDigest": canonicalDigest("b"),
+      "validationIssues": [],
+    ]
+    let activeReceiptBefore = try canonicalJSONData(activeReceipt)
+    let failedLaunchReceipt: [String: Any] = [
+      "status": "failed",
+      "requestDigest": canonicalDigest("8"),
+      "validationIssues": ["runtime_config_activation_write_failed"],
+    ]
+    var launchReceipt = failedLaunchReceipt
+
+    assertRuntimeConfigError(.activationReceiptWriteFailed) {
+      try NativeRuntimeConfigActivationCoordinator.publishAlreadyActivatedReceipt(
+        activeReceipt,
+        write: { _, name in
+          XCTAssertEqual(name, "runtime-config-activation-receipt.json")
+          throw CocoaError(.fileWriteNoPermission)
+        }
+      )
+    }
+
+    XCTAssertEqual(try canonicalJSONData(activeReceipt), activeReceiptBefore)
+    XCTAssertEqual(
+      try canonicalJSONData(launchReceipt),
+      try canonicalJSONData(failedLaunchReceipt)
+    )
+  }
+
   func testRuntimeActivationRestoresBothReceiptsWhenSecondaryWriteFails() throws {
     let previousActiveReceipt = Data("previous-active".utf8)
     let previousLaunchReceipt = Data("previous-launch".utf8)
@@ -835,6 +1029,263 @@ class RunnerTests: XCTestCase {
         allowStaleIdentity: true,
         now: afterExpiry
       )
+    )
+  }
+
+  func testExplicitActivationAcceptsOnlySignedPreviousLayoutOfflinePredecessorBoundToReceipt() throws {
+    let fixture = try previousLayoutOfflinePredecessorFixture()
+
+    let active = try NativeRuntimeConfigStore.validatePreviousLayoutOfflinePredecessor(
+      packageData: fixture.packageData,
+      trust: fixture.trust,
+      activeReceiptData: fixture.receiptData
+    )
+
+    XCTAssertEqual(active.packageDigest, fixture.packageDigest)
+    XCTAssertEqual(active.trustEnvelopeDigest, fixture.trust.trustEnvelopeDigest)
+    XCTAssertNil(active.package["rehearsalSpace"])
+  }
+
+  func testPreviousLayoutOfflinePredecessorRejectsShapeTrustSignatureAndReceiptDrift() throws {
+    let fixture = try previousLayoutOfflinePredecessorFixture()
+
+    var extraField = fixture.package
+    extraField["unexpected"] = "field"
+    assertRuntimeConfigError(.schemaMismatch) {
+      _ = try NativeRuntimeConfigStore.validatePreviousLayoutOfflinePredecessor(
+        packageData: try canonicalJSONData(extraField),
+        trust: fixture.trust,
+        activeReceiptData: fixture.receiptData
+      )
+    }
+
+    var currentShape = fixture.package
+    currentShape["rehearsalSpace"] = [
+      "mode": "standard",
+      "snapshotDigest": canonicalDigest("9"),
+      "instanceId": "default",
+    ]
+    assertRuntimeConfigError(.schemaMismatch) {
+      _ = try NativeRuntimeConfigStore.validatePreviousLayoutOfflinePredecessor(
+        packageData: try canonicalJSONData(currentShape),
+        trust: fixture.trust,
+        activeReceiptData: fixture.receiptData
+      )
+    }
+
+    let nonCanonicalData = try JSONSerialization.data(
+      withJSONObject: fixture.package,
+      options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    )
+    assertRuntimeConfigError(.packageMalformed) {
+      _ = try NativeRuntimeConfigStore.validatePreviousLayoutOfflinePredecessor(
+        packageData: nonCanonicalData,
+        trust: fixture.trust,
+        activeReceiptData: fixture.receiptData
+      )
+    }
+
+    var sourceDrift = fixture.package
+    sourceDrift["sourceGitSha"] = "not-a-git-sha"
+    assertRuntimeConfigError(.sourceIdentityInvalid) {
+      _ = try NativeRuntimeConfigStore.validatePreviousLayoutOfflinePredecessor(
+        packageData: try canonicalJSONData(sourceDrift),
+        trust: fixture.trust,
+        activeReceiptData: fixture.receiptData
+      )
+    }
+
+    var contentSourceDrift = fixture.package
+    contentSourceDrift["contentSource"] = "remote"
+    assertRuntimeConfigError(.contentSourceMismatch) {
+      _ = try NativeRuntimeConfigStore.validatePreviousLayoutOfflinePredecessor(
+        packageData: try canonicalJSONData(contentSourceDrift),
+        trust: fixture.trust,
+        activeReceiptData: fixture.receiptData
+      )
+    }
+
+    var signatureDrift = fixture.package
+    signatureDrift["signature"] = Data(repeating: 0, count: 64).base64EncodedString()
+    assertRuntimeConfigError(.signatureInvalid) {
+      _ = try NativeRuntimeConfigStore.validatePreviousLayoutOfflinePredecessor(
+        packageData: try canonicalJSONData(signatureDrift),
+        trust: fixture.trust,
+        activeReceiptData: fixture.receiptData
+      )
+    }
+
+    var receiptDrift = fixture.receipt
+    receiptDrift["packageDigest"] = canonicalDigest("8")
+    assertRuntimeConfigError(.activationReceiptMismatch) {
+      _ = try NativeRuntimeConfigStore.validatePreviousLayoutOfflinePredecessor(
+        packageData: fixture.packageData,
+        trust: fixture.trust,
+        activeReceiptData: try canonicalJSONData(receiptDrift)
+      )
+    }
+
+    var trustDrift = fixture.trust.artifactTrustEnvelope
+    trustDrift["buildProfile"] = "prod"
+    let mismatchedTrust = NativeRuntimeConfigTrustProjection(
+      artifactTrustEnvelope: trustDrift,
+      trustEnvelopeDigest: fixture.trust.trustEnvelopeDigest,
+      trustedPublicKeys: fixture.trust.trustedPublicKeys
+    )
+    assertRuntimeConfigError(.profileMismatch) {
+      _ = try NativeRuntimeConfigStore.validatePreviousLayoutOfflinePredecessor(
+        packageData: fixture.packageData,
+        trust: mismatchedTrust,
+        activeReceiptData: fixture.receiptData
+      )
+    }
+  }
+
+  func testPreviousLayoutMigrationHistoryWritesCanonicalContentAddressedArchive() throws {
+    let fixture = try previousLayoutOfflinePredecessorFixture()
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "historical-migration-history-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    try NativeRuntimeConfigStore.archivePreviousLayoutMigrationHistory(
+      packageData: fixture.packageData,
+      receiptData: fixture.receiptData,
+      packageDigest: fixture.packageDigest,
+      baseDirectory: root
+    )
+
+    let digestHex = String(fixture.packageDigest.dropFirst("sha256:".count))
+    let archive = root
+      .appendingPathComponent("migration-history", isDirectory: true)
+      .appendingPathComponent(digestHex, isDirectory: true)
+    XCTAssertEqual(
+      try Data(contentsOf: archive.appendingPathComponent("historical-package.json")),
+      fixture.packageData
+    )
+    XCTAssertEqual(
+      try Data(contentsOf: archive.appendingPathComponent("historical-active-receipt.json")),
+      fixture.receiptData
+    )
+    let auditData = try Data(
+      contentsOf: archive.appendingPathComponent("migration-audit.json")
+    )
+    let audit = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: auditData) as? [String: Any]
+    )
+    XCTAssertEqual(auditData, try canonicalJSONData(audit))
+    XCTAssertEqual(audit["packageDigest"] as? String, fixture.packageDigest)
+    XCTAssertEqual(
+      audit["receiptDigest"] as? String,
+      try dataDigest(fixture.receiptData)
+    )
+    XCTAssertEqual(Set(audit.keys), ["schema", "packageDigest", "receiptDigest"])
+  }
+
+  func testPreviousLayoutMigrationHistoryIsCreateOnceIdempotent() throws {
+    let fixture = try previousLayoutOfflinePredecessorFixture()
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "historical-migration-idempotent-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    for _ in 0..<2 {
+      try NativeRuntimeConfigStore.archivePreviousLayoutMigrationHistory(
+        packageData: fixture.packageData,
+        receiptData: fixture.receiptData,
+        packageDigest: fixture.packageDigest,
+        baseDirectory: root
+      )
+    }
+  }
+
+  func testPreviousLayoutMigrationHistoryCollisionAndWriteFailureBlockBeforeActiveMutation() throws {
+    let fixture = try previousLayoutOfflinePredecessorFixture()
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "historical-migration-failure-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try NativeRuntimeConfigStore.archivePreviousLayoutMigrationHistory(
+      packageData: fixture.packageData,
+      receiptData: fixture.receiptData,
+      packageDigest: fixture.packageDigest,
+      baseDirectory: root
+    )
+    let activeBefore = fixture.packageData
+    let digestHex = String(fixture.packageDigest.dropFirst("sha256:".count))
+    let receiptArchive = root
+      .appendingPathComponent("migration-history", isDirectory: true)
+      .appendingPathComponent(digestHex, isDirectory: true)
+      .appendingPathComponent("historical-active-receipt.json")
+    try Data("collision".utf8).write(to: receiptArchive)
+
+    assertRuntimeConfigError(.activationWriteFailed) {
+      try NativeRuntimeConfigStore.archivePreviousLayoutMigrationHistory(
+        packageData: fixture.packageData,
+        receiptData: fixture.receiptData,
+        packageDigest: fixture.packageDigest,
+        baseDirectory: root
+      )
+    }
+    XCTAssertEqual(activeBefore, fixture.packageData)
+
+    var activeBytes = fixture.packageData
+    assertRuntimeConfigError(.activationWriteFailed) {
+      try NativeRuntimeConfigStore.archivePreviousLayoutMigrationHistory(
+        packageData: fixture.packageData,
+        receiptData: fixture.receiptData,
+        packageDigest: fixture.packageDigest,
+        baseDirectory: root,
+        writeCreateOnce: { _, _ in
+          throw NativeRuntimeConfigReadError.activationWriteFailed
+        }
+      )
+      activeBytes = Data("candidate".utf8)
+    }
+    XCTAssertEqual(activeBytes, fixture.packageData, "归档失败必须发生在 active 替换前")
+  }
+
+  func testPreviousLayoutPredecessorRejectsNonCanonicalActiveReceiptBytes() throws {
+    let fixture = try previousLayoutOfflinePredecessorFixture()
+    let nonCanonicalReceipt = try JSONSerialization.data(
+      withJSONObject: fixture.receipt,
+      options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    )
+    assertRuntimeConfigError(.activationReceiptMalformed) {
+      _ = try NativeRuntimeConfigStore.validatePreviousLayoutOfflinePredecessor(
+        packageData: fixture.packageData,
+        trust: fixture.trust,
+        activeReceiptData: nonCanonicalReceipt
+      )
+    }
+  }
+
+  func testRejectedPreviousLayoutPredecessorLeavesOriginalBytesUntouched() throws {
+    let fixture = try previousLayoutOfflinePredecessorFixture()
+    var invalid = fixture.package
+    invalid["payloadDigest"] = canonicalDigest("7")
+    let storedBytes = try canonicalJSONData(invalid)
+    var activeBytes = storedBytes
+
+    XCTAssertThrowsError(
+      try NativeRuntimeConfigStore.validatePreviousLayoutOfflinePredecessor(
+        packageData: activeBytes,
+        trust: fixture.trust,
+        activeReceiptData: fixture.receiptData
+      )
+    )
+
+    XCTAssertEqual(activeBytes, storedBytes, "迁移校验失败不得改写或补齐旧 active")
+    XCTAssertNil(
+      try XCTUnwrap(JSONSerialization.jsonObject(with: activeBytes) as? [String: Any])[
+        "rehearsalSpace"
+      ]
     )
   }
 
@@ -1175,6 +1626,95 @@ class RunnerTests: XCTestCase {
         line: line
       )
     }
+  }
+
+  private struct PreviousLayoutOfflinePredecessorFixture {
+    let package: [String: Any]
+    let packageData: Data
+    let packageDigest: String
+    let trust: NativeRuntimeConfigTrustProjection
+    let receipt: [String: Any]
+    let receiptData: Data
+  }
+
+  private func previousLayoutOfflinePredecessorFixture() throws
+    -> PreviousLayoutOfflinePredecessorFixture
+  {
+    let privateKey = Curve25519.Signing.PrivateKey()
+    let keyID = "historical-alpha-key"
+    let encodedPublicKey = privateKey.publicKey.rawRepresentation.base64EncodedString()
+    let trustDocument: [String: Any] = [
+      "schema": AppLaunchContract.schemaValues["runtime_config_trust_envelope"]!,
+      "buildProfile": "nonprod",
+      "signatureAlgorithm": AppLaunchContract.runtimeConfigPackageSignatureAlgorithm,
+      "trustedPublicKeys": [keyID: encodedPublicKey],
+    ]
+    let trustDigest = try canonicalJSONDigest(trustDocument)
+    let trust = NativeRuntimeConfigTrustProjection(
+      artifactTrustEnvelope: trustDocument,
+      trustEnvelopeDigest: trustDigest,
+      trustedPublicKeys: [keyID: encodedPublicKey]
+    )
+    var package: [String: Any] = [
+      "schema": AppLaunchContract.schemaValues["offline_bootstrap_document"]!,
+      "environment": "alpha",
+      "buildProfile": "nonprod",
+      "target": "alpha-local",
+      "launchPolicy": "test_live",
+      "contentSource": "bundled_snapshot",
+      "sourceGitSha": String(repeating: "a", count: 40),
+      "sourceTreeDigest": "sha256:" + String(repeating: "b", count: 64),
+      "trustEnvelopeDigest": trustDigest,
+      "runtime": ["appRuntimeEnv": "alpha"],
+      "payloadDigest": "",
+      "signatureAlgorithm": AppLaunchContract.runtimeConfigPackageSignatureAlgorithm,
+      "signatureKeyId": keyID,
+      "trustedPublicKeys": [keyID: encodedPublicKey],
+      "signature": "",
+    ]
+    var payloadDocument = package
+    payloadDocument.removeValue(forKey: "signature")
+    package["payloadDigest"] = try canonicalJSONDigest(payloadDocument)
+    var signedPayload = package
+    signedPayload.removeValue(forKey: "signature")
+    package["signature"] = try privateKey.signature(
+      for: canonicalJSONData(signedPayload)
+    ).base64EncodedString()
+    let packageData = try canonicalJSONData(package)
+    let packageDigest = try canonicalJSONDigest(package)
+    let receipt: [String: Any] = [
+      "schema": AppLaunchContract.schemaValues["runtime_config_activation_receipt"]!,
+      "status": AppLaunchContract.runtimeConfigActivationReceiptStatuses[0],
+      "requestDigest": canonicalDigest("1"),
+      "environment": "alpha",
+      "buildProfile": "nonprod",
+      "target": "alpha-local",
+      "launchProvenance": "canonical_launcher",
+      "runtimeConfigSupplyMode": "build_time_self_supply",
+      "packageDigest": packageDigest,
+      "trustEnvelopeDigest": trustDigest,
+      "effectiveLaunchManifestDigest": canonicalDigest("2"),
+      "previousActiveDigest": "",
+      "activePackageDigest": packageDigest,
+      "errorCode": "",
+      "validationIssues": [],
+    ]
+    return PreviousLayoutOfflinePredecessorFixture(
+      package: package,
+      packageData: packageData,
+      packageDigest: packageDigest,
+      trust: trust,
+      receipt: receipt,
+      receiptData: try canonicalJSONData(receipt)
+    )
+  }
+
+  private func canonicalJSONData(_ document: [String: Any]) throws -> Data {
+    try NativeRuntimeCanonicalJSON.data(document)
+  }
+
+  private func dataDigest(_ data: Data) throws -> String {
+    "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
   }
 
   private func canonicalRuntimeValues(environment: String) -> [String: Any] {

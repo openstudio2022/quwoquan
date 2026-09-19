@@ -6,6 +6,8 @@ class UserProfileRouteExtra {
   const UserProfileRouteExtra({
     this.personaId,
     this.avatarUrl,
+    this.avatarAssetId,
+    this.avatarAccessMode,
     this.displayName,
     this.backgroundImage,
     this.openMessageComposer = false,
@@ -14,6 +16,8 @@ class UserProfileRouteExtra {
 
   final String? personaId;
   final String? avatarUrl;
+  final String? avatarAssetId;
+  final MediaDeliveryAccessMode? avatarAccessMode;
   final String? displayName;
   final String? backgroundImage;
 
@@ -28,6 +32,8 @@ class UserProfileRouteExtra {
   /// null / empty 过滤：与路由解析侧保持一致
   String? get safePersonaId => personaId?.isEmpty == true ? null : personaId;
   String? get safeAvatarUrl => avatarUrl?.isEmpty == true ? null : avatarUrl;
+  String? get safeAvatarAssetId =>
+      avatarAssetId?.isEmpty == true ? null : avatarAssetId;
   String? get safeDisplayName =>
       displayName?.isEmpty == true ? null : displayName;
   String? get safeBackgroundImage =>

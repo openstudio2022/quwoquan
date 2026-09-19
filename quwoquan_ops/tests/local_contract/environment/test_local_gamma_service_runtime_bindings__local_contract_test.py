@@ -32,6 +32,7 @@ class LocalGammaServiceRuntimeBindingsTest(unittest.TestCase):
             {
                 "QWQ_COMPOSE_GO_BASE_IMAGE": build_images["goBaseImage"],
                 "QWQ_COMPOSE_ALPINE_BASE_IMAGE": build_images["alpineBaseImage"],
+                "QWQ_COMPOSE_PYTHON_BASE_IMAGE": "python:3.11-slim-bookworm",
                 "QWQ_COMPOSE_PUBLIC_WEB_BASE_URL": (
                     "https://alpha.quwoquan.com:17000"
                 ),

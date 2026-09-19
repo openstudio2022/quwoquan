@@ -1021,3 +1021,67 @@ def test_android_plan_records_coverage_without_ios_components(tmp_path: Path, mo
         "productionPub", "patrolPub", "androidGradle"
     }
     assert set(result["receipt"]["platformInputs"]) == {"android"}
+
+
+def test_ios_only_builder_never_enters_android_or_trust(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work, process, generation = tmp_path / "work", tmp_path / "process", tmp_path / "generation"
+    for path in (work, process, generation):
+        path.mkdir()
+    context = sync.DependencyComponentBuildContext(
+        repo_root=tmp_path / "repo", attempt_id="a" * 32, work_root=work,
+        process_root=process, generation_root=generation,
+        flutter_identity={"executable": "/flutter"}, source_identity=_source_identity(),
+        platforms=("ios",),
+    )
+    pub_roots = {name: generation / name for name in ("productionPub", "patrolPub")}
+    pub_replays = {name: work / f"{name}-replay" for name in pub_roots}
+    pub_digests = {"productionPub": _digest("1"), "patrolPub": _digest("2")}
+    observed: list[str] = []
+    monkeypatch.setattr(sync._builder, "resolve_cocoapods_executable", lambda _raw: "/pod")
+    monkeypatch.setattr(sync._builder, "_resolution_seal", lambda _root: {})
+    monkeypatch.setattr(sync._builder, "project", lambda _repo, target: target.mkdir() or target)
+    monkeypatch.setattr(sync._builder, "_assert_resolution_seal", lambda **_kwargs: None)
+    monkeypatch.setattr(sync._builder, "_build_pub_components", lambda **_kw: (dict(pub_roots), pub_replays, pub_digests))
+    monkeypatch.setattr(sync._builder, "_build_ios_component", lambda **kw: observed.append(str(kw["host"])) or generation / ("productionIosPods" if kw["host"] == sync.IOS_POD_PRODUCTION_HOST else "patrolIosPods"))
+    monkeypatch.setattr(sync._builder, "_build_android_component", lambda **_kw: (_ for _ in ()).throw(AssertionError("iOS-only must not enter Android")))
+    monkeypatch.setattr(sync._builder, "_validated_runtime_trust_root", lambda *_args, **_kw: (_ for _ in ()).throw(AssertionError("iOS-only must not validate Android trust")))
+    monkeypatch.setattr(sync._builder, "_verify_components", lambda **_kwargs: None)
+
+    roots = sync._builder.build_dependency_components(context, trust_root=None)
+
+    assert set(roots) == set(sync.dependency_components_for_platforms(("ios",)))
+    assert observed == [sync.IOS_POD_PRODUCTION_HOST, sync.IOS_POD_PATROL_HOST]
+
+
+def test_android_only_builder_never_resolves_cocoapods_or_ios(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work, process, generation = tmp_path / "work", tmp_path / "process", tmp_path / "generation"
+    for path in (work, process, generation):
+        path.mkdir()
+    context = sync.DependencyComponentBuildContext(
+        repo_root=tmp_path / "repo", attempt_id="b" * 32, work_root=work,
+        process_root=process, generation_root=generation,
+        flutter_identity={"executable": "/flutter"}, source_identity=_source_identity(),
+        platforms=("android",),
+    )
+    pub_roots = {name: generation / name for name in ("productionPub", "patrolPub")}
+    pub_replays = {name: work / f"{name}-replay" for name in pub_roots}
+    pub_digests = {"productionPub": _digest("1"), "patrolPub": _digest("2")}
+    trust = tmp_path / "trust"
+    trust.mkdir()
+    monkeypatch.setattr(sync._builder, "resolve_cocoapods_executable", lambda _raw: (_ for _ in ()).throw(AssertionError("Android-only must not resolve CocoaPods")))
+    monkeypatch.setattr(sync._builder, "_resolution_seal", lambda _root: {})
+    monkeypatch.setattr(sync._builder, "project", lambda _repo, target: target.mkdir() or target)
+    monkeypatch.setattr(sync._builder, "_assert_resolution_seal", lambda **_kwargs: None)
+    monkeypatch.setattr(sync._builder, "_build_pub_components", lambda **_kw: (dict(pub_roots), pub_replays, pub_digests))
+    monkeypatch.setattr(sync._builder, "_build_ios_component", lambda **_kw: (_ for _ in ()).throw(AssertionError("Android-only must not enter iOS")))
+    monkeypatch.setattr(sync._builder, "_validated_runtime_trust_root", lambda root, **_kw: (root, ()))
+    monkeypatch.setattr(sync._builder, "_build_android_component", lambda **_kw: generation / "androidGradle")
+    monkeypatch.setattr(sync._builder, "_verify_components", lambda **_kwargs: None)
+
+    roots = sync._builder.build_dependency_components(context, trust_root=trust)
+
+    assert set(roots) == set(sync.dependency_components_for_platforms(("android",)))

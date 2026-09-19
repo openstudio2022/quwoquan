@@ -6,12 +6,14 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import shutil
 from pathlib import Path
 
 import pytest
 
 from content.execution import seal, task_init
+from content.execution.workspace import target_descriptor_for
 from content.release.canonical import pool_cutover as subject
 from content.release.canonical.application import apply_object_transaction
 from content.release.canonical.canonical_inventory import canonical_inventory_path, load_or_bootstrap_inventory
@@ -34,6 +36,8 @@ HOME = "entities/地点/中国/浙江省/杭州市/景区/p0001/西湖/1"
 LOGICAL_HOME = "地点/景区/西湖"
 HOME_TARGET = {"name": "西湖", "entityType": "地点/景区", "region": "中国/浙江省/杭州市", "entityRef": "/entity/地点/景区/西湖", "entityId": "entity:xihu"}
 PROCESS_HOME = task_init.execution_target_ref(HOME_TARGET, carrier="homepage")
+ENTITY_REF = "/entity/地点/景区/西湖"
+ENTITY_ID = "entity:xihu"
 POST = "posts/article/导览/西湖速览/1"
 CREATOR = "qwq_creator_geo_editor_001"
 AUTHOR = {"host": "cursor", "modelFamily": "gpt", "sessionId": "cutover-author", "invocation": {"provider": "openai", "model": "test-model", "runId": "author-run"}}
@@ -44,6 +48,57 @@ def _write(path: Path, value: object) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(value.encode() if isinstance(value, str) else _json_bytes(value))
     return path
+
+
+def _review_payload(root: Path, process_ref: str, *, carrier: str) -> dict:
+    descriptor = target_descriptor_for(root.name, process_ref)
+    object_ref = descriptor["canonicalObjectRef"]
+    version = descriptor["contentVersion"]
+    draft_name = {
+        "homepage": "page.md",
+        "article": "draft.article.md",
+        "image": "image_work.json",
+        "video": "video_script.json",
+    }[carrier]
+    refs = _read_json(root / process_ref / "1.download/source_refs.json")["sources"]
+    draft = root / process_ref / "4.draft" / draft_name
+    draft_digest = _digest_file(draft)
+    revision = {"contentRevision": version, "sourceRevision": version, "layoutRevision": version}
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
+    counts = {"title": 1, "heading": 0, "paragraph": 1, "list": 0, "tableLogicalCell": 0, "footnote": 0, "media": 0}
+    sources = []
+    source_bindings = []
+    for binding in refs:
+        source_ref = binding["sourceRef"]
+        source_digest = _digest_file(root / source_ref)
+        source_bindings.append({"sourceRef": source_ref, "sourceDigest": source_digest})
+        sequence = {"objectRef": object_ref, "sourceRef": source_ref, "sourceDigest": source_digest, "objectRevision": revision}
+        sequence_digest = "sha256:" + hashlib.sha256(_json_bytes(sequence)).hexdigest()
+        sources.append({
+            "sourceRef": source_ref, "sourceDigest": source_digest, "parseStatus": "complete",
+            "dialect": "markdown", "dialectVersion": "1", "capabilities": ["title", "paragraph"],
+            "sourceCounts": counts, "draftCounts": counts,
+            "sourceSequenceDigest": sequence_digest, "draftSequenceDigest": sequence_digest,
+        })
+    source_set_digest = "sha256:" + hashlib.sha256(_json_bytes(source_bindings)).hexdigest()
+    disposition = {
+        "issueId": "sha256:" + hashlib.sha256(_json_bytes({"objectRef": object_ref, "objectRevision": revision})).hexdigest(),
+        "objectRef": object_ref,
+        "sourceAnchor": {"origin": "source-set", "start": 0, "end": len(sources), "selector": object_ref},
+        "sourceDigest": source_set_digest, "targetDigest": draft_digest,
+        "detectedType": "SEMANTIC_EXACT", "proposedMapping": None, "lossFields": [], "severity": "info",
+        "actor": {"actorId": REVIEWER["sessionId"], "actorType": "independent_reviewer"},
+        "reason": "reviewed exact source bytes", "policyVersion": "1.0.0",
+        "reviewStatus": "reviewed_confirmed", "outcome": "auto_continue", "processingDisposition": "preserved",
+        "protocol": protocol, "objectRevision": revision,
+    }
+    report = {"reviewedCarrier": carrier, "carrierCompatible": True, "sources": sources, "issues": []}
+    if carrier == "homepage":
+        report["homepageFidelity"] = {
+            "title": True, "headingTree": True, "paragraphOrder": True, "links": True,
+            "nestedLists": True, "tableLogicalGrid": True, "footnotes": True, "mediaCaptionOrder": True,
+        }
+    return {"decision": "approved", "blockingIssues": [], "advisories": [], "semanticReport": report, "protocol": protocol, "objectRevision": revision, "dispositions": [disposition]}
 
 
 def _binding(path: Path, *, role: str | None = None) -> dict:
@@ -90,6 +145,7 @@ def _execution(tmp: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             payload["reviews"] = {PROCESS_HOME: approved_semantic_judgement(root, PROCESS_HOME)}
         seal.seal_stage(execution_id=execution_id, stage=stage, input_path=_write(tmp / f"{stage}.json", payload))
     project_publish_final_surface(execution_root=root, object_dir=root / PROCESS_HOME, target_ref=PROCESS_HOME, target=target, carrier="homepage")
+    seed_system_creator_avatar_holding(CREATOR, monkeypatch=monkeypatch)
     return root
 
 
@@ -113,7 +169,7 @@ def _publish(tmp: Path, execution: Path, monkeypatch: pytest.MonkeyPatch) -> tup
 def _dependent_post(case: dict) -> Path:
     tmp, active = case["tmp"], case["active"]
     execution_id = "20260909--travel-article-cutover--local--pilot-002"
-    target = {"name": "西湖", "entityType": "地点/景区", "entityId": "entity:xihu", "entityRef": "/entity/地点/中国/浙江省/杭州市/景区/p0001/西湖/1", "region": "中国/浙江省/杭州市", "entityRef": "/entity/地点/景区/西湖", "entityId": "entity:xihu", "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1}
+    target = {"name": "西湖", "entityType": "地点/景区", "region": "中国/浙江省/杭州市", "entityRef": ENTITY_REF, "entityId": ENTITY_ID, "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1}
     task_init.initialize_execution(submitted_demand={"schema": "quwoquan_data.carrier_demand", "executionId": execution_id, "carrier": "article", "familyRef": "content/travel/article/article"}, submitted_bindings={"schema": "quwoquan_data.immutable_candidate_bindings", "executionId": execution_id, "carrier": "article", "targets": [target]})
     execution = paths.execution_root(execution_id)
     request = _write(tmp / "article-ingest.json", {"schema": "quwoquan_data.ingest_manifest", "executionId": execution_id, "targets": [{"targetRef": POST, "sources": [{"kind": "page", "sourceUrl": "https://zh.wikipedia.org/wiki/西湖", "title": "西湖", "sourceMarkdownPath": str(tmp / "source.md"), "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/", "creator": "测试编辑", "relevance": "正文事实"}]}]})
@@ -419,7 +475,7 @@ def _media_package(case: dict, carrier: str) -> tuple[Path, str, Path]:
     from content.release.canonical.post_transaction_assets import source_assets
     tmp = case["tmp"]
     execution_id = f"20260909--travel-{carrier}-cutover--local--pilot-003"
-    target = {"name": "西湖", "entityType": "地点/景区", "entityId": "entity:xihu", "entityRef": "/entity/地点/中国/浙江省/杭州市/景区/p0001/西湖/1", "region": "中国/浙江省/杭州市", "publishAngle": "风光", "publishTitle": "西湖作品", "publishSeq": 1}
+    target = {"name": "西湖", "entityType": "地点/景区", "region": "中国/浙江省/杭州市", "entityRef": ENTITY_REF, "entityId": ENTITY_ID, "publishAngle": "风光", "publishTitle": "西湖作品", "publishSeq": 1}
     ref = f"posts/{carrier}/风光/西湖作品/1"
     task_init.initialize_execution(submitted_demand={"schema": "quwoquan_data.carrier_demand", "executionId": execution_id, "carrier": carrier, "familyRef": f"content/travel/{carrier}/{carrier}"}, submitted_bindings={"schema": "quwoquan_data.immutable_candidate_bindings", "executionId": execution_id, "carrier": carrier, "targets": [target]})
     execution = paths.execution_root(execution_id)

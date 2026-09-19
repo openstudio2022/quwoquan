@@ -161,6 +161,27 @@ def _lock_model(lock_path: Path) -> tuple[bytes, str, list[dict[str, str]]]:
     return encoded, _digest_bytes(encoded), hosted
 
 
+def lock_hosted_url(lock_path: Path) -> str:
+    """Return the single hosted-Pub URL sealed by one pubspec.lock."""
+
+    _encoded, _digest, hosted = _lock_model(lock_path)
+    urls = sorted({item["url"] for item in hosted})
+    if len(urls) != 1:
+        raise ValueError("App dependency hosted URL is not unique")
+    return urls[0]
+
+
+def seal_lock_hosted_url(
+    environment: Mapping[str, str], *, lock_path: Path
+) -> dict[str, str]:
+    """Force offline pub get onto the lock cache namespace, not ambient pub.dev."""
+
+    sealed = dict(environment)
+    sealed.pop("FLUTTER_STORAGE_BASE_URL", None)
+    sealed["PUB_HOSTED_URL"] = lock_hosted_url(lock_path)
+    return sealed
+
+
 def _safe_relative(value: str) -> str:
     path = PurePosixPath(value)
     if (

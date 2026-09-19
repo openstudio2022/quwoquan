@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/service/content_service/content/post_collection/presentation/post_collection_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -237,6 +238,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       ..._legalDocumentRoutes(ref),
+      GoRoute(
+        path: AppRoutePaths.postCollectionPathTemplate.replaceAll(
+          '{collectionId}',
+          ':collectionId',
+        ),
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: PostCollectionPage(
+            collectionId: state.pathParameters['collectionId']!,
+            openPost: (postId) =>
+                context.push(AppRoutePaths.workBrowser(workId: postId)),
+          ),
+        ),
+      ),
       GoRoute(
         path: AppRoutePaths.interestOnboarding,
         pageBuilder: (context, state) => appRoutePage<void>(

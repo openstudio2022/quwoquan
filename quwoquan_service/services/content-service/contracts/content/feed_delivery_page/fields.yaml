@@ -21,7 +21,11 @@ fields:
   api_exposure: none
   ops_exposure: read
   role: append_only_fact
-  description: actor/session/route/pageSize/clientPresentationContract.contractDigest 的 SHA-256 摘要；contractDigest 必须经 canonical 闭集规范化与服务端重算校验，原始主体不进入 Redis key 或日志
+  description: >-
+    SHA-256 摘要绑定 actor/session/route/pageSize、clientPresentationContract.contractDigest 与推荐原窗口冻结 contextDigest；按固定字段名的 canonical JSON 编码，不能拼接未分隔字符串。
+    contractDigest 必须经 canonical 闭集规范化与服务端重算校验。
+    contextDigest 只取 Recommendation admission 结果并由 cursor AEAD 认证，续页/回翻不能按新 viewport/device、时钟或 profile/policy 重算；非推荐具名查询使用稳定 not_applicable sentinel。
+    原始主体及原 region 不进入 Redis key 或日志；无摘要或摘要不匹配的推荐旧 cursor/window 必须拒绝，不设 dual-read。
 - name: feedRequestId
   source: feedRequestId
   type: string
@@ -124,6 +128,17 @@ fields:
   ops_exposure: read
   role: append_only_fact
   description: 本次推荐唯一策略内容摘要；非推荐具名查询为空
+- name: contextDigest
+  source: contextDigest
+  type: string
+  max_utf8_bytes: 64
+  constraints: [NULLABLE]
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: read
+  role: append_only_fact
+  description: Recommendation 返回的原窗口冻结上下文 SHA-256 hex；推荐页必须存在并参与 scopeHash 和 cursor AEAD，非推荐具名查询为空且 scope 使用 not_applicable。不得存储或返回原始 requestContext。
 - name: experimentBucket
   source: experimentBucket
   type: string

@@ -255,6 +255,8 @@ def test_canonical_source_catalog_preserves_factual_reference_only_truth(
     assert source["sourceUrl"] == "https://commons.wikimedia.org/wiki/File:Example.jpg"
     assert source["sourceUseMode"] == "factual_reference_only"
     assert source["assets"][0]["sourceUseMode"] == "factual_reference_only"
+    assert_valid(source, "publish", "source")
+    assert validate_result(source, "publish", "source") == []
 
 
 def test_internal_reference_asset_is_rejected_without_scope_upgrade(

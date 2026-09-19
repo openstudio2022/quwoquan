@@ -48,6 +48,7 @@ from content.source.homepage_article_source_attribution import (
 from core.content_library import reference_existing_file
 from core.control_types import AUTHOR_ARTIFACT_BY_CARRIER
 from core.schema import assert_valid
+from content.execution.workspace import target_descriptor_for
 from governance.creators.assignment import creator_from_payload
 
 _DEFAULT_CREATOR = {
@@ -379,6 +380,63 @@ def _author_model(execution_root: Path) -> str | None:
     return value or None
 
 
+def _draft_identity_binding(object_dir: Path) -> dict[str, Any]:
+    path = object_dir / "4.draft/identity.json"
+    if path.is_symlink() or not path.is_file():
+        return {}
+    value = _read_json(path)
+    try:
+        assert_valid(value, "execution", "draft_identity_binding", label=str(path))
+    except (TypeError, ValueError) as exc:
+        raise ObjectTransactionError(f"DATA.POOL.IDENTITY_INVALID: {exc}") from exc
+    return value
+
+
+def _projection_identity(execution_root: Path, object_dir: Path, target_ref: str, target: Mapping[str, Any]) -> tuple[str, int, str, list[Mapping[str, Any]]]:
+    try:
+        descriptor = target_descriptor_for(execution_root.name, target_ref)
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise ObjectTransactionError(str(exc)) from exc
+    binding = _draft_identity_binding(object_dir)
+    expected_version = descriptor["contentVersion"]
+    if target.get("requiredVersion") is not None and target.get("requiredVersion") != expected_version:
+        raise ObjectTransactionError("DATA.IDENTITY.REQUIRED_VERSION_DRIFT")
+    if binding and binding["contentVersion"] != expected_version:
+        raise ObjectTransactionError("DATA.IDENTITY.REQUIRED_VERSION_DRIFT")
+    content_id = str(target.get("requiredContentId") or binding.get("contentId") or "").strip()
+    if not content_id:
+        raise ObjectTransactionError("DATA.IDENTITY.MINT_FORBIDDEN: descriptor-bound projection requires contentId")
+    if target.get("requiredContentId") and binding and binding["contentId"] != target["requiredContentId"]:
+        raise ObjectTransactionError("DATA.IDENTITY.CONTENT_ID_DRIFT")
+    title = str(target.get("requiredPublishTitle") or binding.get("publishTitle") or target.get("publishTitle") or "").strip()
+    if binding and target.get("requiredPublishTitle") and binding["publishTitle"] != target["requiredPublishTitle"]:
+        raise ObjectTransactionError("DATA.IDENTITY.PUBLISH_TITLE_DRIFT")
+    assets = target.get("requiredAssets") or binding.get("requiredAssets") or []
+    return content_id, expected_version, title, list(assets)
+
+
+def _apply_required_assets(assets: list[dict[str, Any]], files: Mapping[Path, bytes | Path], required: Sequence[Mapping[str, Any]]) -> None:
+    if not required:
+        return
+    by_role = {str(row.get("role") or ""): row for row in required}
+    if len(by_role) != len(required):
+        raise ObjectTransactionError("DATA.IDENTITY.REQUIRED_ASSET_DUPLICATE")
+    for asset in assets:
+        role = str(asset.get("role") or "")
+        expected = by_role.get(role)
+        if expected is None:
+            raise ObjectTransactionError(f"DATA.IDENTITY.REQUIRED_ASSET_MISSING: {role}")
+        source = files.get(Path(str(asset.get("fileName") or "")))
+        actual_digest = _digest_file(source) if isinstance(source, Path) else str(asset.get("sha256") or "")
+        if actual_digest != expected.get("sha256") or str(asset.get("kind") or "") != expected.get("kind"):
+            raise ObjectTransactionError(f"DATA.IDENTITY.REQUIRED_ASSET_DRIFT: {role}")
+        asset["assetId"] = str(expected["assetId"])
+        asset["sha256"] = actual_digest
+    unused = set(by_role) - {str(row.get("role") or "") for row in assets}
+    if unused:
+        raise ObjectTransactionError("DATA.IDENTITY.REQUIRED_ASSET_MISSING: " + ",".join(sorted(unused)))
+
+
 def _post_manifest(
     *,
     execution_root: Path,
@@ -389,6 +447,9 @@ def _post_manifest(
     source_rows: Sequence[Mapping[str, Any]],
     assets: list[dict[str, Any]],
     draft: Mapping[str, Any],
+    content_id: str,
+    content_version: int,
+    publish_title: str,
 ) -> dict[str, Any]:
     created_at = _created_at(source_rows)
     creator = _creator_fields(compose, carrier=carrier)
@@ -399,8 +460,8 @@ def _post_manifest(
     )
     manifest: dict[str, Any] = {
         "schema": "quwoquan_data.post_manifest",
-        "contentId": _content_id(execution_root.name, target_ref),
-        "version": 1,
+        "contentId": content_id,
+        "version": content_version,
         "vertical": str(compose.get("vertical") or "travel"),
         "topicId": target_ref.removeprefix("posts/"),
         "objectRef": target_ref.removeprefix("posts/"),
@@ -416,7 +477,7 @@ def _post_manifest(
         "assets": assets,
         "generator": "agent",
         "publishAngle": str(target.get("publishAngle") or ""),
-        "publishTitle": str(target.get("publishTitle") or compose.get("title") or ""),
+        "publishTitle": publish_title,
         "publishSeq": int(target.get("publishSeq") or 1),
         "createdAt": created_at,
         "updatedAt": created_at,
@@ -872,6 +933,8 @@ def _post_surface(
         compose=compose,
         draft=draft,
     )
+    content_id, content_version, publish_title, required_assets = _projection_identity(execution_root, object_dir, target_ref, target)
+    _apply_required_assets(assets, media, required_assets)
     manifest = _post_manifest(
         execution_root=execution_root,
         target_ref=target_ref,
@@ -881,6 +944,9 @@ def _post_surface(
         source_rows=source_rows,
         assets=assets,
         draft=draft,
+        content_id=content_id,
+        content_version=content_version,
+        publish_title=publish_title,
     )
     surface: dict[Path, bytes | Path] = {
         Path("manifest.json"): _json_bytes(manifest),

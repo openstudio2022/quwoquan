@@ -9,6 +9,8 @@ fields:
 - {name: modelChannel, source: modelChannel, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: modelReleaseId, source: modelReleaseId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state, reference: true}
 - {name: policyDigest, source: policyDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: requestContext, source: requestContext, type: RecommendationRequestContext, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state, description: 仅窗口内部保存冻结上下文；嵌套敏感值不进入响应或日志，跨服务仅交付 contextDigest。}
+- {name: contextDigest, source: contextDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: requestDigest, source: requestDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
 - {name: rankingSnapshotDigest, source: rankingSnapshotDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: featureSnapshotAt, source: featureSnapshotAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
@@ -23,6 +25,14 @@ types:
     fields:
     - {name: binding, type: ReleaseQueryPreparationBinding, constraints: [NOT_NULL]}
     - {name: snapshotDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL]}
+  RecommendationRequestContext:
+    description: 请求 admission 时冻结的上下文；viewport/device 为共享闭集，时间桶与既有画像 checkpoint 由服务端填充。该对象只保存在窗口内部，不返回客户端或 Content，不递归记录日志。
+    fields:
+    - {name: viewportProfile, source: viewportProfile, type: enum, enum_ref: RecommendationViewportProfile, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, description: 缺失/null 在 admission 归一 unknown；非法值拒绝，禁止宽松 enum 解码。}
+    - {name: deviceClass, source: deviceClass, type: enum, enum_ref: RecommendationDeviceClass, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, description: 缺失/null 在 admission 归一 unknown；非法值拒绝，不采集原始设备型号。}
+    - {name: coarseRegion, source: coarseRegion, type: string, const: unknown, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: drop, api_exposure: none, ops_exposure: none, description: 当前仅允许稳定 sentinel unknown；缺少推荐用途权威同意及撤回来源，不接收地域输入，不读取展示 region，不施加地域 boost。}
+    - {name: timeBucket, source: timeBucket, type: string, pattern: '^h(0[0-9]|1[0-9]|2[0-3])$', constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, description: 服务端注入时钟在 admission 的 UTC hour，编码 h00 至 h23 共 24 个桶，区间左闭右开每小时一次；不含日期或客户端时区，续页冻结不重算。}
+    - {name: profileRevision, source: profileRevision, type: string, pattern: '^(unknown|0|[1-9][0-9]*)$', constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, description: 取 recommendation_feature_profile_view/fields.yaml 的 checkpoint 规范十进制字符串，与 userFeatureSnapshot 同次一致读取；无画像为稳定 unknown（不同于 checkpoint 0），不建计数器，续页不重读。}
   RankedRecommendationItem:
     description: 排序窗口中不可变序位的一项候选。envelope 是该项的自描述展示信封，Post 与实体主页共用同一条序列，不再按对象种类分叉成第二套 sidecar。
     fields:
@@ -40,6 +50,8 @@ types:
     - {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
     - {name: clientPresentationContract, source: clientPresentationContract, type: ClientContentPresentationContract, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: write, ops_exposure: read, description: 建窗前按集合差丢弃闭集外候选并补足 limit（DEC-006）；窗口 identity 含 contractDigest。}
     - {name: limit, source: limit, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: viewportProfile, source: viewportProfile, type: enum, enum_ref: RecommendationViewportProfile, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, description: 与 Content query 同源闭集；仅缺失/null 归一 unknown，非法值按 ranked_window_invalid_argument 拒绝。}
+    - {name: deviceClass, source: deviceClass, type: enum, enum_ref: RecommendationDeviceClass, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, description: 与 Content query 同源闭集；仅缺失/null 归一 unknown，非法值按 ranked_window_invalid_argument 拒绝。}
   GetRankedRecommendationPageQuery:
     description: 读取稳定窗口页的内部强类型查询；subjectId 只用于推导隐私摘要 key 并校验窗口 owner，不进入响应。contentFence由Content本请求重pin，与窗口不等即冲突，要求首刷。
     fields:
@@ -60,6 +72,7 @@ types:
     - {name: modelChannel, source: modelChannel, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: modelReleaseId, source: modelReleaseId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: policyDigest, source: policyDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: contextDigest, source: contextDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: rankingSnapshotDigest, source: rankingSnapshotDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: featureSnapshotAt, source: featureSnapshotAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
     - {name: userFeatureSnapshot, source: userFeatureSnapshot, type: object, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}

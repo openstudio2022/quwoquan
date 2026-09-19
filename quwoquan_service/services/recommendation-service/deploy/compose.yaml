@@ -7,7 +7,7 @@ services:
       context: ../../../quwoquan_service
       dockerfile: services/recommendation-service/build/Dockerfile
       args:
-        PYTHON_BASE_IMAGE: "${QWQ_COMPOSE_PYTHON_BASE_IMAGE:-python:3.11}"
+        PYTHON_BASE_IMAGE: "${QWQ_COMPOSE_PYTHON_BASE_IMAGE:?QWQ_COMPOSE_PYTHON_BASE_IMAGE is required}"
         PIP_INDEX_URL: "${QWQ_COMPOSE_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
         PIP_TRUSTED_HOST: "${QWQ_COMPOSE_PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}"
     environment:

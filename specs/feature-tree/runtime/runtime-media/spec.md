@@ -57,7 +57,7 @@
 - P0 只有真实 probe 验证过 H.264/AAC、时长、尺寸、GOP/keyframe、fast-start、hash 与 canonical video/cover slice 的 ready asset 可被 publish 和投影；seed 不得直接伪造 ready。
 - 产品时长上限为 3600000ms；125000ms 资产用于 seek 回归，3605000ms 资产必须被超上限策略拒绝，同时保留接近一小时合法资产的边界验证。
 - native duration 只用于 seek 边界和数据质量校验；超容差只产生一次去重事件/修复任务，不覆盖服务端权威值或伪装为播放失败。
-- P0 拖动只更新虚拟 target，release 只提交一次 seek；切集/dispose 的过期 generation、buffering、ended/replay 和 seek failure 均有确定状态与结构化恢复。
+- P0 拖动只更新虚拟 target，release 只提交一次 seek；原本 playing 的 controller 在 scrub 期间持续播放且不额外发 pause/play，原本 paused/manualPause/ended 保持不播放。cancel 不 seek：paused 恢复原稳定位置，playing 保留自然推进的最新实际位置；scrub/seek 时段不累计 effective_play，清除虚拟 target 且命令终结后恢复累计。切集/dispose 的过期 generation、buffering、ended/replay 和 seek failure 均有确定状态与结构化恢复。
 - P1-A previewTrack、缓存 key、帧访问和取消均绑定 asset/version/profile/access policy；缺轨或预览失败退化为时间浮标，不阻断 P0。
 - P1-B HLS/CMAF descriptor、rendition set、codec ladder、segment/keyframe、MIME/CORS/鉴权/cache-control 和平台 capability matrix 独立验收；ABR 关闭或失败时回退 P0。
 - 同 asset/version 的 HLS/CMAF 与 progressive MP4 切换必须先绑定新 controller epoch 与 `VideoPlaybackSession`，再执行尾部安全 clamp 后的 typed seek；Android 只在 discontinuity 后渲染帧回执时记为 native settled，无该能力平台只能记为 position readback 且显式标记 native unsupported。命令失败、native settle 超时、readback 不可用与过期 epoch 必须进入强类型状态和 `video_playback_qoe.seekEvidenceSource`，不得仅写日志或把可播放 fallback 误判为媒体失败。
@@ -117,7 +117,7 @@
 - THEN P0 只有真实 probe 验证过 H.264/AAC、时长、尺寸、GOP/keyframe、fast-start、hash 与 canonical video/cover slice 的 ready asset 可被 publish 和投影；seed 不得直接伪造 ready。
 - THEN 产品时长上限为 3600000ms；125000ms 资产用于 seek 回归，3605000ms 资产必须被超上限策略拒绝，同时保留接近一小时合法资产的边界验证。
 - THEN native duration 只用于 seek 边界和数据质量校验；超容差只产生一次去重事件/修复任务，不覆盖服务端权威值或伪装为播放失败。
-- THEN P0 拖动只更新虚拟 target，release 只提交一次 seek；切集/dispose 的过期 generation、buffering、ended/replay 和 seek failure 均有确定状态与结构化恢复。
+- THEN P0 拖动只更新虚拟 target，release 只提交一次 seek；原本 playing 的 controller 全程持续播放且 scrub 不额外发 pause/play，cancel 零 seek并保留自然推进的最新实际位置，paused/manualPause/ended 不被续播；scrub/seek 时段不累计 effective_play，终结后恢复累计。切集/dispose 的过期 generation、buffering、ended/replay 和 seek failure 均有确定状态与结构化恢复。
 - THEN P1-A previewTrack、缓存 key、帧访问和取消均绑定 asset/version/profile/access policy；缺轨或预览失败退化为时间浮标，不阻断 P0。
 - THEN P1-B HLS/CMAF descriptor、rendition set、codec ladder、segment/keyframe、MIME/CORS/鉴权/cache-control 和平台 capability matrix 独立验收；ABR 关闭或失败时回退 P0。
 - THEN 同资产 HLS/CMAF 与 MP4 切换只在新 controller 绑定 session 后执行一次 typed seek；成功、命令失败、native settle 超时、native unsupported/readback 不可用和过期 epoch 均可从状态与 QoE 低基数维度区分，且只有 Android 真实 rendered-frame 信号可计为 native settled。

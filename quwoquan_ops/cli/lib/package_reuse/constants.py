@@ -13,7 +13,7 @@ from quwoquan_ops.cli.lib.currentness import (
 ROOT = Path(__file__).resolve().parents[4]
 FINGERPRINT_NAME = "package-fingerprint.json"
 FINGERPRINT_SCHEMA = "stackctl-package-reuse-fingerprint"
-PACKAGE_INPUT_CAPSULE_SCHEMA = "stackctl-package-input-capsule.v1"
+PACKAGE_INPUT_CAPSULE_SCHEMA = "stackctl-package-input-capsule.v2"
 PACKAGE_INPUT_CAPSULE_DIRECTORY = "input-capsule"
 PACKAGE_VALIDATION_PURPOSES = frozenset({"self_verify", "currentness"})
 _FINGERPRINT_FIELDS = frozenset(
@@ -46,6 +46,7 @@ _CAPSULE_FIELDS = frozenset(
         "deploymentInputRoots",
         "deploymentInputDigest",
         "deploymentInputFileCount",
+        "dependencyPlatforms",
         "entries",
     }
 )

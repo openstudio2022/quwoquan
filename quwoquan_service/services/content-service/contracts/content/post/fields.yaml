@@ -461,6 +461,7 @@ fields:
   - name: width
     source: width
     type: int
+    co_present_with: [height]
     constraints:
       - NULLABLE
       - POSITIVE
@@ -468,11 +469,16 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
-    description: 服务端从 ready MediaAsset 投影的权威视频宽度（px）。
+    description: >-
+      image/video 主媒体的权威宽度（px），与 height 同源成对投影；视频继续取 videoUrl 对应的 ready 视频 MediaAsset 原始尺寸，绝不取 poster/cover。
+      image 取 canonical mediaItems[0].mediaAssetId 所指 ready 图片资产（该项保持已绑定发布/导入媒体顺序），不得按资产 ID/URL 排序、改取后续图片或使用 coverUrl/thumbnailUrl 尺寸。
+      主媒体身份不能确定、任一维缺失/null 或非正数时 width/height 同时为 null（方向 unknown）；完整非正数输入不得成为合法尺寸。
+      主媒体替换/移除、顺序调整或内容类型变化时，在同一 Post revision 原子重投影两维，先清空旧对再取新主媒体，禁止保留旧值或拼接不同媒体维度；非 image/video 两维为 null。
     role: projection
   - name: height
     source: height
     type: int
+    co_present_with: [width]
     constraints:
       - NULLABLE
       - POSITIVE
@@ -480,7 +486,7 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
-    description: 服务端从 ready MediaAsset 投影的权威视频高度（px）。
+    description: image/video 主媒体权威高度（px）；主媒体身份、正数成对约束、缺失 unknown 与替换清空规则均以本对象 width 声明为准，必须与 width 在同一 revision 原子投影。
     role: projection
   - name: durationMs
     source: durationMs
@@ -1357,6 +1363,92 @@ value_objects:
         type: string
         constraints:
           - NOT_NULL
+  PublicSourceAttribution:
+    fields:
+      - name: isOriginal
+        type: bool
+        constraints:
+          - NOT_NULL
+      - name: originalCreatorId
+        type: string
+        constraints:
+          - NULLABLE
+      - name: originalCreatorName
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: originalCreatorProfileUrl
+        type: string
+        constraints:
+          - NULLABLE
+      - name: platform
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: sourcePostUrl
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: originalAssetUrl
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: attributionText
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: rightsBasis
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: commercialAuthorizationStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: authorizationProofUrl
+        type: string
+        constraints:
+          - NULLABLE
+      - name: termsUrl
+        type: string
+        constraints:
+          - NULLABLE
+      - name: derivedModifications
+        type: '[]enum'
+        enum_ref: SourceDerivedModification
+        constraints: [NOT_NULL]
+        description: 发布字节相对原始素材的修改事实；显式空数组表示无修改，缺席非法。
+      - name: watermarkKind
+        type: enum
+        enum_ref: SourceWatermarkKind
+        constraints: [NULLABLE]
+      - name: watermarkNote
+        type: string
+        constraints: [NULLABLE]
+      - name: watermarkStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: audioRightsStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: modelReleaseStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: propertyReleaseStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: collectedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+      - name: takedownPolicy
+        type: string
+        constraints:
+          - NOT_NULL
   SearchIntentProjection:
     description: 用户最近一次搜索查询与真实点击形成的 24 小时短期推荐特征；独立 TTL 物理回收。
     fields:
@@ -1427,6 +1519,8 @@ value_objects:
 enums:
   SemanticDocumentMarkdownDialect:
     values: [qwq-rich-md]
+  PostAssociationKind:
+    values: [topic, news_event, place, gathering, collection]
   SourceDerivedModification:
     values: [video_frame_extraction, crop, resize, format_conversion]
   SourceWatermarkKind:
@@ -1801,6 +1895,12 @@ types:
       - {name: revision, type: int64, constraints: [NOT_NULL]}
       - {name: projectionVersion, type: int64, constraints: [NOT_NULL]}
       - {name: activatedAt, type: timestamp, constraints: [NULLABLE]}
+  PostAssociationSummary:
+    description: 经 owning reader 验证可见的关联摘要；kind 不可由展示文案猜测，targetId 必须为对应 owner 的 canonical 身份。
+    fields:
+      - {name: kind, type: enum, enum_ref: PostAssociationKind, constraints: [NOT_NULL]}
+      - {name: targetId, type: string, constraints: [NOT_BLANK]}
+      - {name: title, type: string, constraints: [NOT_BLANK]}
   ContentDiscoveryFeedQuery:
     fields:
       - name: clientPresentationContract
@@ -1842,6 +1942,22 @@ types:
         constraints:
           - NULLABLE
         client_dart_type: String?
+      - name: viewportProfile
+        type: enum
+        enum_ref: RecommendationViewportProfile
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: write
+        description: 共享闭集；admission 仅将缺失/null 归一 unknown，空串、未知值或非字符串均拒绝，不做宽松 enum 解码。续页不覆盖已冻结值。
+      - name: deviceClass
+        type: enum
+        enum_ref: RecommendationDeviceClass
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: write
+        description: 共享闭集；admission 仅将缺失/null 归一 unknown，非法值拒绝；不是原始设备型号，续页不覆盖已冻结值。
       - name: limit
         type: int
         client_dart_type: int

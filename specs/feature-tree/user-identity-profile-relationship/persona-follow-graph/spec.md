@@ -12,11 +12,15 @@
 
 ### In Scope
 
-- 由本目录 Story 组合交付“persona-follow-graph”的独立业务结果。
+- 组合普通 Persona 的安全创建与恢复、不可变公开身份、人物关注及系统主动关注限额。
+- 普通 Persona 与已发布 Creator 的目标解析、关系命令的真实确认与有限期限恢复、双向图读取和 Persona 级统计。
+- 公开资料/统计/候选缓存与私有关系事实分离，在同一权限和版本边界下供主页、发现和联系人入口消费。
 
 ### Out of Scope
 
 - 其他 L2 的事实所有权、metadata schema 与实现施工步骤。
+- ContentReaction 写入、推荐排序、Data 发布激活与 Chat 会话事务；本能力仅通过其公开契约协作。
+- 将 Creator 变为登录主体、全量替换合法 ID/Pair 摘要、跨数据库分布式配额、千万粉丝同步 fanout 与长期双写兼容。
 
 ## 3. Journey / Scenario 贡献
 
@@ -48,7 +52,7 @@
 ### REQ-001 persona follow graph 能力 SIT
 
 - 本能力必须组合直属 Story 与公开契约，交付“本能力统一分身生命周期、公开身份、关系隔离与跨域透传”所定义的业务结果；失败终态必须可区分且不得伪造成功。
-- PersonaRelationship 关注/拉黑命令具备服务端 CAS + 幂等 receipt + 事务 outbox；capability wire 端云 16 字段对齐。
+- PersonaRelationship 关注/拉黑命令由唯一版本仲裁、幂等 receipt 与事务 outbox 保证事实一致；capability 保留现役动作矩阵并按 canonical contract 承接关系及协作来源的版本/有效性，不以历史字段数量限制协议演进。
 - PersonaRelationship 是关系能力读模型的唯一事实所有者；主页、关系搜索与联系人发现统一嵌套 `user.persona_relationship.projection.relationship_capability_wire`，不得维护字段子集或第二 client projection。
 - 关注、打招呼、会话、音视频通话与拉黑能力必须由 PersonaRelationship 内的唯一领域策略根据相同 viewer-target 事实推导；主页、关系搜索与联系人发现不得各自计算或改写动作矩阵。
 - SubjectFollow 是主页/圈子/地点关注唯一真相源（entity.FollowHomepage 已退役），事件驱动 following_subjects 投影与 homepage follower 投影。
@@ -84,11 +88,21 @@
 - 该投递是异步且至少一次的，投影消费方必须按幂等键收敛重复投递，不得假设恰好一次或与命令同步可见。
 - 关注频道读模型允许在命令成功后短暂落后于水位事实，端侧不得把读模型尚未更新解释成命令失败或重发命令。
 
+<a id="req-005"></a>
+### REQ-005 身份、关注确认与图读取组合时不串主体、不伪造完成
+
+- Persona 创建返回的实际身份是后续关系输入；Account 已提交而 Persona 未完成时不宣称主体就绪，解析尚未完成的别名或 Creator 映射不能代替可关注身份。
+- 关注命令的权限、当前系统限额、前置版本、有限有效期与回执构成同一接纳边界；所有 surface 保留待确认，确定回执才推进本主体已确认事实，不以缓存当前值推断历史提交。
+- 列表、社交统计和后续能力各经 owning reader 组合：Persona 与 owner 统计不混用，权限读取不消费普通缓存陈旧宽限，普通缓存的有效寿命也不能因回放或故障切换续长。
+- 身份创建、目标完整性、命令仲裁与限额由 [Persona 管理](./persona-management/spec.md#req-006) 和 [关注关系](./follow-relationship/spec.md#req-007) 独立验收；有界图读取与缓存由 [社交图谱读取](./social-graph-read/spec.md#req-005) 独立验收。本层只约束组合，不另建协议、统计或完成台账。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`user-identity-profile-relationship`](../spec.md) 声明的领域入口。
 - 下游能力：本目录直接 Story 及其公开结果。
-- 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+- 一致性要求：[DEC-002](./design.md#dec-002) 至 [DEC-010](./design.md#dec-010) 明确目标身份、创建恢复、Pair、命令终结、限额、读取、统计、缓存与端侧确认；跨 owner 不宣称一个不存在的全局事务。
+- canonical contracts：`quwoquan_service/services/user-service/contracts/relationship/persona_relationship/`、`quwoquan_service/services/user-service/contracts/persona_management/persona/`、`quwoquan_service/services/user-service/contracts/account/user_account/`、`quwoquan_service/services/user-service/contracts/profile_projection/creator_runtime_profile/`。
+- 系统限制与资源预算只由 `quwoquan_service/services/user-service/config/schema.yaml` 及现役环境配置激活，能力规格不复制 wire schema 或配置发布接口。
 
 ## 7. 集成验收
 
@@ -98,13 +112,14 @@
 - GIVEN 执行“persona follow graph 能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“persona follow graph 能力”对应动作。
 - THEN 直属 Story 共同交付“本能力统一分身生命周期、公开身份、关系隔离与跨域透传”，失败终态可区分且不产生伪成功事实。
-- THEN PersonaRelationship 关注/拉黑命令具备服务端 CAS + 幂等 receipt + 事务 outbox；capability wire 端云 16 字段对齐。
+- THEN PersonaRelationship 关注/拉黑命令具备版本仲裁、幂等 receipt 与事务 outbox；capability 端云由同一 canonical contract 生成，保留现役动作矩阵并按来源表达版本和有效性。
 - THEN 主页、关系搜索与联系人发现只消费 PersonaRelationship 所有的 canonical relationship capability wire，metadata 门禁拒绝任何重复 `dart_class` 或生成 `output_path`。
-- THEN 对同一 viewer-target 的关系、打招呼会话与拉黑事实，所有公开 surface 返回由同一 PersonaRelationship 策略推导的 16 字段动作矩阵；自己、拉黑或被拉黑时所有关系动作 fail closed。
+- THEN 对同一 viewer-target 的关系、打招呼会话与拉黑事实，所有公开 surface 返回由同一 PersonaRelationship 策略推导的动作矩阵；自己、拉黑或被拉黑时所有关系动作 fail closed，Creator 被关注不获得登录主体或聊天能力。
 - THEN SubjectFollow 是主页/圈子/地点关注唯一真相源（entity.FollowHomepage 已退役），事件驱动 following_subjects 投影与 homepage follower 投影。
 - THEN FollowedSubjectVisitState 水位单调推进且 clientRequestId 重放安全；关注频道红点点击后跨会话不复现。
 - THEN 水位推进只经 relay 主线异步至少一次地到达投影，重复投递被幂等收敛，命令成功后读模型的短暂滞后不表现为失败。
 - THEN 拉黑与打招呼用户旅程可逆：拉黑列表可查看/解除，收到的打招呼可回复/忽略，发出的 pending 请求可撤回；动作失败均有结构化反馈。
+- THEN 实际创建身份、普通 Persona/Creator 目标、命令回执与当前图读取可串联核对；未决、超限、旧依据及权威故障不会被跨页面或缓存包装为成功，公开统计不串 Persona，具体正确性与容量结果分别由直属 Story 验收证明。
 
 ## 8. 开放事项
 
@@ -114,5 +129,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：本能力统一分身生命周期、公开身份、关系隔离与跨域透传。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：尚缺能证明直属 Story 在同一候选下组合交付身份、确认关系、公开读面与跨域权限的完整 SIT 证据；单条旧 CAS/receipt 测试不证明新增命令依据、Creator 资格与统计缓存边界。
+- 完成判定：`SIT-001` 对应组合行为满足且真实测试 `spec_ref` 有效；最低节点的 [Persona 管理 OPEN-001](./persona-management/spec.md#open-001)、[关注关系 OPEN-002](./follow-relationship/spec.md#open-002)、[社交图谱读取 OPEN-002](./social-graph-read/spec.md#open-002) 分别承担新增能力及合同/测试缺口，不以本层跟踪项替代其准出阻断。

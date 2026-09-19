@@ -154,7 +154,7 @@ class CoordinationStore:
                 """
                 PRAGMA journal_mode=WAL;
                 CREATE TABLE IF NOT EXISTS iterations(
-                  iteration_id TEXT PRIMARY KEY, authorization_ref TEXT NOT NULL, registered_at TEXT NOT NULL
+                  iteration_id TEXT PRIMARY KEY, authorization_ref TEXT NOT NULL, authorization_digest TEXT NOT NULL, registered_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS deployments(
                   iteration_id TEXT NOT NULL REFERENCES iterations(iteration_id),
@@ -218,6 +218,9 @@ class CoordinationStore:
                 );
                 """
             )
+            iteration_columns = {row["name"] for row in connection.execute("PRAGMA table_info(iterations)")}
+            if "authorization_digest" not in iteration_columns:
+                connection.execute("ALTER TABLE iterations ADD COLUMN authorization_digest TEXT NOT NULL DEFAULT ''")
             deployment_columns = {row["name"] for row in connection.execute("PRAGMA table_info(deployments)")}
             for column in ("instance_id", "account_identity_ref", "resource_reservation_ref"):
                 if column not in deployment_columns:
@@ -254,17 +257,20 @@ class CoordinationStore:
             raise NotFoundError("COORDINATION.SHARD_NOT_FOUND", shard_id)
         return row
 
-    def register_iteration(self, iteration_id: str, authorization_ref: str, *, occurred_at: str | None = None) -> dict[str, Any]:
+    def register_iteration(self, iteration_id: str, authorization_ref: str, authorization_digest: str = "", *, occurred_at: str | None = None) -> dict[str, Any]:
         self.initialize()
         if not iteration_id or not authorization_ref:
             raise CoordinationError("COORDINATION.INVALID_ARGUMENT", "iteration_id 和 authorization_ref 必须非空")
+        from .authority import verify_authority_artifact
+        if authorization_digest:
+            verify_authority_artifact(authorization_ref,authorization_digest,purpose="content-repackage-user-authorization")
         with self._transaction() as connection:
             existing = connection.execute("SELECT * FROM iterations WHERE iteration_id=?", (iteration_id,)).fetchone()
             if existing:
-                if existing["authorization_ref"] != authorization_ref:
+                if existing["authorization_ref"] != authorization_ref or existing["authorization_digest"] != authorization_digest:
                     raise ConflictError("COORDINATION.ITERATION_CONFLICT", iteration_id)
                 return _decode(existing) or {}
-            connection.execute("INSERT INTO iterations VALUES(?,?,?)", (iteration_id, authorization_ref, _now()))
+            connection.execute("INSERT INTO iterations VALUES(?,?,?,?)", (iteration_id, authorization_ref, authorization_digest, _now()))
             self._event(connection, iteration_id, "iteration.registered", occurred_at=occurred_at, fact_ref=authorization_ref)
             return _decode(connection.execute("SELECT * FROM iterations WHERE iteration_id=?", (iteration_id,)).fetchone()) or {}
 
@@ -482,6 +488,40 @@ class CoordinationStore:
                                        operation=operation, batches=batches, nonces=nonces)
             return write_callable()
 
+    def fenced_governed_repackage(self, tokens, write_callable, *, actor, task_digest, roots, target_refs, release_id):
+        """受治理 release 重物化：复用 claim/generation/root/director gate，但不读写 batch_scopes。"""
+        self._token_set(tokens)
+        with self._business_gates(tokens[0]):
+            self.initialize()
+            with self._connect() as connection:
+                for token in tokens:
+                    self._assert_write_authorized_in_connection(connection, token)
+                roles, bound_roots, _task = self._context(connection, tokens[0], actor, task_digest)
+                from .runtime import is_member, read_repackage_task_context
+                iteration = connection.execute("SELECT authorization_ref,authorization_digest FROM iterations WHERE iteration_id=?", (tokens[0].iteration_id,)).fetchone()
+                context = connection.execute("SELECT task_ref,task_digest FROM deployment_contexts WHERE iteration_id=? AND deployment_id=?", (tokens[0].iteration_id,tokens[0].deployment_id)).fetchone()
+                task = read_repackage_task_context(context["task_ref"], context["task_digest"], roles, authorization_ref=iteration["authorization_ref"], authorization_digest=iteration["authorization_digest"])
+                if roots != bound_roots:
+                    raise ConflictError("COORDINATION.ROOT_BINDING_MISMATCH", "实际根与 deployment 绑定不同")
+                if task["allowedActions"] != ["repackage"]:
+                    raise ConflictError("COORDINATION.ACTION_NOT_AUTHORIZED", "repackage")
+                if not is_member(actor, roles["director"]):
+                    raise ConflictError("COORDINATION.DIRECTOR_REQUIRED", actor)
+                if set(target_refs) != {token.target_ref for token in tokens}:
+                    raise ConflictError("COORDINATION.WRITE_FENCE_TARGET_SET_MISMATCH", "围栏必须恰好覆盖 target cohort")
+                placeholders=",".join("?" for _ in target_refs)
+                occupied=connection.execute(f"SELECT target_ref FROM target_occupancy WHERE iteration_id<>? AND target_ref IN ({placeholders}) LIMIT 1",(tokens[0].iteration_id,*target_refs)).fetchone()
+                if occupied is not None:
+                    raise ConflictError("COORDINATION.CROSS_ITERATION_TARGET_OCCUPIED", occupied["target_ref"])
+            from content.release.canonical.object_transaction_lock import canonical_publish_lock
+            from content.release.canonical.release_operation_lock import ReleaseOperationConflict, release_operation_guard, release_operation_lock_root
+            release_root=Path(roots["output"])/"data"/"releases"
+            try:
+                with release_operation_guard(lock_root=release_operation_lock_root(release_root), release_ids=(str(release_id),), exclusive_releases=True), canonical_publish_lock(Path(roots["publish"]), blocking=False):
+                    return write_callable()
+            except (ReleaseOperationConflict, RuntimeError) as exc:
+                raise ConflictError("COORDINATION.NATIVE_WRITER_LOCK_CONFLICT",str(release_id)) from exc
+
     def _check_producer_write(self, tokens, *, actor, task_digest, roots, operation, batches, nonces):
         """在外层门已稳定归属后只读核权，媒体 proof 验证不持 SQLite 写事务。"""
         from .runtime import batch_facts, is_member, member_key
@@ -612,7 +652,7 @@ class CoordinationStore:
                 if shard_id and connection.execute("SELECT 1 FROM shards WHERE iteration_id=? AND shard_id=?", (iteration_id, shard_id)).fetchone() is None:
                     raise NotFoundError("COORDINATION.SHARD_NOT_FOUND", shard_id)
                 raise ConflictError("COORDINATION.NO_SHARD_AVAILABLE", shard_id or iteration_id)
-            occupied = [target for target in json.loads(shard["targets"]) if connection.execute("SELECT 1 FROM target_occupancy WHERE iteration_id=? AND target_ref=?", (iteration_id, target)).fetchone()]
+            occupied = [target for target in json.loads(shard["targets"]) if connection.execute("SELECT 1 FROM target_occupancy WHERE target_ref=?", (target,)).fetchone()]
             if occupied:
                 raise ConflictError("COORDINATION.TARGET_OCCUPIED", occupied[0])
             generation = int(connection.execute("SELECT COALESCE(MAX(generation),0)+1 FROM claims WHERE iteration_id=? AND shard_id=?", (iteration_id, shard["shard_id"])).fetchone()[0])

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/works_immersive_viewer.dart';
@@ -54,6 +55,8 @@ class _UnifiedMediaViewerPageState
             (
               userId, {
               String? avatarUrl,
+              String? avatarAssetId,
+              MediaDeliveryAccessMode? avatarAccessMode,
               String? displayName,
               String? backgroundUrl,
             }) {
@@ -62,6 +65,8 @@ class _UnifiedMediaViewerPageState
                 extra: UserProfileRouteExtra(
                   personaId: userId,
                   avatarUrl: avatarUrl,
+                  avatarAssetId: avatarAssetId,
+                  avatarAccessMode: avatarAccessMode,
                   displayName: displayName,
                   backgroundImage: backgroundUrl,
                 ),

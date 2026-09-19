@@ -14,7 +14,11 @@
 
 - 照片选择/拍摄、纯端侧像素编辑、MediaAsset 上传与发布回流。
 - 内容详情、沉浸式内容和个人主页评论入口组合验证。
-- 评论提交、回复、展开、赞踩与 post interaction 计数最终一致。
+- 作者管理跨视频、图片和文章 Post 的有序合集，读侧保持成员权限与下架过滤。
+- 内容关联以真实话题、新闻事件、地点主页与参与活动的类型化摘要交付展示层，不混淆事实所有者。
+- 评论提交、回复、展开、Post bool 点赞与 Comment 赞踩三态独立；本人态、命令结果与计数最终一致分型。
+- 可信匿名 Persona/device 读写身份一致、命令同键恢复、目标撤权抑制与有界清理、来源可对账的统计读面。
+- 不恢复 Post 收藏；既有实体「想去」保持 DEC-002 边界，本次不扩功能。
 - Comment metadata、App Remote Facet、content-service contract 与 user_acceptance typed operation recipe 对齐；运行环境不读取 seed manifest。
 
 ### Out of Scope
@@ -50,6 +54,8 @@
 - [`filter-catalog-release`](./filter-catalog-release/spec.md)：Mongo 真实引擎 contract 覆盖 digest 幂等、状态机和单 active CAS。
 - [`image-editing`](./image-editing/spec.md)：全仓无占位符号；工具确认路径全部经 ImageEditorExportEngine 烘焙。
 - [`post-create-update`](./post-create-update/spec.md)：从拍摄得到的图片可进入图片选择器底部缩略条或创作编辑器图片列表，并参与排序、编辑和发布。
+- [`ordered-post-collection`](./ordered-post-collection/spec.md)：作者管理跨视频、图片与文章作品的独立有序合集，分页与计数不泄露受限成员。
+- [`typed-post-associations`](./typed-post-associations/spec.md)：以 canonical 类型化摘要区分话题、新闻事件、真实地点与参与活动，不用媒体项伪造合集。
 - [`reaction-state-counter`](./reaction-state-counter/spec.md)：定义“互动状态状态计数”的可观察主路径、失败语义及父能力交接。
 - [`text-post-commercial-publication`](./text-post-commercial-publication/spec.md)：纯文字和富文图文混排均发布为文章，保留安全准入、可靠提交与真实结果回流。
 
@@ -60,7 +66,9 @@
 
 - 平铺文章入口完成内联定位，沉浸式入口完成上压分屏，个人主页评论可跳回原内容评论区。
 - 评论创建、回复创建、回复分页、赞踩切换、删除/举报权限态都由云端契约驱动。
-- postInteractionStateProvider 与 Comment state 在乐观更新和云端确认后保持最终一致。
+- Post bool 点赞与 Comment 三态共享各自领域真相，不共享值域；按钮可乐观、数字只读有来源的统计，回执确认不等待统计追齐。
+- verified actor、published/actor-aware 目标资格、有限命令窗口、no-op 版本栅栏、同键恢复及生命周期不复活组合承接 [reaction-state-counter REQ-003](./reaction-state-counter/spec.md#req-003) 至 [REQ-007](./reaction-state-counter/spec.md#req-007)；Comment 局部恢复由 [REQ-006](./comment-thread/spec.md#req-006) 承接，不复制 wire。
+- 跨 owner 统计/推荐与生命周期内部清理最终一致，不把前置资格查询包装成分布式原子事务；已确认写不因可选子读失败反转。
 - Alpha/Beta/Gamma 经真实测试账号和公开 API 生成 comments、replies、reaction、attachment、mentions，派生计数只由事件投影产生。
 
 <a id="req-002"></a>
@@ -110,8 +118,10 @@
 - WHEN 参与者发起“评论与内容互动能力端云组合”对应动作。
 - THEN 平铺文章入口完成内联定位，沉浸式入口完成上压分屏，个人主页评论可跳回原内容评论区。
 - THEN 评论创建、回复创建、回复分页、赞踩切换、删除/举报权限态都由云端契约驱动。
-- THEN postInteractionStateProvider 与 Comment state 在乐观更新和云端确认后保持最终一致。
-- THEN alpha/beta/gamma seed 与 verifiedEndpoints 覆盖 comments、replies、reaction、attachment、mentions。
+- THEN Post bool 与 Comment 三态独立，按钮乐观、数字不 +1；本人状态、命令 unknown/确认与统计不可用分别展示，已提交不等统计。
+- THEN 同 verified actor 的命令经资格与版本仲裁可恢复；删除与在途 Like 的组合最终无可见贡献复活，统计按成员来源/水位与重建代际收敛。
+- THEN Alpha/Beta/Gamma 前置经受管公开 command/event 建立，真实 Remote/自动 worker/readback 覆盖 comments、replies、reaction、attachment、mentions；离线演练或替身不冒充真实引擎/设备证据。
+- AND 组合增量引用 `reaction-state-counter` 的 `GWT-002`～`GWT-009` 与 `comment-thread` 的 `GWT-022`；缺证据由各最低 Story OPEN 承接，本层不另建任务台账。
 
 <a id="sit-002"></a>
 ### SIT-002 写文字发布、安全准入、分发回流与运营观测组合 SIT

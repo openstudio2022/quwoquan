@@ -23,6 +23,7 @@ from core.schema import assert_valid
 
 REQUEST_REF = "0.plan/request.json"
 TARGET_SET_REF = "0.plan/target_set.json"
+TARGET_DESCRIPTORS_REF = "0.plan/target-descriptors"
 # AI 提交的两份输入按 canonical 字节复制到 execution 内，binding ref 指向该副本而不是提交路径。
 INPUTS_REF = "0.plan/inputs"
 # 候选绑定省略 entityCatalogDigest 时，从受版本控制的实体目录实际计算，不再要求 AI 手写。
@@ -233,6 +234,49 @@ def execution_target_ref(target: Mapping[str, Any], *, carrier: str) -> str:
     if not angle or not title or isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 1:
         raise TaskInitError(f"候选缺少合法的发布坐标：{name}")
     return f"posts/{carrier}/{angle}/{title}/{sequence}"
+
+
+def _mapping_payload(
+    *, process_ref: str, target: Mapping[str, Any], carrier: str, expected_current_version: int | None = None
+) -> dict[str, Any]:
+    entity_ref = str(target.get("entityRef") or "").strip() or None
+    entity_id = str(target.get("entityId") or "").strip() or None
+    if carrier == "homepage":
+        canonical_ref = f"entities/{entity_ref.removeprefix('/entity/')}/1"
+    else:
+        canonical_ref = process_ref
+    if expected_current_version is not None and (
+        isinstance(expected_current_version, bool)
+        or not isinstance(expected_current_version, int)
+        or expected_current_version < 1
+    ):
+        raise TaskInitError("DATA.IDENTITY.REVISION_DESCRIPTOR_AUTHORITY_INVALID: expectedCurrentVersion 必须是正整数")
+    return {
+        "schema": "quwoquan_data.target_descriptor",
+        "processRef": process_ref,
+        "canonicalObjectRef": canonical_ref,
+        "entityRef": entity_ref,
+        "entityId": entity_id,
+        "expectedCurrentVersion": expected_current_version,
+        "versionAuthority": "initial_create" if expected_current_version is None else "round_spec.targets.requiredVersion",
+        "contentVersion": 1 if expected_current_version is None else expected_current_version + 1,
+    }
+
+
+def target_descriptor(
+    *, process_ref: str, target: Mapping[str, Any], carrier: str, expected_current_version: int | None = None
+) -> dict[str, Any]:
+    payload = _mapping_payload(
+        process_ref=process_ref, target=target, carrier=carrier, expected_current_version=expected_current_version
+    )
+    mapping_digest = _sha256(_canonical_bytes(payload))
+    descriptor = {**payload, "mappingDigest": mapping_digest}
+    assert_valid(descriptor, "execution", "target_descriptor", label=f"target descriptor:{process_ref}")
+    return descriptor
+
+
+def _descriptor_ref(process_ref: str) -> str:
+    return f"{TARGET_DESCRIPTORS_REF}/{hashlib.sha256(process_ref.encode('utf-8')).hexdigest()}.json"
 
 
 def _normalized_targets(value: object, *, carrier: str) -> tuple[list[dict[str, Any]], list[str]]:
@@ -508,7 +552,20 @@ def initialize_round(*, round_spec_path: Path | None = None, submitted_round_spe
     for demand, bindings in _round_documents(round_spec):
         assert_valid(demand, "execution", "carrier_demand", label="round spec derived carrier_demand")
         assert_valid(bindings, "execution", "immutable_candidate_bindings", label="round spec derived candidate_bindings")
-        results.append(initialize_execution(submitted_demand=demand, submitted_bindings=bindings))
+        carrier = str(demand["carrier"])
+        authority_by_ref: dict[str, int] = {}
+        for raw in round_spec["targets"]:
+            if raw["carrier"] != carrier or "requiredVersion" not in raw:
+                continue
+            normalized = {key: raw[key] for key in _TARGET_IDENTITY_FIELDS if key in raw}
+            authority_by_ref[execution_target_ref(normalized, carrier=carrier)] = raw["requiredVersion"]
+        results.append(
+            initialize_execution(
+                submitted_demand=demand,
+                submitted_bindings=bindings,
+                expected_current_versions=authority_by_ref,
+            )
+        )
     return {"executions": results}
 
 
@@ -520,7 +577,12 @@ def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path)
     return initialize_execution(submitted_demand=submitted_demand, submitted_bindings=submitted_bindings)
 
 
-def initialize_execution(*, submitted_demand: dict[str, Any], submitted_bindings: dict[str, Any]) -> dict[str, Any]:
+def initialize_execution(
+    *,
+    submitted_demand: dict[str, Any],
+    submitted_bindings: dict[str, Any],
+    expected_current_versions: Mapping[str, int] | None = None,
+) -> dict[str, Any]:
     assert_valid(submitted_demand, "execution", "carrier_demand", label="task init carrier demand")
     assert_valid(submitted_bindings, "execution", "immutable_candidate_bindings", label="task init candidate bindings")
     execution_id = validate_execution_id(str(submitted_demand["executionId"]))
@@ -578,6 +640,24 @@ def initialize_execution(*, submitted_demand: dict[str, Any], submitted_bindings
         "submittedInputs": submitted_inputs,
         "retryOf": retry_of,
     }
+    expected_current_versions = dict(expected_current_versions or {})
+    unknown_authorities = sorted(set(expected_current_versions) - set(target_refs))
+    if unknown_authorities:
+        raise TaskInitError(f"DATA.IDENTITY.REVISION_DESCRIPTOR_AUTHORITY_CONFLICT: unknown={unknown_authorities}")
+    descriptors = [
+        target_descriptor(
+            process_ref=process_ref,
+            target=target,
+            carrier=carrier,
+            expected_current_version=expected_current_versions.get(process_ref),
+        )
+        for process_ref, target in zip(target_refs, targets, strict=True)
+    ]
+    descriptor_documents = {_descriptor_ref(document["processRef"]): document for document in descriptors}
+    descriptor_bindings = [
+        {"scope": "execution", "ref": ref, "digest": _sha256(_canonical_bytes(document))}
+        for ref, document in sorted(descriptor_documents.items())
+    ]
     target_set: dict[str, Any] = {
         "schema": "quwoquan_data.target_set",
         "executionId": execution_id,
@@ -588,6 +668,7 @@ def initialize_execution(*, submitted_demand: dict[str, Any], submitted_bindings
         "targetCount": candidate_count,
         "targetRefs": target_refs,
         "targets": targets,
+        "targetDescriptors": descriptor_bindings,
     }
     manifest: dict[str, Any] = {
         "schema": "quwoquan_data.content_execution_manifest",
@@ -608,6 +689,7 @@ def initialize_execution(*, submitted_demand: dict[str, Any], submitted_bindings
         "execution_manifest.json": manifest,
         REQUEST_REF: request,
         TARGET_SET_REF: target_set,
+        **descriptor_documents,
         f"{INPUTS_REF}/carrier_demand.json": demand,
         f"{INPUTS_REF}/candidate_bindings.json": bindings,
     }
@@ -666,4 +748,5 @@ __all__ = [
     "initialize_task",
     "location_identity_omitted",
     "optional_location_content_type",
+    "target_descriptor",
 ]

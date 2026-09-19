@@ -24,8 +24,8 @@ func TestRepositoryPrivacyDocumentsMatchCanonicalSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) != 2 {
-		t.Fatalf("privacy corpus = %d documents, want current repository inventory 2", len(paths))
+	if len(paths) != 3 {
+		t.Fatalf("privacy corpus = %d documents, want current repository inventory 3", len(paths))
 	}
 	for _, path := range paths {
 		instance, decodeErr := decodeYAMLAsJSON(path)

@@ -57,7 +57,27 @@ def _manifest(
     }
 
 
+def _publish_repository(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / ".git").mkdir(exist_ok=True)
+    (root / "repository.json").write_text(
+        json.dumps(
+            {
+                "schema": "quwoquan_data.publish_repository.v2",
+                "repositoryId": "canonical-video-inventory-test",
+                "layoutVersion": 2,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return root
+
+
 def _write_manifest(publish: Path, relative: str, manifest: dict[str, object]) -> bytes:
+    _publish_repository(publish)
     payload = (json.dumps(manifest, ensure_ascii=False, sort_keys=True) + "\n").encode()
     destination = publish / relative
     destination.parent.mkdir(parents=True, exist_ok=True)

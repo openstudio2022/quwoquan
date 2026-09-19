@@ -11,6 +11,7 @@ the object's own JSON by digest, while canonical documents stay owned by the tre
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -21,7 +22,56 @@ from core.content_library import MEDIA_KIND, admit_library_entry, library_cas_pa
 from support.publish_repository_fixture import make_publish_repository
 
 _MEDIA_BODY = b"\xff\xd8\xff\xe0canonical-media-body-under-test"
-_DOCUMENT_BODY = (b'{"schema":"quwoquan_data.entity_object","entityRef":"/entity/travel/test/entity-' + b'c' * 64 + b'","version":1}')
+_DOCUMENT_BODY = json.dumps(
+    {
+        "schema": "quwoquan_data.entity_object",
+        "entityId": "entity:canonical-document-ownership-test",
+        "version": 1,
+        "label": "测试",
+        "domain": "地点",
+        "type": "景区",
+        "executionId": "canonical-document-ownership-test",
+        "entityRef": "/entity/地点/景区/测试",
+        "geographyMode": "administrative",
+        "geoTagRef": "Topic/地理/行政区/中国/浙江省/杭州市",
+        "tagRefs": [],
+        "sourceRefs": ["sources/s001/source.json"],
+        "sourceUrls": ["https://zh.wikipedia.org/wiki/测试"],
+        "primarySource": {
+            "sourceKind": "wikipedia",
+            "entityName": "测试",
+            "extractor": "wikipedia_api",
+            "canonicalUrl": "https://zh.wikipedia.org/wiki/测试",
+            "sourceUrl": "https://zh.wikipedia.org/wiki/测试",
+            "title": "测试",
+            "fetchedAt": "2026-09-15T00:00:00Z",
+            "snapshotHash": "sha256:" + "1" * 64,
+            "policyRevision": "encyclopedia-primary",
+            "sourceUseMode": "factual_reference_only",
+        },
+        "sourceAttribution": {
+            "isOriginal": False,
+            "originalCreatorName": "Wikipedia contributors",
+            "platform": "Wikipedia",
+            "sourcePostUrl": "https://zh.wikipedia.org/wiki/测试",
+            "originalAssetUrl": "https://zh.wikipedia.org/wiki/测试",
+            "attributionText": "Wikipedia contributors",
+            "rightsBasis": "CC BY-SA 4.0",
+            "commercialAuthorizationStatus": "verified",
+            "watermarkStatus": "absent",
+            "audioRightsStatus": "no_audio",
+            "modelReleaseStatus": "not_required",
+            "propertyReleaseStatus": "not_required",
+            "collectedAt": "2026-09-15T00:00:00Z",
+            "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+            "derivedModifications": [],
+        },
+        "finalContentRef": "page.md",
+        "assets": [],
+    },
+    ensure_ascii=False,
+    separators=(",", ":"),
+).encode("utf-8")
 
 
 def _digest(body: bytes) -> str:
@@ -103,9 +153,20 @@ def test_canonical_documents_stay_outside_the_media_library(tmp_path: Path) -> N
     run_root = tmp_path / "run"
     make_publish_repository(publish_root)
     run_root.mkdir()
+    (publish_root / ".git").mkdir()
+    (publish_root / "repository.json").write_text(
+        json.dumps(
+            {
+                "schema": "quwoquan_data.publish_repository.v2",
+                "repositoryId": "canonical-document-ownership-test",
+                "layoutVersion": 2,
+            },
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
 
-    ref = "travel/test/entity-" + "c" * 64
-    destination = f"entities/{ref}/1/manifest.json"
+    destination = "entities/地点/中国/浙江省/杭州市/景区/p0001/测试/1/manifest.json"
     blob_ref = _stage_blob(run_root, _DOCUMENT_BODY)
 
     apply_forward_delta(

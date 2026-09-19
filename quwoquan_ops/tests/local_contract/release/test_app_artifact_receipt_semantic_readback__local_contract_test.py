@@ -31,13 +31,70 @@ from quwoquan_ops.tests.support.app_pipeline_web_artifact_test_support import (
 )
 
 
+_REAL_CURRENT_BUILD_INPUT_IDENTITY = artifact_helpers._current_build_input_identity
+
+
+@pytest.mark.parametrize("build_product_id,required", [
+    ("ios-nonprod-app", ("ios",)), ("ios-prod-app", ("ios",)),
+    ("android-nonprod-apk", ("android",)), ("web-shared", ("android", "ios")),
+])
+def test_currentness_uses_canonical_build_product_platform(monkeypatch, build_product_id, required):
+    from types import SimpleNamespace
+    calls = []
+
+    def snapshot(**kwargs):
+        calls.append(kwargs)
+        assert kwargs["dependency_platforms"] == required
+        return {"sourceRevision": "a" * 40, "deploymentInputDigest": "sha256:" + "3" * 64}
+
+    monkeypatch.setattr(artifact_helpers, "workspace_snapshot", snapshot)
+    monkeypatch.setattr(artifact_helpers.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(stdout="b" * 40))
+    monkeypatch.setattr(artifact_helpers, "resolved_flutter_identity", lambda env: {})
+    monkeypatch.setattr(artifact_helpers, "load_json_yaml", lambda path: {"version": "1.0.0+1"})
+    current = _REAL_CURRENT_BUILD_INPUT_IDENTITY(build_product_id=build_product_id)
+    assert current["sourceCapsuleDigest"] == "sha256:" + "3" * 64
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("build_product_id", ["ios", "all", "", "ios-unknown"])
+def test_currentness_rejects_noncanonical_product_before_dependency_read(monkeypatch, build_product_id):
+    from unittest.mock import Mock
+    snapshot = Mock(side_effect=AssertionError("dependency read forbidden"))
+    monkeypatch.setattr(artifact_helpers, "workspace_snapshot", snapshot)
+    with pytest.raises(ValueError):
+        _REAL_CURRENT_BUILD_INPUT_IDENTITY(build_product_id=build_product_id)
+    snapshot.assert_not_called()
+
+
+def test_receipt_wrong_platform_is_rejected_before_currentness(tmp_path, monkeypatch):
+    from unittest.mock import Mock
+    artifact = tmp_path / "ios.app"
+    artifact.mkdir()
+    (artifact / "payload").write_bytes(b"local contract artifact")
+    result_path = _stackctl_result(tmp_path, build_product_id="ios-nonprod-app", artifact=artifact)
+    result = json.loads(result_path.read_bytes())
+    attempt = Path(result["attemptDir"])
+    manifest = json.loads((attempt / "manifest.json").read_bytes())
+    manifest["platform"] = "android"
+    (attempt / "manifest.json").write_text(json.dumps(manifest))
+    receipt = json.loads((attempt / "build-receipt.json").read_bytes())
+    receipt["manifestDigest"] = artifact_digest(attempt / "manifest.json")
+    (attempt / "build-receipt.json").write_text(json.dumps(receipt))
+    currentness = Mock(side_effect=AssertionError("currentness forbidden"))
+    monkeypatch.setattr(artifact_helpers, "_current_build_input_identity", currentness)
+    with pytest.raises(ValueError, match="product identity drifted: platform"):
+        artifact_helpers.validate_app_artifact_build_receipt(attempt_dir=attempt,
+            expected_build_product_id="ios-nonprod-app", expected_manifest=manifest)
+    currentness.assert_not_called()
+
+
 @pytest.fixture(autouse=True)
 def _bind_fake_producer_semantic_readback(monkeypatch: pytest.MonkeyPatch) -> None:
     revision, tree = _source()
     monkeypatch.setattr(
         artifact_helpers,
         "_current_build_input_identity",
-        lambda: {
+        lambda *, build_product_id: {
             "sourceGitSha": revision,
             "sourceTreeDigest": tree,
             "sourceCapsuleDigest": "sha256:" + "3" * 64,

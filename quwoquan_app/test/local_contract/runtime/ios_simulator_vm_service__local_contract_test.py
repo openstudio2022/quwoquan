@@ -83,11 +83,69 @@ class IOSSimulatorVMServiceContractTest(unittest.TestCase):
         self.assertNotIn("Secret", result)
 
     def test_launch_binds_simctl_pid_and_terminates_activation_first(self):
-        with mock.patch.object(vm, "_terminate_selected_application") as terminate, mock.patch.object(vm.subprocess, "run", return_value=completed("com.example.app: 82001\n")) as run:
+        with mock.patch.dict(os.environ, {"QWQ_UAT_LAUNCHER_PID": ""}), mock.patch.object(vm, "_terminate_selected_application") as terminate, mock.patch.object(vm.subprocess, "run", return_value=completed("com.example.app: 82001\n")) as run:
             observed = vm.launch_selected_simulator_application("simulator-2", "com.example.app")
         terminate.assert_called_once_with("simulator-2", "com.example.app")
         self.assertEqual(observed.process_id, 82001)
         self.assertEqual(run.call_args.args[0], ["xcrun", "simctl", "launch", "--terminate-running-process", "simulator-2", "com.example.app"])
+        self.assertNotIn("SIMCTL_CHILD_QWQ_UAT_LAUNCHER_PID", run.call_args.kwargs["env"])
+
+    def test_launch_forwards_verified_uat_startup_identity(self):
+        # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-008
+        digest = "sha256:" + "a" * 64
+        with mock.patch.dict(os.environ, {
+            "QWQ_UAT_LAUNCHER_PID": "12",
+            "QWQ_UAT_HOST_ATTEMPT": "host-1",
+            "QWQ_CANONICAL_LAUNCH_CONTROL_DIGEST": digest,
+        }), mock.patch.object(vm, "_terminate_selected_application"), mock.patch.object(
+            vm.subprocess, "run", return_value=completed("com.example.app: 82001\n")
+        ) as run:
+            vm.launch_selected_simulator_application("simulator-2", "com.example.app")
+        child_env = run.call_args.kwargs["env"]
+        self.assertEqual(child_env["SIMCTL_CHILD_QWQ_UAT_LAUNCHER_PID"], "12")
+        self.assertEqual(child_env["SIMCTL_CHILD_QWQ_UAT_HOST_ATTEMPT"], "host-1")
+        self.assertEqual(child_env["SIMCTL_CHILD_QWQ_UAT_CONTROL_DIGEST"], digest)
+
+    def test_launch_rejects_incomplete_uat_startup_identity(self):
+        # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-008
+        digest = "sha256:" + "a" * 64
+        cases = [
+            {"QWQ_UAT_LAUNCHER_PID": "0"},
+            {"QWQ_UAT_LAUNCHER_PID": "12"},
+            {"QWQ_UAT_LAUNCHER_PID": "12", "QWQ_UAT_HOST_ATTEMPT": "host-1"},
+            {
+                "QWQ_UAT_LAUNCHER_PID": "12",
+                "QWQ_UAT_HOST_ATTEMPT": "host-1",
+                "QWQ_CANONICAL_LAUNCH_CONTROL_DIGEST": "unverified",
+            },
+        ]
+        for values in cases:
+            with self.subTest(values=values), mock.patch.dict(
+                os.environ,
+                {
+                    "QWQ_UAT_LAUNCHER_PID": "",
+                    "QWQ_UAT_HOST_ATTEMPT": "",
+                    "QWQ_CANONICAL_LAUNCH_CONTROL_DIGEST": "",
+                    **values,
+                },
+            ), mock.patch.object(vm, "_terminate_selected_application") as terminate, self.assertRaisesRegex(
+                executor.CanonicalExecutorError, "APP.UAT.relay_admission_mismatch"
+            ):
+                vm.launch_selected_simulator_application("simulator-2", "com.example.app")
+            terminate.assert_not_called()
+        with mock.patch.dict(os.environ, {
+            "QWQ_UAT_LAUNCHER_PID": "12",
+            "QWQ_UAT_HOST_ATTEMPT": "host-1",
+            "QWQ_CANONICAL_LAUNCH_CONTROL_DIGEST": digest,
+        }):
+            compiled = vm.compile_environment({
+                "PATH": "/usr/bin",
+                "QWQ_UAT_LAUNCHER_PID": "12",
+                "QWQ_UAT_HOST_ATTEMPT": "host-1",
+                "QWQ_CANONICAL_LAUNCH_CONTROL_DIGEST": digest,
+            })
+        self.assertEqual(compiled["QWQ_UAT_LAUNCHER_PID"], "12")
+        self.assertEqual(compiled["QWQ_CANONICAL_LAUNCH_CONTROL_DIGEST"], digest)
 
     def test_termination_waits_for_exact_service(self):
         with mock.patch.object(vm.subprocess, "run", side_effect=[completed(""), completed("UIKitApplication:com.example.app[abcd]"), completed("")]), mock.patch.object(vm.time, "sleep") as sleep:

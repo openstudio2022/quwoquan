@@ -248,6 +248,20 @@ def test_execute_resync_covers_closed_outcomes_without_push(hub) -> None:
     assert all(item.outcome == "skipped_missing" for item in results if item.branch != "lane/engineering")
 
 
+def test_resync_execute_exits_zero_unless_ff_failed(monkeypatch, capsys) -> None:
+    skipped = [lane_worktree_commands.LaneResyncResult(
+        branch="lane/engineering", path="/tmp/engineering", outcome="skipped_dirty_overlap", target="a" * 40,
+    )]
+    failed = [lane_worktree_commands.LaneResyncResult(
+        branch="lane/engineering", path="/tmp/engineering", outcome="ff_failed", target="a" * 40,
+    )]
+    monkeypatch.setattr(lane_worktree_commands, "execute_resync", lambda: skipped)
+    assert lane_worktree_commands.main(["resync", "--execute"]) == 0
+    monkeypatch.setattr(lane_worktree_commands, "execute_resync", lambda: failed)
+    assert lane_worktree_commands.main(["resync", "--execute"]) == 1
+    capsys.readouterr()
+
+
 def test_skill_metadata_body_and_execution_share_published_baseline() -> None:
     skills = ROOT / ".agents/skills"
     for name in ("sync-lane-from-dev", "integrate-lane-to-dev"):
@@ -266,5 +280,7 @@ def test_skill_metadata_body_and_execution_share_published_baseline() -> None:
     assert integrate.index("INTEGRATE_ARGS=--validate-bundle-only") < integrate.index("执行 `git merge --ff-only <exact-candidate-sha>`")
     assert "bundle_validated" in integrate and "candidate.parent" in integrate
     assert "Gamma → `IntegrationQualificationFact` → `dev1.0 → main`" in integrate
+    assert "可选报告" in integrate and "skipped_*" in integrate
+    assert "source-admitted" in integrate
     sync = (skills / "sync-lane-from-dev/SKILL.md").read_text(encoding="utf-8")
     assert "分叉默认停止" in sync and "明确授权" in sync

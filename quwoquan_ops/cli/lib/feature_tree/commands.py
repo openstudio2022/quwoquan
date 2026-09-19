@@ -38,6 +38,8 @@ from ..feature_context_fingerprint import (
     build_feature_context_fingerprint,
     embedded_fingerprint_binding,
     referenced_fingerprint_binding,
+    feature_context_closure,
+    feature_context_closure_identity,
 )
 
 MANIFEST_MAX_BYTES = int(contract_section("feature_context_manifest")["max_bytes"])
@@ -151,11 +153,12 @@ def _resolved_direct_reference(
             )
         return None
 
-    # selected canonical source segment 中的裸 YAML basename 只可能指向唯一
-    # quwoquan_ops/policies 文件；即使目标缺失也必须作为 candidate fail-closed。
-    # 带目录的普通 YAML 仍按其原路径判断，不映射到 policies。
+    # 裸 YAML basename 只在 quwoquan_ops/policies/<name> 已存在时才是
+    # canonical policy 引用；缺失当作散文忽略。带目录的 YAML 仍按原路径判断。
     if "/" not in path_text and path_text.endswith(".yaml"):
         candidate = context.repository_root() / "quwoquan_ops" / "policies" / path_text
+        if not candidate.is_file():
+            return None
         candidate_type = True
     elif path_text.startswith(
         ("specs/", "quwoquan_app/", "quwoquan_service/", "quwoquan_data/", "quwoquan_ops/")
@@ -371,6 +374,7 @@ def command_context(args: argparse.Namespace) -> int:
         content = canonical_json_bytes(manifest)
         size = len(content)
         receipt: Mapping[str, object] | None = None
+        closure: dict[str, object] | None = None
         if size > MANIFEST_MAX_BYTES:
             receipt = manifest["evidence_fingerprint"]["receipt"]
             receipt_content = canonical_json_bytes(receipt)
@@ -384,6 +388,17 @@ def command_context(args: argparse.Namespace) -> int:
             )
             content = canonical_json_bytes(manifest)
             size = len(content)
+        if size > MANIFEST_MAX_BYTES:
+            closure = feature_context_closure(manifest)
+            closure_raw = canonical_json_bytes(closure)
+            if len(closure_raw) > int(contract_section("feature_context_closure")["max_bytes"]):
+                raise ValueError("GATE_BLOCK: feature context closure 超出资源边界")
+            manifest["closure_identity"] = feature_context_closure_identity(closure)
+            for field in ("owner_chain", "canonical_contexts", "applicable_agents", "open_items"):
+                manifest[field] = []
+            validate_feature_context_manifest(manifest)
+            content = canonical_json_bytes(manifest)
+            size = len(content)
             if size > MANIFEST_MAX_BYTES:
                 raise ValueError(
                     "GATE_BLOCK: feature context manifest 超出 8KiB 预算："
@@ -391,6 +406,8 @@ def command_context(args: argparse.Namespace) -> int:
                 )
         if receipt is not None:
             _write_content_addressed_json(receipt, subdirectory="receipts")
+        if closure is not None:
+            _write_content_addressed_json(closure, subdirectory="feature-context-closure")
         output = _write_content_addressed_bytes(content)
     except ValueError as error:
         print(error, file=sys.stderr)

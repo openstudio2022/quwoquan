@@ -29,6 +29,15 @@ business_rules:
 - 创建时一次性固化有界候选、ordinal、对象卡候选、服务端权威实验分桶、实际模型执行轨道、模型发布、用户特征与逐项候选特征；每项 featureSnapshotDigest 必须绑定实际评分输入，后续读取不得重新排序或回查漂移特征。
 - experimentBucket 必须来自当前 ExperimentPolicyActivated 的服务端 AssignBucket 结果；modelBucket 仅记录实际执行轨道，模型失败降级为 rule 时不得覆盖 experimentBucket。
 - Idempotency-Key 在窗口 TTL 内唯一派生 windowId；同键同载荷返回原窗口，同键异载荷必须冲突且不得重排。
+- 新请求 admission 先严格解码共享 RecommendationViewportProfile/RecommendationDeviceClass，缺失/null 归一 unknown，非法值拒绝；冻结 viewportProfile、deviceClass、coarseRegion、timeBucket、profileRevision 及实际 policy/model/feature identity，再执行排序。coarseRegion 当前仅 unknown，无推荐用途权威同意和可撤回授权缓存前不开放请求 wire，不采集精确位置或读取用户展示 region。
+- contextDigest 为冻结 RecommendationRequestContext 五字段的 SHA-256 小写 64 位 hex；输入使用 UTF-8 canonical JSON（字段名排序、无多余空白、无可选字段遗漏，值均为已规范字符串），不使用原始 query、客户端时钟或无分隔拼接。timeBucket/profileRevision 精确定义仅在 fields.yaml 的该类型声明。
+- requestDigest 必须在既有规范 subjectId/scenario/limit 载荷中加入 contextDigest；幂等命中先读原窗口，复用其中冻结的 timeBucket/profileRevision/coarseRegion/policy/model/feature identity，仅比较本次规范化客户端字段形成的 requestDigest。同 key 换 viewport/device 必须 conflict；相同载荷跨小时、画像或配置更新仍返回原窗口，不重新 admission、重读画像或重排。
+- rankingSnapshotDigest 必须同时覆盖 contextDigest、policyDigest、实际 model/feature identity、原始评分输入摘要和后处理后的稳定 ordinal/contentId/score；不把后处理媒体尺寸塞入模型 CandidateInput。windowId 与冻结 contextDigest 在 create-once 记录中一一绑定，缓存按原 windowId 唯一读写且必须验证该绑定，不能用同 key 覆盖不同上下文。
+- ranker 与跨进程模型请求必须消费同一冻结 requestContext，至少原样携带 viewportProfile、deviceClass、coarseRegion、timeBucket；禁止在 Facade 到 scorer 边界重新填 unknown/default。
+- "冷启动按画像 action:/state: 稀疏行为计数执行：计数小于等于 ops.reco.discovery.rank.cold_start_max_behavior_count 时对基础分叠加候选 qualityScore 受控先验，严格大于阈值时停用；阈值、active 判定与计数必须进入评分 context 和 rankingSnapshotDigest。"
+- Content 必须把返回 contextDigest 冻结进 FeedDeliveryPage.scopeHash 和 nextCursor/previousCursor AEAD authenticated context；request、幂等、ranking、window、cursor 和 cache 共享同一摘要，不把原地域拼入任何 key，旧缺失摘要窗口 fail-closed。
+- 首版仅在现役 ranker 输出后，对 viewportProfile=landscape 且 canonical 主媒体 width>height 的 image/video 应用 ops.reco.discovery.rank.context_landscape_media_boost；有效值来自 recommendation-service/config/schema.yaml，default=1.0、范围 [1.0,1.25]。其余候选乘数 1.0，不过滤候选、不改变训练/模型请求，保留基础排序和既有多样性约束。
+- policyDigest 在既有权威 policy 内容身份基础上必须绑定本次实际生效的 context_landscape_media_boost 参数值（规范数值而非配置更新时间）；参数越界拒绝 admission，不静默截断。同窗续页与幂等重放不重读热配置；新首刷才使用新 policyDigest，1.0 为明确零 boost，不新增 device/region/time boost 配置或另一套策略源。
 - 续页仅使用 windowId 与稳定 ordinal，读取不得刷新 TTL，也不得把另一窗口结果拼接进来。
 - 窗口过期返回结构化 not-found；Content 必须创建新窗口并重新做权限 hydration。
 - UserAccountClosed 生效后必须按 subject 索引立即删除全部活动窗口；读取栅栏只是并发兜底，不得依赖 TTL 代替隐私清理。

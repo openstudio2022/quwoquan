@@ -67,7 +67,10 @@
 <a id="req-006"></a>
 ### REQ-006 ContentReaction 三态互斥并由列表投影恢复
 
-- `like`、`dislike` 与 `none` 必须互斥，计数和当前用户状态由服务端投影返回并可在重入后恢复。
+- `like`、`dislike` 与 `none` 必须互斥，保持 authenticated Persona 要求；一级评论、回复与个人互动 Tab 共享同一 actor/comment 的版本化 Reaction，不进入 Post bool 队列。
+- 本人反应、命令结果和统计新鲜度独立：按钮允许当前意图乐观，赞/踩数字只读最近有效服务端统计，不做本地加减；未知状态不当作 none 盲切换。
+- 确认 receipt 即结束该命令，统计落后或提交后统计读取失败不改报未提交。确定拒绝仅撤当前 intent 的 overlay，不恢复整树快照，不抹掉其他评论、回复或成功互动。
+- 权限同时满足评论可互动和父 Post published/审核/actor 可访问；内部生命周期补偿与用户命令分别授权。Reaction 的前置版本、签名依据、幂等恢复与有限窗口引用 [reaction-state-counter](../reaction-state-counter/spec.md#req-004)，不改变 Comment 创建、置顶、删除的独立命令协议。
 
 <a id="req-007"></a>
 ### REQ-007 图片附件和 mentions 端云全程强类型
@@ -77,7 +80,7 @@
 <a id="req-008"></a>
 ### REQ-008 四环境数据源和三层证据无 Mock 污染
 
-- alpha/beta/gamma/prod App 均使用 Remote Facet；测试树 typed double 与环境 artifact 物理隔离，发布证据必须绑定同一 commit 与 ContractGraph 摘要。
+- alpha 由隔离组合根注入对象级本地 adapter；beta/gamma/prod App 使用 Remote Facet。测试树 typed double 与环境 artifact 物理隔离，发布证据必须绑定同一 commit 与 ContractGraph 摘要。
 
 <a id="req-009"></a>
 ### REQ-009 个人评论与互动深链使用 typed Facet
@@ -162,8 +165,8 @@
 
 - GIVEN 用户读取含 viewerReaction 的 Comment
 - WHEN 用户执行 like、dislike 或 none
-- THEN 三态互斥且服务端返回精确 likeCount/dislikeCount。
-- THEN 重入时 ViewerReaction 来自 ContentReaction reader。
+- THEN 三态互斥，按钮只乐观覆盖本 intent；服务端统计按声明来源水位返回赞/踩数，不承诺与该 receipt 同时可见或由 App 本地加减。
+- THEN receipt 确认独立结束命令 pending，重入时本人态来自同 actor 的版本化 ContentReaction reader，统计落后/不可用不得重发已成功命令。
 
 <a id="gwt-007"></a>
 ### GWT-007 图片附件和 mentions 端云全程强类型
@@ -178,7 +181,7 @@
 
 - GIVEN alpha、beta、gamma、prod 使用各自正式 composition
 - WHEN 执行 package purity、环境 verify 与 Comment Journey
-- THEN alpha/beta/gamma/prod 只使用 Remote Facet，四环境 kernel/UAT support 均不可达 mock/fixture。
+- THEN alpha 使用隔离本地演练 Facet，beta/gamma/prod 使用 Remote Facet；四环境 kernel/UAT support 均不可达 mock/fixture。
 - THEN typed double 只存在测试树，不作为环境 Journey 证据。
 
 <a id="gwt-009"></a>
@@ -300,6 +303,15 @@
 - THEN ListComments 只返回配置数量的 replyPreview，并返回 replyNextCursor。
 - THEN ListCommentReplies 每次返回 reply_expand_page_size 条以内的回复和下一页 cursor。
 - THEN CreateComment 回复请求写入 replyToCommentId、replyToUserId 和 parentCommentId，列表回显归属一级评论。
+
+<a id="gwt-022"></a>
+### GWT-022 评论三态共享意图与局部失败恢复
+
+- GIVEN 同 actor 在一级评论、回复或个人互动 Tab 看到同一 comment，另一个评论/回复已有成功变更。
+- WHEN 当前 comment 连续赞→踩→none，出现版本冲突、响应丢失或统计读取失败。
+- THEN 同 comment 共享互斥三态、稳定命令身份和版本；未知不当 none，不能进入 Post bool 队列；已发送前驱未决时后继不绕过。
+- AND 确定拒绝只撤本动作 overlay，不回滚整树或其他成功变更；receipt 已确认就结束 pending，数字继续显示有效服务端基线，不本地加减、不因统计失败再写。
+- AND 未登录、评论不可互动、父 Post 非 published 或 actor 无权限时不接纳；真实 owner 资格读取失败不伪成功，内部删除补偿不成为公开绕鉴权入口。
 
 ## 6. 依赖
 
@@ -443,3 +455,21 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：Mock、Remote、Go contract test 使用同一组 seed 断言通过。
 - 完成判定：`GWT-021` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-016"></a>
+### OPEN-016 评论三态、独立统计与局部恢复尚缺当前证据
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：`REQ-006`、`GWT-006` 与新增 `GWT-022` 尚缺 typed 统计/回执合同、共享三态、局部 overlay 恢复和真实父 Post/Comment 资格验证；旧“命令响应必带即时精确数”用例不证明当前结果分型。
+- 完成判定：`GWT-006`、`GWT-022` 的单评论反转/unknown、另一评论已成功、提交后统计失败、失权与登录反例在 local_contract/真实 API/双真机直接绑定当前 `spec_ref`，不得由 Post bool 或整树回滚实现替代。
+
+### 三态增量的待实现测试绑定
+
+以下是需要扩展的实际 runner 与未来 `spec_ref` 落点，不表示新 required 证据已实现或通过；现有其他 GWT/OPEN 保持各自责任。
+
+- `quwoquan_app/test/local_contract/service/content_service/content/comment/comment_facet_widget__local_contract_test.dart`、同目录 `content_comment_facet__local_contract_test.dart` 和 `comment_item_actions__local_contract_test.dart`：扩展绑定 `GWT-006`、`GWT-022` 的三态互斥、未知、局部撤销与数字基线。
+- `quwoquan_app/test/api_integration/service/content_service/content/comment/content_comment_remote__api_integration_test.dart` 与 `quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart`：扩展绑定上述两锚的真实 receipt、统计失败隔离和同 actor 重入。
+- `quwoquan_service/services/content-service/tests/api_integration/content/content_reaction/http_mongo_transaction__api_integration_test.go` 只承担事务专项；真实 Comment/父 Post 资格组合需在同对象 API 目录新增直接场景并绑定 `GWT-022`，不能用恒 active reader 替身代证。
+- `quwoquan_app/test/user_acceptance/service/content_service/content/comment/comment_post__user_acceptance_test.dart`：扩展绑定 `GWT-006`、`GWT-022`，一级/回复/个人互动入口分别有真机动作和服务读回，不以 UI selected 状态证明提交。

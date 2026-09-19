@@ -120,11 +120,47 @@ final class OfflineBootstrapDocument implements RuntimeConfigDocument {
       ),
     };
     for (final key in offlineBootstrapDocumentRequiredFields) {
-      if (key == 'runtime' || key == 'trustedPublicKeys') continue;
+      if (key == 'runtime' ||
+          key == 'trustedPublicKeys' ||
+          key == 'rehearsalSpace') {
+        continue;
+      }
       final value = input[key];
       if (value is! String || value.isEmpty || value.trim() != value) {
         invalid.add(key);
       }
+    }
+    final space = input['rehearsalSpace'];
+    if (space is! Map ||
+        space.length != offlineRehearsalSpaceRequiredFields.length ||
+        !space.keys.every(offlineRehearsalSpaceRequiredFields.contains) ||
+        !offlineRehearsalSpaceModes.contains(space['mode']) ||
+        space['snapshotDigest'] is! String ||
+        !_digestPattern.hasMatch(space['snapshotDigest'] as String) ||
+        space['instanceId'] is! String ||
+        !RegExp(r'^[a-zA-Z0-9_-]{1,80}$')
+            .hasMatch(space['instanceId'] as String) ||
+        space['caseId'] is! String ||
+        !(((jsonDecode(appLaunchManifestJson)
+                        as Map<String, dynamic>)['schemas']
+                    as Map<
+                      String,
+                      dynamic
+                    >)['offline_bootstrap_document']['fields']['rehearsalSpace']['fields']['caseId']['allowed_values']
+                as List)
+            .contains(space['caseId']) ||
+        space['lifecycleGeneration'] is! String ||
+        !RegExp(r'^(?:0|[1-9][0-9]{0,15})$')
+            .hasMatch(space['lifecycleGeneration'] as String) ||
+        space['observationBinding'] is! String ||
+        !RegExp(r'^(?:|sha256:[0-9a-f]{64})$')
+            .hasMatch(space['observationBinding'] as String) ||
+        (space['mode'] == 'standard') != (space['instanceId'] == 'default') ||
+        (space['mode'] == 'standard') != (space['caseId'] == 'none') ||
+        (space['mode'] == 'standard') !=
+            (space['lifecycleGeneration'] == '0') ||
+        (space['mode'] == 'standard') != (space['observationBinding'] == '')) {
+      invalid.add('rehearsalSpace');
     }
     final runtime = input['runtime'];
     final keyring = input['trustedPublicKeys'];
@@ -164,6 +200,9 @@ final class OfflineBootstrapDocument implements RuntimeConfigDocument {
     return OfflineBootstrapDocument._(
       Map<String, Object?>.unmodifiable({
         ...input,
+        'rehearsalSpace': Map<String, String>.unmodifiable(
+          Map<String, String>.from(space as Map),
+        ),
         'runtime': Map<String, String>.unmodifiable(
           Map<String, String>.from(runtime as Map),
         ),
@@ -398,8 +437,34 @@ class RuntimeConfigPackage implements RuntimeConfigDocument {
   };
 }
 
+/// 仅由 resolver 在真实验签且匹配制品 snapshot 后构造；不表示存储已隔离。
+final class VerifiedRehearsalSpace {
+  const VerifiedRehearsalSpace._({
+    required this.mode,
+    required this.snapshotDigest,
+    required this.instanceId,
+    required this.caseId,
+    required this.lifecycleGeneration,
+    required this.observationBinding,
+  });
+
+  final String mode;
+  final String snapshotDigest;
+  final String instanceId;
+  final String caseId;
+  final String lifecycleGeneration;
+  final String observationBinding;
+  bool get isIsolated => mode == 'isolated';
+}
+
 class ResolvedRuntimePackage {
-  const ResolvedRuntimePackage({required this.package, required this.values});
+  const ResolvedRuntimePackage._({
+    required this.package,
+    required this.values,
+    required this.rehearsalSpace,
+  });
+
+  final VerifiedRehearsalSpace? rehearsalSpace;
 
   final RuntimeConfigDocument package;
   final Map<String, String> values;
@@ -465,6 +530,7 @@ class RuntimePackageResolver {
     required String expectedTarget,
     required String trustedBuildProfile,
     required Map<String, String> trustedPublicKeys,
+    String? expectedOfflineSnapshotDigest,
   }) async {
     final RuntimeConfigDocument package;
     if (runtimePackage['schema'] ==
@@ -595,9 +661,31 @@ class RuntimePackageResolver {
       );
     }
 
-    return ResolvedRuntimePackage(
+    VerifiedRehearsalSpace? space;
+    if (package is OfflineBootstrapDocument) {
+      final selected =
+          package._document['rehearsalSpace']! as Map<String, String>;
+      if (expectedOfflineSnapshotDigest == null ||
+          !_digestPattern.hasMatch(expectedOfflineSnapshotDigest) ||
+          selected['snapshotDigest'] != expectedOfflineSnapshotDigest) {
+        throw RuntimePackageValidationException(
+          reason: 'rehearsal-snapshot-mismatch',
+          invalidKeys: const ['rehearsalSpace'],
+        );
+      }
+      space = VerifiedRehearsalSpace._(
+        mode: selected['mode']!,
+        snapshotDigest: selected['snapshotDigest']!,
+        instanceId: selected['instanceId']!,
+        caseId: selected['caseId']!,
+        lifecycleGeneration: selected['lifecycleGeneration']!,
+        observationBinding: selected['observationBinding']!,
+      );
+    }
+    return ResolvedRuntimePackage._(
       package: package,
       values: Map<String, String>.unmodifiable(package.runtimeValues),
+      rehearsalSpace: space,
     );
   }
 }

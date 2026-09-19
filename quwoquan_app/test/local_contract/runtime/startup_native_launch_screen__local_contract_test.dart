@@ -571,7 +571,9 @@ void main() {
       // 创建的 window（旧 storyboard 配置的持久化 session）而不造第二个 window。
       expect(
         appSceneDelegate,
-        contains('let sceneWindow = window ?? UIWindow(windowScene: windowScene)'),
+        contains(
+          'let sceneWindow = window ?? UIWindow(windowScene: windowScene)',
+        ),
       );
       expect(
         appSceneDelegate,
@@ -580,8 +582,12 @@ void main() {
         ),
       );
       expect(
-        appSceneDelegate.indexOf('connectNativeStartupSceneIfNeeded(in: sceneWindow)'),
-        lessThan(appSceneDelegate.indexOf('instantiateInitialViewController()')),
+        appSceneDelegate.indexOf(
+          'connectNativeStartupSceneIfNeeded(in: sceneWindow)',
+        ),
+        lessThan(
+          appSceneDelegate.indexOf('instantiateInitialViewController()'),
+        ),
       );
       expect(appSceneDelegate, contains('nativeStartupWindow = sceneWindow'));
       expect(appSceneDelegate, contains('sceneWindow.makeKeyAndVisible()'));
@@ -599,7 +605,10 @@ void main() {
       );
       expect(appSceneDelegate, isNot(contains('NSUserActivity(')));
       // 引擎在 gate 之后被旧持久化配置提前创建时只记账，不得 trap 掉进程。
-      expect(ios, isNot(contains('assertionFailure("Flutter engine initialized')));
+      expect(
+        ios,
+        isNot(contains('assertionFailure("Flutter engine initialized')),
+      );
       expect(ios, contains('ios_implicit_flutter_engine_behind_native_gate'));
       final infoPlist = _readAppFile('ios/Runner/Info.plist');
       expect(infoPlist, isNot(contains('NSUserActivityTypes')));
@@ -1230,7 +1239,28 @@ void main() {
       expect(runtimeConfig, contains('hydrateFromNativeRuntimePackage'));
       expect(
         bootstrap,
-        contains('CloudRuntimeConfig.hydrateFromNativeRuntimePackage()'),
+        contains('CloudRuntimeConfig.hydrateFromNativeRuntimePackage('),
+      );
+      expect(
+        bootstrap,
+        contains(
+          'expectedOfflineSnapshotDigest: expectedOfflineSnapshotDigest',
+        ),
+      );
+      expect(
+        bootstrap.indexOf(
+          'await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(',
+        ),
+        lessThan(bootstrap.indexOf('_configureContentComposition?.call()')),
+      );
+      final alphaEntry = _readAppFile('lib/main_alpha.dart');
+      expect(
+        alphaEntry,
+        contains('expectedOfflineSnapshotDigest: offlineContentManifestDigest'),
+      );
+      expect(
+        runtimeConfig,
+        isNot(contains('offline_content_bundle_identity.g.dart')),
       );
       // configurationState 由唯一生产解析器产出，facade 只做投影。
       final runtimePackageResolver = _readAppFile(
@@ -1489,7 +1519,7 @@ void main() {
       expect(
         launcherHandoff,
         contains(
-          'entrypoint = effective_schema["fields"]["entrypoint"]["const"]',
+          'entrypoint = contract["content_source_entrypoints"][contract["content_source_policy"][args.env]]',
         ),
       );
       expect(launcherHandoff, contains('effectiveLaunchManifestDigest'));

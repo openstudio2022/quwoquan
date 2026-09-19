@@ -7,6 +7,7 @@ from typing import Any
 
 from content.release.canonical.application import apply_object_transaction
 from content.execution.receipt_chain import ReceiptChainError, validate_publish_review_chain
+from content.execution.workspace import target_descriptor_for
 from content.release.canonical.canonical_inventory import load_or_bootstrap_inventory
 from content.release.canonical.final_surface_projection import project_publish_final_surface
 from content.release.canonical.object_transaction import build_entity_object_transaction_package
@@ -100,12 +101,16 @@ def _review_approved(
     else:
         from content.release.canonical.post_transaction_assets import source_assets as load_source_assets
         source_assets = load_source_assets(root)
+    try:
+        descriptor = target_descriptor_for(execution_id, expected_object_ref)
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise ObjectTransactionError(str(exc)) from exc
     validate_review_authority(
         review_root=object_dir / "5.review",
         manifest=manifest,
         object_kind=object_kind,
         execution_id=execution_id,
-        object_ref=expected_object_ref,
+        object_ref=str(descriptor["canonicalObjectRef"]),
         source_assets=source_assets,
     )
 

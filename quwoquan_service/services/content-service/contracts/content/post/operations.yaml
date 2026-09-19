@@ -294,6 +294,14 @@ api_routes:
       availability_percent: 99.9
     description: '发现流首页推荐唯一主链路（sort=recommend）。推荐路由必须携带长度不超过 128 bytes 且不含空白/控制字符的 X-Client-Session-Id；缺失或非法时按 invalid_argument fail-closed。cursor 为绑定 actor/session/route/pageSize 的 AEAD opaque token；推荐续页只能从 rec scene 中遵守 contracts/metadata/_shared/redis_keyspace.yaml canonical TTL/item/payload/quota 限制的不可变 RankedFeedWindow 按 (ordinal, contentId) 续接。value 与 quota index 必须由同 subjectHash slot Lua 原子创建、清理和淘汰；窗口主体对具名/已验证设备使用 actor，对无身份公开请求使用 session，禁止全局匿名 fallback actor 造成跨游客淘汰。不具备原子能力时 fail-closed，禁止回退无界 SET NX。窗口序列化必须按条目逐块累积完整 wire bytes，超过 2 MiB 剩余预算立即停止并拒绝，禁止先物化无界整窗 JSON 或静默截断字段/条目。窗口缺失/过期、release/digest 或 candidate/policy/model/feature/ranking/reason 版本绑定不一致、ordinal/contentId 锚点不一致均 fail-closed；禁止 live recompute、offset、Mongo _id 或旧 cursor fallback。窗口创建失败时不得下发续接 cursor。每个成功下发且仍可继续的页面还必须先原子写入同 scope 的不可变 FeedDeliveryPage，再返回 nextCursor；下一页响应通过 previousCursor 指向该已交付页，回翻仅按已交付 Post 身份原序 hydrate 当前可见项，删除或不可见项只缩短页面，禁止重新召回或候补。previousCursor/nextCursor 与 paginationExpiresAt 同时绑定 actor/session/route/pageSize/release/feedRequestId；过期、篡改、跨 scope 或存储不可用均 fail-closed。
 
+      viewportProfile/deviceClass 由 ContentDiscoveryFeedQuery 引用共享闭集并原样传递内部 Create 命令；只将缺失/null 归一 unknown，非法值按 invalid_argument 拒绝，禁止任意字符串宽松解码。
+
+      新首刷由 Recommendation admission 冻结 requestContext/contextDigest；requestDigest、幂等比较、rankingSnapshotDigest 和 windowId scope 均绑定该摘要。Content 的 FeedDeliveryPage.scopeHash 以及 nextCursor/previousCursor 的 AEAD authenticated context 必须加入原窗口 contextDigest，不能只绑定 actor/session/route/pageSize。缓存沿用摘要 scope key，不放原地域。
+
+      续页先验证 cursor 并取得原窗口冻结 contextDigest，不能以新 viewport/device、当前时间桶或重读 profile/policy 计算 scope；合法的视口变化不重排旧窗，仅新首刷/刷新生效。摘要缺失或不一致 fail-closed，禁止兼容旧 cursor/window 读轨。
+
+      当前没有推荐用途 coarseRegion 同意权威来源及撤回授权缓存，故不开放 coarseRegion query/wire：显式地域参数按 invalid_argument 拒绝，服务端冻结 unknown 并不施加地域 boost；用户展示 region、IP 发布位置、请求自带 region、登录条款或 Assistant Skill 同意均不构成推荐授权，不主动请求定位权限。
+
       feedRequestId 为服务端权威生成的归因 id：随响应 envelope 下发；客户端首刷不传，
 
       分页/继续加载时回显服务端下发的 feedRequestId 以保持同一 feed 会话的归因连续，
@@ -337,6 +345,12 @@ api_routes:
           required: false
           encoding: json
           max_bytes: 8192
+        - name: viewportProfile
+          field: viewportProfile
+          required: false
+        - name: deviceClass
+          field: deviceClass
+          required: false
         - name: limit
           field: limit
       header:

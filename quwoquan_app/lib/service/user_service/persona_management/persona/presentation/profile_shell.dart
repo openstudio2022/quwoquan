@@ -17,7 +17,7 @@ import 'package:quwoquan_app/design_system/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/design_system/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/design_system/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
-import 'package:quwoquan_app/design_system/media/app_media_image.dart';
+import 'package:quwoquan_app/design_system/media/app_draft_image.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/runtime/di/runtime_package_dependencies.dart'
@@ -95,6 +95,8 @@ class ProfileShell extends ConsumerStatefulWidget {
     required this.mode,
     required this.userId,
     this.initialAvatarUrl,
+    this.initialAvatarAssetId,
+    this.initialAvatarAccessMode,
     this.initialDisplayName,
     this.initialBackgroundUrl,
     this.onBack,
@@ -107,6 +109,8 @@ class ProfileShell extends ConsumerStatefulWidget {
   final ProfileMode mode;
   final String userId;
   final String? initialAvatarUrl;
+  final String? initialAvatarAssetId;
+  final MediaDeliveryAccessMode? initialAvatarAccessMode;
   final String? initialDisplayName;
   final String? initialBackgroundUrl;
   final VoidCallback? onBack;
@@ -548,31 +552,28 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     // 投影时原样保留 assetId/accessMode，包括 URL-less 私有绑定与矛盾投影，
     // 由统一 typed 入口分别渲染或 fail-closed。
     final initialAvatarUrl = widget.initialAvatarUrl?.trim() ?? '';
-    final userAvatarUrl = isMine ? (userData?.avatarUrl?.trim() ?? '') : '';
+    final initialAvatarAssetId = widget.initialAvatarAssetId?.trim() ?? '';
     final profileAvatarUrl = profile?.avatarUrl.trim() ?? '';
     final profileHasDeliveryBinding =
         profile != null &&
         (profile.avatarAccessMode != null ||
             (profile.avatarAssetId?.trim().isNotEmpty ?? false) ||
             profileAvatarUrl.isNotEmpty);
+    final initialHasCompleteBinding =
+        widget.initialAvatarAccessMode != null ||
+        initialAvatarAssetId.isNotEmpty;
     final MediaDeliveryBinding avatarBinding;
-    if (initialAvatarUrl.isNotEmpty) {
-      avatarBinding = MediaDeliveryBinding(
-        assetId: '',
-        accessMode: null,
-        publicUrl: initialAvatarUrl,
-      );
-    } else if (userAvatarUrl.isNotEmpty) {
-      avatarBinding = MediaDeliveryBinding(
-        assetId: '',
-        accessMode: null,
-        publicUrl: userAvatarUrl,
-      );
-    } else if (profileHasDeliveryBinding) {
+    if (profileHasDeliveryBinding) {
       avatarBinding = MediaDeliveryBinding(
         assetId: profile.avatarAssetId?.trim() ?? '',
         accessMode: profile.avatarAccessMode,
         publicUrl: profileAvatarUrl,
+      );
+    } else if (initialHasCompleteBinding) {
+      avatarBinding = MediaDeliveryBinding(
+        assetId: initialAvatarAssetId,
+        accessMode: widget.initialAvatarAccessMode,
+        publicUrl: initialAvatarUrl,
       );
     } else {
       avatarBinding = const MediaDeliveryBinding.absent();

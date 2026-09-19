@@ -32,6 +32,20 @@ from typing import Any
 from typing import Mapping
 
 
+def _locked_python_compose_image() -> str:
+    from quwoquan_ops.cli.lib.docker_dependencies import (
+        DockerDependencyError,
+        locked_python_base_image,
+    )
+
+    try:
+        return locked_python_base_image()
+    except DockerDependencyError as exc:
+        raise RuntimeError(
+            f"GATE_BLOCK: locked python base image is unavailable: {exc}"
+        ) from exc
+
+
 def _all_services() -> list[str]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
@@ -82,6 +96,7 @@ def _beta_env_from_port_manifest(
         "CHAT_PORT": str(ports["chat-service"]),
         "QWQ_COMPOSE_GO_BASE_IMAGE": required_build_image("goBaseImage"),
         "QWQ_COMPOSE_ALPINE_BASE_IMAGE": required_build_image("alpineBaseImage"),
+        "QWQ_COMPOSE_PYTHON_BASE_IMAGE": _locked_python_compose_image(),
         "QWQ_COMPOSE_PUBLIC_WEB_BASE_URL": str(public_bases["publicWeb"]),
         "QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL": str(public_bases["mediaAvatar"]),
         "QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL": _stackctl._public_url_origin(
@@ -236,6 +251,7 @@ def _gamma_env_from_port_manifest(
         # package 路径直接 docker build 时必须携带同一批值。
         "QWQ_COMPOSE_GO_BASE_IMAGE": required_build_image("goBaseImage"),
         "QWQ_COMPOSE_ALPINE_BASE_IMAGE": required_build_image("alpineBaseImage"),
+        "QWQ_COMPOSE_PYTHON_BASE_IMAGE": _locked_python_compose_image(),
         "QWQ_COMPOSE_PUBLIC_WEB_BASE_URL": str(public_bases["publicWeb"]),
         "QWQ_PUBLIC_API_HOST": public_host("api", schemes={"https"}),
         "QWQ_PUBLIC_WEB_HOST": public_host("publicWeb", schemes={"https"}),

@@ -27,13 +27,14 @@ void main() {
     VideoPlayerPlatform.instance = originalPlatform;
   });
 
-  test('拖动仅在释放时提交一次 seek，并在原本播放时恢复', () async {
+  test('播放中拖动不停播且释放只提交一次 seek', () async {
     final controller = await _initializedController();
     final session = VideoPlaybackSession()
       ..setAutomaticPlaybackEligible(true)
       ..attach(controller);
     await _flushAsync();
     final playCountBeforeScrub = fakePlatform.playCount;
+    final pauseCountBeforeScrub = fakePlatform.pauseCount;
 
     await session.beginScrub();
     session
@@ -43,11 +44,14 @@ void main() {
     expect(fakePlatform.seekTargets, isEmpty);
     expect(session.snapshot.isScrubbing, isTrue);
     expect(session.snapshot.scrubTarget, const Duration(minutes: 2));
+    expect(session.snapshot.isPlaying, isTrue);
+    expect(fakePlatform.pauseCount, pauseCountBeforeScrub);
 
     await session.endScrub();
 
     expect(fakePlatform.seekTargets, <Duration>[const Duration(minutes: 2)]);
-    expect(fakePlatform.playCount, playCountBeforeScrub + 1);
+    expect(fakePlatform.playCount, playCountBeforeScrub);
+    expect(fakePlatform.pauseCount, pauseCountBeforeScrub);
     expect(
       session.snapshot.lastSeekLifecycleEvent?.phase,
       VideoSeekLifecyclePhase.commandCompleted,
@@ -104,6 +108,40 @@ void main() {
     expect(fakePlatform.seekTargets, isEmpty);
     expect(session.snapshot.isScrubbing, isFalse);
     expect(session.snapshot.position, const Duration(seconds: 10));
+
+    session
+      ..detach(controller)
+      ..dispose();
+    await controller.dispose();
+  });
+
+  // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/video-display-journey/spec.md#gwt-004
+  test('播放中取消 scrub 零 seek 且保留自然推进的最新实际位置', () async {
+    final controller = await _initializedController();
+    controller.value = controller.value.copyWith(
+      position: const Duration(seconds: 10),
+      isPlaying: true,
+    );
+    final session = VideoPlaybackSession()
+      ..setAutomaticPlaybackEligible(true)
+      ..attach(controller);
+    final playBefore = fakePlatform.playCount;
+    final pauseBefore = fakePlatform.pauseCount;
+
+    await session.beginScrub();
+    session.updateScrubTarget(const Duration(seconds: 90));
+    controller.value = controller.value.copyWith(
+      position: const Duration(seconds: 13),
+      isPlaying: true,
+    );
+    await session.endScrub(commit: false);
+
+    expect(fakePlatform.seekTargets, isEmpty);
+    expect(fakePlatform.playCount, playBefore);
+    expect(fakePlatform.pauseCount, pauseBefore);
+    expect(session.snapshot.isPlaying, isTrue);
+    expect(session.snapshot.position, const Duration(seconds: 13));
+    expect(session.snapshot.effectivePosition, const Duration(seconds: 13));
 
     session
       ..detach(controller)
@@ -544,6 +582,7 @@ void main() {
     await session.beginScrub();
     session.updateScrubTarget(const Duration(seconds: 42));
     final playCountBeforeRelease = fakePlatform.playCount;
+    final pauseCountBeforeRelease = fakePlatform.pauseCount;
     final releaseSeek = session.endScrub();
     await _flushAsync();
 
@@ -561,7 +600,8 @@ void main() {
     await releaseSeek.timeout(const Duration(milliseconds: 250));
 
     final summary = session.takeQoeSummary();
-    expect(fakePlatform.playCount, playCountBeforeRelease + 1);
+    expect(fakePlatform.playCount, playCountBeforeRelease);
+    expect(fakePlatform.pauseCount, pauseCountBeforeRelease);
     expect(summary.seekEvidenceSource, 'native_settled');
     expect(summary.seekSettleMaxMs, 130);
     expect(
@@ -966,9 +1006,14 @@ void main() {
     controller.value = controller.value.copyWith(isPlaying: true);
 
     now = now.add(const Duration(seconds: 6));
+    final playCountBeforeScrub = fakePlatform.playCount;
+    final pauseCountBeforeScrub = fakePlatform.pauseCount;
     await session.beginScrub();
     now = now.add(const Duration(seconds: 20));
     await session.endScrub(commit: false);
+    expect(fakePlatform.playCount, playCountBeforeScrub);
+    expect(fakePlatform.pauseCount, pauseCountBeforeScrub);
+    expect(session.snapshot.isPlaying, isTrue);
 
     controller.value = controller.value.copyWith(isPlaying: true);
     now = now.add(const Duration(seconds: 2));

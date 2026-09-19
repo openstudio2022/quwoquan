@@ -6,6 +6,7 @@ import contextlib
 import fcntl
 import os
 import re
+import stat
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,9 +21,14 @@ from quwoquan_ops.cli.lib.worktree_identity import (
 )
 
 HOST_LOCK_ROOT_ENV = "QWQ_HOST_LOCK_ROOT"
+HOST_LOCK_OWNER_WORKTREE_ENV = "QWQ_HOST_LOCK_OWNER_WORKTREE"
+HOST_LOCK_OWNER_LANE_ENV = "QWQ_HOST_LOCK_OWNER_LANE"
+HOST_LOCK_OWNER_HEAD_SHA_ENV = "QWQ_HOST_LOCK_OWNER_HEAD_SHA"
+IMMUTABLE_SOURCE_PROJECTION_LANE = "immutable-source-projection"
 DEFAULT_HOST_LOCK_ROOT = Path("~/.cache/quwoquan/host-locks")
 _HOLDER_PID = re.compile(r"\bpid=(?P<pid>[1-9][0-9]*)\b")
 _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+_EXACT_HEAD_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 class HostLockBusyError(RuntimeError):
@@ -144,10 +150,14 @@ def named_host_lock_path(namespace: str, resource: str) -> Path:
     )
 
 
-def app_dependency_sync_lock_path() -> Path:
-    """Return the host-wide Flutter/CocoaPods/Gradle sync lock."""
+def app_dependency_sync_lock_path(platform: str | None = None) -> Path:
+    """返回平台级依赖锁；无参数调用对应共享工具链资源。"""
 
-    return named_host_lock_path("app-dependency-sync", "toolchain")
+    if platform is None:
+        return named_host_lock_path("app-dependency-sync", "toolchain")
+    if platform not in {"android", "ios"}:
+        raise ValueError("invalid App dependency sync lock platform")
+    return named_host_lock_path("app-dependency-sync", f"toolchain-{platform}")
 
 
 def _pid_is_live(pid: int) -> bool:
@@ -188,12 +198,68 @@ def read_lock_holder(path: Path) -> str | None:
     return record if record and holder_record_is_live(record) else None
 
 
+def publish_declared_lock_owner(identity: HostLockOwner) -> None:
+    """把已审计投影身份交给深层 host lock；live worktree 探测失败时才消费。"""
+    os.environ[HOST_LOCK_OWNER_WORKTREE_ENV] = identity.worktree
+    os.environ[HOST_LOCK_OWNER_LANE_ENV] = identity.lane
+    os.environ[HOST_LOCK_OWNER_HEAD_SHA_ENV] = identity.head_sha
+
+
+def _physical_directory(path: Path) -> bool:
+    try:
+        metadata = path.lstat()
+    except OSError:
+        return False
+    return not path.is_symlink() and stat.S_ISDIR(metadata.st_mode)
+
+
+def _physical_regular_file(path: Path) -> bool:
+    try:
+        metadata = path.lstat()
+    except OSError:
+        return False
+    return not path.is_symlink() and stat.S_ISREG(metadata.st_mode)
+
+
+def _declared_projection_lock_owner() -> HostLockOwner | None:
+    worktree = str(os.environ.get(HOST_LOCK_OWNER_WORKTREE_ENV) or "").strip()
+    lane = str(os.environ.get(HOST_LOCK_OWNER_LANE_ENV) or "").strip()
+    head_sha = str(os.environ.get(HOST_LOCK_OWNER_HEAD_SHA_ENV) or "").strip()
+    if not worktree or not lane or not head_sha:
+        return None
+    if lane != IMMUTABLE_SOURCE_PROJECTION_LANE or _EXACT_HEAD_SHA.fullmatch(head_sha) is None:
+        return None
+    path = Path(worktree)
+    if not path.is_absolute() or any(part in {".", ".."} for part in path.parts):
+        return None
+    if not _physical_directory(path) or not _physical_regular_file(path / "source-isolation.json"):
+        return None
+    return HostLockOwner(
+        pid=os.getpid(),
+        worktree=str(path),
+        lane=lane,
+        head_sha=head_sha,
+        started_at=utc_now(),
+    )
+
+
 def current_lock_owner(
     *,
     worktree_path: Path | str | None = None,
-    identity: WorktreeIdentity | None = None,
+    identity: WorktreeIdentity | HostLockOwner | None = None,
 ) -> HostLockOwner:
-    resolved = identity or resolve_worktree_identity(worktree_path)
+    if isinstance(identity, HostLockOwner):
+        return HostLockOwner(
+            pid=os.getpid(), worktree=identity.worktree, lane=identity.lane,
+            head_sha=identity.head_sha, started_at=utc_now(),
+        )
+    try:
+        resolved = identity or resolve_worktree_identity(worktree_path)
+    except WorktreeIdentityError:
+        declared = _declared_projection_lock_owner()
+        if declared is None:
+            raise
+        return declared
     if resolved.worktree_root is None:
         raise WorktreeIdentityError("bare repository cannot own a host resource")
     return HostLockOwner(
@@ -210,7 +276,7 @@ def acquire_host_lock(
     *,
     fields: dict[str, str] | None = None,
     worktree_path: Path | str | None = None,
-    identity: WorktreeIdentity | None = None,
+    identity: WorktreeIdentity | HostLockOwner | None = None,
 ) -> HostLock:
     """Acquire ``path`` exclusively and non-blockingly.
 
@@ -246,7 +312,7 @@ def acquire_host_lock_bounded(
     poll_seconds: float = 0.1,
     fields: dict[str, str] | None = None,
     worktree_path: Path | str | None = None,
-    identity: WorktreeIdentity | None = None,
+    identity: WorktreeIdentity | HostLockOwner | None = None,
     on_wait: Callable[[str, float], None] | None = None,
 ) -> HostLock:
     """Acquire a host resource within a wall-clock bound, reporting its holder."""
@@ -280,7 +346,7 @@ def acquire_device_lock(
     device: str,
     app: str,
     worktree_path: Path | str | None = None,
-    identity: WorktreeIdentity | None = None,
+    identity: WorktreeIdentity | HostLockOwner | None = None,
 ) -> HostLock:
     return acquire_host_lock(
         device_lock_path(device, app),
@@ -294,7 +360,7 @@ def acquire_local_runtime_lock(
     *,
     target: str,
     worktree_path: Path | str | None = None,
-    identity: WorktreeIdentity | None = None,
+    identity: WorktreeIdentity | HostLockOwner | None = None,
 ) -> HostLock:
     return acquire_host_lock(
         local_runtime_lock_path(target),
@@ -320,7 +386,11 @@ def local_runtime_holders(target: str) -> list[dict[str, str]]:
 
 __all__ = [
     "DEFAULT_HOST_LOCK_ROOT",
+    "HOST_LOCK_OWNER_HEAD_SHA_ENV",
+    "HOST_LOCK_OWNER_LANE_ENV",
+    "HOST_LOCK_OWNER_WORKTREE_ENV",
     "HOST_LOCK_ROOT_ENV",
+    "IMMUTABLE_SOURCE_PROJECTION_LANE",
     "HostLock",
     "HostLockBusyError",
     "HostLockOwner",
@@ -330,6 +400,7 @@ __all__ = [
     "acquire_host_lock",
     "acquire_host_lock_bounded",
     "acquire_local_runtime_lock",
+    "current_lock_owner",
     "device_lock_path",
     "holder_record_is_live",
     "host_lock_root",
@@ -337,5 +408,6 @@ __all__ = [
     "local_runtime_lock_path",
     "named_host_lock_path",
     "parse_holder_record",
+    "publish_declared_lock_owner",
     "read_lock_holder",
 ]

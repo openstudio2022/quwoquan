@@ -48,8 +48,9 @@
 - 理由：对外边界已对全部生成的 operation 描述符施加该门，生产流量必然先经过边界，进程内重复施加对真实流量的收益为零。
 - 理由：进程内一并施加会掐死直连服务的取证路径，让未达 ready 的 operation 永远拿不到转 ready 所需的运行证据，形成自锁。
 - 被否决方案：在进程内 guard 复制商用状态判定、按环境放宽该判定、或为取证单独开一条绕过 guard 的旁路。
-- 约束与影响：商用治理态是准出与发布决策的输入，不是进程内访问控制的输入。
-- 约束与影响：取证调用仍必须完整通过身份、授权与 deadline 三项强制，不因免除治理态判定而降低安全边界。
+- 约束与影响：operation 商用治理态表达自身实现与运行依据，是对象 stage 与发布决策的输入，不等于对象 commercial-ready 或 release admission，也不是进程内访问控制输入；三轴语义遵循 [领域引导验收治理 REQ-004](../runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md#req-004)。
+- 约束与影响：取证调用仍必须完整通过身份、scope、ownership、deadline 与 canonical 失败语义，不因免除治理态判定而降低安全边界；内部取证不等于公网准出。生产 registry generator 和 GraphQL 专属外边界 authorizer 仍拒绝真实 blocked operation，不以环境特判、第二 registry 或 warn-only 放宽。
+- 可测试性：对同一 blocked operation，受保护 owner 内部可执行真实 conformance，生产生成与外边界请求仍拒绝；匿名、越权、缺 scope 和超时不能进入成功终态。operation ready 后缺对象/环境/发布证据仍不能获得对应资格，验收绑定 [GWT-005](../runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md#gwt-005)。
 - 关联要求：`REQ-002`
 - 关联能力：[`unified-entry-security`](./unified-entry-security/spec.md)、[`orchestration-degradation-rollback`](./orchestration-degradation-rollback/spec.md)
 
@@ -79,6 +80,10 @@
 - 决策：Prod 仅执行发布包内签名 registry 已登记的 persisted query hash，不接受 query text、APQ miss 在线注册或 Mutation。每个 hash 精确绑定 canonical operation、对象集合、授权与签名成本计划。常规 depth 与顶层字段均不超过 3，4～5 必须分别绑定受审计例外引用，超过 5 一律拒绝。generator 按 queryClass 使用 detail 100、collection 300、page_composite 500 的常规 worst-case complexity 上限。超出本类上限必须绑定受审计例外引用，501～1000 在 runtime 仍强制要求引用，超过 1000 一律拒绝。variables 仍以 64 KiB、分页以 100 为硬上限。
 - 决策：签名成本计划使用固定 `costModelVersion`，以 canonical JSON 的 SHA-256 摘要绑定基础复杂度、由变量路径驱动的列表倍数、owner call、batch key 与响应字节上限，并绑定对应 SLO。registry 加载时重算计划摘要与 worst-case；请求期在授权和执行前按实际 variables 重算复杂度，非整数或超过声明最大值的倍数变量直接拒绝。executor 必须返回强类型执行用量，API Edge 在响应前核对 owner call、batch key、响应字节以及实际编码字节数，缺失、漂移或超预算均 fail-closed。
 - 决策：GraphQL package gate 直接消费 checked-in generated registry 并调用生产 runtime validator；对象 owner 的 authoring document/YAML、内部 persisted handler、API Edge executor hash 与 exact response field set 必须形成双向闭集。任何新增/删除字段或 query byte 变化在 package 前阻断并保留具体 hash/field-set 原因，不允许以 compile-only、同源手写 fixture 或启动后才校验替代。
+- 决策：blocked 阶段先完成受保护 owner 内部真实 conformance；仅测试私有 Source/临时 fixture 可构造 ready 输入，用同一真实 authoring、生成器与生产 validator 检验组合，不写真实 ready、不产生可用于 package/activation 或真实 runtime/release 准出的 fixture 证据。自身 conformance 齐备后由 operation owner 逐项裁决，正式生成后必须重新验证 checked-in registry 的 exact owner/授权/字段闭集；旧 REST/Mongo 通过不能顶替新 GraphQL 通过。生产生成门、外边界 blocked 拒绝与既有 baseline 均保持，不增第二 registry。
+- 决策：合集 `GetPostCollection` 的已认证 viewer 与 `GetPostCollectionManagement` 的 owner 读取，只由 [UserAccount authority 委托决定](../user-identity-profile-relationship/design.md#dec-002) 提供可信身份；API Edge 只申请并转交，不取得委托签发 secret 或 authority。管理权限及成员可见性仍由 content owner 在每次读取时重验，已认证委托失败不得降级匿名。
+- 决策：内部 POST persisted transport 必须先由 owner authoring 精确解析唯一 hash/name/root/query operation，再用 canonical query kind、internal visibility、最小 scope、真实 recipient/service caller、resource、请求摘要及 surface 构造验证 expectation；未知 hash、任意 query text、Mutation、多 operation 或身份漂移均在执行前拒绝。不得把所有 POST 加入 safe-read 方法，不借共享路径推断具体 operation，不伪造 Assistant run/tool tuple。
+- 可测试性：正向覆盖真实 authority→API Edge→owner 与合集权限分页/管理回读；负向覆盖 blocked、错 hash/name、Mutation、普通 POST、假 service/persona、错 recipient/scope/digest/surface、过期/撤权及 authority 故障，均不得执行私有 owner query。组合门绑定本域 `DOM-001`，证据分轴绑定 [GWT-005](../runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md#gwt-005)，委托验收细化归身份 owner 决定，不由本域复制协议。
 - 决策：App 与公众业务读面进入 persisted GraphQL read plane。API Edge 聚合只暴露页面或外部门面 Query Slice。跨服务 owner 读取不绕行 App GraphQL，而是经 canonical Reader/Slice 的 typed application port 或受限内部 HTTP。后者必须在 owner 执行前验证 service principal、scope、internal visibility 与 ContractGraph operation identity。运营控制面使用 scoped operator/admin typed query，与 App/public 读面分开。
 - 理由：Query Slice 可以统一查询入口而不泄露领域内部对象或强迫所有聚合根暴露；REST command 保留清晰的写 owner、幂等和恢复语义，也保证更新/恢复端点在 GraphQL 不可用或客户端低于 minimum 时仍可访问。
 - 被否决方案：六类对象机械暴露、GraphQL Mutation、把所有 owner/control-plane 读取强制绕行 App GraphQL、未验签或未声明 scope 的内部 REST query、按 URL 猜测非业务例外、resolver 逐字段跨服务调用、在线登记未知 query、同一 App Build 长期 REST/GraphQL 双读择优，以及用领域模型版本参与请求路由。

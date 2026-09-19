@@ -822,7 +822,7 @@ def test_dependency_evidence_rejects_postbuild_component_identity_drift(
         )
 
 
-def test_ios_dependency_evidence_requires_exact_dual_host_component_set(
+def test_ios_dependency_evidence_rejects_android_component_set(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -838,3 +838,126 @@ def test_ios_dependency_evidence_requires_exact_dual_host_component_set(
             launch_projection=projection,
             platform="ios-simulator",
         )
+
+
+def _ios_production_dependency_projection_evidence(
+    projection_root: Path,
+    *,
+    source_manifest_digest: str,
+    source_manifest_ref: Path,
+) -> dict[str, str]:
+    state = projection_root / "quwoquan_app/.dart_tool/qwq_ios_cocoapods_dependency"
+    expectation_path = state / "dependency-projection-expectation.json"
+    prebuild_path = state / "dependency-projection-prebuild-readback.json"
+    postbuild_path = state / "dependency-projection-postbuild-readback.json"
+    pub_identity = {
+        "manifestDigest": _digest("a"),
+        "treeDigest": _digest("b"),
+        "entryCount": 19,
+        "directoryCount": 7,
+        "lockDigest": _digest("c"),
+    }
+    pods_identity = {
+        "treeDigest": _digest("d"),
+        "entryCount": 11,
+        "lockDigest": _digest("e"),
+    }
+    components = {
+        "productionIosPods": {
+            "kind": "iosPods",
+            "dependencyHost": "production",
+            "treePath": "quwoquan_app/ios/Pods",
+            "lockPath": "quwoquan_app/ios/Podfile.lock",
+            **pods_identity,
+        },
+        "productionPub": {
+            "kind": "pub",
+            "treePath": "quwoquan_app/.dart_tool/qwq_pub_cache",
+            "lockPath": "quwoquan_app/pubspec.lock",
+            **pub_identity,
+        },
+    }
+    expectation_digest = _write_private_evidence(
+        expectation_path,
+        {
+            "schema": "stackctl-app-dependency-projection-expectation.v2",
+            "projectionRoot": str(projection_root),
+            "source": {
+                "manifestDigest": source_manifest_digest,
+                "manifestPath": str(source_manifest_ref),
+                "baselineId": _digest("0"),
+                "inputDigest": _digest("1"),
+                "inputCount": 2,
+                "dependencyMarkers": sorted(
+                    (
+                        {
+                            "logicalPath": COMPONENT_LOGICAL_PATHS[name],
+                            "digest": _digest(marker),
+                            "size": 1,
+                        }
+                        for name, marker in (
+                            ("productionIosPods", "9"),
+                            ("productionPub", "7"),
+                        )
+                    ),
+                    key=lambda item: str(item["logicalPath"]),
+                ),
+            },
+            "components": components,
+            "environments": {
+                "production": environment_identity(
+                    {"FLUTTER_SWIFT_PACKAGE_MANAGER": "false"}
+                ),
+            },
+            "patrolCommandEnvelope": None,
+        },
+    )
+    readback = {
+        "schema": "stackctl-app-dependency-projection-readback.v2",
+        "expectationDigest": expectation_digest,
+        "projectionRoot": str(projection_root),
+        "sourceManifestDigest": source_manifest_digest,
+        "components": {
+            "productionPub": pub_identity,
+            "productionIosPods": pods_identity,
+        },
+        "patrolCommandEnvelopeDigest": None,
+    }
+    prebuild_digest = _write_private_evidence(prebuild_path, readback)
+    postbuild_digest = _write_private_evidence(postbuild_path, readback)
+    return {
+        "dependencyProjectionExpectationRef": str(expectation_path),
+        "dependencyProjectionExpectationDigest": expectation_digest,
+        "dependencyProjectionPrebuildReadbackRef": str(prebuild_path),
+        "dependencyProjectionPrebuildReadbackDigest": prebuild_digest,
+        "dependencyProjectionPostbuildReadbackRef": str(postbuild_path),
+        "dependencyProjectionPostbuildReadbackDigest": postbuild_digest,
+    }
+
+
+def test_ios_dependency_evidence_accepts_production_host_component_set(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _attempt_path, _report_path, report, projection = _write_launch_pair(tmp_path)
+    monkeypatch.setattr(stackctl, "output_root", lambda: tmp_path)
+    ios_evidence = _ios_production_dependency_projection_evidence(
+        Path(str(projection["sourceProjectionRoot"])),
+        source_manifest_digest=(
+            "sha256:"
+            + hashlib.sha256(
+                Path(str(projection["sourceCapsuleManifestRef"])).read_bytes()
+            ).hexdigest()
+        ),
+        source_manifest_ref=Path(str(projection["sourceCapsuleManifestRef"])),
+    )
+    report.update(ios_evidence)
+
+    bound = _verified_dependency_projection_binding(
+        report=report,
+        launch_projection=projection,
+        platform="ios-simulator",
+    )
+    assert bound["dependencyProjectionExpectationRef"] == ios_evidence[
+        "dependencyProjectionExpectationRef"
+    ]

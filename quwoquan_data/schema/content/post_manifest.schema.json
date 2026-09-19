@@ -277,7 +277,10 @@
         "sourceRevision",
         "sourceDigest",
         "entityCatalogDigest",
-        "identityDigest"
+        "identityDigest",
+        "descriptorRef",
+        "descriptorDigest",
+        "mappingDigest"
       ],
       "properties": {
         "executionId": {
@@ -294,6 +297,16 @@
           "$ref": "#/$defs/sha256Digest"
         },
         "identityDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "descriptorRef": {
+          "type": "string",
+          "pattern": "^0\\.plan/target-descriptors/[a-f0-9]{64}\\.json$"
+        },
+        "descriptorDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "mappingDigest": {
           "$ref": "#/$defs/sha256Digest"
         }
       }

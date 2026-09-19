@@ -79,10 +79,11 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         attestation = _attestation(self.root, "rel-production")
         calls: list[tuple[str, ...]] = []
 
-        def fake_ship(*args: str, log_dir: Path, label: str) -> None:
+        def fake_ship(*args: str, log_dir: Path, label: str, output_root: Path | None = None) -> None:
             calls.append(tuple(args))
+            target = output_root or self.root
             if args[0] == "verify":
-                readiness = self.root / "env/alpha/runs/data-release/rel-production/run-1-verify/release-readiness.json"
+                readiness = target / "env/alpha/runs/data-release/rel-production/run-1-verify/release-readiness.json"
                 readiness.parent.mkdir(parents=True, exist_ok=True)
                 readiness.write_text("{}", encoding="utf-8")
 
@@ -150,6 +151,48 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         # 传给 stackctl 的是绑定到样本的环境 postId，而不是 canonical objectId
         self.assertEqual(call[call.index("--content-id") + 1], "data_post_" + "d" * 64)
         self.assertEqual(call[call.index("--readiness-receipt") + 1], str(report))
+
+    def test_package_recovery_preserves_alpha_platform_and_defaults_other_environments_to_all(self) -> None:
+        for environment, selector, expected in (("alpha", "ios", "ios"), ("alpha", "android", "android"),
+                                                ("alpha", "all", "all"), ("prod", "ios", "all")):
+            calls = []
+            def stackctl(*argv, **kwargs):
+                calls.append(argv)
+                failed = len(calls) == 1
+                return integration_run.StackctlResult(argv[0], {
+                    "exitCode": 2 if failed else 0,
+                    "details": ["App dependency bundle missing"] if failed else [],
+                }, "")
+            with self.subTest(environment=environment, selector=selector), mock.patch.object(integration_run, "_stackctl", side_effect=stackctl):
+                integration_run._package_with_dependency_recovery(environment=environment,
+                    args=SimpleNamespace(app_platform=selector, release_attestation="a", rollback_release_attestation="b"),
+                    log_dir=self.root, phases=integration_run.Phases())
+            self.assertEqual([call[0] for call in calls], ["package", "app-dependency-sync", "package"])
+            self.assertEqual(calls[1], ("app-dependency-sync", "--platform", expected))
+            for call in (calls[0], calls[2]):
+                self.assertEqual(call[call.index("--app-platform") + 1], expected)
+
+    def test_acceptance_reuse_requires_exact_platform_plan_and_rejects_legacy_inputs(self) -> None:
+        store_patch = mock.patch.object(integration_run, "_store", return_value=self.root)
+        store_patch.start()
+        self.addCleanup(store_patch.stop)
+        args = SimpleNamespace(release_attestation=_attestation(self.root, "candidate"),
+            rollback_release_attestation=_attestation(self.root, "rollback"),
+            release_handoff_ref=VALID_REF, workload="full")
+        all_inputs = integration_run._acceptance_release_inputs(args)
+        self.assertEqual(all_inputs["appAcceptancePlan"]["requiredPlatforms"], ["android", "ios"])
+        args.app_platform = "ios"
+        ios_inputs = integration_run._acceptance_release_inputs(args)
+        self.assertNotEqual(all_inputs, ios_inputs)
+        package = integration_run._write_canonical(self.root / "package.json", {"kind": "package"})
+        readiness = integration_run._write_canonical(self.root / "readiness.json", {"kind": "readiness"})
+        for label, inputs in (("ios", ios_inputs), ("all", all_inputs),
+                              ("legacy", {key: value for key, value in ios_inputs.items() if key != "appAcceptancePlan"})):
+            runtime = integration_run._write_canonical(self.root / (label + ".json"), {"source": {
+                "acceptanceBinding": {"inputs": inputs, "packageManifest": package, "releaseReadiness": readiness}}})
+            fact = {"runtimeIdentity": runtime}
+            self.assertEqual(integration_run._acceptance_binds_inputs(store=self.root, fact=fact, inputs=ios_inputs), label == "ios")
+            self.assertEqual(integration_run._acceptance_binds_inputs(store=self.root, fact=fact, inputs=all_inputs), label == "all")
 
     def test_package_identity_accepts_reused_candidate_only_from_an_ancestor(self) -> None:
         # 候选身份内容寻址：data-only 候选复用祖先 commit 打出的同一不可变候选是合法的；
@@ -225,6 +268,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         accept_block = makefile.split("\naccept:\n", 1)[1].split("\n.PHONY", 1)[0]
         self.assertIn("--mode acceptance", accept_block)
         self.assertIn("--baseline %s", accept_block)
+        self.assertIn("'--alpha'", accept_block)
         self.assertIn("'--beta'", accept_block)
         self.assertIn("MERGED_LANES", accept_block)
         self.assertNotIn("--publish", accept_block)
@@ -286,21 +330,28 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
                     patches.enter_context(mock.patch("subprocess.run", return_value=SimpleNamespace(returncode=0)))
                     patches.enter_context(mock.patch.object(integration_run, "store_ref", return_value=refs["candidate"]))
                     run = patches.enter_context(mock.patch.object(integration_run, "_run_environment", side_effect=run_environment))
-                    skip = patches.enter_context(mock.patch.object(integration_run, "_not_required_beta", return_value={}))
+                    skip_alpha = patches.enter_context(mock.patch.object(integration_run, "_not_required_alpha", return_value={}))
+                    skip_beta = patches.enter_context(mock.patch.object(integration_run, "_not_required_beta", return_value={}))
                     bundle = patches.enter_context(mock.patch.object(integration_run, "_write_acceptance_bundle",
                         side_effect=integration_run.IntegrationRunError("TEST.BUNDLE_REACHED", "stop before bundle")))
                     run_id = f"policy-{depth}-{opted_in}"
                     argv = ["--mode", "acceptance", "--release-attestation", str(release), "--rollback-release-attestation", str(rollback),
                             "--release-handoff-ref", VALID_REF, *(["--beta"] if opted_in else [])]
                     self.assertEqual(self._blocker(run_id, argv), "TEST.BUNDLE_REACHED")
-                    self.assertEqual([call.kwargs["environment"] for call in run.call_args_list], ["alpha", "beta"] if opted_in else ["alpha"])
+                    self.assertEqual([call.kwargs["environment"] for call in run.call_args_list], ["alpha", "beta"] if opted_in else [])
                     self.assertEqual(bundle.call_args.kwargs["beta_status"], "passed" if opted_in else "not_required")
+                    self.assertEqual(bundle.call_args.kwargs["alpha_status"], "passed" if opted_in else "not_required")
                     if opted_in:
-                        skip.assert_not_called()
+                        skip_alpha.assert_not_called()
+                        skip_beta.assert_not_called()
                         self.assertIsNone(bundle.call_args.kwargs["beta_reason"])
+                        self.assertIsNone(bundle.call_args.kwargs["alpha_reason"])
                     else:
-                        skip.assert_called_once()
-                        self.assertEqual(skip.call_args.kwargs["reason_code"], integration_run.BETA_OPTIONAL_BY_POLICY)
+                        skip_alpha.assert_called_once()
+                        skip_beta.assert_called_once()
+                        self.assertEqual(skip_alpha.call_args.kwargs["reason_code"], integration_run.ALPHA_LIVE_DEFERRED)
+                        self.assertEqual(skip_beta.call_args.kwargs["reason_code"], integration_run.BETA_OPTIONAL_BY_POLICY)
+                        self.assertEqual(bundle.call_args.kwargs["alpha_reason"], integration_run.ALPHA_LIVE_DEFERRED)
                         self.assertEqual(bundle.call_args.kwargs["beta_reason"], integration_run.BETA_OPTIONAL_BY_POLICY)
 
     def test_beta_is_explicit_opt_in_with_typed_reason(self) -> None:
@@ -861,6 +912,76 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         with self.assertRaises(integration_run.IntegrationRunError) as blocked:
             integration_run._release_id(attestation)
         self.assertEqual(blocked.exception.code, "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE")
+
+    def test_release_id_reads_producer_root_without_copying_this_worktree(self) -> None:
+        producer = self.root / "producer-output"
+        attestation = _attestation(producer, "rel-candidate")
+        self.assertFalse((self.root / "data/releases").exists())
+        self.assertEqual(integration_run._release_id(attestation), "rel-candidate")
+        self.assertFalse((self.root / "data/releases").exists())
+        self.assertEqual(
+            integration_run._producer_data_output_root("rel-candidate", attestation),
+            producer.resolve(),
+        )
+
+    def test_unchanged_hotfix_allows_the_same_data_release_id(self) -> None:
+        attestation = _attestation(self.root, "rel-same")
+        args = integration_run._parser().parse_args([
+            "--mode", "acceptance", "--release-attestation", str(attestation),
+            "--rollback-release-attestation", str(attestation), "--release-handoff-ref", VALID_REF,
+        ])
+        summary: dict[str, object] = {}
+        with self._runtime_patches():
+            integration_run._prepare_signing(args, summary)
+        self.assertEqual(summary["dataReleases"], ["rel-same"])
+        self.assertEqual(summary["dataChange"], integration_run.UNCHANGED_DATA_CHANGE)
+        self.assertEqual(summary["dataReleaseHandoffRef"], VALID_REF)
+
+    def test_apply_is_skipped_when_already_activated_matches_handoff(self) -> None:
+        attestation = _attestation(self.root, "rel-production")
+        existing = self.root / "env/alpha/runs/data-release/rel-production/prior-verify/release-readiness.json"
+        existing.parent.mkdir(parents=True, exist_ok=True)
+        existing.write_text(json.dumps({"releaseId": "rel-production", "handoffRef": VALID_REF}), encoding="utf-8")
+        calls: list[tuple[str, ...]] = []
+
+        def fake_ship(*args: str, log_dir: Path, label: str, output_root: Path | None = None) -> None:
+            calls.append(tuple(args))
+
+        args = SimpleNamespace(release_attestation=attestation, release_handoff_ref=VALID_REF)
+        with mock.patch.object(integration_run, "_content_release", side_effect=fake_ship):
+            readiness = integration_run._apply_data_release(
+                environment="alpha", run_id="run-1", args=args, log_dir=self.root / "logs", previous_readiness=None,
+            )
+        self.assertEqual(readiness, existing)
+        self.assertEqual(calls, [])
+
+    def test_ship_output_root_points_at_producer_data_root(self) -> None:
+        producer = self.root / "producer-output"
+        attestation = _attestation(producer, "rel-production")
+        seen_roots: list[Path] = []
+        calls: list[tuple[str, ...]] = []
+
+        def fake_ship(*args: str, log_dir: Path, label: str, output_root: Path | None = None) -> None:
+            calls.append(tuple(args))
+            if output_root is not None:
+                seen_roots.append(Path(output_root))
+            if args[0] == "verify":
+                readiness = Path(output_root or self.root) / "env/alpha/runs/data-release/rel-production/run-1-verify/release-readiness.json"
+                readiness.parent.mkdir(parents=True, exist_ok=True)
+                readiness.write_text("{}", encoding="utf-8")
+
+        args = SimpleNamespace(release_attestation=attestation, release_handoff_ref=VALID_REF)
+        with (
+            mock.patch.object(integration_run, "_content_release", side_effect=fake_ship),
+            mock.patch.object(integration_run, "_bootstrap_premium_pool", return_value=None),
+        ):
+            readiness = integration_run._apply_data_release(
+                environment="alpha", run_id="run-1", args=args, log_dir=self.root / "logs", previous_readiness=None,
+            )
+        self.assertTrue(readiness.is_file())
+        self.assertTrue(all(root == producer.resolve() for root in seen_roots))
+        self.assertEqual([call[0] for call in calls], ["apply", "activate", "verify"])
+        self.assertFalse((self.root / "data/releases").exists())
 
 
 if __name__ == "__main__":

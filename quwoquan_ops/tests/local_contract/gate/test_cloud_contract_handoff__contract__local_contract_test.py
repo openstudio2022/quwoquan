@@ -20,6 +20,12 @@ SPEC.loader.exec_module(handoff)
 
 
 class CloudContractHandoffTest(unittest.TestCase):
+    def test_graphql_auth_mode_comes_from_canonical_graph_not_absent_rest_route(self):
+        # spec_ref: specs/feature-tree/gateway-orchestrator-foundation/spec.md#dom-001
+        operation = {"id": "content.post_collection.GetPostCollection", "localId": "GetPostCollection", "domain": "content", "objectId": "content.post_collection", "transport": "graphql", "authMode": "public", "method": "POST", "pathTemplate": "/graphql", "sourcePath": "content/content/post_collection/operations.yaml"}
+        result = handoff.operation_snapshots({"operations": [operation], "documents": []}, [{"canonicalOperationId": operation["id"]}])
+        self.assertEqual(result[0]["authMode"], "public")
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

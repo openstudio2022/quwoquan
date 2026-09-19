@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>aps-environment</key>
+	<string>$(QWQ_APS_ENVIRONMENT)</string>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:$(QWQ_WECHAT_UNIVERSAL_LINK_HOST)</string>
+		<string>webcredentials:$(QWQ_OTP_AUTOFILL_DOMAIN)</string>
+	</array>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.leadwise.quwoquan.alpha.uat</string>
+	</array>
+</dict>
+</plist>

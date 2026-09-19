@@ -26,6 +26,7 @@ class DiscoveryRankingTuning:
     new_content_boost: float
     author_diversity_weight: float
     whitelist_enabled: bool
+    cold_start_max_behavior_count: int
 
     def __post_init__(self) -> None:
         boost = float(self.new_content_boost)
@@ -36,6 +37,12 @@ class DiscoveryRankingTuning:
             raise ValueError("author_diversity_weight must be within [0, 1]")
         if not isinstance(self.whitelist_enabled, bool):
             raise ValueError("whitelist_enabled must be a bool")
+        if (
+            not isinstance(self.cold_start_max_behavior_count, int)
+            or isinstance(self.cold_start_max_behavior_count, bool)
+            or self.cold_start_max_behavior_count < 0
+        ):
+            raise ValueError("cold_start_max_behavior_count must be a non-negative int")
 
     @classmethod
     def neutral(cls) -> "DiscoveryRankingTuning":
@@ -43,6 +50,7 @@ class DiscoveryRankingTuning:
             new_content_boost=1.0,
             author_diversity_weight=1.0,
             whitelist_enabled=False,
+            cold_start_max_behavior_count=0,
         )
 
     @classmethod
@@ -60,10 +68,12 @@ class DiscoveryRankingTuning:
             prerank = node["prerank"]["new_content_boost"]
             rank = node["rank"]["author_diversity_weight"]
             recall = node["recall"]["whitelist_enabled"]
+            cold_start = node["rank"]["cold_start_max_behavior_count"]
         except (KeyError, TypeError) as error:
             raise RuntimeError(
                 "ops.reco.discovery is missing prerank.new_content_boost, "
-                "rank.author_diversity_weight or recall.whitelist_enabled"
+                "rank.author_diversity_weight, rank.cold_start_max_behavior_count "
+                "or recall.whitelist_enabled"
             ) from error
         if not isinstance(recall, bool):
             raise RuntimeError("ops.reco.discovery.recall.whitelist_enabled must be a bool")
@@ -71,4 +81,5 @@ class DiscoveryRankingTuning:
             new_content_boost=float(prerank),
             author_diversity_weight=float(rank),
             whitelist_enabled=recall,
+            cold_start_max_behavior_count=cold_start,
         )

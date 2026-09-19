@@ -68,17 +68,43 @@ def git_changed_files(base_sha: str, head_sha: str) -> list[str]:
         return []
     validate_exact_sha(base_sha, label="base_sha")
     validate_exact_sha(head_sha, label="head_sha")
-    # NUL 分隔 + 关闭 quotepath：中文等非 ASCII 路径否则会被 git 以 "\345\234\260..." 八进制
-    # 引号形式输出，随后被 normalize_changed_path 判为非法 segment（Delivery Gate 基线红的根因）。
+    # 与 local readiness push_paths 同一闭包：name-status + find-renames，rename/copy
+    # 两侧都计入；NUL + quotepath=off 避免中文路径被八进制转义。
     proc = subprocess.run(
-        ["git", "-c", "core.quotepath=off", "diff", "--name-only", "-z", base_sha, head_sha],
+        [
+            "git",
+            "-c",
+            "core.quotepath=off",
+            "diff",
+            "--name-status",
+            "-z",
+            "--find-renames",
+            base_sha,
+            head_sha,
+        ],
         cwd=ROOT,
         check=False,
         capture_output=True,
     )
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.decode("utf-8", "replace").strip() or "git diff failed")
-    return [entry.decode("utf-8") for entry in proc.stdout.split(b"\0") if entry]
+    records = proc.stdout.split(b"\0")
+    paths: set[str] = set()
+    index = 0
+    while index < len(records) and records[index]:
+        status = records[index].decode("utf-8")
+        index += 1
+        if index >= len(records) or not records[index]:
+            raise RuntimeError(f"git name-status 缺 path: {status}")
+        source = records[index].decode("utf-8")
+        index += 1
+        paths.add(source)
+        if status[:1] in {"R", "C"}:
+            if index >= len(records) or not records[index]:
+                raise RuntimeError(f"git rename/copy 缺 destination: {source}")
+            paths.add(records[index].decode("utf-8"))
+            index += 1
+    return sorted(paths)
 
 
 def classify(paths: list[str]) -> dict[str, bool]:

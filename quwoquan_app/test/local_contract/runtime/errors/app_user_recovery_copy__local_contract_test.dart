@@ -1,4 +1,6 @@
-// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-018
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-018.t1
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-018.t2
 // spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-002
 
 import 'dart:convert';
@@ -7,8 +9,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/errors/app_user_recovery.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import '../../../support/runtime/errors/runtime_failure_fixtures.dart';
 
 void main() {
   test('服务侧失败文案直白归因为系统问题且三组标题说明互不相同', () {
@@ -130,6 +135,102 @@ void main() {
     expect(semantic.primaryAction?.type, copy.action.type);
     expect(semantic.primaryAction?.label, copy.action.label);
     expect(semantic.recoveryAction, copy.recoveryAction);
+  });
+
+  test('明确能力不可用与内容不存在使用不同文案', () {
+    final capability = AppUserRecoveryContract.copyFor(
+      AppUserRecoveryGroup.capabilityUnavailable,
+    );
+    final content = AppUserRecoveryContract.copyFor(
+      AppUserRecoveryGroup.contentUnavailable,
+    );
+    expect(capability.title, SearchText.recoveryCapabilityUnavailableTitle);
+    expect(capability.message, SearchText.recoveryCapabilityUnavailableMessage);
+    expect(capability.title, '当前功能暂不可用');
+    expect(capability.message, '当前暂不支持此功能，这不表示内容已被删除。');
+    expect(capability.action.type, UiErrorActionType.dismiss);
+    expect(capability.action.label, '返回');
+    expect(capability.message, isNot(contains(capability.action.label)));
+    expect(capability.title, isNot(content.title));
+    expect(
+      AppUserRecoveryContract.classify(
+        error: contentCapabilityUnavailable('account_authentication'),
+        failure: contentCapabilityUnavailable(
+          'account_authentication',
+        ).runtimeFailure,
+        category: UiErrorCategory.pageLoad,
+      ),
+      AppUserRecoveryGroup.capabilityUnavailable,
+    );
+  });
+
+  test('认证权限内容不存在与服务失败不进入能力不可用组', () {
+    AppUserRecoveryGroup classify({
+      required Object error,
+      required RuntimeFailure failure,
+    }) {
+      return AppUserRecoveryContract.classify(
+        error: error,
+        failure: failure,
+        category: UiErrorCategory.pageLoad,
+      );
+    }
+
+    final auth = testRuntimeFailure(kind: RuntimeFailureKind.auth);
+    expect(
+      classify(
+        error: CloudException(
+          type: CloudErrorType.unauthorized,
+          message: 'unauthorized',
+          statusCode: 401,
+          runtimeFailure: auth,
+        ),
+        failure: auth,
+      ),
+      AppUserRecoveryGroup.loginAgain,
+    );
+
+    final forbidden = testRuntimeFailure(kind: RuntimeFailureKind.internal);
+    expect(
+      classify(
+        error: CloudException(
+          type: CloudErrorType.forbidden,
+          message: 'forbidden',
+          statusCode: 403,
+          runtimeFailure: forbidden,
+        ),
+        failure: forbidden,
+      ),
+      AppUserRecoveryGroup.noAccess,
+    );
+
+    final missing = testRuntimeFailure(kind: RuntimeFailureKind.notFound);
+    expect(
+      classify(
+        error: CloudException(
+          type: CloudErrorType.notFound,
+          message: 'not found',
+          statusCode: 404,
+          runtimeFailure: missing,
+        ),
+        failure: missing,
+      ),
+      AppUserRecoveryGroup.contentUnavailable,
+    );
+
+    final service = testRuntimeFailure(kind: RuntimeFailureKind.unavailable);
+    expect(
+      classify(
+        error: CloudException(
+          type: CloudErrorType.server,
+          message: 'server',
+          statusCode: 500,
+          runtimeFailure: service,
+        ),
+        failure: service,
+      ),
+      AppUserRecoveryGroup.serviceUnavailable,
+    );
   });
 
   test('页面重试动作统一为重新加载且不提供次级圈子操作', () {

@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"quwoquan_service/internal/metadata/ast"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/graph"
 )
 
 func TestGenerateAndCheckAreIdempotent(t *testing.T) {
@@ -58,9 +63,22 @@ func TestGenerateAndCheckAreIdempotent(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Fatal("generate produced a diff without metadata changes")
 	}
-	securitySource, err := os.ReadFile(securityOutput)
+	securityFiles, err := filepath.Glob(strings.TrimSuffix(securityOutput, ".g.go") + "*.g.go")
 	if err != nil {
-		t.Fatalf("read generated operation security: %v", err)
+		t.Fatalf("glob generated operation security: %v", err)
+	}
+	if len(securityFiles) < 2 {
+		t.Fatalf("operation security bundle files = %v, want main and chunks", securityFiles)
+	}
+	securityBodies := map[string][]byte{}
+	var securitySource []byte
+	for _, path := range securityFiles {
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("read generated operation security %s: %v", path, readErr)
+		}
+		securityBodies[filepath.ToSlash(path)] = body
+		securitySource = append(securitySource, body...)
 	}
 	for _, token := range []string{
 		"ContractGraphSHA256",
@@ -83,10 +101,13 @@ func TestGenerateAndCheckAreIdempotent(t *testing.T) {
 	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
 		t.Fatalf("decode generated provenance manifest: %v", err)
 	}
-	if manifest.Generator != "tools/qwq_contract" || len(manifest.Outputs) != 2 {
+	if manifest.Generator != "tools/qwq_contract" || len(manifest.Outputs) != 1+len(securityFiles) {
 		t.Fatalf("unexpected generated provenance manifest: %+v", manifest)
 	}
-	wantBodies := map[string][]byte{filepath.ToSlash(output): first, filepath.ToSlash(securityOutput): securitySource}
+	wantBodies := map[string][]byte{filepath.ToSlash(output): first}
+	for path, body := range securityBodies {
+		wantBodies[path] = body
+	}
 	for _, current := range manifest.Outputs {
 		body, ok := wantBodies[current.Path]
 		if !ok {
@@ -390,4 +411,59 @@ func writeFixtureFile(t *testing.T, path string, content string) {
 	); err != nil {
 		t.Fatalf("write fixture %s: %v", path, err)
 	}
+}
+
+func TestWriteOperationSecurityBundleRemovesOnlyOwnedStaleChunks(t *testing.T) {
+	root := t.TempDir()
+	mainPath := filepath.Join(root, "descriptors.g.go")
+	large, err := contractcodegen.RenderOperationSecurityGoFiles(operationSecurityCLIFixture(40), "digest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeOperationSecurityBundle(mainPath, large); err != nil {
+		t.Fatalf("write large bundle: %v", err)
+	}
+	stalePath := strings.TrimSuffix(mainPath, ".g.go") + ".chunk002.g.go"
+	if _, err := os.Stat(stalePath); err != nil {
+		t.Fatalf("expected third chunk: %v", err)
+	}
+
+	small, err := contractcodegen.RenderOperationSecurityGoFiles(operationSecurityCLIFixture(5), "digest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	written, err := writeOperationSecurityBundle(mainPath, small)
+	if err != nil {
+		t.Fatalf("write small bundle: %v", err)
+	}
+	if len(written) != 2 {
+		t.Fatalf("small closed output set = %d files, want 2", len(written))
+	}
+	if _, err := os.Stat(stalePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("owned stale chunk was not removed: %v", err)
+	}
+
+	foreignPath := strings.TrimSuffix(mainPath, ".g.go") + ".chunk099.g.go"
+	if err := os.WriteFile(foreignPath, []byte("package foreign\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeOperationSecurityBundle(mainPath, small); err == nil || !strings.Contains(err.Error(), "not owned") {
+		t.Fatalf("foreign stale chunk must fail closed, got %v", err)
+	}
+	if _, err := os.Stat(foreignPath); err != nil {
+		t.Fatalf("foreign file was removed: %v", err)
+	}
+}
+
+func operationSecurityCLIFixture(count int) *graph.ContractGraph {
+	operations := make([]ast.Operation, 0, count)
+	for index := 0; index < count; index++ {
+		operations = append(operations, ast.Operation{
+			ID:     fmt.Sprintf("content.post.Operation%04d", index),
+			Domain: "content", Transport: "http", Method: "GET",
+			Kind: ast.OperationKind("query"), PathTemplate: fmt.Sprintf("/posts/%d", index),
+			AuthMode: "required", Commercial: ast.CommercialBinding{Status: "ready"},
+		})
+	}
+	return &graph.ContractGraph{Operations: operations}
 }

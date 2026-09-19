@@ -92,14 +92,16 @@
 - 本地容器运行时的容量水位必须成为 `doctor`、`up`、`package`、`dev-session` 与 App preflight 的前置判定：宿主可用空间与容器存储可用空间任一低于声明阈值时，环境变更、candidate/Prod 与准出命令必须 `GATE_BLOCK`；只读诊断与 Alpha/Beta/Gamma mutable `test_live` App 启动按上一条 warning 语义继续到真实构建阶段。所有报告都给出实测可用量、阈值、可回收量与精确回收命令。
 - 容量耗尽必须表达为 typed blocker，不得只依赖对底层 `no space left on device` 文本的字符串匹配。
 - 容量不足或候选身份漂移不得阻断本领域白名单恢复动作本身；恢复路径必须在环境已经不可用时仍然可执行。
+- canonical 本地环境即使缺少 startup receipt 或 candidate 不可读，仍可通过独立只读资源盘点观察宿主全部容器（含已退出）与网络的 exact identity、状态及安全的归属标签；零、多项目、未知归属均如实保留，查询失败或部分结果必须阻断，不输出秘密或原始配置，不写运行锁、fence、lease、startup、active pointer 或 teardown attestation。观察不授予接管、启动或发布资格，禁止通过环境变量切换宿主权威。
 
 <a id="req-005"></a>
 ### REQ-005 App 依赖 bundle 的显式同步是单一原子事务
 
-- `stackctl app-dependency-sync` 是 App 依赖 bundle 的唯一显式同步入口：一次 attempt 在单一 sync lock 内完成，并发同步以 typed blocker 拒绝，不得排队互相覆盖。
-- 一次 attempt 必须显式选择唯一 platform plan：`android` 构建 production Pub、Patrol Pub 与 Android Gradle，`ios` 构建 production Pub、Patrol Pub 与两套 iOS Pods，`all` 构建全部五组件；默认 `all` 仅保留人工兼容，受管 package/UAT 必须显式传平台。receipt/active 必须记录 `platforms`、每个平台的 input identity、组件 outputs/digests 与 `nonPromotable`；不得跨 attempt 混合单个平台的组件。
+- `stackctl app-dependency-sync` 是 App 依赖 bundle 的唯一显式同步入口：一次 attempt 在单一 sync lock 内完成，并发同步以 typed blocker 拒绝，不得排队互相覆盖。调用方可显式选择唯一 platform plan：`android`、`ios` 或 `all`；缺省 `all` 仅保留人工兼容，受管 package/UAT 必须显式传实际所需平台，不得隐式扩大到另一平台。平台执行分支可并行，同平台共享资源仍互斥。
+- 一次 attempt 必须完整构建所选平台的依赖闭包：`android` 构建 production Pub、Patrol Pub 与 Android Gradle，`ios` 构建 production Pub、Patrol Pub 与两套 iOS Pods，`all` 构建全部五组件。receipt/active 必须记录 `platforms`、每个平台的 input identity、组件 outputs/digests 与 `nonPromotable`。单平台不得调用另一平台工具链或要求另一平台组件，所选闭包内部不得部分更新或跨 attempt 混合。
 - 事务顺序固定为：在线解析 → fresh 私有 home 完整离线回放 → 封存不可变组件快照 → readback 验证；在线成功不得代替离线可复现性。
-- 激活必须 receipt-first / active-last：先原子落盘本次 attempt 的 sync receipt，最后一步以原子替换推进单槽 active pointer；active readback 与本次 attempt 一致后事务才算 committed。
+- 激活必须 receipt-first / active-last：先原子落盘本次 attempt 的 sync receipt，最后原子推进对应平台计划的 active pointer；iOS、Android 和双平台发布不覆盖彼此。active readback 与本次 attempt 一致后事务才算 committed。
+- 每份依赖证据必须可验证所覆盖平台及其输入、输出和摘要；消费者按显式所需平台验真。单平台证据不得满足另一平台或双平台要求，平台计划改变不得复用原通过结论；此选择不降低正式生产分发的既有资格要求。
 - active pointer 写入已开始但 readback 无法证明与本次 attempt 一致时为 activation ambiguous，必须以 typed blocker 报告，不得声明成功或静默重试。
 - 同步开始与封存时的 source/toolchain identity 漂移必须阻断本次 attempt，不得以漂移后的输入继续激活。
 - 同步绝不更新任何锁定声明（Dart lock、Podfile.lock、Gradle 锁定输入）；锁漂移属于独立 typed blocker，不由同步修复。
@@ -139,12 +141,15 @@
 - 可观察结果：容量耗尽以 typed blocker 表达，同一判定在容量恢复后不再阻断。
 - 禁止结果：不得因存活探针成功、receipt 仍为 `running` 或容量检查缺席而判定环境可用。
 - 禁止结果：不得把容量耗尽降级为无类型错误或纯字符串匹配，也不得让容量不足阻断白名单恢复动作本身。
+- 可观察结果：缺少 startup 的本地资源盘点仍返回全部容器与网络，区分 running/exited、多个项目及未知 owner；真正空清单与命令失败、JSON 非法、部分查询分别表达。只允许受管只读查询和普通诊断报告，不消费 repair admission，不泄露 Env/秘密或变更任何运行事实；盘点成功不构成接管或发布许可。
 
 <a id="dom-004"></a>
 ### DOM-004 App 依赖同步事务的原子性与可判定终态
 
-- 条件：调用方显式发起 `stackctl app-dependency-sync`，当前无其他活跃同步。
+- 条件：调用方显式发起 `stackctl app-dependency-sync`，平台计划明确，当前无其他活跃同步。
 - 可观察结果：成功 attempt 产出所选平台组件同 attempt 的不可变快照、显式 platform coverage、先落盘的 sync receipt 与最后原子推进的 active pointer，active readback 与本次 attempt 一致；Android-only coverage 不调用 CocoaPods/iOS replay，且可供 Android-only Alpha package 使用。
+- 可观察结果：iOS-only 不调用 Android 工具链，Android-only 不调用 CocoaPods、Xcode 或 Simulator；默认双平台分支并行，但发布仍要求两端完整成功。
+- 可观察结果：独立单平台同步不覆盖另一平台 active pointer；同平台竞争仍受互斥保护。单平台证据不能满足双平台、跨平台或被篡改的平台要求。
 - 可观察结果：在线解析失败、离线回放失败、封存失败或 readback 不一致时保留首个 typed blocker，active pointer 保持上一份已验证代际。
 - 可观察结果：active 写入已开始但无法证明 commit 结果时，以 activation ambiguous 的 typed blocker 报告，不声明成功。
 - 禁止结果：不得在同一平台内部分更新组件、跨 attempt 混合快照、更新任何锁定声明，或让调用方消费未 committed 的中间产物；iOS package 不得消费 Android-only coverage，Prod/promotion 不得降级全平台要求。

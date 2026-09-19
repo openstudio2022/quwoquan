@@ -5,6 +5,8 @@ from datetime import datetime, timedelta, timezone
 from generated.recommendation.ranked_recommendation_window.models.client_presentation_contract import (
     validate_client_content_presentation_contract,
 )
+import hashlib
+import json
 import math
 from typing import Any, Mapping
 
@@ -121,6 +123,24 @@ class RankedCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class RecommendationRequestContext:
+    viewport_profile: str
+    device_class: str
+    coarse_region: str
+    time_bucket: str
+    profile_revision: str
+
+    def canonical_document(self) -> dict[str, str]:
+        return {
+            "coarseRegion": self.coarse_region,
+            "deviceClass": self.device_class,
+            "profileRevision": self.profile_revision,
+            "timeBucket": self.time_bucket,
+            "viewportProfile": self.viewport_profile,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class RankingResult:
     experiment_bucket: str
     model_bucket: str
@@ -131,6 +151,7 @@ class RankingResult:
     ranking_snapshot_digest: str
     user_feature_snapshot: Mapping[str, Any]
     candidates: tuple[RankedCandidate, ...]
+    profile_revision: str = "unknown"
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +166,8 @@ class RankedRecommendationWindow:
     model_channel: str | None
     model_release_id: str | None
     policy_digest: str
+    request_context: RecommendationRequestContext
+    context_digest: str
     request_digest: str
     ranking_snapshot_digest: str
     feature_snapshot_at: datetime
@@ -155,19 +178,57 @@ class RankedRecommendationWindow:
 
     @classmethod
     def create(
-        cls, *, window_id: str, subject_id: str, scenario: str, request_digest: str,
-        ranking: RankingResult, content_fence: ReleasePinnedQueryFence,
+        cls,
+        *,
+        window_id: str,
+        subject_id: str,
+        scenario: str,
+        request_digest: str,
+        request_context: RecommendationRequestContext,
+        context_digest: str,
+        ranking: RankingResult,
+        content_fence: ReleasePinnedQueryFence,
         client_presentation_contract: ClientContentPresentationContract,
         now: datetime | None = None,
     ) -> "RankedRecommendationWindow":
         created_at = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
         contract = validate_presentation_contract(client_presentation_contract)
-        normalized_subject, normalized_scenario = subject_id.strip(), scenario.strip()
-        if not all(value.strip() for value in (
-            window_id, normalized_subject, normalized_scenario, ranking.experiment_bucket,
-            request_digest, ranking.model_bucket, ranking.policy_digest, ranking.ranking_snapshot_digest,
-        )):
+        normalized_subject = subject_id.strip()
+        normalized_scenario = scenario.strip()
+        if not all(
+            value.strip()
+            for value in (
+                window_id,
+                normalized_subject,
+                normalized_scenario,
+                ranking.experiment_bucket,
+                request_digest,
+                ranking.model_bucket,
+                ranking.policy_digest,
+                context_digest,
+                ranking.ranking_snapshot_digest,
+            )
+        ):
             raise ValueError("windowId, subjectId, scenario and ranking snapshot digests are required")
+        if request_context.coarse_region != "unknown":
+            raise ValueError("coarseRegion must be unknown")
+        if len(request_context.time_bucket) != 3 or request_context.time_bucket[0] != "h" or not request_context.time_bucket[1:].isdigit() or int(request_context.time_bucket[1:]) > 23:
+            raise ValueError("timeBucket is invalid")
+        revision = request_context.profile_revision
+        if revision != "unknown" and revision != "0" and (not revision.isdigit() or revision.startswith("0")):
+            raise ValueError("profileRevision is invalid")
+        if request_context.viewport_profile not in {"landscape", "portrait", "unknown"}:
+            raise ValueError("viewportProfile is invalid")
+        if request_context.device_class not in {"phone", "tablet", "desktop", "unknown"}:
+            raise ValueError("deviceClass is invalid")
+        canonical_context_digest = hashlib.sha256(json.dumps(
+            request_context.canonical_document(),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")).hexdigest()
+        if context_digest != canonical_context_digest:
+            raise ValueError("contextDigest does not match canonical requestContext")
         if ranking.feature_snapshot_at.tzinfo is None:
             raise ValueError("featureSnapshotAt must be timezone-aware")
         if ranking.feature_snapshot_at.astimezone(timezone.utc) > created_at:
@@ -202,7 +263,10 @@ class RankedRecommendationWindow:
             experiment_bucket=experiment, model_bucket=bucket,
             model_channel=ranking.model_channel.strip() if ranking.model_channel else None,
             model_release_id=ranking.model_release_id.strip() if ranking.model_release_id else None,
-            policy_digest=ranking.policy_digest.strip(), request_digest=request_digest.strip(),
+            policy_digest=ranking.policy_digest.strip(),
+            request_context=request_context,
+            context_digest=context_digest,
+            request_digest=request_digest.strip(),
             ranking_snapshot_digest=ranking.ranking_snapshot_digest.strip(),
             feature_snapshot_at=ranking.feature_snapshot_at.astimezone(timezone.utc),
             user_feature_snapshot=dict(ranking.user_feature_snapshot), items=tuple(items),

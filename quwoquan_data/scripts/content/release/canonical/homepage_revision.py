@@ -18,6 +18,7 @@ from content.release.canonical.object_transaction_contract import (
 )
 from content.release.canonical.object_transaction_lock import canonical_publish_lock
 from content.release.canonical.publish_object import _review_approved, _target_object
+from content.execution.workspace import target_descriptor_for
 from core import paths
 from core.schema import assert_valid
 
@@ -64,9 +65,15 @@ def _reviewed_target(execution_id: str, logical: str, old_manifest: dict):
     process_ref, row = rows[0]
     if row.get("entityId") != old_manifest["entityId"]:
         raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: revision target ID mismatch")
+    try:
+        descriptor = target_descriptor_for(execution_id, process_ref)
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise ObjectTransactionError(str(exc)) from exc
+    if descriptor.get("entityId") != old_manifest["entityId"] or descriptor.get("entityRef") != "/entity/" + logical:
+        raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: revision descriptor identity mismatch")
     _, canonical, object_dir, target, carrier = _target_object(execution_id, process_ref)
     _review_approved(execution_id, object_dir, expected_object_ref=process_ref, target=target, carrier=carrier)
-    return root, canonical, object_dir
+    return root, canonical, object_dir, descriptor
 
 
 def _input_digest(root: Path, object_dir: Path, request: dict) -> str:
@@ -100,10 +107,12 @@ def revise_homepage(*, execution_id: str, target_ref: str, expected_current_vers
     with canonical_publish_lock(publish):
         old, old_manifest, latest = _before(publish, logical, expected_current_version, expected_payload_digest)
         old_digest = _tree_digest(old)
-        root, canonical, object_dir = _reviewed_target(execution_id, logical, old_manifest)
+        root, canonical, object_dir, descriptor = _reviewed_target(execution_id, logical, old_manifest)
+        if descriptor.get("expectedCurrentVersion") != expected_current_version:
+            raise ObjectTransactionError("DATA.IDENTITY.REVISION_DESCRIPTOR_AUTHORITY_INVALID")
         transaction_id = canonical_transaction_id(execution_id=execution_id, object_kind="entities", object_ref=canonical)
         package_root = root / "evidence/object-transactions" / transaction_id
-        version = expected_current_version + 1
+        version = descriptor["contentVersion"]
         for prior_version, prior_root in object_locations(publish, "entities").get(logical, []):
             if prior_version < version and _read_json(prior_root / "manifest.json").get("executionId") == execution_id:
                 raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: revision execution already used")

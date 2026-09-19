@@ -7,17 +7,26 @@ import pytest
 from generated.recommendation.ranked_recommendation_window.models.request_response import ReleasePinnedQueryFence
 from internal.recommendation.ranked_recommendation_window.application.facade import Facade, IdempotencyConflictError, SubjectClosedError
 from internal.recommendation.ranked_recommendation_window.domain.model import (
-    RankedCandidate, RankedRecommendationWindow, RankingResult, WINDOW_TTL,
-    validate_presentation_contract, validate_envelope,
+    MAX_WINDOW_ITEMS,
+    WINDOW_TTL,
+    RecommendationRequestContext,
+    RankedCandidate,
+    RankedRecommendationWindow,
+    RankingResult,
+    validate_presentation_contract,
+    validate_envelope,
 )
 from tests.support.presentation import presentation_contract, post_envelope, homepage_envelope
 
 NOW = datetime(2026, 7, 31, 12, tzinfo=timezone.utc)
 FENCE = ReleasePinnedQueryFence(release=None, revision=0)
+FROZEN_CONTEXT = RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown")
+FROZEN_CONTEXT_DIGEST = "3b84dcc0252ec0f7ae082ef47c6ad3cf9ec96806e82ec472fa49b6ef450b9d52"
 
 
 class _Store:
-    window = None
+    def __init__(self) -> None:
+        self.window = None
 
     def create_or_get(self, window):
         if self.window is None:
@@ -30,19 +39,23 @@ class _Store:
         return None
 
     def erase_subject(self, subject_id):
-        self.window = None
-        return 1
+        if self.window and self.window.subject_id == subject_id:
+            self.window = None
+            return 1
+        return 0
 
 
 class _Closures:
-    closed = False
+    def __init__(self) -> None:
+        self.closed = False
 
     def exists(self, account_id):
         return self.closed
 
 
 class _Profiles:
-    profile = {}
+    def __init__(self) -> None:
+        self.profile = {}
 
     def read_for_scoring(self, subject_id):
         return self.profile
@@ -61,7 +74,8 @@ def _ranking():
 
 
 class _Ranker:
-    calls = 0
+    def __init__(self) -> None:
+        self.calls = 0
 
     def rank(self, **kwargs):
         self.calls += 1
@@ -71,9 +85,16 @@ class _Ranker:
 
 def _window(ranking=None, contract=None):
     return RankedRecommendationWindow.create(
-        content_fence=FENCE, client_presentation_contract=contract or presentation_contract(),
-        window_id="window", subject_id="subject", scenario="content_feed", request_digest="request",
-        ranking=ranking or _ranking(), now=NOW,
+        content_fence=FENCE,
+        client_presentation_contract=contract or presentation_contract(),
+        window_id="window",
+        subject_id="subject",
+        scenario="content_feed",
+        request_digest="request",
+        request_context=FROZEN_CONTEXT,
+        context_digest=FROZEN_CONTEXT_DIGEST,
+        ranking=ranking or _ranking(),
+        now=NOW,
     )
 
 
@@ -146,7 +167,7 @@ def test_empty_capabilities_do_not_expand_and_invalid_envelope_is_rejected():
 
 def test_duplicate_unbounded_and_invalid_fence_rejected():
     ranking = _ranking()
-    for candidates in ((ranking.candidates[0],) * 2, (ranking.candidates[0],) * 301):
+    for candidates in ((ranking.candidates[0],) * 2, (ranking.candidates[0],) * (MAX_WINDOW_ITEMS + 1)):
         with pytest.raises(ValueError):
             _window(replace(ranking, candidates=candidates))
     from internal.recommendation.ranked_recommendation_window.domain.model import validate_content_fence
@@ -177,3 +198,85 @@ def test_replay_capability_conflict_and_feedback_preserve_homepage_and_ordinal()
         facade.read_page(**read)
     with pytest.raises(SubjectClosedError):
         facade.create_window(**create)
+
+
+# spec_ref: specs/feature-tree/recommendation-platform/spec.md
+class _CheckpointRanker(_Ranker):
+    def __init__(self) -> None:
+        super().__init__()
+        self.request_context = None
+
+    def rank(self, **kwargs):
+        self.request_context = kwargs["request_context"]
+        result = super().rank(**kwargs)
+        return RankingResult(
+            experiment_bucket=result.experiment_bucket,
+            model_bucket=result.model_bucket,
+            model_channel=result.model_channel,
+            model_release_id=result.model_release_id,
+            policy_digest=result.policy_digest,
+            feature_snapshot_at=result.feature_snapshot_at,
+            ranking_snapshot_digest=result.ranking_snapshot_digest,
+            user_feature_snapshot=result.user_feature_snapshot,
+            candidates=result.candidates,
+            profile_revision="42",
+        )
+
+
+def test_request_context_is_canonical_frozen_and_replayed_across_clock_change() -> None:
+    clock = [datetime(2026, 7, 31, 23, 59, tzinfo=timezone.utc)]
+    store = _Store()
+    ranker = _CheckpointRanker()
+    facade = Facade(
+        store=store,
+        ranker=ranker,
+        subject_closures=_Closures(),
+        exclusion_profiles=_Profiles(),
+        window_id_factory=lambda _key: "window-context",
+        now=lambda: clock[0],
+    )
+    contract = presentation_contract()
+    first = facade.create_window(
+        content_fence=FENCE,
+        idempotency_key="request-context",
+        subject_id="persona-001",
+        scenario="content_feed",
+        limit=2,
+        client_presentation_contract=contract,
+        viewport_profile=None,
+        device_class="tablet",
+    )
+    assert ranker.request_context == RecommendationRequestContext(
+        "unknown", "tablet", "unknown", "h23", "unknown"
+    )
+    assert store.window.request_context == RecommendationRequestContext(
+        "unknown", "tablet", "unknown", "h23", "42"
+    )
+    assert len(first.context_digest) == 64
+    assert first.context_digest == store.window.context_digest
+
+    clock[0] = datetime(2026, 8, 1, 0, 1, tzinfo=timezone.utc)
+    replay = facade.create_window(
+        content_fence=FENCE,
+        idempotency_key="request-context",
+        subject_id="persona-001",
+        scenario="content_feed",
+        limit=2,
+        client_presentation_contract=contract,
+        viewport_profile=None,
+        device_class="tablet",
+    )
+    assert replay == first
+    assert store.window.request_context.time_bucket == "h23"
+
+    with pytest.raises(IdempotencyConflictError):
+        facade.create_window(
+            content_fence=FENCE,
+            idempotency_key="request-context",
+            subject_id="persona-001",
+            scenario="content_feed",
+            limit=2,
+            client_presentation_contract=contract,
+            viewport_profile="landscape",
+            device_class="tablet",
+        )

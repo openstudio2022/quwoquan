@@ -46,7 +46,7 @@ class _Store:
 
 
 class _Ranker:
-    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int, content_fence, client_presentation_contract):
+    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int, content_fence, client_presentation_contract, request_context):
         assert limit == 300
         return RankingResult(
             experiment_bucket="model",
@@ -129,6 +129,7 @@ def test_create_replay_and_continue_ranked_window() -> None:
     assert [item["envelope"]["post"]["postId"] for item in created.json()["items"]] == ["post-0", "post-1"]
     assert created.json()["nextOrdinal"] == 2
     assert created.json()["modelReleaseId"] == "release-001"
+    assert len(created.json()["contextDigest"]) == 64
     assert created.json()["items"][0]["featureSnapshotDigest"] == "feature-digest-0"
 
     replay = client.post(
@@ -169,6 +170,14 @@ def test_ranked_window_rejects_auth_invalid_body_and_idempotency_conflict() -> N
     )
     assert invalid.status_code == 400
     assert invalid.json()["detail"]["code"].endswith("ranked_window_invalid_argument")
+
+    invalid_context = client.post(
+        "/internal/recommendation/ranked-pages",
+        headers=_headers("request-invalid-context"),
+        json={**body, "viewportProfile": "square", "deviceClass": "watch"},
+    )
+    assert invalid_context.status_code == 400
+    assert invalid_context.json()["detail"]["code"].endswith("ranked_window_invalid_argument")
 
     assert client.post(
         "/internal/recommendation/ranked-pages",

@@ -41,7 +41,35 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
         }
         return;
       }
-      await Future<void>.delayed(_VideoPlayerWidgetState._slotRetryInterval);
+      await _waitForControllerSlotRetry();
+    }
+  }
+
+  Future<void> _waitForControllerSlotRetry() async {
+    final completion = Completer<void>();
+    _controllerSlotRetryCompletion = completion;
+    _controllerSlotRetryTimer = Timer(
+      _VideoPlayerWidgetState._slotRetryInterval,
+      completion.complete,
+    );
+    try {
+      await completion.future;
+    } finally {
+      // 旧 generation 的 continuation 不得取消后继 generation 新建的等待。
+      if (identical(_controllerSlotRetryCompletion, completion)) {
+        _cancelControllerSlotRetry();
+      }
+    }
+  }
+
+  void _cancelControllerSlotRetry() {
+    _controllerSlotRetryTimer?.cancel();
+    _controllerSlotRetryTimer = null;
+    final completion = _controllerSlotRetryCompletion;
+    _controllerSlotRetryCompletion = null;
+    if (completion != null && !completion.isCompleted) {
+      // 不仅取消 Timer，也解除 await；while 由 generation 拒绝迟到抢槽。
+      completion.complete();
     }
   }
 

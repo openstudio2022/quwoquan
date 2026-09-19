@@ -25,6 +25,7 @@ from content.release.canonical.entity_transaction_support import (
     _image_dimensions,
     _project_entity_creator_closure,
 )
+from content.execution.workspace import target_descriptor_for
 from content.release.canonical.object_source_identity import (
     freeze_execution_source_identity,
 )
@@ -85,10 +86,17 @@ def build_entity_object_transaction_package(
     if execution_root.name != execution_id:
         raise ObjectTransactionError("execution root 与 executionId 不一致")
     canonical_target_ref = object_ref.removeprefix("/entity/").strip("/")
+    process_ref = f"entities/{canonical_target_ref}"
+    try:
+        descriptor = target_descriptor_for(execution_id, process_ref)
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise ObjectTransactionError(str(exc)) from exc
+    if descriptor["contentVersion"] != version:
+        raise ObjectTransactionError("DATA.IDENTITY.REVISION_TUPLE_MISMATCH")
     source_identity = freeze_execution_source_identity(
         execution_root=execution_root,
         execution_manifest=execution_manifest,
-        target_ref=f"entities/{canonical_target_ref}",
+        target_ref=process_ref,
     )
     rel = _safe_rel(object_ref.removeprefix("/entity/"), label="objectRef")
     if len(rel.parts) < 3:
@@ -121,6 +129,8 @@ def build_entity_object_transaction_package(
     canonical_ref = logical_object_ref(entity, "entities")
     if not str(entity.get("entityId") or ""):
         raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: entityId must be frozen by init")
+    if entity.get("entityId") != descriptor.get("entityId") or entity.get("entityRef") != descriptor.get("entityRef"):
+        raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: descriptor entity binding")
     content_review_source = object_source / "5.review/content_review.json"
     source_assets = _source_assets_by_ref(execution_root)
     review_authority = validate_review_authority(
@@ -128,7 +138,7 @@ def build_entity_object_transaction_package(
         manifest=source_manifest,
         object_kind="entity",
         execution_id=execution_id,
-        object_ref=f"entities/{canonical_target_ref}",
+        object_ref=str(descriptor["canonicalObjectRef"]),
         source_assets=source_assets,
     )
 

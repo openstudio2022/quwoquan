@@ -17,6 +17,10 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 from content.release.canonical import post_promotion as subject
+from content.release.canonical.canonical_inventory import (
+    canonical_inventory_path,
+    load_or_bootstrap_inventory,
+)
 from content.release.canonical.image_identity import (
     canonical_asset_manifest_row,
 )
@@ -25,6 +29,20 @@ from content.release.canonical.object_transaction_contract import (
 )
 from core.image_deduplication import perceptual_hash_distance
 from core.io import write_json
+
+
+def _publish_repository(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / ".git").mkdir()
+    write_json(
+        root / "repository.json",
+        {
+            "schema": "quwoquan_data.publish_repository.v2",
+            "repositoryId": "image-canonical-identity-cross-execution-test",
+            "layoutVersion": 2,
+        },
+    )
+    return root
 
 
 def _manifest(
@@ -83,6 +101,8 @@ def test_cross_execution_exact_image_identity_is_rejected(
         existing / "manifest.json",
         _manifest(digest="sha256:" + "a" * 64, perceptual_hash="0" * 16),
     )
+    load_or_bootstrap_inventory(publish)
+    assert canonical_inventory_path(publish).is_file()
     write_json(
         package / "object/manifest.json",
         _manifest(
@@ -91,7 +111,10 @@ def test_cross_execution_exact_image_identity_is_rejected(
     )
     monkeypatch.setattr(subject, "PUBLISH_ROOT", publish)
 
-    with pytest.raises(ObjectTransactionError, match="duplicated by sha256"):
+    with pytest.raises(
+        ObjectTransactionError,
+        match=r"DATA\.POOL\.IMAGE_SHA256_DUPLICATE",
+    ):
         subject._assert_cross_publish_image_unique(
             package_root=package,
             canonical_post=publish / "posts/image/摄影/新图片/1",

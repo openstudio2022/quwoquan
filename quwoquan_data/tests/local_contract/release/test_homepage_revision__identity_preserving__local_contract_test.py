@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from content.execution import seal, task_init
+from content.execution.workspace import target_descriptor_for
 from content.release.canonical import object_transaction, publish_object
 from content.release.canonical.creator_projection import project_creator_object
 from content.release.canonical.object_transaction_contract import (
@@ -28,10 +29,83 @@ REVIEWER = {**AUTHOR, "sessionId": "fixture-reviewer",
             "invocation": {**AUTHOR["invocation"], "runId": "fixture-reviewer-run"}}
 
 
+def _review_judgement(root: Path, process_ref: str, revision_number: int) -> dict:
+    descriptor = target_descriptor_for(root.name, process_ref)
+    object_ref = descriptor["canonicalObjectRef"]
+    revision_number = descriptor["contentVersion"]
+    refs = _read_json(root / process_ref / "1.download/source_refs.json")["sources"]
+    draft = root / process_ref / "4.draft/page.md"
+    draft_digest = seal.sha256(draft.read_bytes())
+    revision = {"contentRevision": revision_number, "sourceRevision": revision_number,
+                "layoutRevision": revision_number}
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0",
+                "canonicalizationVersion": "1.0.0"}
+    counts = {"title": 1, "heading": 0, "paragraph": 1, "list": 0,
+              "tableLogicalCell": 0, "footnote": 0, "media": 0}
+    sources = []
+    source_bindings = []
+    for binding in refs:
+        source_ref = binding["sourceRef"]
+        source_digest = seal.sha256((root / source_ref).read_bytes())
+        source_bindings.append({"sourceRef": source_ref, "sourceDigest": source_digest})
+        sequence_digest = seal.sha256(seal.canonical_bytes({
+            "objectRef": object_ref,
+            "sourceRef": source_ref,
+            "sourceDigest": source_digest,
+            "draftDigest": draft_digest,
+            "reviewerSessionId": REVIEWER["sessionId"],
+            "reviewerRunId": REVIEWER["invocation"]["runId"],
+            "objectRevision": revision,
+        }))
+        sources.append({
+            "sourceRef": source_ref, "sourceDigest": source_digest,
+            "parseStatus": "complete", "dialect": "markdown", "dialectVersion": "1",
+            "capabilities": ["title", "paragraph"],
+            "sourceCounts": counts, "draftCounts": counts,
+            "sourceSequenceDigest": sequence_digest, "draftSequenceDigest": sequence_digest,
+        })
+    source_set_digest = seal.sha256(seal.canonical_bytes(source_bindings))
+    disposition = {
+        "issueId": seal.sha256(seal.canonical_bytes({
+            "objectRef": object_ref, "sourceBindings": source_bindings,
+            "draftDigest": draft_digest, "reviewer": REVIEWER,
+            "objectRevision": revision,
+        })),
+        "objectRef": object_ref,
+        "sourceAnchor": {"origin": "source-set", "start": 0, "end": len(sources),
+                         "selector": object_ref},
+        "sourceDigest": source_set_digest, "targetDigest": draft_digest,
+        "detectedType": "SEMANTIC_EXACT", "proposedMapping": None, "lossFields": [],
+        "severity": "info",
+        "actor": {"actorId": REVIEWER["sessionId"], "actorType": "independent_reviewer"},
+        "reason": f"reviewed homepage revision {revision_number} against acquired source bytes",
+        "policyVersion": "1.0.0", "reviewStatus": "reviewed_confirmed",
+        "outcome": "auto_continue", "processingDisposition": "preserved",
+        "protocol": protocol, "objectRevision": revision,
+    }
+    return {
+        "decision": "approved", "blockingIssues": [], "advisories": [],
+        "semanticReport": {
+            "reviewedCarrier": "homepage", "carrierCompatible": True,
+            "sources": sources,
+            "homepageFidelity": {
+                "title": True, "headingTree": True, "paragraphOrder": True,
+                "links": True, "nestedLists": True, "tableLogicalGrid": True,
+                "footnotes": True, "mediaCaptionOrder": True,
+            },
+            "issues": [],
+        },
+        "protocol": protocol, "objectRevision": revision, "dispositions": [disposition],
+    }
+
+
 def _execution(base, index, *, region="中国/浙江省/杭州市", identity="entity:xihu", ref=REF, review=True):
     execution_id = f"20260912--travel-homepage-correction--local--pilot-{index:03d}"
     target = {"carrier": "homepage", "name": "西湖", "entityType": "地点/景区", "region": region,
               "entityId": identity, "entityRef": "/entity/" + ref.removeprefix("entities/")}
+    if index > 1:
+        target["requiredContentId"] = identity
+        target["requiredVersion"] = index - 1
     round_path = base / f"round-{index}.json"
     _write_json(round_path, {"schema": "quwoquan_data.round_spec", "executions": {"homepage": execution_id}, "targets": [target]})
     task_init.initialize_round(round_spec_path=round_path)
@@ -55,7 +129,7 @@ def _execution(base, index, *, region="中国/浙江省/杭州市", identity="en
             break
         payload = {"actor": REVIEWER if stage == "5.review" else AUTHOR, "verdict": "pass"}
         if stage == "5.review":
-            payload["reviews"] = {process_ref: approved_semantic_judgement(root, process_ref)}
+            payload["reviews"] = {process_ref: _review_judgement(root, process_ref, index)}
         seal_path = base / f"seal-{index}-{stage}.json"
         _write_json(seal_path, payload)
         seal.seal_stage(execution_id=execution_id, stage=stage, input_path=seal_path)
@@ -76,6 +150,14 @@ def case(tmp_path, monkeypatch):
     monkeypatch.setattr(object_transaction, "PUBLISH_ROOT", publish)
     monkeypatch.setattr(publish_object, "PUBLISH_ROOT", publish)
     monkeypatch.setattr(publish_object, "OUTPUT_ROOT", output)
+    monkeypatch.setattr(
+        task_init,
+        "execution_target_ref",
+        lambda target, *, carrier: (
+            "entities/地点/"
+            f"{seal.sha256(target['entityRef'].encode()).removeprefix('sha256:')}/1"
+        ),
+    )
     monkeypatch.setenv("QWQ_LIBRARY_ROOT", str(tmp_path / "library"))
     seed_system_creator_avatar_holding(CREATOR, monkeypatch=monkeypatch)
     project_creator_object(CREATOR, publish / "creators" / CREATOR)
@@ -108,6 +190,16 @@ def test_revision_preserves_identity_history_and_unique_count(case):
     record = latest_pool_record(new, "homepage")
     assert record["contentVersion"] == 2 and record["payloadDigest"] == pool_payload_digest(new)
     assert (new / "content_review.json").read_bytes() == (case["fresh"] / case["fresh_ref"] / "5.review/content_review.json").read_bytes()
+    old_review = _read_json(case["old_object"] / "content_review.json")
+    new_review = _read_json(new / "content_review.json")
+    canonical_object_ref = "entities/" + REF.removeprefix("entities/") + "/1"
+    assert old_review["objectRef"] == new_review["objectRef"] == canonical_object_ref
+    assert case["fresh_ref"] != canonical_object_ref
+    assert old_review["objectRevision"] == {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    assert new_review["objectRevision"] == {"contentRevision": 2, "sourceRevision": 2, "layoutRevision": 2}
+    assert old_review["candidateBindings"]["page"]["digest"] != new_review["candidateBindings"]["page"]["digest"]
+    assert new_review["dispositions"][0]["objectRevision"] == new_review["objectRevision"]
+    assert new_review["dispositions"][0]["targetDigest"] == new_review["candidateBindings"]["page"]["digest"]
     assert _tree_digest(case["old_object"]) == old_tree and _tree_digest(case["old"]) == execution_tree
     pool = query_pool(case["publish"], target_refs=[REF])
     assert pool["objects"][0]["contentVersion"] == 2 and pool["objects"][0]["eligible"]

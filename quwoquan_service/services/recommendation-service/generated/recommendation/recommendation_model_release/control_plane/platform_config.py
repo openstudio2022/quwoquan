@@ -5349,6 +5349,26 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
+      "default": "",
+      "description": "authority 独占签发 key identity；缺失时不得装配委托入口，API Edge/content 不接收签发材料。",
+      "key": "sys.user-service.collectionQueryAuthority.activeKeyId",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "description": "仓外环境变量名引用，内容为 keyId 到 base64 密钥材料映射；值不进入配置快照/日志。旧验证材料保留至少60秒且无clock skew宽限，紧急撤销移除对应key，重启生效；未配置或解码失败拒绝装配。",
+      "key": "sys.user-service.collectionQueryAuthority.keyringSecretRef",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
       "default": "quwoquan_content",
       "key": "sys.user-service.content_service.mongo_database",
       "reload": "restart",

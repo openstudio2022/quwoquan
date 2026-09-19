@@ -22,7 +22,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
 
 from content.release.canonical import creator_projection
 from core.content_library import resolve_media_holding
-from governance.creators import avatar
+from governance.creators import avatar, avatar_materialization
 from support.media_fixture import admit_media_body
 
 
@@ -105,8 +105,9 @@ def _fixture(
             ]
         },
     )
+    source_catalog = source_root / "source_catalog.json"
     _write_json(
-        source_root / "source_catalog.json",
+        source_catalog,
         {
             "sources": [
                 {
@@ -116,24 +117,81 @@ def _fixture(
             ]
         },
     )
+    source_catalog_body = source_catalog.read_bytes()
+    file_page = (
+        "https://commons.wikimedia.org/wiki/"
+        "File:West_Lake,_Hangzhou_2025.jpg"
+    )
+    original_asset_url = (
+        "https://upload.wikimedia.org/wikipedia/commons/1/17/"
+        "West_Lake%2C_Hangzhou_2025.jpg"
+    )
     source_asset = {
-        "authorizationProof": "https://commons.wikimedia.org/wiki/File:West_Lake,_Hangzhou_2025.jpg",
+        "authorizationProof": file_page,
+        "authorizationRequired": False,
         "bytes": len(source),
         "caption": "West Lake",
+        "commercialAuthorizationStatus": "verified" if verified else "unverified",
         "creator": "Test Author",
         "credit": "Test Author",
         "height": 1400,
         "license": "CC BY 4.0",
         "modelReleaseStatus": "not_required",
-        "normalizedFromUrl": "https://upload.wikimedia.org/wikipedia/commons/1/17/West_Lake%2C_Hangzhou_2025.jpg",
+        "normalizedFromUrl": original_asset_url,
         "pageRevisionId": 93458353,
         "rightsAuditIssues": [] if verified else ["license_unverified"],
         "rightsAuditStatus": "verified" if verified else "unverified",
         "sha256": digest,
-        "sourceUrl": "https://commons.wikimedia.org/wiki/File:West_Lake,_Hangzhou_2025.jpg",
+        "sourceUrl": file_page,
         "termsUrl": "https://creativecommons.org/licenses/by/4.0",
         "usageScope": "app_publish",
+        "watermarkKind": "none",
+        "watermarkStatus": "absent",
+        "accessPolicy": "open",
         "width": 1600,
+    }
+    commercial_rights = {
+        "assetId": source_asset_id,
+        "sourceKind": "licensed_source_image",
+        "sourceUseMode": "licensed_adaptation",
+        "canonicalFilePage": file_page,
+        "snapshotUrl": file_page,
+        "pageRevision": str(source_asset["pageRevisionId"]),
+        "originalAssetUrl": original_asset_url,
+        "author": source_asset["creator"],
+        "source": file_page,
+        "licenseName": source_asset["license"],
+        "licenseShortName": source_asset["license"],
+        "licenseUrl": source_asset["termsUrl"],
+        "usageScope": source_asset["usageScope"],
+        "attribution": f'{source_asset["creator"]} / {source_asset["license"]}',
+        "caption": source_asset["caption"],
+        "captionSource": "sourceAsset.caption",
+        "modifications": "none; source bytes are used before avatar derivation",
+        "fetchedAt": "2026-07-28T01:41:54Z",
+        "snapshot": {
+            "ref": "source_catalog.json",
+            "sha256": "sha256:" + hashlib.sha256(source_catalog_body).hexdigest(),
+            "bytes": len(source_catalog_body),
+        },
+        "asset": {
+            "ref": object_key,
+            "sha256": digest,
+            "bytes": len(source),
+            "mimeType": "image/jpeg",
+            "width": source_asset["width"],
+            "height": source_asset["height"],
+        },
+        "authorizationProof": source_asset["authorizationProof"],
+        "modelReleaseStatus": source_asset["modelReleaseStatus"],
+        "commercialAuthorizationStatus": source_asset[
+            "commercialAuthorizationStatus"
+        ],
+        "watermarkStatus": source_asset["watermarkStatus"],
+        "watermarkKind": source_asset["watermarkKind"],
+        "accessPolicy": source_asset["accessPolicy"],
+        "rightsAuditStatus": source_asset["rightsAuditStatus"],
+        "rightsAuditIssues": source_asset["rightsAuditIssues"],
     }
     _write_json(
         source_root / "rights_snapshots/source-landscape.json",
@@ -142,9 +200,71 @@ def _fixture(
             "assetId": source_asset_id,
             "executionId": "20260728--test-homepage--test--pilot-001",
             "manifestAsset": {"assetId": source_asset_id},
+            "commercialRights": commercial_rights,
             "sourceAsset": source_asset,
             "sourceAssetRef": "sources/test__wikipedia__unit/assets/source.jpg",
         },
+    )
+
+    persist_avatar = avatar.persist_creator_avatar
+
+    def persist_avatar_with_rights(**kwargs: object) -> dict[str, bool]:
+        evidence_document = dict(kwargs["evidence_document"])
+        derivative_asset = evidence_document["asset"]
+        derivative_rights = {
+            **commercial_rights,
+            "assetId": evidence_document["assetId"],
+            "sourceKind": "creator_avatar_derivative",
+            "captionSource": "rights_snapshots/source-landscape.json",
+            "modifications": (
+                "deterministic center-square crop [100, 0, 1500, 1400] from "
+                "1600x1400; RGB; LANCZOS 1280x1280; WebP quality=85 method=4; "
+                "derivative_policy_version=1"
+            ),
+            "asset": dict(derivative_asset),
+        }
+        evidence_document["commercialRights"] = derivative_rights
+        kwargs["evidence_document"] = evidence_document
+        return persist_avatar(**kwargs)
+
+    monkeypatch.setattr(avatar, "persist_creator_avatar", persist_avatar_with_rights)
+
+    def allow_current_carried_avatar_projection(target: Path) -> None:
+        allowed = {
+            Path("_creator.json"),
+            Path("profile.json"),
+            Path("assets.refs.json"),
+            Path("works.refs.ndjson"),
+            Path("media/avatar.webp"),
+            Path("sources/avatar/evidence.json"),
+            Path("sources/avatar/source.json"),
+        }
+        for path in target.rglob("*"):
+            if path.is_symlink():
+                raise avatar.CreatorAvatarError(
+                    f"creator projection contains symlink: {path}"
+                )
+            if not path.is_file():
+                continue
+            relative = path.relative_to(target)
+            if relative in allowed:
+                continue
+            if relative.parts[0] == "rights_snapshots" and path.suffix == ".json":
+                continue
+            if (
+                len(relative.parts) == 3
+                and relative.parts[:2] == ("_pool", "versions")
+                and path.suffix == ".json"
+            ):
+                continue
+            raise avatar.CreatorAvatarError(
+                f"creator projection owns unexpected file: {path}"
+            )
+
+    monkeypatch.setattr(
+        avatar_materialization,
+        "_assert_replaceable_projection",
+        allow_current_carried_avatar_projection,
     )
     return pool, publish, source_object_ref, source_asset_id
 

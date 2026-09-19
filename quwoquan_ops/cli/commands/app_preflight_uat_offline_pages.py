@@ -3,22 +3,23 @@
 from __future__ import annotations
 
 import argparse
-import binascii
 import base64
 import hashlib
 import json
-import math
 import os
 import plistlib
 import re
+import subprocess
 import zipfile
 from datetime import datetime, timezone
 from contextlib import ExitStack
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from quwoquan_ops.cli.commands.app_preflight_uat_offline import OFFLINE_REQUIRED_CASES, OFFLINE_SPEC_REF
+from quwoquan_ops.cli.commands.app_preflight_uat_offline import (
+    OFFLINE_REQUIRED_CASES, OFFLINE_SPEC_REF, offline_case_spec_ref, offline_case_blocker,
+)
 from quwoquan_ops.cli.lib.readiness_case_result import (
     validate_readiness_case_result, write_create_once_json, write_readiness_case_result,
 )
@@ -29,206 +30,52 @@ from quwoquan_ops.cli.lib.target_uat_binding import (
 from quwoquan_ops.cli.smoke.environment_patrol_smoke import external_aut_driver as driver
 from quwoquan_ops.cli.smoke.environment_patrol_smoke import artifact_binding as artifacts
 from quwoquan_ops.cli.smoke.environment_patrol_smoke.execution import run_command
+from quwoquan_ops.cli.lib.package_reuse.pub_cache_capsule import seal_lock_hosted_url
 RUNNER_SOURCE = "quwoquan_ops/cli/commands/app_preflight_uat_offline_pages.py"
 RUNNER_IDENTITY = "stackctl.offline-native-pages.v1"
 ANDROID_PAGE_METHOD = "executesOfflinePageCaseInCanonicalProductionProcess"
 IOS_PAGE_METHOD = "testExecutesOfflinePageCaseInCanonicalProductionProcess"
-OPERATIONS = frozenset({"visible", "tap", "scroll", "seek", "playback", "back", "reveal", "tab-roundtrip"})
 
 
-def document_digest(value: Mapping[str, Any]) -> str:
-    return "sha256:" + hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
-                                                separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+def ios_native_driver_xcodebuild_command(*, host: Path, device_id: str) -> list[str]:
+    """把 products 钉在私有 derivedData，避免 Xcode 写到共享 DerivedData。"""
+    derived = (Path(host) / "build/ios_integ").resolve()
+    return [
+        "xcodebuild", "build-for-testing",
+        "-workspace", "ios/Runner.xcworkspace",
+        "-scheme", "Runner",
+        "-configuration", "Debug",
+        "-sdk", "iphonesimulator",
+        "-destination", "platform=iOS Simulator,id=" + device_id,
+        "-derivedDataPath", str(derived),
+        "SYMROOT=" + str(derived / "Build/Products"),
+        "OBJROOT=" + str(derived / "Build/Intermediates.noindex"),
+        "CODE_SIGNING_ALLOWED=NO",
+    ]
+
+
+from quwoquan_ops.cli.commands.app_preflight_uat_offline_page_validation import (
+    _validate_identity_journey, _validate_native_result_identity, _validate_page_step,
+    _validate_page_steps, _validate_playback_observation, _validate_step_observation,
+    document_digest, native_page_screenshot,
+    validate_native_page_result as _validate_native_page_result,
+    validate_page_plan as _validate_page_plan,
+)
 
 
 def validate_page_plan(plan: Mapping[str, Any]) -> None:
-    if (plan.get("schema") != "quwoquan_ops.offline_page_case.v1"
-            or plan.get("caseId") not in OFFLINE_REQUIRED_CASES
-            or plan.get("planDigest") != document_digest({k: v for k, v in plan.items() if k != "planDigest"})):
-        raise ValueError("APP.UAT.page_plan_invalid: offline page plan identity drifted")
-    _validate_page_steps(plan.get("steps"))
-    operations = [step["operation"] for step in plan["steps"]]
-    case_id = plan["caseId"]
-    required = {"visible"}
-    if case_id != "default-entry":
-        required.add("tap")
-    if case_id in {"article-detail", "image-detail", "creator-avatar", "pagination-end"}:
-        required.add("reveal")
-    if case_id in {"video-complete", "video-seek", "homepage-video-playback"}:
-        required.add("seek" if case_id == "video-seek" else "playback")
-    if case_id == "homepage-video-playback":
-        required.add("reveal")
-    if case_id == "homepage-tab-roundtrip":
-        required.add("tab-roundtrip")
-    if not required.issubset(operations) or operations[-1] not in {"visible", "playback", "seek", "tab-roundtrip"}:
-        raise ValueError("APP.UAT.page_plan_invalid: required page journey cannot be replaced by first frame")
-    _validate_identity_journey(plan)
+    _validate_page_plan(plan, blocker=offline_case_blocker)
 
 
-def _validate_identity_journey(plan: Mapping[str, Any]) -> None:
-    steps, case_id = plan["steps"], plan["caseId"]
-    if case_id == "homepage-video-playback":
-        if (len(steps) < 6 or steps[-4]["operation"] != "reveal" or steps[-3] != {
-                "operation": "tap", "selector": steps[-4]["selector"]}
-                or steps[-2]["operation"] != "visible" or steps[-1]["operation"] != "playback"
-                or plan.get("route") in {"/", "/video-book"}):
-            raise ValueError("APP.UAT.page_plan_invalid: home video requires feed reveal/tap and playback")
-    if case_id == "homepage-tab-roundtrip":
-        labels = steps[-1]["selector"].split("|")
-        if (steps[-1]["operation"] != "tab-roundtrip" or len(labels) != 2 or not all(labels)
-                or steps[-2] != {"operation": "visible", "selector": labels[1]} or plan.get("route") != "/"):
-            raise ValueError("APP.UAT.page_plan_invalid: tab roundtrip requires original following and geometry")
-    terminal = {
-        "login-unavailable": "capability-unavailable:account_authentication:profileTab",
-        "write-unavailable": "capability-unavailable:like",
-        "private-unavailable": "capability-unavailable:account_authentication:openChat",
-    }.get(case_id)
-    if terminal is not None and steps[-1] != {"operation": "visible", "selector": terminal}:
-        raise ValueError("APP.UAT.page_plan_invalid: typed capability terminal is required")
-    if case_id in {"login-unavailable", "private-unavailable"} and plan.get("route") != "/login":
-        raise ValueError("APP.UAT.page_plan_invalid: refused entry must record the login terminal route")
-    if case_id == "creator-avatar":
-        selector = steps[-1]["selector"]
-        persona = selector.removeprefix("creator-profile-avatar:")
-        if (not selector.startswith("creator-profile-avatar:") or not persona
-                or plan.get("route") != "/user/" + persona):
-            raise ValueError("APP.UAT.page_plan_invalid: decoded creator identity is required")
-        action = "creator-avatar:" + persona
-    elif case_id == "write-unavailable":
-        actions = [step["selector"] for step in steps if step["operation"] == "tap"
-                   and step["selector"].startswith("post-like:") and step["selector"] != "post-like:"]
-        if len(actions) != 1 or plan.get("route") != "/":
-            raise ValueError("APP.UAT.page_plan_invalid: write refusal requires a real feed like action")
-        action = actions[0]
-    else:
-        return
-    reveal = {"operation": "reveal", "selector": action}
-    tap = {"operation": "tap", "selector": action}
-    if reveal not in steps or tap not in steps or not steps.index(reveal) < steps.index(tap) < len(steps) - 1:
-        raise ValueError("APP.UAT.page_plan_invalid: identity-bound reveal and tap journey is required")
-
-
-def _validate_page_steps(steps: object) -> None:
-    if not isinstance(steps, list) or not steps or len(steps) > 40:
-        raise ValueError("APP.UAT.page_plan_invalid: actual page steps are required")
-    if not any(step.get("operation") in {"visible", "playback", "seek"} for step in steps if isinstance(step, Mapping)):
-        raise ValueError("APP.UAT.page_plan_invalid: page observation is required")
-    for step in steps:
-        _validate_page_step(step)
-
-
-def _validate_page_step(step: object) -> None:
-    if not isinstance(step, Mapping) or step.get("operation") not in OPERATIONS:
-        raise ValueError("APP.UAT.page_plan_invalid: unknown or unsafe operation")
-    if set(step) != {"operation", "selector"} or not isinstance(step["selector"], str) or not step["selector"].strip():
-        raise ValueError("APP.UAT.page_plan_invalid: an exact observation selector is required")
-    if step["selector"].startswith("text-prefix:") and (
-            step["operation"] not in {"visible", "playback", "seek"}
-            or not step["selector"].removeprefix("text-prefix:").strip()):
-        raise ValueError("APP.UAT.page_plan_invalid: prefix is only allowed for body/playback observations")
-
-
-def _read_native_terminal(output: str) -> object:
-    marker = "QWQ_OFFLINE_PAGE "
-    lines = [line.split(marker, 1)[1] for line in output.splitlines() if marker in line]
-    if len(lines) != 1:
-        raise ValueError("offline page must have exactly one current native terminal result")
-    return json.loads(lines[0])
-
-
-def _validate_native_result_identity(result: object, *, plan: Mapping[str, Any],
-                                     launch: Mapping[str, Any]) -> dict[str, Any]:
-    expected = {
-        **{key: launch[key] for key in ("candidateDigest", "artifactDigest", "deviceId", "launchAttemptId")},
-        "schema": "quwoquan_ops.offline_native_page_result.v1", "caseId": plan["caseId"],
-        "planDigest": plan["planDigest"], "platform": launch["platform"],
-        "applicationId": launch["applicationId"], "status": "passed",
-        "processIdBefore": launch["canonicalProcessId"], "processIdAfter": launch["canonicalProcessId"],
-    }
-    if (not isinstance(result, dict) or set(result) != set(expected) | {"observations", "screenshotDigest", "screenshotByteLength"}
-            or any(result.get(key) != value for key, value in expected.items())
-            or any(type(result.get(key)) is not int for key in ("processIdBefore", "processIdAfter"))):
-        raise ValueError("offline native page candidate/artifact/process identity drifted")
-    if (not isinstance(result["screenshotDigest"], str)
-            or re.fullmatch(r"sha256:[0-9a-f]{64}", result["screenshotDigest"]) is None
-            or type(result["screenshotByteLength"]) is not int
-            or not 32 <= result["screenshotByteLength"] <= 8 * 1024 * 1024):
-        raise ValueError("offline native screenshot identity is missing")
-    return result
-
-
-def native_page_screenshot(output: str, result: Mapping[str, Any]) -> bytes:
-    """截图在原生观察终态且 canonical PID 仍在前台时产生，不截宿主返回后的屏幕。"""
-    marker = "QWQ_OFFLINE_SCREENSHOT "
-    chunks = [line.split(marker, 1)[1].split(" ", 2) for line in output.splitlines() if marker in line]
-    if not chunks or any(len(chunk) != 3 or chunk[:2] != [result["planDigest"], str(index)]
-                         for index, chunk in enumerate(chunks)):
-        raise ValueError("APP.UAT.page_artifact_binding_missing: native screenshot chunks are missing or drifted")
-    encoded = "".join(chunk[2] for chunk in chunks)
-    if len(encoded) > 12 * 1024 * 1024:
-        raise ValueError("APP.UAT.page_artifact_binding_missing: native screenshot exceeds bound")
-    try:
-        raw = base64.b64decode(encoded, validate=True)
-    except (ValueError, binascii.Error) as error:
-        raise ValueError("APP.UAT.page_artifact_binding_missing: native screenshot encoding is invalid") from error
-    if (not raw.startswith(b"\x89PNG\r\n\x1a\n") or len(raw) != result["screenshotByteLength"]
-            or "sha256:" + hashlib.sha256(raw).hexdigest() != result["screenshotDigest"]):
-        raise ValueError("APP.UAT.page_artifact_binding_missing: native screenshot bytes drifted")
-    return raw
-
-
-def _validate_playback_observation(operation: str, observed: str) -> None:
-    match = re.search(r"(\d+):(\d{2})\s*/\s*(\d+):(\d{2})", observed)
-    if match is None:
-        raise ValueError("offline native playback has no observed position")
-    current, seconds, duration, duration_seconds = map(int, match.groups())
-    position, total = current * 60 + seconds, duration * 60 + duration_seconds
-    if total <= 0 or (operation == "playback" and position < total - 1):
-        raise ValueError("offline native playback did not complete")
-
-
-def _validate_step_observation(step: Mapping[str, Any], observation: object) -> None:
-    if not isinstance(observation, dict) or observation.get("operation") != step.get("operation"):
-        raise ValueError("offline native page step order drifted")
-    if (set(observation) != {"operation", "selector", "observed"}
-            or observation.get("selector") != step.get("selector")
-            or not isinstance(observation.get("observed"), str)
-            or not observation["observed"].strip()
-            or step["selector"].removeprefix("text-prefix:") not in observation["observed"]):
-        raise ValueError("offline native page observation is missing or drifted")
-    if step["operation"] in {"seek", "playback"}:
-        _validate_playback_observation(step["operation"], observation["observed"])
-    if step["operation"] == "tab-roundtrip":
-        try:
-            geometry = json.loads(observation["observed"].split(" geometry=", 1)[1])
-            initial, middle, further, restored = [geometry[key] for key in ("initial", "middle", "further", "restored")]
-            for coordinates, count in ((initial, 2), (middle, 1), (further, 1), (restored, 2)):
-                if (not isinstance(coordinates, list) or len(coordinates) != count
-                        or any(type(value) not in {int, float} or not math.isfinite(value) or value < 0 for value in coordinates)):
-                    raise ValueError("offline native tab geometry is invalid")
-            if not (middle[0] < initial[0] - 5 and abs(middle[0] - further[0]) <= 5
-                    and abs(restored[0] - initial[0]) <= 5 and abs(restored[1] - initial[1]) <= 5
-                    and initial[1] < initial[0] and restored[1] < restored[0]):
-                raise ValueError("tab geometry did not pin and restore")
-        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
-            raise ValueError("offline native tab geometry is incomplete") from error
-
-
-def validate_native_page_result(output: str, *, plan: Mapping[str, Any], launch: Mapping[str, Any]) -> dict[str, Any]:
-    """只接受本次原生命令的一条终态，拒绝旧日志、代理进程或不完整步骤。"""
+def require_executable_page_plan(plan: Mapping[str, Any]) -> None:
     validate_page_plan(plan)
-    if any(plan.get(key) != launch.get(key) for key in (
-        "candidateDigest", "artifactDigest", "deviceId", "applicationId", "canonicalProcessId", "platform", "launchAttemptId",
-    )):
-        raise ValueError("APP.UAT.page_artifact_binding_missing: page plan launch binding drifted")
-    result = _validate_native_result_identity(_read_native_terminal(output), plan=plan, launch=launch)
-    observations = result["observations"]
-    steps = plan["steps"]
-    if not steps or not isinstance(observations, list) or len(observations) != len(steps):
-        raise ValueError("offline native page coverage is incomplete")
-    for step, observation in zip(steps, observations, strict=True):
-        _validate_step_observation(step, observation)
-    return result
+    if plan["executionBlocker"]:
+        raise ValueError(plan["executionBlocker"])
+
+
+def validate_native_page_result(output: str, *, plan: Mapping[str, Any],
+                                launch: Mapping[str, Any]) -> dict[str, Any]:
+    return _validate_native_page_result(output, plan=plan, launch=launch, blocker=offline_case_blocker)
 
 
 def _verify_snapshot_assets(read_asset: Any, *, source: Path, raw: bytes, manifest: Mapping[str, Any]) -> None:
@@ -299,8 +146,10 @@ def _offline_binding_index(bindings: Sequence[Mapping[str, Any]],
 
 def _validate_offline_result_binding(result: Mapping[str, Any], *, binding: Mapping[str, Any],
                                      candidate: Mapping[str, Any]) -> None:
+    if offline_case_blocker(str(result["caseId"])):
+        raise ValueError("APP.UAT.page_artifact_binding_missing: unsupported required case cannot carry a passed result")
     expected = {
-        "contentSource": "bundled_snapshot", "status": "passed", "specRef": OFFLINE_SPEC_REF,
+        "contentSource": "bundled_snapshot", "status": "passed", "specRef": offline_case_spec_ref(str(result["caseId"])),
         "commitSha": candidate["commit"], "candidateDigest": candidate["candidateId"],
         "platform": binding["platform"], "deviceIdentity": binding["device"]["identity"],
         "deviceRegistered": binding["device"]["registered"], "runnerIdentity": binding["runner"]["identity"],
@@ -367,21 +216,15 @@ def _dart_text(app_root: Path, relative: str, symbol: str) -> str:
     return matches[0]
 
 
-def _snapshot_article_excerpt(article: Mapping[str, Any]) -> str:
-    body = str(article.get("articleMarkdown") or article.get("body") or "")
-    paragraphs = [line.strip() for line in body.splitlines() if len(line.strip()) > 25 and not line.startswith(("#", "---", "title:", "tagRefs:", "creatorProfileId:"))]
-    if not paragraphs:
-        raise ValueError("APP.UAT.page_plan_invalid: article has no readable body")
-    return paragraphs[0][:28]
-
-
 def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
-                             launch: Mapping[str, Any]) -> list[dict[str, Any]]:
+                             launch: Mapping[str, Any], fresh_launch: bool = False) -> list[dict[str, Any]]:
     """用制品快照对象与已有页面文案/typed route 构造黑盒旅程，不创建用户。"""
     copies = "lib/l10n/copy/"
     def text(file: str, symbol: str) -> str:
         return _dart_text(app_root, copies + file + ".dart", symbol)
     def step(operation: str, selector: str) -> dict[str, str]:
+        if operation == "input-otp":
+            return {"operation": operation, "selector": selector, "sourceSelector": "alpha-rehearsal-confirm", "mode": "correct"}
         return {"operation": operation, "selector": selector}
     def visible(selector: str) -> dict[str, str]:
         return step("visible", selector)
@@ -407,8 +250,18 @@ def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
         if not selected:
             raise ValueError("APP.UAT.page_plan_invalid: snapshot lacks required " + channel + "/" + kind)
         return selected[0]
-    article, image, video = post("article"), post("image"), post("video", "premium")
-    home_video = post("video")
+    def post_after(kind: str, predecessor: Mapping[str, Any], channel: str = "recommend") -> Mapping[str, Any]:
+        order = channels[channel]
+        start = order.index(predecessor["postId"]) + 1
+        selected = [posts[identity] for identity in order[start:] if posts[identity]["contentType"] == kind]
+        if not selected:
+            raise ValueError("APP.UAT.page_plan_invalid: snapshot lacks " + channel + "/" + kind + " after predecessor")
+        return selected[0]
+    article = post("article")
+    # iOS reveal 只向下滑；generation-1 复用 AUT 时上一格停在文章卡。
+    # 图/首页视频取文章之后的对象，避免再切「关注」（关注面没有「推荐」）。
+    image, video = post_after("image", article), post("video", "premium")
+    home_video = post_after("video", article)
     following = text("ui_text_constants_discovery", "homeTabFollowing")
     if channels.get("campus"):
         raise ValueError("APP.UAT.page_plan_invalid: canonical empty channel is no longer empty")
@@ -428,14 +281,16 @@ def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
     open_video = [tap(premium), visible(video["title"])]
     # 视频书主动隐藏底栏；只点击 canonical 顶栏返回，再观察首页已恢复。
     exit_video = [tap("works-top-back"), visible(home)]
-    article_excerpt = _snapshot_article_excerpt(article)
     # 每例停留在观察终态供截图；下一例才恢复同一进程的导航状态。
+    # 文章详情走 Work Browser 沉浸顶栏；正文在 pageflip 纹理上 ExcludeSemantics，
+    # 不能再用 markdown excerpt 的 text-prefix 断言。
     cases = [
         ("default-entry", "homepage", route("home"), [visible(home)], []),
-        ("homepage-recommendation", "homepage", route("home"), [*base, visible(article["title"])], []),
+        ("homepage-recommendation", "homepage", route("home"),
+         [*base, reveal(article["title"]), visible(article["title"])], []),
         ("premium-video-book", "video", route("videoBook"), open_video, exit_video),
         ("article-detail", "article", route("workBrowserPathTemplate", workId=article["postId"]),
-         [*base, reveal(article["title"]), tap(article["title"]), visible("text-prefix:" + article_excerpt)], [step("back", home)]),
+         [*base, reveal(article["title"]), tap(article["title"]), visible("works-top-back")], [step("back", home)]),
         ("image-detail", "image", route("workBrowserPathTemplate", workId=image["postId"]),
          [*open_image, visible(success[1])], [step("back", home)]),
         ("homepage-video-playback", "video", route("workBrowserPathTemplate", workId=home_video["postId"]),
@@ -450,34 +305,70 @@ def build_offline_page_plans(*, snapshot: Mapping[str, Any], app_root: Path,
         ("video-seek", "video", route("videoBook"), [*open_video, step("seek", progress)], exit_video),
         ("empty-state", "homepage", route("home"), [*base, tap(empty_channel), visible(completed)], []),
         ("pagination-end", "homepage", route("home"), [*base, reveal(completed), visible(completed)], []),
-        ("login-unavailable", "homepage", route("loginPathTemplate"),
+        ("login-cancel", "homepage", route("home"),
          [tap(text("ui_text_constants_foundation", "bottomNavGuestProfile")),
-          visible("capability-unavailable:account_authentication:profileTab")], [step("back", home)]),
-        # 离线禁止远端写入，不禁止本地创作；点赞从推荐流触发真实 typed 拒绝。
-        ("write-unavailable", "homepage", route("home"),
-         [*base, reveal("post-like:" + article["postId"]), tap("post-like:" + article["postId"]),
-          visible("capability-unavailable:like")], [step("back", home)]),
-        # 联系人入口停在登录拒绝页，不能把未进入的 chat 路由记录为已观察。
-        ("private-unavailable", "homepage", route("loginPathTemplate"),
-         [tap(text("chat_text_constants", "chatPrimaryContacts")),
-          visible("capability-unavailable:account_authentication:openChat")], []),
+          visible(text("ui_text_constants_foundation", "loginDismissSemanticLabel")),
+          tap(text("ui_text_constants_foundation", "loginDismissSemanticLabel")),
+          visible(home), visible(text("ui_text_constants_foundation", "bottomNavGuestProfile"))], []),
     ]
+    # 全部 required 格都生成可执行计划；GWT-008 经 launcher-only relay 取 AUT snapshot，不由 runner 合成 actual。
+    identity_entry = [tap(text("ui_text_constants_foundation", "bottomNavGuestProfile")), visible(text("ui_text_constants_foundation", "syntheticLoginTitle"))]
+    login_success = [*identity_entry, tap(text("ui_text_constants_foundation", "syntheticLoginBegin")),
+        step("input-otp", text("ui_text_constants_foundation", "syntheticLoginConfirmation")),
+        tap(text("ui_text_constants_foundation", "syntheticLoginConfirm")), visible(text("app_concept_constants", "profile"))]
+    cases.extend([
+        ("login-success", "homepage", route("home"), login_success, []),
+        ("login-error", "homepage", route("home"), [*identity_entry,
+         tap(text("ui_text_constants_foundation", "syntheticLoginBegin")),
+         {**step("input-otp", text("ui_text_constants_foundation", "syntheticLoginConfirmation")), "mode": "incorrect"},
+         tap(text("ui_text_constants_foundation", "syntheticLoginConfirm")), visible(text("ui_text_constants_foundation", "syntheticLoginMismatch"))], []),
+        ("private-continuation", "homepage", route("home"), [*login_success, tap("post-like:" + home_video["postId"]), visible("post-like:" + home_video["postId"])], []),
+        ("local-write", "homepage", route("home"), [*base, reveal(home_video["title"]), tap("post-like:" + home_video["postId"]), visible("post-like:" + home_video["postId"])], []),
+        ("otp-expiry", "homepage", route("home"), [*identity_entry, tap(text("ui_text_constants_foundation", "syntheticLoginBegin")),
+         {"operation": "wait", "seconds": 300, "clock": "monotonic-real-time-no-adjustment"},
+         step("input-otp", text("ui_text_constants_foundation", "syntheticLoginConfirmation")),
+         tap(text("ui_text_constants_foundation", "syntheticLoginConfirm")), visible(text("ui_text_constants_foundation", "syntheticLoginUnavailable"))], []),
+        ("identity-restart", "homepage", route("home"),
+         [visible(home)] if int(launch.get("generation") or 1) >= 2 else
+         [*login_success, {"operation": "restart", "mode": "cold-new-attempt"}, visible(home)], []),
+    ])
+    refusal_sources = {
+        "network-refusal": "native-network-attempt", "otp-refusal": "native-otp-delivery-attempt",
+        "push-refusal": "native-push-registration-attempt", "remote-refusal": "native-remote-transport-attempt",
+        "outbox-refusal": "native-connected-outbox-attempt",
+    }
+    for case_id in OFFLINE_REQUIRED_CASES[len(cases):]:
+        cases.append((case_id, "homepage", route("home"),
+                      [{"operation": "observe", "selector": refusal_sources[case_id]}], []))
     plans: list[dict[str, Any]] = []
     restore: list[dict[str, str]] = []
     for case_id, carrier, route_path, steps, next_restore in cases:
         plan = {
             "schema": "quwoquan_ops.offline_page_case.v1", "caseId": case_id,
+            "specRef": offline_case_spec_ref(case_id), "executionBlocker": offline_case_blocker(case_id),
             "candidateDigest": launch["candidateDigest"], "artifactDigest": launch["artifactDigest"],
             "deviceId": launch["deviceId"], "applicationId": launch["applicationId"],
             "canonicalProcessId": launch["canonicalProcessId"], "platform": launch["platform"],
             "launchAttemptId": launch["launchAttemptId"], "snapshotDigest": document_digest(snapshot),
-            "route": route_path, "carrier": carrier, "steps": [*restore, *steps],
+            **{key: launch[key] for key in ("generation", "sessionId", "observationBinding") if key in launch},
+            "route": route_path, "carrier": carrier, "steps": [*([] if fresh_launch else restore), *steps],
         }
+        if case_id in {"login-success", "login-error", "private-continuation", "local-write", "otp-expiry", "identity-restart", "network-refusal", "otp-refusal", "push-refusal", "remote-refusal", "outbox-refusal"}:
+            from quwoquan_ops.cli.commands.app_preflight_uat_offline_native_contract import build_native_case_contract
+            plan["nativeContract"] = build_native_case_contract(case_id, plan)
         plan["planDigest"] = document_digest(plan)
         validate_page_plan(plan)
         plans.append(plan)
         restore = next_restore
     return plans
+
+
+def _offline_pub_command_environment(
+    environment: Mapping[str, str], *, lock_path: Path
+) -> dict[str, str]:
+    """Seal offline pub get to the lock's hosted cache namespace, not pub.dev."""
+
+    return seal_lock_hosted_url(environment, lock_path=lock_path)
 
 
 def _run_native_command(command: list[str], *, cwd: Path, environment: dict[str, str],
@@ -495,6 +386,18 @@ def _run_native_command(command: list[str], *, cwd: Path, environment: dict[str,
 def _acquire_page_device_lock(device_id: str, application_id: str) -> Any:
     from quwoquan_ops.cli.lib.host_locks import acquire_device_lock
     return acquire_device_lock(device=device_id, app=application_id)
+
+
+def _launch_between_page_locks(*, owned: ExitStack, device_id: str, application_id: str,
+                               launch_case: Callable[[str, int], Mapping[str, Any]],
+                               case_id: str, generation: int) -> Mapping[str, Any]:
+    """先释放页锁供 launcher 独占；成功后重新获锁，再允许任何页面读写。"""
+    owned.close()
+    successor = launch_case(case_id, generation)
+    owned.enter_context(_acquire_page_device_lock(device_id, application_id))
+    if successor.get("deviceId") != device_id or successor.get("applicationId") != application_id:
+        raise ValueError("APP.UAT.page_artifact_binding_missing: successor device/application drifted")
+    return successor
 
 
 def _verify_page_projection(projection: Mapping[str, Any]) -> None:
@@ -536,7 +439,10 @@ def _prepare_native_driver(*, args: argparse.Namespace, projection: Mapping[str,
         "sourceCapsuleDigest": projection["sourceCapsuleDigest"],
         "sourceCapsuleWorkspaceStatusDigest": projection["sourceCapsuleWorkspaceStatusDigest"],
     }
-    with acquire_patrol_execution_lock(env_name="alpha", target="offline-native-pages"):
+    platform = device["targetPlatform"]
+    if platform not in {"android", "ios"}:
+        raise ValueError("APP.LAUNCH.receipt_invalid: native driver platform is unknown")
+    with acquire_patrol_execution_lock(env_name="alpha", target="offline-native-pages", platforms=(platform,)):
         native_projection = materialize_app_content_launch_projection(
             runtime_binding=runtime, output_root=output_root, projection_root=report_dir / "native-source",
             evidence_path=report_dir / "native-source.json",
@@ -556,6 +462,11 @@ def _prepare_native_driver(*, args: argparse.Namespace, projection: Mapping[str,
             envelope=envelope, ambient_environment={}, dependency_environment=envelope["dependencyEnvironment"], command_environment={},
         )
         flutter = envelope["flutterExecutable"]
+        environment = _offline_pub_command_environment(environment, lock_path=host / "pubspec.lock")
+        production_environment = _offline_pub_command_environment(
+            dependencies.production_environment,
+            lock_path=root / "quwoquan_app/pubspec.lock",
+        )
         # 宿主只嵌入已验真 AUT 的公开信任封套；不请求在线包或伪造登录材料。
         trust_root = report_dir / "native-material"
         trust_path = trust_root / "qwq_runtime/runtime-config-trust.json"
@@ -576,7 +487,7 @@ def _prepare_native_driver(*, args: argparse.Namespace, projection: Mapping[str,
         ios_results = None
         if platform == "ios":
             commands.append(_run_native_command([flutter, "pub", "get", "--offline", "--enforce-lockfile"],
-                cwd=root / "quwoquan_app", environment=dependencies.production_environment,
+                cwd=root / "quwoquan_app", environment=production_environment,
                 log_path=report_dir / "native-production-pub.log", timeout=120))
             ios_results = replay_ios_dependency_projections(dependency_projection=dependencies, pod_executable=pod)
         expectation = prepare_dependency_projection_cas_evidence(
@@ -598,14 +509,30 @@ def _prepare_native_driver(*, args: argparse.Namespace, projection: Mapping[str,
         else:
             commands.append(_run_native_command([flutter, "build", "ios", "--debug", "--simulator", "--no-codesign", "--no-pub", "--config-only"],
                 cwd=host, environment=environment, log_path=report_dir / "native-config.log", timeout=120))
-            commands.append(_run_native_command(["xcodebuild", "build-for-testing", "-workspace", "ios/Runner.xcworkspace", "-scheme", "Runner",
-                "-configuration", "Debug", "-sdk", "iphonesimulator", "-destination", "platform=iOS Simulator,id=" + device["id"],
-                "-derivedDataPath", str(host / "build/ios_integ"), "CODE_SIGNING_ALLOWED=NO"],
+            commands.append(_run_native_command(
+                ios_native_driver_xcodebuild_command(host=host, device_id=device["id"]),
                 cwd=host, environment=environment, log_path=report_dir / "native-build.log", timeout=900))
         source = {"root": "quwoquan_app/test_host/patrol", "rootIdentityDigest": document_digest({"root": str(host)}),
                   "sourceDigest": native_projection["sourceProjectionDigest"], "sourceFileCount": native_projection["sourceProjectionFileCount"]}
         context = {"host": host, "environment": environment, "adb": adb, "source": source, "device": device,
                    "commands": commands, "expectation": expectation, "projection": native_projection}
+        # relay secret/admission只在launcher进程内闭包捕获，不进入argv/env/file/log。
+        from quwoquan_ops.cli.lib.external_uat_relay_transport import (
+            AndroidAdbForwardRelayTransport, IosSimulatorAppGroupRelayTransport,
+        )
+        from quwoquan_ops.cli.commands.package_app_artifact_identity import signing_digest
+        context["autSigningDigest"] = signing_digest(
+            "android" if launch["platform"] == "android" else "ios", artifact)
+        def relay_factory(*, plan, launch, session):
+            token = session.admission["admissionDigest"].removeprefix("sha256:")[:24]
+            if launch["platform"] == "android":
+                return AndroidAdbForwardRelayTransport(
+                    adb=adb, device_id=launch["deviceId"], local_socket="localabstract:qwq-launcher-" + token,
+                    package_socket="qwq.gwt008." + launch["applicationId"])
+            return IosSimulatorAppGroupRelayTransport(
+                device_id=launch["deviceId"], app_group_id="group.com.leadwise.quwoquan.alpha.uat",
+                socket_name=_verified_ios_socket_name(launch))
+        context["relayFactory"] = relay_factory
         context["binding"] = _read_driver_binding(context)
         _verify_driver_dependencies(context)
         return context
@@ -638,17 +565,105 @@ def _read_driver_binding(context: Mapping[str, Any]) -> dict[str, Any]:
         evidence={"testedDriverArtifactBinding": raw})
 
 
+def _verified_ios_socket_name(launch: Mapping[str, Any]) -> str:
+    from quwoquan_app.scripts.device.startup_terminal_receipt import read_startup_terminal_receipt
+    terminal = read_startup_terminal_receipt(Path(launch['startupTerminalEvidenceRef']),
+        launch_attempt=json.loads(Path(launch['launchAttemptRef']).read_bytes()))
+    native = terminal.get('nativeRendezvous')
+    if (not isinstance(native, dict) or native != launch.get('nativeRendezvous')
+            or native['launcherPid'] != os.getpid() or native['processId'] != launch['canonicalProcessId']
+            or native['sessionId'] != launch.get('sessionId')):
+        raise ValueError('APP.UAT.relay_admission_mismatch: exact native rendezvous readback drifted')
+    return native['socketName']
+
+
+def _relay_runtime(*, plan: Mapping[str, Any], launch: Mapping[str, Any], context: Mapping[str, Any],
+                   terminal: Mapping[str, Any]):
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline_native_contract import (
+        TerminalReference, admit_launch,
+    )
+    relay_factory = context.get("relayFactory")
+    if not callable(relay_factory):
+        raise ValueError("APP.UAT.relay_peer_rejected: launcher platform adapter is unavailable")
+    if any(not launch.get(key) or launch.get(key) != plan["nativeContract"].get(key)
+           for key in ("generation", "sessionId", "observationBinding")):
+        raise ValueError("APP.UAT.relay_scope_mismatch: canonical launch lacks exact relay session/generation binding")
+    lifecycle = str(launch.get("startupTerminalEvidenceDigest") or launch.get("launchAttemptDigest") or "")
+    session = admit_launch(plan["nativeContract"], launch, signing_digest=str(context.get("autSigningDigest") or ""),
+                           lifecycle_digest=lifecycle)
+    return session, TerminalReference(terminal), relay_factory(plan=plan, launch=launch, session=session)
+
+
+def _terminate_aut_process(*, launch: Mapping[str, Any], context: Mapping[str, Any]) -> None:
+    command = ([context["adb"], "-s", launch["deviceId"], "shell", "am", "kill", launch["applicationId"]]
+               if launch["platform"] == "android" else
+               ["xcrun", "simctl", "terminate", launch["deviceId"], launch["applicationId"]])
+    result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)
+    if result.returncode != 0:
+        raise ValueError("APP.UAT.teardown_pid_alive: canonical termination failed")
+
+
+def _process_table_dead(*, launch: Mapping[str, Any]) -> bool:
+    from quwoquan_ops.cli.commands.app_preflight_uat_process import (
+        confirm_canonical_app_process_absent,
+        confirm_host_process_table_absent,
+    )
+    if launch["platform"] in {"ios", "ios-simulator"}:
+        return confirm_host_process_table_absent(process_id=int(launch["canonicalProcessId"]))
+    return confirm_canonical_app_process_absent(
+        platform=launch["platform"], device_id=launch["deviceId"],
+        application_id=launch["applicationId"], expected_pid=int(launch["canonicalProcessId"]))
+
+
+def _platform_lifecycle_dead(*, launch: Mapping[str, Any], context: Mapping[str, Any]) -> bool:
+    from quwoquan_ops.cli.commands.app_preflight_uat_process import (
+        confirm_android_lifecycle_absent,
+        confirm_canonical_app_process_absent,
+    )
+    if launch["platform"] == "android":
+        from quwoquan_ops.ci.device_matrix.android import resolve_android_debug_bridge
+        return confirm_android_lifecycle_absent(
+            device_id=launch["deviceId"], application_id=launch["applicationId"],
+            expected_pid=int(launch["canonicalProcessId"]),
+            adb_resolver=lambda: str(context.get("adb") or resolve_android_debug_bridge() or ""))
+    return confirm_canonical_app_process_absent(
+        platform=launch["platform"], device_id=launch["deviceId"],
+        application_id=launch["applicationId"], expected_pid=int(launch["canonicalProcessId"]))
+
+
+def _broker_peer_absent(*, transport: Any) -> bool:
+    probe = getattr(transport, "peer_absent", None)
+    if not callable(probe):
+        raise ValueError("APP.UAT.relay_process_died: broker death probe is unavailable")
+    try:
+        absent = probe()
+    except (BrokenPipeError, ConnectionError, EOFError, OSError, TimeoutError, ValueError) as error:
+        raise ValueError("APP.UAT.teardown_pid_alive: broker readback failed") from error
+    if absent is not True and absent is not False:
+        raise ValueError("APP.UAT.teardown_pid_alive: broker readback is invalid")
+    return absent
+
+
 def _execute_native_page(*, plan: Mapping[str, Any], launch: Mapping[str, Any],
-                         context: Mapping[str, Any], case_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+                         context: Mapping[str, Any], case_dir: Path,
+                         consume_relay: bool = True) -> tuple[dict[str, Any], dict[str, Any]]:
     from quwoquan_ops.cli.smoke.environment_patrol_smoke.external_aut_driver_artifact import _ios_runner_configuration
-    validate_page_plan(plan)
+    require_executable_page_plan(plan)
+    if any(plan.get(key) != launch.get(key) for key in (
+            "candidateDigest", "artifactDigest", "deviceId", "applicationId", "canonicalProcessId", "platform", "launchAttemptId")):
+        raise ValueError("APP.UAT.page_artifact_binding_missing: native input launch binding drifted")
     screenshot_path = case_dir / "screenshot.png"
     if screenshot_path.exists() or screenshot_path.is_symlink():
         raise ValueError("APP.UAT.page_artifact_binding_missing: native screenshot path must be fresh")
     encoded = base64.b64encode(json.dumps(plan, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).decode()
     temporary: Path | None = None
     environment = dict(context["environment"])
+    relay_scope = None
     try:
+        if "nativeContract" in plan and consume_relay:
+            from quwoquan_ops.cli.commands.app_preflight_uat_offline_native_contract import arm_launcher_relay
+            relay_scope = _relay_runtime(plan=plan, launch=launch, context=context, terminal={})
+            arm_launcher_relay(session=relay_scope[0], transport=relay_scope[2])
         if launch["platform"] == "android":
             command = driver.android_external_aut_instrumentation_command(adb=context["adb"], device_id=launch["deviceId"],
                 production_application_id=launch["applicationId"])
@@ -675,11 +690,27 @@ def _execute_native_page(*, plan: Mapping[str, Any], launch: Mapping[str, Any],
                 or re.search(r"FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed", output)):
             raise ValueError("APP.UAT.page_artifact_binding_missing: Instrumentation did not finish one successful test")
         evidence = validate_native_page_result(output, plan=plan, launch=launch)
+        if "nativeContract" in plan and consume_relay:
+            from quwoquan_ops.cli.commands.app_preflight_uat_offline_native_contract import execute_launcher_relay
+            from quwoquan_ops.cli.commands.app_preflight_uat_offline_native_contract import TerminalReference
+            session, _, transport = relay_scope
+            terminal_ref = TerminalReference(evidence)
+            comparison = execute_launcher_relay(
+                session=session, plan=plan, terminal_ref=terminal_ref, transport=transport,
+                expected=plan["nativeContract"]["expectedObservation"],
+                timeout_seconds=float(plan["nativeContract"]["runnerTimeoutSeconds"]),
+            )
+            if comparison.get("status") != "passed":
+                raise ValueError(str(comparison.get("errorCode") or "APP.UAT.relay_contract_drift"))
+            result = {**result, "launcherComparison": comparison}
         screenshot = native_page_screenshot(output, evidence)
         with screenshot_path.open("xb") as destination:
             destination.write(screenshot)
         return evidence, result
     finally:
+        if relay_scope is not None and not relay_scope[0].revoked:
+            relay_scope[0].revoke()
+            relay_scope[2].close()
         if temporary is not None:
             temporary.unlink(missing_ok=True)
 
@@ -737,15 +768,76 @@ def _write_offline_run_bindings(*, candidate: Mapping[str, Any], launch: Mapping
 def _collect_offline_page_evidence(*, plan: Mapping[str, Any], launch: Mapping[str, Any],
                                    projection: Mapping[str, Any], artifact: Path, context: Mapping[str, Any],
                                    device: dict[str, Any], case_dir: Path, output_root: Path,
-                                   receipt: Mapping[str, Any]) -> tuple[dict[str, str], str]:
+                                   receipt: Mapping[str, Any],
+                                   launch_case: Callable[[str, int], Mapping[str, Any]] | None = None) -> tuple[dict[str, str], str]:
     plan_ref = _reference(write_create_once_json(case_dir / "plan.json", plan), output_root)
     started = datetime.now(timezone.utc).isoformat()
     before = _read_aut_binding(artifact=artifact, launch=launch, context=context)
-    native, command = _execute_native_page(plan=plan, launch=launch, context=context, case_dir=case_dir)
+    after_launch = launch
+    successor_refs: dict[str, Any] = {}
+    if plan["caseId"] == "identity-restart":
+        if launch_case is None:
+            raise ValueError("APP.UAT.restart_identity_mismatch: canonical generation-2 launcher is unavailable")
+        from quwoquan_ops.cli.commands.app_preflight_uat_offline_native_contract import (
+            TerminalReference, arm_launcher_relay, supervise_identity_restart,
+        )
+        session1, _, transport1 = _relay_runtime(plan=plan, launch=launch, context=context, terminal={})
+        arm_launcher_relay(session=session1, transport=transport1)
+        native, command = _execute_native_page(plan=plan, launch=launch, context=context, case_dir=case_dir,
+                                                consume_relay=False)
+        def launch_next(case_id: str, generation: int) -> Mapping[str, Any]:
+            nonlocal after_launch
+            successor = dict(launch_case(case_id, generation))
+            if successor.get("generation") != generation or successor.get("caseId") != case_id:
+                raise ValueError("APP.UAT.restart_identity_mismatch: successor lifecycle binding missing")
+            after_launch = successor
+            successor["continuityDigest"] = document_digest({key: successor[key] for key in
+                ("candidateDigest", "artifactDigest", "applicationId", "deviceId")})
+            return successor
+        def prepare_attempt2(successor: Mapping[str, Any]):
+            second_dir = case_dir / "generation-2"
+            second_dir.mkdir(parents=True, exist_ok=False)
+            _read_aut_binding(artifact=artifact, launch=successor, context=context)
+            attempt_path = Path(successor["launchAttemptRef"])
+            if document_digest(json.loads(attempt_path.read_bytes())) != successor["launchAttemptDigest"]:
+                raise ValueError("APP.UAT.restart_identity_mismatch: successor attempt digest drifted")
+            successor_refs["launchBinding"] = _reference(write_create_once_json(second_dir / "launch-binding.json", successor), output_root)
+            successor_refs["launchAttempt"] = _copy_evidence(attempt_path, second_dir / "launch-attempt.json", output_root)
+            second_plans = build_offline_page_plans(snapshot=read_artifact_snapshot(
+                artifact=artifact, platform="android" if successor["platform"] == "android" else "ios",
+                expected_artifact_digest=successor["artifactDigest"], app_root=Path(projection["sourceProjectionRoot"]) / "quwoquan_app"),
+                app_root=Path(projection["sourceProjectionRoot"]) / "quwoquan_app", launch=successor)
+            selected = next(item for item in second_plans if item["caseId"] == "identity-restart")
+            session, _, transport = _relay_runtime(plan=selected, launch=successor, context=context, terminal={})
+            arm_launcher_relay(session=session, transport=transport)
+            value, second_command = _execute_native_page(plan=selected, launch=successor, context=context,
+                                            case_dir=second_dir, consume_relay=False)
+            successor_refs.update(
+                plan=_reference(write_create_once_json(second_dir / "plan.json", selected), output_root),
+                nativeResult=_reference(write_create_once_json(second_dir / "native-result.json", value), output_root),
+                screenshot=_reference(second_dir / "screenshot.png", output_root),
+                log=_reference(second_dir / "native.log", output_root), command=second_command)
+            return selected, session, TerminalReference(value), transport
+        continuity = document_digest({key: launch[key] for key in
+            ("candidateDigest", "artifactDigest", "applicationId", "deviceId")})
+        supervision = supervise_identity_restart(
+            attempt1_session=session1, attempt1_plan=plan, attempt1_terminal=TerminalReference(native),
+            attempt1_transport=transport1, expected_attempt1=plan["nativeContract"]["expectedObservation"],
+            terminate_aut=lambda admission: _terminate_aut_process(launch=launch, context=context),
+            death_readbacks=[
+                lambda: _process_table_dead(launch=launch),
+                lambda: _platform_lifecycle_dead(launch=launch, context=context),
+                lambda: _broker_peer_absent(transport=transport1),
+            ],
+            launch_next=launch_next, prepare_attempt2=prepare_attempt2,
+            expected_attempt2=plan["nativeContract"]["expectedObservation"], continuity_digest=continuity)
+        command = {**command, "launcherSupervision": supervision, "successorEvidence": successor_refs}
+    else:
+        native, command = _execute_native_page(plan=plan, launch=launch, context=context, case_dir=case_dir)
     screenshot_path = case_dir / "screenshot.png"
     if _file_digest(screenshot_path) != native["screenshotDigest"]:
         raise ValueError("APP.UAT.page_artifact_binding_missing: native screenshot artifact drifted")
-    after = _read_aut_binding(artifact=artifact, launch=launch, context=context)
+    after = _read_aut_binding(artifact=artifact, launch=after_launch, context=context)
     if _read_driver_binding(context) != context["binding"]:
         raise ValueError("APP.UAT.page_artifact_binding_missing: native driver artifact drifted")
     _verify_driver_dependencies(context)
@@ -767,7 +859,8 @@ def _write_offline_case_result(*, plan: Mapping[str, Any], candidate: Mapping[st
                                binding: Mapping[str, Any], evidence_ref: Mapping[str, str], started: str,
                                case_dir: Path, output_root: Path, receipt: dict[str, Any]) -> dict[str, Any]:
     completed = datetime.now(timezone.utc).isoformat()
-    raw = {"objectId": "app_runtime", "specRef": OFFLINE_SPEC_REF, "caseId": plan["caseId"],
+    require_executable_page_plan(plan)
+    raw = {"objectId": "app_runtime", "specRef": plan["specRef"], "caseId": plan["caseId"],
         "producer": "app", "layer": "user_acceptance", "status": "passed", "contentSource": "bundled_snapshot",
         "target": {"kind": "page", "id": plan["route"]}, "commitSha": candidate["commit"],
         "contractGraphSourceHash": launch["contractGraphDigest"].removeprefix("sha256:"),
@@ -801,7 +894,8 @@ def _close_offline_page_resources(owned: ExitStack, receipt: dict[str, Any]) -> 
 
 
 def execute_offline_page_cases(*, args: argparse.Namespace, candidate: Mapping[str, Any], launch: Mapping[str, Any],
-                               projection: Mapping[str, Any], report_dir: Path, output_root: Path) -> dict[str, Any]:
+                               projection: Mapping[str, Any], report_dir: Path, output_root: Path,
+                               launch_case: Callable[[str, int], Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """单平台 required 格；所有 ref 均 output_root 相对，rawResultRefs 可直接交 acceptance。
 
     对象边界是设备解析、制品 readback 与原生命令；无 test-only execution 分支。
@@ -813,7 +907,16 @@ def execute_offline_page_cases(*, args: argparse.Namespace, candidate: Mapping[s
         "targetUatBindingRefs": {}, "pageResultRefs": [], "runs": [],
         "rawCoverage": {"alpha-local": {"expected": len(OFFLINE_REQUIRED_CASES), "present": 0, "missing": len(OFFLINE_REQUIRED_CASES)}}}
     results: list[dict[str, Any]] = []
+    bindings: list[dict[str, Any]] = []
     owned = ExitStack()
+    def launch_unlocked(case_id: str, generation: int) -> Mapping[str, Any]:
+        assert launch_case is not None
+        successor = dict(_launch_between_page_locks(owned=owned, device_id=args.device_id,
+            application_id=launch["applicationId"], launch_case=launch_case, case_id=case_id, generation=generation))
+        _validate_offline_launch_identity(args=args, candidate=candidate, launch=successor, projection=projection)
+        if successor.get("artifactDigest") != launch.get("artifactDigest"):
+            raise ValueError("APP.UAT.page_artifact_binding_missing: successor artifact changed; fresh run required")
+        return successor
     try:
         platform = _validate_offline_launch_identity(args=args, candidate=candidate, launch=launch, projection=projection)
         _verify_page_projection(projection)
@@ -823,6 +926,9 @@ def execute_offline_page_cases(*, args: argparse.Namespace, candidate: Mapping[s
         artifact = app_root / ("build/app/outputs/flutter-apk/app-nonprod-debug.apk" if platform == "android" else "build/ios/iphonesimulator/Runner.app")
         snapshot = read_artifact_snapshot(artifact=artifact, platform=platform, expected_artifact_digest=launch["artifactDigest"], app_root=app_root)
         plans = build_offline_page_plans(snapshot=snapshot, app_root=app_root, launch=launch)
+        from quwoquan_ops.cli.commands.app_preflight_uat_offline import selected_offline_cases
+        selected = selected_offline_cases(args)
+        diagnostic = getattr(args, "offline_cases", None) is not None
         if tuple(plan["caseId"] for plan in plans) != OFFLINE_REQUIRED_CASES:
             raise ValueError("APP.UAT.page_plan_invalid: required cases drifted")
         device = _device(args)
@@ -831,15 +937,47 @@ def execute_offline_page_cases(*, args: argparse.Namespace, candidate: Mapping[s
                                          report_dir=report_dir, output_root=output_root, device=device)
         binding = _write_offline_run_bindings(candidate=candidate, launch=launch, root=root, context=context,
             report_dir=report_dir, output_root=output_root, receipt=receipt)
-        for plan in plans:
-            case_dir = report_dir / "pages" / plan["caseId"]
-            evidence_ref, started = _collect_offline_page_evidence(plan=plan, launch=launch, projection=projection,
-                artifact=artifact, context=context, device=device, case_dir=case_dir, output_root=output_root, receipt=receipt)
-            raw = _write_offline_case_result(plan=plan, candidate=candidate, launch=launch, binding=binding,
-                evidence_ref=evidence_ref, started=started, case_dir=case_dir, output_root=output_root, receipt=receipt)
+        receipt["blockedCases"] = [{"caseId": plan["caseId"], "specRef": plan["specRef"],
+                                    "firstBlocker": plan["executionBlocker"]}
+                                   for plan in plans if plan["executionBlocker"]]
+        for seed_plan in plans:
+            if seed_plan["caseId"] not in selected:
+                continue
+            if seed_plan["executionBlocker"]:
+                continue
+            case_id = seed_plan["caseId"]
+            case_launch = launch
+            # generation-1 复用 seed 制品后，native driver 只 Activate 同一 AUT。
+            # iOS 会恢复上一格终态（视频书藏底栏），因此必须保留上一格 restore。
+            # identity-restart 的 generation-2 仍经 launch_case 冷启动。
+            case_plans = build_offline_page_plans(snapshot=snapshot, app_root=app_root, launch=case_launch,
+                                                  fresh_launch=False)
+            plan = next(item for item in case_plans if item["caseId"] == case_id)
+            require_executable_page_plan(plan)
+            case_dir = report_dir / "pages" / case_id
+            case_receipt = dict(receipt)
+            if launch_case is not None:
+                binding = _write_offline_run_bindings(candidate=candidate, launch=case_launch, root=root,
+                    context=context, report_dir=case_dir, output_root=output_root, receipt=case_receipt)
+            if binding not in bindings:
+                bindings.append(binding)
+            evidence_ref, started = _collect_offline_page_evidence(plan=plan, launch=case_launch, projection=projection,
+                artifact=artifact, context=context, device=device, case_dir=case_dir, output_root=output_root,
+                receipt=case_receipt, launch_case=launch_unlocked if launch_case is not None else None)
+            raw = _write_offline_case_result(plan=plan, candidate=candidate, launch=case_launch, binding=binding,
+                evidence_ref=evidence_ref, started=started, case_dir=case_dir, output_root=output_root, receipt=case_receipt)
             results.append(raw)
-        validate_offline_page_coverage(results=results, bindings=[binding], candidate=candidate, platforms=[platform])
-        receipt.update(status="passed", exitCode=0, summary="Offline native page cases passed for " + platform)
+        if diagnostic:
+            if tuple(row["caseId"] for row in results) != selected:
+                raise ValueError("APP.UAT.page_artifact_binding_missing: diagnostic selection is incomplete")
+            by_id = _offline_binding_index(bindings, candidate)
+            for row in results:
+                _validate_offline_result_binding(row, binding=by_id[row["targetUatBindingDigest"]], candidate=candidate)
+            receipt.update(status="diagnostic_passed", diagnostic=True, profile="diagnostic", selectedCases=list(selected),
+                           exitCode=0, summary="Selected offline diagnostics passed; full acceptance remains incomplete")
+        else:
+            validate_offline_page_coverage(results=results, bindings=bindings, candidate=candidate, platforms=[platform])
+            receipt.update(status="passed", exitCode=0, summary="Offline native page cases passed for " + platform)
     except (OSError, RuntimeError, TypeError, ValueError, KeyError) as error:
         receipt.update(firstBlocker=first_typed_blocker(error), details=[str(error)], summary="Offline native page cases are GATE_BLOCK")
     finally:

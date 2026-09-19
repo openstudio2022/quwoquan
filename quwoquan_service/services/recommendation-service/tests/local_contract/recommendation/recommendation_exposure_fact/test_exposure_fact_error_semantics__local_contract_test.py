@@ -59,6 +59,7 @@ def _fields(*, valid_event_name: bool = True) -> dict[bytes, bytes]:
         "experimentBucket": "rule",
         "modelBucket": "rule",
         "rankingSnapshotDigest": "a" * 64,
+        "policyDigest": "sha256:" + "b" * 64,
         "featureSnapshotAt": "2026-07-31T07:59:59Z",
         "userFeatureSnapshot": user_snapshot,
         "items": [

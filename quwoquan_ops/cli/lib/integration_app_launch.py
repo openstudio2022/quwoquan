@@ -1,4 +1,4 @@
-"""Alpha 的独立必需证据：双端离线页面 raw 闭包与 exact release API 回读。
+"""Alpha 的独立必需证据：声明平台（默认双端）离线 raw 闭包与 exact release API 回读。
 
 离线页面保留 rehearsal/nonPromotable；服务身份只由真实服务/API 轴提供。
 旧 direct 启动观察函数仅供开发诊断，不再参与 acceptance authority。
@@ -324,8 +324,8 @@ def content_readback(*, expected_release: Mapping[str, str], target: str = "alph
 
 def _validate_offline_execution_refs(*, execution: Mapping[str, Any], receipt: Mapping[str, Any]) -> None:
     """只校验执行文档指向本次 receipt 的三项 exact 身份，不读取下一阶段证据。"""
-    expected_refs = {"targetUatBinding": receipt["targetUatBindingRefs"]["alpha-local"],
-                     "launchBinding": receipt["launchBindingRef"], "nativeDriverBinding": receipt["nativeDriverBindingRef"]}
+    # target/launch 是逐页面 attempt 的 exact 输入；只有同次构建的 native driver 可共享。
+    expected_refs = {"nativeDriverBinding": receipt["nativeDriverBindingRef"]}
     if any(execution.get(key) != ref for key, ref in expected_refs.items()):
         raise ValueError("offline execution binding drifted")
 
@@ -362,6 +362,62 @@ def _validate_offline_installed_artifact(*, aut: Mapping[str, Any], binding: Map
         raise ValueError("offline installed artifact identity drifted")
 
 
+def _validate_offline_relay_comparison(value: Any, *, plan: Mapping[str, Any],
+                                       launch: Mapping[str, Any], terminal: Mapping[str, Any]) -> None:
+    from quwoquan_ops.cli.commands import app_preflight_uat_offline_native_contract as relay
+    if not isinstance(value, Mapping) or not isinstance(value.get("admission"), Mapping) or not isinstance(value.get("brokerResult"), Mapping):
+        raise ValueError("APP.UAT.relay_admission_mismatch: exact native admission/broker evidence missing")
+    admission = dict(value["admission"])
+    if admission.get("admissionDigest") != relay.digest({k: v for k, v in admission.items() if k != "admissionDigest"}):
+        raise ValueError("APP.UAT.relay_admission_mismatch: admission digest drifted")
+    expected = {"candidateDigest": launch["candidateDigest"], "artifactDigest": launch["artifactDigest"],
+        "packageIdentity": launch["applicationId"], "deviceId": launch["deviceId"],
+        "launchAttemptId": launch["launchAttemptId"], "processId": launch["canonicalProcessId"],
+        "caseId": plan["caseId"], "contractDigest": plan["nativeContract"]["contractDigest"],
+        **{key: plan["nativeContract"][key] for key in ("generation", "sessionId", "observationBinding")}}
+    if any(admission.get(key) != expected_value for key, expected_value in expected.items()):
+        raise ValueError("APP.UAT.relay_scope_mismatch: admission differs from page attempt")
+    session = relay.RelaySession(admission=admission)
+    try:
+        session.verify_terminal(terminal, plan)
+        comparison = relay.compare_and_report(session, value["brokerResult"], plan["nativeContract"]["expectedObservation"])
+        if comparison.get("status") != "passed" or comparison != {k: v for k, v in value.items() if k not in {"admission", "brokerResult"}}:
+            raise ValueError("APP.UAT.relay_contract_drift: exact comparison drifted")
+    finally:
+        session.revoke()
+
+
+def _validate_offline_restart(*, read: Any, execution: Mapping[str, Any], plan: Mapping[str, Any],
+                              launch: Mapping[str, Any], native: Mapping[str, Any]) -> None:
+    from quwoquan_ops.cli.commands import app_preflight_uat_offline_native_contract as relay
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import validate_native_page_result, native_page_screenshot
+    command = execution["command"]
+    supervision, refs = command.get("launcherSupervision"), command.get("successorEvidence")
+    if not isinstance(supervision, Mapping) or not isinstance(refs, Mapping):
+        raise ValueError("APP.UAT.restart_identity_mismatch: successor evidence missing")
+    _validate_offline_relay_comparison(supervision.get("attempt1"), plan=plan, launch=launch, terminal=native)
+    successor, attempt = read(refs["launchBinding"]), read(refs["launchAttempt"])
+    continuity = relay.digest({key: launch[key] for key in ("candidateDigest", "artifactDigest", "applicationId", "deviceId")})
+    teardown = supervision["teardown"]
+    if (any(successor.get(key) != launch.get(key) for key in ("candidateDigest", "artifactDigest", "applicationId", "deviceId", "platform"))
+            or successor.get("launchAttemptId") != attempt.get("attemptId")
+            or successor.get("launchAttemptDigest") != relay.digest(attempt)
+            or supervision.get("continuityDigest") != continuity
+            or teardown.get("launchAttemptId") != launch["launchAttemptId"]
+            or teardown.get("processId") != launch["canonicalProcessId"]
+            or teardown.get("predecessorResultDigest") != supervision["attempt1"]["comparisonDigest"]
+            or any(teardown.get(key) is not True for key in ("processTableConfirmed", "lifecycleConfirmed", "brokerDisconnected"))):
+        raise ValueError("APP.UAT.restart_identity_mismatch: successor/teardown identity drifted")
+    relay.validate_restart_successor(predecessor=teardown, successor_launch=successor, continuity_digest=continuity)
+    second_plan, second_native = read(refs["plan"]), read(refs["nativeResult"])
+    log = read(refs["log"], binary=True).decode("utf-8")
+    if (validate_native_page_result(log, plan=second_plan, launch=successor) != second_native
+            or native_page_screenshot(log, second_native) != read(refs["screenshot"], binary=True)
+            or refs["command"].get("exitCode") != 0):
+        raise ValueError("APP.UAT.restart_identity_mismatch: successor native terminal drifted")
+    _validate_offline_relay_comparison(supervision.get("attempt2"), plan=second_plan, launch=successor, terminal=second_native)
+
+
 def _offline_execution(*, read: Any, page: Mapping[str, Any], result: Mapping[str, Any],
                        receipt: Mapping[str, Any], binding: Mapping[str, Any], candidate: Mapping[str, Any]) -> None:
     from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import native_page_screenshot, validate_native_page_result
@@ -377,6 +433,12 @@ def _offline_execution(*, read: Any, page: Mapping[str, Any], result: Mapping[st
                                     candidate=candidate, snapshot=snapshot, attempt=attempt)
     validate_native_page_result("QWQ_OFFLINE_PAGE " + json.dumps(native), plan=plan, launch=launch)
     read(execution["nativeDriverBinding"])
+    if "nativeContract" in plan:
+        if plan["caseId"] == "identity-restart":
+            _validate_offline_restart(read=read, execution=execution, plan=plan, launch=launch, native=native)
+        else:
+            _validate_offline_relay_comparison(execution["command"].get("launcherComparison"),
+                plan=plan, launch=launch, terminal=native)
     for field in ("autBefore", "autAfter"):
         _validate_offline_installed_artifact(aut=execution[field], binding=binding, launch=launch)
     if execution["command"].get("exitCode") != 0:
@@ -420,7 +482,8 @@ def _validate_offline_receipt_status(receipt: Mapping[str, Any]) -> None:
             or receipt.get("status") != "passed" or receipt.get("exitCode") != 0
             or receipt.get("contentSource") != "bundled_snapshot" or receipt.get("nonPromotable") is not True
             or receipt.get("targets") != ["alpha-local"] or receipt.get("firstBlocker")
-            or receipt.get("dryRun") is True):
+            or receipt.get("dryRun") is True or receipt.get("diagnostic") is True
+            or receipt.get("selectedCases") is not None):
         raise ValueError("offline receipt is not an executed complete result")
 
 
@@ -442,8 +505,9 @@ def _validate_offline_raw_projection(*, slot: str, exact_raw: Mapping[str, str],
 
 
 def offline_receipt_evidence(*, root: Path, receipts: Mapping[str, Mapping[str, str]],
-                             candidate: Mapping[str, Any], devices: Mapping[str, str]) -> dict[str, Any]:
-    """逐字节消费双端 raw 与绑定闭包；parent receipt 的 complete 不是页面 verdict。"""
+                             candidate: Mapping[str, Any], devices: Mapping[str, str],
+                             required_platforms: tuple[str, ...] = ("android", "ios")) -> dict[str, Any]:
+    """按调用方声明的必需平台消费 raw 闭包，不从已收到的证据反推 required。"""
     from quwoquan_ops.cli.commands.app_preflight_uat_offline_pages import validate_offline_page_coverage
 
     files: dict[str, str] = {}
@@ -458,8 +522,10 @@ def offline_receipt_evidence(*, root: Path, receipts: Mapping[str, Mapping[str, 
             raise ValueError("offline evidence must be an object")
         return value
 
-    if set(receipts) != {"android", "ios"} or set(devices) != set(receipts) or not all(devices.values()):
-        raise ValueError("offline page requires two explicit platform devices and receipts")
+    platforms = set(required_platforms)
+    if (not platforms or len(platforms) != len(required_platforms) or platforms - {"android", "ios"}
+            or set(receipts) != platforms or set(devices) != platforms or not all(devices.values())):
+        raise ValueError("offline page requires explicit selected platform devices and receipts")
     results, bindings, case_refs = [], [], []
     for platform, exact in receipts.items():
         receipt = read(exact)
@@ -468,7 +534,7 @@ def offline_receipt_evidence(*, root: Path, receipts: Mapping[str, Mapping[str, 
         binding = read(binding_ref)
         if binding["platform"] != platform or binding["device"]["identity"] != devices[platform]:
             raise ValueError("offline receipt device differs from explicit selector")
-        bindings.append(binding)
+        anchor_binding = binding
         raw_refs, raw_digests, pages = _offline_receipt_pages(receipt)
         for index, page in enumerate(pages):
             slot, exact_raw = page["slotId"], page["result"]
@@ -476,10 +542,22 @@ def offline_receipt_evidence(*, root: Path, receipts: Mapping[str, Mapping[str, 
             result = read(exact_raw)
             if result.get("platform") != platform or slot != platform + ":" + result["caseId"]:
                 raise ValueError("offline raw platform differs from receipt")
+            execution = read(page["evidence"])
+            from quwoquan_ops.cli.lib.target_uat_binding import validate_target_uat_binding, target_uat_binding_digest
+            binding = validate_target_uat_binding(read(execution["targetUatBinding"]))
+            stable = ("candidateDigest", "commitSha", "treeSha", "platform", "device", "artifact", "snapshot", "runner")
+            if (any(binding.get(key) != anchor_binding.get(key) for key in stable)
+                    or result.get("targetUatBindingDigest") != target_uat_binding_digest(binding)):
+                raise ValueError("offline per-page binding differs from candidate/device/artifact anchor")
+            if binding not in bindings:
+                bindings.append(binding)
             _offline_execution(read=read, page=page, result=result, receipt=receipt, binding=binding, candidate=candidate)
             results.append(result)
             case_refs.append(dict(exact_raw))
-    validate_offline_page_coverage(results=results, bindings=bindings, candidate=candidate)
+    validate_offline_page_coverage(
+        results=results, bindings=bindings, candidate=candidate,
+        platforms=required_platforms,
+    )
     if len({binding["snapshot"]["digest"] for binding in bindings}) != 1:
         raise ValueError("offline platforms bind different snapshots")
     return {"files": [{"ref": ref, "digest": digest} for ref, digest in sorted(files.items())],

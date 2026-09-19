@@ -34,6 +34,15 @@ class AppRoutePaths {
   static const String videoBook = '/video-book';
   static const String videoBookSegment = 'video-book';
 
+  static const String postCollectionPathTemplate = '/collections/{collectionId}';
+  static String postCollection({required String collectionId}) {
+    return _buildPath(postCollectionPathTemplate, <String, String>{
+      'collectionId': collectionId,
+    }, <String, String?>{
+    });
+  }
+  static const String postCollectionSegment = '{collectionId}';
+
   static const String circles = '/circles';
   static const String circlesSegment = 'circles';
 

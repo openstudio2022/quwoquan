@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -403,7 +404,8 @@ def capture_fingerprint(
         review_consolidation,
         required_evidence,
         repo_root=repo_root,
-        required=execution["level"] in {"scope", "release"},
+        # source-admitted 的 scope 只要求 owner + candidate；Review 仅 release 准出必填。
+        required=execution["level"] == "release",
         allow_missing=allow_missing_admission,
     )
     all_paths = sorted(
@@ -463,7 +465,17 @@ def _atomic_json(path: Path, value: Any) -> None:
     try:
         os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(value, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            # admit 用 qualification._exact_ref 要求 compact canonical + 末尾换行；
+            # indent=2 的 receipt 会让 source-admitted bundle 在 integration 被拒。
+            handle.write(
+                json.dumps(
+                    value,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+            )
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
@@ -724,6 +736,23 @@ def _canonical_receipt_from_pointer(path: Path, *, state_root: Path) -> Path:
     return receipt
 
 
+_GIT_SENSITIVE_RESOURCES = frozenset({"feature-tree", "impact-plan", "code-health"})
+
+
+def _partition_readiness_checks(
+    checks: list[dict[str, Any]],
+) -> tuple[list[tuple[int, dict[str, Any]]], list[tuple[int, dict[str, Any]]]]:
+    git_sensitive: list[tuple[int, dict[str, Any]]] = []
+    remainder: list[tuple[int, dict[str, Any]]] = []
+    for index, check in enumerate(checks):
+        resources = set(check.get("resources") or [])
+        if resources & _GIT_SENSITIVE_RESOURCES:
+            git_sensitive.append((index, check))
+        else:
+            remainder.append((index, check))
+    return git_sensitive, remainder
+
+
 def run_readiness(
     plan: dict[str, Any],
     *,
@@ -814,24 +843,41 @@ def run_readiness(
             fingerprint=current,
             push_updates=push_updates,
         ) as (execution_root, execution_env, _source_entries):
-            for index, check in enumerate(canonical["checks"]):
+            def _execute(index_and_check: tuple[int, dict[str, Any]]) -> tuple[int, dict[str, Any]]:
+                index, check = index_and_check
                 remaining = (
                     None
                     if wall_clock_deadline is None
                     else wall_clock_deadline - time.monotonic()
                 )
                 if remaining is not None and remaining <= 0:
-                    break
-                result = _run_check(
+                    return index, {
+                        "id": check["id"],
+                        "status": "FAIL",
+                        "exit_code": 124,
+                        "elapsed_ms": 0,
+                        "timed_out": True,
+                        "outcome": "timeout",
+                    }
+                return index, _run_check(
                     check,
                     root / "process/runs" / run_id / f"{index:03d}-{check['id'].replace(':', '-')}.log",
                     repo_root=execution_root,
                     execution_env=execution_env,
                     timeout_seconds=remaining,
                 )
-                results.append(result)
-                if result["status"] != "PASS":
-                    break
+
+            git_sensitive, remainder = _partition_readiness_checks(canonical["checks"])
+            completed: list[tuple[int, dict[str, Any]]] = []
+            # feature-tree / impact-boundary / code-health 先看干净 capsule；
+            # 并行 pytest 会改 worktree 与共享 index，不能和 git status 门禁叠跑。
+            for batch in (git_sensitive, remainder):
+                if not batch:
+                    continue
+                workers = min(8, max(1, len(batch)))
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    completed.extend(pool.map(_execute, batch))
+            results = [item for _, item in sorted(completed)]
         end = capture_fingerprint(
             canonical,
             repo_root=repo_root,
@@ -845,7 +891,7 @@ def run_readiness(
         stable = end["digest"] == current["digest"]
         queue_observation = _assert_scope_queue_closed(canonical, state_root=root)
         status = "PASS" if len(results) == len(canonical["checks"]) and all(item["status"] == "PASS" for item in results) and stable and (level == "fast" or not canonical["deferred"]) else "FAIL"
-        admission_paths, admission_identity = _load_review_inputs(review_consolidation, required_evidence, repo_root=repo_root, required=level in {"scope", "release"})
+        admission_paths, admission_identity = _load_review_inputs(review_consolidation, required_evidence, repo_root=repo_root, required=level == "release")
         from .source_inputs import push_source_identity
         receipt = {
             "schema": RECEIPT_SCHEMA,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import hashlib
 import json
 from typing import Callable, Protocol
@@ -14,6 +15,7 @@ from ..domain.model import (
     RankedRecommendationItem,
     ClientContentPresentationContract,
     validate_presentation_contract,
+    RecommendationRequestContext,
     RankedRecommendationWindow,
 )
 
@@ -40,6 +42,7 @@ class CandidateRanker(Protocol):
         limit: int,
         content_fence: ReleasePinnedQueryFence,
         client_presentation_contract: ClientContentPresentationContract,
+        request_context: RecommendationRequestContext,
     ) -> RankingResult: ...
 
 
@@ -77,6 +80,7 @@ class RankedRecommendationPage:
     model_channel: str | None
     model_release_id: str | None
     policy_digest: str
+    context_digest: str
     ranking_snapshot_digest: str
     feature_snapshot_at: str
     user_feature_snapshot: dict
@@ -95,6 +99,7 @@ class Facade:
         subject_closures: SubjectClosureReader,
         exclusion_profiles: ExclusionProfileReader,
         window_id_factory: Callable[[str], str] | None = None,
+        now: Callable[[], datetime] | None = None,
         release_readiness=None,
     ) -> None:
         self._release_readiness = release_readiness
@@ -102,6 +107,7 @@ class Facade:
         self._ranker = ranker
         self._subject_closures = subject_closures
         self._exclusion_profiles = exclusion_profiles
+        self._now = now or (lambda: datetime.now(timezone.utc))
         self._window_id_factory = window_id_factory or (
             lambda idempotency_key: str(
                 uuid5(NAMESPACE_URL, f"quwoquan:recommendation-window:{idempotency_key}")
@@ -123,6 +129,8 @@ class Facade:
         limit: int,
         content_fence: ReleasePinnedQueryFence,
         client_presentation_contract: ClientContentPresentationContract,
+        viewport_profile: str | None = None,
+        device_class: str | None = None,
     ) -> RankedRecommendationPage:
         content_fence = validate_content_fence(content_fence)
         contract = validate_presentation_contract(client_presentation_contract)
@@ -139,29 +147,39 @@ class Facade:
             raise ValueError("scenario is required")
         if self._subject_closures.exists(normalized_subject):
             raise SubjectClosedError("closed subjects cannot create recommendation windows")
-        request_digest = hashlib.sha256(
-            json.dumps(
-                {
-                    "contentFence": content_fence.model_dump(mode="json"),
-                    "clientPresentationContract": contract.model_dump(mode="json"),
-                    "subjectId": normalized_subject,
-                    "scenario": normalized_scenario,
-                    "limit": limit,
-                },
-                ensure_ascii=False,
-                separators=(",", ":"),
-                sort_keys=True,
-            ).encode("utf-8")
-        ).hexdigest()
+        normalized_viewport = self._normalize_viewport(viewport_profile)
+        normalized_device = self._normalize_device(device_class)
         window_id = self._window_id_factory(json.dumps([normalized_key, contract.contractDigest], separators=(",", ":")))
         existing = self._store.get(normalized_subject, window_id)
         if existing is not None:
+            request_digest = self._request_digest(
+                content_fence=content_fence,
+                contract=contract,
+                subject_id=normalized_subject,
+                scenario=normalized_scenario,
+                limit=limit,
+                context_digest=self._context_digest(RecommendationRequestContext(
+                    viewport_profile=normalized_viewport,
+                    device_class=normalized_device,
+                    coarse_region=existing.request_context.coarse_region,
+                    time_bucket=existing.request_context.time_bucket,
+                    profile_revision=existing.request_context.profile_revision,
+                )),
+            )
             if existing.request_digest != request_digest or existing.content_fence != content_fence:
                 raise IdempotencyConflictError(
                     "Idempotency-Key was already used with another request"
                 )
             return self._page(existing, from_ordinal=0, limit=limit)
 
+        admitted_at = self._now().astimezone(timezone.utc)
+        request_context = RecommendationRequestContext(
+            viewport_profile=normalized_viewport,
+            device_class=normalized_device,
+            coarse_region="unknown",
+            time_bucket=f"h{admitted_at.hour:02d}",
+            profile_revision="unknown",
+        )
         ranking = self._ranker.rank(
             subject_id=normalized_subject,
             scenario=normalized_scenario,
@@ -169,15 +187,37 @@ class Facade:
             limit=MAX_WINDOW_ITEMS,
             content_fence=content_fence.model_copy(deep=True),
             client_presentation_contract=contract.model_copy(deep=True),
+            request_context=request_context,
         )
+        admitted_at = max(admitted_at, ranking.feature_snapshot_at.astimezone(timezone.utc))
+        request_context = RecommendationRequestContext(
+            viewport_profile=request_context.viewport_profile,
+            device_class=request_context.device_class,
+            coarse_region=request_context.coarse_region,
+            time_bucket=request_context.time_bucket,
+            profile_revision=self._normalize_profile_revision(ranking.profile_revision),
+        )
+        context_digest = self._context_digest(request_context)
+        request_digest = self._request_digest(
+            content_fence=content_fence,
+            contract=contract,
+            subject_id=normalized_subject,
+            scenario=normalized_scenario,
+            limit=limit,
+            context_digest=context_digest,
+        )
+        ranking = self._bind_ranking_context(ranking, context_digest)
         window = RankedRecommendationWindow.create(
             window_id=window_id,
             subject_id=normalized_subject,
             scenario=normalized_scenario,
             request_digest=request_digest,
+            request_context=request_context,
+            context_digest=context_digest,
             ranking=ranking,
             content_fence=content_fence,
             client_presentation_contract=contract,
+            now=admitted_at,
         )
         persisted = self._store.create_or_get(window)
         if persisted.request_digest != request_digest or persisted.content_fence != content_fence:
@@ -188,6 +228,71 @@ class Facade:
             self._store.erase_subject(normalized_subject)
             raise SubjectClosedError("closed subjects cannot create recommendation windows")
         return self._page(persisted, from_ordinal=0, limit=limit)
+
+    @staticmethod
+    def _normalize_viewport(value: str | None) -> str:
+        normalized = "unknown" if value is None else value
+        if not isinstance(normalized, str) or normalized not in {"landscape", "portrait", "unknown"}:
+            raise ValueError("viewportProfile is invalid")
+        return normalized
+
+    @staticmethod
+    def _normalize_device(value: str | None) -> str:
+        normalized = "unknown" if value is None else value
+        if not isinstance(normalized, str) or normalized not in {"phone", "tablet", "desktop", "unknown"}:
+            raise ValueError("deviceClass is invalid")
+        return normalized
+
+    @staticmethod
+    def _normalize_profile_revision(value: str) -> str:
+        normalized = str(value).strip()
+        if normalized == "unknown" or normalized == "0" or (normalized.isdigit() and not normalized.startswith("0")):
+            return normalized
+        return "unknown"
+
+    @staticmethod
+    def _context_digest(context: RecommendationRequestContext) -> str:
+        return hashlib.sha256(json.dumps(
+            context.canonical_document(), ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _request_digest(*, content_fence, contract, subject_id: str, scenario: str, limit: int, context_digest: str) -> str:
+        return hashlib.sha256(json.dumps({
+            "clientPresentationContract": contract.model_dump(mode="json"),
+            "contentFence": content_fence.model_dump(mode="json"),
+            "contextDigest": context_digest,
+            "limit": limit,
+            "scenario": scenario,
+            "subjectId": subject_id,
+        }, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _bind_ranking_context(ranking: RankingResult, context_digest: str) -> RankingResult:
+        digest = hashlib.sha256(json.dumps({
+            "contextDigest": context_digest,
+            "featureSnapshotAt": ranking.feature_snapshot_at.astimezone(timezone.utc).isoformat(),
+            "modelBucket": ranking.model_bucket,
+            "modelChannel": ranking.model_channel,
+            "modelReleaseId": ranking.model_release_id,
+            "policyDigest": ranking.policy_digest,
+            "rankerSnapshotDigest": ranking.ranking_snapshot_digest,
+            "ranked": [
+                {
+                    "envelope": item.envelope.model_dump(mode="json"),
+                    "featureSnapshotDigest": item.feature_snapshot_digest,
+                    "score": item.score,
+                }
+                for item in ranking.candidates
+            ],
+        }, allow_nan=False, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")).hexdigest()
+        return RankingResult(
+            experiment_bucket=ranking.experiment_bucket, model_bucket=ranking.model_bucket,
+            model_channel=ranking.model_channel, model_release_id=ranking.model_release_id,
+            policy_digest=ranking.policy_digest, feature_snapshot_at=ranking.feature_snapshot_at,
+            ranking_snapshot_digest=digest, user_feature_snapshot=ranking.user_feature_snapshot,
+            candidates=ranking.candidates, profile_revision=ranking.profile_revision,
+        )
 
     def read_page(
         self,
@@ -258,6 +363,7 @@ class Facade:
             model_channel=window.model_channel,
             model_release_id=window.model_release_id,
             policy_digest=window.policy_digest,
+            context_digest=window.context_digest,
             ranking_snapshot_digest=window.ranking_snapshot_digest,
             feature_snapshot_at=window.feature_snapshot_at.isoformat(),
             user_feature_snapshot=dict(window.user_feature_snapshot),

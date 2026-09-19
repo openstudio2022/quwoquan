@@ -247,7 +247,6 @@ final class _ImmediateDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -270,7 +269,6 @@ final class _SequencedDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -295,7 +293,6 @@ final class _PendingDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,

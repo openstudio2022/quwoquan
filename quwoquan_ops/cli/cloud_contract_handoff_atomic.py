@@ -198,7 +198,10 @@ def main() -> int:
         "--approve-breaking-report-sha256",
         help="已人工审阅的 blocked report SHA256（透传给 accept）",
     )
+    parser.add_argument("--preview-only", action="store_true", help="仅重建并输出审阅预览；绝不接收 lock 或运行 App codegen")
     args = parser.parse_args()
+    if args.preview_only and (args.approve_breaking_report or args.approve_breaking_report_sha256):
+        parser.error("--preview-only cannot be combined with approval")
 
     if not CANONICAL_LOCK.exists():
         print(f"FAIL: canonical lock not found: {CANONICAL_LOCK}")
@@ -224,6 +227,9 @@ def main() -> int:
             if not ok:
                 time.sleep(args.poll_seconds)
                 continue
+            if args.preview_only:
+                print(f"PREVIEW ONLY: {PREVIEW_REPORT}; breaking={len(breaking)}; canonical lock unchanged")
+                return EXIT_OK
             if breaking and not args.approve_breaking_report:
                 print("FAIL: 存在未审阅的 breaking 变更，拒绝自动批准：")
                 for change in breaking:

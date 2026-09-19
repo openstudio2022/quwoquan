@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from content.execution.workspace import target_descriptor_for
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _read_json,
@@ -23,6 +24,9 @@ _IDENTITY_FIELDS = (
     "sourceRevision",
     "sourceDigest",
     "entityCatalogDigest",
+    "descriptorRef",
+    "descriptorDigest",
+    "mappingDigest",
 )
 _INIT_INPUT_NAMES = ("carrierDemand", "immutableCandidateBindings")
 _REQUEST_REF = "0.plan/request.json"
@@ -105,10 +109,11 @@ def _init_binding(value: object, *, label: str) -> dict[str, str]:
 
 
 def source_identity_digest(identity: Mapping[str, Any]) -> str:
-    values = {
-        field: str(identity.get(field) or "").strip() for field in _IDENTITY_FIELDS
-    }
-    if any(not _SHA256.fullmatch(value) for value in values.values()):
+    values = {field: str(identity.get(field) or "").strip() for field in _IDENTITY_FIELDS}
+    if (
+        any(not _SHA256.fullmatch(values[field]) for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest", "descriptorDigest", "mappingDigest"))
+        or not values["descriptorRef"].startswith("0.plan/target-descriptors/")
+    ):
         raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_INVALID")
     return _canonical_digest(
         {"schema": "quwoquan_data.object_source_identity", **values}
@@ -362,6 +367,28 @@ def freeze_execution_source_identity(
         target_set.get("entityCatalogDigest"),
         label="targetSet.entityCatalogDigest",
     )
+    descriptor_bindings = target_set.get("targetDescriptors")
+    if not isinstance(descriptor_bindings, list):
+        raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_INVALID: targetDescriptors")
+    try:
+        descriptor = target_descriptor_for(execution_id, normalized_target)
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise ObjectTransactionError(str(exc)) from exc
+    descriptor_binding = next(
+        (
+            row
+            for row in descriptor_bindings
+            if isinstance(row, Mapping)
+            and str(row.get("ref") or "")
+            and _read_json(execution_root / str(row.get("ref") or "")).get("processRef") == normalized_target
+        ),
+        None,
+    )
+    if descriptor_binding is None or set(descriptor_binding) != {"scope", "ref", "digest"} or descriptor_binding.get("scope") != "execution":
+        raise ObjectTransactionError("DATA.IDENTITY.DESCRIPTOR_MISSING")
+    descriptor_ref = _safe_rel(str(descriptor_binding["ref"]), label="targetDescriptor.ref").as_posix()
+    descriptor_digest = _digest(descriptor_binding.get("digest"), label="targetDescriptor.digest")
+    mapping_digest = _digest(descriptor.get("mappingDigest"), label="targetDescriptor.mappingDigest")
     source_digest = _canonical_digest(
         {
             "schema": "quwoquan_data.task_init_source_identity",
@@ -386,6 +413,9 @@ def freeze_execution_source_identity(
         "sourceRevision": source_revision,
         "sourceDigest": source_digest,
         "entityCatalogDigest": entity_catalog_digest,
+        "descriptorRef": descriptor_ref,
+        "descriptorDigest": descriptor_digest,
+        "mappingDigest": mapping_digest,
     }
     identity["identityDigest"] = source_identity_digest(identity)
     return identity
@@ -445,6 +475,9 @@ def source_identity_set(
                 "sourceRevision": key[0],
                 "sourceDigest": key[1],
                 "entityCatalogDigest": key[2],
+                "descriptorRef": key[3],
+                "descriptorDigest": key[4],
+                "mappingDigest": key[5],
                 "executionIds": sorted(execution_ids),
             }
         )

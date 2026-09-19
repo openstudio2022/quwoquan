@@ -14,8 +14,9 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// 与 Remote 共用 typed 详情、作者作品 ports 和 generated decoder；没有网络依赖。
 final class BundledContentPostReader
     implements ContentPostDetailReader, ContentAuthorPostsReader {
-  BundledContentPostReader({required this.loadBundle});
+  BundledContentPostReader({required this.loadBundle, this.checkScope});
   final Future<OfflineContentBundle> Function() loadBundle;
+  final void Function()? checkScope;
   Future<OfflineContentBundle>? _bundle;
 
   @override
@@ -24,16 +25,19 @@ final class BundledContentPostReader
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
+    checkScope?.call();
     final readBudgetDeadline = DateTime.now().add(const Duration(seconds: 6));
     final effectiveDeadline =
         deadlineAt == null || deadlineAt.isAfter(readBudgetDeadline)
         ? readBudgetDeadline
         : deadlineAt;
     final bundle = await runCloudOperationPrerequisite(
-      () => _bundle ??= loadBundle().catchError((Object error) {
-        _bundle = null;
-        throw error;
-      }),
+      () => checkScope != null
+          ? loadBundle()
+          : _bundle ??= loadBundle().catchError((Object error) {
+              _bundle = null;
+              throw error;
+            }),
       cancellation: cancellation,
       deadlineAt: effectiveDeadline,
     );
@@ -53,6 +57,7 @@ final class BundledContentPostReader
       cancellation: cancellation,
       deadlineAt: effectiveDeadline,
     );
+    checkScope?.call();
     return ContentPostDetailPayload.fromWire(detail);
   }
 
@@ -64,6 +69,7 @@ final class BundledContentPostReader
     String? cursor,
     int limit = ContentAuthorPostsQuery.defaultLimit,
   }) async {
+    checkScope?.call();
     if (userId.trim().isEmpty ||
         userId.trim() == 'me' ||
         (visibility != null && visibility != 'public')) {
@@ -72,10 +78,14 @@ final class BundledContentPostReader
     if (limit < 1 || limit > 100) {
       throw const OfflineContentFailure('bundle_query_limit_invalid');
     }
-    final bundle = await (_bundle ??= loadBundle().catchError((Object error) {
-      _bundle = null;
-      throw error;
-    })).timeout(const Duration(seconds: 6));
+    final bundle =
+        await (checkScope != null
+                ? loadBundle()
+                : _bundle ??= loadBundle().catchError((Object error) {
+                    _bundle = null;
+                    throw error;
+                  }))
+            .timeout(const Duration(seconds: 6));
     final rows = bundle
         .rows('posts')
         .map(
@@ -121,6 +131,7 @@ final class BundledContentPostReader
         .take(limit)
         .map(const ContentPostProjectionMapper().toDto)
         .toList(growable: false);
+    checkScope?.call();
     return CursorPage<ContentPostViewData>(
       items: items,
       nextCursor: offset + items.length < rows.length

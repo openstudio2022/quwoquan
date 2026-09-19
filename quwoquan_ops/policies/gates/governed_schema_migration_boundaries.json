@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "_governance": {
+    "owner": "specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/spec.md",
+    "reason": "以实际 CLI、调用与 schema 闭包区分一次性受治理重物化和普通运行时双轨；声明不直接授予豁免。",
+    "expires_when": "已批准旧输入迁移终止且对应 command、handler 与旧输入闭包原子退役时删除边界声明。"
+  },
+  "boundaries": [
+    {
+      "spec_ref": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-030",
+      "cli": "quwoquan_data/scripts/cli.py",
+      "command": "release",
+      "subcommand": "repackage-legacy",
+      "registration": "quwoquan_data/scripts/content/release/canonical/handler_cli.py",
+      "register_function": "register_parser",
+      "handler": "quwoquan_data/scripts/content/release/canonical/handler.py",
+      "handler_function": "handle_repackage_legacy",
+      "governed_call": "content.coordination.runtime.governed_repackage_call",
+      "authority_verifier": "content.coordination.authority.verify_authority_artifact",
+      "authority_purpose": "legacy-source-repository-seal",
+      "input_error_codes": ["DATA.RELEASE.REPACKAGE.LEGACY_SCHEMA_UNSUPPORTED", "DATA.RELEASE.REPACKAGE.LEGACY_SCHEMA_INVALID"],
+      "implementation": "quwoquan_data/scripts/content/release/canonical/legacy_release_repackage.py",
+      "freeze_function": "freeze_legacy_source",
+      "writer_function": "repackage_legacy_release",
+      "schema_root": "quwoquan_data/schema",
+      "input_schemas": [
+        "release/legacy_producer_release_handoff_v1.schema.json",
+        "release/legacy_release_cohort_v1.schema.json"
+      ],
+      "input_closure": [
+        "release/legacy_producer_release_handoff_v1.schema.json",
+        "release/legacy_release_cohort_v1.schema.json",
+        "release/legacy_content_pool_handoff_query_v1.schema.json"
+      ],
+      "evidence_schema": "release/legacy_source_repository_evidence.schema.json",
+      "lineage_schema": "release/legacy_release_repackage_lineage.schema.json",
+      "output_schemas": [
+        "release/release_cohort.schema.json",
+        "release/producer_release_handoff.schema.json"
+      ],
+      "current_builder": "content.release.canonical.aggregate_release.build_pool_release",
+      "current_writer": "content.release.canonical.producer_release_handoff.write_producer_release_handoff",
+      "current_reader": "content.release.canonical.producer_release_handoff.read_producer_release_handoff"
+    }
+  ]
+}

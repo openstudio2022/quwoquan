@@ -12,6 +12,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -231,6 +232,183 @@ void main() {
   setUp(MediaLoadFailureCache.instance.clear);
   tearDown(MediaLoadFailureCache.instance.clear);
 
+  // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-021
+  // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-023
+  testWidgets('当前图片状态帧后上报解码比例，canonical优先且有效状态去重', (tester) async {
+    final loader = _ControlledImageLoader();
+    final states = <ImageBookCurrentMediaState>[];
+    final phases = <SchedulerPhase>[];
+    void report(ImageBookCurrentMediaState value) {
+      states.add(value);
+      phases.add(SchedulerBinding.instance.schedulerPhase);
+    }
+
+    Widget host({
+      double? ratio,
+      ValueChanged<ImageBookCurrentMediaState>? callback,
+    }) => _host(
+      SizedBox(
+        width: 320,
+        height: 480,
+        child: ImageBookCanvas(
+          deliveries: _publicPages(const [
+            'media/image/s/fixture/v1/state-ratio.jpg',
+          ]),
+          mediaAspectRatios: [ratio],
+          imageLoader: loader.call,
+          onImageChanged: (_) {},
+          onCurrentMediaStateChanged: callback ?? report,
+        ),
+      ),
+    );
+    await tester.pumpWidget(host());
+    await tester.pump();
+    expect(states, [
+      const ImageBookCurrentMediaState(
+        index: 0,
+        isReady: false,
+        hasFailure: false,
+      ),
+    ]);
+    loader
+        .latest(0)
+        .complete(await _solidImage(80, 40, const Color(0xFF3182CE)));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      states.last,
+      const ImageBookCurrentMediaState(
+        index: 0,
+        isReady: true,
+        hasFailure: false,
+        aspectRatio: 2,
+      ),
+    );
+    final readyCount = states.length;
+    await tester.pumpWidget(host());
+    await tester.pump(const Duration(seconds: 1));
+    expect(states, hasLength(readyCount));
+    await tester.pumpWidget(host(ratio: 4 / 3));
+    await tester.pump();
+    expect(states.last.aspectRatio, 4 / 3);
+    expect(loader.attempts[0], hasLength(1));
+    final replacementStates = <ImageBookCurrentMediaState>[];
+    final replacement = replacementStates.add;
+    await tester.pumpWidget(host(ratio: 4 / 3, callback: replacement));
+    await tester.pump();
+    expect(replacementStates, [states.last]);
+    await tester.pumpWidget(host(ratio: 4 / 3, callback: replacement));
+    await tester.pump();
+    expect(replacementStates, hasLength(1));
+    expect(phases, everyElement(SchedulerPhase.postFrameCallbacks));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('当前图片失败重试状态仅影响当前页，邻页加载不误报', (tester) async {
+    final loader = _ControlledImageLoader();
+    final states = <ImageBookCurrentMediaState>[];
+    final report = states.add;
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: ImageBookCanvas(
+            deliveries: _publicPages(const [
+              'media/image/s/fixture/v1/state-failure.jpg',
+              'media/image/s/fixture/v1/state-neighbor.jpg',
+            ]),
+            imageLoader: loader.call,
+            onImageChanged: (_) {},
+            onCurrentMediaStateChanged: report,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    loader
+        .latest(1)
+        .complete(await _solidImage(40, 80, const Color(0xFF3182CE)));
+    await tester.pump();
+    await tester.pump();
+    expect(states, hasLength(1));
+    loader.latest(0).completeError(StateError('当前页失败'));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      states.last,
+      const ImageBookCurrentMediaState(
+        index: 0,
+        isReady: false,
+        hasFailure: true,
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('image-book-retry')));
+    await tester.pump();
+    expect(
+      states.last,
+      const ImageBookCurrentMediaState(
+        index: 0,
+        isReady: false,
+        hasFailure: false,
+      ),
+    );
+    final book = tester.widget<MediaPageFlipBook>(
+      find.byType(MediaPageFlipBook),
+    );
+    book.onPageChanged!(1);
+    await tester.pump();
+    expect(
+      states.last,
+      const ImageBookCurrentMediaState(
+        index: 1,
+        isReady: true,
+        hasFailure: false,
+        aspectRatio: .5,
+      ),
+    );
+    final count = states.length;
+    loader.latest(0).completeError(StateError('已离开的页迟到失败'));
+    await tester.pump(ImmersiveMediaWaitMotion.indicatorMinDisplay);
+    await tester.pump();
+    expect(states, hasLength(count));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('当前图片换源取消旧generation，卸载丢弃已排队ready和迟到回调', (tester) async {
+    final loader = _ControlledImageLoader();
+    final states = <ImageBookCurrentMediaState>[];
+    final report = states.add;
+    Widget host(String suffix) => _host(
+      SizedBox(
+        width: 320,
+        height: 480,
+        child: ImageBookCanvas(
+          deliveries: _publicPages(['media/image/s/fixture/v1/$suffix.jpg']),
+          imageLoader: loader.call,
+          onImageChanged: (_) {},
+          onCurrentMediaStateChanged: report,
+        ),
+      ),
+    );
+    await tester.pumpWidget(host('state-old'));
+    await tester.pump();
+    final previous = loader.latest(0);
+    await tester.pumpWidget(host('state-new'));
+    await tester.pump();
+    expect(previous.cancelled, isTrue);
+    final count = states.length;
+    final nextImage = await _solidImage(80, 40, const Color(0xFF3182CE));
+    loader.latest(0).complete(nextImage);
+    // 解码成功的微任务已排队，但在下一帧上报前卸载。
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 7));
+    expect(states, hasLength(count));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('图片负缓存命中阻止默认 provider 并保留页位与 TTL', (tester) async {
     const path = 'media/image/s/fixture/v1/negative-cache.jpg';
     const identity = path;
@@ -322,6 +500,213 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  test('ImageBookPageSurfaceFactory 横竖方未知图均以 contain 保留完整边界', () async {
+    const factory = ImageBookPageSurfaceFactory();
+    const pageSize = Size(320, 480);
+    final cases = <({ui.Image image, double? ratio, Size expected})>[
+      (
+        image: await _solidImage(640, 180, const Color(0xFFCC6633)),
+        ratio: 16 / 9,
+        expected: const Size(320, 180),
+      ),
+      (
+        image: await _solidImage(180, 640, const Color(0xFF3366CC)),
+        ratio: 9 / 16,
+        expected: const Size(270, 480),
+      ),
+      (
+        image: await _solidImage(320, 320, const Color(0xFF38A169)),
+        ratio: 1,
+        expected: const Size(320, 320),
+      ),
+      (
+        image: await _solidImage(400, 200, const Color(0xFF805AD5)),
+        ratio: null,
+        expected: const Size(320, 160),
+      ),
+    ];
+    for (final entry in cases) {
+      expect(
+        factory
+            .containDestinationRect(
+              entry.image,
+              pageSize,
+              canonicalAspectRatio: entry.ratio,
+            )
+            .size,
+        entry.expected,
+      );
+      entry.image.dispose();
+    }
+  });
+
+  // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-023
+  test('图片书整栏窗口在正背面一致且窗口外纯黑', () async {
+    const factory = ImageBookPageSurfaceFactory();
+    const size = Size(400, 880);
+    for (final height in [225, 660, 760, 880, 960]) {
+      final image = await _quadrantImage(
+        width: 400,
+        height: height,
+        topLeft: const Color(0xFFDD4444),
+        topRight: const Color(0xFF44DD44),
+        bottomLeft: const Color(0xFF4444DD),
+        bottomRight: const Color(0xFFDDDD44),
+      );
+      final geometry = factory.geometryForImage(
+        image,
+        size,
+        usePortraitBands: true,
+        mediaTopInset: 80,
+        mediaBottomInset: 180,
+      );
+      final pair = await factory.rasterizeImageTexture(
+        image: image,
+        pageSize: size,
+        pixelRatio: 1,
+        usePortraitBands: true,
+        mediaTopInset: 80,
+        mediaBottomInset: 180,
+      );
+      final top = geometry.viewportRect.top.ceil();
+      final bottom = geometry.viewportRect.bottom.floor();
+      for (final snapshot in [pair.front, pair.back]) {
+        expect(
+          await _sampleLuminance(snapshot.image, x: 10, y: top + 2),
+          greaterThan(10),
+        );
+        expect(
+          await _sampleLuminance(snapshot.image, x: 390, y: bottom - 3),
+          greaterThan(10),
+        );
+        if (top > 0) {
+          expect(
+            await _sampleLuminance(
+              snapshot.image,
+              x: 200,
+              y: geometry.viewportRect.top.floor() - 1,
+            ),
+            0,
+          );
+        }
+        if (bottom < 880) {
+          expect(
+            await _sampleLuminance(snapshot.image, x: 200, y: bottom + 1),
+            0,
+          );
+        }
+      }
+      expect(geometry.contentRect.height, closeTo(height.toDouble(), .00001));
+      pair.dispose();
+      image.dispose();
+    }
+  });
+
+  // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-023
+  testWidgets('图片静态绘制与front纹理逐像素一致，几何更新失效且不重载或换页', (tester) async {
+    const size = Size(320, 480);
+    final loader = _ControlledImageLoader();
+    final changes = <int>[];
+    final image = await _quadrantImage(
+      width: 320,
+      height: 600,
+      topLeft: const Color(0xFFCC4444),
+      topRight: const Color(0xFF44CC44),
+      bottomLeft: const Color(0xFF4444CC),
+      bottomRight: const Color(0xFFCCCC44),
+    );
+    Widget host({
+      double top = 40,
+      double bottom = 80,
+      double entry = 0,
+      bool bands = true,
+      double? ratio,
+    }) => _host(
+      SizedBox.fromSize(
+        size: size,
+        child: ImageBookCanvas(
+          deliveries: _publicPages(const [
+            '',
+            'media/image/s/fixture/v1/geometry.jpg',
+            '',
+          ]),
+          initialIndex: 1,
+          mediaAspectRatios: [null, ratio, null],
+          usePortraitBands: bands,
+          mediaTopInset: top,
+          mediaBottomInset: bottom,
+          landscapeEntryExtent: entry,
+          imageLoader: loader.call,
+          onImageChanged: changes.add,
+        ),
+      ),
+    );
+    await tester.pumpWidget(host());
+    await tester.pump();
+    loader.latest(1).complete(image);
+    await tester.pump();
+    Object? previousSignature;
+    for (final child in [
+      host(),
+      host(top: 60),
+      host(top: 60, bottom: 100),
+      host(top: 60, bottom: 100, entry: 44),
+      host(top: 60, bottom: 100, entry: 44, ratio: 16 / 9),
+      host(top: 60, bottom: 100, entry: 44, ratio: 16 / 9, bands: false),
+    ]) {
+      await tester.pumpWidget(child);
+      await tester.pump(const Duration(milliseconds: 16));
+      final book = tester.widget<MediaPageFlipBook>(
+        find.byType(MediaPageFlipBook),
+      );
+      if (previousSignature != null) {
+        expect(book.contentSignature, isNot(previousSignature));
+      }
+      previousSignature = book.contentSignature;
+      expect(book.initialPage, 1);
+      expect(loader.attempts[1], hasLength(1));
+      expect(changes, [1]);
+      final painter = tester
+          .widget<CustomPaint>(
+            find.byKey(const ValueKey('image-book-decoded-surface')),
+          )
+          .painter!;
+      await tester.runAsync(() async {
+        final recorder = ui.PictureRecorder();
+        final canvas = ui.Canvas(recorder);
+        canvas.drawRect(
+          Offset.zero & size,
+          ui.Paint()..color = const Color(0xFF000000),
+        );
+        painter.paint(canvas, size);
+        final picture = recorder.endRecording();
+        final staticImage = await picture.toImage(320, 480);
+        picture.dispose();
+        final pair = await book.textureSnapshotBuilder!(
+          tester.element(find.byType(MediaPageFlipBook)),
+          1,
+          size,
+          1,
+        );
+        expect(pair, isNotNull);
+        final staticBytes = await staticImage.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        );
+        final frontBytes = await pair!.front.image.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        );
+        expect(
+          staticBytes!.buffer.asUint8List(),
+          orderedEquals(frontBytes!.buffer.asUint8List()),
+        );
+        pair.dispose();
+        staticImage.dispose();
+      });
+      expect(tester.takeException(), isNull);
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   test('ImageBookPageSurfaceFactory 将不同尺寸 ready 图片统一为双面书页材质', () async {
     const factory = ImageBookPageSurfaceFactory();
     const pageSize = Size(320, 480);
@@ -383,8 +768,8 @@ void main() {
     );
     expect(
       backBrightnessRatio,
-      lessThanOrEqualTo(0.78),
-      reason: '背面必须降低亮度刺激，不能保留高对比镜像图。',
+      lessThanOrEqualTo(0.82),
+      reason: 'contain 留白计入整页平均亮度后，背面仍必须明显降低刺激。',
     );
     expect(
       await _averageSaturation(widePair.back.image),
@@ -846,6 +1231,7 @@ void main() {
             imageLoader: loader.call,
             onMediaLoad: mediaEvents.add,
             onImageChanged: (_) {},
+            now: () => DateTime.utc(2026, 9, 15),
           ),
         ),
       ),

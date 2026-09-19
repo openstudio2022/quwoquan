@@ -51,6 +51,7 @@ DEPENDENCY_PREPARE_HELPER = (
 LAUNCH_EXECUTOR = ROOT / "quwoquan_app/scripts/device/run_app_instance.py"
 FLUTTER_TEST_GUARD = ROOT / "quwoquan_app/scripts/env/run_flutter_test_guarded.py"
 PUBSPEC = ROOT / "quwoquan_app/pubspec.yaml"
+PATROL_PUBSPEC = ROOT / "quwoquan_app/test_host/patrol/pubspec.yaml"
 PUBSPEC_LOCK = ROOT / "quwoquan_app/pubspec.lock"
 PODFILE_LOCK = ROOT / "quwoquan_app/ios/Podfile.lock"
 PODS_MANIFEST_LOCK = ROOT / "quwoquan_app/ios/Pods/Manifest.lock"
@@ -359,18 +360,20 @@ def _verify_scripts(failures: list[str]) -> None:
 
 
 def _verify_pubspec(failures: list[str]) -> None:
-    data = yaml.safe_load(PUBSPEC.read_text(encoding="utf-8"))
-    sqlite_source = (
-        data.get("hooks", {}).get("user_defines", {}).get("sqlite3", {}).get("source")
-    )
-    if sqlite_source != "system":
-        _fail(
-            failures,
-            f"{PUBSPEC.relative_to(ROOT)} hooks.user_defines.sqlite3.source must be 'system', got {sqlite_source!r}",
+    for path in (PUBSPEC, PATROL_PUBSPEC):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        sqlite_source = (
+            data.get("hooks", {}).get("user_defines", {}).get("sqlite3", {}).get("source")
         )
+        if sqlite_source != "system":
+            _fail(
+                failures,
+                f"{path.relative_to(ROOT)} hooks.user_defines.sqlite3.source must be 'system', got {sqlite_source!r}",
+            )
 
+    app_data = yaml.safe_load(PUBSPEC.read_text(encoding="utf-8"))
     swiftpm_enabled = (
-        data.get("flutter", {}).get("config", {}).get("enable-swift-package-manager")
+        app_data.get("flutter", {}).get("config", {}).get("enable-swift-package-manager")
     )
     if swiftpm_enabled is not False:
         _fail(

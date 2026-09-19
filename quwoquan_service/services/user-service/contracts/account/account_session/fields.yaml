@@ -49,6 +49,14 @@ fields:
       - NULLABLE
     role: authoritative_state
 enums:
+  SyntheticLoginFailureReason:
+    - unavailable
+    - invalidInput
+    - expired
+    - mismatch
+    - attemptsExceeded
+    - conflict
+    - storageUnavailable
   AccountSessionStatus:
     - active
     - rotated
@@ -58,6 +66,25 @@ enums:
     - authenticated
     - phoneBindingRequired
 types:
+  CompleteSyntheticChallenge:
+    client_value: true
+    description: '仅Alpha isolated的本地SyntheticSessionPort消费，不是LoginWithPhone或真实认证。identity/challengeId绑定begin实际空间；confirmationHint 是用户提交值，完整匹配 ^alpha-rehearsal-(confirm|reject)$，长度最多23 ASCII字节，不trim或归一化；confirm与现役展示提示匹配，reject是合法但不匹配的受限错误输入。安全格式通过不代表挑战匹配；端口实现必须与该challenge的实际提示比较，错提示与错identity均在同一事务累计attempts，5次锁定，同request重放不重复计数。提交值日志drop且不属于SyntheticLoginEvidence公开字段域；requestKey为随机128-bit lowercase hex。same request成功响应丢失返回同一本地结果；不同request重复消费、跨空间、错identity或过期均拒绝。'
+    fields:
+      - {name: identityLabel, type: string, pattern: '^alpha-synthetic:[a-f0-9]{32}$', constraints: [NOT_BLANK], max_utf8_bytes: 48, classification: PUBLIC, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: challengeId, type: string, pattern: '^alpha-challenge:[a-f0-9]{32}$', constraints: [NOT_BLANK], classification: INTERNAL, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: confirmationHint, type: string, pattern: '^alpha-rehearsal-(confirm|reject)$', constraints: [NOT_BLANK, MAX_LENGTH_23], max_utf8_bytes: 23, classification: PUBLIC, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: requestKey, type: string, pattern: '^[a-f0-9]{32}$', constraints: [NOT_BLANK], max_utf8_bytes: 32, classification: INTERNAL, log_policy: drop, api_exposure: none, ops_exposure: drop}
+  SyntheticSessionResult:
+    client_value: true
+    description: '纯本地非认证成功结果；accountId/personaId分别完整匹配 ^alpha-account:[a-f0-9]{32}$ / ^alpha-persona:[a-f0-9]{32}$，只在已验证隔离空间内有效，持久分配且绝不选canonical creator。没有access/refresh token、phone或credential；不能直接转换成AuthSessionGrant。内部ID禁止plan/screenshots/native活动产物与普通日志，UI只显示专门合成标识。'
+    fields:
+      - {name: accountId, type: string, pattern: '^alpha-account:[a-f0-9]{32}$', constraints: [NOT_BLANK], classification: INTERNAL, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: personaId, type: string, pattern: '^alpha-persona:[a-f0-9]{32}$', constraints: [NOT_BLANK], classification: INTERNAL, log_policy: drop, api_exposure: none, ops_exposure: drop}
+  SyntheticLoginFailure:
+    client_value: true
+    description: '本地结果错误而非HTTP错误。reason只允许 unavailable/invalidInput/expired/mismatch/attemptsExceeded/conflict/storageUnavailable，未知拒绝；不携带raw message、输入、request或credential。各reason由未来同源validator/判别类型生成，不能用本字段自由string绕过闭集。'
+    fields:
+      - {name: reason, type: enum, enum_ref: SyntheticLoginFailureReason, constraints: [NOT_NULL], classification: INTERNAL, log_policy: drop, api_exposure: none, ops_exposure: drop}
   LoginOneTapCommand:
     fields:
       - name: vendor

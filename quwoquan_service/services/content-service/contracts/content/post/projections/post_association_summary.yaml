@@ -1,0 +1,6 @@
+read_model: PostAssociationSummarySlice
+description: Post 关联 projector 的权限内 typed 摘要；话题与新闻事件属于 tag，地点属于 Homepage，参与活动属于 Gathering，合集属于 PostCollection。
+source_entities: [Post]
+consumers: [app]
+fields:
+- {name: associations, type: '[]PostAssociationSummary', nullable: false}

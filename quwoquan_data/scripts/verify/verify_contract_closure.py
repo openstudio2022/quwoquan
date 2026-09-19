@@ -214,6 +214,46 @@ def _tombstone_issues(repo_root: Path, nodes: dict[Path, SchemaNode]) -> list[st
     return issues
 
 
+def _governed_migration_schema_groups(repo_root: Path) -> tuple[frozenset[str], ...]:
+    """一次性受治理重物化允许旧输入闭包与现役输出共享 payload identity。"""
+    path = repo_root / "quwoquan_ops/policies/gates/governed_schema_migration_boundaries.json"
+    if not path.is_file():
+        return ()
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return ()
+    groups = []
+    for boundary in document.get("boundaries") or []:
+        relatives = set()
+        for key in ("input_schemas", "input_closure", "output_schemas"):
+            relatives.update(item for item in boundary.get(key) or [] if isinstance(item, str))
+        for key in ("evidence_schema", "lineage_schema"):
+            item = boundary.get(key)
+            if isinstance(item, str):
+                relatives.add(item)
+        if relatives:
+            groups.append(frozenset(relatives))
+    return tuple(groups)
+
+
+def _group_ref_closure(
+    group: frozenset[str],
+    nodes: dict[Path, SchemaNode],
+    edges: dict[Path, set[Path]],
+) -> set[str]:
+    by_relative = {node.relative: path for path, node in nodes.items()}
+    pending = [by_relative[relative] for relative in group if relative in by_relative]
+    seen = set(pending)
+    while pending:
+        source = pending.pop()
+        for target in edges.get(source, ()):
+            if target not in seen:
+                seen.add(target)
+                pending.append(target)
+    return {nodes[path].relative for path in seen} | set(group)
+
+
 def build_report(repo_root: Path = REPO_ROOT) -> ClosureReport:
     nodes, issues = load_nodes(repo_root)
     if not nodes: return ClosureReport(tuple(issues), 0, 0, (), {})
@@ -223,8 +263,14 @@ def build_report(repo_root: Path = REPO_ROOT) -> ClosureReport:
     for node in nodes.values():
         if not node.identities and not any(node.path in targets for targets in edges.values()): issues.append(f"{node.relative}: identityless non-supporting authority")
         for identity in node.identities: owners[identity].append(node)
+    migration_groups = _governed_migration_schema_groups(repo_root)
     for identity, matches in sorted(owners.items()):
-        if len(matches) > 1: issues.append(f"duplicate schema identity {identity!r}: " + ", ".join(n.relative for n in matches))
+        if len(matches) <= 1:
+            continue
+        relatives = {node.relative for node in matches}
+        if any(relatives <= _group_ref_closure(group, nodes, edges) for group in migration_groups):
+            continue
+        issues.append(f"duplicate schema identity {identity!r}: " + ", ".join(n.relative for n in matches))
     by_relative = {n.relative: p for p, n in nodes.items()}; bindings = []; scanned = 0
     for path in sorted((repo_root / "quwoquan_data/scripts").rglob("*.py")):
         if any(part in SKIPPED_PARTS for part in path.parts): continue

@@ -29,6 +29,7 @@ from quwoquan_ops.cli.lib.package_reuse import (
     materialize_dependency_bundle_projection,
     replay_ios_dependency_projections,
 )
+from quwoquan_ops.cli.lib.package_reuse.pub_cache_capsule import seal_lock_hosted_url
 from quwoquan_ops.cli.lib.package_reuse.dependency_bundle_projection_verify import (
     load_dependency_projection_cas_readback,
     prepare_dependency_projection_cas_evidence_with_observed_components,
@@ -38,6 +39,7 @@ from quwoquan_ops.cli.lib.package_reuse.dependency_bundle_projection_verify impo
 
 _EXPORTED_KEYS = (
     "PUB_CACHE",
+    "PUB_HOSTED_URL",
     "GRADLE_USER_HOME",
     "FLUTTER_SWIFT_PACKAGE_MANAGER",
     "CP_HOME_DIR",
@@ -159,7 +161,10 @@ def _run_projected_pub_gets(
     _run_pub_get(
         flutter=flutter,
         package_root=projection_root / "quwoquan_app",
-        environment=production_environment,
+        environment=seal_lock_hosted_url(
+            production_environment,
+            lock_path=projection_root / "quwoquan_app/pubspec.lock",
+        ),
     )
     if not include_patrol:
         return
@@ -171,7 +176,10 @@ def _run_projected_pub_gets(
     _run_pub_get(
         flutter=flutter,
         package_root=projection_root / "quwoquan_app/test_host/patrol",
-        environment=patrol_environment,
+        environment=seal_lock_hosted_url(
+            patrol_environment,
+            lock_path=projection_root / "quwoquan_app/test_host/patrol/pubspec.lock",
+        ),
     )
 
 

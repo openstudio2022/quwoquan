@@ -51,6 +51,15 @@ abstract interface class FileStorageGateway {
   Future<List<FileSystemEntry>> listDirectory(String path);
 }
 
+/// 可选原子替换能力；不支持时调用方必须拒绝，不能退回覆盖写。
+abstract interface class AtomicFileStorageGateway {
+  Future<void> writeAsStringAtomically(
+    String path,
+    String contents, {
+    void Function()? beforeCommit,
+  });
+}
+
 /// Builds the platform-appropriate gateway (io on mobile/desktop/ohos, web stub
 /// on web). Selected at compile time via conditional import.
 FileStorageGateway createFileStorageGateway() =>

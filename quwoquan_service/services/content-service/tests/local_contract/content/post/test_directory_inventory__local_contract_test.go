@@ -44,6 +44,13 @@ func TestContentServicePhysicalTestDirectoryLayout(t *testing.T) {
 				strings.HasSuffix(entry.Name(), "__local_contract_test.go") {
 				return nil
 			}
+			// 同包白盒：未导出 cache 的 coalescing 只能与实现同目录。
+			if strings.HasSuffix(
+				path,
+				"/active_supply_snapshot_cache__local_contract_test.go",
+			) {
+				return nil
+			}
 			t.Errorf("business test must be under tests/, found %q", path)
 			return nil
 		})

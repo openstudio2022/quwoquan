@@ -134,8 +134,9 @@ final class AppPageLoadArbiter {
       AppUserRecoveryGroup.waitThenReload => 8,
       AppUserRecoveryGroup.reloadLater => 9,
       AppUserRecoveryGroup.noAccess => 10,
+      AppUserRecoveryGroup.capabilityUnavailable => 11,
       AppUserRecoveryGroup.contentGone ||
-      AppUserRecoveryGroup.contentUnavailable => 11,
+      AppUserRecoveryGroup.contentUnavailable => 12,
     };
   }
 }

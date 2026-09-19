@@ -181,6 +181,81 @@ class CanonicalLaunchPlatformContractMixin:
             ],
         )
 
+    def test_platform_drivers_prepare_canonical_activation_observation_marker(self) -> None:
+        application_id = "com.leadwise.quwoquan.nonprod.debug"
+        digest = "sha256:" + "d" * 64
+        expected_marker = executor.activation_receipt_observation_marker(digest)
+
+        android = executor.AndroidPlatformDriver(
+            device_id="android-1",
+            application_id=application_id,
+            entrypoint="lib/main_prod.dart",
+        )
+        completed = subprocess.CompletedProcess([], 0, stdout=b"", stderr=b"")
+        with mock.patch.object(executor, "_run", return_value=completed) as run:
+            android.prepare_activation_receipt_observation(digest)
+        android_call = run.call_args
+        self.assertEqual(android_call.kwargs["input_payload"], expected_marker)
+        self.assertTrue(android_call.kwargs["capture_output"])
+        command = android_call.args[0]
+        self.assertEqual(
+            command[:7],
+            ["adb", "-s", "android-1", "shell", "run-as", application_id, "sh"],
+        )
+        self.assertEqual(command[7], "-c")
+        self.assertIn("runtime-config-activation-receipt.json.$$.tmp", command[8])
+        self.assertIn("mv -f", command[8])
+        self.assertIn("no_backup/runtime-config-activation-receipt.json", command[8])
+
+        simulator = executor.IOSSimulatorPlatformDriver(
+            device_id="SIM-1",
+            application_id=application_id,
+            entrypoint="lib/main_prod.dart",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / executor.RECEIPT_FILE_NAME
+            destination.write_bytes(b"old receipt bytes")
+            with mock.patch.object(
+                simulator, "_runtime_state_root", return_value=root
+            ) as runtime_root, mock.patch.object(
+                executor.os, "replace", wraps=executor.os.replace
+            ) as replace:
+                simulator.prepare_activation_receipt_observation(digest)
+            runtime_root.assert_called_once_with(create=True)
+            replace.assert_called_once()
+            self.assertEqual(destination.read_bytes(), expected_marker)
+            self.assertFalse(any(path.name.endswith(".tmp") for path in root.iterdir()))
+
+        iphone = executor.IOSPhysicalPlatformDriver(
+            device_id="IPHONE-1",
+            application_id=application_id,
+            entrypoint="lib/main_prod.dart",
+        )
+        copied: dict[str, object] = {}
+
+        def capture_copy(arguments):
+            copied["arguments"] = arguments
+            source_root = Path(arguments[arguments.index("--source") + 1])
+            copied["marker"] = (
+                source_root / executor.RECEIPT_FILE_NAME
+            ).read_bytes()
+            copied["mode"] = oct(
+                (source_root / executor.RECEIPT_FILE_NAME).stat().st_mode & 0o777
+            )
+            return {}
+
+        with mock.patch.object(iphone, "_devicectl", side_effect=capture_copy):
+            iphone.prepare_activation_receipt_observation(digest)
+        arguments = copied["arguments"]
+        self.assertEqual(arguments[:3], ["device", "copy", "to"])
+        self.assertEqual(
+            arguments[arguments.index("--destination") + 1],
+            "Library/Application Support",
+        )
+        self.assertEqual(copied["marker"], expected_marker)
+        self.assertEqual(copied["mode"], "0o600")
+
     def test_platform_drivers_execute_canonical_install_and_launch_commands(self) -> None:
         application_id = "com.leadwise.quwoquan.nonprod.debug"
         digest = "sha256:" + "a" * 64

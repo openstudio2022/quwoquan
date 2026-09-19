@@ -28,12 +28,6 @@ entries:
 - path: quwoquan_service/AGENTS.md
   kind: agents
   ceiling: 5149
-- path: quwoquan_data/AGENTS.md
-  kind: agents
-  ceiling: 8740
-- path: .agents/skills/content-production/SKILL.md
-  kind: skill_file
-  ceiling: 8224
 - path: .agents/skills/environment-ops/SKILL.md
   kind: skill_file
   ceiling: 4145

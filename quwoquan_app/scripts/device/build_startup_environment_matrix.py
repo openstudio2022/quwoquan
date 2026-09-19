@@ -14,9 +14,12 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
+
+sys.dont_write_bytecode = True
 
 from canonical_app_instance.activation import (
     FORBIDDEN_COMPILE_ENVIRONMENT_KEYS,
@@ -34,13 +37,13 @@ TARGETS = {
     "gamma": "gamma-local",
     "prod": "prod-hosted",
 }
-def _artifact_path(platform: str, build_profile: str) -> Path:
+def _artifact_path(platform: str, flavor: str, build_mode: str = "debug") -> Path:
     if platform == "android":
         return APP_DIR / (
-            f"build/app/outputs/flutter-apk/app-{build_profile}-debug.apk"
+            f"build/app/outputs/flutter-apk/app-{flavor}-{build_mode}.apk"
         )
     if platform == "ios":
-        return APP_DIR / "build/ios/iphonesimulator/Runner.app"
+        return APP_DIR / f"build/ios/{'iphonesimulator' if build_mode == 'debug' else 'iphoneos'}/Runner.app"
     return APP_DIR / "build/web"
 
 
@@ -110,34 +113,52 @@ def _retain_artifact(
     return destination
 
 
+def _build_identity(platform: str, handoff: dict[str, Any]):
+    from quwoquan_ops.cli.lib.app_identity import resolve_app_identity
+    mode = str(handoff.get("buildMode") or ("release" if handoff["environment"] == "prod" else "debug"))
+    return resolve_app_identity(platform=platform, environment=str(handoff["environment"]),
+                                build_profile=str(handoff["buildProfile"]), build_mode=mode)
+
+
 def _build_command(platform: str, handoff: dict[str, Any]) -> list[str]:
-    # flavor 只认 handoff 的 buildProfile：环境属于 runtime package，不是构建维度。
+    from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
+    contract = load_launch_manifest_contract()
+    expected = contract["content_source_entrypoints"][contract["content_source_policy"][handoff["environment"]]]
+    if handoff["entrypoint"] != expected:
+        raise ValueError("entrypoint conflicts with canonical environment content source")
     command = ["flutter", "build"]
-    if platform == "android":
-        command.extend(["apk", "--debug", "--flavor", str(handoff["buildProfile"])])
-    elif platform == "ios":
-        command.extend(
-            ["ios", "--simulator", "--debug", "--flavor", str(handoff["buildProfile"])]
-        )
+    if platform == "web":
+        command.extend(["web", "--release"])
     else:
-        command.extend(["web", "--debug"])
+        identity = _build_identity(platform, handoff)
+        command.extend(["apk" if platform == "android" else "ios", "--" + identity.build_mode,
+                        "--flavor", identity.flavor])
+        if platform == "ios" and identity.build_mode == "debug":
+            command.append("--simulator")
     command.extend(["--target", str(handoff["entrypoint"])])
     return command
 
 
 def _build_key(platform: str, handoff: dict[str, Any]) -> tuple[str, str]:
-    # Web is the single shared build product. Mobile has one product per trust
-    # domain; Alpha/Beta/Gamma therefore share the same nonprod bytes.
-    profile = "shared" if platform == "web" else str(handoff["buildProfile"])
-    return profile, platform
+    # 同一 Release 身份仍须区分 source composition；不能把 Alpha 资产复用给 Remote。
+    if platform == "web":
+        selector = "shared/release"
+    else:
+        identity = _build_identity(platform, handoff)
+        selector = f"{identity.flavor}/{identity.build_mode}"
+    return selector + ":" + str(handoff["entrypoint"]), platform
 
 
 def _compile_environment(
     *,
     build_profile: str,
     platform: str,
+    runtime_environment: str,
     ios_simulator_id: str,
 ) -> dict[str, str]:
+    from quwoquan_ops.cli.lib.app_identity import build_profile_for_environment
+    if build_profile_for_environment(runtime_environment) != build_profile:
+        raise ValueError("compile environment/build profile mismatch")
     environment = compile_environment(os.environ)
     environment["QWQ_APP_BUILD_CONTEXT"] = "package-only"
     if platform == "web":
@@ -151,6 +172,8 @@ def _compile_environment(
             environment.pop(key, None)
     else:
         environment["QWQ_APP_BUILD_PROFILE"] = build_profile
+        # runtime 值不进入 compiler；环境身份由 canonical flavor/configuration 选择。
+        environment.pop("QWQ_APP_RUNTIME_ENV", None)
     if platform == "ios" and ios_simulator_id:
         environment["QWQ_IOS_SIMULATOR_UDID"] = ios_simulator_id
     return environment
@@ -205,8 +228,9 @@ def main() -> int:
             if existing is not None:
                 continue
             process_env = _compile_environment(
-                build_profile=key[0],
+                build_profile=str(handoff["buildProfile"]),
                 platform=platform,
+                runtime_environment=environment,
                 ios_simulator_id=args.ios_simulator_id,
             )
             started = time.monotonic()
@@ -216,7 +240,9 @@ def main() -> int:
                 env=process_env,
                 check=False,
             )
-            artifact = _artifact_path(platform, str(handoff["buildProfile"]))
+            identity = _build_identity(platform, handoff) if platform != "web" else None
+            artifact = _artifact_path(platform, identity.flavor if identity else "shared",
+                                      identity.build_mode if identity else "release")
             succeeded = result.returncode == 0 and artifact.is_file()
             if artifact.is_dir():
                 succeeded = result.returncode == 0 and any(

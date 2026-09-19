@@ -15,7 +15,7 @@ Feature Tree 上下文算法见 [`specs/feature-tree/README.md`](specs/feature-t
 `.agents/skills/<name>/SKILL.md` 是 Workflow Skill 的唯一 authoring source 与宿主发现面；自然语言与显式入口加载同一 Skill body 并进入同一生命周期。
 
 - 始终选择当前最早且足以闭环的 Skill；目标、证据或阻断改变时按 metadata 切换，而不是沿用错误流程。
-- Skill 就地声明生命周期；根与子树不复制流程。
+- Skill 就地声明五段生命周期；根与子树不复制步骤或路由。
 - 工作流切换只改变执行契约，不扩大用户授权；提交、发布、外部写入、不可逆动作和高风险环境操作仍须满足原有明确授权与确认边界。
 
 ## 真相源与修改顺序
@@ -46,9 +46,9 @@ Feature Tree 上下文算法见 [`specs/feature-tree/README.md`](specs/feature-t
 
 ## Git 不变量
 
-- 本地允许`dev1.0`、`main`与六条长期`lane/*`；六 lane 仅作检出/验收 identity，upstream 统一指向 `origin/dev1.0`，远端闭集只允许 `origin/dev1.0` 与 `origin/main`，lane 不推远端。本地受管入口对 `dev1.0` 只接受trusted publisher CAS、`integration/`持有 acceptance bundle 的non-force fast-forward publish与managed system backsync三条通道，无bundle的裸push、非快进、force/delete或来源不匹配一律阻断；`main`本地只读、禁止direct push，唯一promotion边为`dev1.0 -> main`；Prod只消费main-reachable stable tag AdmissionFact绑定的exact OCI digests。
+- 本地分支闭集为 `dev1.0`、只读 `main` 与六条长期 `lane/*`；lane upstream 统一为 `origin/dev1.0` 且不推远端，远端仅 `dev1.0/main`。`dev1.0` 只接受 trusted publisher CAS、持 bundle 的 integration non-force FF publish、managed backsync；其他 push、force/delete、来源不符均拒绝。唯一 promotion 为 `dev1.0 -> main`；Prod 只消费 main-reachable stable tag AdmissionFact 的 exact OCI digests。
 - 新建 linked worktree 或再次 clone 每次都须先取得用户明确授权，并以 `QWQ_WORKTREE_AUTHZ="<授权理由>" <command>` 执行。clone 后先运行 `make install-hooks`。
-- 无验真 bundle/admission 不移动 `origin/dev1.0`；env=1 不证明 admission。资格通道只读 daily REQ-002；日常 dev 由 accept/bundle/integrate/hook 强制。服务端凭据可 FF 但不保证 Alpha；hosted 资格保持 OPEN-track；dev 禁删/禁非 FF。Gamma/IQF 后仅 `dev1.0 -> main` PR，MainSourceSeal 后仅受管 backsync。同步固定本轮已发布 `origin/dev1.0` exact SHA，不回落本地 dev、不推 lane。
+- 无验真 bundle/admission 不移动 `origin/dev1.0`；`env=1` 不证明 admission。bundle/admission、Lane Gate 左移、dev 发布资格与回同步只读 `daily-merge-release-strategy` REQ-002 及两个同步 Skill；日常 dev 由 accept/bundle/integrate/hook 强制。普通凭据可 FF 但不证明 Alpha；hosted 强制缺口保持 OPEN-track；dev 禁删/禁非 FF。同步目标只取本轮已发布 `origin/dev1.0` exact SHA，不回落本地 dev、不推 lane。Gamma/IQF 后仅 `dev1.0 -> main` PR，MainSourceSeal 后仅受管 backsync。
 - 只有用户明确要求时才创建提交；提交按 `commit` Skill 执行，不用 `--no-verify` 作为常规通道。
 
 ## 沟通

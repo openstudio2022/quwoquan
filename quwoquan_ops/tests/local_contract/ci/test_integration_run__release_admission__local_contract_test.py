@@ -1,5 +1,7 @@
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001
-"""lane acceptance 消费当前无类别 Data attestation 与本树 exact release。"""
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t6
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t7
+"""lane acceptance 消费当前无类别 Data attestation；只读 producer Data root，不要求本树 mirror。"""
 from __future__ import annotations
 
 import json
@@ -43,16 +45,29 @@ class IntegrationRunReleaseAdmissionTest(unittest.TestCase):
                             subject._release_id(attestation)
                     self.assertEqual(caught.exception.code, "INTEGRATION_RUN.INPUT_INVALID")
 
-    def test_release_absent_from_worktree_data_root_is_a_typed_blocker(self) -> None:
+    def test_release_absent_from_this_worktree_is_consumed_from_producer_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            attestation = _write_attestation(root, "release-m1-candidate")
+            producer = root / "data-engineering-output"
+            consumer = root / "product-mainline-output"
+            attestation = _write_attestation(producer, "release-m1-candidate")
+            consumer.mkdir(parents=True, exist_ok=True)
+            with mock.patch.object(subject, "OUTPUT_ROOT", consumer):
+                self.assertEqual(subject._release_id(attestation), "release-m1-candidate")
+            self.assertFalse((consumer / "data/releases").exists())
+
+    def test_handed_attestation_without_producer_bytes_is_a_typed_blocker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = release_attestation_payload("release-m1-candidate", "sha256:" + "a" * 64)
+            handed = root / "release-m1-candidate.attestation.json"
+            handed.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
             with mock.patch.object(subject, "OUTPUT_ROOT", root / "elsewhere"):
                 with self.assertRaises(subject.IntegrationRunError) as caught:
-                    subject._release_id(attestation)
+                    subject._release_id(handed)
         self.assertEqual(caught.exception.code, "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE")
 
-    def test_local_attestation_drift_is_rejected(self) -> None:
+    def test_producer_attestation_drift_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             attestation = _write_attestation(root, "release-candidate")

@@ -14,6 +14,7 @@ import json
 import pytest
 from tests.support.presentation import presentation_contract
 from generated.recommendation.ranked_recommendation_window.models.request_response import ReleasePinnedQueryFence
+from internal.recommendation.ranked_recommendation_window.domain.model import RecommendationRequestContext
 from prometheus_client import REGISTRY
 
 from generated.recommendation.recommendation_model_release.models.request_response import (
@@ -89,7 +90,7 @@ class _Features:
     def read_for_scoring(self, subject_id: str):
         profile = {
             "checkpoint": 1,
-            "sparseFeatures": {},
+            "sparseFeatures": {"action:view": 1.0},
             "influenceScore": 0.0,
             "collaborativeFeatures": {},
             "intersectionFeatures": {},
@@ -195,6 +196,7 @@ def _rank(ranker: MongoCandidateRanker):
         scenario="content_feed",
         session_id="window-tuning",
         limit=300,
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
     )
 
 
@@ -226,6 +228,7 @@ def test_new_content_boost_promotes_fresh_candidates() -> None:
                 new_content_boost=1.5,
                 author_diversity_weight=1.0,
                 whitelist_enabled=False,
+                cold_start_max_behavior_count=0,
             ),
         )
     )
@@ -250,6 +253,7 @@ def test_author_diversity_weight_demotes_repeat_authors() -> None:
                 new_content_boost=1.0,
                 author_diversity_weight=0.5,
                 whitelist_enabled=False,
+                cold_start_max_behavior_count=0,
             ),
         )
     )
@@ -277,6 +281,7 @@ def test_whitelist_keeps_canonical_release_supply_only() -> None:
                 new_content_boost=1.0,
                 author_diversity_weight=1.0,
                 whitelist_enabled=True,
+                cold_start_max_behavior_count=0,
             ),
         )
     )
@@ -297,6 +302,7 @@ def test_whitelist_never_bypasses_hard_filters() -> None:
                 new_content_boost=1.0,
                 author_diversity_weight=1.0,
                 whitelist_enabled=True,
+                cold_start_max_behavior_count=0,
             ),
             features=_Features(negativeContentIds=["post-canonical"]),
         )
@@ -373,6 +379,7 @@ def test_whitelist_filtering_everything_returns_empty_window_not_fallback() -> N
                 new_content_boost=1.0,
                 author_diversity_weight=1.0,
                 whitelist_enabled=True,
+                cold_start_max_behavior_count=0,
             ),
         )
     )
@@ -385,12 +392,14 @@ def test_tuning_validation_fails_fast() -> None:
             new_content_boost=0.0,
             author_diversity_weight=1.0,
             whitelist_enabled=False,
+            cold_start_max_behavior_count=0,
         )
     with pytest.raises(ValueError):
         DiscoveryRankingTuning(
             new_content_boost=1.0,
             author_diversity_weight=1.5,
             whitelist_enabled=False,
+            cold_start_max_behavior_count=0,
         )
 
 
@@ -401,7 +410,7 @@ def test_tuning_parses_rendered_runtime_config_shape() -> None:
                 "reco": {
                     "discovery": {
                         "prerank": {"new_content_boost": 1.08},
-                        "rank": {"author_diversity_weight": 0.42},
+                        "rank": {"author_diversity_weight": 0.42, "cold_start_max_behavior_count": 3},
                         "recall": {"whitelist_enabled": False},
                     }
                 }
@@ -411,6 +420,7 @@ def test_tuning_parses_rendered_runtime_config_shape() -> None:
     assert tuning.new_content_boost == pytest.approx(1.08)
     assert tuning.author_diversity_weight == pytest.approx(0.42)
     assert tuning.whitelist_enabled is False
+    assert tuning.cold_start_max_behavior_count == 3
 
 
 def test_tuning_missing_tree_fails_fast() -> None:
@@ -428,6 +438,7 @@ def test_snapshot_records_tuning_and_fallback_attribution() -> None:
                 new_content_boost=1.08,
                 author_diversity_weight=0.42,
                 whitelist_enabled=False,
+                cold_start_max_behavior_count=0,
             ),
         )
     )
@@ -435,3 +446,39 @@ def test_snapshot_records_tuning_and_fallback_attribution() -> None:
     # fallback reason and the tuning values; consumers can audit the window.
     assert result.model_bucket == "rule"
     assert len(result.ranking_snapshot_digest) == 64
+
+
+def test_cold_start_threshold_controls_quality_prior_and_model_context() -> None:
+    documents = [
+        {**_document("post-popular"), "qualityScore": 0.1},
+        {**_document("post-quality", author_id="persona-quality"), "qualityScore": 0.9},
+    ]
+    tuning = DiscoveryRankingTuning(
+        new_content_boost=1.0,
+        author_diversity_weight=1.0,
+        whitelist_enabled=False,
+        cold_start_max_behavior_count=3,
+    )
+    cold_scoring = _FixedScoring({"post-popular": 0.8, "post-quality": 0.2})
+    cold = _rank(_ranker(cold_scoring, documents, tuning=tuning, features=_Features(sparseFeatures={"action:view": 3.0})))
+    assert [item.envelope.post.postId for item in cold.candidates] == ["post-quality", "post-popular"]
+    assert cold_scoring.requests[0].context["coldStart"] is True
+    assert cold_scoring.requests[0].context["behaviorCount"] == 3
+
+    warm_scoring = _FixedScoring({"post-popular": 0.8, "post-quality": 0.2})
+    warm = _rank(_ranker(warm_scoring, documents, tuning=tuning, features=_Features(sparseFeatures={"action:view": 4.0})))
+    assert [item.envelope.post.postId for item in warm.candidates] == ["post-popular", "post-quality"]
+    assert warm_scoring.requests[0].context["coldStart"] is False
+
+def test_ranker_propagates_request_context_to_model_request() -> None:
+    scoring = _FixedScoring({"post-a": 0.5})
+    ranker = _ranker(scoring, [_document("post-a")], tuning=DiscoveryRankingTuning.neutral())
+    ranker.rank(
+        content_fence=ReleasePinnedQueryFence(release=None, revision=0),
+        client_presentation_contract=presentation_contract(),
+        subject_id=SUBJECT, scenario="content_feed", session_id="context-window", limit=300,
+        request_context=RecommendationRequestContext("landscape", "tablet", "unknown", "h12", "unknown"),
+    )
+    assert scoring.requests[0].context["viewportProfile"] == "landscape"
+    assert scoring.requests[0].context["deviceClass"] == "tablet"
+    assert scoring.requests[0].context["timeBucket"] == "h12"

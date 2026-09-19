@@ -130,13 +130,10 @@ distribution_classes:
     launch_provenances: [icon_cold_launch]
     promotable: true
 
-# BuildProfile × BuildMode 的原生包身份映射（唯一真相源）。规则：
-#   applicationId = base + build_profile_suffix + build_mode_suffix
-#   displayName   = display_name_base + build_profile_mark + build_mode_mark
-# prod × release 使用 base 本身；nonprod 与 prod 可以在同一设备并存，但
-# Alpha/Beta/Gamma 复用同一个 nonprod 安装实例，运行环境由签名配置集合选择。
-# registered=false 表示该平台 Prod 正式 ID 尚未取得已登记外部事实，
-# store 渠道 promotable 必须阻断（GATE_BLOCK/OPEN），不得用占位 ID 上架。
+# 原生包身份映射（唯一真相源）：Release 只按 buildProfile 二分；不可提升的
+# Debug/Profile 按 environment + mode 独立安装。Prod Debug/Profile 不在有效矩阵。
+# registered=false 表示该平台 Prod 正式 ID 尚未取得权威外部登记 readback；用户
+# 确认不能改变此事实，store 渠道必须继续 GATE_BLOCK，不得以字符串正确冒充登记。
 application_identity:
   display_name_base: 趣我圈
   base_application_ids:
@@ -147,21 +144,21 @@ application_identity:
       value: com.leadwise.quwoquan
       registered: true
     ios:
-      value: com.example.quwoquanApp
+      value: com.leadwise.quwoquan
       registered: false
   build_profile_suffixes:
     nonprod: .nonprod
     prod: ""
   build_profile_display_marks:
-    nonprod: ·N
+    nonprod: ·非生产
     prod: ""
   build_mode_suffixes:
     debug: .debug
     profile: .profile
     release: ""
   build_mode_display_marks:
-    debug: ·D
-    profile: ·P
+    debug: ·调试
+    profile: ·性能
     release: ""
 
 # launch provenance 枚举：只记录启动来源，任何消费方不得据此改变业务行为。

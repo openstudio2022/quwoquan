@@ -249,9 +249,14 @@ def _validate_launch(fact: dict[str, Any], root: Path) -> None:
         _block("APP.READINESS.invalid", "sourceGitSha must be exact")
     for field in (
         "artifactDigest", "runtimeConfigPackageDigest",
-        "runtimeConfigTrustEnvelopeDigest", "effectiveLaunchManifestDigest", "consumerLeaseId",
+        "runtimeConfigTrustEnvelopeDigest", "effectiveLaunchManifestDigest",
     ):
         _require_digest(fact.get(field), field=field)
+    consumer_lease_id = str(fact.get("consumerLeaseId") or "")
+    if consumer_lease_id:
+        _require_digest(consumer_lease_id, field="consumerLeaseId")
+    elif fact.get("nonPromotable") is not True:
+        _block("APP.READINESS.invalid", "promotable launch requires consumerLeaseId")
     if _TREE_RE.fullmatch(str(fact.get("sourceTreeDigest") or "")) is None:
         _block("APP.READINESS.invalid", "sourceTreeDigest must be an exact Git tree identity")
     if fact.get("platform") not in {"android", "ios"}:
@@ -274,7 +279,25 @@ def _validate_launch(fact: dict[str, Any], root: Path) -> None:
         _block("APP.READINESS.invalid", "launchAttempt fields are invalid")
     exact, raw = _verify_exact_ref(root, {"ref": attempt.get("ref"), "digest": attempt.get("digest")}, field="launchAttempt")
     launch = _decode_json(raw, field="launchAttempt")
-    if attempt.get("status") != "launched" or launch.get("status") != "launched":
+    transitions = [
+        str(item.get("status") or "")
+        for item in launch.get("transitions") or []
+        if isinstance(item, Mapping)
+    ]
+    from .app_launch_attempt import FORWARD_STATES, validate_app_launch_attempt
+    stopped = launch.get("status") == "stopped"
+    if stopped:
+        try:
+            validate_app_launch_attempt(launch)
+        except (TypeError, ValueError) as error:
+            _block("APP.READINESS.evidence_blocked", f"stopped launch lifecycle is invalid: {error}")
+    reached_launched = not launch.get("firstBlocker") and "failed" not in transitions and (
+        launch.get("status") == "launched" or (
+            stopped and transitions == [*FORWARD_STATES, "stopped"]
+            and fact.get("nonPromotable") is True
+        )
+    )
+    if attempt.get("status") != launch.get("status") or not reached_launched:
         _block("APP.READINESS.evidence_blocked", "launch attempt did not reach launched")
     if launch.get("attemptId") != attempt.get("attemptId") or launch.get("attemptId") != fact["attemptId"]:
         _block("APP.READINESS.evidence_blocked", "launch attempt identity drifted")
@@ -308,6 +331,20 @@ def _validate_launch(fact: dict[str, Any], root: Path) -> None:
     }
     if any(terminal.get(field) != value for field, value in terminal_expected.items()):
         _block("APP.READINESS.evidence_blocked", "startup terminal config readback drifted")
+    if stopped:
+        from quwoquan_app.scripts.device.startup_terminal_receipt import validate_startup_terminal_receipt
+        try:
+            validate_startup_terminal_receipt(terminal, launch_attempt=launch)
+        except (TypeError, ValueError) as error:
+            _block("APP.READINESS.evidence_blocked", f"stopped launch safe terminal is invalid: {error}")
+    if stopped and (
+        launch.get("startupTerminalAttemptId") != terminal.get("startupAttemptId")
+        or launch.get("startupTerminalEvidenceDigest") != exact_byte_digest(_canonical_json(terminal))
+        or terminal.get("launchProvenance") != "canonical_launcher"
+        or launch.get("configurationState") != "complete"
+        or launch.get("runtimeHealthStatus") != "healthy"
+    ):
+        _block("APP.READINESS.evidence_blocked", "stopped launch safe terminal is not bound")
     if exact["ref"] == terminal_exact["ref"]:
         _block("APP.READINESS.invalid", "launch and terminal evidence must be distinct")
     report_value = fact.get("launchReport")
@@ -315,6 +352,12 @@ def _validate_launch(fact: dict[str, Any], root: Path) -> None:
         _block("APP.READINESS.invalid", "launchReport fields are invalid")
     report_exact, report_raw = _verify_exact_ref(root, report_value, field="launchReport")
     report = _decode_json(report_raw, field="launchReport")
+    if not consumer_lease_id and not (
+        fact["nonPromotable"] is True and transport["required"] is False
+        and report.get("contentSource") == "bundled_snapshot"
+        and launch.get("environment") == "alpha" and launch.get("target") == "alpha-local"
+    ):
+        _block("APP.READINESS.evidence_blocked", "empty lease requires offline Alpha without runtime transport")
     report_expected = {
         "schema": "quwoquan_app.test_live_launch", "launchAttemptId": fact["attemptId"],
         "artifactDigest": fact["artifactDigest"],
@@ -324,7 +367,7 @@ def _validate_launch(fact: dict[str, Any], root: Path) -> None:
         "effectiveLaunchManifestDigest": fact["effectiveLaunchManifestDigest"],
         "deviceId": fact["deviceId"], "platform": fact["platform"], "nonPromotable": fact["nonPromotable"],
         "compileStatus": "compiled", "installStatus": "installed", "launchStatus": "launched",
-        "runtimeStatus": "healthy",
+        "runtimeStatus": "healthy", "consumerLeaseId": consumer_lease_id, "transport": dict(transport),
     }
     if any(report.get(field) != value for field, value in report_expected.items()):
         _block("APP.READINESS.evidence_blocked", "canonical launch report identity/readiness drifted")

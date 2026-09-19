@@ -222,7 +222,350 @@ runtime_config_error_codes:
   runtime_config_activation_receipt_write_failed: receipt 原子写入失败。
   runtime_config_internal_failure: 原生实现未预期异常的 fail-closed 包装码。
 
+# 现役私有launch control字段唯一声明；不是人工授权receipt。
+app_content_uat_launch_control:
+  schema_value: quwoquan_ops.app_content_uat_launch_control.v1
+  actor: app-content-uat
+  base_fields: [schema, actor, environment, target, platform, deviceId, candidateDigest, packageDigest, sourceRevision, sourceCapsuleDigest, sourceCapsuleManifestDigest, sourceCapsuleManifestRef, sourceProjectionRoot, sourceProjectionEvidenceDigest, sourceProjectionEvidenceRef, buildProjectionPolicyId, buildProjectionSealRef, expectedBuildProjectionDigest, launchAttemptRef, launchReportRef, startupTerminalReceiptRef]
+  offline_replace_field: packageDigest
+  offline_source_field: contentSource
+  selection_field: rehearsalSpaceSelection
+  selection:
+    additional_fields: false
+    required_fields: [mode, instanceId, snapshotDigest, caseId, lifecycleGeneration, observationBinding]
+    fields:
+      mode: {type: string, allowed_values: [standard, isolated]}
+      instanceId: {type: string, format: rehearsal_instance_id}
+      snapshotDigest: {type: string, format: sha256_identity}
+      caseId: {type: string, allowed_values: [login-success, login-error, private-continuation, local-write, otp-expiry, identity-restart, network-refusal, otp-refusal, push-refusal, remote-refusal, outbox-refusal]}
+      lifecycleGeneration: {type: string}
+      observationBinding: {type: string, format: sha256_identity}
+  constraints:
+    - selection仅离线control可选；旧合法无selection control保持standard，无control普通开发启动保持standard/default。显式isolated请求必须携带完整control与mode=isolated选择，missing/mismatch拒绝而非fallback。
+    - control不签发用户授权；只承载现役app-content-uat受管调用已获准选择。candidate/device/attempt沿用原字段，禁止authorized标志、人工理由或第二批准文档。
+    - signing material准备之前逐项验证control私有ref/digest、实际target/device/attempt/report/candidate/source身份，source projection完整CAS与capsule摘要以及对应身份字段必须交叉一致。snapshotDigest从projection内manifest及identity逐字节校验获得，不信runner值或待签文档自证。
+    - 签名App文档仍仅消费offline_bootstrap_document.rehearsalSpace；线上不接受selection或isolated请求，旧active不自动迁移/清理。
+    - isolated caseId/lifecycleGeneration/observationBinding 均由 canonical launcher 按当前 candidate/device/attempt/snapshot 派生并签入；App 与 runner 只消费该绑定。跨case、旧generation、旧attempt或自报摘要一律拒绝。
+
+# 只声明专用读取面，实际native桥接由owner实现；绝不进入事件/journal。
+rehearsal_storage_readback:
+  channel: quwoquan/startup/timings
+  method: readRehearsalStorageObservation
+  response_schema: rehearsal_storage_observation
+  classification: INTERNAL
+  log_policy: drop
+  purpose: isolated_private_device_evidence
+  digest_domains:
+    binding: rehearsal-observation-binding
+    namespace: rehearsal-observation-namespace
+  constraints:
+    - 方法只读取当前owner内存投影，不初始化consumer、不触发任何存储I/O；桥接未装配或缺可靠关联返回unavailable形状，不能返回空对象冒成功。
+    - 仅受控isolated私有设备证据读取；禁止recordStartupEvent/readStartupJournal及遥测消费，不签发资格。native不能直接假设可访问Dart，须通过同一生成模型接线。
+    - bindingDigest按digest_contract对[用途域,实际startupAttemptId,实际generation,已验snapshotDigest,已验instanceId]求摘要；namespaceDigest对[用途域,bindingDigest,固定consumer名]求摘要，仅owner确认实例实际namespace匹配该binding后才可提供。不得以真实installId、账户、完整key/path作摘要输入。
+
+external_uat_observation_relay:
+  enabled_targets: [android-emulator, ios-simulator]
+  case_catalog:
+    login-success: gwt-008-case-login-success
+    login-error: gwt-008-case-login-error
+    private-continuation: gwt-008-case-private-continuation
+    local-write: gwt-008-case-local-write
+    otp-expiry: gwt-008-case-otp-expiry
+    identity-restart: gwt-008-case-identity-restart
+    network-refusal: gwt-008-case-network-refusal
+    otp-refusal: gwt-008-case-otp-refusal
+    push-refusal: gwt-008-case-push-refusal
+    remote-refusal: gwt-008-case-remote-refusal
+    outbox-refusal: gwt-008-case-outbox-refusal
+  expected_observation_schema: external-uat-expected-observation-v1
+  expected_matcher: exact_ordered_rows_v1
+  expected_observations:
+    login-success:
+      observations: [{source: ui-control, status: observed, detail: unique-editable-control}, {source: rehearsal-session-readback, status: observed, detail: session-established}]
+    login-error:
+      observations: [{source: ui-control, status: observed, detail: unique-editable-control}, {source: rehearsal-auth-error-readback, status: observed, detail: recoverable-error-observed}]
+    private-continuation:
+      observations: [{source: continuation-query-readback, status: observed, detail: continued-once-readback}]
+    local-write:
+      observations: [{source: local-command-query-readback, status: observed, detail: command-query-readback}]
+    otp-expiry:
+      observations: [{source: monotonic-clock, status: observed, detail: elapsed-300s-challenge-expired}, {source: rehearsal-challenge-readback, status: observed, detail: challenge-expired}]
+    identity-restart:
+      observations: [{source: rehearsal-session-readback, status: observed, detail: session-established}]
+    network-refusal:
+      observations: [{source: native-network-attempt, status: observed, detail: refused-at-side-effect-boundary, attemptCount: 1}]
+    otp-refusal:
+      observations: [{source: native-otp-delivery-attempt, status: observed, detail: refused-at-side-effect-boundary, attemptCount: 1}]
+    push-refusal:
+      observations: [{source: native-push-registration-attempt, status: observed, detail: refused-at-side-effect-boundary, attemptCount: 1}]
+    remote-refusal:
+      observations: [{source: native-remote-transport-attempt, status: observed, detail: refused-at-side-effect-boundary, attemptCount: 1}]
+    outbox-refusal:
+      observations: [{source: native-connected-outbox-attempt, status: observed, detail: refused-at-side-effect-boundary, attemptCount: 1}]
+  operations: [admitLaunch, armRelay, publishTerminalRef, sealObservation, querySealedObservation, compareAndReport, revokeRelay, requestTeardown, confirmTerminated, coldLaunchNextGeneration]
+  states: [admitted, armed, terminal_published, observation_sealed, queried, compared, revoked, termination_requested, terminated, next_generation_launched, failed]
+  ttl_seconds: 60
+  observation_lifetime_seconds: {default: 120, otp-expiry: 360}
+  observation_policy:
+    - 初始admitLaunch/armRelay仅授权当前epoch收集AUT内存事实，不授予query；必须在任何case动作或事实采集前完成host/native双向身份校验与ack。
+    - admittedAtMonotonicMs/expiresAtMonotonicMs仅界定不可续期观察epoch；上限来自observation_lifetime_seconds，不得用它们授权读取snapshot。
+    - AUT在当前epoch内真实业务终态create-once seal时，native自产sealedAtMonotonicMs并仅此一次开启ttl_seconds查询窗；查询要求sealed且处于该60秒窗口，不重签、不续期、不吸收旧epoch或预授权前事实。
+    - observation过期、query过期、首错、进程死亡及单次消费均清零verifier；seal后的查询窗口可越过观察截止，但不得晚于seal时间加ttl_seconds。
+    - generation-2保持generation-1的rehearsal instanceId与snapshot，仅更新host launchAttemptId、Dart startupAttemptId、native PID/session及observationBinding；恢复阶段禁止再次登录来证明身份连续。
+  native_rendezvous:
+    carrier: canonical_startup_safe_terminal
+    public_fields: [processId, processStartedAtMonotonicMs, sessionId, socketName, startupAttemptId, launchAttemptId, launcherPid, canonicalLaunchControlDigest, effectiveLaunchManifestDigest]
+    startup_binding_method: bindStartupObservation
+    observation_admission_method: requireObservationAdmission
+    startup_environment: [QWQ_UAT_LAUNCHER_PID, QWQ_UAT_HOST_ATTEMPT, QWQ_UAT_CONTROL_DIGEST]
+    diagnostic_case_policy: explicit_subset_candidate_bound_non_promotable_full_acceptance_rejected
+    session_owner: aut_native_csprng
+    constraints:
+      - carrier仅保存公开rendezvous及不可逆摘要，不包含secret/verifier/challenge/MAC或actual；host从当前signed control、启动receipt和native readback绑定host launchAttemptId与Dart startupAttemptId。
+      - native只接受启动前受管控制绑定的launcher PID及进程启动身份，不允许首次同UID连接自行登记；host反向核对server peer PID/euid与exact device安装制品和lifecycle，不以socket名、App Group membership或PID单独授权。
+      - socketName仅basename；容器由exact simctl App Group读回解析，拒绝symlink、非socket及路径逃逸；未知平台或未验证carrier禁止猜测路径/session。
+  max_query_count: 1
+  digest_domains:
+    admission: external-uat-admission-v1
+    relay: external-uat-relay-v1
+    terminal: external-uat-terminal-v1
+    observation: external-uat-observation-v1
+    teardown: external-uat-teardown-v1
+    comparison: external-uat-comparison-v1
+    handshake: external-uat-handshake-v1
+  secret_policy: launcher_and_aut_memory_only
+  terminal_ref_policy: non_authorizing_single_consumer
+  actual_owner: aut
+  comparison_owner: launcher
+  expected_binding_policy: canonical_case_semantics_only_no_candidate_device_attempt_generation_pid_or_actual_inputs
+  raw_result_policy: nonPromotable
+  non_uat_broker_policy: source_linker_entitlement_manifest_artifact_excluded
+  platform_adapters:
+    android-emulator: {transport: adb_attempt_forward_package_private_unix_socket, peer: adbd_uid_pid_and_launcher_mac}
+    ios-simulator: {transport: host_app_group_attempt_random_unix_socket, peer: local_peertoken_pid_euid_and_launcher_mac}
+  failure_codes:
+    APP.UAT.relay_admission_mismatch: managed launch admission identity mismatch
+    APP.UAT.relay_terminal_invalid: runner terminal result or ref is invalid
+    APP.UAT.relay_terminal_replayed: terminal ref was already consumed
+    APP.UAT.relay_not_sealed: AUT snapshot is not sealed
+    APP.UAT.relay_snapshot_conflict: create-once snapshot bytes conflict
+    APP.UAT.relay_stale: relay generation or attempt is stale
+    APP.UAT.relay_scope_mismatch: case, binding, candidate, device, session or PID mismatch
+    APP.UAT.relay_peer_rejected: transport peer is not the admitted launcher relay
+    APP.UAT.relay_mac_invalid: challenge transcript MAC is invalid or replayed
+    APP.UAT.relay_expired: relay TTL expired
+    APP.UAT.relay_consumed: relay query was already consumed
+    APP.UAT.relay_revoked: relay was revoked
+    APP.UAT.relay_timeout: relay query or teardown timed out
+    APP.UAT.relay_contract_drift: canonical contract digest mismatch
+    APP.UAT.relay_sensitive_field: snapshot requested or contained a sensitive field
+    APP.UAT.relay_process_died: launcher, AUT or broker died before terminal completion
+    APP.UAT.relay_non_uat_excluded: broker is unavailable in non-UAT or Release artifacts
+    APP.UAT.teardown_predecessor_invalid: teardown predecessor is not a consumed attempt-1 relay
+    APP.UAT.teardown_pid_alive: exact PID remains alive after termination budget
+    APP.UAT.teardown_pid_reused: PID identity is ambiguous or reused
+    APP.UAT.restart_identity_mismatch: generation-2 attempt/PID or continuity binding mismatch
+  recovery:
+    - 首错立即revoke并清零launcher/AUT内存secret，关闭本transaction forward/socket；不续期、不重签同attempt、不切换transport。
+    - terminal ref只定位闭集terminal result，runner不得持有capability、query、actual、revoke或comparison。
+    - expectedObservation由本catalog按expected_observation_schema、caseId、matcher与闭集observations机械摘要；不得从actual、runner、截图、日志、contractDigest或动态launch identity反推。
+    - identity-restart只有terminated teardown receipt可作为generation2 predecessor；不force-stop、不hot restart、不清App数据。
+
 schemas:
+  external_uat_managed_launch_admission:
+    schema_value: external-uat-managed-launch-admission
+    additional_fields: false
+    required_fields: [schema, contractDigest, candidateDigest, artifactDigest, packageIdentity, signingDigest, platform, deviceId, sessionId, caseId, launchAttemptId, generation, observationBinding, processId, lifecycleReceiptDigest, admittedAtMonotonicMs, expiresAtMonotonicMs, admissionDigest]
+    fields:
+      schema: {type: string, const: external-uat-managed-launch-admission}
+      contractDigest: {type: string, format: sha256_identity}
+      candidateDigest: {type: string, format: sha256_identity}
+      artifactDigest: {type: string, format: sha256_identity}
+      packageIdentity: {type: string, min_length: 1}
+      signingDigest: {type: string, format: sha256_identity}
+      platform: {type: string, allowed_values: [android-emulator, ios-simulator]}
+      deviceId: {type: string, min_length: 1}
+      sessionId: {type: string, min_length: 1}
+      caseId: {type: string, allowed_values: [login-success, login-error, private-continuation, local-write, otp-expiry, identity-restart, network-refusal, otp-refusal, push-refusal, remote-refusal, outbox-refusal]}
+      launchAttemptId: {type: string, min_length: 1}
+      generation: {type: integer}
+      observationBinding: {type: string, format: sha256_identity}
+      processId: {type: integer}
+      lifecycleReceiptDigest: {type: string, format: sha256_identity}
+      admittedAtMonotonicMs: {type: integer}
+      expiresAtMonotonicMs: {type: integer}
+      admissionDigest: {type: string, format: sha256_identity}
+    constraints: [仅canonical launcher从host-side exact install/launch readback创建；generation和PID为正数，admittedAtMonotonicMs/expiresAtMonotonicMs约束不可续期观察epoch，上限为external_uat_observation_relay.observation_lifetime_seconds；初始admission不授予query，只有同epoch native seal才一次开启ttl_seconds查询窗口。]
+  external_uat_terminal_result:
+    schema_value: external-uat-terminal-result
+    additional_fields: false
+    required_fields: [schema, planDigest, caseId, launchAttemptId, generation, processId, deviceId, sessionId, status, screenshotDigest, terminalDigest, terminalRef]
+    fields:
+      schema: {type: string, const: external-uat-terminal-result}
+      planDigest: {type: string, format: sha256_identity}
+      caseId: {type: string, min_length: 1}
+      launchAttemptId: {type: string, min_length: 1}
+      generation: {type: integer}
+      processId: {type: integer}
+      deviceId: {type: string, min_length: 1}
+      sessionId: {type: string, min_length: 1}
+      status: {type: string, allowed_values: [passed, failed]}
+      screenshotDigest: {type: string, format: sha256_identity}
+      terminalDigest: {type: string, format: sha256_identity}
+      terminalRef: {type: string, min_length: 1}
+    constraints: [runner只产生本闭集且terminalRef无授权；禁止actual、capability、secret、challenge、MAC、expected或comparison字段。]
+  external_uat_broker_query:
+    schema_value: external-uat-broker-query
+    additional_fields: false
+    required_fields: [schema, contractDigest, admissionDigest, terminalDigest, caseId, launchAttemptId, generation, observationBinding, processId, deviceId, sessionId, sequence, challenge, mac]
+    fields:
+      schema: {type: string, const: external-uat-broker-query}
+      contractDigest: {type: string, format: sha256_identity}
+      admissionDigest: {type: string, format: sha256_identity}
+      terminalDigest: {type: string, format: sha256_identity}
+      caseId: {type: string, min_length: 1}
+      launchAttemptId: {type: string, min_length: 1}
+      generation: {type: integer}
+      observationBinding: {type: string, format: sha256_identity}
+      processId: {type: integer}
+      deviceId: {type: string, min_length: 1}
+      sessionId: {type: string, min_length: 1}
+      sequence: {type: integer}
+      challenge: {type: string, min_length: 1}
+      mac: {type: string, min_length: 1}
+    constraints: [仅launcher构造且sequence固定为1；challenge/MAC只存在launcher/AUT内存与socket frame。]
+  external_uat_sealed_snapshot:
+    schema_value: external-uat-sealed-snapshot
+    additional_fields: false
+    required_fields: [schema, caseId, launchAttemptId, generation, observationBinding, processId, snapshotDigest, observations, sealedAtMonotonicMs]
+    fields:
+      schema: {type: string, const: external-uat-sealed-snapshot}
+      caseId: {type: string, min_length: 1}
+      launchAttemptId: {type: string, min_length: 1}
+      generation: {type: integer}
+      observationBinding: {type: string, format: sha256_identity}
+      processId: {type: integer}
+      snapshotDigest: {type: string, format: sha256_identity}
+      observations: {type: array, items: {type: object}}
+      sealedAtMonotonicMs: {type: integer}
+    constraints: [AUT actual owner从真实gateway create-once seal；字段闭集脱敏，禁止runner expected、secret、PII、自由文本和seal后mutation。]
+  external_uat_broker_result:
+    schema_value: external-uat-broker-result
+    additional_fields: false
+    required_fields: [schema, status, admissionDigest, terminalDigest, snapshot, snapshotDigest, consumed, revoked, errorCode, resultDigest]
+    fields:
+      schema: {type: string, const: external-uat-broker-result}
+      status: {type: string, allowed_values: [observed, rejected]}
+      admissionDigest: {type: string, format: sha256_identity}
+      terminalDigest: {type: string, format: sha256_identity}
+      snapshot: {type: object, schema_ref: external_uat_sealed_snapshot}
+      snapshotDigest: {type: string, format: optional_sha256_identity}
+      consumed: {type: boolean}
+      revoked: {type: boolean}
+      errorCode: {type: string}
+      resultDigest: {type: string, format: sha256_identity}
+    constraints: [observed只允许一次且随后consumed/revoked；rejected不返回snapshot或旧值，errorCode必须来自failure_codes。]
+  external_uat_teardown_receipt:
+    schema_value: external-uat-teardown-receipt
+    additional_fields: false
+    append_only_transitions: true
+    required_fields: [schema, transactionId, admissionDigest, launchAttemptId, generation, processId, state, predecessorResultDigest, requestedAtMonotonicMs, terminatedAtMonotonicMs, processTableConfirmed, lifecycleConfirmed, brokerDisconnected, receiptDigest, errorCode]
+    fields:
+      schema: {type: string, const: external-uat-teardown-receipt}
+      transactionId: {type: string, min_length: 1}
+      admissionDigest: {type: string, format: sha256_identity}
+      launchAttemptId: {type: string, min_length: 1}
+      generation: {type: integer}
+      processId: {type: integer}
+      state: {type: string, allowed_values: [termination_requested, terminated, failed]}
+      predecessorResultDigest: {type: string, format: sha256_identity}
+      requestedAtMonotonicMs: {type: integer}
+      terminatedAtMonotonicMs: {type: integer}
+      processTableConfirmed: {type: boolean}
+      lifecycleConfirmed: {type: boolean}
+      brokerDisconnected: {type: boolean}
+      receiptDigest: {type: string, format: sha256_identity}
+      errorCode: {type: string}
+    constraints: [terminated要求PID1消失、lifecycle终止与broker断连三证据；只有terminal terminated可作为generation2 cold launch predecessor。]
+  external_uat_comparison_result:
+    schema_value: external-uat-comparison-result
+    additional_fields: false
+    required_fields: [schema, caseId, admissionDigest, terminalDigest, brokerResultDigest, expectedDigest, status, nonPromotable, comparisonDigest, errorCode]
+    fields:
+      schema: {type: string, const: external-uat-comparison-result}
+      caseId: {type: string, min_length: 1}
+      admissionDigest: {type: string, format: sha256_identity}
+      terminalDigest: {type: string, format: sha256_identity}
+      brokerResultDigest: {type: string, format: sha256_identity}
+      expectedDigest: {type: string, format: sha256_identity}
+      status: {type: string, allowed_values: [passed, failed]}
+      nonPromotable: {type: boolean}
+      comparisonDigest: {type: string, format: sha256_identity}
+      errorCode: {type: string}
+    constraints: [仅launcher比较expected与AUT actual；nonPromotable必须为true，actual不得返回runner或写入terminal result。]
+  rehearsal_storage_observation:
+    schema_value: rehearsal-storage-observation
+    additional_fields: false
+    required_fields: [schema, status, configurationState, startupAttemptId, generation, bindingDigest, consumers]
+    fields:
+      schema: {type: string, const: rehearsal-storage-observation}
+      status: {type: string, allowed_values: [available, unavailable]}
+      configurationState: {type: string, allowed_values: [not_observed, verified, invalidated]}
+      startupAttemptId: {type: string}
+      generation: {type: string}
+      bindingDigest: {type: string, format: optional_sha256_identity}
+      consumers:
+        type: object
+        additional_fields: false
+        required_fields: [auth, installId, pending, rehearsal]
+        fields:
+          auth:
+            type: object
+            additional_fields: false
+            required_fields: [state, namespaceDigest, successfulOperations]
+            fields:
+              state: {type: string, allowed_values: [not_observed, constructed, io_observed, invalidated]}
+              namespaceDigest: {type: string, format: optional_sha256_identity}
+              successfulOperations:
+                type: array
+                items: {type: string, allowed_values: [read, write, delete]}
+          installId:
+            type: object
+            additional_fields: false
+            required_fields: [state, namespaceDigest, successfulOperations]
+            fields:
+              state: {type: string, allowed_values: [not_observed, constructed, io_observed, invalidated]}
+              namespaceDigest: {type: string, format: optional_sha256_identity}
+              successfulOperations:
+                type: array
+                items: {type: string, allowed_values: [read, write, delete]}
+          pending:
+            type: object
+            additional_fields: false
+            required_fields: [state, namespaceDigest, successfulOperations]
+            fields:
+              state: {type: string, allowed_values: [not_observed, constructed, io_observed, invalidated]}
+              namespaceDigest: {type: string, format: optional_sha256_identity}
+              successfulOperations:
+                type: array
+                items: {type: string, allowed_values: [read, write, delete]}
+          rehearsal:
+            type: object
+            additional_fields: false
+            required_fields: [state, namespaceDigest, successfulOperations]
+            fields:
+              state: {type: string, allowed_values: [not_observed, constructed, io_observed, invalidated]}
+              namespaceDigest: {type: string, format: optional_sha256_identity}
+              successfulOperations:
+                type: array
+                items: {type: string, allowed_values: [read, write, delete]}
+    constraints:
+      - status=available要求configurationState=verified；startupAttemptId完整匹配[A-Za-z0-9_-]{1,128}，generation为实际owner正整数的canonical十进制字符串[1-9][0-9]{0,15}，bindingDigest非空canonical SHA256。身份只来自实际AUT owner，不接受runner expected或actor私有fence。
+      - status=unavailable要求startupAttemptId/generation/bindingDigest全空，四consumer只能not_observed或invalidated；配置可以verified但缺可靠attempt/generation时仍unavailable。configurationState=not_observed时所有consumer为not_observed，invalidated时所有consumer为invalidated。
+      - consumer constructed/io_observed要求available及非空namespaceDigest；constructed不能含成功操作，io_observed至少一种成功操作。not_observed/invalidated必须清空namespaceDigest及成功操作。successfulOperations去重且仅read/write/delete；未知字段、类型、null、任意consumer或敏感混入均拒绝。
+      - 只有当前真实consumer实际I/O成功并再次通过binding/generation fence才可更新集合；构造/失败/迟到不算成功。auth会话与installId独立观察，读取空存储成功可算read但不证明存在会话；读取观察不得自行调用exists/read/write/delete。
+      - 失效清空旧摘要，禁止isolationPassed或历史零访问结论；正向观察不能证明过去未读旧空间，private sentinel与gateway审计仍独立required。所有字段INTERNAL且普通日志/遥测drop，不扩SyntheticLoginEvidence。
+
   runtime_config_trust_envelope:
     schema_value: app-runtime-config-trust
     additional_fields: false
@@ -321,6 +664,7 @@ schemas:
       - target
       - launchPolicy
       - contentSource
+      - rehearsalSpace
       - sourceGitSha
       - sourceTreeDigest
       - trustEnvelopeDigest
@@ -337,6 +681,17 @@ schemas:
       target: { type: string, const: alpha-local }
       launchPolicy: { type: string, const: test_live }
       contentSource: { type: string, const: bundled_snapshot }
+      rehearsalSpace:
+        type: object
+        additional_fields: false
+        required_fields: [mode, snapshotDigest, instanceId, caseId, lifecycleGeneration, observationBinding]
+        fields:
+          mode: { type: string, allowed_values: [standard, isolated] }
+          snapshotDigest: { type: string, format: sha256_identity }
+          instanceId: { type: string, format: rehearsal_instance_id }
+          caseId: { type: string, allowed_values: [none, login-success, login-error, private-continuation, local-write, otp-expiry, identity-restart, network-refusal, otp-refusal, push-refusal, remote-refusal, outbox-refusal] }
+          lifecycleGeneration: { type: string }
+          observationBinding: { type: string, format: optional_sha256_identity }
       sourceGitSha: { type: string, format: git_object_sha }
       sourceTreeDigest: { type: string, format: git_tree_digest }
       trustEnvelopeDigest: { type: string, format: sha256_identity }
@@ -352,7 +707,10 @@ schemas:
       trustedPublicKeys: { type: object, value_type: string }
       signature: { type: string, format: strict_base64_ed25519_signature }
     constraints:
-      - 只允许 content_source_policy 与 runtime_document_content_sources 共同指定的 Alpha bundled_snapshot；签名覆盖 contentSource、profile、target、source identity 与 trustEnvelopeDigest。
+      - 只允许 content_source_policy 与 runtime_document_content_sources 共同指定的 Alpha bundled_snapshot；签名覆盖 contentSource、rehearsalSpace、profile、target、source identity 与 trustEnvelopeDigest。
+      - rehearsalSpace 必须显式声明；普通构建供给 mode=standard、instanceId=default，isolated 必须为非 default 的 rehearsal_instance_id（完整匹配 [a-zA-Z0-9_-]{1,80}）。snapshotDigest 必须与制品内固定且已验证的 offline manifest digest 完全一致。缺字段、非法 mode、跨 snapshot/source 或 isolated/default 错配均拒绝，不将缺席解释为 standard，不向在线 package 增加此字段。
+      - canonical launcher 选择 isolated 的授权继续绑定现役 candidate/device/attempt 控制面；签名文档只携带空间选择，不携带审阅理由、合成用户或第二授权记录。普通构建固定 caseId=none、lifecycleGeneration=0、observationBinding空；isolated 必须携带控制面签发的非空 case/generation/binding，不能从环境变量、runner 回显或 APP_INSTANCE_ID 猜 isolated。
+      - resolver 验签与空间校验必须先于业务 auth/pending/rehearsal 存储；仅从已消费的配置投影 mode/snapshotDigest/instanceId。该配置观察不是存储已消费证明；AUT 全链观察仍须由三类存储共同消费绑定后提供，未接线不得报告隔离成功。
       - 使用 runtime_config_package 相同 canonical payloadDigest 与 Ed25519 签名算法及独立制品 trust envelope；trustEnvelopeDigest 必须匹配实际制品 envelope。没有 issuedAt/expiresAt，禁止任何 endpoint 字段（包括空值），不获得网络能力。
       - 通过同一 activation/CAS/active receipt/read 链消费；没有第二 store、在线失败 fallback 或远端 readiness authority。在线 package 的 freshness 不变。
       - 构建期默认自供给只可激活 absent 或更新既有合法 Alpha 离线文档；在线、过期、损坏与 receipt 不匹配的 active 不得自动转离线。旧 Alpha 在线文档只能经显式 canonical activation 迁移。

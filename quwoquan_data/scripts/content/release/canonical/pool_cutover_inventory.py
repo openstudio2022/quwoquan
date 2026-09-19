@@ -134,11 +134,11 @@ def _execution_review(execution: Path, ref: str, cache: dict) -> tuple[dict, dic
     digest = _digest_file(review_path)
     _bound(chain, 3, ref + "/5.review/content_review.json", digest)
     converted = convert_review_document(review)
-    page_binding = review.get("candidateBindings", {}).get("page", {})
-    draft_ref = ref + "/" + _relative(page_binding.get("ref", ""))
+    page_binding = review["candidateBindings"]["page"]
+    draft_ref = ref + "/" + _relative(page_binding["ref"])
     draft_path = _file(execution, draft_ref)
     draft_digest = _digest_file(draft_path)
-    if draft_digest != page_binding.get("digest"):
+    if draft_digest != page_binding["digest"]:
         _fail("ORIGINAL_DRAFT_DRIFT", ref)
     _bound(chain, 2, draft_ref, draft_digest)
     if converted["decision"] != "approved":

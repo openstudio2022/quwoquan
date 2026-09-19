@@ -103,19 +103,28 @@ def _review_semantics(root: Path, target_ref: str) -> dict:
     counts = {"title": 0, "heading": 0, "paragraph": 1, "list": 0, "tableLogicalCell": 0, "footnote": 0, "media": 0}
     protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
     revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
-    report_rows = [{
-        "sourceRef": source_ref, "sourceDigest": seal.sha256((root / source_ref).read_bytes()), "parseStatus": "complete",
-        "dialect": "plain", "dialectVersion": "1", "capabilities": ["paragraph"],
-        "sourceCounts": counts, "draftCounts": counts,
-        "sourceSequenceDigest": "sha256:" + "2" * 64, "draftSequenceDigest": "sha256:" + "2" * 64,
-    } for source_ref in source_refs]
+    report_rows = []
+    for source_ref in source_refs:
+        source_digest = seal.sha256((root / source_ref).read_bytes())
+        sequence_digest = seal.sha256(seal.canonical_bytes({
+            "objectRef": target_ref, "sourceRef": source_ref,
+            "sourceDigest": source_digest, "objectRevision": revision,
+        }))
+        report_rows.append({
+            "sourceRef": source_ref, "sourceDigest": source_digest, "parseStatus": "complete",
+            "dialect": "media-source-record", "dialectVersion": "1", "capabilities": ["paragraph"],
+            "sourceCounts": counts, "draftCounts": counts,
+            "sourceSequenceDigest": sequence_digest, "draftSequenceDigest": sequence_digest,
+        })
     report = {"reviewedCarrier": "image", "carrierCompatible": True, "sources": report_rows, "issues": []}
-    source_digest = report_rows[0]["sourceDigest"]
-    disposition = {"issueId": "semantic-exact", "objectRef": target_ref,
-        "sourceAnchor": {"origin": "source", "start": 0, "end": 1, "selector": "document"},
-        "sourceDigest": source_digest, "targetDigest": "sha256:" + "4" * 64,
+    source_set_digest = seal.sha256(seal.canonical_bytes([row["sourceDigest"] for row in report_rows]))
+    draft_digest = seal.sha256((root / target_ref / "4.draft/image_work.json").read_bytes())
+    disposition = {"issueId": "image-semantic-exact-r1", "objectRef": target_ref,
+        "sourceAnchor": {"origin": "source-set", "start": 0, "end": len(report_rows), "selector": target_ref},
+        "sourceDigest": source_set_digest, "targetDigest": draft_digest,
         "detectedType": "SEMANTIC_EXACT", "proposedMapping": None, "lossFields": [], "severity": "info",
-        "actor": {"actorId": "reviewer", "actorType": "independent_reviewer"}, "reason": "no semantic loss",
+        "actor": {"actorId": REVIEWER["sessionId"], "actorType": "independent_reviewer"},
+        "reason": "reviewed image draft revision 1 against every acquired source revision",
         "policyVersion": "1.0.0", "reviewStatus": "reviewed_confirmed", "outcome": "auto_continue",
         "processingDisposition": "preserved", "protocol": protocol, "objectRevision": revision}
     return {"semanticReport": report, "protocol": protocol, "objectRevision": revision, "dispositions": [disposition]}

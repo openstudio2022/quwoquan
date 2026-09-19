@@ -519,10 +519,11 @@ class DeploymentCandidateManifestContractTest(
         with self.assertRaisesRegex(
             ValueError, "alpha-local package requires current candidate evidence"
         ):
-            subject.write_candidate_manifest(
-                "alpha",
-                "alpha-local",
-                package_snapshot=self.snapshot,
+            subject.validate_release_attestations(
+                "",
+                "",
+                environment="gamma",
+                target="gamma-local",
             )
 
     def test_prod_cannot_consume_local_candidate_evidence(self) -> None:
@@ -540,6 +541,32 @@ class DeploymentCandidateManifestContractTest(
                 "prod", "prod-hosted", release_attestation="",
                 rollback_release_attestation="", candidate_evidence="",
             )
+
+    def test_alpha_local_empty_release_attestations_are_accepted(self) -> None:
+        bindings = subject.validate_release_attestations(
+            "",
+            "",
+            environment="alpha",
+            target="alpha-local",
+        )
+        self.assertEqual(bindings["candidate"]["releaseId"], "")
+        self.assertEqual(bindings["rollback"]["releaseId"], "")
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["release"]["candidate"]["releaseId"], "")
+        self.assertEqual(payload["release"]["rollback"]["releaseId"], "")
+        subject.validate_candidate_manifest(
+            payload,
+            expected_environment="alpha",
+            expected_target="alpha-local",
+            require_full=True,
+            purpose="currentness",
+            candidate_root=self.candidate,
+        )
 
     def test_package_preflight_rejects_same_candidate_and_rollback(self) -> None:
         with self.assertRaisesRegex(

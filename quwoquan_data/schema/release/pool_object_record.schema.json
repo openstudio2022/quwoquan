@@ -41,13 +41,16 @@
     "sourceIdentity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["executionId", "sourceRevision", "sourceDigest", "entityCatalogDigest", "identityDigest"],
+      "required": ["executionId", "sourceRevision", "sourceDigest", "entityCatalogDigest", "identityDigest", "descriptorRef", "descriptorDigest", "mappingDigest"],
       "properties": {
         "executionId": {"type": "string", "minLength": 1},
         "sourceRevision": {"$ref": "#/$defs/digest"},
         "sourceDigest": {"$ref": "#/$defs/digest"},
         "entityCatalogDigest": {"$ref": "#/$defs/digest"},
-        "identityDigest": {"$ref": "#/$defs/digest"}
+        "identityDigest": {"$ref": "#/$defs/digest"},
+        "descriptorRef": {"type": "string", "pattern": "^0\\.plan/target-descriptors/[a-f0-9]{64}\\.json$"},
+        "descriptorDigest": {"$ref": "#/$defs/digest"},
+        "mappingDigest": {"$ref": "#/$defs/digest"}
       }
     }
   }

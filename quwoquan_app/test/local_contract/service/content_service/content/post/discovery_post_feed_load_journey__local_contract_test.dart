@@ -79,7 +79,6 @@ class _ErrorContentRepository extends InMemoryContentDiscoveryFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -107,7 +106,6 @@ class _RecordingContentRepository extends InMemoryContentDiscoveryFeedQuery {
       );
   String? lastCategory;
   String? lastChannelId;
-  String? lastIdentity;
   String? lastType;
   String? lastSessionId;
   String? lastFeedRequestId;
@@ -116,7 +114,6 @@ class _RecordingContentRepository extends InMemoryContentDiscoveryFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -129,14 +126,12 @@ class _RecordingContentRepository extends InMemoryContentDiscoveryFeedQuery {
   }) async {
     lastCategory = category;
     lastChannelId = channelId;
-    lastIdentity = identity;
     lastType = type;
     lastSessionId = sessionId;
     lastFeedRequestId = feedRequestId;
     return super.listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
-      identity: identity,
       type: type,
       subCategory: subCategory,
       limit: limit,
@@ -189,7 +184,7 @@ void main() {
             isA<ContentPostViewData>().having(
               (item) => item.type,
               'canonical content type',
-              'image',
+              ContentType.image,
             ),
           ),
           reason: 'contentType=image 应归一为唯一 ContentPostViewData',
@@ -215,7 +210,7 @@ void main() {
       expect(feed, isNotNull);
       expect(feed!.items, isNotEmpty);
       expect(feed.items.first, isA<ContentPostViewData>());
-      expect(feed.items.first.type, 'video');
+      expect(feed.items.first.type, ContentType.video);
       expect(feed.items.first.hasVideo, isTrue);
       expect(feed.error, isNull);
     });
@@ -235,7 +230,6 @@ void main() {
       await tester.pump();
 
       expect(repo.lastCategory, 'photo');
-      expect(repo.lastIdentity, 'work');
       expect(repo.lastType, 'image');
       expect(repo.lastSessionId, feedSession.sessionId);
       // 首刷：App 不再客户端自造 feedRequestId 塞 query（服务端权威生成）。
@@ -335,9 +329,9 @@ void main() {
       expect(photoFeed!.items, isNotEmpty);
       expect(videoFeed!.items, isNotEmpty);
       expect(photoFeed.items.first, isA<ContentPostViewData>());
-      expect(photoFeed.items.first.type, 'image');
+      expect(photoFeed.items.first.type, ContentType.image);
       expect(videoFeed.items.first, isA<ContentPostViewData>());
-      expect(videoFeed.items.first.type, 'video');
+      expect(videoFeed.items.first.type, ContentType.video);
     });
 
     testWidgets('旅程 C2：同一 tab 重复加载 → 状态稳定，不崩溃', (tester) async {

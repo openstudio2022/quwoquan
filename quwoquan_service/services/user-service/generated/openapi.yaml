@@ -697,6 +697,71 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/user/collection-query-grants:
+        post:
+            operationId: IssueCollectionQueryGrant
+            x-contract-operation-id: user.user_account.IssueCollectionQueryGrant
+            x-object-id: user.user_account
+            x-actor: none
+            x-application:
+                kind: command
+                facet: CollectionQueryAuthority
+                method: issue
+                aggregateOwner: UserAccount
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/IssueCollectionQueryGrantCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CollectionQueryGrantResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/user/collection-query-grants/verify:
+        post:
+            operationId: VerifyCollectionQueryGrant
+            x-contract-operation-id: user.user_account.VerifyCollectionQueryGrant
+            x-object-id: user.user_account
+            x-actor: none
+            x-application:
+                kind: query
+                facet: CollectionQueryAuthority
+                method: verify
+                reader: CollectionQueryIdentityReader
+                slice: VerifiedCollectionQueryIdentity
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/VerifyCollectionQueryGrantQuery'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/VerifiedCollectionQueryIdentity'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/user/creator-search-candidate:query:
         post:
             operationId: ReadCreatorSearchCandidate
@@ -3498,6 +3563,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CloseAccountResultWire
             x-contract-placeholder: true
+        CollectionQueryGrantResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CollectionQueryGrantResult
+            x-contract-placeholder: true
         CompleteFederatedPhoneBindingCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3632,6 +3702,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: IssueAccountAppealCredentialCommand
+            x-contract-placeholder: true
+        IssueCollectionQueryGrantCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: IssueCollectionQueryGrantCommand
             x-contract-placeholder: true
         ListCredentialsSlice:
             type: object
@@ -3902,4 +3977,14 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: UserSyncPullRequestWire
+            x-contract-placeholder: true
+        VerifiedCollectionQueryIdentity:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: VerifiedCollectionQueryIdentity
+            x-contract-placeholder: true
+        VerifyCollectionQueryGrantQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: VerifyCollectionQueryGrantQuery
             x-contract-placeholder: true

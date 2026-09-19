@@ -107,6 +107,93 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /content/collections/{collectionId}:
+        put:
+            operationId: SavePostCollection
+            x-contract-operation-id: content.post_collection.SavePostCollection
+            x-object-id: content.post_collection
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: PostCollectionFacade
+                method: save
+                aggregateOwner: PostCollection
+            parameters:
+                - name: collectionId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SavePostCollectionCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PostCollectionCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+        delete:
+            operationId: DeletePostCollection
+            x-contract-operation-id: content.post_collection.DeletePostCollection
+            x-object-id: content.post_collection
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: PostCollectionFacade
+                method: delete
+                aggregateOwner: PostCollection
+            parameters:
+                - name: collectionId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeletePostCollectionCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PostCollectionCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /content/comments/{commentId}/media:bind:
         post:
             operationId: BindMediaAssetsToComment
@@ -339,6 +426,16 @@ paths:
                                 - contractDigest
                             additionalProperties: false
                   x-max-bytes: 8192
+                - name: viewportProfile
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: deviceClass
+                  in: query
+                  required: false
+                  schema:
+                    type: string
                 - name: limit
                   in: query
                   required: false
@@ -3863,6 +3960,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: DecidePostModerationCaseRequest
             x-contract-placeholder: true
+        DeletePostCollectionCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: DeletePostCollectionCommand
+            x-contract-placeholder: true
         DismissReportRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -4038,6 +4140,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PostCandidateSafetyResult
             x-contract-placeholder: true
+        PostCollectionCommandResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PostCollectionCommandResult
+            x-contract-placeholder: true
         PostCounterSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -4182,6 +4289,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RollbackMediaImageReprocessRunRequest
+            x-contract-placeholder: true
+        SavePostCollectionCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SavePostCollectionCommand
             x-contract-placeholder: true
         SelectManualContentMediaCoverCommand:
             type: object

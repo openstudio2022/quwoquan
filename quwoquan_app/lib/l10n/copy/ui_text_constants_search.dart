@@ -34,6 +34,9 @@ abstract final class SearchText {
   static const String recoveryContentGoneMessage = '内容已被删除或下架。';
   static const String recoveryContentUnavailableTitle = '当前内容无法使用';
   static const String recoveryContentUnavailableMessage = '你还可以继续查看其他内容。';
+  static const String recoveryCapabilityUnavailableTitle = '当前功能暂不可用';
+  static const String recoveryCapabilityUnavailableMessage =
+      '当前暂不支持此功能，这不表示内容已被删除。';
   static const String recoveryReturnAction = '返回';
 
   static String recoveryWaitThenReloadMessage(int seconds) {

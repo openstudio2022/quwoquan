@@ -379,17 +379,21 @@ class AgentContextBudgetGateTest(unittest.TestCase):
             encoding="utf-8"
         )
         for required in (
-            "主会话",
-            "多作者和多 QA 只并行不同小批",
-            "同 shard 内只允许不重叠 execution 写者",
+            "主会话保持 execution owner",
+            "多 author/QA 可并行不同小批",
+            "每作者最多两个未闭合批且最多一个创作",
+            "同 shard 仅不重叠 execution 写者",
+            "同 execution/review scope 单写",
+            "派发前按 receipt/artifact 去重",
+            "不嵌套派发",
             "不包装 seal/publish",
-            "`starting up` 不是进度也不是失败",
-            "不得据此补发相同或替代调用",
-            "找首个未闭合步骤继续",
-            "已有 receipt 或 reviewer 产物的工作单元不得再次派发",
+            "`starting up` 不是进度/失败",
+            "不得再次派发",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, text)
+        self.assertNotIn("同时最多两个不重叠 author", text)
+        self.assertNotIn("review 串行", text)
 
     def test_mutation_skills_use_claim_and_actual_diff(self) -> None:
         for workflow in ("prd", "design", "dev"):
@@ -826,6 +830,49 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         )
         issues = self.module.check_checklists_and_registry()
         self.assertTrue(any("profiles.ghost 引用未知 workflow ghost" in issue for issue in issues), issues)
+
+    def test_profile_checklist_outside_roles_is_rejected(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t3
+        self._use_fixture_root()
+        registry = self._valid_registry()
+        self._write(".agents/skills/review/references/guides/probe.md", "# guide\n")
+        registry["profiles"]["ghost"] = {
+            "paths": ["Makefile"],
+            "specialist": {
+                "role": "probe",
+                "priority": 1,
+                "required": False,
+                "checklists": {"dev": "guides/probe.md"},
+            },
+        }
+        self._write(
+            ".agents/skills/review/references/registry.yaml",
+            self.module.yaml.safe_dump(registry, sort_keys=False),
+        )
+        issues = self.module.check_checklists_and_registry()
+        self.assertTrue(
+            any("profiles.ghost checklist 必须位于 roles/" in issue for issue in issues),
+            issues,
+        )
+
+    def test_primary_checklist_outside_roles_is_rejected(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t3
+        self._use_fixture_root()
+        registry = self._valid_registry()
+        self._write(".agents/skills/review/references/guides/probe.md", "# guide\n")
+        registry["workflows"]["dev"]["primary"]["checklist"] = "guides/probe.md"
+        self._write(
+            ".agents/skills/review/references/registry.yaml",
+            self.module.yaml.safe_dump(registry, sort_keys=False),
+        )
+        issues = self.module.check_checklists_and_registry()
+        self.assertTrue(
+            any(
+                "workflows.dev primary checklist 必须位于 roles/" in issue
+                for issue in issues
+            ),
+            issues,
+        )
 
     def test_registry_requires_v2_limits(self) -> None:
         self._use_fixture_root()

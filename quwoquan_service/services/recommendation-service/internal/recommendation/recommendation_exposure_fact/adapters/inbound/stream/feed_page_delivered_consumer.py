@@ -46,6 +46,7 @@ class FeedPageDeliveredEvent:
     model_channel: str | None
     model_release_id: str | None
     ranking_snapshot_digest: str
+    policy_digest: str
     feature_snapshot_at: datetime
     user_feature_snapshot: dict[str, Any]
     items: tuple[dict[str, Any], ...]
@@ -131,6 +132,7 @@ def decode_feed_page_delivered(values: dict[str, str]) -> FeedPageDeliveredEvent
         "scenario": str(payload.get("scenario") or "").strip(),
         "windowId": str(payload.get("windowId") or "").strip(),
         "rankingSnapshotDigest": str(payload.get("rankingSnapshotDigest") or "").strip(),
+        "policyDigest": str(payload.get("policyDigest") or "").strip(),
     }
     if not all(required.values()):
         raise ValueError("FeedPageDelivered attribution is incomplete")
@@ -147,6 +149,7 @@ def decode_feed_page_delivered(values: dict[str, str]) -> FeedPageDeliveredEvent
         model_channel=model_channel,
         model_release_id=model_release_id,
         ranking_snapshot_digest=required["rankingSnapshotDigest"],
+        policy_digest=required["policyDigest"],
         feature_snapshot_at=feature_snapshot_at,
         user_feature_snapshot=user_snapshot,
         items=tuple(items),
@@ -280,6 +283,7 @@ class FeedPageDeliveredConsumer:
                             item.get("featureSnapshotDigest") or ""
                         ).strip(),
                         ranking_snapshot_digest=event.ranking_snapshot_digest,
+                        policy_digest=event.policy_digest,
                         user_feature_snapshot=event.user_feature_snapshot,
                         item_feature_snapshot=item_snapshot,
                         exposed_at=event.occurred_at,

@@ -63,6 +63,7 @@ def build_startup_terminal_receipt(
     canonical_terminal: str,
     hot_restart: bool,
     observed_marker_digest: str,
+    native_rendezvous: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     value = {
         "schema": SCHEMA,
@@ -87,6 +88,8 @@ def build_startup_terminal_receipt(
         "hotRestart": bool(hot_restart),
         "observedMarkerDigest": str(observed_marker_digest).strip(),
     }
+    if native_rendezvous is not None:
+        value['nativeRendezvous'] = dict(native_rendezvous)
     return validate_startup_terminal_receipt(value, launch_attempt=launch_attempt)
 
 
@@ -95,8 +98,11 @@ def validate_startup_terminal_receipt(
     *,
     launch_attempt: Mapping[str, Any],
 ) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != _FIELDS:
+    if not isinstance(value, dict) or set(value) not in (_FIELDS, _FIELDS | {'nativeRendezvous'}):
         raise ValueError("startup safe-terminal receipt fields mismatch")
+    if 'nativeRendezvous' in value:
+        validate_native_rendezvous(value['nativeRendezvous'], launch_attempt=launch_attempt,
+                                   startup_attempt_id=str(value.get('startupAttemptId') or ''))
     expected = {
         "schema": SCHEMA,
         "launchAttemptId": launch_attempt.get("attemptId"),
@@ -133,6 +139,24 @@ def validate_startup_terminal_receipt(
     ):
         if _DIGEST_RE.fullmatch(str(value.get(field) or "")) is None:
             raise ValueError(f"startup safe-terminal {field} is invalid")
+    return dict(value)
+
+
+def validate_native_rendezvous(value: object, *, launch_attempt: Mapping[str, Any], startup_attempt_id: str) -> dict[str, Any]:
+    fields = {'processId', 'processStartedAtMonotonicMs', 'sessionId', 'socketName', 'startupAttemptId',
+              'launchAttemptId', 'launcherPid', 'canonicalLaunchControlDigest', 'effectiveLaunchManifestDigest'}
+    if not isinstance(value, dict) or set(value) != fields:
+        raise ValueError('APP.UAT.relay_admission_mismatch: native rendezvous fields invalid')
+    if (value['launchAttemptId'] != launch_attempt.get('attemptId') or value['startupAttemptId'] != startup_attempt_id
+            or value['effectiveLaunchManifestDigest'] != launch_attempt.get('launchDigest')
+            or launch_attempt.get('platform') != 'ios'):
+        raise ValueError('APP.UAT.relay_scope_mismatch: native startup/host attempt mapping drifted')
+    if any(type(value[key]) is not int or value[key] <= 0 for key in ('processId', 'launcherPid', 'processStartedAtMonotonicMs')):
+        raise ValueError('APP.UAT.relay_admission_mismatch: native process identity invalid')
+    if (re.fullmatch(r'[a-f0-9-]{36}', str(value['sessionId'])) is None
+            or re.fullmatch(r'gwt008-' + str(value['processId']) + r'-[a-z0-9-]{16,64}\.sock', str(value['socketName'])) is None
+            or _DIGEST_RE.fullmatch(str(value['canonicalLaunchControlDigest'])) is None):
+        raise ValueError('APP.UAT.relay_admission_mismatch: native rendezvous identity invalid')
     return dict(value)
 
 

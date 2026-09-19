@@ -61,6 +61,7 @@ from .release_binding import (
     _workspace_root_digest,
     canonical_contract_graph_digest,
     resolve_package_release_binding,
+    validate_release_attestations,
 )
 
 
@@ -688,13 +689,21 @@ def write_candidate_manifest(
             raise ValueError(
                 "deployment candidate has no complete safe legal-static package"
             ) from exc
-    release = _pkg.resolve_package_release_binding(
-        env_name,
-        target_name,
-        release_attestation=release_attestation,
-        rollback_release_attestation=rollback_release_attestation,
-        candidate_evidence=candidate_evidence,
-    )
+    if str(candidate_evidence or "").strip():
+        release = _pkg.resolve_package_release_binding(
+            env_name,
+            target_name,
+            release_attestation=release_attestation,
+            rollback_release_attestation=rollback_release_attestation,
+            candidate_evidence=candidate_evidence,
+        )
+    else:
+        release = validate_release_attestations(
+            release_attestation,
+            rollback_release_attestation,
+            environment=env_name,
+            target=target_name,
+        )
     contract_graph_digest = canonical_contract_graph_digest()
     if (
         {"releaseInputClassification", "releaseClass", "productLifecycleState"}.intersection(fingerprint)
@@ -986,20 +995,42 @@ def validate_candidate_manifest(
             binding = release.get(label)
             if not isinstance(binding, dict) or set(binding) != _RELEASE_BINDING_FIELDS:
                 raise ValueError(f"deployment candidate {label} release fields mismatch")
-            if not str(binding.get("releaseId") or ""):
-                raise ValueError(f"deployment candidate {label} releaseId is invalid")
-            for field in ("releaseDigest", "attestationDigest"):
-                if _DIGEST.fullmatch(str(binding.get(field) or "")) is None:
-                    raise ValueError(f"deployment candidate {label} {field} is invalid")
-            attestation_ref = binding.get("attestationRef")
-            if not isinstance(attestation_ref, str) or not attestation_ref.strip():
-                raise ValueError(f"deployment candidate {label} attestationRef is invalid")
-            if purpose == "currentness":
-                current = _release_binding(attestation_ref, label=label)
-                if current != binding:
-                    raise ValueError(f"{label} release attestation bytes drifted")
-        if (release["candidate"]["releaseId"] == release["rollback"]["releaseId"] or release["candidate"]["releaseDigest"] == release["rollback"]["releaseDigest"]):
-            raise ValueError("candidate and rollback release identities must be distinct")
+        alpha_local_empty_release = (
+            expected_environment == "alpha"
+            and expected_target == "alpha-local"
+            and all(
+                not str((release.get(label) or {}).get(field) or "")
+                for label in ("candidate", "rollback")
+                for field in (
+                    "releaseId",
+                    "releaseDigest",
+                    "attestationRef",
+                    "attestationDigest",
+                )
+            )
+        )
+        if not alpha_local_empty_release:
+            for label in ("candidate", "rollback"):
+                binding = release.get(label)
+                if not str(binding.get("releaseId") or ""):
+                    raise ValueError(f"deployment candidate {label} releaseId is invalid")
+                for field in ("releaseDigest", "attestationDigest"):
+                    if _DIGEST.fullmatch(str(binding.get(field) or "")) is None:
+                        raise ValueError(f"deployment candidate {label} {field} is invalid")
+                attestation_ref = binding.get("attestationRef")
+                if not isinstance(attestation_ref, str) or not attestation_ref.strip():
+                    raise ValueError(
+                        f"deployment candidate {label} attestationRef is invalid"
+                    )
+                if purpose == "currentness":
+                    current = _release_binding(attestation_ref, label=label)
+                    if current != binding:
+                        raise ValueError(f"{label} release attestation bytes drifted")
+            if (
+                release["candidate"]["releaseId"] == release["rollback"]["releaseId"]
+                or release["candidate"]["releaseDigest"] == release["rollback"]["releaseDigest"]
+            ):
+                raise ValueError("candidate and rollback release identities must be distinct")
     if (
         purpose == "currentness"
         and payload.get("contractGraphDigest") != canonical_contract_graph_digest()

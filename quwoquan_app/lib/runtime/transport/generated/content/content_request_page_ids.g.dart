@@ -22,6 +22,7 @@ class ContentRequestPageIds {
     'DecidePostModeration': 'content.decide.post.moderation',
     'DeleteComment': 'content.comment.delete',
     'DeletePost': 'content.post.delete',
+    'DeletePostCollection': 'content.delete.post.collection',
     'DiscardMediaAsset': 'content.media.discard',
     'DismissReport': 'content.dismiss.report',
     'GenerateArticleSummary': 'content.article.summary',
@@ -94,6 +95,7 @@ class ContentRequestPageIds {
     'RollbackFilterCatalogRelease': 'content.rollback.filter.catalog.release',
     'RollbackMediaImageReprocessRun':
         'content.rollback.media.image.reprocess.run',
+    'SavePostCollection': 'content.save.post.collection',
     'SelectAutoVideoCover': 'content.media.cover.auto',
     'SelectManualVideoCover': 'content.media.cover.manual',
     'StageFilterCatalogRelease': 'content.stage.filter.catalog.release',
@@ -125,6 +127,7 @@ class ContentRequestPageIds {
   static const String decidePostModeration = 'content.decide.post.moderation';
   static const String deleteComment = 'content.comment.delete';
   static const String deletePost = 'content.post.delete';
+  static const String deletePostCollection = 'content.delete.post.collection';
   static const String discardMediaAsset = 'content.media.discard';
   static const String dismissReport = 'content.dismiss.report';
   static const String generateArticleSummary = 'content.article.summary';
@@ -222,6 +225,7 @@ class ContentRequestPageIds {
       'content.rollback.filter.catalog.release';
   static const String rollbackMediaImageReprocessRun =
       'content.rollback.media.image.reprocess.run';
+  static const String savePostCollection = 'content.save.post.collection';
   static const String selectAutoVideoCover = 'content.media.cover.auto';
   static const String selectManualVideoCover = 'content.media.cover.manual';
   static const String stageFilterCatalogRelease =

@@ -1146,6 +1146,51 @@ void main() {
       );
     });
 
+    test('作者作品缓存拒绝过期或失权交集，避免切换后私有 reason 回放', () {
+      final now = DateTime.utc(2026, 9, 13, 12);
+      final store = ContentQuerySnapshotStore(now: () => now);
+      final identity = _defaultCacheIdentity();
+      store.adoptContentCacheIsolationIdentity(identity);
+      store.replayPolicy = (_) => true;
+      ContentQuerySnapshot snapshot(IntersectionReason reason) =>
+          ContentQuerySnapshot(
+            key: contentUserPostsQueryKey(userId: 'author-a', limit: 20),
+            items: <ContentPostViewData>[
+              _postDto(
+                'post-intersection-cache',
+                intersectionReasons: <IntersectionReason>[reason],
+              ),
+            ],
+            fetchedAt: now,
+            activationIdentity: identity.activationIdentity,
+          );
+
+      expect(
+        store.canReplay(
+          snapshot(
+            intersectionReasonFixture(
+              expiresAt: now
+                  .subtract(const Duration(seconds: 1))
+                  .toIso8601String(),
+              lifecycleState: 'active',
+            ),
+          ),
+        ),
+        isFalse,
+      );
+      expect(
+        store.canReplay(
+          snapshot(
+            intersectionReasonFixture(
+              expiresAt: now.add(const Duration(days: 1)).toIso8601String(),
+              lifecycleState: 'revoked',
+            ),
+          ),
+        ),
+        isFalse,
+      );
+    });
+
     test('query snapshot 分块 JSON 编码保真转义字符和嵌套投影', () async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       const storageKey = 'qwq.content_query_snapshots.json_round_trip.test';
@@ -1709,7 +1754,6 @@ class _CountingContentRepository extends Fake
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -1752,7 +1796,6 @@ class _CountingContentRepository extends Fake
   @override
   Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
-    String? identity,
     String? type,
     String? visibility,
     String? cursor,

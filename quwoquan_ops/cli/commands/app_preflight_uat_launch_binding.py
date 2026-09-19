@@ -60,16 +60,12 @@ _DEPENDENCY_COMPONENT_KINDS = {
     "patrolIosPods": "iosPods",
     "androidGradle": "androidGradle",
 }
+# iOS content-live / canonical launcher 只投影生产 host。run.sh 仅在
+# actor=app-content-uat 且 device=android* 时传 --include-patrol；iOS 收据
+# 不得再要求 patrolPub/patrolIosPods，否则已启动的 production 回执会被误拒。
 _PLATFORM_REQUIRED_DEPENDENCY_COMPONENTS = {
     "android": frozenset({"productionPub", "patrolPub", "androidGradle"}),
-    "ios-simulator": frozenset(
-        {
-            "productionPub",
-            "patrolPub",
-            "productionIosPods",
-            "patrolIosPods",
-        }
-    ),
+    "ios-simulator": frozenset({"productionPub", "productionIosPods"}),
 }
 _CONTRACT_GRAPH_LOGICAL_PATH = "quwoquan_service/generated/contract_graph.json"
 
@@ -852,6 +848,16 @@ def _app_content_launch_binding(
     if offline:
         control_expected.pop("packageDigest")
         control_expected["contentSource"] = "bundled_snapshot"
+    if offline and 'rehearsalSpaceSelection' in control:
+        from quwoquan_ops.cli.lib.app_launch_manifest_schema import _validate_schema_value
+        from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
+        contract = load_launch_manifest_contract()
+        selected = control['rehearsalSpaceSelection']
+        issues = _validate_schema_value(selected, {'type': 'object', **contract['app_content_uat_launch_control']['selection']},
+            field_path='rehearsalSpaceSelection', contract=contract)
+        if issues or selected.get('mode') != 'isolated':
+            raise ValueError('APP.UAT.relay_scope_mismatch: invalid verified isolated selection')
+        control_expected['rehearsalSpaceSelection'] = selected
     if (
         report.get("canonicalLaunchControlDigest") != control_digest
         or set(control) != set(control_expected)
@@ -946,4 +952,14 @@ def _app_content_launch_binding(
     if offline:
         binding.pop("candidatePackageDigest")
         binding["contentSource"] = "bundled_snapshot"
+        if 'rehearsalSpaceSelection' in control and platform == 'ios-simulator':
+            from quwoquan_app.scripts.device.startup_terminal_receipt import validate_native_rendezvous
+            terminal = read_startup_terminal_receipt(terminal_path, launch_attempt=attempt)
+            native = validate_native_rendezvous(terminal.get('nativeRendezvous'), launch_attempt=attempt,
+                startup_attempt_id=attempt['startupTerminalAttemptId'])
+            if native['processId'] != canonical_process_id or native['canonicalLaunchControlDigest'] != control_digest:
+                raise ValueError('APP.UAT.relay_scope_mismatch: host/native launch identity drifted')
+            selected = control['rehearsalSpaceSelection']
+            binding.update(nativeRendezvous=native, sessionId=native['sessionId'], caseId=selected['caseId'],
+                           generation=int(selected['lifecycleGeneration']), observationBinding=selected['observationBinding'])
     return binding

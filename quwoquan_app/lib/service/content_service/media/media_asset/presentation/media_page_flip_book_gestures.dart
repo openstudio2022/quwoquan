@@ -2,6 +2,9 @@ part of 'media_page_flip_book.dart';
 
 extension _MediaPageFlipBookStateGestures on _MediaPageFlipBookState {
   Widget _buildGestureLayer(Rect pageRect) {
+    if (!widget.interactionEnabled) {
+      return const SizedBox.expand();
+    }
     return ImmersivePointerGestureLayer(
       key: const ValueKey('media-pageflip-gesture-layer'),
       behavior: HitTestBehavior.translucent,

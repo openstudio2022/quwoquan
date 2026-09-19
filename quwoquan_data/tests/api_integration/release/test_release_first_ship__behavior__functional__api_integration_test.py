@@ -12,7 +12,7 @@ SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from content.release.environment import _ship_operations, handler
+from quwoquan_ops.cli.lib.content_release_environment import _ship_operations, handler
 from content.release.environment.release_runtime import ReleaseAdmission
 from content.release.environment.run_evidence import (
     create_run as create_environment_run,
@@ -30,6 +30,7 @@ from content.release.environment.topology import (
 from content.release.model import DeploymentEnvironment, ReleaseKind
 from core.io import read_json, write_json
 from core.release_layout import payload_digest
+from core.schema import assert_valid
 from core.source_digest import SourceDefinitionSnapshot, content_source_revision
 
 # The coverage receipt cross-checks the importer's own environment against the
@@ -53,6 +54,64 @@ def _admission(release_id: str = "release-a") -> ReleaseAdmission:
     )
 
 
+def _write_materialization_handoff(release: Path) -> Path:
+    from content.release.canonical import producer_release_handoff as handoff
+    from local_contract.release.test_producer_release_detachment__contract__local_contract_test import (
+        _sealed_handoff_fixture,
+    )
+
+    target = release / "producer_release_handoff.json"
+    if target.is_file():
+        return target
+
+    logical_ref = "entities/地点/景区/p0001/entity-a/1"
+    fixture_root = release.parent.parent.parent / "handoff-fixture" / release.name
+    _sealed, row, _manifest, _record, _review = _sealed_handoff_fixture(
+        fixture_root, logical_ref=logical_ref, review_ref=logical_ref
+    )
+    targets = {"homepage": 1, "article": 0, "image": 0, "video": 0}
+    counts = {**targets, "total": 1}
+    baseline = "a" * 40
+    cohort = {
+        "schema": "quwoquan_data.release_cohort",
+        "producerBaselineRevision": baseline,
+        "objectRefs": [logical_ref],
+        "milestone": "M1",
+        "expectedCarrierCounts": targets,
+    }
+    cohort_path = release / "cohort.json"
+    cohort_path.write_bytes(handoff._canonical_bytes(cohort))
+    header_path = release / "payload/release.json"
+    document = {
+        "schema": "quwoquan_data.producer_release_handoff",
+        "repositoryId": "test-content",
+        "handoffId": release.name,
+        "releaseId": release.name,
+        "milestone": "M1",
+        "carrierCounts": counts,
+        "release": {
+            "scope": "output",
+            "ref": f"data/releases/{release.name}",
+            "payloadDigest": payload_digest(release),
+            "headerRef": f"data/releases/{release.name}/payload/release.json",
+            "headerDigest": handoff._digest(header_path.read_bytes()),
+        },
+        "explicitCohort": {
+            "scope": "output",
+            "ref": f"data/releases/{release.name}/cohort.json",
+            "digest": handoff._digest(cohort_path.read_bytes()),
+            "document": cohort,
+        },
+        "contentPoolObjects": [row],
+        "artifact": handoff._artifact_inventory(release),
+        "producerBaselineRevision": baseline,
+        "producerContractDigest": "sha256:" + "2" * 64,
+    }
+    assert_valid(document, "release", "producer_release_handoff")
+    target.write_bytes(handoff._canonical_bytes(document))
+    return target
+
+
 def _fixture_admission(release: Path) -> ReleaseAdmission:
     header = read_json(release / "payload/release.json")
     if header.get("releaseKind") == ReleaseKind.EMPTY_BASELINE:
@@ -68,11 +127,17 @@ def _fixture_admission(release: Path) -> ReleaseAdmission:
             system_attestation_ref=f"data/releases/{release.name}/attestations/release.json",
             system_attestation_digest=_ADMISSION_DIGEST,
         )
+    handoff = _write_materialization_handoff(release)
+    handoff_digest = "sha256:" + hashlib.sha256(handoff.read_bytes()).hexdigest()
+    handoff_ref = f"data/releases/{release.name}/producer_release_handoff.json"
     return replace(
         _admission(release.name),
         release=release,
         contract=read_json(release / "payload/desired_state.json"),
         manifest_digest=payload_digest(release),
+        handoff_ref=f"{handoff_ref}={handoff_digest}",
+        handoff_artifact_ref=handoff_ref,
+        handoff_artifact_digest=handoff_digest,
     )
 
 

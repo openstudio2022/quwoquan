@@ -1,6 +1,125 @@
 part of 'works_immersive_viewer.dart';
 
+enum _WorksInternalFeedTerminal {
+  loading,
+  content,
+  canonicalEmpty,
+  blockingError,
+}
+
+final class _WorksInternalFeedAggregate {
+  const _WorksInternalFeedAggregate({
+    required this.terminal,
+    required this.posts,
+    this.blockingError,
+    this.emptyReason,
+  });
+
+  final _WorksInternalFeedTerminal terminal;
+  final List<ContentPostViewData> posts;
+  final Object? blockingError;
+  final ContentFeedEmptyReason? emptyReason;
+}
+
 extension _WorksImmersiveViewerFeedTerminal on _WorksImmersiveViewerState {
+  Widget _buildInternalFeedTerminal(
+    BuildContext context,
+    _WorksInternalFeedAggregate feed,
+  ) {
+    switch (feed.terminal) {
+      case _WorksInternalFeedTerminal.loading:
+        return ColoredBox(
+          key: const ValueKey<String>('works-internal-feed-loading'),
+          color: AppColors.black,
+          child: AppRequestFeedback.page(),
+        );
+      case _WorksInternalFeedTerminal.canonicalEmpty:
+        final reason = feed.emptyReason!;
+        return ColoredBox(
+          key: ValueKey<String>('works-internal-feed-empty-${reason.wireName}'),
+          color: AppColors.black,
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.containerLg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    DiscoveryText.webPcFeedEmpty,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.white,
+                      fontSize: AppTypography.iosTitle3,
+                      fontWeight: AppTypography.semiBold,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  Text(
+                    DiscoveryFeedText.contentLoadingCompleted,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.white.withValues(alpha: 0.72),
+                      fontSize: AppTypography.iosSubheadline,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      case _WorksInternalFeedTerminal.blockingError:
+        final semantic = runtime_error_display.ensureRetryUiErrorSemantic(
+          runtime_error_display.runtimeErrorSemantic(
+            context,
+            error: feed.blockingError!,
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            presentation: UiErrorPresentation.emptyPage,
+            appearanceMode: UiErrorAppearanceMode.dark,
+            sourceRouteId: AppUiSurfaces.workBrowser.routeId,
+            sourceSurfaceId: AppUiSurfaces.workBrowser.id,
+            sourceOperationId: AppCloudOperationIds.contentPostGetFeed,
+          ),
+          retryLabel: SearchText.reload,
+        );
+        return AppPageErrorState(
+          key: const ValueKey<String>('works-internal-feed-error'),
+          semantic: semantic,
+          onRecovery: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              return _retryTrackedFeeds();
+            }
+            if (action.type == UiErrorActionType.dismiss) {
+              _dismissViewer();
+              return UiRecoveryOutcome.handedOff;
+            }
+            return UiRecoveryOutcome.cancelled;
+          },
+        );
+      case _WorksInternalFeedTerminal.content:
+        return const SizedBox.shrink();
+    }
+  }
+
+  void _applyFilterSelection(Set<String> selectedIds) {
+    final nextIds = selectedIds.isEmpty || selectedIds.contains('all')
+        ? <String>{'all'}
+        : selectedIds;
+    _setMountedState(() {
+      _selectedWorkFilterIds = nextIds;
+      _currentPage = 0;
+      _invalidateVideoViewport();
+      _pageController.jumpToPage(0);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _retainPostLocalStateAround(_buildFeed(), _currentPage);
+    });
+  }
+
   _WorksInternalFeedAggregate _buildInternalFeedAggregate() {
     final channelIds = _trackedFeedTabIds;
     final feedStates = <String, AsyncValue<WorksViewerFeedSnapshot>>{

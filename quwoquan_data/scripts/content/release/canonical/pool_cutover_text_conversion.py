@@ -92,6 +92,13 @@ def convert_text_object(*, object_root: Path, execution_root: Path, object_ref: 
     _inspect_content(root, execution, ref, original, {})
     result = _text_bytes(root, ref, original["finalContentRef"])
     entity = original if ref.startswith("entities/") else None
+    entity_path = Path("_entity.json")
+    if entity_path in result:
+        sidecar = json.loads(result[entity_path])
+        _attribution(sidecar, "entity")
+        _convert_asset_classification(sidecar.get("assets"), "entity.assets")
+        assert_valid(sidecar, "publish", "entity", label=ref)
+        result.pop(entity_path)
     manifest = _manifest(original, entity)
     result[Path("manifest.json")] = _json_bytes(manifest)
     if entity is None:

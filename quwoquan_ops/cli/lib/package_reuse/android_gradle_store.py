@@ -301,13 +301,16 @@ def materialize_pinned_flutter_gradle_wrappers(
 def canonical_android_dependency_bundle_invocations(
     project_root: Path,
 ) -> tuple[GradleInvocation, ...]:
-    """Return only the production App package task owned by this bundle."""
+    """Return the current Alpha Debug production and AndroidTest dependency tasks."""
 
     repository = project_root.expanduser().absolute()
     return (
         GradleInvocation(
             gradle_root=repository / "quwoquan_app/android",
-            tasks=(":app:assembleNonprodDebug", ":app:assembleNonprodRelease"),
+            tasks=(
+                ":app:assembleNonprodDebug",
+                ":app:assembleNonprodDebugAndroidTest",
+            ),
         ),
     )
 
@@ -321,8 +324,8 @@ def canonical_android_uat_gradle_invocations(
         GradleInvocation(
             gradle_root=repository / "quwoquan_app/android",
             tasks=(
-                ":app:assembleNonprodDebug",
-                ":app:assembleNonprodDebugAndroidTest",
+                ":app:assembleAlphaDebug",
+                ":app:assembleAlphaDebugDebugAndroidTest",
             ),
         ),
         GradleInvocation(

@@ -1,0 +1,52 @@
+description: PostCollection 权威状态及公开命令输入；owner 只由已认证 principal 注入。
+fields:
+- {name: collectionId, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: ownerPersonaId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: name, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: drop, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: coverAssetId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: visibility, type: enum, enum_ref: PostCollectionVisibility, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: postIds, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: drop, api_exposure: drop, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: version, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: status, type: enum, enum_ref: PostCollectionStatus, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+enums:
+  PostCollectionVisibility: [public, private]
+  PostCollectionStatus: [active, deleted]
+types:
+  GetPostCollectionManagementQuery:
+    fields:
+    - {name: collectionId, type: string, constraints: [NOT_BLANK]}
+  PostCollectionManagedMember:
+    description: owner 已拥有的编排引用；不可读 Post 不暴露标题、类型、媒体或下架原因，但仍可保留、移除与排序。
+    fields:
+    - {name: postId, type: string, constraints: [NOT_NULL]}
+    - {name: readable, type: bool, constraints: [NOT_NULL]}
+    - {name: title, type: string, constraints: [NULLABLE]}
+  SavePostCollectionCommand:
+    description: 预期版本为零时创建；其他版本原子替换元信息和有序成员，涵盖编辑、添加、移除和排序。
+    fields:
+    - {name: collectionId, type: string, constraints: [NOT_BLANK]}
+    - {name: expectedVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: name, type: string, constraints: [NOT_BLANK]}
+    - {name: coverAssetId, type: string, constraints: [NULLABLE]}
+    - {name: visibility, type: enum, enum_ref: PostCollectionVisibility, constraints: [NOT_NULL]}
+    - {name: postIds, type: '[]string', constraints: [NOT_NULL, MAX_ITEMS_100]}
+  DeletePostCollectionCommand:
+    fields:
+    - {name: collectionId, type: string, constraints: [NOT_BLANK]}
+    - {name: expectedVersion, type: int64, constraints: [NOT_NULL]}
+  GetPostCollectionQuery:
+    fields:
+    - {name: collectionId, type: string, constraints: [NOT_BLANK]}
+    - {name: cursor, type: string, constraints: [NULLABLE]}
+    - {name: limit, type: int, constraints: [NOT_NULL]}
+  PostCollectionCommandResult:
+    fields:
+    - {name: collectionId, type: string, constraints: [NOT_NULL]}
+    - {name: version, type: int64, constraints: [NOT_NULL]}
+    - {name: status, type: enum, enum_ref: PostCollectionStatus, constraints: [NOT_NULL]}
+  PostCollectionMemberSummary:
+    fields:
+    - {name: postId, type: string, constraints: [NOT_NULL]}
+    - {name: contentType, type: string, constraints: [NOT_NULL]}
+    - {name: title, type: string, constraints: [NOT_NULL]}

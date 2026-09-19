@@ -112,7 +112,7 @@ def candidate_exact(target: Path, candidate_ref: Path) -> dict[str, str]:
     return store_ref(repository=target, policy_path=POLICY, path=candidate_ref)
 
 
-def environment_fact(target: Path, candidate: dict[str, object], environment: str, status: str, *, prefix: str = "") -> dict[str, object]:
+def environment_fact(target: Path, candidate: dict[str, object], environment: str, status: str, *, prefix: str = "", reason_code: str | None = None) -> dict[str, object]:
     from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import _EVIDENCE_ROLE_CONTRACT, DSSE_PAYLOAD_TYPE
     from quwoquan_ops.cli.lib.evidence_signing import ENVIRONMENT_OPS_IDENTITY, KEYRING_RELATIVE_PATH
     from quwoquan_ops.ci.environment_scheduler import dsse_pae
@@ -144,7 +144,7 @@ def environment_fact(target: Path, candidate: dict[str, object], environment: st
         "caseResultRefs": [case], **roles, "nonPromotable": False,
         "predecessor": None if environment == "alpha" else {"ref": f"{prefix}alpha.json", "digest": exact_digest(root / f"{prefix}alpha.json")},
         "issuedAt": (now - timedelta(minutes=1)).isoformat(), "expiresAt": (now + timedelta(hours=1)).isoformat(),
-        **({"reasonCode": "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED"} if status == "not_required" else {}),
+        **({"reasonCode": reason_code or "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED"} if status == "not_required" else {}),
     }
     payload = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
     body["signer"] = {"identity": ENVIRONMENT_OPS_IDENTITY, "payloadType": DSSE_PAYLOAD_TYPE,
@@ -329,6 +329,43 @@ def test_same_admission_replay_is_rejected(tmp_path: Path, source_receipt_bounda
         local_ref_cas_publish(repository=target, admission_ref=admission_ref, allow_test_adapter=True)
     with pytest.raises(ScopedCandidateError, match="PUBLISHER_UNAVAILABLE"):
         local_ref_cas_publish(repository=target, admission_ref=admission_ref)
+
+
+def test_source_admitted_alpha_deferred_can_create_admission(tmp_path: Path, source_receipt_boundary) -> None:
+    from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV
+
+    target, parent = repo(tmp_path)
+    claim_ref = claim(target, parent, ["owned.txt"])
+    (target / "owned.txt").write_text("candidate\n")
+    candidate_ref = build_candidate(
+        repository=target, policy_path=POLICY, claim_ref=claim_ref,
+        owner_identity_ref="evidence-fingerprint-v1:sha256:" + "b" * 64,
+        impact_plan_digest=DIGEST, message="deferred-alpha", author_name="Candidate", author_email="candidate@example.com",
+    )
+    candidate = json.loads(candidate_ref.read_text())
+    source = source_fact(target, candidate, candidate_ref)
+    alpha = write_fact(
+        target, "alpha.json",
+        environment_fact(target, candidate, "alpha", "not_required", reason_code=ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV),
+    )
+    beta = write_fact(target, "beta.json", environment_fact(target, candidate, "beta", "not_required"))
+    admission_ref = create_publish_admission(
+        repository=target, policy_path=POLICY, candidate_ref=candidate_exact(target, candidate_ref),
+        source_fact_refs=[source], alpha_fact_ref=alpha, beta_fact_ref=beta,
+        expected_remote_oid=parent,
+    )
+    body = json.loads(admission_ref.read_text())
+    assert body["decision"] == "admitted"
+    wrong = write_fact(
+        target, "alpha-wrong.json",
+        environment_fact(target, candidate, "alpha", "not_required", prefix="wrong-", reason_code="ACCEPTANCE.BETA_OPTIONAL_BY_POLICY"),
+    )
+    with pytest.raises(ScopedCandidateError, match="ALPHA_LIVE_DEFERRED|typed"):
+        create_publish_admission(
+            repository=target, policy_path=POLICY, candidate_ref=candidate_exact(target, candidate_ref),
+            source_fact_refs=[source], alpha_fact_ref=wrong, beta_fact_ref=beta,
+            expected_remote_oid=parent,
+        )
 
 
 class BrokerResponse:

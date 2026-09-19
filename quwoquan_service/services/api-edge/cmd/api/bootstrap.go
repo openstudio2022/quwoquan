@@ -431,6 +431,12 @@ func assembleOwnerExecutor(
 	if err != nil {
 		return nil, fmt.Errorf("GraphQL owner executor router invalid: %w", err)
 	}
+    var issuePath,verifyPath string
+    for _,descriptor:=range operationsecurity.ForDomain("user"){switch descriptor.CanonicalOperationID{case "user.user_account.IssueCollectionQueryGrant":issuePath=descriptor.PathTemplate;case "user.user_account.VerifyCollectionQueryGrant":verifyPath=descriptor.PathTemplate}}
+    issuerCredential,err:=asm.Auth.ServiceCredentials("user.collection_query.issue");if err!=nil{return nil,err}
+    issuer,err:=rtauth.NewCollectionQueryAuthorityClient(config.UserAccountSecurityAuthority.BaseURL,issuePath,verifyPath,issuerCredential,&http.Client{Timeout:ownerTimeout});if err!=nil{return nil,err}
+    collectionCredential,err:=asm.Auth.ServiceCredentials(ownerquery.CollectionReadScope);if err!=nil{return nil,err}
+    router.WithCollection(&ownerquery.PostCollectionQueryExecutor{Origin:stableContentOrigin,Client:&http.Client{Timeout:ownerTimeout},Credentials:collectionCredential,Authority:issuer,SourceCredential:httpadapter.VerifiedSourceAccessCredential,GraphHash:operationsecurity.ContractGraphSHA256})
 	return router, nil
 }
 

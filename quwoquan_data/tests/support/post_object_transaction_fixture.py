@@ -14,13 +14,14 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 from content.release.canonical.object_transaction_contract import canonical_transaction_id
 from content.release.canonical.post_transaction import (
     build_post_object_transaction_package as _build_post_object_transaction_package,
 )
 from PIL import Image
 
-from support.media_fixture import seed_system_creator_avatar_holding
+from support.media_fixture import admit_media_body
 
 EXECUTION_ID = "20260718--travel-image-cold-start--test-region-a--scale-901"
 POST_REF = "image/西湖/光影/1"
@@ -41,19 +42,82 @@ CREATOR_PROFILE_PATH = (
 )
 
 
-def _seed_creator_avatar_holding(monkeypatch: pytest.MonkeyPatch) -> None:
-    seed_system_creator_avatar_holding(CREATOR_REF, monkeypatch=monkeypatch)
+def _seed_creator_avatar_holding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch | None,
+) -> None:
+    """Stand up a traceable avatar whose identity comes from real fixture bytes."""
+    from content.release.canonical import creator_projection
+
+    profile = yaml.safe_load(CREATOR_PROFILE_PATH.read_text(encoding="utf-8"))
+    asset = profile["avatarAsset"]
+    evidence_path = (
+        REPO_ROOT
+        / "quwoquan_data/control_plane/governance/creator_pool"
+        / asset["evidenceRef"]
+    )
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+    original = Image.new("RGB", (96, 80), color=(50, 110, 160))
+    derived = original.crop((8, 0, 88, 80)).resize((64, 64), Image.Resampling.LANCZOS)
+    avatar_path = tmp_path / "creator-avatar.webp"
+    derived.save(avatar_path, format="WEBP", quality=85, method=4)
+    body = avatar_path.read_bytes()
+    digest_hex = hashlib.sha256(body).hexdigest()
+    digest = f"sha256:{digest_hex}"
+    object_key = (
+        f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/"
+        f"{digest_hex}.webp"
+    )
+    admit_media_body(body)
+
+    asset.update(
+        sha256=digest,
+        objectKey=object_key,
+        bytes=len(body),
+        mimeType="image/webp",
+    )
+    evidence["manifestAsset"].update(assetId=asset["assetId"], sha256=digest)
+    evidence["commercialRights"].update(
+        assetId=asset["assetId"],
+        modifications=(
+            "fixture center-square crop [8, 0, 88, 80] from 96x80; RGB; "
+            "LANCZOS 64x64; WebP quality=85 method=4"
+        ),
+        derivedModifications=["crop", "resize"],
+    )
+    evidence["commercialRights"]["asset"].update(
+        ref=f"cas/{digest_hex}.webp",
+        sha256=digest,
+        bytes=len(body),
+        mimeType="image/webp",
+        width=64,
+        height=64,
+    )
+
+    pool = tmp_path / "creator-pool"
+    profile_path = pool / "profiles/system_builtin/landscape_photographer.creator.yaml"
+    profile_path.parent.mkdir(parents=True, exist_ok=True)
+    profile_path.write_text(
+        yaml.safe_dump(profile, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    _write_json(pool / asset["evidenceRef"], evidence)
+    if monkeypatch is None:
+        creator_projection.CONTROL_PLANE_CREATOR_POOL_ROOT = pool
+    else:
+        monkeypatch.setattr(
+            creator_projection, "CONTROL_PLANE_CREATOR_POOL_ROOT", pool
+        )
 
 
 @pytest.fixture(autouse=True)
-def _isolate_creator_avatar_cas(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stand up the referenced creator avatar in the isolated content library.
-
-    Projecting a creator resolves its avatar by digest against the library, so
-    the holding has to exist before the projection runs; canonical publish never
-    carries the body and cannot supply it.
-    """
-    _seed_creator_avatar_holding(monkeypatch)
+def _isolate_creator_avatar_cas(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stand up the referenced creator avatar in the isolated content library."""
+    _seed_creator_avatar_holding(tmp_path, monkeypatch)
 
 
 def make_text_only_article(execution_root: Path) -> None:
@@ -197,7 +261,7 @@ def _fixture(
             {
                 "name": "西湖",
                 "entityType": "地点/景区",
-                "entityRef": "/entity/travel/test/entity-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "entityRef": "/entity/地点/景区/西湖",
                 "entityId": "entity:fixture:西湖",
                 "region": "中国/浙江省/杭州市",
                 "publishAngle": "西湖",
@@ -404,6 +468,6 @@ def _fixture(
     _write_json(publish / "repository.json", {"schema": "quwoquan_data.publish_repository.v2", "repositoryId": "post-fixture", "layoutVersion": 2})
     from content.release.canonical import post_transaction
     post_transaction.PUBLISH_ROOT = publish
-    _seed_creator_avatar_holding(monkeypatch)
+    _seed_creator_avatar_holding(tmp_path, monkeypatch)
     package = execution / "evidence/object-transactions" / transaction_id
     return execution, package, publish, transaction_id

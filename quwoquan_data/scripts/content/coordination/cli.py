@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,10 @@ def parser() -> argparse.ArgumentParser:
     root.add_argument("--db", type=Path)
     commands = root.add_subparsers(dest="command", required=True)
     commands.add_parser("init")
+    task = commands.add_parser("create-repackage-task")
+    task.add_argument("--output", required=True, type=Path); task.add_argument("--authorization-ref", required=True); task.add_argument("--authorization-digest", required=True)
+    task.add_argument("--confirmation-ref", required=True); task.add_argument("--confirmation-digest", required=True)
+    task.add_argument("--confirmed-by", required=True); task.add_argument("--roles", required=True, type=_document)
     context = commands.add_parser("bind-context")
     context.add_argument("iteration_id"); context.add_argument("deployment_id")
     context.add_argument("--task-ref", required=True); context.add_argument("--task-digest", required=True)
@@ -31,7 +36,7 @@ def parser() -> argparse.ArgumentParser:
     batch.add_argument("--nonce", required=True); batch.add_argument("--task-digest", required=True)
     batch.add_argument("--review", action="store_true")
     iteration = commands.add_parser("register-iteration")
-    iteration.add_argument("iteration_id"); iteration.add_argument("authorization_ref")
+    iteration.add_argument("iteration_id"); iteration.add_argument("authorization_ref"); iteration.add_argument("authorization_digest", nargs="?", default="")
     deployment = commands.add_parser("register-deployment")
     deployment.add_argument("iteration_id"); deployment.add_argument("deployment_id"); deployment.add_argument("--roles", required=True, type=_document); deployment.add_argument("--instance-id"); deployment.add_argument("--account-identity-ref"); deployment.add_argument("--resource-reservation-ref")
     shard = commands.add_parser("register-shard")
@@ -53,11 +58,33 @@ def parser() -> argparse.ArgumentParser:
     return root
 
 
+def _create_repackage_task(args) -> dict[str, Any]:
+    from core.schema import assert_valid
+    from .authority import verify_authority_artifact
+    verify_authority_artifact(args.authorization_ref,args.authorization_digest,purpose="content-repackage-user-authorization")
+    confirmation=Path(args.confirmation_ref).expanduser().absolute()
+    verify_authority_artifact(str(confirmation),args.confirmation_digest,purpose="content-repackage-confirmation")
+    if args.confirmed_by not in args.roles.get("director", []):
+        raise CoordinationError("COORDINATION.DIRECTOR_REQUIRED", args.confirmed_by)
+    document={"schema":"quwoquan_data.repackage_task_context","coordination":{"version":1,
+        "authorizationRef":args.authorization_ref,"authorizationDigest":args.authorization_digest,"confirmationRef":args.confirmation_ref,
+        "confirmationDigest":args.confirmation_digest,"confirmedBy":args.confirmed_by,
+        "allowedActions":["repackage"],"revokedActors":[]}}
+    assert_valid(document,"execution","repackage_task_context")
+    encoded=(json.dumps(document,ensure_ascii=False,sort_keys=True,separators=(",",":"))+"\n").encode()
+    target=args.output.expanduser().absolute()
+    if target.exists():
+        if target.read_bytes()!=encoded: raise CoordinationError("COORDINATION.REPACKAGE_TASK_CONFLICT",str(target))
+    else:
+        target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(encoded)
+    return {"taskRef":str(target),"taskDigest":"sha256:"+hashlib.sha256(encoded).hexdigest()}
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     store = CoordinationStore(args.db)
     try:
         if args.command == "init": result: Any = {"path": str(store.initialize())}
+        elif args.command == "create-repackage-task": result = _create_repackage_task(args)
         elif args.command == "bind-context":
             from .runtime import actor_key
             result = store.bind_context(args.iteration_id, args.deployment_id, task_ref=args.task_ref, task_digest=args.task_digest, roots=args.roots, actor=actor_key(args.actor), expected_digest=args.expected_digest)
@@ -66,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
             from .fence import WriteFenceToken
             values = args.tokens if isinstance(args.tokens, list) else [args.tokens]
             result = store.claim_batch([WriteFenceToken(**value) for value in values], execution_id=args.execution_id, actor=actor_key(args.actor), nonce=args.nonce, task_digest=args.task_digest, review=args.review)
-        elif args.command == "register-iteration": result = store.register_iteration(args.iteration_id, args.authorization_ref)
+        elif args.command == "register-iteration": result = store.register_iteration(args.iteration_id, args.authorization_ref, args.authorization_digest)
         elif args.command == "register-deployment": result = store.register_deployment(args.iteration_id, args.deployment_id, args.roles, instance_id=args.instance_id, account_identity_ref=args.account_identity_ref, resource_reservation_ref=args.resource_reservation_ref)
         elif args.command == "register-shard": result = store.register_shard(args.iteration_id, args.shard_id, args.name, args.scope_ref, args.order, args.targets, authorized_team=args.authorized_team)
         elif args.command == "rename-shard": result = store.rename_shard(args.iteration_id, args.shard_id, args.new_name)

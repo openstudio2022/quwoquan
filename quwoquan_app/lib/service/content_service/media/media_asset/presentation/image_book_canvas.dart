@@ -10,6 +10,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/image_book_page_surface.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/design_system/gestures/immersive_gesture_intent_controller.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_page_flip_book.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_media_failure_content.dart';
@@ -62,10 +63,37 @@ class ImageBookMediaLoadEvent {
   final Object? error;
 }
 
+/// 当前页真实就绪状态；已知比例本身不代表图片可查看。
+@immutable
+class ImageBookCurrentMediaState {
+  const ImageBookCurrentMediaState({
+    required this.index,
+    required this.isReady,
+    required this.hasFailure,
+    this.aspectRatio,
+  });
+
+  final int index;
+  final bool isReady;
+  final bool hasFailure;
+  final double? aspectRatio;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ImageBookCurrentMediaState &&
+      other.index == index &&
+      other.isReady == isReady &&
+      other.hasFailure == hasFailure &&
+      other.aspectRatio == aspectRatio;
+
+  @override
+  int get hashCode => Object.hash(index, isReady, hasFailure, aspectRatio);
+}
+
 /// 图片作品的书页式沉浸画布。
 ///
-/// 每页只保留一条解码链；静态页和翻页纹理共享同一个 [ui.Image] 与 cover
-/// source rect，避免图片晚到时发生裁剪或亮度切换。
+/// 每页只保留一条解码链；静态页和翻页纹理共享同一个 [ui.Image] 与整栏
+/// 显示窗口/自然比例矩形，避免图片晚到时发生裁剪或亮度切换。
 ///
 /// 每页把投影引用与 typed 绑定原样交给统一获取器；full profile 独立传参。
 /// 授权、来源、CDN 与校验不进入画布，所有结果共享同一解码/呈现链。
@@ -74,6 +102,13 @@ class ImageBookCanvas extends ConsumerStatefulWidget {
     super.key,
     required this.deliveries,
     required this.onImageChanged,
+    this.onCurrentMediaStateChanged,
+    this.mediaAspectRatios = const <double?>[],
+    this.mediaTopInset = 0,
+    this.mediaBottomInset = 0,
+    this.landscapeEntryExtent = 0,
+    this.usePortraitBands = false,
+    this.interactionEnabled = true,
     this.initialIndex = 0,
     this.onPageflipMotion,
     this.onOverflowPrevious,
@@ -87,7 +122,18 @@ class ImageBookCanvas extends ConsumerStatefulWidget {
   /// 逐页 typed 交付绑定。顺序即页序。
   final List<MediaDeliveryBinding> deliveries;
   final int initialIndex;
+  final List<double?> mediaAspectRatios;
+  final double mediaTopInset;
+  final double mediaBottomInset;
+  final double landscapeEntryExtent;
+
+  /// false 保持文章独立图片和横向模式的全视口 contain。
+  final bool usePortraitBands;
+  final bool interactionEnabled;
   final ValueChanged<int> onImageChanged;
+
+  /// 仅在帧后报告当前页有效变化；更换监听者时重新报告一次。
+  final ValueChanged<ImageBookCurrentMediaState>? onCurrentMediaStateChanged;
   final ValueChanged<MediaPageFlipMotionEvent>? onPageflipMotion;
   final VoidCallback? onOverflowPrevious;
   final VoidCallback? onOverflowNext;
@@ -112,6 +158,9 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
   int _presentationReleaseGeneration = 0;
   bool _presentationFrozen = false;
   Object? _scheduledWindowSignature;
+  ImageBookCurrentMediaState? _reportedCurrentMediaState;
+  int _currentMediaReportGeneration = 0;
+  bool _currentMediaReportScheduled = false;
 
   int get _safeInitialIndex {
     if (widget.deliveries.length <= 1) {
@@ -129,10 +178,24 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
   @override
   void didUpdateWidget(covariant ImageBookCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.onCurrentMediaStateChanged !=
+        oldWidget.onCurrentMediaStateChanged) {
+      _reportedCurrentMediaState = null;
+    }
     if (!listEquals(widget.deliveries, oldWidget.deliveries)) {
       _disposeResources();
       _textureRevision += 1;
       _scheduledWindowSignature = null;
+    } else if (!listEquals(
+          widget.mediaAspectRatios,
+          oldWidget.mediaAspectRatios,
+        ) ||
+        widget.mediaTopInset != oldWidget.mediaTopInset ||
+        widget.mediaBottomInset != oldWidget.mediaBottomInset ||
+        widget.landscapeEntryExtent != oldWidget.landscapeEntryExtent ||
+        widget.usePortraitBands != oldWidget.usePortraitBands) {
+      // 只失效几何材质；保留资源、解码请求和当前页位。
+      _textureRevision += 1;
     }
     final nextInitialIndex = _safeInitialIndex;
     if (widget.initialIndex != oldWidget.initialIndex &&
@@ -155,9 +218,10 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
 
   @override
   Widget build(BuildContext context) {
+    _scheduleCurrentMediaReport();
     final images = widget.deliveries;
     if (images.isEmpty) {
-      return const ColoredBox(color: AppColors.worksBackground);
+      return const ColoredBox(color: AppColors.black);
     }
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -177,7 +241,15 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
               key: const ValueKey('works-photo-book-stage'),
               pageCount: images.length,
               initialPage: _currentIndex.clamp(0, images.length - 1),
-              contentSignature: Object.hashAll(images),
+              contentSignature: Object.hash(
+                Object.hashAll(images),
+                Object.hashAll(widget.mediaAspectRatios),
+                widget.mediaTopInset,
+                widget.mediaBottomInset,
+                widget.landscapeEntryExtent,
+                widget.usePortraitBands,
+              ),
+              interactionEnabled: widget.interactionEnabled,
               textureReadinessSignature: _textureRevision,
               textureSnapshotBuilder: (context, index, size, pixelRatio) {
                 return _buildTexturePair(
@@ -188,7 +260,7 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
                   pixelRatio: pixelRatio,
                 );
               },
-              stageColor: AppColors.worksBackground,
+              stageColor: AppColors.black,
               onPageChanged: (index) =>
                   _handlePageChanged(index, images, pageSize),
               onMotionEvent: widget.onPageflipMotion,
@@ -207,12 +279,9 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
                 return _ImageBookPage(
                   key: ValueKey<String>('image-book-page-$index'),
                   resource: resource,
-                  coverSourceRect: resource?.image == null
+                  geometry: resource?.image == null
                       ? null
-                      : _pageSurfaceFactory.coverSourceRect(
-                          resource!.image!,
-                          pageSize,
-                        ),
+                      : _geometryForImage(resource!.image!, index, pageSize),
                   hideStatusOverlay: _presentationFrozen,
                   fadeDuration: reduceMotion
                       ? ImmersiveMediaWaitMotion.reducedMotionTransition
@@ -235,6 +304,51 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
         );
       },
     );
+  }
+
+  ImageBookCurrentMediaState get _currentMediaState {
+    final hasPage =
+        _currentIndex >= 0 && _currentIndex < widget.deliveries.length;
+    final resource = hasPage ? _resources[_currentIndex] : null;
+    final availability = resource?.availability;
+    final canonical = hasPage && _currentIndex < widget.mediaAspectRatios.length
+        ? widget.mediaAspectRatios[_currentIndex]
+        : null;
+    final image = resource?.image;
+    final ratio = canonical != null && canonical.isFinite && canonical > 0
+        ? canonical
+        : image == null
+        ? null
+        : image.width / image.height;
+    return ImageBookCurrentMediaState(
+      index: _currentIndex,
+      isReady:
+          availability == _ImageBookPageAvailability.ready && image != null,
+      hasFailure: availability == _ImageBookPageAvailability.failed,
+      aspectRatio: ratio,
+    );
+  }
+
+  void _scheduleCurrentMediaReport() {
+    if (!mounted ||
+        widget.onCurrentMediaStateChanged == null ||
+        _currentMediaReportScheduled ||
+        _currentMediaState == _reportedCurrentMediaState) {
+      return;
+    }
+    _currentMediaReportScheduled = true;
+    final generation = _currentMediaReportGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _currentMediaReportGeneration) return;
+      _currentMediaReportScheduled = false;
+      final callback = widget.onCurrentMediaStateChanged;
+      final current = _currentMediaState;
+      if (callback == null || current == _reportedCurrentMediaState) return;
+      // 回调可能让父级重建；先记录再通知，避免同一状态重复排队。
+      _reportedCurrentMediaState = current;
+      callback(current);
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   DateTime get _now => widget._now();
@@ -260,7 +374,7 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
     }
     _scheduledWindowSignature = signature;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
+      if (!mounted || _scheduledWindowSignature != signature) {
         return;
       }
       _ensureLoadWindow(images, pageSize);
@@ -333,6 +447,7 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
         _resources.remove(index)?.dispose();
       }
     }
+    _scheduleCurrentMediaReport();
   }
 
   Future<MediaPageFlipTexturePair?> _buildTexturePair({
@@ -363,8 +478,31 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
       image: image,
       pageSize: pageSize,
       pixelRatio: pixelRatio,
+      canonicalAspectRatio: pageIndex < widget.mediaAspectRatios.length
+          ? widget.mediaAspectRatios[pageIndex]
+          : null,
+      mediaTopInset: widget.mediaTopInset,
+      mediaBottomInset: widget.mediaBottomInset,
+      landscapeEntryExtent: widget.landscapeEntryExtent,
+      usePortraitBands: widget.usePortraitBands,
     );
   }
+
+  ImmersiveMediaGeometry _geometryForImage(
+    ui.Image image,
+    int index,
+    Size size,
+  ) => _pageSurfaceFactory.geometryForImage(
+    image,
+    size,
+    canonicalAspectRatio: index < widget.mediaAspectRatios.length
+        ? widget.mediaAspectRatios[index]
+        : null,
+    mediaTopInset: widget.mediaTopInset,
+    mediaBottomInset: widget.mediaBottomInset,
+    landscapeEntryExtent: widget.landscapeEntryExtent,
+    usePortraitBands: widget.usePortraitBands,
+  );
 
   void _ensurePageLoad({
     required int index,
@@ -712,6 +850,7 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
     } else {
       resource.applyPresentation();
     }
+    _scheduleCurrentMediaReport();
     if (mounted) {
       setState(() {});
     }
@@ -760,6 +899,8 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
   }
 
   void _disposeResources() {
+    _currentMediaReportGeneration += 1;
+    _currentMediaReportScheduled = false;
     for (final resource in _resources.values) {
       resource.dispose();
     }
@@ -990,7 +1131,7 @@ class _ImageBookPage extends StatelessWidget {
   const _ImageBookPage({
     super.key,
     required this.resource,
-    required this.coverSourceRect,
+    required this.geometry,
     required this.hideStatusOverlay,
     required this.fadeDuration,
     required this.reduceMotion,
@@ -998,7 +1139,7 @@ class _ImageBookPage extends StatelessWidget {
   });
 
   final _ImageBookPageResource? resource;
-  final Rect? coverSourceRect;
+  final ImmersiveMediaGeometry? geometry;
   final bool hideStatusOverlay;
   final Duration fadeDuration;
   final bool reduceMotion;
@@ -1017,7 +1158,9 @@ class _ImageBookPage extends StatelessWidget {
     final showFailure = availability == _ImageBookPageAvailability.failed;
     final showAbsent = availability == _ImageBookPageAvailability.absent;
     return ColoredBox(
-      color: AppColors.imageBookPlaceholderBackdrop,
+      color: image == null
+          ? AppColors.imageBookPlaceholderBackdrop
+          : AppColors.black,
       child: Stack(
         fit: StackFit.expand,
         children: <Widget>[
@@ -1026,13 +1169,13 @@ class _ImageBookPage extends StatelessWidget {
             opacity: image == null ? 0 : 1,
             duration: fadeDuration,
             curve: Curves.easeOut,
-            child: image == null || coverSourceRect == null
+            child: image == null || geometry == null
                 ? const SizedBox.expand()
                 : CustomPaint(
                     key: const ValueKey<String>('image-book-decoded-surface'),
                     painter: _ImageBookDecodedPagePainter(
                       image: image,
-                      sourceRect: coverSourceRect!,
+                      geometry: geometry!,
                     ),
                     child: const SizedBox.expand(),
                   ),
@@ -1082,27 +1225,22 @@ class _ImageBookPage extends StatelessWidget {
 class _ImageBookDecodedPagePainter extends CustomPainter {
   const _ImageBookDecodedPagePainter({
     required this.image,
-    required this.sourceRect,
+    required this.geometry,
   });
 
   final ui.Image image;
-  final Rect sourceRect;
+  final ImmersiveMediaGeometry geometry;
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawImageRect(
-      image,
-      sourceRect,
-      Offset.zero & size,
-      Paint()
-        ..isAntiAlias = false
-        ..filterQuality = FilterQuality.medium,
-    );
+    const ImageBookPageSurfaceFactory().paintImage(canvas, image, geometry);
   }
 
   @override
   bool shouldRepaint(covariant _ImageBookDecodedPagePainter oldDelegate) {
-    return oldDelegate.image != image || oldDelegate.sourceRect != sourceRect;
+    return oldDelegate.image != image ||
+        oldDelegate.geometry.viewportRect != geometry.viewportRect ||
+        oldDelegate.geometry.contentRect != geometry.contentRect;
   }
 }
 

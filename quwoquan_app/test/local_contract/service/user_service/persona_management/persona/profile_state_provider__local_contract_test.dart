@@ -16,6 +16,7 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_state_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/user_service/relationship/greeting_request/user_typed_facet_test_support.dart';
@@ -93,20 +94,25 @@ class _FailingUserProfileRepository extends MockUserProfileRepository {
 }
 
 class _CountingProfileContentRepository implements ContentAuthorPostsReader {
+  _CountingProfileContentRepository({this.postAuthorId = 'profile-1'});
+  final String postAuthorId;
   int listUserPostsCalls = 0;
+  String? requestedUserId;
 
   @override
   Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
-    String? identity,
     String? type,
     String? visibility,
     String? cursor,
     int limit = 20,
   }) async {
     listUserPostsCalls += 1;
+    requestedUserId = userId;
     return CursorPage<ContentPostViewData>(
-      items: <ContentPostViewData>[_profilePostDto('content_repo_post')],
+      items: <ContentPostViewData>[
+        _profilePostDto('content_repo_post', authorId: postAuthorId),
+      ],
       nextCursor: null,
     );
   }
@@ -309,9 +315,45 @@ void main() {
 
       final s = container.read(profileNotifierProvider('profile-1'));
       expect(contentRepo.listUserPostsCalls, 1);
+      expect(contentRepo.requestedUserId, 'profile-1');
       expect(s.creations.single.id, 'content_repo_post');
+      expect(s.creations.single.authorId, 'profile-1');
     },
   );
+
+  test('我的主页按当前 persona 读取作品，不把包内 creator 冒充自己', () async {
+    final contentRepo = _CountingProfileContentRepository(
+      postAuthorId: 'bundle-creator',
+    );
+    final container = ProviderContainer(
+      overrides: [
+        profileQueryProvider.overrideWith(
+          (ref, surface) => _TestUserProfileRepository(),
+        ),
+        ...mockContentFacetOverrides(
+          store: InMemoryContentPostStore(),
+          authorPostsReader: contentRepo,
+        ),
+        relationshipCapabilityRepositoryProvider.overrideWithValue(
+          _testRelationshipCapabilityRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(profileNotifierProvider('persona-mine').notifier);
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+
+    expect(contentRepo.requestedUserId, 'persona-mine');
+    expect(
+      container
+          .read(profileNotifierProvider('persona-mine'))
+          .creations
+          .single
+          .authorId,
+      'bundle-creator',
+    );
+  });
 
   test('loadProfile 失败进入结构化错误态：errorMessage 非空且不静默', () async {
     final container = ProviderContainer(
@@ -339,11 +381,14 @@ void main() {
   });
 }
 
-ContentPostViewData _profilePostDto(String id) {
+ContentPostViewData _profilePostDto(
+  String id, {
+  String authorId = 'profile-1',
+}) {
   return contentPostViewDataFromReadModelMap(<String, dynamic>{
     'postId': id,
     'contentType': 'article',
-    'authorId': 'profile-1',
+    'authorId': authorId,
     'authorDisplayName': '展示名',
     'authorAvatarUrl': '',
     'body': '个人作品缓存内容',

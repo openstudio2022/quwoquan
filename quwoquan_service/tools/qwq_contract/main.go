@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -167,14 +168,15 @@ func runGenerate(args []string, stdout io.Writer) error {
 	if err := os.WriteFile(*output, data, 0o644); err != nil {
 		return err
 	}
-	var securitySource []byte
+	var securityFiles []generatedFile
 	if *goSecurityOutput != "" {
 		graphDigest := fmt.Sprintf("%x", sha256.Sum256(data))
-		securitySource = contractcodegen.RenderOperationSecurityGo(contractGraph, graphDigest)
-		if err := os.MkdirAll(filepath.Dir(*goSecurityOutput), 0o755); err != nil {
-			return err
+		rendered, renderErr := contractcodegen.RenderOperationSecurityGoFiles(contractGraph, graphDigest)
+		if renderErr != nil {
+			return renderErr
 		}
-		if err := os.WriteFile(*goSecurityOutput, securitySource, 0o644); err != nil {
+		securityFiles, err = writeOperationSecurityBundle(*goSecurityOutput, rendered)
+		if err != nil {
 			return err
 		}
 	}
@@ -182,10 +184,109 @@ func runGenerate(args []string, stdout io.Writer) error {
 		return nil
 	}
 	outputs := []generatedOutputManifest{newGeneratedOutputManifest(*output, data)}
-	if *goSecurityOutput != "" {
-		outputs = append(outputs, newGeneratedOutputManifest(*goSecurityOutput, securitySource))
+	for _, file := range securityFiles {
+		outputs = append(outputs, newGeneratedOutputManifest(file.Path, file.Body))
 	}
 	return writeGeneratedManifest(*generatedManifest, outputs)
+}
+
+type generatedFile struct {
+	Path string
+	Body []byte
+}
+
+func writeOperationSecurityBundle(
+	mainPath string,
+	files []contractcodegen.OperationSecurityGoFile,
+) ([]generatedFile, error) {
+	if len(files) == 0 || files[0].Suffix != "" {
+		return nil, errors.New("operation security bundle must start with the main file")
+	}
+	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
+		return nil, err
+	}
+
+	closedPaths := make(map[string]struct{}, len(files))
+	written := make([]generatedFile, 0, len(files))
+	for _, file := range files {
+		path, err := operationSecurityOutputPath(mainPath, file.Suffix)
+		if err != nil {
+			return nil, err
+		}
+		closedPaths[path] = struct{}{}
+		if file.Suffix != "" {
+			if err := rejectNonOwnedOperationSecurityChunk(path); err != nil {
+				return nil, err
+			}
+		}
+		if err := os.WriteFile(path, file.Source, 0o644); err != nil {
+			return nil, err
+		}
+		written = append(written, generatedFile{Path: path, Body: file.Source})
+	}
+	if err := removeStaleOperationSecurityChunks(mainPath, closedPaths); err != nil {
+		return nil, err
+	}
+	return written, nil
+}
+
+func operationSecurityOutputPath(mainPath, suffix string) (string, error) {
+	const extension = ".g.go"
+	if !strings.HasSuffix(mainPath, extension) {
+		return "", fmt.Errorf("operation security output %q must end in %s", mainPath, extension)
+	}
+	if suffix == "" {
+		return mainPath, nil
+	}
+	matched, err := regexp.MatchString(`^\.chunk[0-9]{3}$`, suffix)
+	if err != nil || !matched {
+		return "", fmt.Errorf("invalid operation security output suffix %q", suffix)
+	}
+	return strings.TrimSuffix(mainPath, extension) + suffix + extension, nil
+}
+
+func rejectNonOwnedOperationSecurityChunk(path string) error {
+	body, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !bytes.HasPrefix(body, []byte(contractcodegen.OperationSecurityGeneratedHeader+"\n")) {
+		return fmt.Errorf("refusing to overwrite non-owned operation security chunk %s", path)
+	}
+	return nil
+}
+
+func removeStaleOperationSecurityChunks(mainPath string, closedPaths map[string]struct{}) error {
+	dir := filepath.Dir(mainPath)
+	base := strings.TrimSuffix(filepath.Base(mainPath), ".g.go")
+	pattern := regexp.MustCompile(`^` + regexp.QuoteMeta(base) + `\.chunk[0-9]{3}\.g\.go$`)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !pattern.MatchString(entry.Name()) {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		if _, current := closedPaths[path]; current {
+			continue
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		if !bytes.HasPrefix(body, []byte(contractcodegen.OperationSecurityGeneratedHeader+"\n")) {
+			return fmt.Errorf("stale chunk candidate %s is not owned by qwq-contract", path)
+		}
+		if removeErr := os.Remove(path); removeErr != nil {
+			return removeErr
+		}
+	}
+	return nil
 }
 
 type generatedOutputManifest struct {

@@ -184,6 +184,15 @@
 - 确定性工具拥有 `PASS`、`PR_WARN`、`GATE_BLOCK`，AI advisory、Reviewer 与自然语言理由均不得改写 terminal 或自动修改棘轮基线。
 - 全仓存量只经定时 report-only 热点观测进入最低 owner 的可行动 OPEN，不建立中央债务台账、路径豁免或质量数据库。
 
+<a id="req-009"></a>
+### REQ-009 标识符不编码可变闭集基数
+
+- 手写源码与测试的方法、类型、属性、变量、测试名、错误码与 CLI flag 只描述角色或能力，不把可变闭集的当前成员数写成身份。
+- 可变闭集的成员与基数只存在于唯一 canonical 源；消费方按该源发现成员，不在函数体内平行维护与之等价的成员表。
+- 判据是一句可回答的话：该数字变化后操作语义是否仍成立。仍成立即属于可变基数，不得进入标识符。
+- 冻结协议 id、已发布节点目录名、契约字面量与分桶枚举成员不受本要求约束，它们是身份而非当前计数，改名等于改契约。
+- 本要求对增量新增或重命名的标识符成立；存量随触及文件收敛，不得为此建立全仓扫描豁免名单或改名台账。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`runtime`](../spec.md) 声明的领域入口。
@@ -294,6 +303,14 @@
 - THEN policy、toolchain、changed paths、base/head 或 candidate 字节任一漂移都会产生不同 receipt，clean CI 不信任本地脏树回执。
 - THEN L0 只执行秒级 changed-file 判据，L1 与独立 Delivery job 执行完整 delta，scheduled workflow 只产出全仓 report-only 热点。
 - THEN AI 与 Reviewer 只消费命名证据并提出修复建议，不能覆盖确定性 terminal、创建路径豁免或自动升格 rollout。
+
+<a id="sit-008"></a>
+### SIT-008 标识符不编码可变闭集基数
+
+- GIVEN 一次增量新增或重命名了手写源码或测试的标识符，且其中涉及可变闭集。
+- WHEN 该增量进入 dev 交付件的 Review 判定。
+- THEN 把闭集当前个数写成标识符身份，或在函数体内平行维护与 canonical 闭集等价的成员表，均判失败并给出唯一修复动作。
+- THEN 冻结协议 id、已发布节点目录名与契约字面量不产生 finding。
 
 ## 8. 开放事项
 
@@ -408,4 +425,13 @@
 - 准出影响：`track`
 - 影响或价值：当前 11 个服务的 `environments/prod/config.yaml` 声明了 `redis.<scene>.mode: cluster`，但只有 api-edge 在快照里给出了集群种子地址；其余服务的 `secretRefs` 只声明 Redis 密码，`deploy/base/**` 也没有地址注入，因此云上 prod 的集群种子没有任何来源。这些 scene 已按 [DEC-028](design.md#dec-028) 在装配期判否，会在首次部署时启动失败——失败本身是正确暴露，但缺的是种子地址在 prod 的注入归属：它既不在服务自治的环境入口，也不在 k8s 侧的 secret 声明里。同一个缺口还有反向形态：entity-service 的 prod 快照声明 `standalone` + 明文，与其余服务的 `cluster` + TLS 口径相反，两种声明都没有部署事实支撑，说明云上 prod 的 Redis 拓扑归属本身没有被裁决过。prod plane（自托管 onebox 形态）已按明文单点显式降档，该缺口只影响云上 prod 拓扑。契约面现已有静态执行位：`redis_cache` 的 `hash_tag` / `atomic_keys` / `fence` 成对与 `durability`×`eviction_consequence` 恢复来源由 [DEC-032](design.md#dec-032) 的 contract gate 校验，因此「声明了 cluster 且键族确需同 slot」在声明层已可判定；缺的仍只是 prod 种子注入归属这一部署事实，静态校验通过不代表云上集群真正按该 hash_tag 共址。circle-service 与 api-edge 不由 prod plane 部署，它们的 prod 地址注入同样只能落在云上，因此 `test_redis_scene_address_provenance` 对「不在 prod plane 服务清单里的服务」跳过 prod 判定——那段判定归本缺口，服务一旦迁入 prod plane 就自动纳入。按 [DEC-029](design.md#dec-029) 删除 schema 的 `standalone` 默认值后，`mode` 的兜底声明位改为全局跨服务默认，因此「声明了 cluster 却无种子」这一形态不再可能被降级为单点静默连接——它只会判否。
 - 完成判定：云上 prod 的每个 `cluster` scene 的种子地址在服务 `environments/prod/**` 或 k8s secret 声明里有唯一注入归属，`SIT-003` 的 `sit-003.t1`（每个服务配置键只在本服务 schema 定义）对该注入归属具备子句级绑定证据，实跑回执落入 `SIT-006` 的四环境字段。
+
+<a id="open-015"></a>
+### OPEN-015 可变基数标识符只有 Review 判据，尚无确定性执行位
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：`REQ-009` 当前的唯一执行位是 developer 主审 checklist 的客观 `check:`，属于人工与 Agent 判定，不产生确定性 terminal。这意味着该要求在没有 Reviewer 参与的开发期 POST 上不被检查，也无法在 Delivery Gate 复算。已知的确定性方案都有明确代价：按词法扫描 `two|three|four|five` 一类前缀会对冻结协议 id（`qwq.three-layer-case-results`）、已发布节点目录名（`four-environment-commercial-login-maturity`）、契约字面量与分桶枚举成员（`two_to_five`）产出压倒性误报，而为它们建豁免名单与 [DEC-031](design.md#dec-031) 禁止路径豁免的裁决冲突。因此当前只落地 authoring 与 Review 判据，不以"先加扫描再加名单"的方式换取一个会被绕过的绿灯。缺口是判据本身的可机验形态：需要先能从 canonical 闭集声明反向识别"这个标识符里的数字正是该闭集的当前基数"，才可能在不依赖名单的前提下判定。
+- 完成判定：`SIT-008` 的两条 THEN 各具备子句级 `spec_ref`（`sit-008.t1`、`sit-008.t2`）绑定的真实测试或可执行门证据，且该判据对新增违规样本变红、对冻结协议 id 与契约字面量不误报，双向自证不依赖豁免名单。
 

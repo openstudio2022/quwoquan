@@ -32,7 +32,9 @@ def _write(root: Path, name: str, value: object) -> dict[str, str]:
     return {"ref": name, "digest": subject.exact_byte_digest(path)}
 
 
-def _launch(root: Path, *, non_promotable: bool) -> Path:
+def _launch(root: Path, *, non_promotable: bool, content_source: str = "remote",
+            lease: str = D, required_transport: bool = True, stopped: bool = False,
+            damage: str = "") -> Path:
     terminal = {
         "schema": "quwoquan_app.startup_safe_terminal.v1", "launchAttemptId": ATTEMPT,
         "startupAttemptId": "startup-1", "platform": "android", "deviceId": "pixel-1",
@@ -47,6 +49,27 @@ def _launch(root: Path, *, non_promotable: bool) -> Path:
         "artifactDigest": D, "runtimeConfigPackageDigest": D, "runtimeConfigTrustEnvelopeDigest": D,
         "launchDigest": D, "platform": "android", "deviceId": "pixel-1", "nonPromotable": non_promotable,
     }
+    attempt.update(environment="alpha", target="alpha-local")
+    if stopped:
+        from quwoquan_ops.cli.lib.app_launch_attempt import create_app_launch_attempt, FORWARD_STATES
+        attempt = create_app_launch_attempt(root / "producer-attempt.json", environment="alpha", target="alpha-local",
+            platform="android", build_profile="nonprod", build_mode="debug", run_mode="content-live",
+            launch_provenance="canonical_launcher", runtime_config_supply_mode="external_runtime_package",
+            runtime_config_trust_envelope_digest=D, runtime_config_package_digest=D, application_id="com.quwoquan",
+            flutter_version="3.47.0", command_resolution_digest=D, device_id="pixel-1", artifact_digest=D,
+            launch_digest=D, attempt_id=ATTEMPT, non_promotable=non_promotable)
+        attempt.update(status="stopped", configurationState="complete", runtimeHealthStatus="healthy",
+            startupTerminalAttemptId="startup-1", startupTerminalEvidenceDigest=terminal_ref["digest"],
+            startupTerminalEvidenceRef=str(root / "startup-terminal.json"),
+            transitions=[{"status": state, "at": attempt["updatedAt"]} for state in (*FORWARD_STATES, "stopped")])
+        if damage == "missing":
+            del attempt["transitions"][2]
+        elif damage == "failed":
+            attempt["transitions"].insert(-1, {"status": "failed", "at": attempt["updatedAt"]})
+        elif damage == "terminal":
+            attempt["startupTerminalEvidenceDigest"] = "sha256:" + "f" * 64
+        elif damage == "blocker":
+            attempt["firstBlocker"] = "APP.LAUNCH.compile_failed"
     attempt_ref = _write(root, "attempt.json", attempt)
     launch_digest = "sha256:" + __import__("hashlib").sha256(json.dumps(attempt, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     report = {
@@ -64,6 +87,9 @@ def _launch(root: Path, *, non_promotable: bool) -> Path:
         "installedConfigReadback": {"configurationState": "complete", "runtimeConfigPackageDigest": D,
             "runtimeConfigTrustEnvelopeDigest": D, "effectiveLaunchManifestDigest": D},
     }
+    report.update(contentSource=content_source, consumerLeaseId=lease)
+    if not required_transport:
+        report["transport"] = {"required": False, "reverseExpectedPorts": "", "reverseActualPorts": "", "reverseReceiptDigest": ""}
     _write(root, "report.json", report)
     return subject.create_launch_ready_fact_from_report(report_path=root / "report.json")
 
@@ -99,6 +125,29 @@ def _release(root: Path, content: Path) -> Path:
         attempt_id=ATTEMPT, predecessor=subject.exact_ref(content, attempt_dir=root),
         release_candidate=candidate, qualification=qualification,
     ), attempt_dir=root)
+
+
+@pytest.mark.parametrize("source,required,promotable,accepted", [
+    ("bundled_snapshot", False, False, True), ("remote", False, False, False),
+    ("bundled_snapshot", True, False, False), ("bundled_snapshot", False, True, False),
+    ("unknown", False, False, False),
+])
+def test_empty_lease_is_only_offline_without_runtime_transport(tmp_path, source, required, promotable, accepted):
+    if accepted:
+        path = _launch(tmp_path, non_promotable=not promotable, content_source=source, lease="", required_transport=required)
+        assert subject.load_app_readiness_fact(path)["consumerLeaseId"] == ""
+    else:
+        with pytest.raises(subject.AppReadinessFactError):
+            _launch(tmp_path, non_promotable=not promotable, content_source=source, lease="", required_transport=required)
+
+
+@pytest.mark.parametrize("damage", ["", "missing", "failed", "terminal", "blocker"])
+def test_stopped_requires_complete_success_and_bound_safe_terminal(tmp_path, damage):
+    if damage:
+        with pytest.raises(subject.AppReadinessFactError):
+            _launch(tmp_path, non_promotable=True, stopped=True, damage=damage)
+    else:
+        assert subject.load_app_readiness_fact(_launch(tmp_path, non_promotable=True, stopped=True))["launchAttempt"]["status"] == "stopped"
 
 
 def test_three_stage_positive_chain(tmp_path: Path) -> None:

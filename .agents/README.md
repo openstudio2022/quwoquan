@@ -11,6 +11,7 @@
 | Feature spec/design/contracts | 功能行为、设计约束、wire 事实与验收 |
 | `review/references/registry.yaml` | workflow primary、profile specialist、预算与命名 evidence |
 | `review/references/roles/*/ROLE.md` | 角色视角和盲区，不拥有功能事实/命令 |
+| `review/references/guides/*.md` | 单个 profile 的按需正文：做法、违规案例与修复步骤；不进 Reviewer 派发上下文，不得被 registry 引用为 checklist |
 | `.cursor/commands/*.md` | 指向同一 Skill body 的一行式显式入口 |
 | `.cursor/agents/*.md` / `.codex/agents/*.toml` | 仅从中性 Reviewer executor 生成的 Reviewer projection，不承载 Workflow Skill |
 

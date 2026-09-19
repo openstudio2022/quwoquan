@@ -22,8 +22,10 @@ part 'media_page_flip_book_gestures.dart';
 part 'media_page_flip_book_soft_surface.dart';
 part 'media_page_flip_book_texture_cache.dart';
 
-typedef MediaPageFlipPageBuilder =
-    Widget Function(BuildContext context, int pageIndex);
+typedef MediaPageFlipPageBuilder = Widget Function(
+  BuildContext context,
+  int pageIndex,
+);
 typedef MediaPageFlipTextureReadyPredicate = bool Function(int pageIndex);
 typedef MediaPageFlipTextureSnapshot = ArticlePageTextureSnapshot;
 typedef MediaPageFlipTextureSnapshotBuilder =
@@ -115,6 +117,7 @@ class MediaPageFlipBook extends StatefulWidget {
     this.onOverflowPrevious,
     this.onOverflowNext,
     this.gestureIntentController,
+    this.interactionEnabled = true,
   });
 
   final int pageCount;
@@ -133,6 +136,7 @@ class MediaPageFlipBook extends StatefulWidget {
   final VoidCallback? onOverflowPrevious;
   final VoidCallback? onOverflowNext;
   final ImmersiveGestureIntentController? gestureIntentController;
+  final bool interactionEnabled;
 
   @override
   State<MediaPageFlipBook> createState() => _MediaPageFlipBookState();
@@ -231,6 +235,9 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     } else if (_currentPage >= widget.pageCount && widget.pageCount > 0) {
       _currentPage = widget.pageCount - 1;
       _controller?.setCurrentPage(_currentPage);
+    }
+    if (oldWidget.interactionEnabled && !widget.interactionEnabled) {
+      _cancelHorizontalDrag();
     }
     if (widget.textureReadinessSignature !=
         oldWidget.textureReadinessSignature) {

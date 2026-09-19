@@ -46,7 +46,6 @@ class _FaultInjectingFeedQuery extends InMemoryContentDiscoveryFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -61,7 +60,6 @@ class _FaultInjectingFeedQuery extends InMemoryContentDiscoveryFeedQuery {
       () => super.listDiscoveryFeedPage(
         category: category,
         channelId: channelId,
-        identity: identity,
         type: type,
         subCategory: subCategory,
         limit: limit,
@@ -144,7 +142,7 @@ void main() {
       isNotEmpty,
       reason: '同一装配在故障恢复后重试必须取回真实数据',
     );
-    expect(recoveredFeed.items.first.type, 'image');
+    expect(recoveredFeed.items.first.type, ContentType.image);
   });
 
   testWidgets('弱网延迟 profile 下加载变慢但最终成功且无重复副作用', (tester) async {

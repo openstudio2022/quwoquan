@@ -277,6 +277,7 @@ verify-graphql-app-client: service-contract-view
 		-metadata-dir "$(CONTRACT_VIEW)" \
 		-target search-page \
 		-check
+	go run ./tools/codegen_graphql_app_client -metadata-dir "$(CONTRACT_VIEW)" -target post-collection -check
 
 codegen-graphql-app-client: service-contract-view
 	go run ./tools/codegen_graphql_app_client \
@@ -285,6 +286,7 @@ codegen-graphql-app-client: service-contract-view
 	go run ./tools/codegen_graphql_app_client \
 		-metadata-dir "$(CONTRACT_VIEW)" \
 		-target search-page
+	go run ./tools/codegen_graphql_app_client -metadata-dir "$(CONTRACT_VIEW)" -target post-collection
 
 verify-contract-graph: verify-openapi
 	go run ./tools/qwq_contract validate --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile baseline

@@ -1,5 +1,7 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+import 'package:quwoquan_app/service/content_service/content/comment/presentation/comment_detail_surface.dart';
 import 'package:quwoquan_app/service/content_service/content/comment/presentation/comment_viewer_modal.dart';
 import 'package:quwoquan_app/service/content_service/content/comment/presentation/immersive_comment_split_sheet.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
@@ -135,6 +137,48 @@ abstract final class HomeFeedCrossObjectComposition {
       onLikeTap: onLikeTap,
       onShareTap: onShareTap,
       onClose: onClose,
+    );
+  }
+
+  /// 横向宿主的纯评论面板：只消费父级有界约束，不装配媒体或新路由。
+  /// 滚动控制器由宿主持有，评论事实与关闭入口复用既有 surface。
+  static Widget immersiveCommentPanel({
+    required String postId,
+    required int entryObservedCommentCount,
+    required MediaViewerCommentContext commentContext,
+    required ScrollController scrollController,
+    required int likeCount,
+    required int shareCount,
+    required bool isLiked,
+    required VoidCallback onLikeTap,
+    required VoidCallback onShareTap,
+    required VoidCallback onClose,
+  }) {
+    return Builder(
+      builder: (context) => ColoredBox(
+        color: AppColorsFunctional.getColor(
+          CupertinoTheme.of(context).brightness == Brightness.dark,
+          ColorType.backgroundPrimary,
+        ),
+        child: SizedBox.expand(
+          child: CommentDetailSurface(
+            postId: postId,
+            mode: commentContext.usesProfileInteractionMode
+                ? CommentDetailSurfaceMode.profileInteraction
+                : CommentDetailSurfaceMode.immersiveSplit,
+            entryObservedCommentCount: entryObservedCommentCount,
+            commentContext: commentContext,
+            scrollController: scrollController,
+            flexibleThread: false,
+            likeCount: likeCount,
+            shareCount: shareCount,
+            isLiked: isLiked,
+            onLikeTap: onLikeTap,
+            onShareTap: onShareTap,
+            onClose: onClose,
+          ),
+        ),
+      ),
     );
   }
 

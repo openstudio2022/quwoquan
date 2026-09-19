@@ -1,5 +1,5 @@
 # recommendation-service model runtime: FastAPI + Python 3.11
-ARG PYTHON_BASE_IMAGE=python:3.11
+ARG PYTHON_BASE_IMAGE
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 ARG PIP_FALLBACK_INDEX_URL=https://pypi.org/simple

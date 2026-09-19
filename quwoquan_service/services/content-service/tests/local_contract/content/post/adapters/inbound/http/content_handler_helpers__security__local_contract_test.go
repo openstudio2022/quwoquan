@@ -44,6 +44,26 @@ func TestTrustedPrincipalOverridesClientActorSelectors(t *testing.T) {
 	}
 }
 
+func TestRecommendationActorIgnoresDelegatedServiceActor(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequest("GET", "/content/personas/author/posts", nil)
+	request = request.WithContext(rtauth.WithPrincipal(
+		request.Context(),
+		rtauth.Principal{
+			Claims: rtauth.Claims{ServiceActorID: "assistant-service"},
+			Actor: operation.ActorContext{
+				AccountID: "viewer-account",
+				PersonaID: "viewer-persona",
+			},
+		},
+	))
+
+	if got := ResolveRecommendationActorID(request); got != "viewer-persona" {
+		t.Fatalf("recommendation actor=%q, want resolved viewer persona", got)
+	}
+}
+
 func TestIntersectionActorUsesVerifiedPersonaRatherThanOwnerAccount(t *testing.T) {
 	t.Parallel()
 

@@ -5,6 +5,7 @@ import json
 import pytest
 from tests.support.presentation import presentation_contract
 from generated.recommendation.ranked_recommendation_window.models.request_response import ReleasePinnedQueryFence
+from internal.recommendation.ranked_recommendation_window.domain.model import RecommendationRequestContext
 
 from generated.recommendation.recommendation_model_release.models.request_response import (
     CandidateScore,
@@ -86,7 +87,7 @@ class _Features:
         assert subject_id == "persona-viewer"
         return {
             "checkpoint": 8,
-            "sparseFeatures": {"engagementRate": 0.7},
+            "sparseFeatures": {"engagementRate": 0.7, "action:view": 1.0},
             "influenceScore": 0.2,
             "collaborativeFeatures": {"post-a": 0.3},
             "intersectionFeatures": {"strength": 0.4},
@@ -181,6 +182,7 @@ def test_ranker_freezes_feature_snapshot_and_stable_score_order() -> None:
         scenario="content_feed",
         session_id="window-001",
         limit=300,
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
     )
     assert result.model_release_id == "release-001"
     assert result.model_bucket == "model"
@@ -208,6 +210,7 @@ def test_ranker_filters_capabilities_before_scoring():
         content_fence=ReleasePinnedQueryFence(release=None, revision=0),
         client_presentation_contract=presentation_contract(openSurfaces=["article_reader"]),
         subject_id="persona-viewer", scenario="content_feed", session_id="filtered", limit=300,
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
     )
     assert [candidate.contentId for candidate in scoring.requests[0].candidates] == ["post-b"]
     assert [candidate.envelope.post.postId for candidate in result.candidates] == ["post-b"]
@@ -225,6 +228,7 @@ def test_ranker_keeps_audience_selection_separate_from_model_scenario() -> None:
         scenario="premium_stream",
         session_id="window-premium",
         limit=300,
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
     )
     assert result.model_release_id == "release-001"
     assert scoring.requests[0].scenario == "content_feed"
@@ -239,6 +243,7 @@ def test_ranker_fails_closed_when_scoring_omits_candidate() -> None:
             scenario="content_feed",
             session_id="window-001",
             limit=300,
+            request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
         )
 
 
@@ -251,6 +256,7 @@ def test_ranker_applies_profile_hard_exclusions_before_scoring() -> None:
         scenario="content_feed",
         session_id="window-excluded",
         limit=300,
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
     )
     assert result.candidates == ()
     assert scoring.requests == []
@@ -319,6 +325,7 @@ def test_ranker_freezes_object_cards_from_candidate_snapshot_and_entity_affinity
         scenario="content_feed",
         session_id="window-object-cards",
         limit=300,
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
     )
 
     homepages = [item for item in result.candidates if item.envelope.homepage]
@@ -346,7 +353,10 @@ def test_ranker_isolates_unsupported_gathering_without_losing_legal_posts() -> N
     result = _ranker(_Scoring(), candidates=candidates).rank(
         content_fence=ReleasePinnedQueryFence(release=None, revision=0),
         client_presentation_contract=presentation_contract(),
-        subject_id="persona-viewer", scenario="content_feed",
-        session_id="window-gathering-card", limit=300,
+        subject_id="persona-viewer",
+        scenario="content_feed",
+        session_id="window-gathering-card",
+        limit=300,
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
     )
     assert [item.envelope.post.postId for item in result.candidates] == ["post-a", "post-b"]

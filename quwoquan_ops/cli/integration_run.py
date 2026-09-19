@@ -2,10 +2,11 @@
 """「本地验收 → integration 发布 dev1.0」的 canonical 两阶段编排：
 
 - `--mode acceptance`：在政策允许的 lane 或 integration 分支（head 即 candidate）对 exact candidate
-  跑本地 readiness、Alpha（Beta 仅 `--beta` 显式 opt-in，否则以 typed `not_required` 闭合）并签发
-  `EnvironmentAcceptanceFact`，终态 `accepted`，不 admit、不 publish；同时把 candidate/claim/
+  跑本地 readiness，并签发 typed Alpha/Beta `EnvironmentAcceptanceFact`（默认均为 `not_required`：
+  Alpha=`ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV`，Beta=`ACCEPTANCE.BETA_OPTIONAL_BY_POLICY`；
+  仅 `--alpha`/`--beta` 才真跑 live 环境），终态 `accepted`，不 admit、不 publish；同时把 candidate/claim/
   source fact/EAF 及其全部 exact 证据打成 portable acceptance bundle。Data release 的
-  `ship --handoff-ref` admission 在当前交付工作树验证 candidate evidence，integration不借用他方身份；
+  `ship --handoff-ref` admission 只在 live Alpha/Beta 时验证；integration不借用他方身份；
   `--baseline` 指定 ImpactPlan/readiness 的 exact parent（默认远端 dev1.0）；
   用户显式合并多个 lane head 后验收时用 `--merged-lanes` 记录来源。
 - `--mode integrate`（默认）：在唯一 integration 工作区（分支 dev1.0，HEAD 即 candidate）只消费
@@ -67,6 +68,7 @@ from quwoquan_ops.cli.lib.content_api_consumer_authority import (
     _runtime_authority,
 )
 from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
+    ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV,
     BETA_OPTIONAL_BY_POLICY,
     NO_LIVE_ENVIRONMENT_REQUIRED,
 )
@@ -91,6 +93,7 @@ OUTPUT_ROOT = _output_root()
 RUNS_ROOT = OUTPUT_ROOT / "env/repo/runs/integrate"
 DEV_REF = "refs/heads/dev1.0"
 NO_LIVE = NO_LIVE_ENVIRONMENT_REQUIRED
+ALPHA_LIVE_DEFERRED = ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV
 ENVIRONMENT_SPEC_REF = "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001"
 DEFAULT_SIGNER = "quwoquan-environment-ops-local"
 from quwoquan_ops.cli.integration_run_acceptance import validate_mode_inputs, validate_source_inputs, preflight_identity, record_imported_bundle
@@ -234,6 +237,79 @@ def _stackctl(*args: str, env: Mapping[str, str] | None = None, log_dir: Path) -
 
 # DEC-041：release 不携带类别；acceptance 只消费显式 immutable 身份。
 HANDOFF_REF_RE = re.compile(r"^data/releases/[^/]+/producer_release_handoff\.json=sha256:[0-9a-f]{64}$")
+UNCHANGED_DATA_CHANGE = "unchanged/no_data_change"
+_DATA_ENGINEERING_OUTPUT = ROOT.parent / "data-engineering" / ".qwq_output"
+
+
+def _canonical_release_attestation(root: Path, release_id: str) -> Path:
+    return Path(root) / "data/releases" / release_id / "attestations/release.json"
+
+
+def _root_owns_attestation(root: Path, release_id: str, attestation: Path) -> bool:
+    """producer 树持有与 handed attestation 逐字节相同的 canonical 文件。"""
+    local = _canonical_release_attestation(root, release_id)
+    try:
+        return local.is_file() and local.read_bytes() == attestation.read_bytes()
+    except OSError:
+        return False
+
+
+def _producer_data_output_candidates(release_id: str, attestation: Path) -> list[Path]:
+    """只枚举只读候选根；不扫描 latest，不把他树字节拷进本树。"""
+    attestation = Path(attestation).expanduser().resolve()
+    candidates: list[Path] = []
+    suffix = ("data", "releases", release_id, "attestations", "release.json")
+    parts = attestation.parts
+    if len(parts) >= 5 and parts[-5:] == suffix:
+        candidates.append(Path(*parts[:-5]))
+    neighbor = attestation.parent / "data/releases" / release_id / "attestations/release.json"
+    if neighbor.is_file():
+        candidates.append(attestation.parent)
+    candidates.append(OUTPUT_ROOT)
+    if _DATA_ENGINEERING_OUTPUT.is_dir():
+        candidates.append(_DATA_ENGINEERING_OUTPUT)
+    return candidates
+
+
+def _producer_data_output_root(release_id: str, attestation: Path, *, handoff_ref: str = "") -> Path:
+    """定位 producer-owned Data output root；本树 `.qwq_output/data/releases` 不是准入条件。"""
+    attestation = Path(attestation).expanduser().resolve()
+    seen: set[Path] = set()
+    for root in _producer_data_output_candidates(release_id, attestation):
+        try:
+            resolved = root.expanduser().resolve()
+        except OSError:
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if not _root_owns_attestation(resolved, release_id, attestation):
+            continue
+        if handoff_ref:
+            _assert_producer_handoff(resolved, handoff_ref)
+        return resolved
+    raise IntegrationRunError(
+        "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE",
+        f"immutable release {release_id} is absent from producer-owned Data roots or its attestation differs; "
+        "this worktree Data root is not required and trees must not be copied to impersonate identity",
+    )
+
+
+def _assert_producer_handoff(output_root: Path, handoff_ref: str) -> None:
+    relative, digest = handoff_ref.rsplit("=", 1)
+    path = Path(output_root) / relative
+    try:
+        actual = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE",
+            f"producer handoff {relative} is unreadable under {output_root}: {exc}",
+        ) from exc
+    if actual != digest:
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE",
+            f"producer handoff digest differs from {handoff_ref}",
+        )
 
 
 def _release_id(attestation: Path) -> str:
@@ -244,14 +320,55 @@ def _release_id(attestation: Path) -> str:
     except (OSError, TypeError, ValueError) as exc:
         raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", str(exc)) from exc
     release_id = binding["releaseId"]
-    local = OUTPUT_ROOT / "data/releases" / release_id / "attestations/release.json"
-    if not local.is_file() or local.read_bytes() != attestation.read_bytes():
-        raise IntegrationRunError(
-            "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE",
-            f"immutable release {release_id} is absent from {OUTPUT_ROOT / 'data/releases'} or its attestation differs; "
-            "ship apply only executes releases present in this worktree's Data root",
-        )
+    _producer_data_output_root(release_id, attestation)
     return release_id
+
+
+def _data_release_output_ref(path: Path) -> str:
+    """readiness 可落在 producer output root；不得因此复制 Data 树。"""
+    try:
+        return _output_ref(path)
+    except ValueError:
+        return str(path.resolve())
+
+
+def _activated_data_release_readiness(
+    *, environment: str, release_id: str, handoff_ref: str, roots: Sequence[Path],
+) -> Path | None:
+    """已激活且 handoff 吻合时复用既有 readiness，避免重复 apply。"""
+    seen: set[Path] = set()
+    for root in roots:
+        try:
+            resolved = Path(root).expanduser().resolve()
+        except OSError:
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        base = resolved / "env" / environment / "runs/data-release" / release_id
+        if not base.is_dir():
+            continue
+        for path in sorted(base.glob("*/release-readiness.json"), reverse=True):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(payload, dict) or str(payload.get("releaseId") or "") != release_id:
+                continue
+            recorded = str(payload.get("handoffRef") or payload.get("dataReleaseHandoffRef") or "")
+            if recorded and recorded != handoff_ref:
+                continue
+            return path
+    return None
+
+
+def _app_acceptance_plan(app_platform: str = "all") -> dict[str, Any]:
+    """Alpha 的声明计划随 acceptanceBinding 被 EAF 签名，不以设备集合授予范围。"""
+    if app_platform not in {"all", "android", "ios"}:
+        raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "invalid Alpha app platform selector")
+    return {"environment": "alpha", "appPlatform": app_platform,
+            "requiredPlatforms": ["android", "ios"] if app_platform == "all" else [app_platform],
+            "specRef": "specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004"}
 
 
 def _acceptance_release_inputs(args: argparse.Namespace) -> dict[str, Any]:
@@ -263,7 +380,8 @@ def _acceptance_release_inputs(args: argparse.Namespace) -> dict[str, Any]:
         binding = _release_binding(str(path), label=role)
         bindings[role] = {key: value for key, value in binding.items() if key != "attestationRef"}
     return {"release": bindings, "handoffRef": _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref"),
-            "workload": args.workload}
+            "workload": args.workload,
+            "appAcceptancePlan": _app_acceptance_plan(getattr(args, "app_platform", "all"))}
 
 
 def _acceptance_binds_inputs(*, store: Path, fact: Mapping[str, Any], inputs: Mapping[str, Any]) -> bool:
@@ -294,10 +412,11 @@ def _handoff_ref(value: str, *, label: str) -> str:
     return ref
 
 
-def _content_release(*args: str, log_dir: Path, label: str) -> None:
-    """环境发布仅经 Ops-owned stackctl content-release。"""
+def _content_release(*args: str, log_dir: Path, label: str, output_root: Path | None = None) -> None:
+    """环境发布仅经 Ops-owned stackctl content-release。跨树时 QWQ_OUTPUT_ROOT 指向 producer root。"""
 
-    result = _stackctl("content-release", *args, log_dir=log_dir)
+    env = {"QWQ_OUTPUT_ROOT": str(output_root)} if output_root is not None else None
+    result = _stackctl("content-release", *args, env=env, log_dir=log_dir)
     if result.exit_code != 0:
         detail = " ".join(str(item) for item in result.payload.get("details", []))[-400:]
         raise IntegrationRunError(
@@ -306,9 +425,13 @@ def _content_release(*args: str, log_dir: Path, label: str) -> None:
         )
 
 
+def _release_readiness_path(output_root: Path, environment: str, release_id: str, verify_run: str) -> Path:
+    return Path(output_root) / "env" / environment / "runs/data-release" / release_id / verify_run / "release-readiness.json"
+
+
 def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespace, log_dir: Path,
                         previous_readiness: Path | None, candidate_root: Path | None = None) -> Path:
-    """candidate release 进入环境：`ship apply --handoff-ref … --import --full-sync` → `ship activate` → `ship verify`。
+    """candidate release 进入环境：producer root 只读 admit；已激活且 handoff 吻合则跳过重复 apply。
 
     handoff-ref 是现役 Data CLI 唯一的 release 准入身份；attestation 只用于 stackctl package 的候选绑定，
     两者必须指向同一 releaseId（由 ship 侧对 handoff 做 exact 校验）。返回 release-readiness 回执路径。
@@ -316,12 +439,24 @@ def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespa
 
     release_id = _release_id(args.release_attestation)
     handoff_ref = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
+    producer_root = _producer_data_output_root(release_id, args.release_attestation)
+    handoff_path = producer_root / handoff_ref.rsplit("=", 1)[0]
+    if handoff_path.is_file():
+        _assert_producer_handoff(producer_root, handoff_ref)
     import_run, activate_run, verify_run = f"{run_id}-import", f"{run_id}-activate", f"{run_id}-verify"
+    existing = _activated_data_release_readiness(
+        environment=environment, release_id=release_id, handoff_ref=handoff_ref,
+        roots=(OUTPUT_ROOT, producer_root),
+    )
+    if existing is not None:
+        return existing
     candidate_args = ("--runtime-candidate-root", str(candidate_root)) if candidate_root is not None else ()
     _content_release("apply", "--handoff-ref", handoff_ref, "--env", environment, "--run-id", import_run,
-               *candidate_args, "--import", "--full-sync", log_dir=log_dir, label=f"{environment}-apply")
+               *candidate_args, "--import", "--full-sync", log_dir=log_dir, label=f"{environment}-apply",
+               output_root=producer_root)
     _content_release("activate", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
-               "--run-id", activate_run, *candidate_args, log_dir=log_dir, label=f"{environment}-activate")
+               "--run-id", activate_run, *candidate_args, log_dir=log_dir, label=f"{environment}-activate",
+               output_root=producer_root)
     _bootstrap_premium_pool(environment=environment, release_id=release_id, import_run=import_run,
                             attestation=args.release_attestation, log_dir=log_dir)
     # ship verify 的 --import-run-id 指向 completed 的 activate run（其 result.importRunId 再指回 apply run）；
@@ -329,9 +464,17 @@ def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespa
     verify_args = ["verify", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", activate_run,
                    "--run-id", verify_run, *candidate_args]
     if previous_readiness is not None:
-        verify_args.extend(["--previous-environment-readiness", _output_ref(previous_readiness)])
-    _content_release(*verify_args, log_dir=log_dir, label=f"{environment}-verify")
-    readiness = OUTPUT_ROOT / "env" / environment / "runs/data-release" / release_id / verify_run / "release-readiness.json"
+        try:
+            previous_ref = _output_ref(previous_readiness)
+        except ValueError:
+            previous_ref = str(previous_readiness)
+        verify_args.extend(["--previous-environment-readiness", previous_ref])
+    _content_release(*verify_args, log_dir=log_dir, label=f"{environment}-verify", output_root=producer_root)
+    readiness = _release_readiness_path(producer_root, environment, release_id, verify_run)
+    if not readiness.is_file():
+        fallback = _release_readiness_path(OUTPUT_ROOT, environment, release_id, verify_run)
+        if fallback.is_file():
+            readiness = fallback
     if not readiness.is_file():
         raise IntegrationRunError("INTEGRATION_RUN.DATA_RELEASE_FAILED", f"release readiness receipt missing: {readiness}")
     return readiness
@@ -580,9 +723,12 @@ def _assert_package_identity(*, packaged_revision: str, candidate_commit: str, p
 def _package_with_dependency_recovery(*, environment: str, args: argparse.Namespace, log_dir: Path, phases: Phases) -> StackctlResult:
     """打包；App 依赖 bundle 缺失/过期时执行一次有界 canonical `app-dependency-sync` 再重试，其余失败原样阻断。"""
 
+    app_platform = getattr(args, "app_platform", "all") if environment == "alpha" else "all"
+    _app_acceptance_plan(app_platform)
+
     def package() -> StackctlResult:
         return _stackctl(
-            "package", "--env", environment, "--include-services",
+            "package", "--env", environment, "--include-services", "--app-platform", app_platform,
             "--release-attestation", str(args.release_attestation),
             "--rollback-release-attestation", str(args.rollback_release_attestation), log_dir=log_dir,
         )
@@ -591,7 +737,7 @@ def _package_with_dependency_recovery(*, environment: str, args: argparse.Namesp
     details = " ".join(str(item) for item in (result.payload.get("details") or []))
     if result.exit_code != 0 and "App dependency bundle" in details:
         phases.run(f"{environment}.app-dependency-sync", lambda: _require_ok(
-            _stackctl("app-dependency-sync", log_dir=log_dir / "app-dependency-sync"), "INTEGRATION_RUN.APP_DEPENDENCY_SYNC_FAILED",
+            _stackctl("app-dependency-sync", "--platform", app_platform, log_dir=log_dir / "app-dependency-sync"), "INTEGRATION_RUN.APP_DEPENDENCY_SYNC_FAILED",
         ))
         result = package()
     return _require_ok(result, "INTEGRATION_RUN.PACKAGE_FAILED")
@@ -599,12 +745,18 @@ def _package_with_dependency_recovery(*, environment: str, args: argparse.Namesp
 
 def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping[str, str],
                          args: argparse.Namespace, run_dir: Path, phases: Phases) -> dict[str, Any]:
-    """服务启动前执行双端页面；证据保持 rehearsal，绝不补写服务 runtime identity。"""
+    """服务启动前执行声明平台页面；证据保持 rehearsal，不补写服务 runtime identity。"""
     from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
 
-    devices = {"android": args.android_device_id, "ios": args.ios_device_id}
-    if not all(devices.values()) or len(set(devices.values())) != 2:
-        raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_DEVICE_UNAVAILABLE", "explicit distinct --android-device-id and --ios-device-id are required")
+    app_platform = getattr(args, "app_platform", "all")
+    requested = tuple(_app_acceptance_plan(app_platform)["requiredPlatforms"])
+    available = {"android": args.android_device_id, "ios": args.ios_device_id}
+    devices = {platform: available[platform] for platform in requested}
+    if not all(devices.values()) or len(set(devices.values())) != len(devices):
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.APP_LAUNCH_DEVICE_UNAVAILABLE",
+            f"explicit distinct device ids are required for app-platform={app_platform}",
+        )
     receipts = {}
     evidence_root = None
     first_error = None
@@ -656,7 +808,8 @@ def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping
     if first_error is not None:
         raise first_error
     try:
-        evidence = offline_receipt_evidence(root=evidence_root, receipts=receipts, candidate=candidate, devices=devices)
+        evidence = offline_receipt_evidence(root=evidence_root, receipts=receipts, candidate=candidate,
+                                            devices=devices, required_platforms=requested)
     except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
         raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", str(exc)) from exc
     # 将原始闭包 exact 复制到 store；不改 raw 路径、摘要或 nonPromotable。
@@ -672,17 +825,25 @@ def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping
             "required": True, "nonPromotable": True, "caseCount": len(evidence["cases"])}
 
 
-def _validate_offline_axis(*, store: Path, axis: Mapping[str, Any], candidate: Mapping[str, Any]) -> list[dict[str, str]]:
+def _validate_offline_axis(*, store: Path, axis: Mapping[str, Any], candidate: Mapping[str, Any],
+                           app_plan: Mapping[str, Any] | None = None) -> list[dict[str, str]]:
     from quwoquan_ops.cli.lib.integration_app_launch import offline_receipt_evidence
     from quwoquan_ops.cli.commands.app_preflight_uat_offline import OFFLINE_REQUIRED_CASES
 
     try:
         expected_root = f"offline-page-evidence/{candidate['candidateId'].removeprefix('sha256:')}"
-        if (axis.get("root") != expected_root or axis.get("required") is not True
-                or axis.get("nonPromotable") is not True or axis.get("caseCount") != 2 * len(OFFLINE_REQUIRED_CASES)):
+        plan = _app_acceptance_plan() if app_plan is None else app_plan
+        if plan != _app_acceptance_plan(plan.get("appPlatform", "")):
+            raise ValueError("offline acceptance platform plan is missing or drifted")
+        expected_platforms = tuple(plan["requiredPlatforms"])
+        if (set(axis.get("devices") or {}) != set(expected_platforms)
+                or set(axis.get("receipts") or {}) != set(expected_platforms)
+                or axis.get("root") != expected_root or axis.get("required") is not True
+                or axis.get("nonPromotable") is not True
+                or axis.get("caseCount") != len(expected_platforms) * len(OFFLINE_REQUIRED_CASES)):
             raise ValueError("required offline evidence axis is missing or drifted")
         evidence = offline_receipt_evidence(root=_bundle_path(store, expected_root), receipts=axis["receipts"],
-                                            candidate=candidate, devices=axis["devices"])
+                                            candidate=candidate, devices=axis["devices"], required_platforms=expected_platforms)
         expected_cases = [{"ref": expected_root + "/" + exact["ref"], "digest": exact["digest"]} for exact in evidence["cases"]]
         if axis["files"] != evidence["files"] or axis.get("cases") != expected_cases:
             raise ValueError("offline evidence closure drifted")
@@ -727,7 +888,8 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
     app_cases: list[dict[str, str]] = []
     release_inputs = _acceptance_release_inputs(args)
     if environment == "alpha" and "app" in scopes:
-        _validate_offline_axis(store=store, axis=offline_pages or {}, candidate=candidate)
+        _validate_offline_axis(store=store, axis=offline_pages or {}, candidate=candidate,
+                               app_plan=_app_acceptance_plan(getattr(args, "app_platform", "all")))
         env_summary["offlinePages"] = dict(offline_pages or {})
     try:
         package = phases.run(f"{environment}.package", lambda: _package_with_dependency_recovery(
@@ -760,7 +922,7 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
             environment=environment, run_id=summary["runId"], args=args, log_dir=log_dir, previous_readiness=previous_readiness,
             candidate_root=Path(str(active["candidateDir"])),
         ))
-        env_summary["dataRelease"] = {"readiness": _output_ref(readiness), "digest": exact_file_digest(readiness)}
+        env_summary["dataRelease"] = {"readiness": _data_release_output_ref(readiness), "digest": exact_file_digest(readiness)}
         health = phases.run(f"{environment}.health", lambda: _require_ok(_stackctl("health", "--target", target, "--scope", "full", log_dir=log_dir), "INTEGRATION_RUN.HEALTH_FAILED"))
         env_summary["reports"]["health"] = _report_source(health)
         runtime = _health_runtime(health=health, environment=environment, candidate=candidate, expected_baseline=baseline)
@@ -806,7 +968,7 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
     acceptance_binding = {
         "inputs": release_inputs,
         "packageManifest": {"ref": package_snapshot.relative_to(OUTPUT_ROOT).as_posix(), "digest": exact_file_digest(package_snapshot)},
-        "releaseReadiness": {"ref": readiness.relative_to(OUTPUT_ROOT).as_posix(), "digest": exact_file_digest(readiness)},
+        "releaseReadiness": {"ref": _data_release_output_ref(readiness), "digest": exact_file_digest(readiness)},
     }
 
     def evidence(role: str, status: str, source: StackctlResult) -> dict[str, str]:
@@ -848,19 +1010,17 @@ def _provider_ready(health_payload: Mapping[str, Any]) -> bool:
     return True
 
 
-def _not_required_beta(*, candidate: Mapping[str, str], impact_plan_digest: str, impact_plan_path: Path, profile: str,
-                       reason_code: str = NO_LIVE) -> dict[str, Any]:
-    """Beta 不真跑时的 typed not_required 证据：`reason_code` 记录真实原因——ImpactPlan 判定无需 live
-    Beta（`IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED`），或 ImpactPlan 判定敏感但用户未 `--beta` opt-in
-    （`ACCEPTANCE.BETA_OPTIONAL_BY_POLICY`）。两者都绑定 candidate 与 ImpactPlan，不从 skipped 推导。"""
+def _not_required_environment(*, environment: str, candidate: Mapping[str, str], impact_plan_digest: str,
+                              impact_plan_path: Path, profile: str, reason_code: str) -> dict[str, Any]:
+    """不真跑时的 typed not_required 证据：原因码绑定 candidate 与 ImpactPlan，不从 skipped 推导。"""
     store = _store()
-    evidence_dir = store / "environment-evidence" / candidate["candidateId"].removeprefix("sha256:") / "beta"
+    evidence_dir = store / "environment-evidence" / candidate["candidateId"].removeprefix("sha256:") / environment
     plan_sha = hashlib.sha256(impact_plan_path.read_bytes()).hexdigest()
     source = {"basis": reason_code, "executed": False, "impactPlanRef": _output_ref(impact_plan_path), "impactPlanSha256": plan_sha}
 
     def evidence(role: str, status: str) -> dict[str, str]:
         return _write_canonical(evidence_dir / f"{role}.json", _evidence_object(
-            role=role, status=status, environment="beta", profile=profile, candidate=candidate,
+            role=role, status=status, environment=environment, profile=profile, candidate=candidate,
             impact_plan_digest=impact_plan_digest, source=source,
         ))
 
@@ -878,20 +1038,20 @@ def _not_required_beta(*, candidate: Mapping[str, str], impact_plan_digest: str,
     case = {
         "objectId": "impact-plan:integration-depth",
         "specRef": ENVIRONMENT_SPEC_REF,
-        "caseId": "beta-depth-evaluation",
+        "caseId": f"{environment}-depth-evaluation",
         "producer": "ops",
         "layer": "environment_acceptance",
         "status": "passed",
         "target": {"kind": "operation", "id": "derive_integration_depth"},
         "commitSha": candidate["commit"],
         "contractGraphSourceHash": plan_sha,
-        "deploymentTarget": "beta-local",
+        "deploymentTarget": f"{environment}-local",
         "baselineId": "impact-plan-not-required",
         "packageDigest": "sha256:" + plan_sha,
         "configurationDigest": "sha256:" + plan_sha,
         "candidateManifestSha256": plan_sha,
         "candidateDigest": candidate["candidateId"],
-        "environment": "beta",
+        "environment": environment,
         "provider": "impact-planner",
         "startedAt": now,
         "completedAt": now,
@@ -905,6 +1065,26 @@ def _not_required_beta(*, candidate: Mapping[str, str], impact_plan_digest: str,
     _write_canonical(case_path, validate_readiness_case_result(case, generated_at=now))
     return {"named": named, "cases": [{"ref": case_path.relative_to(store).as_posix(), "digest": exact_file_digest(case_path)}],
             "reasonCode": reason_code}
+
+
+def _not_required_alpha(*, candidate: Mapping[str, str], impact_plan_digest: str, impact_plan_path: Path, profile: str,
+                        reason_code: str = ALPHA_LIVE_DEFERRED) -> dict[str, Any]:
+    """源码合入默认不启 Alpha live；环境/UAT/Data 激活后移到已发布 SHA。"""
+    return _not_required_environment(
+        environment="alpha", candidate=candidate, impact_plan_digest=impact_plan_digest,
+        impact_plan_path=impact_plan_path, profile=profile, reason_code=reason_code,
+    )
+
+
+def _not_required_beta(*, candidate: Mapping[str, str], impact_plan_digest: str, impact_plan_path: Path, profile: str,
+                       reason_code: str = NO_LIVE) -> dict[str, Any]:
+    """Beta 不真跑时的 typed not_required 证据：`reason_code` 记录真实原因——ImpactPlan 判定无需 live
+    Beta（`IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED`），或 ImpactPlan 判定敏感但用户未 `--beta` opt-in
+    （`ACCEPTANCE.BETA_OPTIONAL_BY_POLICY`）。两者都绑定 candidate 与 ImpactPlan，不从 skipped 推导。"""
+    return _not_required_environment(
+        environment="beta", candidate=candidate, impact_plan_digest=impact_plan_digest,
+        impact_plan_path=impact_plan_path, profile=profile, reason_code=reason_code,
+    )
 
 
 _CANDIDATE_SCHEMA = "quwoquan_ops.exact_integration_candidate.v1"
@@ -968,14 +1148,17 @@ def _validate_alpha_readback_case(*, cases: Sequence[Mapping[str, Any]], candida
 
 def _offline_fact_refs(*, store: Path, fact: Mapping[str, Any], candidate: Mapping[str, Any]) -> list[dict[str, str]]:
     """离线轴受 Alpha EAF runtimeIdentity 的签名摘要覆盖，导出/导入/复用均重新验真。"""
-    if fact.get("environment") != "alpha":
+    if fact.get("environment") != "alpha" or fact.get("status") != "passed":
         return []
     runtime = _read_store_object(store, fact["runtimeIdentity"], "runtimeIdentity")
     axis = (runtime.get("source") or {}).get("offlinePages")
     app_required = bool(classify_impacts(candidate.get("paths", []))["scopes"]["app"])
     if axis is None and not app_required:
         return []
-    refs = _validate_offline_axis(store=store, axis=axis or {}, candidate=candidate)
+    app_plan = (runtime.get("source") or {}).get("acceptanceBinding", {}).get("inputs", {}).get("appAcceptancePlan")
+    if not isinstance(app_plan, Mapping):
+        raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", "signed Alpha acceptance platform plan is missing")
+    refs = _validate_offline_axis(store=store, axis=axis or {}, candidate=candidate, app_plan=app_plan)
     _validate_offline_fact_case_refs(axis=axis or {}, fact=fact)
     service_cases = [_read_store_object(store, exact, "Alpha raw case") for exact in fact["caseResultRefs"]]
     _validate_alpha_readback_case(cases=service_cases, candidate=candidate)
@@ -1023,18 +1206,21 @@ def _reusable_offline_evidence(store: Path, alpha: Mapping[str, str], candidate:
 
 
 def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str, impact_plan_digest: str,
-                             profile: str, beta: bool = False, signature_verifier: Any = None,
+                             profile: str, beta: bool = False, live_alpha: bool = True,
+                             signature_verifier: Any = None,
                              expected_signer_identity: str | None = None,
                              release_inputs: Mapping[str, Any] | None = None,
                              ) -> dict[str, Any] | None:
-    """寻找同源码及 exact release/rollback/handoff 输入、持有有效 passed Alpha 的 candidate。
+    """寻找同源码及（live 时）exact release/rollback/handoff 输入、持有可复用 Alpha 的 candidate。
 
-    candidateId 含 claim 与创建时间，因此按 exact 身份字段匹配。Beta opt-in 只消费 passed；未 opt-in
-    只消费政策 not_required。后者遇到占用的旧 Beta slot 必须新建 candidate，不改写 create-once 事实。
+    live Alpha 只消费 passed；源码合入默认消费 typed deferred，若已有 passed 且 Data 绑定仍可核验则也可复用。
+    Beta opt-in 只消费 passed；未 opt-in 只消费政策 not_required。后者遇到占用的旧 Beta slot 必须新建 candidate，不改写 create-once 事实。
     """
 
     candidates_root = store / "candidates"
-    if not release_inputs or not candidates_root.is_dir():
+    if not candidates_root.is_dir():
+        return None
+    if live_alpha and not release_inputs:
         return None
     matches: list[dict[str, Any]] = []
     for path in sorted(candidates_root.glob("*.json")):
@@ -1052,16 +1238,33 @@ def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str
                                          impact_plan_digest=impact_plan_digest):
             continue
         candidate_id = str(body.get("candidateId") or "")
-        alpha = _reusable_acceptance(
-            store=store, candidate_id=candidate_id, environment="alpha", profile=profile,
-            commit=commit, tree=tree, impact_plan_digest=impact_plan_digest, allowed_status={"passed"},
-            signature_verifier=signature_verifier, expected_signer_identity=expected_signer_identity,
-            release_inputs=release_inputs,
-        )
-        if alpha is None:
-            continue
-        if not _reusable_offline_evidence(store, alpha, body):
-            continue
+        if live_alpha:
+            alpha = _reusable_acceptance(
+                store=store, candidate_id=candidate_id, environment="alpha", profile=profile,
+                commit=commit, tree=tree, impact_plan_digest=impact_plan_digest, allowed_status={"passed"},
+                signature_verifier=signature_verifier, expected_signer_identity=expected_signer_identity,
+                release_inputs=release_inputs,
+            )
+            if alpha is None or not _reusable_offline_evidence(store, alpha, body):
+                continue
+        else:
+            alpha = _reusable_acceptance(
+                store=store, candidate_id=candidate_id, environment="alpha", profile=profile,
+                commit=commit, tree=tree, impact_plan_digest=impact_plan_digest, allowed_status={"not_required"},
+                expected_reason_code=ALPHA_LIVE_DEFERRED,
+                signature_verifier=signature_verifier, expected_signer_identity=expected_signer_identity,
+            )
+            if alpha is None and release_inputs:
+                passed = _reusable_acceptance(
+                    store=store, candidate_id=candidate_id, environment="alpha", profile=profile,
+                    commit=commit, tree=tree, impact_plan_digest=impact_plan_digest, allowed_status={"passed"},
+                    signature_verifier=signature_verifier, expected_signer_identity=expected_signer_identity,
+                    release_inputs=release_inputs,
+                )
+                if passed is not None and _reusable_offline_evidence(store, passed, body):
+                    alpha = passed
+            if alpha is None:
+                continue
         beta_ref = _reusable_acceptance(
             store=store, candidate_id=candidate_id, environment="beta", profile=profile,
             commit=commit, tree=tree, impact_plan_digest=impact_plan_digest,
@@ -1141,6 +1344,7 @@ def _merged_lanes(*, values: Sequence[str], lane_branch: str, commit: str, remot
 def _apply_acceptance_execution_scope(args: argparse.Namespace, source_ref: str) -> None:
     """本树显式多树合并必须真跑Alpha/Beta，不把单树复用带入该模式。"""
     if source_ref == DEV_REF and args.merged_lanes:
+        args.alpha = True
         args.beta = True
         args.reuse = False
 
@@ -1148,16 +1352,17 @@ def _apply_acceptance_execution_scope(args: argparse.Namespace, source_ref: str)
 def _write_acceptance_bundle(*, run_dir: Path, candidate_ref: Mapping[str, str], source_ref: Mapping[str, str],
                              alpha_ref: Mapping[str, str], beta_ref: Mapping[str, str], identity: Mapping[str, str],
                              plan_path: Path, summary: Mapping[str, Any], beta_status: str, beta_reason: str | None,
-                             lane_branch: str, merged_lanes: Sequence[Mapping[str, str]], args: argparse.Namespace) -> Path:
+                             lane_branch: str, merged_lanes: Sequence[Mapping[str, str]], args: argparse.Namespace,
+                             alpha_status: str = "passed", alpha_reason: str | None = None) -> Path:
     """把 accepted 终态的全部 exact 事实按 store 相对路径复制成 portable bundle，供 integration 工作区导入。
 
     bundle 只复制字节、不改写任何事实；`bundle.json` 记录 candidate 身份、baseline、lane 来源与每个文件的
     exact digest，`bundleId` 是 manifest 自身的 canonical digest。integration 侧按同一 digest 逐字节复核。
     """
     store = _store()
-    if getattr(args, "release_attestation", None) is not None or (summary.get("reused") or {}).get("alpha"):
+    if getattr(args, "release_attestation", None) is not None:
         inputs = _acceptance_release_inputs(args)
-        if (summary.get("dataReleases") != sorted(binding["releaseId"] for binding in inputs["release"].values())
+        if (summary.get("dataReleases") != sorted({binding["releaseId"] for binding in inputs["release"].values()})
                 or summary.get("dataReleaseHandoffRef") != inputs["handoffRef"]):
             raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "reused release labels differ from exact inputs")
         for fact_ref in (alpha_ref, beta_ref):
@@ -1206,6 +1411,7 @@ def _write_acceptance_bundle(*, run_dir: Path, candidate_ref: Mapping[str, str],
         "dataReleases": list(summary.get("dataReleases") or []),
         "dataReleaseHandoffRef": str(summary.get("dataReleaseHandoffRef") or ""),
         "signerIdentity": args.signer_identity, "profile": args.profile,
+        "alpha": {"status": alpha_status, "executed": alpha_status == "passed", "reasonCode": alpha_reason},
         "beta": {"status": beta_status, "executed": beta_status == "passed", "reasonCode": beta_reason},
         "candidate": dict(candidate_ref), "claim": claim_ref, "sourceFact": dict(source_ref), "sourceReceipt": receipt,
         "alphaFact": dict(alpha_ref), "betaFact": dict(beta_ref),
@@ -1279,9 +1485,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--candidate-ref", default="", help="acceptance：复用已冻结 candidate 的 store ref=sha256:digest，不重新 acquire claim")
     parser.add_argument("--mode", choices=("integrate", "acceptance"), default="integrate",
                         help="integrate=integration 工作区消费 acceptance bundle 并 admit/publish；"
-                             "acceptance=本地 lane/integration 跑 readiness + Alpha（--beta 时含 Beta）并签发事实与 bundle")
+                             "acceptance=本地 lane/integration 跑 readiness + typed Alpha/Beta 并签发事实与 bundle")
     parser.add_argument("--baseline", default="",
                         help="acceptance 专用：显式确认 exact parent；必须等于当前远端 dev1.0 head，不接受历史基线发布")
+    parser.add_argument("--alpha", action="store_true",
+                        help="acceptance 专用：显式 opt-in 真跑 Alpha live；缺省以 typed "
+                             "not_required(reason=ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV) 闭合")
     parser.add_argument("--beta", action="store_true",
                         help="acceptance 专用：显式 opt-in 真跑 Beta；缺省不按集成深度分流，"
                              "以 typed not_required(reason=ACCEPTANCE.BETA_OPTIONAL_BY_POLICY) 闭合")
@@ -1296,13 +1505,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--review-consolidation", default="")
     parser.add_argument("--required-evidence", action="append", default=[])
     parser.add_argument("--readiness-level", choices=("fast", "scope"), default="scope",
-                        help="可发布验收只接受默认 scope，要求 Review consolidation 与 required evidence；fast 明确拒绝")
+                        help="可发布源码验收只接受默认 scope；Review consolidation 与 required evidence 可选，fast 明确拒绝")
     parser.add_argument("--release-attestation", type=Path, default=None,
-                        help="acceptance 必填：candidate production Data release attestation（stackctl package 候选绑定）")
+                        help="acceptance：live Alpha/Beta 必填的 candidate production Data release attestation")
     parser.add_argument("--rollback-release-attestation", type=Path, default=None,
-                        help="acceptance 必填：rollback production Data release attestation（只参与候选绑定，不执行 rollback）")
+                        help="acceptance：live Alpha/Beta 必填的 rollback production Data release attestation")
     parser.add_argument("--release-handoff-ref", default="",
-                        help="acceptance 必填：candidate release 的producer输出相对ref=sha256:digest；"
+                        help="acceptance：live Alpha/Beta 必填的 candidate release producer 输出相对 ref=sha256:digest；"
                              "rollback release 只参与 stackctl package 候选绑定，因此不需要其 handoff-ref")
     parser.add_argument("--workload", default="full", choices=("content-release", "content-commercial", "full"))
     parser.add_argument("--profile", default="integration", choices=("smoke", "integration"))
@@ -1313,9 +1522,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--writer", default="integration")
     parser.add_argument("--publish", action="store_true", help="admit 后以 local-git CAS 发布到远端 dev1.0")
     parser.add_argument("--reuse", action="store_true",
-                        help="acceptance 专用：复用同 commit/tree/parent/ImpactPlan/profile 的有效 Alpha/Beta 事实；"
+                        help="acceptance 专用：复用同 commit/tree/parent/ImpactPlan/profile/平台计划 的有效 Alpha/Beta 事实；"
                              "Beta 状态必须匹配本次 --beta 政策，summary 标记 reused")
     parser.add_argument("--run-id", default="")
+    parser.add_argument("--app-platform", choices=("android", "ios", "all"), default="all",
+                        help="Alpha App acceptance 平台；默认双端，显式单平台不要求另一端证据")
     parser.add_argument("--android-device-id", default="", help="Alpha 离线 UAT 的 exact Android emulator serial；不自动发现")
     parser.add_argument("--ios-device-id", default="", help="Alpha 离线 UAT 的 exact iOS simulator UDID；不自动发现")
     return parser
@@ -1337,14 +1548,19 @@ def _prepare_signing(args: argparse.Namespace, summary: dict[str, Any]) -> tuple
     except EvidenceSigningError as exc:
         code = "INTEGRATION_RUN.SIGNER_UNREGISTERED" if exc.code == "EVIDENCE_SIGNING.SIGNER_UNREGISTERED" else "INTEGRATION_RUN.SIGNER_UNAVAILABLE"
         raise IntegrationRunError(code, exc.detail) from exc
-    for label, path in (("release", args.release_attestation), ("rollback", args.rollback_release_attestation)):
-        if path is None or not path.is_file():
-            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{label} attestation is required in acceptance mode and must be a file: {path}")
-    release_ids = {_release_id(args.release_attestation), _release_id(args.rollback_release_attestation)}
-    if len(release_ids) != 2:
-        raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "release and rollback attestations must name two different releases")
-    summary["dataReleases"] = sorted(release_ids)
-    summary["dataReleaseHandoffRef"] = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
+    live_environment = bool(getattr(args, "alpha", False) or args.beta)
+    has_data = args.release_attestation is not None or args.rollback_release_attestation is not None or bool(args.release_handoff_ref)
+    if live_environment or has_data:
+        for label, path in (("release", args.release_attestation), ("rollback", args.rollback_release_attestation)):
+            if path is None or not path.is_file():
+                raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{label} attestation is required for live Alpha/Beta or when any Data input is set: {path}")
+        candidate_id = _release_id(args.release_attestation)
+        rollback_id = _release_id(args.rollback_release_attestation)
+        release_ids = {candidate_id, rollback_id}
+        if candidate_id == rollback_id:
+            summary["dataChange"] = UNCHANGED_DATA_CHANGE
+        summary["dataReleases"] = sorted(release_ids)
+        summary["dataReleaseHandoffRef"] = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
     return keyring, signer
 
 
@@ -1380,13 +1596,27 @@ def _integrate_bundle(args: argparse.Namespace, *, identity: Mapping[str, str], 
 
 
 def _accept_alpha(*, args: argparse.Namespace, candidate_ref: Mapping[str, str], candidate: Mapping[str, Any],
-                  plan: Mapping[str, Any], reusable: Mapping[str, Any] | None, phases: Phases,
+                  plan: Mapping[str, Any], plan_path: Path, reusable: Mapping[str, Any] | None, phases: Phases,
                   run_dir: Path, summary: dict[str, Any], signer: Any) -> tuple[dict[str, str], dict[str, Any] | None]:
     if reusable is not None:
         alpha_ref = reusable["alpha"]
         summary["reused"]["alpha"] = True
         summary["environments"]["alpha"] = {"environment": "alpha", "executed": False, "reused": True, "acceptance": alpha_ref}
         phases.run("alpha.reuse", lambda: alpha_ref)
+        return alpha_ref, None
+    if not (getattr(args, "alpha", False) or args.beta):
+        evidence = _not_required_alpha(
+            candidate=candidate, impact_plan_digest=plan["plan_digest"], impact_plan_path=plan_path,
+            profile=args.profile, reason_code=ALPHA_LIVE_DEFERRED,
+        )
+        summary["environments"]["alpha"] = {
+            "environment": "alpha", "executed": False, "reasonCode": ALPHA_LIVE_DEFERRED,
+        }
+        alpha_ref = phases.run("alpha.issue", lambda: _issue(
+            environment="alpha", candidate_ref=candidate_ref, impact_plan_digest=plan["plan_digest"], evidence=evidence,
+            status="not_required", predecessor=None, profile=args.profile, args=args, signer=signer,
+        ))
+        summary["environments"]["alpha"]["acceptance"] = alpha_ref
         return alpha_ref, None
     offline_pages = None
     if "app" in plan["scopes"]:
@@ -1440,12 +1670,14 @@ def _select_candidate(*, args: argparse.Namespace, identity: Mapping[str, str], 
                       keyring: Any, phases: Phases, summary: dict[str, Any]) -> tuple[dict[str, str], dict[str, Any], dict[str, Any] | None, Path | None]:
     reusable = None
     if args.reuse:
+        live_alpha = bool(getattr(args, "alpha", False) or args.beta)
+        release_inputs = _acceptance_release_inputs(args) if live_alpha or args.release_attestation else None
         reusable = phases.run("reuse-lookup", lambda: _find_reusable_candidate(
             store=_store(), commit=identity["commit"], tree=identity["tree"], parent=identity["parent"],
-            impact_plan_digest=impact_digest, profile=args.profile, beta=args.beta,
+            impact_plan_digest=impact_digest, profile=args.profile, beta=args.beta, live_alpha=live_alpha,
             signature_verifier=ed25519_environment_verifier(keyring, [args.signer_identity]),
             expected_signer_identity=args.signer_identity,
-            release_inputs=_acceptance_release_inputs(args),
+            release_inputs=release_inputs,
         ))
     if args.candidate_ref:
         ref, candidate = _existing_candidate(exact=args.candidate_ref, identity=identity,
@@ -1503,7 +1735,7 @@ def main(argv: list[str] | None = None) -> int:
         if depth == "no_live":
             # ImpactPlan 保留真实分类；可发布验收仍走既有最小 smoke profile，绝不伪造 EAF。
             args.profile = "smoke"
-            summary["note"] = "无 runtime 增量仍须真实 Alpha smoke；Beta 仅显式 opt-in。"
+            summary["note"] = "无 runtime 增量默认签发 typed Alpha/Beta；live 仅 --alpha/--beta opt-in。"
 
         receipt_path, receipt = phases.run(f"readiness-{args.readiness_level}", lambda: _local_readiness(
             level=args.readiness_level, parent=identity["parent"], commit=identity["commit"], run_dir=run_dir, args=args,
@@ -1528,10 +1760,13 @@ def main(argv: list[str] | None = None) -> int:
             raise IntegrationRunError("INTEGRATION_RUN.LANE_IDENTITY_INVALID", "lane HEAD moved after readiness; reaccept the new exact candidate")
 
         alpha_ref, alpha_evidence = _accept_alpha(args=args, candidate_ref=candidate_ref, candidate=candidate_identity,
-            plan=plan, reusable=reusable, phases=phases, run_dir=run_dir, summary=summary, signer=signer)
+            plan=plan, plan_path=plan_path, reusable=reusable, phases=phases, run_dir=run_dir, summary=summary, signer=signer)
         beta_ref = _accept_beta(args=args, candidate_ref=candidate_ref, candidate=candidate_identity,
             plan_path=plan_path, alpha_ref=alpha_ref, alpha_evidence=alpha_evidence, reusable=reusable,
             phases=phases, run_dir=run_dir, summary=summary, signer=signer)
+        live_alpha = bool(getattr(args, "alpha", False) or args.beta)
+        alpha_status = "passed" if live_alpha else "not_required"
+        alpha_reason = None if live_alpha else ALPHA_LIVE_DEFERRED
         beta_status = "passed" if args.beta else "not_required"
         beta_reason = None if args.beta else BETA_OPTIONAL_BY_POLICY
 
@@ -1539,12 +1774,15 @@ def main(argv: list[str] | None = None) -> int:
         # bundle 把全部 exact 事实按 store 相对路径复制出去，供 integration 逐字节导入。
         bundle_dir = phases.run("bundle", lambda: _write_acceptance_bundle(
             run_dir=run_dir, candidate_ref=candidate_ref, source_ref=source_ref, alpha_ref=alpha_ref, beta_ref=beta_ref,
-            identity=identity, plan_path=plan_path, summary=summary, beta_status=beta_status, beta_reason=beta_reason,
+            identity=identity, plan_path=plan_path, summary=summary,
+            alpha_status=alpha_status, alpha_reason=alpha_reason, beta_status=beta_status, beta_reason=beta_reason,
             lane_branch=lane_branch, merged_lanes=merged_lanes, args=args,
         ))
         manifest = json.loads((bundle_dir / BUNDLE_MANIFEST).read_bytes())
         summary["terminal"] = "accepted"
-        summary["acceptance"] = {"alphaFactRef": alpha_ref, "betaFactRef": beta_ref, "betaStatus": beta_status, "betaReasonCode": beta_reason,
+        summary["acceptance"] = {"alphaFactRef": alpha_ref, "betaFactRef": beta_ref,
+                                 "alphaStatus": alpha_status, "alphaReasonCode": alpha_reason,
+                                 "betaStatus": beta_status, "betaReasonCode": beta_reason,
                                  "bundle": {"path": str(bundle_dir), "ref": _output_ref(bundle_dir), "bundleId": manifest["bundleId"],
                                             "storeFiles": len(manifest["storeFiles"])},
                                  "note": "lane acceptance only: no publish admission, no dev1.0 write; integrate consumes the bundle"}

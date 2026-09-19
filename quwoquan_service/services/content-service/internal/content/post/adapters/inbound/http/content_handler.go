@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -815,6 +816,15 @@ func (h *ContentHandler) handleGetHelperRead(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, result)
 }
 
+func ProjectAuthorPostsForViewer(
+	ctx context.Context,
+	page postports.AuthorPostPageSlice,
+	viewerID string,
+	reader postapp.AuthorPostIntersectionPoolReader,
+) (postapp.AuthorPostClientPage, error) {
+	return postapp.ProjectAuthorPostIntersections(ctx, page, viewerID, reader)
+}
+
 func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Request) {
 	viewerID := ResolvePersonaID(r)
 	userID := viewerID
@@ -869,7 +879,19 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, page)
+	// ListUserPosts 与 Feed/GetPost 共用同一 viewer reason pool。一次批量读取后
+	// 在 application projector 内逐 Post 匹配；读取失败降级为作品可读并留痕。
+	recommendationActorID := ResolveRecommendationActorID(r)
+	projected, intersectionErr := ProjectAuthorPostsForViewer(
+		r.Context(), page, recommendationActorID, h.postIntersectionReader,
+	)
+	if intersectionErr != nil {
+		feedapp.LogIntersectionReadFailure("author_posts", userID, intersectionErr)
+		projected, _ = ProjectAuthorPostsForViewer(
+			r.Context(), page, "", nil,
+		)
+	}
+	writeJSON(w, http.StatusOK, projected)
 }
 
 func (h *ContentHandler) handleGetGatheringSocialProof(

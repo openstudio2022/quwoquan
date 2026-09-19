@@ -73,16 +73,38 @@ def _object_rows(
                     raise ObjectTransactionError(
                         f"release rights asset must be an object: {object_ref}"
                     )
+                asset_id = str(raw.get("assetId") or "").strip()
                 try:
-                    media = next(asset for asset in manifest["assets"] if asset["assetId"] == raw["assetId"])
-                    if raw.get("sha256") != media["sha256"] or raw.get("bytes") != media["bytes"]:
-                        raise ValueError(f"{object_ref}: source/manifest media identity drift")
+                    media = next(
+                        (
+                            asset
+                            for asset in manifest["assets"]
+                            if asset["assetId"] == raw["assetId"]
+                        ),
+                        None,
+                    )
+                except (KeyError, TypeError) as exc:
+                    raise ObjectTransactionError(
+                        f"DATA.RELEASE.MEDIA_MISSING: {object_ref} assetId={asset_id}"
+                    ) from exc
+                if media is None:
+                    raise ObjectTransactionError(
+                        f"DATA.RELEASE.MEDIA_MISSING: {object_ref} assetId={asset_id}"
+                    )
+                if (
+                    raw.get("sha256") != media.get("sha256")
+                    or raw.get("bytes") != media.get("bytes")
+                ):
+                    raise ObjectTransactionError(
+                        f"DATA.RELEASE.MEDIA_DRIFT: {object_ref} assetId={asset_id}"
+                    )
+                try:
                     # 物理交付事实来自唯一 manifest；不往原 source 文件补写派生旁车。
                     projected = project_asset_admission({**raw, "asset": {
                         "sha256": media["sha256"], "bytes": media["bytes"], "mimeType": media["mimeType"],
                     }}, object_ref=object_ref)
                     assets.append(projected)
-                except (TypeError, ValueError) as exc:
+                except (KeyError, TypeError, ValueError) as exc:
                     raise ObjectTransactionError(str(exc)) from exc
             rows.append(
                 {

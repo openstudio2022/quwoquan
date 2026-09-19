@@ -52,6 +52,13 @@ func (g *ContractGraph) DocumentContent(path string) ([]byte, error) {
 	normalized := filepath.ToSlash(filepath.Clean(path))
 	for _, document := range g.Documents {
 		if document.Path == normalized {
+			if document.MediaType == "application/graphql" {
+				var content string
+				if err := json.Unmarshal(document.Content, &content); err != nil {
+					return nil, fmt.Errorf("decode metadata document %s: %w", normalized, err)
+				}
+				return []byte(content), nil
+			}
 			return append([]byte(nil), document.Content...), nil
 		}
 	}

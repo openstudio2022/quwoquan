@@ -429,6 +429,53 @@ types:
     fields:
       - {name: found, type: bool, constraints: [NOT_NULL]}
       - {name: snapshot, type: CreatorSearchCandidateSnapshot, constraints: [NULLABLE]}
+  CollectionQueryBinding:
+    description: UserAccount authority 唯一拥有的窄查询绑定，字符串精确比较；请求摘要为实际内部 POST JSON bytes 的 sha256:hex，hash 为 persisted document SHA256 hex。
+    fields:
+    - {name: operationId, type: string, constraints: [NOT_BLANK]}
+    - {name: collectionId, type: string, constraints: [NOT_BLANK]}
+    - {name: persistedHash, type: string, constraints: [NOT_BLANK]}
+    - {name: bodyDigest, type: string, constraints: [NOT_BLANK]}
+    - {name: method, type: string, constraints: [NOT_BLANK]}
+    - {name: path, type: string, constraints: [NOT_BLANK]}
+    - {name: surface, type: string, constraints: [NOT_BLANK]}
+    - {name: requestId, type: string, constraints: [NOT_BLANK]}
+  IssueCollectionQueryGrantCommand:
+    description: 只允许已认证 service:api-edge 申请；sourceAccessToken 原文只交 authority 验签，身份从它派生且逐次核对当前归属，不接受身份自报。
+    fields:
+    - {name: sourceAccessToken, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: drop}
+    - {name: binding, type: CollectionQueryBinding, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: drop, api_exposure: write, ops_exposure: drop}
+  VerifyCollectionQueryGrantQuery:
+    description: 只允许已认证 service:content-service 验证；actual caller 必须由 service principal 证明，不能只信 grant recipient；每次重新读取账号及 Persona。
+    fields:
+    - {name: grant, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: drop}
+    - {name: binding, type: CollectionQueryBinding, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: drop, api_exposure: write, ops_exposure: drop}
+  CollectionQueryGrantResult:
+    description: grant 编码为 keyId.base64url(canonical claims JSON).base64url(HMAC-SHA256(keyId+点+claims))；仅 authority 持有对称材料，TTL 固定 60 秒且不超过源到期，不能用作 command 或 Assistant grant。
+    fields:
+    - {name: grant, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: read, ops_exposure: drop}
+    - {name: expiresUnixSeconds, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  VerifiedCollectionQueryIdentity:
+    description: 仅供 content 当前精确请求使用的最小已验证身份，不缓存为 active verdict；单会话 logout 不作即时撤销承诺。
+    fields:
+    - {name: accountId, type: string, constraints: [NOT_BLANK], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: drop}
+    - {name: personaId, type: string, constraints: [NOT_BLANK], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: drop}
+    - {name: authEpoch, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: expiresUnixSeconds, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CollectionQueryGrantClaims:
+    description: 只由 authority 编解码的签名负载；kind 固定 collection_query，issuer 固定 user-service，recipient 固定 content-service，delegate 固定 api-edge；不含 Assistant run/tool tuple。operation 闭集只有 content.post_collection.GetPostCollection/GetPostCollectionManagement，method=POST，path=/internal/graphql，surface=postCollection。
+    fields:
+    - {name: kind, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: drop}
+    - {name: issuer, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: drop}
+    - {name: recipient, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: drop}
+    - {name: delegate, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: drop}
+    - {name: accountId, type: string, constraints: [NOT_BLANK], classification: PII, log_policy: drop}
+    - {name: personaId, type: string, constraints: [NOT_BLANK], classification: PII, log_policy: drop}
+    - {name: authEpoch, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: drop}
+    - {name: issuedUnixSeconds, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: drop}
+    - {name: expiresUnixSeconds, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: drop}
+    - {name: sourceExpiresUnixSeconds, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: drop}
+    - {name: binding, type: CollectionQueryBinding, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: drop}
   UserSyncHintEventPayload:
     description: durable UserSyncPatch 已提交后的最小实时提示；客户端只使用 latestSyncSeq 触发 typed PullUserSync，不解析业务补丁。
     fields:

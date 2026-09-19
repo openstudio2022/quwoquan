@@ -72,6 +72,48 @@ class PackageInputCapsuleSizeContractTest(unittest.TestCase):
             entry for entry in self._manifest()["entries"] if entry["kind"] == kind
         )
 
+    def test_platform_plan_is_bound_to_capsule_identity(self) -> None:
+        manifest = self._manifest()
+        self.assertEqual(manifest["dependencyPlatforms"], ["android", "ios"])
+        manifest["dependencyPlatforms"] = ["ios"]
+        self._write_manifest(manifest)
+        with self.assertRaisesRegex(ValueError, "identity CAS mismatch"):
+            package_reuse.verify_package_input_capsule(self.capsule_root)
+
+    def test_ios_capsule_and_workspace_snapshot_share_explicit_platform_identity(self) -> None:
+        with mock.patch.object(package_reuse, "ROOT", self.root):
+            snapshot = package_reuse.workspace_snapshot(
+                deployment_roots=["quwoquan_ops"], dependency_platforms=("ios",),
+            )
+            capsule = package_reuse.materialize_package_input_capsule(
+                ["quwoquan_ops"], capsule_root=self.root / "ios-capsule",
+                dependency_platforms=("ios",),
+            )
+        self.assertEqual(capsule["dependencyPlatforms"], ["ios"])
+        self.assertEqual(snapshot["baselineId"], capsule["baselineId"])
+        self.assertNotEqual(capsule["baselineId"], self._manifest()["baselineId"])
+        package_reuse.verify_package_input_capsule(
+            self.root / "ios-capsule", expected_snapshot=snapshot,
+        )
+        with self.assertRaisesRegex(ValueError, "mismatch"):
+            package_reuse.verify_package_input_capsule(
+                self.root / "ios-capsule", expected_snapshot=self._manifest(),
+            )
+
+    def test_platform_plan_missing_or_invalid_is_rejected(self) -> None:
+        original = self._manifest()
+        for value in ([], ["ios", "ios"], ["web"], ["ios", "android"], "ios"):
+            with self.subTest(plan=value):
+                manifest = dict(original, dependencyPlatforms=value)
+                self._write_manifest(manifest)
+                with self.assertRaises(ValueError):
+                    package_reuse.verify_package_input_capsule(self.capsule_root)
+        missing = dict(original)
+        del missing["dependencyPlatforms"]
+        self._write_manifest(missing)
+        with self.assertRaisesRegex(ValueError, "fields mismatch"):
+            package_reuse.verify_package_input_capsule(self.capsule_root)
+
     def test_zero_byte_entry_is_valid_and_content_tamper_is_rejected(self) -> None:
         manifest = package_reuse.verify_package_input_capsule(self.capsule_root)
         entry = next(item for item in manifest["entries"] if item["kind"] == "file")
@@ -422,7 +464,8 @@ class PackageDependencyCapsuleReuseContractTest(unittest.TestCase):
             input_capsule._canonical_json_bytes(request)
         ).hexdigest()
 
-        def reject_clone(*, capsule_root: Path, manifest_entries: object) -> None:
+        def reject_clone(*, capsule_root: Path, manifest_entries: object, required_platforms: tuple[str, ...]) -> None:
+            self.assertEqual(required_platforms, ("android", "ios"))
             self.assertEqual(capsule_root, staging)
             self.assertEqual(
                 (capsule_root / "dependencies/payload").read_bytes(), b"dependency"
@@ -928,8 +971,9 @@ class PackageStagingCleanupContractTest(unittest.TestCase):
                 return candidates / identity.replace(":", "-")
 
             def materialize(
-                _roots: list[str], *, capsule_root: Path
+                _roots: list[str], *, capsule_root: Path, dependency_platforms: tuple[str, ...]
             ) -> dict[str, object]:
+                self.assertEqual(dependency_platforms, ("android", "ios"))
                 payload = capsule_root / "repo/input.bin"
                 payload.parent.mkdir(parents=True)
                 payload.write_bytes(b"")
@@ -1101,6 +1145,87 @@ class PackageStagingCleanupContractTest(unittest.TestCase):
             self.assertIn(package_domain.PACKAGE_STAGING_CLEANUP_BLOCKER, notes[0])
             self.assertNotIn("must-not-leak", notes[0])
             self.assertEqual(len(list(candidates.glob(".package-staging-*"))), 1)
+
+
+class FrozenCandidateSourceCapsuleTest(unittest.TestCase):
+    def test_frozen_source_root_does_not_read_live_worktree_bytes(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        tracked = root / "quwoquan_ops/owned.bin"
+        tracked.parent.mkdir(parents=True)
+        tracked.write_bytes(b"committed")
+        subprocess.run(["git", "init", "--quiet"], cwd=root, check=True)
+        subprocess.run(["git", "add", "quwoquan_ops"], cwd=root, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Capsule Contract",
+                "-c",
+                "user.email=capsule-contract@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "owned input",
+            ],
+            cwd=root,
+            check=True,
+        )
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=root, text=True
+        ).strip()
+        tree = subprocess.check_output(
+            ["git", "rev-parse", "HEAD^{tree}"], cwd=root, text=True
+        ).strip()
+        tracked.write_bytes(b"live-dirty")
+        (root / "quwoquan_ops/untracked.bin").write_bytes(b"untracked")
+        checkout = root / "frozen-source"
+        checkout.mkdir()
+        archive = subprocess.Popen(
+            ["git", "archive", "--format=tar", commit, "--", "quwoquan_ops"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+        )
+        subprocess.run(
+            ["tar", "-x", "-C", str(checkout)],
+            stdin=archive.stdout,
+            check=True,
+        )
+        archive.wait()
+        with mock.patch.object(package_reuse, "ROOT", root):
+            snapshot = package_reuse.workspace_snapshot(
+                deployment_roots=["quwoquan_ops"],
+                dependency_platforms=("ios",),
+                source_revision=commit,
+                source_root=checkout,
+                source_tree=tree,
+            )
+            capsule = package_reuse.materialize_package_input_capsule(
+                ["quwoquan_ops"],
+                capsule_root=root / "frozen-capsule",
+                dependency_platforms=("ios",),
+                source_revision=commit,
+                source_root=checkout,
+                source_tree=tree,
+            )
+        self.assertEqual(snapshot["sourceRevision"], commit)
+        self.assertEqual(capsule["sourceRevision"], commit)
+        copied = next(
+            entry
+            for entry in json.loads(
+                (root / "frozen-capsule/manifest.json").read_text(encoding="utf-8")
+            )["entries"]
+            if str(entry["logicalPath"]).endswith("owned.bin")
+        )
+        self.assertEqual(
+            copied["digest"],
+            "sha256:" + hashlib.sha256(b"committed").hexdigest(),
+        )
+        self.assertNotEqual(
+            copied["digest"],
+            "sha256:" + hashlib.sha256(b"live-dirty").hexdigest(),
+        )
 
 
 if __name__ == "__main__":

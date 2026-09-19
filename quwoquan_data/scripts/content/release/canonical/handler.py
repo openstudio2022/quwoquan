@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import hashlib
+import os
 import os
 from pathlib import Path
 
@@ -238,6 +240,53 @@ def write_versioned_release_copy(*, release_dir: Path, reference_root: Path, rel
         os.replace(temporary, target)
         statuses[name] = "created"
     return {"root": target_dir.as_posix(), **statuses}
+
+
+def handle_repackage_legacy(args: argparse.Namespace) -> None:
+    """单阶段机械入口；authority 只复用现役 director/global closer/generation/root/fence。"""
+    from content.coordination.runtime import CLOSER_ENV, current_tokens, governed_repackage_call
+    from content.coordination.store import CoordinationError
+    from content.release.canonical.legacy_release_repackage import freeze_legacy_source, repackage_legacy_release
+    from core.publish_repository import require_publish_repository
+    import sys
+
+    publish = Path(args.publish_root or PUBLISH_ROOT).resolve()
+    output = Path(OUTPUT_ROOT).resolve()
+    release_root = Path(args.release_root or output / "data/releases").expanduser().absolute()
+    source_root = Path(args.source_root).expanduser().absolute()
+    try:
+        if (publish != Path(PUBLISH_ROOT).resolve() or release_root != output / "data/releases"
+                or source_root != release_root):
+            raise CoordinationError("COORDINATION.ROOT_BINDING_MISMATCH", "source/target release 与 publish 根不得偏离 deployment 绑定")
+        require_publish_repository(publish, expected_repository_id=str(args.repository_id))
+        tokens=current_tokens()
+        if os.environ.get(CLOSER_ENV) != tokens[0].deployment_id:
+            raise CoordinationError("COORDINATION.GLOBAL_CLOSER_REQUIRED",tokens[0].deployment_id)
+        source_id=str(args.source_release_id)
+        cohort_path=source_root/source_id/"cohort.json"
+        cohort_bytes=cohort_path.read_bytes(); expected_cohort_digest=str(args.source_cohort_digest)
+        if "sha256:"+hashlib.sha256(cohort_bytes).hexdigest()!=expected_cohort_digest:
+            raise ObjectTransactionError("DATA.RELEASE.REPACKAGE.SOURCE_COHORT_DIGEST_DRIFT")
+        target_refs=sorted(str(ref) for ref in json.loads(cohort_bytes)["objectRefs"])
+        def execute_repackage():
+            frozen = freeze_legacy_source(source_root=source_root, release_id=source_id,
+                handoff_digest=str(args.source_handoff_digest), cohort_digest=expected_cohort_digest)
+            if list(frozen.refs)!=target_refs:
+                raise ObjectTransactionError("DATA.RELEASE.REPACKAGE.SOURCE_MEMBERSHIP_DRIFT")
+            evidence_path = source_root / str(args.source_repository_evidence_ref)
+            if evidence_path.is_symlink() or not evidence_path.is_file():
+                raise ObjectTransactionError("DATA.RELEASE.REPACKAGE.SOURCE_REPOSITORY_EVIDENCE_INVALID")
+            return repackage_legacy_release(frozen_source=frozen, publish_root=publish, target_release_root=release_root,
+                repository_id=str(args.repository_id), source_repository_evidence=json.loads(evidence_path.read_bytes()),
+                source_repository_evidence_ref=str(args.source_repository_evidence_ref), source_repository_evidence_digest=str(args.source_repository_evidence_digest),
+                target_release_id=str(args.target_release_id), milestone=str(args.milestone),
+                producer_baseline_revision=str(args.producer_baseline_revision), repo_root=Path(REPO_ROOT).resolve())
+        result = governed_repackage_call(execute_repackage, target_refs=target_refs, release_id=str(args.target_release_id))
+    except (CoordinationError, FileNotFoundError, OSError, ObjectTransactionError, TypeError, ValueError) as exc:
+        code = str(exc).split(":", 1)[0]
+        print(json.dumps({"status":"blocked", "code":code, "message":str(exc)}, ensure_ascii=False), file=sys.stderr)
+        raise SystemExit(2) from exc
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2))
 
 
 def handle_release_finalize(args: argparse.Namespace) -> None:

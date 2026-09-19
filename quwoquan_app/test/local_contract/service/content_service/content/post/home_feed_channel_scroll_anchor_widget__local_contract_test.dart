@@ -24,7 +24,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         ContentBehaviorFactAppender,
         ContentPostProjection,
         ReportContentBehaviorsCommand,
-        ContentType;
+        ContentType,
+        MediaDeliveryAccessMode;
 
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
@@ -150,7 +151,6 @@ final class _WidgetPagedDiscoveryFeedQuery
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -364,6 +364,8 @@ void main() {
                       onUserTap: (
                         _, {
                         avatarUrl,
+                        avatarAssetId,
+                        avatarAccessMode,
                         backgroundUrl,
                         displayName,
                       }) {},
@@ -506,7 +508,14 @@ void main() {
                     key: ValueKey<String>('object-anchor-feed-$channelId'),
                     isDark: false,
                     channelId: channelId,
-                    onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
+                    onUserTap: (
+                      _, {
+                      avatarUrl,
+                      avatarAssetId,
+                      avatarAccessMode,
+                      backgroundUrl,
+                      displayName,
+                    }) {},
                   ),
                 ),
               ),
@@ -575,6 +584,8 @@ void main() {
 void _noopUserTap(
   String userId, {
   String? avatarUrl,
+  String? avatarAssetId,
+  MediaDeliveryAccessMode? avatarAccessMode,
   String? displayName,
   String? backgroundUrl,
 }) {}

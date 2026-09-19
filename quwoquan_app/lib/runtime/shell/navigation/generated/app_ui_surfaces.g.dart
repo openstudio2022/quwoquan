@@ -662,6 +662,21 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface postCollection = AppUiSurface(
+    id: 'postCollection',
+    owner: 'content',
+    routeId: 'postCollection',
+    pathTemplate: '/collections/{collectionId}',
+    description: '跨作品合集详情与 owner 有序编排管理',
+    operationIds: <String>[
+      'GetPostCollection',
+      'GetPostCollectionManagement',
+      'SavePostCollection',
+      'DeletePostCollection',
+      'ListUserPosts',
+    ],
+  );
+
   static const AppUiSurface videoBook = AppUiSurface(
     id: 'videoBook',
     owner: 'content',
@@ -1378,6 +1393,7 @@ class AppUiSurfaces {
     addContactConfirm,
     myQrCode,
     appShell,
+    postCollection,
     videoBook,
     homeFeed,
     welcome,
@@ -1462,6 +1478,7 @@ class AppUiSurfaces {
     'addContactConfirm': addContactConfirm,
     'myQrCode': myQrCode,
     'appShell': appShell,
+    'postCollection': postCollection,
     'videoBook': videoBook,
     'homeFeed': homeFeed,
     'welcome': welcome,

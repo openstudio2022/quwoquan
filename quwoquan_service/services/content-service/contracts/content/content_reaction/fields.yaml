@@ -108,7 +108,91 @@ fields:
     api_exposure: read
     ops_exposure: read
     role: authoritative_state
+# M0 协议值类型定义，未绑定现役 operation/DTO；实现、迁移、生成与真实证据
+# 完成前不声明已可用。Post 组合读在后续单轨升级时引用本对象统计切片，
+# 不并存第二计数、不以可空字段猜测可用性，也不让 UI 本地 +1 充当权威数字。
+enums:
+  ContentReactionTargetKind:
+    values: [post, comment]
+  ContentReactionReceiptOutcome:
+    values: [committed, rejected, expired, history_unavailable]
+  ContentReactionStatisticsState:
+    values: [available, stale, unavailable]
+  ContentReactionAttachmentState:
+    values: [attached, not_applicable, unavailable]
 types:
+  ContentReactionMutationBasisClaims:
+    description: >-
+      独立用途签名的内部载荷；最长接受窗口72小时。actor 来自 verified principal，
+      可信匿名 Persona 与 device-only 分别使用真实维度，不从游客标签推导。
+      basis 仅证明目标/预期版本/期限，写前仍执行权限及目标生命周期校验。
+    fields:
+      - {name: targetKind, type: enum, enum_ref: ContentReactionTargetKind, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: targetId, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 256, classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: drop}
+      - {name: actorDimension, type: enum, enum_ref: ContentActorDimension, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: actorId, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 256, classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: drop}
+      - {name: audience, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 128, classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, description: 受管服务与环境的精确验签受众，禁止跨环境使用依据。}
+      - {name: allowedReactions, type: '[]enum', enum_ref: CommentReactionType, constraints: [NOT_NULL], max_items: 3, classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, description: Post 仅可含 none/like，Comment 可含 none/like/dislike；目标闭集仍由 owner 校验。}
+      - {name: expectedVersion, type: int64, constraints: [NOT_NULL, MIN_0], semantic_type: aggregate_version, classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: issuedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant, classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: acceptUntil, type: timestamp, constraints: [NOT_NULL], semantic_type: instant, classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+  ContentReactionMutationEvidence:
+    description: >-
+      不可变命令依据；idempotencyKey 与唯一 Idempotency-Key 同值，目标、desired reaction、
+      expectedVersion 和 basis 共同绑定请求摘要。重复发起不得更换 key 或刷新接受期限。
+      原 operation 单轨接线及 decoder 条件验证完成前不能认为本协议已生效。
+    fields:
+      - {name: idempotencyKey, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 128, classification: INTERNAL, log_policy: hash, api_exposure: read_write, ops_exposure: drop}
+      - {name: mutationBasis, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 4096, classification: SECRET, log_policy: drop, api_exposure: read_write, ops_exposure: drop}
+      - {name: expectedVersion, type: int64, constraints: [NOT_NULL, MIN_0], semantic_type: aggregate_version, classification: INTERNAL, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+  ContentReactionCommandRecoverySlice:
+    description: >-
+      同 actor-target 命令恢复结果；committed 才有 committedVersion/changed。
+      history_unavailable 不证明原命令成功，当前 reaction 查询不能冒充历史 receipt。
+      expired 必须由原写与终结的唯一 receipt 事务仲裁产生，不由客户端计时器合成。
+      receipt 留存至少覆盖72小时接受窗口和恢复余量，首期下限96小时；统计不参与命令确认。
+    fields:
+      - {name: idempotencyKey, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 128, classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: drop}
+      - {name: outcome, type: enum, enum_ref: ContentReactionReceiptOutcome, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: committedVersion, type: int64, constraints: [NULLABLE, MIN_1], semantic_type: aggregate_version, co_present_with: [changed], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: changed, type: bool, constraints: [NULLABLE], co_present_with: [committedVersion], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentReactionStatisticsSnapshot:
+    description: >-
+      一份来源可证明的 target 统计；不包含 viewer 的乐观增量。
+      generation 内 statsVersion 单调，likeCount/dislikeCount 可以因撤销而下降。
+      expiresAt 约束源绝对期限，缓存或 Redis failover 后重新填充不得续鲜。
+      Post 的 dislikeCount 为权威零，Comment 两种计数保持各自贡献闭集。
+    fields:
+      - {name: generation, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 128, classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: statsVersion, type: int64, constraints: [NOT_NULL, MIN_0], semantic_type: aggregate_version, classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: likeCount, type: int64, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: dislikeCount, type: int64, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: sourceCheckpoint, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 2048, classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: asOf, type: timestamp, constraints: [NOT_NULL], semantic_type: watermark_time, classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant, classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentReactionStatisticsSlice:
+    description: >-
+      available/stale 必须有 snapshot，unavailable 必须无 snapshot；此交叉字段条件
+      需要单轨 decoder/adapter 直接验证，类型声明本身不代表已实现。
+      新鲜度缺失、reader 故障与合法0不同；读失败不会制造 command pending。
+    fields:
+      - {name: targetKind, type: enum, enum_ref: ContentReactionTargetKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: targetId, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 256, classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: state, type: enum, enum_ref: ContentReactionStatisticsState, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: snapshot, type: ContentReactionStatisticsSnapshot, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  ContentReactionViewerAttachment:
+    description: >-
+      attached 必须有 reaction/version；not_applicable 或 unavailable 两者均不得伪造 false/none。
+      拿不到 actor 或查询失败不能清除端侧 pending；写与读按同一 verified actor 解析。
+      普通公开 GraphQL 可以 not_applicable，个性化组合必须读取此 actor-scoped slice。
+    fields:
+      - {name: targetKind, type: enum, enum_ref: ContentReactionTargetKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: targetId, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 256, classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: state, type: enum, enum_ref: ContentReactionAttachmentState, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: reaction, type: enum, enum_ref: CommentReactionType, constraints: [NULLABLE], co_present_with: [version], classification: PRIVATE, log_policy: drop, api_exposure: read, ops_exposure: drop}
+      - {name: version, type: int64, constraints: [NULLABLE, MIN_0], semantic_type: aggregate_version, co_present_with: [reaction], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: mutationBasis, type: string, constraints: [NULLABLE], max_utf8_bytes: 4096, classification: SECRET, log_policy: drop, api_exposure: read, ops_exposure: drop}
   ContentReactionCommandResult:
     description: Post reaction mutation result returned by the ContentReaction aggregate facade.
     fields:

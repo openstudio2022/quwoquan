@@ -51,11 +51,14 @@
 - 四环境证据只认既有四环境证据产物，查不到即为空并由 missing 暴露，不得编造。
 
 <a id="req-004"></a>
-### REQ-004 operation 商用状态与对象 readiness stage 是两条独立轴
+### REQ-004 operation 实现就绪、对象 stage 与环境发布资格分别裁决
 
-- operation 级 `commercial.status` 是对象级 `commercial-ready` stage 的输入，对象 stage 不得反过来成为 operation 状态的前提。
-- 对象 stage 派生把「该对象全部 operation 均为 ready」当作输入之一，若 operation 的 ready 判定再依赖对象 stage 或环境证据，判定即成环并永远无法收敛。
-- operation 的 ready 只由该 operation 自身的实现与运行依据决定，四环境与用户验收依据只影响对象 stage。
+- operation 级 `commercial.status: ready` 只表示该 operation 自身的正式实现、认证授权、协议、恢复、持久化及其真实运行依据满足当前要求；文件存在、编译或测试替身通过均不足以声明。它是对象级 `commercial-ready` stage 的输入，不是对象、App/UAT、环境或发布资格。
+- 对象 stage 按当前结构与 runner 结果派生；静态最高 `implemented`，不得人工填写 commercial-ready。对象 stage、四环境全量闭环或 release admission 不得反过来成为 operation 实现就绪的前提，避免循环；该 operation 自身要求的真实 Provider/持久化运行证据仍必须满足。
+- 环境、App/API/UAT、设备、Provider、签名制品与 release 继续按同一候选分别裁决。缺少其中 required 结果时对应对象 stage 或准入保持未就绪，不得由 operation ready 自动补齐、继承或提升。
+- blocked operation 先经现役受保护 owner 内部入口取得实现运行证据，身份、scope、ownership、deadline 与失败语义不减；测试私有 Source/临时 fixture 可构造 ready 输入验证真实 authoring、生成器与生产 validator 的组合，但不得修改真实 commercial 状态，不得进入生产依赖图、package/activation 或真实 runtime/release 准出证据。生产 generator 与外边界对真实 blocked 仍拒绝。
+- 完成 operation conformance 后由其唯一 targetStory owner 逐项裁决 ready，再从真实 ContractGraph 正式生成并重跑 exact registry/owner/授权组合验证；后一步失败即阻断交付，不能用私有 fixture 通过替代。旧 REST/Mongo 结果只能证明对应底层能力，不能计作新 GraphQL 链通过。
+- 本规则不批量提升存量 blocked。已有环境/UAT 类 gap 必须由其 targetStory owner 显式分类并保留等强准出约束后逐项裁决；不得撤销旧 gap、改 baseline 或新增第二 registry 来绕过证据。缺口归属与迁移见 [商用闭环 REQ-009](../../system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#req-009)。
 
 <a id="req-005"></a>
 ### REQ-005 结构性证据与结果证据必须分开命名且不可互相顶替
@@ -155,6 +158,15 @@
 - AND 可直接调用的稳定脚本入口在第一次仓内 import 之前自行抑制字节码写入，因此绕过 Make 直接运行任一入口都不会把 `__pycache__` 写进源码树；缺该守卫即阻断，使缓存禁令不依赖调用方是否记得设环境变量。
 - AND acceptance runner、generator 与被 import 的 lib 不被误判为可自动删除的 orphan；orphan 候选只报告、不自动删除。
 
+<a id="gwt-005"></a>
+### GWT-005 operation 内部取证不提升对象与发布资格
+
+- GIVEN 真实合同中的 operation 仍 blocked，owner 内部正式实现与受保护入口已就位，且对象/环境/App/UAT/release 仍缺当前结果。
+- WHEN 经真实 command 构造前置并执行 owner 内部 conformance，同时在测试私有 Source 中用真实 authoring 验证 ready 输入的生成与生产 validator 组合。
+- THEN 内部请求仍强制身份、scope、ownership、deadline；生产 generator 与外边界用真实 blocked descriptor 拒绝，测试 fixture、输出和 receipt 不可成为 package/activation 或真实 runtime/release 准出输入。
+- AND owner 只在自身 conformance 齐备且其他 gap 的等强准出约束仍在时逐 operation 裁决 ready；正式生成后的 exact registry/owner/授权组合须重新验证，失败阻断交付，旧 REST/Mongo 或私有 fixture 通过不能顶替。
+- AND 对象静态 stage 不超过 implemented，缺当前 required 环境/App/UAT/release 证据时各自资格仍未就绪；其他 blocked operation 不被批量翻牌。
+
 ## 6. 依赖
 
 - 前置要求：[`runtime-control-plane-foundation`](../spec.md) 的范围、要求与 SIT。
@@ -182,3 +194,13 @@
 - 缺上述执行链时，调用方仍只能在「把入口声明或调用方自报 digest 当回执用」和「让全部对象停在 `implemented`」之间二选一；前者违反本节点红线，后者是当前必须保留的诚实结果。
 - 关闭方式是由对象合同声明 case，可信 runner 只在真实断言后输出结果，并由 evaluator 从 canonical package/activation manifest 解析当前候选摘要、复算 receipt bytes 后消费；case、runner、snapshot authority、receipt 与 stage 消费缺一不可。
 - 完成判定：`GWT-003` 的 2 条 THEN 组全部具备子句级 `spec_ref`（`gwt-003.t1..t2`）绑定的真实测试或可执行门证据，且 receipt 必须由 evaluator 从 canonical snapshot authority 复算 bytes 后消费，调用方自报 digest 不计。
+
+<a id="open-003"></a>
+### OPEN-003 三轴就绪与私有取证隔离尚缺直接运行证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：REQ-004 已统一 operation、对象与发布资格，但尚缺 blocked 内部真实取证、生产生成/外边界拒绝、私有 ready Source 不可进入发布证据及逐 operation 正式生成后复验的直接结果。规格冻结不代表这些行为已经验证。
+- 完成判定：`GWT-005` 全部结果由真实 local_contract/api_integration 或可执行门的 `spec_ref` 绑定；fixture 与正式结果分别命名，且不批量提升存量 blocked 或放宽任何 required release 门。
+- 边界：本 OPEN 只拥有资格分轴与证据隔离；合集功能、身份委托实现及其真实 UAT/环境缺口继续由对应业务 owner 的最低可关闭节点拥有。

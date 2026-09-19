@@ -194,17 +194,8 @@ func collectSourceDigests(catalog *ast.Catalog, metadataDir string, errs *[]erro
 			return nil
 		}
 		switch strings.ToLower(filepath.Ext(entry.Name())) {
-		case ".yaml", ".yml", ".json":
+		case ".yaml", ".yml", ".json", ".graphql":
 			addSourceDocument(catalog, metadataDir, path, errs)
-		case ".graphql":
-			data, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			digest := sha256.Sum256(data)
-			catalog.Sources = append(catalog.Sources, ast.SourceDigest{
-				Path: relativePath(metadataDir, path), SHA256: hex.EncodeToString(digest[:]),
-			})
 		}
 		return nil
 	})
@@ -818,19 +809,27 @@ func addSourceDocument(catalog *ast.Catalog, root, path string, errs *[]error) {
 		strings.Contains("/"+relative+"/", "/test_fixtures/") {
 		return
 	}
-	var value any
-	if err := yaml.Unmarshal(data, &value); err != nil {
-		*errs = append(*errs, fmt.Errorf("%s: parse source document: %w", path, err))
-		return
-	}
-	content, err := json.Marshal(value)
+	content, err := json.Marshal(string(data))
 	if err != nil {
-		*errs = append(*errs, fmt.Errorf("%s: normalize source document: %w", path, err))
+		*errs = append(*errs, fmt.Errorf("%s: encode source document: %w", path, err))
 		return
 	}
-	mediaType := "application/yaml"
-	if strings.EqualFold(filepath.Ext(path), ".json") {
-		mediaType = "application/json"
+	mediaType := "application/graphql"
+	if !strings.EqualFold(filepath.Ext(path), ".graphql") {
+		var value any
+		if err := yaml.Unmarshal(data, &value); err != nil {
+			*errs = append(*errs, fmt.Errorf("%s: parse source document: %w", path, err))
+			return
+		}
+		content, err = json.Marshal(value)
+		if err != nil {
+			*errs = append(*errs, fmt.Errorf("%s: normalize source document: %w", path, err))
+			return
+		}
+		mediaType = "application/yaml"
+		if strings.EqualFold(filepath.Ext(path), ".json") {
+			mediaType = "application/json"
+		}
 	}
 	catalog.Documents = append(catalog.Documents, ast.SourceDocument{
 		Path: relative, SHA256: digest, MediaType: mediaType, Content: content,

@@ -120,6 +120,9 @@ timeouts:
     # user-service api_integration（credential_binding 单包 ~265s）整包实测 ~356s；
     # accept 20260911T012627Z 在 focused 默认 300s 被 SIGTERM，断言尚未跑完。
     focused:go:user-service: 600
+    # 全量 App local_contract（3800+ cases / 5min 仍在跑 RTC）在 focused 默认 300s
+    # 被 SIGTERM；scope 上限 1800s，用满以免再被相位默认掐断。
+    focused:dart: 1800
     scope_build:app-compile-ios-simulator: 900
     scope_build:app-package-smoke: 900
   resolution_order: [check, phase, level, default]

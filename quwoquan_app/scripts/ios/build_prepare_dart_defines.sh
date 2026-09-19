@@ -5,20 +5,27 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 STACKCTL_PYTHON_RESOLVER="$APP_DIR/scripts/ios/build_resolve_stackctl_python.sh"
 TRUST_BLOCKER="APP.LAUNCH.runtime_config_trust_missing"
 
-case "${CONFIGURATION:-}" in
-  Debug-nonprod) BUILD_PROFILE="nonprod"; BUILD_MODE="debug" ;;
-  Profile-nonprod) BUILD_PROFILE="nonprod"; BUILD_MODE="profile" ;;
-  Release-nonprod) BUILD_PROFILE="nonprod"; BUILD_MODE="release" ;;
-  Release-prod) BUILD_PROFILE="prod"; BUILD_MODE="release" ;;
-  Debug-prod|Profile-prod)
-    echo "[ios-runtime-config] GATE_BLOCK: prod AppArtifact supports Release-prod only; Debug and Profile use Debug-nonprod/Profile-nonprod." >&2
-    exit 2
-    ;;
-  *)
-    echo "[ios-runtime-config] GATE_BLOCK: iOS configuration must be Debug-nonprod, Profile-nonprod, Release-nonprod, or Release-prod." >&2
-    exit 2
-    ;;
-esac
+RUNTIME_PYTHON="$(bash "$STACKCTL_PYTHON_RESOLVER")" || exit 2
+IDENTITY_EXPORTS="$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$APP_DIR/..${PYTHONPATH:+:$PYTHONPATH}" \
+  "$RUNTIME_PYTHON" - "${CONFIGURATION:-}" <<'PY'
+import shlex
+import sys
+from quwoquan_ops.cli.lib.app_identity import resolve_ios_configuration
+try:
+    identity = resolve_ios_configuration(sys.argv[1])
+except ValueError as error:
+    raise SystemExit(f"[ios-runtime-config] GATE_BLOCK: {error}")
+for key, value in {"BUILD_PROFILE": identity.build_profile, "BUILD_MODE": identity.build_mode,
+                   "BUILD_ENVIRONMENT": identity.environment or "",
+                   "EXPECTED_BUNDLE_ID": identity.application_id}.items():
+    print(key + "=" + shlex.quote(value))
+PY
+)" || exit 2
+eval "$IDENTITY_EXPORTS"
+if [[ -n "$BUILD_ENVIRONMENT" && -n "${QWQ_APP_RUNTIME_ENV:-}" && "$QWQ_APP_RUNTIME_ENV" != "$BUILD_ENVIRONMENT" ]]; then
+  echo "[ios-runtime-config] GATE_BLOCK: generated environment conflicts with configuration." >&2
+  exit 2
+fi
 
 if [[ -z "${QWQ_APP_BUILD_PROFILE:-}" ]]; then
   echo "[ios-runtime-config] GATE_BLOCK: generated build-profile identity is missing." >&2
@@ -31,7 +38,7 @@ fi
 
 # trust 是 AppArtifact 的第一道制品门：先于 Flutter backend 与任何编译动作判否，确保
 # raw Xcode 也得到与 canonical executor 相同的 typed blocker。
-# Debug-nonprod 构建期自供给（REQ-003 build_time_self_supply）：无外部 canonical handoff
+# Debug-alpha 构建期自供给（REQ-003 build_time_self_supply）：无外部 canonical handoff
 # 时，以当前源码树（SRCROOT 推导的 APP_DIR，不读任何用户级配置）调用仓内 canonical
 # handoff builder 签发独立 Alpha offline bootstrap + nonprod trust，并以激活请求形态嵌入
 # 制品；Profile/Release 与 prod 仍 fail-closed。
@@ -49,11 +56,6 @@ if [[ -z "${TARGET_BUILD_DIR:-}" || -z "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" 
   exit 2
 fi
 
-RUNTIME_PYTHON="$(bash "$STACKCTL_PYTHON_RESOLVER")" || {
-  echo "[ios-runtime-config] GATE_BLOCK: build requires Python 3.10+ with PyYAML." >&2
-  exit 2
-}
-
 # Flutter 有时传 absolute target；只按同一 App 根归一，不按 ambient 环境猜测。
 NORMALIZED_FLUTTER_TARGET="$($RUNTIME_PYTHON - "$APP_DIR" "${FLUTTER_TARGET:-lib/main.dart}" <<'PY'
 from pathlib import Path
@@ -65,7 +67,7 @@ if not target.is_absolute():
 print(target.resolve().relative_to(app).as_posix())
 PY
 )" || exit 2
-if [[ -z "$RUNTIME_TRUST_PATH" && "${CONFIGURATION:-}" == "Debug-nonprod" \
+if [[ -z "$RUNTIME_TRUST_PATH" && "${CONFIGURATION:-}" == "Debug-alpha" \
    && ( "$NORMALIZED_FLUTTER_TARGET" == "lib/main.dart" || "$NORMALIZED_FLUTTER_TARGET" == "lib/main_alpha.dart" ) ]]; then
   SELF_SUPPLY_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/qwq-ios-self-supply.XXXXXX")"
   chmod 0700 "$SELF_SUPPLY_ROOT"
@@ -77,7 +79,7 @@ if [[ -z "$RUNTIME_TRUST_PATH" && "${CONFIGURATION:-}" == "Debug-nonprod" \
         --trust-output "$RUNTIME_TRUST_PATH" \
         --request-output "$SELF_SUPPLY_REQUEST_PATH"
   )"; then
-    echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: Debug-nonprod build-time self supply failed (see the typed blocker above)." >&2
+    echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: Debug-alpha build-time self supply failed (see the typed blocker above)." >&2
     exit 2
   fi
   echo "[ios-runtime-config] runtimeConfigSupplyMode=build_time_self_supply $(printf '%s' "$SELF_SUPPLY_SUMMARY" | "$RUNTIME_PYTHON" -c 'import json,sys; d=json.load(sys.stdin); print("requestDigest="+d["requestDigest"], "packageDigest="+d["packageDigest"])')" >&2
@@ -88,7 +90,7 @@ if [[ -z "$RUNTIME_TRUST_PATH" ]]; then
   exit 2
 fi
 
-VALIDATION_EXPORTS="$($RUNTIME_PYTHON - "${DART_DEFINES:-}" "${FLUTTER_TARGET:-}" "$APP_DIR" <<'PY'
+VALIDATION_EXPORTS="$($RUNTIME_PYTHON - "${DART_DEFINES:-}" "${FLUTTER_TARGET:-}" "$APP_DIR" "$BUILD_ENVIRONMENT" "$BUILD_MODE" "$BUILD_PROFILE" <<'PY'
 import base64
 import shlex
 import sys
@@ -137,13 +139,23 @@ if decoded_defines.get("RUN_PATROL_ACCEPTANCE", "").strip().lower() == "true":
 app_dir = Path(sys.argv[3]).resolve()
 sys.path.insert(0, str(app_dir.parent))
 from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
-mapping = load_launch_manifest_contract()["content_source_entrypoints"]
-requested = sys.argv[2].strip() or "lib/main.dart"
+contract = load_launch_manifest_contract()
+mapping = contract["content_source_entrypoints"]
+environment, mode = sys.argv[4:6]
+expected = mapping[contract["content_source_policy"][environment]] if environment else None
+if mode == "release" and sys.argv[6] == "prod":
+    expected = mapping[contract["content_source_policy"]["prod"]]
+requested = sys.argv[2].strip()
+if mode == "profile" and not requested:
+    raise SystemExit("Profile requires explicit FLUTTER_TARGET")
+requested = requested or expected or "lib/main.dart"
 requested_path = Path(requested)
 if not requested_path.is_absolute():
     requested_path = app_dir / requested_path
 if requested_path.resolve() == (app_dir / "lib/main.dart").resolve():
-    requested_path = app_dir / mapping["bundled_snapshot"]
+    requested_path = app_dir / (expected or mapping["bundled_snapshot"])
+if expected and requested_path.resolve() != (app_dir / expected).resolve():
+    raise SystemExit("FLUTTER_TARGET conflicts with canonical environment content source")
 allowed = {(app_dir / value).resolve(): value for value in mapping.values()}
 if requested_path.resolve() not in allowed:
     raise SystemExit("FLUTTER_TARGET must match canonical source entrypoint")
@@ -157,15 +169,6 @@ PY
 eval "$VALIDATION_EXPORTS"
 
 if [[ -n "${PRODUCT_BUNDLE_IDENTIFIER:-}" ]]; then
-  EXPECTED_BUNDLE_ID="$({
-    PYTHONPATH="$APP_DIR/..${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
-      "$RUNTIME_PYTHON" -c \
-      "from quwoquan_ops.cli.lib.app_identity import resolve_app_identity; import sys; print(resolve_app_identity(platform='ios', build_profile=sys.argv[1], build_mode=sys.argv[2]).application_id)" \
-      "$BUILD_PROFILE" "$BUILD_MODE"
-  })" || {
-    echo "[ios-runtime-config] GATE_BLOCK: failed to derive build-product bundle identity." >&2
-    exit 2
-  }
   if [[ "$PRODUCT_BUNDLE_IDENTIFIER" != "$EXPECTED_BUNDLE_ID" ]]; then
     echo "[ios-runtime-config] GATE_BLOCK: bundle id $PRODUCT_BUNDLE_IDENTIFIER does not match $EXPECTED_BUNDLE_ID for ios-${BUILD_PROFILE}-app." >&2
     exit 2
@@ -182,7 +185,7 @@ if [[ -n "${QWQ_APP_RUNTIME_TRUSTED_PUBLIC_KEYS_JSON:-}" ]]; then
 fi
 
 # trust 嵌入与 Patrol UAT test host 共用同一份实现，宿主与生产因此受同一组判否约束。
-# 嵌 trust envelope；Debug-nonprod 自供给时另嵌激活请求。可读 runtime package 不进入 Runner.app。
+# 嵌 trust envelope；Debug-alpha 自供给时另嵌激活请求。可读 runtime package 不进入 Runner.app。
 EMBED_ARGUMENTS=(
   "$RUNTIME_TRUST_PATH" "$BUILD_PROFILE"
   "$TARGET_BUILD_DIR" "$UNLOCALIZED_RESOURCES_FOLDER_PATH"

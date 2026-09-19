@@ -23,6 +23,26 @@ SPEC.loader.exec_module(atomic)
 
 
 class CloudContractHandoffAtomicTest(unittest.TestCase):
+    def test_preview_only_never_accepts_even_without_breaking(self) -> None:
+        # spec_ref: specs/feature-tree/gateway-orchestrator-foundation/spec.md#dom-001
+        for changes in ([], [{"kind": "changed"}]):
+            with tempfile.TemporaryDirectory() as directory:
+                lock = Path(directory) / "lock.json"
+                lock.write_text("{}", encoding="utf-8")
+                with (
+                    mock.patch.object(sys, "argv", ["atomic", "--preview-only", "--max-attempts", "1"]),
+                    mock.patch.object(atomic, "CANONICAL_LOCK", lock),
+                    mock.patch.object(atomic, "tree_is_quiet", return_value=True),
+                    mock.patch.object(atomic, "rebuild_graph", return_value=True),
+                    mock.patch.object(atomic, "preview_breaking", return_value=(True, changes)),
+                    mock.patch.object(atomic, "accept_lock") as accept,
+                    mock.patch.object(atomic, "codegen_app") as generate,
+                ):
+                    self.assertEqual(atomic.main(), atomic.EXIT_OK)
+                    accept.assert_not_called()
+                    generate.assert_not_called()
+                    self.assertEqual(lock.read_text(), "{}")
+
     def test_breaking_preview_exit_is_a_successful_review_handoff(self) -> None:
         breaking = [
             {

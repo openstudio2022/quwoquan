@@ -881,6 +881,8 @@ func AuthorPostProjection() bson.D {
 		{Key: "locationName", Value: 1},
 		{Key: "geoTagRef", Value: 1},
 		{Key: "primaryHomepageId", Value: 1},
+		{Key: "primaryHomepageType", Value: 1},
+		{Key: "gatheringRef", Value: 1},
 		{Key: "canonicalEntityId", Value: 1},
 		{Key: "status", Value: 1},
 		{Key: "visibility", Value: 1},

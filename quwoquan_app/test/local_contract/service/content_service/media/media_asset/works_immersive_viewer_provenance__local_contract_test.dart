@@ -169,7 +169,7 @@ WorksImmersiveViewer _viewer(
         if (gatheringRef.isNotEmpty) 'gatheringRef': gatheringRef,
       }),
     },
-    onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+    onUserTap: (_, {avatarUrl, avatarAssetId, avatarAccessMode, displayName, backgroundUrl}) {},
     onAssistantTap: () {},
   );
 }

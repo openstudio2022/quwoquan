@@ -9,6 +9,7 @@ from typing import Any
 from .dependency_bundle import (
     APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA,
     APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA,
+    dependency_active_pointer_name,
     dependency_components_for_platforms,
 )
 from .pub_cache_capsule import _canonical_bytes, _digest_bytes
@@ -56,8 +57,8 @@ def publish_dependency_bundle_activation(
     component_payload = {
         name: dict(components[name]) for name in expected_components
     }
-    selected_active_path = active_path or active_base / (
-        f"active-{platforms[0]}.json" if len(platforms) == 1 else "active.json"
+    selected_active_path = active_path or (
+        active_base / dependency_active_pointer_name(platforms)
     )
     if selected_active_path.parent != active_base:
         raise ValueError("APP.DEPENDENCY.active_pointer_path_unsafe")

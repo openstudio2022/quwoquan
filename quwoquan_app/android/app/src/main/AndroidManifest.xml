@@ -30,6 +30,7 @@
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".StartupGateActivity"
+            android:screenOrientation="portrait"
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme">
@@ -40,6 +41,7 @@
         </activity>
         <activity
             android:name=".MainActivity"
+            android:screenOrientation="portrait"
             android:exported="false"
             android:launchMode="singleTop"
             android:theme="@style/NormalTheme"
@@ -54,6 +56,7 @@
         <!-- 微信回调按 applicationId 约定使用全限定名，与 Java namespace 分离。 -->
         <activity
             android:name="com.leadwise.quwoquan.wxapi.WXEntryActivity"
+            android:screenOrientation="behind"
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />

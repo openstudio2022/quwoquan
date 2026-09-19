@@ -39,6 +39,9 @@
 
 - 所有最小 gate 通过，且高置信退役路径无活动源码引用。
 - schema/contract 退出必须在同一变更中使 authority、生产 reader/writer、配置实例、生成物和旧协议测试归零，并把旧路径/身份交给现有反向退役门；工具不自动删除。保留的非 supporting schema 必须有生产 consumer，supporting schema 必须从现役根经 `$ref` 可达。任何无绑定、悬空、重复身份或动态未知都保持门禁失败，不建立候选 inventory、不分批处理，也不以 OPEN 放行。
+- 受治理的一次性 schema 重物化不是普通运行时兼容 reader。边界身份只由 `quwoquan_ops/policies/gates/governed_schema_migration_boundaries.json` 声明；其 command、专用 handler、输入 schema 闭包、current writer/reader 与不同输出 identity 必须由实际 Python AST/import/call 和 JSON Schema 引用机械核对，声明本身不授予放行。
+- 输入闭包不得被普通 reader、其它 CLI 分支或 current schema 引用；新输出必须经 current writer/validator/readback 且拒绝复用 source identity。无法静态证明、动态逃逸或边界漂移均 fail closed。只有已验证边界中的身份定义、引用和对应 schema 字面量可认可；不按目录、文件名、术语或整个函数体豁免，不放过迁移实现中的无关 compatibility 标识。
+- 静态边界证据只证明代码隔离，不替代 Data owning spec 的 authority、原件不可变、fresh pool readback、双根 terminal 或真实执行验收。
 
 <a id="req-003"></a>
 ### REQ-003 可再生产输出与工作区目录边界
@@ -61,6 +64,7 @@
 - canonical：`quwoquan_ops/gate/verify_media_delivery_contract.py`
 - canonical：`quwoquan_ops/policies/lane_ownership.yaml`
 - canonical：`quwoquan_ops/policies/worktree_policy.yaml`
+- canonical：`quwoquan_ops/policies/gates/governed_schema_migration_boundaries.json`
 
 ## 5. 验收场景
 
@@ -87,6 +91,20 @@
 - THEN App 不打包无消费者配置，已清零语义基线不可通过 update-baseline 回流。
 - THEN tracked 多根 `quwoquan-workspace.code-workspace` 不存在，README/AGENTS 明示一 worktree 一 Cursor workspace，bare hub 不被当作源码或脏工作树。
 - THEN 契约闭包中每个现役 authority 都有生产 consumer 或从生产根可达，每个生产 consumer 都反向解析到唯一 authority；原子退役同批清除双向边并由旧路径/身份反向门阻止回流，任一未裁决项直接失败。
+
+<a id="gwt-003"></a>
+### GWT-003 受治理迁移边界与普通读侧隔离
+
+- GIVEN 显式迁移 command、专用 handler、封闭旧 schema 输入、current 输出和 owning spec 均已声明。
+- WHEN 退役扫描解析实际 CLI、Python AST/import/call 与 schema 引用。
+<a id="gwt-003.t1"></a>
+- THEN 合法闭包中的迁移身份通过。
+<a id="gwt-003.t2"></a>
+- THEN 普通 runtime 的旧标识与迁移文件内无关旧标识仍被拒绝。
+<a id="gwt-003.t3"></a>
+- THEN 普通 reader 直接或别名 import 迁移实现、引用旧 schema、current schema 引用旧闭包、扩大旧输入闭包、把迁移 handler 绑定到普通 CLI，以及 Data scripts 内无法证明目标或前缀的开放 import_module，均被阻断。
+<a id="gwt-003.t4"></a>
+- THEN 移除 current 输出校验/readback、复用 source identity、取消 governed call、声明漂移或不可解析边界均阻断。静态通过不证明真实迁移成功。
 
 ## 6. 依赖
 

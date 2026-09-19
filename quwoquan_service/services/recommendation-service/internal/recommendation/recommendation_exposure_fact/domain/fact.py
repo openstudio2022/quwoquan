@@ -48,6 +48,7 @@ class ExposureFact:
     feature_snapshot_at: datetime
     feature_snapshot_digest: str
     ranking_snapshot_digest: str
+    policy_digest: str
     user_feature_snapshot: Mapping[str, Any]
     item_feature_snapshot: Mapping[str, Any]
     exposed_at: datetime
@@ -68,6 +69,7 @@ class ExposureFact:
             self.model_bucket,
             self.feature_snapshot_digest,
             self.ranking_snapshot_digest,
+            self.policy_digest,
         )
         if not all(value.strip() for value in required):
             raise ValueError("recommendation exposure fact is incomplete")
@@ -89,6 +91,12 @@ class ExposureFact:
         for digest in (self.feature_snapshot_digest, self.ranking_snapshot_digest):
             if len(digest) != 64 or any(value not in "0123456789abcdef" for value in digest):
                 raise ValueError("recommendation exposure digest must be canonical SHA-256")
+        if (
+            not self.policy_digest.startswith("sha256:")
+            or len(self.policy_digest) != 71
+            or any(value not in "0123456789abcdef" for value in self.policy_digest[7:])
+        ):
+            raise ValueError("recommendation exposure policyDigest must be canonical SHA-256")
         timestamps = (self.feature_snapshot_at, self.exposed_at, self.recorded_at)
         if any(value.tzinfo is None for value in timestamps):
             raise ValueError("recommendation exposure timestamps must be timezone-aware")

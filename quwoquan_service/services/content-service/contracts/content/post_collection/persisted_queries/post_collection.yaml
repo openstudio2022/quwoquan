@@ -1,0 +1,25 @@
+schema: qwq.object-owned-internal-persisted-graphql
+canonicalOperationId: content.post_collection.GetPostCollection
+objectId: content.post_collection
+document: post_collection.graphql
+operationName: PostCollection
+operationType: query
+sha256Hash: aabadb9772a276ea6c2837d0b04508e7fcbb1d8be5d6194e01ba837a6dee0f5a
+runtimeRequest:
+  method: POST
+  path: /internal/graphql
+  contentType: application/json
+  queryText: forbidden
+  onlineRegistration: forbidden
+  mutation: forbidden
+  contractGraphHeader: X-Contract-Graph-SHA256
+  trustedServicePrincipal: {subject: 'service:api-edge', scope: content.post_collection.graphql.read}
+  grantHeader: X-Collection-Query-Grant
+  surfaceHeader: X-Client-Surface
+  requestIdentityHeader: X-Request-ID
+variables:
+  required: [collectionId, first]
+  generatedDefaults: {first: 20}
+  bindings: {collectionId: collectionId, first: limit, after: cursor}
+  additionalProperties: false
+response: {rootField: postCollection}

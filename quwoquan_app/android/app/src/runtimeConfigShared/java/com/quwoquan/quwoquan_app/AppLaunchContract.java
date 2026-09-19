@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class AppLaunchContract {
-  public static final String SOURCE_DIGEST = "sha256:bf5adb5a1aba571c8f69657beb1f786b0ed12f40bbc1f921caeba37aed005f0b";
+  public static final String SOURCE_DIGEST = "sha256:bbedc25e6bb4087b226ce50e11c33ddb1ff70cc0237d66a0e8e320c67e4b9c92";
   public static final List<String> ENVIRONMENTS = Collections.unmodifiableList(Arrays.asList(
       "alpha",
       "beta",
@@ -172,7 +172,15 @@ public final class AppLaunchContract {
       {"app_launch_attempt", "app-launch-attempt"},
       {"app_launcher_handoff", "app-launcher-handoff"},
       {"app_managed_preparation", "quwoquan_ops.app_managed_preparation.v1"},
+      {"external_uat_broker_query", "external-uat-broker-query"},
+      {"external_uat_broker_result", "external-uat-broker-result"},
+      {"external_uat_comparison_result", "external-uat-comparison-result"},
+      {"external_uat_managed_launch_admission", "external-uat-managed-launch-admission"},
+      {"external_uat_sealed_snapshot", "external-uat-sealed-snapshot"},
+      {"external_uat_teardown_receipt", "external-uat-teardown-receipt"},
+      {"external_uat_terminal_result", "external-uat-terminal-result"},
       {"offline_bootstrap_document", "app-offline-bootstrap-document"},
+      {"rehearsal_storage_observation", "rehearsal-storage-observation"},
       {"runtime_config_activation_receipt", "app-runtime-config-activation-receipt"},
       {"runtime_config_activation_request", "app-runtime-config-activation-request"},
       {"runtime_config_package", "app-runtime-config-package"},
@@ -273,6 +281,108 @@ public final class AppLaunchContract {
       "status",
       "firstBlocker"
   ));
+  public static final List<String> EXTERNAL_UAT_BROKER_QUERY_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
+      "schema",
+      "contractDigest",
+      "admissionDigest",
+      "terminalDigest",
+      "caseId",
+      "launchAttemptId",
+      "generation",
+      "observationBinding",
+      "processId",
+      "deviceId",
+      "sessionId",
+      "sequence",
+      "challenge",
+      "mac"
+  ));
+  public static final List<String> EXTERNAL_UAT_BROKER_RESULT_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
+      "schema",
+      "status",
+      "admissionDigest",
+      "terminalDigest",
+      "snapshot",
+      "snapshotDigest",
+      "consumed",
+      "revoked",
+      "errorCode",
+      "resultDigest"
+  ));
+  public static final List<String> EXTERNAL_UAT_COMPARISON_RESULT_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
+      "schema",
+      "caseId",
+      "admissionDigest",
+      "terminalDigest",
+      "brokerResultDigest",
+      "expectedDigest",
+      "status",
+      "nonPromotable",
+      "comparisonDigest",
+      "errorCode"
+  ));
+  public static final List<String> EXTERNAL_UAT_MANAGED_LAUNCH_ADMISSION_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
+      "schema",
+      "contractDigest",
+      "candidateDigest",
+      "artifactDigest",
+      "packageIdentity",
+      "signingDigest",
+      "platform",
+      "deviceId",
+      "sessionId",
+      "caseId",
+      "launchAttemptId",
+      "generation",
+      "observationBinding",
+      "processId",
+      "lifecycleReceiptDigest",
+      "admittedAtMonotonicMs",
+      "expiresAtMonotonicMs",
+      "admissionDigest"
+  ));
+  public static final List<String> EXTERNAL_UAT_SEALED_SNAPSHOT_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
+      "schema",
+      "caseId",
+      "launchAttemptId",
+      "generation",
+      "observationBinding",
+      "processId",
+      "snapshotDigest",
+      "observations",
+      "sealedAtMonotonicMs"
+  ));
+  public static final List<String> EXTERNAL_UAT_TEARDOWN_RECEIPT_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
+      "schema",
+      "transactionId",
+      "admissionDigest",
+      "launchAttemptId",
+      "generation",
+      "processId",
+      "state",
+      "predecessorResultDigest",
+      "requestedAtMonotonicMs",
+      "terminatedAtMonotonicMs",
+      "processTableConfirmed",
+      "lifecycleConfirmed",
+      "brokerDisconnected",
+      "receiptDigest",
+      "errorCode"
+  ));
+  public static final List<String> EXTERNAL_UAT_TERMINAL_RESULT_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
+      "schema",
+      "planDigest",
+      "caseId",
+      "launchAttemptId",
+      "generation",
+      "processId",
+      "deviceId",
+      "sessionId",
+      "status",
+      "screenshotDigest",
+      "terminalDigest",
+      "terminalRef"
+  ));
   public static final List<String> OFFLINE_BOOTSTRAP_DOCUMENT_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
       "schema",
       "environment",
@@ -280,6 +390,7 @@ public final class AppLaunchContract {
       "target",
       "launchPolicy",
       "contentSource",
+      "rehearsalSpace",
       "sourceGitSha",
       "sourceTreeDigest",
       "trustEnvelopeDigest",
@@ -289,6 +400,15 @@ public final class AppLaunchContract {
       "signatureKeyId",
       "trustedPublicKeys",
       "signature"
+  ));
+  public static final List<String> REHEARSAL_STORAGE_OBSERVATION_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
+      "schema",
+      "status",
+      "configurationState",
+      "startupAttemptId",
+      "generation",
+      "bindingDigest",
+      "consumers"
   ));
   public static final List<String> RUNTIME_CONFIG_ACTIVATION_RECEIPT_REQUIRED_FIELDS = Collections.unmodifiableList(Arrays.asList(
       "schema",
@@ -420,5 +540,7 @@ public final class AppLaunchContract {
     return Collections.unmodifiableMap(values);
   }
 
+  public static final String REHEARSAL_STORAGE_OBSERVATION_CHANNEL = "quwoquan/startup/timings";
+  public static final String REHEARSAL_STORAGE_OBSERVATION_METHOD = "readRehearsalStorageObservation";
   private AppLaunchContract() {}
 }

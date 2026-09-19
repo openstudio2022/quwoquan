@@ -4,9 +4,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
+import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+
+import '../../../support/runtime/cloud_boundary_test_scope.dart';
 
 Widget _wrap(Widget child) {
   return ProviderScope(
+    overrides: [
+      ...sealedCloudBoundaryOverrides(),
+      publicMediaDeliveryProvider.overrideWithValue(
+        RemotePublicMediaDelivery(_mediaEndpoints),
+      ),
+    ],
     child: CupertinoApp(
       home: CupertinoPageScaffold(child: Center(child: child)),
     ),
@@ -22,34 +31,34 @@ final _mediaEndpoints = MediaEndpointConfig(
 
 void main() {
   group('RoundedSquareAvatar', () {
-    testWidgets('resolves relative media avatar paths before cached avatar load', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        _wrap(
-          RoundedSquareAvatar(
-            size: 48,
-            imageUrl:
-                '/media/avatar/s/archived-avatar/default/group/v1/default.png',
-            name: '契约群',
-            mediaEndpointConfig: _mediaEndpoints,
+    testWidgets(
+      'passes raw relative avatar reference with explicit avatar kind',
+      (tester) async {
+        await tester.pumpWidget(
+          _wrap(
+            RoundedSquareAvatar(
+              size: 48,
+              imageUrl: '/media/avatar/s/archived-avatar/default/group/v1/default.png',
+              name: '契约群',
+            ),
           ),
-        ),
-      );
+        );
 
-      final image = tester.widget<AppCachedNetworkImage>(
-        find.byType(AppCachedNetworkImage),
-      );
-      final candidates = image.imageUrlCandidates ?? const <String>[];
-      expect(image.cdnPreset, CdnImagePreset.avatar);
-      final expected =
-          'https://cdn.example.test/media/avatar/s/archived-avatar/default/group/v1/default.png';
-      expect(image.imageUrl, expected);
-      expect(candidates, <String>[expected]);
-      expect(candidates.join('\n'), isNot(contains('https://10.0.2.2')));
-      expect(image.placeholder, isNotNull);
-      expect(find.text('契'), findsOneWidget);
-    });
+        final image = tester.widget<AppCachedNetworkImage>(
+          find.byType(AppCachedNetworkImage),
+        );
+        // spec_ref: specs/feature-tree/runtime/runtime-media/spec.md#sit-003
+        expect(image.cdnPreset, CdnImagePreset.avatar);
+        expect(image.mediaKind, MediaDeliveryKind.avatar);
+        expect(
+          image.imageUrl,
+          '/media/avatar/s/archived-avatar/default/group/v1/default.png',
+        );
+        expect(image.imageUrlCandidates, isNull);
+        expect(image.placeholder, isNotNull);
+        expect(find.text('契'), findsOneWidget);
+      },
+    );
 
     testWidgets(
       'shows explicit fallback icon while network avatar is loading',
@@ -61,7 +70,6 @@ void main() {
               imageUrl: '/media/avatar/s/archived-avatar/user/u1/v1/avatar.png',
               name: '空头像',
               fallbackIcon: CupertinoIcons.person_fill,
-              mediaEndpointConfig: _mediaEndpoints,
             ),
           ),
         );
@@ -81,7 +89,14 @@ void main() {
         _wrap(const RoundedSquareAvatar(size: 48, imageUrl: '契', name: '契约群')),
       );
 
-      expect(find.byType(AppCachedNetworkImage), findsNothing);
+      // 非空非法引用仍交给获取器判否，消费层不得按URL形态猜测来源。
+      expect(
+        tester
+            .widget<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
+            .imageUrl,
+        '契',
+      );
+      expect(find.byKey(appImageLoadErrorKey), findsOneWidget);
       expect(find.text('契'), findsOneWidget);
     });
   });

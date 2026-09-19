@@ -222,6 +222,11 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
+      "page_name": "post_collection",
+      "route_id": "postCollection"
+    },
+    {
+      "collect_page_access": true,
       "page_name": "chat",
       "route_id": "chat"
     },

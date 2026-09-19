@@ -425,6 +425,7 @@ def can_reuse_package(
             snapshot = _pkg.workspace_snapshot(
                 deployment_roots=normalized_roots,
                 timeout_seconds=currentness_timeout_seconds,
+                dependency_platforms=tuple(capsule_manifest["dependencyPlatforms"]),
             )
             actual_input_digest = str(snapshot["deploymentInputDigest"])
             actual_input_count = int(snapshot["deploymentInputFileCount"])

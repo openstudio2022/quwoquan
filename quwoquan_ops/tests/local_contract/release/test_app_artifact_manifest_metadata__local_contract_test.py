@@ -196,7 +196,7 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
         self.assertEqual(payload["schema"], "app_artifact_manifest")
         self.assertEqual(
             payload["applicationId"],
-            "com.example.quwoquanApp.nonprod.debug",
+            "com.leadwise.quwoquan.alpha.debug",
         )
         self.assertGreater(payload["pathCount"], 0)
 
@@ -273,20 +273,15 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
         for platform in supported_identity_platforms():
             seen: dict[str, tuple[str, str]] = {}
             for build_profile in supported_build_profiles():
-                for build_mode in supported_build_modes():
-                    identity = resolve_app_identity(
-                        platform=platform,
-                        build_profile=build_profile,
-                        build_mode=build_mode,
-                    )
-                    self.assertNotIn(
-                        identity.application_id,
-                        seen,
-                        f"{platform} {build_profile}/{build_mode} collides with "
-                        f"{seen.get(identity.application_id)}",
-                    )
-                    seen[identity.application_id] = (build_profile, build_mode)
-                    self.assertTrue(identity.display_name)
+                identity = resolve_app_identity(platform=platform, build_profile=build_profile,
+                                                build_mode="release")
+                self.assertNotIn(identity.application_id, seen)
+                seen[identity.application_id] = (build_profile, "release")
+                for mode in ("debug", "profile"):
+                    with self.assertRaises(AppIdentityError):
+                        resolve_app_identity(platform=platform, build_profile=build_profile, build_mode=mode)
+                    with self.assertRaises(AppIdentityError):
+                        resolve_app_identity(platform=platform, environment="prod", build_mode=mode)
             for build_mode in supported_build_modes():
                 nonprod_ids = {
                     resolve_app_identity(
@@ -296,7 +291,7 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
                     ).application_id
                     for environment in ("alpha", "beta", "gamma")
                 }
-                self.assertEqual(len(nonprod_ids), 1)
+                self.assertEqual(len(nonprod_ids), 1 if build_mode == "release" else 3)
 
     def test_generated_identity_projection_matches_metadata(self) -> None:
         contract = self.document["application_identity"]
@@ -315,48 +310,23 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
                 "prod": "prod",
             },
         )
-        for build_profile in contract["build_profile_suffixes"]:
-            for build_mode in contract["build_mode_suffixes"]:
-                identity = generated["identities"]["android"][
-                    f"{build_profile}/{build_mode}"
-                ]
-                self.assertEqual(
-                    identity["applicationId"],
-                    contract["base_application_ids"]["android"]["value"]
-                    + contract["build_profile_suffixes"][build_profile]
-                    + contract["build_mode_suffixes"][build_mode],
-                )
-        android_manifest = ANDROID_MANIFEST_PATH.read_text(encoding="utf-8")
-        self.assertNotIn("android:taskAffinity", android_manifest)
-
-        for build_profile in contract["build_profile_suffixes"]:
-            identity_source = (
-                ROOT / f"quwoquan_app/ios/Flutter/Identity/{build_profile}.xcconfig"
-            ).read_text(encoding="utf-8")
-            self.assertIn(
-                "QWQ_PROFILE_BUNDLE_ID_SUFFIX = "
-                + contract["build_profile_suffixes"][build_profile],
-                identity_source,
-            )
-            for build_mode in contract["build_mode_suffixes"]:
-                configuration = f"{build_mode.title()}-{build_profile}"
-                source = (
-                    ROOT / f"quwoquan_app/ios/Flutter/{configuration}.xcconfig"
-                ).read_text(encoding="utf-8")
-                self.assertIn(
-                    f"Pods-Runner.{build_mode}-{build_profile}.xcconfig",
-                    source,
-                )
-                self.assertNotIn("Pods-RunnerTests", source)
-                self.assertIn(
-                    "QWQ_MODE_BUNDLE_ID_SUFFIX ="
-                    + (
-                        f" {contract['build_mode_suffixes'][build_mode]}"
-                        if contract["build_mode_suffixes"][build_mode]
-                        else ""
-                    ),
-                    source,
-                )
+        from quwoquan_ops.cli.lib.app_identity import resolve_ios_configuration
+        for platform, identities in generated["identities"].items():
+            for key, value in identities.items():
+                identity = resolve_app_identity(platform=platform, build_profile=value["buildProfile"],
+                                                environment=value.get("environment"), build_mode=value["buildMode"])
+                self.assertEqual(identity.application_id, value["applicationId"])
+                self.assertEqual(identity.display_name, value["displayName"])
+                self.assertEqual(identity.promotable, value["promotable"])
+                if platform == "ios":
+                    self.assertEqual(resolve_ios_configuration(identity.configuration), identity)
+                    selector, mode = key.split("/")
+                    source = (ROOT / f"quwoquan_app/ios/Flutter/Identity/{selector}-{mode}.xcconfig").read_text()
+                    self.assertIn("QWQ_IOS_APPLICATION_ID = " + identity.application_id, source)
+        for configuration in ("Debug-nonprod", "Profile-nonprod", "Debug-prod", "Profile-prod"):
+            with self.assertRaises(AppIdentityError):
+                resolve_ios_configuration(configuration)
+        self.assertNotIn("android:taskAffinity", ANDROID_MANIFEST_PATH.read_text(encoding="utf-8"))
 
     def test_prod_release_identity_is_the_registered_base_id(self) -> None:
         contract = self.document["application_identity"]

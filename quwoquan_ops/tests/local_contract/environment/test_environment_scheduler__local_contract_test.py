@@ -399,15 +399,17 @@ def test_not_required_is_restricted_to_typed_beta_reason(tmp_path: Path) -> None
 
 
 def test_beta_not_required_accepts_policy_optional_reason(tmp_path: Path) -> None:
-    # lane 验收默认只真跑 Alpha：ImpactPlan 判定 Beta 敏感但用户未 --beta opt-in 时，Beta 以
-    # ACCEPTANCE.BETA_OPTIONAL_BY_POLICY 写 typed not_required；该原因码与 no-live 同属闭集，
-    # 签发、schema 与 admission 三处一致；Alpha 与 Gamma 仍不得 not_required。
+    # 源码合入默认签发 typed Alpha/Beta：Beta 以 ACCEPTANCE.BETA_OPTIONAL_BY_POLICY，
+    # Alpha 以 ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV；Gamma 仍不得 not_required。
     from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
+        ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV,
         BETA_OPTIONAL_BY_POLICY,
         NOT_REQUIRED_REASON_CODES,
     )
 
-    assert NOT_REQUIRED_REASON_CODES == {NO_LIVE_ENVIRONMENT_REQUIRED, BETA_OPTIONAL_BY_POLICY}
+    assert NOT_REQUIRED_REASON_CODES == {
+        NO_LIVE_ENVIRONMENT_REQUIRED, BETA_OPTIONAL_BY_POLICY, ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV,
+    }
     candidate = _candidate(tmp_path, suffix="d")
     _, alpha = _request(tmp_path, environment="alpha", candidate=candidate)
     _mutate(tmp_path, alpha)
@@ -423,6 +425,33 @@ def test_beta_not_required_accepts_policy_optional_reason(tmp_path: Path) -> Non
     Draft202012Validator(json.loads(ACCEPTANCE_SCHEMA.read_text()), format_checker=FormatChecker()).validate(beta_fact)
     with pytest.raises(EnvironmentSchedulerError, match="ACCEPTANCE_INVALID"):
         validate_environment_acceptance_fact({**beta_fact, "reasonCode": "ACCEPTANCE.SKIPPED"})
+
+
+def test_alpha_not_required_accepts_live_deferred_reason(tmp_path: Path) -> None:
+    from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
+        ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV,
+        BETA_OPTIONAL_BY_POLICY,
+    )
+
+    candidate = _candidate(tmp_path, suffix="e")
+    _, alpha = _request(tmp_path, environment="alpha", candidate=candidate)
+    _queue(tmp_path, alpha)
+    with pytest.raises(EnvironmentSchedulerError, match="NOT_REQUIRED_INVALID"):
+        _issue(tmp_path, alpha, status="not_required", reason_code=BETA_OPTIONAL_BY_POLICY)
+    alpha_path = _issue(
+        tmp_path, alpha, status="not_required", reason_code=ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV,
+    )
+    alpha_fact = json.loads(alpha_path.read_text())
+    assert alpha_fact["status"] == "not_required"
+    assert alpha_fact["reasonCode"] == ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV
+    Draft202012Validator(json.loads(ACCEPTANCE_SCHEMA.read_text()), format_checker=FormatChecker()).validate(alpha_fact)
+    _, gamma = _request(tmp_path, environment="gamma", candidate=_candidate(tmp_path, suffix="f"))
+    _queue(tmp_path, gamma)
+    with pytest.raises(EnvironmentSchedulerError, match="NOT_REQUIRED_INVALID"):
+        _issue(
+            tmp_path, gamma, status="not_required",
+            reason_code=ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV,
+        )
 
 
 def test_create_once_conflict_rejects_different_bytes(tmp_path: Path) -> None:

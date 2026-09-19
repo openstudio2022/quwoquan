@@ -118,6 +118,7 @@ def execute_canonical_platform_launch(
                     stackctl.acquire_patrol_execution_lock(
                         env_name=target,
                         target=f"canonical-launch:{device_id}",
+                        platforms=("android" if args.platform.startswith("android") else "ios",),
                     )
                 )
                 canonical_result = stackctl.run(
@@ -282,6 +283,7 @@ def execute_canonical_platform_launch(
                 direct_execution_lock = stackctl.acquire_patrol_execution_lock(
                     env_name=target,
                     target=f"canonical-hot-restart:{device_id}",
+                    platforms=("ios",),
                 )
             direct_result = stackctl.run(
                 direct_command,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import shlex
+import stat
 import sys
 from pathlib import Path
 
@@ -52,6 +53,31 @@ def _shell_exports(*, phase: str, path: Path, digest: str) -> str:
     )
 
 
+def retire_swiftpm_user_links(*, projection_root: Path) -> None:
+    """工具退出且依赖已校验后，只删除私有状态内的用户链接，保留全部证据。"""
+    projection = projection_root.absolute()
+    if projection.resolve(strict=True) != projection:
+        raise ValueError("APP.DEPENDENCY.projection_failed: unsafe projection root")
+    for host in ("production", "patrol"):
+        parent = (projection / "quwoquan_app/.dart_tool/qwq_ios_cocoapods_dependency"
+                  / host / "user-home/.config/swiftpm")
+        if not parent.exists():
+            continue
+        if parent.resolve(strict=True) != parent or not parent.is_dir():
+            raise ValueError("APP.DEPENDENCY.projection_failed: unsafe SwiftPM state parent")
+        descriptor = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            for name in ("cache", "security", "configuration"):
+                try:
+                    metadata = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                if stat.S_ISLNK(metadata.st_mode):
+                    os.unlink(name, dir_fd=descriptor)
+        finally:
+            os.close(descriptor)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
@@ -76,6 +102,8 @@ def main(argv: list[str] | None = None) -> int:
                 "APP.DEPENDENCY.projection_expectation_invalid: "
                 "post-build readback differs after reload"
             )
+        if args.phase == "postbuild":
+            retire_swiftpm_user_links(projection_root=args.projection_root)
         print(
             _shell_exports(
                 phase=args.phase,

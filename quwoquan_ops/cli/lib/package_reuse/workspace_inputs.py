@@ -22,6 +22,7 @@ from .input_capsule import (
     _baseline_id,
     _digest_record,
     _enumerated_deployment_inputs,
+    _frozen_source_identity,
     _normalized_input_roots,
     _path_entry,
 )
@@ -126,11 +127,15 @@ def deployment_input_digest(
     roots: Sequence[str],
     *,
     timeout_seconds: float | None = None,
-    platforms: tuple[str, ...] = ("android", "ios"),
+    dependency_platforms: tuple[str, ...] = ("android", "ios"),
+    source_root: Path | None = None,
+    source_tree: str | None = None,
 ) -> tuple[str, int]:
     """Digest tracked/untracked bytes in the declared package source closure."""
 
-    _normalized_roots, source_entries = _enumerated_deployment_inputs(roots)
+    _normalized_roots, source_entries = _enumerated_deployment_inputs(
+        roots, source_root=source_root, source_tree=source_tree
+    )
     deadline = (
         time.monotonic() + timeout_seconds
         if timeout_seconds is not None and timeout_seconds > 0
@@ -146,7 +151,9 @@ def deployment_input_digest(
         if dependency_required(_pkg.ROOT, _normalized_roots):
             if deadline is not None and time.monotonic() >= deadline:
                 raise TimeoutError("deployment input currentness check timed out")
-            snapshots = load_managed_dependency_snapshots(repo_root=_pkg.ROOT, platforms=platforms)
+            snapshots = load_managed_dependency_snapshots(
+                repo_root=_pkg.ROOT, required_platforms=dependency_platforms
+            )
             yield from dependency_bundle_digest_entries(snapshots)
 
     return _digest_record(entries())
@@ -156,54 +163,71 @@ def workspace_snapshot(
     *,
     deployment_roots: Sequence[str],
     timeout_seconds: float | None = None,
-    platforms: tuple[str, ...] = ("android", "ios"),
+    dependency_platforms: tuple[str, ...] = ("android", "ios"),
+    source_revision: str | None = None,
+    source_root: Path | None = None,
+    source_tree: str | None = None,
 ) -> dict[str, object]:
     """Return one identity bound only to the declared deployment closure."""
 
+    frozen = _frozen_source_identity(
+        source_revision=source_revision,
+        source_root=source_root,
+        source_tree=source_tree,
+    )
+    _pkg._capsule_identity_payload(roots=(), input_digest="", input_count=0,
+                                 dependency_platforms=dependency_platforms)
     normalized_roots = _normalized_input_roots(deployment_roots)
     repo_roots = [value for value in normalized_roots if not Path(value).is_absolute()]
 
-    revision = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=_pkg.ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    source_revision = revision.stdout.strip()
-    if revision.returncode != 0 or len(source_revision) != 40:
-        raise ValueError("cannot resolve workspace source revision")
-    status = subprocess.run(
-        [
-            "git",
-            "status",
-            "--porcelain=v2",
-            "-z",
-            "--untracked-files=all",
-            "--",
-            *repo_roots,
-        ],
-        cwd=_pkg.ROOT,
-        capture_output=True,
-        check=False,
-    )
-    if status.returncode != 0:
-        detail = status.stderr.decode("utf-8", errors="replace").strip()
-        raise ValueError(
-            "cannot resolve workspace index/worktree state"
-            + (f": {detail}" if detail else "")
+    if frozen is None:
+        revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=_pkg.ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
         )
+        source_revision = revision.stdout.strip()
+        if revision.returncode != 0 or len(source_revision) != 40:
+            raise ValueError("cannot resolve workspace source revision")
+        status = subprocess.run(
+            [
+                "git",
+                "status",
+                "--porcelain=v2",
+                "-z",
+                "--untracked-files=all",
+                "--",
+                *repo_roots,
+            ],
+            cwd=_pkg.ROOT,
+            capture_output=True,
+            check=False,
+        )
+        if status.returncode != 0:
+            detail = status.stderr.decode("utf-8", errors="replace").strip()
+            raise ValueError(
+                "cannot resolve workspace index/worktree state"
+                + (f": {detail}" if detail else "")
+            )
+        status_stdout = status.stdout
+        digest_source_root = None
+        digest_source_tree = None
+    else:
+        source_revision, digest_source_root, digest_source_tree = frozen
+        status_stdout = b""
     input_digest, input_count = _pkg.deployment_input_digest(
-        normalized_roots,
-        timeout_seconds=timeout_seconds,
-        platforms=platforms,
+        normalized_roots, timeout_seconds=timeout_seconds,
+        dependency_platforms=dependency_platforms,
+        source_root=digest_source_root,
+        source_tree=digest_source_tree,
     )
-    status_digest = "sha256:" + hashlib.sha256(status.stdout).hexdigest()
-    identity_payload = {
-        "deploymentInputRoots": normalized_roots,
-        "deploymentInputDigest": input_digest,
-        "deploymentInputFileCount": input_count,
-    }
+    status_digest = "sha256:" + hashlib.sha256(status_stdout).hexdigest()
+    identity_payload = _pkg._capsule_identity_payload(
+        roots=normalized_roots, input_digest=input_digest, input_count=input_count,
+        dependency_platforms=dependency_platforms,
+    )
     return {
         **identity_payload,
         "sourceRevision": source_revision,

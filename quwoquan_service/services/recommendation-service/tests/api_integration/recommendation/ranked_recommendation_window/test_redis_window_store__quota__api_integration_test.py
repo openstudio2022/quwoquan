@@ -9,6 +9,7 @@ from tests.support.presentation import presentation_contract, post_envelope
 
 from internal.recommendation.ranked_recommendation_window.domain.model import (
     ReleasePinnedQueryFence,
+    RecommendationRequestContext,
     RankedCandidate,
     RankedRecommendationWindow,
     RankingResult,
@@ -32,6 +33,8 @@ def _window(window_id: str, subject_id: str) -> RankedRecommendationWindow:
         window_id=window_id,
         subject_id=subject_id,
         scenario="content_feed",
+        request_context=RecommendationRequestContext("unknown", "unknown", "unknown", "h12", "unknown"),
+        context_digest="3b84dcc0252ec0f7ae082ef47c6ad3cf9ec96806e82ec472fa49b6ef450b9d52",
         request_digest=f"request-{window_id}",
         ranking=RankingResult(
             experiment_bucket="rule",

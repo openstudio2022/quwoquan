@@ -1,0 +1,7 @@
+// Generated from _shared/app_artifact_manifest.yaml; do not edit.
+#include "Base/Profile.xcconfig"
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.profile-beta.xcconfig"
+#include "Identity/beta-profile.xcconfig"
+QWQ_EXPECTED_BUILD_MODE = profile
+QWQ_EXPECTED_CONFIGURATION = Profile-beta
+// FLUTTER_TARGET is owned by Flutter invocation and validated against launch metadata.

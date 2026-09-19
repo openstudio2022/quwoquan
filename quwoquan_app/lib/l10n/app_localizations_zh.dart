@@ -10,6 +10,30 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get media_enterFullscreen => '全屏';
+
+  @override
+  String get media_showControls => '显示媒体控件';
+
+  @override
+  String get media_exitFullscreen => '退出全屏';
+
+  @override
+  String get media_play => '播放';
+
+  @override
+  String get media_pause => '暂停';
+
+  @override
+  String get media_landscapeRequestFailed => '暂时无法进入横屏，请重试。';
+
+  @override
+  String get media_orientationRestoreFailed => '暂时无法恢复原来的方向，请重试退出。';
+
+  @override
+  String get media_orientationRetry => '重试';
+
+  @override
   String get home => '首页';
 
   @override

@@ -135,6 +135,15 @@
 - 影响 Story：[`feed-fallback-degrade`](./feed-fallback-degrade/spec.md)、[`streaming-feed-performance`](./streaming-feed-performance/spec.md)
 - 关联验收：[`SIT-001`](./spec.md#sit-001)、[`SIT-002`](./spec.md#sit-002)
 
+<a id="dec-010"></a>
+### DEC-010 请求期上下文只做有界 ranker 后处理并冻结进窗口身份
+
+- 对象与边界：客户端只声明低基数 `viewportProfile/deviceClass` 和已获同意的粗 region；服务端提供权威时间桶并读取既有用户画像。推荐 owner 在现役 ranker 输出后执行 bounded soft boost，首版不修改训练、模型输入或 Content hydration。横屏上下文只提升 canonical `width/height` 判定的横向 image/video，不过滤任何候选。
+- 隐私与降级：不得为推荐主动请求定位权限，不接收经纬度或精确位置；无同意、无 region、未知 device/viewport 均归一为无对应 boost 并继续基础排序。boost 上下界与 policy identity 由推荐配置 owner 单轨声明。
+- 一致性：请求 admission 时冻结 viewport/device、服务端 time bucket、profile revision、粗 region 与 policy/model/feature identity，并纳入 `RankedFeedWindow` subject/scope、cursor AEAD context 与相关 cache key。窗口 create-once 后只按 ordinal/contentId 续页；旋转或横屏切换不能改写旧窗，新上下文只在新首刷/刷新生效。
+- 恢复、观测与测试 seam：后处理失败返回 canonical failure 或预声明的零 boost 降级，绝不退回 hard filter。观测仅保留低基数上下文类别、boost policy 与结果，不记录精确位置。local_contract 覆盖 boost 上下界、候选全集不变、无 region/未知 profile、训练输入不变；API/Redis seam 覆盖 scope/cursor/cache 绑定、旋转后续页稳定与刷新后新窗。回滚整体停用该 policy 版本，不保留双窗口读轨。
+- 关联要求与验收：`personalized-ranking` REQ-005/GWT-002、`streaming-feed-performance` REQ-001/GWT-002。
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

@@ -903,6 +903,9 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 		personaHostAuthorityEvaluator,
 	)
 	serviceMux := http.NewServeMux()
+	if err := registerCollectionQueryAuthority(asm, cfg, accountEnforcementStore, personapersistence.NewOwnerReader(pgPool), serviceMux); err != nil {
+		return err
+	}
 	userHandler.RegisterRoutes(serviceMux)
 	if creatorCandidateStore != nil {
 		registerCreatorSearchCandidate(serviceMux, creatorCandidateStore, personaStore, profileStore, appEnv)

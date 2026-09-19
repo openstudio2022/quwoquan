@@ -13,45 +13,6 @@ import PushKit
 import Security
 import UIKit
 
-enum StartupSafeTerminalSurface: Equatable {
-  case routerShell
-  case safeRecovery
-  case flutterRecovery
-  case missing
-  case unknown
-
-  static func parse(event: String) -> StartupSafeTerminalSurface {
-    guard let data = event.data(using: .utf8),
-          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-          let rawSurface = object["surface"] as? String
-    else {
-      return .missing
-    }
-    switch rawSurface {
-    case "router_shell": return .routerShell
-    case "safe_recovery": return .safeRecovery
-    case "flutter_recovery": return .flutterRecovery
-    default: return .unknown
-    }
-  }
-
-  var markerValue: String {
-    switch self {
-    case .routerShell: return "router_shell"
-    case .safeRecovery: return "safe_recovery"
-    case .flutterRecovery: return "flutter_recovery"
-    case .missing: return "missing"
-    case .unknown: return "unknown"
-    }
-  }
-
-  var isCanonical: Bool { self == .routerShell }
-
-  var isRecognizedSafeSurface: Bool {
-    self == .routerShell || self == .safeRecovery || self == .flutterRecovery
-  }
-}
-
 /// 仅持久化已脱敏的原生未捕获异常类别，供下次 Dart 启动产出一条标准诊断事实。
 /// 原生异常消息与堆栈绝不能写入 UserDefaults 或运行时日志管道。
 private let nativeCrashMarkerKindKey = "qwq.runtime.previous_native_crash_kind"
@@ -485,6 +446,10 @@ private final class RecoveryFailureEncryptedStore {
   private static let recoveryRetention: TimeInterval = 7 * 24 * 60 * 60
   private let processStartUptime = ProcessInfo.processInfo.systemUptime
   private let videoEditingPlugin = VideoEditingPlugin()
+  private let nativeOrientationReader = NativeOrientationReader()
+  #if targetEnvironment(simulator) && QWQ_EXTERNAL_UAT_BROKER
+  private let gwt008Driver = AlphaGwt008NativeEvidenceDriver()
+  #endif
   private let personalAssistantNativeApiPlugin = PersonalAssistantNativeApiPlugin()
   private let assistantDeviceActionPlugin = AssistantDeviceActionPlugin()
   private let commercialAuthPlugin = CommercialAuthPlugin()
@@ -609,6 +574,11 @@ private final class RecoveryFailureEncryptedStore {
       return true
     }
     NativeCrashMarkerStore.markStarting()
+    #if targetEnvironment(simulator) && QWQ_EXTERNAL_UAT_BROKER
+    // Socket path is intentionally public rendezvous metadata; no authorization material is logged.
+    do { NSLog("QWQ_EXTERNAL_UAT_SOCKET %@", try gwt008Driver.startUATBroker()) }
+    catch { NSLog("QWQ_EXTERNAL_UAT_SOCKET_UNAVAILABLE") }
+    #endif
     if #available(iOS 14.0, *) {
       NativeHangMetricStore.shared.install()
     }
@@ -678,6 +648,7 @@ private final class RecoveryFailureEncryptedStore {
   /// Scene delegate 把真实承载 Flutter 的 window 交回：绑定 renderer 首帧回调。不写 AppDelegate.window——
   /// FlutterSceneDelegate 会把非空的 appDelegate.window.rootViewController 视为旧式手动装配并搬进新 window。
   func attachFlutterSceneWindow(_ sceneWindow: UIWindow) {
+    nativeOrientationReader.attach(sceneWindow)
     sceneWindow.backgroundColor = StartupTransitionBackground.color
     sceneWindow.rootViewController?.view.backgroundColor = StartupTransitionBackground.color
     observeNativeFlutterFirstFrame(
@@ -703,13 +674,13 @@ private final class RecoveryFailureEncryptedStore {
     }
 
     NativeRuntimeConfigChannel.register(binaryMessenger: binaryMessenger)
+    #if targetEnvironment(simulator) && QWQ_EXTERNAL_UAT_BROKER
+    gwt008Driver.register(binaryMessenger: binaryMessenger)
+    #endif
 
-    let videoEditingChannel = FlutterMethodChannel(
-      name: "quwoquan/video_editing",
-      binaryMessenger: binaryMessenger
-    )
-    videoEditingChannel.setMethodCallHandler { [weak self] call, result in
-      self?.videoEditingPlugin.handle(call: call, result: result)
+    nativeOrientationReader.register(binaryMessenger: binaryMessenger) { [weak self] call, result in
+      guard let self = self else { result(FlutterMethodNotImplemented); return }
+      self.videoEditingPlugin.handle(call: call, result: result)
     }
 
     let assistantChannel = FlutterMethodChannel(
@@ -1282,6 +1253,9 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   override func applicationWillTerminate(_ application: UIApplication) {
+    #if targetEnvironment(simulator) && QWQ_EXTERNAL_UAT_BROKER
+    gwt008Driver.revoke()
+    #endif
     cancelFlutterFirstFrameWatchdog()
     cancelNativeRecoveryTerminalReconciliation()
     if !confirmedPreviousBuildFatal,

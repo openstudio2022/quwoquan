@@ -21,12 +21,12 @@ type appIdentityBaseID struct {
 }
 
 type appIdentityContract struct {
-	DisplayNameBase         string                       `yaml:"display_name_base"`
-	BaseApplicationIDs      map[string]appIdentityBaseID `yaml:"base_application_ids"`
-	BuildProfileSuffixes    map[string]string            `yaml:"build_profile_suffixes"`
-	BuildProfileMarks       map[string]string            `yaml:"build_profile_display_marks"`
-	BuildModeSuffixes       map[string]string            `yaml:"build_mode_suffixes"`
-	BuildModeDisplayMarks   map[string]string            `yaml:"build_mode_display_marks"`
+	DisplayNameBase       string                       `yaml:"display_name_base"`
+	BaseApplicationIDs    map[string]appIdentityBaseID `yaml:"base_application_ids"`
+	BuildProfileSuffixes  map[string]string            `yaml:"build_profile_suffixes"`
+	BuildProfileMarks     map[string]string            `yaml:"build_profile_display_marks"`
+	BuildModeSuffixes     map[string]string            `yaml:"build_mode_suffixes"`
+	BuildModeDisplayMarks map[string]string            `yaml:"build_mode_display_marks"`
 }
 
 type appBuildProfileContract struct {
@@ -47,17 +47,22 @@ type generatedAppIdentity struct {
 	ApplicationID string `json:"applicationId"`
 	DisplayName   string `json:"displayName"`
 	Registered    bool   `json:"registered"`
+	BuildProfile  string `json:"buildProfile"`
+	BuildMode     string `json:"buildMode"`
+	Environment   string `json:"environment,omitempty"`
+	Promotable    bool   `json:"promotable"`
 }
 
 type generatedAppIdentityDocument struct {
-	Schema               string                                     `json:"schema"`
-	Source               string                                     `json:"source"`
-	SourceSHA256         string                                     `json:"sourceSha256"`
-	Environments         []string                                   `json:"environments"`
-	BuildProfiles        []string                                   `json:"buildProfiles"`
-	EnvironmentProfiles  map[string]string                          `json:"environmentProfiles"`
-	BuildModes           []string                                   `json:"buildModes"`
-	Identities           map[string]map[string]generatedAppIdentity `json:"identities"`
+	Schema              string                                     `json:"schema"`
+	Source              string                                     `json:"source"`
+	SourceSHA256        string                                     `json:"sourceSha256"`
+	Environments        []string                                   `json:"environments"`
+	BuildProfiles       []string                                   `json:"buildProfiles"`
+	EnvironmentProfiles map[string]string                          `json:"environmentProfiles"`
+	BuildModes          []string                                   `json:"buildModes"`
+	IdentityTargets     []string                                   `json:"identityTargets"`
+	Identities          map[string]map[string]generatedAppIdentity `json:"identities"`
 }
 
 type appIdentityArtifact struct {
@@ -108,6 +113,27 @@ func runAppIdentityMode(metadataDir, appDir, manifestPath string, check bool) er
 	return writeAppIdentityArtifacts(appDir, manifestPath, artifacts, manifest)
 }
 
+func validateExactKeys(label string, actual map[string]string, expected []string) error {
+	if len(actual) != len(expected) {
+		return fmt.Errorf("%s keys must equal %s", label, strings.Join(expected, ","))
+	}
+	for _, key := range expected {
+		if _, ok := actual[key]; !ok {
+			return fmt.Errorf("%s is missing %s", label, key)
+		}
+	}
+	return nil
+}
+
+func validateRequiredKeys(label string, actual map[string]string, required []string) error {
+	for _, key := range required {
+		if _, ok := actual[key]; !ok {
+			return fmt.Errorf("%s is missing %s", label, key)
+		}
+	}
+	return nil
+}
+
 func validateAppIdentityMetadata(metadata appArtifactIdentityMetadata) error {
 	if metadata.SchemaID != "app_artifact_manifest" {
 		return fmt.Errorf("App identity metadata schema_id mismatch")
@@ -132,28 +158,37 @@ func validateAppIdentityMetadata(metadata appArtifactIdentityMetadata) error {
 	if len(environmentProfiles) != len(metadata.Environments) {
 		return fmt.Errorf("build_profiles must own every canonical environment exactly once")
 	}
+	if err := validateExactKeys("application_identity.build_profile_suffixes", contract.BuildProfileSuffixes, profiles); err != nil {
+		return err
+	}
+	if err := validateExactKeys("application_identity.build_profile_display_marks", contract.BuildProfileMarks, profiles); err != nil {
+		return err
+	}
+	developmentEnvironments := metadata.BuildProfiles["nonprod"].Environments
+	developmentModes := []string{"debug", "profile"}
+	if err := validateRequiredKeys("application_identity.build_mode_suffixes", contract.BuildModeSuffixes, developmentModes); err != nil {
+		return err
+	}
+	if err := validateRequiredKeys("application_identity.build_mode_display_marks", contract.BuildModeDisplayMarks, developmentModes); err != nil {
+		return err
+	}
 	seen := map[string]string{}
-	for _, buildProfile := range profiles {
-		if _, ok := contract.BuildProfileSuffixes[buildProfile]; !ok {
-			return fmt.Errorf("application_identity build-profile suffix is missing for %s", buildProfile)
-		}
-		if _, ok := contract.BuildProfileMarks[buildProfile]; !ok {
-			return fmt.Errorf("application_identity build-profile display mark is missing for %s", buildProfile)
-		}
-		for _, buildMode := range metadata.BuildModes {
-			if _, ok := contract.BuildModeSuffixes[buildMode]; !ok {
-				return fmt.Errorf("application_identity build-mode suffix is missing for %s", buildMode)
+	for _, platform := range []string{"android", "ios"} {
+		base := contract.BaseApplicationIDs[platform].Value
+		for _, profile := range profiles {
+			id := base + contract.BuildProfileSuffixes[profile]
+			if previous, ok := seen[platform+":"+id]; ok {
+				return fmt.Errorf("App identity collision: %s and %s/release", previous, profile)
 			}
-			if _, ok := contract.BuildModeDisplayMarks[buildMode]; !ok {
-				return fmt.Errorf("application_identity build-mode display mark is missing for %s", buildMode)
-			}
-			for _, platform := range []string{"android", "ios"} {
-				identity := contract.BaseApplicationIDs[platform].Value + contract.BuildProfileSuffixes[buildProfile] + contract.BuildModeSuffixes[buildMode]
-				key := platform + ":" + identity
-				if previous, exists := seen[key]; exists {
-					return fmt.Errorf("App identity collision: %s and %s", previous, buildProfile+"/"+buildMode)
+			seen[platform+":"+id] = profile + "/release"
+		}
+		for _, environment := range developmentEnvironments {
+			for _, mode := range developmentModes {
+				id := base + "." + environment + contract.BuildModeSuffixes[mode]
+				if previous, ok := seen[platform+":"+id]; ok {
+					return fmt.Errorf("App identity collision: %s and %s/%s", previous, environment, mode)
 				}
-				seen[key] = buildProfile + "/" + buildMode
+				seen[platform+":"+id] = environment + "/" + mode
 			}
 		}
 	}
@@ -189,82 +224,104 @@ func resolveBuildProfiles(metadata appArtifactIdentityMetadata) ([]string, map[s
 	return profiles, environmentProfiles, nil
 }
 
-func renderAppIdentityArtifacts(metadata appArtifactIdentityMetadata, sourceSHA string) ([]appIdentityArtifact, error) {
+func generatedIdentities(metadata appArtifactIdentityMetadata) (map[string]map[string]generatedAppIdentity, []string, error) {
 	contract := metadata.ApplicationIdentity
-	buildProfiles, environmentProfiles, err := resolveBuildProfiles(metadata)
+	profiles, _, err := resolveBuildProfiles(metadata)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	identities := map[string]map[string]generatedAppIdentity{}
+	targets := []string{}
+	for _, profile := range profiles {
+		targets = append(targets, profile+"/release")
+	}
+	for _, environment := range metadata.BuildProfiles["nonprod"].Environments {
+		for _, mode := range []string{"debug", "profile"} {
+			targets = append(targets, environment+"/"+mode)
+		}
+	}
 	for _, platform := range []string{"android", "ios"} {
 		identities[platform] = map[string]generatedAppIdentity{}
 		base := contract.BaseApplicationIDs[platform]
-		for _, buildProfile := range buildProfiles {
-			for _, buildMode := range metadata.BuildModes {
-				identities[platform][buildProfile+"/"+buildMode] = generatedAppIdentity{
-					ApplicationID: base.Value + contract.BuildProfileSuffixes[buildProfile] + contract.BuildModeSuffixes[buildMode],
-					DisplayName:   contract.DisplayNameBase + contract.BuildProfileMarks[buildProfile] + contract.BuildModeDisplayMarks[buildMode],
-					Registered:    base.Registered,
+		for _, profile := range profiles {
+			key := profile + "/release"
+			identities[platform][key] = generatedAppIdentity{
+				ApplicationID: base.Value + contract.BuildProfileSuffixes[profile],
+				DisplayName:   contract.DisplayNameBase + contract.BuildProfileMarks[profile],
+				Registered:    base.Registered, BuildProfile: profile, BuildMode: "release", Promotable: profile == "prod",
+			}
+		}
+		for _, environment := range metadata.BuildProfiles["nonprod"].Environments {
+			for _, mode := range []string{"debug", "profile"} {
+				key := environment + "/" + mode
+				identities[platform][key] = generatedAppIdentity{
+					ApplicationID: base.Value + "." + environment + contract.BuildModeSuffixes[mode],
+					DisplayName:   contract.DisplayNameBase + "·" + strings.ToUpper(environment[:1]) + environment[1:] + contract.BuildModeDisplayMarks[mode],
+					Registered:    base.Registered, BuildProfile: "nonprod", BuildMode: mode, Environment: environment, Promotable: false,
 				}
 			}
 		}
 	}
+	return identities, targets, nil
+}
+
+func renderAppIdentityArtifacts(metadata appArtifactIdentityMetadata, sourceSHA string) ([]appIdentityArtifact, error) {
+	identities, targets, err := generatedIdentities(metadata)
+	if err != nil {
+		return nil, err
+	}
+	buildProfiles, environmentProfiles, err := resolveBuildProfiles(metadata)
+	if err != nil {
+		return nil, err
+	}
 	document := generatedAppIdentityDocument{
-		Schema:              "qwq.app-identity-generated",
-		Source:              appIdentityMetadataRelativePath,
-		SourceSHA256:        "sha256:" + sourceSHA,
-		Environments:        append([]string(nil), metadata.Environments...),
-		BuildProfiles:       buildProfiles,
-		EnvironmentProfiles: environmentProfiles,
-		BuildModes:          append([]string(nil), metadata.BuildModes...),
-		Identities:          identities,
+		Schema: "qwq.app-identity-generated", Source: appIdentityMetadataRelativePath,
+		SourceSHA256: "sha256:" + sourceSHA, Environments: append([]string(nil), metadata.Environments...),
+		BuildProfiles: buildProfiles, EnvironmentProfiles: environmentProfiles,
+		BuildModes: append([]string(nil), metadata.BuildModes...), IdentityTargets: targets, Identities: identities,
 	}
 	jsonBytes, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("encode generated App identity JSON: %w", err)
 	}
-	artifacts := []appIdentityArtifact{{
-		RelativePath: "android/app/app_identity.generated.json",
-		Content:      append(jsonBytes, '\n'),
-	}}
-	for _, buildProfile := range buildProfiles {
+	artifacts := []appIdentityArtifact{{RelativePath: "android/app/app_identity.generated.json", Content: append(jsonBytes, '\n')}}
+	for _, target := range targets {
+		identity := identities["ios"][target]
+		parts := strings.Split(target, "/")
+		configurationTarget := parts[0]
+		if identity.BuildMode == "release" {
+			configurationTarget = identity.BuildProfile
+		}
+		configurationName := strings.ToUpper(identity.BuildMode[:1]) + identity.BuildMode[1:] + "-" + configurationTarget
+		identityName := configurationTarget + "-" + identity.BuildMode
 		identityLines := []string{
 			"// Generated from " + appIdentityMetadataRelativePath + "; do not edit.",
 			"QWQ_APP_IDENTITY_SOURCE_SHA256 = sha256:" + sourceSHA,
-			"QWQ_APP_BUILD_PROFILE = " + buildProfile,
-			"QWQ_IOS_BASE_BUNDLE_ID = " + contract.BaseApplicationIDs["ios"].Value,
-			"QWQ_PROFILE_BUNDLE_ID_SUFFIX = " + contract.BuildProfileSuffixes[buildProfile],
-			"QWQ_APP_DISPLAY_NAME_BASE = " + contract.DisplayNameBase,
-			"QWQ_PROFILE_DISPLAY_MARK = " + contract.BuildProfileMarks[buildProfile],
+			"QWQ_APP_BUILD_PROFILE = " + identity.BuildProfile,
+			strings.TrimRight("QWQ_APP_RUNTIME_ENV = "+identity.Environment, " "),
+			"QWQ_IOS_APPLICATION_ID = " + identity.ApplicationID,
+			"QWQ_APP_DISPLAY_NAME = " + identity.DisplayName,
+			"QWQ_APP_PROMOTABLE = " + fmt.Sprintf("%t", identity.Promotable),
 			"",
 		}
 		artifacts = append(artifacts, appIdentityArtifact{
-			RelativePath: filepath.ToSlash(filepath.Join("ios", "Flutter", "Identity", buildProfile+".xcconfig")),
+			RelativePath: filepath.ToSlash(filepath.Join("ios", "Flutter", "Identity", identityName+".xcconfig")),
 			Content:      []byte(strings.Join(identityLines, "\n")),
 		})
-		for _, buildMode := range metadata.BuildModes {
-			configurationName := strings.ToUpper(buildMode[:1]) + buildMode[1:] + "-" + buildProfile
-			baseConfigName := "Base/" + strings.ToUpper(buildMode[:1]) + buildMode[1:] + ".xcconfig"
-			lowerConfigurationName := strings.ToLower(configurationName)
-			wrapper := strings.Join([]string{
-				"// Generated from " + appIdentityMetadataRelativePath + "; do not edit.",
-				"#include \"" + baseConfigName + "\"",
-				"#include? \"Pods/Target Support Files/Pods-Runner/Pods-Runner." + lowerConfigurationName + ".xcconfig\"",
-				"#include \"Identity/" + buildProfile + ".xcconfig\"",
-				"QWQ_EXPECTED_BUILD_MODE = " + buildMode,
-				"QWQ_EXPECTED_CONFIGURATION = " + configurationName,
-				"QWQ_MODE_BUNDLE_ID_SUFFIX = " + contract.BuildModeSuffixes[buildMode],
-				"QWQ_MODE_DISPLAY_MARK = " + contract.BuildModeDisplayMarks[buildMode],
-				"QWQ_BUNDLE_ID_SUFFIX = $(QWQ_PROFILE_BUNDLE_ID_SUFFIX)$(QWQ_MODE_BUNDLE_ID_SUFFIX)",
-				"QWQ_APP_DISPLAY_NAME = $(QWQ_APP_DISPLAY_NAME_BASE)$(QWQ_PROFILE_DISPLAY_MARK)$(QWQ_MODE_DISPLAY_MARK)",
-				"// FLUTTER_TARGET is owned by Flutter invocation and validated against launch metadata.",
-				"",
-			}, "\n")
-			artifacts = append(artifacts, appIdentityArtifact{
-				RelativePath: filepath.ToSlash(filepath.Join("ios", "Flutter", configurationName+".xcconfig")),
-				Content:      []byte(wrapper),
-			})
-		}
+		baseConfigName := "Base/" + strings.ToUpper(identity.BuildMode[:1]) + identity.BuildMode[1:] + ".xcconfig"
+		wrapper := strings.Join([]string{
+			"// Generated from " + appIdentityMetadataRelativePath + "; do not edit.",
+			"#include \"" + baseConfigName + "\"",
+			"#include? \"Pods/Target Support Files/Pods-Runner/Pods-Runner." + strings.ToLower(configurationName) + ".xcconfig\"",
+			"#include \"Identity/" + identityName + ".xcconfig\"",
+			"QWQ_EXPECTED_BUILD_MODE = " + identity.BuildMode,
+			"QWQ_EXPECTED_CONFIGURATION = " + configurationName,
+			"// FLUTTER_TARGET is owned by Flutter invocation and validated against launch metadata.",
+			"",
+		}, "\n")
+		artifacts = append(artifacts, appIdentityArtifact{
+			RelativePath: filepath.ToSlash(filepath.Join("ios", "Flutter", configurationName+".xcconfig")), Content: []byte(wrapper),
+		})
 	}
 	return artifacts, nil
 }
@@ -273,23 +330,36 @@ func buildAppIdentityGeneratedManifest(artifacts []appIdentityArtifact, sourceSH
 	outputs := make([]appIdentityManifestOutput, 0, len(artifacts))
 	for _, artifact := range artifacts {
 		sum := sha256.Sum256(artifact.Content)
-		outputs = append(outputs, appIdentityManifestOutput{
-			Path:   artifact.RelativePath,
-			SHA256: "sha256:" + hex.EncodeToString(sum[:]),
-			Bytes:  len(artifact.Content),
-		})
+		outputs = append(outputs, appIdentityManifestOutput{Path: artifact.RelativePath, SHA256: "sha256:" + hex.EncodeToString(sum[:]), Bytes: len(artifact.Content)})
 	}
 	sort.Slice(outputs, func(i, j int) bool { return outputs[i].Path < outputs[j].Path })
-	return appIdentityGeneratedManifest{
-		Schema:       "qwq.app-identity-codegen-manifest",
-		Generator:    "tools/codegen_app_metadata --app-identity-only",
-		Source:       appIdentityMetadataRelativePath,
-		SourceSHA256: "sha256:" + sourceSHA,
-		Outputs:      outputs,
-	}
+	return appIdentityGeneratedManifest{Schema: "qwq.app-identity-codegen-manifest", Generator: "tools/codegen_app_metadata --app-identity-only", Source: appIdentityMetadataRelativePath, SourceSHA256: "sha256:" + sourceSHA, Outputs: outputs}
 }
 
 func writeAppIdentityArtifacts(appDir, manifestPath string, artifacts []appIdentityArtifact, manifest appIdentityGeneratedManifest) error {
+	if previousBytes, err := os.ReadFile(manifestPath); err == nil {
+		var previous appIdentityGeneratedManifest
+		if json.Unmarshal(previousBytes, &previous) == nil && previous.Schema == "qwq.app-identity-codegen-manifest" {
+			current := map[string]struct{}{}
+			for _, artifact := range artifacts {
+				current[artifact.RelativePath] = struct{}{}
+			}
+			for _, output := range previous.Outputs {
+				if _, retained := current[output.Path]; retained {
+					continue
+				}
+				stalePath := filepath.Clean(filepath.Join(appDir, filepath.FromSlash(output.Path)))
+				appRoot := filepath.Clean(appDir) + string(os.PathSeparator)
+				if !strings.HasPrefix(stalePath, appRoot) {
+					return fmt.Errorf("refuse to remove App identity output outside app root: %s", output.Path)
+				}
+				if err := os.Remove(stalePath); err != nil && !os.IsNotExist(err) {
+					return fmt.Errorf("remove retired App identity artifact %s: %w", stalePath, err)
+				}
+				fmt.Printf("removed retired generated artifact: %s\n", stalePath)
+			}
+		}
+	}
 	for _, artifact := range artifacts {
 		path := filepath.Join(appDir, filepath.FromSlash(artifact.RelativePath))
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {

@@ -27,6 +27,7 @@ from content.execution.task_init import (  # noqa: E402
     execution_target_ref,
     initialize_round,
     initialize_task,
+    target_descriptor,
 )
 from content.execution.workspace import (  # noqa: E402
     entity_catalog_digest,
@@ -87,6 +88,17 @@ def test_one_round_spec_creates_every_declared_carrier_and_derives_mechanical_fi
     assert target_set["targetRefs"] == [f"entities/地点/景区/entity-{token}"]
     assert target_set["targets"][0]["entityRef"] == "/entity/sanfang-qixiang"
     assert target_set["targets"][0]["entityId"] == "entity:sanfang-qixiang"
+    descriptor_binding = target_set["targetDescriptors"][0]
+    descriptor = json.loads((root / descriptor_binding["ref"]).read_text(encoding="utf-8"))
+    mapping_payload = {key: value for key, value in descriptor.items() if key != "mappingDigest"}
+    assert descriptor["processRef"] == target_set["targetRefs"][0]
+    assert not descriptor["processRef"].endswith("/1")
+    assert descriptor["canonicalObjectRef"] == "entities/sanfang-qixiang/1"
+    assert descriptor["expectedCurrentVersion"] is None
+    assert descriptor["versionAuthority"] == "initial_create"
+    assert descriptor["contentVersion"] == 1
+    mapping_raw = (json.dumps(mapping_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    assert descriptor["mappingDigest"] == "sha256:" + hashlib.sha256(mapping_raw).hexdigest()
     copied = json.loads((root / "0.plan/inputs/candidate_bindings.json").read_text(encoding="utf-8"))
     assert copied["candidateCount"] == 1 and copied["entityCatalogDigest"] == target_set["entityCatalogDigest"]
     assert request["carrierDemand"]["ref"].endswith("0.plan/inputs/carrier_demand.json")
@@ -366,3 +378,51 @@ def test_legacy_frozen_inputs_and_receipt_are_never_rewritten(tmp_path: Path) ->
     with pytest.raises(ValueError):
         load_frozen_target_set(_HOMEPAGE_ID)
     assert {path: path.read_bytes() for path in old} == old
+
+
+# correction descriptor authority：round spec 的 requiredVersion 表示 CAS 所见当前版本；descriptor 唯一派生 next version。
+def test_correction_round_freezes_expected_current_version_and_next_descriptor(tmp_path: Path) -> None:
+    execution_id = "20260916--travel-article-correction--contract--pilot-001"
+    target = {
+        "carrier": "article", "name": "西湖", "entityType": "地点/景区",
+        "entityRef": "/entity/lake", "entityId": "entity:lake",
+        "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1,
+        "requiredContentId": "content:lake-guide", "requiredVersion": 1,
+    }
+    path = tmp_path / "correction.json"
+    path.write_text(json.dumps({"schema": "quwoquan_data.round_spec", "executions": {"article": execution_id}, "targets": [target]}), encoding="utf-8")
+
+    assert initialize_round(round_spec_path=path)["executions"][0]["status"] == "created"
+    root = paths.DATA_EXECUTIONS_ROOT / execution_id
+    target_set = json.loads((root / "0.plan/target_set.json").read_bytes())
+    binding = target_set["targetDescriptors"][0]
+    raw = (root / binding["ref"]).read_bytes()
+    descriptor = json.loads(raw)
+    assert descriptor["processRef"] == "posts/article/导览/西湖速览/1"
+    assert descriptor["canonicalObjectRef"] == descriptor["processRef"]
+    assert descriptor["expectedCurrentVersion"] == 1
+    assert descriptor["contentVersion"] == 2
+    assert descriptor["versionAuthority"] == "round_spec.targets.requiredVersion"
+    payload = {key: value for key, value in descriptor.items() if key != "mappingDigest"}
+    assert descriptor["mappingDigest"] == "sha256:" + hashlib.sha256(
+        (json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    ).hexdigest()
+    assert binding["digest"] == "sha256:" + hashlib.sha256(raw).hexdigest()
+
+    assert initialize_round(round_spec_path=path)["executions"][0]["status"] == "replayed"
+    changed = json.loads(path.read_bytes())
+    changed["targets"][0]["requiredVersion"] = 2
+    path.write_text(json.dumps(changed), encoding="utf-8")
+    with pytest.raises(TaskInitConflict, match="内容不同"):
+        initialize_round(round_spec_path=path)
+    assert (root / binding["ref"]).read_bytes() == raw
+
+
+@pytest.mark.parametrize("expected_current", [0, -1])
+def test_descriptor_authority_rejects_non_positive_expected_current_version(expected_current: int) -> None:
+    with pytest.raises(TaskInitError, match="REVISION_DESCRIPTOR_AUTHORITY"):
+        target_descriptor(
+            process_ref="posts/article/导览/西湖速览/1",
+            target={"entityRef": "/entity/lake", "entityId": "entity:lake"},
+            carrier="article", expected_current_version=expected_current,
+        )

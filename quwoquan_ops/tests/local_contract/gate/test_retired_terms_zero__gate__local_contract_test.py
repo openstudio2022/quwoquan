@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -118,6 +119,114 @@ def test_gate_prefix_fails_before_heavy_commands(runtime_tree: Path, scope: str,
     assert completed.returncode != 0
     assert "value.py:1:legacyAvailable" in completed.stdout, completed.stdout + completed.stderr
     assert "vertical architecture static ratchet" not in completed.stdout
+
+
+POLICY_PATH = "quwoquan_ops/policies/gates/governed_schema_migration_boundaries.json"
+
+
+@pytest.fixture
+def migration_tree(runtime_tree: Path) -> Path:
+    """复制当前生产边界 exact bytes，只在私有树注入反例。"""
+    (runtime_tree / "quwoquan_ops/cli/value.py").unlink()
+    policy = json.loads((ROOT / POLICY_PATH).read_text())
+    boundary = policy["boundaries"][0]
+    paths = [POLICY_PATH, boundary["spec_ref"].split("#")[0]]
+    paths.extend(boundary[key] for key in ("cli", "registration", "handler", "implementation"))
+    paths.extend("quwoquan_data/scripts/" + boundary[key].rpartition(".")[0].replace(".", "/") + ".py"
+                 for key in ("current_reader", "current_writer"))
+    paths.extend(path.relative_to(ROOT).as_posix() for path in (ROOT / boundary["schema_root"]).rglob("*.schema.json"))
+    for relative in paths:
+        target = runtime_tree / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, target)
+    return runtime_tree
+
+
+def _scan_boundary(root: Path) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, "-B", str(root / GATE.relative_to(ROOT))],
+                          cwd=root, capture_output=True, text=True, timeout=30)
+
+
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/spec.md#gwt-003.t1
+def test_governed_migration_actual_boundary_passes(migration_tree: Path) -> None:
+    completed = _scan_boundary(migration_tree)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+@pytest.mark.parametrize("case", [
+    "reader_import", "reader_alias_import", "reader_parent_import", "reader_schema",
+    "reader_schema_path", "current_schema_ref", "extra_old_schema", "normal_cli",
+    "remove_guard", "remove_governed_call", "remove_current_readback", "remove_current_validation",
+    "unrelated_term", "same_line_term", "dynamic_import", "handler_direct_call",
+    "dynamic_import_expression", "dynamic_schema", "writer_old_schema", "current_reader_validation",
+    "early_return", "output_source_identity", "open_dynamic_import",
+])
+def test_governed_migration_rejects_actual_boundary_escape(migration_tree: Path, case: str) -> None:
+    # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/spec.md#gwt-003.t2
+    # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/spec.md#gwt-003.t3
+    # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/spec.md#gwt-003.t4
+    boundary = json.loads((migration_tree / POLICY_PATH).read_text())["boundaries"][0]
+    implementation = migration_tree / boundary["implementation"]
+    registration = migration_tree / boundary["registration"]
+    module = "content.release.canonical.legacy_release_repackage"
+    normal = migration_tree / "quwoquan_data/scripts/content/ordinary_reader.py"
+    if case == "reader_import":
+        normal.write_text(f"import {module}\n")
+    elif case == "reader_alias_import":
+        normal.write_text(f"from {module} import freeze_legacy_source as parse\n")
+    elif case == "reader_parent_import":
+        normal.write_text("from content.release.canonical import legacy_release_repackage as parser\n")
+    elif case == "reader_schema":
+        normal.write_text('from core.schema import assert_valid as validate\nvalidate({}, "release", "legacy_release_cohort_v1")\n')
+    elif case == "reader_schema_path":
+        normal.write_text('SCHEMA = "release/legacy_release_cohort_v1.schema.json"\n')
+    elif case == "current_schema_ref":
+        path = migration_tree / boundary["schema_root"] / boundary["output_schemas"][0]
+        value = json.loads(path.read_text())
+        value["allOf"] = [{"$ref": "legacy_release_cohort_v1.schema.json"}]
+        path.write_text(json.dumps(value))
+    elif case == "extra_old_schema":
+        path = migration_tree / boundary["schema_root"] / boundary["input_schemas"][0]
+        value = json.loads(path.read_text())
+        value["allOf"] = [{"$ref": "release_cohort.schema.json"}]
+        path.write_text(json.dumps(value))
+    elif case == "normal_cli":
+        registration.write_text(registration.read_text() + '\n    normal = commands.add_parser("read")\n    normal.set_defaults(handler=owner.handle_repackage_legacy)\n')
+    elif case == "remove_guard":
+        implementation.write_text(implementation.read_text().replace("source.release_id == target_id", "source.release_id != target_id"))
+    elif case == "remove_governed_call":
+        path = migration_tree / boundary["handler"]
+        path.write_text(path.read_text().replace("governed_repackage_call(execute_repackage,", "execute_repackage("))
+    elif case == "remove_current_readback":
+        implementation.write_text(implementation.read_text().replace("read_producer_release_handoff(", "unverified_read("))
+    elif case == "remove_current_validation":
+        implementation.write_text(implementation.read_text().replace('assert_valid(document, "release", "producer_release_handoff", label="repackaged handoff")', "pass"))
+    elif case == "unrelated_term":
+        implementation.write_text(implementation.read_text() + "\nlegacyFallback = True\n")
+    elif case == "same_line_term":
+        implementation.write_text(implementation.read_text().replace('LEGACY_V1_LITERAL = "quwoquan_data.producer_release_handoff"', 'LEGACY_V1_LITERAL = "quwoquan_data.producer_release_handoff"; print("LEGACY_V1_LITERAL")'))
+    elif case == "dynamic_import":
+        normal.write_text(f'import importlib\nparser = importlib.import_module("{module}")\n')
+    elif case == "handler_direct_call":
+        normal.write_text('from content.release.canonical import handler as h\nh.handle_repackage_legacy(None)\n')
+    elif case == "dynamic_import_expression":
+        normal.write_text('import importlib\nparser = importlib.import_module("content.release.canonical." + "le" + "gacy_release_repackage")\n')
+    elif case == "dynamic_schema":
+        normal.write_text('from core.schema import assert_valid as validate\nvalidate({}, "release", "le" + "gacy_release_cohort_v1")\n')
+    elif case == "writer_old_schema":
+        implementation.write_text(implementation.read_text().replace('assert_valid(document, "release", "producer_release_handoff", label="repackaged handoff")', 'assert_valid(document, "release", "legacy_release_cohort_v1")\n        assert_valid(document, "release", "producer_release_handoff", label="repackaged handoff")'))
+    elif case == "current_reader_validation":
+        path = migration_tree / "quwoquan_data/scripts/content/release/canonical/producer_release_handoff.py"
+        path.write_text(path.read_text().replace('assert_valid(value, "release", "producer_release_handoff", label="producer release handoff")', 'pass'))
+    elif case == "early_return":
+        implementation.write_text(implementation.read_text().replace('    source = frozen_source\n', '    return {}\n    source = frozen_source\n'))
+    elif case == "output_source_identity":
+        implementation.write_text(implementation.read_text().replace('write_producer_release_handoff(release_id=target_id,', 'write_producer_release_handoff(release_id=source.release_id,'))
+    elif case == "open_dynamic_import":
+        normal.write_text("import importlib\nparser = importlib.import_module(name)\n")
+    completed = _scan_boundary(migration_tree)
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    assert "FAIL" in completed.stdout
 
 
 def test_gate_has_no_allowlist_escape() -> None:
@@ -311,6 +420,7 @@ RETIRED_CONTENT_AXIS_COMPLIANT = (
     (
         "moment_local_variable.py",
         (
+            "def inspect(now, pending, policy):",
             "    moment = now if now is not None else int(time.time())",
             "    overdue = [c for c in pending if c.is_overdue(policy, now=moment)]",
             '    return {"checkedAt": moment}',
@@ -349,7 +459,11 @@ RETIRED_CONTENT_AXIS_COMPLIANT = (
         ),
     ),
     ("notes_collection.json", ('  "notes": ["first"],', '  "note": "closed release-media domain"')),
-    ("promote_to_workspace.py", ("    workspacePromotion = resolve_promote_to_workspace(plan)",)),
+    ("promote_to_workspace.py", (
+        "def plan_workspace(plan):",
+        "    workspacePromotion = resolve_promote_to_workspace(plan)",
+        "    return workspacePromotion",
+    )),
     ("canonical_metrics.go", ('ImpressionImage atomic.Int64', '"deep_engage_video": counter.Load(),', 'CommentArticle atomic.Int64')),
     ("unrelated_metric_words.go", ('ShareWechatMoments atomic.Int64', 'ClickMomentaryButton()', 'ImpressionPhotographer atomic.Int64', '"share_photo_library": enabled,')),
     ("negative_metric__local_contract_test.go", ('ImpressionMoment atomic.Int64', '"click_photo": counter.Load(),')),

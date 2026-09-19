@@ -234,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.action == "resync" and args.execute:
         results = execute_resync()
         print(json.dumps([item.as_dict() for item in results], ensure_ascii=False, indent=2))
-        return 0 if all(item.outcome == "ff_done" for item in results) else 1
+        return 0 if all(item.outcome != "ff_failed" for item in results) else 1
     try:
         commands = render(args.action)
     except RuntimeError as error:

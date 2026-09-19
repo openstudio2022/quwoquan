@@ -16,6 +16,12 @@ OLD_ENUMS = {
     "research", "commercial", "research_release", "commercial_release",
     "research_allowed", "commercial_allowed", "commercial_variant",
 }
+LEGACY_INPUT_ENUMS = {
+    Path("release/legacy_release_cohort_v1.schema.json"): {"research"},
+    Path("release/legacy_content_pool_handoff_query_v1.schema.json"): {
+        "research", "commercial", "commercial_variant",
+    },
+}
 
 
 def _attribution() -> dict[str, object]:
@@ -39,9 +45,17 @@ def _attribution() -> dict[str, object]:
 
 
 def test_all_data_schemas_exclude_retired_object_classification_enums() -> None:
-    for path in (DATA_ROOT / "schema").rglob("*.json"):
+    schema_root = DATA_ROOT / "schema"
+    seen_legacy_inputs: set[Path] = set()
+    for path in schema_root.rglob("*.json"):
         document = json.loads(path.read_text(encoding="utf-8"))
-        assert not OLD_ENUMS.intersection(_enum_strings(document)), path
+        retired = OLD_ENUMS.intersection(_enum_strings(document))
+        relative = path.relative_to(schema_root)
+        expected = LEGACY_INPUT_ENUMS.get(relative, set())
+        assert retired == expected, path
+        if expected:
+            seen_legacy_inputs.add(relative)
+    assert seen_legacy_inputs == set(LEGACY_INPUT_ENUMS)
 
 
 def _enum_strings(value: object) -> set[str]:

@@ -89,6 +89,22 @@ func validateAppLaunchContractMetadata(
 	if err := validateAppLaunchRuntimeConfigContracts(artifact, launch); err != nil {
 		return err
 	}
+	var control struct {
+		SchemaValue string               `yaml:"schema_value"`
+		Actor       string               `yaml:"actor"`
+		BaseFields  []string             `yaml:"base_fields"`
+		Selection   appLaunchSchemaField `yaml:"selection"`
+	}
+	if err := launch.AppContentUATLaunchControl.Decode(&control); err != nil {
+		return err
+	}
+	if control.SchemaValue != "quwoquan_ops.app_content_uat_launch_control.v1" || control.Actor != "app-content-uat" || len(control.BaseFields) == 0 ||
+		!reflect.DeepEqual(control.Selection.Fields["mode"].AllowedValues, []string{"standard", "isolated"}) || control.Selection.Fields["snapshotDigest"].Format != "sha256_identity" || control.Selection.Fields["instanceId"].Format != "rehearsal_instance_id" {
+		return fmt.Errorf("canonical launch control selection identity is invalid")
+	}
+	if err := validateObservationContract(launch); err != nil {
+		return err
+	}
 	if err := validateAppLaunchSchemas(artifact, launch); err != nil {
 		return err
 	}
@@ -218,6 +234,16 @@ func validateAppLaunchRuntimeConfigContracts(
 		offline.Fields["contentSource"].Const != "bundled_snapshot" ||
 		offline.Fields["trustEnvelopeDigest"].Format != "sha256_identity" {
 		return fmt.Errorf("offline bootstrap must bind Alpha/nonprod to the artifact trust")
+	}
+	space := offline.Fields["rehearsalSpace"]
+	if space.Type != "object" || space.AdditionalFields == nil || *space.AdditionalFields ||
+		!reflect.DeepEqual(space.Fields["mode"].AllowedValues, []string{"standard", "isolated"}) ||
+		space.Fields["snapshotDigest"].Format != "sha256_identity" ||
+		space.Fields["instanceId"].Format != "rehearsal_instance_id" {
+		return fmt.Errorf("offline rehearsal space must bind explicit mode, snapshot and isolated instance")
+	}
+	if err := requireExactStringSet("offline rehearsal fields", space.RequiredFields, []string{"mode", "snapshotDigest", "instanceId", "caseId", "lifecycleGeneration", "observationBinding"}); err != nil {
+		return err
 	}
 	if err := requireExactStringSet("offline runtime fields", mapSchemaFieldKeys(offline.Fields["runtime"].Fields), []string{"appRuntimeEnv"}); err != nil {
 		return err
@@ -504,15 +530,23 @@ func validateAppManagedPreparationSchema(schema appLaunchSchemaContract) error {
 
 func appLaunchNamedSchemas(schemas appLaunchSchemas) map[string]appLaunchSchemaContract {
 	return map[string]appLaunchSchemaContract{
-		"runtime_config_trust_envelope":     schemas.RuntimeConfigTrustEnvelope,
-		"runtime_config_package":            schemas.RuntimeConfigPackage,
-		"offline_bootstrap_document":        schemas.OfflineBootstrapDocument,
-		"runtime_config_activation_request": schemas.RuntimeConfigActivationRequest,
-		"runtime_config_activation_receipt": schemas.RuntimeConfigActivationReceipt,
-		"app_launch_attempt":                schemas.AppLaunchAttempt,
-		"app_effective_launch_manifest":     schemas.AppEffectiveLaunchManifest,
-		"app_launcher_handoff":              schemas.AppLauncherHandoff,
-		"app_managed_preparation":           schemas.AppManagedPreparation,
+		"external_uat_managed_launch_admission": schemas.ExternalUATManagedLaunchAdmission,
+		"external_uat_terminal_result":          schemas.ExternalUATTerminalResult,
+		"external_uat_broker_query":             schemas.ExternalUATBrokerQuery,
+		"external_uat_sealed_snapshot":          schemas.ExternalUATSealedSnapshot,
+		"external_uat_broker_result":            schemas.ExternalUATBrokerResult,
+		"external_uat_teardown_receipt":         schemas.ExternalUATTeardownReceipt,
+		"external_uat_comparison_result":        schemas.ExternalUATComparisonResult,
+		"rehearsal_storage_observation":         schemas.RehearsalStorageObservation,
+		"runtime_config_trust_envelope":         schemas.RuntimeConfigTrustEnvelope,
+		"runtime_config_package":                schemas.RuntimeConfigPackage,
+		"offline_bootstrap_document":            schemas.OfflineBootstrapDocument,
+		"runtime_config_activation_request":     schemas.RuntimeConfigActivationRequest,
+		"runtime_config_activation_receipt":     schemas.RuntimeConfigActivationReceipt,
+		"app_launch_attempt":                    schemas.AppLaunchAttempt,
+		"app_effective_launch_manifest":         schemas.AppEffectiveLaunchManifest,
+		"app_launcher_handoff":                  schemas.AppLauncherHandoff,
+		"app_managed_preparation":               schemas.AppManagedPreparation,
 	}
 }
 

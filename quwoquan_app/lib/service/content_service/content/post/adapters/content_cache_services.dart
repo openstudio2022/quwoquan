@@ -714,7 +714,21 @@ class ContentQuerySnapshotStore {
       _isolationIdentity != null &&
       _isReplayable(snapshot) &&
       _snapshotAge(snapshot) < maximumAge &&
+      !_containsExpiredOrRevokedIntersection(snapshot) &&
       (replayPolicy?.call(snapshot) ?? false);
+
+  bool _containsExpiredOrRevokedIntersection(ContentQuerySnapshot snapshot) {
+    final now = _now().toUtc();
+    for (final item in snapshot.items) {
+      for (final reason in item.intersectionReasons ?? const []) {
+        final lifecycle = reason.lifecycleState.trim().toLowerCase();
+        if (lifecycle == 'revoked' || lifecycle == 'expired') return true;
+        final expiresAt = DateTime.tryParse(reason.expiresAt)?.toUtc();
+        if (expiresAt == null || !expiresAt.isAfter(now)) return true;
+      }
+    }
+    return false;
+  }
 
   void requireCurrentRequest(int epoch) {
     if (epoch != _requestEpoch) throw const CloudOperationCancelledException();

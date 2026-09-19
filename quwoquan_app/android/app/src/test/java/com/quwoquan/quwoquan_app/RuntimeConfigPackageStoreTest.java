@@ -80,6 +80,7 @@ public final class RuntimeConfigPackageStoreTest {
     material.packageDocument.addProperty("target", "alpha-local");
     material.packageDocument.addProperty("contentSource", "bundled_snapshot");
     material.packageDocument.addProperty("trustEnvelopeDigest", material.trustDigest());
+    material.packageDocument.add("rehearsalSpace", standardRehearsalSpace());
     material.packageDocument.remove("issuedAt");
     material.packageDocument.remove("expiresAt");
     JsonObject runtime = new JsonObject();
@@ -113,6 +114,7 @@ public final class RuntimeConfigPackageStoreTest {
     offline.packageDocument.remove("expiresAt");
     offline.packageDocument.addProperty("contentSource", "bundled_snapshot");
     offline.packageDocument.addProperty("trustEnvelopeDigest", offline.trustDigest());
+    offline.packageDocument.add("rehearsalSpace", standardRehearsalSpace());
     JsonObject runtime = new JsonObject();
     runtime.addProperty("appRuntimeEnv", "alpha");
     offline.packageDocument.add("runtime", runtime);
@@ -375,6 +377,220 @@ public final class RuntimeConfigPackageStoreTest {
     assertEquals(request.get("effectiveLaunchManifestDigest").getAsString(), envelope.get("effectiveLaunchManifestDigest"));
     assertEquals(sha256(RuntimeConfigPackageStore.canonicalJsonBytes(request)), readLaunchReceipt().get("requestDigest").getAsString());
     assertArrayEquals(RuntimeConfigPackageStore.canonicalJsonBytes(readLaunchReceipt()), Files.readAllBytes(activeReceiptFile().toPath()));
+  }
+
+  @Test
+  public void canonicalActivationReplacesExactPreviousLayoutOfflinePredecessor() throws Exception {
+    TestMaterial historical = TestMaterial.create("nonprod");
+    TestMaterial candidate = historical.nextPackage("beta", "beta-local");
+    makeOfflineBootstrap(historical, false);
+    byte[] previousLayoutBytes = RuntimeConfigPackageStore.canonicalJsonBytes(historical.packageDocument);
+    Files.write(activeFile().toPath(), previousLayoutBytes);
+    writePreviousLayoutActiveReceipt(historical);
+
+    RuntimeConfigPackageStore store =
+        createStore(historical, RuntimeConfigPackageStore.durableAtomicWriter());
+    assertEquals("runtime_config_schema_mismatch", store.readState().error.code);
+
+    JsonObject request = activationRequest(candidate, historical.packageDigest());
+    RuntimeConfigActivationCoordinator coordinator =
+        new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+
+    RuntimeConfigActivationCoordinator.ConsumeResult result =
+        coordinator.consumePendingRequest(writeActivationRequest(request));
+
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED, result.kind);
+    assertEquals(candidate.packageDigest(), store.readCurrentActiveDigest());
+    assertFalse(java.util.Arrays.equals(previousLayoutBytes, Files.readAllBytes(activeFile().toPath())));
+  }
+
+  @Test
+  public void canonicalActivationAcceptsPreviousLayoutSelfSupplyReceiptAndPreservesHistory()
+      throws Exception {
+    TestMaterial historical = TestMaterial.create("nonprod");
+    TestMaterial candidate = historical.nextPackage("beta", "beta-local");
+    makeOfflineBootstrap(historical, false);
+    byte[] packageBytes = RuntimeConfigPackageStore.canonicalJsonBytes(historical.packageDocument);
+    Files.write(activeFile().toPath(), packageBytes);
+    byte[] receiptBytes = writePreviousLayoutActiveReceipt(historical, "build_time_self_supply");
+    RuntimeConfigPackageStore store =
+        createStore(historical, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator coordinator =
+        new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+
+    RuntimeConfigActivationCoordinator.ConsumeResult result = coordinator.consumePendingRequest(
+        writeActivationRequest(activationRequest(candidate, historical.packageDigest())));
+
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED, result.kind);
+    File history = previousLayoutHistoryDirectory(historical.packageDigest());
+    assertArrayEquals(packageBytes, Files.readAllBytes(
+        new File(history, RuntimeConfigPackageStore.PREVIOUS_LAYOUT_MIGRATION_PACKAGE_FILE_NAME).toPath()));
+    assertArrayEquals(receiptBytes, Files.readAllBytes(
+        new File(history, RuntimeConfigPackageStore.PREVIOUS_LAYOUT_MIGRATION_RECEIPT_FILE_NAME).toPath()));
+    JsonObject audit = JsonParser.parseString(Files.readString(
+        new File(history, RuntimeConfigPackageStore.PREVIOUS_LAYOUT_MIGRATION_AUDIT_FILE_NAME).toPath()))
+        .getAsJsonObject();
+    assertEquals(2, audit.size());
+    assertEquals(historical.packageDigest(), audit.get("packageDigest").getAsString());
+    assertEquals(sha256(receiptBytes), audit.get("receiptDigest").getAsString());
+  }
+
+  @Test
+  public void previousLayoutPredecessorStillRequiresCanonicalExternalActivationRequest()
+      throws Exception {
+    TestMaterial historical = TestMaterial.create("nonprod");
+    TestMaterial candidate = historical.nextPackage("beta", "beta-local");
+    makeOfflineBootstrap(historical, false);
+    byte[] before = RuntimeConfigPackageStore.canonicalJsonBytes(historical.packageDocument);
+    Files.write(activeFile().toPath(), before);
+    writePreviousLayoutActiveReceipt(historical, "build_time_self_supply");
+    RuntimeConfigPackageStore store =
+        createStore(historical, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator coordinator =
+        new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+    JsonObject request = activationRequest(candidate, historical.packageDigest());
+    request.getAsJsonObject("effectiveLaunchManifest")
+        .addProperty("runtimeConfigSupplyMode", "build_time_self_supply");
+    refreshEffectiveManifestDigest(request);
+
+    RuntimeConfigActivationCoordinator.ConsumeResult result = coordinator.consumePendingRequest(
+        writeActivationRequest(request));
+
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.FAILED, result.kind);
+    assertEquals("runtime_config_activation_identity_mismatch", result.errorCode);
+    assertArrayEquals(before, Files.readAllBytes(activeFile().toPath()));
+    assertFalse(previousLayoutHistoryDirectory(historical.packageDigest()).exists());
+  }
+
+  @Test
+  public void canonicalActivationReusesExactPreviousLayoutMigrationHistory() throws Exception {
+    TestMaterial historical = TestMaterial.create("nonprod");
+    TestMaterial candidate = historical.nextPackage("beta", "beta-local");
+    makeOfflineBootstrap(historical, false);
+    byte[] packageBytes = RuntimeConfigPackageStore.canonicalJsonBytes(historical.packageDocument);
+    Files.write(activeFile().toPath(), packageBytes);
+    byte[] receiptBytes = writePreviousLayoutActiveReceipt(historical);
+    writeExactPreviousLayoutHistory(historical.packageDigest(), packageBytes, receiptBytes);
+    RuntimeConfigPackageStore store =
+        createStore(historical, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator coordinator =
+        new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+
+    RuntimeConfigActivationCoordinator.ConsumeResult result = coordinator.consumePendingRequest(
+        writeActivationRequest(activationRequest(candidate, historical.packageDigest())));
+
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED, result.kind);
+    assertEquals(candidate.packageDigest(), store.readCurrentActiveDigest());
+  }
+
+  @Test
+  public void previousLayoutHistoryCollisionOrWriteFailureDoesNotReplaceActive() throws Exception {
+    for (boolean collision : new boolean[] {true, false}) {
+      temporaryFolder.delete();
+      temporaryFolder.create();
+      TestMaterial historical = TestMaterial.create("nonprod");
+      TestMaterial candidate = historical.nextPackage("beta", "beta-local");
+      makeOfflineBootstrap(historical, false);
+      byte[] before = RuntimeConfigPackageStore.canonicalJsonBytes(historical.packageDocument);
+      Files.write(activeFile().toPath(), before);
+      writePreviousLayoutActiveReceipt(historical);
+      RuntimeConfigPackageStore.AtomicWriter writer =
+          RuntimeConfigPackageStore.durableAtomicWriter();
+      if (collision) {
+        File history = previousLayoutHistoryDirectory(historical.packageDigest());
+        assertTrue(history.mkdirs());
+        Files.writeString(
+            new File(history, RuntimeConfigPackageStore.PREVIOUS_LAYOUT_MIGRATION_PACKAGE_FILE_NAME).toPath(),
+            "collision");
+      } else {
+        writer = (destination, payload) -> {
+          if (destination.getParentFile().getParentFile().getName().equals(
+              RuntimeConfigPackageStore.PREVIOUS_LAYOUT_MIGRATION_HISTORY_DIRECTORY)) {
+            throw new IOException("injected history write failure");
+          }
+          RuntimeConfigPackageStore.writeDurablyAndReplace(destination, payload);
+        };
+      }
+      RuntimeConfigPackageStore store = createStore(historical, writer);
+      RuntimeConfigActivationCoordinator coordinator =
+          new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+
+      RuntimeConfigActivationCoordinator.ConsumeResult result = coordinator.consumePendingRequest(
+          writeActivationRequest(activationRequest(candidate, historical.packageDigest())));
+
+      assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.FAILED, result.kind);
+      assertEquals("runtime_config_activation_write_failed", result.errorCode);
+      assertArrayEquals(before, Files.readAllBytes(activeFile().toPath()));
+    }
+  }
+
+  @Test
+  public void canonicalActivationRejectsUnknownOrTamperedPreviousLayoutPredecessor() throws Exception {
+    for (boolean unknownShape : new boolean[] {true, false}) {
+      temporaryFolder.delete();
+      temporaryFolder.create();
+      TestMaterial historical = TestMaterial.create("nonprod");
+      TestMaterial candidate = historical.nextPackage("beta", "beta-local");
+      makeOfflineBootstrap(historical, false);
+      if (unknownShape) {
+        historical.packageDocument.addProperty("unknownPreviousLayoutField", "forbidden");
+        historical.resign();
+      } else {
+        historical.packageDocument.getAsJsonObject("runtime")
+            .addProperty("appRuntimeEnv", "tampered");
+      }
+      byte[] before = RuntimeConfigPackageStore.canonicalJsonBytes(historical.packageDocument);
+      Files.write(activeFile().toPath(), before);
+      writePreviousLayoutActiveReceipt(historical);
+      RuntimeConfigPackageStore store =
+          createStore(historical, RuntimeConfigPackageStore.durableAtomicWriter());
+      RuntimeConfigActivationCoordinator coordinator =
+          new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+
+      RuntimeConfigActivationCoordinator.ConsumeResult result = coordinator.consumePendingRequest(
+          writeActivationRequest(activationRequest(candidate, historical.packageDigest())));
+
+      assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.FAILED, result.kind);
+      assertTrue(result.errorCode.equals("runtime_config_schema_mismatch")
+          || result.errorCode.equals("runtime_config_runtime_values_invalid")
+          || result.errorCode.equals("runtime_config_payload_digest_mismatch"));
+      assertArrayEquals(before, Files.readAllBytes(activeFile().toPath()));
+    }
+  }
+
+  @Test
+  public void canonicalActivationRollbackRestoresPreviousLayoutOfflinePredecessor() throws Exception {
+    TestMaterial historical = TestMaterial.create("nonprod");
+    TestMaterial candidate = historical.nextPackage("beta", "beta-local");
+    makeOfflineBootstrap(historical, false);
+    byte[] before = RuntimeConfigPackageStore.canonicalJsonBytes(historical.packageDocument);
+    Files.write(activeFile().toPath(), before);
+    writePreviousLayoutActiveReceipt(historical);
+    boolean[] failed = {false};
+    RuntimeConfigPackageStore store =
+        createStore(historical, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator coordinator =
+        new RuntimeConfigActivationCoordinator(
+            temporaryFolder.getRoot(),
+            store,
+            (destination, payload) -> {
+              if (destination.getName().equals(
+                      RuntimeConfigActivationCoordinator.RECEIPT_FILE_NAME)
+                  && !failed[0]) {
+                failed[0] = true;
+                throw new IOException("injected receipt failure");
+              }
+              RuntimeConfigPackageStore.writeDurablyAndReplace(destination, payload);
+            },
+            requestFile -> Files.deleteIfExists(requestFile.toPath()));
+
+    RuntimeConfigActivationCoordinator.ConsumeResult result = coordinator.consumePendingRequest(
+        writeActivationRequest(activationRequest(candidate, historical.packageDigest())));
+
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.FAILED, result.kind);
+    assertEquals("runtime_config_activation_receipt_write_failed", result.errorCode);
+    assertTrue(failed[0]);
+    assertArrayEquals(before, Files.readAllBytes(activeFile().toPath()));
   }
 
   @Test
@@ -1003,6 +1219,109 @@ public final class RuntimeConfigPackageStoreTest {
   }
 
   @Test
+  public void alreadyActivatedExplicitRequestRepublishesExactCanonicalActiveReceipt()
+      throws Exception {
+    TestMaterial material = TestMaterial.create("nonprod");
+    RuntimeConfigPackageStore store =
+        createStore(material, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator coordinator =
+        new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+    JsonObject request = activationRequest(material, "");
+    String requestDigest = writeActivationRequest(request);
+    assertEquals(
+        RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED,
+        coordinator.consumePendingRequest(requestDigest).kind);
+    File activeReceipt =
+        new File(
+            temporaryFolder.getRoot(),
+            RuntimeConfigActivationCoordinator.ACTIVE_RECEIPT_FILE_NAME);
+    File launchReceipt =
+        new File(
+            temporaryFolder.getRoot(),
+            RuntimeConfigActivationCoordinator.RECEIPT_FILE_NAME);
+    byte[] activeReceiptBytes = Files.readAllBytes(activeReceipt.toPath());
+    byte[] activePackageBytes = Files.readAllBytes(activeFile().toPath());
+    Files.writeString(launchReceipt.toPath(), "stale-launch-receipt");
+    writeActivationRequest(request);
+    List<String> writtenFiles = new ArrayList<>();
+    RuntimeConfigActivationCoordinator retryCoordinator =
+        new RuntimeConfigActivationCoordinator(
+            temporaryFolder.getRoot(),
+            store,
+            (destination, payload) -> {
+              writtenFiles.add(destination.getName());
+              assertArrayEquals(activeReceiptBytes, payload);
+              RuntimeConfigPackageStore.writeDurablyAndReplace(destination, payload);
+            },
+            pendingRequest -> Files.deleteIfExists(pendingRequest.toPath()));
+
+    RuntimeConfigActivationCoordinator.ConsumeResult result =
+        retryCoordinator.consumePendingRequest(requestDigest);
+
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED, result.kind);
+    assertEquals(List.of(RuntimeConfigActivationCoordinator.RECEIPT_FILE_NAME), writtenFiles);
+    assertArrayEquals(activeReceiptBytes, Files.readAllBytes(launchReceipt.toPath()));
+    assertArrayEquals(activeReceiptBytes, Files.readAllBytes(activeReceipt.toPath()));
+    assertArrayEquals(activePackageBytes, Files.readAllBytes(activeFile().toPath()));
+    assertFalse(
+        new File(
+                temporaryFolder.getRoot(),
+                RuntimeConfigActivationCoordinator.REQUEST_FILE_NAME)
+            .exists());
+  }
+
+  @Test
+  public void alreadyActivatedExplicitRequestBlocksWhenLaunchReceiptRepublishFails()
+      throws Exception {
+    TestMaterial material = TestMaterial.create("nonprod");
+    RuntimeConfigPackageStore store =
+        createStore(material, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator initialCoordinator =
+        new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+    JsonObject request = activationRequest(material, "");
+    String requestDigest = writeActivationRequest(request);
+    assertEquals(
+        RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED,
+        initialCoordinator.consumePendingRequest(requestDigest).kind);
+    File activeReceipt =
+        new File(
+            temporaryFolder.getRoot(),
+            RuntimeConfigActivationCoordinator.ACTIVE_RECEIPT_FILE_NAME);
+    byte[] activeReceiptBytes = Files.readAllBytes(activeReceipt.toPath());
+    byte[] activePackageBytes = Files.readAllBytes(activeFile().toPath());
+    File requestFile =
+        new File(
+            temporaryFolder.getRoot(),
+            RuntimeConfigActivationCoordinator.REQUEST_FILE_NAME);
+    writeActivationRequest(request);
+    int[] activeReceiptWrites = {0};
+    RuntimeConfigActivationCoordinator failingCoordinator =
+        new RuntimeConfigActivationCoordinator(
+            temporaryFolder.getRoot(),
+            store,
+            (destination, payload) -> {
+              if (destination.getName().equals(
+                  RuntimeConfigActivationCoordinator.RECEIPT_FILE_NAME)) {
+                throw new IOException("injected launch receipt republish failure");
+              }
+              activeReceiptWrites[0]++;
+              RuntimeConfigPackageStore.writeDurablyAndReplace(destination, payload);
+            },
+            pendingRequest -> Files.deleteIfExists(pendingRequest.toPath()));
+
+    RuntimeConfigActivationCoordinator.ConsumeResult result =
+        failingCoordinator.consumePendingRequest(requestDigest);
+
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.FAILED, result.kind);
+    assertEquals("runtime_config_activation_receipt_write_failed", result.errorCode);
+    assertTrue(result.validationIssues.contains(result.errorCode));
+    assertEquals(0, activeReceiptWrites[0]);
+    assertArrayEquals(activeReceiptBytes, Files.readAllBytes(activeReceipt.toPath()));
+    assertArrayEquals(activePackageBytes, Files.readAllBytes(activeFile().toPath()));
+    assertTrue(requestFile.isFile());
+  }
+
+  @Test
   public void coordinatorTreatsRequestCleanupFailureAsCommittedActivation() throws Exception {
     TestMaterial material = TestMaterial.create("nonprod");
     RuntimeConfigPackageStore store =
@@ -1160,7 +1479,7 @@ public final class RuntimeConfigPackageStoreTest {
             RuntimeConfigActivationCoordinator.ACTIVE_RECEIPT_FILE_NAME);
     JsonObject receipt =
         JsonParser.parseString(Files.readString(activeReceipt.toPath())).getAsJsonObject();
-    receipt.addProperty("launchProvenance", "legacy_unknown_launcher");
+    receipt.addProperty("launchProvenance", "previousLayout_unknown_launcher");
     Files.write(activeReceipt.toPath(), RuntimeConfigPackageStore.canonicalJsonBytes(receipt));
 
     RuntimeConfigPackageStore.RuntimeConfigException error =
@@ -1229,6 +1548,86 @@ public final class RuntimeConfigPackageStoreTest {
             .contains(
                 new com.google.gson.JsonPrimitive(
                     "runtime_config_activation_rollback_failed")));
+  }
+
+  private void makeOfflineBootstrap(TestMaterial material, boolean includeRehearsalSpace)
+      throws Exception {
+    material.packageDocument.addProperty("schema", "app-offline-bootstrap-document");
+    material.packageDocument.addProperty("environment", "alpha");
+    material.packageDocument.addProperty("target", "alpha-local");
+    material.packageDocument.addProperty("contentSource", "bundled_snapshot");
+    material.packageDocument.addProperty("trustEnvelopeDigest", material.trustDigest());
+    material.packageDocument.remove("issuedAt");
+    material.packageDocument.remove("expiresAt");
+    JsonObject runtime = new JsonObject();
+    runtime.addProperty("appRuntimeEnv", "alpha");
+    material.packageDocument.add("runtime", runtime);
+    if (includeRehearsalSpace) {
+      material.packageDocument.add("rehearsalSpace", standardRehearsalSpace());
+    } else {
+      material.packageDocument.remove("rehearsalSpace");
+    }
+    material.resign();
+  }
+
+  private static JsonObject standardRehearsalSpace() {
+    JsonObject rehearsalSpace = new JsonObject();
+    rehearsalSpace.addProperty("mode", "standard");
+    rehearsalSpace.addProperty("snapshotDigest", differentDigest());
+    rehearsalSpace.addProperty("instanceId", "default");
+    return rehearsalSpace;
+  }
+
+  private byte[] writePreviousLayoutActiveReceipt(TestMaterial historical) throws Exception {
+    return writePreviousLayoutActiveReceipt(historical, "external_runtime_package");
+  }
+
+  private byte[] writePreviousLayoutActiveReceipt(TestMaterial historical, String supplyMode) throws Exception {
+    JsonObject receipt = new JsonObject();
+    receipt.addProperty("schema", "app-runtime-config-activation-receipt");
+    receipt.addProperty("status", "activated");
+    receipt.addProperty("requestDigest", differentDigest());
+    receipt.addProperty("environment", "alpha");
+    receipt.addProperty("buildProfile", "nonprod");
+    receipt.addProperty("target", "alpha-local");
+    receipt.addProperty("launchProvenance", "canonical_launcher");
+    receipt.addProperty("runtimeConfigSupplyMode", supplyMode);
+    receipt.addProperty("packageDigest", historical.packageDigest());
+    receipt.addProperty("trustEnvelopeDigest", historical.trustDigest());
+    receipt.addProperty("effectiveLaunchManifestDigest", differentDigest());
+    receipt.addProperty("previousActiveDigest", "");
+    receipt.addProperty("activePackageDigest", historical.packageDigest());
+    receipt.addProperty("errorCode", "");
+    receipt.add("validationIssues", new com.google.gson.JsonArray());
+    byte[] receiptBytes = RuntimeConfigPackageStore.canonicalJsonBytes(receipt);
+    Files.write(
+        new File(temporaryFolder.getRoot(),
+            RuntimeConfigActivationCoordinator.ACTIVE_RECEIPT_FILE_NAME).toPath(),
+        receiptBytes);
+    return receiptBytes;
+  }
+
+  private File previousLayoutHistoryDirectory(String packageDigest) {
+    return new File(
+        new File(temporaryFolder.getRoot(),
+            RuntimeConfigPackageStore.PREVIOUS_LAYOUT_MIGRATION_HISTORY_DIRECTORY),
+        packageDigest.substring("sha256:".length()));
+  }
+
+  private void writeExactPreviousLayoutHistory(
+      String packageDigest, byte[] packageBytes, byte[] receiptBytes) throws Exception {
+    File history = previousLayoutHistoryDirectory(packageDigest);
+    assertTrue(history.mkdirs());
+    Files.write(new File(history,
+        RuntimeConfigPackageStore.PREVIOUS_LAYOUT_MIGRATION_PACKAGE_FILE_NAME).toPath(), packageBytes);
+    Files.write(new File(history,
+        RuntimeConfigPackageStore.PREVIOUS_LAYOUT_MIGRATION_RECEIPT_FILE_NAME).toPath(), receiptBytes);
+    JsonObject audit = new JsonObject();
+    audit.addProperty("packageDigest", packageDigest);
+    audit.addProperty("receiptDigest", sha256(receiptBytes));
+    Files.write(new File(history,
+        RuntimeConfigPackageStore.PREVIOUS_LAYOUT_MIGRATION_AUDIT_FILE_NAME).toPath(),
+        RuntimeConfigPackageStore.canonicalJsonBytes(audit));
   }
 
   private JsonObject activationRequest(TestMaterial material, String expectedActiveDigest)

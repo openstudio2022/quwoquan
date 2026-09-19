@@ -172,7 +172,6 @@ func TestLoadArticlePreservesCompleteSourceAttribution(t *testing.T) {
 		filepath.Join(root, "posts/article/攻略/都江堰/1/manifest.json"),
 		`{
 			"contentType":"article",
-			"contentIdentity":"work",
 			"entityRefs":["地点/景区/都江堰"],
 			"tagRefs":[],
 			"publishTitle":"都江堰",

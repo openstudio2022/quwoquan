@@ -114,6 +114,9 @@ def _validated_pool_record(
             "sourceDigest",
             "entityCatalogDigest",
             "identityDigest",
+            "descriptorRef",
+            "descriptorDigest",
+            "mappingDigest",
         }
         if (
             not isinstance(source_identity, Mapping)

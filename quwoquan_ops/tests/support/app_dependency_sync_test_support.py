@@ -264,7 +264,7 @@ def component_builder(
         if mutate is not None:
             mutate(manifests)
         roots: dict[str, Path] = {}
-        for name in sync.APP_DEPENDENCY_COMPONENTS:
+        for name in sync.dependency_components_for_platforms(context.platforms):
             root = context.generation_root / name
             _write_manifest(root, manifests[name])
             roots[name] = root

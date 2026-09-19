@@ -12,6 +12,7 @@ import 'package:quwoquan_app/runtime/models/visit_models.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/page_context/application/public/assistant_open_context.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// canonical `/video-book` 根页的 premium 沉浸正文。
 ///
@@ -41,11 +42,13 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
           child: ContentViewerComposition.featuredWorks(
             isActive: isActive,
             topChromeSafeInset: 0,
-            onUserTap: (userId, {avatarUrl, displayName, backgroundUrl}) =>
+            onUserTap: (userId, {avatarUrl, avatarAssetId, avatarAccessMode, displayName, backgroundUrl}) =>
                 _openUserProfile(
                   context,
                   userId,
                   avatarUrl: avatarUrl,
+                  avatarAssetId: avatarAssetId,
+                  avatarAccessMode: avatarAccessMode,
                   displayName: displayName,
                   backgroundUrl: backgroundUrl,
                 ),
@@ -63,6 +66,8 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
     BuildContext context,
     String userId, {
     String? avatarUrl,
+    String? avatarAssetId,
+    MediaDeliveryAccessMode? avatarAccessMode,
     String? displayName,
     String? backgroundUrl,
   }) {
@@ -71,6 +76,8 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
       extra: UserProfileRouteExtra(
         personaId: userId,
         avatarUrl: avatarUrl,
+        avatarAssetId: avatarAssetId,
+        avatarAccessMode: avatarAccessMode,
         displayName: displayName,
         backgroundImage: backgroundUrl,
       ),

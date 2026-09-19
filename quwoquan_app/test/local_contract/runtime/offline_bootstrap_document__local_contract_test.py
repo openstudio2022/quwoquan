@@ -48,6 +48,30 @@ class OfflineBootstrapContractTest(unittest.TestCase):
             self.signing.private_key_path.read_bytes(), canonical_signed_payload(document),
         )).decode("ascii")
 
+    # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-008
+    def test_space_selection_is_signed_closed_and_not_a_phone_identity(self):
+        space = self.document["rehearsalSpace"]
+        self.assertEqual(space["mode"], "standard")
+        self.assertEqual(space["instanceId"], "default")
+        self.assertRegex(space["snapshotDigest"], r"^sha256:[a-f0-9]{64}$")
+        for mutate in (
+            lambda d: d.pop("rehearsalSpace"),
+            lambda d: d["rehearsalSpace"].update(mode="isolated"),
+            lambda d: d["rehearsalSpace"].update(instanceId="../old"),
+            lambda d: d["rehearsalSpace"].update(mode="unknown"),
+            lambda d: d["rehearsalSpace"].update(snapshotDigest="invalid"),
+        ):
+            document = deepcopy(self.document)
+            mutate(document)
+            self.resign(document)
+            self.assertTrue(validate_runtime_config_package(document, self.trust))
+        isolated = deepcopy(self.document)
+        isolated["rehearsalSpace"].update(mode="isolated", instanceId="synthetic-space-A")
+        self.resign(isolated)
+        self.assertEqual(validate_runtime_config_package(isolated, self.trust), [])
+        isolated["rehearsalSpace"]["instanceId"] = "synthetic-space-B"
+        self.assertTrue(validate_runtime_config_package(isolated, self.trust))
+
     def test_offline_signature_survives_next_day_without_endpoints(self):
         self.assertNotIn("expiresAt", self.document)
         self.assertNotIn("issuedAt", self.document)

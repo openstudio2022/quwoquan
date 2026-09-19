@@ -49,12 +49,14 @@
 - 关联能力：[`observability-and-alerting`](./observability-and-alerting/spec.md)
 
 <a id="dec-003"></a>
-### DEC-003 App 依赖 bundle 同步以 receipt-first/active-last 原子事务推进单槽 active 代际
-- 决策：`stackctl app-dependency-sync` 在单一 sync lock 内消费显式 `android|ios|all` platform plan；每个平台闭包均包含共享 Pub 组件及自身 native 组件，按在线解析 → fresh 私有 home 完整离线回放 → 封存不可变组件快照 → readback 验证的固定顺序执行。receipt/active 记录平台 coverage、平台 input identity、组件 outputs/digests 与 nonPromotable；先原子落盘 receipt，最后原子替换 active pointer，commit 后 readback 必须一致。`android` plan 不解析 CocoaPods、不运行 iOS config/replay；受管 package/UAT 必须显式投影平台，Prod/promotion 固定要求 `all`。
-- 理由：App 打包、UAT 与 canonical launcher 消费的是一份平台内跨组件一致的依赖代际。平台 plan 使 Android 能独立同步和验证而不触发 iOS 工具链；显式 coverage 与平台 input identity 防止把 Android-only 事实提升为 iOS 或全平台事实。receipt-first/active-last 保证 active 代际完整可回读。
+### DEC-003 App 依赖 bundle 同步以 receipt-first/active-last 原子事务按平台计划推进
+- 决策：`stackctl app-dependency-sync` 在单一 sync lock 内消费显式 `android|ios|all` platform plan；未指定时选双平台。每个平台闭包均包含共享 Pub 组件及自身 native 组件。所需平台锁按固定顺序获取，独立平台不争用同一发布槽；共同输入一次冻结，默认双平台分支在私有构建状态内并行，所选闭包全部 readback 成功后才发布。按在线解析 → fresh 私有 home 完整离线回放 → 封存不可变组件快照 → readback 验证的固定顺序执行。receipt/active 记录平台 coverage、平台 input identity、组件 outputs/digests 与 nonPromotable；先原子落盘 receipt，最后原子替换该计划 active pointer，commit 后 readback 必须一致。`android` plan 不解析 CocoaPods、不运行 iOS config/replay；受管 package/UAT 必须显式投影平台，Prod/promotion 固定要求 `all`。
+- 理由：App 打包、UAT 与 canonical launcher 消费的是一份平台内跨组件一致的依赖代际。平台 plan 使 Android 能独立同步和验证而不触发 iOS 工具链；显式 coverage 与平台 input identity 防止把 Android-only 事实提升为 iOS 或全平台事实。平台计划独立不是组件逐个激活；receipt-first/active-last 保证每个可消费代际完整可回读，单平台发布不能覆盖或冒充另一平台和双平台。
 - 被否决方案：按组件独立激活、在线解析成功即切换 active、无锁并发同步互相覆盖、以同步顺带更新锁定声明、把 work 目录或未 commit receipt 作为消费面、把 ambiguous commit 静默重试成成功。
 - 失败恢复：source/toolchain identity 漂移、在线解析失败、离线回放失败、封存或 readback 失败均保留首个 typed blocker 且 active pointer 保持上一份已验证代际；active 写入已开始但无法证明 commit 结果时以 activation ambiguous 的 typed blocker 报告，禁止自动重试，只能由显式重新同步收敛。锁定声明永不更新，锁漂移是独立 typed blocker，不由同步修复。
-- 约束与影响：调用方（打包、UAT、canonical launcher 的交互式 stale 恢复）只能消费 committed active readback。launcher 侧触发边界（live outer launcher only、pre-projection、one-shot、双 TTY、保留首个 stale blocker）由 [`runtime-config` design DEC-003](../runtime/runtime-config/design.md#dec-003) 拥有，本 DEC 只拥有 sync 事务本身的对象与恢复语义。
+- 约束与影响：调用方（打包、UAT、canonical launcher 的交互式 stale 恢复）必须贯穿所需平台，并只消费 committed active readback；source currentness、bundle 覆盖和复用身份均绑定同一平台计划。各平台私有临时目录、工具环境与构建输出不得并行共享可变字节；共享 SDK/生成物仍由其 owner 的锁保护。单平台仅是依赖与开发验收范围，不授予生产全平台资格。
+- 可测试观察面：单平台工具调用负例、默认双分支并发、平台锁互斥、独立 active 不覆盖、receipt 摘要篡改及平台复用漂移；记录各 phase 耗时与首个 typed blocker，在现役有界同步 deadline 内完成或失败，不无限排队。失败只保留所选计划的上一代，回滚不改写历史 receipt。
+- 调用边界：launcher 侧触发边界（live outer launcher only、pre-projection、one-shot、双 TTY、保留首个 stale blocker）由 [`runtime-config` design DEC-003](../runtime/runtime-config/design.md#dec-003) 拥有，本 DEC 只拥有 sync 事务本身的对象与恢复语义。
 - 关联要求：`REQ-005`
 - 关联能力：[`config-and-reliability-governance`](./config-and-reliability-governance/spec.md)
 

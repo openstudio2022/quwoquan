@@ -29,6 +29,26 @@ errors:
   dart_const: creatorSearchUnavailable
   go_const: ErrCreatorSearchUnavailable
   user_message: {zh: 创作者候选读取暂时不可用, en: Creator candidate read is temporarily unavailable}
+- code: USER.AUTH.collection_query_denied
+  reason: collection_query_denied
+  http_status: 403
+  emitted_by:
+  - {surface: http, operations: [IssueCollectionQueryGrant, VerifyCollectionQueryGrant]}
+  recovery_action: surface
+  disruption_level: permissionCard
+  dart_const: collectionQueryDenied
+  go_const: ErrCollectionQueryDenied
+  user_message: {zh: 查询授权已失效，请重新登录后重试, en: Query authorization is unavailable}
+- code: USER.AUTH.collection_query_authority_unavailable
+  reason: collection_query_authority_unavailable
+  http_status: 503
+  emitted_by:
+  - {surface: http, operations: [IssueCollectionQueryGrant, VerifyCollectionQueryGrant]}
+  recovery_action: retry
+  disruption_level: inlineCard
+  dart_const: collectionQueryAuthorityUnavailable
+  go_const: ErrCollectionQueryAuthorityUnavailable
+  user_message: {zh: 暂时无法验证查询权限，请稍后重试, en: Query authority is temporarily unavailable}
 - code: USER.USER.not_found
   reason: not_found
   emitted_by:

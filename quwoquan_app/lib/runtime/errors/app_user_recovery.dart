@@ -53,6 +53,9 @@ final class AppUserRecoveryContract {
         (error is CloudException && error.type == CloudErrorType.forbidden)) {
       return AppUserRecoveryGroup.noAccess;
     }
+    if (_isCapabilityUnavailable(code: code, failure: failure)) {
+      return AppUserRecoveryGroup.capabilityUnavailable;
+    }
     if (status == 404 ||
         failure?.kind == RuntimeFailureKind.notFound ||
         failure?.kind == RuntimeFailureKind.unsupported ||
@@ -213,6 +216,15 @@ final class AppUserRecoveryContract {
         ),
         recoveryAction: RuntimeRecoveryAction.surface,
       ),
+      AppUserRecoveryGroup.capabilityUnavailable => const AppUserRecoveryCopy(
+        title: SearchText.recoveryCapabilityUnavailableTitle,
+        message: SearchText.recoveryCapabilityUnavailableMessage,
+        action: UiErrorAction(
+          type: UiErrorActionType.dismiss,
+          label: SearchText.recoveryReturnAction,
+        ),
+        recoveryAction: RuntimeRecoveryAction.surface,
+      ),
     };
   }
 
@@ -352,6 +364,14 @@ final class AppUserRecoveryContract {
 
   static bool _isExplicitlyGone({required String code, required int? status}) {
     return code == ContentErrorCode.contentDeleted.code && status == 410;
+  }
+
+  static bool _isCapabilityUnavailable({
+    required String code,
+    required RuntimeFailureBase? failure,
+  }) {
+    return code == RuntimeFailureCodes.clientPlatformCapabilityUnavailable ||
+        failure?.semanticReason == 'content_source_capability_unavailable';
   }
 }
 

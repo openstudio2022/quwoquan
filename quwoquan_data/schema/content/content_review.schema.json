@@ -736,9 +736,9 @@
       ]
     },
     "objectRef": {
-      "description": "Frozen producer execution target identity. Homepage uses the entityRef-derived process target; posts use the frozen publish coordinates. This is not a canonical repository locator or content version.",
+      "description": "Opaque canonical logical identity; locator depth is not identity semantics.",
       "type": "string",
-      "pattern": "^(?:entities/(?!\\.{1,2}(?:/|$))[^/]+/(?!\\.{1,2}(?:/|$))[^/]+/entity-[a-f0-9]{64}|posts/(?:article|image|video)/(?!\\.{1,2}(?:/|$))[^/]+/(?!\\.{1,2}(?:/|$))[^/]+/[1-9][0-9]*)$"
+      "pattern": "^(?:entities/(?!\\.{1,2}(?:/|$))[^/]+(?:/(?!\\.{1,2}(?:/|$))[^/]+)*/[1-9][0-9]*|posts/(?:article|image|video)/(?!\\.{1,2}(?:/|$))[^/]+(?:/(?!\\.{1,2}(?:/|$))[^/]+)*/[1-9][0-9]*)$"
     }
   },
   "allOf": [

@@ -73,6 +73,17 @@ func MetadataSchemas(metadataDir string) ([]Issue, error) {
 		}
 
 		schemaName, ok := metadataSchemaByFilename[entry.Name()]
+		if entry.Name() == "native_orientation_contract.yaml" {
+			// 对象专用合同按出现位置加载，其他对象的最小 schema fixture 不必携带它。
+			schemaName, ok = "native_orientation_contract.schema.json", true
+			if compiled[schemaName] == nil {
+				schema, err := jsonschema.NewCompiler().Compile(filepath.Join(metadataDir, "_schemas", schemaName))
+				if err != nil {
+					return fmt.Errorf("compile native orientation schema: %w", err)
+				}
+				compiled[schemaName] = schema
+			}
+		}
 		if !ok {
 			return nil
 		}
@@ -87,6 +98,9 @@ func MetadataSchemas(metadataDir string) ([]Issue, error) {
 		instance, decodeErr := decodeYAMLAsJSON(path)
 		if decodeErr != nil {
 			return decodeErr
+		}
+		if compiled[schemaName] == nil {
+			return fmt.Errorf("missing metadata schema %s for %s", schemaName, path)
 		}
 		if validateErr := compiled[schemaName].Validate(instance); validateErr != nil {
 			sourcePath := relativeMetadataPath(metadataDir, path)

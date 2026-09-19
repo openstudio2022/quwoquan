@@ -1,19 +1,19 @@
 {
   "generator": "tools/codegen_app_metadata",
   "responsibility": "shell-navigation-metadata-only",
-  "metadataSha256": "0317a8d70b0001f5c1ede30709d4aaadac88d22eaca61350eed79ad2a3c47be7",
+  "metadataSha256": "04d6dbcffdedfbcd819550cae2f1c2efbb8e29ba1852f08334a4c7c5cd9950ca",
   "inputs": [
     {
       "path": "_shared/app_routes.yaml",
-      "sha256": "7bf6ad8f67277921990229d7a648b199b1379d36fc8ac816164678add33c10d9"
+      "sha256": "c4b01450ae2a46de375641bc1c297785f17b1c5476b1d5772bf008b73db10149"
     },
     {
       "path": "_shared/app_pages.yaml",
-      "sha256": "b78e79718475b91258af474326a99896c2b9032faea28cf672299a7896448cbe"
+      "sha256": "ed07d8a61f6ee0a360e5a6d23994305ade8e54f1c375377ddda950627614ded6"
     },
     {
       "path": "_shared/ui_surfaces.yaml",
-      "sha256": "b440af8395d302922a6d31694f111fac44699dbf6ec5fa8e5aa9a3704782e112"
+      "sha256": "bb6f5db1111af9a3e7b26f57f8c2d5b85686fea1e2714946c52fa4ff802ed3ed"
     },
     {
       "path": "_shared/link_templates.yaml",
@@ -25,22 +25,22 @@
       "path": "lib/runtime/shell/navigation/generated/app_pages.g.dart",
       "owner": "app-shell-navigation-emitter",
       "generator": "tools/codegen_app_metadata",
-      "sha256": "a0017206d10c18e2eec5525cb86065732c9f1d43fe67455ab4c68c3a7c0708e5",
-      "bytes": 20659
+      "sha256": "9110149c22ee1f81d0c164fd24bf4a636f926d8ad5f20027f24d565999e5347c",
+      "bytes": 20866
     },
     {
       "path": "lib/runtime/shell/navigation/generated/app_route_paths.g.dart",
       "owner": "app-shell-navigation-emitter",
       "generator": "tools/codegen_app_metadata",
-      "sha256": "dd5efd03a80726842a07d69fd0a48b8e89f2a196dea5185851f5b0c95742017f",
-      "bytes": 18522
+      "sha256": "7b8f76e27d7bbfcf2d86c3c79c7956578399ff7e32266810b6eedfbe3a2a846d",
+      "bytes": 18876
     },
     {
       "path": "lib/runtime/shell/navigation/generated/app_ui_surfaces.g.dart",
       "owner": "app-shell-navigation-emitter",
       "generator": "tools/codegen_app_metadata",
-      "sha256": "0eef35eaef8810b88f7c54572c7dca28eddce1afcb9f196c7e3ca6090defa970",
-      "bytes": 43176
+      "sha256": "f59346745bdfe4390c25c0d4bebaa6a1e4c8934f7255d9471cbe8792fa902e23",
+      "bytes": 43677
     },
     {
       "path": "lib/runtime/shell/navigation/generated/link_templates.g.dart",

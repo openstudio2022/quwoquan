@@ -76,6 +76,16 @@
 - 恢复与测试：任何路径逃逸、symlink、缺失、格式或digest漂移在导入前阻断；不改历史release，不隐式重建。用真实producer reader正向回归与篡改/错误仓/旧ref负例证明，Gamma运行数据读回是独立下游证据。
 - 理由：producer finalize已验证完整对象闭包，通用源码会话交付不应成为内容immutable artifact的第二生产者；验收范围应绑定所选release而非共享池所有对象。
 - 关联要求/验收：本层spec的内容单一准入、DOM-001；实现未完由OPEN-004跟踪。
+<a id="dec-004"></a>
+### DEC-004 媒体方向读取与方向策略写入分离
+- 决策：媒体对象合同包拥有 App 本地方向读取 wire，runtime 平台层复用既有视频编辑 channel 的宿主分发读取当前 Flutter window 的新鲜界面事实；不进入 MediaAsset 持久化、HTTP operation、AppLaunchContract 或编辑 worker。方向策略仍由单一 MediaOrientationPolicy 租约 owner 串行写入。
+- 理由：横屏退出必须恢复进入前的实际界面方向和现役策略；策略请求完成、窗口横竖比例、传感器姿态均不是精确方向成功事实。
+- 一致性与恢复：进入前捕获同一窗口绑定；进入请求后新鲜读回横向才提交模式；退出对 Android 的同绑定 rotation/axis 或 iOS 的同绑定四向值精确确认，再释放回原策略。Android 请求常量仅为候选：同轴但 rotation 差 180 度时，允许在同一总预算内请求另一同轴常量并精确读回，不读取私有 reverse 配置。未知、后台、绑定变化、超时和迟到回执不得记成功；失败仍释放临时策略并保留已有可重试媒体反馈。
+- 被否决方案：viewport 推断上下左右、启动时缓存当新鲜事实、传感器监听、未知值默认 portrait、全局首个 scene、另建 channel registry 或迁移全部视频编辑协议。
+- 约束与影响：iOS 只绑定承载 Flutter 的 windowScene；Android 主线程只读当前 Activity/window/display 的公开 API。沿用现役四方向全局策略和播放会话，禁止修改服务授权、权限、证书与发布流程。
+- 测试 seam：严格合同解码拒绝未知字段、非法枚举、跨平台字段和空绑定；覆盖 capture → request → fresh confirm → restore、180 度无尺寸变化、拒绝、解绑、迟到与策略释放。局部单测不代替 Android/iOS 真机证据。
+- 观测与回滚：复用媒体方向拒绝/恢复失败文案与已有反馈，不记录窗口标识；单次动作预算沿现役策略，整体回滚本专用读取接缝，不保留双轨。
+- 关联要求与验收：`dual-rail-discovery-redesign/works-immersive-viewer` REQ-022 / GWT-021；影响 Story 为该媒体浏览器，缺失真机证据保留在其 OPEN-015。
 
 ## 6. 质量与运行约束
 

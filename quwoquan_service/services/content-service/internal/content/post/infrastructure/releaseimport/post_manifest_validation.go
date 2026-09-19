@@ -56,10 +56,10 @@ type postManifest struct {
 	PublishAngle          string                             `json:"publishAngle"`
 	PublishSeq            int                                `json:"publishSeq"`
 	ArticleAssetManifest  *ArticleAssetManifestDoc           `json:"articleAssetManifest"`
+	VideoBindings         []VideoBindingDoc                  `json:"videoBindings"`
 	CreatedAt             string                             `json:"createdAt"`
 	UpdatedAt             string                             `json:"updatedAt"`
 	PublishedAt           string                             `json:"publishedAt"`
-	VideoBindings         []json.RawMessage                  `json:"videoBindings"`
 	Closure000            json.RawMessage                    `json:"allowedContactNumbers"`
 	Closure001            json.RawMessage                    `json:"articleCategory"`
 	Closure002            json.RawMessage                    `json:"articleRenderProfile"`
@@ -400,6 +400,42 @@ func validateReleaseSourceFacts(raw []byte) error {
 		var value string
 		if err := json.Unmarshal(rawValue, &value); err != nil || !slices.Contains(allowed, value) {
 			return fmt.Errorf("%s is outside the Data source fact enum", name)
+		}
+	}
+	return nil
+}
+
+type VideoBindingDoc struct {
+	AssetID       string `json:"assetId"`
+	SectionAnchor string `json:"sectionAnchor"`
+	Role          string `json:"role"`
+}
+
+func validateImportedPostManifestShape(m postManifest, postRef string) error {
+	if !slices.Contains([]string{"article", "image", "video"}, m.ContentType) {
+		return fmt.Errorf("%s: contentType must be article, image or video", postRef)
+	}
+	if m.ContentType != "video" {
+		return nil
+	}
+	if len(m.VideoBindings) == 0 {
+		return fmt.Errorf("%s: videoBindings must contain at least one binding", postRef)
+	}
+	assetsByID := make(map[string]AssetManifestItem, len(m.Assets))
+	for _, asset := range m.Assets {
+		assetsByID[asset.AssetID] = asset
+	}
+	for index, binding := range m.VideoBindings {
+		assetID := strings.TrimSpace(binding.AssetID)
+		if assetID == "" {
+			return fmt.Errorf("%s: videoBindings[%d].assetId is required", postRef, index)
+		}
+		asset, exists := assetsByID[assetID]
+		if !exists || !strings.EqualFold(strings.TrimSpace(asset.Kind), "video") {
+			return fmt.Errorf("%s: videoBindings[%d].assetId must resolve to a video asset", postRef, index)
+		}
+		if binding.Role != "" && !slices.Contains([]string{"cover", "embedded", "node", "shortVideo"}, binding.Role) {
+			return fmt.Errorf("%s: videoBindings[%d].role is invalid", postRef, index)
 		}
 	}
 	return nil

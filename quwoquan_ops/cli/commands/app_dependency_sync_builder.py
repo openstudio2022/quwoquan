@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import re
@@ -110,6 +111,7 @@ class BuildContext(Protocol):
     source_identity: Mapping[str, str]
     platforms: tuple[str, ...]
     android_gradle_seed_root: Path | None
+    ios_pod_seed_roots: Mapping[str, Path] | None
     progress: Any
     deadline: float
 
@@ -689,12 +691,67 @@ def _build_pub_components(
     return roots, replays, digests
 
 
+def seed_cocoapods_private_state(
+    *, capsule_root: Path, expected_lock: Path, home: Path, cache: Path
+) -> bool:
+    """把已封印 capsule 的 CocoaPods home/cache 拷进私有目录，避免空 CP_HOME 再打 CDN。"""
+    from quwoquan_ops.cli.lib.package_reuse.dependency_fs import read_regular_nofollow
+    from quwoquan_ops.cli.lib.package_reuse.ios_pod_capsule import (
+        IOS_POD_COMPONENTS,
+        IosPodSnapshot,
+        _scan_component,
+    )
+    from quwoquan_ops.cli.lib.package_reuse.ios_pod_identity import CocoaPodsIdentity
+    from quwoquan_ops.cli.lib.package_reuse.ios_pod_store import copy_ios_pod_component
+
+    current_lock, _ = read_regular_nofollow(expected_lock, label="current Podfile.lock")
+    sealed_lock, _ = read_regular_nofollow(
+        Path(capsule_root) / "Podfile.lock", label="sealed Podfile.lock"
+    )
+    if current_lock != sealed_lock:
+        return False
+    nodes = []
+    for component in ("home", "cache"):
+        if component not in IOS_POD_COMPONENTS:
+            raise ValueError(f"APP.DEPENDENCY.ios_pod_seed_component_invalid: {component}")
+        nodes.extend(_scan_component(component, Path(capsule_root) / component))
+    # copy_ios_pod_component 以 relative 排序复验，节点顺序必须与之一致。
+    nodes.sort(key=lambda item: item.relative)
+    snapshot = IosPodSnapshot(
+        manifest={},
+        encoded_manifest=b"{}",
+        lock_bytes=current_lock,
+        nodes=tuple(nodes),
+        cocoa_pods=CocoaPodsIdentity(
+            version="0",
+            executable=None,
+            executable_digest="sha256:" + "0" * 64,
+            runtime_environment_digest="sha256:" + "0" * 64,
+            command_resolution_digest="sha256:" + "0" * 64,
+        ),
+        resolution_inputs=(),
+        upstream_dependency_digest="sha256:" + "0" * 64,
+        dependency_host=IOS_POD_PRODUCTION_HOST,
+    )
+    copy_ios_pod_component(snapshot, component="home", destination=home, writable=True)
+    copy_ios_pod_component(snapshot, component="cache", destination=cache, writable=True)
+    return True
+
+
 def _pod_environment(
-    *, state_root: Path, pub_cache: Path, hosted_url: str, pod: str
+    *, state_root: Path, pub_cache: Path, hosted_url: str, pod: str,
+    seed_capsule: Path | None = None, expected_lock: Path | None = None,
 ) -> tuple[dict[str, str], Path, Path]:
     home, cache = state_root / "pod-home", state_root / "pod-cache"
-    home.mkdir(parents=True, mode=0o700)
-    cache.mkdir(mode=0o700)
+    state_root.mkdir(parents=True, mode=0o700)
+    seeded = False
+    if seed_capsule is not None and expected_lock is not None:
+        seeded = seed_cocoapods_private_state(
+            capsule_root=seed_capsule, expected_lock=expected_lock, home=home, cache=cache,
+        )
+    if not seeded:
+        home.mkdir(parents=True, mode=0o700)
+        cache.mkdir(mode=0o700)
     environment = private_environment(
         home=state_root / "user-home",
         pub_cache=pub_cache,
@@ -729,11 +786,14 @@ def _build_ios_component(
     )
     ios_root = projection_root / IOS_PODFILE_RELATIVES[host].parent
     state = context.work_root / "ios-online" / host
+    seed_roots = getattr(context, "ios_pod_seed_roots", None) or {}
     environment, cp_home, cp_cache = _pod_environment(
         state_root=state,
         pub_cache=pub_cache,
         hosted_url=_locked_host(app_root / "pubspec.lock"),
         pod=pod,
+        seed_capsule=seed_roots.get(host),
+        expected_lock=ios_root / "Podfile.lock",
     )
     flutter = str(context.flutter_identity.get("executable") or "")
     if not flutter:
@@ -1002,19 +1062,24 @@ def _verify_components(
         load_android_gradle_component(
             project_root=context.repo_root,
             component_root=roots["androidGradle"],
-        invocations=canonical_android_dependency_bundle_invocations(context.repo_root),
+            invocations=canonical_android_dependency_bundle_invocations(context.repo_root),
             upstream_dependency_digests=pub_digests,
         )
 
 
 def build_dependency_components(
-    context: BuildContext, *, trust_root: Path
+    context: BuildContext, *, trust_root: Path | None
 ) -> Mapping[str, Path]:
-    """Network-resolve, offline-replay, seal and reread all five components."""
+    """Resolve the selected platform plan; the default runs iOS and Android branches concurrently."""
 
-    validated_trust_root, trust_sensitive_values = _validated_runtime_trust_root(
-        trust_root, repo_root=context.repo_root
-    )
+    validated_trust_root: Path | None = None
+    trust_sensitive_values: tuple[str, ...] = ()
+    if "android" in context.platforms:
+        if trust_root is None:
+            raise ValueError("APP.DEPENDENCY.android_runtime_trust_missing")
+        validated_trust_root, trust_sensitive_values = _validated_runtime_trust_root(
+            trust_root, repo_root=context.repo_root
+        )
     pod: str | None = None
     if "ios" in context.platforms:
         context.progress.begin("toolchain-resolution")
@@ -1031,33 +1096,46 @@ def build_dependency_components(
     roots, pub_replays, pub_digests = _build_pub_components(
         context=context, projection_root=projection_root
     )
-    if "ios" in context.platforms:
+    def build_ios() -> dict[str, Path]:
         if pod is None:
             raise ValueError("APP.DEPENDENCY.cocoapods_identity_missing")
         context.progress.begin("ios-resolution-replay")
+        built: dict[str, Path] = {}
         for name, host in (
             ("productionIosPods", IOS_POD_PRODUCTION_HOST),
             ("patrolIosPods", IOS_POD_PATROL_HOST),
         ):
             pub_name = "productionPub" if host == IOS_POD_PRODUCTION_HOST else "patrolPub"
-            roots[name] = _build_ios_component(
-                context=context,
-                projection_root=projection_root,
-                pod=pod,
-                host=host,
-                pub_cache=pub_replays[pub_name],
-                upstream_digest=pub_digests[pub_name],
+            built[name] = _build_ios_component(
+                context=context, projection_root=projection_root, pod=pod, host=host,
+                pub_cache=pub_replays[pub_name], upstream_digest=pub_digests[pub_name],
             )
-    if "android" in context.platforms:
+        return built
+
+    def build_android() -> dict[str, Path]:
+        if validated_trust_root is None:
+            raise ValueError("APP.DEPENDENCY.android_runtime_trust_missing")
         context.progress.begin("android-resolution-replay")
-        roots["androidGradle"] = _build_android_component(
-            context=context,
-            projection_root=projection_root,
-            pub_replays=pub_replays,
-            pub_digests=pub_digests,
-            trust_root=validated_trust_root,
+        return {"androidGradle": _build_android_component(
+            context=context, projection_root=projection_root, pub_replays=pub_replays,
+            pub_digests=pub_digests, trust_root=validated_trust_root,
             trust_sensitive_values=trust_sensitive_values,
-        )
+        )}
+
+    builders = []
+    if "ios" in context.platforms:
+        builders.append(build_ios)
+    if "android" in context.platforms:
+        builders.append(build_android)
+    if len(builders) == 2:
+        context.progress.begin("platform-parallel-resolution")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(builder) for builder in builders]
+            for future in futures:
+                roots.update(future.result())
+    else:
+        for builder in builders:
+            roots.update(builder())
     context.progress.begin("source-projection-readback")
     _assert_resolution_seal(projection_root=projection_root, expected=sealed_sources)
     context.progress.begin("component-readback")

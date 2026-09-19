@@ -1,6 +1,6 @@
 # quwoquan_data Agent Guide
 
-同时遵守根规则并先读 `quwoquan_data/README.md`。
+同时阅读根规则与 `quwoquan_data/README.md`。本文件只拥有 Data 工程不变量；producer 流程只读 [content-production Skill](../.agents/skills/content-production/SKILL.md) 及当前 reference/carrier，不复制正文。
 
 ## Data 内容生产边界
 

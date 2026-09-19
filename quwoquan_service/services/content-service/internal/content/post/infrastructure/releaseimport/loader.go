@@ -596,6 +596,9 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		if err := normalizeImportedContentPoolRecord(&m, postRef); err != nil {
 			return err
 		}
+		if err := validateImportedPostManifestShape(m, postRef); err != nil {
+			return err
+		}
 		_ = resolveCreatorProfileVersion(&m)
 		if err := validateCreatorProjection(m, postRef); err != nil {
 			return err

@@ -275,6 +275,8 @@ types:
       - { name: recurrence, type: enum, enum_ref: TagHeatRecurrence }
 
 enums:
+  RecommendationViewportProfile: [landscape, portrait, unknown]
+  RecommendationDeviceClass: [phone, tablet, desktop, unknown]
   TagHeatRecurrence: [once, annual]
   # Post 权威内容类型。区分点不是有无媒体，而是是否进入长文编辑器、是否有独立正文：
   # article 由长文编辑器产出且正文是主体，image/video 以媒体为主体、文字只能短配文。

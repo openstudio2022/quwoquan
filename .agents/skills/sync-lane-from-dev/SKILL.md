@@ -1,6 +1,6 @@
 ---
 name: sync-lane-from-dev
-description: Sync only the current local lane identity from the exact origin/dev1.0 SHA frozen after fetch, normally by fast-forward; a diverged lane needs explicit merge authorization. Use when the user says 同步 dev1.0, 拉齐开发分支, 合入最新代码到本地, 更新到最新, 从 dev 同步, or 解决与 dev 的冲突.
+description: Sync only the current local lane identity from the exact origin/dev1.0 SHA frozen after fetch, normally by fast-forward; a diverged lane needs explicit merge authorization. Never use unpublished local dev or push lane refs. Use when the user says 同步 dev1.0, 拉齐开发分支, 合入最新代码到本地, 更新到最新, 从 dev 同步, or 解决与 dev 的冲突.
 metadata:
   published_baseline: origin/dev1.0 frozen after fetch
   kind: workflow
@@ -11,7 +11,7 @@ metadata:
 
 ## 触发与输入
 
-把已发布的 `origin/dev1.0` 同步进**当前 lane 工作树**，方向固定远端 dev → 本地 lane。`lane/*` 只作检出/验收身份；不推 lane、不移动本地 dev、不进入 integration 工作区。开发分支只读 `branch_policy.yaml#integration_branch`；不接受用本地未发布 dev 替代远端基线。输入：当前工作区路径与分支、fetch 后冻结的 published SHA、脏树/untracked、进行中 Git 操作及用户授权。布局与落后阈值只读 `worktree_policy.yaml`。
+把已发布的 `origin/dev1.0` 同步进**当前 lane 工作树**，方向固定远端 dev → 本地 lane。六条本地 `lane/*` 只作检出/验收身份；不推 lane、不移动本地 dev、不进入 integration 工作区。开发分支只读 `branch_policy.yaml#integration_branch`；不接受用本地未发布 dev 替代远端基线。输入：当前工作区路径与分支、fetch 后冻结的 published SHA、脏树/untracked、进行中 Git 操作及用户授权。布局与落后阈值只读 `worktree_policy.yaml`。
 
 ## 执行
 

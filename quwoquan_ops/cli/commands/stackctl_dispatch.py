@@ -39,6 +39,7 @@ _STACKCTL_HANDLER_NAMES = {
     "drill": "command_drill",
     "prod-hosted-plan": "command_prod_hosted_plan",
     "inspect": "command_inspect",
+    "docker-dependencies": "command_docker_dependencies",
     "doctor": "command_doctor",
     "content-readiness": "command_content_readiness",
     "content-api-consumer": "command_content_api_consumer",

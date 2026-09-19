@@ -98,6 +98,54 @@ abstract class AppLocalizations {
     Locale('zh'),
   ];
 
+  /// 媒体画面下方居中全屏入口
+  ///
+  /// In zh, this message translates to:
+  /// **'全屏'**
+  String get media_enterFullscreen;
+
+  /// 横向媒体纯画面模式的唤出控件动作
+  ///
+  /// In zh, this message translates to:
+  /// **'显示媒体控件'**
+  String get media_showControls;
+
+  /// 收起局部横向媒体查看器
+  ///
+  /// In zh, this message translates to:
+  /// **'退出全屏'**
+  String get media_exitFullscreen;
+
+  /// 媒体播放按钮无障碍标签
+  ///
+  /// In zh, this message translates to:
+  /// **'播放'**
+  String get media_play;
+
+  /// 媒体暂停按钮无障碍标签
+  ///
+  /// In zh, this message translates to:
+  /// **'暂停'**
+  String get media_pause;
+
+  /// 显式纯媒体横屏请求被拒绝或超时
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法进入横屏，请重试。'**
+  String get media_landscapeRequestFailed;
+
+  /// 纯媒体模式退出时方向恢复失败
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法恢复原来的方向，请重试退出。'**
+  String get media_orientationRestoreFailed;
+
+  /// 重试媒体方向请求或恢复
+  ///
+  /// In zh, this message translates to:
+  /// **'重试'**
+  String get media_orientationRetry;
+
   /// No description provided for @home.
   ///
   /// In zh, this message translates to:

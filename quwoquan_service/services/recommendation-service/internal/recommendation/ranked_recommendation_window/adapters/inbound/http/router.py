@@ -78,6 +78,7 @@ def _wire_page(page: DomainPage) -> RankedRecommendationPage:
         modelChannel=page.model_channel,
         modelReleaseId=page.model_release_id,
         policyDigest=page.policy_digest,
+        contextDigest=page.context_digest,
         rankingSnapshotDigest=page.ranking_snapshot_digest,
         featureSnapshotAt=datetime.fromisoformat(page.feature_snapshot_at),
         userFeatureSnapshot=page.user_feature_snapshot,
@@ -139,6 +140,8 @@ def build_router(
                 limit=command.limit,
                 content_fence=command.contentFence,
                 client_presentation_contract=command.clientPresentationContract,
+                viewport_profile=command.viewportProfile,
+                device_class=command.deviceClass,
             )
             outcome = "ok"
             return _wire_page(page)

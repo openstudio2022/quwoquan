@@ -449,7 +449,6 @@ final class _PagedDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -503,7 +502,6 @@ final class _BidirectionalPagedDiscoveryFeedQuery
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -542,7 +540,6 @@ final class _ChannelPolicyDiscoveryFeedQuery
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,

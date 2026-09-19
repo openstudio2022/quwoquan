@@ -100,6 +100,14 @@ def dependency_components_for_platforms(platforms: tuple[str, ...]) -> tuple[str
         for component in APP_DEPENDENCY_PLATFORM_COMPONENTS[platform]
     ))
 
+
+def dependency_active_pointer_name(platforms: tuple[str, ...]) -> str:
+    dependency_components_for_platforms(platforms)
+    normalized = tuple(sorted(platforms))
+    return "active.json" if normalized == ("android", "ios") else f"active-{normalized[0]}.json"
+
+
+
 _ACTIVE_FIELDS = {
     "schema",
     "attemptId",
@@ -287,7 +295,7 @@ def _validate_receipt(
         or receipt.get("components") != components
         or receipt.get("activationEvidence")
         != {
-            "requiredActiveRef": (root / (f"active-{active['platforms'][0]}.json" if len(active["platforms"]) == 1 else "active.json"))
+            "requiredActiveRef": (root / dependency_active_pointer_name(tuple(active["platforms"])))
             .relative_to(output_root().expanduser().absolute())
             .as_posix(),
             "requiredAttemptId": active.get("attemptId"),
@@ -297,6 +305,30 @@ def _validate_receipt(
         raise ValueError("App dependency sync receipt binding drifted")
     if json.loads(encoded) != receipt:
         raise ValueError("App dependency sync receipt readback drifted")
+
+
+def _validate_platform_plan(active: Mapping[str, Any], required: tuple[str, ...]) -> tuple[str, ...]:
+    """独立验真声明覆盖、输入与资格，不从现存组件反推要求。"""
+    dependency_components_for_platforms(required)
+    covered = active.get("platforms")
+    if (not isinstance(covered, list) or not covered
+            or any(not isinstance(platform, str) or platform not in APP_DEPENDENCY_PLATFORMS for platform in covered)
+            or len(set(covered)) != len(covered)):
+        raise ValueError("App dependency bundle platform coverage is invalid")
+    if set(required) - set(covered):
+        raise AppDependencyBundleMissingError("managedDependencyBundle", "platformCoverage")
+    inputs = active.get("platformInputs")
+    if not isinstance(inputs, Mapping) or set(inputs) != set(covered):
+        raise ValueError("App dependency bundle platform input coverage mismatch")
+    for platform in covered:
+        fields = set(APP_DEPENDENCY_BUNDLE_STALE_FIELDS)
+        if platform == "ios":
+            fields.remove("nativeResolutionInputDigest")
+        if inputs[platform] != {field: active[field] for field in fields}:
+            raise ValueError("App dependency bundle platform input identity drifted")
+    if type(active.get("nonPromotable")) is not bool or active["nonPromotable"] != (set(covered) != set(APP_DEPENDENCY_PLATFORMS)):
+        raise ValueError("App dependency bundle platform qualification drifted")
+    return tuple(covered)
 
 
 def load_active_dependency_bundle(
@@ -318,12 +350,8 @@ def load_active_dependency_bundle(
                 "managedDependencyBundle", "root"
             ) from error
         raise
-    active_name = (
-        f"active-{required_platforms[0]}.json"
-        if len(required_platforms) == 1
-        else "active.json"
-    )
-    active_path = root / active_name
+    required = tuple(required_platforms)
+    active_path = root / dependency_active_pointer_name(required)
     try:
         _encoded, active = _read_json(active_path, label="bundle active pointer")
     except ValueError as error:
@@ -343,22 +371,8 @@ def load_active_dependency_bundle(
     attempt_id = str(active.get("attemptId") or "")
     if not attempt_id or any(character not in "0123456789abcdef" for character in attempt_id):
         raise ValueError("App dependency bundle attempt identity is invalid")
-    required = tuple(required_platforms)
     expected_components = dependency_components_for_platforms(required)
-    covered = active.get("platforms")
-    if (
-        not isinstance(covered, list)
-        or not covered
-        or len(set(covered)) != len(covered)
-        or any(platform not in APP_DEPENDENCY_PLATFORMS for platform in covered)
-    ):
-        raise ValueError("App dependency bundle platform coverage is invalid")
-    missing = set(required) - set(covered)
-    if missing:
-        raise AppDependencyBundleMissingError("managedDependencyBundle", "platformCoverage")
-    platform_inputs = active.get("platformInputs")
-    if not isinstance(platform_inputs, Mapping) or set(platform_inputs) != set(covered):
-        raise ValueError("App dependency bundle platform input coverage mismatch")
+    covered = _validate_platform_plan(active, required)
     current = _current_source_identity(repository)
     if require_current_source:
         required_fields = {"flutterVersion", "flutterCommandResolutionDigest", "productionPubResolutionInputDigest", "patrolPubResolutionInputDigest"}

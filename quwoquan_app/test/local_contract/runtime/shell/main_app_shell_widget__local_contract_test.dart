@@ -147,7 +147,6 @@ final class _PendingPremiumFeedQuery extends InMemoryContentDiscoveryFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -164,7 +163,6 @@ final class _PendingPremiumFeedQuery extends InMemoryContentDiscoveryFeedQuery {
     return super.listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
-      identity: identity,
       type: type,
       subCategory: subCategory,
       limit: limit,
@@ -1344,7 +1342,7 @@ void main() {
                     showWorksToolbar: true,
                     showTopNavigation: false,
                     externalPosts: [post],
-                    onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+                    onUserTap: (_, {avatarUrl, avatarAssetId, avatarAccessMode, displayName, backgroundUrl}) {},
                     onAssistantTap: () {},
                   ),
                 ),

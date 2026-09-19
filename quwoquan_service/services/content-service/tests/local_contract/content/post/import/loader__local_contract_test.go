@@ -34,7 +34,7 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
 func TestLoadPostsRejectsRetiredObjectClassificationFields(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -63,6 +63,54 @@ func TestLoadPostsRejectsRetiredObjectClassificationFields(t *testing.T) {
 				t.Fatalf("retired field %s must fail closed, got %v", test.want, err)
 			}
 		})
+	}
+}
+
+// spec_ref: specs/feature-tree/discovery-content/content-service-cloud-production/remote-content-delivery/spec.md#gwt-001
+func TestLoadPostsRejectsUnsupportedCanonicalContentType(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "posts/audio/播客/不支持载体/1/manifest.json"), `{
+		"contentType":"audio",
+		"publishedAt":"2026-09-16T00:00:00Z"
+	}`)
+
+	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(err.Error(), "contentType") {
+		t.Fatalf("unsupported canonical contentType must fail closed, got %v", err)
+	}
+}
+
+// spec_ref: specs/feature-tree/discovery-content/content-display-consistency/video-display-journey/spec.md#gwt-003
+func TestLoadPostsRejectsVideoWithoutBindings(t *testing.T) {
+	for _, videoBindings := range []string{"", `,"videoBindings":[]`} {
+		root := t.TempDir()
+		writeFile(t, filepath.Join(root, "posts/video/旅行/缺少视频绑定/1/manifest.json"), `{
+			"contentType":"video",
+			"title":"缺少视频绑定",
+			"caption":"视频、海报和权利事实均合法。",
+			"publishedAt":"2026-09-16T00:00:00Z",
+			"assets":[{
+				"assetId":"clip",
+				"kind":"video",
+				"sha256":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+				"license":"CC BY-SA 4.0",
+				"termsUrl":"https://creativecommons.org/licenses/by-sa/4.0/",
+				"rightsAuditStatus":"verified",
+				"rightsAuditIssues":[],
+				"posterAssetId":"poster"
+			},{
+				"assetId":"poster",
+				"kind":"image",
+				"role":"cover",
+				"sha256":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+				"license":"CC BY-SA 4.0",
+				"termsUrl":"https://creativecommons.org/licenses/by-sa/4.0/",
+				"rightsAuditStatus":"verified",
+				"rightsAuditIssues":[]
+			}]`+videoBindings+`}`)
+
+		if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(err.Error(), "videoBindings") {
+			t.Fatalf("missing or empty videoBindings must fail closed, got %v", err)
+		}
 	}
 }
 

@@ -18,6 +18,8 @@ routes:
     path: /
   - id: videoBook
     path: /video-book
+  - id: postCollection
+    path: /collections/{collectionId}
   - id: circles
     path: /circles
   # 仅兼容重定向到 /profile/intersections，无 page_object_contract 与 surface；退役窗口随 my_intersections 稳定后删除。

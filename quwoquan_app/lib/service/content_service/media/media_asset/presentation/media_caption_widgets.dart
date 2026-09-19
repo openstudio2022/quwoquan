@@ -135,11 +135,11 @@ class MediaCaptionBlock extends StatelessWidget {
     );
   }
 
-  /// 「全文」/「收起」入口样式：沉浸前景次级层级（REQ-019，非品牌色），
-  /// 以字重与透明度区别于正文，不喧宾夺主。
+  /// 「全文」/「收起」入口样式：与深色 mention 同一 worksAccent，
+  /// 字重与配文同为 regular，不用系统/品牌 primary。
   TextStyle _entryStyle(TextStyle captionStyle) => captionStyle.copyWith(
-    color: AppColors.immersiveForeground.withValues(alpha: 0.7),
-    fontWeight: AppTypography.medium,
+    color: AppColors.worksAccent,
+    fontWeight: AppTypography.regular,
   );
 
   Widget _buildExpandableCaption(
@@ -157,6 +157,7 @@ class MediaCaptionBlock extends StatelessWidget {
         final overflowPainter = TextPainter(
           text: TextSpan(text: caption, style: captionStyle),
           maxLines: captionOverflowMaxLines,
+          textScaler: MediaQuery.textScalerOf(context),
           textDirection: TextDirection.ltr,
         )..layout(maxWidth: constraints.maxWidth);
         final isOverflow = overflowPainter.didExceedMaxLines;
@@ -236,15 +237,13 @@ class MediaCaptionBlock extends StatelessWidget {
         ],
       ),
       textDirection: TextDirection.ltr,
+      textScaler: basePainter.textScaler,
     )..layout();
     final reservedWidth = entryPainter.width;
 
     var cut = basePainter
         .getPositionForOffset(
-          Offset(
-            math.max(0, maxWidth - reservedWidth),
-            basePainter.height,
-          ),
+          Offset(math.max(0, maxWidth - reservedWidth), basePainter.height),
         )
         .offset
         .clamp(0, caption.length);
@@ -263,6 +262,7 @@ class MediaCaptionBlock extends StatelessWidget {
           ],
         ),
         maxLines: maxLines,
+        textScaler: basePainter.textScaler,
         textDirection: TextDirection.ltr,
       )..layout(maxWidth: maxWidth);
       return !probe.didExceedMaxLines;
@@ -275,8 +275,7 @@ class MediaCaptionBlock extends StatelessWidget {
     return truncated;
   }
 
-  static bool _isLowSurrogate(int codeUnit) =>
-      (codeUnit & 0xFC00) == 0xDC00;
+  static bool _isLowSurrogate(int codeUnit) => (codeUnit & 0xFC00) == 0xDC00;
 }
 
 class MediaBlurCaptionOverlay extends StatelessWidget {

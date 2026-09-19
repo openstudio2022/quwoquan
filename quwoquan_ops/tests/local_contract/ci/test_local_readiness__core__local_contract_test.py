@@ -690,7 +690,7 @@ def test_scope_and_release_queue_pending_is_contract_advisory(
         )
         monkeypatch.setattr(
             "lib.local_readiness.core._load_review_inputs",
-            lambda *_args, **_kwargs: ([], {"required": True, "consolidation": None, "evidence": []}),
+            lambda *_args, **_kwargs: ([], {"required": level == "release", "consolidation": None, "evidence": []}),
         )
         monkeypatch.setattr(
             "lib.local_readiness.core._run_check",
@@ -800,6 +800,17 @@ def test_scope_producer_requires_candidate_review_and_required_evidence_before_a
             run_readiness(plan, repo_root=repo, state_root=state)
         assert not (state / "process/receipts/current").exists()
         assert not (state / "cache/exact-input").exists()
+
+
+def test_scope_fingerprint_does_not_require_review_consolidation() -> None:
+    with _repo() as directory:
+        repo = Path(directory)
+        _init(repo)
+        plan = {**build_impact_plan(["source.txt"], level="scope", repo_root=repo), "mode": "workspace"}
+        with pytest.raises(LocalReadinessError, match="owner identity"):
+            capture_fingerprint(plan, repo_root=repo, mode="workspace")
+        fingerprint = capture_fingerprint(plan, repo_root=repo, mode="workspace", allow_missing_admission=True)
+        assert fingerprint["digest"].startswith("sha256:")
 
 
 def test_staged_boundary_rejects_generated_only_and_production_without_related_test(tmp_path: Path) -> None:
@@ -992,6 +1003,16 @@ def test_selector_plan_is_stable_for_equivalent_input_order() -> None:
     second = build_impact_plan(list(reversed(paths)), level="fast")
 
     assert first == second
+
+
+def test_focused_dart_uses_check_override_within_scope_ceiling() -> None:
+    plan = build_impact_plan(
+        ["quwoquan_app/lib/runtime/value.dart"],
+        level="scope",
+    )
+    check = next(item for item in plan["checks"] if item["id"] == "focused:dart")
+    assert check["timeout_seconds"] == 1800
+    assert check["timeout_seconds"] <= 1800
 
 
 def test_user_service_focused_go_uses_check_override_within_fast_ceiling() -> None:

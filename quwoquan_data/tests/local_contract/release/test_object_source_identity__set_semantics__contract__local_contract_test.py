@@ -30,6 +30,9 @@ def test_modern_identity_set_still_rejects_one_execution_with_drift() -> None:
         "sourceRevision": "sha256:" + "6" * 64,
         "sourceDigest": "sha256:" + "7" * 64,
         "entityCatalogDigest": "sha256:" + "8" * 64,
+        "descriptorRef": "0.plan/target-descriptors/" + "a" * 64 + ".json",
+        "descriptorDigest": "sha256:" + "b" * 64,
+        "mappingDigest": "sha256:" + "c" * 64,
     }
     second = {**first, "sourceDigest": "sha256:" + "9" * 64}
 

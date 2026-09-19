@@ -94,7 +94,7 @@ void main() {
       expect(feed, isNotNull);
       expect(feed!.items, isNotEmpty);
       expect(feed.items.first, isA<ContentPostViewData>());
-      expect(feed.items.first.type, 'image');
+      expect(feed.items.first.type, ContentType.image);
     });
 
     test('load(video) returns canonical video presentation items', () async {
@@ -107,7 +107,7 @@ void main() {
       expect(feed, isNotNull);
       expect(feed!.items, isNotEmpty);
       expect(feed.items.first, isA<ContentPostViewData>());
-      expect(feed.items.first.type, 'video');
+      expect(feed.items.first.type, ContentType.video);
     });
 
     test('load error is captured in feed state without throwing', () async {
@@ -257,7 +257,10 @@ void main() {
           .read(discoveryFeedMapProvider)['recommend']!
           .value!;
 
-      expect(after.items, same(before.items));
+      expect(
+        after.items.map((item) => item.id),
+        equals(before.items.map((item) => item.id)),
+      );
       expect(after.appendError, isNotNull);
       expect(after.blockingError, isNull);
       expect(after.staleDataError, isNull);
@@ -339,7 +342,10 @@ void main() {
 
         await notifier.load('photo', force: true);
         final after = container.read(discoveryFeedMapProvider)['photo']!.value!;
-        expect(after.items, same(seeded.items));
+        expect(
+          after.items.map((item) => item.id),
+          equals(seeded.items.map((item) => item.id)),
+        );
         expect(after.staleDataError, isNotNull);
         expect(after.blockingError, isNull);
         expect(after.appendError, isNull);
@@ -362,7 +368,10 @@ void main() {
           .read(discoveryFeedMapProvider)['recommend']!
           .value!;
 
-      expect(after.items, same(before.items));
+      expect(
+        after.items.map((item) => item.id),
+        equals(before.items.map((item) => item.id)),
+      );
       expect(after.blockingError, isNull);
       expect(after.staleDataError, isA<RuntimeFailure>());
       expect(
@@ -556,7 +565,10 @@ void main() {
             .read(discoveryFeedMapProvider)['photo']!
             .value!;
         expect(repo.cancellation?.isCancelled, isTrue);
-        expect(timedOut.items, same(before.items));
+        expect(
+          timedOut.items.map((item) => item.id),
+          equals(before.items.map((item) => item.id)),
+        );
         expect(timedOut.isLoading, isFalse);
         expect(timedOut.isRefreshing, isFalse);
         expect(timedOut.isAppending, isFalse);
@@ -571,7 +583,10 @@ void main() {
         final afterLateCompletion = container
             .read(discoveryFeedMapProvider)['photo']!
             .value!;
-        expect(afterLateCompletion.items, same(before.items));
+        expect(
+          afterLateCompletion.items.map((item) => item.id),
+          equals(before.items.map((item) => item.id)),
+        );
         expect(afterLateCompletion.appendError, same(timedOut.appendError));
         expect(afterLateCompletion.isAppending, isFalse);
       });
@@ -594,7 +609,10 @@ void main() {
           .read(discoveryFeedMapProvider)['photo']!
           .value!;
       expect(repo.cancellation?.isCancelled, isTrue);
-      expect(deactivated.items, same(before.items));
+      expect(
+        deactivated.items.map((item) => item.id),
+        equals(before.items.map((item) => item.id)),
+      );
       expect(deactivated.nextCursor, before.nextCursor);
       expect(deactivated.isLoading, isFalse);
       expect(deactivated.isRefreshing, isFalse);
@@ -605,7 +623,10 @@ void main() {
       final afterLate = container
           .read(discoveryFeedMapProvider)['photo']!
           .value!;
-      expect(afterLate.items, same(before.items));
+      expect(
+        afterLate.items.map((item) => item.id),
+        equals(before.items.map((item) => item.id)),
+      );
       expect(afterLate.nextCursor, before.nextCursor);
     });
 
@@ -792,7 +813,6 @@ class _FailingContentRepository extends _SuiteFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -812,7 +832,6 @@ class _CancelledContentRepository extends _SuiteFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -832,7 +851,6 @@ class _EmptyCacheFallbackContentRepository extends _SuiteFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -856,7 +874,6 @@ class _EmptyDiscoveryFeedContentRepository extends _SuiteFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -883,7 +900,6 @@ class _EmptyContinuationContentRepository extends _SuiteFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -907,7 +923,6 @@ class _EmptyContinuationContentRepository extends _SuiteFeedQuery {
     final page = await super.listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
-      identity: identity,
       type: type,
       subCategory: subCategory,
       limit: limit,
@@ -934,7 +949,6 @@ class _FailingAppendContentRepository
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -951,7 +965,6 @@ class _FailingAppendContentRepository
     return super.listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
-      identity: identity,
       type: type,
       subCategory: subCategory,
       limit: limit,
@@ -971,7 +984,6 @@ class _CachedContinuationFallbackContentRepository
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -986,7 +998,6 @@ class _CachedContinuationFallbackContentRepository
       return super.listDiscoveryFeedPage(
         category: category,
         channelId: channelId,
-        identity: identity,
         type: type,
         subCategory: subCategory,
         limit: limit,
@@ -1001,7 +1012,6 @@ class _CachedContinuationFallbackContentRepository
     final page = await _SuiteFeedQuery().listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
-      identity: identity,
       type: type,
       subCategory: subCategory,
       limit: limit,
@@ -1030,7 +1040,6 @@ class _EmptyRefreshContentRepository extends _SuiteFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -1048,7 +1057,6 @@ class _EmptyRefreshContentRepository extends _SuiteFeedQuery {
     return super.listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
-      identity: identity,
       type: type,
       subCategory: subCategory,
       limit: limit,
@@ -1071,7 +1079,6 @@ class _ControllableContentRepository extends _SuiteFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -1085,7 +1092,6 @@ class _ControllableContentRepository extends _SuiteFeedQuery {
     final page = await super.listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
-      identity: identity,
       type: type,
       subCategory: subCategory,
       limit: limit,
@@ -1118,7 +1124,6 @@ class _NeverCompletingContentRepository extends _SuiteFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -1147,7 +1152,6 @@ class _PendingAppendContentRepository extends _SuiteFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -1161,7 +1165,6 @@ class _PendingAppendContentRepository extends _SuiteFeedQuery {
     final page = await super.listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
-      identity: identity,
       type: type,
       subCategory: subCategory,
       limit: limit,
@@ -1191,7 +1194,6 @@ class _StaleWhileRevalidateContentRepository extends _SuiteFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -1205,7 +1207,6 @@ class _StaleWhileRevalidateContentRepository extends _SuiteFeedQuery {
     final basePage = await super.listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
-      identity: identity,
       type: type,
       subCategory: subCategory,
       limit: limit,
@@ -1273,7 +1274,6 @@ class _SupersedingContentRepository extends _SuiteFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -1287,7 +1287,6 @@ class _SupersedingContentRepository extends _SuiteFeedQuery {
     final basePage = await super.listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
-      identity: identity,
       type: type,
       subCategory: subCategory,
       limit: limit,

@@ -1,0 +1,7 @@
+// Generated from _shared/app_artifact_manifest.yaml; do not edit.
+QWQ_APP_IDENTITY_SOURCE_SHA256 = sha256:1b450f0775a74e692d08fed19361fa8956c95aa995bf460acdfcb464b146eb30
+QWQ_APP_BUILD_PROFILE = nonprod
+QWQ_APP_RUNTIME_ENV = alpha
+QWQ_IOS_APPLICATION_ID = com.leadwise.quwoquan.alpha.profile
+QWQ_APP_DISPLAY_NAME = 趣我圈·Alpha·性能
+QWQ_APP_PROMOTABLE = false

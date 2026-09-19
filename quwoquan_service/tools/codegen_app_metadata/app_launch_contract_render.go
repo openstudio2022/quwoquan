@@ -83,6 +83,8 @@ func renderAppLaunchContractDart(contract appLaunchContract) []byte {
 	writeDartLaunchStringMap(&output, "appLaunchTargetEnvironment", contract.TargetEnvironment)
 	writeDartStringSet(&output, "offlineBootstrapDocumentRequiredFields", contract.SchemaRequiredFields["offline_bootstrap_document"])
 	writeDartStringSet(&output, "offlineBootstrapRuntimeRequiredFields", contract.OfflineBootstrapRuntimeFields)
+	writeDartStringSet(&output, "offlineRehearsalSpaceRequiredFields", contract.OfflineRehearsalSpaceFields)
+	writeDartStringSet(&output, "offlineRehearsalSpaceModes", contract.OfflineRehearsalSpaceModes)
 	writeDartStringSet(&output, "runtimeConfigPackageRuntimeRequiredFields", contract.RuntimePackageRuntimeFields)
 	fmt.Fprintf(&output, "const int runtimeConfigPackageMaxLifetimeSeconds = %d;\n", contract.RuntimePackageMaxLifetimeSeconds)
 	fmt.Fprintf(&output, "const int runtimeConfigPackageMaxFutureSkewSeconds = %d;\n", contract.RuntimePackageMaxFutureSkewSeconds)
@@ -110,6 +112,7 @@ func renderAppLaunchContractDart(contract appLaunchContract) []byte {
 	output.WriteString("const String appArtifactContractJson =\n    ")
 	output.WriteString(strconv.Quote(string(artifactJSON)))
 	output.WriteString(";\n")
+	output.WriteString(renderObservationDart(contract))
 	return []byte(output.String())
 }
 
@@ -199,6 +202,7 @@ func renderAppLaunchContractPython(contract appLaunchContract) ([]byte, error) {
 	output.WriteString("APP_ARTIFACT_CONTRACT = _json.loads(")
 	output.WriteString(strconv.Quote(string(artifactJSON)))
 	output.WriteString(")\n")
+	output.WriteString(renderObservationPython(contract))
 	return []byte(output.String()), nil
 }
 
@@ -297,6 +301,8 @@ func renderAppLaunchContractSwift(contract appLaunchContract) []byte {
 	writeSwiftStringArray(&output, "appLaunchAttemptStatuses", contract.AttemptStatuses)
 	writeSwiftStringArray(&output, "appLaunchAttemptForwardStates", contract.AttemptForwardStates)
 	writeSwiftStringArray(&output, "appLaunchAttemptTerminalStates", contract.AttemptTerminalStates)
+	r := observationReadback(contract)
+	fmt.Fprintf(&output, "  static let rehearsalStorageObservationChannel = %q\n  static let rehearsalStorageObservationMethod = %q\n", r["channel"], r["method"])
 	output.WriteString("}\n")
 	return []byte(output.String())
 }
@@ -420,6 +426,8 @@ func renderAppLaunchContractJava(contract appLaunchContract) []byte {
 	output.WriteString("    }\n")
 	output.WriteString("    return Collections.unmodifiableMap(values);\n")
 	output.WriteString("  }\n\n")
+	r := observationReadback(contract)
+	fmt.Fprintf(&output, "  public static final String REHEARSAL_STORAGE_OBSERVATION_CHANNEL = %q;\n  public static final String REHEARSAL_STORAGE_OBSERVATION_METHOD = %q;\n", r["channel"], r["method"])
 	output.WriteString("  private AppLaunchContract() {}\n")
 	output.WriteString("}\n")
 	return []byte(output.String())

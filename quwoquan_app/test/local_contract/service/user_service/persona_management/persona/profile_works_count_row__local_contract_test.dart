@@ -51,7 +51,6 @@ final class _ThrowingAuthorPostsReader implements ContentAuthorPostsReader {
   @override
   Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
-    String? identity,
     String? type,
     String? visibility,
     String? cursor,

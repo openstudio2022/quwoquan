@@ -64,10 +64,8 @@ void main() {
       expect(state.ownerId, isEmpty);
       expect(state.accessToken, isEmpty);
       expect(await controller.refreshSessionIfNeeded(force: true), isFalse);
-      await expectLater(
-        controller.accessTokenForRequest(),
-        throwsA(isA<CloudException>()),
-      );
+      // 离线 transport 没有 bearer；真实认证入口仍显式拒绝，不能假创建匿名账号。
+      expect(await controller.accessTokenForRequest(), isNull);
       await expectLater(
         controller.ensureTrustedGuestSession(),
         throwsA(isA<CloudException>()),

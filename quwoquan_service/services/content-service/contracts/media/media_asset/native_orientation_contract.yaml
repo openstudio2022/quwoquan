@@ -1,0 +1,30 @@
+schema: content_native_orientation_contract
+channel: quwoquan/video_editing
+method: readInterfaceOrientation
+response_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  oneOf:
+    - type: object
+      additionalProperties: false
+      required: [status, platform]
+      properties:
+        status: {const: unavailable}
+        platform: {enum: [android, ios]}
+    - type: object
+      additionalProperties: false
+      required: [status, platform, binding, axis, rotation]
+      properties:
+        status: {const: available}
+        platform: {const: android}
+        binding: {type: string, minLength: 1, pattern: '.*\S.*'}
+        axis: {enum: [portrait, landscape]}
+        rotation: {type: integer, enum: [0, 90, 180, 270]}
+    - type: object
+      additionalProperties: false
+      required: [status, platform, binding, orientation]
+      properties:
+        status: {const: available}
+        platform: {const: ios}
+        binding: {type: string, minLength: 1, pattern: '.*\S.*'}
+        orientation: {enum: [portraitUp, portraitDown, landscapeLeft, landscapeRight]}

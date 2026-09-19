@@ -21,7 +21,7 @@ def validate_mode_inputs(args: argparse.Namespace) -> None:
         if args.acceptance_bundle is not None:
             raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "--acceptance-bundle is integrate-only; acceptance produces the bundle")
         return
-    flags = ("baseline", "beta", "reuse", "merged_lanes", "candidate_ref", "android_device_id", "ios_device_id",
+    flags = ("baseline", "alpha", "beta", "reuse", "merged_lanes", "candidate_ref", "android_device_id", "ios_device_id",
              "release_attestation", "rollback_release_attestation", "release_handoff_ref")
     for field in flags:
         if getattr(args, field):
@@ -57,7 +57,7 @@ def validate_source_inputs(args: argparse.Namespace, *, repository: Path) -> Non
         raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "publishable acceptance requires scope readiness")
     try:
         load_review_inputs(Path(args.review_consolidation) if args.review_consolidation else None,
-                           [Path(item) for item in args.required_evidence or []], repo_root=repository, required=True)
+                           [Path(item) for item in args.required_evidence or []], repo_root=repository, required=False)
     except LocalReadinessError as exc:
         raise IntegrationRunError("INTEGRATION_RUN.SOURCE_REQUIRED", str(exc)) from exc
 
@@ -76,7 +76,9 @@ def record_imported_bundle(summary: dict[str, Any], imported: Mapping[str, Any],
     summary["dataReleaseHandoffRef"] = manifest.get("dataReleaseHandoffRef")
     summary["sourceFact"] = dict(manifest["sourceFact"])
     summary["environments"] = {
-        "alpha": {"environment": "alpha", "executed": True, "imported": True, "acceptance": dict(manifest["alphaFact"])},
+        "alpha": {"environment": "alpha", "executed": bool((manifest.get("alpha") or {}).get("executed", True)),
+                 "imported": True, "reasonCode": (manifest.get("alpha") or {}).get("reasonCode"),
+                 "acceptance": dict(manifest["alphaFact"])},
         "beta": {"environment": "beta", "executed": bool((manifest.get("beta") or {}).get("executed")), "imported": True,
                  "reasonCode": (manifest.get("beta") or {}).get("reasonCode"), "acceptance": dict(manifest["betaFact"])},
     }

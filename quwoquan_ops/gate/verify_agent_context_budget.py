@@ -555,6 +555,41 @@ def _manifest_budget_nodes(nodes: list[Any]) -> list[Any]:
     return list(nodes)
 
 
+
+def _compact_manifest_for_budget(payload: dict[str, object]) -> int:
+    import hashlib
+    from lib.evidence_fingerprint import canonical_json_bytes
+    from lib.feature_context_fingerprint import (
+        feature_context_closure,
+        feature_context_closure_identity,
+        referenced_fingerprint_binding,
+    )
+
+    size = len(_serialize_manifest_for_budget(payload))
+    if size > MANIFEST_BYTE_BUDGET:
+        receipt = payload["evidence_fingerprint"]["receipt"]
+        receipt_digest = hashlib.sha256(canonical_json_bytes(receipt)).hexdigest()
+        payload["evidence_fingerprint"] = referenced_fingerprint_binding(
+            receipt,
+            receipt_ref=(
+                ".qwq_output/env/repo/runs/feature-tree/"
+                f"by-fingerprint/receipts/{receipt_digest}.json"
+            ),
+        )
+        size = len(_serialize_manifest_for_budget(payload))
+    if size > MANIFEST_BYTE_BUDGET:
+        closure = feature_context_closure(payload)
+        payload["closure_identity"] = feature_context_closure_identity(closure)
+        for field in ("owner_chain", "canonical_contexts", "applicable_agents", "open_items"):
+            payload[field] = []
+        size = len(_serialize_manifest_for_budget(payload))
+    return size
+
+
+def _serialize_manifest_for_budget(payload: dict[str, object]) -> bytes:
+    from lib.feature_tree.commands import _serialize_context_manifest
+    return _serialize_context_manifest(payload).encode("utf-8")
+
 def check_manifest_budget() -> list[str]:
     issues: list[str] = []
     commands_path = ROOT / "quwoquan_ops/cli/lib/feature_tree/commands.py"
@@ -567,6 +602,7 @@ def check_manifest_budget() -> list[str]:
     manifest_contract = contract.get("feature_context_manifest") or {}
     configured = manifest_contract.get("max_bytes")
     required_fields = manifest_contract.get("required_fields")
+    optional_fields = manifest_contract.get("optional_fields") or []
     if configured != MANIFEST_BYTE_BUDGET:
         issues.append(
             "agent governance contract 的 manifest max_bytes 必须精确为 8192，"
@@ -603,28 +639,11 @@ def check_manifest_budget() -> list[str]:
                 )
                 if budget_fingerprint is None:
                     budget_fingerprint = payload["evidence_fingerprint"]["receipt"]
-                if set(payload) != set(required_fields):
+                if not set(required_fields) <= set(payload) <= set(required_fields) | set(optional_fields):
                     issues.append(
                         f"{target}: manifest 字段与 agent governance contract 不一致"
                     )
-                size = len(
-                    _serialize_context_manifest(payload).encode("utf-8")
-                )
-                if size > MANIFEST_BYTE_BUDGET:
-                    import hashlib
-                    from lib.evidence_fingerprint import canonical_json_bytes
-                    from lib.feature_context_fingerprint import referenced_fingerprint_binding
-
-                    receipt = payload["evidence_fingerprint"]["receipt"]
-                    receipt_digest = hashlib.sha256(canonical_json_bytes(receipt)).hexdigest()
-                    payload["evidence_fingerprint"] = referenced_fingerprint_binding(
-                        receipt,
-                        receipt_ref=(
-                            ".qwq_output/env/repo/runs/feature-tree/"
-                            f"by-fingerprint/receipts/{receipt_digest}.json"
-                        ),
-                    )
-                    size = len(_serialize_context_manifest(payload).encode("utf-8"))
+                size = _compact_manifest_for_budget(payload)
                 if size > MANIFEST_BYTE_BUDGET:
                     issues.append(f"{target}: 默认 manifest {size} bytes 超过 8192 bytes")
         except (ImportError, OSError, ValueError) as error:
@@ -689,6 +708,23 @@ def _load_registry() -> tuple[dict[str, Any] | None, list[str]]:
     if not isinstance(registry, dict):
         return None, ["registry.yaml 必须是映射"]
     return registry, []
+
+
+def _checklist_location_issues(label: str, checklist: object) -> list[str]:
+    """派发 checklist 只能取 roles/ 下的分级判定文件。
+
+    `references/guides/**` 是按需正文，不进 Reviewer 派发上下文；一旦被当作
+    checklist 引用，正文字节就会计入单 Reviewer 预算，且分级标签门禁（只扫
+    `roles/*/checklists/*/*.md`）对它不生效，等于绕过判据绑定。
+    """
+
+    value = str(checklist or "")
+    if not value or value.startswith("roles/"):
+        return []
+    return [
+        f"registry.yaml: {label} checklist 必须位于 roles/，"
+        f"不得指向按需正文或其他载体: {value}"
+    ]
 
 
 def check_checklists_and_registry() -> list[str]:
@@ -789,6 +825,7 @@ def check_checklists_and_registry() -> list[str]:
                 issues.append(f"registry.yaml: profiles.{profile} 引用未知 workflow {workflow}")
             if not (ROOT / ".agents/skills/review/references" / str(checklist)).is_file():
                 issues.append(f"registry.yaml: profiles.{profile} checklist 不存在: {checklist}")
+            issues.extend(_checklist_location_issues(f"profiles.{profile}", checklist))
 
     workflows = registry.get("workflows") or {}
     if not isinstance(workflows, dict):
@@ -839,6 +876,10 @@ def check_checklists_and_registry() -> list[str]:
             issues.append(f"registry.yaml: primary 角色 {role} 缺 ROLE.md")
         if checklist and not (ROOT / ".agents/skills/review/references" / checklist).is_file():
             issues.append(f"registry.yaml: workflows.{workflow} primary checklist 不存在: {checklist}")
+        if checklist:
+            issues.extend(
+                _checklist_location_issues(f"workflows.{workflow} primary", checklist)
+            )
 
     # 检查全部 checklist，但不再要求磁盘文件反向注册成 inventory。
     for path in sorted(roles_root.glob("*/checklists/*/*.md")):

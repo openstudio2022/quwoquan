@@ -1,5 +1,8 @@
 // spec_ref: specs/feature-tree/runtime/runtime-media/spec.md#sit-003
 import 'dart:io';
+import 'dart:convert';
+
+import 'package:quwoquan_app/runtime/di/alpha_content_composition.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -29,6 +32,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/config/offline_content_bundle.dart';
+import 'package:quwoquan_app/runtime/config/offline_content_failure.dart';
 import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/video_preview_track_dependencies.dart';
 import 'package:quwoquan_app/runtime/platform/media/bundled_public_media_delivery.dart';
@@ -211,6 +215,54 @@ void main() {
     );
   });
 
+  test('avatar缩放profile不改变显式image kind或私有lease授权种类', () {
+    final port = RemotePublicMediaDelivery(
+      MediaEndpointConfig(
+        avatarBaseUrl: 'https://avatar.test/media/avatar',
+        imageBaseUrl: 'https://image.test/media/image',
+        videoBaseUrl: 'https://video.test/media/video',
+        attachmentBaseUrl: 'https://image.test',
+      ),
+    );
+    const source = 'media/image/s/test/post/p1/v1/image.png';
+    final image = port.imageProvider(
+      source,
+      kind: MediaDeliveryKind.image,
+      profile: CdnImagePreset.avatar,
+    ) as CachedNetworkImageProvider;
+    expect(Uri.parse(image.url).host, 'image.test');
+    expect(Uri.parse(image.url).path, '/$source');
+    final avatar = port.imageProvider(
+      'media/avatar/s/test/person/p1/v1/avatar.png',
+      kind: MediaDeliveryKind.avatar,
+      profile: CdnImagePreset.avatar,
+    ) as CachedNetworkImageProvider;
+    expect(Uri.parse(avatar.url).host, 'avatar.test');
+    const privateSource = 'https://private.test/media.png?sign=a&t=1';
+    final lease = testSignedMediaLease(
+      deliveryUri: Uri.parse(privateSource),
+      assetId: 'image-asset',
+      kind: MediaDeliveryKind.image,
+    );
+    final privateImage = port.imageProvider(
+      privateSource,
+      kind: MediaDeliveryKind.image,
+      profile: CdnImagePreset.avatar,
+      lease: lease,
+    ) as CachedNetworkImageProvider;
+    expect(privateImage.url, privateSource);
+    expect(privateImage.cacheKey, lease.cacheIdentity);
+    expect(
+      () => port.imageProvider(
+        privateSource,
+        kind: MediaDeliveryKind.avatar,
+        profile: CdnImagePreset.avatar,
+        lease: lease,
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('四环境使用同一图片驱动且返回同一 provider 类型边界', () async {
     installCanonicalOfflineAssetsForTests();
     final bundle = await OfflineContentBundle.load();
@@ -327,7 +379,31 @@ void main() {
     testWidgets('$environment Post头像封面文章同业务驱动逐字节进入真实adapter', (tester) async {
       installCanonicalOfflineAssetsForTests();
       MediaLoadFailureCache.instance.clear();
-      final bundle = await tester.runAsync(OfflineContentBundle.load);
+      if (environment == 'alpha') {
+        await tester.runAsync(
+          () => hydrateRuntimePackageForTests(environment: 'alpha'),
+        );
+      }
+      final scope = OfflineContentReadScope();
+      final preparation = Stopwatch()..start();
+      final bundle = await tester.runAsync(scope.load);
+      expect(bundle, isNotNull);
+      // 此冷验证属于已有寻址准备，不计入后续widget解码窗口。
+      // ignore: avoid_print
+      print(
+        jsonEncode({
+          'stage': 'post-driver-cold',
+          'environment': environment,
+          'elapsedMicros': preparation.elapsedMicroseconds,
+        }),
+      );
+      final disposeComposition = environment == 'alpha'
+          ? installAlphaContentComposition(scope: scope, installMedia: true)
+          : null;
+      addTearDown(() {
+        disposeComposition?.call();
+        scope.dispose();
+      });
       final post = bundle!
           .rows('posts')
           .map(
@@ -343,7 +419,7 @@ void main() {
           );
       final recording = _RecordingDelivery(
         environment == 'alpha'
-            ? BundledPublicMediaDelivery()
+            ? publicMediaDelivery
             : RemotePublicMediaDelivery(
                 MediaEndpointConfig(
                   avatarBaseUrl: 'https://$environment.test/media/avatar',
@@ -411,11 +487,37 @@ void main() {
         ),
         isTrue,
       );
+      if (environment == 'alpha') {
+        // 真IO/compute完成之前不跳跃fake clock；保留2秒有界观察。
+        bool decodedImagesReady() =>
+            tester
+                .widgetList<RawImage>(find.byType(RawImage))
+                .where((widget) => widget.image != null)
+                .length >=
+            3;
+        for (var i = 0; i < 80 && !decodedImagesReady(); i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 25)),
+          );
+          await tester.pump(const Duration(milliseconds: 20));
+        }
+        expect(
+          decodedImagesReady(),
+          isTrue,
+          reason: '三处真实RawImage成功后才能释放source scope',
+        );
+        expect(PaintingBinding.instance.imageCache.pendingImageCount, 0);
+        expect(tester.takeException(), isNull);
+      }
       await tester.pumpWidget(const SizedBox.shrink());
+      disposeComposition?.call();
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 250)),
       );
-      await tester.pump(const Duration(seconds: 7));
+      // 仅Remote cache manager有该清理任务，Alpha不以跳时替代真实读取终态。
+      if (environment != 'alpha') {
+        await tester.pump(const Duration(seconds: 11));
+      }
     });
   }
 
@@ -423,11 +525,31 @@ void main() {
     tester,
   ) async {
     installCanonicalOfflineAssetsForTests();
-    final bundle = await tester.runAsync(OfflineContentBundle.load);
+    await tester.runAsync(
+      () => hydrateRuntimePackageForTests(environment: 'alpha'),
+    );
+    final scope = OfflineContentReadScope();
+    final preparation = Stopwatch()..start();
+    final disposeComposition = installAlphaContentComposition(
+      scope: scope,
+      installMedia: true,
+    );
+    addTearDown(disposeComposition);
+    final bundle = await tester.runAsync(scope.load);
+    expect(bundle, isNotNull);
+    // 实际首次完整6秒验证，原测试也在此取得图片身份；非假bundle/窗口内预热。
+    // ignore: avoid_print
+    print(
+      jsonEncode({
+        'stage': 'canvas-cold-preparation',
+        'elapsedMicros': preparation.elapsedMicroseconds,
+      }),
+    );
     final image = bundle!.media.byAssetId.values.firstWhere(
       (a) => a.kind == 'image',
     );
-    final delivery = BundledPublicMediaDelivery();
+    final delivery = publicMediaDelivery;
+    final decodeClock = Stopwatch()..start();
     final events = <ImageBookMediaLoadEvent>[];
     await tester.pumpWidget(
       ProviderScope(
@@ -463,6 +585,26 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 20));
     }
+    // ignore: avoid_print
+    print(
+      jsonEncode({
+        'stage': 'canvas-decode-terminal',
+        'elapsedMicros': decodeClock.elapsedMicroseconds,
+        'assetId': image.assetId,
+        'byteLength': image.byteLength,
+        'width': image.width,
+        'height': image.height,
+        'events': events
+            .map(
+              (e) => {
+                'result': e.result,
+                'durationMs': e.durationMs,
+                'error': e.error?.runtimeType.toString(),
+              },
+            )
+            .toList(),
+      }),
+    );
     expect(
       events.any((e) => e.result == 'success'),
       isTrue,
@@ -470,5 +612,13 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
+    disposeComposition();
+    final terminalCount = events.length;
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 25)),
+    );
+    await tester.pump();
+    expect(events, hasLength(terminalCount), reason: '卸载后不能追加迟到成功');
+    await expectLater(scope.load(), throwsA(isA<OfflineContentFailure>()));
   });
 }

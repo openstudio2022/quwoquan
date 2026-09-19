@@ -1,0 +1,18 @@
+description: >-
+  AuthenticationChallenge 保持真实OTP/recipient/secret保密，未列字段默认禁止App日志。
+  SyntheticIdentityLabel/SyntheticChallengeView/SyntheticLoginEvidence 的字段分类只由同对象fields.yaml拥有：
+  PUBLIC仅指严格非电话随机合成标识与固定非认证演练提示本身，不代表全局allow，普通日志仍drop。
+  仅SyntheticLoginEvidence闭集通过完整语法、实际isolated Alpha来源和无真实数据混入检查后，
+  可作为受限私有测试plan、截图、native活动产物的候选值；无明确作用域/采集保障时禁止输入及记录。
+  不能把类型名、字段名、runner期望或人工理由当作来源验证，不能豁免真实phone/OTP/credential。
+  request/challenge/internal account/persona/session及完整payload不属于公开证据。
+  尚无同源本地validator/端口及native保障时保持GATE_BLOCK，不签发receipt、不更改日志收集器。
+app_log_policy:
+  - field: destinationHash
+    classification: SENSITIVE
+    app_log: drop
+    description: 真实投递目标的摘要同样禁止日志，不能拿摘要充当合成身份。
+  - field: secretRef
+    classification: SECRET
+    app_log: drop
+    description: OTP或其他真实认证秘密引用不进入任何公开证据。

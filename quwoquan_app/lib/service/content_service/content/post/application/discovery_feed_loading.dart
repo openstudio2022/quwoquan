@@ -335,8 +335,39 @@ abstract class _DiscoveryFeedMapLoadingCore
         error: error,
         stackTrace: st,
       );
+      final retained = state[channelId]?.value;
+      final hasDisplayableCache = retained?.items.isNotEmpty ?? false;
+      if (hasDisplayableCache) {
+        // 刷新失败保留已展示窗口，只记非阻断 stale；不得清空用户正在看的列表。
+        state = {
+          ...state,
+          channelId: AsyncData(
+            retained!.copyWith(
+              isLoading: false,
+              isRefreshing: false,
+              isAppending: false,
+              isSlow: false,
+              blockingError: null,
+              staleDataError: error,
+            ),
+          ),
+        };
+        _recordPageState(
+          channelId,
+          phase: 'retainedContent',
+          source: 'online',
+          error: error,
+          hasCache: true,
+          itemCount: retained.items.length,
+        );
+        return DiscoveryFeedLoadResult(
+          terminal: DiscoveryFeedLoadTerminal.retainedContent,
+          generation: generation,
+          failure: error,
+        );
+      }
       // 可安全回放的失败由 reader 返回 typed cacheFallback 页；
-      // 直接抛出的错误没有准入证明，必须撤出已有 resident。
+      // 首屏没有可展示项时，直接抛出的错误必须 fail-closed。
       state = {
         ...state,
         channelId: AsyncData(
@@ -430,6 +461,32 @@ abstract class _DiscoveryFeedMapLoadingCore
         name: 'DiscoveryFeed',
         error: error,
       );
+      final retained = state[channelId]?.value;
+      final hasDisplayableCache = retained?.items.isNotEmpty ?? false;
+      if (hasDisplayableCache) {
+        state = {
+          ...state,
+          channelId: AsyncData(
+            retained!.copyWith(
+              isLoading: false,
+              isRefreshing: false,
+              isAppending: false,
+              isSlow: false,
+              blockingError: null,
+              staleDataError: error,
+            ),
+          ),
+        };
+        _recordPageState(
+          channelId,
+          phase: 'retainedContent',
+          source: 'localConsistency',
+          error: error,
+          hasCache: true,
+          itemCount: retained.items.length,
+        );
+        return;
+      }
       state = {
         ...state,
         channelId: AsyncData(

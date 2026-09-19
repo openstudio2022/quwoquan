@@ -89,6 +89,13 @@ def register_parser(
     app_content_uat_parser.add_argument(
         "--candidate", default="", help="离线验收绑定的 <store-relative ref>=<sha256:digest>",
     )
+    app_content_uat_parser.add_argument("--isolated-rehearsal", action="store_true",
+                                       help="显式选择已获准的独立本地演练空间；本参数不签发用户授权")
+    app_content_uat_parser.add_argument("--rehearsal-instance-id", default="",
+                                       help="isolated 非默认空间标识；snapshot pin仅从已验证制品闭包派生")
+    from quwoquan_ops.cli.commands.app_preflight_uat_offline import OFFLINE_REQUIRED_CASES
+    app_content_uat_parser.add_argument("--case", dest="offline_cases", action="append", choices=OFFLINE_REQUIRED_CASES,
+                                       help="仅离线诊断的具名case，可重复指定；不能作为完整acceptance")
     app_content_uat_parser.add_argument("--dry-run", action="store_true")
     app_content_uat_parser.add_argument(
         "--verification-purpose",

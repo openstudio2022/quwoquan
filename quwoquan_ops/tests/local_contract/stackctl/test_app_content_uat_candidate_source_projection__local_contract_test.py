@@ -75,6 +75,8 @@ def _fixture(
         for relative in (
             "quwoquan_app/run.sh",
             "quwoquan_app/.flutter-version",
+            "quwoquan_app/android/app/app_identity.generated.json",
+            "quwoquan_app/tool/app_identity_codegen/generated_manifest.json",
             "quwoquan_app/scripts/device/build_launcher_handoff.py",
             "quwoquan_app/scripts/device/canonical_app_instance/__init__.py",
             "quwoquan_app/scripts/device/canonical_app_instance/arguments.py",
@@ -136,7 +138,8 @@ def _fixture(
     manifest_path = capsule / "manifest.json"
     manifest_path.write_text("{}\n", encoding="utf-8")
     manifest = {
-        "schema": "stackctl-package-input-capsule.v1",
+        "schema": "stackctl-package-input-capsule.v2",
+        "dependencyPlatforms": ["android", "ios"],
         "baselineId": _digest("a"),
         "sourceRevision": "b" * 40,
         "workspaceStatusDigest": _digest("c"),

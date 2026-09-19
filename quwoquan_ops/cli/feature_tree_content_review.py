@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+sys.dont_write_bytecode = True
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FEATURE_TREE_MODULE = Path(__file__).with_name("feature_tree.py")
 OUTPUT_ROOT = REPO_ROOT / ".qwq_output" / "env" / "repo" / "runs" / "feature-tree"
@@ -813,9 +815,24 @@ def render(reviews: list[Review]) -> tuple[str, dict[str, object]]:
     return "\n".join(lines), payload
 
 
+def blocking_reviews(reviews: list[Review], *, changes_only: bool) -> list[Review]:
+    """L0 只阻断本次 Git 变更里的 spec/design；全树问题留在报告里。"""
+    failures = [item for item in reviews if not item.ok]
+    if not changes_only:
+        return failures
+    from quwoquan_ops.cli.lib.feature_tree import gitio
+    changed = set(gitio.git_changed_paths())
+    return [item for item in failures if item.path in changed]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report-only", action="store_true", help="生成报告但不以内容问题返回失败")
+    parser.add_argument(
+        "--changes",
+        action="store_true",
+        help="只对 git 变更中的 spec/design 以内容问题返回失败",
+    )
     args = parser.parse_args()
     nodes = feature_tree.discover_nodes()
     refs = feature_tree.test_spec_refs()
@@ -834,8 +851,13 @@ def main() -> int:
     machine.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(markdown.relative_to(REPO_ROOT))
     print(machine.relative_to(REPO_ROOT))
-    if payload["blocked"]:
-        message = f"GATE_BLOCK: {payload['blocked']} files / {payload['issues']} content issues"
+    failures = blocking_reviews(reviews, changes_only=args.changes)
+    blocked = len(failures)
+    issues = sum(len(item.issues) for item in failures)
+    if blocked:
+        message = f"GATE_BLOCK: {blocked} files / {issues} content issues"
+        if args.changes:
+            message += " (changes-only)"
         if not args.report_only:
             print(message, file=sys.stderr)
             return 1

@@ -72,7 +72,7 @@ void main() {
       expect(state.entries, isEmpty);
     });
 
-    // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t7
+    // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t4
     test('重试期内失败保持静默：entry 保留、递增 retryCount、无终态回调', () async {
       final harness = _ClientStateSyncHarness(
         config: const ClientStateSyncConfig(
@@ -100,8 +100,8 @@ void main() {
       expect(harness.terminalFailures, isEmpty);
     });
 
+    // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t4
     // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t6
-    // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t7
     test('超过 maxPendingAge 进入终态：放弃重试、移除 entry 并回调上层', () async {
       final store = _InMemoryClientStateSyncStore()
         ..value = <String, dynamic>{

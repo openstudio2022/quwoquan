@@ -54,6 +54,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
     this.showWishlistButton = false,
     this.isWishlisted = false,
     this.onWishlistTap,
+    this.transparentBackground = false,
+    this.horizontalInsetOverride,
     this.layoutSpec = ImmersiveViewerStageLayoutSpec.feedRail,
   });
 
@@ -74,6 +76,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
   final bool isFollowing;
   final bool isSelfPost;
   final bool showFollowButton;
+  final bool transparentBackground;
+  final double? horizontalInsetOverride;
 
   /// 想去（wishlist）动作格：仅当当前作品锚定到支持想去的实体主页
   /// （detail/list wire 的 primaryHomepageId + wishlistHomepageTypes 类型门）
@@ -490,6 +494,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
       },
       child: ClipRect(
         child: BackdropFilter(
+          enabled: !transparentBackground,
           filter: ImageFilter.blur(
             sigmaX: AppSpacing.eighteen,
             sigmaY: AppSpacing.eighteen,
@@ -500,7 +505,9 @@ class ImmersiveEngagementBar extends StatelessWidget {
             padding: EdgeInsets.only(
               bottom: bottomClearance + AppSpacing.immersiveBottomChromeLift,
             ),
-            color: AppColors.worksBackground.withValues(alpha: 0.88),
+            color: transparentBackground
+                ? AppColors.transparent
+                : AppColors.worksBackground.withValues(alpha: 0.88),
             child: SizedBox(
               height: contentHeight,
               child: LayoutBuilder(
@@ -508,6 +515,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
                   // Track 宽度 = rail。作者左锚 rail 左缘、动作右锚 rail 右缘。
                   // 与顶栏 / caption / 交集 / 文章正文共用同一对齐轨道。
                   final horizontalInset =
+                      horizontalInsetOverride ??
                       ImmersiveViewerLayout.horizontalPadding(
                         context,
                         layoutSpec: layoutSpec,

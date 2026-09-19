@@ -31,12 +31,12 @@ def _stub_capsule(
         "verify_package_input_capsule_with_dependencies",
         lambda _root: SimpleNamespace(
             manifest={"entries": [{"logicalPath": "fixture"}]},
-            dependency_snapshots=(
-                production,
-                patrol,
-                object(),
-                object(),
-                object(),
+            dependency_snapshots=SimpleNamespace(
+                production_pub=production,
+                patrol_pub=patrol,
+                production_ios_pods=object(),
+                patrol_ios_pods=object(),
+                android_gradle=object(),
             ),
         ),
     )
@@ -51,6 +51,24 @@ def _stub_capsule(
         lambda **_kwargs: tmp_path / "patrol-pub",
     )
     return manifest, production, patrol
+
+
+@pytest.mark.parametrize("platform", ["ios", "android"])
+def test_projection_rejects_missing_required_platform_before_materialization(tmp_path, monkeypatch, platform):
+    manifest, production, patrol = _stub_capsule(tmp_path, monkeypatch)
+    monkeypatch.setattr(projection, "verify_package_input_capsule_with_dependencies", lambda _: SimpleNamespace(
+        manifest={"entries": [{"logicalPath": "fixture"}]},
+        dependency_snapshots=SimpleNamespace(
+            production_pub=production, patrol_pub=patrol,
+            production_ios_pods=None, patrol_ios_pods=None, android_gradle=None,
+        ),
+    ))
+    with pytest.raises(ValueError, match="lacks required"):
+        projection.materialize_dependency_bundle_projection(
+            manifest_path=manifest, projection_root=tmp_path / "projection",
+            private_state_root=tmp_path / "state", platform=platform, base_environment={},
+        )
+    assert not (tmp_path / "state").exists()
 
 
 def test_android_projection_forces_one_private_gradle_home_for_both_hosts(
@@ -116,6 +134,8 @@ def test_web_projection_uses_fresh_flutter_home_and_ignores_global_config(
             "HOME": "/developer/home",
             "XDG_CONFIG_HOME": "/developer/config",
             "HTTP_PROXY": "http://developer-proxy.invalid",
+            "PUB_HOSTED_URL": "https://ambient-pub.invalid",
+            "FLUTTER_STORAGE_BASE_URL": "https://ambient-flutter.invalid",
             "PATH": "/usr/bin:/bin",
         },
     )
@@ -126,6 +146,49 @@ def test_web_projection_uses_fresh_flutter_home_and_ignores_global_config(
     )
     assert result.production_environment["FLUTTER_SWIFT_PACKAGE_MANAGER"] == "false"
     assert "HTTP_PROXY" not in result.production_environment
+    assert "PUB_HOSTED_URL" not in result.production_environment
+    assert "FLUTTER_STORAGE_BASE_URL" not in result.production_environment
+
+
+def test_projection_seals_lock_hosted_url_when_lock_is_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest, _production, _patrol = _stub_capsule(tmp_path, monkeypatch)
+    repo = tmp_path / "repo"
+    production_lock = repo / "quwoquan_app/pubspec.lock"
+    patrol_lock = repo / "quwoquan_app/test_host/patrol/pubspec.lock"
+    hosted_lock = (
+        "packages:\n"
+        "  fixture_pkg:\n"
+        "    dependency: transitive\n"
+        "    description:\n"
+        "      name: fixture_pkg\n"
+        f"      sha256: {'a' * 64}\n"
+        "      url: https://pub.flutter-io.cn\n"
+        "    source: hosted\n"
+        "    version: 1.2.3\n"
+    )
+    production_lock.parent.mkdir(parents=True)
+    production_lock.write_text(hosted_lock, encoding="utf-8")
+    patrol_lock.parent.mkdir(parents=True)
+    patrol_lock.write_text(hosted_lock, encoding="utf-8")
+
+    result = projection.materialize_dependency_bundle_projection(
+        manifest_path=manifest,
+        projection_root=repo,
+        private_state_root=tmp_path / "private",
+        platform="web",
+        base_environment={
+            "PUB_HOSTED_URL": "https://ambient-pub.invalid",
+            "PATH": "/usr/bin:/bin",
+        },
+        include_patrol=True,
+    )
+
+    assert result.production_environment["PUB_HOSTED_URL"] == "https://pub.flutter-io.cn"
+    assert result.patrol_environment is not None
+    assert result.patrol_environment["PUB_HOSTED_URL"] == "https://pub.flutter-io.cn"
 
 
 def test_patrol_projection_expands_user_home_shorthand_in_private_path(

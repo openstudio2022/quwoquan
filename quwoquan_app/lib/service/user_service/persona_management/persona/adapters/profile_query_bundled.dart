@@ -10,18 +10,42 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/app
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_profile_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// 仅投影快照许可的公开 creator；不授予账号、关系或私域能力。
+typedef BundledPrivateProfileLookup = Future<PersonaProfileViewData?> Function(
+  String userId,
+);
+
+typedef BundledPersonaListLookup =
+    Future<List<PersonaManagementItemViewData>?> Function();
+
+typedef BundledHomepageLookup = Future<UserHomepageBundleViewData?> Function(
+  String personaId,
+);
+
+BundledPrivateProfileLookup? bundledPrivateProfileLookup;
+BundledPersonaListLookup? bundledPersonaListLookup;
+BundledHomepageLookup? bundledHomepageLookup;
+
+/// 仅投影快照许可的公开 creator；私域能力仅在 Alpha overlay 已安装时开放。
 final class BundledProfileQuery implements ProfileQuery, PersonaQuery {
-  BundledProfileQuery({required this.loadBundle});
+  BundledProfileQuery({required this.loadBundle, this.checkScope});
 
   final Future<OfflineContentBundle> Function() loadBundle;
+  final void Function()? checkScope;
   Future<OfflineContentBundle>? _bundle;
 
-  Future<OfflineContentBundle> _readBundle() =>
-      (_bundle ??= loadBundle().catchError((Object error) {
-        _bundle = null;
-        throw error;
-      })).timeout(const Duration(seconds: 6));
+  Future<OfflineContentBundle> _readBundle() async {
+    checkScope?.call();
+    final result =
+        await (checkScope != null
+                ? loadBundle()
+                : _bundle ??= loadBundle().catchError((Object error) {
+                    _bundle = null;
+                    throw error;
+                  }))
+            .timeout(const Duration(seconds: 6));
+    checkScope?.call();
+    return result;
+  }
 
   PersonaProfileViewData _profile(OfflineContentBundle bundle, String id) {
     final rows = bundle
@@ -50,6 +74,15 @@ final class BundledProfileQuery implements ProfileQuery, PersonaQuery {
 
   @override
   Future<PersonaProfileViewData> getUserProfile(String userId) async {
+    checkScope?.call();
+    final overlay = bundledPrivateProfileLookup;
+    if (overlay != null) {
+      final profile = await overlay(userId);
+      if (profile != null) {
+        checkScope?.call();
+        return profile;
+      }
+    }
     final id = _publicId(userId);
     return _profile(await _readBundle(), id);
   }
@@ -62,6 +95,15 @@ final class BundledProfileQuery implements ProfileQuery, PersonaQuery {
   Future<UserHomepageBundleViewData> getUserHomepageBundle(
     String personaId,
   ) async {
+    checkScope?.call();
+    final overlay = bundledHomepageLookup;
+    if (overlay != null) {
+      final page = await overlay(personaId);
+      if (page != null) {
+        checkScope?.call();
+        return page;
+      }
+    }
     final id = _publicId(personaId);
     final bundle = await _readBundle();
     final profile = _profile(bundle, id);
@@ -87,8 +129,18 @@ final class BundledProfileQuery implements ProfileQuery, PersonaQuery {
   }) async => throw contentCapabilityUnavailable('social_relations');
 
   @override
-  Future<List<PersonaManagementItemViewData>> listPersonas() async =>
-      throw contentCapabilityUnavailable('persona_management');
+  Future<List<PersonaManagementItemViewData>> listPersonas() async {
+    checkScope?.call();
+    final overlay = bundledPersonaListLookup;
+    if (overlay != null) {
+      final items = await overlay();
+      if (items != null) {
+        checkScope?.call();
+        return items;
+      }
+    }
+    throw contentCapabilityUnavailable('persona_management');
+  }
 
   @override
   Future<PersonaManagementSummaryViewData>

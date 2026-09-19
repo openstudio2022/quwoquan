@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/legacy_source_repository_evidence.schema.json",
+  "title": "Independent source repository evidence for legacy repackage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "sourceRepositoryId",
+    "sourceTerminalDigest",
+    "issuer",
+    "authorityRef",
+    "authorityDigest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.legacy_source_repository_evidence"
+    },
+    "sourceRepositoryId": {
+      "$ref": "../publish/repository.schema.json#/properties/repositoryId"
+    },
+    "sourceTerminalDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "issuer": {
+      "const": "legacy-release-seal"
+    },
+    "authorityRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authorityDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

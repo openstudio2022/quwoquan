@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
+import 'package:quwoquan_app/runtime/alpha_rehearsal/alpha_rehearsal_observation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
@@ -762,6 +763,11 @@ void runWhenLoggedIn(
   LoginDismissPolicy dismissPolicy = LoginDismissPolicy.popPrevious,
 }) {
   unawaited(() async {
+    if (reason == AuthGateReason.like &&
+        AlphaRehearsalObservation.current?.caseId == 'local-write') {
+      await action();
+      return;
+    }
     final allowed = await requireLogin(
       ref,
       context,

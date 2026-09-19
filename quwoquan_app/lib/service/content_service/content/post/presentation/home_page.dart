@@ -9,12 +9,14 @@ import 'package:quwoquan_app/runtime/shell/startup/app_startup_runtime.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_primary_tab_strip.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/home_chrome_tokens.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
@@ -470,19 +472,14 @@ class _HomePageState extends ConsumerState<HomePage>
       _scheduleActiveChannelReconciliation(effectiveActiveChannelId);
     }
     final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
-    // 三处 overlay 字段只有「底色亮度」与「其上前景的反色」两种取值。各写一遍
-    // isDark 三元会把同一个明暗判断摊成三处，调深浅时容易改一处漏两处。
-    final barBrightness = isDark ? Brightness.dark : Brightness.light;
-    final barForegroundBrightness = switch (barBrightness) {
-      Brightness.dark => Brightness.light,
-      Brightness.light => Brightness.dark,
-    };
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: AppColors.transparent,
-      statusBarIconBrightness: barForegroundBrightness,
-      statusBarBrightness: barBrightness,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
       systemNavigationBarColor: AppColors.transparent,
-      systemNavigationBarIconBrightness: barForegroundBrightness,
+      systemNavigationBarIconBrightness: isDark
+          ? Brightness.light
+          : Brightness.dark,
     );
 
     return Semantics(
@@ -498,35 +495,31 @@ class _HomePageState extends ConsumerState<HomePage>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Container(
+                  key: const ValueKey<String>('home-search-blue-chrome'),
+                  color: HomeChromeTokens.searchSurface,
+                  padding: EdgeInsets.only(
+                    top: effectiveTopInset,
+                    bottom: AppSpacing.intraGroupXs,
+                    left: AppSpacing.feedContentHorizontal(context),
+                    right: AppSpacing.feedContentHorizontal(context),
+                  ),
+                  child: const GlobalXiaoquSearchBar(
+                    showAssistantLabel: true,
+                    assistantForegroundColor: HomeChromeTokens.searchForeground,
+                  ),
+                ),
+                Container(
                   key: const ValueKey<String>('home-primary-tab-chrome'),
-                  height:
-                      effectiveTopInset +
-                      AppSpacing.primaryTopBarHeight(context),
-                  padding: EdgeInsets.only(top: effectiveTopInset),
                   decoration: BoxDecoration(color: bg),
-                  child: SizedBox(
-                    height: AppSpacing.primaryTopBarHeight(context),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.feedContentHorizontal(context),
-                      ),
-                      child: Row(
-                        children: [
-                          // 频道条自身横向滚动，因此让出右侧固定宽度给全局搜索与小趣，
-                          // 频道再多也不会把这两个入口挤出屏幕。
-                          Expanded(
-                            child: HomePrimaryTabStrip(
-                              activeChannelId: effectiveActiveChannelId,
-                              onChannelChanged: _handleChannelChange,
-                              isDark: isDark,
-                              channels: channels,
-                            ),
-                          ),
-                          SizedBox(width: AppSpacing.intraGroupXs),
-                          const GlobalTopActions(),
-                        ],
-                      ),
-                    ),
+                  height: AppSpacing.primaryTopBarHeight(context),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.feedContentHorizontal(context),
+                  ),
+                  child: HomePrimaryTabStrip(
+                    activeChannelId: effectiveActiveChannelId,
+                    onChannelChanged: _handleChannelChange,
+                    isDark: isDark,
+                    channels: channels,
                   ),
                 ),
                 Expanded(
@@ -589,6 +582,8 @@ class _HomePageState extends ConsumerState<HomePage>
   void _openUserProfile(
     String userId, {
     String? avatarUrl,
+    String? avatarAssetId,
+    MediaDeliveryAccessMode? avatarAccessMode,
     String? displayName,
     String? backgroundUrl,
   }) {
@@ -597,6 +592,8 @@ class _HomePageState extends ConsumerState<HomePage>
       extra: UserProfileRouteExtra(
         personaId: userId,
         avatarUrl: avatarUrl,
+        avatarAssetId: avatarAssetId,
+        avatarAccessMode: avatarAccessMode,
         displayName: displayName,
         backgroundImage: backgroundUrl,
       ),

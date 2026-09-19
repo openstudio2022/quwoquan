@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -53,26 +54,113 @@ def replay_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
                 publish_root=publish)
 
 
+def _sha256(body: bytes) -> str:
+    return "sha256:" + hashlib.sha256(body).hexdigest()
+
+
 def _homepage_case(case: dict) -> dict:
-    """复用新包测试中已入池的无图主页，封装同一现役事务 schema。"""
+    """将已入池无图主页整体迁到现役 review、身份与 revision 契约。"""
     package = case["source_package_root"]
     publish = case["publish_root"]
+    object_root = package / "object"
     document = read_json(package / "object_transaction_package.json")
     homepage = next((publish / "entities").rglob("manifest.json")).parent
-    shutil.rmtree(package / "object")
-    shutil.copytree(homepage, package / "object")
-    manifest = read_json(homepage / "manifest.json")
+    shutil.rmtree(object_root)
+    shutil.copytree(homepage, object_root)
+
+    logical_ref = "地点/景区/西湖/1"
+    review_ref = "entities/" + logical_ref
+    manifest_path = object_root / "manifest.json"
+    manifest = read_json(manifest_path)
+    manifest["entityRef"] = "/entity/" + logical_ref
+    for retired in ("distributionDecision", "publicationAdmission", "usageScope", "variantPurpose"):
+        manifest.pop(retired, None)
+    _write_json(manifest_path, manifest)
+
+    page_body = (object_root / "page.md").read_bytes()
+    draft_digest = _sha256(page_body)
+    source_document = read_json(object_root / manifest["sourceRefs"][0])
+    excerpt = next(row for row in source_document["evidence"] if row["kind"] == "source_excerpt")
+    source_body = (object_root / manifest["sourceRefs"][0]).parent.joinpath(excerpt["path"]).read_bytes()
+    source_digest = _sha256(source_body)
+    assert excerpt["sha256"] == source_digest and excerpt["bytes"] == len(source_body)
+
+    actor = lambda session: {
+        "host": "cursor", "modelFamily": "gpt", "sessionId": session,
+        "invocation": {"provider": "openai", "model": "gpt-5", "runId": session + "-run"},
+    }
+    protocol = {
+        "schemaVersion": "1.0.0", "dialectVersion": "1.0.0",
+        "canonicalizationVersion": "1.0.0",
+    }
+    revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    counts = {"title": 1, "heading": 0, "paragraph": 1, "list": 0,
+              "tableLogicalCell": 0, "footnote": 0, "media": 0}
+    sequence_digest = _sha256(json.dumps({
+        "objectRef": review_ref, "sourceDigest": source_digest,
+        "draftDigest": draft_digest, "objectRevision": revision,
+    }, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode())
+    disposition = {
+        "issueId": "homepage-semantic-exact", "objectRef": review_ref,
+        "sourceDigest": source_digest, "targetDigest": draft_digest,
+        "detectedType": "SEMANTIC_EXACT", "proposedMapping": None,
+        "lossFields": [], "severity": "info",
+        "actor": {"actorId": "homepage-reviewer", "actorType": "independent_reviewer"},
+        "reason": "verified fixture homepage preserves the acquired source semantics",
+        "policyVersion": "1.0.0", "reviewStatus": "reviewed_confirmed",
+        "outcome": "auto_continue", "processingDisposition": "preserved",
+        "protocol": protocol, "objectRevision": revision,
+    }
+    review = {
+        "schema": "quwoquan_data.content_review", "stage": "5.review",
+        "executionId": document["executionId"], "objectRef": review_ref,
+        "decision": "approved", "author": actor("homepage-author"),
+        "reviewer": actor("homepage-reviewer"),
+        "candidateBindings": {
+            "origin": "execution_draft",
+            "page": {"ref": "4.draft/page.md", "digest": draft_digest},
+            "manifest": None, "semanticDocument": None,
+        },
+        "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
+        "blockingIssues": [], "assetRights": [],
+        "semanticReport": {
+            "reviewedCarrier": "homepage", "carrierCompatible": True,
+            "sources": [{
+                "sourceRef": "sources/commons/source.md", "sourceDigest": source_digest,
+                "parseStatus": "complete", "dialect": "markdown", "dialectVersion": "1",
+                "capabilities": ["title", "paragraph"],
+                "sourceCounts": counts, "draftCounts": counts,
+                "sourceSequenceDigest": sequence_digest,
+                "draftSequenceDigest": sequence_digest,
+            }],
+            "homepageFidelity": {
+                "title": True, "headingTree": True, "paragraphOrder": True,
+                "links": True, "nestedLists": True, "tableLogicalGrid": True,
+                "footnotes": True, "mediaCaptionOrder": True,
+            },
+            "issues": [],
+        },
+        "protocol": protocol, "objectRevision": revision,
+        "dispositions": [disposition],
+    }
+    _write_json(object_root / "content_review.json", review)
+
     document["publishMediaMode"] = "text_only"
     document["sourcePolicyRevision"] = "encyclopedia-primary"
-    document["target"].update(objectKind="entities", objectSchema=manifest["schema"],
-                              objectRef=manifest["entityRef"].removeprefix("/entity/"),
-                              objectPath=homepage.relative_to(publish).as_posix())
+    document["target"].update(
+        objectKind="entities", objectSchema=manifest["schema"], objectRef=logical_ref,
+        objectPath=homepage.relative_to(publish).as_posix(),
+    )
     document["closure"]["casRefs"] = []
+    review_binding = _review_binding(object_root, document)
+    document["semanticBinding"] = {
+        key: review_binding[key]
+        for key in ("protocol", "objectRevision", "dispositionsDigest")
+    }
     document["objectClosureDigest"] = _closure_digest(
-        object_root=package / "object", object_kind="entities",
-        object_ref=document["target"]["objectRef"], target_schema=manifest["schema"],
-        source_policy_revision=document["sourcePolicyRevision"], closure=document["closure"],
-        cas_rows=[], review=_review_binding(package / "object", document),
+        object_root=object_root, object_kind="entities", object_ref=logical_ref,
+        target_schema=manifest["schema"], source_policy_revision=document["sourcePolicyRevision"],
+        closure=document["closure"], cas_rows=[], review=review_binding,
     )
     _write_json(package / "object_transaction_package.json", document)
     _verify_package(package, canonical_root=publish, require_target_absent=False)
@@ -178,6 +266,7 @@ def test_exact_package_replay_accepts_verified_empty_homepage(replay_case):
     result = replay_object_transaction_package(**case)
     assert result["status"] == "applied"
     assert result["canonicalObjectRef"] == "entities/" + package["target"]["objectRef"]
+    assert result["canonicalObjectRef"] == "entities/地点/景区/西湖/1"
     assert (case["publish_root"] / package["target"]["objectPath"] / "page.md").is_file()
     assert replay_object_transaction_package(**case)["idempotent"] is True
 
@@ -260,3 +349,23 @@ def test_exact_package_replay_rejects_changed_source_binding(replay_case):
     (replay_case["source_package_root"] / "extra.txt").write_text("changed", encoding="utf-8")
     with pytest.raises(ObjectTransactionError, match="REPLAY_CREATE_ONCE_CONFLICT"):
         replay_object_transaction_package(**replay_case)
+
+
+@pytest.mark.parametrize("drift", ["identity", "bytes", "revision"])
+def test_empty_homepage_replay_rejects_identity_bytes_or_revision_drift(replay_case, drift):
+    case = _homepage_case(replay_case)
+    replay_object_transaction_package(**case)
+    root = case["source_package_root"]
+    document = read_json(root / "object_transaction_package.json")
+    if drift == "identity":
+        document["target"]["objectRef"] = "地点/景区/断裂身份/1"
+        _write_json(root / "object_transaction_package.json", document)
+    elif drift == "bytes":
+        (root / "object/page.md").write_bytes(b"# drifted homepage\n")
+    else:
+        review_path = root / "object/content_review.json"
+        review = read_json(review_path)
+        review["objectRevision"]["contentRevision"] += 1
+        _write_json(review_path, review)
+    with pytest.raises(ObjectTransactionError):
+        replay_object_transaction_package(**case)

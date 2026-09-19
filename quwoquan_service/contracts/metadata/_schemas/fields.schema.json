@@ -31,6 +31,7 @@
         "type": "object",
         "additionalProperties": true,
         "properties": {
+          "client_value": { "type": "boolean" },
           "fields": {
             "type": "array",
             "items": {
@@ -72,6 +73,7 @@
         "type": "object",
         "additionalProperties": true,
         "properties": {
+          "client_value": { "type": "boolean" },
           "fields": {
             "type": "array",
             "items": {
@@ -217,6 +219,11 @@
           "type": "integer",
           "minimum": 1
         },
+        "pattern": { "type": "string", "minLength": 1 },
+        "const": { "type": "string" },
+        "max_utf8_bytes": { "type": "integer", "minimum": 1 },
+        "max_items": { "type": "integer", "minimum": 1 },
+        "item_max_utf8_bytes": { "type": "integer", "minimum": 1 },
         "format": {
           "enum": [
             "canonical_sha256"

@@ -828,7 +828,13 @@ func assembleContentDomain(
 	// 推荐策略 Store 的具体实现仍在 composition root 显式选择。
 	policyStore := rtrecpolicy.NewStoreFromBaseline()
 	startRecommendationPolicyHotReload(workers, policyStore, logger)
+	collectionVerifier, err := collectionAuthorityVerifier(asm, cfg)
+	if err != nil {
+		return fmt.Errorf("collection authority verifier: %w", err)
+	}
 	handlers, err := buildContentHTTPHandler(contentHTTPHandlerInput{
+		collectionAuthority:          collectionVerifier,
+		collectionDB:                 db,
 		ctx:                          ctx,
 		workers:                      workers,
 		logger:                       logger,

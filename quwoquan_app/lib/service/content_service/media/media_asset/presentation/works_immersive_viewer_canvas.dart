@@ -1,97 +1,5 @@
 part of 'works_immersive_viewer.dart';
 
-@immutable
-class _WorksTopChromeTheme {
-  const _WorksTopChromeTheme({
-    required this.overlayStyle,
-    required this.foregroundColor,
-    required this.mutedForegroundColor,
-  });
-
-  final SystemUiOverlayStyle overlayStyle;
-  final Color foregroundColor;
-  final Color mutedForegroundColor;
-}
-
-/// Work Browser 顶部栏：极简，仅「返回」与「更多」。
-/// 禁止媒体类型指示、页码、形态 tab；媒体筛选入口收敛到「更多」菜单。
-/// 顶栏空白区保留横滑手势用于宿主一级 tab 切换（首页嵌入态）。
-class _WorksPrimaryTopBar extends StatelessWidget {
-  const _WorksPrimaryTopBar({
-    required this.layoutSpec,
-    required this.onHorizontalDragEnd,
-    required this.foregroundColor,
-    this.onTapClose,
-    this.onTapMore,
-  });
-
-  final ImmersiveViewerStageLayoutSpec layoutSpec;
-  final GestureDragEndCallback onHorizontalDragEnd;
-  final Color foregroundColor;
-  final VoidCallback? onTapClose;
-  final VoidCallback? onTapMore;
-
-  @override
-  Widget build(BuildContext context) {
-    return ImmersiveViewerLayout.alignToRail(
-      context: context,
-      layoutSpec: layoutSpec,
-      child: SizedBox(
-        key: const ValueKey<String>('works-top-rail'),
-        width: double.infinity,
-        height: AppSpacing.appChromeTopBarHeight(context),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onHorizontalDragEnd: onHorizontalDragEnd,
-                child: const SizedBox.expand(),
-              ),
-            ),
-
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: Opacity(
-                  opacity: onTapClose == null ? 0 : 1,
-                  child: Semantics(
-                    key: const ValueKey<String>('works-top-back'),
-                    identifier: 'works-top-back',
-                    child: ImmersiveToolbarIconButton(
-                      icon: CupertinoIcons.back,
-                      onPressed: onTapClose,
-                      foregroundColor: foregroundColor,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            Positioned(
-              right: 0,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: KeyedSubtree(
-                  key: const ValueKey<String>('works-top-more'),
-                  child: ImmersiveToolbarIconButton(
-                    icon: CupertinoIcons.ellipsis,
-                    onPressed: onTapMore,
-                    foregroundColor: foregroundColor,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// 视频作品画布：全屏沉浸视频；作品内分集横滑切换（mediaItems 契约序列）；
 /// 默认控件被禁用，播放控制由 caption header 的极简控制条承载；
 /// 点击视频区域切换播放/暂停。
@@ -104,10 +12,22 @@ class _WorksVideoCanvas extends StatefulWidget {
     required this.isVisible,
     required this.onEpisodeChanged,
     required this.onActiveSessionChanged,
+    required this.composeStage,
+    required this.landscape,
+    required this.onMediaTap,
   });
 
+  final bool landscape;
+  final VoidCallback onMediaTap;
   final ContentPostViewData post;
   final List<_WorksVideoDeliveryItem> items;
+  final Widget Function(
+    _WorksVideoDeliveryItem,
+    VideoPlaybackSession,
+    Widget,
+    bool,
+  )
+  composeStage;
   final int initialEpisodeIndex;
   final bool isVisible;
   final void Function(int episodeIndex, String episodeIdentity)
@@ -161,6 +81,15 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas>
   @override
   void didUpdateWidget(covariant _WorksVideoCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.landscape != widget.landscape) {
+      _preheatReadinessGeneration++;
+      _forwardPreheatAllowed = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _episodeController.hasClients) {
+          _episodeController.jumpToPage(_currentEpisodeIndex);
+        }
+      });
+    }
     final episodeReconciled = _reconcileEpisodes(oldWidget);
     if (episodeReconciled) {
       _forwardPreheatAllowed = false;
@@ -428,7 +357,10 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas>
           child: PageView.builder(
             controller: _episodeController,
             scrollDirection: Axis.horizontal,
-            allowImplicitScrolling: true,
+            allowImplicitScrolling: !widget.landscape,
+            physics: widget.landscape
+                ? const NeverScrollableScrollPhysics()
+                : null,
             itemCount: items.length,
             onPageChanged: (index) {
               final identity = items[index].identity;
@@ -457,6 +389,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas>
                   ? null
                   : _mountedSessionsByIdentity[currentIdentity];
               final shouldPreheat =
+                  !widget.landscape &&
                   widget.isVisible &&
                   _appIsForeground &&
                   !_preheatSuppressedByMemoryPressure &&
@@ -480,12 +413,15 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas>
                     index: index,
                     identity: identity,
                     item: item,
+                    composeStage: widget.composeStage,
                     initialize: shouldInitialize,
                     autoPlay:
                         widget.isVisible &&
                         isCurrent &&
                         _episodePlaybackSettled,
-                    tapEnabled: widget.isVisible,
+                    tapEnabled: widget.isVisible && isCurrent,
+                    landscape: widget.landscape,
+                    onMediaTap: widget.onMediaTap,
                     onSessionMounted: _trackMountedSession,
                     onSessionReady: _registerSession,
                     onSessionUnmounted: _untrackMountedSession,
@@ -493,22 +429,6 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas>
                 ),
               );
             },
-          ),
-        ),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.black.withValues(alpha: 0.08),
-                    AppColors.black.withValues(alpha: 0.62),
-                  ],
-                ),
-              ),
-            ),
           ),
         ),
       ],
@@ -526,9 +446,12 @@ class _WorksVideoEpisodeStage extends StatefulWidget {
     required this.index,
     required this.identity,
     required this.item,
+    required this.composeStage,
     required this.initialize,
     required this.autoPlay,
     required this.tapEnabled,
+    required this.landscape,
+    required this.onMediaTap,
     required this.onSessionMounted,
     required this.onSessionReady,
     required this.onSessionUnmounted,
@@ -538,9 +461,18 @@ class _WorksVideoEpisodeStage extends StatefulWidget {
   final int index;
   final String identity;
   final _WorksVideoDeliveryItem item;
+  final Widget Function(
+    _WorksVideoDeliveryItem,
+    VideoPlaybackSession,
+    Widget,
+    bool,
+  )
+  composeStage;
   final bool initialize;
   final bool autoPlay;
   final bool tapEnabled;
+  final bool landscape;
+  final VoidCallback onMediaTap;
   final void Function(String identity, VideoPlaybackSession session)
   onSessionMounted;
   final void Function(int index, String identity, VideoPlaybackSession session)
@@ -573,22 +505,35 @@ class _WorksVideoEpisodeStageState extends State<_WorksVideoEpisodeStage> {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        KeyedSubtree(
-          key: ValueKey<String>('works-video-${widget.postId}-${widget.index}'),
-          child: mediaDeliveryVideo(
-            binding: item.videoBinding,
-            publicBuilder: (context, _) => item.deliveryReference == null
-                ? const SizedBox.shrink()
-                : _immersivePlayer(item: item, signedDelivery: null),
-            signedBuilder: (context, signedDelivery) =>
-                _immersivePlayer(item: item, signedDelivery: signedDelivery),
-          ),
+    return Offstage(
+      offstage: !widget.tapEnabled,
+      child: widget.composeStage(
+        item,
+        _session,
+        Stack(
+          fit: StackFit.expand,
+          children: [
+            KeyedSubtree(
+              key: ValueKey<String>(
+                'works-video-${widget.postId}-${widget.index}',
+              ),
+              child: mediaDeliveryVideo(
+                binding: item.videoBinding,
+                publicBuilder: (context, _) => item.deliveryReference == null
+                    ? const SizedBox.shrink()
+                    : _immersivePlayer(item: item, signedDelivery: null),
+                signedBuilder: (context, signedDelivery) => _immersivePlayer(
+                  item: item,
+                  signedDelivery: signedDelivery,
+                ),
+              ),
+            ),
+            if (!widget.landscape)
+              _WorksPausedPlaybackOverlay(session: _session),
+          ],
         ),
-        _WorksPausedPlaybackOverlay(session: _session),
-      ],
+        widget.tapEnabled,
+      ),
     );
   }
 
@@ -618,7 +563,14 @@ class _WorksVideoEpisodeStageState extends State<_WorksVideoEpisodeStage> {
       // Android inline players keep the factory's platform-view default.
       viewType: VideoViewType.textureView,
       verifiedDuration: item.verifiedDuration,
-      onTap: widget.tapEnabled ? () => unawaited(_session.toggle()) : null,
+      aspectRatio: item.aspectRatio,
+      // 外层唯一几何负责上下对称裁剪，播放器始终完整渲染自然比例。
+      fit: BoxFit.contain,
+      // 横向画布轻点由 viewer 唯一 interaction layer 持有；播放器只在
+      // 竖屏承载既有 play/pause tap，避免同一手势出现第二个显隐 owner。
+      onTap: widget.tapEnabled && !widget.landscape
+          ? () => unawaited(_session.toggle())
+          : null,
       playbackSession: _session,
       onPlaybackSessionCreated: (registeredSession) => widget.onSessionReady(
         widget.index,
@@ -773,6 +725,7 @@ class _WorksVideoDeliveryItem {
     this.adaptiveDescriptorVersion = 0,
     this.coverBinding = const MediaDeliveryBinding.absent(),
     this.verifiedDuration,
+    this.aspectRatio = 16 / 9,
     this.previewTrackDescriptor,
   });
 
@@ -791,5 +744,6 @@ class _WorksVideoDeliveryItem {
   /// 不复用视频自身的 mediaAssetId，也不以 post 标识兜底。
   final MediaDeliveryBinding coverBinding;
   final Duration? verifiedDuration;
+  final double aspectRatio;
   final VideoPreviewTrackDescriptor? previewTrackDescriptor;
 }

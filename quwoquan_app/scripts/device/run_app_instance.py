@@ -36,6 +36,7 @@ from canonical_app_instance.activation import (
     REQUEST_FILE_NAME,
     CanonicalExecutorError,
     CanonicalLaunchExecutor,
+    activation_receipt_observation_marker,
     canonical_json_bytes,  # noqa: F401 - compatibility observation
     compile_environment,
 )
@@ -107,6 +108,22 @@ class CommandPlatformDriver:
         self.activation_component = activation_component.strip()
         self.vm_service_info_file = vm_service_info_file
         self.vm_service_info_allowed_root = vm_service_info_allowed_root
+
+    def build_identity(self):
+        from quwoquan_ops.cli.lib.app_identity import resolve_app_identity
+        handoff = getattr(self, "launch_handoff", None) or _load_handoff(None)
+        platform = "android" if isinstance(self, AndroidPlatformDriver) else "ios"
+        identity = resolve_app_identity(platform=platform, environment=str(handoff["environment"]),
+                                        build_profile=str(handoff["buildProfile"]), build_mode="debug")
+        if not self.activation_component:
+            from quwoquan_ops.cli.lib.app_launch_manifest_contract import load_launch_manifest_contract
+            contract = load_launch_manifest_contract()
+            expected = contract["content_source_entrypoints"][contract["content_source_policy"][identity.environment]]
+            if identity.application_id != self.application_id:
+                raise CanonicalExecutorError("application id conflicts with canonical build identity")
+            if self.entrypoint != expected:
+                raise CanonicalExecutorError("entrypoint conflicts with canonical environment content source")
+        return identity
 
     def build_command(self) -> list[str]:
         raise NotImplementedError
@@ -194,13 +211,13 @@ class AndroidPlatformDriver(CommandPlatformDriver):
             "--debug",
             "--no-pub",
             "--flavor",
-            "nonprod",
+            self.build_identity().flavor,
             "--target",
             self.entrypoint,
         ]
 
     def artifact_path(self) -> Path:
-        return APP_DIR / "build/app/outputs/flutter-apk/app-nonprod-debug.apk"
+        return APP_DIR / f"build/app/outputs/flutter-apk/app-{self.build_identity().flavor}-debug.apk"
 
     def install(self) -> None:
         _run_checked(
@@ -266,11 +283,28 @@ class AndroidPlatformDriver(CommandPlatformDriver):
         )
 
     def write_activation_request(self, payload: bytes) -> None:
-        _bounded_payload(payload, REQUEST_FILE_NAME)
-        destination = f"no_backup/{REQUEST_FILE_NAME}"
+        self._write_runtime_file(
+            REQUEST_FILE_NAME,
+            payload,
+            label="activation request",
+        )
+
+    def prepare_activation_receipt_observation(self, request_digest: str) -> None:
+        self._write_runtime_file(
+            RECEIPT_FILE_NAME,
+            activation_receipt_observation_marker(request_digest),
+            label="activation receipt observation marker",
+        )
+
+    def _write_runtime_file(
+        self, file_name: str, payload: bytes, *, label: str
+    ) -> None:
+        _validate_runtime_file_name(file_name)
+        payload = _bounded_payload(payload, file_name)
+        destination = f"no_backup/{file_name}"
         script = (
             "set -e; umask 077; mkdir -p no_backup; "
-            f"temporary=no_backup/.{REQUEST_FILE_NAME}.$$.tmp; "
+            f"temporary=no_backup/.{file_name}.$$.tmp; "
             "trap 'rm -f \"$temporary\"' EXIT; "
             "cat > \"$temporary\"; chmod 600 \"$temporary\"; "
             f"mv -f \"$temporary\" {shlex.quote(destination)}; trap - EXIT"
@@ -298,7 +332,7 @@ class AndroidPlatformDriver(CommandPlatformDriver):
                     stderr_text = stderr_text.decode("utf-8", errors="replace")
                 detail = f": {stderr_text.strip()[:200]}"
             raise CanonicalExecutorError(
-                "unable to write Android private activation request "
+                f"unable to write Android private {label} "
                 f"(code {result.returncode})"
                 f"{detail}"
             )
@@ -385,6 +419,9 @@ class IOSPlatformDriver(CommandPlatformDriver):
                 )
             }
         )
+        ios_trust = str(environment.get("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH") or "").strip()
+        if ios_trust:
+            child_environment["QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH"] = ios_trust
         return child_environment
 
 
@@ -398,7 +435,7 @@ class IOSSimulatorPlatformDriver(IOSPlatformDriver):
             "--simulator",
             "--no-pub",
             "--flavor",
-            "nonprod",
+            self.build_identity().flavor,
             "--target",
             self.entrypoint,
         ]
@@ -433,10 +470,27 @@ class IOSSimulatorPlatformDriver(IOSPlatformDriver):
             ) from error
 
     def write_activation_request(self, payload: bytes) -> None:
-        payload = _bounded_payload(payload, REQUEST_FILE_NAME)
+        self._write_runtime_file(
+            REQUEST_FILE_NAME,
+            payload,
+            label="activation request",
+        )
+
+    def prepare_activation_receipt_observation(self, request_digest: str) -> None:
+        self._write_runtime_file(
+            RECEIPT_FILE_NAME,
+            activation_receipt_observation_marker(request_digest),
+            label="activation receipt observation marker",
+        )
+
+    def _write_runtime_file(
+        self, file_name: str, payload: bytes, *, label: str
+    ) -> None:
+        _validate_runtime_file_name(file_name)
+        payload = _bounded_payload(payload, file_name)
         root = self._runtime_state_root(create=True)
-        destination = root / REQUEST_FILE_NAME
-        temporary = root / f".{REQUEST_FILE_NAME}.{os.getpid()}.tmp"
+        destination = root / file_name
+        temporary = root / f".{file_name}.{os.getpid()}.tmp"
         try:
             temporary.write_bytes(payload)
             temporary.chmod(0o600)
@@ -444,7 +498,7 @@ class IOSSimulatorPlatformDriver(IOSPlatformDriver):
         except OSError as error:
             temporary.unlink(missing_ok=True)
             raise CanonicalExecutorError(
-                f"unable to write iOS Simulator activation request: {error}"
+                f"unable to write iOS Simulator {label}: {error}"
             ) from error
 
     def launch_activation(self, request_digest: str) -> None:
@@ -525,7 +579,7 @@ class IOSPhysicalPlatformDriver(IOSPlatformDriver):
             "--debug",
             "--no-pub",
             "--flavor",
-            "nonprod",
+            self.build_identity().flavor,
             "--target",
             self.entrypoint,
         ]
@@ -637,7 +691,17 @@ class IOSPhysicalPlatformDriver(IOSPlatformDriver):
                 ) from error
 
     def write_activation_request(self, payload: bytes) -> None:
-        payload = _bounded_payload(payload, REQUEST_FILE_NAME)
+        self._copy_runtime_file(REQUEST_FILE_NAME, payload)
+
+    def prepare_activation_receipt_observation(self, request_digest: str) -> None:
+        self._copy_runtime_file(
+            RECEIPT_FILE_NAME,
+            activation_receipt_observation_marker(request_digest),
+        )
+
+    def _copy_runtime_file(self, file_name: str, payload: bytes) -> None:
+        _validate_runtime_file_name(file_name)
+        payload = _bounded_payload(payload, file_name)
         cache_root = _cache_root()
         with tempfile.TemporaryDirectory(
             prefix="ios-runtime-write-",
@@ -645,9 +709,9 @@ class IOSPhysicalPlatformDriver(IOSPlatformDriver):
         ) as temporary_directory:
             source_root = Path(temporary_directory) / RUNTIME_STATE_DIRECTORY
             source_root.mkdir(mode=0o700)
-            request = source_root / REQUEST_FILE_NAME
-            request.write_bytes(payload)
-            request.chmod(0o600)
+            source = source_root / file_name
+            source.write_bytes(payload)
+            source.chmod(0o600)
             self._devicectl(
                 [
                     "device",
@@ -794,6 +858,7 @@ def main() -> int:
             vm_service_info_file=vm_service_info_file,
             vm_service_info_allowed_root=vm_service_info_allowed_root,
         )
+        driver.launch_handoff = handoff
         executor = CanonicalLaunchExecutor(
             handoff=handoff,
             platform_driver=driver,

@@ -75,12 +75,12 @@ def project_post(source: CanonicalSource, ref: str, media: dict[str, dict], vali
             "createdAt": m["createdAt"], "updatedAt": m["updatedAt"], "publishedAt": m["publishedAt"], "contentVertical": m["vertical"]}
     detail = {**view, "status": "published", "visibility": "public", "viewCount": 0,
               "tagRefs": m["tagRefs"], "entityRefs": m["entityRefs"],
-              "sourceAttribution": {f["name"]: m["sourceAttribution"][f["name"]] for f in validator.types["SourceAttribution"]["fields"] if f["name"] in m["sourceAttribution"]}}
+              "sourceAttribution": {f["name"]: m["sourceAttribution"][f["name"]] for f in validator.types["PublicSourceAttribution"]["fields"] if f["name"] in m["sourceAttribution"]}}
     if m["entityRefs"]:
         homepage_ref = m["entityRefs"][0]
         entity = source.json("entities/" + homepage_ref.removeprefix("/entity/") + "/manifest.json")
         for target in (view, detail):
-            target.update(primaryHomepageId=runtime_homepage_id(homepage_ref), primaryHomepageType=_homepage_type(entity["type"], validator))
+            target.update(primaryHomepageId=runtime_homepage_id(homepage_ref), primaryHomepageType=runtime_homepage_type(entity["type"], validator))
     elif content_type not in {"image", "video"}:
         raise OfflineSnapshotError("OFFLINE.HOMEPAGE_REFERENCE_MISSING")
     if content_type == "article":
@@ -92,7 +92,7 @@ def project_post(source: CanonicalSource, ref: str, media: dict[str, dict], vali
     return {"sourceObjectRef": ref, "projection": view, "detail": detail}
 
 
-def _homepage_type(entity_type: str, validator: PublicContractValidator) -> str:
+def runtime_homepage_type(entity_type: str, validator: PublicContractValidator) -> str:
     # 从现役 importer 的具名闭集读取，不复制第三份类型映射或默认 sight。
     ref = f"{ENTITY_ROOT}/infrastructure/homepageimport/loader.go"
     raw = validator.repo.joinpath(ref).read_bytes()
@@ -196,7 +196,7 @@ def project_homepages(source: CanonicalSource, refs: list[str], media: dict[str,
     for ref in refs:
         manifest = source.json(f"entities/{ref}/manifest.json")
         header = manifest
-        homepage_type = _homepage_type(header["type"], validator)
+        homepage_type = runtime_homepage_type(header["type"], validator)
         markdown = source.read(f"entities/{ref}/page.md").decode("utf-8")
         assets = [{"assetId": a["assetId"], "url": media[a["assetId"]]["canonicalReference"], "accessMode": "public", "caption": a["caption"],
                    "role": {"cover": "cover", "detail": "inline", "inline": "inline", "related": "related"}[a["role"]]} for a in manifest["assets"]]

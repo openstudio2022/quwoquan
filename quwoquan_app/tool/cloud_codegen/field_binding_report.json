@@ -1,6 +1,6 @@
 {
   "generator": "app-only-emitter",
-  "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+  "contractGraphSha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
   "bindings": [
     {
       "generatedPath": "lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",
@@ -1863,6 +1863,39 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "PostCollectionCommandResult",
+      "dartField": "status",
+      "dartType": "PostCollectionStatus",
+      "enumRef": "PostCollectionStatus",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "PostCollectionManagementView",
+      "dartField": "visibility",
+      "dartType": "PostCollectionVisibility",
+      "enumRef": "PostCollectionVisibility",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "PostCollectionPage",
+      "dartField": "visibility",
+      "dartType": "PostCollectionVisibility",
+      "enumRef": "PostCollectionVisibility",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
       "dartClass": "PostDeletionReceipt",
       "dartField": "status",
       "dartType": "PostStatus",
@@ -1951,18 +1984,7 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
-      "dartClass": "ReportCommandResult",
-      "dartField": "status",
-      "dartType": "ReportStatus",
-      "enumRef": "ReportStatus",
-      "contractType": "enum",
-      "contractSource": "",
-      "clientDartType": "",
-      "typed": true
-    },
-    {
-      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
-      "dartClass": "SourceAttribution",
+      "dartClass": "PublicSourceAttribution",
       "dartField": "derivedModifications",
       "dartType": "List\u003cSourceDerivedModification\u003e",
       "enumRef": "SourceDerivedModification",
@@ -1973,10 +1995,21 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
-      "dartClass": "SourceAttribution",
+      "dartClass": "PublicSourceAttribution",
       "dartField": "watermarkKind",
       "dartType": "SourceWatermarkKind?",
       "enumRef": "SourceWatermarkKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ReportCommandResult",
+      "dartField": "status",
+      "dartType": "ReportStatus",
+      "enumRef": "ReportStatus",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
@@ -3282,6 +3315,28 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
+      "dartClass": "ContentDiscoveryFeedQuery",
+      "dartField": "deviceClass",
+      "dartType": "RecommendationDeviceClass?",
+      "enumRef": "RecommendationDeviceClass",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
+      "dartClass": "ContentDiscoveryFeedQuery",
+      "dartField": "viewportProfile",
+      "dartType": "RecommendationViewportProfile?",
+      "enumRef": "RecommendationViewportProfile",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
       "dartClass": "ContentProfileInteractionPageQuery",
       "dartField": "type",
       "dartType": "InteractionActivityType",
@@ -3385,6 +3440,17 @@
       "dartField": "purpose",
       "dartType": "MediaOriginalAccessPurpose",
       "enumRef": "MediaOriginalAccessPurpose",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
+      "dartClass": "SavePostCollectionCommand",
+      "dartField": "visibility",
+      "dartType": "PostCollectionVisibility",
+      "enumRef": "PostCollectionVisibility",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
@@ -3783,6 +3849,17 @@
       "enumRef": "FeedPresentationRecipe",
       "contractType": "[]enum",
       "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/values/user/account/account_session.values.g.dart",
+      "dartClass": "SyntheticLoginFailure",
+      "dartField": "reason",
+      "dartType": "SyntheticLoginFailureReason",
+      "enumRef": "SyntheticLoginFailureReason",
+      "contractType": "enum",
+      "contractSource": "user/account/account_session/fields.yaml",
       "clientDartType": "",
       "typed": true
     },

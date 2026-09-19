@@ -418,6 +418,23 @@ pages:
     entry_widget: PersonalAssistantSessionPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router.dart]
 
+  - page_id: content.post_collection
+    source_path: lib/service/content_service/content/post_collection/presentation/post_collection_page.dart
+    page_kind: routed
+    route_id: postCollection
+    surface_ids: [postCollection]
+    experience_owner: content
+    data_owners: [content]
+    object_ids: [content.post_collection, content.post]
+    query_slices: [content.post_collection.projection.post_collection_page, content.post_collection.projection.post_collection_management_view, content.post.projection.author_post_page_slice]
+    command_operations: [content.post_collection.SavePostCollection, content.post_collection.DeletePostCollection]
+    typed_presentation: [PostCollectionPage, PostCollectionManagementView, AuthorPostPageSlice]
+    auth_requirement: optional
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.content.post_collection, lifecycle: [enter, exit, refresh, update, failure] }
+    entry_widget: PostCollectionPage
+    route_registration_evidence: [lib/runtime/di/navigation/app_router.dart]
+
   - page_id: chat.detail
     source_path: lib/service/chat_service/chat/conversation/presentation/chat_conversation_page.dart
     page_kind: routed

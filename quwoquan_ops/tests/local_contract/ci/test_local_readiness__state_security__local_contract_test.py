@@ -419,6 +419,16 @@ def test_queue_corruption_symlink_and_extra_fields_fail_closed(monkeypatch: pyte
         enqueue_paths(["docs/source.txt"], state_root=state)
 
 
+def test_atomic_json_writes_qualification_canonical_bytes(tmp_path: Path) -> None:
+    from quwoquan_ops.ci.environment_scheduler import canonical_json_bytes
+
+    destination = tmp_path / "state" / "process" / "receipt.json"
+    destination.parent.mkdir(parents=True)
+    payload = {"status": "PASS", "plan": {"level": "scope"}, "paths": ["a", "b"]}
+    _atomic_json(destination, payload)
+    assert destination.read_bytes() == canonical_json_bytes(payload) + b"\n"
+
+
 def test_atomic_write_and_resource_lock_reject_destination_symlinks(tmp_path: Path) -> None:
     state = tmp_path / "state"
     external = tmp_path / "external.json"

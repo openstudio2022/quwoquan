@@ -1,0 +1,67 @@
+description: PostCollection 独立生命周期及持久化错误。
+errors:
+- code: CONTENT.USER.post_collection_unavailable
+  reason: post_collection_unavailable
+  http_status: 404
+  emitted_by:
+  - {surface: http, operations: [SavePostCollection, DeletePostCollection]}
+  - {surface: graphql, operations: [GetPostCollection, GetPostCollectionManagement]}
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: postCollectionUnavailable
+  go_const: ErrPostCollectionUnavailable
+  user_message: {zh: 合集不存在或不可访问, en: Collection is unavailable}
+- code: CONTENT.USER.post_collection_unauthorized
+  reason: post_collection_unauthorized
+  http_status: 401
+  emitted_by:
+  - {surface: http, operations: [SavePostCollection, DeletePostCollection]}
+  - {surface: graphql, operations: [GetPostCollection, GetPostCollectionManagement]}
+  recovery_action: surface
+  disruption_level: permissionCard
+  dart_const: postCollectionUnauthorized
+  go_const: ErrPostCollectionUnauthorized
+  user_message: {zh: 请登录后管理合集, en: Sign in to manage collections}
+- code: CONTENT.USER.post_collection_invalid_argument
+  reason: post_collection_invalid_argument
+  http_status: 400
+  emitted_by:
+  - {surface: http, operations: [SavePostCollection, DeletePostCollection]}
+  - {surface: graphql, operations: [GetPostCollection, GetPostCollectionManagement]}
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: postCollectionInvalidArgument
+  go_const: ErrPostCollectionInvalidArgument
+  user_message: {zh: 合集内容或分页参数不合法, en: Invalid collection input}
+- code: CONTENT.USER.post_collection_version_conflict
+  reason: post_collection_version_conflict
+  http_status: 409
+  emitted_by:
+  - {surface: http, operations: [SavePostCollection, DeletePostCollection]}
+  - {surface: graphql, operations: [GetPostCollection]}
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: postCollectionVersionConflict
+  go_const: ErrPostCollectionVersionConflict
+  user_message: {zh: 合集已更新，请刷新后重试, en: Collection changed; refresh before retrying}
+- code: CONTENT.SYSTEM.post_collection_read_failed
+  reason: post_collection_read_failed
+  http_status: 503
+  emitted_by:
+  - {surface: http, operations: [SavePostCollection, DeletePostCollection]}
+  - {surface: graphql, operations: [GetPostCollection, GetPostCollectionManagement]}
+  recovery_action: retry
+  disruption_level: inlineCard
+  dart_const: postCollectionReadFailed
+  go_const: ErrPostCollectionReadFailed
+  user_message: {zh: 暂时无法读取合集，请稍后重试, en: Collection read is temporarily unavailable}
+- code: CONTENT.SYSTEM.post_collection_write_failed
+  reason: post_collection_write_failed
+  http_status: 503
+  emitted_by:
+  - {surface: http, operations: [SavePostCollection, DeletePostCollection]}
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: postCollectionWriteFailed
+  go_const: ErrPostCollectionWriteFailed
+  user_message: {zh: 合集保存未确认，请刷新查看结果, en: Save is unconfirmed; refresh to check the result}

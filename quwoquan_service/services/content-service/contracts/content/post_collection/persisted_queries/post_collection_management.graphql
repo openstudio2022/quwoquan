@@ -1,0 +1,10 @@
+query PostCollectionManagement($collectionId: ID!, $first: Int! = 100) {
+  postCollectionManagement(collectionId: $collectionId) {
+    collectionId
+    name
+    coverAssetId
+    visibility
+    version
+    members(first: $first) { postId readable title }
+  }
+}

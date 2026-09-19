@@ -87,6 +87,7 @@ abstract final class PageNames {
   static const String myQrCode = 'my_qr_code';
   static const String myReports = 'my_reports';
   static const String objectIntersections = 'object_intersections';
+  static const String postCollection = 'post_collection';
   static const String profile = 'profile';
   static const String profileCareerInterests = 'profile_career_interests';
   static const String profileEdit = 'profile_edit';
@@ -174,6 +175,7 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'chat_transfer_ownership', routeId: 'chatTransferOwnership', pathTemplate: '/chat/{id}/transfer-ownership', collectPageAccess: true),
     AppPageDefinition(pageName: 'homepage_status_report', routeId: 'homepageStatusReport', pathTemplate: '/homepages/{id}/status-report', collectPageAccess: true),
     AppPageDefinition(pageName: 'homepage_introduction', routeId: 'homepageIntroduction', pathTemplate: '/homepages/{id}/introduction', collectPageAccess: true),
+    AppPageDefinition(pageName: 'post_collection', routeId: 'postCollection', pathTemplate: '/collections/{collectionId}', collectPageAccess: true),
     AppPageDefinition(pageName: 'chat_member_search', routeId: 'chatMemberSearch', pathTemplate: '/chat/{id}/member-search', collectPageAccess: true),
     AppPageDefinition(pageName: 'chat_announcement', routeId: 'chatAnnouncement', pathTemplate: '/chat/{id}/announcement', collectPageAccess: true),
     AppPageDefinition(pageName: 'work_browser', routeId: 'workBrowser', pathTemplate: '/works/browser/{workId}', collectPageAccess: true),

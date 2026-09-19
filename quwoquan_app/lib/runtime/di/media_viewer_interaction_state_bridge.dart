@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_interaction_state.dart';
 import 'package:quwoquan_app/runtime/di/post_interaction_state_dependencies.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/alpha_rehearsal/alpha_rehearsal_observation.dart';
 import 'package:quwoquan_app/runtime/di/client_state_sync_dependencies.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/user_relationship_state.dart';
 import 'package:quwoquan_app/runtime/di/user_relationship_state_dependencies.dart';
@@ -193,6 +196,15 @@ void syncPostLikeIntent(
   ref
       .read(postInteractionStateProvider.notifier)
       .setLiked(postId, isLiked, likeCount: likeCount);
+  final observation = AlphaRehearsalObservation.current;
+  if (observation != null &&
+      (observation.caseId == 'local-write' ||
+          observation.caseId == 'private-continuation')) {
+    if (ref.read(postInteractionStateProvider).isLiked(postId) != isLiked) {
+      throw StateError('like command-query readback mismatch');
+    }
+    unawaited(observation.recordLikeCommandQueryReadback());
+  }
 }
 
 void syncProfileFollowIntent(

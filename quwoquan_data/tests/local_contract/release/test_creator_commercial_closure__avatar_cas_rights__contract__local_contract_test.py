@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[4]
 SCRIPTS = ROOT / "quwoquan_data" / "scripts"
@@ -17,20 +19,8 @@ if str(SCRIPTS) not in sys.path:
 from content.release.canonical.creator_avatar_quality import (  # noqa: E402
     creator_avatar_quality_issues,
 )
-from core import content_library  # noqa: E402
+from core.schema import assert_valid  # noqa: E402
 from support.media_fixture import admit_media_body  # noqa: E402
-
-
-@pytest.fixture(autouse=True)
-def _isolated_media_library(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setitem(
-        content_library.LIBRARY_CAS_ROOT_BY_KIND,
-        content_library.MEDIA_KIND,
-        tmp_path / "content-library" / "_media_cas",
-    )
 
 
 def _write(path: Path, document: dict) -> None:
@@ -90,21 +80,90 @@ def _rights_document(
     }
 
 
-def _traceable_creator(tmp_path: Path) -> tuple[Path, dict]:
+def _jpeg_bytes(size: tuple[int, int], color: tuple[int, int, int]) -> bytes:
+    image = Image.new("RGB", size, color)
+    output = io.BytesIO()
+    image.save(output, format="JPEG", quality=92)
+    return output.getvalue()
+
+
+def _write_avatar_source(
+    creator: Path,
+    rights: dict,
+    *,
+    object_key: str,
+    source_asset: dict,
+    derivative_binding: dict,
+) -> None:
+    assert_valid(rights, "release", "creator_avatar_rights_snapshot")
+    evidence = json.dumps(rights, ensure_ascii=False).encode("utf-8")
+    source = {
+        "schema": "quwoquan_data.publish_source",
+        "sourceId": "avatar",
+        "sourceUrl": rights["commercialRights"]["canonicalFilePage"],
+        "sourceUseMode": rights["commercialRights"]["sourceUseMode"],
+        "fetchedAt": rights["commercialRights"]["fetchedAt"],
+        "metadata": rights,
+        "assets": [
+            {
+                **rights["commercialRights"],
+                "assetId": rights["assetId"],
+                "sha256": rights["manifestAsset"]["sha256"],
+                "bytes": rights["commercialRights"]["asset"]["bytes"],
+                "mimeType": rights["commercialRights"]["asset"]["mimeType"],
+                "objectKey": object_key,
+                "sourceAsset": source_asset,
+                "derivativeBinding": derivative_binding,
+            }
+        ],
+        "evidence": [
+            {
+                "path": "evidence.json",
+                "sha256": "sha256:" + hashlib.sha256(evidence).hexdigest(),
+                "bytes": len(evidence),
+                "kind": "acquisition_receipt",
+            }
+        ],
+    }
+    assert_valid(source, "publish", "source")
+    evidence_path = creator / "sources/avatar/evidence.json"
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_bytes(evidence)
+    _write(creator / "sources/avatar/source.json", source)
+
+
+def _traceable_creator(tmp_path: Path) -> tuple[Path, dict, dict]:
     creator = tmp_path / "creators/creator-a"
-    content = b"avatar-cas"
+    original = _jpeg_bytes((96, 80), (50, 110, 160))
+    content = _jpeg_bytes((64, 64), (50, 110, 160))
+    original_digest = "sha256:" + hashlib.sha256(original).hexdigest()
     digest_hex = hashlib.sha256(content).hexdigest()
     digest = f"sha256:{digest_hex}"
     admit_media_body(content)
-    relative_path = "media/avatar.jpg"
-    carried = creator / relative_path
-    carried.parent.mkdir(parents=True, exist_ok=True)
-    carried.write_bytes(content)
+    object_key = (
+        f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/"
+        f"{digest_hex}.jpg"
+    )
+    media_path = creator / "media/avatar.jpg"
+    media_path.parent.mkdir(parents=True, exist_ok=True)
+    media_path.write_bytes(content)
+    derivative_binding = {
+        "originalSha256": original_digest,
+        "originalBytes": len(original),
+        "originalMimeType": "image/jpeg",
+        "policy": "source_unit_asset_budget",
+        "profile": "image",
+        "derivedSha256": digest,
+        "derivedBytes": len(content),
+        "derivedMimeType": "image/jpeg",
+        "derivedExtension": ".jpg",
+    }
     _write(creator / "_creator.json", {"creatorId": "creator-a"})
     _write(
         creator / "profile.json",
         {
             "creatorId": "creator-a",
+            "sourceRefs": ["sources/avatar/source.json"],
             "avatarAsset": {
                 "assetId": "avatar-a",
                 "kind": "avatar",
@@ -119,11 +178,14 @@ def _traceable_creator(tmp_path: Path) -> tuple[Path, dict]:
                 {
                     "assetId": "avatar-a",
                     "kind": "avatar",
+                    "path": "media/avatar.jpg",
                     "sha256": digest,
-                    "path": relative_path,
-                    "sourceRefs": ["sources/avatar/source.json"],
                     "bytes": len(content),
                     "mimeType": "image/jpeg",
+                    "width": 64,
+                    "height": 64,
+                    "sourceRefs": ["sources/avatar/source.json"],
+                    "derivativeBinding": derivative_binding,
                 }
             ]
         },
@@ -133,31 +195,23 @@ def _traceable_creator(tmp_path: Path) -> tuple[Path, dict]:
         digest=digest,
         byte_count=len(content),
     )
-    evidence = json.dumps(rights, ensure_ascii=False).encode("utf-8")
-    evidence_digest = "sha256:" + hashlib.sha256(evidence).hexdigest()
-    evidence_path = creator / "sources/avatar/evidence.json"
-    evidence_path.parent.mkdir(parents=True, exist_ok=True)
-    evidence_path.write_bytes(evidence)
-    _write(creator / "sources/avatar/source.json", {
-        "schema": "quwoquan_data.publish_source",
-        "sourceId": "avatar",
-        "sourceUrl": "https://rights.example/avatar-a",
-        "sourceUseMode": "licensed_adaptation",
-        "fetchedAt": "2026-07-28T00:00:00Z",
-        "metadata": rights,
-        "assets": [{
-            **rights["commercialRights"], "assetId": "avatar-a",
-            "sha256": digest, "bytes": len(content), "mimeType": "image/jpeg",
-        }],
-        "evidence": [{
-            "path": "evidence.json", "sha256": evidence_digest,
-            "bytes": len(evidence), "kind": "acquisition_receipt",
-        }],
-    })
-    profile = json.loads((creator / "profile.json").read_text(encoding="utf-8"))
-    profile["sourceRefs"] = ["sources/avatar/source.json"]
-    _write(creator / "profile.json", profile)
-    return creator, rights
+    rights["commercialRights"].update(
+        modifications="center-square crop and resize from 96x80 to 64x64",
+        derivedModifications=["crop", "resize"],
+    )
+    rights["commercialRights"]["asset"].update(width=64, height=64)
+    binding = {
+        "object_key": object_key,
+        "source_asset": {
+            "sha256": original_digest,
+            "bytes": len(original),
+            "mimeType": "image/jpeg",
+            "width": 96,
+            "height": 80,
+        },
+        "derivative_binding": derivative_binding,
+    }
+    return creator, rights, binding
 
 
 def test_creator_commercial_closure__missing_avatar_blocks_release(
@@ -176,8 +230,8 @@ def test_creator_commercial_closure__missing_avatar_blocks_release(
 def test_creator_commercial_closure__traceable_avatar_passes(
     tmp_path: Path,
 ) -> None:
-    creator, rights = _traceable_creator(tmp_path)
-    _write(creator / "rights_snapshots/avatar-a.json", rights)
+    creator, rights, binding = _traceable_creator(tmp_path)
+    _write_avatar_source(creator, rights, **binding)
 
     assert creator_avatar_quality_issues(tmp_path) == []
 
@@ -185,15 +239,14 @@ def test_creator_commercial_closure__traceable_avatar_passes(
 def test_creator_avatar_quality__rights_and_model_release_do_not_filter_author(
     tmp_path: Path,
 ) -> None:
-    creator, rights = _traceable_creator(tmp_path)
+    creator, rights, binding = _traceable_creator(tmp_path)
     rights["depictsIdentifiablePerson"] = True
-    _write(creator / "rights_snapshots/avatar-a.json", rights)
 
     rights["commercialRights"]["rightsAuditStatus"] = "unverified"
     rights["commercialRights"]["rightsAuditIssues"] = ["commercial proof unavailable"]
     rights["commercialRights"]["usageScope"] = "editorial"
     rights["commercialRights"]["modelReleaseStatus"] = "editorial_only"
-    _write(creator / "rights_snapshots/avatar-a.json", rights)
+    _write_avatar_source(creator, rights, **binding)
 
     assert creator_avatar_quality_issues(tmp_path) == []
 
@@ -201,9 +254,9 @@ def test_creator_avatar_quality__rights_and_model_release_do_not_filter_author(
 def test_creator_avatar_quality__evidence_identity_is_required(
     tmp_path: Path,
 ) -> None:
-    creator, rights = _traceable_creator(tmp_path)
+    creator, rights, binding = _traceable_creator(tmp_path)
     rights["manifestAsset"]["sha256"] = "sha256:" + "f" * 64
-    _write(creator / "rights_snapshots/avatar-a.json", rights)
+    _write_avatar_source(creator, rights, **binding)
 
     assert creator_avatar_quality_issues(tmp_path) == [
         {"code": "creator_avatar_quality_evidence_missing", "ref": "creator-a"}

@@ -68,6 +68,44 @@ api_routes:
     request_entity: ReadCreatorSearchCandidateQuery
     request_body_kind: object
     response_entity: CreatorSearchCandidateResult
+  - method: POST
+    path: /internal/user/collection-query-grants
+    operation: IssueCollectionQueryGrant
+    actor: none
+    application: {kind: command, facet: CollectionQueryAuthority, method: issue, aggregate_owner: UserAccount, mutation_target: UserAccount, invariant_target: UserAccount}
+    commercial: {status: blocked, block_reason: 窄合集查询 authority 真实取证尚未闭环, gap_id: USER_COLLECTION_QUERY_AUTHORITY, target_story: collection-query-delegation}
+    authorization: {principal: service, scopes: [user.collection_query.issue], ownership_policy: api_edge_source_credential_current_identity}
+    security: {auth_mode: required, principal: service, token_transport: bearer, visibility: internal, anonymous_policy: deny}
+    reliability: {timeout_ms: 800, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
+    privacy: {request_classification: SECRET, response_classification: SECRET, log_policy: redacted}
+    telemetry: {metric: user_collection_query_issue, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 300, availability_percent: 99.99}
+    error_codes: [USER.AUTH.collection_query_denied, USER.AUTH.collection_query_authority_unavailable]
+    request_entity: IssueCollectionQueryGrantCommand
+    request_body_kind: object
+    response_entity: CollectionQueryGrantResult
+    response_body: CollectionQueryGrantResult
+    response_body_kind: object
+    description: authority 独立验签源用户凭据并核对当前账号分身关系，仅签发两条合集 query 的 60 秒窄请求 grant；不持久化源凭据或 grant。
+  - method: POST
+    path: /internal/user/collection-query-grants/verify
+    operation: VerifyCollectionQueryGrant
+    actor: none
+    application: {kind: query, facet: CollectionQueryAuthority, method: verify, reader: CollectionQueryIdentityReader, slice: VerifiedCollectionQueryIdentity}
+    commercial: {status: blocked, block_reason: 窄合集查询 authority 真实取证尚未闭环, gap_id: USER_COLLECTION_QUERY_AUTHORITY, target_story: collection-query-delegation}
+    authorization: {principal: service, scopes: [user.collection_query.verify], ownership_policy: content_service_exact_collection_query_binding}
+    security: {auth_mode: required, principal: service, token_transport: bearer, visibility: internal, anonymous_policy: deny}
+    reliability: {timeout_ms: 800, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    privacy: {request_classification: SECRET, response_classification: PII, log_policy: redacted}
+    telemetry: {metric: user_collection_query_verify, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 300, availability_percent: 99.99}
+    error_codes: [USER.AUTH.collection_query_denied, USER.AUTH.collection_query_authority_unavailable]
+    request_entity: VerifyCollectionQueryGrantQuery
+    request_body_kind: object
+    response_entity: VerifiedCollectionQueryIdentity
+    response_body: VerifiedCollectionQueryIdentity
+    response_body_kind: object
+    description: content-service 每次执行同一精确 query 前在线验签并重验当前账号状态、epoch 和 Persona 归属；失败不返回身份，不缓存 active verdict。
   - actor: account
     application:
       facet: PersonaManagementQueryFacade

@@ -617,6 +617,7 @@ def write_app_content_launch_control(
     build_projection_policy_id: str,
     build_projection_seal_path: Path,
     expected_build_projection_digest: str | None,
+    rehearsal_space_selection: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Issue a fresh path-bound control file consumed by the internal launcher."""
 
@@ -672,5 +673,16 @@ def write_app_content_launch_control(
             raise ValueError("App content UAT offline evidence requires a rehearsal device")
         control.pop("packageDigest")
         control["contentSource"] = "bundled_snapshot"
+    if rehearsal_space_selection is not None:
+        if not _offline_launch(runtime_binding):
+            raise ValueError("rehearsal selection requires offline source")
+        from quwoquan_ops.cli.lib.app_launch_manifest_schema import _validate_schema_value
+        contract = load_launch_manifest_contract()
+        declaration = contract["app_content_uat_launch_control"]
+        selection = dict(rehearsal_space_selection)
+        issues = _validate_schema_value(selection, {"type": "object", **declaration["selection"]}, field_path="rehearsalSpaceSelection", contract=contract)
+        if issues or ((selection["mode"] == "standard") != (selection["instanceId"] == "default")):
+            raise ValueError("invalid rehearsal selection")
+        control[declaration["selection_field"]] = selection
     digest = _atomic_private_json(control_ref, control)
     return {**control, "controlDigest": digest, "controlRef": str(control_ref)}

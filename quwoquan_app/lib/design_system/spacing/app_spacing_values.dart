@@ -792,9 +792,9 @@ class AppSpacing {
   static const double mediaViewerPositionIndicatorWidth = 44.0;
 
   /// 中央创作按钮使用横向圆角矩形；视觉宽高与点击热区分离。
-  static const double primaryActionPillWidth = 56.0;
-  static const double primaryActionPillHeight = 40.0;
-  static const double primaryActionPillRadius = 12.0;
+  static const double primaryActionPillWidth = 52.0;
+  static const double primaryActionPillHeight = 36.0;
+  static const double primaryActionPillRadius = 11.0;
   static const double bottomNavPrimaryActionHitSize = 48.0;
 
   /// 底部导航普通项图标尺寸，保持当前主壳视觉基线。
@@ -807,7 +807,7 @@ class AppSpacing {
       _appSpacingBottomNavBarItemIconSize(context);
 
   /// 底部导航主操作内图标尺寸，随胶囊缩小避免 “+” 过重。
-  static const double bottomNavPrimaryActionIconSize = 22.0;
+  static const double bottomNavPrimaryActionIconSize = 20.0;
 
   /// 底部导航图标与标签间距，压紧图文关系以降低底栏视觉高度。
   static const double bottomNavIconLabelGap = one;
@@ -885,6 +885,10 @@ class AppSpacing {
 
   /// 沉浸视频无背景圆角播放三角尺寸
   static const double videoPlayRoundedGlyphSize = 44.0;
+
+  /// 横视频 contain 后垂直余量分给舞台顶部的比例；其余留在视频下方，
+  /// 让时长、关联与配文方向获得略多呼吸空间。
+  static const double immersiveLandscapeVideoTopSlackFraction = 0.45;
 
   /// 视频拖动预览最大尺寸
   static const double videoTimelinePreviewMaxWidth = 160.0;

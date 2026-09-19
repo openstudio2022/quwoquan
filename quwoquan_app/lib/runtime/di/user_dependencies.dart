@@ -97,14 +97,23 @@ final class UserProductionComposition {
 
   static ({ProfileQuery profile, PersonaQuery persona})? _profileReaders;
 
-  static void installReadComposition({
+  static Object? _readInstallation;
+  static void Function() installReadComposition({
     required ProfileQuery profile,
     required PersonaQuery persona,
   }) {
+    final token = Object();
+    _readInstallation = token;
     _profileReaders = (profile: profile, persona: persona);
+    return () {
+      if (identical(_readInstallation, token)) useRemoteReadComposition();
+    };
   }
 
-  static void useRemoteReadComposition() => _profileReaders = null;
+  static void useRemoteReadComposition() {
+    _readInstallation = null;
+    _profileReaders = null;
+  }
 
   static FollowingSubjectReader followingSubjectReader({
     required GeneratedCloudOperationClient client,

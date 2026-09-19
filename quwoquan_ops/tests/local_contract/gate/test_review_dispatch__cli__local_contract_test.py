@@ -30,6 +30,14 @@ import yaml
 
 from quwoquan_ops.cli.lib.evidence_fingerprint import canonical_json_bytes
 from quwoquan_ops.cli.lib.candidate_evidence import build_candidate_evidence
+from quwoquan_ops.cli.lib.feature_context_fingerprint import (
+    feature_context_closure,
+    feature_context_closure_identity,
+)
+from quwoquan_ops.cli.lib.feature_tree.content_addressed_writer import (
+    _write_content_addressed_bytes,
+    _write_content_addressed_json,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CLI = _REPO_ROOT / "quwoquan_ops/cli/review_dispatch.py"

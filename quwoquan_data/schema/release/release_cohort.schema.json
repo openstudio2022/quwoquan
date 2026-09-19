@@ -61,6 +61,9 @@
     "producerBaselineRevision": {
       "type": "string",
       "pattern": "^[0-9a-f]{40}$"
+    },
+    "repackageLineage": {
+      "$ref": "legacy_release_repackage_lineage.schema.json"
     }
   },
   "description": "AI 写 objectRefs/milestone/producerBaselineRevision；expectedCarrierCounts 缺省按 objectRefs 派生、objectRefs 排序与 canonical 字节由 release finalize 规范化后写入 release 目录。"

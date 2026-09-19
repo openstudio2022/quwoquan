@@ -55,6 +55,7 @@ from quwoquan_ops.cli.lib.package_reuse.dependency_bundle import (
     APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA,
     APP_DEPENDENCY_COMPONENTS,
     APP_DEPENDENCY_PLATFORMS,
+    dependency_active_pointer_name,
     dependency_components_for_platforms,
     AppDependencyBundleMissingError,
     component_declaration,
@@ -148,6 +149,7 @@ class DependencyComponentBuildContext:
     source_identity: Mapping[str, str]
     platforms: tuple[str, ...] = ("android", "ios")
     android_gradle_seed_root: Path | None = None
+    ios_pod_seed_roots: Mapping[str, Path] | None = None
     progress: DependencyBuildProgress = field(default_factory=DependencyBuildProgress)
     deadline: float = field(
         default_factory=lambda: time.monotonic() + _SYNC_TOTAL_DEADLINE_SECONDS
@@ -214,22 +216,24 @@ def _atomic_json(path: Path, value: dict[str, Any], *, mode: int) -> None:
 
 @contextlib.contextmanager
 def _sync_lock(
-    *, on_wait: Callable[[str, float], None] | None = None
+    *, platforms: tuple[str, ...] = ("android", "ios"),
+    on_wait: Callable[[str, float], None] | None = None,
 ) -> Any:
-    """Serialize dependency sync and the shared Flutter build workspace."""
+    """Serialize only the selected platform resources; all acquires in stable order."""
 
     held = []
     try:
-        held.append(
-            acquire_host_lock_bounded(
-                app_dependency_sync_lock_path(),
-                timeout_seconds=_LOCK_TIMEOUT_SECONDS,
-                poll_seconds=1.0,
-                fields={"resource": "flutter-cocoapods-gradle"},
-                worktree_path=_LOCK_OWNER_WORKTREE,
-                on_wait=on_wait,
+        for platform in sorted(platforms):
+            held.append(
+                acquire_host_lock_bounded(
+                    app_dependency_sync_lock_path(platform),
+                    timeout_seconds=_LOCK_TIMEOUT_SECONDS,
+                    poll_seconds=1.0,
+                    fields={"resource": f"flutter-{platform}-dependencies"},
+                    worktree_path=_LOCK_OWNER_WORKTREE,
+                    on_wait=on_wait,
+                )
             )
-        )
         yield tuple(held)
     except HostLockBusyError as exc:
         raise ValueError(
@@ -534,7 +538,7 @@ def _publish_dependency_generation(
     before_active_write: Callable[[], None],
 ) -> tuple[dict[str, Any], dict[str, Any], Path, Path]:
     def atomic_json(path: Path, value: dict[str, Any]) -> None:
-        if path == active_root / "active.json":
+        if path == active_root / dependency_active_pointer_name(platforms):
             before_active_write()
             progress.active_write_started = True
         _atomic_json(path, value, mode=0o600)
@@ -548,7 +552,7 @@ def _publish_dependency_generation(
         platforms=platforms,
         platform_inputs=platform_inputs,
         non_promotable=platforms != ("android", "ios"),
-        active_path=active_root / (f"active-{platforms[0]}.json" if len(platforms) == 1 else "active.json"),
+        active_path=active_root / dependency_active_pointer_name(platforms),
         atomic_json=atomic_json,
     )
 
@@ -689,7 +693,7 @@ def command_app_dependency_sync(
         live_source_seal = _builder.resolution_seal(repo_root)
         failed_phase = "dependency-sync-lock"
         emit_progress("dependency-sync-lock", state="acquiring")
-        with _sync_lock(on_wait=wait_progress):
+        with _sync_lock(platforms=platforms, on_wait=wait_progress):
             emit_progress("dependency-sync-lock", state="acquired")
             failed_phase = "toolchain-identity"
             emit_progress("toolchain-identity")
@@ -706,7 +710,23 @@ def command_app_dependency_sync(
                 )
             )
             android_gradle_seed_root: Path | None = None
-            if component_builder is None:
+            ios_pod_seed_roots: Mapping[str, Path] | None = None
+            if component_builder is None and "ios" in platforms:
+                try:
+                    ios_seed_bundle = load_active_dependency_bundle(
+                        repo_root=repo_root, require_current_source=False, required_platforms=("ios",)
+                    )
+                except AppDependencyBundleMissingError:
+                    ios_seed_bundle = None
+                if ios_seed_bundle is not None and all(
+                    ios_seed_bundle.active.get(field) == source_identity[field]
+                    for field in ("flutterVersion", "flutterCommandResolutionDigest")
+                ):
+                    ios_pod_seed_roots = {
+                        "production": ios_seed_bundle.component_root("productionIosPods"),
+                        "patrol": ios_seed_bundle.component_root("patrolIosPods"),
+                    }
+            if component_builder is None and "android" in platforms:
                 try:
                     seed_bundle = load_active_dependency_bundle(
                         repo_root=repo_root, require_current_source=False, required_platforms=("android",)
@@ -721,7 +741,7 @@ def command_app_dependency_sync(
                 ):
                     android_gradle_seed_root = seed_bundle.component_root("androidGradle")
             active_root = managed_dependency_bundle_root().absolute()
-            active_path = active_root / (f"active-{platforms[0]}.json" if len(platforms) == 1 else "active.json")
+            active_path = active_root / dependency_active_pointer_name(platforms)
             work_root = active_root / "work" / attempt_id
             work_root.mkdir(parents=True, mode=0o700)
             snapshots_root = active_root / "snapshots"
@@ -744,20 +764,23 @@ def command_app_dependency_sync(
                 source_identity=source_identity,
                 platforms=platforms,
                 android_gradle_seed_root=android_gradle_seed_root,
+                ios_pod_seed_roots=ios_pod_seed_roots,
                 progress=progress,
                 deadline=deadline,
             )
             failed_phase = progress.current_phase
             if component_builder is None:
-                with _attempt_android_runtime_trust(
-                    repo_root,
-                    attempt_id=attempt_id,
-                    cleanup_warnings=cleanup_warnings,
-                ) as trust_root:
-                    sensitive_failure_values.append(str(trust_root))
-                    roots = _build_dependency_components(
-                        context, trust_root=trust_root
+                trust_context = (
+                    _attempt_android_runtime_trust(
+                        repo_root, attempt_id=attempt_id, cleanup_warnings=cleanup_warnings
                     )
+                    if "android" in platforms
+                    else contextlib.nullcontext(None)
+                )
+                with trust_context as trust_root:
+                    if trust_root is not None:
+                        sensitive_failure_values.append(str(trust_root))
+                    roots = _build_dependency_components(context, trust_root=trust_root)
             else:
                 roots = component_builder(context)
             failed_phase = "live-source-readback"

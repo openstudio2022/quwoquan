@@ -17,7 +17,7 @@
 - 首页混合流、视频频道、通用视频卡、作品浏览器的视频未播放封面展示。
 - `thumbnailUrl` 优先、同源 `coverUrl` 回退、点击后进入真实视频播放的展示合同。
 - 用户上传视频与数据工程导入视频在 feed/read model 中使用同一封面合同。
-- 关注、点赞、收藏、评论数、转发数和重入状态在列表、浏览器、作者详情间同步。
+- 关注、点赞、评论数、转发数和重入状态在列表、浏览器、作者详情间同步；不恢复 Post 收藏，既有实体「想去」不属于本次新增能力。
 
 ### Out of Scope
 
@@ -47,6 +47,13 @@
 
 - 两种 profile 的控制层只能消费 `PlaybackSnapshot`；seek、首帧与暂停状态不得从 Widget 局部推断。
 - compact、regular 与 expanded 视口必须保持文本和控制区不碰撞，并在文字缩放、评论重绑、过滤恢复和媒体重排后保持同一媒体身份。
+- 作品视频与图片共用 [`works-immersive-viewer` REQ-024](../../dual-rail-discovery-redesign/works-immersive-viewer/spec.md#req-024) 的有效比例、真实区域测量与三个整栏档位；按 `h=W/r` 对 `H0=C−T、H1=C、H2=H` 选择最高可覆盖区域，不足普通区时 contain 且留白上 45% 下 55%，其余只上下等量裁剪。禁止按“竖视频”身份无条件 cover、左右裁剪、拉伸或部分侵入整栏。
+- 仅当前媒体 `r>1`、实际视口为竖屏普通模式且视频可查看时，在实际画面下方居中显示“扩展图标＋全屏”，热区至少 44pt；删除右下 current-time 与同行小图标整行。竖屏与横向全屏均无常驻 current/total，时间只在 scrub 浮标和无障碍真实进度语义中使用。尺寸未知、无可查看目标或已经是宽视口时不提供冗余或无效入口。
+- 竖屏作品有效时长严格大于 30000ms 时，未播放、播放与暂停轨道整体低亮度常显；零进度不绘制亮线或亮点。时长不超过 30000ms 默认隐藏视觉轨，触摸/水平拖动揭示后 5 秒无操作再隐藏，持续拖动挂起计时；该局部规则不得隐藏竖屏标题、工具栏或全屏入口，inlineFeed 行为不变。
+- 竖屏 scrubbing 时配文、居中全屏入口及关联/交集同用 `VideoPlaybackSnapshot.isScrubbing` 暂时退出可视、命中与无障碍树，但保留测量空间，不改档位、裁剪或媒体位置；进度条上方只显示 target/total。拖动轨道与 thumb 共用贴底视觉基准并彼此垂直居中，只从原位置向上增厚，不迁移到 44pt 命中区中心。end/cancel 同步恢复原 chrome；仅 end 提交一次 seek，cancel 不 seek。原本 playing 时 controller 全程继续播放且 scrub 不额外发 pause/play，原本 paused/manualPause/ended 仍不播放；清除虚拟 target 后恢复有效播放计时。playing cancel 保留自然推进的最新实际位置，paused cancel 恢复原稳定位置。
+- 显式横向模式按 [`works-immersive-viewer` REQ-025](../../dual-rail-discovery-redesign/works-immersive-viewer/spec.md#req-025) 只局部旋转查看器、控件和内部弹层 90°，媒体在完整横向视口 contain，不请求系统横屏、不随传感器切换，也不新增浏览器系统全屏能力。顶部仅返回/标题/更多，中央显式播放/暂停；作者头像/名称/关注与赞转评仍在底部，右下独立收起；进度条位于整组工具栏上方，所有已知有效时长（含 ≤30000ms）随控件显示，中性白/灰轨道与白色拖动点，不用红色。
+- 横向播放或暂停同用最后有效交互结束后 5 秒隐藏全部普通控件（含两个退出按钮）及专属渐变的单一计时器；轻点只显隐，不同时播放/暂停。scrub、弹层、输入、关键无障碍操作与失败挂起计时，结束或恢复后重新计时；横向不得叠加短视频局部 timer 或暂停 pinned 常显。系统返回/Esc 与无障碍退出始终可达。
+- 进入与退出仅改变展示模式，不创建第二播放器、不重复解析播放源、不重放进入前旧时间；退出消费同一 session 最新实际位置与播放 intent，例如 00:10 进入、00:20 收起应继续 00:20，横向手动暂停后收起仍暂停。横向禁切作品、翻图、切集；模式切换取消未提交 scrub/pageflip，作者/评论往返恢复同一媒体和最新互动状态。主导航整个沉浸周期隐藏且不占位，收起横向不恢复主导航。
 
 <a id="req-005"></a>
 ### REQ-005 约束：统一媒体获取与 Alpha 制品隔离
@@ -59,6 +66,13 @@
 - 首页、通用视频卡、作品浏览器、沉浸式浏览器首帧态必须消费同一封面优先级，不允许使用无关 seed 图、作者头像、地点图、视频 URL 或端侧运行时临时抽帧。
 - 数据工程导入视频与用户上传视频使用同一展示合同，不能通过入口差异维护第二套封面字段。
 - 封面展示、点击播放、错误恢复和停留/互动行为必须具备 `referralSource` / `feedRequestId` / trace 传递，支撑推荐与运营分析。
+
+<a id="req-006"></a>
+### REQ-006 视频全入口共享命令与读失败语义
+
+- 首页、视频频道、竖/横屏控制区、作者作品、搜索/路由直达与评论内 Post 点赞均经 [动作意图 REQ-003](../content-action-intent-contract/spec.md#req-003) 的 typed coordinator 与真实 surface；不维护视频专用 writer/outbox。
+- 本人状态、pending 与统计按 [状态同步 REQ-003](../viewer-profile-state-sync-contract/spec.md#req-003) 至 [REQ-006](../viewer-profile-state-sync-contract/spec.md#req-006) 处理；无 pending 的读失败不制造待同步，数字未知只占位数字、本人未知不盲 toggle。
+- 互动读失败不重建播放器、不丢当前播放位置；目标真正失权时按内容资格进入不可访问，不用旧缓存或乐观按钮继续放行。actor 切换和旧回调同样受分区/epoch 保护。
 
 ## 4. 契约引用
 
@@ -95,11 +109,11 @@
 ### GWT-002 视频 feed、沉浸浏览器与作者详情状态一致
 
 - GIVEN 用户在视频频道或首页打开一个视频 post，并进入视频沉浸式浏览器。
-- GIVEN 该视频 post 具备作者、关注、点赞、收藏、评论数和转发数等互动状态。
-- WHEN 用户在视频沉浸式浏览器点赞、收藏、关注作者，进入作者详情后再返回。
-- THEN 视频频道、首页卡片、沉浸浏览器和作者详情展示同一 post 与作者状态。
-- THEN 关注、点赞、收藏状态跨页面同步；作者详情关注变更返回后浏览器展示同步更新。
-- THEN 左右滑动顺序与视频频道 feed 一致，滑动到底按同一数据源加载更多。
+- GIVEN 该视频 post 具备真实作者身份、本人关系/点赞结果和有来源的互动统计，不存在 Post 收藏事实。
+- WHEN 用户在竖屏或显式横向浏览器点赞、关注作者，进入作者详情或评论后再返回。
+- THEN 各页面共享同一 actor/target 状态；关注只有 receipt 确认才改变最终关系，点赞按钮乐观但数字保持有效服务端基线，统计追齐后不额外 +1。
+- THEN 作者详情的较新确认返回后同步更新；旧 Feed、capability、viewer 返回值不得覆盖，读取失败不伪 pending、不清已接纳意图，Post 收藏入口不回归。
+- THEN 竖屏浏览操作的滑动顺序与视频频道 feed 一致，滑动到底按同一数据源加载更多；显式横向全屏专注当前媒体，禁止切作品与切集，收起后恢复浏览操作。
 
 <a id="gwt-003"></a>
 ### GWT-003 数据工程导入视频与用户上传视频展示合同一致
@@ -118,19 +132,35 @@
 - GIVEN 首页内嵌视频和同一 post 的 WorkBrowser 均由同一个 VideoPlaybackSession 命令/快照合同驱动。
 - WHEN 用户自动播放、手动暂停/续播、拖动时间轴、切集、离屏或前后台切换。
 - THEN feedInline 的被动进度轨始终贴视频底边并保持可见，真实总时长常驻轨道右上方；不显示左侧播放按钮，不使用黑色时长胶囊，也不因 44dp 语义热区抬高视觉轨道。
-- THEN immersiveWorkBrowser 的时间轴视觉轨紧贴底部互动工具栏上沿并与 caption rail 对齐；控制层只包含轨道与轨道上方的短暂总时长 overlay，不显示左侧播放按钮，正常播放时轨道保持可见。
-- THEN 标题、正文与交集说明组成同一文本区并始终位于总时长/时间轴之上
-- AND 总时长仅在首次进入或切集完成后最多显示 5 秒，不为它单独占据一行。若文本区实际 RenderParagraph 字形矩形与总时长 RenderBox 无法保持最小安全间距，则只隐藏视觉总时长
-- AND 短文本未占满右侧时不得按整条 rail 误判。轨道与无障碍 current/total 语义必须保留。
-- THEN paused 使用 4dp 轨道和 8dp 当前位置，中央只显示无背景、无边框、三个角圆润的放大播放三角；scrubbing 使用 6dp 轨道和 12dp 当前位置，P0 以更大等宽数字显示目标时间/有效总时长，P1-A 才在其上方追加服务端 storyboard 预览。
-- THEN 拖动仅改变虚拟 target，释放时只提交一次 seek
-- AND 取消回到原位置
+- THEN 竖屏 immersiveWorkBrowser 的时间轴视觉轨紧贴底部互动工具栏上沿并与 caption rail 对齐，不显示左侧播放按钮；有效时长严格大于 30000ms 时暗淡轨道常显，29999ms 与 30000ms 默认隐藏。
+- THEN 竖屏短视频隐藏视觉轨时仍保留透明且至少 44pt 的触摸热区；触摸或水平拖动立即显示，停止操作后 5 秒隐藏，持续拖动不得中途隐藏。纵向意图不提交 seek，取消不提交 seek，水平拖动释放只提交一次；横向全部控件隐藏时不保留该独立可拖动热区，轻点仅唤出控件。
+- THEN 竖屏作品视频使用与图片同源的有效比例及三个整栏档位：`h=W/r≤H0` 在普通区完整 contain、留白上 45% 下 55%；`H0<h<H1` 裁到 `H0`；`H1≤h<H` 裁到 `H1` 且顶部整栏透明；`h≥H` 裁到 `H` 且上下整栏透明。裁剪始终上下等量、全宽等比，无左右裁剪、拉伸或半栏覆盖；匹配视口时无裁剪，9:16 在长屏上不强行满屏。
+- AND 媒体、可选居中“图标＋全屏”入口、信息区、配文、轨道和底栏消费同一实测几何；入口仅在可查看宽视频且当前竖屏普通视口显示于实际画面下方。竖屏固定顺序为入口区 → 可选关联区（含单份交集推荐解释）→ 配文 → 时间轴 → 底栏，无常驻 current-time 行；最多两行关联信息独立测量但不伪造数据，缺席时高度/间隔为零。402×874、平板和大字下不碰撞，隐藏 chrome 不释放空间或改变媒体档位/裁剪。
+- AND 未知时长不显示虚假时间、不允许 seek，返回/更多等安全操作仍可达，不暴露无效进度热区；无障碍 current/total 语义与 inlineFeed 既有被动常显行为独立。
+- THEN 显式横向全屏仅把查看器与内部控件/弹层局部旋转 90°，宽高、触摸与安全区一致；不请求手机物理方向、不依赖方向 API 拒绝/成功分支、不随传感器转换，也不新增浏览器系统全屏能力。横向媒体在完整视口 contain，顶栏仅返回/标题/更多，中央显式播放/暂停；底部保留作者头像/名称/关注与赞转评的现有分组、右下独立收起，进度条在整组上方，中性白/灰不使用红色。
+- AND 横向所有已知有效时长（含 29999/30000/30001ms）随统一控件状态显示时间轴，不常驻 current/total，只有 scrub 浮标。就绪并进入完成后 4.9 秒仍可见，满 5 秒全部普通控件及专属渐变隐藏（含退出），播放与暂停相同；隐藏控件不可命中且不残留无障碍节点，媒体几何不变。轻点只显隐，不误暂停/续播；scrub/弹层/输入/关键无障碍操作/失败挂起 timer，恢复后重新计时，旧短视频 timer 与暂停 pinned 不竞争。
+- AND 返回先关闭弹层，无弹层时左上返回、右下收起、系统 back/Esc 同一逻辑只收起一层；隐藏时系统与无障碍退出仍可达。退出保留同一 post/episode 与同一 session 的最新位置和 intent，00:10 进入、00:20 退出不得回跳，横向暂停后竖屏仍暂停；主导航在整个沉浸周期隐藏，收起横向不恢复主壳。
+- AND 模式切换取消尚未提交的 scrub/pageflip，不提交虚拟 target；横向滑动不切作品、翻图或切集，进度拖动与按钮仍可用。评论/更多在同一旋转宿主打开，作者页按正常竖屏打开；往返恢复同一 post/episode、最新播放和互动状态，不重新开始播放。
+- THEN 竖屏不超过 30000ms 的作品视频在轨道揭示时保留 paused 4dp 轨道/8dp 当前位置、scrubbing 6dp 轨道/12dp 当前位置的既有规则，不以暂停强制常显；竖屏中央保留无背景、无边框、三个角圆润的放大播放三角。P0 仅 scrub 显示目标时间/有效总时长，P1-A 才在其上方追加服务端 storyboard 预览。
+- THEN 竖屏 30001ms 及更长作品未播放时全轨低亮度，零进度没有 progress 线或 thumb；播放与暂停均保持低亮度，触摸揭示或拖动结束后也不得留下高亮细线。静息视觉轨仍贴工具栏边界且左右不越过原 rail；横向轨道可见性仅服从整组控件，不保留竖屏时长边界或暂停常显分支。
+- WHEN 竖屏作品开始水平 scrubbing，THEN 配文、居中全屏入口、关联及交集均不可见、不可命中且无 semantics，但测量空间不变；各 slot 同步消费同一 snapshot，不使用各自 timer。target/total 留在进度条上方；长作品等宽数字由 base 提高至 lg，拖动轨道由 6dp 增至 8dp，thumb 由 12dp 增至 16dp，轨道、progress 与 thumb 在原贴底视觉范围内共用中心线并向上增厚，44pt 只作为命中区，左右轨道长度不扩展。
+- WHEN 竖屏 scrubbing end 或 cancel，THEN 原配文、居中全屏入口与关联/交集恢复且媒体矩形不变，无 current-time 行回归；end 只 seek 一次，cancel 不 seek，playing/paused intent 各自保持。原本 playing 的 controller 从 begin 到 end/cancel 不额外发 pause/play，cancel 丢弃虚拟 target 并保留自然推进的最新实际位置；原本 paused 的 cancel 恢复原稳定位置。清除虚拟 target 后有效播放计时继续累计。30000ms 与 30001ms 必须有边界测试，竖屏短视频隐藏/五秒、长视频低亮度常显及键盘/无障碍 seek 保持；横向拖动结束后仅重启统一五秒计时。
+- THEN 拖动仅改变虚拟 target，释放时只提交一次 seek；播放中的拖动持续播放
+- AND 取消不提交 seek，paused 回稳定位置，playing 保留自然推进的最新实际位置
 - AND 原本暂停或 manualPause 不会因 seek、自动播放、前后台、焦点或切集而自行续播。
 - THEN 缺少 previewTrack、能力受限、节流或预览失败时只显示时间浮标
 - AND P1-A/P1-B 可分别关闭且不影响 P0
-- AND 未知时长禁用拖动，buffering、ended、failure 不伪装为正常播放。
+- AND 未知时长禁用拖动，buffering、ended、failure 不伪装为正常播放；已知时长 ended 保持 100% 稳定位置，thumb 中心位于轨道可见末端并与轨道垂直居中，只有显式 replay 才提交归零 seek。
 - THEN 页面、控件、焦点协调器不得直接调用原生 controller 的 play/pause/seek；过期 generation 回调不得影响当前作品。
-- THEN 当前视频会话按 viewport epoch、post、media delivery identity 与 episode index 原子绑定；评论分屏、过滤移除/恢复和 mediaItems 重排恢复同一媒体时不得回到第 1 集或复用已失效会话，普通重建/重排不得重启五秒窗口，真实 1→2→1 切集则每次开启新窗口。
+- THEN 当前视频会话按 viewport epoch、post、media delivery identity 与 episode index 原子绑定；评论分屏、过滤移除/恢复和 mediaItems 重排恢复同一媒体时不得回到第 1 集或复用已失效会话，计时器按 post/episode/session generation 取消，切页或切集不得让上一媒体的延迟回调影响当前媒体；普通重建不重新显示短视频轨道，不再保留首次进入或切集开启五秒时长窗口的旧轨。
+
+<a id="gwt-005"></a>
+### GWT-005 视频直达与模式往返保持真实互动结果
+
+- GIVEN 同一 actor 由 Feed、作者作品、搜索/路由直达视频，或在评论内操作宿主 Post，视频可正常播放。
+- WHEN 竖/横屏往返、点赞/关注、本人附着或统计子读失败、另一设备确认变更后回到前台。
+- THEN 各入口经真实 surface 的同一 coordinator；关注云确认、点赞按钮乐观但数字不 +1，无 pending 的读失败只降级对应区块，不重建播放器或丢播放位置。
+- AND 当前 unknown、确认版本与 actor 分区跨模式保留；旧页面结果不能覆盖新确认。目标已失权进入不可访问，不用旧缓存继续授权，Post 收藏不回归。
 
 ## 6. 依赖
 
@@ -139,6 +169,17 @@
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
 
 ## 7. 开放事项
+
+本次互动增量的待实现测试：`quwoquan_app/test/local_contract/journeys/cross_page_interaction_consistency/cross_page_interaction_consistency__local_contract_test.dart` 与 `quwoquan_app/test/local_contract/journeys/viewer_profile_state_sync/viewer_profile_state_sync__local_contract_test.dart` 扩展绑定本 Story `GWT-002`、`GWT-005`；`quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart` 证明同 actor receipt/readback；`quwoquan_app/test/user_acceptance/service/content_service/content/content_reaction/like_post__user_acceptance_test.dart` 和 `quwoquan_app/test/user_acceptance/journeys/profile/profile_journey__user_acceptance_test.dart` 扩展视频直达、横向、评论/作者往返的双真机子句并绑定对应 `spec_ref`。这些是后续断言落点，不是已实现/通过记录。
+
+<a id="open-005"></a>
+### OPEN-005 视频全入口的互动结果分型证据缺失
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：`REQ-006`、`GWT-005` 尚缺真实 surface、统计失败/unknown、actor 隔离、目标撤权与播放器不重建的组合证据。
+- 完成判定：视频入口逐项 local_contract/API/双真机直接绑定 `GWT-005`，并与 `OPEN-002` 的新 `GWT-002` 同候选取证；已有播放或几何证据不替代互动闭环。
 
 <a id="open-001"></a>
 ### OPEN-001 视频未播放态展示同源封面并点击后播放
@@ -156,7 +197,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：四环境 Remote-only 状态同步与重入保持均由同一 typed port 合同覆盖，测试 double 仅在测试树中且不维护页面级第二状态源。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 完成判定：`REQ-002` 与 `GWT-002` 的当前语义满足且真实测试 `spec_ref` 有效；旧 Post 收藏与数字即时 +1 断言不证明本次规格。
 
 <a id="open-003"></a>
 ### OPEN-003 数据工程导入视频与用户上传视频展示合同一致
@@ -173,5 +214,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：两种 profile 的控制层只消费 PlaybackSnapshot，并由本地契约、受控视觉验收和真实设备 seek/首帧证据共同证明。
-- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：尚缺两种 profile 的会话真相源、整栏几何、竖屏 30 秒边界与横向统一五秒模式当前合同的 local_contract、受控视觉及真实设备 seek/首帧证据；旧物理方向拒绝、常驻时间/退出或进入旧位置恢复证据不得替代。
+- 完成判定：`GWT-004` 逐子句由真实测试 `spec_ref` 绑定，覆盖 `H0/H1/H` 整栏阈值与无左右裁剪、29999/30000/30001ms、ended 100% 末端共中心、固定贴底拖动基准、playing scrub 零额外 pause/play、cancel 最新实际位置与 QoE 连续、横向所有已知时长白灰时间轴、无常驻时间、4.9 秒/5 秒、播放/暂停、scrub/弹层/失败挂起、轻点只显隐、隐藏不可命中与最新位置/intent 连续。Android/iPhone 设备及适用平板/宽视口 user_acceptance 单独证明局部旋转触摸/安全区、退出/back、作者/评论往返、禁切集与主导航始终隐藏；设备证据尚缺，不以测试/编译或模拟器结果冒充。

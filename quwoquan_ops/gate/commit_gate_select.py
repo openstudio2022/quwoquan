@@ -370,7 +370,19 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
         "quwoquan_ops/tests/local_contract/gate/"
         "test_local_worktree_lifecycle__gate__local_contract_test.py",
     )
+    ios_runtime_config_tests = (
+        "quwoquan_app/test/local_contract/runtime/"
+        "default_debug_supply__local_contract_test.py",
+        "quwoquan_app/test/local_contract/runtime/"
+        "ios_runtime_dart_defines__local_contract_test.py",
+    )
     source_mappings = (
+        ("quwoquan_app/ios/Runner/NativeRuntimeConfig", ios_runtime_config_tests),
+        ("quwoquan_app/ios/Runner.xcodeproj/project.pbxproj", ios_runtime_config_tests),
+        (
+            "quwoquan_app/test_host/patrol/ios/Runner.xcodeproj/project.pbxproj",
+            ios_runtime_config_tests,
+        ),
         (
             "quwoquan_app/scripts/runtime/architecture/verify_retired_terms_zero.py",
             (

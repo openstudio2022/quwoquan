@@ -79,6 +79,32 @@ def test_duplicate_logical_identity_fails(tmp_path: Path) -> None:
     assert any("duplicate schema identity" in issue for issue in evaluate(tmp_path))
 
 
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-009.t4
+def test_governed_migration_allows_shared_payload_identity(tmp_path: Path) -> None:
+    _schema(tmp_path, "release/current.schema.json", "quwoquan_data.same")
+    _schema(tmp_path, "release/previous.schema.json", "quwoquan_data.same")
+    _consumer(
+        tmp_path,
+        'assert_valid({}, "release", "current")\nassert_valid({}, "release", "previous")\n',
+    )
+    policy = tmp_path / "quwoquan_ops/policies/gates/governed_schema_migration_boundaries.json"
+    policy.parent.mkdir(parents=True, exist_ok=True)
+    policy.write_text(
+        json.dumps(
+            {
+                "boundaries": [
+                    {
+                        "input_closure": ["release/previous.schema.json"],
+                        "output_schemas": ["release/current.schema.json"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert evaluate(tmp_path) == []
+
+
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-009.t5
 def test_python_literal_loader_is_a_real_production_binding(tmp_path: Path) -> None:
     _schema(tmp_path, "content/live.schema.json", "quwoquan_data.live")

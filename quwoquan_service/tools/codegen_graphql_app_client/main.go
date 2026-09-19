@@ -70,6 +70,8 @@ func main() {
 	switch target {
 	case "content-post-detail":
 		generated, manifest, err = Generate(options)
+    case "post-collection":
+        if outputPath==appClientOutputPath{outputPath=collectionClientPath};if manifestPath=="tool/graphql_read_codegen/generated_manifest.json"{manifestPath=collectionManifestPath};generated,manifest,err=GenerateCollection(options)
 	case "search-page":
 		if outputPath == appClientOutputPath {
 			outputPath = searchAppClientOutputPath

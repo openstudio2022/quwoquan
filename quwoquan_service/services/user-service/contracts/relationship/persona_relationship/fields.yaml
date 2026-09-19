@@ -144,7 +144,63 @@ members:
         api_exposure: read
         ops_exposure: read
         role: owned_value
+# M0 冻结的协议值类型；尚未绑定现役 route/request/response。
+# 对应 follow-relationship 的未闭合验收仍阻断上线；接线时必须单轨升级，
+# 不得把这些类型在场当作 mutation basis、恢复仲裁或 policy activation 已实现。
+enums:
+  PersonaRelationshipTargetKind:
+    values: [persona, creator]
+  PersonaRelationshipReceiptOutcome:
+    values: [committed, rejected, expired, history_unavailable]
+  PersonaRelationshipMutationAction:
+    values: [follow, unfollow, block, unblock]
 types:
+  PersonaRelationshipMutationBasisClaims:
+    description: >-
+      User 签名依据的内部精确载荷；issuedAt 至 acceptUntil 最长72小时。
+      它绑定真实 Persona actor、canonical target、允许操作和预期版本，不是权限授权。
+      不直接作为公开响应；公开面只携带独立用途签名后的 opaque token。
+    fields:
+      - {name: actorPersonaId, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 96, classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: drop}
+      - {name: targetPersonaId, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 96, classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: drop}
+      - {name: targetKind, type: enum, enum_ref: PersonaRelationshipTargetKind, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: pairId, type: string, constraints: [NOT_NULL], pattern: '^[0-9a-f]{64}$', classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read}
+      - {name: audience, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 128, classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, description: 受管 User 服务与环境的精确验签受众，跨环境依据必须拒绝。}
+      - {name: expectedVersion, type: int64, constraints: [NOT_NULL, MIN_0], semantic_type: aggregate_version, classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: allowedActions, type: '[]enum', enum_ref: PersonaRelationshipMutationAction, constraints: [NOT_NULL], max_items: 4, classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: issuedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant, classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: acceptUntil, type: timestamp, constraints: [NOT_NULL], semantic_type: instant, classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+  PersonaRelationshipMutationEvidence:
+    description: >-
+      同一命令身份的持久依据；idempotencyKey 与 canonical Idempotency-Key 必须相同。
+      basis、expectedVersion 和命令目标态参与请求摘要，重试不得换键或续期。
+      后续 operation 接线必须替换旧 clientRequestId 空值旁路，不保留两套来源。
+    fields:
+      - {name: idempotencyKey, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 128, classification: INTERNAL, log_policy: hash, api_exposure: read_write, ops_exposure: drop}
+      - {name: mutationBasis, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 4096, classification: SECRET, log_policy: drop, api_exposure: read_write, ops_exposure: drop}
+      - {name: expectedVersion, type: int64, constraints: [NOT_NULL, MIN_0], semantic_type: aggregate_version, classification: INTERNAL, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+  PersonaRelationshipCommandRecoverySlice:
+    description: >-
+      同 actor 命令的恢复结果。committed 才携带 committedVersion/changed；
+      rejected 使用 owning operation 的 canonical failure，expired 表示仲裁已终结未执行。
+      history_unavailable 不表示曾经成功或失败；当前关系必须独立查询，不能由当前布尔值补历史。
+      新接纳 no-op 的 changed=false 但 version 推进；replayed 仅表示命中同键回执。
+    fields:
+      - {name: idempotencyKey, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 128, classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: drop}
+      - {name: outcome, type: enum, enum_ref: PersonaRelationshipReceiptOutcome, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: committedVersion, type: int64, constraints: [NULLABLE, MIN_1], semantic_type: aggregate_version, co_present_with: [changed], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: changed, type: bool, constraints: [NULLABLE], co_present_with: [committedVersion], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: lastStateEventId, type: string, constraints: [NULLABLE], max_utf8_bytes: 128, co_present_with: [lastStateEventVersion], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: lastStateEventVersion, type: int64, constraints: [NULLABLE, MIN_1], semantic_type: aggregate_version, co_present_with: [lastStateEventId], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  PersonaFollowingLimitSlice:
+    description: >-
+      User 已激活系统限制的只读结果；默认1000、受测升档10000，非每秒限流或粉丝上限。
+      policyRevision/maxFollowingPerPersona 必须来自同一 activation 快照；客户端不参与配额裁决。
+      下调不取消已存在关注，超额只拒绝新增；本类型不宣称数据库 activation 已实现。
+    fields:
+      - {name: policyRevision, type: int64, constraints: [NOT_NULL, MIN_1], semantic_type: aggregate_version, classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: maxFollowingPerPersona, type: int, constraints: [NOT_NULL, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   PersonaRelationshipEventPayload:
     description: domain/model.OutboxPayload的实际PG payload_json；eventId与eventName属于OutboxEntry/envelope，relay可展平但不属于本值。following始终发出，三个clear字段仅非零时发出。
     fields:

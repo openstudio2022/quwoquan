@@ -128,13 +128,15 @@ class StartupLaunchIdentityProtocolContractTest(unittest.TestCase):
         self.assertIn(
             '"android_startup_safe_terminal_rejected surface="', android
         )
+        ios_surface = (APP_DIR / "ios/Runner/AppSceneDelegate.swift").read_text(encoding="utf-8")
+        self.assertIn("enum StartupSafeTerminalSurface", ios_surface)
         self.assertIn("StartupSafeTerminalSurface.parse(event: event)", ios)
         self.assertIn("ios_startup_safe_terminal surface=%@", ios)
         self.assertIn("ios_startup_safe_terminal_rejected surface=%@", ios)
         for recovery_surface in ("safe_recovery", "flutter_recovery"):
             with self.subTest(surface=recovery_surface):
                 self.assertIn(recovery_surface, android_surface)
-                self.assertIn(recovery_surface, ios)
+                self.assertIn(recovery_surface, ios_surface)
 
 
 if __name__ == "__main__":

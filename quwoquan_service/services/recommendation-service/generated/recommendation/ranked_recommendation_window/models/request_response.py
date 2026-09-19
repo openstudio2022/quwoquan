@@ -95,6 +95,8 @@ class CreateRankedRecommendationWindowCommand(BaseModel):
     scenario: str
     clientPresentationContract: ClientContentPresentationContract
     limit: int
+    viewportProfile: str | None = None
+    deviceClass: str | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -158,6 +160,7 @@ class RankedRecommendationPage(BaseModel):
     modelChannel: str | None = None
     modelReleaseId: str | None = None
     policyDigest: str
+    contextDigest: str
     rankingSnapshotDigest: str
     featureSnapshotAt: datetime
     userFeatureSnapshot: dict[str, Any]

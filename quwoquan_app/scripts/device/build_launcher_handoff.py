@@ -96,6 +96,9 @@ def _parser(contract: dict[str, Any]) -> argparse.ArgumentParser:
         choices=tuple(contract["runtime_config_supply_modes"]),
         default="",
     )
+    sys.path.insert(0, str(APP_DIR / "scripts/env"))
+    from print_app_env_dart_defines import add_launch_control_arguments
+    add_launch_control_arguments(parser)
     return parser
 
 
@@ -227,6 +230,10 @@ def _load_runtime_config_package(args: argparse.Namespace) -> dict[str, Any]:
     ):
         if value:
             package_command.extend([option, value])
+    for name in ("launch-control-ref", "launch-control-digest", "launch-output-root", "launch-device-id", "launch-candidate-digest", "launch-attempt-ref", "launch-report-ref"):
+        value = getattr(args, name.replace("-", "_"), "")
+        if value: package_command.extend(["--" + name, value])
+    if args.isolated_rehearsal: package_command.append("--isolated-rehearsal")
     result = subprocess.run(
         package_command,
         cwd=APP_DIR,
@@ -263,6 +270,15 @@ def build_handoff(
         raise ValueError(
             f"launch policy {args.launch_policy} is invalid for build profile {build_profile}"
         )
+    if args.isolated_rehearsal or any((args.launch_control_ref, args.launch_control_digest,
+            args.launch_device_id, args.launch_candidate_digest, args.launch_attempt_ref, args.launch_report_ref)):
+        sys.path.insert(0, str(APP_DIR / "scripts/env"))
+        from print_app_env_dart_defines import _source_identity, launch_control_input, validate_rehearsal_control
+        revision, source_digest = _source_identity(source_git_sha=args.source_git_sha,
+            source_tree_digest=args.source_tree_digest, source_capsule_manifest=args.source_capsule_manifest)
+        validate_rehearsal_control(environment=args.env, target=args.target, source_git_sha=revision,
+            source_tree_digest=source_digest, launch_control=launch_control_input(args),
+            require_isolated=args.isolated_rehearsal)
     runtime_config_trust_envelope = _runtime_config_trust_envelope(build_profile)
     runtime_package = runtime_config_package_loader(args)
     package_issues = validate_runtime_config_package(
@@ -398,15 +414,8 @@ def _read_private_launch_control(control_path: Path, root: Path) -> Any:
 
 def _validate_launch_control_fields(control: Any) -> bool:
     """先判定离线来源，再校验对应字段闭集；返回已校验的离线标记。"""
-    fields = {
-        "schema", "actor", "environment", "target", "platform", "deviceId",
-        "candidateDigest", "packageDigest", "sourceRevision", "sourceCapsuleDigest",
-        "sourceCapsuleManifestDigest", "sourceCapsuleManifestRef",
-        "sourceProjectionRoot", "sourceProjectionEvidenceDigest",
-        "sourceProjectionEvidenceRef", "buildProjectionPolicyId",
-        "buildProjectionSealRef", "expectedBuildProjectionDigest",
-        "launchAttemptRef", "launchReportRef", "startupTerminalReceiptRef",
-    }
+    declaration = load_launch_manifest_contract()["app_content_uat_launch_control"]
+    fields = set(declaration["base_fields"])
     offline = isinstance(control, dict) and control.get("contentSource") == "bundled_snapshot"
     if offline:
         policy = load_launch_manifest_contract()["content_source_policy"]
@@ -414,7 +423,17 @@ def _validate_launch_control_fields(control: Any) -> bool:
                 or policy.get("alpha") != control["contentSource"]
                 or control.get("platform") not in {"android", "ios-simulator"}):
             raise ValueError("canonical offline launch source/target/device mismatch")
-        fields = (fields - {"packageDigest"}) | {"contentSource"}
+        fields = (fields - {declaration["offline_replace_field"]}) | {declaration["offline_source_field"]}
+        selection_field = declaration["selection_field"]
+        if selection_field in control:
+            fields.add(selection_field)
+            from quwoquan_ops.cli.lib.app_launch_manifest_schema import _validate_schema_value
+            issues = _validate_schema_value(control[selection_field], {"type": "object", **declaration["selection"]}, field_path=selection_field, contract=load_launch_manifest_contract())
+            if issues:
+                raise ValueError("canonical launch selection malformed")
+            selected = control[selection_field]
+            if (selected["mode"] == "standard") != (selected["instanceId"] == "default"):
+                raise ValueError("canonical launch selection mode/instance mismatch")
     if not isinstance(control, dict) or set(control) != fields:
         raise ValueError("canonical launch control fields mismatch")
     return offline
@@ -504,6 +523,64 @@ def _validate_launch_control_projection_evidence(control: dict[str, Any]) -> Non
         raise ValueError("canonical launch source projection evidence drifted")
 
 
+def verified_rehearsal_selection(
+    *, control_ref: str, control_digest: str, output_root: str,
+    source_root: Path, environment: str, target: str, device_id: str,
+    candidate_digest: str, attempt_ref: str, report_ref: str, capsule_ref: str,
+    source_revision: str, source_digest: str, require_isolated: bool,
+) -> dict[str, str] | None:
+    """签名前只读复验同一现役control及实际source；不创建任何授权事实。"""
+    if not control_ref:
+        if require_isolated or any((control_digest, device_id, candidate_digest, attempt_ref, report_ref)):
+            raise ValueError("isolated launch requires complete canonical control")
+        return None
+    root = Path(output_root).expanduser().resolve()
+    source_root = source_root.resolve()
+    control = _read_private_launch_control(Path(control_ref), root)
+    offline = _validate_launch_control_fields(control)
+    _validate_launch_control_identity(control, control_digest)
+    _validate_launch_control_digests(control, offline)
+    _validate_launch_control_source_paths(control, source_root, capsule_ref)
+    _validate_launch_control_output_paths(control, root, attempt_ref, report_ref)
+    if not offline or (environment, target) != ("alpha", "alpha-local"):
+        raise ValueError("rehearsal selection requires offline Alpha")
+    actual = {"environment": environment, "target": target, "deviceId": device_id,
+              "candidateDigest": candidate_digest, "sourceRevision": source_revision,
+              "sourceCapsuleDigest": source_digest}
+    if any(not value or control.get(key) != value for key, value in actual.items()):
+        raise ValueError("canonical launch invocation identity mismatch")
+    from quwoquan_ops.cli.commands.app_preflight_uat_launch import verify_app_content_launch_projection
+    from quwoquan_ops.cli.lib.package_reuse.input_capsule import verify_package_input_capsule
+    evidence = verify_app_content_launch_projection(
+        projection_root=source_root, evidence_path=Path(control["sourceProjectionEvidenceRef"]),
+        reject_unmanifested=False,
+    )
+    _validate_launch_control_projection_evidence(control)
+    for field in ("candidateDigest", "sourceRevision", "sourceCapsuleDigest", "sourceCapsuleManifestDigest", "sourceCapsuleManifestRef", "sourceProjectionRoot", "contentSource"):
+        if evidence.get(field) != control.get(field):
+            raise ValueError("canonical control/projection identity mismatch: " + field)
+    capsule = verify_package_input_capsule(Path(capsule_ref).parent)
+    if (capsule.get("sourceRevision") != source_revision or capsule.get("deploymentInputDigest") != source_digest
+            or capsule.get("workspaceStatusDigest") != evidence.get("sourceCapsuleWorkspaceStatusDigest")):
+        raise ValueError("canonical control/capsule source mismatch")
+    selection = control.get("rehearsalSpaceSelection")
+    if require_isolated and (selection is None or selection["mode"] != "isolated"):
+        raise ValueError("explicit isolated launch selection missing")
+    if selection is None:
+        return None
+    pinned_inputs = {"quwoquan_app/assets/content/alpha/manifest.json", "quwoquan_app/assets/content/alpha/bundle_identity.json"}
+    if not pinned_inputs.issubset({entry.get("logicalPath") for entry in capsule["entries"]}):
+        raise ValueError("snapshot pin is not part of the verified capsule")
+    manifest_path = source_root / "quwoquan_app/assets/content/alpha/manifest.json"
+    identity_path = manifest_path.with_name("bundle_identity.json")
+    if manifest_path.is_symlink() or identity_path.is_symlink():
+        raise ValueError("snapshot pin must be regular source input")
+    snapshot = "sha256:" + hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    if json.loads(identity_path.read_text()).get("manifestDigest") != snapshot or selection["snapshotDigest"] != snapshot:
+        raise ValueError("canonical selection snapshot mismatch")
+    return dict(selection)
+
+
 def canonical_launch_control_exports(arguments: list[str]) -> dict[str, str]:
     """依序校验 bounded launcher 私有 control；所有阶段通过后才返回导出值。"""
     output_root, source, control_ref, declared_digest, attempt, report, capsule = arguments
@@ -518,6 +595,7 @@ def canonical_launch_control_exports(arguments: list[str]) -> dict[str, str]:
     _validate_launch_control_output_paths(control, root, attempt, report)
     _validate_launch_control_projection_evidence(control)
     return {
+        "QWQ_CANONICAL_REHEARSAL_MODE": control.get("rehearsalSpaceSelection", {}).get("mode", "standard") if offline else "",
         "QWQ_CANONICAL_CANDIDATE_DIGEST": control["candidateDigest"],
         "QWQ_CANONICAL_CANDIDATE_PACKAGE_DIGEST": control.get("packageDigest", ""),
         "QWQ_CANONICAL_CONTENT_SOURCE": "bundled_snapshot" if offline else "remote",
@@ -577,7 +655,20 @@ def check_remote_launch_surface(arguments: list[str]) -> int:
     return 0
 
 
+def handoff_shell_exports(raw: str) -> str:
+    handoff = json.loads(raw)
+    fields = {"ENTRYPOINT": "entrypoint", "LAUNCH_PROVENANCE": "launchProvenance",
+              "RUNTIME_CONFIG_SUPPLY_MODE": "runtimeConfigSupplyMode",
+              "RUNTIME_CONFIG_PACKAGE_DIGEST": "runtimeConfigPackageDigest",
+              "RUNTIME_CONFIG_TRUST_ENVELOPE_DIGEST": "runtimeConfigTrustEnvelopeDigest",
+              "EFFECTIVE_LAUNCH_MANIFEST_DIGEST": "effectiveLaunchManifestDigest"}
+    return "\n".join(name + "=" + shlex.quote(handoff[field]) for name, field in fields.items())
+
+
 def main() -> int:
+    if sys.argv[1:2] == ["--handoff-shell-exports"]:
+        print(handoff_shell_exports(sys.argv[2]))
+        return 0
     if sys.argv[1:2] in (["--canonical-launch-control-exports"], ["--resolve-launch-content-source"]):
         try:
             if sys.argv[1] == "--canonical-launch-control-exports":

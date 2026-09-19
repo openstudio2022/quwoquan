@@ -17,6 +17,21 @@ from content.release.canonical.canonical_inventory import (
     write_inventory,
 )
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
+from core.io import write_json
+
+
+def _publish_repository(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / ".git").mkdir()
+    write_json(
+        root / "repository.json",
+        {
+            "schema": "quwoquan_data.publish_repository.v2",
+            "repositoryId": "canonical-image-inventory-test",
+            "layoutVersion": 2,
+        },
+    )
+    return root
 
 
 def _manifest(

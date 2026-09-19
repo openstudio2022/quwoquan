@@ -51,12 +51,15 @@ type fieldDef struct {
 	// 信封级准入表达位。max_items 约束列表长度，format 约束字符串 canonical
 	// 字形，co_present_with 声明必须同时出现或同时缺失的 nullable 字段组。
 	MaxItems      int      `yaml:"max_items"`
+	Pattern       string   `yaml:"pattern"`
+	ConstValue    *string  `yaml:"const"`
 	Format        string   `yaml:"format"`
 	CoPresentWith []string `yaml:"co_present_with"`
 }
 
 type entityDef struct {
-	Fields []fieldDef `yaml:"fields"`
+	Fields      []fieldDef `yaml:"fields"`
+	ClientValue bool       `yaml:"client_value"`
 }
 
 // objectLocalEnumDef is the `enums:` block an object declares next to its own

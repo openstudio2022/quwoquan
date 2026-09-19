@@ -1,0 +1,89 @@
+description: PostCollection owner-only 原子编排命令与权限内分页查询。
+commercial_defaults:
+  status: blocked
+  block_reason: 合集公开边界、App 接线及真实持久化 conformance 尚待闭环
+  gap_id: CONTENT_POST_COLLECTION_CONFORMANCE
+  target_story: ordered-post-collection
+api_routes:
+- method: PUT
+  path: /content/collections/{collectionId}
+  operation: SavePostCollection
+  actor: persona
+  application:
+    kind: command
+    facet: PostCollectionFacade
+    method: save
+    aggregate_owner: PostCollection
+    mutation_target: PostCollection
+    invariant_target: PostCollection
+  authorization: {principal: persona, ownership_policy: collection_owner_only}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [CONTENT.USER.post_collection_unauthorized, CONTENT.USER.post_collection_invalid_argument, CONTENT.USER.post_collection_unavailable, CONTENT.USER.post_collection_version_conflict, CONTENT.SYSTEM.post_collection_write_failed, CONTENT.SYSTEM.post_collection_read_failed]
+  privacy: {request_classification: PII, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: content_collection_save, trace: true, attributes: [outcome]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.9}
+  description: 当前认证 owner 创建或按预期版本原子替换名称、封面、可见性与有序成员，成员添加移除和排序不分离提交。
+  request_entity: SavePostCollectionCommand
+  request_body_kind: object
+  request_bindings:
+    path: [{name: collectionId, field: collectionId}]
+  response_entity: PostCollectionCommandResult
+  response_body: PostCollectionCommandResult
+  response_body_kind: object
+  security: {auth_mode: required, principal: persona, token_transport: bearer, anonymous_policy: deny, visibility: private}
+- method: DELETE
+  path: /content/collections/{collectionId}
+  operation: DeletePostCollection
+  actor: persona
+  application:
+    kind: command
+    facet: PostCollectionFacade
+    method: delete
+    aggregate_owner: PostCollection
+    mutation_target: PostCollection
+    invariant_target: PostCollection
+  authorization: {principal: persona, ownership_policy: collection_owner_only}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [CONTENT.USER.post_collection_unauthorized, CONTENT.USER.post_collection_invalid_argument, CONTENT.USER.post_collection_unavailable, CONTENT.USER.post_collection_version_conflict, CONTENT.SYSTEM.post_collection_write_failed, CONTENT.SYSTEM.post_collection_read_failed]
+  privacy: {request_classification: PII, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: content_collection_delete, trace: true, attributes: [outcome]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.9}
+  description: 当前 owner 以预期版本写入合集墓碑，不删除或改写任何成员 Post。
+  request_entity: DeletePostCollectionCommand
+  request_body_kind: object
+  request_bindings:
+    path: [{name: collectionId, field: collectionId}]
+  response_entity: PostCollectionCommandResult
+  response_body: PostCollectionCommandResult
+  response_body_kind: object
+  security: {auth_mode: required, principal: persona, token_transport: bearer, anonymous_policy: deny, visibility: private}
+graphql_queries:
+- operation: GetPostCollection
+  operation_type: query
+  application: {kind: query, facet: PostCollectionQueryFacet, method: get, reader: PostCollectionReader, slice: PostCollectionPage}
+  authorization: {principal: public, ownership_policy: collection_and_member_post_visibility}
+  reliability: {timeout_ms: 2500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [CONTENT.USER.post_collection_unauthorized, CONTENT.USER.post_collection_invalid_argument, CONTENT.USER.post_collection_unavailable, CONTENT.USER.post_collection_version_conflict, CONTENT.SYSTEM.post_collection_read_failed]
+  privacy: {request_classification: PII, response_classification: PUBLIC, log_policy: metadata_only}
+  telemetry: {metric: content_collection_get, trace: true, attributes: [outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  request_entity: GetPostCollectionQuery
+  request_body_kind: none
+  response_entity: PostCollectionPage
+- operation: GetPostCollectionManagement
+  operation_type: query
+  application: {kind: query, facet: PostCollectionQueryFacet, method: getManagement, reader: PostCollectionManagementReader, slice: PostCollectionManagementView}
+  authorization: {principal: persona, ownership_policy: collection_owner_only}
+  reliability: {timeout_ms: 2500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [CONTENT.USER.post_collection_unauthorized, CONTENT.USER.post_collection_invalid_argument, CONTENT.USER.post_collection_unavailable, CONTENT.SYSTEM.post_collection_read_failed]
+  privacy: {request_classification: PII, response_classification: PII, log_policy: metadata_only}
+  telemetry: {metric: content_collection_management_get, trace: true, attributes: [outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  request_entity: GetPostCollectionManagementQuery
+  request_body_kind: none
+  response_entity: PostCollectionManagementView
+consumers:
+- name: app
+  capabilities: [save_post_collection, delete_post_collection, get_post_collection]

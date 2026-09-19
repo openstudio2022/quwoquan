@@ -1,6 +1,46 @@
 import Flutter
 import UIKit
 
+/// Scene 启动最终表面；与 AppDelegate 及 Dart startup channel 共用同一类型。
+enum StartupSafeTerminalSurface: Equatable {
+  case routerShell
+  case safeRecovery
+  case flutterRecovery
+  case missing
+  case unknown
+
+  static func parse(event: String) -> StartupSafeTerminalSurface {
+    guard let data = event.data(using: .utf8),
+          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let rawSurface = object["surface"] as? String
+    else {
+      return .missing
+    }
+    switch rawSurface {
+    case "router_shell": return .routerShell
+    case "safe_recovery": return .safeRecovery
+    case "flutter_recovery": return .flutterRecovery
+    default: return .unknown
+    }
+  }
+
+  var markerValue: String {
+    switch self {
+    case .routerShell: return "router_shell"
+    case .safeRecovery: return "safe_recovery"
+    case .flutterRecovery: return "flutter_recovery"
+    case .missing: return "missing"
+    case .unknown: return "unknown"
+    }
+  }
+
+  var isCanonical: Bool { self == .routerShell }
+
+  var isRecognizedSafeSurface: Bool {
+    self == .routerShell || self == .safeRecovery || self == .flutterRecovery
+  }
+}
+
 /// 唯一的 scene delegate。
 ///
 /// scene 配置不挂 storyboard，Main.storyboard（含 FlutterViewController）只在这里按

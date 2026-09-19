@@ -20,10 +20,20 @@ import 'package:quwoquan_app/runtime/di/content_image_delivery_dependencies.dart
 import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
 export 'package:quwoquan_app/runtime/platform/media/public_media_delivery_port.dart';
 
-/// 仅启动组合根安装；公共在线依赖闭包不引用 Alpha 实现。
-void installPublicMediaDelivery(PublicMediaDeliveryPort delivery) {
+/// 每次安装独占一个token；卸载仅撤销本次全局选择，不销毁Provider缓存。
+/// 公共在线依赖闭包不引用Alpha；调用方可暂忽略返回值，生命周期接线另行持有。
+void Function() installPublicMediaDelivery(PublicMediaDeliveryPort delivery) {
+  final identity = CloudRuntimeConfig.runtimeConfigPackageDigest;
+  final token = Object();
+  _installationToken = token;
   _selected = delivery;
-  _identity = CloudRuntimeConfig.runtimeConfigPackageDigest;
+  _identity = identity;
+  return () {
+    if (!identical(_installationToken, token)) return;
+    _installationToken = null;
+    _selected = null;
+    _identity = null;
+  };
 }
 
 PublicMediaDeliveryPort get publicMediaDelivery {
@@ -38,10 +48,12 @@ PublicMediaDeliveryPort get publicMediaDelivery {
       ),
     );
     _identity = identity;
+    _installationToken = null;
   }
   return _selected!;
 }
 
+Object? _installationToken;
 String? _identity;
 PublicMediaDeliveryPort? _selected;
 
@@ -188,12 +200,7 @@ final class RemotePublicMediaDelivery implements PublicMediaDeliveryPort {
         : kind;
     final resolved = lease != null
         ? reference
-        : tryResolve(
-            reference,
-            kind: profile == CdnImagePreset.avatar
-                ? MediaDeliveryKind.avatar
-                : effectiveKind,
-          )?.url;
+        : tryResolve(reference, kind: effectiveKind)?.url;
     if (resolved == null) {
       throw const FormatException('media image reference invalid');
     }

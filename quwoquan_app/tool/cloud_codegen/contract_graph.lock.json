@@ -16145,6 +16145,16 @@
             "required": false
           },
           {
+            "field": "viewportProfile",
+            "name": "viewportProfile",
+            "required": false
+          },
+          {
+            "field": "deviceClass",
+            "name": "deviceClass",
+            "required": false
+          },
+          {
             "field": "limit",
             "name": "limit"
           }
@@ -16770,6 +16780,7 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
+        "postCollection",
         "userProfile"
       ],
       "telemetry": {
@@ -16868,6 +16879,335 @@
           "admission_stage"
         ],
         "metric": "content_post_publication_submit",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "PostCollection",
+      "authMode": "required",
+      "canonicalOperationId": "content.post_collection.DeletePostCollection",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodePostCollectionCommandResult",
+        "responseType": "PostCollectionCommandResult"
+      },
+      "commercial": {
+        "blockReason": "合集公开边界、App 接线及真实持久化 conformance 尚待闭环",
+        "explicit": true,
+        "gapId": "CONTENT_POST_COLLECTION_CONFORMANCE",
+        "status": "blocked",
+        "targetStory": "ordered-post-collection"
+      },
+      "concurrency": {},
+      "consistency": null,
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.post_collection_unauthorized",
+        "CONTENT.USER.post_collection_invalid_argument",
+        "CONTENT.USER.post_collection_unavailable",
+        "CONTENT.USER.post_collection_version_conflict",
+        "CONTENT.SYSTEM.post_collection_write_failed",
+        "CONTENT.SYSTEM.post_collection_read_failed"
+      ],
+      "facadeMethod": "delete",
+      "facet": "PostCollectionFacade",
+      "invariantTarget": "PostCollection",
+      "kind": "command",
+      "localOperationId": "DeletePostCollection",
+      "method": "DELETE",
+      "mutationTarget": "PostCollection",
+      "objectId": "content.post_collection",
+      "ownershipPolicy": "collection_owner_only",
+      "pagination": null,
+      "pathTemplate": "/content/collections/{collectionId}",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 5000
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "collectionId",
+            "name": "collectionId"
+          }
+        ]
+      },
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "DeletePostCollectionCommand",
+      "responseAdmission": null,
+      "responseBody": "PostCollectionCommandResult",
+      "responseBodyKind": "object",
+      "responseEntity": "PostCollectionCommandResult",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "content/content/post_collection/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "postCollection"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "content_collection_delete",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "public",
+      "canonicalOperationId": "content.post_collection.GetPostCollection",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodePostCollectionPage",
+        "responseType": "PostCollectionPage"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "consistency": null,
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.post_collection_unauthorized",
+        "CONTENT.USER.post_collection_invalid_argument",
+        "CONTENT.USER.post_collection_unavailable",
+        "CONTENT.USER.post_collection_version_conflict",
+        "CONTENT.SYSTEM.post_collection_read_failed"
+      ],
+      "facadeMethod": "get",
+      "facet": "PostCollectionQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetPostCollection",
+      "method": "POST",
+      "mutationTarget": "",
+      "objectId": "content.post_collection",
+      "ownershipPolicy": "collection_and_member_post_visibility",
+      "pagination": null,
+      "pathTemplate": "/graphql",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 2500
+      },
+      "requestBindings": null,
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GetPostCollectionQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "object",
+      "responseEntity": "PostCollectionPage",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "content/content/post_collection/operations.yaml",
+      "streaming": null,
+      "successStatus": 200,
+      "surfaceIds": [
+        "postCollection"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "content_collection_get",
+        "trace": true
+      },
+      "transport": "graphql"
+    },
+    {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "content.post_collection.GetPostCollectionManagement",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodePostCollectionManagementView",
+        "responseType": "PostCollectionManagementView"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "consistency": null,
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.post_collection_unauthorized",
+        "CONTENT.USER.post_collection_invalid_argument",
+        "CONTENT.USER.post_collection_unavailable",
+        "CONTENT.SYSTEM.post_collection_read_failed"
+      ],
+      "facadeMethod": "getManagement",
+      "facet": "PostCollectionQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetPostCollectionManagement",
+      "method": "POST",
+      "mutationTarget": "",
+      "objectId": "content.post_collection",
+      "ownershipPolicy": "collection_owner_only",
+      "pagination": null,
+      "pathTemplate": "/graphql",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "PII"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 2500
+      },
+      "requestBindings": null,
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GetPostCollectionManagementQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "object",
+      "responseEntity": "PostCollectionManagementView",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "content/content/post_collection/operations.yaml",
+      "streaming": null,
+      "successStatus": 200,
+      "surfaceIds": [
+        "postCollection"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "content_collection_management_get",
+        "trace": true
+      },
+      "transport": "graphql"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "PostCollection",
+      "authMode": "required",
+      "canonicalOperationId": "content.post_collection.SavePostCollection",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodePostCollectionCommandResult",
+        "responseType": "PostCollectionCommandResult"
+      },
+      "commercial": {
+        "blockReason": "合集公开边界、App 接线及真实持久化 conformance 尚待闭环",
+        "explicit": true,
+        "gapId": "CONTENT_POST_COLLECTION_CONFORMANCE",
+        "status": "blocked",
+        "targetStory": "ordered-post-collection"
+      },
+      "concurrency": {},
+      "consistency": null,
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.post_collection_unauthorized",
+        "CONTENT.USER.post_collection_invalid_argument",
+        "CONTENT.USER.post_collection_unavailable",
+        "CONTENT.USER.post_collection_version_conflict",
+        "CONTENT.SYSTEM.post_collection_write_failed",
+        "CONTENT.SYSTEM.post_collection_read_failed"
+      ],
+      "facadeMethod": "save",
+      "facet": "PostCollectionFacade",
+      "invariantTarget": "PostCollection",
+      "kind": "command",
+      "localOperationId": "SavePostCollection",
+      "method": "PUT",
+      "mutationTarget": "PostCollection",
+      "objectId": "content.post_collection",
+      "ownershipPolicy": "collection_owner_only",
+      "pagination": null,
+      "pathTemplate": "/content/collections/{collectionId}",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 5000
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "collectionId",
+            "name": "collectionId"
+          }
+        ]
+      },
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "SavePostCollectionCommand",
+      "responseAdmission": null,
+      "responseBody": "PostCollectionCommandResult",
+      "responseBodyKind": "object",
+      "responseEntity": "PostCollectionCommandResult",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "content/content/post_collection/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "postCollection"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "content_collection_save",
         "trace": true
       },
       "transport": "json"
@@ -19030,7 +19370,7 @@
     {
       "actorRequirement": "none",
       "aggregateOwner": "",
-      "authMode": "required",
+      "authMode": "public",
       "canonicalOperationId": "gateway.persisted_query_execution.SearchPage",
       "clientContract": {
         "dartImport": "../gateway/gateway_operation_contracts.g.dart",
@@ -30025,13 +30365,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "837d31454c3a28e80e4ed96866336e6a24088c55a4f00ac71646be7ed67406db"
+    "sha256": "98a016c10140f6d40474722f74b07b81232184f5bf9560cf8045cbe6f3408e63"
   },
   "contractGraph": {
-    "compilerHash": "sha256:ad299d58067f9883f1b71cbe2d3b06dcbb94c1052e4a974b89546d0aed7f25b0",
+    "compilerHash": "sha256:25003c47b5e3af19e4cf8971c1b7036cf76f578eda09a92637769835b950a5b5",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
-    "sourceDigestSetSha256": "37e0f1bcdb20f2f2b222d51a5561e348316c0ec3cbc4fa748505c34b95ce9805"
+    "sha256": "8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e",
+    "sourceDigestSetSha256": "7de065c2d4c6a11d58186424ec68b775ed729fa34ec50d2051ce7d0f12d3c469"
   },
   "generator": "app-cloud-handoff"
 }
