@@ -763,3 +763,14 @@ def test_followee_viewing_hides_instead_of_naming_a_generic_object() -> None:
         )
         is None
     )
+
+def test_coliked_uses_current_contributions_and_disappears_after_unlike():
+    evidence=_Evidence();evidence.likes={"viewer":("post-shared","post-own"),"profile-target":("post-shared",)}
+    evidence.list_liked_content_ids=lambda persona_id,limit: evidence.likes.get(persona_id,())[:limit]
+    writer=_Writer();materializer=Materializer(evidence=evidence,projector=Projector(writer),now=lambda:datetime(2026,8,2,12,tzinfo=timezone.utc))
+    assert materializer.rebuild_object(source_event_id="like-current",source_event_digest=hashlib.sha256(b"like-current").hexdigest(),subject_id="viewer",object_type="user",object_id="profile-target")
+    reason=next(item for item in writer.objects[-1].reasons if item["kind"]=="coLiked")
+    assert reason["mutualCount"]==1 and reason["subjectContext"]=="post:post-shared"
+    evidence.likes["profile-target"]=()
+    assert materializer.rebuild_object(source_event_id="unlike-current",source_event_digest=hashlib.sha256(b"unlike-current").hexdigest(),subject_id="viewer",object_type="user",object_id="profile-target")
+    assert "coLiked" not in {item["kind"] for item in writer.objects[-1].reasons}

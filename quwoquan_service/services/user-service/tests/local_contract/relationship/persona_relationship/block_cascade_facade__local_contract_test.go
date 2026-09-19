@@ -72,13 +72,14 @@ func TestChangedBlockCallsGreetingCascadeThroughOwningFacade(t *testing.T) {
 		nil,
 		nil,
 		greetings,
+		localRelationshipOptions()...,
 	)
 
 	result, err := service.Block(
 		t.Context(),
 		"persona-a",
 		"persona-b",
-		"block-request",
+		localEvidence("block-request"),
 	)
 	if err != nil {
 		t.Fatalf("BlockUser: %v", err)
@@ -126,13 +127,14 @@ func TestIdempotentBlockReplayDoesNotRepeatSuccessfulCascade(t *testing.T) {
 		nil,
 		nil,
 		greetings,
+		localRelationshipOptions()...,
 	)
 
 	if _, err := service.Block(
 		t.Context(),
 		"persona-a",
 		"persona-b",
-		"block-request",
+		localEvidence("block-request"),
 	); err != nil {
 		t.Fatalf("first BlockUser: %v", err)
 	}
@@ -140,7 +142,7 @@ func TestIdempotentBlockReplayDoesNotRepeatSuccessfulCascade(t *testing.T) {
 		t.Context(),
 		"persona-a",
 		"persona-b",
-		"block-request",
+		localEvidence("block-request"),
 	)
 	if err != nil {
 		t.Fatalf("replayed BlockUser: %v", err)
@@ -167,13 +169,14 @@ func TestUnblockDoesNotCallGreetingCascadeOrRestoreFollowing(t *testing.T) {
 		nil,
 		nil,
 		greetings,
+		localRelationshipOptions()...,
 	)
 
 	result, err := service.Unblock(
 		t.Context(),
 		"persona-a",
 		"persona-b",
-		"unblock-request",
+		localEvidence("unblock-request"),
 	)
 	if err != nil {
 		t.Fatalf("UnblockUser: %v", err)

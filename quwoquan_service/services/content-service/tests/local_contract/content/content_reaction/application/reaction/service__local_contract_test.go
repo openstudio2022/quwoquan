@@ -26,7 +26,7 @@ func TestContentReaction_ActorDimensionAndReceiptAreUnique(t *testing.T) {
 	t.Parallel()
 
 	store := testsupport.NewReactionStore()
-	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store))
+	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store), testBasis{})
 	persona := mustReactionActor(t, reactiondomain.ActorDimensionPersona, "same-id")
 	device := mustReactionActor(t, reactiondomain.ActorDimensionDevice, "same-id")
 
@@ -79,7 +79,7 @@ func TestContentReaction_ReaderReturnsSliceWithoutAggregateLeak(t *testing.T) {
 	t.Parallel()
 
 	store := testsupport.NewReactionStore()
-	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store))
+	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store), testBasis{})
 	actor := mustReactionActor(t, reactiondomain.ActorDimensionDevice, "device-1")
 
 	_, err := service.LikePost(
@@ -108,7 +108,7 @@ func TestContentReaction_ReaderReturnsSliceWithoutAggregateLeak(t *testing.T) {
 
 	unliked, err := service.UnlikePost(
 		commandmeta.WithIdempotencyKey(context.Background(), "reaction-read-unlike"),
-		reactionapp.UnlikePostCommand{PostID: "post-reader", Actor: actor},
+		reactionapp.UnlikePostCommand{PostID: "post-reader", Actor: actor, Evidence: evidence(slice.Version)},
 	)
 	if err != nil || !unliked.Changed || unliked.Liked {
 		t.Fatalf("unlike result=%+v err=%v", unliked, err)
@@ -126,7 +126,7 @@ func TestContentReaction_MissingTargetUsesObjectOwnedErrorCode(t *testing.T) {
 	t.Parallel()
 
 	store := testsupport.NewReactionStore()
-	service := reactionapp.NewService(reactionapp.BindDataPorts(store, missingReactionTarget{}))
+	service := reactionapp.NewService(reactionapp.BindDataPorts(store, missingReactionTarget{}), testBasis{})
 	actor := mustReactionActor(t, reactiondomain.ActorDimensionPersona, "persona-1")
 
 	_, err := service.LikePost(
@@ -157,7 +157,7 @@ func TestContentReaction_CommentThreeStateUsesOneAggregateAndExactCounts(t *test
 	t.Parallel()
 
 	store := testsupport.NewReactionStore()
-	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store))
+	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store), testBasis{})
 	actor := mustReactionActor(t, reactiondomain.ActorDimensionPersona, "comment-actor")
 	command := reactionapp.ReactToCommentCommand{
 		CommentID: "comment-target",
@@ -172,6 +172,7 @@ func TestContentReaction_CommentThreeStateUsesOneAggregateAndExactCounts(t *test
 		t.Fatalf("comment like result=%+v err=%v", liked, err)
 	}
 	command.Reaction = reactiondomain.ValueDislike
+	command.Evidence = evidence(liked.Version)
 	disliked, err := service.ReactToComment(
 		commandmeta.WithIdempotencyKey(context.Background(), "comment-reaction-dislike"),
 		command,
@@ -180,6 +181,7 @@ func TestContentReaction_CommentThreeStateUsesOneAggregateAndExactCounts(t *test
 		t.Fatalf("comment dislike result=%+v err=%v", disliked, err)
 	}
 	command.Reaction = reactiondomain.ValueNone
+	command.Evidence = evidence(disliked.Version)
 	cleared, err := service.ReactToComment(
 		commandmeta.WithIdempotencyKey(context.Background(), "comment-reaction-none"),
 		command,
@@ -196,7 +198,7 @@ func TestContentReaction_StaleLikeAfterUnlikeIsRejected(t *testing.T) {
 	t.Parallel()
 
 	store := testsupport.NewReactionStore()
-	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store))
+	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store), testBasis{})
 	actor := mustReactionActor(t, reactiondomain.ActorDimensionPersona, "persona-1")
 	initial, err := service.LikePost(
 		commandmeta.WithIdempotencyKey(context.Background(), "reaction-race-initial"),

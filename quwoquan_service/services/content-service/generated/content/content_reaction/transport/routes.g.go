@@ -15,6 +15,9 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "DELETE", pathTemplate: "/content/posts/{postId}/like", operation: "UnlikePost"},
 	{method: "POST", pathTemplate: "/content/posts/{postId}/like", operation: "LikePost"},
 	{method: "GET", pathTemplate: "/content/posts/{postId}/reactions", operation: "GetContentReactionState"},
+	{method: "POST", pathTemplate: "/content/reactions/{targetKind}/{targetId}/commands/{operation}/finalize-expired", operation: "FinalizeExpiredContentReactionCommand"},
+	{method: "GET", pathTemplate: "/content/reactions/{targetKind}/{targetId}/commands/{operation}/receipt", operation: "RecoverContentReactionCommand"},
+	{method: "GET", pathTemplate: "/content/reactions/{targetKind}/{targetId}/mutation-basis", operation: "GetContentReactionMutationBasis"},
 }
 
 type generatedRouteDef struct {
@@ -124,8 +127,22 @@ func generatedSplitPath(raw string) []string {
 }
 
 var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
+	"FinalizeExpiredContentReactionCommand": {
+		"mutationBasis":   {},
+		"expectedVersion": {},
+	},
+	"LikePost": {
+		"mutationBasis":   {},
+		"expectedVersion": {},
+	},
 	"ReactToComment": {
-		"reaction": {},
+		"reaction":        {},
+		"mutationBasis":   {},
+		"expectedVersion": {},
+	},
+	"UnlikePost": {
+		"mutationBasis":   {},
+		"expectedVersion": {},
 	},
 }
 

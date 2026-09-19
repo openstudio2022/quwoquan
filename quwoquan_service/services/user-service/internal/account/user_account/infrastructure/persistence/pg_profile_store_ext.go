@@ -87,6 +87,38 @@ func (s *PgProfileStore) FindByID(ctx context.Context, id string) (*model.UserPr
 	)
 }
 
+func (s *PgProfileStore) FindManyByID(
+	ctx context.Context,
+	ids []string,
+) (map[string]model.UserProfile, error) {
+	result := make(map[string]model.UserProfile, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	rows, err := s.pool.Query(
+		ctx,
+		`SELECT `+userProfileNullableSafeCols+` FROM user_profiles WHERE user_id = ANY($1)`,
+		ids,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		profile, scanErr := scanNullableSafeUserProfile(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		if profile != nil {
+			result[profile.UserID] = *profile
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // CreateAccount creates only authoritative UserAccount state. Public profile
 // columns start as an empty projection and are populated exclusively by the
 // durable PersonaProfileProjector after Persona creation.

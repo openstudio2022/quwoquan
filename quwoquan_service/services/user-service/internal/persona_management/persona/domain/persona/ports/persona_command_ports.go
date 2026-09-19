@@ -24,6 +24,10 @@ var (
 	ErrPersonaVersionConflict = errors.New("persona version conflict")
 	// ErrPersonaQuotaReached 表示 owner 已达 canonical Persona 数量上限。
 	ErrPersonaQuotaReached = errors.New("persona quota reached")
+	// ErrPersonaIdentityConflict 只表示新 Persona 不可变 ID 与既有权威行冲突。
+	// 调用方仅可对此错误在同一创建意图内有界重分配；handle、receipt、quota 与
+	// 其它唯一约束必须保留各自 typed 失败。
+	ErrPersonaIdentityConflict = errors.New("persona identity conflict")
 )
 
 // PersonaCommandMeta 承载一次命令的业务重放身份。

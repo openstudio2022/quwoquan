@@ -35,7 +35,7 @@ void main() {
       addTearDown(server.close);
       final query = RemoteContentDiscoveryFeedQuery(
         client: server.buildGeneratedClient(),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.homeFeed.id,
           routeId: AppUiSurfaces.homeFeed.routeId,
           clientPageId: clientPageId,

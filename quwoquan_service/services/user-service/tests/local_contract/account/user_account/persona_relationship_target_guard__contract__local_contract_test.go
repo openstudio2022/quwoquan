@@ -34,14 +34,26 @@ func (s *fakeRelationshipStore) Get(
 	return relmodel.RelationshipState{}, nil
 }
 
+func (s *fakeRelationshipStore) GetMany(
+	_ context.Context,
+	_ string,
+	targetPersonaIDs []string,
+) (map[string]relmodel.RelationshipState, error) {
+	states := make(map[string]relmodel.RelationshipState, len(targetPersonaIDs))
+	for _, targetPersonaID := range targetPersonaIDs {
+		states[targetPersonaID] = relmodel.RelationshipState{}
+	}
+	return states, nil
+}
+
 func (s *fakeRelationshipStore) ListFollowing(
-	_ context.Context, _, _ string, _ int,
+	_ context.Context, _, _ string, _ int, _, _ string,
 ) ([]relmodel.Direction, string, error) {
 	return nil, "", nil
 }
 
 func (s *fakeRelationshipStore) ListFollowers(
-	_ context.Context, _, _ string, _ int,
+	_ context.Context, _, _ string, _ int, _, _ string,
 ) ([]relmodel.Direction, string, error) {
 	return nil, "", nil
 }
@@ -50,6 +62,31 @@ func (s *fakeRelationshipStore) ListBlocked(
 	_ context.Context, _, _ string, _ int,
 ) ([]relports.BlockedListItem, string, error) {
 	return nil, "", nil
+}
+
+type guardBasis struct{}
+
+func (guardBasis) Issue(relationshipapp.MutationBasisClaims) (string, error) {
+	return "guard-basis", nil
+}
+func (guardBasis) Verify(_ string, command relmodel.Command, pair string) (relationshipapp.MutationBasisClaims, error) {
+	return relationshipapp.MutationBasisClaims{ActorPersonaID: command.SourcePersonaID, TargetPersonaID: command.TargetPersonaID, PairID: pair, ExpectedVersion: *command.ExpectedVersion, AcceptUntil: time.Now().Add(time.Hour)}, nil
+}
+func (b guardBasis) VerifyForRecovery(token string, command relmodel.Command, pair string) (relationshipapp.MutationBasisClaims, error) {
+	return b.Verify(token, command, pair)
+}
+func (guardBasis) Digest(string) string { return "guard" }
+
+type guardReceipts struct{}
+
+func (guardReceipts) Recover(context.Context, string, string, relmodel.CommandKind, string) (relmodel.MutationResult, bool, error) {
+	return relmodel.MutationResult{}, false, nil
+}
+func (guardReceipts) FinalizeExpired(context.Context, string, string, relmodel.CommandKind, string, time.Time) (relmodel.MutationResult, error) {
+	return relmodel.MutationResult{}, nil
+}
+func guardEvidence() relationshipapp.CommandEvidence {
+	return relationshipapp.CommandEvidence{IdempotencyKey: "guard-key", MutationBasis: "guard-basis", ExpectedVersion: 0}
 }
 
 type fakePersonaReader struct {
@@ -86,12 +123,12 @@ func TestFollowTargetGuard_MissingTargetRejected(t *testing.T) {
 	store := &fakeRelationshipStore{}
 	personas := &fakePersonaReader{personas: map[string]*usermodel.Persona{}}
 	service := relationshipapp.NewPersonaRelationshipService(
-		store, personas, nil, nil,
+		store, personas, nil, nil, relationshipapp.WithMutationBasis(guardBasis{}, guardReceipts{}),
 	)
 
 	_, err := service.Follow(
 		context.Background(),
-		"ps_actor", "ps_missing_target", "", "",
+		"ps_actor", "ps_missing_target", "", guardEvidence(),
 	)
 	if err == nil {
 		t.Fatal("expected follow against missing target to fail")
@@ -111,10 +148,10 @@ func TestFollowTargetGuard_RetiredTargetRejected(t *testing.T) {
 		"ps_retired": {PersonaID: "ps_retired", UserID: "owner", Status: "retired"},
 	}}
 	service := relationshipapp.NewPersonaRelationshipService(
-		store, personas, nil, nil,
+		store, personas, nil, nil, relationshipapp.WithMutationBasis(guardBasis{}, guardReceipts{}),
 	)
 
-	_, err := service.Follow(context.Background(), "ps_actor", "ps_retired", "", "")
+	_, err := service.Follow(context.Background(), "ps_actor", "ps_retired", "", guardEvidence())
 	if err == nil {
 		t.Fatal("expected follow against retired target to fail")
 	}
@@ -131,11 +168,11 @@ func TestFollowTargetGuard_ActiveTargetPasses(t *testing.T) {
 		"ps_actor":  {PersonaID: "ps_actor", UserID: "actor", Status: "active"},
 	}}
 	service := relationshipapp.NewPersonaRelationshipService(
-		store, personas, nil, nil,
+		store, personas, nil, nil, relationshipapp.WithMutationBasis(guardBasis{}, guardReceipts{}),
 	)
 
 	if _, err := service.Follow(
-		context.Background(), "ps_actor", "ps_active", "", "",
+		context.Background(), "ps_actor", "ps_active", "", guardEvidence(),
 	); err != nil {
 		t.Fatalf("active target follow must pass the guard: %v", err)
 	}
@@ -148,11 +185,11 @@ func TestFollowTargetGuard_UnfollowSkipsExistenceCheck(t *testing.T) {
 	store := &fakeRelationshipStore{}
 	personas := &fakePersonaReader{personas: map[string]*usermodel.Persona{}}
 	service := relationshipapp.NewPersonaRelationshipService(
-		store, personas, nil, nil,
+		store, personas, nil, nil, relationshipapp.WithMutationBasis(guardBasis{}, guardReceipts{}),
 	)
 
 	if _, err := service.Unfollow(
-		context.Background(), "ps_actor", "ps_gone_target", "",
+		context.Background(), "ps_actor", "ps_gone_target", guardEvidence(),
 	); err != nil {
 		t.Fatalf("unfollow must converge even when target vanished: %v", err)
 	}

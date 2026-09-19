@@ -56,7 +56,7 @@ final class RealtimeApiContractHarness {
       // 带 session 断言的共享 context 只服务登录后的对象操作。
       final accountSessions = RemoteAccountSessionCommandWriter(
         client: client,
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.appShell.id,
           routeId: AppUiSurfaces.appShell.routeId,
           clientPageId: clientPageId,
@@ -84,7 +84,7 @@ final class RealtimeApiContractHarness {
         final suffix = DateTime.now().microsecondsSinceEpoch;
         final personaCommands = RemotePersonaCommandWriter(
           client: client,
-          invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
             surfaceId: AppUiSurfaces.profilePersonas.id,
             routeId: AppUiSurfaces.profilePersonas.routeId,
             clientPageId: clientPageId,

@@ -8,6 +8,8 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_cloud_client_context_provider.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/di/media_viewer_interaction_state_bridge.dart';
+import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync.dart';
+import 'package:quwoquan_app/runtime/di/client_state_sync_dependencies.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 游客（未登录）会话桩：isAuthenticated=false，但带稳定 installId。
@@ -132,6 +134,44 @@ void main() {
         ProviderScope(
           overrides: [
             authSessionStoreProvider.overrideWithValue(_GuestAuthStore()),
+            clientStateSyncRuntimeDependenciesProvider.overrideWithValue(
+              ClientStateSyncRuntimeDependencies(
+                readConfig: () => const ClientStateSyncConfig(
+                  flushDelay: Duration(hours: 1),
+                  retryDelay: Duration(minutes: 5),
+                  maxBatchSize: 20,
+                  maxPendingAge: Duration(hours: 72),
+                  flushOnForegroundResume: true,
+                  flushOnNetworkRecovered: true,
+                ),
+                readPersistedState: () async => null,
+                writePersistedState: (_) async {},
+                executeEntry: (_) async => const ClientStateSyncReceipt(
+                  outcome: ClientStateSyncReceiptOutcome.committed,
+                  replayed: false,
+                  committedVersion: 1,
+                  changed: true,
+                ),
+                recoverEntry: (_) async => const ClientStateSyncReceipt(
+                  outcome: ClientStateSyncReceiptOutcome.historyUnavailable,
+                  replayed: false,
+                ),
+                prepareFollowEvidence: (_, _) async =>
+                    const ClientStateSyncPreparedEvidence(
+                      idempotencyKey: 'guest-key',
+                      mutationBasis: 'guest-basis',
+                      expectedVersion: 0,
+                      actorRef: 'guest',
+                    ),
+                preparePostEvidence: (_) async =>
+                    const ClientStateSyncPreparedEvidence(
+                      idempotencyKey: 'guest-key',
+                      mutationBasis: 'guest-basis',
+                      expectedVersion: 0,
+                      actorRef: 'guest',
+                    ),
+              ),
+            ),
           ],
           child: Consumer(
             builder: (context, ref, _) {
@@ -154,12 +194,11 @@ void main() {
         reason: '前置：当前为游客态',
       );
 
-      syncPostLikeIntent(
+      await syncPostLikeIntent(
         ref,
         postId: 'post_x',
         previousLiked: false,
         isLiked: true,
-        likeCount: 10,
       );
       await tester.pump();
 

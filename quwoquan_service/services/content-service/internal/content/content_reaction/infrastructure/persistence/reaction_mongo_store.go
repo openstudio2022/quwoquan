@@ -4,6 +4,8 @@ package persistence
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"time"
@@ -23,9 +25,15 @@ const (
 	contentReactionAggregateCollection  = "content_reaction_aggregates"
 	contentReactionReceiptCollection    = "content_reaction_command_receipts"
 	contentReactionOutboxCollection     = "content_reaction_outbox"
-	contentReactionSequenceCollection   = "content_reaction_outbox_sequences"
+	contentReactionSequenceCollection   = "content_reaction_outbox_partition_sequences"
 	contentReactionCheckpointCollection = "content_reaction_projection_checkpoints"
+	contentReactionFenceCollection      = "content_reaction_target_fence_buckets"
+	contentReactionCleanupJobCollection = "content_reaction_cleanup_jobs"
 )
+
+// minReceiptRetention 是 receipt 的持久保留下限：覆盖 72 小时命令接受窗口
+// 再留恢复余量。存储层负责兜底，调用方时钟偏差不得让实际保留期低于它。
+const minReceiptRetention = 96 * time.Hour
 
 type contentReactionDocument struct {
 	ID             string     `bson:"_id"`
@@ -41,25 +49,33 @@ type contentReactionDocument struct {
 }
 
 type contentReactionReceiptDocument struct {
-	ID               string                  `bson:"_id"`
-	AggregateID      string                  `bson:"aggregateId"`
-	AggregateVersion int64                   `bson:"aggregateVersion"`
-	CommandName      string                  `bson:"commandName"`
-	CommandDigest    string                  `bson:"commandDigest"`
-	Result           contentReactionDocument `bson:"result"`
-	Changed          bool                    `bson:"changed"`
-	CreatedAt        time.Time               `bson:"createdAt"`
-	ExpiresAt        time.Time               `bson:"expiresAt"`
+	ID                string                   `bson:"_id"`
+	AggregateID       string                   `bson:"aggregateId"`
+	AggregateVersion  int64                    `bson:"aggregateVersion"`
+	CommandName       string                   `bson:"commandName"`
+	ActorDimension    string                   `bson:"actorDimension"`
+	ActorID           string                   `bson:"actorId"`
+	IdempotencyDigest string                   `bson:"idempotencyDigest"`
+	CommandDigest     string                   `bson:"commandDigest"`
+	BasisDigest       string                   `bson:"basisDigest"`
+	Outcome           string                   `bson:"outcome"`
+	Result            *contentReactionDocument `bson:"result,omitempty"`
+	Changed           bool                     `bson:"changed"`
+	AcceptUntil       time.Time                `bson:"acceptUntil"`
+	CreatedAt         time.Time                `bson:"createdAt"`
+	ExpiresAt         time.Time                `bson:"expiresAt"`
 }
 
 type contentReactionOutboxDocument struct {
-	ID               string          `bson:"_id"`
-	OutboxSequence   int64           `bson:"outboxSequence"`
-	EventType        string          `bson:"eventType"`
-	AggregateID      string          `bson:"aggregateId"`
-	AggregateVersion int64           `bson:"aggregateVersion"`
-	PayloadJSON      json.RawMessage `bson:"payloadJson"`
-	OccurredAt       time.Time       `bson:"occurredAt"`
+	ID                string          `bson:"_id"`
+	PartitionKey      string          `bson:"partitionKey"`
+	PartitionID       int             `bson:"partitionId"`
+	PartitionSequence int64           `bson:"partitionSequence"`
+	EventType         string          `bson:"eventType"`
+	AggregateID       string          `bson:"aggregateId"`
+	AggregateVersion  int64           `bson:"aggregateVersion"`
+	PayloadJSON       json.RawMessage `bson:"payloadJson"`
+	OccurredAt        time.Time       `bson:"occurredAt"`
 }
 
 type contentReactionStateProjection struct {
@@ -76,6 +92,9 @@ type MongoContentReactionStore struct {
 	outbox      *mongo.Collection
 	sequences   *mongo.Collection
 	checkpoints *mongo.Collection
+	fences      *mongo.Collection
+	cleanupJobs *mongo.Collection
+	now         func() time.Time
 }
 
 var _ reactionports.AggregateStore = (*MongoContentReactionStore)(nil)
@@ -84,6 +103,14 @@ var _ reactionapp.CommentReactionCountReader = (*MongoContentReactionStore)(nil)
 var _ reactionports.CommentReactionValueReader = (*MongoContentReactionStore)(nil)
 var _ commentapp.CommentReactionProjectionReader = (*MongoContentReactionStore)(nil)
 
+func reactionReceiptID(actor reactiondomain.Actor, key string) string {
+	return opaqueDigest(string(actor.Dimension) + "\x1f" + actor.ID + "\x1f" + strings.TrimSpace(key))
+}
+func opaqueDigest(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
+}
+
 func NewMongoContentReactionStore(db *mongo.Database) *MongoContentReactionStore {
 	return &MongoContentReactionStore{
 		aggregates:  db.Collection(contentReactionAggregateCollection),
@@ -91,10 +118,44 @@ func NewMongoContentReactionStore(db *mongo.Database) *MongoContentReactionStore
 		outbox:      db.Collection(contentReactionOutboxCollection),
 		sequences:   db.Collection(contentReactionSequenceCollection),
 		checkpoints: db.Collection(contentReactionCheckpointCollection),
+		fences:      db.Collection(contentReactionFenceCollection),
+		cleanupJobs: db.Collection(contentReactionCleanupJobCollection), now: func() time.Time { return time.Now().UTC() },
 	}
 }
 
+func (s *MongoContentReactionStore) WithClock(now func() time.Time) *MongoContentReactionStore {
+	if s != nil && now != nil {
+		s.now = now
+	}
+	return s
+}
+
+// CloseTargetLifecycle 在一次事务里封闭该 target 的全部写栅栏桶。
+// 它由已验证的 owner lifecycle 事件驱动的内部清理调用：封闭之后，任何晚到的
+// 互动写都会在自己的事务里失败，而不是在扫空之后复活。
+func (s *MongoContentReactionStore) CloseTargetLifecycle(
+	ctx context.Context,
+	target reactiondomain.Target,
+	closeSource string,
+) error {
+	session, err := s.fences.Database().Client().StartSession()
+	if err != nil {
+		return err
+	}
+	defer session.EndSession(ctx)
+	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		return nil, closeLifecycleFences(txCtx, s.fences, target, closeSource, time.Now().UTC())
+	})
+	return err
+}
+
 func (s *MongoContentReactionStore) EnsureIndexes(ctx context.Context) error {
+	if err := s.MigrateOutboxPartitions(ctx); err != nil {
+		return err
+	}
+	if err := s.DropUnpartitionedGlobalSequence(ctx); err != nil {
+		return err
+	}
 	if _, err := s.aggregates.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys: bson.D{
@@ -129,6 +190,31 @@ func (s *MongoContentReactionStore) EnsureIndexes(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
+	// 生命周期写栅栏按 target 分组读取（封闭审计与有界清理），因此三元组
+	// 需要自己的唯一索引；_id 的复合编码只保证单桶身份。
+	if _, err := s.fences.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "targetKind", Value: 1},
+				{Key: "targetId", Value: 1},
+				{Key: "bucket", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_content_reaction_fence_target").
+				SetUnique(true),
+		},
+	}); err != nil {
+		return err
+	}
+	if _, err := s.cleanupJobs.Indexes().CreateMany(ctx, []mongo.IndexModel{{Keys: bson.D{{Key: "completed", Value: 1}, {Key: "leaseUntil", Value: 1}}, Options: options.Index().SetName("idx_content_reaction_cleanup_claim")}, {Keys: bson.D{{Key: "targetKind", Value: 1}, {Key: "targetId", Value: 1}, {Key: "sourceVersion", Value: 1}}, Options: options.Index().SetName("idx_content_reaction_cleanup_source").SetUnique(true)}}); err != nil {
+		return err
+	}
+	if _, err := s.checkpoints.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "consumer", Value: 1}, {Key: "leaseUntil", Value: 1}, {Key: "partitionId", Value: 1}},
+		Options: options.Index().SetName("idx_content_reaction_checkpoint_claim"),
+	}); err != nil {
+		return err
+	}
 	if _, err := s.receipts.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "aggregateId", Value: 1}, {Key: "aggregateVersion", Value: -1}},
@@ -143,9 +229,9 @@ func (s *MongoContentReactionStore) EnsureIndexes(ctx context.Context) error {
 	}
 	_, err := s.outbox.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
-			Keys: bson.D{{Key: "outboxSequence", Value: 1}},
+			Keys: bson.D{{Key: "partitionId", Value: 1}, {Key: "partitionSequence", Value: 1}},
 			Options: options.Index().
-				SetName("idx_content_reaction_outbox_sequence").
+				SetName("idx_content_reaction_outbox_partition_sequence").
 				SetUnique(true),
 		},
 		{
@@ -185,14 +271,16 @@ func (s *MongoContentReactionStore) Load(
 
 func (s *MongoContentReactionStore) FindReceipt(
 	ctx context.Context,
+	identity reactiondomain.Identity,
 	idempotencyKey string,
 	commandName string,
 	commandDigest string,
+	basisDigest string,
 ) (reactionports.CommitResult, bool, error) {
 	var receipt contentReactionReceiptDocument
 	err := s.receipts.FindOne(
 		ctx,
-		bson.D{{Key: "_id", Value: strings.TrimSpace(idempotencyKey)}},
+		bson.D{{Key: "_id", Value: reactionReceiptID(identity.Actor, idempotencyKey)}},
 	).Decode(&receipt)
 	if err == mongo.ErrNoDocuments {
 		return reactionports.CommitResult{}, false, nil
@@ -200,23 +288,92 @@ func (s *MongoContentReactionStore) FindReceipt(
 	if err != nil {
 		return reactionports.CommitResult{}, false, err
 	}
-	if !receipt.ExpiresAt.After(time.Now().UTC()) {
+	if !receipt.ExpiresAt.After(s.now().UTC()) {
 		return reactionports.CommitResult{}, false, nil
 	}
-	if receipt.CommandName != commandName || receipt.CommandDigest != commandDigest {
+	if receipt.CommandName != commandName || receipt.CommandDigest != commandDigest || receipt.BasisDigest != basisDigest {
 		return reactionports.CommitResult{},
 			false,
 			contentgenerated.AppErrorFromIdempotencyConflict("reaction receipt command mismatch")
 	}
-	aggregate, err := ReactionFromDocument(receipt.Result)
+	if receipt.Result == nil {
+		return reactionports.CommitResult{Outcome: reactionports.ReceiptOutcome(receipt.Outcome), Replayed: true}, true, nil
+	}
+	aggregate, err := ReactionFromDocument(*receipt.Result)
 	if err != nil {
 		return reactionports.CommitResult{}, false, err
 	}
 	return reactionports.CommitResult{
 		Aggregate: aggregate,
 		Changed:   receipt.Changed,
-		Replayed:  true,
+		Replayed:  true, Outcome: reactionports.ReceiptOutcome(receipt.Outcome),
 	}, true, nil
+}
+
+func (s *MongoContentReactionStore) RecoverReceipt(ctx context.Context, actor reactiondomain.Actor, idempotencyKey, commandName string) (reactionports.CommitResult, bool, error) {
+	var receipt contentReactionReceiptDocument
+	err := s.receipts.FindOne(ctx, bson.M{"_id": reactionReceiptID(actor, idempotencyKey)}).Decode(&receipt)
+	if err == mongo.ErrNoDocuments {
+		return reactionports.CommitResult{}, false, nil
+	}
+	if err != nil {
+		return reactionports.CommitResult{}, false, err
+	}
+	if receipt.CommandName != commandName {
+		return reactionports.CommitResult{}, false, contentgenerated.AppErrorFromIdempotencyConflict("reaction receipt command mismatch")
+	}
+	if receipt.Result == nil {
+		return reactionports.CommitResult{Replayed: true, Outcome: reactionports.ReceiptOutcome(receipt.Outcome)}, true, nil
+	}
+	aggregate, err := ReactionFromDocument(*receipt.Result)
+	if err != nil {
+		return reactionports.CommitResult{}, false, err
+	}
+	return reactionports.CommitResult{Aggregate: aggregate, Changed: receipt.Changed, Replayed: true, Outcome: reactionports.ReceiptOutcome(receipt.Outcome)}, true, nil
+}
+
+func (s *MongoContentReactionStore) FinalizeExpired(ctx context.Context, identity reactiondomain.Identity, idempotencyKey, commandName, commandDigest, basisDigest string, acceptUntil time.Time) (reactionports.CommitResult, error) {
+	now := s.now().UTC()
+	if acceptUntil.IsZero() || now.Before(acceptUntil) {
+		return reactionports.CommitResult{}, contentgenerated.AppErrorFromVersionConflict("reaction command is still inside its acceptance window")
+	}
+	session, err := s.receipts.Database().Client().StartSession()
+	if err != nil {
+		return reactionports.CommitResult{}, err
+	}
+	defer session.EndSession(ctx)
+	var result reactionports.CommitResult
+	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		id := reactionReceiptID(identity.Actor, idempotencyKey)
+		var receipt contentReactionReceiptDocument
+		readErr := s.receipts.FindOne(txCtx, bson.M{"_id": id}).Decode(&receipt)
+		if readErr == nil {
+			if receipt.CommandName != commandName || receipt.CommandDigest != commandDigest || receipt.BasisDigest != basisDigest {
+				return nil, contentgenerated.AppErrorFromIdempotencyConflict("reaction receipt command mismatch")
+			}
+			if receipt.Result != nil {
+				aggregate, e := ReactionFromDocument(*receipt.Result)
+				if e != nil {
+					return nil, e
+				}
+				result = reactionports.CommitResult{Aggregate: aggregate, Changed: receipt.Changed, Replayed: true, Outcome: reactionports.ReceiptOutcome(receipt.Outcome)}
+			} else {
+				result = reactionports.CommitResult{Replayed: true, Outcome: reactionports.ReceiptOutcome(receipt.Outcome)}
+			}
+			return nil, nil
+		}
+		if readErr != mongo.ErrNoDocuments {
+			return nil, readErr
+		}
+		expiresAt := now.Add(minReceiptRetention)
+		_, insertErr := s.receipts.InsertOne(txCtx, contentReactionReceiptDocument{ID: id, AggregateID: identity.AggregateID(), AggregateVersion: 0, CommandName: commandName, ActorDimension: string(identity.Actor.Dimension), ActorID: identity.Actor.ID, IdempotencyDigest: opaqueDigest(idempotencyKey), CommandDigest: commandDigest, BasisDigest: basisDigest, Outcome: string(reactionports.ReceiptOutcomeExpired), AcceptUntil: acceptUntil, CreatedAt: now, ExpiresAt: expiresAt})
+		if insertErr != nil {
+			return nil, insertErr
+		}
+		result = reactionports.CommitResult{Outcome: reactionports.ReceiptOutcomeExpired}
+		return nil, nil
+	})
+	return result, err
 }
 
 func (s *MongoContentReactionStore) Commit(
@@ -237,30 +394,33 @@ func (s *MongoContentReactionStore) Commit(
 		var receipt contentReactionReceiptDocument
 		receiptErr := s.receipts.FindOne(
 			txCtx,
-			bson.D{{Key: "_id", Value: commit.IdempotencyKey}},
+			bson.D{{Key: "_id", Value: reactionReceiptID(commit.Aggregate.Identity().Actor, commit.IdempotencyKey)}},
 		).Decode(&receipt)
 		if receiptErr == nil {
-			if receipt.ExpiresAt.After(time.Now().UTC()) {
+			if receipt.ExpiresAt.After(s.now().UTC()) {
 				if receipt.CommandName != commit.CommandName ||
-					receipt.CommandDigest != commit.CommandDigest {
+					receipt.CommandDigest != commit.CommandDigest || receipt.BasisDigest != commit.BasisDigest {
 					return nil, contentgenerated.AppErrorFromIdempotencyConflict(
 						"reaction receipt command mismatch",
 					)
 				}
-				replayed, restoreErr := ReactionFromDocument(receipt.Result)
+				if receipt.Result == nil {
+					return nil, contentgenerated.AppErrorFromIdempotencyConflict("reaction terminal receipt cannot replay as committed")
+				}
+				replayed, restoreErr := ReactionFromDocument(*receipt.Result)
 				if restoreErr != nil {
 					return nil, restoreErr
 				}
 				result = reactionports.CommitResult{
 					Aggregate: replayed,
 					Changed:   receipt.Changed,
-					Replayed:  true,
+					Replayed:  true, Outcome: reactionports.ReceiptOutcome(receipt.Outcome),
 				}
 				return nil, nil
 			}
 			if _, deleteErr := s.receipts.DeleteOne(
 				txCtx,
-				bson.D{{Key: "_id", Value: commit.IdempotencyKey}},
+				bson.D{{Key: "_id", Value: reactionReceiptID(commit.Aggregate.Identity().Actor, commit.IdempotencyKey)}},
 			); deleteErr != nil {
 				return nil, deleteErr
 			}
@@ -270,6 +430,16 @@ func (s *MongoContentReactionStore) Commit(
 
 		snapshot := commit.Aggregate.Snapshot()
 		document := ReactionDocumentFromSnapshot(snapshot)
+		// 新增活跃贡献前必须在同一事务里真实更新所属生命周期栅栏桶并确认它
+		// 仍 open。只读墓碑不会与删除产生写冲突，因此不能证明「扫空后不复活」。
+		// 撤销（none）与内部清理不新增贡献，允许在已封闭目标上收敛。
+		if commit.Changed && snapshot.Value != reactiondomain.ValueNone {
+			if fenceErr := markLifecycleFenceOpen(
+				txCtx, s.fences, snapshot.Identity.Target, document.ID, snapshot.UpdatedAt,
+			); fenceErr != nil {
+				return nil, fenceErr
+			}
+		}
 		mutatesAggregate := snapshot.Version == commit.ExpectedVersion+1
 		if mutatesAggregate {
 			if commit.ExpectedVersion == 0 {
@@ -318,51 +488,54 @@ func (s *MongoContentReactionStore) Commit(
 			}
 		}
 
-		firstSequence := int64(0)
-		if len(commit.Events) > 0 {
+		for _, fact := range commit.Events {
+			partitionKey := strings.TrimSpace(fact.AggregateID)
+			partitionID := reactionports.OutboxPartitionForKey(partitionKey)
 			var sequenceCounter struct {
 				Value int64 `bson:"value"`
 			}
 			if sequenceErr := s.sequences.FindOneAndUpdate(
 				txCtx,
-				bson.M{"_id": "ContentReaction"},
-				bson.M{"$inc": bson.M{"value": int64(len(commit.Events))}},
-				options.FindOneAndUpdate().
-					SetUpsert(true).
-					SetReturnDocument(options.After),
+				bson.M{"_id": partitionID},
+				bson.M{"$inc": bson.M{"value": int64(1)}},
+				options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
 			).Decode(&sequenceCounter); sequenceErr != nil {
 				return nil, sequenceErr
 			}
-			firstSequence = sequenceCounter.Value - int64(len(commit.Events)) + 1
-		}
-		for index, fact := range commit.Events {
 			if _, insertErr := s.outbox.InsertOne(txCtx, contentReactionOutboxDocument{
-				ID:               fact.EventID,
-				OutboxSequence:   firstSequence + int64(index),
-				EventType:        fact.EventType,
-				AggregateID:      fact.AggregateID,
-				AggregateVersion: fact.AggregateVersion,
-				PayloadJSON:      append(json.RawMessage(nil), fact.Payload...),
-				OccurredAt:       fact.OccurredAt,
+				ID:                fact.EventID,
+				PartitionKey:      partitionKey,
+				PartitionID:       partitionID,
+				PartitionSequence: sequenceCounter.Value,
+				EventType:         fact.EventType,
+				AggregateID:       fact.AggregateID,
+				AggregateVersion:  fact.AggregateVersion,
+				PayloadJSON:       append(json.RawMessage(nil), fact.Payload...),
+				OccurredAt:        fact.OccurredAt,
 			}); insertErr != nil {
 				return nil, insertErr
 			}
 		}
 
+		// 保留期必须相对 receipt 自身的创建时刻成立。以调用方时钟推算会因
+		// 服务与存储之间的偏差让实际保留期短于下限，从而在命令仍可重试的
+		// 时间窗内丢失可判定历史。
+		createdAt := s.now().UTC()
 		expiresAt := commit.ReceiptExpiresAt
-		if expiresAt.IsZero() {
-			expiresAt = time.Now().UTC().Add(24 * time.Hour)
+		if floor := createdAt.Add(minReceiptRetention); expiresAt.Before(floor) {
+			expiresAt = floor
 		}
 		if _, insertErr := s.receipts.InsertOne(txCtx, contentReactionReceiptDocument{
-			ID:               commit.IdempotencyKey,
+			ID:               reactionReceiptID(snapshot.Identity.Actor, commit.IdempotencyKey),
 			AggregateID:      document.ID,
 			AggregateVersion: document.Version,
 			CommandName:      commit.CommandName,
-			CommandDigest:    commit.CommandDigest,
-			Result:           document,
-			Changed:          commit.Changed,
-			CreatedAt:        time.Now().UTC(),
-			ExpiresAt:        expiresAt,
+			ActorDimension:   string(snapshot.Identity.Actor.Dimension), ActorID: snapshot.Identity.Actor.ID,
+			IdempotencyDigest: opaqueDigest(commit.IdempotencyKey),
+			CommandDigest:     commit.CommandDigest, BasisDigest: commit.BasisDigest,
+			Outcome: string(reactionports.ReceiptOutcomeCommitted), Result: &document,
+			Changed: commit.Changed, AcceptUntil: commit.AcceptUntil, CreatedAt: createdAt,
+			ExpiresAt: expiresAt,
 		}); insertErr != nil {
 			if mongo.IsDuplicateKeyError(insertErr) {
 				return nil, contentgenerated.AppErrorFromIdempotencyConflict(
@@ -377,7 +550,7 @@ func (s *MongoContentReactionStore) Commit(
 		}
 		result = reactionports.CommitResult{
 			Aggregate: aggregate,
-			Changed:   commit.Changed,
+			Changed:   commit.Changed, Outcome: reactionports.ReceiptOutcomeCommitted,
 		}
 		return nil, nil
 	})

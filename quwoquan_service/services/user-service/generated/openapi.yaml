@@ -2575,6 +2575,12 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/BlockUserCommand'
             responses:
                 "200":
                     description: OK
@@ -2612,6 +2618,12 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UnblockUserCommand'
             responses:
                 "200":
                     description: OK
@@ -2706,6 +2718,126 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/FollowCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /user/personas/{targetPersonaId}/relationship/commands/{operation}/finalize-expired:
+        post:
+            operationId: FinalizeExpiredRelationshipCommand
+            x-contract-operation-id: user.persona_relationship.FinalizeExpiredRelationshipCommand
+            x-object-id: user.persona_relationship
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: PersonaRelationshipCommandFacade
+                method: finalizeExpiredRelationshipCommand
+                aggregateOwner: PersonaRelationship
+            parameters:
+                - name: targetPersonaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: operation
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/FinalizeExpiredRelationshipCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PersonaRelationshipCommandRecoverySlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /user/personas/{targetPersonaId}/relationship/commands/{operation}/receipt:
+        get:
+            operationId: RecoverRelationshipCommand
+            x-contract-operation-id: user.persona_relationship.RecoverRelationshipCommand
+            x-object-id: user.persona_relationship
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: PersonaRelationshipCommandFacade
+                method: recoverRelationshipCommand
+                reader: RelationshipCommandReceiptReader
+                slice: PersonaRelationshipCommandRecoverySlice
+            parameters:
+                - name: targetPersonaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: operation
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PersonaRelationshipCommandRecoverySlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /user/personas/{targetPersonaId}/relationship/mutation-basis:
+        get:
+            operationId: GetRelationshipMutationBasis
+            x-contract-operation-id: user.persona_relationship.GetRelationshipMutationBasis
+            x-object-id: user.persona_relationship
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: PersonaRelationshipCommandFacade
+                method: getRelationshipMutationBasis
+                reader: GetRelationshipReader
+                slice: PersonaRelationshipMutationBasisSlice
+            parameters:
+                - name: targetPersonaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PersonaRelationshipMutationBasisSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -3538,6 +3670,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: BlockCommandResult
             x-contract-placeholder: true
+        BlockUserCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: BlockUserCommand
+            x-contract-placeholder: true
         BlockedUserSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3622,6 +3759,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: FederatedLoginOutcome
+            x-contract-placeholder: true
+        FinalizeExpiredRelationshipCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: FinalizeExpiredRelationshipCommand
             x-contract-placeholder: true
         FollowCommandResult:
             type: object
@@ -3818,6 +3960,16 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PersonaProfileView
             x-contract-placeholder: true
+        PersonaRelationshipCommandRecoverySlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PersonaRelationshipCommandRecoverySlice
+            x-contract-placeholder: true
+        PersonaRelationshipMutationBasisSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PersonaRelationshipMutationBasisSlice
+            x-contract-placeholder: true
         PrivacySettingsView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3922,6 +4074,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: TokenRefreshGrant
+            x-contract-placeholder: true
+        UnblockUserCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: UnblockUserCommand
             x-contract-placeholder: true
         UnfollowUserCommand:
             type: object

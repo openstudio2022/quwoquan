@@ -7,7 +7,7 @@ void main() {
     final executor = _RecordingExecutor(response: _commandResult());
     final remote = RemoteProfileUpdateProposalFacet(
       client: GeneratedCloudOperationClient(executor),
-      invocationContext: (clientPageId, {required command}) =>
+      invocationContext: (clientPageId, {required command, idempotencyKey}) =>
           CloudOperationInvocationContext(
             surfaceId: 'personalAssistantDialog',
             clientPageId: clientPageId,
@@ -58,7 +58,7 @@ void main() {
     );
     final remote = RemoteProfileUpdateProposalFacet(
       client: GeneratedCloudOperationClient(executor),
-      invocationContext: (clientPageId, {required command}) =>
+      invocationContext: (clientPageId, {required command, idempotencyKey}) =>
           CloudOperationInvocationContext(
             surfaceId: 'profileEdit',
             clientPageId: clientPageId,
@@ -98,7 +98,7 @@ void main() {
     );
     final remote = RemoteProfileUpdateProposalFacet(
       client: GeneratedCloudOperationClient(executor),
-      invocationContext: (clientPageId, {required command}) =>
+      invocationContext: (clientPageId, {required command, idempotencyKey}) =>
           CloudOperationInvocationContext(
             surfaceId: 'profileEdit',
             clientPageId: clientPageId,

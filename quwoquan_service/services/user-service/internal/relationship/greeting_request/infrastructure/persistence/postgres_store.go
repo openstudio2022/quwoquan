@@ -59,6 +59,14 @@ func (s *PgGreetingStore) HasPendingBetween(ctx context.Context, personaA, perso
 	return exists, err
 }
 
+func (s *PgGreetingStore) HasPendingBetweenMany(
+	ctx context.Context,
+	viewerPersonaID string,
+	targetPersonaIDs []string,
+) (map[string]bool, error) {
+	return s.hasStatusBetweenMany(ctx, viewerPersonaID, targetPersonaIDs, usermodel.GreetingStatusPending, false)
+}
+
 func (s *PgGreetingStore) HasRepliedBetween(ctx context.Context, personaA, personaB string) (bool, error) {
 	var exists bool
 	err := s.pool.QueryRow(ctx, `
@@ -73,6 +81,58 @@ func (s *PgGreetingStore) HasRepliedBetween(ctx context.Context, personaA, perso
 			  )
 		)`, personaA, personaB, usermodel.GreetingStatusReplied).Scan(&exists)
 	return exists, err
+}
+
+func (s *PgGreetingStore) HasRepliedBetweenMany(
+	ctx context.Context,
+	viewerPersonaID string,
+	targetPersonaIDs []string,
+) (map[string]bool, error) {
+	return s.hasStatusBetweenMany(ctx, viewerPersonaID, targetPersonaIDs, usermodel.GreetingStatusReplied, true)
+}
+
+func (s *PgGreetingStore) hasStatusBetweenMany(
+	ctx context.Context,
+	viewerPersonaID string,
+	targetPersonaIDs []string,
+	status string,
+	requireConversation bool,
+) (map[string]bool, error) {
+	result := make(map[string]bool, len(targetPersonaIDs))
+	if len(targetPersonaIDs) == 0 {
+		return result, nil
+	}
+	conversationClause := ""
+	if requireConversation {
+		conversationClause = " AND promoted_conversation_id IS NOT NULL AND promoted_conversation_id <> ''"
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT CASE
+			WHEN requester_persona_id = $1 THEN target_persona_id
+			ELSE requester_persona_id
+		END AS peer_id
+		FROM greeting_requests
+		WHERE status = $3`+conversationClause+`
+		  AND (
+			(requester_persona_id = $1 AND target_persona_id = ANY($2))
+			OR (target_persona_id = $1 AND requester_persona_id = ANY($2))
+		  )
+		GROUP BY peer_id`, viewerPersonaID, targetPersonaIDs, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var peerID string
+		if err := rows.Scan(&peerID); err != nil {
+			return nil, err
+		}
+		result[peerID] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *PgGreetingStore) ListInbox(ctx context.Context, targetID, status, cursor string, limit int) ([]usermodel.GreetingRequest, string, error) {

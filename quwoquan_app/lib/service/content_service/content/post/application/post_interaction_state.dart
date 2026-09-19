@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_interaction_state.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_app/runtime/di/actor_interaction_partition.dart';
 import 'package:quwoquan_app/runtime/platform/storage/client_interaction_state_store.dart';
 
 const String _postInteractionStateStorageKey = 'post_interaction_state';
@@ -12,15 +13,20 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
 
   @override
   PostInteractionState build() {
+    ref.watch(actorInteractionPartitionProvider);
     unawaited(_hydratePersistedState());
     return const PostInteractionState();
   }
 
+  /// 内容互动投影按 actor 分区持久化：登录 Persona、可信匿名 Persona 与
+  /// device-only 各自独立，切换主体后不读到上一个主体的本人态。
+  String get _storageKey => ref
+      .read(actorInteractionPartitionProvider)
+      .boxName(_postInteractionStateStorageKey);
+
   Future<void> _hydratePersistedState() async {
     final revision = _stateRevision;
-    final raw = await readPersistedInteractionMap(
-      _postInteractionStateStorageKey,
-    );
+    final raw = await readPersistedInteractionMap(_storageKey);
     // 盘面是启动时快照；不能覆盖读取期间已经 prime/确认/乐观更新的实时状态。
     if (!ref.mounted || revision != _stateRevision) {
       return;
@@ -31,18 +37,14 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     state = PostInteractionState.fromMap(raw);
   }
 
-  void setLiked(String postId, bool isLiked, {int? likeCount}) {
+  void setLiked(String postId, bool isLiked) {
     final nextLiked = Set<String>.from(state.likedPostIds);
-    final nextCounts = Map<String, int>.from(state.likeCounts);
     if (isLiked) {
       nextLiked.add(postId);
     } else {
       nextLiked.remove(postId);
     }
-    if (likeCount != null) {
-      nextCounts[postId] = likeCount;
-    }
-    state = state.copyWith(likedPostIds: nextLiked, likeCounts: nextCounts);
+    state = state.copyWith(likedPostIds: nextLiked);
     unawaited(_persistState());
   }
 
@@ -217,9 +219,6 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
 
   Future<void> _persistState() async {
     _stateRevision++;
-    await writePersistedInteractionMap(
-      _postInteractionStateStorageKey,
-      state.toMap(),
-    );
+    await writePersistedInteractionMap(_storageKey, state.toMap());
   }
 }

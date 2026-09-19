@@ -17,6 +17,8 @@ def _fields(event_name: str = "PersonaFollowStateChanged") -> dict[bytes, bytes]
         "targetPersonaId": "persona-author",
         "following": "true" if event_name == "PersonaFollowStateChanged" else "false",
         "version": "7",
+        "partitionId": "3",
+        "partitionSequence": "1",
         "occurredAt": "2026-08-02T08:00:00Z",
     }
     return {key.encode(): value.encode() for key, value in values.items()}
@@ -95,3 +97,18 @@ def test_block_event_cannot_retain_following_state() -> None:
         assert "cannot retain following" in str(error)
     else:
         raise AssertionError("blocked relationship accepted following=true")
+
+class _FenceProjection:
+    def read_relationship_causal_watermark(self, subject_id): return {"3": 7}
+
+class _FenceRedis:
+    def __init__(self,pending=0,last="9-0"): self.pending=pending;self.last=last
+    def xinfo_stream(self,stream): return {"last-generated-id":"9-0"}
+    def xinfo_groups(self,stream): return [{"name":CONSUMER_GROUP,"last-delivered-id":self.last,"pending":self.pending,"lag":0}]
+
+def test_relationship_causal_fence_requires_consumer_to_reach_source_watermark():
+    from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.persona_relationship_consumer import RelationshipCausalFenceReader
+    assert RelationshipCausalFenceReader(redis_client=_FenceRedis(),projection=_FenceProjection()).read_relationship_causal_watermark("viewer")=={"3":7}
+    import pytest
+    with pytest.raises(RuntimeError,match="has not reached"):
+        RelationshipCausalFenceReader(redis_client=_FenceRedis(pending=1),projection=_FenceProjection()).read_relationship_causal_watermark("viewer")

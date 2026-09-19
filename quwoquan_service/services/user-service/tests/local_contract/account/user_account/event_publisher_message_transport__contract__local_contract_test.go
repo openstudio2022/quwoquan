@@ -4,6 +4,7 @@ package local_contract
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	accountports "quwoquan_service/services/user-service/internal/account/user_account/domain/ports"
 	greetingapp "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
 	relmodel "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/model"
+	relports "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/ports"
 	sfmodel "quwoquan_service/services/user-service/internal/relationship/subject_follow/domain/model"
 )
 
@@ -78,13 +80,23 @@ func TestUserEventPublisherRetainsObjectOwnedMessageCoordinatesAndFields(t *test
 	); err != nil {
 		t.Fatalf("append account event: %v", err)
 	}
+	relationshipPair, err := relmodel.NewPair("persona-1", "persona-2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	relationshipPairID := relationshipPair.ID
+	relationshipPartition := relports.OutboxPartitionForKey(relationshipPairID)
+	relationshipCtx := relports.WithOutboxEnvelope(ctx, relports.PartitionedOutboxEvent{
+		PartitionKey: relationshipPairID, PartitionID: relationshipPartition, PartitionSequence: 7,
+		Event: relmodel.OutboxEvent{EventID: "relationship-event-1"},
+	})
 	if err := publisher.PublishPersonaRelationship(
-		ctx,
+		relationshipCtx,
 		relmodel.OutboxEvent{
 			EventID:   "relationship-event-1",
 			EventName: "PersonaFollowStateChanged",
 			Payload: relmodel.OutboxPayload{
-				PairID:                  "pair-1",
+				PairID:                  relationshipPairID,
 				SourcePersonaID:         "persona-1",
 				TargetPersonaID:         "persona-2",
 				Following:               true,
@@ -164,7 +176,10 @@ func TestUserEventPublisherRetainsObjectOwnedMessageCoordinatesAndFields(t *test
 	assertDurableFields(t, transport.durable[1], mq.PersonaRelationshipEventStream, map[string]string{
 		"eventId":                 "relationship-event-1",
 		"eventName":               "PersonaFollowStateChanged",
-		"pairId":                  "pair-1",
+		"partitionKey":            relationshipPairID,
+		"partitionId":             strconv.Itoa(relationshipPartition),
+		"partitionSequence":       "7",
+		"pairId":                  relationshipPairID,
 		"sourcePersonaId":         "persona-1",
 		"targetPersonaId":         "persona-2",
 		"following":               "true",

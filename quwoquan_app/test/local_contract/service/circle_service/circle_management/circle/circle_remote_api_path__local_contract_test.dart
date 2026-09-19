@@ -94,7 +94,7 @@ void main() {
       );
       lifecycle = RemoteCircleLifecycleFacet(
         client: client,
-        invocationContext: (clientPageId, {required command}) =>
+        invocationContext: (clientPageId, {required command, idempotencyKey}) =>
             CloudOperationInvocationContext(
               surfaceId: clientPageId == CircleRequestPageIds.createCircle
                   ? AppUiSurfaces.circlesList.id

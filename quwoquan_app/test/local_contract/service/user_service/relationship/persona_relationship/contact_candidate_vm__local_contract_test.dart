@@ -24,7 +24,10 @@ void main() {
     });
 
     test('followed_by → 回关', () {
-      expect(resolve(relationState: 'followed_by'), ContactAddState.canFollowBack);
+      expect(
+        resolve(relationState: 'followed_by'),
+        ContactAddState.canFollowBack,
+      );
     });
 
     test('not_following → 可添加', () {

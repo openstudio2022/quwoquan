@@ -89,6 +89,18 @@ func requestOtpCode(t *testing.T, phone string) string {
 	return code
 }
 
+func followPersonaForTest(t *testing.T, ownerID, actorPersonaID, targetPersonaID string) *httptest.ResponseRecorder {
+	t.Helper()
+	headers := authHeadersForPersona(ownerID, actorPersonaID)
+	basisRec := doRequest(t, http.MethodGet, "/user/personas/"+targetPersonaID+"/relationship/mutation-basis", "", headers)
+	if basisRec.Code != http.StatusOK {
+		t.Fatalf("follow basis %s: %d %s", targetPersonaID, basisRec.Code, basisRec.Body.String())
+	}
+	basis := parseJSON(t, basisRec)
+	body := fmt.Sprintf(`{"mutationBasis":%q,"expectedVersion":%.0f}`, basis["mutationBasis"], basis["expectedVersion"])
+	return doRequest(t, http.MethodPost, "/user/personas/"+targetPersonaID+"/follow", body, headers)
+}
+
 func parseJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	var result map[string]any
@@ -171,6 +183,7 @@ func createTestPersona(t *testing.T, personaID, userID, displayName string, isPr
 	if err != nil {
 		t.Fatalf("create test persona: %v", err)
 	}
+	assertPublicProfileIndex(t, personaID)
 }
 
 func cleanAll(t *testing.T) {
@@ -233,6 +246,18 @@ func createTestPersonaFull(t *testing.T, _ string, userID, personaID, displayNam
 		userID, personaID, displayName, isolationLevel, isPrimary, isActive)
 	if err != nil {
 		t.Fatalf("createTestPersonaFull: %v", err)
+	}
+	assertPublicProfileIndex(t, personaID)
+}
+
+func assertPublicProfileIndex(t *testing.T, personaID string) {
+	t.Helper()
+	var indexed int
+	if err := pgPool.QueryRow(context.Background(), `SELECT COUNT(*) FROM persona_public_profile_search WHERE persona_id=$1`, personaID).Scan(&indexed); err != nil {
+		t.Fatalf("read public profile index for %s: %v", personaID, err)
+	}
+	if indexed != 1 {
+		t.Fatalf("public profile index missing for %s", personaID)
 	}
 }
 

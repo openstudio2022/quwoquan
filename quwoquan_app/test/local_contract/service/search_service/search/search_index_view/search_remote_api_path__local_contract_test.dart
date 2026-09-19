@@ -166,7 +166,7 @@ void main() {
       final failingRepository = RemoteSearchRepository(
         remoteQuery: RemoteCanonicalSearchQuery(
           client: client,
-          invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
             surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
             routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
             clientPageId: clientPageId,

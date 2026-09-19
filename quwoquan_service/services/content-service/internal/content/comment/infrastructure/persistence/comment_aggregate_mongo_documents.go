@@ -212,17 +212,25 @@ func (d commentReadDocument) readModel() commentmodel.ReadModel {
 }
 
 type commentRelationDocument struct {
-	ID              string `bson:"_id"`
-	PostID          string `bson:"postId"`
-	AuthorID        string `bson:"authorId"`
-	ParentCommentID string `bson:"parentCommentId"`
-	Status          string `bson:"status"`
+	ID                string `bson:"_id"`
+	PostID            string `bson:"postId"`
+	AuthorID          string `bson:"authorId"`
+	ParentCommentID   string `bson:"parentCommentId"`
+	Status            string `bson:"status"`
+	AccountRestricted bool   `bson:"accountRestricted"`
 }
 
 type postOwnershipDocument struct {
-	ID       string `bson:"_id"`
-	AuthorID string `bson:"authorId"`
-	Status   string `bson:"status"`
+	ID                string `bson:"_id"`
+	AuthorID          string `bson:"authorId"`
+	Status            string `bson:"status"`
+	Visibility        string `bson:"visibility"`
+	ModerationStatus  string `bson:"moderationStatus"`
+	AccountRestricted bool   `bson:"accountRestricted"`
+	ReleaseID         string `bson:"releaseId"`
+	ManifestDigest    string `bson:"manifestDigest"`
+	SourceOwner       string `bson:"sourceOwner"`
+	Environment       string `bson:"environment"`
 }
 
 type postIDDocument struct {

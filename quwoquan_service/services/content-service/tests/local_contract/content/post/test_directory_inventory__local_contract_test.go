@@ -44,6 +44,11 @@ func TestContentServicePhysicalTestDirectoryLayout(t *testing.T) {
 				strings.HasSuffix(entry.Name(), "__local_contract_test.go") {
 				return nil
 			}
+			// 与未导出缓存同包的白盒取证：Go 无法从 tests/ 看见
+			// activeSupplySnapshotCache，只能留在 internal/ 实现旁。
+			if strings.HasSuffix(path, "active_supply_snapshot_cache__local_contract_test.go") {
+				return nil
+			}
 			t.Errorf("business test must be under tests/, found %q", path)
 			return nil
 		})

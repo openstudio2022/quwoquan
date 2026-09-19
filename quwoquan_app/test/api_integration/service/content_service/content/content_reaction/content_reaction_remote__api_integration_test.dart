@@ -57,7 +57,11 @@ void main() {
         expect(initial.postId, postId);
         expect(initial.liked, isFalse);
 
-        final likeCommand = LikeContentPostCommand(postId: postId);
+        final likeCommand = LikeContentPostCommand(
+          postId: postId,
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
+        );
         final liked = await reactor.withIdempotencyKey(
           'reaction-like-$sequence',
           () => reactor.reactions.likePost(likeCommand),
@@ -84,7 +88,11 @@ void main() {
         expect(likedState.postId, postId);
         expect(likedState.found, isTrue);
 
-        final unlikeCommand = UnlikeContentPostCommand(postId: postId);
+        final unlikeCommand = UnlikeContentPostCommand(
+          postId: postId,
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
+        );
         final unliked = await reactor.withIdempotencyKey(
           'reaction-unlike-$sequence',
           () => reactor.reactions.unlikePost(unlikeCommand),
@@ -129,6 +137,8 @@ void main() {
               ReactToContentCommentCommand(
                 commentId: createdComment.id,
                 reaction: reaction,
+                mutationBasis: 'test-basis',
+                expectedVersion: 0,
               ),
             ),
           );

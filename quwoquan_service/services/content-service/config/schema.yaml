@@ -1,5 +1,19 @@
 description: 该自治边界的运行配置定义与默认值；环境只维护差异和引用。
 configs:
+- key: sys.content-service.reactionMutationBasis.activeKeyId
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: reaction-v1
+- key: sys.content-service.reactionMutationBasis.keyringSecretRef
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
+  default: ''
 - key: sys.content-service.post_safety.hmac_secret_ref
   type: string
   scope: workload

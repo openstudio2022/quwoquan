@@ -1,14 +1,15 @@
 import 'dart:async';
 
+import 'package:uuid/uuid.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/config/app_content_source.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
-import 'package:quwoquan_app/runtime/auth/auth_session.dart';
-import 'package:quwoquan_app/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/runtime/errors/content_capability_unavailable.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_content_facets.dart';
+import 'package:quwoquan_app/runtime/di/actor_interaction_partition.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart';
+import 'package:quwoquan_app/runtime/di/app_providers_content_facets.dart';
 import 'package:quwoquan_app/runtime/di/post_interaction_state_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/user_relationship_state_dependencies.dart';
 import 'package:quwoquan_app/runtime/platform/storage/client_interaction_state_store.dart';
@@ -16,6 +17,8 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync.dart';
 import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync_outbox_engine.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/persona_relationship_facets.dart';
+import 'package:quwoquan_app/service/content_service/content/content_reaction/application/public/content_post_reaction_ports.dart';
 
 const String _clientStateSyncOutboxStorageKey = 'client_state_sync_outbox';
 
@@ -29,12 +32,23 @@ final class ClientStateSyncRuntimeDependencies {
     required this.readPersistedState,
     required this.writePersistedState,
     required this.executeEntry,
+    required this.recoverEntry,
+    this.prepareFollowEvidence,
+    this.preparePostEvidence,
   });
 
   final ClientStateSyncConfigReader readConfig;
   final ClientStateSyncOutboxReader readPersistedState;
   final ClientStateSyncOutboxWriter writePersistedState;
   final ClientStateSyncEntryExecutor executeEntry;
+  final ClientStateSyncEntryRecoverer recoverEntry;
+  final Future<ClientStateSyncPreparedEvidence> Function(
+    String personaId,
+    String sourceSurfaceId,
+  )?
+  prepareFollowEvidence;
+  final Future<ClientStateSyncPreparedEvidence> Function(String postId)?
+  preparePostEvidence;
 }
 
 /// Test suites may replace this single typed boundary with fixed config,
@@ -42,14 +56,7 @@ final class ClientStateSyncRuntimeDependencies {
 /// object ports below.
 final clientStateSyncRuntimeDependenciesProvider =
     Provider<ClientStateSyncRuntimeDependencies>((ref) {
-      final session = ref.watch(authSessionControllerProvider);
-      final partition = ActorQueuePartition(
-        environment:
-            '${CloudRuntimeConfig.launchTarget}|${CloudRuntimeConfig.appEnvironment}',
-        accountId: session.hasTrustedSession ? session.ownerId : '',
-        personaId: session.hasTrustedSession ? session.activePersonaId : '',
-        deviceId: session.installId,
-      );
+      final partition = ref.watch(actorInteractionPartitionProvider);
       final storageKey = partition.boxName(_clientStateSyncOutboxStorageKey);
       final networkAllowed = CloudRuntimeConfig.networkAccessAllowed;
       final localCommandExecution = ref.watch(
@@ -71,45 +78,178 @@ final clientStateSyncRuntimeDependenciesProvider =
           }
           return _executeClientStateSyncEntry(ref, entry);
         },
+        recoverEntry: (entry) {
+          if ((!networkAllowed && !localCommandExecution) || !ref.mounted) {
+            throw contentCapabilityUnavailable('client_state_sync');
+          }
+          return _recoverClientStateSyncEntry(ref, entry);
+        },
+        prepareFollowEvidence: (personaId, sourceSurfaceId) async {
+          final surface = AppUiSurfaces.byId[sourceSurfaceId];
+          if (surface == null) throw StateError('invalid source surface');
+          final basis = await ref
+              .read(personaRelationshipDurableCommandWriterProvider(surface))
+              .getMutationBasis(personaId);
+          return ClientStateSyncPreparedEvidence(
+            idempotencyKey: const Uuid().v4(),
+            mutationBasis: basis.mutationBasis,
+            expectedVersion: basis.expectedVersion,
+            actorRef: partition.key,
+            canonicalObjectId: basis.targetPersonaId,
+          );
+        },
+        preparePostEvidence: (postId) async {
+          final basis = await ref
+              .read(contentPostReactionFacetProvider)
+              .getReactionState(
+                GetContentPostReactionStateQuery(postId: postId),
+              );
+          return ClientStateSyncPreparedEvidence(
+            idempotencyKey: const Uuid().v4(),
+            mutationBasis: basis.mutationBasis,
+            expectedVersion: basis.version,
+            actorRef: partition.key,
+          );
+        },
       );
     });
 
-Future<void> _executeClientStateSyncEntry(
+Future<ClientStateSyncReceipt> _executeClientStateSyncEntry(
   Ref ref,
   ClientStateSyncOutboxEntry entry,
 ) async {
   switch ('${entry.objectType}:${entry.intentType}') {
     case 'profile:follow':
-      final sourceSurfaceId = entry.sourceSurfaceId.trim();
-      final surface = AppUiSurfaces.byId[sourceSurfaceId];
-      if (surface == null) {
-        throw StateError('关注同步缺少有效 source surface: ${entry.sourceSurfaceId}');
-      }
+      final surface = AppUiSurfaces.byId[entry.sourceSurfaceId.trim()];
+      if (surface == null) throw StateError('关注同步缺少有效 source surface');
       final writer = ref.read(
-        personaRelationshipCommandWriterProvider(surface),
+        personaRelationshipDurableCommandWriterProvider(surface),
       );
-      if (entry.desiredBoolValue) {
-        await writer.follow(entry.objectId, sourceSurfaceId: sourceSurfaceId);
-      } else {
-        await writer.unfollow(entry.objectId);
-      }
-      return;
+      final evidence = PersonaRelationshipMutationEvidence(
+        idempotencyKey: entry.idempotencyKey,
+        mutationBasis: entry.mutationBasis,
+        expectedVersion: entry.expectedVersion,
+      );
+      final result = entry.desiredBoolValue
+          ? await writer.followWithEvidence(
+              entry.objectId,
+              sourceSurfaceId: entry.sourceSurfaceId,
+              evidence: evidence,
+            )
+          : await writer.unfollowWithEvidence(
+              entry.objectId,
+              evidence: evidence,
+            );
+      return ClientStateSyncReceipt(
+        outcome: ClientStateSyncReceiptOutcome.committed,
+        replayed: result.idempotentReplay,
+        committedVersion: entry.expectedVersion + 1,
+        changed: !result.idempotentReplay,
+      );
     case 'post:like':
-      final writer = ref.read(contentPostReactionFacetProvider);
-      if (entry.desiredBoolValue) {
-        await writer.likePost(LikeContentPostCommand(postId: entry.objectId));
-      } else {
-        await writer.unlikePost(
-          UnlikeContentPostCommand(postId: entry.objectId),
-        );
-      }
-      return;
+      final writer = ref.read(contentPostReactionDurableFacetProvider);
+      final evidence = ContentReactionMutationEvidence(
+        idempotencyKey: entry.idempotencyKey,
+        mutationBasis: entry.mutationBasis,
+        expectedVersion: entry.expectedVersion,
+      );
+      final result = entry.desiredBoolValue
+          ? await writer.likePostWithEvidence(
+              entry.objectId,
+              evidence: evidence,
+            )
+          : await writer.unlikePostWithEvidence(
+              entry.objectId,
+              evidence: evidence,
+            );
+      return ClientStateSyncReceipt(
+        outcome: ClientStateSyncReceiptOutcome.committed,
+        replayed: result.replayed,
+        committedVersion: result.version,
+        changed: result.changed,
+      );
     default:
       throw StateError(
-        'unsupported client state sync entry: '
-        '${entry.objectType}:${entry.intentType}',
+        'unsupported client state sync entry: ${entry.objectType}:${entry.intentType}',
       );
   }
+}
+
+Future<ClientStateSyncReceipt> _recoverClientStateSyncEntry(
+  Ref ref,
+  ClientStateSyncOutboxEntry entry,
+) async {
+  if (entry.objectType == 'post' && entry.intentType == 'like') {
+    final value = await ref
+        .read(contentPostReactionDurableFacetProvider)
+        .recoverPost(
+          entry.objectId,
+          operation: entry.desiredBoolValue ? 'LikePost' : 'UnlikePost',
+          idempotencyKey: entry.idempotencyKey,
+        );
+    return _contentRecoveryReceipt(value);
+  }
+  if (entry.objectType != 'profile' || entry.intentType != 'follow') {
+    throw StateError('unsupported recovery entry');
+  }
+  final surface = AppUiSurfaces.byId[entry.sourceSurfaceId.trim()];
+  if (surface == null) {
+    throw StateError('invalid source surface');
+  }
+  final writer = ref.read(
+    personaRelationshipDurableCommandWriterProvider(surface),
+  );
+  final operation = entry.desiredBoolValue
+      ? PersonaRelationshipMutationAction.follow
+      : PersonaRelationshipMutationAction.unfollow;
+  final recovered = await writer.recover(
+    entry.objectId,
+    operation: operation,
+    idempotencyKey: entry.idempotencyKey,
+  );
+  return _relationshipRecoveryReceipt(recovered);
+}
+
+ClientStateSyncReceipt _contentRecoveryReceipt(
+  ContentReactionCommandRecoverySlice value,
+) {
+  final outcome = switch (value.outcome) {
+    ContentReactionReceiptOutcome.committed =>
+      ClientStateSyncReceiptOutcome.committed,
+    ContentReactionReceiptOutcome.rejected =>
+      ClientStateSyncReceiptOutcome.rejected,
+    ContentReactionReceiptOutcome.expired =>
+      ClientStateSyncReceiptOutcome.expired,
+    ContentReactionReceiptOutcome.historyUnavailable =>
+      ClientStateSyncReceiptOutcome.historyUnavailable,
+  };
+  return ClientStateSyncReceipt(
+    outcome: outcome,
+    replayed: value.replayed,
+    committedVersion: value.committedVersion,
+    changed: value.changed,
+  );
+}
+
+ClientStateSyncReceipt _relationshipRecoveryReceipt(
+  PersonaRelationshipCommandRecoverySlice value,
+) {
+  final outcome = switch (value.outcome) {
+    PersonaRelationshipReceiptOutcome.committed =>
+      ClientStateSyncReceiptOutcome.committed,
+    PersonaRelationshipReceiptOutcome.rejected =>
+      ClientStateSyncReceiptOutcome.rejected,
+    PersonaRelationshipReceiptOutcome.expired =>
+      ClientStateSyncReceiptOutcome.expired,
+    PersonaRelationshipReceiptOutcome.historyUnavailable =>
+      ClientStateSyncReceiptOutcome.historyUnavailable,
+  };
+  return ClientStateSyncReceipt(
+    outcome: outcome,
+    replayed: value.replayed,
+    committedVersion: value.committedVersion,
+    changed: value.changed,
+  );
 }
 
 final clientStateSyncOutboxProvider =
@@ -159,6 +299,7 @@ final class ClientStateSyncTerminalFailureNotifier
 final class ClientStateSyncOutboxNotifier
     extends Notifier<ClientStateSyncOutboxState> {
   late ClientStateSyncOutboxEngine _engine;
+  late ClientStateSyncRuntimeDependencies _dependencies;
 
   bool get _localCommandExecution =>
       ref.read(localCommandExecutionEnabledProvider);
@@ -179,12 +320,14 @@ final class ClientStateSyncOutboxNotifier
       return const ClientStateSyncOutboxState();
     }
     final dependencies = ref.watch(clientStateSyncRuntimeDependenciesProvider);
+    _dependencies = dependencies;
     var active = true;
     final engine = ClientStateSyncOutboxEngine(
       readConfig: dependencies.readConfig,
       readPersistedState: dependencies.readPersistedState,
       writePersistedState: dependencies.writePersistedState,
       executeEntry: dependencies.executeEntry,
+      recoverEntry: dependencies.recoverEntry,
       onStateChanged: (nextState) {
         if (active && ref.mounted) {
           state = nextState;
@@ -224,22 +367,35 @@ final class ClientStateSyncOutboxNotifier
     }
   }
 
-  void enqueueFollow({
+  Future<String> enqueueFollow({
     required String personaId,
     required bool currentFollowing,
     required bool shouldFollow,
     required String sourceSurfaceId,
     bool flushImmediately = false,
-  }) {
+  }) async {
+    _requireRemoteWrites();
     try {
-      _requireRemoteWrites();
-      _engine.enqueueFollow(
-        personaId: personaId,
+      final prepare = _dependencies.prepareFollowEvidence;
+      if (prepare == null) {
+        throw StateError('follow evidence preparer unavailable');
+      }
+      final evidence = await prepare(personaId, sourceSurfaceId);
+      final canonicalPersonaId = evidence.canonicalObjectId.trim().isEmpty
+          ? personaId
+          : evidence.canonicalObjectId.trim();
+      await _engine.enqueueFollow(
+        personaId: canonicalPersonaId,
         currentFollowing: currentFollowing,
         shouldFollow: shouldFollow,
         sourceSurfaceId: sourceSurfaceId,
+        idempotencyKey: evidence.idempotencyKey,
+        mutationBasis: evidence.mutationBasis,
+        expectedVersion: evidence.expectedVersion,
+        actorRef: evidence.actorRef,
         flushImmediately: flushImmediately,
       );
+      return canonicalPersonaId;
     } catch (_) {
       ref
           .read(userRelationshipStateProvider.notifier)
@@ -248,17 +404,26 @@ final class ClientStateSyncOutboxNotifier
     }
   }
 
-  void enqueuePostLike({
+  Future<void> enqueuePostLike({
     required String postId,
     required bool currentLiked,
     required bool isLiked,
     bool flushImmediately = false,
-  }) {
+  }) async {
     _requireRemoteWrites();
-    _engine.enqueuePostLike(
+    final prepare = _dependencies.preparePostEvidence;
+    if (prepare == null) {
+      throw StateError('post evidence preparer unavailable');
+    }
+    final evidence = await prepare(postId);
+    await _engine.enqueuePostLike(
       postId: postId,
       currentLiked: currentLiked,
       isLiked: isLiked,
+      idempotencyKey: evidence.idempotencyKey,
+      mutationBasis: evidence.mutationBasis,
+      expectedVersion: evidence.expectedVersion,
+      actorRef: evidence.actorRef,
       flushImmediately: flushImmediately,
     );
   }

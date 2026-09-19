@@ -56,7 +56,7 @@ func (r *ReactionTargetReader) FindReactionTarget(
 			return reactionapp.ReactionTargetSlice{}, err
 		}
 		return reactionapp.ReactionTargetSlice{
-			Exists:   found && ownership.Active,
+			Exists:   found && ownership.Interactive(),
 			AuthorID: ownership.AuthorID,
 		}, nil
 	case reactiondomain.TargetKindComment:
@@ -64,10 +64,14 @@ func (r *ReactionTargetReader) FindReactionTarget(
 		if err != nil {
 			return reactionapp.ReactionTargetSlice{}, err
 		}
-		return reactionapp.ReactionTargetSlice{
-			Exists:   found && comment.Status == commentmodel.StatusActive,
-			AuthorID: comment.AuthorID,
-		}, nil
+		if !found || comment.Status != commentmodel.StatusActive || comment.AccountRestricted {
+			return reactionapp.ReactionTargetSlice{}, nil
+		}
+		post, postFound, err := r.posts.FindPostOwnership(ctx, comment.PostID)
+		if err != nil {
+			return reactionapp.ReactionTargetSlice{}, err
+		}
+		return reactionapp.ReactionTargetSlice{Exists: postFound && post.Interactive(), AuthorID: comment.AuthorID}, nil
 	default:
 		return reactionapp.ReactionTargetSlice{},
 			fmt.Errorf("unsupported ContentReaction target kind %q", target.Kind)

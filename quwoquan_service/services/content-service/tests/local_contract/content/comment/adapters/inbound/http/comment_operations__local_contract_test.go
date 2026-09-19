@@ -23,6 +23,7 @@ import (
 	"net/http/httptest"
 	. "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 	"testing"
+	"time"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
@@ -32,6 +33,7 @@ import (
 	commenttestsupport "quwoquan_service/services/content-service/internal/content/comment/infrastructure/testsupport"
 	reactionhttp "quwoquan_service/services/content-service/internal/content/content_reaction/adapters/inbound/http"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
+	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 
@@ -47,7 +49,7 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 		commentStore,
 		commentStore,
 	)))
-	reactionService := reactionapp.BindFacades(reactionapp.NewService(reactionapp.BindDataPorts(reactionStore, reactionStore)))
+	reactionService := reactionapp.BindFacades(reactionapp.NewService(reactionapp.BindDataPorts(reactionStore, reactionStore), commentReactionTestBasis{}))
 	handler := NewContentHandler(
 		nil,
 		nil,
@@ -123,7 +125,7 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 
 	reacted := performCommentRequest(t, handler, http.MethodPost,
 		"/content/comments/"+createResult.ID+"/reaction",
-		map[string]any{"reaction": "dislike"}, "comment-http-react", "comment-viewer")
+		commentReactionBody("dislike"), "comment-http-react", "comment-viewer")
 	if reacted.Code != http.StatusOK {
 		t.Fatalf("react status=%d body=%s", reacted.Code, reacted.Body.String())
 	}
@@ -472,6 +474,47 @@ func TestCommentModerationHTTPRequiresGeneratedOperatorAuthorization(t *testing.
 	}
 	if restored.Status != "active" || restored.Version != hidden.Version+1 {
 		t.Fatalf("unexpected RestoreComment result: %+v", restored)
+	}
+}
+
+type commentReactionTestBasis struct{}
+
+func (commentReactionTestBasis) Issue(reactionapp.MutationBasisClaims) (string, error) {
+	return "test-basis", nil
+}
+
+func (commentReactionTestBasis) Verify(
+	_ string,
+	identity reactiondomain.Identity,
+	value reactiondomain.Value,
+	version int64,
+) (reactionapp.MutationBasisClaims, error) {
+	return reactionapp.MutationBasisClaims{
+		Identity:        identity,
+		ExpectedVersion: version,
+		AllowedValues:   []reactiondomain.Value{value},
+		AcceptUntil:     time.Now().Add(time.Hour),
+	}, nil
+}
+
+func (basis commentReactionTestBasis) VerifyForRecovery(
+	token string,
+	identity reactiondomain.Identity,
+	value reactiondomain.Value,
+	version int64,
+) (reactionapp.MutationBasisClaims, error) {
+	return basis.Verify(token, identity, value, version)
+}
+
+func (commentReactionTestBasis) Digest(string) string {
+	return "test-basis-digest"
+}
+
+func commentReactionBody(reaction string) map[string]any {
+	return map[string]any{
+		"reaction":        reaction,
+		"mutationBasis":   "test-basis",
+		"expectedVersion": 0,
 	}
 }
 

@@ -126,6 +126,8 @@ class MongoCandidateAudienceWriteOps:
         following: bool,
         version: int,
         occurred_at: datetime,
+        partition_id: int,
+        partition_sequence: int,
     ) -> bool:
         normalized_event_id = event_id.strip()
         normalized_digest = event_digest.strip()
@@ -143,6 +145,7 @@ class MongoCandidateAudienceWriteOps:
             or source_id == target_id
             or version <= 0
             or occurred_at.tzinfo is None
+            or partition_id < 0 or partition_sequence <= 0
         ):
             raise ValueError("candidate persona relationship event is incomplete")
 
@@ -152,16 +155,32 @@ class MongoCandidateAudienceWriteOps:
 
         with self._database.client.start_session() as session:
             with session.start_transaction():
+                checkpoint = self._persona_relationship_checkpoints.find_one(
+                    {"partitionId": partition_id}, session=session
+                ) or {}
+                current_sequence = int(checkpoint.get("sequence") or 0)
                 receipt = self._persona_relationship_inbox.find_one(
-                    {"_id": normalized_event_id},
-                    session=session,
+                    {"_id": normalized_event_id}, session=session
                 )
                 if receipt is not None:
-                    if receipt.get("eventDigest") != normalized_digest:
+                    if (
+                        receipt.get("eventDigest") != normalized_digest
+                        or int(receipt.get("partitionId") or -1) != partition_id
+                        or int(receipt.get("partitionSequence") or 0)
+                        != partition_sequence
+                    ):
                         raise RuntimeError(
                             "candidate persona relationship event identity conflict"
                         )
+                    if current_sequence < partition_sequence:
+                        raise RuntimeError(
+                            "candidate relationship receipt is ahead of checkpoint"
+                        )
                     return bool(receipt.get("changed"))
+                if partition_sequence != current_sequence + 1:
+                    raise RuntimeError(
+                        "candidate relationship partition checkpoint is not contiguous"
+                    )
 
                 changed = False
                 for direction_source, direction_target in directions:
@@ -218,9 +237,135 @@ class MongoCandidateAudienceWriteOps:
                         "eventDigest": normalized_digest,
                         "eventName": normalized_name,
                         "version": version,
+                        "partitionId": partition_id,
+                        "partitionSequence": partition_sequence,
                         "changed": changed,
                         "appliedAt": datetime.now(timezone.utc),
                     },
                     session=session,
                 )
+                self._persona_relationship_checkpoints.update_one(
+                    {"partitionId": partition_id},
+                    {"$set": {"sequence": partition_sequence, "updatedAt": datetime.now(timezone.utc)}},
+                    upsert=True,
+                    session=session,
+                )
                 return changed
+
+    def read_relationship_causal_watermark(self, subject_id: str) -> dict[str, int]:
+        subject = subject_id.strip()
+        if not subject:
+            raise ValueError("subjectId is required")
+        return {str(row["partitionId"]): int(row.get("sequence") or 0) for row in self._persona_relationship_checkpoints.find({}, {"partitionId": 1, "sequence": 1})}
+
+    def apply_content_reaction_event(
+        self, *, event_id: str, event_digest: str, reaction_id: str,
+        target_kind: str, target_id: str, actor_dimension: str, actor_id: str,
+        reaction: str, version: int, partition_id: int,
+        partition_sequence: int, occurred_at: datetime,
+    ) -> bool:
+        if (
+            not event_id.strip() or len(event_digest) != 64
+            or target_kind not in {"post", "comment"}
+            or reaction not in {"none", "like", "dislike"}
+            or version <= 0 or partition_id < 0 or partition_sequence <= 0
+            or occurred_at.tzinfo is None
+        ):
+            raise ValueError("candidate content reaction event is incomplete")
+        with self._database.client.start_session() as session:
+            with session.start_transaction():
+                checkpoint = self._content_reaction_checkpoints.find_one(
+                    {"partitionId": partition_id}, session=session
+                ) or {}
+                current_sequence = int(checkpoint.get("sequence") or 0)
+                receipt = self._content_reaction_inbox.find_one(
+                    {"_id": event_id}, session=session
+                )
+                if receipt is not None:
+                    if (
+                        receipt.get("eventDigest") != event_digest
+                        or int(receipt.get("partitionId") or -1) != partition_id
+                        or int(receipt.get("partitionSequence") or 0)
+                        != partition_sequence
+                    ):
+                        raise RuntimeError("candidate reaction event identity conflict")
+                    if current_sequence < partition_sequence:
+                        raise RuntimeError("candidate reaction receipt is ahead of checkpoint")
+                    return bool(receipt.get("changed"))
+                if partition_sequence != current_sequence + 1:
+                    raise RuntimeError(
+                        "candidate reaction partition checkpoint is not contiguous"
+                    )
+                current = self._content_reaction_members.find_one(
+                    {"_id": reaction_id}, session=session
+                ) or {}
+                current_version = int(current.get("version") or 0)
+                if current and any((
+                    current.get("targetKind") != target_kind,
+                    current.get("targetId") != target_id,
+                    current.get("actorDimension") != actor_dimension,
+                    current.get("actorId") != actor_id,
+                )):
+                    raise RuntimeError("candidate reaction identity changed across versions")
+                changed = False
+                if current_version < version:
+                    old_like = int(current.get("reaction") == "like")
+                    new_like = int(reaction == "like")
+                    delta = new_like - old_like
+                    self._content_reaction_members.replace_one(
+                        {"_id": reaction_id},
+                        {"_id": reaction_id, "targetKind": target_kind,
+                         "targetId": target_id, "actorDimension": actor_dimension,
+                         "actorId": actor_id, "reaction": reaction,
+                         "version": version, "eventDigest": event_digest,
+                         "updatedAt": occurred_at.astimezone(timezone.utc)},
+                        upsert=True, session=session,
+                    )
+                    if delta:
+                        stats = self._content_reaction_stats.find_one_and_update(
+                            {"_id": target_id},
+                            {"$inc": {"likeCount": delta, "statsVersion": 1},
+                             "$set": {"updatedAt": occurred_at.astimezone(timezone.utc)},
+                             "$setOnInsert": {"generationSequence": 1}},
+                            upsert=True, return_document=True, session=session,
+                        )
+                        like_count = int(stats.get("likeCount") or 0)
+                        if like_count < 0:
+                            raise RuntimeError("candidate reaction likeCount became negative")
+                        self._candidates.update_many(
+                            {"contentId": target_id},
+                            {"$set": {"likeCount": like_count,
+                                      "likeStatsVersion": int(stats.get("statsVersion") or 0),
+                                      "likeGenerationSequence": int(stats.get("generationSequence") or 1)}},
+                            session=session,
+                        )
+                    changed = True
+                elif current_version == version and current.get("eventDigest") != event_digest:
+                    raise RuntimeError("candidate reaction member version conflict")
+                self._content_reaction_inbox.insert_one(
+                    {"_id": event_id, "eventDigest": event_digest,
+                     "partitionId": partition_id,
+                     "partitionSequence": partition_sequence,
+                     "changed": changed, "version": version,
+                     "appliedAt": datetime.now(timezone.utc)},
+                    session=session,
+                )
+                self._content_reaction_checkpoints.update_one(
+                    {"partitionId": partition_id},
+                    {"$set": {"sequence": partition_sequence,
+                              "updatedAt": datetime.now(timezone.utc)}},
+                    upsert=True, session=session,
+                )
+                return changed
+
+    def current_like_actors_for_target(self, target_id: str) -> tuple[str, ...]:
+        return tuple(sorted(
+            str(row["actorId"])
+            for row in self._content_reaction_members.find(
+                {"targetId": target_id.strip(), "actorDimension": "persona", "reaction": "like"},
+                {"actorId": 1},
+            )
+        ))
+
+    def current_co_liked_targets(self, actor_id: str) -> tuple[str, ...]:
+        return tuple(sorted(str(row["targetId"]) for row in self._content_reaction_members.find({"actorDimension":"persona","actorId":actor_id.strip(),"reaction":"like"},{"targetId":1})))

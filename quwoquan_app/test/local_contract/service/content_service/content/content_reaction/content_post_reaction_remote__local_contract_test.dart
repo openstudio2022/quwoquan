@@ -41,10 +41,18 @@ void main() {
       );
 
       final result = await adapter.likePost(
-        LikeContentPostCommand(postId: 'post-1'),
+        LikeContentPostCommand(
+          postId: 'post-1',
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
+        ),
       );
       final replay = await adapter.likePost(
-        LikeContentPostCommand(postId: 'post-1'),
+        LikeContentPostCommand(
+          postId: 'post-1',
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
+        ),
       );
 
       expect(result.postId, 'post-1');
@@ -59,7 +67,7 @@ void main() {
       for (final request in captured) {
         expect(request.method, 'POST');
         expect(request.url.path, '/content/posts/post-1/like');
-        expect(request.body, isEmpty);
+        expect(request.body, contains('\"mutationBasis\":\"test-basis\"'));
         expect(
           request.headers['X-Client-Page-Id'],
           ContentRequestPageIds.likePost,
@@ -94,10 +102,18 @@ void main() {
       );
 
       final result = await adapter.unlikePost(
-        UnlikeContentPostCommand(postId: 'post-1'),
+        UnlikeContentPostCommand(
+          postId: 'post-1',
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
+        ),
       );
       final replay = await adapter.unlikePost(
-        UnlikeContentPostCommand(postId: 'post-1'),
+        UnlikeContentPostCommand(
+          postId: 'post-1',
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
+        ),
       );
 
       expect(result.version, 2);
@@ -112,7 +128,7 @@ void main() {
       for (final request in captured) {
         expect(request.method, 'DELETE');
         expect(request.url.path, '/content/posts/post-1/like');
-        expect(request.body, isEmpty);
+        expect(request.body, contains('\"mutationBasis\":\"test-basis\"'));
         expect(
           request.headers['X-Client-Page-Id'],
           ContentRequestPageIds.unlikePost,
@@ -138,6 +154,7 @@ void main() {
             'liked': true,
             'version': 3,
             'updatedAt': '2026-07-14T08:00:00Z',
+            'mutationBasis': 'test-basis',
           };
         }),
         invocationContext: _context,

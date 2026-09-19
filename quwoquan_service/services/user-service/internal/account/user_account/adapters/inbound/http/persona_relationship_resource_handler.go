@@ -8,6 +8,7 @@ import (
 
 	generated "quwoquan_service/services/user-service/generated/account/user_account"
 	relationshipgenerated "quwoquan_service/services/user-service/generated/relationship/persona_relationship"
+	relationshipapp "quwoquan_service/services/user-service/internal/relationship/persona_relationship/application"
 	relmodel "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/model"
 )
 
@@ -62,52 +63,118 @@ func (h *UserHandler) handleGetRelationshipCapability(w http.ResponseWriter, r *
 	writeJSON(w, http.StatusOK, h.relationshipCapabilityView(r.Context(), viewerID, targetID, rel, isBlocked, isBlockedBy))
 }
 
+func (h *UserHandler) handleGetRelationshipMutationBasis(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.resolveActorPersonaID(r.Context(), r, "")
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	basis, version, target, err := h.relationship.IssueMutationBasis(r.Context(), actor, r.PathValue("targetPersonaId"))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"targetPersonaId": target, "mutationBasis": basis, "expectedVersion": version})
+}
+
 func (h *UserHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
-	blockedID := strings.TrimSpace(r.PathValue("targetPersonaId"))
-	if blockedID == "" {
+	targetIdentity := strings.TrimSpace(r.PathValue("targetPersonaId"))
+	if targetIdentity == "" {
 		writeInvalidArg(w, r, "targetPersonaId required")
 		return
 	}
-	blockerID, err := h.resolveActorPersonaID(r.Context(), r, "")
+	actor, err := h.resolveActorPersonaID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	result, err := h.relationship.Block(r.Context(), blockerID, blockedID, h.commandIdempotencyKey(r))
+	wire, err := decodeRelationshipMutation(r)
+	if err != nil {
+		writeInvalidArg(w, r, err.Error())
+		return
+	}
+	result, err := h.relationship.Block(r.Context(), actor, targetIdentity, relationshipapp.CommandEvidence{IdempotencyKey: h.commandIdempotencyKey(r), MutationBasis: wire.MutationBasis, ExpectedVersion: *wire.ExpectedVersion})
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"targetPersonaId":  blockedID,
-		"blocked":          true,
-		"idempotentReplay": result.IdempotentReplay || !result.Changed,
-		"updatedAt":        relationshipUpdatedAt(result),
-	})
+	writeJSON(w, http.StatusOK, map[string]any{"targetPersonaId": result.CanonicalTargetPersonaID, "blocked": true, "idempotentReplay": result.IdempotentReplay, "updatedAt": relationshipUpdatedAt(result)})
 }
 
 func (h *UserHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
-	blockedID := strings.TrimSpace(r.PathValue("targetPersonaId"))
-	if blockedID == "" {
+	targetIdentity := strings.TrimSpace(r.PathValue("targetPersonaId"))
+	if targetIdentity == "" {
 		writeInvalidArg(w, r, "targetPersonaId required")
 		return
 	}
-	blockerID, err := h.resolveActorPersonaID(r.Context(), r, "")
+	actor, err := h.resolveActorPersonaID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	result, err := h.relationship.Unblock(r.Context(), blockerID, blockedID, h.commandIdempotencyKey(r))
+	wire, err := decodeRelationshipMutation(r)
+	if err != nil {
+		writeInvalidArg(w, r, err.Error())
+		return
+	}
+	result, err := h.relationship.Unblock(r.Context(), actor, targetIdentity, relationshipapp.CommandEvidence{IdempotencyKey: h.commandIdempotencyKey(r), MutationBasis: wire.MutationBasis, ExpectedVersion: *wire.ExpectedVersion})
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"targetPersonaId":  blockedID,
-		"blocked":          false,
-		"idempotentReplay": result.IdempotentReplay || !result.Changed,
-		"updatedAt":        relationshipUpdatedAt(result),
-	})
+	writeJSON(w, http.StatusOK, map[string]any{"targetPersonaId": result.CanonicalTargetPersonaID, "blocked": false, "idempotentReplay": result.IdempotentReplay, "updatedAt": relationshipUpdatedAt(result)})
+}
+
+func (h *UserHandler) handleRecoverRelationshipCommand(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.resolveActorPersonaID(r.Context(), r, "")
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	op, ok := parseRelationshipOperation(r.PathValue("operation"))
+	if !ok {
+		writeInvalidArg(w, r, "unsupported relationship operation")
+		return
+	}
+	result, err := h.relationship.RecoverCommand(r.Context(), actor, r.PathValue("targetPersonaId"), op, h.commandIdempotencyKey(r))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, recoveryResponse(result))
+}
+func (h *UserHandler) handleFinalizeExpiredRelationshipCommand(w http.ResponseWriter, r *http.Request) {
+	actor, err := h.resolveActorPersonaID(r.Context(), r, "")
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	op, ok := parseRelationshipOperation(r.PathValue("operation"))
+	if !ok {
+		writeInvalidArg(w, r, "unsupported relationship operation")
+		return
+	}
+	wire, err := decodeRelationshipFinalize(r)
+	if err != nil {
+		writeInvalidArg(w, r, err.Error())
+		return
+	}
+	result, err := h.relationship.FinalizeExpiredCommand(r.Context(), actor, r.PathValue("targetPersonaId"), op, relationshipapp.CommandEvidence{IdempotencyKey: h.commandIdempotencyKey(r), MutationBasis: wire.MutationBasis, ExpectedVersion: *wire.ExpectedVersion})
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, recoveryResponse(result))
+}
+func recoveryResponse(result relationshipapp.CommandRecoveryResult) map[string]any {
+	response := map[string]any{"idempotencyKey": result.IdempotencyKey, "outcome": string(result.Outcome), "replayed": result.Replayed}
+	if result.CommittedVersion != nil {
+		response["committedVersion"] = *result.CommittedVersion
+	}
+	if result.Changed != nil {
+		response["changed"] = *result.Changed
+	}
+	return response
 }
 
 func (h *UserHandler) handleListBlocked(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +216,7 @@ func (h *UserHandler) resolveActorPersonaID(
 		actorID = trustedPersonaID
 	}
 	if actorID != "" {
-		return actorID, nil
+		return h.verifyActorPersonaOwnership(ctx, userID, actorID)
 	}
 	activeContext, err := h.persona.GetActivePersonaContextView(ctx, userID)
 	if err != nil {

@@ -20,7 +20,7 @@ void main() {
       );
       final reader = RemoteSearchHotQueryReader(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: 'searchHome',
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(

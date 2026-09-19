@@ -136,7 +136,7 @@
 - THEN 批量行为上报不另造关注/点赞成功，按钮按确认事实收敛，统计未追齐不重发命令；Post 收藏入口与 favorite 贡献保持退役。
 - AND 普通流只在新窗口消费软特征，following 只下发当前合格对象；旧窗口相对顺序不变，只移除失权条目或显式失效，cursor 不偷换排序。
 - AND 因果新首刷只等待可信实际事件，无事件 no-op 和权威空态可终结；未追齐/依赖失败不伪装为没有关注，当前权限失败不得被旧窗口放行。
-- 证据层：local_contract 验证 tracker/状态/续页时序；api_integration 关联真实 command receipt、自动 worker、窗口及安全 reader；user_acceptance 以 Android/iPhone 真实 App 操作与同事实读回证明交付，不以 UI 改变或 HTTP 成功代替。
+- AND 交付结果可区分命令回执、窗口事实与安全裁决；UI 改变或传输成功不能代替已确认业务事实。
 
 ## 8. 开放事项
 

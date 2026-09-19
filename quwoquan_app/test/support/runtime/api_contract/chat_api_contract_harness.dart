@@ -82,7 +82,7 @@ final class ChatApiContractHarness {
     try {
       final accountSessions = RemoteAccountSessionCommandWriter(
         client: client,
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.appShell.id,
           routeId: AppUiSurfaces.appShell.routeId,
           clientPageId: clientPageId,

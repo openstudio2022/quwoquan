@@ -97,5 +97,5 @@
 
 - 同步并发/队列/期限/刷新预算来自现役系统配置 authoring 与 App Config；业务页面不另立默认值或 feature flag 复制协议，scope 配置不完整时 typed 拒绝。
 - 点击反馈、持久接纳、云 durable 确认、统计新鲜度和完整附着率分别记录；source/actor/命令只留脱敏关联，不记录凭据、basis 或私有 payload。
-- local_contract、真实 Remote/引擎、编译安装、双真机、容量与 HA 证据分别绑定当前 source/ContractGraph/候选；本轮设计不替代其中任一证据。
+- local_contract、真实 Remote/引擎、编译安装、双真机、容量与 HA 证据分别绑定当前 source/ContractGraph/候选；本设计不替代其中任一证据。
 - 单轨迁移与回滚遵循 DEC-002/004；source/合同先 verify/codegen，缺新字段客户端走明确升级/拒绝，不保留长期旧 decoder、双写或旧快照反向覆盖。

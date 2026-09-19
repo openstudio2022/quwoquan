@@ -24,6 +24,7 @@ import 'package:quwoquan_app/service/user_service/relationship/greeting_request/
 import 'package:quwoquan_app/service/user_service/relationship/contact_discovery_record/adapters/contact_discovery_remote.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/adapters/persona_relationship_follow_remote.dart'
     as follow_remote;
+import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/persona_relationship_block_intent_writer.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/adapters/persona_relationship_remote.dart'
     as relationship_remote;
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/persona_relationship_facets.dart';
@@ -53,10 +54,12 @@ final class AppProductionPersonaRelationshipFollowFacets {
   const AppProductionPersonaRelationshipFollowFacets({
     required this.query,
     required this.commandWriter,
+    required this.durableCommandWriter,
   });
 
   final PersonaRelationshipQuery query;
   final PersonaRelationshipCommandWriter commandWriter;
+  final PersonaRelationshipDurableCommandWriter durableCommandWriter;
 }
 
 final class AppProductionPersonaCommandFacets {
@@ -74,11 +77,13 @@ final class AppProductionPersonaRelationshipFacets {
     required this.blockWriter,
     required this.blockedListQuery,
     required this.capabilityQuery,
+    required this.blockCoordinator,
   });
 
   final BlockCommandWriter blockWriter;
   final BlockedListQuery blockedListQuery;
   final RelationshipCapabilityQuery capabilityQuery;
+  final PersonaRelationshipBlockCoordinator blockCoordinator;
 }
 
 final class AppProductionGreetingRequestFacets {
@@ -148,6 +153,7 @@ final class UserProductionComposition {
     return AppProductionPersonaRelationshipFollowFacets(
       query: remote,
       commandWriter: remote,
+      durableCommandWriter: remote,
     );
   }
 
@@ -197,6 +203,7 @@ final class UserProductionComposition {
       blockWriter: remote,
       blockedListQuery: remote,
       capabilityQuery: remote,
+      blockCoordinator: remote,
     );
   }
 

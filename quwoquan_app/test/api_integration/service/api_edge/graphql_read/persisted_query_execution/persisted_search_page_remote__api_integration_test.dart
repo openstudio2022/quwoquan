@@ -83,7 +83,7 @@ void main() {
     );
     final remote = RemotePersistedSearchPageQuery(
       client: GeneratedSearchPageGraphQLClient(executor),
-      invocationContext: (clientPageId) => CloudOperationInvocationContext(
+      invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
         surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
         routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
         clientPageId: clientPageId,

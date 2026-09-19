@@ -8,6 +8,10 @@ type ConversationGateway interface {
 	HasDirectBetween(ctx context.Context, personaA, personaB string) (bool, error)
 }
 
+type ConversationBatchGateway interface {
+	HasDirectBetweenMany(ctx context.Context, viewerPersonaID string, peerPersonaIDs []string) (map[string]bool, error)
+}
+
 func requireConversationGateway(gateway ConversationGateway) ConversationGateway {
 	if gateway == nil {
 		panic("user application requires ConversationGateway")

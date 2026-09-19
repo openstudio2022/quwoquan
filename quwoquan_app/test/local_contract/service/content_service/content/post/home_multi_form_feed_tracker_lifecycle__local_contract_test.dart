@@ -111,9 +111,8 @@ void main() {
               authSessionControllerProvider.overrideWith(
                 _GuestAuthSessionController.new,
               ),
-              contentFeatureFlagProvider(
-                'enable_article_distribution_profiles',
-              ).overrideWithValue(false),
+              contentFeatureFlagProvider('enable_article_distribution_profiles')
+                  .overrideWithValue(false),
               discoveryFeedMapProvider.overrideWith(
                 _LifecycleFeedMapNotifier.new,
               ),
@@ -137,7 +136,14 @@ void main() {
                   isDark: false,
                   channelId: 'recommend',
                   template: 'single_column_multiform',
-                  onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
+                  onUserTap: (
+                    _, {
+                    avatarAccessMode,
+                    avatarAssetId,
+                    avatarUrl,
+                    backgroundUrl,
+                    displayName,
+                  }) {},
                 ),
               ),
             ),

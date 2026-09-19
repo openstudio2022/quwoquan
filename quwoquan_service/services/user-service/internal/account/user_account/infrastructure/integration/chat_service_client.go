@@ -165,6 +165,42 @@ func (c *ChatServiceClient) HasDirectBetween(ctx context.Context, personaA, pers
 	return result.Exists, nil
 }
 
+func (c *ChatServiceClient) HasDirectBetweenMany(ctx context.Context, viewerPersonaID string, peerPersonaIDs []string) (map[string]bool, error) {
+	if c == nil || c.baseURL == "" {
+		return nil, fmt.Errorf("chat service client unavailable")
+	}
+	payload, err := json.Marshal(map[string]any{"viewerId": viewerPersonaID, "peerIds": peerPersonaIDs})
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/internal/chat/conversations/direct/batch-lookup", bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if err := c.authorizeRequest(ctx, req, viewerPersonaID); err != nil {
+		return nil, err
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("batch lookup direct conversations: status %d", resp.StatusCode)
+	}
+	var result struct {
+		ExistsByPeerID map[string]bool `json:"existsByPeerId"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	if result.ExistsByPeerID == nil {
+		result.ExistsByPeerID = map[string]bool{}
+	}
+	return result.ExistsByPeerID, nil
+}
+
 func (c *ChatServiceClient) authorizeRequest(
 	ctx context.Context,
 	request *http.Request,

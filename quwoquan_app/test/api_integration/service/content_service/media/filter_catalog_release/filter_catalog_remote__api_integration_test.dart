@@ -54,7 +54,7 @@ void main() {
       );
       final remote = RemoteFilterCatalogQuery(
         client: client,
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.imageEditor.id,
           routeId: AppUiSurfaces.imageEditor.routeId,
           clientPageId: clientPageId,

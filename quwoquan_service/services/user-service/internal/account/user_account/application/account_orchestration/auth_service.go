@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	rtauth "quwoquan_service/runtime/auth"
+	runtimeid "quwoquan_service/runtime/id"
 	rtmedia "quwoquan_service/runtime/media"
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/otpseal"
@@ -79,6 +80,7 @@ type AuthService struct {
 	smsOtpReadiness          SMSOTPDeliveryReadinessQuery
 	accessSigner             *rtauth.Signer
 	accountSecurity          accountports.AccountSecurityReader
+	accountCreationRecovery  AccountCreationRecoveryStore
 	nicknamePrefix           string
 	managedAcceptancePhone   string
 	managedAcceptanceOwnerID string
@@ -149,6 +151,14 @@ func WithPersonaCommandPipeline(
 	return func(s *AuthService) {
 		s.personaCommands = commands
 		s.personaProfileProjector = projector
+	}
+}
+
+// WithAccountCreationRecoveryStore installs the UserAccount-owned durable
+// recovery coordinate for Account -> Persona -> projection -> credential.
+func WithAccountCreationRecoveryStore(store AccountCreationRecoveryStore) AuthServiceOption {
+	return func(s *AuthService) {
+		s.accountCreationRecovery = store
 	}
 }
 
@@ -421,107 +431,204 @@ func (s *AuthService) createOwnerAccountWithIdentity(
 	identityOrigin string,
 	originCode string,
 ) (string, error) {
-	identity, err := s.newOwnerIdentity(
-		credentialType,
-		credentialKey,
-		identityOrigin,
-		originCode,
-	)
-	if err != nil {
-		return "", err
-	}
-	ownerID := identity.OwnerID
-	if _, err := s.resolvePhysicalShard(ownerID); err != nil {
-		return "", err
-	}
-	personaID, err := buildPersonaIdentity(identity.RootPrefix)
-	if err != nil {
-		return "", err
-	}
-
-	defaultNickname := s.buildDefaultNickname()
-	account := userrepo.UserAccountCreate{
-		UserID:                   ownerID,
-		Phone:                    "",
-		AccountState:             accountStateForCredentialType(string(credentialType)),
-		IdentityOrigin:           identityOrigin,
-		LogicalShard:             identity.LogicalShard,
-		AnonymousRetentionPolicy: anonymousRetentionPolicyForCredentialType(string(credentialType)),
-		PersonaCount:             1,
-	}
-	if credentialType == credentialmodel.CredentialType(credentialPhone) ||
-		credentialType == credentialmodel.CredentialType(credentialCarrierPhone) {
-		account.Phone = credentialKey
-	}
-
-	if err := s.profiles.CreateAccount(ctx, account); err != nil {
-		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("create account: %v", err))
-	}
-
-	persona := &model.Persona{
-		UserID:                   ownerID,
-		PersonaID:                personaID,
-		UserHandle:               systemUserHandleForPersona(personaID),
-		DisplayName:              defaultNickname,
-		NicknameCustomized:       false,
-		IdentityTags:             []string{},
-		IsPrimary:                true,
-		IsActive:                 true,
-		IsolationLevel:           defaultIsolationLevel,
-		InheritsProfileFromOwner: false,
-		OverriddenProfileFields:  encodeProfileFieldList(nil),
-		LastProfileSyncSource:    "initial_inherit",
-	}
-	normalizePersonaPersistence(persona)
-	if s.personaCommands == nil || s.personaProfileProjector == nil {
+	if s.accountCreationRecovery == nil {
 		return "", accountgenerated.AppErrorFromInternalError(
-			"Persona bootstrap command pipeline unavailable",
+			"account creation recovery store unavailable",
 		)
 	}
-	bootstrapDigest := sha256.Sum256([]byte(strings.Join([]string{
-		ownerID,
-		personaID,
-		defaultNickname,
-		identityOrigin,
-	}, "\x00")))
-	personaResult, err := s.personaCommands.CommitCreate(
-		ctx,
-		persona,
-		personaports.PersonaCommandMeta{
-			IdempotencyKey: "auth-persona-bootstrap:" + personaID,
-			CommandDigest:  hex.EncodeToString(bootstrapDigest[:]),
-		},
+	credentialKey = strings.TrimSpace(credentialKey)
+	flowID, intentDigest := accountCreationFlowIdentity(
+		credentialType, credentialKey, identityOrigin,
 	)
+	flow, found, err := s.accountCreationRecovery.Load(ctx, flowID)
 	if err != nil {
-		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("create Persona: %v", err))
+		return "", accountgenerated.AppErrorFromInternalError(
+			fmt.Sprintf("load account creation flow: %v", err),
+		)
 	}
-	if _, err := s.personaProfileProjector.Project(
-		ctx,
-		personaResult.PersonaID,
-		personaResult.Version,
-	); err != nil {
+	if found && flow.IntentDigest != intentDigest {
+		return "", accountgenerated.AppErrorFromInternalError(
+			ErrAccountCreationFlowConflict.Error(),
+		)
+	}
+	if !found {
+		identity, identityErr := s.newOwnerIdentity(
+			credentialType, credentialKey, identityOrigin, originCode,
+		)
+		if identityErr != nil {
+			return "", identityErr
+		}
+		if _, resolveErr := s.resolvePhysicalShard(identity.OwnerID); resolveErr != nil {
+			return "", resolveErr
+		}
+		personaID, personaErr := buildPersonaIdentity(identity.RootPrefix)
+		if personaErr != nil {
+			return "", personaErr
+		}
+		flow, err = s.accountCreationRecovery.Begin(ctx, AccountCreationFlow{
+			FlowID:          flowID,
+			IntentDigest:    intentDigest,
+			OwnerID:         identity.OwnerID,
+			PersonaID:       personaID,
+			DefaultNickname: s.buildDefaultNickname(),
+			IdentityOrigin:  identityOrigin,
+		})
+		if err != nil {
+			return "", accountgenerated.AppErrorFromInternalError(
+				fmt.Sprintf("begin account creation flow: %v", err),
+			)
+		}
+	}
+	ownerID := flow.OwnerID
+	personaID := flow.PersonaID
+
+	// Each step first reads its authority. This closes the failure window where
+	// the business transaction committed but the recovery marker did not.
+	account, err := s.profiles.FindByID(ctx, ownerID)
+	if err != nil {
+		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("read account recovery fact: %v", err))
+	}
+	if account == nil {
+		if err := s.profiles.CreateAccount(ctx, userrepo.UserAccountCreate{
+			UserID:                   ownerID,
+			Phone:                    accountCreationPhone(credentialType, credentialKey),
+			AccountState:             accountStateForCredentialType(string(credentialType)),
+			IdentityOrigin:           flow.IdentityOrigin,
+			LogicalShard:             logicalShardForOwner(ownerID),
+			AnonymousRetentionPolicy: anonymousRetentionPolicyForCredentialType(string(credentialType)),
+			PersonaCount:             1,
+		}); err != nil {
+			return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("create account: %v", err))
+		}
+	}
+	if err := s.accountCreationRecovery.MarkStep(ctx, flowID, AccountCreationAccountCommitted); err != nil {
+		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("record account creation step: %v", err))
+	}
+
+	persona, err := s.personas.FindByPersonaID(ctx, personaID)
+	if err != nil {
+		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("read Persona recovery fact: %v", err))
+	}
+	personaVersion := int64(1)
+	if persona == nil {
+		if s.personaCommands == nil || s.personaProfileProjector == nil {
+			return "", accountgenerated.AppErrorFromInternalError("Persona bootstrap command pipeline unavailable")
+		}
+		var committed bool
+		for attempt := 0; attempt < runtimeid.AllocationAttempts; attempt++ {
+			candidate := &model.Persona{
+				UserID: ownerID, PersonaID: personaID,
+				UserHandle:  systemUserHandleForPersona(personaID),
+				DisplayName: flow.DefaultNickname, NicknameCustomized: false,
+				IdentityTags: []string{}, IsPrimary: true, IsActive: true,
+				IsolationLevel: defaultIsolationLevel, InheritsProfileFromOwner: false,
+				OverriddenProfileFields: encodeProfileFieldList(nil), LastProfileSyncSource: "initial_inherit",
+			}
+			normalizePersonaPersistence(candidate)
+			bootstrapDigest := sha256.Sum256([]byte(strings.Join([]string{
+				ownerID, personaID, flow.DefaultNickname, flow.IdentityOrigin,
+			}, "\x00")))
+			result, commitErr := s.personaCommands.CommitCreate(ctx, candidate, personaports.PersonaCommandMeta{
+				IdempotencyKey: "auth-persona-bootstrap:" + flowID,
+				CommandDigest:  hex.EncodeToString(bootstrapDigest[:]),
+			})
+			if commitErr == nil {
+				personaID, personaVersion, committed = result.PersonaID, result.Version, true
+				break
+			}
+			if !errors.Is(commitErr, personaports.ErrPersonaIdentityConflict) {
+				return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("create Persona: %v", commitErr))
+			}
+			if attempt+1 >= runtimeid.AllocationAttempts {
+				return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf(
+					"create Persona: %v after %d attempts", runtimeid.ErrAllocationBudgetExhausted, runtimeid.AllocationAttempts))
+			}
+			nextPersonaID, generateErr := buildPersonaIdentity(rootPrefixForOwner(ownerID))
+			if generateErr != nil {
+				return "", generateErr
+			}
+			if replaceErr := s.accountCreationRecovery.ReplacePersonaCandidate(ctx, flowID, personaID, nextPersonaID); replaceErr != nil {
+				return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("replace Persona candidate: %v", replaceErr))
+			}
+			personaID = nextPersonaID
+		}
+		if !committed {
+			return "", accountgenerated.AppErrorFromInternalError("create Persona did not reach a terminal result")
+		}
+	} else {
+		if persona.UserID != ownerID {
+			return "", accountgenerated.AppErrorFromInternalError("account creation Persona belongs to another owner")
+		}
+		personaVersion = int64(persona.Version)
+	}
+	if err := s.accountCreationRecovery.MarkStep(ctx, flowID, AccountCreationPersonaCommitted); err != nil {
+		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("record Persona creation step: %v", err))
+	}
+	if _, err := s.personaProfileProjector.Project(ctx, personaID, personaVersion); err != nil {
 		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("project Persona profile: %v", err))
+	}
+	if err := s.accountCreationRecovery.MarkStep(ctx, flowID, AccountCreationProfileProjected); err != nil {
+		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("record profile projection step: %v", err))
 	}
 
 	if s.credentialCommands == nil {
-		return "", accountgenerated.AppErrorFromInternalError(
-			"credential command facet unavailable",
-		)
+		return "", accountgenerated.AppErrorFromInternalError("credential command facet unavailable")
 	}
-	_, err = s.credentialCommands.BindVerifiedCredential(
-		ctx,
-		ownerID,
-		credentialapp.BindCredentialCommand{
-			CredentialType: credentialType,
-			CredentialKey:  credentialKey,
-			DisplayLabel:   displayLabel,
-		},
-	)
+	binding, bound, err := s.credentials.FindByTypeAndKey(ctx, credentialType, credentialKey)
 	if err != nil {
+		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("read credential recovery fact: %v", err))
+	}
+	if bound {
+		state := binding.State()
+		if state.OwnerID != ownerID || state.Status != credentialmodel.StatusActive {
+			return "", accountgenerated.AppErrorFromInternalError("credential is bound outside the account creation flow")
+		}
+	} else if _, err := s.credentialCommands.BindVerifiedCredential(ctx, ownerID, credentialapp.BindCredentialCommand{
+		CredentialType: credentialType,
+		CredentialKey:  credentialKey,
+		DisplayLabel:   displayLabel,
+	}); err != nil {
 		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("create credential: %v", err))
 	}
-
+	if err := s.accountCreationRecovery.MarkStep(ctx, flowID, AccountCreationCredentialBound); err != nil {
+		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("record credential creation step: %v", err))
+	}
 	return ownerID, nil
+}
+
+func accountCreationFlowIdentity(
+	credentialType credentialmodel.CredentialType,
+	credentialKey string,
+	identityOrigin string,
+) (string, string) {
+	digest := sha256.Sum256([]byte(strings.Join([]string{
+		string(credentialType), strings.TrimSpace(credentialKey), strings.TrimSpace(identityOrigin),
+	}, "\x1f")))
+	hexDigest := hex.EncodeToString(digest[:])
+	return "account-create-" + hexDigest[:32], hexDigest
+}
+
+func accountCreationPhone(credentialType credentialmodel.CredentialType, credentialKey string) string {
+	if credentialType == credentialmodel.CredentialTypePhone || credentialType == credentialmodel.CredentialTypeCarrierPhone {
+		return strings.TrimSpace(credentialKey)
+	}
+	return ""
+}
+
+func rootPrefixForOwner(ownerID string) string {
+	parsed, err := useridentity.ParseOwnerID(ownerID)
+	if err != nil {
+		return ""
+	}
+	return parsed.LogicalShardHex()
+}
+
+func logicalShardForOwner(ownerID string) int {
+	parsed, err := useridentity.ParseOwnerID(ownerID)
+	if err != nil {
+		return 0
+	}
+	return parsed.LogicalShard()
 }
 
 func (s *AuthService) newOwnerIdentity(

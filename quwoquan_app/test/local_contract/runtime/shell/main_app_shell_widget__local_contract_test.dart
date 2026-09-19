@@ -978,6 +978,11 @@ void main() {
                 firstQueuedAt: DateTime.now().toUtc().subtract(
                   const Duration(hours: 73),
                 ),
+                idempotencyKey: 'terminal-key',
+                mutationBasis: 'terminal-basis',
+                expectedVersion: 0,
+                intentRevision: 1,
+                actorRef: 'actor',
               ),
             );
         await tester.pump();
@@ -1345,7 +1350,14 @@ void main() {
                     showWorksToolbar: true,
                     showTopNavigation: false,
                     externalPosts: [post],
-                    onUserTap: (_, {avatarUrl, avatarAssetId, avatarAccessMode, displayName, backgroundUrl}) {},
+                    onUserTap: (
+                      _, {
+                      avatarUrl,
+                      avatarAssetId,
+                      avatarAccessMode,
+                      displayName,
+                      backgroundUrl,
+                    }) {},
                     onAssistantTap: () {},
                   ),
                 ),

@@ -18,7 +18,7 @@ void main() {
       );
       final adapter = RemoteSearchFeedbackAdapter(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: 'searchResults',
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(

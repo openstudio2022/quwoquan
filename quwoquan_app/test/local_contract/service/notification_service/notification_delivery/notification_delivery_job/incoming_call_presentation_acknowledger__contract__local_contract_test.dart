@@ -43,7 +43,7 @@ void main() {
       final executor = _RecordingExecutor();
       final writer = RemoteIncomingCallPresentationAcknowledger(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: 'rtc.incoming-call',
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(

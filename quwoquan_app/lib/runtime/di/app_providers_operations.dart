@@ -5,6 +5,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/trust_safety/report/application/public/content_report_ports.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/persona_query.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/persona_relationship_facets.dart';
+import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/persona_relationship_block_intent_writer.dart';
 import 'package:quwoquan_app/service/user_service/relationship/subject_follow/application/public/subject_follow_writer.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/profile_edit_query.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/profile_query.dart';
@@ -56,7 +57,6 @@ final opsVisitAppendWriterProvider = Provider<VisitAppendPort>((ref) {
               ref,
               surface: AppUiSurfaces.appShell,
               clientPageId: clientPageId,
-              idempotencyKey: idempotencyKey,
             ),
   );
   return VisitRecordAppendBridge(writer);
@@ -300,7 +300,6 @@ final authenticationChallengeCommandWriterProvider =
               ref,
               surface: AppUiSurfaces.login,
               clientPageId: clientPageId,
-              idempotencyKey: idempotencyKey,
             ),
       );
     });
@@ -474,6 +473,12 @@ final personaRelationshipCommandWriterProvider =
           .watch(_personaRelationshipFollowRemoteProvider(surface))
           .commandWriter;
     });
+final personaRelationshipDurableCommandWriterProvider =
+    Provider.family<PersonaRelationshipDurableCommandWriter, AppUiSurface>(
+      (ref, surface) => ref
+          .watch(_personaRelationshipFollowRemoteProvider(surface))
+          .durableCommandWriter,
+    );
 
 final _personaRemoteWriterProvider =
     Provider<AppProductionPersonaCommandFacets>((ref) {
@@ -588,6 +593,16 @@ final personaRelationshipBlockWriterProvider =
       return ref.watch(personaRelationshipRemoteProvider(surface)).blockWriter;
     });
 
+final personaRelationshipBlockCoordinatorProvider =
+    Provider.family<PersonaRelationshipBlockCoordinator, AppUiSurface>((
+      ref,
+      surface,
+    ) {
+      return ref
+          .watch(personaRelationshipRemoteProvider(surface))
+          .blockCoordinator;
+    });
+
 /// 拉黑管理页私有查询面；production 只装配 Remote，alpha/test 显式 override。
 final blockedListQueryProvider = Provider<BlockedListQuery>((ref) {
   return ref
@@ -604,7 +619,6 @@ final greetingRequestRemoteProvider =
               ref,
               surface: surface,
               clientPageId: clientPageId,
-              idempotencyKey: idempotencyKey,
             ),
       ),
     );
@@ -827,7 +841,6 @@ CloudOperationInvocationContext locationInvocationContext(
     surfaceId: surface.id,
     clientPageId: clientPageId,
     routeId: surface.routeId,
-    idempotencyKey: idempotencyKey,
     actor: CloudOperationActorContext(
       accountId: accountId.isEmpty ? null : accountId,
       personaId: personaId.isEmpty ? null : personaId,

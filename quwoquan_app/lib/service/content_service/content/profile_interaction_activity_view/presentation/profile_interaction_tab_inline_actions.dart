@@ -198,14 +198,12 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
     });
     try {
       await ref
-          .read(profileCommentsContentCommentFacetProvider)
-          .reactToComment(
-            ReactToContentCommentCommand(
-              commentId: commentId,
-              reaction: next == 'like'
-                  ? CommentReactionType.like
-                  : CommentReactionType.none,
-            ),
+          .read(profileCommentReactionCoordinatorProvider)
+          .react(
+            commentId,
+            next == 'like'
+                ? CommentReactionType.like
+                : CommentReactionType.none,
           );
       if (mounted) {
         setState(() => _commentReactionInFlight.remove(item.activityId));

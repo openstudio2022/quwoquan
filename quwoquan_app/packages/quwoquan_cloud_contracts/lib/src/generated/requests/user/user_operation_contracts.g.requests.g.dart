@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 0d85f128db29a8f7b402ca339d482c77c330e4ce2714232aeface394889278e3
+// ContractGraph SHA256: 4f2bcaec685b896f69dd6ebaf2b9b200b9d599e8083ae457d9d91e8a201a5106
 
 part of '../../../user/user_operation_contracts.g.dart';
 
@@ -334,8 +334,13 @@ final class BindPhoneCredentialCommand {
 }
 
 final class BlockUserCommand {
-  BlockUserCommand({required String targetPersonaId})
-    : targetPersonaId = targetPersonaId.trim() {
+  BlockUserCommand({
+    required String targetPersonaId,
+    required String mutationBasis,
+    required int expectedVersion,
+  }) : targetPersonaId = targetPersonaId.trim(),
+       mutationBasis = mutationBasis.trim(),
+       expectedVersion = expectedVersion {
     if (this.targetPersonaId.isEmpty) {
       throw ArgumentError.value(
         this.targetPersonaId,
@@ -343,9 +348,25 @@ final class BlockUserCommand {
         'must not be blank',
       );
     }
+    if (this.mutationBasis.isEmpty) {
+      throw ArgumentError.value(
+        this.mutationBasis,
+        "mutationBasis",
+        'must not be blank',
+      );
+    }
+    if (this.expectedVersion < 0) {
+      throw ArgumentError.value(
+        this.expectedVersion,
+        "expectedVersion",
+        "must be at least 0",
+      );
+    }
   }
 
   final String targetPersonaId;
+  final String mutationBasis;
+  final int expectedVersion;
 
   factory BlockUserCommand.fromWire(
     Map<String, Object?> map, [
@@ -353,17 +374,29 @@ final class BlockUserCommand {
   ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{
       "targetPersonaId",
+      "mutationBasis",
+      "expectedVersion",
     }, path);
     return BlockUserCommand(
       targetPersonaId: _generatedRequestString(
         map["targetPersonaId"],
         '$path.targetPersonaId',
       ),
+      mutationBasis: _generatedRequestString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
+      expectedVersion: _generatedRequestInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "targetPersonaId": this.targetPersonaId,
+    "mutationBasis": this.mutationBasis,
+    "expectedVersion": this.expectedVersion,
   };
 }
 
@@ -1012,6 +1045,87 @@ final class DismissContactDiscoveryCommand {
   Map<String, Object?> toWire() => <String, Object?>{"id": this.discoveryId};
 }
 
+final class FinalizeExpiredRelationshipCommand {
+  FinalizeExpiredRelationshipCommand({
+    required String targetPersonaId,
+    required PersonaRelationshipMutationAction operation,
+    required String mutationBasis,
+    required int expectedVersion,
+  }) : targetPersonaId = targetPersonaId.trim(),
+       operation = operation,
+       mutationBasis = mutationBasis,
+       expectedVersion = expectedVersion {
+    if (this.targetPersonaId.isEmpty) {
+      throw ArgumentError.value(
+        this.targetPersonaId,
+        "targetPersonaId",
+        'must not be blank',
+      );
+    }
+    if (this.mutationBasis.isEmpty) {
+      throw ArgumentError.value(
+        this.mutationBasis,
+        "mutationBasis",
+        'must not be blank',
+      );
+    }
+    if (this.expectedVersion < 0) {
+      throw ArgumentError.value(
+        this.expectedVersion,
+        "expectedVersion",
+        "must be at least 0",
+      );
+    }
+  }
+
+  final String targetPersonaId;
+  final PersonaRelationshipMutationAction operation;
+  final String mutationBasis;
+  final int expectedVersion;
+
+  factory FinalizeExpiredRelationshipCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "FinalizeExpiredRelationshipCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "targetPersonaId",
+      "operation",
+      "mutationBasis",
+      "expectedVersion",
+    }, path);
+    return FinalizeExpiredRelationshipCommand(
+      targetPersonaId: _generatedRequestString(
+        map["targetPersonaId"],
+        '$path.targetPersonaId',
+      ),
+      operation: switch (map["operation"]) {
+        "follow" => PersonaRelationshipMutationAction.follow,
+        "unfollow" => PersonaRelationshipMutationAction.unfollow,
+        "block" => PersonaRelationshipMutationAction.block,
+        "unblock" => PersonaRelationshipMutationAction.unblock,
+        _ => throw FormatException(
+          '$path.operation' + ' has an invalid enum value',
+        ),
+      },
+      mutationBasis: _generatedRequestString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
+      expectedVersion: _generatedRequestInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "targetPersonaId": this.targetPersonaId,
+    "operation": this.operation.wireName,
+    "mutationBasis": this.mutationBasis,
+    "expectedVersion": this.expectedVersion,
+  };
+}
+
 final class FollowSubjectCommand {
   FollowSubjectCommand({
     required SubjectFollowTargetKind subjectType,
@@ -1069,10 +1183,12 @@ final class FollowUserCommand {
   FollowUserCommand({
     required String targetPersonaId,
     String? source,
-    String? clientRequestId,
+    required String mutationBasis,
+    required int expectedVersion,
   }) : targetPersonaId = targetPersonaId.trim(),
        source = source,
-       clientRequestId = clientRequestId {
+       mutationBasis = mutationBasis.trim(),
+       expectedVersion = expectedVersion {
     if (this.targetPersonaId.isEmpty) {
       throw ArgumentError.value(
         this.targetPersonaId,
@@ -1080,11 +1196,26 @@ final class FollowUserCommand {
         'must not be blank',
       );
     }
+    if (this.mutationBasis.isEmpty) {
+      throw ArgumentError.value(
+        this.mutationBasis,
+        "mutationBasis",
+        'must not be blank',
+      );
+    }
+    if (this.expectedVersion < 0) {
+      throw ArgumentError.value(
+        this.expectedVersion,
+        "expectedVersion",
+        "must be at least 0",
+      );
+    }
   }
 
   final String targetPersonaId;
   final String? source;
-  final String? clientRequestId;
+  final String mutationBasis;
+  final int expectedVersion;
 
   factory FollowUserCommand.fromWire(
     Map<String, Object?> map, [
@@ -1093,7 +1224,8 @@ final class FollowUserCommand {
     _generatedRequestRejectUnknownFields(map, const <String>{
       "targetPersonaId",
       "source",
-      "clientRequestId",
+      "mutationBasis",
+      "expectedVersion",
     }, path);
     return FollowUserCommand(
       targetPersonaId: _generatedRequestString(
@@ -1103,20 +1235,22 @@ final class FollowUserCommand {
       source: map["source"] == null
           ? null
           : _generatedRequestString(map["source"], '$path.source'),
-      clientRequestId: map["clientRequestId"] == null
-          ? null
-          : _generatedRequestString(
-              map["clientRequestId"],
-              '$path.clientRequestId',
-            ),
+      mutationBasis: _generatedRequestString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
+      expectedVersion: _generatedRequestInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "targetPersonaId": this.targetPersonaId,
     if (this.source?.isNotEmpty == true) "source": this.source!,
-    if (this.clientRequestId?.isNotEmpty == true)
-      "clientRequestId": this.clientRequestId!,
+    "mutationBasis": this.mutationBasis,
+    "expectedVersion": this.expectedVersion,
   };
 }
 
@@ -2277,6 +2411,55 @@ final class ProfileUpdateProposalQuery {
   Map<String, Object?> toWire() => <String, Object?>{"id": this.proposalId};
 }
 
+final class RecoverRelationshipCommandQuery {
+  RecoverRelationshipCommandQuery({
+    required String targetPersonaId,
+    required PersonaRelationshipMutationAction operation,
+  }) : targetPersonaId = targetPersonaId.trim(),
+       operation = operation {
+    if (this.targetPersonaId.isEmpty) {
+      throw ArgumentError.value(
+        this.targetPersonaId,
+        "targetPersonaId",
+        'must not be blank',
+      );
+    }
+  }
+
+  final String targetPersonaId;
+  final PersonaRelationshipMutationAction operation;
+
+  factory RecoverRelationshipCommandQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "RecoverRelationshipCommandQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "targetPersonaId",
+      "operation",
+    }, path);
+    return RecoverRelationshipCommandQuery(
+      targetPersonaId: _generatedRequestString(
+        map["targetPersonaId"],
+        '$path.targetPersonaId',
+      ),
+      operation: switch (map["operation"]) {
+        "follow" => PersonaRelationshipMutationAction.follow,
+        "unfollow" => PersonaRelationshipMutationAction.unfollow,
+        "block" => PersonaRelationshipMutationAction.block,
+        "unblock" => PersonaRelationshipMutationAction.unblock,
+        _ => throw FormatException(
+          '$path.operation' + ' has an invalid enum value',
+        ),
+      },
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "targetPersonaId": this.targetPersonaId,
+    "operation": this.operation.wireName,
+  };
+}
+
 final class RefreshTokenCommand {
   RefreshTokenCommand({required String refreshToken})
     : refreshToken = refreshToken.trim() {
@@ -2765,8 +2948,13 @@ final class UnbindCredentialCommand {
 }
 
 final class UnblockUserCommand {
-  UnblockUserCommand({required String targetPersonaId})
-    : targetPersonaId = targetPersonaId.trim() {
+  UnblockUserCommand({
+    required String targetPersonaId,
+    required String mutationBasis,
+    required int expectedVersion,
+  }) : targetPersonaId = targetPersonaId.trim(),
+       mutationBasis = mutationBasis.trim(),
+       expectedVersion = expectedVersion {
     if (this.targetPersonaId.isEmpty) {
       throw ArgumentError.value(
         this.targetPersonaId,
@@ -2774,9 +2962,25 @@ final class UnblockUserCommand {
         'must not be blank',
       );
     }
+    if (this.mutationBasis.isEmpty) {
+      throw ArgumentError.value(
+        this.mutationBasis,
+        "mutationBasis",
+        'must not be blank',
+      );
+    }
+    if (this.expectedVersion < 0) {
+      throw ArgumentError.value(
+        this.expectedVersion,
+        "expectedVersion",
+        "must be at least 0",
+      );
+    }
   }
 
   final String targetPersonaId;
+  final String mutationBasis;
+  final int expectedVersion;
 
   factory UnblockUserCommand.fromWire(
     Map<String, Object?> map, [
@@ -2784,17 +2988,29 @@ final class UnblockUserCommand {
   ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{
       "targetPersonaId",
+      "mutationBasis",
+      "expectedVersion",
     }, path);
     return UnblockUserCommand(
       targetPersonaId: _generatedRequestString(
         map["targetPersonaId"],
         '$path.targetPersonaId',
       ),
+      mutationBasis: _generatedRequestString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
+      expectedVersion: _generatedRequestInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "targetPersonaId": this.targetPersonaId,
+    "mutationBasis": this.mutationBasis,
+    "expectedVersion": this.expectedVersion,
   };
 }
 
@@ -2846,9 +3062,11 @@ final class UnfollowSubjectCommand {
 final class UnfollowUserCommand {
   UnfollowUserCommand({
     required String targetPersonaId,
-    String? clientRequestId,
+    required String mutationBasis,
+    required int expectedVersion,
   }) : targetPersonaId = targetPersonaId.trim(),
-       clientRequestId = clientRequestId {
+       mutationBasis = mutationBasis.trim(),
+       expectedVersion = expectedVersion {
     if (this.targetPersonaId.isEmpty) {
       throw ArgumentError.value(
         this.targetPersonaId,
@@ -2856,10 +3074,25 @@ final class UnfollowUserCommand {
         'must not be blank',
       );
     }
+    if (this.mutationBasis.isEmpty) {
+      throw ArgumentError.value(
+        this.mutationBasis,
+        "mutationBasis",
+        'must not be blank',
+      );
+    }
+    if (this.expectedVersion < 0) {
+      throw ArgumentError.value(
+        this.expectedVersion,
+        "expectedVersion",
+        "must be at least 0",
+      );
+    }
   }
 
   final String targetPersonaId;
-  final String? clientRequestId;
+  final String mutationBasis;
+  final int expectedVersion;
 
   factory UnfollowUserCommand.fromWire(
     Map<String, Object?> map, [
@@ -2867,26 +3100,29 @@ final class UnfollowUserCommand {
   ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{
       "targetPersonaId",
-      "clientRequestId",
+      "mutationBasis",
+      "expectedVersion",
     }, path);
     return UnfollowUserCommand(
       targetPersonaId: _generatedRequestString(
         map["targetPersonaId"],
         '$path.targetPersonaId',
       ),
-      clientRequestId: map["clientRequestId"] == null
-          ? null
-          : _generatedRequestString(
-              map["clientRequestId"],
-              '$path.clientRequestId',
-            ),
+      mutationBasis: _generatedRequestString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
+      expectedVersion: _generatedRequestInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "targetPersonaId": this.targetPersonaId,
-    if (this.clientRequestId?.isNotEmpty == true)
-      "clientRequestId": this.clientRequestId!,
+    "mutationBasis": this.mutationBasis,
+    "expectedVersion": this.expectedVersion,
   };
 }
 
@@ -4083,6 +4319,26 @@ encodeUserPersonaRelationshipBlockUserGeneratedRequest(
     pathParameters: <String, String>{
       "targetPersonaId": request.targetPersonaId,
     },
+    body: <String, Object?>{
+      "mutationBasis": request.mutationBasis,
+      "expectedVersion": request.expectedVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload
+encodeUserPersonaRelationshipFinalizeExpiredRelationshipCommandGeneratedRequest(
+  FinalizeExpiredRelationshipCommand request,
+) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "targetPersonaId": request.targetPersonaId,
+      "operation": (request.operation.wireName).toString(),
+    },
+    body: <String, Object?>{
+      "mutationBasis": request.mutationBasis,
+      "expectedVersion": request.expectedVersion,
+    },
   );
 }
 
@@ -4096,8 +4352,8 @@ encodeUserPersonaRelationshipFollowUserGeneratedRequest(
     },
     body: <String, Object?>{
       if (request.source?.isNotEmpty == true) "source": request.source!,
-      if (request.clientRequestId?.isNotEmpty == true)
-        "clientRequestId": request.clientRequestId!,
+      "mutationBasis": request.mutationBasis,
+      "expectedVersion": request.expectedVersion,
     },
   );
 }
@@ -4108,6 +4364,17 @@ encodeUserPersonaRelationshipGetRelationshipCapabilityGeneratedRequest(
 ) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{"personaId": request.targetPersonaId},
+  );
+}
+
+CloudOperationRequestPayload
+encodeUserPersonaRelationshipGetRelationshipMutationBasisGeneratedRequest(
+  GetRelationshipCapabilityQuery request,
+) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "targetPersonaId": request.targetPersonaId,
+    },
   );
 }
 
@@ -4152,12 +4419,28 @@ encodeUserPersonaRelationshipListFollowingGeneratedRequest(
 }
 
 CloudOperationRequestPayload
+encodeUserPersonaRelationshipRecoverRelationshipCommandGeneratedRequest(
+  RecoverRelationshipCommandQuery request,
+) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "targetPersonaId": request.targetPersonaId,
+      "operation": (request.operation.wireName).toString(),
+    },
+  );
+}
+
+CloudOperationRequestPayload
 encodeUserPersonaRelationshipUnblockUserGeneratedRequest(
   UnblockUserCommand request,
 ) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "targetPersonaId": request.targetPersonaId,
+    },
+    body: <String, Object?>{
+      "mutationBasis": request.mutationBasis,
+      "expectedVersion": request.expectedVersion,
     },
   );
 }
@@ -4171,8 +4454,8 @@ encodeUserPersonaRelationshipUnfollowUserGeneratedRequest(
       "targetPersonaId": request.targetPersonaId,
     },
     body: <String, Object?>{
-      if (request.clientRequestId?.isNotEmpty == true)
-        "clientRequestId": request.clientRequestId!,
+      "mutationBasis": request.mutationBasis,
+      "expectedVersion": request.expectedVersion,
     },
   );
 }

@@ -14,7 +14,7 @@ void main() {
       final executor = _RecordingExecutor();
       final gateway = RemoteRealtimeConnectionOperationGateway(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.appShell.id,
           routeId: AppUiSurfaces.appShell.routeId,
           clientPageId: clientPageId,

@@ -47,9 +47,8 @@ class ProfileActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final separator = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.22 : 0.14);
+    final separator = AppColors.iosSeparator(context)
+        .withValues(alpha: isDark ? 0.22 : 0.14);
     final neutralFill = AppColors.iosProfileSurface(context);
     final neutralForeground = AppColors.iosLabel(context);
 
@@ -115,7 +114,7 @@ class ProfileActionBar extends StatelessWidget {
       );
     }
 
-    final alreadyFollowing = capability?.viewerFollowsTarget ?? isFollowing;
+    final alreadyFollowing = isFollowing;
     final primaryActions = <ObjectAction>[
       alreadyFollowing
           ? neutralAction(

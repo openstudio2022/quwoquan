@@ -28,6 +28,8 @@ api_routes:
       max_attempts: 2
       idempotency: required
     error_codes:
+      - CONTENT.USER.content_reaction_basis_invalid
+      - CONTENT.USER.content_reaction_basis_expired
       - CONTENT.USER.unauthorized
       - CONTENT.USER.content_reaction_target_not_found
       - CONTENT.USER.invalid_argument
@@ -62,7 +64,7 @@ api_routes:
       anonymous_policy: allow
       visibility: public
     request_entity: LikeContentPostCommand
-    request_body_kind: none
+    request_body_kind: object
   - method: DELETE
     path: /content/posts/{postId}/like
     operation: UnlikePost
@@ -86,6 +88,8 @@ api_routes:
       max_attempts: 2
       idempotency: required
     error_codes:
+      - CONTENT.USER.content_reaction_basis_invalid
+      - CONTENT.USER.content_reaction_basis_expired
       - CONTENT.USER.unauthorized
       - CONTENT.USER.content_reaction_target_not_found
       - CONTENT.USER.invalid_argument
@@ -120,7 +124,7 @@ api_routes:
       anonymous_policy: allow
       visibility: public
     request_entity: UnlikeContentPostCommand
-    request_body_kind: none
+    request_body_kind: object
   - method: POST
     path: /content/comments/{commentId}/reaction
     operation: ReactToComment
@@ -144,6 +148,8 @@ api_routes:
       max_attempts: 2
       idempotency: required
     error_codes:
+      - CONTENT.USER.content_reaction_basis_invalid
+      - CONTENT.USER.content_reaction_basis_expired
       - CONTENT.USER.unauthorized
       - CONTENT.USER.invalid_argument
       - CONTENT.USER.content_reaction_target_not_found
@@ -234,6 +240,97 @@ api_routes:
       visibility: public
     request_entity: GetContentPostReactionStateQuery
     request_body_kind: none
+  - method: GET
+    path: /content/reactions/{targetKind}/{targetId}/presentation
+    operation: GetContentReactionPresentation
+    actor: persona_or_device
+    application: {kind: query, facet: ContentReactionQueryFacet, method: getPresentation, reader: ContentReactionStatisticsReader, slice: ContentReactionPresentationSlice}
+    request_entity: GetContentReactionPresentationQuery
+    request_body_kind: none
+    request_bindings:
+      path: [{name: targetKind, field: targetKind}, {name: targetId, field: targetId}]
+    response_entity: ContentReactionPresentationSlice
+    response_body: ContentReactionPresentationSlice
+    response_body_kind: object
+    authorization: {principal: public, ownership_policy: authenticated_persona_or_derived_device_actor}
+    reliability: {timeout_ms: 800, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    error_codes: [CONTENT.USER.unauthorized, CONTENT.USER.invalid_argument, CONTENT.SYSTEM.storage_read_failed]
+    privacy: {request_classification: PII, response_classification: SENSITIVE, log_policy: metadata_only}
+    telemetry: {metric: content_reaction_presentation_get, trace: true, attributes: [actor_dimension, outcome]}
+    slo: {latency_p95_ms: 300, availability_percent: 99.9}
+    commercial: {status: ready}
+    security: {auth_mode: optional, principal: owner, token_transport: bearer, anonymous_policy: allow, visibility: private}
+  - method: GET
+    path: /content/reactions/{targetKind}/{targetId}/mutation-basis
+    operation: GetContentReactionMutationBasis
+    transport_role: recovery
+    actor: persona_or_device
+    application: {kind: query, facet: ContentReactionQueryFacet, method: getMutationBasis, reader: ContentReactionStateReader, slice: ContentReactionMutationBasisSlice}
+    request_entity: GetContentReactionMutationBasisQuery
+    request_body_kind: none
+    request_bindings:
+      path:
+        - {name: targetKind, field: targetKind}
+        - {name: targetId, field: targetId}
+    response_entity: ContentReactionMutationBasisSlice
+    response_body: ContentReactionMutationBasisSlice
+    response_body_kind: object
+    authorization: {principal: public, ownership_policy: authenticated_persona_or_derived_device_actor}
+    reliability: {timeout_ms: 800, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    error_codes: [CONTENT.USER.unauthorized, CONTENT.USER.invalid_argument, CONTENT.USER.content_reaction_target_not_found, CONTENT.SYSTEM.storage_read_failed]
+    privacy: {request_classification: PII, response_classification: SENSITIVE, log_policy: metadata_only}
+    telemetry: {metric: content_reaction_state_get, trace: true, attributes: [actor_dimension, outcome]}
+    slo: {latency_p95_ms: 300, availability_percent: 99.9}
+    commercial: {status: ready}
+    security: {auth_mode: optional, principal: owner, token_transport: bearer, anonymous_policy: allow, visibility: private}
+  - method: GET
+    path: /content/reactions/{targetKind}/{targetId}/commands/{operation}/receipt
+    operation: RecoverContentReactionCommand
+    transport_role: recovery
+    actor: persona_or_device
+    application: {kind: query, facet: ContentReactionCommandFacet, method: recover, reader: ContentReactionReceiptReader, slice: ContentReactionCommandRecoverySlice}
+    request_entity: RecoverContentReactionCommandQuery
+    request_body_kind: none
+    request_bindings:
+      path:
+        - {name: targetKind, field: targetKind}
+        - {name: targetId, field: targetId}
+        - {name: operation, field: operation}
+    response_entity: ContentReactionCommandRecoverySlice
+    response_body: ContentReactionCommandRecoverySlice
+    response_body_kind: object
+    authorization: {principal: public, ownership_policy: authenticated_persona_or_derived_device_actor}
+    reliability: {timeout_ms: 800, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    error_codes: [CONTENT.USER.unauthorized, CONTENT.USER.invalid_argument, CONTENT.SYSTEM.storage_read_failed]
+    privacy: {request_classification: PII, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_reaction_recovery, trace: true, attributes: [actor_dimension, outcome]}
+    slo: {latency_p95_ms: 300, availability_percent: 99.9}
+    commercial: {status: ready}
+    security: {auth_mode: optional, principal: owner, token_transport: bearer, anonymous_policy: allow, visibility: private}
+  - method: POST
+    path: /content/reactions/{targetKind}/{targetId}/commands/{operation}/finalize-expired
+    operation: FinalizeExpiredContentReactionCommand
+    actor: persona_or_device
+    application: {kind: command, facet: ContentReactionCommandFacet, method: finalizeExpired, aggregate_owner: ContentReaction, mutation_target: ContentReaction, invariant_target: ContentReaction}
+    request_entity: FinalizeExpiredContentReactionCommand
+    request_body_kind: object
+    request_bindings:
+      path:
+        - {name: targetKind, field: targetKind}
+        - {name: targetId, field: targetId}
+        - {name: operation, field: operation}
+    response_entity: ContentReactionCommandRecoverySlice
+    response_body: ContentReactionCommandRecoverySlice
+    response_body_kind: object
+    authorization: {principal: public, ownership_policy: authenticated_persona_or_derived_device_actor}
+    reliability: {timeout_ms: 800, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+    error_codes: [CONTENT.USER.content_reaction_basis_invalid, CONTENT.USER.unauthorized, CONTENT.USER.invalid_argument, CONTENT.USER.idempotency_conflict, CONTENT.USER.content_reaction_basis_expired, CONTENT.SYSTEM.storage_write_failed]
+    privacy: {request_classification: PII, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_reaction_recovery, trace: true, attributes: [actor_dimension, outcome]}
+    slo: {latency_p95_ms: 300, availability_percent: 99.9}
+    commercial: {status: ready}
+    security: {auth_mode: optional, principal: owner, token_transport: bearer, anonymous_policy: allow, visibility: private}
+
 consumers:
   - name: app
     capabilities:

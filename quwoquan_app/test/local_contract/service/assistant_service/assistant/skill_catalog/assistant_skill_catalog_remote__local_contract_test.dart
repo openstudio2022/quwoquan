@@ -53,7 +53,7 @@ void main() {
       );
       final adapter = RemoteAssistantSkillCatalogAdapter(
         client: buildAssistantRemoteTestOperationClient(httpClient),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.assistantSkills.id,
           routeId: AppUiSurfaces.assistantSkills.routeId,
           clientPageId: clientPageId,

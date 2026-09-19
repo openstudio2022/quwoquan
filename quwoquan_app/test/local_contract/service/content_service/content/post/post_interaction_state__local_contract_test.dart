@@ -84,7 +84,7 @@ void main() {
           commentCounts: {'post': 4},
         ),
       );
-      notifier.setLiked('stale-liked', false, likeCount: 0);
+      notifier.setLiked('stale-liked', false);
       expect(
         container.read(postInteractionStateProvider).isLiked('post'),
         isTrue,
@@ -202,6 +202,41 @@ void main() {
       // 计数仍无条件采纳权威值。
       expect(state.commentCountFor('post-pending'), 2);
       expect(state.shareCountFor('post-pending'), 1);
+    });
+    // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-004
+    test('点赞按钮乐观变化不改数字，只有权威 statsVersion 投影更新数字', () {
+      final container = ProviderContainer(
+        overrides: sealedCloudBoundaryOverrides(),
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(postInteractionStateProvider.notifier);
+      notifier.mergeInteractionState(
+        const PostInteractionInput(
+          scopePostIds: {'post-stats'},
+          likeCounts: {'post-stats': 10},
+        ),
+      );
+      notifier.setLiked('post-stats', true);
+      var state = container.read(postInteractionStateProvider);
+      expect(state.isLiked('post-stats'), isTrue);
+      expect(state.likeCountFor('post-stats'), 10);
+      expect(
+        state.likeStatisticsFor('post-stats').state,
+        InteractionProjectionState.available,
+      );
+      notifier.mergeInteractionState(
+        const PostInteractionInput(
+          scopePostIds: {'post-stats'},
+          likedPostIds: {'post-stats'},
+          likeCounts: {'post-stats': 11},
+        ),
+      );
+      state = container.read(postInteractionStateProvider);
+      expect(state.likeCountFor('post-stats'), 11);
+      expect(
+        state.viewerLikeAttachmentFor('unknown').state,
+        ViewerInteractionAttachmentState.unavailable,
+      );
     });
   });
 }

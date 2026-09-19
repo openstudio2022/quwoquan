@@ -734,3 +734,7 @@ class MongoIntersectionReadOps:
                 {"supplyKey": 1, "sourceEventDigest": 1, "checkpoint": 1},
             )
         )
+
+    def list_liked_content_ids(self, persona_id: str, limit: int) -> tuple[str, ...]:
+        size=max(1,min(int(limit),200))
+        return tuple(str(row["targetId"]) for row in self._current_reactions.find({"actorDimension":"persona","actorId":persona_id.strip(),"reaction":"like"},{"targetId":1}).sort("targetId",1).limit(size))

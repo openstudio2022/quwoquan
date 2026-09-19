@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/content_service/content/content_reaction/adapters/post_reaction_facets_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/runtime/remote_api_path_test_harness.dart';
 
 http.Response _responseFor(http.Request request) {
@@ -35,7 +36,7 @@ void main() {
           log,
           responseFor: _responseFor,
         ),
-        invocationContext: (clientPageId, {required command}) =>
+        invocationContext: (clientPageId, {required command, idempotencyKey}) =>
             CloudOperationInvocationContext(
               surfaceId: AppUiSurfaces.homeFeed.id,
               routeId: AppUiSurfaces.homeFeed.routeId,
@@ -48,7 +49,13 @@ void main() {
 
     test('likePost → POST /content/posts/{postId}/like', () async {
       try {
-        await reactions.likePost(LikeContentPostCommand(postId: 'p1'));
+        await reactions.likePost(
+          LikeContentPostCommand(
+            postId: 'p1',
+            mutationBasis: 'test-basis',
+            expectedVersion: 0,
+          ),
+        );
       } catch (_) {}
       expect(log.last.method, 'POST');
       expect(
@@ -62,7 +69,13 @@ void main() {
 
     test('unlikePost → DELETE /content/posts/{postId}/like', () async {
       try {
-        await reactions.unlikePost(UnlikeContentPostCommand(postId: 'p1'));
+        await reactions.unlikePost(
+          UnlikeContentPostCommand(
+            postId: 'p1',
+            mutationBasis: 'test-basis',
+            expectedVersion: 0,
+          ),
+        );
       } catch (_) {}
       expect(log.last.method, 'DELETE');
       expect(

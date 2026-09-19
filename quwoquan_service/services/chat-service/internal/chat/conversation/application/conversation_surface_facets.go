@@ -262,6 +262,53 @@ func (s *ConversationService) HasDirectBetween(ctx context.Context, memberA, mem
 	return conv != nil, nil
 }
 
+func (s *ConversationService) HasDirectBetweenMany(
+	ctx context.Context,
+	viewerID string,
+	peerIDs []string,
+) (map[string]bool, error) {
+	result := make(map[string]bool, len(peerIDs))
+	reader, ok := s.members.(DirectConversationBatchReader)
+	if !ok {
+		return nil, errors.New("direct conversation batch reader unavailable")
+	}
+	sharedByPeer, err := reader.ListSharedConversationIDsMany(ctx, viewerID, peerIDs)
+	if err != nil {
+		return nil, err
+	}
+	conversationIDs := make([]string, 0, len(sharedByPeer))
+	seen := make(map[string]struct{})
+	for _, ids := range sharedByPeer {
+		for _, id := range ids {
+			if _, exists := seen[id]; exists {
+				continue
+			}
+			seen[id] = struct{}{}
+			conversationIDs = append(conversationIDs, id)
+		}
+	}
+	conversations, err := s.conversations.FindConversationsByIDs(ctx, conversationIDs)
+	if err != nil {
+		return nil, err
+	}
+	activeDirect := make(map[string]struct{}, len(conversations))
+	for _, conversation := range conversations {
+		if (conversation.Type == conversationTypeDirect || conversation.Type == conversationTypeEncrypted) &&
+			conversation.Status == model.ConversationStatusActive {
+			activeDirect[conversation.ID] = struct{}{}
+		}
+	}
+	for peerID, ids := range sharedByPeer {
+		for _, id := range ids {
+			if _, exists := activeDirect[id]; exists {
+				result[peerID] = true
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
 // findDirectConversationBetween composes the Conversation aggregate with the
 // ConversationMembership identity index without allowing Conversation storage
 // to read the membership collection directly.

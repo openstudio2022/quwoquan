@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -254,14 +255,12 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
         return;
       }
       await ref
-          .read(
-            personaRelationshipCommandWriterProvider(
-              AppUiSurfaces.addContactPhone,
-            ),
-          )
-          .follow(
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowingWithSync(
             targetPersonaId,
-            sourceSurfaceId: AppUiSurfaces.addContactPhone.id,
+            currentFollowing: preflight.viewerFollowsTarget,
+            shouldFollow: true,
+            sourceSurface: AppUiSurfaces.addContactPhone,
           );
       if (!_isCurrentFollowAttempt(
         targetPersonaId,

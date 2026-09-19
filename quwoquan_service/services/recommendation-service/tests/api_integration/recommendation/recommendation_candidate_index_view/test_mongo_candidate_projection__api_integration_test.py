@@ -258,7 +258,7 @@ def test_persona_relationship_stream_projects_mongo_edge_before_ack(
             "sourcePersonaId": "persona-stream-viewer",
             "targetPersonaId": "persona-stream-author",
             "following": "true",
-            "version": "1",
+            "version": "1", "partitionId": "4", "partitionSequence": "1",
             "occurredAt": "2026-08-05T08:00:00Z",
         },
     )
@@ -461,6 +461,7 @@ def test_following_candidates_use_local_relationship_projection_and_block_is_irr
         following=True,
         version=1,
         occurred_at=occurred_at,
+        partition_id=7, partition_sequence=1,
     )
     assert [
         row["contentId"]
@@ -479,6 +480,7 @@ def test_following_candidates_use_local_relationship_projection_and_block_is_irr
         following=False,
         version=2,
         occurred_at=occurred_at,
+        partition_id=7, partition_sequence=2,
     )
     assert store.list_for_ranking(
         subject_id="persona-viewer",
@@ -494,8 +496,22 @@ def test_following_candidates_use_local_relationship_projection_and_block_is_irr
         following=False,
         version=3,
         occurred_at=occurred_at,
+        partition_id=7, partition_sequence=3,
     )
     assert store.list_for_ranking(
         subject_id="persona-viewer",
         scenario="following",
     ) == []
+
+def test_content_reaction_current_contribution_updates_candidate_and_unlike_removes_coliked(mongo_database):
+    store=MongoCandidateIndexStore(mongo_database);store.ensure_indexes();now=datetime.now(timezone.utc)
+    snapshot=CandidateLifecycleSnapshot(scenario="content_feed",content_id="reaction-post",content_type="article",author_id="author",tag_refs=(),entity_refs=(),published_at=now,content_vertical=None,entity_tag_ids=(),source_sequence=1,updated_at=now)
+    assert store.apply_source_event(event_id="reaction-post-published",snapshot=snapshot)
+    common=dict(reaction_id="reaction-member",target_kind="post",target_id="reaction-post",actor_dimension="persona",actor_id="viewer",partition_id=2,occurred_at=now)
+    assert store.apply_content_reaction_event(event_id="reaction-like",event_digest="a"*64,reaction="like",version=1,partition_sequence=1,**common)
+    row=store._candidates.find_one({"contentId":"reaction-post"});assert row["likeCount"]==1 and row["likeStatsVersion"]==1
+    assert store.current_co_liked_targets("viewer")== ("reaction-post",)
+    assert store.apply_content_reaction_event(event_id="reaction-unlike",event_digest="b"*64,reaction="none",version=2,partition_sequence=2,**common)
+    row=store._candidates.find_one({"contentId":"reaction-post"});assert row["likeCount"]==0 and row["likeStatsVersion"]==2
+    assert store.current_co_liked_targets("viewer")==()
+    assert not store.apply_content_reaction_event(event_id="reaction-old",event_digest="c"*64,reaction="like",version=1,partition_sequence=3,**common)

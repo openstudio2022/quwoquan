@@ -10,6 +10,7 @@ import 'package:quwoquan_app/runtime/di/media_viewer_interaction_state_bridge.da
     as interaction_state_bridge;
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/actor_interaction_partition.dart';
 
 MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
   required WidgetRef ref,
@@ -56,6 +57,8 @@ MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
   }
 
   return MediaViewerInteractionSnapshot(
+    actorRef: ref.read(actorInteractionPartitionProvider).key,
+    snapshotEpoch: DateTime.now().toUtc().microsecondsSinceEpoch,
     scopePostIds: scopePostIds,
     scopeProfileIds: scopeProfileIds,
     followingUsers: followingUsers,
@@ -134,19 +137,17 @@ int effectivePostCommentCount(
   );
 }
 
-void syncPostLikeIntent(
+Future<void> syncPostLikeIntent(
   WidgetRef ref, {
   required String postId,
   required bool previousLiked,
   required bool isLiked,
-  required int likeCount,
 }) {
-  interaction_state_bridge.syncPostLikeIntent(
+  return interaction_state_bridge.syncPostLikeIntent(
     ref,
     postId: postId,
     previousLiked: previousLiked,
     isLiked: isLiked,
-    likeCount: likeCount,
   );
 }
 

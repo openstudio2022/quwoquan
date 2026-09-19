@@ -303,7 +303,7 @@ void main() {
             log,
             responseFor: _notificationResponseFor,
           ),
-          invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
             surfaceId: AppUiSurfaces.chatList.id,
             routeId: AppUiSurfaces.chatList.routeId,
             clientPageId: clientPageId,

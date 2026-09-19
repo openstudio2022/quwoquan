@@ -1,3 +1,6 @@
+import 'package:quwoquan_app/service/content_service/content/comment/adapters/comment_facets_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/comment/application/content_comment_reaction_coordinator.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -89,7 +92,6 @@ final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
           ref,
           surface: AppUiSurfaces.workBrowser,
           clientPageId: clientPageId,
-          idempotencyKey: idempotencyKey,
         ),
     blockedKeywordsLoader: loadBlockedKeywords,
     postCache: ref.watch(postObjectCacheProvider),
@@ -206,6 +208,26 @@ ContentPostReactionPort _productionPostReactionFacet(Ref ref) {
 final contentPostReactionFacetProvider = Provider<ContentPostReactionPort>(
   _productionPostReactionFacet,
 );
+final contentPostReactionDurableFacetProvider =
+    Provider<ContentPostReactionDurableWriter>(
+      (ref) =>
+          ContentProductionComposition.generatedAdapter<
+            ContentPostReactionDurableWriter
+          >(
+            ContentProductionAdapter.postReaction,
+            client: ref.watch(generatedCloudOperationClientProvider),
+            invocationContext: (clientPageId, {required command}) => command
+                ? contentCommandInvocationContext(
+                    ref,
+                    clientPageId: clientPageId,
+                  )
+                : contentQueryInvocationContext(
+                    ref,
+                    surface: AppUiSurfaces.homeFeed,
+                    clientPageId: clientPageId,
+                  ),
+          ),
+    );
 
 final createContentPostPublicationWriterProvider =
     Provider<ContentPostPublicationWriter>((ref) {
@@ -215,16 +237,17 @@ final createContentPostPublicationWriterProvider =
         ContentProductionAdapter.postPublication,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, idempotencyKey) =>
-            contentCommandInvocationContext(
-              ref,
-              clientPageId: clientPageId,
-              idempotencyKey: idempotencyKey,
-            ),
+            contentCommandInvocationContext(ref, clientPageId: clientPageId),
       );
     });
 
-ContentCommentFacet _remoteContentCommentFacet(Ref ref, AppUiSurface surface) {
-  return ContentProductionComposition.generatedAdapter<ContentCommentFacet>(
+RemoteContentCommentFacet _remoteContentCommentFacet(
+  Ref ref,
+  AppUiSurface surface,
+) {
+  return ContentProductionComposition.generatedAdapter<
+    RemoteContentCommentFacet
+  >(
     ContentProductionAdapter.comment,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, {required command}) {
@@ -261,6 +284,14 @@ final workBrowserContentCommentFacetProvider = Provider<ContentCommentFacet>(
 final profileCommentsContentCommentFacetProvider =
     Provider<ContentCommentFacet>(
       (ref) => _productionCommentFacet(ref, AppUiSurfaces.profileHome),
+    );
+final workBrowserCommentReactionCoordinatorProvider =
+    Provider<ContentCommentReactionCoordinator>(
+      (ref) => _remoteContentCommentFacet(ref, AppUiSurfaces.workBrowser),
+    );
+final profileCommentReactionCoordinatorProvider =
+    Provider<ContentCommentReactionCoordinator>(
+      (ref) => _remoteContentCommentFacet(ref, AppUiSurfaces.profileHome),
     );
 final contentConfigRepositoryProvider = Provider<ContentConfigRepository>((
   ref,
@@ -547,7 +578,6 @@ CirclePostPlacementCommands _productionCirclePostPlacementWriter(
         clientPageId: base.clientPageId,
         routeId: base.routeId,
         actor: base.actor,
-        idempotencyKey: idempotencyKey,
       );
     },
   );

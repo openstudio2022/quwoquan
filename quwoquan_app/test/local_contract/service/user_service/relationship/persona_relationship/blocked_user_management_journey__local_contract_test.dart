@@ -25,10 +25,12 @@ class _AuthenticatedSessionController extends AuthSessionController {
   );
 }
 
-typedef _ListBlockedHandler =
-    Future<BlockedUserSlice> Function(ListBlockedUsersQuery query);
-typedef _UnblockHandler =
-    Future<BlockCommandResult> Function(UnblockUserCommand command);
+typedef _ListBlockedHandler = Future<BlockedUserSlice> Function(
+  ListBlockedUsersQuery query,
+);
+typedef _UnblockHandler = Future<BlockCommandResult> Function(
+  UnblockUserCommand command,
+);
 
 final class _ControlledPersonaRelationshipFacet
     implements BlockCommandWriter, BlockedListQuery {

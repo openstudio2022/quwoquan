@@ -18,6 +18,18 @@ func (h *UserHandler) relationshipCapabilityView(
 		hasPendingGreeting, _ = h.greeting.HasPendingBetween(ctx, viewerID, targetID)
 		hasFormalConversation, _ = h.greeting.HasFormalConversation(ctx, viewerID, targetID)
 	}
+	return h.relationshipCapabilityViewFromFacts(
+		viewerID, targetID, rel, isBlocked, isBlockedBy,
+		hasPendingGreeting, hasFormalConversation,
+	)
+}
+
+func (h *UserHandler) relationshipCapabilityViewFromFacts(
+	viewerID, targetID string,
+	rel relmodel.RelationshipState,
+	isBlocked, isBlockedBy bool,
+	hasPendingGreeting, hasFormalConversation bool,
+) relationshipapp.RelationshipCapabilityView {
 	return relationshipapp.NewRelationshipCapabilityView(
 		relmodel.RelationshipCapabilityFacts{
 			ViewerPersonaID:       viewerID,

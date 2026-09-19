@@ -12,6 +12,7 @@ import (
 	accountports "quwoquan_service/services/user-service/internal/account/user_account/domain/ports"
 	greetingapp "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
 	relmodel "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/model"
+	relports "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/ports"
 	sfmodel "quwoquan_service/services/user-service/internal/relationship/subject_follow/domain/model"
 )
 
@@ -161,15 +162,25 @@ func (p *EventPublisher) PublishPersonaRelationship(ctx context.Context, event r
 		payload.SourcePersonaID == "" || payload.TargetPersonaID == "" || payload.Version <= 0 {
 		return fmt.Errorf("invalid persona relationship event")
 	}
+	envelope, ok := relports.OutboxEnvelopeFromContext(ctx)
+	if !ok || envelope.Event.EventID != event.EventID ||
+		envelope.PartitionKey != payload.PairID ||
+		envelope.PartitionID != relports.OutboxPartitionForKey(payload.PairID) ||
+		envelope.PartitionSequence <= 0 {
+		return fmt.Errorf("persona relationship transport envelope is invalid")
+	}
 	values := map[string]string{
-		"eventId":         event.EventID,
-		"eventName":       event.EventName,
-		"pairId":          payload.PairID,
-		"sourcePersonaId": payload.SourcePersonaID,
-		"targetPersonaId": payload.TargetPersonaID,
-		"following":       strconv.FormatBool(payload.Following),
-		"version":         strconv.FormatInt(payload.Version, 10),
-		"occurredAt":      payload.OccurredAt.UTC().Format(time.RFC3339Nano),
+		"eventId":           event.EventID,
+		"eventName":         event.EventName,
+		"partitionKey":      envelope.PartitionKey,
+		"partitionId":       strconv.Itoa(envelope.PartitionID),
+		"partitionSequence": strconv.FormatInt(envelope.PartitionSequence, 10),
+		"pairId":            payload.PairID,
+		"sourcePersonaId":   payload.SourcePersonaID,
+		"targetPersonaId":   payload.TargetPersonaID,
+		"following":         strconv.FormatBool(payload.Following),
+		"version":           strconv.FormatInt(payload.Version, 10),
+		"occurredAt":        payload.OccurredAt.UTC().Format(time.RFC3339Nano),
 	}
 	if payload.ClearedFollowDirections > 0 {
 		values["clearedFollowDirections"] = strconv.Itoa(payload.ClearedFollowDirections)

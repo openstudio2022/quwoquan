@@ -1,6 +1,6 @@
 {
   "generator": "app-only-emitter",
-  "contractGraphSha256": "0d85f128db29a8f7b402ca339d482c77c330e4ce2714232aeface394889278e3",
+  "contractGraphSha256": "4f2bcaec685b896f69dd6ebaf2b9b200b9d599e8083ae457d9d91e8a201a5106",
   "bindings": [
     {
       "generatedPath": "lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",
@@ -1614,6 +1614,94 @@
       "dartField": "authorAvatarAccessMode",
       "dartType": "MediaDeliveryAccessMode?",
       "enumRef": "MediaDeliveryAccessMode",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentReactionCommandRecoverySlice",
+      "dartField": "outcome",
+      "dartType": "ContentReactionReceiptOutcome",
+      "enumRef": "ContentReactionReceiptOutcome",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentReactionMutationBasisSlice",
+      "dartField": "targetKind",
+      "dartType": "ContentReactionTargetKind",
+      "enumRef": "ContentReactionTargetKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentReactionPresentationSlice",
+      "dartField": "targetKind",
+      "dartType": "ContentReactionTargetKind",
+      "enumRef": "ContentReactionTargetKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentReactionStatisticsSlice",
+      "dartField": "state",
+      "dartType": "ContentReactionStatisticsState",
+      "enumRef": "ContentReactionStatisticsState",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentReactionStatisticsSlice",
+      "dartField": "targetKind",
+      "dartType": "ContentReactionTargetKind",
+      "enumRef": "ContentReactionTargetKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentReactionViewerAttachment",
+      "dartField": "reaction",
+      "dartType": "CommentReactionType?",
+      "enumRef": "CommentReactionType",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentReactionViewerAttachment",
+      "dartField": "state",
+      "dartType": "ContentReactionAttachmentState",
+      "enumRef": "ContentReactionAttachmentState",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentReactionViewerAttachment",
+      "dartField": "targetKind",
+      "dartType": "ContentReactionTargetKind",
+      "enumRef": "ContentReactionTargetKind",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
@@ -3326,6 +3414,39 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
+      "dartClass": "FinalizeExpiredContentReactionCommand",
+      "dartField": "targetKind",
+      "dartType": "ContentReactionTargetKind",
+      "enumRef": "ContentReactionTargetKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "ContentReactionTargetKind",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
+      "dartClass": "GetContentReactionMutationBasisQuery",
+      "dartField": "targetKind",
+      "dartType": "ContentReactionTargetKind",
+      "enumRef": "ContentReactionTargetKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "ContentReactionTargetKind",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
+      "dartClass": "GetContentReactionPresentationQuery",
+      "dartField": "targetKind",
+      "dartType": "ContentReactionTargetKind",
+      "enumRef": "ContentReactionTargetKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "ContentReactionTargetKind",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
       "dartClass": "InitContentMediaUploadCommand",
       "dartField": "mediaType",
       "dartType": "MediaType",
@@ -3366,6 +3487,17 @@
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
+      "dartClass": "RecoverContentReactionCommandQuery",
+      "dartField": "targetKind",
+      "dartType": "ContentReactionTargetKind",
+      "enumRef": "ContentReactionTargetKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "ContentReactionTargetKind",
       "typed": true
     },
     {
@@ -3623,6 +3755,17 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/user/user_operation_contracts.g.requests.g.dart",
+      "dartClass": "FinalizeExpiredRelationshipCommand",
+      "dartField": "operation",
+      "dartType": "PersonaRelationshipMutationAction",
+      "enumRef": "PersonaRelationshipMutationAction",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "PersonaRelationshipMutationAction",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/user/user_operation_contracts.g.requests.g.dart",
       "dartClass": "FollowSubjectCommand",
       "dartField": "subjectType",
       "dartType": "SubjectFollowTargetKind",
@@ -3652,6 +3795,17 @@
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/user/user_operation_contracts.g.requests.g.dart",
+      "dartClass": "RecoverRelationshipCommandQuery",
+      "dartField": "operation",
+      "dartType": "PersonaRelationshipMutationAction",
+      "enumRef": "PersonaRelationshipMutationAction",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "PersonaRelationshipMutationAction",
       "typed": true
     },
     {
@@ -4364,6 +4518,17 @@
       "dartField": "subjectType",
       "dartType": "ProfileOwnerKind",
       "enumRef": "ProfileOwnerKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/user/user_operation_contracts.g.dart",
+      "dartClass": "PersonaRelationshipCommandRecoverySlice",
+      "dartField": "outcome",
+      "dartType": "PersonaRelationshipReceiptOutcome",
+      "enumRef": "PersonaRelationshipReceiptOutcome",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",

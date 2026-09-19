@@ -125,6 +125,12 @@ void _writeSnapshotJson(
     snapshot.fetchedAt.toUtc().toIso8601String(),
   );
   writer.writeRaw(',');
+  _writeJsonField(
+    writer,
+    'sourceExpiresAt',
+    snapshot.sourceExpiresAt.toUtc().toIso8601String(),
+  );
+  writer.writeRaw(',');
   _writeJsonField(writer, 'feedRequestId', snapshot.feedRequestId);
   writer.writeRaw(',');
   _writeJsonField(writer, 'policyDigest', snapshot.policyDigest);

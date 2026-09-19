@@ -14,6 +14,7 @@ import (
 func (h *ChatHandler) registerInternalRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /internal/chat/conversations/direct", h.handleInternalCreateDirect)
 	mux.HandleFunc("GET /internal/chat/conversations/direct", h.handleInternalLookupDirect)
+	mux.HandleFunc("POST /internal/chat/conversations/direct/batch-lookup", h.handleInternalBatchLookupDirect)
 }
 
 func (h *ChatHandler) handleInternalCreateDirect(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +99,32 @@ func (h *ChatHandler) handleInternalLookupDirect(w http.ResponseWriter, r *http.
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"exists": exists})
+}
+
+func (h *ChatHandler) handleInternalBatchLookupDirect(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ViewerID string   `json:"viewerId"`
+		PeerIDs  []string `json:"peerIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "请求格式错误", err.Error()))
+		return
+	}
+	body.ViewerID = strings.TrimSpace(body.ViewerID)
+	if body.ViewerID == "" || len(body.PeerIDs) == 0 || len(body.PeerIDs) > 100 {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "viewerId 与 peerIds 必填", "batch direct lookup requires 1..100 peers"))
+		return
+	}
+	if !isAuthorizedUserServiceRequest(r, body.ViewerID) {
+		writeInternalRouteForbidden(w, r)
+		return
+	}
+	exists, err := h.conversationService.HasDirectBetweenMany(r.Context(), body.ViewerID, body.PeerIDs)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"existsByPeerId": exists})
 }
 
 func writeInternalRouteForbidden(w http.ResponseWriter, r *http.Request) {

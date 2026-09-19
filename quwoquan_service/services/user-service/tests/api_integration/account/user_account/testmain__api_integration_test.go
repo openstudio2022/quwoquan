@@ -315,6 +315,10 @@ func bootstrapMongoRuntime(ctx context.Context, allowLocalUnavailable bool) erro
 
 func rebuildTestHandler(ctx context.Context) error {
 	profileStore := persistence.NewPgProfileStore(pgPool)
+	accountCreationRecoveryStore, err := useraccountpersistence.NewAccountCreationRecoveryPostgresStore(pgPool)
+	if err != nil {
+		return err
+	}
 	personaStore := userpersistence.NewPgPersonaStore(pgPool)
 	invitationStore, err := invitationpersistence.NewPostgresStore(pgPool)
 	if err != nil {
@@ -460,11 +464,19 @@ func rebuildTestHandler(ctx context.Context) error {
 		return err
 	}
 	searchService := application.NewSearchService(profileStore, personaStore)
+	relationshipBasisSigner, err := relationshippersistence.NewMutationBasisSigner(
+		"user-service.test", "test-key",
+		[]relationshippersistence.MutationBasisKey{{ID: "test-key", Material: []byte(strings.Repeat("k", 32))}},
+	)
+	if err != nil {
+		return err
+	}
 	relationshipService := relationshipapp.NewPersonaRelationshipService(
 		relationshipStore,
 		personaStore,
 		profileCache,
 		greetingStore,
+		relationshipapp.WithMutationBasis(relationshipBasisSigner, relationshipStore),
 	)
 	// SubjectFollow / FollowingSubject / FollowedSubjectVisitState packet
 	subjectFollowStore := subjectfollowpersistence.NewPgSubjectFollowStore(pgPool)
@@ -571,6 +583,7 @@ func rebuildTestHandler(ctx context.Context) error {
 			personaCommandStore,
 			personaProfileProjector,
 		),
+		application.WithAccountCreationRecoveryStore(accountCreationRecoveryStore),
 		application.WithDeviceRegistration(deviceRegistrationCommands),
 		application.WithConsentRecordStore(consentRecordStore),
 		application.WithFederatedPhoneBindingTickets(

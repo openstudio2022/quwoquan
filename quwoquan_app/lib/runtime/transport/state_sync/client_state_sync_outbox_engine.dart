@@ -1,31 +1,36 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync.dart';
 
 typedef ClientStateSyncConfigReader = ClientStateSyncConfig Function();
 typedef ClientStateSyncOutboxReader = Future<Map<String, dynamic>?> Function();
-typedef ClientStateSyncOutboxWriter =
-    Future<void> Function(Map<String, dynamic> value);
-typedef ClientStateSyncEntryExecutor =
-    Future<void> Function(ClientStateSyncOutboxEntry entry);
-typedef ClientStateSyncStateListener =
-    void Function(ClientStateSyncOutboxState state);
-typedef ClientStateSyncTerminalFailureListener =
-    void Function(ClientStateSyncOutboxEntry entry);
+typedef ClientStateSyncOutboxWriter = Future<void> Function(
+  Map<String, dynamic> value,
+);
+typedef ClientStateSyncEntryExecutor = Future<ClientStateSyncReceipt> Function(
+  ClientStateSyncOutboxEntry entry,
+);
+typedef ClientStateSyncEntryRecoverer = Future<ClientStateSyncReceipt> Function(
+  ClientStateSyncOutboxEntry entry,
+);
+typedef ClientStateSyncStateListener = void Function(
+  ClientStateSyncOutboxState state,
+);
+typedef ClientStateSyncTerminalFailureListener = void Function(
+  ClientStateSyncOutboxEntry entry,
+);
 
-/// Runtime transport engine for coalescing and retrying client interaction
-/// intents. Domain operation mapping, persistence technology and composition
-/// stay outside this library behind typed callbacks.
-///
-/// 重试期间的瞬时失败保持静默；entry 首次入队超过 `maxPendingAge` 进入
-/// 终态失败：放弃重试、移除 entry 并经 [onTerminalFailure] 交由上层回滚
-/// 乐观态与提示用户。
+/// Durable client intent engine. A command becomes accepted only after the
+/// entry carrying stable key/basis/version/actor has been persisted. Local age
+/// only pauses new sends; the owning service receipt decides terminal outcome.
 final class ClientStateSyncOutboxEngine {
   ClientStateSyncOutboxEngine({
     required this.readConfig,
     required this.readPersistedState,
     required this.writePersistedState,
     required this.executeEntry,
+    required this.recoverEntry,
     required this.onStateChanged,
     required this.onTerminalFailure,
   });
@@ -34,12 +39,17 @@ final class ClientStateSyncOutboxEngine {
   final ClientStateSyncOutboxReader readPersistedState;
   final ClientStateSyncOutboxWriter writePersistedState;
   final ClientStateSyncEntryExecutor executeEntry;
+  final ClientStateSyncEntryRecoverer recoverEntry;
   final ClientStateSyncStateListener onStateChanged;
   final ClientStateSyncTerminalFailureListener onTerminalFailure;
 
   Timer? _flushTimer;
   final Map<String, bool> _inFlightDesiredValues = <String, bool>{};
+  final Map<String, int> _objectRevisions = <String, int>{};
+  final Set<String> _touchedKeys = <String>{};
+  Future<void> _admissionTail = Future<void>.value();
   ClientStateSyncOutboxState _state = const ClientStateSyncOutboxState();
+  Future<void> _writeTail = Future<void>.value();
   bool _terminallyPurged = false;
   bool _disposed = false;
 
@@ -47,302 +57,413 @@ final class ClientStateSyncOutboxEngine {
 
   Future<void> hydrate() async {
     final raw = await readPersistedState();
-    if (_disposed || _terminallyPurged || raw == null) {
-      return;
-    }
+    await _admissionTail;
+    if (_disposed || _terminallyPurged || raw == null) return;
     try {
+      final disk = ClientStateSyncOutboxState.fromMap(raw).entries;
+      final byKey = <String, ClientStateSyncOutboxEntry>{
+        for (final entry in _state.entries) entry.coalesceKey: entry,
+      };
+      for (final entry in disk) {
+        final current = byKey[entry.coalesceKey];
+        final localRevision = _objectRevisions[entry.coalesceKey] ?? 0;
+        if (_touchedKeys.contains(entry.coalesceKey) ||
+            localRevision > entry.intentRevision) {
+          continue;
+        }
+        if (current == null || current.intentRevision < entry.intentRevision) {
+          byKey[entry.coalesceKey] = entry;
+        }
+      }
       _setState(
-        _state.copyWith(
-          entries: _dropResolvedEntries(
-            ClientStateSyncOutboxState.fromMap(raw).entries,
-          ),
+        ClientStateSyncOutboxState(
+          entries: _dropResolvedEntries(byKey.values.toList(growable: false)),
         ),
       );
     } on FormatException {
-      _setState(const ClientStateSyncOutboxState());
-      await writePersistedState(_state.toMap());
+      // Invalid legacy records cannot be upgraded into a new write command: the
+      // stable key/basis/version cannot be reconstructed honestly.
+      // Corrupt legacy storage must not erase newly accepted in-memory intents.
+      await _persistState();
     }
     _scheduleNextFlush();
   }
 
-  void enqueueFollow({
+  Future<void> enqueueFollow({
     required String personaId,
     required bool currentFollowing,
     required bool shouldFollow,
     required String sourceSurfaceId,
+    required String idempotencyKey,
+    required String mutationBasis,
+    required int expectedVersion,
+    required String actorRef,
     bool flushImmediately = false,
-  }) {
-    _upsertEntry(
-      objectType: 'profile',
-      objectId: personaId,
-      intentType: 'follow',
-      currentBoolValue: currentFollowing,
-      desiredBoolValue: shouldFollow,
-      sourceSurfaceId: sourceSurfaceId,
-      flushImmediately: flushImmediately,
-    );
-  }
+  }) => _upsertEntry(
+    objectType: 'profile',
+    objectId: personaId,
+    intentType: 'follow',
+    currentBoolValue: currentFollowing,
+    desiredBoolValue: shouldFollow,
+    sourceSurfaceId: sourceSurfaceId,
+    idempotencyKey: idempotencyKey,
+    mutationBasis: mutationBasis,
+    expectedVersion: expectedVersion,
+    actorRef: actorRef,
+    flushImmediately: flushImmediately,
+  );
 
-  void enqueuePostLike({
+  Future<void> enqueuePostLike({
     required String postId,
     required bool currentLiked,
     required bool isLiked,
+    required String idempotencyKey,
+    required String mutationBasis,
+    required int expectedVersion,
+    required String actorRef,
     bool flushImmediately = false,
-  }) {
-    _upsertEntry(
-      objectType: 'post',
-      objectId: postId,
-      intentType: 'like',
-      currentBoolValue: currentLiked,
-      desiredBoolValue: isLiked,
-      flushImmediately: flushImmediately,
-    );
-  }
+  }) => _upsertEntry(
+    objectType: 'post',
+    objectId: postId,
+    intentType: 'like',
+    currentBoolValue: currentLiked,
+    desiredBoolValue: isLiked,
+    idempotencyKey: idempotencyKey,
+    mutationBasis: mutationBasis,
+    expectedVersion: expectedVersion,
+    actorRef: actorRef,
+    flushImmediately: flushImmediately,
+  );
 
   Future<void> flushNow() async {
-    if (_disposed || _terminallyPurged) {
-      return;
-    }
+    await _admissionTail;
+    if (_disposed || _terminallyPurged) return;
     final config = readConfig();
     final now = DateTime.now();
-    // 超期终态优先：放弃重试、移除并通知上层，不再发出远程写入。
     final expired = _state.entries
         .where(
-          (entry) =>
-              !_isInFlight(entry.coalesceKey) &&
-              entry.hasPendingDelta &&
-              now.difference(entry.firstQueuedAt) > config.maxPendingAge,
+          (e) =>
+              !_isInFlight(e.coalesceKey) &&
+              e.hasPendingDelta &&
+              !e.pausedUnknown &&
+              now.difference(e.firstQueuedAt) > config.maxPendingAge,
         )
         .toList(growable: false);
     for (final entry in expired) {
-      _removeEntry(entry.coalesceKey);
-      onTerminalFailure(entry);
+      _replaceEntry(entry.copyWith(pausedUnknown: true));
     }
-    if (expired.isNotEmpty) {
-      unawaited(_persistState());
-    }
-    final dueKeys = _state.entries
+    if (expired.isNotEmpty) await _persistState();
+    final paused = _state.entries
         .where(
-          (entry) =>
-              !_isInFlight(entry.coalesceKey) &&
-              entry.hasPendingDelta &&
-              !entry.nextFlushAt.isAfter(now),
+          (e) =>
+              e.pausedUnknown &&
+              !_isInFlight(e.coalesceKey) &&
+              !e.nextFlushAt.isAfter(now),
         )
         .take(config.maxBatchSize)
-        .map((entry) => entry.coalesceKey)
         .toList(growable: false);
-    if (dueKeys.isEmpty) {
-      _scheduleNextFlush();
-      return;
+    for (final entry in paused) {
+      await _recover(entry);
     }
-
-    for (final coalesceKey in dueKeys) {
+    final due = _state.entries
+        .where(
+          (e) =>
+              !e.pausedUnknown &&
+              !_isInFlight(e.coalesceKey) &&
+              e.hasPendingDelta &&
+              !e.nextFlushAt.isAfter(now),
+        )
+        .take(config.maxBatchSize)
+        .map((e) => e.coalesceKey)
+        .toList(growable: false);
+    for (final key in due) {
       if (_disposed || _terminallyPurged) {
         break;
       }
-      final entry = _entryForKey(coalesceKey);
+      final entry = _entryForKey(key);
       if (entry == null ||
-          _isInFlight(coalesceKey) ||
-          !entry.hasPendingDelta ||
-          entry.nextFlushAt.isAfter(DateTime.now())) {
+          _isInFlight(key) ||
+          entry.pausedUnknown ||
+          !entry.hasPendingDelta) {
         continue;
       }
-      _inFlightDesiredValues[coalesceKey] = entry.desiredBoolValue;
+      _inFlightDesiredValues[key] = entry.desiredBoolValue;
       try {
-        await executeEntry(entry);
-        if (!_disposed && !_terminallyPurged) {
-          _onFlushSucceeded(
-            coalesceKey: coalesceKey,
-            flushedDesiredBoolValue: entry.desiredBoolValue,
-          );
-        }
+        final receipt = await executeEntry(entry);
+        _applyReceipt(key, entry, receipt);
       } catch (_) {
-        if (!_disposed && !_terminallyPurged) {
-          _onFlushFailed(coalesceKey: coalesceKey, config: config);
-        }
+        _onFlushFailed(key, config);
       } finally {
-        _inFlightDesiredValues.remove(coalesceKey);
+        _inFlightDesiredValues.remove(key);
       }
     }
-    if (_disposed || _terminallyPurged) {
-      return;
-    }
-    unawaited(_persistState());
+    await _persistState();
     _scheduleNextFlush();
   }
 
-  void _upsertEntry({
+  Future<void> _recover(ClientStateSyncOutboxEntry entry) async {
+    _inFlightDesiredValues[entry.coalesceKey] = entry.desiredBoolValue;
+    try {
+      final receipt = await recoverEntry(entry);
+      _applyReceipt(entry.coalesceKey, entry, receipt);
+    } catch (_) {
+      final current = _entryForKey(entry.coalesceKey);
+      if (current != null) {
+        _replaceEntry(
+          current.copyWith(
+            pausedUnknown: true,
+            nextFlushAt: DateTime.now().add(readConfig().retryDelay),
+          ),
+        );
+      }
+    } finally {
+      _inFlightDesiredValues.remove(entry.coalesceKey);
+    }
+  }
+
+  void _applyReceipt(
+    String key,
+    ClientStateSyncOutboxEntry flushed,
+    ClientStateSyncReceipt receipt,
+  ) {
+    switch (receipt.outcome) {
+      case ClientStateSyncReceiptOutcome.committed:
+        final current = _entryForKey(key);
+        if (current == null) return;
+        final reconciled = current.copyWith(
+          confirmedBoolValue: flushed.desiredBoolValue,
+          retryCount: 0,
+          pausedUnknown: false,
+          expectedVersion: receipt.committedVersion ?? current.expectedVersion,
+        );
+        if (!reconciled.hasPendingDelta) {
+          _removeEntry(key);
+        } else {
+          _replaceEntry(reconciled);
+        }
+      case ClientStateSyncReceiptOutcome.rejected:
+      case ClientStateSyncReceiptOutcome.expired:
+        _removeEntry(key);
+        onTerminalFailure(flushed);
+      case ClientStateSyncReceiptOutcome.historyUnavailable:
+        // History loss is not proof of failure. Keep the intent paused and ask
+        // the owning read/recovery UI for an explicit new user decision.
+        _replaceEntry(
+          flushed.copyWith(
+            pausedUnknown: true,
+            nextFlushAt: DateTime.now().add(readConfig().retryDelay),
+          ),
+        );
+    }
+  }
+
+  Future<void> _upsertEntry({
     required String objectType,
     required String objectId,
     required String intentType,
     required bool? currentBoolValue,
     required bool desiredBoolValue,
     String sourceSurfaceId = '',
+    required String idempotencyKey,
+    required String mutationBasis,
+    required int expectedVersion,
+    required String actorRef,
     required bool flushImmediately,
-  }) {
-    if (_disposed || _terminallyPurged) {
-      return;
+  }) async {
+    final previous = _admissionTail;
+    final result = previous
+        .catchError((Object _) {})
+        .then(
+          (_) => _upsertEntryInternal(
+            objectType: objectType,
+            objectId: objectId,
+            intentType: intentType,
+            currentBoolValue: currentBoolValue,
+            desiredBoolValue: desiredBoolValue,
+            sourceSurfaceId: sourceSurfaceId,
+            idempotencyKey: idempotencyKey,
+            mutationBasis: mutationBasis,
+            expectedVersion: expectedVersion,
+            actorRef: actorRef,
+            flushImmediately: flushImmediately,
+          ),
+        );
+    _admissionTail = result.catchError((Object _) {});
+    await result;
+    if (flushImmediately) {
+      await flushNow();
     }
-    final config = readConfig();
-    final now = DateTime.now();
-    final coalesceKey = '$objectType:$intentType:$objectId';
-    final existingEntry = _entryForKey(coalesceKey);
-    final confirmedBoolValue =
-        existingEntry?.confirmedBoolValue ?? currentBoolValue;
-    if (!_isInFlight(coalesceKey) &&
-        confirmedBoolValue != null &&
-        confirmedBoolValue == desiredBoolValue) {
-      _removeEntry(coalesceKey);
-      unawaited(_persistState());
+  }
+
+  Future<void> _upsertEntryInternal({
+    required String objectType,
+    required String objectId,
+    required String intentType,
+    required bool? currentBoolValue,
+    required bool desiredBoolValue,
+    String sourceSurfaceId = '',
+    required String idempotencyKey,
+    required String mutationBasis,
+    required int expectedVersion,
+    required String actorRef,
+    required bool flushImmediately,
+  }) async {
+    if (_disposed || _terminallyPurged) {
+      throw StateError('client state sync outbox is unavailable');
+    }
+    if (idempotencyKey.trim().isEmpty ||
+        mutationBasis.trim().isEmpty ||
+        actorRef.trim().isEmpty ||
+        expectedVersion < 0) {
+      throw ArgumentError('durable command identity is incomplete');
+    }
+    final config = readConfig(),
+        now = DateTime.now(),
+        key = '$objectType:$intentType:$objectId',
+        existing = _entryForKey(key);
+    final confirmed = existing?.confirmedBoolValue ?? currentBoolValue;
+    if (!_isInFlight(key) &&
+        confirmed != null &&
+        confirmed == desiredBoolValue) {
+      final next = ClientStateSyncOutboxState(
+        entries: _state.entries
+            .where((e) => e.coalesceKey != key)
+            .toList(growable: false),
+      );
+      await _persistSnapshot(next);
+      _removeEntry(key);
+      _touchedKeys.add(key);
       _scheduleNextFlush();
       return;
     }
+    final revision =
+        (existing?.intentRevision ?? _objectRevisions[key] ?? 0) + 1;
+    final entry = ClientStateSyncOutboxEntry(
+      coalesceKey: key,
+      objectType: objectType,
+      objectId: objectId,
+      intentType: intentType,
+      desiredBoolValue: desiredBoolValue,
+      sourceSurfaceId: sourceSurfaceId,
+      nextFlushAt: flushImmediately ? now : now.add(config.flushDelay),
+      firstQueuedAt: existing?.firstQueuedAt ?? now,
+      confirmedBoolValue: confirmed,
+      retryCount: 0,
+      idempotencyKey: idempotencyKey,
+      mutationBasis: mutationBasis,
+      expectedVersion: expectedVersion,
+      intentRevision: revision,
+      actorRef: actorRef,
+    );
+    final next = [..._state.entries.where((e) => e.coalesceKey != key), entry];
+    if (next.length > config.maxEntries) {
+      throw StateError('client state sync outbox entry capacity exceeded');
+    }
+    final encodedBytes = utf8
+        .encode(jsonEncode(ClientStateSyncOutboxState(entries: next).toMap()))
+        .length;
+    if (encodedBytes > config.maxPersistedBytes) {
+      throw StateError('client state sync outbox byte capacity exceeded');
+    }
+    final accepted = ClientStateSyncOutboxState(entries: next);
+    await _persistSnapshot(accepted); // publish only after durable acceptance
+    _objectRevisions[key] = revision;
+    _touchedKeys.add(key);
+    _setState(accepted);
+    _scheduleNextFlush();
+  }
+
+  void _onFlushFailed(String key, ClientStateSyncConfig config) {
+    final current = _entryForKey(key);
+    if (current == null || !current.hasPendingDelta) return;
+    final now = DateTime.now();
+    if (now.difference(current.firstQueuedAt) > config.maxPendingAge) {
+      _replaceEntry(current.copyWith(pausedUnknown: true));
+      return;
+    }
     _replaceEntry(
-      ClientStateSyncOutboxEntry(
-        coalesceKey: coalesceKey,
-        objectType: objectType,
-        objectId: objectId,
-        intentType: intentType,
-        desiredBoolValue: desiredBoolValue,
-        sourceSurfaceId: sourceSurfaceId,
-        nextFlushAt: flushImmediately ? now : now.add(config.flushDelay),
-        // coalesce 更新不重置首次入队时间，终态判定以最早意图为准。
-        firstQueuedAt: existingEntry?.firstQueuedAt ?? now,
-        confirmedBoolValue: confirmedBoolValue,
-        retryCount: existingEntry?.retryCount ?? 0,
+      current.copyWith(
+        retryCount: current.retryCount + 1,
+        nextFlushAt: now.add(config.retryDelay),
       ),
     );
-    unawaited(_persistState());
-    _scheduleNextFlush();
   }
 
   void _scheduleNextFlush() {
     _flushTimer?.cancel();
-    if (_disposed || _terminallyPurged || _state.entries.isEmpty) return;
-    final wakeTimes = _state.entries
-        .where(
-          (entry) => !_isInFlight(entry.coalesceKey) && entry.hasPendingDelta,
-        )
-        .map((entry) => entry.nextFlushAt)
-        .toList(growable: false);
-    if (wakeTimes.isEmpty) {
-      return;
-    }
-    final nextWakeAt = wakeTimes.reduce((a, b) => a.isBefore(b) ? a : b);
-    final delay = nextWakeAt.difference(DateTime.now());
+    if (_disposed || _terminallyPurged) return;
+    final times = _state.entries
+        .where((e) => !_isInFlight(e.coalesceKey) && e.hasPendingDelta)
+        .map((e) => e.nextFlushAt)
+        .toList();
+    if (times.isEmpty) return;
+    final at = times.reduce((a, b) => a.isBefore(b) ? a : b);
+    final delay = at.difference(DateTime.now());
     _flushTimer = Timer(delay.isNegative ? Duration.zero : delay, flushNow);
   }
 
-  bool _isInFlight(String coalesceKey) {
-    return _inFlightDesiredValues.containsKey(coalesceKey);
-  }
-
-  ClientStateSyncOutboxEntry? _entryForKey(String coalesceKey) {
-    for (final entry in _state.entries.reversed) {
-      if (entry.coalesceKey == coalesceKey) {
-        return entry;
-      }
+  bool _isInFlight(String key) => _inFlightDesiredValues.containsKey(key);
+  ClientStateSyncOutboxEntry? _entryForKey(String key) {
+    for (final e in _state.entries.reversed) {
+      if (e.coalesceKey == key) return e;
     }
     return null;
   }
 
   void _replaceEntry(ClientStateSyncOutboxEntry entry) {
-    final nextEntries = List<ClientStateSyncOutboxEntry>.from(_state.entries)
-      ..removeWhere((item) => item.coalesceKey == entry.coalesceKey)
-      ..add(entry);
-    _setState(_state.copyWith(entries: nextEntries));
-  }
-
-  void _removeEntry(String coalesceKey) {
     _setState(
-      _state.copyWith(
-        entries: _state.entries
-            .where((entry) => entry.coalesceKey != coalesceKey)
-            .toList(growable: false),
+      ClientStateSyncOutboxState(
+        entries: [
+          ..._state.entries.where((e) => e.coalesceKey != entry.coalesceKey),
+          entry,
+        ],
       ),
     );
   }
 
-  void _onFlushSucceeded({
-    required String coalesceKey,
-    required bool flushedDesiredBoolValue,
-  }) {
-    final currentEntry = _entryForKey(coalesceKey);
-    if (currentEntry == null) {
-      return;
-    }
-    final reconciledEntry = currentEntry.copyWith(
-      confirmedBoolValue: flushedDesiredBoolValue,
-      retryCount: 0,
-    );
-    if (!reconciledEntry.hasPendingDelta) {
-      _removeEntry(coalesceKey);
-      return;
-    }
-    _replaceEntry(reconciledEntry);
-  }
-
-  void _onFlushFailed({
-    required String coalesceKey,
-    required ClientStateSyncConfig config,
-  }) {
-    final currentEntry = _entryForKey(coalesceKey);
-    if (currentEntry == null) {
-      return;
-    }
-    if (!currentEntry.hasPendingDelta) {
-      _removeEntry(coalesceKey);
-      return;
-    }
-    final now = DateTime.now();
-    if (now.difference(currentEntry.firstQueuedAt) > config.maxPendingAge) {
-      // 失败瞬间跨过期限：同样进入终态，不再安排下一次重试。
-      _removeEntry(coalesceKey);
-      onTerminalFailure(currentEntry);
-      return;
-    }
-    _replaceEntry(
-      currentEntry.copyWith(
-        retryCount: currentEntry.retryCount + 1,
-        nextFlushAt: now.add(config.retryDelay),
+  void _removeEntry(String key) {
+    _touchedKeys.add(key);
+    _objectRevisions[key] = (_objectRevisions[key] ?? 0) + 1;
+    _setState(
+      ClientStateSyncOutboxState(
+        entries: _state.entries
+            .where((e) => e.coalesceKey != key)
+            .toList(growable: false),
       ),
     );
   }
 
   List<ClientStateSyncOutboxEntry> _dropResolvedEntries(
     List<ClientStateSyncOutboxEntry> entries,
-  ) {
-    return entries
-        .where((entry) => entry.hasPendingDelta)
-        .toList(growable: false);
-  }
-
-  Future<void> _persistState() async {
-    if (_disposed || _terminallyPurged) {
-      return;
-    }
-    await writePersistedState(_state.toMap());
+  ) => entries.where((e) => e.hasPendingDelta).toList(growable: false);
+  Future<void> _persistState() => _persistSnapshot(_state);
+  Future<void> _persistSnapshot(ClientStateSyncOutboxState snapshot) {
+    if (_disposed || _terminallyPurged) return Future<void>.value();
+    final encoded = snapshot.toMap();
+    final write = _writeTail
+        .catchError((Object _) {})
+        .then((_) => writePersistedState(encoded));
+    _writeTail = write.catchError((Object _) {});
+    return write;
   }
 
   void purgeForTerminalAccountClosure() {
     _terminallyPurged = true;
     _flushTimer?.cancel();
-    _flushTimer = null;
     _inFlightDesiredValues.clear();
+    _objectRevisions.clear();
+    _touchedKeys.clear();
     _setState(const ClientStateSyncOutboxState());
   }
 
   void dispose() {
     _disposed = true;
     _flushTimer?.cancel();
-    _flushTimer = null;
     _inFlightDesiredValues.clear();
   }
 
-  void _setState(ClientStateSyncOutboxState nextState) {
-    _state = nextState;
-    if (!_disposed) {
-      onStateChanged(nextState);
-    }
+  void _setState(ClientStateSyncOutboxState next) {
+    _state = next;
+    onStateChanged(next);
   }
 }

@@ -24,10 +24,12 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         ContentBehaviorFactAppender,
         ContentPostProjection,
         FeedObjectCard,
+        MediaDeliveryAccessMode,
         ReportContentBehaviorsCommand;
 
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 
@@ -115,8 +117,9 @@ class _TwoChannelFeedMapNotifier extends DiscoveryFeedMapNotifier {
 /// 内层传输故意直接抛错，把「意外发起真实下载」变成显式测试失败。
 CloudHttpClient _unreachableDataPlaneClient() => CloudHttpClient(
   client: MockClient(
-    (request) async =>
-        throw StateError('MediaDownloadCache double must not perform network IO'),
+    (request) async => throw StateError(
+      'MediaDownloadCache double must not perform network IO',
+    ),
   ),
 );
 
@@ -169,8 +172,7 @@ final class _WidgetPagedDiscoveryFeedQuery
       ),
       nextCursor: 'cursor_${pageIndex + 1}',
       feedRequestId: 'frq_widget_resident_$pageIndex',
-      policyDigest:
-          'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      policyDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
   }
 }
@@ -361,8 +363,14 @@ void main() {
                       isDark: false,
                       channelId: channelId,
                       template: 'single_column_multiform',
-                      onUserTap:
-                          (_, {avatarUrl, backgroundUrl, displayName}) {},
+                      onUserTap: (
+                        _, {
+                        avatarAccessMode,
+                        avatarAssetId,
+                        avatarUrl,
+                        backgroundUrl,
+                        displayName,
+                      }) {},
                     );
                   },
                 ),
@@ -509,7 +517,14 @@ void main() {
                     isDark: false,
                     channelId: channelId,
                     template: 'single_column_multiform',
-                    onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
+                    onUserTap: (
+                      _, {
+                      avatarAccessMode,
+                      avatarAssetId,
+                      avatarUrl,
+                      backgroundUrl,
+                      displayName,
+                    }) {},
                   ),
                 ),
               ),
@@ -577,6 +592,8 @@ void main() {
 
 void _noopUserTap(
   String userId, {
+  MediaDeliveryAccessMode? avatarAccessMode,
+  String? avatarAssetId,
   String? avatarUrl,
   String? displayName,
   String? backgroundUrl,

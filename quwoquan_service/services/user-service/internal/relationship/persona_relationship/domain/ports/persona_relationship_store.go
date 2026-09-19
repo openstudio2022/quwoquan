@@ -29,8 +29,16 @@ type BlockedListItem struct {
 type PersonaRelationshipStore interface {
 	Apply(ctx context.Context, command model.Command) (model.MutationResult, error)
 	Get(ctx context.Context, viewerPersonaID, targetPersonaID string) (model.RelationshipState, error)
-	ListFollowing(ctx context.Context, sourcePersonaID, cursor string, limit int) ([]model.Direction, string, error)
-	ListFollowers(ctx context.Context, targetPersonaID, cursor string, limit int) ([]model.Direction, string, error)
+	// GetMany 以一次查询返回 viewer 与一组 target 的关系快照。
+	// 列表每页只做一次边查询：逐条 Get 会让往返数随页大小线性增长。
+	// 结果按 target 索引；没有任何方向的 target 返回零值状态。
+	GetMany(
+		ctx context.Context,
+		viewerPersonaID string,
+		targetPersonaIDs []string,
+	) (map[string]model.RelationshipState, error)
+	ListFollowing(ctx context.Context, sourcePersonaID, cursor string, limit int, viewerPersonaID, query string) ([]model.Direction, string, error)
+	ListFollowers(ctx context.Context, targetPersonaID, cursor string, limit int, viewerPersonaID, query string) ([]model.Direction, string, error)
 	ListBlocked(ctx context.Context, sourcePersonaID, cursor string, limit int) ([]BlockedListItem, string, error)
 }
 

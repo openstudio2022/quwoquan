@@ -14024,6 +14024,280 @@
     },
     {
       "actorRequirement": "persona_or_device",
+      "aggregateOwner": "ContentReaction",
+      "authMode": "optional",
+      "canonicalOperationId": "content.content_reaction.FinalizeExpiredContentReactionCommand",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodeContentReactionCommandRecoverySlice",
+        "responseType": "ContentReactionCommandRecoverySlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "consistency": null,
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.content_reaction_basis_invalid",
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.USER.idempotency_conflict",
+        "CONTENT.USER.content_reaction_basis_expired",
+        "CONTENT.SYSTEM.storage_write_failed"
+      ],
+      "facadeMethod": "finalizeExpired",
+      "facet": "ContentReactionCommandFacet",
+      "invariantTarget": "ContentReaction",
+      "kind": "command",
+      "localOperationId": "FinalizeExpiredContentReactionCommand",
+      "method": "POST",
+      "mutationTarget": "ContentReaction",
+      "objectId": "content.content_reaction",
+      "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
+      "pagination": null,
+      "pathTemplate": "/content/reactions/{targetKind}/{targetId}/commands/{operation}/finalize-expired",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 800
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "targetKind",
+            "name": "targetKind"
+          },
+          {
+            "field": "targetId",
+            "name": "targetId"
+          },
+          {
+            "field": "operation",
+            "name": "operation"
+          }
+        ]
+      },
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "FinalizeExpiredContentReactionCommand",
+      "responseAdmission": null,
+      "responseBody": "ContentReactionCommandRecoverySlice",
+      "responseBodyKind": "object",
+      "responseEntity": "ContentReactionCommandRecoverySlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "content/content/content_reaction/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "homeFeed",
+        "profileHome",
+        "workBrowser"
+      ],
+      "telemetry": {
+        "attributes": [
+          "actor_dimension",
+          "outcome"
+        ],
+        "metric": "content_reaction_recovery",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona_or_device",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "content.content_reaction.GetContentReactionMutationBasis",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodeContentReactionMutationBasisSlice",
+        "responseType": "ContentReactionMutationBasisSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "consistency": null,
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.USER.content_reaction_target_not_found",
+        "CONTENT.SYSTEM.storage_read_failed"
+      ],
+      "facadeMethod": "getMutationBasis",
+      "facet": "ContentReactionQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetContentReactionMutationBasis",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "content.content_reaction",
+      "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
+      "pagination": null,
+      "pathTemplate": "/content/reactions/{targetKind}/{targetId}/mutation-basis",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 800
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "targetKind",
+            "name": "targetKind"
+          },
+          {
+            "field": "targetId",
+            "name": "targetId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GetContentReactionMutationBasisQuery",
+      "responseAdmission": null,
+      "responseBody": "ContentReactionMutationBasisSlice",
+      "responseBodyKind": "object",
+      "responseEntity": "ContentReactionMutationBasisSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "content/content/content_reaction/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "homeFeed",
+        "profileHome",
+        "workBrowser"
+      ],
+      "telemetry": {
+        "attributes": [
+          "actor_dimension",
+          "outcome"
+        ],
+        "metric": "content_reaction_state_get",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona_or_device",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "content.content_reaction.GetContentReactionPresentation",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodeContentReactionPresentationSlice",
+        "responseType": "ContentReactionPresentationSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "consistency": null,
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.SYSTEM.storage_read_failed"
+      ],
+      "facadeMethod": "getPresentation",
+      "facet": "ContentReactionQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetContentReactionPresentation",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "content.content_reaction",
+      "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
+      "pagination": null,
+      "pathTemplate": "/content/reactions/{targetKind}/{targetId}/presentation",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 800
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "targetKind",
+            "name": "targetKind"
+          },
+          {
+            "field": "targetId",
+            "name": "targetId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GetContentReactionPresentationQuery",
+      "responseAdmission": null,
+      "responseBody": "ContentReactionPresentationSlice",
+      "responseBodyKind": "object",
+      "responseEntity": "ContentReactionPresentationSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "content/content/content_reaction/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "homeFeed",
+        "workBrowser"
+      ],
+      "telemetry": {
+        "attributes": [
+          "actor_dimension",
+          "outcome"
+        ],
+        "metric": "content_reaction_presentation_get",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona_or_device",
       "aggregateOwner": "",
       "authMode": "optional",
       "canonicalOperationId": "content.content_reaction.GetContentReactionState",
@@ -14125,6 +14399,8 @@
       "consistency": null,
       "domain": "content",
       "errorCodes": [
+        "CONTENT.USER.content_reaction_basis_invalid",
+        "CONTENT.USER.content_reaction_basis_expired",
         "CONTENT.USER.unauthorized",
         "CONTENT.USER.content_reaction_target_not_found",
         "CONTENT.USER.invalid_argument",
@@ -14165,7 +14441,7 @@
           }
         ]
       },
-      "requestBodyKind": "none",
+      "requestBodyKind": "object",
       "requestConstants": null,
       "requestEntity": "LikeContentPostCommand",
       "responseAdmission": null,
@@ -14212,6 +14488,8 @@
       "consistency": null,
       "domain": "content",
       "errorCodes": [
+        "CONTENT.USER.content_reaction_basis_invalid",
+        "CONTENT.USER.content_reaction_basis_expired",
         "CONTENT.USER.unauthorized",
         "CONTENT.USER.invalid_argument",
         "CONTENT.USER.content_reaction_target_not_found",
@@ -14284,6 +14562,99 @@
     },
     {
       "actorRequirement": "persona_or_device",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "content.content_reaction.RecoverContentReactionCommand",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodeContentReactionCommandRecoverySlice",
+        "responseType": "ContentReactionCommandRecoverySlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "consistency": null,
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.SYSTEM.storage_read_failed"
+      ],
+      "facadeMethod": "recover",
+      "facet": "ContentReactionCommandFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "RecoverContentReactionCommand",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "content.content_reaction",
+      "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
+      "pagination": null,
+      "pathTemplate": "/content/reactions/{targetKind}/{targetId}/commands/{operation}/receipt",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 800
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "targetKind",
+            "name": "targetKind"
+          },
+          {
+            "field": "targetId",
+            "name": "targetId"
+          },
+          {
+            "field": "operation",
+            "name": "operation"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "RecoverContentReactionCommandQuery",
+      "responseAdmission": null,
+      "responseBody": "ContentReactionCommandRecoverySlice",
+      "responseBodyKind": "object",
+      "responseEntity": "ContentReactionCommandRecoverySlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "content/content/content_reaction/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "homeFeed",
+        "profileHome",
+        "workBrowser"
+      ],
+      "telemetry": {
+        "attributes": [
+          "actor_dimension",
+          "outcome"
+        ],
+        "metric": "content_reaction_recovery",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona_or_device",
       "aggregateOwner": "ContentReaction",
       "authMode": "optional",
       "canonicalOperationId": "content.content_reaction.UnlikePost",
@@ -14300,6 +14671,8 @@
       "consistency": null,
       "domain": "content",
       "errorCodes": [
+        "CONTENT.USER.content_reaction_basis_invalid",
+        "CONTENT.USER.content_reaction_basis_expired",
         "CONTENT.USER.unauthorized",
         "CONTENT.USER.content_reaction_target_not_found",
         "CONTENT.USER.invalid_argument",
@@ -14340,7 +14713,7 @@
           }
         ]
       },
-      "requestBodyKind": "none",
+      "requestBodyKind": "object",
       "requestConstants": null,
       "requestEntity": "UnlikeContentPostCommand",
       "responseAdmission": null,
@@ -27093,7 +27466,9 @@
         "USER.AUTH.account_security_unavailable",
         "USER.AUTH.account_suspended",
         "USER.AUTH.token_stale",
-        "USER.RELATIONSHIP.invalid_pair"
+        "USER.RELATIONSHIP.invalid_pair",
+        "USER.RELATIONSHIP.command_key_required",
+        "USER.RELATIONSHIP.command_conflict"
       ],
       "facadeMethod": "blockUser",
       "facet": "PersonaRelationshipCommandFacade",
@@ -27128,7 +27503,7 @@
           }
         ]
       },
-      "requestBodyKind": "none",
+      "requestBodyKind": "object",
       "requestConstants": null,
       "requestEntity": "BlockUserCommand",
       "responseAdmission": null,
@@ -27152,6 +27527,100 @@
           "outcome",
           "error_code",
           "idempotent_replay"
+        ],
+        "metric": "user_persona_relationship_command",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "PersonaRelationship",
+      "authMode": "required",
+      "canonicalOperationId": "user.persona_relationship.FinalizeExpiredRelationshipCommand",
+      "clientContract": {
+        "dartImport": "../user/user_operation_contracts.g.dart",
+        "responseDecoder": "decodePersonaRelationshipCommandRecoverySlice",
+        "responseType": "PersonaRelationshipCommandRecoverySlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "consistency": null,
+      "domain": "user",
+      "errorCodes": [
+        "USER.USER.unauthorized",
+        "USER.RELATIONSHIP.actor_forbidden",
+        "USER.RELATIONSHIP.command_conflict",
+        "USER.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "finalizeExpiredRelationshipCommand",
+      "facet": "PersonaRelationshipCommandFacade",
+      "invariantTarget": "PersonaRelationship",
+      "kind": "command",
+      "localOperationId": "FinalizeExpiredRelationshipCommand",
+      "method": "POST",
+      "mutationTarget": "PersonaRelationship",
+      "objectId": "user.persona_relationship",
+      "ownershipPolicy": "actor_self",
+      "pagination": null,
+      "pathTemplate": "/user/personas/{targetPersonaId}/relationship/commands/{operation}/finalize-expired",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "targetPersonaId",
+            "name": "targetPersonaId"
+          },
+          {
+            "field": "operation",
+            "name": "operation"
+          }
+        ]
+      },
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "FinalizeExpiredRelationshipCommand",
+      "responseAdmission": null,
+      "responseBody": "PersonaRelationshipCommandRecoverySlice",
+      "responseBodyKind": "object",
+      "responseEntity": "PersonaRelationshipCommandRecoverySlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "user/relationship/persona_relationship/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "addContactSearch",
+        "blockedUsers",
+        "homeFeed",
+        "profileStats",
+        "userProfile",
+        "workBrowser"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code"
         ],
         "metric": "user_persona_relationship_command",
         "trace": true
@@ -27186,7 +27655,10 @@
         "USER.AUTH.account_security_unavailable",
         "USER.AUTH.account_suspended",
         "USER.AUTH.token_stale",
-        "USER.RELATIONSHIP.invalid_pair"
+        "USER.RELATIONSHIP.invalid_pair",
+        "USER.RELATIONSHIP.command_key_required",
+        "USER.RELATIONSHIP.command_conflict",
+        "USER.RELATIONSHIP.following_limit_exceeded"
       ],
       "facadeMethod": "followUser",
       "facet": "PersonaRelationshipCommandFacade",
@@ -27336,6 +27808,96 @@
         "addContactPhone",
         "addContactSearch",
         "userProfile"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code"
+        ],
+        "metric": "user_persona_relationship_query",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "user.persona_relationship.GetRelationshipMutationBasis",
+      "clientContract": {
+        "dartImport": "../user/user_operation_contracts.g.dart",
+        "responseDecoder": "decodePersonaRelationshipMutationBasisSlice",
+        "responseType": "PersonaRelationshipMutationBasisSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "consistency": null,
+      "domain": "user",
+      "errorCodes": [
+        "USER.USER.unauthorized",
+        "USER.RELATIONSHIP.target_not_found",
+        "USER.RELATIONSHIP.actor_forbidden",
+        "USER.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "getRelationshipMutationBasis",
+      "facet": "PersonaRelationshipCommandFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetRelationshipMutationBasis",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "user.persona_relationship",
+      "ownershipPolicy": "actor_self",
+      "pagination": null,
+      "pathTemplate": "/user/personas/{targetPersonaId}/relationship/mutation-basis",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "personaId",
+            "name": "targetPersonaId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GetRelationshipCapabilityQuery",
+      "responseAdmission": null,
+      "responseBody": "PersonaRelationshipMutationBasisSlice",
+      "responseBodyKind": "object",
+      "responseEntity": "PersonaRelationshipMutationBasisSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "user/relationship/persona_relationship/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "addContactSearch",
+        "blockedUsers",
+        "homeFeed",
+        "profileStats",
+        "userProfile",
+        "workBrowser"
       ],
       "telemetry": {
         "attributes": [
@@ -27662,6 +28224,99 @@
     },
     {
       "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "user.persona_relationship.RecoverRelationshipCommand",
+      "clientContract": {
+        "dartImport": "../user/user_operation_contracts.g.dart",
+        "responseDecoder": "decodePersonaRelationshipCommandRecoverySlice",
+        "responseType": "PersonaRelationshipCommandRecoverySlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "consistency": null,
+      "domain": "user",
+      "errorCodes": [
+        "USER.USER.unauthorized",
+        "USER.RELATIONSHIP.actor_forbidden",
+        "USER.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "recoverRelationshipCommand",
+      "facet": "PersonaRelationshipCommandFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "RecoverRelationshipCommand",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "user.persona_relationship",
+      "ownershipPolicy": "actor_self",
+      "pagination": null,
+      "pathTemplate": "/user/personas/{targetPersonaId}/relationship/commands/{operation}/receipt",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "targetPersonaId",
+            "name": "targetPersonaId"
+          },
+          {
+            "field": "operation",
+            "name": "operation"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "RecoverRelationshipCommandQuery",
+      "responseAdmission": null,
+      "responseBody": "PersonaRelationshipCommandRecoverySlice",
+      "responseBodyKind": "object",
+      "responseEntity": "PersonaRelationshipCommandRecoverySlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "user/relationship/persona_relationship/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "addContactSearch",
+        "blockedUsers",
+        "homeFeed",
+        "profileStats",
+        "userProfile",
+        "workBrowser"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code"
+        ],
+        "metric": "user_persona_relationship_command",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
       "aggregateOwner": "PersonaRelationship",
       "authMode": "required",
       "canonicalOperationId": "user.persona_relationship.UnblockUser",
@@ -27686,7 +28341,9 @@
         "USER.AUTH.account_security_unavailable",
         "USER.AUTH.account_suspended",
         "USER.AUTH.token_stale",
-        "USER.RELATIONSHIP.invalid_pair"
+        "USER.RELATIONSHIP.invalid_pair",
+        "USER.RELATIONSHIP.command_key_required",
+        "USER.RELATIONSHIP.command_conflict"
       ],
       "facadeMethod": "unblockUser",
       "facet": "PersonaRelationshipCommandFacade",
@@ -27721,7 +28378,7 @@
           }
         ]
       },
-      "requestBodyKind": "none",
+      "requestBodyKind": "object",
       "requestConstants": null,
       "requestEntity": "UnblockUserCommand",
       "responseAdmission": null,
@@ -27777,7 +28434,9 @@
         "USER.AUTH.account_security_unavailable",
         "USER.AUTH.account_suspended",
         "USER.AUTH.token_stale",
-        "USER.RELATIONSHIP.invalid_pair"
+        "USER.RELATIONSHIP.invalid_pair",
+        "USER.RELATIONSHIP.command_key_required",
+        "USER.RELATIONSHIP.command_conflict"
       ],
       "facadeMethod": "unfollowUser",
       "facet": "PersonaRelationshipCommandFacade",
@@ -30442,13 +31101,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "371c52983159cc1bf140af7ead10c489d9634593df43058e7ced3a6ae8bb5a7f"
+    "sha256": "51792c05265aaf2bfbbd25fd56c395447598ce3c01c5d86f19ec439149c13e24"
   },
   "contractGraph": {
     "compilerHash": "sha256:868a062a9a1bea38bec1b2207c75bcdb6fad719ec8a56a7b358c2e77ae466381",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "0d85f128db29a8f7b402ca339d482c77c330e4ce2714232aeface394889278e3",
-    "sourceDigestSetSha256": "ab457ec15369ba8900d5cb6ba9a38da6e719f66bd1fa171e14fe06cd1db82b3a"
+    "sha256": "4f2bcaec685b896f69dd6ebaf2b9b200b9d599e8083ae457d9d91e8a201a5106",
+    "sourceDigestSetSha256": "84ceba827de27484fd98257d40ea2509d059c86a0062e64ce787bef24ebe1f39"
   },
   "generator": "app-cloud-handoff"
 }

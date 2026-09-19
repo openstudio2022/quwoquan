@@ -591,7 +591,7 @@ func (s *MongoPostStore) SetLikeCount(ctx context.Context, id string, count int6
 	res, err := s.coll.UpdateOne(
 		ctx,
 		bson.M{"_id": strings.TrimSpace(id)},
-		bson.M{"$set": bson.M{"likeCount": count, "updatedAt": time.Now().UTC()}},
+		bson.M{"$set": bson.M{"likeCount": count}},
 	)
 	if err != nil {
 		return false, err

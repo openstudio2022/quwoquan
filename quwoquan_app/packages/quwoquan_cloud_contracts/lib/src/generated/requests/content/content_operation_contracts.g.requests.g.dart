@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 0d85f128db29a8f7b402ca339d482c77c330e4ce2714232aeface394889278e3
+// ContractGraph SHA256: 4f2bcaec685b896f69dd6ebaf2b9b200b9d599e8083ae457d9d91e8a201a5106
 
 part of '../../../content/content_operation_contracts.g.dart';
 
@@ -1876,6 +1876,91 @@ final class FilterCatalogQuery {
   const FilterCatalogQuery();
 }
 
+final class FinalizeExpiredContentReactionCommand {
+  FinalizeExpiredContentReactionCommand({
+    required ContentReactionTargetKind targetKind,
+    required String targetId,
+    required String operation,
+    required String mutationBasis,
+    required int expectedVersion,
+  }) : targetKind = targetKind,
+       targetId = targetId.trim(),
+       operation = operation.trim(),
+       mutationBasis = mutationBasis.trim(),
+       expectedVersion = expectedVersion {
+    if (this.targetId.isEmpty) {
+      throw ArgumentError.value(this.targetId, "targetId", 'must not be blank');
+    }
+    if (this.operation.isEmpty) {
+      throw ArgumentError.value(
+        this.operation,
+        "operation",
+        'must not be blank',
+      );
+    }
+    if (this.mutationBasis.isEmpty) {
+      throw ArgumentError.value(
+        this.mutationBasis,
+        "mutationBasis",
+        'must not be blank',
+      );
+    }
+    if (this.expectedVersion < 0) {
+      throw ArgumentError.value(
+        this.expectedVersion,
+        "expectedVersion",
+        "must be at least 0",
+      );
+    }
+  }
+
+  final ContentReactionTargetKind targetKind;
+  final String targetId;
+  final String operation;
+  final String mutationBasis;
+  final int expectedVersion;
+
+  factory FinalizeExpiredContentReactionCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "FinalizeExpiredContentReactionCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "targetKind",
+      "targetId",
+      "operation",
+      "mutationBasis",
+      "expectedVersion",
+    }, path);
+    return FinalizeExpiredContentReactionCommand(
+      targetKind: switch (map["targetKind"]) {
+        "post" => ContentReactionTargetKind.post,
+        "comment" => ContentReactionTargetKind.comment,
+        _ => throw FormatException(
+          '$path.targetKind' + ' has an invalid enum value',
+        ),
+      },
+      targetId: _generatedRequestString(map["targetId"], '$path.targetId'),
+      operation: _generatedRequestString(map["operation"], '$path.operation'),
+      mutationBasis: _generatedRequestString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
+      expectedVersion: _generatedRequestInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "targetKind": this.targetKind.wireName,
+    "targetId": this.targetId,
+    "operation": this.operation,
+    "mutationBasis": this.mutationBasis,
+    "expectedVersion": this.expectedVersion,
+  };
+}
+
 final class GetAppConfigQuery {
   const GetAppConfigQuery();
 }
@@ -1995,6 +2080,86 @@ final class GetContentPostReactionStateQuery {
   }
 
   Map<String, Object?> toWire() => <String, Object?>{"postId": this.postId};
+}
+
+final class GetContentReactionMutationBasisQuery {
+  GetContentReactionMutationBasisQuery({
+    required ContentReactionTargetKind targetKind,
+    required String targetId,
+  }) : targetKind = targetKind,
+       targetId = targetId.trim() {
+    if (this.targetId.isEmpty) {
+      throw ArgumentError.value(this.targetId, "targetId", 'must not be blank');
+    }
+  }
+
+  final ContentReactionTargetKind targetKind;
+  final String targetId;
+
+  factory GetContentReactionMutationBasisQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetContentReactionMutationBasisQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "targetKind",
+      "targetId",
+    }, path);
+    return GetContentReactionMutationBasisQuery(
+      targetKind: switch (map["targetKind"]) {
+        "post" => ContentReactionTargetKind.post,
+        "comment" => ContentReactionTargetKind.comment,
+        _ => throw FormatException(
+          '$path.targetKind' + ' has an invalid enum value',
+        ),
+      },
+      targetId: _generatedRequestString(map["targetId"], '$path.targetId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "targetKind": this.targetKind.wireName,
+    "targetId": this.targetId,
+  };
+}
+
+final class GetContentReactionPresentationQuery {
+  GetContentReactionPresentationQuery({
+    required ContentReactionTargetKind targetKind,
+    required String targetId,
+  }) : targetKind = targetKind,
+       targetId = targetId.trim() {
+    if (this.targetId.isEmpty) {
+      throw ArgumentError.value(this.targetId, "targetId", 'must not be blank');
+    }
+  }
+
+  final ContentReactionTargetKind targetKind;
+  final String targetId;
+
+  factory GetContentReactionPresentationQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetContentReactionPresentationQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "targetKind",
+      "targetId",
+    }, path);
+    return GetContentReactionPresentationQuery(
+      targetKind: switch (map["targetKind"]) {
+        "post" => ContentReactionTargetKind.post,
+        "comment" => ContentReactionTargetKind.comment,
+        _ => throw FormatException(
+          '$path.targetKind' + ' has an invalid enum value',
+        ),
+      },
+      targetId: _generatedRequestString(map["targetId"], '$path.targetId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "targetKind": this.targetKind.wireName,
+    "targetId": this.targetId,
+  };
 }
 
 final class GetGatheringSocialProofQuery {
@@ -2230,25 +2395,63 @@ final class InitContentMediaUploadCommand {
 }
 
 final class LikeContentPostCommand {
-  LikeContentPostCommand({required String postId}) : postId = postId.trim() {
+  LikeContentPostCommand({
+    required String postId,
+    required String mutationBasis,
+    required int expectedVersion,
+  }) : postId = postId.trim(),
+       mutationBasis = mutationBasis.trim(),
+       expectedVersion = expectedVersion {
     if (this.postId.isEmpty) {
       throw ArgumentError.value(this.postId, "postId", 'must not be blank');
+    }
+    if (this.mutationBasis.isEmpty) {
+      throw ArgumentError.value(
+        this.mutationBasis,
+        "mutationBasis",
+        'must not be blank',
+      );
+    }
+    if (this.expectedVersion < 0) {
+      throw ArgumentError.value(
+        this.expectedVersion,
+        "expectedVersion",
+        "must be at least 0",
+      );
     }
   }
 
   final String postId;
+  final String mutationBasis;
+  final int expectedVersion;
 
   factory LikeContentPostCommand.fromWire(
     Map<String, Object?> map, [
     String path = "LikeContentPostCommand",
   ]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"postId"}, path);
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "postId",
+      "mutationBasis",
+      "expectedVersion",
+    }, path);
     return LikeContentPostCommand(
       postId: _generatedRequestString(map["postId"], '$path.postId'),
+      mutationBasis: _generatedRequestString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
+      expectedVersion: _generatedRequestInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{"postId": this.postId};
+  Map<String, Object?> toWire() => <String, Object?>{
+    "postId": this.postId,
+    "mutationBasis": this.mutationBasis,
+    "expectedVersion": this.expectedVersion,
+  };
 }
 
 final class ListAuthorImpactEvidenceQuery {
@@ -2950,8 +3153,12 @@ final class ReactToContentCommentCommand {
   ReactToContentCommentCommand({
     required String commentId,
     required CommentReactionType reaction,
+    required String mutationBasis,
+    required int expectedVersion,
   }) : commentId = commentId.trim(),
-       reaction = reaction {
+       reaction = reaction,
+       mutationBasis = mutationBasis.trim(),
+       expectedVersion = expectedVersion {
     if (this.commentId.isEmpty) {
       throw ArgumentError.value(
         this.commentId,
@@ -2959,10 +3166,26 @@ final class ReactToContentCommentCommand {
         'must not be blank',
       );
     }
+    if (this.mutationBasis.isEmpty) {
+      throw ArgumentError.value(
+        this.mutationBasis,
+        "mutationBasis",
+        'must not be blank',
+      );
+    }
+    if (this.expectedVersion < 0) {
+      throw ArgumentError.value(
+        this.expectedVersion,
+        "expectedVersion",
+        "must be at least 0",
+      );
+    }
   }
 
   final String commentId;
   final CommentReactionType reaction;
+  final String mutationBasis;
+  final int expectedVersion;
 
   factory ReactToContentCommentCommand.fromWire(
     Map<String, Object?> map, [
@@ -2971,6 +3194,8 @@ final class ReactToContentCommentCommand {
     _generatedRequestRejectUnknownFields(map, const <String>{
       "commentId",
       "reaction",
+      "mutationBasis",
+      "expectedVersion",
     }, path);
     return ReactToContentCommentCommand(
       commentId: _generatedRequestString(map["commentId"], '$path.commentId'),
@@ -2982,12 +3207,75 @@ final class ReactToContentCommentCommand {
           '$path.reaction' + ' has an invalid enum value',
         ),
       },
+      mutationBasis: _generatedRequestString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
+      expectedVersion: _generatedRequestInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "commentId": this.commentId,
     "reaction": this.reaction.wireName,
+    "mutationBasis": this.mutationBasis,
+    "expectedVersion": this.expectedVersion,
+  };
+}
+
+final class RecoverContentReactionCommandQuery {
+  RecoverContentReactionCommandQuery({
+    required ContentReactionTargetKind targetKind,
+    required String targetId,
+    required String operation,
+  }) : targetKind = targetKind,
+       targetId = targetId.trim(),
+       operation = operation.trim() {
+    if (this.targetId.isEmpty) {
+      throw ArgumentError.value(this.targetId, "targetId", 'must not be blank');
+    }
+    if (this.operation.isEmpty) {
+      throw ArgumentError.value(
+        this.operation,
+        "operation",
+        'must not be blank',
+      );
+    }
+  }
+
+  final ContentReactionTargetKind targetKind;
+  final String targetId;
+  final String operation;
+
+  factory RecoverContentReactionCommandQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "RecoverContentReactionCommandQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "targetKind",
+      "targetId",
+      "operation",
+    }, path);
+    return RecoverContentReactionCommandQuery(
+      targetKind: switch (map["targetKind"]) {
+        "post" => ContentReactionTargetKind.post,
+        "comment" => ContentReactionTargetKind.comment,
+        _ => throw FormatException(
+          '$path.targetKind' + ' has an invalid enum value',
+        ),
+      },
+      targetId: _generatedRequestString(map["targetId"], '$path.targetId'),
+      operation: _generatedRequestString(map["operation"], '$path.operation'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "targetKind": this.targetKind.wireName,
+    "targetId": this.targetId,
+    "operation": this.operation,
   };
 }
 
@@ -3723,25 +4011,63 @@ final class SubmitContentPostPublicationCommand {
 }
 
 final class UnlikeContentPostCommand {
-  UnlikeContentPostCommand({required String postId}) : postId = postId.trim() {
+  UnlikeContentPostCommand({
+    required String postId,
+    required String mutationBasis,
+    required int expectedVersion,
+  }) : postId = postId.trim(),
+       mutationBasis = mutationBasis.trim(),
+       expectedVersion = expectedVersion {
     if (this.postId.isEmpty) {
       throw ArgumentError.value(this.postId, "postId", 'must not be blank');
+    }
+    if (this.mutationBasis.isEmpty) {
+      throw ArgumentError.value(
+        this.mutationBasis,
+        "mutationBasis",
+        'must not be blank',
+      );
+    }
+    if (this.expectedVersion < 0) {
+      throw ArgumentError.value(
+        this.expectedVersion,
+        "expectedVersion",
+        "must be at least 0",
+      );
     }
   }
 
   final String postId;
+  final String mutationBasis;
+  final int expectedVersion;
 
   factory UnlikeContentPostCommand.fromWire(
     Map<String, Object?> map, [
     String path = "UnlikeContentPostCommand",
   ]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"postId"}, path);
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "postId",
+      "mutationBasis",
+      "expectedVersion",
+    }, path);
     return UnlikeContentPostCommand(
       postId: _generatedRequestString(map["postId"], '$path.postId'),
+      mutationBasis: _generatedRequestString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
+      expectedVersion: _generatedRequestInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{"postId": this.postId};
+  Map<String, Object?> toWire() => <String, Object?>{
+    "postId": this.postId,
+    "mutationBasis": this.mutationBasis,
+    "expectedVersion": this.expectedVersion,
+  };
 }
 
 CloudOperationRequestPayload
@@ -3883,6 +4209,47 @@ encodeContentContentBehaviorFactReportBehaviorsGeneratedRequest(
 }
 
 CloudOperationRequestPayload
+encodeContentContentReactionFinalizeExpiredContentReactionCommandGeneratedRequest(
+  FinalizeExpiredContentReactionCommand request,
+) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "targetKind": (request.targetKind.wireName).toString(),
+      "targetId": request.targetId,
+      "operation": request.operation,
+    },
+    body: <String, Object?>{
+      "mutationBasis": request.mutationBasis,
+      "expectedVersion": request.expectedVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload
+encodeContentContentReactionGetContentReactionMutationBasisGeneratedRequest(
+  GetContentReactionMutationBasisQuery request,
+) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "targetKind": (request.targetKind.wireName).toString(),
+      "targetId": request.targetId,
+    },
+  );
+}
+
+CloudOperationRequestPayload
+encodeContentContentReactionGetContentReactionPresentationGeneratedRequest(
+  GetContentReactionPresentationQuery request,
+) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "targetKind": (request.targetKind.wireName).toString(),
+      "targetId": request.targetId,
+    },
+  );
+}
+
+CloudOperationRequestPayload
 encodeContentContentReactionGetContentReactionStateGeneratedRequest(
   GetContentPostReactionStateQuery request,
 ) {
@@ -3897,6 +4264,10 @@ encodeContentContentReactionLikePostGeneratedRequest(
 ) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{"postId": request.postId},
+    body: <String, Object?>{
+      "mutationBasis": request.mutationBasis,
+      "expectedVersion": request.expectedVersion,
+    },
   );
 }
 
@@ -3906,7 +4277,24 @@ encodeContentContentReactionReactToCommentGeneratedRequest(
 ) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{"commentId": request.commentId},
-    body: <String, Object?>{"reaction": request.reaction.wireName},
+    body: <String, Object?>{
+      "reaction": request.reaction.wireName,
+      "mutationBasis": request.mutationBasis,
+      "expectedVersion": request.expectedVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload
+encodeContentContentReactionRecoverContentReactionCommandGeneratedRequest(
+  RecoverContentReactionCommandQuery request,
+) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "targetKind": (request.targetKind.wireName).toString(),
+      "targetId": request.targetId,
+      "operation": request.operation,
+    },
   );
 }
 
@@ -3916,6 +4304,10 @@ encodeContentContentReactionUnlikePostGeneratedRequest(
 ) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{"postId": request.postId},
+    body: <String, Object?>{
+      "mutationBasis": request.mutationBasis,
+      "expectedVersion": request.expectedVersion,
+    },
   );
 }
 

@@ -12,7 +12,7 @@ externalDependencies:
     ext.first_party.http_authority:
       endpointEnvs: {base: ASSISTANT_CHAT_BASE_URL}
       secretRefs: []
-      defaultTimeoutMs: 3000
+      defaultTimeoutMs: 10000
 - capability: circle.membership.self.read
   port: CircleSurfaceAuthorityReaderPort
   operations: [getMyCircleMembership]
@@ -21,7 +21,7 @@ externalDependencies:
     ext.first_party.http_authority:
       endpointEnvs: {base: ASSISTANT_CIRCLE_BASE_URL}
       secretRefs: []
-      defaultTimeoutMs: 3000
+      defaultTimeoutMs: 10000
 api_routes:
 - method: GET
   path: /assistant/skill-placements/{surfaceKind}/{surfaceId}

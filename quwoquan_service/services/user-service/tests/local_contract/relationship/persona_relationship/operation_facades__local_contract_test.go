@@ -48,10 +48,25 @@ func (store *readinessRelationshipStore) Get(
 	return relmodel.RelationshipState{IsFollowing: true, UpdatedAt: time.Now().UTC()}, nil
 }
 
+func (store *readinessRelationshipStore) GetMany(
+	_ context.Context,
+	_ string,
+	targetPersonaIDs []string,
+) (map[string]relmodel.RelationshipState, error) {
+	states := make(map[string]relmodel.RelationshipState, len(targetPersonaIDs))
+	for _, targetPersonaID := range targetPersonaIDs {
+		states[targetPersonaID] = relmodel.RelationshipState{
+			IsFollowing: true,
+			UpdatedAt:   time.Now().UTC(),
+		}
+	}
+	return states, nil
+}
+
 func (store *readinessRelationshipStore) ListFollowing(
 	_ context.Context,
 	sourcePersonaID, _ string,
-	_ int,
+	_ int, _, _ string,
 ) ([]relmodel.Direction, string, error) {
 	return []relmodel.Direction{{
 		SourcePersonaID: sourcePersonaID,
@@ -63,7 +78,7 @@ func (store *readinessRelationshipStore) ListFollowing(
 func (store *readinessRelationshipStore) ListFollowers(
 	_ context.Context,
 	targetPersonaID, _ string,
-	_ int,
+	_ int, _, _ string,
 ) ([]relmodel.Direction, string, error) {
 	return []relmodel.Direction{{
 		SourcePersonaID: "follower-persona",
@@ -83,18 +98,18 @@ func (store *readinessRelationshipStore) ListBlocked(
 func TestPersonaRelationshipOperationsCallTheOwningFacade(t *testing.T) {
 	ctx := t.Context()
 	store := &readinessRelationshipStore{}
-	service := relationshipapp.NewPersonaRelationshipService(store, nil, nil, nil)
+	service := relationshipapp.NewPersonaRelationshipService(store, nil, nil, nil, localRelationshipOptions()...)
 
-	if result, err := service.Follow(ctx, "viewer-persona", "target-persona", "homepage", "follow-key"); err != nil || !result.State.IsFollowing {
+	if result, err := service.Follow(ctx, "viewer-persona", "target-persona", "homepage", localEvidence("follow-key")); err != nil || !result.State.IsFollowing {
 		t.Fatalf("FollowUser result=%+v err=%v", result, err)
 	}
-	if result, err := service.Unfollow(ctx, "viewer-persona", "target-persona", "unfollow-key"); err != nil || result.State.IsFollowing {
+	if result, err := service.Unfollow(ctx, "viewer-persona", "target-persona", localEvidence("unfollow-key")); err != nil || result.State.IsFollowing {
 		t.Fatalf("UnfollowUser result=%+v err=%v", result, err)
 	}
-	if result, err := service.Block(ctx, "viewer-persona", "target-persona", "block-key"); err != nil || !result.State.IsBlocked {
+	if result, err := service.Block(ctx, "viewer-persona", "target-persona", localEvidence("block-key")); err != nil || !result.State.IsBlocked {
 		t.Fatalf("BlockUser result=%+v err=%v", result, err)
 	}
-	if result, err := service.Unblock(ctx, "viewer-persona", "target-persona", "unblock-key"); err != nil || result.State.IsBlocked {
+	if result, err := service.Unblock(ctx, "viewer-persona", "target-persona", localEvidence("unblock-key")); err != nil || result.State.IsBlocked {
 		t.Fatalf("UnblockUser result=%+v err=%v", result, err)
 	}
 	wantKinds := []relmodel.CommandKind{
@@ -116,11 +131,11 @@ func TestPersonaRelationshipOperationsCallTheOwningFacade(t *testing.T) {
 	if err != nil || !state.IsFollowing {
 		t.Fatalf("GetRelationship state=%+v err=%v", state, err)
 	}
-	following, followingCursor, err := service.ListFollowing(ctx, "viewer-persona", "", 20)
+	following, followingCursor, err := service.ListFollowing(ctx, "viewer-persona", "", 20, "viewer-persona", "")
 	if err != nil || len(following) != 1 || following[0].TargetPersonaID != "target-persona" || followingCursor != "following-next" {
 		t.Fatalf("ListFollowing items=%+v cursor=%q err=%v", following, followingCursor, err)
 	}
-	followers, followersCursor, err := service.ListFollowers(ctx, "target-persona", "", 20)
+	followers, followersCursor, err := service.ListFollowers(ctx, "target-persona", "", 20, "viewer-persona", "")
 	if err != nil || len(followers) != 1 || followers[0].SourcePersonaID != "follower-persona" || followersCursor != "followers-next" {
 		t.Fatalf("ListFollowers items=%+v cursor=%q err=%v", followers, followersCursor, err)
 	}

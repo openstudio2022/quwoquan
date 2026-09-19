@@ -54,7 +54,7 @@ void main() {
       );
       adapter = RemoteLocationQueryAdapter(
         client: client,
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.createWorkspace.id,
           routeId: AppUiSurfaces.createWorkspace.routeId,
           clientPageId: clientPageId,

@@ -6,6 +6,8 @@ class ClientStateSyncConfig {
     required this.maxPendingAge,
     required this.flushOnForegroundResume,
     required this.flushOnNetworkRecovered,
+    this.maxEntries = 256,
+    this.maxPersistedBytes = 1048576,
   });
 
   final Duration flushDelay;
@@ -14,6 +16,8 @@ class ClientStateSyncConfig {
   final Duration maxPendingAge;
   final bool flushOnForegroundResume;
   final bool flushOnNetworkRecovered;
+  final int maxEntries;
+  final int maxPersistedBytes;
 
   factory ClientStateSyncConfig.defaults() {
     return const ClientStateSyncConfig(
@@ -23,6 +27,8 @@ class ClientStateSyncConfig {
       maxPendingAge: Duration(hours: 72),
       flushOnForegroundResume: true,
       flushOnNetworkRecovered: true,
+      maxEntries: 256,
+      maxPersistedBytes: 1048576,
     );
   }
 
@@ -67,6 +73,16 @@ class ClientStateSyncConfig {
         'flush_on_network_recovered',
         fallback.flushOnNetworkRecovered,
       ),
+      maxEntries: _positiveIntOrFallback(
+        map,
+        'max_entries',
+        fallback.maxEntries,
+      ),
+      maxPersistedBytes: _positiveIntOrFallback(
+        map,
+        'max_persisted_bytes',
+        fallback.maxPersistedBytes,
+      ),
     );
   }
 }
@@ -80,9 +96,15 @@ class ClientStateSyncOutboxEntry {
     required this.desiredBoolValue,
     required this.nextFlushAt,
     required this.firstQueuedAt,
+    required this.idempotencyKey,
+    required this.mutationBasis,
+    required this.expectedVersion,
+    required this.intentRevision,
+    required this.actorRef,
     this.sourceSurfaceId = '',
     this.confirmedBoolValue,
     this.retryCount = 0,
+    this.pausedUnknown = false,
   });
 
   final String coalesceKey;
@@ -98,6 +120,12 @@ class ClientStateSyncOutboxEntry {
   final String sourceSurfaceId;
   final bool? confirmedBoolValue;
   final int retryCount;
+  final String idempotencyKey;
+  final String mutationBasis;
+  final int expectedVersion;
+  final int intentRevision;
+  final String actorRef;
+  final bool pausedUnknown;
 
   bool get hasPendingDelta =>
       confirmedBoolValue == null || confirmedBoolValue != desiredBoolValue;
@@ -114,6 +142,12 @@ class ClientStateSyncOutboxEntry {
       'firstQueuedAt',
       'confirmedBoolValue',
       'retryCount',
+      'idempotencyKey',
+      'mutationBasis',
+      'expectedVersion',
+      'intentRevision',
+      'actorRef',
+      'pausedUnknown',
     };
     if (!allowedKeys.containsAll(map.keys)) {
       throw const FormatException('unknown client state sync outbox field');
@@ -160,6 +194,19 @@ class ClientStateSyncOutboxEntry {
     if (retryCount is! int || retryCount < 0) {
       throw const FormatException('invalid retryCount');
     }
+    final idempotencyKey = _requiredText(map, 'idempotencyKey');
+    final mutationBasis = _requiredText(map, 'mutationBasis');
+    final expectedVersion = map['expectedVersion'];
+    final intentRevision = map['intentRevision'];
+    final actorRef = _requiredText(map, 'actorRef');
+    final pausedUnknown = map['pausedUnknown'] ?? false;
+    if (expectedVersion is! int ||
+        expectedVersion < 0 ||
+        intentRevision is! int ||
+        intentRevision < 1 ||
+        pausedUnknown is! bool) {
+      throw const FormatException('invalid durable command identity');
+    }
     return ClientStateSyncOutboxEntry(
       coalesceKey: coalesceKey,
       objectType: objectType,
@@ -171,6 +218,12 @@ class ClientStateSyncOutboxEntry {
       firstQueuedAt: firstQueuedAt,
       confirmedBoolValue: confirmedBoolValue as bool?,
       retryCount: retryCount,
+      idempotencyKey: idempotencyKey,
+      mutationBasis: mutationBasis,
+      expectedVersion: expectedVersion,
+      intentRevision: intentRevision,
+      actorRef: actorRef,
+      pausedUnknown: pausedUnknown,
     );
   }
 
@@ -185,6 +238,12 @@ class ClientStateSyncOutboxEntry {
     String? sourceSurfaceId,
     bool? confirmedBoolValue,
     int? retryCount,
+    String? idempotencyKey,
+    String? mutationBasis,
+    int? expectedVersion,
+    int? intentRevision,
+    String? actorRef,
+    bool? pausedUnknown,
   }) {
     return ClientStateSyncOutboxEntry(
       coalesceKey: coalesceKey ?? this.coalesceKey,
@@ -197,6 +256,12 @@ class ClientStateSyncOutboxEntry {
       sourceSurfaceId: sourceSurfaceId ?? this.sourceSurfaceId,
       confirmedBoolValue: confirmedBoolValue ?? this.confirmedBoolValue,
       retryCount: retryCount ?? this.retryCount,
+      idempotencyKey: idempotencyKey ?? this.idempotencyKey,
+      mutationBasis: mutationBasis ?? this.mutationBasis,
+      expectedVersion: expectedVersion ?? this.expectedVersion,
+      intentRevision: intentRevision ?? this.intentRevision,
+      actorRef: actorRef ?? this.actorRef,
+      pausedUnknown: pausedUnknown ?? this.pausedUnknown,
     );
   }
 
@@ -212,8 +277,49 @@ class ClientStateSyncOutboxEntry {
       if (sourceSurfaceId.isNotEmpty) 'sourceSurfaceId': sourceSurfaceId,
       'confirmedBoolValue': confirmedBoolValue,
       'retryCount': retryCount,
+      'idempotencyKey': idempotencyKey,
+      'mutationBasis': mutationBasis,
+      'expectedVersion': expectedVersion,
+      'intentRevision': intentRevision,
+      'actorRef': actorRef,
+      'pausedUnknown': pausedUnknown,
     };
   }
+}
+
+final class ClientStateSyncPreparedEvidence {
+  const ClientStateSyncPreparedEvidence({
+    required this.idempotencyKey,
+    required this.mutationBasis,
+    required this.expectedVersion,
+    required this.actorRef,
+    this.canonicalObjectId = '',
+  });
+  final String idempotencyKey;
+  final String mutationBasis;
+  final int expectedVersion;
+  final String actorRef;
+  final String canonicalObjectId;
+}
+
+enum ClientStateSyncReceiptOutcome {
+  committed,
+  rejected,
+  expired,
+  historyUnavailable,
+}
+
+final class ClientStateSyncReceipt {
+  const ClientStateSyncReceipt({
+    required this.outcome,
+    required this.replayed,
+    this.committedVersion,
+    this.changed,
+  });
+  final ClientStateSyncReceiptOutcome outcome;
+  final bool replayed;
+  final int? committedVersion;
+  final bool? changed;
 }
 
 class ClientStateSyncOutboxState {

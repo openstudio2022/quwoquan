@@ -38,7 +38,7 @@ func newCommentWireHandler(t *testing.T, postID string) http.Handler {
 		commentStore,
 		commentStore,
 	)))
-	reactionService := reactionapp.BindFacades(reactionapp.NewService(reactionapp.BindDataPorts(reactionStore, reactionStore)))
+	reactionService := reactionapp.BindFacades(reactionapp.NewService(reactionapp.BindDataPorts(reactionStore, reactionStore), commentReactionTestBasis{}))
 	return NewContentHandler(
 		nil,
 		nil,
@@ -70,7 +70,7 @@ func TestCommandResultKeepsFalseBooleanOnWire(t *testing.T) {
 
 	reacted := performCommentRequest(t, handler, http.MethodPost,
 		"/content/comments/"+createResult.ID+"/reaction",
-		map[string]any{"reaction": "dislike"},
+		commentReactionBody("dislike"),
 		"false-bool-react", "comment-viewer")
 	if reacted.Code != http.StatusOK {
 		t.Fatalf("react status=%d body=%s", reacted.Code, reacted.Body.String())

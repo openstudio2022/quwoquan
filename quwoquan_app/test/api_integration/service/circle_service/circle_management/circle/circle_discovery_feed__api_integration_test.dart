@@ -48,7 +48,7 @@ void main() {
     );
     final remote = RemoteCircleQueryReader(
       client: client,
-      invocationContext: (clientPageId, {required command}) =>
+      invocationContext: (clientPageId, {required command, idempotencyKey}) =>
           CloudOperationInvocationContext(
             surfaceId: AppUiSurfaces.circlesList.id,
             routeId: AppUiSurfaces.circlesList.routeId,

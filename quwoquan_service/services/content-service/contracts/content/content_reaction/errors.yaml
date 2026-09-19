@@ -9,7 +9,7 @@ errors:
   http_status: 404
   emitted_by:
   - surface: http
-    operations: [LikePost, UnlikePost, ReactToComment]
+    operations: [GetContentReactionMutationBasis, LikePost, UnlikePost, ReactToComment]
   recovery_action: surface
   disruption_level: inlineCard
   dart_const: contentReactionTargetNotFound
@@ -17,3 +17,25 @@ errors:
   user_message:
     zh: 互动目标不存在或已失效
     en: The reaction target is missing or unavailable
+- code: CONTENT.USER.content_reaction_basis_invalid
+  reason: content_reaction_basis_invalid
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [LikePost, UnlikePost, ReactToComment, FinalizeExpiredContentReactionCommand]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: contentReactionBasisInvalid
+  go_const: ErrContentReactionBasisInvalid
+  user_message: {zh: 互动状态已更新，请刷新后重试, en: The reaction state changed; refresh and try again}
+- code: CONTENT.USER.content_reaction_basis_expired
+  reason: content_reaction_basis_expired
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [LikePost, UnlikePost, ReactToComment, FinalizeExpiredContentReactionCommand]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: contentReactionBasisExpired
+  go_const: ErrContentReactionBasisExpired
+  user_message: {zh: 互动请求已过期，请刷新后重试, en: The reaction request expired; refresh and try again}

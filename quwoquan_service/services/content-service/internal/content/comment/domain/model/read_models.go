@@ -100,17 +100,31 @@ func (p Page) Clone() Page {
 
 // ReplyTarget 是仅用于规范化新回复的窄关系投影，不是 Comment 聚合。
 type ReplyTarget struct {
-	ID              string
-	PostID          string
-	AuthorID        string
-	ParentCommentID string
-	Status          Status
+	ID                string
+	PostID            string
+	AuthorID          string
+	ParentCommentID   string
+	Status            Status
+	AccountRestricted bool
 }
 
 type PostOwnership struct {
-	PostID   string
-	AuthorID string
-	Active   bool
+	PostID            string
+	AuthorID          string
+	Active            bool
+	Status            string
+	Visibility        string
+	ModerationStatus  string
+	AccountRestricted bool
+	ReleaseID         string
+	ManifestDigest    string
+	SourceOwner       string
+	Environment       string
+	ReleaseActive     bool
+}
+
+func (p PostOwnership) Interactive() bool {
+	return p.Active && p.Status == "published" && p.Visibility == "public" && p.ModerationStatus == "approved" && !p.AccountRestricted && (p.ReleaseID == "" || p.ReleaseActive)
 }
 
 type CountsDelta struct {

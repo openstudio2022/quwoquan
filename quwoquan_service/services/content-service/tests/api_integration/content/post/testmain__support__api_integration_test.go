@@ -98,7 +98,6 @@ var (
 	commentOutboxRelay          *commentapp.OutboxRelay
 	commentCountProjectionRelay *commentapp.OutboxRelay
 	reactionOutboxRelay         *reactionapp.OutboxRelay
-	reactionPostProjectionRelay *reactionapp.OutboxRelay
 	profileReactionRelay        *reactionapp.OutboxRelay
 	profileCommentRelay         *commentapp.OutboxRelay
 	profileShareRelay           *outboundshareapp.OutboxRelay
@@ -244,15 +243,11 @@ func drainPostOutboxForHarness(ctx context.Context) error {
 
 func drainReactionOutbox(t *testing.T) {
 	t.Helper()
-	if reactionOutboxRelay == nil || reactionPostProjectionRelay == nil ||
-		profileReactionRelay == nil {
+	if reactionOutboxRelay == nil || profileReactionRelay == nil {
 		t.Fatal("content-service api_integration requires ContentReaction outbox relays")
 	}
 	if _, err := reactionOutboxRelay.Drain(context.Background(), 100); err != nil {
 		t.Fatalf("drain ContentReaction runtime outbox: %v", err)
-	}
-	if _, err := reactionPostProjectionRelay.Drain(context.Background(), 100); err != nil {
-		t.Fatalf("drain ContentReaction Post projection outbox: %v", err)
 	}
 	if _, err := profileReactionRelay.Drain(context.Background(), 100); err != nil {
 		t.Fatalf("drain ContentReaction profile interaction projection outbox: %v", err)
@@ -557,12 +552,6 @@ func TestMain(m *testing.M) {
 		testReactionStore,
 		reactionmessaging.NewContentReactionOutboxPublisher(eventSpy),
 		"api-integration-reaction-events",
-	)
-	reactionPostProjectionRelay = reactionapp.NewOutboxRelay(
-		testReactionStore,
-		testReactionStore,
-		reactionapp.NewActiveReactionCountProjector(testReactionStore, postStore),
-		"api-integration-reaction-like-count",
 	)
 	// Wire services with redis.Router. Every scene uses an isolated DB on the same
 	// real Redis runtime so EXPIRE/DEL/SET, serialization and key routing all cross
@@ -900,9 +889,6 @@ func TestMain(m *testing.M) {
 			if _, err := reactionOutboxRelay.Drain(r.Context(), 100); err != nil {
 				panic(fmt.Errorf("drain ContentReaction runtime outbox: %w", err))
 			}
-			if _, err := reactionPostProjectionRelay.Drain(r.Context(), 100); err != nil {
-				panic(fmt.Errorf("drain ContentReaction Post projection outbox: %w", err))
-			}
 			if _, err := profileReactionRelay.Drain(r.Context(), 100); err != nil {
 				panic(fmt.Errorf("drain ContentReaction profile interaction projection: %w", err))
 			}
@@ -1032,6 +1018,7 @@ func cleanPosts(t *testing.T) {
 		"content_reaction_command_receipts",
 		"content_reaction_outbox",
 		"content_reaction_outbox_sequences",
+		"content_reaction_outbox_partition_sequences",
 		"content_reaction_projection_checkpoints",
 		"comment_command_receipts",
 		"comment_author_rate_limit_locks",

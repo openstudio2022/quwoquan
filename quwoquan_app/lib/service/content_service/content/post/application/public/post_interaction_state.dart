@@ -1,5 +1,21 @@
 import 'dart:math' as math;
 
+enum InteractionProjectionState { available, stale, unavailable }
+
+final class InteractionStatistic {
+  const InteractionStatistic({required this.state, this.value});
+  final InteractionProjectionState state;
+  final int? value;
+}
+
+enum ViewerInteractionAttachmentState { attached, notApplicable, unavailable }
+
+final class ViewerLikeAttachment {
+  const ViewerLikeAttachment({required this.state, this.liked});
+  final ViewerInteractionAttachmentState state;
+  final bool? liked;
+}
+
 class PostInteractionInput {
   const PostInteractionInput({
     this.scopePostIds = const <String>{},
@@ -44,6 +60,24 @@ class PostInteractionState {
   final Map<String, int> pendingCommentDeltas;
 
   bool isLiked(String postId) => likedPostIds.contains(postId);
+  ViewerLikeAttachment viewerLikeAttachmentFor(String postId) =>
+      hasLikeStateFor(postId)
+      ? ViewerLikeAttachment(
+          state: ViewerInteractionAttachmentState.attached,
+          liked: likedPostIds.contains(postId),
+        )
+      : const ViewerLikeAttachment(
+          state: ViewerInteractionAttachmentState.unavailable,
+        );
+  InteractionStatistic likeStatisticsFor(String postId) =>
+      likeCounts.containsKey(postId)
+      ? InteractionStatistic(
+          state: InteractionProjectionState.available,
+          value: likeCounts[postId],
+        )
+      : const InteractionStatistic(
+          state: InteractionProjectionState.unavailable,
+        );
 
   bool hasLikeStateFor(String postId) {
     return likedPostIds.contains(postId) || likeCounts.containsKey(postId);

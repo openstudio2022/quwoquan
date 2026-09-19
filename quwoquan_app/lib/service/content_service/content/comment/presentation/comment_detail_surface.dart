@@ -255,17 +255,13 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
 
   void _toggleLikeFromInteraction(PostInteractionState interaction) {
     final isLiked = interaction.isLiked(widget.postId);
-    final likeCount = interaction.likeCountFor(widget.postId);
     runWhenLoggedIn(ref, context, AuthGateReason.like, () {
       final nextLiked = !isLiked;
-      syncPostLikeIntent(
+      return syncPostLikeIntent(
         ref,
         postId: widget.postId,
         previousLiked: isLiked,
         isLiked: nextLiked,
-        likeCount: isLiked
-            ? (likeCount - 1).clamp(0, 1 << 31).toInt()
-            : likeCount + 1,
       );
     });
   }

@@ -486,21 +486,12 @@ class HomeMultiFormFeed extends ConsumerWidget {
             onLikeTap: () {
               runWhenLoggedIn(ref, context, AuthGateReason.like, () {
                 final wasLiked = effectivePostLiked(ref, dto.id);
-                final currentLikeCount = effectivePostLikeCount(
-                  ref,
-                  dto.id,
-                  fallback: dto.likeCount,
-                );
                 final nextLiked = !wasLiked;
-                final nextLikeCount = wasLiked
-                    ? (currentLikeCount - 1).clamp(0, 1 << 31).toInt()
-                    : currentLikeCount + 1;
-                syncPostLikeIntent(
+                return syncPostLikeIntent(
                   ref,
                   postId: dto.id,
                   previousLiked: wasLiked,
                   isLiked: nextLiked,
-                  likeCount: nextLikeCount,
                 );
               });
             },
@@ -844,8 +835,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
   ) async {
     try {
       await ref
-          .read(personaRelationshipBlockWriterProvider(AppUiSurfaces.homeFeed))
-          .blockUser(BlockUserCommand(targetPersonaId: post.authorId));
+          .read(
+            personaRelationshipBlockCoordinatorProvider(AppUiSurfaces.homeFeed),
+          )
+          .blockTarget(post.authorId);
       final attribution = _currentFeedAttribution(ref);
       ref
           .read(contentBehaviorTrackerProvider)

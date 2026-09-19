@@ -202,9 +202,11 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
       }
       await ref
           .read(
-            personaRelationshipBlockWriterProvider(AppUiSurfaces.profileHome),
+            personaRelationshipBlockCoordinatorProvider(
+              AppUiSurfaces.profileHome,
+            ),
           )
-          .blockUser(BlockUserCommand(targetPersonaId: targetPersonaId));
+          .blockTarget(targetPersonaId);
       ref.invalidate(profileNotifierProvider(widget.userId));
       unawaited(
         ref

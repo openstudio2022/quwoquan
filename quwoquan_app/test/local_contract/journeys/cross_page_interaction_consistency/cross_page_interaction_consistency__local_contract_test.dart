@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/di/post_interaction_state_dependencies.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/post_interaction_state.dart';
 import 'package:quwoquan_app/runtime/di/user_relationship_state_dependencies.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_hub_feed_post_entry.dart';
 
@@ -23,20 +24,23 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      // 详情/沉浸式侧：乐观点赞（syncPostLikeIntent 最终落到 setLiked）。
-      container
-          .read(postInteractionStateProvider.notifier)
-          .setLiked('post-1', true, likeCount: 8);
+      // 页面先持有服务端权威数字7；点赞只改变viewer按钮态。
+      final notifier = container.read(postInteractionStateProvider.notifier);
+      notifier.mergeInteractionState(
+        const PostInteractionInput(
+          scopePostIds: {'post-1'},
+          likeCounts: {'post-1': 7},
+        ),
+      );
+      notifier.setLiked('post-1', true);
 
       // 首页 feed 卡片的消费口径（home_multi_form_feed_post_cards）。
       final state = container.read(postInteractionStateProvider);
       expect(state.isLiked('post-1'), isTrue);
-      expect(state.likeCountFor('post-1', fallback: 7), 8);
+      expect(state.likeCountFor('post-1', fallback: 7), 7);
 
       // 取消点赞同样即时一致。
-      container
-          .read(postInteractionStateProvider.notifier)
-          .setLiked('post-1', false, likeCount: 7);
+      notifier.setLiked('post-1', false);
       final next = container.read(postInteractionStateProvider);
       expect(next.isLiked('post-1'), isFalse);
       expect(next.likeCountFor('post-1', fallback: 0), 7);
@@ -54,15 +58,12 @@ void main() {
       // 其他页面点赞（未打开圈子 Hub 的 viewer，entry 快照不更新）。
       container
           .read(postInteractionStateProvider.notifier)
-          .setLiked('post-hub', true, likeCount: 4);
+          .setLiked('post-hub', true);
 
       // 圈子 Hub 渲染消费口径（home_circles_category_tab / section_creations）：
       // 共享投影优先，entry 快照只作未命中兜底。
       final state = container.read(postInteractionStateProvider);
-      expect(
-        state.likeCountFor(entry.postId, fallback: entry.likeCount),
-        4,
-      );
+      expect(state.likeCountFor(entry.postId, fallback: entry.likeCount), 3);
       expect(
         state.hasLikeStateFor(entry.postId)
             ? state.isLiked(entry.postId)
@@ -114,20 +115,21 @@ void main() {
         expect(
           source.contains(banned),
           isFalse,
-          reason: 'discovery_state_provider 重新引入了点赞/分享副本符号：$banned；'
+          reason:
+              'discovery_state_provider 重新引入了点赞/分享副本符号：$banned；'
               '互动事实唯一真相源是 postInteractionStateProvider',
         );
       }
     });
 
     test('媒体交互门面不得双写 discovery 副本', () {
-      final source = File(
-        'lib/runtime/di/media_viewer_interaction_facade.dart',
-      ).readAsStringSync();
+      final source = File('lib/runtime/di/media_viewer_interaction_facade.dart')
+          .readAsStringSync();
       expect(
         source.contains('discoveryStateProvider'),
         isFalse,
-        reason: '媒体交互门面重新引入 discovery 双写；'
+        reason:
+            '媒体交互门面重新引入 discovery 双写；'
             '互动事实唯一真相源是 postInteractionStateProvider',
       );
     });
@@ -151,7 +153,8 @@ void main() {
         expect(
           source.contains('userRelationshipStateProvider.notifier'),
           isTrue,
-          reason: '$page 直写 PersonaRelationship 命令但未回写 '
+          reason:
+              '$page 直写 PersonaRelationship 命令但未回写 '
               'userRelationshipStateProvider，跨页关注状态会漂移',
         );
       }

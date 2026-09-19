@@ -489,3 +489,17 @@ def test_request_context_is_canonical_frozen_and_replayed_across_clock_change() 
             viewport_profile="landscape",
             device_class="tablet",
         )
+
+class _Causality:
+    def __init__(self): self.value={"3":7}
+    def read_relationship_causal_watermark(self, subject_id): return dict(self.value)
+
+def test_new_window_freezes_following_causal_watermark_and_old_window_does_not_reorder():
+    store=_Store();causal=_Causality();facade=Facade(store=store,ranker=_Ranker(),subject_closures=_Closures(),exclusion_profiles=_ExclusionProfiles(),relationship_causality=causal,window_id_factory=lambda _:"causal-window")
+    first=facade.create_window(idempotency_key="causal-key",subject_id="persona",scenario="content_feed",limit=2,content_fence=_fence())
+    assert first.user_feature_snapshot["followingCausalWatermark"]=={"3":7}
+    ids=[item.content_id for item in first.items]
+    causal.value={"3":8,"5":1}
+    replay=facade.create_window(idempotency_key="causal-key",subject_id="persona",scenario="content_feed",limit=2,content_fence=_fence())
+    assert replay.user_feature_snapshot["followingCausalWatermark"]=={"3":7}
+    assert [item.content_id for item in replay.items]==ids

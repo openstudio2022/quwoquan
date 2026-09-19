@@ -23,7 +23,7 @@ final class _StubOperationExecutor implements CloudOperationExecutor {
 RemoteLocationQueryAdapter _adapter(Object? response) {
   return RemoteLocationQueryAdapter(
     client: GeneratedCloudOperationClient(_StubOperationExecutor(response)),
-    invocationContext: (clientPageId) => CloudOperationInvocationContext(
+    invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
       surfaceId: AppUiSurfaces.createWorkspace.id,
       routeId: AppUiSurfaces.createWorkspace.routeId,
       clientPageId: clientPageId,

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,45 +14,99 @@ import (
 	relports "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/ports"
 )
 
+const defaultPersonaRelationshipOutboxConsumer = "persona-relationship-runtime-events"
+
 // OutboxEventPublisher is the transport boundary for committed relationship
-// facts. The relay owns delivery; commands never publish before commit.
-// Implementations must durably append before returning success because that
-// acknowledgement advances the PostgreSQL outbox checkpoint.
+// facts. The relay attaches the same stable partition envelope for every sink.
 type OutboxEventPublisher interface {
 	PublishPersonaRelationship(ctx context.Context, event relmodel.OutboxEvent) error
 }
 
 type OutboxRelay struct {
-	outbox    relports.PersonaRelationshipOutbox
+	outbox    relports.PartitionedPersonaRelationshipOutbox
 	publisher OutboxEventPublisher
+	consumer  string
 	ownerID   string
+	drainMu   sync.Mutex
 }
 
-func NewOutboxRelay(outbox relports.PersonaRelationshipOutbox, publisher OutboxEventPublisher) *OutboxRelay {
+func NewOutboxRelay(
+	outbox relports.PartitionedPersonaRelationshipOutbox,
+	publisher OutboxEventPublisher,
+) *OutboxRelay {
 	if outbox == nil || publisher == nil {
 		panic("persona relationship outbox and publisher are required")
 	}
-	return &OutboxRelay{outbox: outbox, publisher: publisher, ownerID: uuid.NewString()}
+	return &OutboxRelay{
+		outbox: outbox, publisher: publisher,
+		consumer: defaultPersonaRelationshipOutboxConsumer, ownerID: uuid.NewString(),
+	}
 }
 
 func (r *OutboxRelay) Drain(ctx context.Context, limit int) (int, error) {
-	events, err := r.outbox.ClaimPendingOutbox(ctx, r.ownerID, time.Minute, limit)
+	r.drainMu.Lock()
+	defer r.drainMu.Unlock()
+	leases, err := r.outbox.ClaimOutboxPartitions(
+		ctx, r.consumer, r.ownerID, time.Minute,
+		relports.PersonaRelationshipOutboxPartitionCount,
+	)
 	if err != nil {
 		return 0, err
 	}
-	for _, event := range events {
-		if err := r.publisher.PublishPersonaRelationship(ctx, event); err != nil {
-			_ = r.outbox.ReleaseOutboxClaim(ctx, event.EventID, r.ownerID)
-			return 0, fmt.Errorf("publish persona relationship outbox event %s: %w", event.EventID, err)
-		}
-		if err := r.outbox.MarkOutboxPublished(ctx, event.EventID, r.ownerID); err != nil {
-			if errors.Is(err, relports.ErrOutboxClaimLost) {
-				continue
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	type partitionResult struct {
+		processed int
+		err       error
+	}
+	results := make(chan partitionResult, len(leases))
+	var workers sync.WaitGroup
+	for _, claimedLease := range leases {
+		lease := claimedLease
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			events, readErr := r.outbox.ReadOutboxPartition(ctx, lease, limit)
+			if readErr != nil {
+				results <- partitionResult{err: readErr}
+				return
 			}
-			return 0, err
+			processed := 0
+			for _, event := range events {
+				publishCtx := relports.WithOutboxEnvelope(ctx, event)
+				if publishErr := r.publisher.PublishPersonaRelationship(publishCtx, event.Event); publishErr != nil {
+					results <- partitionResult{processed: processed, err: fmt.Errorf(
+						"publish persona relationship partition %d sequence %d event %s: %w",
+						event.PartitionID, event.PartitionSequence, event.Event.EventID, publishErr,
+					)}
+					return
+				}
+				if advanceErr := r.outbox.AdvanceOutboxCheckpoint(ctx, lease, event); advanceErr != nil {
+					if errors.Is(advanceErr, relports.ErrOutboxLeaseLost) {
+						results <- partitionResult{processed: processed}
+					} else {
+						results <- partitionResult{processed: processed, err: advanceErr}
+					}
+					return
+				}
+				lease.Sequence = event.PartitionSequence
+				processed++
+			}
+			results <- partitionResult{processed: processed}
+		}()
+	}
+	workers.Wait()
+	close(results)
+	processed := 0
+	var firstErr error
+	for result := range results {
+		processed += result.processed
+		if firstErr == nil && result.err != nil {
+			firstErr = result.err
 		}
 	}
-	return len(events), nil
+	return processed, firstErr
 }
 
 func (r *OutboxRelay) Run(ctx context.Context, interval time.Duration) error {
@@ -62,9 +117,6 @@ func (r *OutboxRelay) Run(ctx context.Context, interval time.Duration) error {
 	defer ticker.Stop()
 	for {
 		if _, err := r.Drain(ctx, 100); err != nil && ctx.Err() == nil {
-			// The PostgreSQL outbox is the durable retry source. A transient
-			// database or transport failure must not terminate the worker and
-			// silently strand every later relationship event.
 			slog.ErrorContext(ctx, "persona relationship outbox drain failed", "err", err)
 		}
 		select {

@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 0d85f128db29a8f7b402ca339d482c77c330e4ce2714232aeface394889278e3
+// ContractGraph SHA256: 4f2bcaec685b896f69dd6ebaf2b9b200b9d599e8083ae457d9d91e8a201a5106
 
 library;
 
@@ -163,6 +163,82 @@ enum ContentIdentity {
     return switch (value) {
       "moment" => ContentIdentity.moment,
       "work" => ContentIdentity.work,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum ContentReactionAttachmentState {
+  attached("attached"),
+  notApplicable("not_applicable"),
+  unavailable("unavailable");
+
+  const ContentReactionAttachmentState(this.wireName);
+
+  final String wireName;
+
+  static ContentReactionAttachmentState fromWire(Object? value, String path) {
+    return switch (value) {
+      "attached" => ContentReactionAttachmentState.attached,
+      "not_applicable" => ContentReactionAttachmentState.notApplicable,
+      "unavailable" => ContentReactionAttachmentState.unavailable,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum ContentReactionReceiptOutcome {
+  committed("committed"),
+  rejected("rejected"),
+  expired("expired"),
+  historyUnavailable("history_unavailable");
+
+  const ContentReactionReceiptOutcome(this.wireName);
+
+  final String wireName;
+
+  static ContentReactionReceiptOutcome fromWire(Object? value, String path) {
+    return switch (value) {
+      "committed" => ContentReactionReceiptOutcome.committed,
+      "rejected" => ContentReactionReceiptOutcome.rejected,
+      "expired" => ContentReactionReceiptOutcome.expired,
+      "history_unavailable" => ContentReactionReceiptOutcome.historyUnavailable,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum ContentReactionStatisticsState {
+  available("available"),
+  stale("stale"),
+  unavailable("unavailable");
+
+  const ContentReactionStatisticsState(this.wireName);
+
+  final String wireName;
+
+  static ContentReactionStatisticsState fromWire(Object? value, String path) {
+    return switch (value) {
+      "available" => ContentReactionStatisticsState.available,
+      "stale" => ContentReactionStatisticsState.stale,
+      "unavailable" => ContentReactionStatisticsState.unavailable,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum ContentReactionTargetKind {
+  post("post"),
+  comment("comment");
+
+  const ContentReactionTargetKind(this.wireName);
+
+  final String wireName;
+
+  static ContentReactionTargetKind fromWire(Object? value, String path) {
+    return switch (value) {
+      "post" => ContentReactionTargetKind.post,
+      "comment" => ContentReactionTargetKind.comment,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -3696,6 +3772,67 @@ final class ContentPostProjection {
   };
 }
 
+final class ContentReactionCommandRecoverySlice {
+  const ContentReactionCommandRecoverySlice({
+    required this.idempotencyKey,
+    required this.outcome,
+    required this.replayed,
+    this.committedVersion,
+    this.changed,
+  });
+
+  final String idempotencyKey;
+  final ContentReactionReceiptOutcome outcome;
+  final bool replayed;
+  final int? committedVersion;
+  final bool? changed;
+
+  factory ContentReactionCommandRecoverySlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentReactionCommandRecoverySlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "idempotencyKey",
+      "outcome",
+      "replayed",
+      "committedVersion",
+      "changed",
+    }, path);
+    _requireCoPresentFields(map, const <String>{
+      "changed",
+      "committedVersion",
+    }, path);
+    return ContentReactionCommandRecoverySlice(
+      idempotencyKey: _requiredNonBlankString(
+        map["idempotencyKey"],
+        '$path.idempotencyKey',
+      ),
+      outcome: ContentReactionReceiptOutcome.fromWire(
+        map["outcome"],
+        '$path.outcome',
+      ),
+      replayed: _requiredBool(map["replayed"], '$path.replayed'),
+      committedVersion: map["committedVersion"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["committedVersion"],
+              '$path.committedVersion',
+            ),
+      changed: map["changed"] == null
+          ? null
+          : _requiredBool(map["changed"], '$path.changed'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "idempotencyKey": idempotencyKey,
+    "outcome": outcome.wireName,
+    "replayed": replayed,
+    if (committedVersion != null) "committedVersion": committedVersion!,
+    if (changed != null) "changed": changed!,
+  };
+}
+
 final class ContentReactionCommandResult {
   const ContentReactionCommandResult({
     required this.reactionId,
@@ -3745,6 +3882,102 @@ final class ContentReactionCommandResult {
   };
 }
 
+final class ContentReactionMutationBasisSlice {
+  const ContentReactionMutationBasisSlice({
+    required this.targetKind,
+    required this.targetId,
+    required this.mutationBasis,
+    required this.expectedVersion,
+  });
+
+  final ContentReactionTargetKind targetKind;
+  final String targetId;
+  final String mutationBasis;
+  final int expectedVersion;
+
+  factory ContentReactionMutationBasisSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentReactionMutationBasisSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "targetKind",
+      "targetId",
+      "mutationBasis",
+      "expectedVersion",
+    }, path);
+    return ContentReactionMutationBasisSlice(
+      targetKind: ContentReactionTargetKind.fromWire(
+        map["targetKind"],
+        '$path.targetKind',
+      ),
+      targetId: _requiredNonBlankString(map["targetId"], '$path.targetId'),
+      mutationBasis: _requiredNonBlankString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
+      expectedVersion: _requiredInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "targetKind": targetKind.wireName,
+    "targetId": targetId,
+    "mutationBasis": mutationBasis,
+    "expectedVersion": expectedVersion,
+  };
+}
+
+final class ContentReactionPresentationSlice {
+  const ContentReactionPresentationSlice({
+    required this.targetKind,
+    required this.targetId,
+    required this.statistics,
+    required this.viewerAttachment,
+  });
+
+  final ContentReactionTargetKind targetKind;
+  final String targetId;
+  final ContentReactionStatisticsSlice statistics;
+  final ContentReactionViewerAttachment viewerAttachment;
+
+  factory ContentReactionPresentationSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentReactionPresentationSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "targetKind",
+      "targetId",
+      "statistics",
+      "viewerAttachment",
+    }, path);
+    return ContentReactionPresentationSlice(
+      targetKind: ContentReactionTargetKind.fromWire(
+        map["targetKind"],
+        '$path.targetKind',
+      ),
+      targetId: _requiredNonBlankString(map["targetId"], '$path.targetId'),
+      statistics: ContentReactionStatisticsSlice.fromWire(
+        _requiredObject(map["statistics"], '$path.statistics'),
+        '$path.statistics',
+      ),
+      viewerAttachment: ContentReactionViewerAttachment.fromWire(
+        _requiredObject(map["viewerAttachment"], '$path.viewerAttachment'),
+        '$path.viewerAttachment',
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "targetKind": targetKind.wireName,
+    "targetId": targetId,
+    "statistics": statistics.toWire(),
+    "viewerAttachment": viewerAttachment.toWire(),
+  };
+}
+
 final class ContentReactionStateSlice {
   const ContentReactionStateSlice({
     required this.found,
@@ -3752,6 +3985,7 @@ final class ContentReactionStateSlice {
     required this.liked,
     required this.version,
     this.updatedAt,
+    required this.mutationBasis,
   });
 
   final bool found;
@@ -3759,6 +3993,7 @@ final class ContentReactionStateSlice {
   final bool liked;
   final int version;
   final DateTime? updatedAt;
+  final String mutationBasis;
 
   factory ContentReactionStateSlice.fromWire(
     Map<String, Object?> map, [
@@ -3770,6 +4005,7 @@ final class ContentReactionStateSlice {
       "liked",
       "version",
       "updatedAt",
+      "mutationBasis",
     }, path);
     return ContentReactionStateSlice(
       found: _requiredBool(map["found"], '$path.found'),
@@ -3779,6 +4015,10 @@ final class ContentReactionStateSlice {
       updatedAt: map["updatedAt"] == null
           ? null
           : _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
+      mutationBasis: _requiredNonBlankString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
     );
   }
 
@@ -3788,6 +4028,179 @@ final class ContentReactionStateSlice {
     "liked": liked,
     "version": version,
     if (updatedAt != null) "updatedAt": updatedAt!.toUtc().toIso8601String(),
+    "mutationBasis": mutationBasis,
+  };
+}
+
+final class ContentReactionStatisticsSlice {
+  const ContentReactionStatisticsSlice({
+    required this.targetKind,
+    required this.targetId,
+    required this.state,
+    this.snapshot,
+  });
+
+  final ContentReactionTargetKind targetKind;
+  final String targetId;
+  final ContentReactionStatisticsState state;
+  final ContentReactionStatisticsSnapshot? snapshot;
+
+  factory ContentReactionStatisticsSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentReactionStatisticsSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "targetKind",
+      "targetId",
+      "state",
+      "snapshot",
+    }, path);
+    return ContentReactionStatisticsSlice(
+      targetKind: ContentReactionTargetKind.fromWire(
+        map["targetKind"],
+        '$path.targetKind',
+      ),
+      targetId: _requiredNonBlankString(map["targetId"], '$path.targetId'),
+      state: ContentReactionStatisticsState.fromWire(
+        map["state"],
+        '$path.state',
+      ),
+      snapshot: map["snapshot"] == null
+          ? null
+          : ContentReactionStatisticsSnapshot.fromWire(
+              _requiredObject(map["snapshot"], '$path.snapshot'),
+              '$path.snapshot',
+            ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "targetKind": targetKind.wireName,
+    "targetId": targetId,
+    "state": state.wireName,
+    if (snapshot != null) "snapshot": snapshot!.toWire(),
+  };
+}
+
+final class ContentReactionStatisticsSnapshot {
+  const ContentReactionStatisticsSnapshot({
+    required this.generation,
+    required this.statsVersion,
+    required this.likeCount,
+    required this.dislikeCount,
+    required this.sourceCheckpoint,
+    required this.asOf,
+    required this.expiresAt,
+  });
+
+  final String generation;
+  final int statsVersion;
+  final int likeCount;
+  final int dislikeCount;
+  final String sourceCheckpoint;
+  final DateTime asOf;
+  final DateTime expiresAt;
+
+  factory ContentReactionStatisticsSnapshot.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentReactionStatisticsSnapshot",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "generation",
+      "statsVersion",
+      "likeCount",
+      "dislikeCount",
+      "sourceCheckpoint",
+      "asOf",
+      "expiresAt",
+    }, path);
+    return ContentReactionStatisticsSnapshot(
+      generation: _requiredNonBlankString(
+        map["generation"],
+        '$path.generation',
+      ),
+      statsVersion: _requiredInt(map["statsVersion"], '$path.statsVersion'),
+      likeCount: _requiredInt(map["likeCount"], '$path.likeCount'),
+      dislikeCount: _requiredInt(map["dislikeCount"], '$path.dislikeCount'),
+      sourceCheckpoint: _requiredNonBlankString(
+        map["sourceCheckpoint"],
+        '$path.sourceCheckpoint',
+      ),
+      asOf: _requiredTimestamp(map["asOf"], '$path.asOf'),
+      expiresAt: _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "generation": generation,
+    "statsVersion": statsVersion,
+    "likeCount": likeCount,
+    "dislikeCount": dislikeCount,
+    "sourceCheckpoint": sourceCheckpoint,
+    "asOf": asOf.toUtc().toIso8601String(),
+    "expiresAt": expiresAt.toUtc().toIso8601String(),
+  };
+}
+
+final class ContentReactionViewerAttachment {
+  const ContentReactionViewerAttachment({
+    required this.targetKind,
+    required this.targetId,
+    required this.state,
+    this.reaction,
+    this.version,
+    this.mutationBasis,
+  });
+
+  final ContentReactionTargetKind targetKind;
+  final String targetId;
+  final ContentReactionAttachmentState state;
+  final CommentReactionType? reaction;
+  final int? version;
+  final String? mutationBasis;
+
+  factory ContentReactionViewerAttachment.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentReactionViewerAttachment",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "targetKind",
+      "targetId",
+      "state",
+      "reaction",
+      "version",
+      "mutationBasis",
+    }, path);
+    _requireCoPresentFields(map, const <String>{"reaction", "version"}, path);
+    return ContentReactionViewerAttachment(
+      targetKind: ContentReactionTargetKind.fromWire(
+        map["targetKind"],
+        '$path.targetKind',
+      ),
+      targetId: _requiredNonBlankString(map["targetId"], '$path.targetId'),
+      state: ContentReactionAttachmentState.fromWire(
+        map["state"],
+        '$path.state',
+      ),
+      reaction: map["reaction"] == null
+          ? null
+          : CommentReactionType.fromWire(map["reaction"], '$path.reaction'),
+      version: map["version"] == null
+          ? null
+          : _requiredInt(map["version"], '$path.version'),
+      mutationBasis: map["mutationBasis"] == null
+          ? null
+          : _requiredString(map["mutationBasis"], '$path.mutationBasis'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "targetKind": targetKind.wireName,
+    "targetId": targetId,
+    "state": state.wireName,
+    if (reaction != null) "reaction": reaction!.wireName,
+    if (version != null) "version": version!,
+    if (mutationBasis != null) "mutationBasis": mutationBasis!,
   };
 }
 
@@ -6988,11 +7401,32 @@ ContentPostDetailSlice decodeContentPostDetailSlice(Object? response) =>
       "ContentPostDetailSlice",
     );
 
+ContentReactionCommandRecoverySlice decodeContentReactionCommandRecoverySlice(
+  Object? response,
+) => ContentReactionCommandRecoverySlice.fromWire(
+  _requiredObject(response, "ContentReactionCommandRecoverySlice"),
+  "ContentReactionCommandRecoverySlice",
+);
+
 ContentReactionCommandResult decodeContentReactionCommandResult(
   Object? response,
 ) => ContentReactionCommandResult.fromWire(
   _requiredObject(response, "ContentReactionCommandResult"),
   "ContentReactionCommandResult",
+);
+
+ContentReactionMutationBasisSlice decodeContentReactionMutationBasisSlice(
+  Object? response,
+) => ContentReactionMutationBasisSlice.fromWire(
+  _requiredObject(response, "ContentReactionMutationBasisSlice"),
+  "ContentReactionMutationBasisSlice",
+);
+
+ContentReactionPresentationSlice decodeContentReactionPresentationSlice(
+  Object? response,
+) => ContentReactionPresentationSlice.fromWire(
+  _requiredObject(response, "ContentReactionPresentationSlice"),
+  "ContentReactionPresentationSlice",
 );
 
 ContentReactionStateSlice decodeContentReactionStateSlice(Object? response) =>
@@ -7265,4 +7699,17 @@ List<Object?> _requiredList(Object? value, String path) {
     throw FormatException('$path must be a list');
   }
   return value;
+}
+
+void _requireCoPresentFields(
+  Map<String, Object?> value,
+  Set<String> fields,
+  String path,
+) {
+  final present = fields.where((field) => value[field] != null).length;
+  if (present != 0 && present != fields.length) {
+    throw FormatException(
+      '$path requires ${fields.join(', ')} to be present together',
+    );
+  }
 }

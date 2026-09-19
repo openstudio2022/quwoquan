@@ -48,6 +48,7 @@ func startChatServiceContractRuntime() (*chatServiceContractRuntime, *integratio
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/internal/chat/conversations/direct", runtime.handleDirectConversation)
+	mux.HandleFunc("/internal/chat/conversations/direct/batch-lookup", runtime.handleBatchDirectConversation)
 	runtime.server = httptest.NewServer(mux)
 	client, err := integration.NewAuthorizedChatServiceClient(
 		runtime.server.URL,
@@ -144,6 +145,33 @@ func (runtime *chatServiceContractRuntime) handleDirectConversation(writer http.
 	default:
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (runtime *chatServiceContractRuntime) handleBatchDirectConversation(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var input struct {
+		ViewerID string   `json:"viewerId"`
+		PeerIDs  []string `json:"peerIds"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&input); err != nil ||
+		strings.TrimSpace(input.ViewerID) == "" || len(input.PeerIDs) == 0 {
+		http.Error(writer, "invalid batch direct lookup", http.StatusBadRequest)
+		return
+	}
+	if !runtime.hasDelegatedUserServicePersona(request, input.ViewerID) {
+		http.Error(writer, "delegated internal attribution required", http.StatusUnauthorized)
+		return
+	}
+	exists := make(map[string]bool, len(input.PeerIDs))
+	runtime.mu.Lock()
+	for _, peerID := range input.PeerIDs {
+		_, exists[peerID] = runtime.conversations[directConversationPairKey(input.ViewerID, peerID)]
+	}
+	runtime.mu.Unlock()
+	writeJSON(writer, map[string]any{"existsByPeerId": exists})
 }
 
 func (runtime *chatServiceContractRuntime) hasDelegatedUserServicePersona(

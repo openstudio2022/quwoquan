@@ -20,6 +20,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
+
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 
@@ -110,7 +111,14 @@ Widget _buildFeed(List<ContentPostViewData> posts, List<FeedObjectCard> cards) {
             isDark: false,
             channelId: 'recommend',
             template: 'single_column_multiform',
-            onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
+            onUserTap: (
+              _, {
+              avatarAccessMode,
+              avatarAssetId,
+              avatarUrl,
+              backgroundUrl,
+              displayName,
+            }) {},
           ),
         ),
       ),

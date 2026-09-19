@@ -44,7 +44,7 @@ import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart'
     show
         authorImpactQueryProvider,
-        personaRelationshipBlockWriterProvider,
+        personaRelationshipBlockCoordinatorProvider,
         userProfileContentReportCommandWriterProvider;
 import 'package:quwoquan_app/runtime/di/content_behavior_dependencies.dart'
     show contentBehaviorTrackerProvider;

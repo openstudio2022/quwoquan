@@ -27,208 +27,225 @@ void main() {
     await actor?.close();
   });
 
-  test(
-    'production PersonaRelationship Remote closes follow, capability and blocked-list readback',
-    () async {
-      final suffix = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
-      actor = await UserApiContractHarness.create();
-      target = await UserApiContractHarness.create();
-      secondTarget = await UserApiContractHarness.create();
-      final actorSession = await actor!.loginDisposableAccount(
-        'persona-relationship-actor-$suffix',
-      );
-      final targetSession = await target!.loginDisposableAccount(
-        'persona-relationship-target-$suffix',
-      );
-      final secondTargetSession = await secondTarget!.loginDisposableAccount(
-        'persona-relationship-second-target-$suffix',
-      );
-      final actorPersonaId = _activePersonaId(actorSession);
-      final targetPersonaId = _activePersonaId(targetSession);
-      final secondTargetPersonaId = _activePersonaId(secondTargetSession);
+  test('production PersonaRelationship Remote closes follow, capability and blocked-list readback', () async {
+    final suffix = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
+    actor = await UserApiContractHarness.create();
+    target = await UserApiContractHarness.create();
+    secondTarget = await UserApiContractHarness.create();
+    final actorSession = await actor!.loginDisposableAccount(
+      'persona-relationship-actor-$suffix',
+    );
+    final targetSession = await target!.loginDisposableAccount(
+      'persona-relationship-target-$suffix',
+    );
+    final secondTargetSession = await secondTarget!.loginDisposableAccount(
+      'persona-relationship-second-target-$suffix',
+    );
+    final actorPersonaId = _activePersonaId(actorSession);
+    final targetPersonaId = _activePersonaId(targetSession);
+    final secondTargetPersonaId = _activePersonaId(secondTargetSession);
 
-      try {
-        final initialCapability = await actor!.personaRelationships
-            .getRelationshipCapability(
-              GetRelationshipCapabilityQuery(targetPersonaId: targetPersonaId),
-            );
-        expect(initialCapability.viewerPersonaId, actorPersonaId);
-        expect(initialCapability.targetPersonaId, targetPersonaId);
-        expect(initialCapability.canFollow, isTrue);
-        expect(initialCapability.isBlocked, isFalse);
-        expect(initialCapability.isBlockedBy, isFalse);
-
-        for (var replay = 0; replay < 2; replay++) {
-          await actor!.withIdempotencyKey(
-            idempotencyKey: 'persona-follow-$suffix',
-            action: () => actor!.personaRelationshipFollows.follow(
-              targetPersonaId,
-              sourceSurfaceId: AppUiSurfaces.userProfile.id,
-            ),
+    try {
+      final initialCapability = await actor!.personaRelationships
+          .getRelationshipCapability(
+            GetRelationshipCapabilityQuery(targetPersonaId: targetPersonaId),
           );
-        }
+      expect(initialCapability.viewerPersonaId, actorPersonaId);
+      expect(initialCapability.targetPersonaId, targetPersonaId);
+      expect(initialCapability.canFollow, isTrue);
+      expect(initialCapability.isBlocked, isFalse);
+      expect(initialCapability.isBlockedBy, isFalse);
 
-        final following = await _pollUntil(
-          () => actor!.personaRelationshipFollows.listFollowing(
-            personaId: actorPersonaId,
-            limit: 100,
+      for (var replay = 0; replay < 2; replay++) {
+        await actor!.withIdempotencyKey(
+          idempotencyKey: 'persona-follow-$suffix',
+          action: () => actor!.personaRelationshipFollows.follow(
+            targetPersonaId,
+            sourceSurfaceId: AppUiSurfaces.userProfile.id,
           ),
-          (page) => page.items.any(
-            (item) => item.personaId == targetPersonaId && item.isFollowing,
-          ),
-          'following owner projection',
-        );
-        final followers = await _pollUntil(
-          () => target!.personaRelationshipFollows.listFollowers(
-            personaId: targetPersonaId,
-            limit: 100,
-          ),
-          (page) => page.items.any((item) => item.personaId == actorPersonaId),
-          'followers owner projection',
-        );
-        expect(
-          following.items.where((item) => item.personaId == targetPersonaId),
-          hasLength(1),
-        );
-        expect(
-          followers.items.where((item) => item.personaId == actorPersonaId),
-          hasLength(1),
-        );
-        final followedCapability = await actor!.personaRelationships
-            .getRelationshipCapability(
-              GetRelationshipCapabilityQuery(targetPersonaId: targetPersonaId),
-            );
-        expect(followedCapability.canUnfollow, isTrue);
-        expect(followedCapability.canFollow, isFalse);
-
-        for (var replay = 0; replay < 2; replay++) {
-          await actor!.withIdempotencyKey(
-            idempotencyKey: 'persona-unfollow-$suffix',
-            action: () =>
-                actor!.personaRelationshipFollows.unfollow(targetPersonaId),
-          );
-        }
-        await _pollUntil(
-          () => actor!.personaRelationshipFollows.listFollowing(
-            personaId: actorPersonaId,
-            limit: 100,
-          ),
-          (page) =>
-              page.items.every((item) => item.personaId != targetPersonaId),
-          'unfollowed owner projection',
-        );
-
-        final firstBlock = await actor!.personaRelationships
-            .blockUserWithIntent(
-              BlockUserCommand(targetPersonaId: targetPersonaId),
-              idempotencyKey: 'persona-block-target-$suffix',
-            );
-        final firstBlockReplay = await actor!.personaRelationships
-            .blockUserWithIntent(
-              BlockUserCommand(targetPersonaId: targetPersonaId),
-              idempotencyKey: 'persona-block-target-$suffix',
-            );
-        final secondBlock = await actor!.personaRelationships
-            .blockUserWithIntent(
-              BlockUserCommand(targetPersonaId: secondTargetPersonaId),
-              idempotencyKey: 'persona-block-second-target-$suffix',
-            );
-        expect(firstBlock.blocked, isTrue);
-        expect(firstBlock.idempotentReplay, isFalse);
-        expect(firstBlockReplay.targetPersonaId, firstBlock.targetPersonaId);
-        expect(firstBlockReplay.idempotentReplay, isTrue);
-        expect(secondBlock.blocked, isTrue);
-
-        final blockedFirstPage = await _pollUntil(
-          () => actor!.personaRelationships.listBlockedUsers(
-            ListBlockedUsersQuery(limit: 1),
-          ),
-          (page) =>
-              page.items.length == 1 &&
-              page.nextCursor != null &&
-              page.nextCursor!.isNotEmpty,
-          'blocked-list first page',
-        );
-        final blockedSecondPage = await actor!.personaRelationships
-            .listBlockedUsers(
-              ListBlockedUsersQuery(
-                cursor: blockedFirstPage.nextCursor,
-                limit: 1,
-              ),
-            );
-        final blockedPersonaIds = <String>{
-          ...blockedFirstPage.items.map((item) => item.targetPersonaId),
-          ...blockedSecondPage.items.map((item) => item.targetPersonaId),
-        };
-        expect(blockedPersonaIds, <String>{
-          targetPersonaId,
-          secondTargetPersonaId,
-        });
-        expect(blockedSecondPage.nextCursor, isNull);
-        final targetOwnedBlocks = await target!.personaRelationships
-            .listBlockedUsers(ListBlockedUsersQuery(limit: 100));
-        expect(
-          targetOwnedBlocks.items.any(
-            (item) => item.targetPersonaId == actorPersonaId,
-          ),
-          isFalse,
-        );
-
-        final blockedCapability = await actor!.personaRelationships
-            .getRelationshipCapability(
-              GetRelationshipCapabilityQuery(targetPersonaId: targetPersonaId),
-            );
-        expect(blockedCapability.isBlocked, isTrue);
-        expect(blockedCapability.canFollow, isFalse);
-
-        final unblocked = await actor!.personaRelationships
-            .unblockUserWithIntent(
-              UnblockUserCommand(targetPersonaId: targetPersonaId),
-              idempotencyKey: 'persona-unblock-target-$suffix',
-            );
-        final unblockReplay = await actor!.personaRelationships
-            .unblockUserWithIntent(
-              UnblockUserCommand(targetPersonaId: targetPersonaId),
-              idempotencyKey: 'persona-unblock-target-$suffix',
-            );
-        expect(unblocked.blocked, isFalse);
-        expect(unblocked.idempotentReplay, isFalse);
-        expect(unblockReplay.targetPersonaId, unblocked.targetPersonaId);
-        expect(unblockReplay.idempotentReplay, isTrue);
-        await _pollUntil(
-          () => actor!.personaRelationships.listBlockedUsers(
-            ListBlockedUsersQuery(limit: 100),
-          ),
-          (page) =>
-              page.items.every(
-                (item) => item.targetPersonaId != targetPersonaId,
-              ) &&
-              page.items.any(
-                (item) => item.targetPersonaId == secondTargetPersonaId,
-              ),
-          'unblocked owner projection',
-        );
-
-        await actor!.personaRelationships.unblockUserWithIntent(
-          UnblockUserCommand(targetPersonaId: secondTargetPersonaId),
-          idempotencyKey: 'persona-unblock-second-target-$suffix',
-        );
-      } finally {
-        await _closeDisposableAccount(
-          actor,
-          clientRequestId: 'persona-relationship-close-actor-$suffix',
-        );
-        await _closeDisposableAccount(
-          target,
-          clientRequestId: 'persona-relationship-close-target-$suffix',
-        );
-        await _closeDisposableAccount(
-          secondTarget,
-          clientRequestId: 'persona-relationship-close-second-$suffix',
         );
       }
-    },
-  );
+
+      final following = await _pollUntil(
+        () => actor!.personaRelationshipFollows.listFollowing(
+          personaId: actorPersonaId,
+          limit: 100,
+        ),
+        (page) => page.items.any(
+          (item) => item.personaId == targetPersonaId && item.isFollowing,
+        ),
+        'following owner projection',
+      );
+      final followers = await _pollUntil(
+        () => target!.personaRelationshipFollows.listFollowers(
+          personaId: targetPersonaId,
+          limit: 100,
+        ),
+        (page) => page.items.any((item) => item.personaId == actorPersonaId),
+        'followers owner projection',
+      );
+      expect(
+        following.items.where((item) => item.personaId == targetPersonaId),
+        hasLength(1),
+      );
+      expect(
+        followers.items.where((item) => item.personaId == actorPersonaId),
+        hasLength(1),
+      );
+      final followedCapability = await actor!.personaRelationships
+          .getRelationshipCapability(
+            GetRelationshipCapabilityQuery(targetPersonaId: targetPersonaId),
+          );
+      expect(followedCapability.canUnfollow, isTrue);
+      expect(followedCapability.canFollow, isFalse);
+
+      for (var replay = 0; replay < 2; replay++) {
+        await actor!.withIdempotencyKey(
+          idempotencyKey: 'persona-unfollow-$suffix',
+          action: () =>
+              actor!.personaRelationshipFollows.unfollow(targetPersonaId),
+        );
+      }
+      await _pollUntil(
+        () => actor!.personaRelationshipFollows.listFollowing(
+          personaId: actorPersonaId,
+          limit: 100,
+        ),
+        (page) => page.items.every((item) => item.personaId != targetPersonaId),
+        'unfollowed owner projection',
+      );
+
+      final firstBlock = await actor!.personaRelationships.blockUserWithIntent(
+        BlockUserCommand(
+          targetPersonaId: targetPersonaId,
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
+        ),
+        idempotencyKey: 'persona-block-target-$suffix',
+      );
+      final firstBlockReplay = await actor!.personaRelationships
+          .blockUserWithIntent(
+            BlockUserCommand(
+              targetPersonaId: targetPersonaId,
+              mutationBasis: 'test-basis',
+              expectedVersion: 0,
+            ),
+            idempotencyKey: 'persona-block-target-$suffix',
+          );
+      final secondBlock = await actor!.personaRelationships.blockUserWithIntent(
+        BlockUserCommand(
+          targetPersonaId: secondTargetPersonaId,
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
+        ),
+        idempotencyKey: 'persona-block-second-target-$suffix',
+      );
+      expect(firstBlock.blocked, isTrue);
+      expect(firstBlock.idempotentReplay, isFalse);
+      expect(firstBlockReplay.targetPersonaId, firstBlock.targetPersonaId);
+      expect(firstBlockReplay.idempotentReplay, isTrue);
+      expect(secondBlock.blocked, isTrue);
+
+      final blockedFirstPage = await _pollUntil(
+        () => actor!.personaRelationships.listBlockedUsers(
+          ListBlockedUsersQuery(limit: 1),
+        ),
+        (page) =>
+            page.items.length == 1 &&
+            page.nextCursor != null &&
+            page.nextCursor!.isNotEmpty,
+        'blocked-list first page',
+      );
+      final blockedSecondPage = await actor!.personaRelationships
+          .listBlockedUsers(
+            ListBlockedUsersQuery(
+              cursor: blockedFirstPage.nextCursor,
+              limit: 1,
+            ),
+          );
+      final blockedPersonaIds = <String>{
+        ...blockedFirstPage.items.map((item) => item.targetPersonaId),
+        ...blockedSecondPage.items.map((item) => item.targetPersonaId),
+      };
+      expect(blockedPersonaIds, <String>{
+        targetPersonaId,
+        secondTargetPersonaId,
+      });
+      expect(blockedSecondPage.nextCursor, isNull);
+      final targetOwnedBlocks = await target!.personaRelationships
+          .listBlockedUsers(ListBlockedUsersQuery(limit: 100));
+      expect(
+        targetOwnedBlocks.items.any(
+          (item) => item.targetPersonaId == actorPersonaId,
+        ),
+        isFalse,
+      );
+
+      final blockedCapability = await actor!.personaRelationships
+          .getRelationshipCapability(
+            GetRelationshipCapabilityQuery(targetPersonaId: targetPersonaId),
+          );
+      expect(blockedCapability.isBlocked, isTrue);
+      expect(blockedCapability.canFollow, isFalse);
+
+      final unblocked = await actor!.personaRelationships.unblockUserWithIntent(
+        UnblockUserCommand(
+          targetPersonaId: targetPersonaId,
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
+        ),
+        idempotencyKey: 'persona-unblock-target-$suffix',
+      );
+      final unblockReplay = await actor!.personaRelationships
+          .unblockUserWithIntent(
+            UnblockUserCommand(
+              targetPersonaId: targetPersonaId,
+              mutationBasis: 'test-basis',
+              expectedVersion: 0,
+            ),
+            idempotencyKey: 'persona-unblock-target-$suffix',
+          );
+      expect(unblocked.blocked, isFalse);
+      expect(unblocked.idempotentReplay, isFalse);
+      expect(unblockReplay.targetPersonaId, unblocked.targetPersonaId);
+      expect(unblockReplay.idempotentReplay, isTrue);
+      await _pollUntil(
+        () => actor!.personaRelationships.listBlockedUsers(
+          ListBlockedUsersQuery(limit: 100),
+        ),
+        (page) =>
+            page.items.every(
+              (item) => item.targetPersonaId != targetPersonaId,
+            ) &&
+            page.items.any(
+              (item) => item.targetPersonaId == secondTargetPersonaId,
+            ),
+        'unblocked owner projection',
+      );
+
+      await actor!.personaRelationships.unblockUserWithIntent(
+        UnblockUserCommand(
+          targetPersonaId: secondTargetPersonaId,
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
+        ),
+        idempotencyKey: 'persona-unblock-second-target-$suffix',
+      );
+    } finally {
+      await _closeDisposableAccount(
+        actor,
+        clientRequestId: 'persona-relationship-close-actor-$suffix',
+      );
+      await _closeDisposableAccount(
+        target,
+        clientRequestId: 'persona-relationship-close-target-$suffix',
+      );
+      await _closeDisposableAccount(
+        secondTarget,
+        clientRequestId: 'persona-relationship-close-second-$suffix',
+      );
+    }
+  });
 }
 
 String _activePersonaId(AuthSessionGrant session) {

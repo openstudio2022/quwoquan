@@ -24,6 +24,12 @@ type PersonaReader interface {
 	FindByPersonaID(ctx context.Context, personaID string) (*model.Persona, error)
 }
 
+// PersonaBatchReader 是公开列表组装使用的批量读取能力。生产 PostgreSQL
+// adapter 必须实现它，使一页资料读取不随条目数增加往返。
+type PersonaBatchReader interface {
+	FindManyByPersonaID(ctx context.Context, personaIDs []string) (map[string]model.Persona, error)
+}
+
 // PersonaOwnerAccountReader 是跨对象读取 Persona owner 的最窄 typed port。
 // DeviceRegistration 来电 destination resolver 只需要 accountId，禁止为此加载
 // Persona 全量私有字段或在 application 层直连 personas 表。

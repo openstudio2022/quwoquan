@@ -27,8 +27,8 @@ func LoadManagedAcceptanceBinding() (ManagedAcceptanceBinding, error) {
 		return ManagedAcceptanceBinding{}, nil
 	}
 	var identity struct {
-		Phone string `json:"phone"`
-		AccountID string `json:"accountId"`
+		Phone       string `json:"phone"`
+		AccountID   string `json:"accountId"`
 		SubjectHash string `json:"subjectHash"`
 	}
 	decoder := json.NewDecoder(strings.NewReader(raw))

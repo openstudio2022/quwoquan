@@ -145,6 +145,12 @@ types:
       - {name: idempotencyKey, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 128, classification: INTERNAL, log_policy: hash, api_exposure: read_write, ops_exposure: drop}
       - {name: mutationBasis, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 4096, classification: SECRET, log_policy: drop, api_exposure: read_write, ops_exposure: drop}
       - {name: expectedVersion, type: int64, constraints: [NOT_NULL, MIN_0], semantic_type: aggregate_version, classification: INTERNAL, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+  ContentReactionMutationBasisSlice:
+    fields:
+      - {name: targetKind, type: enum, enum_ref: ContentReactionTargetKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: targetId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: mutationBasis, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 4096, classification: SECRET, log_policy: drop, api_exposure: read, ops_exposure: drop}
+      - {name: expectedVersion, type: int64, constraints: [NOT_NULL, MIN_0], semantic_type: aggregate_version, classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
   ContentReactionCommandRecoverySlice:
     description: >-
       同 actor-target 命令恢复结果；committed 才有 committedVersion/changed。
@@ -193,6 +199,13 @@ types:
       - {name: reaction, type: enum, enum_ref: CommentReactionType, constraints: [NULLABLE], co_present_with: [version], classification: PRIVATE, log_policy: drop, api_exposure: read, ops_exposure: drop}
       - {name: version, type: int64, constraints: [NULLABLE, MIN_0], semantic_type: aggregate_version, co_present_with: [reaction], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: mutationBasis, type: string, constraints: [NULLABLE], max_utf8_bytes: 4096, classification: SECRET, log_policy: drop, api_exposure: read, ops_exposure: drop}
+  ContentReactionPresentationSlice:
+    description: 公共统计与当前verified actor本人态的分层组合；statistics unavailable不伪造0，viewerAttachment unavailable不伪造none。
+    fields:
+      - {name: targetKind, type: enum, enum_ref: ContentReactionTargetKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: targetId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: statistics, type: ContentReactionStatisticsSlice, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: viewerAttachment, type: ContentReactionViewerAttachment, constraints: [NOT_NULL], classification: PRIVATE, log_policy: drop, api_exposure: read, ops_exposure: drop}
   ContentReactionCommandResult:
     description: Post reaction mutation result returned by the ContentReaction aggregate facade.
     fields:
@@ -220,6 +233,7 @@ types:
       - {name: liked, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: version, type: int, constraints: [NOT_NULL, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: updatedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: mutationBasis, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 4096, classification: SECRET, log_policy: drop, api_exposure: read, ops_exposure: drop}
   ContentReactionChangedPayload:
     fields:
       - {name: reactionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
@@ -242,28 +256,37 @@ types:
         client_normalization: trim
   ReactToContentCommentCommand:
     fields:
-      - name: commentId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_type: String
-        client_normalization: trim
-      - name: reaction
-        type: enum
-        enum_ref: CommentReactionType
+      - {name: commentId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: reaction, type: enum, enum_ref: CommentReactionType}
+      - {name: mutationBasis, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: expectedVersion, type: int64, constraints: [MIN_0], client_dart_type: int}
   UnlikeContentPostCommand:
     fields:
-      - name: postId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_type: String
-        client_normalization: trim
+      - {name: postId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: mutationBasis, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: expectedVersion, type: int64, constraints: [MIN_0], client_dart_type: int}
   LikeContentPostCommand:
     fields:
-      - name: postId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_type: String
-        client_normalization: trim
+      - {name: postId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: mutationBasis, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: expectedVersion, type: int64, constraints: [MIN_0], client_dart_type: int}
+  GetContentReactionPresentationQuery:
+    fields:
+      - {name: targetKind, type: enum, enum_ref: ContentReactionTargetKind, client_dart_type: ContentReactionTargetKind}
+      - {name: targetId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+  GetContentReactionMutationBasisQuery:
+    fields:
+      - {name: targetKind, type: enum, enum_ref: ContentReactionTargetKind, client_dart_type: ContentReactionTargetKind}
+      - {name: targetId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+  RecoverContentReactionCommandQuery:
+    fields:
+      - {name: targetKind, type: enum, enum_ref: ContentReactionTargetKind, client_dart_type: ContentReactionTargetKind}
+      - {name: targetId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: operation, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+  FinalizeExpiredContentReactionCommand:
+    fields:
+      - {name: targetKind, type: enum, enum_ref: ContentReactionTargetKind, client_dart_type: ContentReactionTargetKind}
+      - {name: targetId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: operation, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: mutationBasis, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: expectedVersion, type: int64, constraints: [MIN_0], client_dart_type: int}

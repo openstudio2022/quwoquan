@@ -7,17 +7,24 @@ type DataPorts struct {
 	State         ContentReactionStateReader
 	Target        ReactionTargetReader
 	CommentCounts CommentReactionCountReader
+	Statistics    ContentReactionStatisticsReader
 }
 
 func BindDataPorts(adapter interface {
 	reactionports.AggregateStore
 	ContentReactionStateReader
 	CommentReactionCountReader
-}, target ReactionTargetReader) DataPorts {
+}, target ReactionTargetReader, statistics ...ContentReactionStatisticsReader) DataPorts {
 	return DataPorts{
 		Aggregate:     adapter,
 		State:         adapter,
 		Target:        target,
 		CommentCounts: adapter,
+		Statistics: func() ContentReactionStatisticsReader {
+			if len(statistics) > 0 {
+				return statistics[0]
+			}
+			return nil
+		}(),
 	}
 }

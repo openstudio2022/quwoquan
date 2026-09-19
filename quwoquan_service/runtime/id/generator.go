@@ -2,6 +2,7 @@ package id
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -11,7 +12,29 @@ import (
 const (
 	ulidLength = 26
 	entropyLen = 10
+
+	// maxTimestampMilliseconds 是 ULID 时间段可表示的毫秒上界（48 bit）。
+	// 越界时间无法编码为 canonical ULID，只能停止分配而不是截断或环绕。
+	maxTimestampMilliseconds = int64(1) << 48
+
+	// AllocationAttempts 是同一次分配意图允许的候选 ID 总次数。未提交候选
+	// 与既有身份冲突时可在此预算内换用新的安全熵；预算耗尽必须安全失败，
+	// 不降级为弱随机、别名或时间后缀。
+	AllocationAttempts = 3
 )
+
+var (
+	// ErrTimestampOutOfRange 表示时间戳无法编码为 canonical ULID。
+	ErrTimestampOutOfRange = errors.New("runtime/id: timestamp out of encodable range")
+	// ErrEntropyUnavailable 表示安全熵不可用；调用方不得改用弱随机。
+	ErrEntropyUnavailable = errors.New("runtime/id: secure entropy unavailable")
+	// ErrAllocationBudgetExhausted 表示未提交候选连续冲突且预算已耗尽。
+	ErrAllocationBudgetExhausted = errors.New("runtime/id: identity allocation budget exhausted")
+)
+
+// CandidateProbe 回答一个尚未提交的候选 ID 是否已被既有身份占用。
+// 只有 taken=true 才触发有界重分配；err 按原样返回，不当作冲突。
+type CandidateProbe func(candidate string) (taken bool, err error)
 
 var crockford = []byte("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
 
@@ -69,9 +92,13 @@ func (g *Generator) Generate() (string, error) {
 }
 
 func (g *Generator) GenerateAt(t time.Time) (string, error) {
+	milliseconds := t.UTC().UnixMilli()
+	if milliseconds < 0 || milliseconds >= maxTimestampMilliseconds {
+		return "", fmt.Errorf("%w: %d", ErrTimestampOutOfRange, milliseconds)
+	}
 	var entropy [entropyLen]byte
 	if _, err := io.ReadFull(g.entropy, entropy[:]); err != nil {
-		return "", fmt.Errorf("runtime/id: read entropy: %w", err)
+		return "", fmt.Errorf("%w: %v", ErrEntropyUnavailable, err)
 	}
 	return string(g.prefix) + encodeULID(t.UTC(), entropy), nil
 }
@@ -160,6 +187,12 @@ func IsValid(raw string) bool {
 
 func isULIDSuffix(suffix string) bool {
 	if len(suffix) != ulidLength {
+		return false
+	}
+	// ULID is a 128-bit value encoded into 26 Crockford characters (130 bits).
+	// The first character therefore only admits 0-7; accepting 8-Z creates a
+	// non-canonical value that cannot round-trip through independent encoders.
+	if suffix[0] < '0' || suffix[0] > '7' {
 		return false
 	}
 	for _, ch := range suffix {

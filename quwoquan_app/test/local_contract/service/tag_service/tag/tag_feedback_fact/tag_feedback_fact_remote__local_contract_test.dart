@@ -15,7 +15,7 @@ void main() {
       );
       final adapter = RemoteTagFeedbackAdapter(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: 'careerInterest',
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(

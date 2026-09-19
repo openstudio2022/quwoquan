@@ -180,8 +180,14 @@ Future<void> _pumpFeed(
               isDark: false,
               channelId: 'recommend',
               template: 'single_column_multiform',
-              onUserTap: (id, {avatarUrl, backgroundUrl, displayName}) =>
-                  onUserTap?.call(id),
+              onUserTap: (
+                id, {
+                avatarAccessMode,
+                avatarAssetId,
+                avatarUrl,
+                backgroundUrl,
+                displayName,
+              }) => onUserTap?.call(id),
             ),
           ),
         ),
@@ -228,7 +234,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text(SearchText.recoveryContentUnavailableTitle),
+        find.text(SearchText.recoveryCapabilityUnavailableTitle),
         findsOneWidget,
       );
       await tester.tap(find.text(SearchText.recoveryReturnAction));

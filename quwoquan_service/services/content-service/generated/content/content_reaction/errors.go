@@ -11,8 +11,22 @@ import (
 //
 //nolint:gochecknoglobals
 var (
+	ErrContentReactionBasisExpired   = errors.New("CONTENT.USER.content_reaction_basis_expired")
+	ErrContentReactionBasisInvalid   = errors.New("CONTENT.USER.content_reaction_basis_invalid")
 	ErrContentReactionTargetNotFound = errors.New("CONTENT.USER.content_reaction_target_not_found")
 )
+
+// AppErrorFromContentReactionBasisExpired returns *AppError for CONTENT.USER.content_reaction_basis_expired (user_message from errors.yaml).
+func AppErrorFromContentReactionBasisExpired(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.content_reaction_basis_expired")
+	return rterr.NewAppError(code, "互动请求已过期，请刷新后重试", debugMessage).WithMetadata("content_reaction_basis_expired", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromContentReactionBasisInvalid returns *AppError for CONTENT.USER.content_reaction_basis_invalid (user_message from errors.yaml).
+func AppErrorFromContentReactionBasisInvalid(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.content_reaction_basis_invalid")
+	return rterr.NewAppError(code, "互动状态已更新，请刷新后重试", debugMessage).WithMetadata("content_reaction_basis_invalid", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
 
 // AppErrorFromContentReactionTargetNotFound returns *AppError for CONTENT.USER.content_reaction_target_not_found (user_message from errors.yaml).
 func AppErrorFromContentReactionTargetNotFound(debugMessage string) *rterr.AppError {

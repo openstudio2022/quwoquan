@@ -16,6 +16,7 @@ final class InMemoryContentPostReactionFacet
       postId: query.postId,
       liked: liked,
       version: liked ? 1 : 0,
+      mutationBasis: 'test-basis',
       updatedAt: liked ? DateTime.now().toUtc() : null,
     );
   }

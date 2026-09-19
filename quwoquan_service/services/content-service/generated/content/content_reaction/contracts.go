@@ -2,14 +2,20 @@
 package generated
 
 const (
-	RouteGetContentReactionStateMethod = "GET"
-	RouteGetContentReactionStatePath   = "/content/posts/{postId}/reactions"
-	RouteLikePostMethod                = "POST"
-	RouteLikePostPath                  = "/content/posts/{postId}/like"
-	RouteReactToCommentMethod          = "POST"
-	RouteReactToCommentPath            = "/content/comments/{commentId}/reaction"
-	RouteUnlikePostMethod              = "DELETE"
-	RouteUnlikePostPath                = "/content/posts/{postId}/like"
+	RouteFinalizeExpiredContentReactionCommandMethod = "POST"
+	RouteFinalizeExpiredContentReactionCommandPath   = "/content/reactions/{targetKind}/{targetId}/commands/{operation}/finalize-expired"
+	RouteGetContentReactionMutationBasisMethod       = "GET"
+	RouteGetContentReactionMutationBasisPath         = "/content/reactions/{targetKind}/{targetId}/mutation-basis"
+	RouteGetContentReactionStateMethod               = "GET"
+	RouteGetContentReactionStatePath                 = "/content/posts/{postId}/reactions"
+	RouteLikePostMethod                              = "POST"
+	RouteLikePostPath                                = "/content/posts/{postId}/like"
+	RouteReactToCommentMethod                        = "POST"
+	RouteReactToCommentPath                          = "/content/comments/{commentId}/reaction"
+	RouteRecoverContentReactionCommandMethod         = "GET"
+	RouteRecoverContentReactionCommandPath           = "/content/reactions/{targetKind}/{targetId}/commands/{operation}/receipt"
+	RouteUnlikePostMethod                            = "DELETE"
+	RouteUnlikePostPath                              = "/content/posts/{postId}/like"
 )
 
 var AllowedContentTypes = map[string]struct{}{}

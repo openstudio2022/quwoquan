@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -95,14 +96,12 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
     _activeFollowAttempt = attempt;
     try {
       await ref
-          .read(
-            personaRelationshipCommandWriterProvider(
-              AppUiSurfaces.addContactConfirm,
-            ),
-          )
-          .follow(
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowingWithSync(
             widget.targetUserId,
-            sourceSurfaceId: AppUiSurfaces.addContactConfirm.id,
+            currentFollowing: false,
+            shouldFollow: true,
+            sourceSurface: AppUiSurfaces.addContactConfirm,
           );
       if (!mounted || _activeFollowAttempt != attempt) {
         return;

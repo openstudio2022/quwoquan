@@ -153,8 +153,8 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：`REQ-001`～`REQ-004` 的当前语义已替换“两个 bool 即足够”和“本地到期直接失败”；旧 `GWT-001` 绑定不证明 actor 分区、逐对象 hydrate、persist 成功与权威同键终结。
-- 完成判定：`GWT-001`、`GWT-002`、`GWT-003`、`GWT-004` 按新断言取得 local_contract、真实 Remote 恢复及适用双真机证据；Reaction/User 各自权威仲裁反例通过前不开放新协议发送侧。
+- 影响或价值：`REQ-001`～`REQ-004` 尚缺 actor 分区、逐对象 hydrate、persist 成功、权威同键终结以及“两个 bool”与本地到期误判的反例证据。工程引用包括 `quwoquan_app/test/local_contract/journeys/viewer_profile_state_sync/viewer_profile_state_sync__local_contract_test.dart`、`quwoquan_app/test/local_contract/runtime/transport/state_sync/client_state_sync_outbox__local_contract_test.dart`、`quwoquan_app/test/local_contract/service/content_service/content/post/post_interaction_state__local_contract_test.dart`、Reaction Remote api_integration 及 like/profile user_acceptance；这些落点均尚未证明完整语义。
+- 完成判定：`GWT-001`、`GWT-002`、`GWT-003`、`GWT-004` 的逐行为断言绑定当前 `spec_ref`，并取得职责匹配的本地契约、真实 Remote 恢复及适用双真机结果；Reaction/User 各自权威仲裁反例通过前不开放新协议发送侧。
 
 <a id="open-002"></a>
 ### OPEN-002 互动附着与统计分型尚缺单轨端云证据
@@ -162,8 +162,8 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：`REQ-005`、`GWT-005`、`GWT-006` 尚待 owner typed slice、严格 mapper、REST/公开 GraphQL 与私有组合及设备 UI 反例；不能把合法公共缺席或 HTTP 200 当互动完整成功。
-- 完成判定：`GWT-005`、`GWT-006` 的所有身份/子读组合有当前 `spec_ref`，无本地 +1、假零、假 pending、匿名身份推断或公共缓存泄漏。
+- 影响或价值：`REQ-005`、`GWT-005`、`GWT-006` 尚缺 owner typed slice、严格 mapper、REST/公开 GraphQL 与私有组合及设备 UI 反例的实现与验收证据；不能把合法公共缺席或 HTTP 200 当互动完整成功。工程引用包括 Reaction Remote api_integration、`quwoquan_service/services/content-service/tests/api_integration/content/content_reaction/` 下尚缺的真实 owner reader 场景，以及 like/profile user_acceptance；新协议引用 `quwoquan_service/services/content-service/contracts/content/content_reaction/`、`content/post/projections/` 与 `quwoquan_service/services/user-service/contracts/relationship/persona_relationship/`。
+- 完成判定：`GWT-005`、`GWT-006` 的所有身份/子读组合均在直接断言处绑定当前 `spec_ref`，无本地 +1、假零、假 pending、匿名身份推断或公共缓存泄漏；字段、错误/恢复、page surface 和 readiness 仍由 owning contracts 登记。
 
 <a id="open-003"></a>
 ### OPEN-003 旧缓存防覆盖与可见刷新成本尚缺证据
@@ -171,15 +171,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：`REQ-006` 与 `GWT-007` 尚缺 production replay policy、网络/磁盘 epoch 竞态、跨设备恢复和批准负载下的端到端新鲜度证据。
-- 完成判定：`GWT-007` 的可控迟到反例、真实缓存/Remote、前台合并刷新次数、源绝对期限与双真机同候选读回分别通过；未批准峰值/资源或 skip 不证明 5 秒达标。
-
-## 8. 待实现验收的测试绑定
-
-以下仅定义后续 `spec_ref` 的断言落点，不声明现有 runner 已实现或通过新语义；每条 GWT 需逐行为绑定，不以整文件标注代替断言。
-
-- `quwoquan_app/test/local_contract/journeys/viewer_profile_state_sync/viewer_profile_state_sync__local_contract_test.dart` 与 `quwoquan_app/test/local_contract/journeys/cross_page_interaction_consistency/cross_page_interaction_consistency__local_contract_test.dart` 扩展绑定 `GWT-001`、`GWT-002`、`GWT-005`、`GWT-007`。
-- `quwoquan_app/test/local_contract/runtime/transport/state_sync/client_state_sync_outbox__local_contract_test.dart`、`quwoquan_app/test/local_contract/service/content_service/content/post/post_interaction_state__local_contract_test.dart` 扩展绑定 `GWT-002`～`GWT-005`；同 Post 目录 `content_cache_services__local_contract_test.dart` 扩展绑定 `GWT-007`。
-- `quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart` 扩展绑定 `GWT-002`、`GWT-004`～`GWT-006`；公开 GraphQL 与私有组合的 service 专项在 `quwoquan_service/services/content-service/tests/api_integration/content/content_reaction/` 补真实 owner reader 用例，尚未实现。
-- `quwoquan_app/test/user_acceptance/service/content_service/content/content_reaction/like_post__user_acceptance_test.dart` 与 `quwoquan_app/test/user_acceptance/journeys/profile/profile_journey__user_acceptance_test.dart` 扩展绑定 `GWT-001`、`GWT-002`、`GWT-004`、`GWT-005`、`GWT-007`，用双真机动作、同 actor/target receipt、服务读回与来源水位区分 UI 和云确认。
-- 新协议引用：`quwoquan_service/services/content-service/contracts/content/content_reaction/`、`quwoquan_service/services/content-service/contracts/content/post/projections/`、`quwoquan_service/services/user-service/contracts/relationship/persona_relationship/` 与现役 capability owner；字段、错误/恢复、page surface 和 readiness 登记仍只由 contracts 拥有。
+- 影响或价值：`REQ-006` 与 `GWT-007` 尚缺 production replay policy、网络/磁盘 epoch 竞态、跨设备恢复和批准负载下的端到端新鲜度证据。工程引用包括 cross-page/viewer-profile local_contract、Post 目录 `content_cache_services__local_contract_test.dart`、Reaction Remote api_integration 与 like/profile user_acceptance；这些落点尚缺可控迟到、真实缓存和同候选设备读回的完整绑定。
+- 完成判定：`GWT-007` 的可控迟到反例、真实缓存/Remote、前台合并刷新次数、源绝对期限与双真机同候选读回分别在直接断言处绑定当前 `spec_ref`；未批准峰值/资源或 skip 不证明 5 秒达标。

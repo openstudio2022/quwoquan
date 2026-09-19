@@ -50,7 +50,9 @@ from internal.recommendation.recommendation_candidate_index_view.adapters.inboun
 )
 from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.persona_relationship_consumer import (  # noqa: E402
     PersonaRelationshipConsumer as CandidatePersonaRelationshipConsumer,
+    RelationshipCausalFenceReader,
 )
+from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.content_reaction_consumer import ContentReactionConsumer as CandidateContentReactionConsumer  # noqa: E402
 from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.premium_pool_consumer import (  # noqa: E402
     PremiumPoolConsumer,
 )
@@ -359,6 +361,7 @@ async def lifespan(app: FastAPI):
     user_account_closed_consumer = None
     user_account_restriction_consumer = None
     persona_relationship_consumer = None
+    content_reaction_consumer = None
     content_behavior_consumer = None
     feature_persona_relationship_consumer = None
     feature_circle_membership_consumer = None
@@ -491,6 +494,10 @@ async def lifespan(app: FastAPI):
                 subject_closures=subject_closure_store,
                 exclusion_profiles=feature_store,
                 release_readiness=candidate_store,
+                relationship_causality=RelationshipCausalFenceReader(
+                    redis_client=general_redis_client,
+                    projection=candidate_store,
+                ),
             )
         from internal.recommendation.recommendation_candidate_index_view.application.fence_reconciliation import FenceReconciler
         from internal.recommendation.recommendation_candidate_index_view.application.release_candidate import digest as release_digest
@@ -583,6 +590,14 @@ async def lifespan(app: FastAPI):
         )
         persona_relationship_consumer.start()
         app.state.persona_relationship_consumer = persona_relationship_consumer
+        content_reaction_consumer = CandidateContentReactionConsumer(
+            redis_client=general_redis_client,
+            projection=candidate_store,
+            consumer=os.getenv("SERVICE_INSTANCE_ID", "recommendation-candidate-content-reaction"),
+            intersection_materializer=intersection_materializer,
+        )
+        content_reaction_consumer.start()
+        app.state.content_reaction_consumer = content_reaction_consumer
         feed_page_delivered_consumer = FeedPageDeliveredConsumer(
             redis_client=general_redis_client,
             exposure_store=exposure_store,
@@ -715,6 +730,8 @@ async def lifespan(app: FastAPI):
             user_account_restriction_consumer.stop()
         if persona_relationship_consumer is not None:
             persona_relationship_consumer.stop()
+        if content_reaction_consumer is not None:
+            content_reaction_consumer.stop()
         if experiment_policy_consumer is not None:
             experiment_policy_consumer.stop()
         if content_behavior_consumer is not None:

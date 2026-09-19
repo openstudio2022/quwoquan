@@ -18,3 +18,8 @@ abstract interface class PersonaRelationshipBlockIntentCommandWriter {
     required String idempotencyKey,
   });
 }
+
+abstract interface class PersonaRelationshipBlockCoordinator {
+  Future<BlockCommandResult> blockTarget(String targetPersonaId);
+  Future<BlockCommandResult> unblockTarget(String targetPersonaId);
+}

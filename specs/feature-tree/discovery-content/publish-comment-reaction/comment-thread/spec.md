@@ -462,14 +462,5 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：`REQ-006`、`GWT-006` 与新增 `GWT-022` 尚待 typed 统计/回执合同、共享三态、局部 overlay 恢复和真实父 Post/Comment 资格验证；旧“命令响应必带即时精确数”用例不证明当前结果分型。
-- 完成判定：`GWT-006`、`GWT-022` 的单评论反转/unknown、另一评论已成功、提交后统计失败、失权与登录反例在 local_contract/真实 API/双真机直接绑定当前 `spec_ref`，不得由 Post bool 或整树回滚实现替代。
-
-## 8. 三态增量的待实现测试绑定
-
-以下是需要扩展的实际 runner 与未来 `spec_ref` 落点，不表示新 required 证据已实现或通过；现有其他 GWT/OPEN 保持各自责任。
-
-- `quwoquan_app/test/local_contract/service/content_service/content/comment/comment_facet_widget__local_contract_test.dart`、同目录 `content_comment_facet__local_contract_test.dart` 和 `comment_item_actions__local_contract_test.dart`：扩展绑定 `GWT-006`、`GWT-022` 的三态互斥、未知、局部撤销与数字基线。
-- `quwoquan_app/test/api_integration/service/content_service/content/comment/content_comment_remote__api_integration_test.dart` 与 `quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart`：扩展绑定上述两锚的真实 receipt、统计失败隔离和同 actor 重入。
-- `quwoquan_service/services/content-service/tests/api_integration/content/content_reaction/http_mongo_transaction__api_integration_test.go` 只承担事务专项；真实 Comment/父 Post 资格组合需在同对象 API 目录新增直接场景并绑定 `GWT-022`，不能用恒 active reader 替身代证。
-- `quwoquan_app/test/user_acceptance/service/content_service/content/comment/comment_post__user_acceptance_test.dart`：扩展绑定 `GWT-006`、`GWT-022`，一级/回复/个人互动入口分别有真机动作和服务读回，不以 UI selected 状态证明提交。
+- 影响或价值：`REQ-006`、`GWT-006` 与 `GWT-022` 尚缺 typed 统计/回执合同、共享三态、局部 overlay 恢复和真实父 Post/Comment 资格验证的实现与验收证据；旧“命令响应必带即时精确数”用例不证明当前结果分型。工程引用包括 Comment 目录的 `comment_facet_widget__local_contract_test.dart`、`content_comment_facet__local_contract_test.dart`、`comment_item_actions__local_contract_test.dart`，Comment/Reaction Remote api_integration、Reaction Mongo 事务专项及 `comment_post__user_acceptance_test.dart`；真实 Comment/父 Post 资格组合场景仍缺失。
+- 完成判定：`GWT-006`、`GWT-022` 的三态互斥、未知、局部撤销、数字基线、单评论反转/unknown、另一评论已成功、提交后统计失败、失权与登录反例均在职责匹配的本地契约、真实 API 与双真机直接断言处绑定当前 `spec_ref`；事务专项不代替 owner 资格组合，UI selected 状态不代替提交证明，且不得由 Post bool 或整树回滚实现替代。

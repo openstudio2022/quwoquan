@@ -365,7 +365,7 @@ GeneratedCloudOperationClient _client(
 }
 
 ContentPostReaderInvocationContextFactory _contextFor(AppUiSurface surface) {
-  return (clientPageId) => CloudOperationInvocationContext(
+  return (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
     surfaceId: surface.id,
     routeId: surface.routeId,
     clientPageId: clientPageId,

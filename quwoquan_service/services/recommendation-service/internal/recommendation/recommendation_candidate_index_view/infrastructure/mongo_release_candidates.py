@@ -98,6 +98,14 @@ class MongoReleaseCandidateOps:
                     if a["source"] == canonical(p.identity) and a["status"] == "active" and a["qualityAdmission"] == "approved" and a["scope"] == "global" and a["qualityScore"] >= .75 and datetime.fromisoformat(a["expiresAt"].replace("Z", "+00:00")) > now and p.contentType == "video" and p.contentIdentity == "work" and p.videoUrl and p.durationMs > 0:
                         allowed.add(p.identity.objectId)
         following = set(self.following_persona_ids(subject_id)) if scenario == "following" else None
+        post_ids = [post.identity.objectId for post in event.snapshot.posts]
+        reaction_stats = {
+            str(row["_id"]): row
+            for row in self._content_reaction_stats.find(
+                {"_id": {"$in": post_ids}},
+                {"likeCount": 1, "statsVersion": 1, "generationSequence": 1},
+            )
+        }
         out = []
         for p in event.snapshot.posts:
             if p.status != "published" or p.visibility != "public" or p.moderationStatus != "approved": continue
@@ -105,7 +113,8 @@ class MongoReleaseCandidateOps:
             if following is not None and p.authorId not in following: continue
             if scenario == "travel_photography" and p.contentVertical != scenario: continue
             if self._account_restrictions.find_one({"subjectIds": p.authorId, "restricted": True}): continue
-            out.append({"contentId": p.identity.objectId, "contentType": p.contentType, "authorId": p.authorId, "tagRefs": p.tagRefs, "entityRefs": p.entityRefs, "publishedAt": p.publishedAt, "updatedAt": p.updatedAt, "qualityScore": 0, "likeCount": 0, "commentCount": 0, "shareCount": 0, "viewCount": 0, "supplySource": "qwq_data", "contentVertical": p.contentVertical, "intersectionFeatures": {}, "recallPath": "premium_pool" if allowed is not None else "explore_recall"})
+            stats = reaction_stats.get(p.identity.objectId, {})
+            out.append({"contentId": p.identity.objectId, "contentType": p.contentType, "authorId": p.authorId, "tagRefs": p.tagRefs, "entityRefs": p.entityRefs, "publishedAt": p.publishedAt, "updatedAt": p.updatedAt, "qualityScore": 0, "likeCount": int(stats.get("likeCount") or 0), "likeStatsVersion": int(stats.get("statsVersion") or 0), "likeGenerationSequence": int(stats.get("generationSequence") or 0), "commentCount": 0, "shareCount": 0, "viewCount": 0, "supplySource": "qwq_data", "contentVertical": p.contentVertical, "intersectionFeatures": {}, "recallPath": "premium_pool" if allowed is not None else "explore_recall"})
         ordinary = self.list_for_ranking(scenario=scenario, subject_id=subject_id, limit=limit)
         ids = {d["contentId"] for d in out}
         if any(d["contentId"] in ids for d in ordinary): raise ReleaseCandidateError("cross-source public identity collision")

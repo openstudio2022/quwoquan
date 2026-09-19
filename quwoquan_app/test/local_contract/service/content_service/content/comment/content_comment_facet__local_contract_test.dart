@@ -106,6 +106,8 @@ void main() {
         ReactToContentCommentCommand(
           commentId: 'root',
           reaction: CommentReactionType.like,
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
         ),
       );
       expect(reaction.reaction, CommentReactionType.like);

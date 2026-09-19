@@ -45,9 +45,8 @@ func (s *Store) SeedPost(postID string, authorID string) {
 	defer s.mu.Unlock()
 	postID = strings.TrimSpace(postID)
 	s.posts[postID] = commentmodel.PostOwnership{
-		PostID:   postID,
-		AuthorID: strings.TrimSpace(authorID),
-		Active:   true,
+		PostID: postID, AuthorID: strings.TrimSpace(authorID), Active: true,
+		Status: "published", Visibility: "public", ModerationStatus: "approved", ReleaseActive: true,
 	}
 }
 

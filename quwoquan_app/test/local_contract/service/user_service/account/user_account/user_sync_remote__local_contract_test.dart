@@ -13,7 +13,7 @@ void main() {
       final executor = _UserSyncExecutor(response: _validResponse());
       final repository = RemoteUserSyncRepository(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.chatList.id,
           routeId: AppUiSurfaces.chatList.routeId,
           clientPageId: clientPageId,
@@ -48,7 +48,7 @@ void main() {
       client: GeneratedCloudOperationClient(
         _UserSyncExecutor(response: response),
       ),
-      invocationContext: (clientPageId) => CloudOperationInvocationContext(
+      invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
         surfaceId: AppUiSurfaces.chatList.id,
         routeId: AppUiSurfaces.chatList.routeId,
         clientPageId: clientPageId,

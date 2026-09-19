@@ -1,6 +1,7 @@
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-001.t4
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart' show CreationText;
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart'
+    show CreationText;
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/create_page_remote_helpers.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
@@ -353,12 +354,14 @@ void main() {
         settings.toPayloadFields().containsKey('textContentType'),
         isFalse,
       );
-      expect(PublishSettings.fromMap(settings.toMap()).textContentType, 'micro');
+      expect(
+        PublishSettings.fromMap(settings.toMap()).textContentType,
+        'micro',
+      );
       // 非法草稿值不得被迁移成确认态。
       expect(
-        PublishSettings.fromMap(<String, dynamic>{
-          'textContentType': 'video',
-        }).textContentType,
+        PublishSettings.fromMap(<String, dynamic>{'textContentType': 'video'})
+            .textContentType,
         isEmpty,
       );
     });
@@ -430,9 +433,7 @@ void main() {
       final state = CreateEditorState.initial().copyWith(body: '纯文字无任何提及');
       expect(semanticMentionsForPayload(state), isEmpty);
       expect(
-        buildPostPublicationPayloadMap(
-          state,
-        ).containsKey('semanticMentions'),
+        buildPostPublicationPayloadMap(state).containsKey('semanticMentions'),
         isFalse,
       );
     });
@@ -457,10 +458,7 @@ void main() {
         unorderedEquals(<String>['homepage_valid_1', 'Topic/摄影/风光']),
       );
       expect(isSemanticTargetRefValid('tag', '自由字符串'), isFalse);
-      expect(
-        isSemanticTargetRefValid('entity', 'entity:candidate:x'),
-        isFalse,
-      );
+      expect(isSemanticTargetRefValid('entity', 'entity:candidate:x'), isFalse);
     });
   });
 
@@ -631,7 +629,7 @@ Set<String> _submitPostPublicationRequestBodyFields() {
     ],
     mediaAssetIds: const <String>['asset-contract'],
     articleMarkdown: '# 标题',
-    markdownDialect: 'qwq-rich-md',
+    markdownDialect: SemanticDocumentMarkdownDialect.qwqRichMd,
     articleAssetManifest: PostArticleAssetManifestInput(
       schema: 'article-asset-manifest',
       assets: const <PostArticleAssetInput>[
@@ -671,8 +669,7 @@ Set<String> _submitPostPublicationRequestBodyFields() {
     authorAvatarUrlSnapshot: 'https://example.com/avatar.jpg',
     personaContextVersion: 1,
   );
-  final body = encodeContentPostSubmitPostPublicationGeneratedRequest(
-    command,
-  ).body;
+  final body = encodeContentPostSubmitPostPublicationGeneratedRequest(command)
+      .body;
   return Map<String, Object?>.from(body! as Map).keys.toSet();
 }
