@@ -87,22 +87,21 @@ if [[ ! -d "$QWQ_DEPLOY_WORK_ROOT" ]]; then
   echo "[local-release] GATE_BLOCK: deploy work root is unavailable" >&2
   exit 2
 fi
-# macOS exposes /var through /private/var. Package descriptors are emitted
-# with the physical path, so normalize the configured root before enforcing
-# candidate containment.
+# macOS exposes /var through /private/var; normalize to the physical path
+# before enforcing candidate containment.
 QWQ_DEPLOY_WORK_ROOT="$(cd "$QWQ_DEPLOY_WORK_ROOT" && pwd -P)"
 QWQ_LOCAL_RELEASE_ENV="${QWQ_LOCAL_RELEASE_ENV:-gamma}"
 QWQ_LOCAL_RELEASE_TARGET="${QWQ_LOCAL_RELEASE_TARGET:-${QWQ_LOCAL_RELEASE_ENV}-local}"
-if [[ "$QWQ_LOCAL_RELEASE_ENV" != "alpha" \
-   && "$QWQ_LOCAL_RELEASE_ENV" != "beta" \
-   && "$QWQ_LOCAL_RELEASE_ENV" != "gamma" ]]; then
+if [[ "$QWQ_LOCAL_RELEASE_ENV" == "prod" && "$QWQ_LOCAL_RELEASE_TARGET" == "prod-sim" ]]; then
+  :
+elif [[ "$QWQ_LOCAL_RELEASE_ENV" != "alpha" && "$QWQ_LOCAL_RELEASE_ENV" != "beta" && "$QWQ_LOCAL_RELEASE_ENV" != "gamma" ]]; then
   echo "[local-release] GATE_BLOCK: unsupported environment $QWQ_LOCAL_RELEASE_ENV" >&2
   exit 2
-fi
-if [[ "$QWQ_LOCAL_RELEASE_TARGET" != "${QWQ_LOCAL_RELEASE_ENV}-local" ]]; then
+elif [[ "$QWQ_LOCAL_RELEASE_TARGET" != "${QWQ_LOCAL_RELEASE_ENV}-local" ]]; then
   echo "[local-release] GATE_BLOCK: target does not belong to environment" >&2
   exit 2
 fi
+export QWQ_RUNTIME_TARGET="$QWQ_LOCAL_RELEASE_TARGET"
 if [[ "${QWQ_PREPARED_ATTEMPT_ONLY:-0}" == "1" ]]; then
   prepared_down=0
   for arg in "$@"; do
@@ -524,6 +523,7 @@ export \
 export_service_compose_environment() {
   local source_name target_name
   export QWQ_COMPOSE_ENV="$QWQ_LOCAL_RELEASE_ENV"
+  export QWQ_RUNTIME_TARGET
   while IFS= read -r source_name; do
     # gamma-local infrastructure Compose still owns LOCAL_GAMMA_* mount/port
     # variables (for example the immutable Caddyfile source). Export both the
@@ -666,11 +666,11 @@ esac
 # bytes into runtime-shared; up must never bind-mount the mutable source tree.
 if [[ "$EARLY_BUILD_ONLY" == "1" ]]; then
   LOCAL_GAMMA_RUNTIME_SHARED_ROOT="$(
-    PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" <<'PY'
+    PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" "$QWQ_LOCAL_RELEASE_TARGET" <<'PY'
 import sys
-from quwoquan_ops.cli.lib.output_paths import deployment_package_root
+from quwoquan_ops.cli.lib.output_paths import runtime_shared_deployment_package_dir
 
-print(deployment_package_root(sys.argv[1]) / "runtime-shared")
+print(runtime_shared_deployment_package_dir(sys.argv[1], target=sys.argv[2]))
 PY
   )"
 else
@@ -1152,11 +1152,11 @@ fi
 prepare_config_root() {
   local out="${LOCAL_GAMMA_CONFIG_ROOT}"
   local package_root
-  package_root="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" <<'PY'
+  package_root="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" "$QWQ_LOCAL_RELEASE_TARGET" <<'PY'
 import sys
 from quwoquan_ops.cli.lib.output_paths import deployment_package_root
 
-print(deployment_package_root(sys.argv[1]))
+print(deployment_package_root(sys.argv[1], target=sys.argv[2]))
 PY
 )"
   local packaged_configuration_digest

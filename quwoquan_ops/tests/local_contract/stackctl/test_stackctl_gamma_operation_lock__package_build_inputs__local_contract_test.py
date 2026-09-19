@@ -618,6 +618,7 @@ class StackctlGammaOperationLockContractTest(
             stackctl._bind_package_provider_reference_environment(
                 environment,
                 environment_name="alpha",
+                target_name="alpha-local",
                 runtime_composition={},
             )
 

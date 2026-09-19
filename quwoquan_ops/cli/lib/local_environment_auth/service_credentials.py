@@ -95,7 +95,10 @@ def mint_local_product_ops_operator_token(
     """
 
     _require_local_environment(environment, target_name)
-    if environment not in {"alpha", "beta", "gamma"}:
+    if environment not in {"alpha", "beta", "gamma"} and (
+        environment,
+        target_name,
+    ) != ("prod", "prod-sim"):
         raise ValueError(
             "local Product Ops operator credential is limited to Alpha/Beta/Gamma"
         )
@@ -108,6 +111,7 @@ def mint_local_product_ops_operator_token(
         **os.environ,
         **auth.environment,
         "APP_ENV": environment,
+        "QWQ_LOCAL_RELEASE_TARGET": target_name,
         # 可丢弃缓存只能落在 local/cache/**：local/ 一级的其他 target 必须是
         # <target>/{process,cache} 结构，直接建 local/go-build/<name> 会破坏
         # verify_output_layout 的布局契约。

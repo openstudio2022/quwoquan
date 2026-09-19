@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import argparse
+import re
 import shutil
 import stat
 import subprocess
@@ -488,6 +489,210 @@ def _completed_capsule_candidates(capsule_root: Path) -> list[Path]:
     return [item[2] for item in sorted(found, reverse=True)]
 
 
+_COMPLETED_DONOR_CANDIDATE_FIELDS = frozenset(
+    {
+        "schema",
+        "candidateType",
+        "environment",
+        "target",
+        "baselineId",
+        "sourceRevision",
+        "workspaceDigest",
+        "workspaceStatusDigest",
+        "packageDigest",
+        "buildInputDigest",
+        "imageDigest",
+        "configurationDigest",
+        "runtimeSchemaVersion",
+        "runtimeConfigDigest",
+        "environmentRuntimeDigest",
+        "dataPlaneBinding",
+        "observabilityLogSink",
+        "providerRuntime",
+        "release",
+        "contractGraphDigest",
+        "graphqlReadRegistry",
+        "appLaunchBundle",
+        "specRefs",
+        "environmentArtifact",
+    }
+)
+_SHA256_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+_SOURCE_REVISION = re.compile(r"[0-9a-f]{40}")
+
+
+def _require_sha256_digest(value: object, *, label: str) -> str:
+    digest = str(value or "")
+    if _SHA256_DIGEST.fullmatch(digest) is None:
+        raise ValueError(f"{label} is invalid")
+    return digest
+
+
+def _validated_completed_dependency_donor(
+    *,
+    candidate_root: Path,
+    capsule_root: Path,
+    capsule_manifest: Mapping[str, object],
+    expected: Mapping[str, object],
+) -> list[dict[str, object]]:
+    """校验冻结 donor 字节，绝不重放当前 target 合约语义。
+
+    donor 只提供离线 dependency bundle。其完成性由封存的
+    candidate/capsule/fingerprint CAS 链证明，不能借当前待打包 target 的
+    Provider、Binding、observability 或 ContractGraph 语义再次判定。
+    """
+
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest.candidate_fs import (
+        _UnsafeCandidatePath,
+        _read_candidate_object,
+    )
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest.candidate_staging import (
+        _validate_candidate_payload_tree,
+    )
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest.constants import (
+        CANDIDATE_MANIFEST_SCHEMA,
+        RUNTIME_CANDIDATE_TYPE,
+    )
+
+    if (
+        capsule_root.parent != candidate_root
+        or capsule_root.name != _pkg.PACKAGE_INPUT_CAPSULE_DIRECTORY
+        or capsule_root.is_symlink()
+        or not capsule_root.is_dir()
+    ):
+        raise ValueError("dependency donor capsule path is unsafe")
+    try:
+        # 已完成 candidate 只能包含普通 package payload。这里刻意不调用
+        # validate_candidate_manifest，后者会对历史 candidate 重放可变的
+        # 当前 target 语义。
+        _validate_candidate_payload_tree(candidate_root)
+        candidate = _read_candidate_object(
+            candidate_root,
+            "manifest.json",
+            label="dependency donor candidate manifest",
+        )
+        if set(candidate) != _COMPLETED_DONOR_CANDIDATE_FIELDS:
+            raise ValueError("dependency donor candidate manifest fields mismatch")
+        if (
+            candidate.get("schema") != CANDIDATE_MANIFEST_SCHEMA
+            or candidate.get("candidateType") != RUNTIME_CANDIDATE_TYPE
+            or not str(candidate.get("environment") or "").strip()
+            or not str(candidate.get("target") or "").strip()
+        ):
+            raise ValueError("dependency donor candidate completion identity is invalid")
+        if _SOURCE_REVISION.fullmatch(str(candidate.get("sourceRevision") or "")) is None:
+            raise ValueError("dependency donor candidate source revision is invalid")
+        for field in (
+            "baselineId",
+            "workspaceDigest",
+            "workspaceStatusDigest",
+            "packageDigest",
+            "configurationDigest",
+            "runtimeConfigDigest",
+            "environmentRuntimeDigest",
+            "contractGraphDigest",
+        ):
+            _require_sha256_digest(candidate.get(field), label=f"dependency donor {field}")
+
+        verified_capsule = _pkg.verify_package_input_capsule(capsule_root)
+        if dict(capsule_manifest) != verified_capsule:
+            raise ValueError("dependency donor capsule changed during verification")
+        for field, candidate_field in (
+            ("baselineId", "baselineId"),
+            ("sourceRevision", "sourceRevision"),
+            ("workspaceStatusDigest", "workspaceStatusDigest"),
+            ("deploymentInputDigest", "workspaceDigest"),
+        ):
+            if verified_capsule.get(field) != candidate.get(candidate_field):
+                raise ValueError("dependency donor candidate capsule binding drifted")
+
+        fingerprint = _read_candidate_object(
+            candidate_root,
+            "packages/app/package-fingerprint.json",
+            label="dependency donor package fingerprint",
+        )
+        if (
+            set(fingerprint) != _pkg._FINGERPRINT_FIELDS
+            or fingerprint.get("schema") != _pkg.FINGERPRINT_SCHEMA
+            or fingerprint.get("environment") != candidate["environment"]
+            or fingerprint.get("target") != candidate["target"]
+            or fingerprint.get("candidateType") != RUNTIME_CANDIDATE_TYPE
+            or fingerprint.get("includeServices") is not True
+            or not str(fingerprint.get("reportRef") or "").strip()
+        ):
+            raise ValueError("dependency donor fingerprint completion identity is invalid")
+        for field in ("baselineId", "sourceRevision", "workspaceStatusDigest"):
+            if fingerprint.get(field) != candidate.get(field):
+                raise ValueError("dependency donor fingerprint candidate binding drifted")
+        deployment_inputs = fingerprint.get("deploymentInputs")
+        if not isinstance(deployment_inputs, Mapping) or set(deployment_inputs) != _pkg._DEPLOYMENT_INPUT_FIELDS:
+            raise ValueError("dependency donor fingerprint deployment inputs are invalid")
+        roots = deployment_inputs.get("roots")
+        if not isinstance(roots, list) or any(not isinstance(value, str) for value in roots):
+            raise ValueError("dependency donor fingerprint deployment roots are invalid")
+        normalized_roots = _normalized_input_roots(roots)
+        if (
+            roots != normalized_roots
+            or deployment_inputs.get("capsuleRef") != _pkg.PACKAGE_INPUT_CAPSULE_DIRECTORY
+            or normalized_roots != verified_capsule.get("deploymentInputRoots")
+            or deployment_inputs.get("digest") != verified_capsule.get("deploymentInputDigest")
+            or deployment_inputs.get("fileCount") != verified_capsule.get("deploymentInputFileCount")
+        ):
+            raise ValueError("dependency donor fingerprint capsule binding drifted")
+        package_content = fingerprint.get("packageContent")
+        if not isinstance(package_content, Mapping) or set(package_content) != _pkg._DIGEST_FIELDS:
+            raise ValueError("dependency donor fingerprint package content is invalid")
+        expected_package_digest = _require_sha256_digest(
+            package_content.get("digest"), label="dependency donor fingerprint package digest"
+        )
+        package_count = package_content.get("fileCount")
+        if isinstance(package_count, bool) or not isinstance(package_count, int) or package_count <= 0:
+            raise ValueError("dependency donor fingerprint package file count is invalid")
+        if expected_package_digest != candidate.get("packageDigest"):
+            raise ValueError("dependency donor fingerprint package binding drifted")
+        service_packages = fingerprint.get("servicePackages")
+        if not isinstance(service_packages, list) or any(
+            not isinstance(value, str) for value in service_packages
+        ):
+            raise ValueError("dependency donor fingerprint service packages are invalid")
+        packages = _pkg._normalized_service_packages(service_packages)
+        actual_package_digest, actual_package_count = _pkg.package_content_digest(
+            str(candidate["environment"]),
+            str(candidate["target"]),
+            service_packages=packages,
+            candidate_root=candidate_root,
+        )
+        if (
+            actual_package_digest != expected_package_digest
+            or actual_package_count != package_count
+        ):
+            raise ValueError("dependency donor package content CAS mismatch")
+        if (
+            fingerprint.get("contractGraphDigest") != candidate.get("contractGraphDigest")
+            or fingerprint.get("graphqlReadRegistry") != candidate.get("graphqlReadRegistry")
+            or fingerprint.get("appLaunchBundle") != candidate.get("appLaunchBundle")
+        ):
+            raise ValueError("dependency donor frozen semantic identity drifted")
+
+        raw_entries = verified_capsule.get("entries")
+        if not isinstance(raw_entries, list):
+            raise ValueError("dependency donor capsule entries are invalid")
+        records = [
+            dict(item)
+            for item in raw_entries
+            if isinstance(item, Mapping)
+            and str(item.get("logicalPath") or "").startswith("dependency:")
+        ]
+        logical_paths = [str(record.get("logicalPath") or "") for record in records]
+        if len(records) != len(expected) or set(logical_paths) != set(expected) or len(set(logical_paths)) != len(logical_paths):
+            raise ValueError("dependency donor marker set is incomplete")
+        if _capsule_dependency_payloads(capsule_root, verified_capsule) != expected:
+            raise ValueError("dependency donor capsule dependency payload drifted")
+        return records
+    except _UnsafeCandidatePath as error:
+        raise ValueError("dependency donor candidate path is unsafe") from error
+
+
 def _matching_dependency_capsules(
     *, capsule_root: Path, expected: Mapping[str, object]
 ) -> list[tuple[Path, list[dict[str, object]]]]:
@@ -503,32 +708,12 @@ def _matching_dependency_capsules(
         # From this point the donor claims the exact current dependency identity.
         # Any completion/integrity failure is evidence, never a cache miss.
         try:
-            candidate_manifest = json.loads(
-                (old_capsule.parent / "manifest.json").read_text(encoding="utf-8")
-            )
-            if not isinstance(candidate_manifest, dict):
-                raise ValueError("deployment candidate manifest is not an object")
-            validated_candidate = _pkg.validate_candidate_manifest(
-                candidate_manifest,
-                expected_environment=str(candidate_manifest.get("environment") or ""),
-                expected_target=str(candidate_manifest.get("target") or ""),
-                require_full=True,
+            records = _validated_completed_dependency_donor(
                 candidate_root=old_capsule.parent,
-                purpose="self_verify",
+                capsule_root=old_capsule,
+                capsule_manifest=manifest,
+                expected=expected,
             )
-            if validated_candidate.get("baselineId") != manifest.get("baselineId"):
-                raise ValueError("dependency donor candidate baseline binding drifted")
-            raw_entries = manifest.get("entries")
-            if not isinstance(raw_entries, list):
-                raise ValueError("dependency donor capsule entries are invalid")
-            records = [
-                dict(item)
-                for item in raw_entries
-                if isinstance(item, Mapping)
-                and str(item.get("logicalPath") or "").startswith("dependency:")
-            ]
-            if len(records) != len(expected):
-                raise ValueError("dependency donor marker set is incomplete")
         except (OSError, TypeError, UnicodeError, ValueError, json.JSONDecodeError) as error:
             raise PackageDependencyDonorIntegrityError(
                 f"{PackageDependencyDonorIntegrityError.code}: identity-matching "

@@ -58,10 +58,33 @@ func TestRandomOTPIsCapturedOnceWithEnvironmentIsolation(t *testing.T) {
 	}
 }
 
+func TestServerAllowsOnlyExactLocalTargetPairs(t *testing.T) {
+	base := Config{
+		Environment: "prod", Target: "prod-sim", ConfigurationDigest: "sha256:" + strings.Repeat("a", 64),
+		ProviderToken: "provider-token", OperatorToken: "operator-token",
+		CaptureKey: bytes.Repeat([]byte{7}, 32),
+	}
+	server, err := New(base)
+	if err != nil {
+		t.Fatalf("prod-sim SMS substitute must be accepted: %v", err)
+	}
+	health := perform(t, server.Handler(), http.MethodGet, "/healthz", nil, "", nil)
+	if health.Code != http.StatusOK || !strings.Contains(health.Body.String(), `"target":"prod-sim"`) || !strings.Contains(health.Body.String(), `"nonPromotable":true`) {
+		t.Fatalf("prod-sim health readback=%d %s", health.Code, health.Body.String())
+	}
+	for _, target := range []string{"prod-hosted", "", "gamma-local"} {
+		cfg := base
+		cfg.Target = target
+		if _, err := New(cfg); err == nil {
+			t.Fatalf("prod/%q must be rejected", target)
+		}
+	}
+}
+
 func TestProviderRequestValidationAndCaptureTTL(t *testing.T) {
 	current := time.Date(2026, 8, 2, 8, 0, 0, 0, time.UTC)
 	s, err := New(Config{
-		Environment: "alpha", ConfigurationDigest: "sha256:" + strings.Repeat("a", 64),
+		Environment: "alpha", Target: "alpha-local", ConfigurationDigest: "sha256:" + strings.Repeat("a", 64),
 		ProviderToken: "provider-token", OperatorToken: "operator-token",
 		CaptureKey: bytes.Repeat([]byte{7}, 32), Now: func() time.Time { return current },
 	})
@@ -69,7 +92,7 @@ func TestProviderRequestValidationAndCaptureTTL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	invalidPhone := providerPayload(current.Add(time.Minute), "invalid-phone", "18038139016", "482731")
+	invalidPhone := providerPayload(current.Add(time.Minute), "invalid-phone", "not-e164-phone", "482731")
 	response := perform(t, s.Handler(), http.MethodPost, "/v1/provider/sms/send", invalidPhone, "provider-token", map[string]string{
 		"Idempotency-Key": "invalid-phone", "X-QWQ-Request-ID": "invalid-phone",
 	})
@@ -110,7 +133,7 @@ func TestProviderRequestValidationAndCaptureTTL(t *testing.T) {
 
 func TestProviderAndOperatorCredentialsMustBeDistinct(t *testing.T) {
 	_, err := New(Config{
-		Environment: "alpha", ConfigurationDigest: "sha256:" + strings.Repeat("a", 64),
+		Environment: "alpha", Target: "alpha-local", ConfigurationDigest: "sha256:" + strings.Repeat("a", 64),
 		ProviderToken: "same-token", OperatorToken: "same-token",
 		CaptureKey: bytes.Repeat([]byte{7}, 32),
 	})
@@ -178,7 +201,7 @@ func TestRequestBodyOverLimitIsRejected(t *testing.T) {
 func newTestServer(t *testing.T, now time.Time) *Server {
 	t.Helper()
 	s, err := New(Config{
-		Environment: "alpha", ConfigurationDigest: "sha256:" + strings.Repeat("a", 64),
+		Environment: "alpha", Target: "alpha-local", ConfigurationDigest: "sha256:" + strings.Repeat("a", 64),
 		ProviderToken: "provider-token", OperatorToken: "operator-token",
 		CaptureKey: bytes.Repeat([]byte{7}, 32), TimeoutDelay: time.Millisecond, Now: func() time.Time { return now },
 	})

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from quwoquan_ops.cli.render_runtime_config import (  # noqa: E402
     load_cross_service_defaults,
     pattern_matches,
     render_workload,
+    validate_target_scope,
     resolve_layer_default,
 )
 
@@ -233,3 +235,144 @@ def test_unmatched_key_reports_missing_sentinel_not_none(tmp_path: Path) -> None
         )
         is None
     )
+
+def test_prod_sim_render_uses_exact_profile_and_matches_compiler(tmp_path: Path) -> None:
+    from quwoquan_ops.cli.lib import external_provider_governance as governance
+
+    output = tmp_path / "assistant-prod-sim.yaml"
+    render_workload(
+        ROOT,
+        "prod",
+        "assistant-service",
+        output,
+        target="prod-sim",
+    )
+    rendered = yaml.safe_load(output.read_text(encoding="utf-8"))
+    compiled = governance.compile_single_environment_bindings(
+        environment="prod",
+        target="prod-sim",
+        source_root=ROOT,
+    )
+    for capability_id, binding in rendered["externalBindings"].items():
+        compiled_binding = compiled["bindings"][capability_id]
+        assert binding["state"] == compiled_binding["state"]
+        assert binding.get("adapter", "") == compiled_binding["adapter_id"]
+        assert binding.get("endpointRef", "") == compiled_binding["endpoint_ref"]
+    rendered_adapter = rendered["externalBindings"]["assistant.model.generation"]["adapter"]
+    assert rendered_adapter == "ext.llm.protocol_fixture"
+    assistant_go_source = next(
+        source["source"]
+        for source in compiled["goSources"]
+        if source["rootId"] == "assistant.assistant.assistant_session"
+    )
+    assert f'AdapterID:   "{rendered_adapter}"' in assistant_go_source
+
+
+def test_prod_sim_recommendation_render_uses_standalone_redis(tmp_path: Path) -> None:
+    sim_output = tmp_path / "recommendation-prod-sim.yaml"
+    hosted_output = tmp_path / "recommendation-prod-hosted.yaml"
+    render_workload(
+        ROOT,
+        "prod",
+        "recommendation-service",
+        sim_output,
+        target="prod-sim",
+    )
+    render_workload(
+        ROOT,
+        "prod",
+        "recommendation-service",
+        hosted_output,
+        target="prod-hosted",
+    )
+    sim = yaml.safe_load(sim_output.read_text(encoding="utf-8"))
+    hosted = yaml.safe_load(hosted_output.read_text(encoding="utf-8"))
+    assert sim["redis"]["rec"]["mode"] == "standalone"
+    assert sim["redis"]["rec"]["tls"] is False
+    assert sim["redis"]["rec"]["addr"] == "redis:6379"
+    assert sim["redis"]["general"]["addr"] == "redis:6379"
+    assert hosted["redis"]["rec"]["mode"] == "cluster"
+    assert hosted["redis"]["rec"]["tls"] is True
+    assert hosted["redis"]["rec"]["addr"] == ""
+
+
+def test_prod_sim_media_upload_base_matches_object_storage_edge() -> None:
+    from quwoquan_ops.cli.lib.port_manifest import canonical_port, load_port_manifest
+    from quwoquan_ops.cli.stackctl import get_target, load_environment_topology
+
+    target = get_target(load_environment_topology(), "prod-sim")
+    port = canonical_port(load_port_manifest(), "prod-sim", "object-storage-edge")
+    assert target["publicBases"]["mediaUpload"] == (
+        f"https://upload.sim.quwoquan.com:{port}"
+    )
+
+
+def test_prod_hosted_render_keeps_existing_prod_bindings(tmp_path: Path) -> None:
+    output = tmp_path / "assistant-prod-hosted.yaml"
+    render_workload(
+        ROOT,
+        "prod",
+        "assistant-service",
+        output,
+        target="prod-hosted",
+    )
+    rendered = yaml.safe_load(output.read_text(encoding="utf-8"))
+    assert (
+        rendered["externalBindings"]["assistant.model.generation"]["adapter"]
+        == "ext.llm.xiaomi_mimo"
+    )
+
+
+def test_prod_sim_runtime_render_missing_and_key_drift_fail_closed(tmp_path: Path) -> None:
+    service_source = ROOT / "quwoquan_service/services/assistant-service"
+    service_target = tmp_path / "quwoquan_service/services/assistant-service"
+    shutil.copytree(service_source, service_target)
+    defaults_source = ROOT / "quwoquan_ops/environments"
+    defaults_target = tmp_path / "quwoquan_ops/environments"
+    shutil.copytree(defaults_source, defaults_target)
+    profile_path = (
+        service_target / "environments/prod/targets/prod-sim/external_bindings.yaml"
+    )
+    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+
+    profile_path.unlink()
+    with pytest.raises(ValueError, match="missing target external Provider Binding profile"):
+        render_workload(
+            tmp_path,
+            "prod",
+            "assistant-service",
+            tmp_path / "missing.yaml",
+            target="prod-sim",
+        )
+
+    profile["externalBindings"].pop("assistant.finance.quote")
+    profile["externalBindings"]["assistant.unowned.extra"] = {"state": "not_required"}
+    profile_path.parent.mkdir(parents=True, exist_ok=True)
+    profile_path.write_text(yaml.safe_dump(profile, sort_keys=False), encoding="utf-8")
+    with pytest.raises(ValueError, match="missing=.*assistant.finance.quote.*extra=.*assistant.unowned.extra"):
+        render_workload(
+            tmp_path,
+            "prod",
+            "assistant-service",
+            tmp_path / "drift.yaml",
+            target="prod-sim",
+        )
+
+
+def test_runtime_render_rejects_target_environment_mismatch() -> None:
+    with pytest.raises(ValueError, match="target/environment mismatch"):
+        validate_target_scope("prod", "gamma-local")
+
+
+def test_service_packaging_propagates_explicit_target() -> None:
+    packager = (
+        ROOT / "quwoquan_service/scripts/runtime/packaging/build_service_env_package.sh"
+    ).read_text(encoding="utf-8")
+    package_runtime = (
+        ROOT / "quwoquan_ops/cli/commands/package_runtime.py"
+    ).read_text(encoding="utf-8")
+    assert 'target_name=""' in packager
+    assert '--target) target_name="${2:-}"' in packager
+    assert '--target "$target_name"' in packager
+    assert 'target=sys.argv[3]' in packager
+    assert '"--target",\n                target_name,' in package_runtime

@@ -555,7 +555,7 @@ def _validate_prod_hosted_release_evidence_currentness(
 def materialize_prod_sim_app_launch_bundle(
     *, candidate_root: Path, package_snapshot: Mapping[str, object],
     materialized_release_evidence: Mapping[str, str], source_root: Path,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     from .prod_sim_app_launch_materialization import materialize_prod_sim_app_launch_bundle_impl
     return materialize_prod_sim_app_launch_bundle_impl(
         candidate_root=candidate_root, package_snapshot=package_snapshot,

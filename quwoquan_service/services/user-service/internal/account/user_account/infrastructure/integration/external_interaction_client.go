@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -34,10 +35,17 @@ func NewExternalInteractionClient(baseURL string, env string, client *http.Clien
 	}
 	switch strings.TrimSpace(env) {
 	case "alpha", "beta", "gamma":
-		if parsed.Scheme != "http" || parsed.Host != "integration-service:18086" || (parsed.Path != "" && parsed.Path != "/") {
+		if !canonicalInternalIntegrationHTTP(parsed) {
 			return nil, fmt.Errorf("nonprod integration service base url must be canonical internal http")
 		}
 	case "prod":
+		// prod-sim 与 Gamma 共用本地 compose mesh；prod-hosted 仍必须 HTTPS。
+		if os.Getenv("QWQ_RUNTIME_TARGET") == "prod-sim" {
+			if !canonicalInternalIntegrationHTTP(parsed) {
+				return nil, fmt.Errorf("prod-sim integration service base url must be canonical internal http")
+			}
+			break
+		}
 		if parsed.Scheme != "https" {
 			return nil, fmt.Errorf("prod integration service base url must use https")
 		}
@@ -56,6 +64,12 @@ func NewExternalInteractionClient(baseURL string, env string, client *http.Clien
 		env:     env,
 		signer:  signer,
 	}, nil
+}
+
+func canonicalInternalIntegrationHTTP(parsed *url.URL) bool {
+	return parsed.Scheme == "http" &&
+		parsed.Host == "integration-service:18086" &&
+		(parsed.Path == "" || parsed.Path == "/")
 }
 
 func (c *ExternalInteractionClient) SubmitSMSOTP(ctx context.Context, req application.SMSOTPDispatchRequest) (application.ExternalInteractionAccepted, error) {

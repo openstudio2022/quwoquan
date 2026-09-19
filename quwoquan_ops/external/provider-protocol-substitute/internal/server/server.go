@@ -21,6 +21,7 @@ const AdapterID = "ops.provider_protocol_substitute"
 
 type Config struct {
 	Environment              string
+	Target                   string
 	ConfigurationDigest      string
 	RuntimeCompositionDigest string
 	OperatorToken            string
@@ -46,6 +47,18 @@ type Server struct {
 	sleep                    func(time.Duration)
 }
 
+func localSubstituteIdentity(environment, target string) bool {
+	if environment == "prod" {
+		return target == "prod-sim"
+	}
+	switch environment {
+	case "alpha", "beta", "gamma":
+		return target == environment+"-local"
+	default:
+		return false
+	}
+}
+
 func New(cfg Config) (*Server, error) {
 	return newServer(cfg, time.Now, time.Sleep)
 }
@@ -56,10 +69,9 @@ func newServer(
 	sleep func(time.Duration),
 ) (*Server, error) {
 	environment := strings.TrimSpace(cfg.Environment)
-	switch environment {
-	case "alpha", "beta", "gamma":
-	default:
-		return nil, fmt.Errorf("provider protocol substitute forbids environment %q", environment)
+	target := strings.TrimSpace(cfg.Target)
+	if !localSubstituteIdentity(environment, target) {
+		return nil, fmt.Errorf("provider protocol substitute forbids environment/target %q/%q", environment, target)
 	}
 	configurationDigest := strings.TrimSpace(cfg.ConfigurationDigest)
 	if !isSHA256Digest(configurationDigest) {
@@ -78,7 +90,7 @@ func newServer(
 	}
 	server := &Server{
 		environment:              environment,
-		target:                   environment + "-local",
+		target:                   target,
 		configurationDigest:      configurationDigest,
 		runtimeCompositionDigest: runtimeCompositionDigest,
 		operatorToken:            operatorToken,
@@ -183,12 +195,15 @@ func (s *Server) health(writer http.ResponseWriter, _ *http.Request) {
 }
 
 type modelCompletionRequest struct {
+	Model    string `json:"model"`
 	Messages []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	} `json:"messages"`
 	Stream bool `json:"stream"`
 }
+
+const rehearsalModelID = "prod-sim-rehearsal-model"
 
 func (s *Server) modelCompletion(writer http.ResponseWriter, request *http.Request) {
 	var payload modelCompletionRequest
@@ -207,13 +222,22 @@ func (s *Server) modelCompletion(writer http.ResponseWriter, request *http.Reque
 	})
 }
 
+func rehearsalCompletionModelID(payload modelCompletionRequest) string {
+	if model := strings.TrimSpace(payload.Model); model != "" {
+		return model
+	}
+	return rehearsalModelID
+}
+
 func (s *Server) writeModelCompletion(writer http.ResponseWriter, payload modelCompletionRequest) {
 	content := modelResponse(payload)
+	modelID := rehearsalCompletionModelID(payload)
 	usage := map[string]int{"prompt_tokens": 8, "completion_tokens": 8, "total_tokens": 16}
 	if payload.Stream {
 		writer.Header().Set("Content-Type", "text/event-stream")
 		writer.WriteHeader(http.StatusOK)
 		chunk := map[string]any{
+			"model": modelID,
 			"choices": []map[string]any{{
 				"delta": map[string]any{"content": content}, "finish_reason": "stop",
 			}},
@@ -224,6 +248,8 @@ func (s *Server) writeModelCompletion(writer http.ResponseWriter, payload modelC
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{
+		"id":    "chatcmpl-prod-sim-rehearsal",
+		"model": modelID,
 		"choices": []map[string]any{{
 			"message": map[string]any{"role": "assistant", "content": content}, "finish_reason": "stop",
 		}},
@@ -239,18 +265,173 @@ func modelResponse(request modelCompletionRequest) string {
 			break
 		}
 	}
+	question := rehearsalUserQuestion(request)
 	switch {
 	case strings.Contains(system, "技能选择器"):
-		return `{"skillId":"daily_assistant","reason":"非生产协议替代返回可复核的技能选择"}`
+		skillID := rehearsalSkillID(question)
+		return fmt.Sprintf(
+			`{"skillId":%q,"reason":"非生产协议替代按用户目标选择可复核技能"}`,
+			skillID,
+		)
 	case strings.Contains(system, "problemShape"):
 		return `{"problemShape":"single_skill","subagentPlan":[]}`
 	case strings.Contains(system, "nextAction"):
-		return `{"nextAction":"ask_user","toolName":"","toolInput":{},"stageNarrative":"你可以继续补充需要验证的具体目标。","askUser":{"slotId":"nonprod_clarification","prompt":"请补充你希望验证的具体目标","required":true,"suggestions":[]}}`
+		return rehearsalNextAction(system, question)
 	case strings.Contains(system, "retrievalProcessing"):
 		return `{"retrievalProcessing":{"processingSummary":"你的非生产协议链路已完成验证。","selectedKeyPoints":[],"acceptedReferences":[]},"evidenceSufficient":true}`
+	case strings.Contains(system, "summaryText"):
+		return `{"summaryText":"你正在核验非生产协议替代链路，当前目标与已确认事实保持不变。"}`
+	case strings.Contains(system, "candidateId"):
+		return rehearsalCandidateID(joinedMessageContent(request))
 	default:
 		return "你当前使用的是 Alpha/Beta/Gamma 隔离协议替代链路；请以此结果验证页面、恢复动作与可观测回读。"
 	}
+}
+
+func lastUserContent(request modelCompletionRequest) string {
+	for index := len(request.Messages) - 1; index >= 0; index-- {
+		if strings.EqualFold(strings.TrimSpace(request.Messages[index].Role), "user") {
+			return strings.TrimSpace(request.Messages[index].Content)
+		}
+	}
+	return ""
+}
+
+func rehearsalUserQuestion(request modelCompletionRequest) string {
+	user := lastUserContent(request)
+	if marker := "用户问题："; strings.Contains(user, marker) {
+		user = strings.TrimSpace(user[strings.LastIndex(user, marker)+len(marker):])
+	}
+	if line, _, found := strings.Cut(user, "\n"); found {
+		user = strings.TrimSpace(line)
+	}
+	return user
+}
+
+func joinedMessageContent(request modelCompletionRequest) string {
+	parts := make([]string, 0, len(request.Messages))
+	for _, message := range request.Messages {
+		if text := strings.TrimSpace(message.Content); text != "" {
+			parts = append(parts, text)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func rehearsalSkillID(user string) string {
+	switch {
+	case containsAny(user, "报价", "股价", "行情", "茅台", "股票"):
+		return "finance_consumer"
+	case containsAny(user, "天气", "气温", "下雨", "预报"):
+		return "weather"
+	case containsAny(user, "搜索", "公开资料"):
+		return "knowledge_general"
+	default:
+		return "daily_assistant"
+	}
+}
+
+func rehearsalNextAction(system, user string) string {
+	catalog := toolNamesFromSystem(system)
+	query := strings.TrimSpace(user)
+	if query == "" {
+		query = "非生产协议替代核验"
+	}
+	candidates := []struct {
+		tool  string
+		input map[string]any
+	}{
+		{
+			tool:  "finance_quote",
+			input: map[string]any{"query": query, "symbols": []string{"600519.SS"}},
+		},
+		{
+			tool:  "weather_lookup",
+			input: map[string]any{"query": query, "location": "杭州", "locationSearchName": "杭州"},
+		},
+		{
+			tool:  "web_search",
+			input: map[string]any{"query": query},
+		},
+	}
+	for _, candidate := range candidates {
+		if !catalog[candidate.tool] {
+			continue
+		}
+		encoded, err := json.Marshal(map[string]any{
+			"nextAction":     "tool_call",
+			"toolName":       candidate.tool,
+			"toolInput":      candidate.input,
+			"stageNarrative": "你正在核验非生产协议替代链路中的工具调用。",
+		})
+		if err == nil {
+			return string(encoded)
+		}
+	}
+	return `{"nextAction":"ask_user","toolName":"","toolInput":{},"stageNarrative":"你可以继续补充需要验证的具体目标。","askUser":{"slotId":"nonprod_clarification","prompt":"请补充你希望验证的具体目标","required":true,"suggestions":[]}}`
+}
+
+func rehearsalCandidateID(blob string) string {
+	start := strings.Index(blob, "{")
+	if start < 0 {
+		return `{"candidateId":"prod-sim-rehearsal-candidate"}`
+	}
+	decoder := json.NewDecoder(strings.NewReader(blob[start:]))
+	for {
+		var envelope struct {
+			Candidates []struct {
+				CandidateID string `json:"candidateId"`
+			} `json:"candidates"`
+		}
+		if err := decoder.Decode(&envelope); err != nil {
+			break
+		}
+		for _, candidate := range envelope.Candidates {
+			if id := strings.TrimSpace(candidate.CandidateID); id != "" {
+				encoded, err := json.Marshal(map[string]any{"candidateId": id})
+				if err == nil {
+					return string(encoded)
+				}
+			}
+		}
+	}
+	return `{"candidateId":"prod-sim-rehearsal-candidate"}`
+}
+
+func toolNamesFromSystem(system string) map[string]bool {
+	names := map[string]bool{}
+	marker := "当前工具目录："
+	index := strings.Index(system, marker)
+	if index < 0 {
+		return names
+	}
+	raw := system[index+len(marker):]
+	start := strings.Index(raw, "[")
+	if start < 0 {
+		return names
+	}
+	var catalog []struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(strings.NewReader(raw[start:])).Decode(&catalog); err != nil {
+		return names
+	}
+	for _, tool := range catalog {
+		name := strings.TrimSpace(tool.Name)
+		if name != "" {
+			names[name] = true
+		}
+	}
+	return names
+}
+
+func containsAny(text string, needles ...string) bool {
+	for _, needle := range needles {
+		if strings.Contains(text, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) embedding(writer http.ResponseWriter, request *http.Request) {

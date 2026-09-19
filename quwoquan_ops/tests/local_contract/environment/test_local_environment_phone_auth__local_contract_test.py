@@ -305,11 +305,11 @@ class LocalEnvironmentTestDataAuthContractTest(unittest.TestCase):
                     actor_index=0,
                 )
 
-    def test_prod_is_rejected_before_identity_materialization(self) -> None:
-        with self.assertRaisesRegex(ValueError, "forbidden for Prod"):
+    def test_prod_hosted_is_rejected_before_identity_materialization(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unsupported local environment target"):
             local_environment_auth.materialize_test_data_identity_set(
                 environment="prod",
-                target_name="prod-sim",
+                target_name="prod-hosted",
                 identity_set_id="typed-prod",
                 actor_count=1,
             )
@@ -337,6 +337,66 @@ class LocalEnvironmentTestDataAuthContractTest(unittest.TestCase):
         )
         self.assertNotIn("access-secret", json.dumps(kwargs["body"]))
         self.assertNotIn("refresh-secret", json.dumps(kwargs["body"]))
+
+    def test_prod_sim_otp_throttle_clear_uses_managed_redis_acl(self) -> None:
+        phone = "+8613812345678"
+        digest = hashlib.sha256(phone.encode("utf-8")).hexdigest()
+        with (
+            mock.patch.object(local_environment_auth.subprocess, "run") as run,
+            mock.patch(
+                "quwoquan_ops.cli.commands.source_allocation.prepare_gamma_local_redis_acl",
+                return_value={
+                    "aclFile": "/tmp/users.acl",
+                    "runtimePassword": "runtime-secret",
+                },
+            ),
+        ):
+            local_environment_auth._clear_local_otp_send_throttle(
+                target_name="prod-sim",
+                phone=phone,
+            )
+        run.assert_called_once()
+        command = run.call_args.args[0]
+        self.assertEqual(command[0], "redis-cli")
+        self.assertIn("--user", command)
+        self.assertEqual(command[command.index("--user") + 1], "qwq_runtime")
+        self.assertIn(f"otp:quota:{digest}", command)
+        self.assertNotIn("runtime-secret", command)
+        env = run.call_args.kwargs["env"]
+        self.assertEqual(env["REDISCLI_AUTH"], "runtime-secret")
+
+    def test_authenticated_me_retries_transient_rollout_unavailable(self) -> None:
+        session = LocalAcceptanceSession(
+            owner_id="owner-1",
+            persona_id="persona-1",
+            access_token="access-secret",
+            refresh_token="refresh-secret",
+        )
+        with (
+            mock.patch.object(
+                local_environment_auth,
+                "request_local_environment_json",
+                side_effect=[
+                    local_environment_auth.LocalEnvironmentHTTPError(
+                        method="GET",
+                        path="/me",
+                        status=503,
+                    ),
+                    {"ownerId": "owner-1"},
+                ],
+            ) as request,
+            mock.patch(
+                "quwoquan_ops.cli.lib.local_environment_auth.acceptance_sessions.time.sleep"
+            ) as slept,
+        ):
+            payload = local_environment_auth.acceptance_sessions._authenticated_me(
+                "https://api.sim.quwoquan.com:20000",
+                session=session,
+                timeout_seconds=5.0,
+            )
+        self.assertEqual(payload, {"ownerId": "owner-1"})
+        self.assertEqual(request.call_count, 2)
+        slept.assert_called_once()
 
 
 if __name__ == "__main__":

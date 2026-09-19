@@ -20,6 +20,7 @@ class LocalAcceptanceSession:
     persona_id: str
     access_token: str = field(repr=False)
     refresh_token: str = field(default="", repr=False)
+    device_id: str = ""
 
     def authorization_header(self) -> str:
         return "Bearer " + self.access_token

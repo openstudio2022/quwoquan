@@ -96,6 +96,7 @@ def render_single_environment_go_bindings(
     root_bindings: Mapping[str, Any],
     *,
     environment: str,
+    target: str,
     descriptor_owner: str,
     descriptor_root_id: str,
 ) -> str:
@@ -109,6 +110,8 @@ def render_single_environment_go_bindings(
         "package generated",
         "",
         f"const ExternalProviderBindingEnvironment = {json.dumps(environment)}",
+        "",
+        f"const ExternalProviderBindingTarget = {json.dumps(target)}",
         "",
         f"const ExternalProviderBindingOwner = {json.dumps(descriptor_owner)}",
         "",

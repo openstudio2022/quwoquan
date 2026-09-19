@@ -114,6 +114,7 @@ def _safe_source_bytes(path: Path, *, label: str) -> bytes:
 def _sealed_compose_bytes(
     source: Path,
     *,
+    runtime_target: str,
     data_plane_service: str = "",
     data_plane_environment: Mapping[str, str] | None = None,
     data_plane_bindings: tuple[Mapping[str, Any], ...] = (),
@@ -136,6 +137,8 @@ def _sealed_compose_bytes(
         raise RuntimeTopologyPackageError(
             f"runtime Compose source has no services: {source}"
         )
+    if not re.fullmatch(r"(?:alpha|beta|gamma)-local|prod-sim", runtime_target):
+        raise RuntimeTopologyPackageError("runtime topology target identity is invalid")
     for service_name, service in services.items():
         if not isinstance(service_name, str) or not isinstance(service, dict):
             raise RuntimeTopologyPackageError(
@@ -143,6 +146,19 @@ def _sealed_compose_bytes(
             )
         service.pop("build", None)
         _seal_relative_bind_mounts(service, source=source)
+        environment = service.get("environment")
+        if environment is None:
+            environment = {}
+        if not isinstance(environment, Mapping):
+            raise RuntimeTopologyPackageError(
+                f"runtime Compose service environment is invalid: {source}"
+            )
+        # Target identity is candidate-owned deployment data, not a caller
+        # selector.  Every first-party process receives the same exact target.
+        service["environment"] = {
+            **dict(environment),
+            "QWQ_RUNTIME_TARGET": runtime_target,
+        }
     if postgres_namespaces is not None:
         if not postgres_namespaces:
             raise RuntimeTopologyPackageError(
@@ -590,6 +606,14 @@ def materialize_prod_hosted_runtime_topology_manifest(
     return manifest
 
 
+def is_local_compose_runtime_topology(environment: str, target: str) -> bool:
+    """Local Compose 拓扑：alpha/beta/gamma-local 与 prod-sim；不含 prod-hosted。"""
+
+    if (environment, target) == ("prod", "prod-sim"):
+        return True
+    return environment in {"alpha", "beta", "gamma"} and target == f"{environment}-local"
+
+
 def materialize_runtime_topology_package(
     environment: str,
     target: str,
@@ -597,13 +621,9 @@ def materialize_runtime_topology_package(
     *,
     repo_root: Path = ROOT,
 ) -> dict[str, Any]:
-    if environment not in {"alpha", "beta", "gamma"}:
+    if not is_local_compose_runtime_topology(environment, target):
         raise RuntimeTopologyPackageError(
-            "runtime topology package supports alpha, beta, and gamma only"
-        )
-    if target != f"{environment}-local":
-        raise RuntimeTopologyPackageError(
-            "runtime topology target does not match environment"
+            "runtime topology package supports local compose targets only"
         )
     root = runtime_shared_root
     try:
@@ -664,9 +684,11 @@ def materialize_runtime_topology_package(
             *bindings_by_service.get(service, ()),
             binding,
         )
-    # user-service 的 User database 由 source allocator 独占创建、授权并初始化。
-    # 通用 postgres-init 只能预建其余 runtime namespace，否则冷启动在 allocator
-    # 取得 authority 前就制造了“未知既存资源”，且不能安全收养。
+    # Alpha/Beta/Gamma 的 User database 仍由 source allocator 独占创建、授权并
+    # 初始化。prod-sim 则运行完整第一方 local rehearsal，service-core 在 allocator
+    # 之前启动，故必须由封存的 postgres-init 先创建全部 required namespace（含
+    # user-service），不把 prod-sim 退回到 Gamma source-allocation 的时序假设。
+    source_allocator_owns_user_database = (environment, target) != ("prod", "prod-sim")
     postgres_namespaces = tuple(
         sorted(
             {
@@ -674,7 +696,10 @@ def materialize_runtime_topology_package(
                 for binding in data_plane_payload["bindings"].values()
                 if binding["engine"] == "postgres"
                 and binding["required"] is True
-                and binding["service"] != "user-service"
+                and (
+                    not source_allocator_owns_user_database
+                    or binding["service"] != "user-service"
+                )
             }
         )
     )
@@ -714,6 +739,7 @@ def materialize_runtime_topology_package(
         )
         encoded, source_digest = _sealed_compose_bytes(
             source,
+            runtime_target=target,
             data_plane_service=binding_service,
             data_plane_environment=binding_environment,
             data_plane_bindings=bindings_by_service.get(binding_service, ()),

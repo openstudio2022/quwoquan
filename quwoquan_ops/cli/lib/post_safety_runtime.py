@@ -398,10 +398,16 @@ def produce_gamma_local_startup_material(*, current: PostSafetyTarget, source_cu
     return produce_startup_material(current=current, authorization=authorization_evidence,
         account_closure_authority=descriptor, authority=authority, deployment_owner=deployment_owner)
 
+def _accepted_runtime_target(current: PostSafetyTarget) -> bool:
+    if current.environment in {"alpha", "beta", "gamma"} and current.target == current.environment + "-local":
+        return True
+    return current.environment == "prod" and current.target == "prod-sim"
+
+
 def _validate_target(approved: PostSafetyTarget, current: PostSafetyTarget) -> None:
     if approved != current:
         raise PostSafetyRuntimeError("approved/current Post safety target differs")
-    if current.environment not in {"alpha", "beta", "gamma"} or current.target != current.environment + "-local":
+    if not _accepted_runtime_target(current):
         raise PostSafetyRuntimeError("managed nonproduction target required")
     if current.namespace.strip() == "" or current.resource_ref.strip() == "" or current.runtime_generation.strip() == "":
         raise PostSafetyRuntimeError("runtime binding is incomplete")

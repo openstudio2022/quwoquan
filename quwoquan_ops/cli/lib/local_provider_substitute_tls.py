@@ -26,8 +26,8 @@ def prepare_local_provider_substitute_tls(
     *,
     role: str,
 ) -> LocalProviderSubstituteTls:
-    if target_name not in {"alpha-local", "beta-local", "gamma-local"}:
-        raise ValueError("Provider substitute TLS is limited to local non-production")
+    if target_name not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
+        raise ValueError("Provider substitute TLS is limited to local compose targets")
     openssl = resolve_openssl3()
     ca_path = root_certificate_path(target_name)
     ca_key_path = ca_path.with_name("root.key")

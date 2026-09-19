@@ -692,6 +692,7 @@ def _dev_session_render_runtime_inputs(
             environment,
             service,
             config_root / f"{service}.yaml",
+            target=target,
         )
         payload = _stackctl.load_json_yaml(output)
         version = str((payload.get("config") or {}).get("version") or "")

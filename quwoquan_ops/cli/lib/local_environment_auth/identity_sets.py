@@ -27,7 +27,7 @@ from .constants import (
     _TEST_DATA_IDENTITY_SET_SCHEMA,
     _TEST_DATA_PHONE_PROFILES,
 )
-from .guards import _canonical_actor_role, _require_nonprod_target
+from .guards import _canonical_actor_role, _require_local_environment
 
 
 def materialize_test_data_identity_set(
@@ -45,7 +45,7 @@ def materialize_test_data_identity_set(
     contains no access or refresh token.
     """
 
-    _require_nonprod_target(environment, target_name)
+    _require_local_environment(environment, target_name)
     canonical_identity_set_id = _canonical_actor_role(identity_set_id)
     if phone_profile not in _TEST_DATA_PHONE_PROFILES:
         raise ValueError("unsupported test-data phone profile")
@@ -89,6 +89,7 @@ def materialize_test_data_identity_set(
             "alpha-local": "1",
             "beta-local": "2",
             "gamma-local": "3",
+            "prod-sim": "4",
         }[target_name]
         identity_set_slot = int(
             hashlib.sha256(

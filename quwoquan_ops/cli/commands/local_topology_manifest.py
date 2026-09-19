@@ -128,14 +128,16 @@ def _gamma_env_from_port_manifest(
     resolved_manifest = (
         manifest if manifest is not None else _stackctl.load_port_manifest()
     )
-    profile_name = str(_stackctl.get_target(topology, target_name).get("portProfile"))
-    ports = _stackctl.profile_ports(resolved_manifest, profile_name)
     target = _stackctl.get_target(topology, target_name)
     environment_name = str(target["env"])
-    if environment_name not in {"alpha", "beta", "gamma"}:
+    if environment_name not in {"alpha", "beta", "gamma"} and not (
+        environment_name == "prod" and target_name == "prod-sim"
+    ):
         raise RuntimeError(
             f"GATE_BLOCK: shared local release runtime does not support {target_name}"
         )
+    profile_name = str(target.get("portProfile"))
+    ports = _stackctl.profile_ports(resolved_manifest, profile_name)
     public_bases = target.get("publicBases") or {}
     def public_host(name: str, *, schemes: set[str]) -> str:
         parsed = urllib.parse.urlsplit(str(public_bases.get(name) or ""))
@@ -265,6 +267,7 @@ def _gamma_env_from_port_manifest(
         "QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL": str(public_bases["mediaAvatar"]),
         "QWQ_LOCAL_RELEASE_ENV": environment_name,
         "QWQ_LOCAL_RELEASE_TARGET": target_name,
+        "QWQ_RUNTIME_TARGET": target_name,
         "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": _stackctl._formal_release_compose_project_name(
             target_name
         ),

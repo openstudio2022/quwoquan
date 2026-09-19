@@ -28,7 +28,7 @@ func main() {
 		log.Fatal("SMS substitute capture key is invalid")
 	}
 	handler, err := server.New(server.Config{
-		Environment: required("APP_ENV"), ConfigurationDigest: required("SMS_SUBSTITUTE_CONFIGURATION_DIGEST"),
+		Environment: required("APP_ENV"), Target: required("QWQ_RUNTIME_TARGET"), ConfigurationDigest: required("SMS_SUBSTITUTE_CONFIGURATION_DIGEST"),
 		ProviderToken: required("SMS_SUBSTITUTE_PROVIDER_TOKEN"),
 		OperatorToken: required("SMS_SUBSTITUTE_OPERATOR_TOKEN"), CaptureKey: captureKey,
 		DefaultScene: strings.TrimSpace(os.Getenv("SMS_SUBSTITUTE_SCENARIO")),

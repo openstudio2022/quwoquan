@@ -98,6 +98,10 @@ class DeploymentCandidateManifestContractTest(
             payload["providerRuntime"]["images"],
             self.provider_images,
         )
+        self.assertEqual(
+            payload["providerRuntime"]["rehearsal"],
+            {"kind": "local-provider-substitute", "nonPromotable": True},
+        )
         subject.validate_candidate_manifest(
             payload,
             expected_environment="alpha",

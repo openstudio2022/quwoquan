@@ -202,10 +202,6 @@ def _bounded_workload_down_decision(
 def command_down(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    if args.target == "prod-sim":
-        return {"exitCode": 2, "blockerKind": "unmanaged_runtime_authority",
-                "summary": "prod-sim teardown has no generation authority",
-                "details": ["OPS.RUNTIME.unmanaged_target: explicit migration required"]}
     bounded_decision = _stackctl._bounded_workload_down_decision(args)
     if bounded_decision is not None:
         return bounded_decision
@@ -418,10 +414,11 @@ def _bind_gamma_teardown_redis_locators(
 
     from quwoquan_ops.cli.lib import output_paths
 
-    if target_name != "gamma-local":
+    if target_name not in {"gamma-local", "prod-sim"}:
         return
+    material_target = "gamma-local" if target_name == "prod-sim" else target_name
     root = output_paths.deployment_target_path(
-        target_name, "secrets", "source-allocation-management"
+        material_target, "secrets", "source-allocation-management"
     )
     repository = output_paths.ROOT.resolve()
     absolute_root = root.absolute()
@@ -654,7 +651,7 @@ def _digest_path(path: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 def _prepare_gamma_purge_control_transaction(*, target: str, report_dir: Path, receipt: Mapping[str, Any], compose_project: str) -> Path | None:
-    if target != "gamma-local": return None
+    if target not in {"gamma-local", "prod-sim"}: return None
     from quwoquan_ops.cli.lib.startup_attempt_receipt import _write_transaction_journal_exclusive
     identity = {"target": target, "attemptId": receipt.get("attemptId"), "candidateDigest": receipt.get("candidateDigest"), "composeProject": compose_project}
     if not all(identity.values()): raise ValueError("Gamma purge receipt identity is incomplete")
@@ -786,17 +783,17 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
             }
 
     if purge_rebuildable_state and (
-        args.target not in {"alpha-local", "beta-local", "gamma-local"}
+        args.target not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
     ):
         return {
             "exitCode": 2,
             "summary": f"stackctl down is GATE_BLOCK for {args.target}",
             "details": [
-                "rebuildable-state purge is only available for non-formal Alpha/Beta/Gamma local teardown"
+                "rebuildable-state purge is only available for local Alpha/Beta/Gamma or prod-sim rehearsal teardown"
             ],
         }
 
-    if args.target in {"alpha-local", "beta-local", "gamma-local"}:
+    if args.target in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
         cmd = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh", "--down"]
         port_manifest = _stackctl.load_port_manifest()
         env = _stackctl._gamma_env_from_port_manifest(
@@ -907,6 +904,16 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
         env = {**(env or {}), "QWQ_OUTPUT_ROOT": str(env_root(env_name).parents[1])}
         bind_managed_stackctl_python(env)
         runtime_result = _stackctl.run(cmd, env=env)
+        if runtime_result.returncode == 0 and args.target == "prod-sim":
+            public_cmd = [
+                "bash",
+                "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh",
+                "down",
+            ]
+            public_result = _stackctl.run(public_cmd)
+            cmd = [*cmd, "&&", *public_cmd]
+            if public_result.returncode != 0:
+                runtime_result = public_result
         if runtime_result.returncode == 0 and purge_rebuildable_state:
             try:
                 if purge_transaction is not None: _complete_gamma_purge_control_transaction(purge_transaction)
@@ -939,18 +946,6 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
             ),
             runtime_result,
         )
-    elif args.target == "prod-sim":
-        app_cmd = [
-            "bash",
-            "quwoquan_app/scripts/device/run_stop_app_instance.sh",
-            "--env",
-            "prod",
-        ]
-        app_result = _stackctl.run(app_cmd)
-        stack_cmd = ["bash", "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh", "down"]
-        stack_result = _stackctl.run(stack_cmd)
-        cmd = [*app_cmd, "&&", *stack_cmd]
-        result = stack_result if stack_result.returncode != 0 else app_result
     else:
         return {
             "exitCode": 2,
@@ -961,7 +956,7 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     resource_release_issues: list[str] = []
     startup_receipt: dict[str, Any] | None = None
     if result.returncode == 0 and not prepared_attempt_only:
-        if args.target in {"alpha-local", "beta-local", "gamma-local"}:
+        if args.target in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
             if runtime_owned_port_report is None:
                 raise RuntimeError(
                     f"GATE_BLOCK: {args.target} runtime port ownership was not projected"
@@ -1004,6 +999,7 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
         "alpha-local",
         "beta-local",
         "gamma-local",
+        "prod-sim",
     }:
         try:
             current_attempt = _stackctl.load_startup_attempt(args.target)

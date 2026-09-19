@@ -558,8 +558,18 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
     required_availability_layers = tuple(
         name
         for name in _read_only_user_availability.LAYERS
-        if args.scope != "content-consumer"
-        or name not in {"device_bound", "content_live_passed"}
+        if (
+            args.target == "prod-sim"
+            and name
+            in {"build_ready", "runtime_full_ready", "provider_ready"}
+        )
+        or (
+            args.target != "prod-sim"
+            and (
+                args.scope != "content-consumer"
+                or name not in {"device_bound", "content_live_passed"}
+            )
+        )
     )
     blocked_required_availability = [
         layer

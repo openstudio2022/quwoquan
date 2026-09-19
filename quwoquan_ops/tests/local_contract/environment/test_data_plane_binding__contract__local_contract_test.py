@@ -840,7 +840,7 @@ def test_gamma_and_prod_current_required_resources_resolve_uniquely() -> None:
 
 @pytest.mark.parametrize(
     ("environment", "target"),
-    (("gamma", "gamma-local"), ("prod", "prod-hosted")),
+    (("gamma", "gamma-local"), ("prod", "prod-sim"), ("prod", "prod-hosted")),
 )
 def test_required_environment_package_calls_contract_graph_cross_validation(
     monkeypatch: pytest.MonkeyPatch,
@@ -1009,6 +1009,7 @@ def test_current_runtime_declarations_resolve_without_secret_material() -> None:
         ("alpha", "alpha-local"),
         ("beta", "beta-local"),
         ("gamma", "gamma-local"),
+        ("prod", "prod-sim"),
         ("prod", "prod-hosted"),
     ):
         targets[target] = yaml.safe_load(
@@ -1024,7 +1025,7 @@ def test_current_runtime_declarations_resolve_without_secret_material() -> None:
         target: resolve_data_plane_environment(
             targets[target], mode="local", target_name=target
         )
-        for target in ("alpha-local", "beta-local", "gamma-local")
+        for target in ("alpha-local", "beta-local", "gamma-local", "prod-sim")
     }
     gamma_projection = local_projections["gamma-local"]
 
@@ -1114,6 +1115,7 @@ def test_current_runtime_declarations_resolve_without_secret_material() -> None:
         ("alpha", "alpha-local"),
         ("beta", "beta-local"),
         ("gamma", "gamma-local"),
+        ("prod", "prod-sim"),
         ("prod", "prod-hosted"),
     ):
         runtime = yaml.safe_load(
@@ -1158,6 +1160,7 @@ def test_prod_backup_plan_must_cover_explicit_index_members() -> None:
         ("alpha-local", "alpha"),
         ("beta-local", "beta"),
         ("gamma-local", "gamma"),
+        ("prod-sim", "prod"),
         ("prod-hosted", "prod"),
     ),
 )
@@ -1178,6 +1181,7 @@ def test_every_canonical_target_requires_data_plane(
         ("alpha", "alpha-local"),
         ("beta", "beta-local"),
         ("gamma", "gamma-local"),
+        ("prod", "prod-sim"),
         ("prod", "prod-hosted"),
     ),
 )

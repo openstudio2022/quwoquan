@@ -223,8 +223,11 @@ func Validate(cfg Config) error {
 			return fmt.Errorf("enabled operation %s cannot use mock provider", operation)
 		}
 		if providerCfg.Provider == "ext.sms.local_capture" {
-			if cfg.Environment == "prod" {
-				return fmt.Errorf("SMS local_capture is forbidden in prod")
+			if err := ValidateLocalSubstituteRuntimeIdentity(
+				cfg.Environment,
+				os.Getenv("QWQ_RUNTIME_TARGET"),
+			); err != nil {
+				return fmt.Errorf("SMS local_capture runtime identity invalid: %w", err)
 			}
 		}
 		if providerCfg.Provider == "ext.sms.local_capture" &&
@@ -276,6 +279,26 @@ func ValidateResultRelayRedis(environment string, cfg RedisSceneConfig) error {
 	return nil
 }
 
+// ValidateLocalSubstituteRuntimeIdentity accepts only target identities sealed by
+// the local candidate compiler.  QWQ_RUNTIME_TARGET is deployment-owned Compose
+// input, not a request or user-configurable Provider selector.
+func ValidateLocalSubstituteRuntimeIdentity(environment, target string) error {
+	environment = strings.TrimSpace(environment)
+	target = strings.TrimSpace(target)
+	if environment == "prod" && target == "prod-sim" {
+		return nil
+	}
+	if (environment == "alpha" || environment == "beta" || environment == "gamma") &&
+		target == environment+"-local" {
+		return nil
+	}
+	return fmt.Errorf(
+		"QWQ_RUNTIME_TARGET=%q is not a local substitute target for APP_ENV=%q",
+		target,
+		environment,
+	)
+}
+
 func validatePushDeliveryConfig(
 	appEnv string,
 	push PushDeliveryProviderConfig,
@@ -285,11 +308,11 @@ func validatePushDeliveryConfig(
 	}
 	mode := strings.TrimSpace(push.Mode)
 	if mode == "protocol_substitute" {
-		if appEnv != "alpha" && appEnv != "beta" && appEnv != "gamma" {
-			return fmt.Errorf(
-				"integration push protocol_substitute is only permitted in alpha/beta/gamma, got APP_ENV=%s",
-				appEnv,
-			)
+		if err := ValidateLocalSubstituteRuntimeIdentity(
+			appEnv,
+			os.Getenv("QWQ_RUNTIME_TARGET"),
+		); err != nil {
+			return fmt.Errorf("integration push protocol_substitute runtime identity invalid: %w", err)
 		}
 		endpoint, err := url.ParseRequestURI(strings.TrimSpace(push.Endpoint))
 		if err != nil || endpoint.Host == "" || endpoint.Scheme != "https" {

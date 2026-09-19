@@ -182,8 +182,11 @@ class PackageOutputBoundaryTest(unittest.TestCase):
             self.assertIn("must not reside under disposable output", issues[0])
 
 
-def _write_runtime_shared(module, package_dir: Path, environment: str) -> None:
+def _write_runtime_shared(
+    module, package_dir: Path, environment: str, *, target: str | None = None
+) -> None:
     """铺出一份自洽的 runtime-shared 包：五份共享运行时文件 + provenance。"""
+    resolved_target = target or f"{environment}-local"
     payloads = {
         "Caddyfile": ":80 {\n\trespond 200\n}\n",
         "livekit.yaml": "port: 7880\n",
@@ -227,7 +230,7 @@ def _write_runtime_shared(module, package_dir: Path, environment: str) -> None:
     migration = _write(package_dir / "source-initializer/resources/migrations/001.up.sql", "SELECT 1;")
     initializer_manifest = _write_json(package_dir / "source-initializer/manifest.json", {
         "schema": "stackctl-source-initializer", "environment": environment,
-        "target": f"{environment}-local", "platform": platform.system()+"/"+platform.machine(),
+        "target": resolved_target, "platform": platform.system()+"/"+platform.machine(),
         "executable": "source-init", "files": {"source-init": _digest(executable), "resources/migrations/001.up.sql": _digest(migration)},
     })
     _write_json(
@@ -236,7 +239,7 @@ def _write_runtime_shared(module, package_dir: Path, environment: str) -> None:
             "schema": "qwq.runtime_shared_package",
             "sourceInitializer": {"ref": "packages/runtime-shared/source-initializer/manifest.json", "digest": _digest(initializer_manifest)},
             "environment": environment,
-            "target": f"{environment}-local",
+            "target": resolved_target,
             "dataPlaneBinding": binding,
             "runtimeTopology": None,
             "provenance": {"files": files},
@@ -276,6 +279,31 @@ class RuntimeSharedPackageTest(unittest.TestCase):
             self.assertEqual(
                 module.validate_runtime_shared_package(package_dir, "alpha", "alpha-local"),
                 [],
+            )
+
+    def test_prod_sim_source_initializer_identity_is_accepted(self) -> None:
+        module = _load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
+            _write_runtime_shared(module, package_dir, "prod", target="prod-sim")
+            self.assertEqual(
+                module.validate_runtime_shared_package(package_dir, "prod", "prod-sim"),
+                [],
+            )
+
+    def test_prod_sim_rejects_hosted_initializer_identity(self) -> None:
+        module = _load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            package_dir = Path(tmp).resolve() / "packages/runtime-shared"
+            _write_runtime_shared(module, package_dir, "prod", target="prod-hosted")
+            issues = module.validate_runtime_shared_package(
+                package_dir, "prod", "prod-sim"
+            )
+            self.assertTrue(
+                any(
+                    "source initializer" in issue or "target mismatch" in issue
+                    for issue in issues
+                )
             )
 
     def test_missing_manifest_is_rejected(self) -> None:

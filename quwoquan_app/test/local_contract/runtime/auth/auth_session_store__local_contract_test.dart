@@ -446,6 +446,7 @@ void main() {
       secureStorage: storage,
       prefsFactory: () => throw StateError('禁止全局prefs读取'),
     );
+    expect(store.isIsolated, isTrue);
     final result = SyntheticSessionResult(
       accountId: 'alpha-account:${'a' * 32}',
       personaId: 'alpha-persona:${'b' * 32}',

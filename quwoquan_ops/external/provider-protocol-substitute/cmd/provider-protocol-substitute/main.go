@@ -24,6 +24,7 @@ func main() {
 	}
 	handler, err := server.New(server.Config{
 		Environment:              required("APP_ENV"),
+		Target:                   required("QWQ_RUNTIME_TARGET"),
 		ConfigurationDigest:      required("PROVIDER_SUBSTITUTE_CONFIGURATION_DIGEST"),
 		RuntimeCompositionDigest: required("QWQ_PROVIDER_RUNTIME_DIGEST"),
 		OperatorToken:            required("PROVIDER_SUBSTITUTE_OPERATOR_TOKEN"),

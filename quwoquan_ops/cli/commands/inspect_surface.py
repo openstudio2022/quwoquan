@@ -311,9 +311,26 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
                 target_name=args.target,
             )
             inspection["release"] = release_inspection
+            release_issues = list(release_inspection.get("issues") or [])
+            if args.target == "prod-sim":
+                # skip-app local rehearsal does not claim Web/App distribution.
+                skip_app_distribution = {
+                    "Web distribution current pointer is missing",
+                    "Android latest manifest is missing",
+                }
+                inspection["release"] = {
+                    **release_inspection,
+                    "appDistribution": "not_executed",
+                    "issues": release_issues,
+                }
+                release_issues = [
+                    issue
+                    for issue in release_issues
+                    if issue not in skip_app_distribution
+                ]
             findings.extend(
                 f"release distribution: {issue}"
-                for issue in release_inspection.get("issues", [])
+                for issue in release_issues
             )
         except (OSError, ValueError, _stackctl.OfficialDistributionReleaseError) as error:
             inspection["release"] = {
@@ -378,6 +395,15 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         else [f"{key}: collected" for key in inspection]
     )
     availability_failed = user_availability.get("status") != "ready"
+    if args.target == "prod-sim":
+        # skip-app local rehearsal keeps content/App/legal layers OPEN.
+        availability_failed = user_availability.get("firstBlockerClass") in {
+            "startup_identity",
+            "provider",
+            "build",
+            "toolchain_capability",
+            "signature_invalid",
+        }
     status = "failed" if findings or availability_failed else "ok"
     summary = (
         f"stackctl inspect failed for {args.target}"

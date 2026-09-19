@@ -23,7 +23,7 @@ from .constants import (
     _OCI_IMAGE_FIELD_SETS,
     _OCI_SCHEMA,
 )
-from .receipt_contract import _sha256_json
+from .receipt_contract import _is_local_generation_identity, _sha256_json
 from .receipt_fs import _absolute_path
 
 
@@ -99,10 +99,7 @@ def load_candidate_oci_image_composition(
 ) -> dict[str, Any]:
     if not expected_target:
         raise ValueError("startup OCI image manifest requires expected target")
-    if (
-        expected_environment not in {"alpha", "beta", "gamma"}
-        or expected_target != f"{expected_environment}-local"
-    ):
+    if not _is_local_generation_identity(expected_environment, expected_target):
         raise ValueError("startup OCI expected target identity mismatch")
     pointer_path = _pkg.active_candidate_manifest_path(expected_target)
     pointer_bytes = _pkg._secure_read(

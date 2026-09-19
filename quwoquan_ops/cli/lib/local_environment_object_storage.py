@@ -37,6 +37,17 @@ class LocalEnvironmentObjectStorage:
     root_certificate_path: Path
 
 
+_LOCAL_OBJECT_STORAGE_TARGETS = frozenset(
+    {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
+)
+_LOCAL_OBJECT_STORAGE_ENVIRONMENTS = {
+    "alpha-local": "alpha",
+    "beta-local": "beta",
+    "gamma-local": "gamma",
+    "prod-sim": "prod",
+}
+
+
 def package_build_object_storage_environment(
     *,
     target_name: str,
@@ -48,7 +59,7 @@ def package_build_object_storage_environment(
     trust root. The paths remain target-scoped placeholders under the managed
     cache and are consumed only while Compose resolves its build graph.
     """
-    if not target_name.endswith("-local"):
+    if target_name not in _LOCAL_OBJECT_STORAGE_TARGETS:
         raise ValueError(f"package-build object-storage target must be local: {target_name}")
     prefix = environment_prefix.rstrip("_")
     if not prefix:
@@ -76,10 +87,10 @@ def prepare_local_environment_object_storage(
     region: str = "cn-local-1",
 ) -> LocalEnvironmentObjectStorage:
     """Prepare MinIO credentials and the target's canonical TLS material."""
-    if environment not in {"alpha", "beta", "gamma"}:
-        raise ValueError(f"unsupported local object-storage environment: {environment}")
-    if not target_name.endswith("-local"):
-        raise ValueError(f"local object-storage target must end with -local: {target_name}")
+    if _LOCAL_OBJECT_STORAGE_ENVIRONMENTS.get(target_name) != environment:
+        raise ValueError(
+            f"local object-storage identity mismatch: {environment}/{target_name}"
+        )
     if not isinstance(edge_port, int) or not 0 < edge_port <= 65535:
         raise ValueError("object-storage edge port must be a valid TCP port")
     if not environment_prefix:

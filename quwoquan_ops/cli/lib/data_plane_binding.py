@@ -1065,7 +1065,7 @@ DATA_PLANE_BINDING_PACKAGE_REF = PurePosixPath(
     "packages/runtime-shared/data-plane-binding.json"
 )
 _REQUIRED_DATA_PLANE_TARGETS = frozenset(
-    {"alpha-local", "beta-local", "gamma-local", "prod-hosted"}
+    {"alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"}
 )
 
 

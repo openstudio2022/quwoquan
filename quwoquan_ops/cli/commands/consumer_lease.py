@@ -101,8 +101,6 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
             )
             try:
                 generation = str(getattr(args, "instance_generation", "") or "")
-                if target == "prod-sim":
-                    raise ValueError("OPS.RUNTIME.unmanaged_target: prod-sim has no generation authority")
                 attempts = [_stackctl.load_startup_attempt(target), _stackctl.load_test_live_startup_attempt(target)]
                 active = [item for item in attempts if item and item.get("status") != "stopped"]
                 if len(active) != 1 or active[0].get("status") != "running" or active[0].get("attemptId") != generation:

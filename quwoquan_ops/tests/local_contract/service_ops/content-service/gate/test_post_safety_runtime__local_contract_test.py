@@ -21,7 +21,7 @@ from quwoquan_ops.cli.lib.generated.post_safety_runtime import (
     PostSafetyDeploymentStartupMaterial, PostSafetyMaterialRootLocator, PostSafetyRuntimeClosure,
     PostSafetyRuntimeEvidence, PostSafetySecretRefDescriptor, PostSafetySourceAllocationCurrentDescriptor,
 )
-from quwoquan_ops.cli.lib.post_safety_runtime import PostSafetyRuntimeError, PostSafetyTarget, create_new_runtime, verify_current
+from quwoquan_ops.cli.lib.post_safety_runtime import PostSafetyRuntimeError, PostSafetyTarget, _validate_target, create_new_runtime, verify_current
 
 
 class Mongo:
@@ -408,3 +408,11 @@ def test_gamma_local_producer_uses_real_local_signer_and_prod_or_missing_source_
         runtime.produce_gamma_local_startup_material(current=target(), source_current=missing, source_expected=object(),
             source_binding={}, database=Mongo(), account_material_root=(tmp_path/"missing-account").absolute(),
             connection_factory=object(), deployment_owner=runtime.FileDeploymentStartupMaterialOwner("gamma-local"), keyring_path=signing.keyring_path)
+
+
+def test_validate_target_allows_prod_sim_and_rejects_hosted():
+    sim = PostSafetyTarget("prod", "prod-sim", "sha256:" + "a" * 64, "sha256:" + "b" * 64, "mongo", "quwoquan_content", "generation", "generation")
+    _validate_target(sim, sim)
+    hosted = PostSafetyTarget("prod", "prod-hosted", "sha256:" + "a" * 64, "sha256:" + "b" * 64, "mongo", "quwoquan_content", "generation", "generation")
+    with pytest.raises(PostSafetyRuntimeError, match="nonproduction"):
+        _validate_target(hosted, hosted)

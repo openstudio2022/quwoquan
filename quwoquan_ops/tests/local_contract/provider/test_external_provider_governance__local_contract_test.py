@@ -660,6 +660,10 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
                     "func CompiledBindingFor(capabilityID string)",
                     source,
                 )
+                self.assertIn(
+                    f'const ExternalProviderBindingTarget = "{target}"',
+                    source,
+                )
                 self.assertNotIn("environment, capabilityID", source)
                 self.assertNotIn("func ExternalProviderBindingFor(", source)
                 self.assertNotIn("map[string]map[string]ExternalProviderBinding", source)
@@ -740,11 +744,132 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
             target="prod-hosted",
             source_root=ROOT,
         )
-        self.assertEqual(prod_sim["bindings"], prod_hosted["bindings"])
+        self.assertNotEqual(prod_sim["bindings"], prod_hosted["bindings"])
+        prod_sim_adapters = {
+            binding["adapter_id"]
+            for binding in prod_sim["bindings"].values()
+            if binding["state"] != "not_required"
+        }
+        prod_hosted_adapters = {
+            binding["adapter_id"]
+            for binding in prod_hosted["bindings"].values()
+            if binding["state"] != "not_required"
+        }
+        self.assertIn("ext.llm.protocol_fixture", prod_sim_adapters)
+        self.assertIn("ext.llm.xiaomi_mimo", prod_hosted_adapters)
+        self.assertFalse(
+            any(
+                secret
+                for binding in prod_sim["bindings"].values()
+                for secret in binding.get("secret_refs", [])
+                if secret in {
+                    "ASSISTANT_MODEL_API_KEY",
+                    "CONTENT_EMBEDDING_API_KEY",
+                    "ALIYUN_DYPNS_ACCESS_KEY_ID",
+                    "ALIYUN_DYPNS_ACCESS_KEY_SECRET",
+                    "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY",
+                    "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY",
+                }
+            )
+        )
         self.assertNotEqual(
             prod_sim["manifest"]["manifestDigest"],
             prod_hosted["manifest"]["manifestDigest"],
         )
+
+
+    def test_prod_sim_target_profile_missing_and_key_drift_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            capsule_root = Path(temporary) / "capsule"
+            shutil.copytree(
+                ROOT / "quwoquan_service",
+                capsule_root / "quwoquan_service",
+                ignore=shutil.ignore_patterns(".git", ".qwq_output", "generated", "tests"),
+            )
+            profile_path = (
+                capsule_root
+                / "quwoquan_service/services/assistant-service/environments/prod/targets/"
+                "prod-sim/external_bindings.yaml"
+            )
+            profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+            mutations = {
+                "missing profile": None,
+                "missing capability": lambda value: value["externalBindings"].pop(
+                    "assistant.finance.quote"
+                ),
+                "extra capability": lambda value: value["externalBindings"].update(
+                    {"assistant.unowned.extra": {"state": "not_required"}}
+                ),
+                "inheritance field": lambda value: value.update(
+                    {"extends": "gamma"}
+                ),
+            }
+            for name, mutation in mutations.items():
+                with self.subTest(name=name):
+                    if mutation is None:
+                        profile_path.unlink()
+                    else:
+                        changed = deepcopy(profile)
+                        mutation(changed)
+                        profile_path.write_text(
+                            yaml.safe_dump(changed, sort_keys=False),
+                            encoding="utf-8",
+                        )
+                    load_environment_bindings.cache_clear()
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "missing target external Provider Binding profile|missing=|extra=|must contain only",
+                    ):
+                        load_environment_bindings(
+                            "prod",
+                            target="prod-sim",
+                            source_root=capsule_root,
+                        )
+                    profile_path.parent.mkdir(parents=True, exist_ok=True)
+                    profile_path.write_text(
+                        yaml.safe_dump(profile, sort_keys=False),
+                        encoding="utf-8",
+                    )
+
+    def test_target_binding_loader_allows_no_profile_only_for_empty_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = (
+                root
+                / "quwoquan_service/services/empty-service/environments/prod/config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text("overrides: {}\n", encoding="utf-8")
+            load_environment_bindings.cache_clear()
+            self.assertEqual(
+                load_environment_bindings(
+                    "prod",
+                    target="prod-sim",
+                    source_root=root,
+                ),
+                {"empty-service": {}},
+            )
+
+            profile_path = (
+                config_path.parent / "targets/prod-sim/external_bindings.yaml"
+            )
+            profile_path.parent.mkdir(parents=True)
+            profile_path.write_text("externalBindings: {}\n", encoding="utf-8")
+            load_environment_bindings.cache_clear()
+            with self.assertRaisesRegex(ValueError, "profile is forbidden"):
+                load_environment_bindings(
+                    "prod",
+                    target="prod-sim",
+                    source_root=root,
+                )
+
+    def test_single_environment_compiler_rejects_unsupported_target(self) -> None:
+        with self.assertRaisesRegex(ValueError, "target/environment mismatch"):
+            compile_single_environment_bindings(
+                environment="prod",
+                target="gamma-local",
+                source_root=ROOT,
+            )
 
     def test_single_environment_compiler_reads_capsule_after_live_workspace_drift(
         self,

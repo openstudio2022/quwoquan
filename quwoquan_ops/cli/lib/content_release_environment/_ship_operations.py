@@ -693,6 +693,31 @@ def activate_release(
             importer_image_ref=getattr(target, "content_importer_image_ref", ""),
         )
         _remember_pointer_receipt(base_result, "contentPreActive", pre)
+        
+        # Query preparation: build Creator/Post/Homepage Search indexes
+        failed_stage = "content_query_preparation"
+        from quwoquan_ops.cli.lib.content_release_query_preparation import (
+            prepare_content_release_queries,
+        )
+        
+        query_prep_idempotency_key = f"activate-{release_id}-{run_id}"
+        query_prep_result = prepare_content_release_queries(
+            api_base_url=getattr(target, "api_base_url", ""),
+            ssl_cafile=getattr(target, "ssl_cafile", ""),
+            release_id=release_id,
+            manifest_digest=admission.manifest_digest,
+            environment=env,
+            idempotency_key=query_prep_idempotency_key,
+            timeout_seconds=300,  # 5 minutes timeout
+        )
+        
+        # Record query preparation result
+        query_prep_path = run / "content-query-preparation.json"
+        dependencies.write_json(query_prep_path, query_prep_result)
+        base_result["queryPreparationRef"] = str(
+            query_prep_path.relative_to(dependencies.output_root)
+        )
+        
         failed_stage = "content_activation_cas"
         activation = _required_adapter(dependencies, "activate_content_release")(
             env=env,

@@ -137,6 +137,7 @@ def materialize_provider_runtime_package(
     payload = {
         "schema": PROVIDER_RUNTIME_PACKAGE_SCHEMA,
         "composition": composition,
+        "rehearsal": _provider_rehearsal_marker(env_name, target_name),
         "compositionRef": (artifact_relative / "composition.json").as_posix(),
         "compositionDigest": (
             "sha256:" + hashlib.sha256(composition_bytes).hexdigest()
@@ -193,6 +194,19 @@ def materialize_provider_runtime_package(
         require_images=False,
     )
 
+
+
+def _provider_rehearsal_marker(environment: str, target: str) -> dict[str, object]:
+    """Declare substitute rehearsal independently from legal-placeholder status."""
+
+    local_rehearsal = (
+        environment in {"alpha", "beta", "gamma"}
+        and target == f"{environment}-local"
+    ) or (environment, target) == ("prod", "prod-sim")
+    return {
+        "kind": "local-provider-substitute" if local_rehearsal else "",
+        "nonPromotable": local_rehearsal,
+    }
 
 def provider_runtime_image_environment_key(role: str) -> str:
     normalized = str(role or "").strip()
@@ -290,13 +304,19 @@ def validate_packaged_provider_runtime(
         raise ValueError(
             "packaged Provider runtime validation requires candidate_root"
         )
-    if not isinstance(payload, dict) or set(payload) != {
+    current_fields = {
         "schema",
         "composition",
+        "rehearsal",
         "compositionRef",
         "compositionDigest",
         "workloads",
         "images",
+    }
+    previous_fields = current_fields - {"rehearsal"}
+    if not isinstance(payload, dict) or set(payload) not in {
+        frozenset(current_fields),
+        frozenset(previous_fields),
     }:
         raise ValueError("deployment candidate Provider runtime fields mismatch")
     if payload.get("schema") != PROVIDER_RUNTIME_PACKAGE_SCHEMA:
@@ -307,6 +327,15 @@ def validate_packaged_provider_runtime(
         expected_target=expected_target,
         require_current_contracts=require_current_contracts,
     )
+    # `rehearsal` was added after existing immutable candidates were sealed.
+    # Read previously sealed bytes exactly and derive only the target-scoped
+    # marker for validation; re-applying today's Binding/Provider semantics to
+    # a dependency donor would make valid historical capsules unusable.
+    if "rehearsal" in payload and payload["rehearsal"] != _provider_rehearsal_marker(
+        expected_environment,
+        expected_target,
+    ):
+        raise ValueError("deployment candidate Provider rehearsal marker is invalid")
     composition_ref = _validate_candidate_artifact_ref(
         payload.get("compositionRef"),
         prefix="packages/runtime-shared/provider-runtime/",

@@ -255,10 +255,10 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
     def test_prod_cannot_use_nonprod_operator_port(self) -> None:
         with (
             mock.patch.object(local_environment_auth.subprocess, "run") as run,
-            self.assertRaisesRegex(ValueError, "Alpha/Beta/Gamma"),
+            self.assertRaisesRegex(ValueError, "unsupported local environment target"),
         ):
             local_environment_auth.mint_local_product_ops_operator_token(
-                "prod", "prod-sim"
+                "prod", "prod-hosted"
             )
         run.assert_not_called()
 

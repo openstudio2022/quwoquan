@@ -21,12 +21,13 @@ def materialize_prod_sim_app_launch_bundle_impl(
     package_snapshot: Mapping[str, object],
     materialized_release_evidence: Mapping[str, str],
     source_root: Path,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     """Copy one exact Android Prod Release launch closure into the candidate."""
 
     artifact_root_value = os.environ.get("QWQ_PROD_RELEASE_ARTIFACT_ROOT", "").strip()
     if not artifact_root_value:
-        raise FileNotFoundError("prod-sim release artifact root is required")
+        # 本地 skip-app 部署验证不携带 APK 闭包；不得据此声称 App 已验。
+        return None
     artifact_root = Path(artifact_root_value).expanduser()
     if not artifact_root.is_absolute():
         artifact_root = source_root / artifact_root

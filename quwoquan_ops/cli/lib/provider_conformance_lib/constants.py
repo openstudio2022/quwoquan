@@ -18,6 +18,8 @@ RELEASE_READINESS_ENVIRONMENTS = frozenset({RELEASE_ENVIRONMENT})
 EVIDENCE_ENVIRONMENTS = (*ENVIRONMENTS, RELEASE_ENVIRONMENT)
 READINESS_ENVIRONMENTS = EVIDENCE_ENVIRONMENTS
 LAYERS = ("local_contract", "api_integration", "user_acceptance")
+# Catalog key only; not a nine-grid evidence layer and not a TEST_LAYER_ROOT.
+PROD_SIM_REHEARSAL_LAYER = "prod-sim-rehearsal"
 CELL_PROFILES = {
     ("alpha", "local_contract"): "baseline",
     ("beta", "local_contract"): "baseline",

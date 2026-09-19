@@ -69,13 +69,22 @@ def _build_official_skill_package_publication(
     environment = dict(package_environment)
     if not str(environment.get("QWQ_PACKAGE_SOURCE_REVISION") or "").strip():
         environment["QWQ_PACKAGE_SOURCE_REVISION"] = "0" * 40
-    step = build_official_skill_package_publication(
-        env_name,
-        target_name,
-        package_source_root=package_source_root,
-        package_environment=environment,
-        output_root=output_root,
-    )
+    try:
+        step = build_official_skill_package_publication(
+            env_name,
+            target_name,
+            package_source_root=package_source_root,
+            package_environment=environment,
+            output_root=output_root,
+        )
+    except RuntimeError as exc:
+        return {
+            "name": "assistant-skill-package-publication",
+            "argv": [],
+            "exitCode": 2,
+            "stdout": "",
+            "stderr": str(exc),
+        }
     step["argv"] = [item for item in step["argv"] if "PRIVATE" not in item]
     return step
 

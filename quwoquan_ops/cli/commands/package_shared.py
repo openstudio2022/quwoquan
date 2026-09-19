@@ -102,7 +102,11 @@ def _build_runtime_shared_package(
         repo_root=source_root,
     )
     runtime_topology = None
-    if env_name in {"alpha", "beta", "gamma"} and target_name == f"{env_name}-local":
+    from quwoquan_ops.cli.lib.runtime_topology_package import (
+        is_local_compose_runtime_topology,
+    )
+
+    if is_local_compose_runtime_topology(env_name, target_name):
         runtime_topology = _stackctl.materialize_runtime_topology_package(
             env_name,
             target_name,
@@ -121,8 +125,12 @@ def _build_runtime_shared_package(
         if runtime_topology.get("dataPlaneBinding") != data_plane_binding:
             raise ValueError("hosted runtime topology data-plane binding identity drifted")
     source_initializer = None
-    if env_name in {"alpha", "beta", "gamma"} and target_name == f"{env_name}-local":
-        from quwoquan_ops.cli.lib.source_initializer_package import build_source_initializer
+    from quwoquan_ops.cli.lib.source_initializer_package import (
+        build_source_initializer,
+        source_initializer_required,
+    )
+
+    if source_initializer_required(env_name, target_name):
         source_initializer = build_source_initializer(package_dir, source_root, env_name, target_name)
     _stackctl.write_json(
         package_dir / "manifest.json",
@@ -208,6 +216,7 @@ def _build_package_bound_local_images(
     _stackctl._bind_package_provider_reference_environment(
         environment,
         environment_name=env_name,
+        target_name=target_name,
         runtime_composition=provider_runtime["composition"],
     )
     overlay_dir, _, binding_manifest_digest = (

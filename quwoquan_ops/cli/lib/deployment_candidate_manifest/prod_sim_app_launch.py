@@ -20,6 +20,9 @@ def validate_prod_sim_app_launch_bundle(
         if bundle is not None:
             raise ValueError("non-prod-sim candidate must not contain App launch bundle")
         return {}
+    if bundle is None:
+        # skip-app 本地验证允许不携带 APK 闭包；有 bundle 时仍须完整自洽。
+        return {}
     required = {
         "schema",
         "candidateDigest",

@@ -70,7 +70,7 @@ def validate_startup_attempt(
         raise ValueError("startup attempt receipt schema mismatch")
     env = str(value.get("env") or "").strip()
     target = str(value.get("target") or "").strip()
-    if env not in {"alpha", "beta", "gamma"} or target != f"{env}-local":
+    if not _is_local_generation_identity(env, target):
         raise ValueError("startup attempt receipt target identity mismatch")
     if expected_env and env != expected_env:
         raise ValueError("startup attempt receipt environment mismatch")
@@ -220,11 +220,22 @@ def load_workload_startup_attempt(
     return _read(startup_attempt_path_for_workload(target, workload))
 
 
+def _is_local_generation_identity(environment: str, target: str) -> bool:
+    """本地 generation 只含三环境 *-local 与 prod-sim；不含 test-live / prod-hosted。"""
+    env = str(environment or "").strip()
+    tgt = str(target or "").strip()
+    if env in {"alpha", "beta", "gamma"} and tgt == f"{env}-local":
+        return True
+    return env == "prod" and tgt == "prod-sim"
+
+
 def _environment_for_target(target: str) -> str:
     normalized = str(target or "").strip()
     for environment in ("alpha", "beta", "gamma"):
         if normalized == f"{environment}-local":
             return environment
+    if normalized == "prod-sim":
+        return "prod"
     raise ValueError("startup attempt target identity mismatch")
 
 

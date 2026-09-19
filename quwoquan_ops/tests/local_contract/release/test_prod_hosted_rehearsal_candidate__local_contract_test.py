@@ -566,6 +566,40 @@ class RehearsalDiagnosticMarkerContractTest(unittest.TestCase):
             legal_static.os.environ, {legal_static.PLACEHOLDER_POLICY_ENV: "mark"}, clear=False
         ):
             self.assertEqual(legal_static._placeholder_policy(""), "mark")
+        self.assertEqual(
+            legal_static.placeholder_policy_for_package(
+                env_name="prod",
+                target_name="prod-sim",
+                rehearsal_material=False,
+            ),
+            "mark",
+        )
+        self.assertEqual(
+            legal_static.placeholder_policy_for_package(
+                env_name="prod",
+                target_name="prod-hosted",
+                rehearsal_material=False,
+            ),
+            "block",
+        )
+        self.assertEqual(
+            legal_static.placeholder_policy_for_package(
+                env_name="prod",
+                target_name="prod-hosted",
+                rehearsal_material=True,
+            ),
+            "mark",
+        )
+        self.assertEqual(
+            legal_static.placeholder_policy_for_package(
+                env_name="gamma",
+                target_name="gamma-local",
+                rehearsal_material=False,
+            ),
+            "block",
+        )
+        self.assertTrue(legal_static._non_promotable_for_placeholder_policy("mark"))
+        self.assertFalse(legal_static._non_promotable_for_placeholder_policy("block"))
         del issues
 
     def test_rehearsal_report_marks_legal_placeholder_and_host_shared_edge_as_diagnostic(self) -> None:

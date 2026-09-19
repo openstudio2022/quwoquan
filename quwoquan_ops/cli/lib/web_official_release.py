@@ -10,6 +10,10 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
 from quwoquan_ops.cli.commands.package_app_artifact_helpers import artifact_digest
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
 from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     load_launch_manifest_contract,
     runtime_config_package_digest,
@@ -41,7 +45,12 @@ def package_web_official_release(
     environment = environment.strip()
     if environment not in {"alpha", "beta", "gamma", "prod"}:
         raise WebOfficialReleaseError(f"unsupported Web environment: {environment}")
-    public_origin = _trusted_web_origin(environment, public_origin)
+    public_origin = _trusted_web_origin(
+        repo_root=repo_root,
+        environment=environment,
+        target=target,
+        raw=public_origin,
+    )
     flutter = shutil.which("flutter")
     if not flutter:
         raise WebOfficialReleaseError("flutter is required to package the Web application")
@@ -139,27 +148,72 @@ def _web_build_command(flutter: str, build_root: Path) -> list[str]:
     ]
 
 
-def _trusted_web_origin(environment: str, raw: str) -> str:
+def _trusted_web_origin(
+    *,
+    repo_root: Path,
+    environment: str,
+    target: str,
+    raw: str,
+) -> str:
+    """将 Web release 绑定至指定 target 的 publicWeb topology origin。"""
+
+    expected_origin = _target_public_web_origin(
+        repo_root=repo_root,
+        environment=environment,
+        target=target,
+    )
+    requirement = _web_origin_requirement_label(environment, target)
+    provided_origin = _canonical_https_origin(raw, requirement=requirement)
+    if provided_origin != expected_origin:
+        raise WebOfficialReleaseError(
+            f"{requirement} Web origin must be {expected_origin}"
+        )
+    return expected_origin
+
+
+def _target_public_web_origin(
+    *,
+    repo_root: Path,
+    environment: str,
+    target: str,
+) -> str:
+    try:
+        topology = load_environment_topology(
+            repo_root / "quwoquan_ops" / "environments"
+        )
+        target_contract = get_target(topology, target)
+    except (OSError, RuntimeError, TypeError, ValueError, KeyError) as error:
+        raise WebOfficialReleaseError(
+            f"Web target topology is unavailable for {target}"
+        ) from error
+    if str(target_contract.get("env") or "") != environment:
+        raise WebOfficialReleaseError(
+            f"Web target {target} does not belong to environment {environment}"
+        )
+    public_bases = target_contract.get("publicBases")
+    if not isinstance(public_bases, dict):
+        raise WebOfficialReleaseError(
+            f"Web target {target} has no resolved publicWeb origin"
+        )
+    return _canonical_https_origin(
+        str(public_bases.get("publicWeb") or ""),
+        requirement=_web_origin_requirement_label(environment, target),
+    )
+
+
+def _canonical_https_origin(raw: str, *, requirement: str) -> str:
     value = raw.strip().rstrip("/")
     parsed = urlparse(value)
-    expected = {
-        "alpha": ("alpha.quwoquan.com", 17000),
-        "beta": ("beta.quwoquan.com", 18000),
-        "gamma": ("gamma.quwoquan.com", 19000),
-        "prod": ("quwoquan.com", None),
-    }[environment]
-    expected_host, expected_port = expected
     try:
         parsed_port = parsed.port
     except ValueError as error:
         raise WebOfficialReleaseError(
-            f"{environment} Web origin must be "
-            f"https://{expected_host}{f':{expected_port}' if expected_port else ''}"
+            f"{requirement} Web origin must be a canonical HTTPS origin"
         ) from error
+    host = parsed.hostname
     if (
         parsed.scheme != "https"
-        or parsed.hostname != expected_host
-        or parsed_port != expected_port
+        or not host
         or parsed.username is not None
         or parsed.password is not None
         or parsed.path not in {"", "/"}
@@ -167,10 +221,13 @@ def _trusted_web_origin(environment: str, raw: str) -> str:
         or parsed.fragment
     ):
         raise WebOfficialReleaseError(
-            f"{environment} Web origin must be "
-            f"https://{expected_host}{f':{expected_port}' if expected_port else ''}"
+            f"{requirement} Web origin must be a canonical HTTPS origin"
         )
-    return f"https://{expected_host}{f':{expected_port}' if expected_port else ''}"
+    return f"https://{host}{f':{parsed_port}' if parsed_port is not None else ''}"
+
+
+def _web_origin_requirement_label(environment: str, target: str) -> str:
+    return "prod-sim" if (environment, target) == ("prod", "prod-sim") else environment
 
 
 def _verify_web_build(build_root: Path) -> None:

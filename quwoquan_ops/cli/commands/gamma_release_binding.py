@@ -302,12 +302,13 @@ def _bind_formal_local_release_provider_environment(
         str(item["role"])
         for item in validated_provider_runtime["workloads"]
     }
-    if not provider_roles:
-        return f"{target_name} full runtime Provider workload closure is empty"
-    unsupported_roles = provider_roles - {
+    local_compose_substitutes = {
         "sms-provider-substitute",
         "provider-protocol-substitute",
     }
+    if not provider_roles:
+        return f"{target_name} full runtime Provider workload closure is empty"
+    unsupported_roles = provider_roles - local_compose_substitutes
     if unsupported_roles:
         return (
             f"{target_name} Provider runtime has unsupported materializers: "
@@ -316,8 +317,7 @@ def _bind_formal_local_release_provider_environment(
     selected_provider_roles = (
         provider_roles
         if workload == "full"
-        else provider_roles
-        & {"sms-provider-substitute", "provider-protocol-substitute"}
+        else provider_roles & local_compose_substitutes
     )
     if selected_provider_roles != {
         "sms-provider-substitute",
@@ -454,6 +454,13 @@ def _bind_gamma_down_parse_environment(
             "AUTH_DEVICE_TICKET_TOKEN_VERSION": "down-not-used",
             "OTP_CODE_REF_ACTIVE_KEY_VERSION": "down-not-used",
             "OTP_CODE_REF_KEYS_JSON": '{"down-not-used":"down-not-used"}',
+            "USER_COLLECTION_QUERY_AUTHORITY_ACTIVE_KEY_ID": "down-not-used",
+            "USER_COLLECTION_QUERY_AUTHORITY_KEYRING_SECRET_REF": (
+                "USER_COLLECTION_QUERY_AUTHORITY_KEYRING_JSON"
+            ),
+            "USER_COLLECTION_QUERY_AUTHORITY_KEYRING_JSON": (
+                '{"down-not-used":"down-not-used"}'
+            ),
             "ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON": (
                 '{"down-not-used":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}'
             ),
@@ -588,6 +595,7 @@ def _bind_package_provider_reference_environment(
     environment: dict[str, str],
     *,
     environment_name: str,
+    target_name: str,
     runtime_composition: Mapping[str, Any],
 ) -> None:
     """Bind non-runtime interpolation values for an OCI-only build.
@@ -603,7 +611,7 @@ def _bind_package_provider_reference_environment(
     validated = _stackctl.validate_provider_runtime_composition(
         dict(runtime_composition),
         expected_environment=environment_name,
-        expected_target=f"{environment_name}-local",
+        expected_target=target_name,
     )
     endpoint_keys = set(validated["materialKeys"]["endpoint"])
     secret_keys = set(validated["materialKeys"]["secret"])

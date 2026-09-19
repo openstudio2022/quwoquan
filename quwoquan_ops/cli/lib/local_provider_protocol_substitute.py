@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .local_provider_substitute_tls import prepare_local_provider_substitute_tls
 from .provider_endpoint_contract import load_provider_endpoint_environment
+from .runtime_topology_package import is_local_compose_runtime_topology
 
 
 ROLE = "provider-protocol-substitute"
@@ -26,10 +27,10 @@ def prepare_local_provider_protocol_substitute(
     *,
     port: int,
 ) -> LocalProviderProtocolSubstitute:
-    if environment not in {"alpha", "beta", "gamma"}:
-        raise ValueError("Provider protocol substitute is limited to Alpha/Beta/Gamma")
-    if target_name != f"{environment}-local":
-        raise ValueError("Provider protocol substitute target/environment mismatch")
+    if not is_local_compose_runtime_topology(environment, target_name):
+        raise ValueError(
+            "Provider protocol substitute is limited to local compose targets"
+        )
     if not 1 <= int(port) <= 65535:
         raise ValueError("Provider protocol substitute port is invalid")
     tls = prepare_local_provider_substitute_tls(target_name, role=ROLE)
@@ -37,6 +38,7 @@ def prepare_local_provider_protocol_substitute(
     return LocalProviderProtocolSubstitute(
         environment={
             **endpoint_environment,
+            "QWQ_RUNTIME_TARGET": target_name,
             "PROVIDER_SUBSTITUTE_TLS_CERT_FILE": (
                 "/run/secrets/provider-protocol-substitute/server.crt"
             ),

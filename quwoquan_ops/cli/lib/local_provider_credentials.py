@@ -17,6 +17,7 @@ from .external_provider_governance import NONPROD_ENVIRONMENTS, load_and_compile
 from .provider_config import packaged_runtime_bindings
 from .provider_endpoint_contract import load_provider_endpoint_environment
 from .provider_runtime_composition import validate_provider_runtime_composition
+from .runtime_topology_package import is_local_compose_runtime_topology
 
 # Local infrastructure material is owned by its topology materializer.  It is
 # deliberately excluded here so Provider validation does not create a second
@@ -61,12 +62,7 @@ def load_nonprod_provider_environment(
 ) -> dict[str, str]:
     """Return topology-owned substitutes and target-scoped LiveKit secrets."""
 
-    if environment not in NONPROD_ENVIRONMENTS:
-        raise ValueError(
-            "non-production Provider substitutes are only valid for "
-            f"Alpha/Beta/Gamma, got {environment}"
-        )
-    if target_name != f"{environment}-local":
+    if not is_local_compose_runtime_topology(environment, target_name):
         raise ValueError(
             "Provider target/environment mismatch: "
             f"environment={environment} target={target_name}"

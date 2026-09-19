@@ -16,6 +16,7 @@ _SECRET_KEYS = (
     "sms_substitute_operator_token",
     "provider_substitute_operator_token",
     "sms_substitute_capture_key_b64",
+    "collection_query_authority_key_b64",
 )
 _LOCAL_TARGETS = {
     "alpha": "alpha-local",

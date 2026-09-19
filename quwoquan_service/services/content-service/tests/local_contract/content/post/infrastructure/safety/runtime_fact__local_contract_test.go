@@ -398,9 +398,15 @@ func TestProductionRuntimeAuthorityBlocksListenerOnMaterialDrift(t *testing.T) {
 		clear(key)
 		t.Fatal("recreated collection retained listener authority")
 	}
+	t.Setenv("QWQ_RUNTIME_TARGET", "")
 	if _, key, err := safety.LoadRuntimeAuthority(ctx, runtime.Database, "prod", root, "current.json", "fact.json", "secrets/post-safety.key", active); err == nil {
 		clear(key)
 		t.Fatal("nonproduction authorization opened prod listener")
+	}
+	t.Setenv("QWQ_RUNTIME_TARGET", "prod-hosted")
+	if _, key, err := safety.LoadRuntimeAuthority(ctx, runtime.Database, "prod", root, "current.json", "fact.json", "secrets/post-safety.key", active); err == nil {
+		clear(key)
+		t.Fatal("hosted runtime target opened prod listener")
 	}
 	_ = startup
 }

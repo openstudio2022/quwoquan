@@ -21,6 +21,9 @@ from quwoquan_ops.cli.lib.output_paths import deployment_target_path
 
 
 LOCAL_TARGETS = ("alpha-local", "beta-local", "gamma-local")
+# HTTP trust includes prod-sim local rehearsal; Android resolver handoff stays
+# Alpha/Beta/Gamma-only and must not consume this tuple.
+HTTP_TRUST_TARGETS = (*LOCAL_TARGETS, "prod-sim")
 LOOPBACK_ADDRESS = "127.0.0.1"
 
 
@@ -28,11 +31,7 @@ class LocalTargetHandoffError(RuntimeError):
     pass
 
 
-def canonical_hosts(target: str) -> tuple[str, ...]:
-    if target not in LOCAL_TARGETS:
-        raise LocalTargetHandoffError(
-            f"GATE_BLOCK: local resolver handoff is not owned by {target}"
-        )
+def _topology_hosts(target: str) -> tuple[str, ...]:
     resolved_roles = get_target(
         load_environment_topology(), target
     ).get("resolvedUrlRoles") or {}
@@ -52,11 +51,23 @@ def canonical_hosts(target: str) -> tuple[str, ...]:
     return hosts
 
 
+def canonical_hosts(target: str) -> tuple[str, ...]:
+    if target not in LOCAL_TARGETS:
+        raise LocalTargetHandoffError(
+            f"GATE_BLOCK: local resolver handoff is not owned by {target}"
+        )
+    return _topology_hosts(target)
+
+
 def target_for_hostname(hostname: str) -> str | None:
     normalized = str(hostname or "").strip().lower().rstrip(".")
     if not normalized:
         return None
-    matches = [target for target in LOCAL_TARGETS if normalized in canonical_hosts(target)]
+    matches = [
+        target
+        for target in HTTP_TRUST_TARGETS
+        if normalized in _topology_hosts(target)
+    ]
     if len(matches) > 1:
         raise LocalTargetHandoffError(
             f"GATE_BLOCK: canonical hostname has multiple local owners: {normalized}"

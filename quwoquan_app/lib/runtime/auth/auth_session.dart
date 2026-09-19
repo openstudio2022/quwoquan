@@ -289,16 +289,16 @@ final class _IsolatedAuthSessionStore extends AuthSessionStore {
   _IsolatedAuthSessionStore({
     required RehearsalStorageNamespace namespace,
     required VerifiedRehearsalSpace? Function() currentSpace,
-    FlutterSecureStorage? secureStorage,
-    Future<SharedPreferences> Function()? prefsFactory,
+    super.secureStorage,
+    super.prefsFactory,
     RehearsalStorageObserver? observer,
-  }) : super._isolated(
-         namespace,
-         currentSpace,
-         secureStorage,
-         prefsFactory,
-         observer,
-       );
+  }) : super(storageNamespace: namespace.authNamespace) {
+    _configureIsolatedStorage(
+      namespace: namespace,
+      currentSpace: currentSpace,
+      observer: observer,
+    );
+  }
 }
 
 extension AuthSessionStoreIsolation on AuthSessionStore {
@@ -346,18 +346,23 @@ class AuthSessionStore {
     FlutterSecureStorage? secureStorage,
     Future<SharedPreferences> Function()? prefsFactory,
     RehearsalStorageObserver? observer,
-  }) = _IsolatedAuthSessionStore;
+  }) {
+    return _IsolatedAuthSessionStore(
+      namespace: namespace,
+      currentSpace: currentSpace,
+      secureStorage: secureStorage,
+      prefsFactory: prefsFactory,
+      observer: observer,
+    );
+  }
 
-  AuthSessionStore._isolated(
-    RehearsalStorageNamespace namespace,
-    this._currentSpace,
-    FlutterSecureStorage? secureStorage,
-    Future<SharedPreferences> Function()? prefsFactory,
+  void _configureIsolatedStorage({
+    required RehearsalStorageNamespace namespace,
+    required VerifiedRehearsalSpace? Function() currentSpace,
     RehearsalStorageObserver? observer,
-  ) : _storageNamespace = namespace.authNamespace,
-      _secureStorage = secureStorage ?? const FlutterSecureStorage(),
-      _rawPrefsFactory = prefsFactory ?? SharedPreferences.getInstance,
-      _isolatedNamespace = namespace {
+  }) {
+    _currentSpace = currentSpace;
+    _isolatedNamespace = namespace;
     requireCurrentStorage();
     _authObserver = observer?.attach('auth', namespace);
     try {
@@ -370,7 +375,7 @@ class AuthSessionStore {
 
   final String _storageNamespace;
   RehearsalStorageNamespace? _isolatedNamespace;
-  final VerifiedRehearsalSpace? Function()? _currentSpace;
+  VerifiedRehearsalSpace? Function()? _currentSpace;
   bool _disposed = false;
   RehearsalConsumerObserver? _authObserver;
   RehearsalConsumerObserver? _installObserver;

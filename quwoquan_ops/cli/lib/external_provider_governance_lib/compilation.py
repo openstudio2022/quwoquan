@@ -31,6 +31,7 @@ def compile_governance(
     *,
     source_root: Path | None = None,
     environments: tuple[str, ...] = ENVIRONMENTS,
+    target: str | None = None,
 ) -> tuple[dict[str, Any], list[ProviderGovernanceIssue]]:
     source_base = ROOT if source_root is None else Path(source_root).resolve()
     issues = [
@@ -40,6 +41,7 @@ def compile_governance(
             bindings,
             source_root=source_root,
             environments_to_validate=environments,
+            target=target,
         ),
         *conformance_manifest_issues(registry, conformance_manifest),
     ]
@@ -83,7 +85,12 @@ def compile_governance(
             state = str(binding.get("state") or "")
             required = state != "not_required"
             ready = state == "enabled" and bool(adapter_id) and source_path.exists()
-            if env in RELEASE_ADAPTER_ENVIRONMENTS and required and adapter_id:
+            if (
+                env in RELEASE_ADAPTER_ENVIRONMENTS
+                and target != "prod-sim"
+                and required
+                and adapter_id
+            ):
                 ready = ready and not is_prod_forbidden_adapter(adapter_id)
             readiness[env][capability_id] = {
                 "state": state,

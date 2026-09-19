@@ -33,6 +33,7 @@ func TestNewExternalInteractionClientAcceptsOnlyCanonicalNonprodTopology(t *test
 }
 
 func TestNewExternalInteractionClientKeepsProdOnHTTPS(t *testing.T) {
+	t.Setenv("QWQ_RUNTIME_TARGET", "")
 	signer := &rtauth.Signer{}
 	if _, err := userintegration.NewExternalInteractionClient(
 		"https://integration-service.prod",
@@ -49,5 +50,53 @@ func TestNewExternalInteractionClientKeepsProdOnHTTPS(t *testing.T) {
 		signer,
 	); err == nil {
 		t.Fatal("Prod HTTP URL must be rejected")
+	}
+}
+
+func TestNewExternalInteractionClientRejectsProdHostedHTTP(t *testing.T) {
+	t.Setenv("QWQ_RUNTIME_TARGET", "prod-hosted")
+	signer := &rtauth.Signer{}
+	if _, err := userintegration.NewExternalInteractionClient(
+		"https://integration-service.prod",
+		"prod",
+		&http.Client{},
+		signer,
+	); err != nil {
+		t.Fatalf("prod-hosted HTTPS URL must be accepted: %v", err)
+	}
+	if _, err := userintegration.NewExternalInteractionClient(
+		"http://integration-service:18086",
+		"prod",
+		&http.Client{},
+		signer,
+	); err == nil {
+		t.Fatal("prod-hosted HTTP URL must be rejected")
+	}
+}
+
+func TestNewExternalInteractionClientAcceptsProdSimCanonicalHTTP(t *testing.T) {
+	t.Setenv("QWQ_RUNTIME_TARGET", "prod-sim")
+	signer := &rtauth.Signer{}
+	if _, err := userintegration.NewExternalInteractionClient(
+		"http://integration-service:18086",
+		"prod",
+		&http.Client{},
+		signer,
+	); err != nil {
+		t.Fatalf("prod-sim canonical mesh URL must be accepted: %v", err)
+	}
+	for _, baseURL := range []string{
+		"https://integration-service.prod",
+		"https://integration-service:18086",
+		"http://127.0.0.1:18086",
+	} {
+		if _, err := userintegration.NewExternalInteractionClient(
+			baseURL,
+			"prod",
+			&http.Client{},
+			signer,
+		); err == nil {
+			t.Fatalf("prod-sim non-canonical URL must be rejected: %s", baseURL)
+		}
 	}
 }

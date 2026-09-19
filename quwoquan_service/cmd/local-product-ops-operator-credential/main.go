@@ -1,9 +1,9 @@
 // Command local-product-ops-operator-credential emits one short-lived local
-// Product Ops operator JWT for Alpha/Beta/Gamma environment acceptance only.
+// Product Ops operator JWT for Alpha/Beta/Gamma and prod-sim rehearsal.
 //
 // The token is written to captured stdout and must remain in the invoking
-// stackctl process. Prod and every non-local environment require a real RS256
-// OIDC operator and are deliberately rejected here.
+// stackctl process. prod-hosted and every non-local environment require a real
+// RS256 OIDC operator and are deliberately rejected here.
 package main
 
 import (
@@ -18,8 +18,10 @@ import (
 
 func main() {
 	environment := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
-	if environment != "alpha" && environment != "beta" && environment != "gamma" {
-		fail("APP_ENV must be alpha, beta, or gamma")
+	target := strings.TrimSpace(os.Getenv("QWQ_LOCAL_RELEASE_TARGET"))
+	if environment != "alpha" && environment != "beta" && environment != "gamma" &&
+		!(environment == "prod" && target == "prod-sim") {
+		fail("APP_ENV must be alpha, beta, gamma, or prod with QWQ_LOCAL_RELEASE_TARGET=prod-sim")
 	}
 	version, err := strconv.Atoi(strings.TrimSpace(os.Getenv("AUTH_JWT_TOKEN_VERSION")))
 	if err != nil {

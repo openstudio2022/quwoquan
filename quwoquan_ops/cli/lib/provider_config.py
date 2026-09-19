@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from .output_paths import deployment_work_root
 from .provider_endpoint_contract import load_provider_endpoint_environment
+from .runtime_topology_package import is_local_compose_runtime_topology
 from .provider_runtime_composition import (
     validate_provider_runtime_composition,
     validate_provider_runtime_scope,
@@ -104,7 +105,7 @@ def compile_provider_config(
     bindings = packaged_runtime_bindings(resolved_composition)
     endpoint_environment = (
         load_provider_endpoint_environment()
-        if environment in {"alpha", "beta", "gamma"}
+        if is_local_compose_runtime_topology(environment, target)
         else {}
     )
     resolved: dict[str, str] = {}

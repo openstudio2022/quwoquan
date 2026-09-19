@@ -1,0 +1,17 @@
+externalBindings:
+  identity.sms.otp:
+    state: enabled
+    adapter: ext.sms.local_capture
+    endpointRef: local_topology:sms-provider-substitute
+  integration.push.delivery:
+    state: enabled
+    adapter: ext.push.protocol_substitute
+    endpointRef: local_topology:provider-protocol-substitute
+  integration.location.lookup:
+    state: enabled
+    adapter: ext.map.protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute
+  location.poi.search:
+    state: not_required
+  location.route.read:
+    state: not_required

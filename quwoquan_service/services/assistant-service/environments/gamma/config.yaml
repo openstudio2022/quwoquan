@@ -27,17 +27,17 @@ externalBindings:
     endpointRef: service_topology:circle-service
   assistant.model.generation:
     state: enabled
-    adapter: ext.llm.xiaomi_mimo
-    endpointRef: environment_binding:assistant.model
+    adapter: ext.llm.protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute
   assistant.public.search:
     state: enabled
-    adapter: ext.search.duckduckgo_html
-    endpointRef: environment_binding:assistant.search
+    adapter: ext.search.protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute
   assistant.weather.forecast:
     state: enabled
-    adapter: ext.weather.open_meteo
-    endpointRef: environment_binding:assistant.weather
+    adapter: ext.weather.protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute
   assistant.finance.quote:
     state: enabled
-    adapter: ext.finance.yahoo_chart
-    endpointRef: environment_binding:assistant.finance
+    adapter: ext.finance.protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute

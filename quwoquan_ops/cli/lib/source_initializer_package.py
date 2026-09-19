@@ -24,9 +24,16 @@ def digest(raw):
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+def source_initializer_required(environment: str, target: str) -> bool:
+    """Alpha/Beta/Gamma local allocator targets plus prod-sim rehearsal owner."""
+    if target in contract()["targets"] and target == environment + "-local":
+        return True
+    return (environment, target) == ("prod", "prod-sim")
+
+
 def build_source_initializer(shared_root: Path, source_root: Path, environment: str, target: str):
     policy = contract()
-    if target not in policy["targets"] or target != environment+"-local":
+    if not source_initializer_required(environment, target):
         raise ValueError("initializer requires a managed nonproduction target")
     spec = policy["initializer"]
     destination = shared_root / Path(spec["root"]).name
@@ -47,7 +54,12 @@ def build_source_initializer(shared_root: Path, source_root: Path, environment: 
 def load_source_initializer(candidate_root: Path, descriptor, environment: str, target: str):
     policy = contract(); spec = policy["initializer"]
     reference = spec["root"]+"/"+spec["manifest"]
-    if target not in policy["targets"] or target != environment+"-local" or not isinstance(descriptor,dict) or set(descriptor)!={"ref","digest"} or descriptor["ref"]!=reference:
+    if (
+        not source_initializer_required(environment, target)
+        or not isinstance(descriptor, dict)
+        or set(descriptor) != {"ref", "digest"}
+        or descriptor["ref"] != reference
+    ):
         raise ValueError("source initializer descriptor rejected")
     raw = _read_candidate_bytes(candidate_root,reference,label="source initializer manifest")
     if (candidate_root/reference).stat(follow_symlinks=False).st_nlink != 1:

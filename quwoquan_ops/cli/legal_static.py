@@ -60,9 +60,10 @@ PLACEHOLDER_TOKENS = (
     "{{",
     "}}",
 )
-# prod 占位字段策略：`block`（默认）把占位当作阻断；`mark` 只用于 prod-hosted
-# exact dev candidate rehearsal——占位被记录为 placeholderFields 并进入候选/报告，
-# 该 legal-static 包不构成任何法务、登录商用或发布证据。
+# prod 占位字段策略：`block`（默认）把占位当作阻断；`mark` 用于
+# prod-hosted exact-dev rehearsal 以及 prod-sim 本地部署验证——占位被记录为
+# placeholderFields 并进入候选/报告，且该候选 nonPromotable=true。
+# 该 legal-static 包不构成任何法务、登录商用或 ICP 准出证据。
 PLACEHOLDER_POLICY_ENV = "QWQ_LEGAL_STATIC_PLACEHOLDER_POLICY"
 PLACEHOLDER_POLICIES = ("block", "mark")
 PLACEHOLDER_ISSUE_SUFFIX = " contains placeholder text"
@@ -73,6 +74,22 @@ def _placeholder_policy(explicit: str = "") -> str:
     if policy not in PLACEHOLDER_POLICIES:
         raise ValueError(f"legal-static placeholder policy is invalid: {policy}")
     return policy
+
+
+def placeholder_policy_for_package(
+    *,
+    env_name: str,
+    target_name: str,
+    rehearsal_material: bool,
+) -> str:
+    """prod-sim 本地包与 hosted rehearsal 才 mark 占位；不要求 local-build。"""
+    if rehearsal_material or (env_name == "prod" and target_name == "prod-sim"):
+        return "mark"
+    return "block"
+
+
+def _non_promotable_for_placeholder_policy(policy: str) -> bool:
+    return policy == "mark"
 
 
 def _split_placeholder_issues(issues: list[str]) -> tuple[list[str], list[str]]:
@@ -406,6 +423,7 @@ def build_package(
             ),
             "placeholderPolicy": policy,
             "placeholderFields": placeholder_fields,
+            "nonPromotable": _non_promotable_for_placeholder_policy(policy),
             "generatedAt": utc_now(),
         }
         write_json(package_dir / "release_metadata.json", release_metadata)
@@ -430,6 +448,7 @@ def build_package(
         "documents": docs_payload,
         "placeholderPolicy": policy,
         "placeholderFields": placeholder_fields,
+        "nonPromotable": _non_promotable_for_placeholder_policy(policy),
         "exitCode": 0,
     }
 
@@ -653,6 +672,7 @@ def main() -> int:
             "issues": issues,
             "placeholderPolicy": policy,
             "placeholderFields": placeholder_fields,
+            "nonPromotable": _non_promotable_for_placeholder_policy(policy),
             "exitCode": 0 if not issues else 1,
         }
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))

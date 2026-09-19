@@ -15,24 +15,38 @@ import (
 	integrationconfig "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig"
 )
 
-func TestPushConfigAcceptsProtocolSubstituteOnlyOnNonprod(t *testing.T) {
-	cfg := validBaseConfigForPushTest()
-	cfg.Integration.ExternalInteraction.Push.Enabled = true
-	cfg.Integration.ExternalInteraction.Push.Mode = "protocol_substitute"
-	cfg.Integration.ExternalInteraction.Push.TimeoutMs = 1000
-	cfg.Integration.ExternalInteraction.Push.Endpoint =
+func TestPushConfigAcceptsProtocolSubstituteOnlyForExactLocalTarget(t *testing.T) {
+	base := validBaseConfigForPushTest()
+	base.Integration.ExternalInteraction.Push.Enabled = true
+	base.Integration.ExternalInteraction.Push.Mode = "protocol_substitute"
+	base.Integration.ExternalInteraction.Push.TimeoutMs = 1000
+	base.Integration.ExternalInteraction.Push.Endpoint =
 		"https://provider-protocol-substitute:18089/push/send"
-	for _, appEnv := range []string{"alpha", "beta", "gamma"} {
-		cfg.Environment = appEnv
+	for _, identity := range []struct{ environment, target string }{
+		{"alpha", "alpha-local"},
+		{"beta", "beta-local"},
+		{"gamma", "gamma-local"},
+		{"prod", "prod-sim"},
+	} {
+		cfg := base
+		cfg.Environment = identity.environment
+		t.Setenv("QWQ_RUNTIME_TARGET", identity.target)
 		if err := integrationconfig.Validate(cfg); err != nil {
-			t.Fatalf("%s protocol_substitute must be accepted: %v", appEnv, err)
+			t.Fatalf("%s/%s protocol_substitute must be accepted: %v", identity.environment, identity.target, err)
 		}
 	}
-	for _, appEnv := range []string{"prod"} {
-		cfg.Environment = appEnv
+	for _, identity := range []struct{ environment, target string }{
+		{"prod", "prod-hosted"},
+		{"prod", ""},
+		{"prod", "gamma-local"},
+		{"gamma", "prod-sim"},
+	} {
+		cfg := base
+		cfg.Environment = identity.environment
+		t.Setenv("QWQ_RUNTIME_TARGET", identity.target)
 		if err := integrationconfig.Validate(cfg); err == nil ||
-			!strings.Contains(err.Error(), "only permitted in alpha/beta/gamma") {
-			t.Fatalf("%s protocol_substitute must fail closed: %v", appEnv, err)
+			!strings.Contains(err.Error(), "runtime identity invalid") {
+			t.Fatalf("%s/%s protocol_substitute must fail closed: %v", identity.environment, identity.target, err)
 		}
 	}
 }

@@ -45,9 +45,11 @@
 <a id="req-004"></a>
 ### REQ-004 非生产 Provider 九格与 Prod hosted 正式厂商证据独立计算
 
-- Alpha/Beta/Gamma 九格验证环境选中的受管 **protocol substitute/local infrastructure** Adapter 健康、Port 同源 assertion 与逐级增强的第一方黑盒结果；required 数据集不接受 App/UI Mock、运行时 fallback 或未经 Binding 的 override。
-- Prod deploy gate 要求当前版本 **真实厂商** Adapter 证据；缺凭据、远端租户或审批时保持 blocked。
-- Prod smoke 不反写非生产九格；Alpha/Beta/Gamma nonprod receipt 不得提升 Prod 目标厂商 adapter_ready，也不得替代 Prod hosted rollout receipt。
+- 每个 target 的 required Capability 集合必须从当前候选的 generated target Binding 中动态枚举；门禁不得维护固定 Capability 清单或数量。Alpha/Beta/Gamma 九格验证环境选中的受管 **protocol substitute/local infrastructure** Adapter 健康、Port 同源 assertion 与逐级增强的第一方黑盒结果；required 数据集不接受 App/UI Mock、运行时 fallback 或未经 Binding 的 override。
+- `prod-sim` 仍是 `environment=prod` 的本机 package-bound Provider rehearsal target，不形成第五环境。候选在 package/candidate 阶段封存 target-scoped、Port 对等 protocol substitute/local infrastructure Binding 并运行完整第一方服务；无论法务占位是否消除都固定 `nonPromotable=true`。
+- `prod-sim` 每项 required Capability 都必须由其 owner 的第一方 Service（由 integration-service 所有时即由 Integration 黑盒入口）发起至少一次非零调用，并同源绑定 Provider invocation、可观察 effect/readback、cleanup 与 logs/traces/metrics。其证据 scope 只能为 `local_rehearsal` / `local_functional`，不得置任何 Prod `adapter_ready` / `capability_ready` 为 true，也不得关闭真实厂商 receipt 缺口。零调用、required skip、旧 receipt 或只探测 `/healthz` 均失败。
+- `prod-hosted` deploy gate 只接受当前版本真实厂商 Adapter、真实凭据和正式 hosted rollout/health/switch/callback-drain/last-good/rollback receipt；fixture、protocol substitute 与 local infrastructure workload 必须拒绝，缺凭据、远端租户或审批时保持 blocked。
+- Prod smoke 不反写非生产九格；Alpha/Beta/Gamma nonprod receipt 与 `prod-sim` local rehearsal 均不得提升 Prod 目标厂商 adapter_ready，也不得替代 Prod hosted rollout receipt。
 
 <a id="req-005"></a>
 ### REQ-005 optional Provider 不可用时只允许结构化关闭并提供用户指引
@@ -91,9 +93,13 @@
 <a id="gwt-004"></a>
 ### GWT-004 非生产 Provider 九格与 Prod hosted 正式厂商证据分层
 
-- GIVEN 某 Capability 被产品声明为 Prod required。
-- WHEN 执行 prod-hosted gray_initial deploy gate。
-- THEN Alpha/Beta/Gamma 当前版本 protocol substitute/local infrastructure Adapter 的九格证据必须齐备，且 Prod 当前版本正式厂商 Adapter 的 hosted rollout 证据必须独立齐备才允许继续；任一层证据不得替代另一层。
+- GIVEN 当前候选同时具有 `environment=prod,target=prod-sim` 与 `environment=prod,target=prod-hosted` 的 generated target Binding。
+- WHEN 执行 `prod-sim` Provider rehearsal gate。
+- THEN 门禁从 `prod-sim` Binding 动态枚举全部 `required=true` Capability，并逐项验证第一方 Service/Integration 黑盒调用与同一 attempt 的 Provider invocation/effect/readback/cleanup/logs/traces/metrics；expected invocation count 为零、required skip、旧 receipt、重复补格或仅 `/healthz` 成功时均 fail-closed。
+- AND 通过结果只写 `readinessScope=local_rehearsal|local_functional`、`releasePromotionClaimed=false` 与 `nonPromotable=true`；legal-static 是否仍含占位不得改变 `nonPromotable`，也不得产出 Prod Adapter/Capability ready 事实。
+- WHEN 执行 `prod-hosted` gray_initial deploy gate。
+- THEN Alpha/Beta/Gamma 当前版本 protocol substitute/local infrastructure Adapter 的九格证据必须齐备，且从 `prod-hosted` Binding 动态枚举的每个 required Capability 都具有当前版本真实厂商 Adapter、真实凭据与正式 hosted rollout/health/switch/callback-drain/last-good/rollback receipt 才允许继续。
+- AND `prod-sim`/nonprod evidence、fixture/local workload、零调用、required skip、旧 receipt 或只有 `/healthz` 的结果均不得满足该 hosted receipt；任一层证据不得替代另一层。
 
 ## 6. 依赖
 
@@ -131,10 +137,10 @@
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-004"></a>
-### OPEN-004 Alpha/Beta/Gamma 九格与 Prod hosted 观测是 deploy 前置
+### OPEN-004 本地演练与 Prod hosted readiness scope 隔离
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：缺 Alpha/Beta/Gamma protocol substitute/local infrastructure 九格、Prod 凭据/设备/远端租户或审批时保持 blocked；Prod smoke 不反写非生产九格，nonprod receipt 不冒充 Prod hosted rollout 证据。
+- 影响或价值：本项只跟踪门禁对 `local_rehearsal` / `local_functional` 与 Prod readiness 的 scope 隔离、动态 Binding 枚举和 fail-closed 消费；真实厂商材料与 hosted receipt 的执行缺口继续唯一归属 [`provider-adapter-conformance-suite` OPEN-002](../provider-adapter-conformance-suite/spec.md#open-002)，不得在此复制第二份缺口。
 - 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效

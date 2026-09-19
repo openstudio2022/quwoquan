@@ -146,6 +146,98 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
             self.assertEqual(result["exitCode"], 2)
             self.assertIn("Alpha-only", result["details"][0])
 
+    def test_graphql_local_signing_uses_prod_sim_and_existing_local_targets(
+        self,
+    ) -> None:
+        signing_env = {
+            name: ""
+            for name in (
+                stackctl.GRAPHQL_READ_SIGNING_KEY_ID_ENV,
+                stackctl.GRAPHQL_READ_SIGNING_PRIVATE_KEY_FILE_ENV,
+                stackctl.GRAPHQL_READ_TRUSTED_PUBLIC_KEYS_FILE_ENV,
+            )
+        }
+        for environment, target in (
+            ("alpha", "alpha-local"),
+            ("beta", "beta-local"),
+            ("gamma", "gamma-local"),
+            ("prod", "prod-sim"),
+        ):
+            with self.subTest(environment=environment, target=target):
+                expected = object()
+                with (
+                    mock.patch.dict(os.environ, signing_env, clear=False),
+                    mock.patch.object(
+                        stackctl,
+                        "prepare_local_graphql_read_registry_signing",
+                        return_value=expected,
+                    ) as local_signer,
+                ):
+                    actual = stackctl._resolve_graphql_read_signing_for_local_target(
+                        environment, target
+                    )
+                self.assertIs(actual, expected)
+                local_signer.assert_called_once_with(stackctl.ROOT, environment, target)
+
+    def test_graphql_prod_hosted_requires_explicit_signing_material(self) -> None:
+        signing_env = {
+            name: ""
+            for name in (
+                stackctl.GRAPHQL_READ_SIGNING_KEY_ID_ENV,
+                stackctl.GRAPHQL_READ_SIGNING_PRIVATE_KEY_FILE_ENV,
+                stackctl.GRAPHQL_READ_TRUSTED_PUBLIC_KEYS_FILE_ENV,
+            )
+        }
+        with (
+            mock.patch.dict(os.environ, signing_env, clear=False),
+            mock.patch.object(
+                stackctl, "prepare_local_graphql_read_registry_signing"
+            ) as local_signer,
+            self.assertRaisesRegex(
+                ValueError,
+                "^Prod GraphQL registry package requires explicit signing material$",
+            ),
+        ):
+            stackctl._resolve_graphql_read_signing_for_local_target("prod", "prod-hosted")
+        local_signer.assert_not_called()
+
+    def test_graphql_prod_sim_explicit_signing_failures_do_not_fallback(
+        self,
+    ) -> None:
+        all_env = {
+            stackctl.GRAPHQL_READ_SIGNING_KEY_ID_ENV: "configured-key",
+            stackctl.GRAPHQL_READ_SIGNING_PRIVATE_KEY_FILE_ENV: "/invalid/private.pem",
+            stackctl.GRAPHQL_READ_TRUSTED_PUBLIC_KEYS_FILE_ENV: "/invalid/keyring.json",
+        }
+        partial_env = {
+            stackctl.GRAPHQL_READ_SIGNING_KEY_ID_ENV: "configured-key",
+            stackctl.GRAPHQL_READ_SIGNING_PRIVATE_KEY_FILE_ENV: "",
+            stackctl.GRAPHQL_READ_TRUSTED_PUBLIC_KEYS_FILE_ENV: "",
+        }
+        for name, environment in (
+            ("partial", partial_env),
+            ("invalid", all_env),
+        ):
+            with self.subTest(name=name):
+                with (
+                    mock.patch.dict(os.environ, environment, clear=False),
+                    mock.patch.object(
+                        stackctl,
+                        "resolve_graphql_read_signing_material",
+                        side_effect=ValueError(f"{name} explicit signing material"),
+                    ),
+                    mock.patch.object(
+                        stackctl, "prepare_local_graphql_read_registry_signing"
+                    ) as local_signer,
+                    self.assertRaisesRegex(
+                        ValueError, f"^{name} explicit signing material$"
+                    ),
+                ):
+                    stackctl._resolve_graphql_read_signing_for_local_target(
+                        "prod", "prod-sim"
+                    )
+                local_signer.assert_not_called()
+
     def test_internal_candidate_schemas_are_canonical_and_unversioned(self) -> None:
         self.assertEqual(
             deployment_candidate_manifest.CANDIDATE_MANIFEST_SCHEMA,

@@ -24,6 +24,7 @@ from .constants import (
     CAPABILITY_PATTERN,
     ENVIRONMENTS,
     LAYERS,
+    PROD_SIM_REHEARSAL_LAYER,
     PUBLIC_ASSERTION_IDS,
     RELEASE_ENVIRONMENT,
     SOURCE_DYNAMIC_EXECUTOR_RE,
@@ -106,10 +107,26 @@ def load_test_source(
         "target",
         "networkBoundary",
     }
-    if set(metadata) != required:
+    allowed = required | {"prodSimFirstParty"}
+    if not required.issubset(metadata) or set(metadata) - allowed:
         raise ValueError(
-            f"{relative} provider_conformance header fields must be exactly {sorted(required)}"
+            f"{relative} provider_conformance header fields must be {sorted(required)} "
+            "with optional prodSimFirstParty"
         )
+    prod_sim_first_party = metadata.get("prodSimFirstParty")
+    if prod_sim_first_party is not None:
+        if (
+            not isinstance(prod_sim_first_party, Mapping)
+            or set(prod_sim_first_party) != {"service"}
+            or not re.fullmatch(
+                r"[a-z][a-z0-9-]*", str(prod_sim_first_party.get("service") or "")
+            )
+            or "QWQ_PROVIDER_CONFORMANCE_PROD_SIM_RESULT_PATH" not in raw
+        ):
+            raise ValueError(
+                f"{relative} prodSimFirstParty must declare one first-party service "
+                "and write the prod-sim result path"
+            )
     layer = metadata.get("testLayer")
     if layer not in LAYERS:
         raise ValueError(f"{relative} declares an unsupported testLayer")
@@ -194,6 +211,11 @@ def load_test_source(
         "testSource": relative,
         "testSourceDigest": _digest_bytes(raw.encode("utf-8")),
         "acceptanceRefs": _source_spec_refs(raw, location=relative),
+        **(
+            {"prodSimFirstParty": dict(prod_sim_first_party)}
+            if isinstance(prod_sim_first_party, Mapping)
+            else {}
+        ),
     }
 
 
@@ -227,7 +249,11 @@ def discover_test_sources() -> tuple[dict[tuple[str, str, str], dict[str, Any]],
             key = (
                 str(source["capabilityId"]),
                 str(source["adapterId"]),
-                str(source["testLayer"]),
+                (
+                    PROD_SIM_REHEARSAL_LAYER
+                    if source.get("prodSimFirstParty")
+                    else str(source["testLayer"])
+                ),
             )
             if key in sources:
                 issues.append(

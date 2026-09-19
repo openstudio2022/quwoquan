@@ -51,6 +51,23 @@ def load_layered_runtime_config_or_die(
         merged = _load_yaml_dict(path)
 
     # env vars are final override layer
+    for scene in ("general", "rec"):
+        prefix = f"RECOMMENDATION_REDIS_{scene.upper()}_"
+        redis_root = merged.setdefault("redis", {})
+        if not isinstance(redis_root, dict):
+            raise RuntimeError("runtime redis config must be a mapping")
+        scene_cfg = redis_root.setdefault(scene, {})
+        if not isinstance(scene_cfg, dict):
+            raise RuntimeError(f"runtime redis.{scene} config must be a mapping")
+        addr = _env(prefix + "ADDR")
+        if addr:
+            scene_cfg["addr"] = addr
+        mode = _env(prefix + "MODE")
+        if mode:
+            scene_cfg["mode"] = mode
+        tls = _env(prefix + "TLS")
+        if tls:
+            scene_cfg["tls"] = tls.lower() in {"1", "true", "yes"}
     if _env("REC_SERVICE_HTTP_ADDR"):
         merged.setdefault("service", {}).setdefault("http", {})["addr"] = _env(
             "REC_SERVICE_HTTP_ADDR"

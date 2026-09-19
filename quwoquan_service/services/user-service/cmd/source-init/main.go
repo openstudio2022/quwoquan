@@ -19,10 +19,33 @@ func main() {
 		os.Exit(1)
 	}
 }
-func run(ctx context.Context) error {
-	env := os.Getenv("QWQ_SOURCE_INIT_ENV")
-	if (env != "alpha" && env != "beta" && env != "gamma") || os.Getenv("QWQ_SOURCE_INIT_DSN") == "" {
+func acceptedSourceInitIdentity(env, target, dsn string) error {
+	if dsn == "" {
 		return fmt.Errorf("managed nonproduction inputs required")
+	}
+	switch env {
+	case "alpha", "beta", "gamma":
+		if target != "" && target != env+"-local" {
+			return fmt.Errorf("managed nonproduction inputs required")
+		}
+		return nil
+	case "prod":
+		if target != "prod-sim" {
+			return fmt.Errorf("managed nonproduction inputs required")
+		}
+		return nil
+	default:
+		return fmt.Errorf("managed nonproduction inputs required")
+	}
+}
+
+func run(ctx context.Context) error {
+	if err := acceptedSourceInitIdentity(
+		os.Getenv("QWQ_SOURCE_INIT_ENV"),
+		os.Getenv("QWQ_SOURCE_INIT_TARGET"),
+		os.Getenv("QWQ_SOURCE_INIT_DSN"),
+	); err != nil {
+		return err
 	}
 	pool, err := pgxpool.New(ctx, os.Getenv("QWQ_SOURCE_INIT_DSN"))
 	if err != nil {

@@ -16,6 +16,7 @@ import yaml
 
 
 ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
+TARGETS = ("alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted")
 SECRET_REF_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 CROSS_SERVICE_DEFAULTS_FILENAME = "config-defaults.yaml"
 
@@ -154,7 +155,92 @@ def canonical_dump(payload: dict[str, Any]) -> bytes:
     ).encode("utf-8")
 
 
-def render_workload(root: Path, environment: str, workload: str, output_path: Path) -> Path:
+def validate_target_scope(environment: str, target: str) -> None:
+    expected = f"{environment}-local" if environment != "prod" else None
+    valid = target == expected if expected is not None else target in {"prod-sim", "prod-hosted"}
+    if not valid:
+        raise ValueError(
+            "runtime config target/environment mismatch: "
+            f"environment={environment} target={target}"
+        )
+
+
+def load_target_external_bindings(
+    owner: Path,
+    environment: str,
+    target: str,
+    environment_path: Path,
+    environment_config: dict[str, Any],
+) -> dict[str, Any]:
+    raw_expected = environment_config.get("externalBindings", {}) or {}
+    if not isinstance(raw_expected, dict):
+        raise ValueError(f"{environment_path}: externalBindings must be a mapping")
+    if (environment, target) != ("prod", "prod-sim"):
+        return raw_expected
+
+    profile_path = (
+        owner / "environments" / environment / "targets" / target / "external_bindings.yaml"
+    )
+    if not raw_expected:
+        if profile_path.exists():
+            raise ValueError(
+                f"{profile_path}: target profile is forbidden for a service "
+                "without locally owned external capabilities"
+            )
+        return {}
+    if not profile_path.is_file():
+        raise ValueError(f"{profile_path}: missing target external Provider Binding profile")
+    profile = load_yaml(profile_path)
+    if set(profile) != {"externalBindings"}:
+        raise ValueError(f"{profile_path}: target profile must contain only externalBindings")
+    raw_profile = profile.get("externalBindings")
+    if not isinstance(raw_profile, dict):
+        raise ValueError(f"{profile_path}: externalBindings must be a mapping")
+    missing = sorted(set(raw_expected) - set(raw_profile))
+    extra = sorted(set(raw_profile) - set(raw_expected))
+    if missing or extra:
+        raise ValueError(
+            f"{profile_path}: must declare exactly locally owned external capabilities; "
+            f"missing={missing}, extra={extra}"
+        )
+    return raw_profile
+
+
+def load_target_config_overrides(
+    owner: Path,
+    environment: str,
+    target: str,
+) -> dict[str, Any]:
+    # prod-hosted keeps environments/prod/config.yaml. prod-sim may overlay
+    # standalone local addresses without changing hosted cluster defaults.
+    if (environment, target) != ("prod", "prod-sim"):
+        return {}
+    profile_path = (
+        owner / "environments" / environment / "targets" / target / "config.yaml"
+    )
+    if not profile_path.is_file():
+        return {}
+    profile = load_yaml(profile_path)
+    if set(profile) != {"overrides"}:
+        raise ValueError(f"{profile_path}: target config must contain only overrides")
+    raw_overrides = profile.get("overrides")
+    if not isinstance(raw_overrides, dict):
+        raise ValueError(f"{profile_path}: overrides must be a mapping")
+    return raw_overrides
+
+
+def render_workload(
+    root: Path,
+    environment: str,
+    workload: str,
+    output_path: Path,
+    *,
+    target: str | None = None,
+) -> Path:
+    selected_target = target or (
+        f"{environment}-local" if environment != "prod" else "prod-hosted"
+    )
+    validate_target_scope(environment, selected_target)
     owner = service_root(root, workload)
     schema_path = owner / "config/schema.yaml"
     environment_path = owner / f"environments/{environment}/config.yaml"
@@ -177,9 +263,18 @@ def render_workload(root: Path, environment: str, workload: str, output_path: Pa
             raise ValueError(f"{schema_path}: duplicate config key {key}")
         definitions[key] = entry
 
-    overrides = environment_config.get("overrides", {}) or {}
+    overrides = dict(environment_config.get("overrides", {}) or {})
+    overrides.update(
+        load_target_config_overrides(owner, environment, selected_target)
+    )
     secret_refs = environment_config.get("secretRefs", {}) or {}
-    external_bindings = environment_config.get("externalBindings", {}) or {}
+    external_bindings = load_target_external_bindings(
+        owner,
+        environment,
+        selected_target,
+        environment_path,
+        environment_config,
+    )
     for name, value in (
         ("overrides", overrides),
         ("secretRefs", secret_refs),
@@ -266,13 +361,22 @@ def render_workload(root: Path, environment: str, workload: str, output_path: Pa
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", required=True, choices=ENVIRONMENTS)
+    parser.add_argument("--target", required=True, choices=TARGETS)
     parser.add_argument("--workload", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
     output_path = Path(args.output).expanduser()
     if not output_path.is_absolute():
         output_path = repository_root() / output_path
-    print(render_workload(repository_root(), args.env, args.workload, output_path))
+    print(
+        render_workload(
+            repository_root(),
+            args.env,
+            args.workload,
+            output_path,
+            target=args.target,
+        )
+    )
     return 0
 
 

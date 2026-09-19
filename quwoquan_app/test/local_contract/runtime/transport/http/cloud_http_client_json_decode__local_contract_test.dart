@@ -681,22 +681,19 @@ void main() {
       );
     });
 
-    test('object cards reject recursive or unknown fields before mapping', () {
+    test('feed envelope 拒绝退役的 objectCards 字段', () {
       expect(
-        () => _decodeFeedEnvelope(
-          items: <Object?>[_feedItemWire()],
-          objectCards: <Object?>[
-            <String, Object?>{
-              ..._feedObjectCardWire(),
-              'nested': <String, Object?>{'unbounded': true},
-            },
-          ],
-        ),
+        () => decodeContentDiscoveryFeedPageSlice(<String, Object?>{
+          'items': <Object?>[_feedItemWire()],
+          'objectCards': <Object?>[_feedObjectCardWire()],
+          'outcome': 'content',
+          'feedRequestId': 'fr_local_contract',
+        }),
         throwsA(
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('unknown field'),
+            contains('unknown fields: objectCards'),
           ),
         ),
       );
@@ -805,16 +802,15 @@ void main() {
   });
 }
 
-/// canonical feed 信封的最小合法 wire：generated decoder 现在要求 `outcome`、
-/// `feedRequestId` 与 `objectCards` 全部到位，缺一即 fail-closed。
+/// canonical feed 信封的最小合法 wire：decoder 要求 `outcome` 与
+/// `feedRequestId`；items 必须是 envelope+post 投影。退役的 objectCards
+/// 不得出现在信封上。
 ContentDiscoveryFeedPageSlice _decodeFeedEnvelope({
   List<Object?> items = const <Object?>[],
-  List<Object?> objectCards = const <Object?>[],
   Map<String, Object?> extra = const <String, Object?>{},
 }) {
   return decodeContentDiscoveryFeedPageSlice(<String, Object?>{
     'items': items,
-    'objectCards': objectCards,
     'outcome': items.isEmpty ? 'empty' : 'content',
     if (items.isEmpty) 'emptyReason': 'no_eligible_content',
     'feedRequestId': 'fr_local_contract',
@@ -824,11 +820,20 @@ ContentDiscoveryFeedPageSlice _decodeFeedEnvelope({
 
 Map<String, Object?> _feedItemWire({String postId = 'post-1'}) =>
     <String, Object?>{
-      'postId': postId,
-      'contentType': 'image_text',
-      'likeCount': 0,
-      'commentCount': 0,
-      'shareCount': 0,
+      'envelope': <String, Object?>{
+        'objectKind': 'post',
+        'contentType': 'image',
+        'presentationRecipe': 'cover_media_card',
+        'openSurface': 'home_feed',
+        'post': <String, Object?>{'postId': postId},
+      },
+      'post': <String, Object?>{
+        'postId': postId,
+        'contentType': 'image',
+        'likeCount': 0,
+        'commentCount': 0,
+        'shareCount': 0,
+      },
     };
 
 Map<String, Object?> _feedObjectCardWire({String objectId = 'homepage-1'}) =>

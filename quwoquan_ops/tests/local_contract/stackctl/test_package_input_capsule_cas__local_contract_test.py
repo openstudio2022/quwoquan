@@ -217,72 +217,207 @@ class PackageDependencyCapsuleReuseContractTest(unittest.TestCase):
         (capsule / "manifest.json").write_text("{}\n", encoding="utf-8")
         return capsule
 
-    def test_same_active_manifests_select_completed_capsule_despite_source_change(self) -> None:
+    def _frozen_donor_capsule_manifest(
+        self, records: list[dict[str, object]]
+    ) -> dict[str, object]:
+        return {
+            "schema": package_reuse.PACKAGE_INPUT_CAPSULE_SCHEMA,
+            "baselineId": "sha256:" + "a" * 64,
+            "sourceRevision": "b" * 40,
+            "workspaceStatusDigest": "sha256:" + "c" * 64,
+            "deploymentInputRoots": ["quwoquan_app"],
+            "deploymentInputDigest": "sha256:" + "d" * 64,
+            "deploymentInputFileCount": len(records),
+            "dependencyPlatforms": ["android", "ios"],
+            "entries": records,
+        }
+
+    def _frozen_donor_candidate(
+        self, capsule: dict[str, object]
+    ) -> dict[str, object]:
+        digest = "sha256:" + "e" * 64
+        return {
+            "schema": "stackctl-deployment-candidate",
+            "candidateType": "runtime-full",
+            "environment": "prod",
+            "target": "prod-sim",
+            "baselineId": capsule["baselineId"],
+            "sourceRevision": capsule["sourceRevision"],
+            "workspaceDigest": capsule["deploymentInputDigest"],
+            "workspaceStatusDigest": capsule["workspaceStatusDigest"],
+            "packageDigest": digest,
+            "buildInputDigest": digest,
+            "imageDigest": digest,
+            "configurationDigest": digest,
+            "runtimeSchemaVersion": "environment-runtime-package",
+            "runtimeConfigDigest": digest,
+            "environmentRuntimeDigest": digest,
+            "dataPlaneBinding": {},
+            "observabilityLogSink": {"kind": "managed-external"},
+            "providerRuntime": {},
+            "release": {},
+            "contractGraphDigest": digest,
+            "graphqlReadRegistry": {},
+            "appLaunchBundle": None,
+            "specRefs": [],
+            "environmentArtifact": {},
+        }
+
+    def _frozen_donor_fingerprint(
+        self, candidate: dict[str, object], capsule: dict[str, object]
+    ) -> dict[str, object]:
+        return {
+            "schema": package_reuse.FINGERPRINT_SCHEMA,
+            "environment": candidate["environment"],
+            "target": candidate["target"],
+            "candidateType": candidate["candidateType"],
+            "includeServices": True,
+            "servicePackages": ["content-service"],
+            "reportRef": "frozen-report",
+            "baselineId": candidate["baselineId"],
+            "sourceRevision": candidate["sourceRevision"],
+            "workspaceStatusDigest": candidate["workspaceStatusDigest"],
+            "deploymentInputs": {
+                "roots": capsule["deploymentInputRoots"],
+                "capsuleRef": package_reuse.PACKAGE_INPUT_CAPSULE_DIRECTORY,
+                "digest": capsule["deploymentInputDigest"],
+                "fileCount": capsule["deploymentInputFileCount"],
+            },
+            "packageContent": {
+                "digest": candidate["packageDigest"],
+                "fileCount": 1,
+            },
+            "contractGraphDigest": candidate["contractGraphDigest"],
+            "graphqlReadRegistry": candidate["graphqlReadRegistry"],
+            "appLaunchBundle": candidate["appLaunchBundle"],
+        }
+
+    def _frozen_donor_integrity_patches(
+        self,
+        *,
+        candidate: dict[str, object],
+        fingerprint: dict[str, object],
+        capsule: dict[str, object],
+        capsule_verifier: object | None = None,
+    ) -> tuple[object, ...]:
+        verifier = (
+            mock.patch.object(
+                package_reuse,
+                "verify_package_input_capsule",
+                return_value=capsule,
+            )
+            if capsule_verifier is None
+            else mock.patch.object(
+                package_reuse,
+                "verify_package_input_capsule",
+                side_effect=capsule_verifier,
+            )
+        )
+        return (
+            mock.patch(
+                "quwoquan_ops.cli.lib.deployment_candidate_manifest.candidate_staging._validate_candidate_payload_tree"
+            ),
+            mock.patch(
+                "quwoquan_ops.cli.lib.deployment_candidate_manifest.candidate_fs._read_candidate_object",
+                side_effect=[candidate, fingerprint],
+            ),
+            verifier,
+            mock.patch.object(
+                package_reuse,
+                "package_content_digest",
+                return_value=(candidate["packageDigest"], 1),
+            ),
+        )
+
+    def test_frozen_donor_reuse_ignores_current_contract_drift(self) -> None:
         old = self._completed_capsule()
         records = [
             {"logicalPath": logical, "capsulePath": f"dependencies/{index}.json"}
             for index, logical in enumerate(self.expected)
         ]
-        with (
-            mock.patch.object(
-                input_capsule,
-                "_read_capsule_manifest",
-                return_value={
-                    "baselineId": "sha256:" + "a" * 64,
-                    "entries": records,
-                },
-            ),
-            mock.patch.object(
-                input_capsule,
-                "_capsule_dependency_payloads",
-                return_value=self.expected,
-            ),
-            mock.patch.object(
-                package_reuse,
-                "validate_candidate_manifest",
-                return_value={"baselineId": "sha256:" + "a" * 64},
-            ) as validate_candidate,
-        ):
+        capsule = self._frozen_donor_capsule_manifest(records)
+        candidate = self._frozen_donor_candidate(capsule)
+        fingerprint = self._frozen_donor_fingerprint(candidate, capsule)
+        current_validator = mock.patch.object(
+            package_reuse,
+            "validate_candidate_manifest",
+            side_effect=ValueError("observability target Binding closure invalid"),
+        )
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(
+                mock.patch.object(
+                    input_capsule,
+                    "_read_capsule_manifest",
+                    return_value=capsule,
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(
+                    input_capsule,
+                    "_capsule_dependency_payloads",
+                    return_value=self.expected,
+                )
+            )
+            for patch in self._frozen_donor_integrity_patches(
+                candidate=candidate, fingerprint=fingerprint, capsule=capsule
+            ):
+                stack.enter_context(patch)
+            current_validator_mock = stack.enter_context(current_validator)
             selected = input_capsule._matching_dependency_capsules(
                 capsule_root=self.current, expected=self.expected
             )
 
         self.assertEqual(selected, [(old, records)])
-        validate_candidate.assert_called_once()
+        current_validator_mock.assert_not_called()
 
-    def test_partial_candidate_manifest_is_rejected(self) -> None:
+    def test_identity_matching_donor_tamper_is_typed_fail_closed(self) -> None:
         self._completed_capsule()
         records = [
             {"logicalPath": logical, "capsulePath": f"dependencies/{index}.json"}
             for index, logical in enumerate(self.expected)
         ]
-        with (
-            mock.patch.object(
-                input_capsule,
-                "_read_capsule_manifest",
-                return_value={
-                    "baselineId": "sha256:" + "a" * 64,
-                    "entries": records,
-                },
-            ),
-            mock.patch.object(
-                input_capsule,
-                "_capsule_dependency_payloads",
-                return_value=self.expected,
-            ),
-            mock.patch.object(
-                package_reuse,
-                "validate_candidate_manifest",
-                side_effect=ValueError("deployment candidate manifest fields mismatch"),
-            ),
-            self.assertRaisesRegex(
-                input_capsule.PackageDependencyDonorIntegrityError,
-                "dependency_donor_integrity",
-            ),
-        ):
-            input_capsule._matching_dependency_capsules(
-                capsule_root=self.current, expected=self.expected
-            )
+        capsule = self._frozen_donor_capsule_manifest(records)
+        for tamper in ("capsule", "fingerprint", "baseline"):
+            with self.subTest(tamper=tamper):
+                candidate = self._frozen_donor_candidate(capsule)
+                fingerprint = self._frozen_donor_fingerprint(candidate, capsule)
+                capsule_verifier = None
+                if tamper == "capsule":
+                    capsule_verifier = ValueError("package input capsule entry CAS mismatch")
+                elif tamper == "fingerprint":
+                    fingerprint["baselineId"] = "sha256:" + "f" * 64
+                else:
+                    candidate["baselineId"] = "sha256:" + "f" * 64
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(
+                        mock.patch.object(
+                            input_capsule,
+                            "_read_capsule_manifest",
+                            return_value=capsule,
+                        )
+                    )
+                    stack.enter_context(
+                        mock.patch.object(
+                            input_capsule,
+                            "_capsule_dependency_payloads",
+                            return_value=self.expected,
+                        )
+                    )
+                    for patch in self._frozen_donor_integrity_patches(
+                        candidate=candidate,
+                        fingerprint=fingerprint,
+                        capsule=capsule,
+                        capsule_verifier=capsule_verifier,
+                    ):
+                        stack.enter_context(patch)
+                    with self.assertRaisesRegex(
+                        input_capsule.PackageDependencyDonorIntegrityError,
+                        "dependency_donor_integrity",
+                    ):
+                        input_capsule._matching_dependency_capsules(
+                            capsule_root=self.current, expected=self.expected
+                        )
+
 
     def test_cocoapods_identity_drift_rejected_before_donor_selection(self) -> None:
         manifests = dict(self.expected)
@@ -390,11 +525,6 @@ class PackageDependencyCapsuleReuseContractTest(unittest.TestCase):
                 input_capsule,
                 "_capsule_dependency_payloads",
                 return_value={"dependency:dart-pub-cache-v2": {"schema": "stale"}},
-            ),
-            mock.patch.object(
-                package_reuse,
-                "validate_candidate_manifest",
-                return_value={"baselineId": "sha256:" + "a" * 64},
             ),
         ):
             selected = input_capsule._matching_dependency_capsules(

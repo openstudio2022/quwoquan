@@ -17,6 +17,9 @@ from quwoquan_ops.cli.lib.external_provider_governance import (
     is_prod_forbidden_adapter,
     load_and_compile,
 )
+from quwoquan_ops.cli.lib.provider_runtime_composition import (
+    compile_provider_runtime_composition,
+)
 
 
 FORBIDDEN = ("provider-protocol-substitute", "sms-provider-substitute")
@@ -26,13 +29,32 @@ def main() -> int:
     issues: list[str] = []
     compiled, governance_issues = load_and_compile()
     issues.extend(issue.render() for issue in governance_issues)
-    for capability_id, binding in (
-        compiled.get("selectedBindings", {}).get("prod", {}).items()
-    ):
-        adapter_id = str(binding.get("adapter_id") or "")
-        if is_prod_forbidden_adapter(adapter_id):
+    # Prod has two exact targets.  Hosted must remain substitute-free; the
+    # service-local prod-sim profile is the only allowed rehearsal closure.
+    try:
+        prod_hosted = compile_provider_runtime_composition(
+            environment="prod", target="prod-hosted", source_root=ROOT
+        )
+        prod_sim = compile_provider_runtime_composition(
+            environment="prod", target="prod-sim", source_root=ROOT
+        )
+    except (RuntimeError, ValueError) as exc:
+        issues.append(f"prod target Provider composition is invalid: {exc}")
+    else:
+        if prod_hosted["workloads"]:
+            issues.append("prod-hosted composition reaches local substitute workloads")
+        for binding in prod_hosted["bindings"]:
+            adapter_id = str(binding.get("adapterId") or "")
+            if is_prod_forbidden_adapter(adapter_id):
+                issues.append(
+                    "prod-hosted binding reaches substitute: "
+                    f"{binding['capabilityId']}={adapter_id}"
+                )
+        sim_roles = {str(item.get("role") or "") for item in prod_sim["workloads"]}
+        if sim_roles != set(FORBIDDEN):
             issues.append(
-                f"prod binding reaches substitute: {capability_id}={adapter_id}"
+                "prod-sim composition substitute closure is invalid: "
+                + ",".join(sorted(sim_roles))
             )
 
     for config in (
@@ -42,6 +64,15 @@ def main() -> int:
         for token in FORBIDDEN:
             if token in source:
                 issues.append(f"{config.relative_to(ROOT)} contains {token}")
+
+    for profile in (
+        ROOT / "quwoquan_service" / "services"
+    ).glob("*/environments/prod/targets/*/external_bindings.yaml"):
+        source = profile.read_text(encoding="utf-8")
+        if any(token in source for token in FORBIDDEN) and profile.parent.name != "prod-sim":
+            issues.append(
+                f"{profile.relative_to(ROOT)} reaches substitute outside prod-sim"
+            )
 
     prod_renderer = (
         ROOT / "quwoquan_ops" / "cli" / "prod" / "render_prod_plane_stack.py"
@@ -92,8 +123,9 @@ def main() -> int:
         return 1
     print("[verify_provider_substitute_prod_purity] OK")
     print(
-        "Prod selected bindings, renderer, first-party module graphs and "
-        "Compose roots exclude substitute implementation/TLS material."
+        "Prod-hosted composition, renderer, first-party module graphs and "
+        "Compose roots exclude substitutes; only service-local prod-sim profiles "
+        "compile the two non-promotable substitute workloads."
     )
     return 0
 

@@ -128,6 +128,19 @@ def _launch_prod_sim_stack(
             ),
             cmd,
         )
+    if not args.skip_app and not launch_bundle:
+        return (
+            subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout="",
+                stderr=(
+                    "GATE_BLOCK: prod-sim candidate App launch bundle is missing; "
+                    "use --skip-app for services-only verification"
+                ),
+            ),
+            cmd,
+        )
     readiness_value = str(
         getattr(args, "data_release_readiness", "")
         or os.environ.get("DATA_RELEASE_READINESS_RECEIPT", "")

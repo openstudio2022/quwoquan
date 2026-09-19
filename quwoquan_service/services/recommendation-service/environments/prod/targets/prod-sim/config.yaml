@@ -1,0 +1,5 @@
+overrides:
+  sys.recommendation-service.redis.general.addr: redis:6379
+  sys.recommendation-service.redis.rec.addr: redis:6379
+  sys.recommendation-service.redis.rec.mode: standalone
+  sys.recommendation-service.redis.rec.tls: false

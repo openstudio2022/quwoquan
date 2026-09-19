@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -271,7 +272,7 @@ func inspectRuntimeFact(ctx context.Context, db *mongo.Database, files *RuntimeF
 	if fact.Binding != expected || fact.RecordedAt.IsZero() {
 		return fact, errRuntimeMaterial
 	}
-	if expected.Target != expected.Environment+"-local" || (expected.Environment != "alpha" && expected.Environment != "beta" && expected.Environment != "gamma") {
+	if !acceptedPostSafetyRuntimeIdentity(expected.Environment, expected.Target) {
 		return fact, errRuntimeMaterial
 	}
 	if !validDigest(expected.CandidateDigest) || !validDigest(expected.DataPlaneBindingDigest) || expected.ResourceRef == "" || expected.RuntimeGeneration == "" {
@@ -376,9 +377,20 @@ type RuntimeAuthority struct {
 	account     rtauth.AccountSecurityAuthority
 }
 
+func acceptedPostSafetyRuntimeIdentity(environment, target string) bool {
+	switch environment {
+	case "alpha", "beta", "gamma":
+		return target == environment+"-local"
+	case "prod":
+		return target == "prod-sim"
+	default:
+		return false
+	}
+}
+
 // LoadRuntimeAuthority在任何Post索引或listener暴露前执行完整首次验证，并返回
-// Manager所需的独立HMAC key。Prod只能消费正式writer材料；当前非生产
-// authorization合同明确不包含prod，因此此reader对prod保持fail-closed。
+// Manager所需的独立HMAC key。prod-hosted只能消费正式writer材料；environment=prod
+// 对本进程 fail-closed，除非部署注入 QWQ_RUNTIME_TARGET=prod-sim。
 // OpenRuntimeManager 是 API 与 release importer 唯一的 Post Safety 装配入口。
 // 两者必须传入各自进程已经解析出的 canonical Mongo database 与账号安全
 // authority；本函数只消费环境 owner 发布的完整 startup/current/recovery/HMAC
@@ -400,7 +412,7 @@ func OpenRuntimeManager(ctx context.Context, db *mongo.Database, environment, ro
 }
 
 func LoadRuntimeAuthority(ctx context.Context, db *mongo.Database, environment, root, currentRef, factRef, keyRef string, account rtauth.AccountSecurityAuthority) (*RuntimeAuthority, []byte, error) {
-	if db == nil || environment == "prod" {
+	if db == nil || (environment == "prod" && os.Getenv("QWQ_RUNTIME_TARGET") != "prod-sim") {
 		return nil, nil, app.ErrPostSafetyNotReady
 	}
 	files, err := OpenRuntimeFiles(root)

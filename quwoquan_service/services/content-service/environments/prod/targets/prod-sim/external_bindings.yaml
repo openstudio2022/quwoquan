@@ -1,0 +1,9 @@
+externalBindings:
+  content.embedding.generation:
+    state: enabled
+    adapter: ext.embed.protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute
+  runtime.object.storage:
+    state: enabled
+    adapter: infra.minio.object_storage
+    endpointRef: environment_binding:content.object_storage

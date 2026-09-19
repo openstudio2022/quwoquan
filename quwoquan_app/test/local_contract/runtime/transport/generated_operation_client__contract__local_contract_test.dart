@@ -188,21 +188,21 @@ void main() {
       response: <String, Object?>{
         'items': <Object?>[
           <String, Object?>{
-            'postId': 'post-1',
-            'contentType': 'article',
-            'title': '西湖行记',
-            'likeCount': 0,
-            'commentCount': 0,
-            'shareCount': 0,
-          },
-        ],
-        'objectCards': <Object?>[
-          <String, Object?>{
-            'objectKind': 'entity',
-            'objectId': 'west-lake',
-            'title': '西湖',
-            'tagRefs': <String>[],
-            'anchorIndex': 0,
+            'envelope': <String, Object?>{
+              'objectKind': 'post',
+              'contentType': 'article',
+              'presentationRecipe': 'article_excerpt_card',
+              'openSurface': 'home_feed',
+              'post': <String, Object?>{'postId': 'post-1'},
+            },
+            'post': <String, Object?>{
+              'postId': 'post-1',
+              'contentType': 'article',
+              'title': '西湖行记',
+              'likeCount': 0,
+              'commentCount': 0,
+              'shareCount': 0,
+            },
           },
         ],
         'nextCursor': 'cursor-2',
@@ -238,8 +238,7 @@ void main() {
       'limit': '20',
     });
     expect(executor.headers['X-Blocked-Keywords'], '%E5%B9%BF%E5%91%8A');
-    expect(result.items.single.postId, 'post-1');
-    expect(result.objectCards, hasLength(1));
+    expect(result.items.single.post?.postId, 'post-1');
     expect(result.nextCursor, 'cursor-2');
     expect(result.previousCursor, 'cursor-0');
     expect(result.paginationExpiresAt, DateTime.utc(2026, 7, 29, 12));
@@ -350,13 +349,22 @@ void main() {
       response: <String, Object?>{
         'items': <Object?>[
           <String, Object?>{
-            'postId': 'post-1',
-            'contentType': 'image',
-            'authorId': 'author-1',
-            'mediaUrls': <String>['https://example.test/p.jpg'],
-            'likeCount': 0,
-            'commentCount': 0,
-            'shareCount': 0,
+            'envelope': <String, Object?>{
+              'objectKind': 'post',
+              'contentType': 'image',
+              'presentationRecipe': 'cover_media_card',
+              'openSurface': 'profile_works',
+              'post': <String, Object?>{'postId': 'post-1'},
+            },
+            'post': <String, Object?>{
+              'postId': 'post-1',
+              'contentType': 'image',
+              'authorId': 'author-1',
+              'mediaUrls': <String>['https://example.test/p.jpg'],
+              'likeCount': 0,
+              'commentCount': 0,
+              'shareCount': 0,
+            },
           },
         ],
         'nextCursor': 'cursor-2',
@@ -368,7 +376,6 @@ void main() {
     final result = await client.contentPostListUserPosts(
       ContentAuthorPostsQuery(
         personaId: 'author-1',
-        identity: 'work',
         type: 'image',
         visibility: 'public',
         limit: 10,
@@ -385,13 +392,11 @@ void main() {
       AppCloudOperationIds.contentPostListUserPosts,
     );
     expect(executor.pathParameters, <String, String>{'personaId': 'author-1'});
-    expect(executor.queryParameters, <String, String>{
-      'identity': 'work',
-      'type': 'image',
-      'visibility': 'public',
-      'limit': '10',
-    });
-    expect(result.items.single.postId, 'post-1');
+    expect(executor.queryParameters.containsKey('identity'), isFalse);
+    expect(executor.queryParameters['type'], 'image');
+    expect(executor.queryParameters['visibility'], 'public');
+    expect(executor.queryParameters['limit'], '10');
+    expect(result.items.single.post?.postId, 'post-1');
     expect(result.nextCursor, 'cursor-2');
     expect(result.hasMore, isTrue);
   });

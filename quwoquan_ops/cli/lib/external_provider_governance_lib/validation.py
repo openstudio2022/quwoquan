@@ -235,6 +235,7 @@ def binding_issues(
     *,
     source_root: Path | None = None,
     environments_to_validate: tuple[str, ...] = ENVIRONMENTS,
+    target: str | None = None,
 ) -> list[ProviderGovernanceIssue]:
     issues: list[ProviderGovernanceIssue] = []
     environments = bindings.get("environments")
@@ -421,8 +422,10 @@ def binding_issues(
                     not ENV_KEY_RE.fullmatch(str(value)) for value in secret_refs
                 ):
                     issues.append(ProviderGovernanceIssue(item_location, "secretRefs must contain environment key names"))
-                if env in RELEASE_ADAPTER_ENVIRONMENTS and is_prod_forbidden_adapter(
-                    adapter_id
+                if (
+                    env in RELEASE_ADAPTER_ENVIRONMENTS
+                    and target != "prod-sim"
+                    and is_prod_forbidden_adapter(adapter_id)
                 ):
                     issues.append(
                         ProviderGovernanceIssue(

@@ -59,6 +59,7 @@ def _exact_active_release(
 def _load_dev_session_public_web_package(
     *,
     environment: str,
+    target: str,
     package_root: Path,
     public_origin: str,
 ) -> tuple[dict[str, str], Path]:
@@ -72,7 +73,12 @@ def _load_dev_session_public_web_package(
     )
 
     try:
-        expected_origin = _trusted_web_origin(environment, public_origin)
+        expected_origin = _trusted_web_origin(
+            repo_root=Path(__file__).resolve().parents[3],
+            environment=environment,
+            target=target,
+            raw=public_origin,
+        )
     except WebOfficialReleaseError as exc:
         raise ValueError(
             f"mutable test_live public Web origin is invalid: {exc}"
@@ -180,6 +186,7 @@ def _resolve_dev_session_public_web_package(
     public_bases = target_contract.get("publicBases") or {}
     return _load_dev_session_public_web_package(
         environment=environment,
+        target=target,
         package_root=_stackctl.deployment_target_path(
             target,
             "standalone-packages",

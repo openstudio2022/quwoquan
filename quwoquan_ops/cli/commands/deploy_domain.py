@@ -47,6 +47,8 @@ def _command_deploy_service_environment(args: argparse.Namespace) -> dict[str, A
         args.service,
         "--env",
         env_name,
+        "--target",
+        target_name,
     ]
     package_result = _stackctl.run(package_command, env={"QWQ_DEPLOY_TARGET": target_name})
     if package_result.returncode != 0:

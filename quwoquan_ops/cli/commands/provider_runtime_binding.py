@@ -374,6 +374,7 @@ def _provider_runtime_launch_environment(
     )
     runtime_digest = str(validated["runtimeCompositionDigest"])
     projected = {
+        "QWQ_RUNTIME_TARGET": target_name,
         "QWQ_PROVIDER_RUNTIME_DIGEST": runtime_digest,
         "QWQ_PROVIDER_RUNTIME_COMPOSE_FILES": "",
         "QWQ_PROVIDER_RUNTIME_COMPOSE_DIGESTS": "",
@@ -381,12 +382,18 @@ def _provider_runtime_launch_environment(
     }
     if workload not in {"full", "content-release", "content-commercial"}:
         raise ValueError(f"unsupported Provider runtime workload: {workload}")
-    if environment_name == "prod":
+    if (environment_name, target_name) == ("prod", "prod-hosted"):
         if validated["workloads"]:
             raise ValueError("Prod Provider runtime cannot start local workloads")
+        if provider_runtime.get("workloads") or provider_runtime.get("images"):
+            raise ValueError("Prod-hosted Provider artifacts must be empty")
         return projected
-    if environment_name not in {"alpha", "beta", "gamma"}:
-        raise ValueError("local Provider runtime environment is unsupported")
+    if not (
+        (environment_name, target_name) == ("prod", "prod-sim")
+        or environment_name in {"alpha", "beta", "gamma"}
+        and target_name == f"{environment_name}-local"
+    ):
+        raise ValueError("local Provider runtime target identity is unsupported")
 
     artifacts = provider_runtime.get("workloads")
     if not isinstance(artifacts, list):

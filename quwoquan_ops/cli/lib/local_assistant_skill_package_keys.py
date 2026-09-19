@@ -68,6 +68,19 @@ def prepare_rehearsal_assistant_skill_package_keys(
     )
 
 
+def prepare_prod_sim_assistant_skill_package_keys(
+    *,
+    openssl: OpenSSL3Executable | None = None,
+) -> LocalAssistantSkillPackageKeys:
+    """prod-sim 本地部署验证用 Skill 包信任材料；不进 prod-hosted 正式目录。"""
+
+    return _prepare_keys(
+        "prod-sim",
+        REHEARSAL_ROLE,
+        openssl=openssl or resolve_openssl3(),
+    )
+
+
 def _prepare_keys(
     target_name: str,
     role: str,

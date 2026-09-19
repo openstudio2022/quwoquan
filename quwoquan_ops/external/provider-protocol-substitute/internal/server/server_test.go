@@ -49,6 +49,7 @@ func canonicalTestSHA256(payload string) string {
 func TestServerRejectsProdAndInvalidRuntimeIdentity(t *testing.T) {
 	valid := Config{
 		Environment:              "alpha",
+		Target:                   "alpha-local",
 		ConfigurationDigest:      testConfigurationDigest,
 		RuntimeCompositionDigest: testRuntimeDigest,
 		OperatorToken:            testOperatorToken,
@@ -57,7 +58,9 @@ func TestServerRejectsProdAndInvalidRuntimeIdentity(t *testing.T) {
 		name   string
 		mutate func(*Config)
 	}{
-		{name: "prod", mutate: func(cfg *Config) { cfg.Environment = "prod" }},
+		{name: "prod hosted", mutate: func(cfg *Config) { cfg.Environment, cfg.Target = "prod", "prod-hosted" }},
+		{name: "prod empty target", mutate: func(cfg *Config) { cfg.Environment, cfg.Target = "prod", "" }},
+		{name: "target mismatch", mutate: func(cfg *Config) { cfg.Environment, cfg.Target = "gamma", "alpha-local" }},
 		{name: "short operator", mutate: func(cfg *Config) { cfg.OperatorToken = "short" }},
 		{name: "missing config digest", mutate: func(cfg *Config) { cfg.ConfigurationDigest = "" }},
 		{name: "non canonical config digest", mutate: func(cfg *Config) { cfg.ConfigurationDigest = "sha256:abc" }},
@@ -72,6 +75,137 @@ func TestServerRejectsProdAndInvalidRuntimeIdentity(t *testing.T) {
 				t.Fatal("invalid substitute configuration must fail closed")
 			}
 		})
+	}
+}
+
+func TestServerAcceptsProdSimIdentity(t *testing.T) {
+	server, err := New(Config{
+		Environment:              "prod",
+		Target:                   "prod-sim",
+		ConfigurationDigest:      testConfigurationDigest,
+		RuntimeCompositionDigest: testRuntimeDigest,
+		OperatorToken:            testOperatorToken,
+	})
+	if err != nil {
+		t.Fatalf("prod-sim substitute must be accepted: %v", err)
+	}
+	health := perform(server.Handler(), http.MethodGet, "/healthz", nil, nil)
+	if health.Code != http.StatusOK || !strings.Contains(health.Body.String(), `"target":"prod-sim"`) || !strings.Contains(health.Body.String(), `"nonPromotable":true`) {
+		t.Fatalf("prod-sim health readback=%d %s", health.Code, health.Body.String())
+	}
+}
+
+func TestModelResponseSelectsRehearsalSkillAndTool(t *testing.T) {
+	skill := modelResponse(modelCompletionRequest{Messages: []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}{
+		{Role: "system", Content: "技能选择器"},
+		{Role: "user", Content: "贵州茅台当前报价"},
+	}})
+	if !strings.Contains(skill, `"skillId":"finance_consumer"`) {
+		t.Fatalf("finance skill selector=%s", skill)
+	}
+	next := modelResponse(modelCompletionRequest{Messages: []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}{
+		{Role: "system", Content: `输出唯一 JSON：nextAction。当前工具目录：[{"name":"finance_quote","description":"行情","inputSchema":{"properties":{"symbols":{"items":[]}}}}]`},
+		{Role: "user", Content: "贵州茅台当前报价"},
+	}})
+	if !strings.Contains(next, `"nextAction":"tool_call"`) ||
+		!strings.Contains(next, `"toolName":"finance_quote"`) ||
+		!strings.Contains(next, "600519.SS") {
+		t.Fatalf("finance nextAction=%s", next)
+	}
+	weather := modelResponse(modelCompletionRequest{Messages: []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}{
+		{Role: "system", Content: "技能选择器"},
+		{Role: "user", Content: "杭州明天天气"},
+	}})
+	if !strings.Contains(weather, `"skillId":"weather"`) {
+		t.Fatalf("weather skill selector=%s", weather)
+	}
+	wrapped := modelResponse(modelCompletionRequest{Messages: []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}{
+		{Role: "system", Content: "技能选择器"},
+		{Role: "user", Content: "Select one skillId\n- finance_consumer: 理财分析、基金/股票/保险对比\n- weather: 天气\n- knowledge_general: 百科\n用户问题：搜索趣我圈公开资料"},
+	}})
+	if !strings.Contains(wrapped, `"skillId":"knowledge_general"`) {
+		t.Fatalf("wrapped search skill selector=%s", wrapped)
+	}
+	hello := modelResponse(modelCompletionRequest{Messages: []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}{
+		{Role: "system", Content: "技能选择器"},
+		{Role: "user", Content: "Select one skillId\n- finance_consumer: 基金/股票\n用户问题：用一句话介绍你自己"},
+	}})
+	if !strings.Contains(hello, `"skillId":"daily_assistant"`) {
+		t.Fatalf("hello skill selector=%s", hello)
+	}
+	catalogFirst := modelResponse(modelCompletionRequest{Messages: []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}{
+		{Role: "system", Content: `输出唯一 JSON：nextAction。当前工具目录：[{"name":"finance_quote"}]`},
+		{Role: "user", Content: "请继续核验"},
+	}})
+	if !strings.Contains(catalogFirst, `"toolName":"finance_quote"`) {
+		t.Fatalf("catalog-first nextAction=%s", catalogFirst)
+	}
+	presentation := modelResponse(modelCompletionRequest{Messages: []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}{
+		{Role: "system", Content: `只输出唯一 JSON：{"candidateId":"..."}`},
+		{Role: "user", Content: `{"candidates":[{"candidateId":"chart.primary"}]}`},
+	}})
+	if presentation != `{"candidateId":"chart.primary"}` {
+		t.Fatalf("presentation selector=%s", presentation)
+	}
+}
+
+func TestWriteModelCompletionEchoesModelReceipt(t *testing.T) {
+	server, _ := newTestServer(t)
+	handler := server.Handler()
+	response := perform(
+		handler,
+		http.MethodPost,
+		"/v1/chat/completions",
+		strings.NewReader(`{"model":"rehearsal-balanced","messages":[{"role":"user","content":"hello"}]}`),
+		nil,
+	)
+	if response.Code != http.StatusOK {
+		t.Fatalf("complete=%d %s", response.Code, response.Body.String())
+	}
+	var decoded struct {
+		Model   string `json:"model"`
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage *struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Model != "rehearsal-balanced" ||
+		decoded.Usage == nil ||
+		decoded.Usage.TotalTokens <= 0 ||
+		decoded.Usage.TotalTokens < decoded.Usage.PromptTokens+decoded.Usage.CompletionTokens ||
+		len(decoded.Choices) == 0 ||
+		!strings.Contains(decoded.Choices[0].Message.Content, "隔离协议替代链路") {
+		t.Fatalf("receipt=%s", response.Body.String())
 	}
 }
 
@@ -440,7 +574,7 @@ func TestInvocationLedgerContainsOnlyDigestsAndCleanupReceipt(t *testing.T) {
 		30,
 		3,
 	))
-	requestSecret := "secret-carrier-token-13800138000"
+	requestSecret := "secret-carrier-token-plus8613800000000"
 	traceSecret := "00-secret-trace-value-01"
 	headers := http.Header{
 		"Content-Type": []string{"application/json"},
@@ -450,7 +584,7 @@ func TestInvocationLedgerContainsOnlyDigestsAndCleanupReceipt(t *testing.T) {
 	faulted := perform(
 		handler,
 		http.MethodPost,
-		"/carrier/resolve?phone=13800138000",
+		"/carrier/resolve?phone=+8613800000000",
 		strings.NewReader(`{"token":"`+requestSecret+`"}`),
 		headers,
 	)
@@ -468,7 +602,7 @@ func TestInvocationLedgerContainsOnlyDigestsAndCleanupReceipt(t *testing.T) {
 	for _, forbidden := range []string{
 		requestSecret,
 		traceSecret,
-		"13800138000",
+		"+8613800000000",
 		"user@example.com",
 		testOperatorToken,
 	} {
@@ -507,6 +641,7 @@ func newTestServer(t *testing.T) (*Server, *testClock) {
 	clock := newTestClock()
 	server, err := newServer(Config{
 		Environment:              "alpha",
+		Target:                   "alpha-local",
 		ConfigurationDigest:      testConfigurationDigest,
 		RuntimeCompositionDigest: testRuntimeDigest,
 		OperatorToken:            testOperatorToken,

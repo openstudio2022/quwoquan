@@ -140,6 +140,9 @@ from quwoquan_ops.cli.lib.experiment_policy_activation import (
     activate_search_experiment_policy_via_published_port,
     activate_test_live_experiment_policies,
 )
+from quwoquan_ops.cli.lib.prod_sim_assistant_policy_publication import (
+    ProdSimAssistantPolicyPublicationError, publish_prod_sim_assistant_policy,
+)
 from quwoquan_ops.cli.lib.local_environment_auth import (
     LocalAcceptanceSession, LocalEnvironmentHTTPError, close_test_data_acceptance_actor,
     load_local_environment_auth, mint_local_filter_catalog_service_token,
@@ -159,7 +162,8 @@ from quwoquan_ops.cli.lib.local_environment_object_storage import (
 )
 from quwoquan_ops.cli.lib.product_telemetry_log_sink import load_product_telemetry_log_sink
 from quwoquan_ops.cli.lib.public_domain_tls import (
-    PublicDomainTlsError, issue_certificate, load_policy as load_public_domain_policy,
+    PublicDomainTlsError, ensure_local_compose_runtime_tls, issue_certificate,
+    load_policy as load_public_domain_policy,
     root_certificate_path, tls_profile, verify_certificate,
 )
 from quwoquan_ops.cli.lib.local_target_handoff import (
@@ -637,8 +641,10 @@ from quwoquan_ops.cli.commands.dev_session_public_web import (
 )
 from quwoquan_ops.cli.commands.matrix_domain import command_matrix
 from quwoquan_ops.cli.commands.provider_conformance_domain import (
-    _command_provider_conformance_unlocked, _provider_conformance, _provider_conformance_runner,
-    _provider_conformance_runtime_environment, command_provider_conformance,
+    _command_prod_sim_provider_rehearsal, _command_provider_conformance_unlocked,
+    _prod_sim_provider_rehearsal_environment, _provider_conformance,
+    _provider_conformance_runner, _provider_conformance_runtime_environment,
+    command_provider_conformance,
 )
 from quwoquan_ops.cli.commands.deploy_prod_finalize import _deploy_prod_hosted_finalize
 from quwoquan_ops.cli.commands.deploy_release_inputs import (
@@ -921,7 +927,7 @@ def _resolve_graphql_read_signing_for_local_target(
         )
         if any(str(os.environ.get(name) or "").strip() for name in explicit):
             raise
-        if environment == "prod":
+        if environment == "prod" and target != "prod-sim":
             raise ValueError(
                 "Prod GraphQL registry package requires explicit signing material"
             )

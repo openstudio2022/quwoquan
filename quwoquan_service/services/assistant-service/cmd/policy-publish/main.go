@@ -33,6 +33,8 @@ type options struct {
 	ConfigRoot         string
 	ConfigVersion      string
 	PolicyResourceRoot string
+	ReleaseArtifactRef string
+	RolloutArtifactRef string
 	Timeout            time.Duration
 }
 
@@ -70,6 +72,8 @@ func parseOptions(
 	configRoot := flags.String("config-root", strings.TrimSpace(getenv("CONFIG_ROOT")), "runtime config root")
 	configVersion := flags.String("config-version", strings.TrimSpace(getenv("CONFIG_VERSION")), "runtime config version")
 	resourceRoot := flags.String("resource-root", strings.TrimSpace(getenv("ASSISTANT_POLICY_RESOURCE_ROOT")), "immutable policy resource root")
+	releaseRef := flags.String("release-ref", "", "optional policy release artifact ref override")
+	rolloutRef := flags.String("rollout-ref", "", "optional policy rollout artifact ref override")
 	timeoutSeconds := flags.Int("timeout-seconds", 60, "publication timeout")
 	if err := flags.Parse(args); err != nil {
 		return options{}, err
@@ -87,11 +91,18 @@ func parseOptions(
 		*timeoutSeconds <= 0 {
 		return options{}, fmt.Errorf("config root, policy resource root, and positive timeout are required")
 	}
+	normalizedReleaseRef := strings.TrimSpace(*releaseRef)
+	normalizedRolloutRef := strings.TrimSpace(*rolloutRef)
+	if (normalizedReleaseRef == "") != (normalizedRolloutRef == "") {
+		return options{}, fmt.Errorf("release and rollout artifact overrides must be supplied together")
+	}
 	return options{
 		Environment:        strings.TrimSpace(*environment),
 		ConfigRoot:         strings.TrimSpace(*configRoot),
 		ConfigVersion:      strings.TrimSpace(*configVersion),
 		PolicyResourceRoot: strings.TrimSpace(*resourceRoot),
+		ReleaseArtifactRef: normalizedReleaseRef,
+		RolloutArtifactRef: normalizedRolloutRef,
 		Timeout:            time.Duration(*timeoutSeconds) * time.Second,
 	}, nil
 }
@@ -103,8 +114,12 @@ func run(parent context.Context, opts options, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	releaseRef := strings.TrimSpace(cfg.PolicyPublication.ReleaseArtifactRef)
-	rolloutRef := strings.TrimSpace(cfg.PolicyPublication.RolloutArtifactRef)
+	releaseRef := strings.TrimSpace(opts.ReleaseArtifactRef)
+	rolloutRef := strings.TrimSpace(opts.RolloutArtifactRef)
+	if releaseRef == "" && rolloutRef == "" {
+		releaseRef = strings.TrimSpace(cfg.PolicyPublication.ReleaseArtifactRef)
+		rolloutRef = strings.TrimSpace(cfg.PolicyPublication.RolloutArtifactRef)
+	}
 	if releaseRef == "" || rolloutRef == "" {
 		return fmt.Errorf("policy publication artifact references are required in runtime config")
 	}

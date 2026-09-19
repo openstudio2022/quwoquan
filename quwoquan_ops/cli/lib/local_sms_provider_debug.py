@@ -37,9 +37,15 @@ def read_latest_debug_otp(
     protected capture endpoint until the OTP appears or the budget expires.
     """
 
-    if environment not in {"alpha", "beta", "gamma"}:
-        raise ValueError("protected Debug OTP read is limited to Alpha/Beta/Gamma")
-    if target_name != f"{environment}-local":
+    if environment in {"alpha", "beta", "gamma"}:
+        expected_target = f"{environment}-local"
+    elif environment == "prod":
+        expected_target = "prod-sim"
+    else:
+        raise ValueError(
+            "protected Debug OTP read is limited to Alpha/Beta/Gamma and prod-sim"
+        )
+    if target_name != expected_target:
         raise ValueError("protected Debug OTP target/environment mismatch")
     if re.fullmatch(r"\+[1-9][0-9]{7,14}", recipient) is None:
         raise ValueError("protected Debug OTP recipient must be canonical E.164")

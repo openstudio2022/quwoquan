@@ -20,7 +20,7 @@ from typing import Any, BinaryIO
 SCHEMA = "qwq.startup-health-failure-evidence.v1"
 MAX_BODY_BYTES = 65_536
 SHA256_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
-TARGET_PATTERN = re.compile(r"(?:alpha|beta|gamma)-local")
+TARGET_PATTERN = re.compile(r"(?:(?:alpha|beta|gamma)-local|prod-sim)")
 
 
 class StartupHealthFailureEvidenceError(ValueError):

@@ -679,8 +679,10 @@ def _run_environment_integration_probe(
             else:
                 os.environ["SSL_CERT_FILE"] = previous_ssl_cert_file
     probe_env: dict[str, str] = {}
-    if target_name in {"alpha-local", "beta-local", "gamma-local"}:
+    if target_name in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
         probe_env["SSL_CERT_FILE"] = str(_stackctl.root_certificate_path(target_name))
+        probe_env["REQUESTS_CA_BUNDLE"] = probe_env["SSL_CERT_FILE"]
+        probe_env["CURL_CA_BUNDLE"] = probe_env["SSL_CERT_FILE"]
     if token:
         probe_env["TEST_AUTH_TOKEN"] = token
         if env_name == "gamma":

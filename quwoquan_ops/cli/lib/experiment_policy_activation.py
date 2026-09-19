@@ -371,6 +371,8 @@ def activate_search_experiment_policy_via_published_port(
 
 
 def _require_nonprod_target(environment: str, target: str) -> None:
+    if (environment, target) == ("prod", "prod-sim"):
+        return
     if _NONPROD_TARGETS.get(environment) != target:
         raise ExperimentPolicyActivationError(
             "experiment policy activation is restricted to Alpha/Beta/Gamma local targets"

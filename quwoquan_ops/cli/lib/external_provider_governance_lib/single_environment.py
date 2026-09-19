@@ -37,6 +37,7 @@ def compile_single_environment_bindings(
     registry = load_registry(source_root=root)
     environment_scope = load_environment_bindings(
         environment,
+        target=target,
         source_root=root,
     )
     compiled, issues = compile_governance(
@@ -48,6 +49,7 @@ def compile_single_environment_bindings(
         load_conformance_manifest(source_root=root),
         source_root=root,
         environments=(environment,),
+        target=target,
     )
     if issues:
         raise RuntimeError("; ".join(issue.render() for issue in issues))
@@ -86,6 +88,7 @@ def compile_single_environment_bindings(
         source = render_single_environment_go_bindings(
             environment_roots,
             environment=environment,
+            target=target,
             descriptor_owner=owner,
             descriptor_root_id=root_id,
         )

@@ -42,11 +42,10 @@ def prepare_local_integration_service_mtls(
 ) -> LocalIntegrationServiceMTLS:
     """Issue or reuse target-isolated client PEMs for integration-service mTLS."""
 
-    if environment not in {"alpha", "beta", "gamma"}:
-        raise ValueError(
-            "integration-service mTLS bootstrap is limited to Alpha/Beta/Gamma"
-        )
-    if target_name != f"{environment}-local":
+    expected_target = (
+        "prod-sim" if environment == "prod" else f"{environment}-local"
+    )
+    if environment not in {"alpha", "beta", "gamma", "prod"} or target_name != expected_target:
         raise ValueError(
             "integration-service mTLS target/environment mismatch: "
             f"environment={environment} target={target_name}"

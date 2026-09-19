@@ -49,15 +49,25 @@ def _service_roots(source_root: Path | None = None) -> list[Path]:
     )
 
 
-@lru_cache(maxsize=32)
-def load_environment_bindings(
+def _load_environment_bindings(
     environment: str,
     *,
+    target: str | None,
     source_root: Path | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """只读取请求环境，供 candidate-scoped compiler 使用。"""
     if environment not in ENVIRONMENTS:
         raise ValueError(f"unsupported Provider environment: {environment}")
+    if target is not None:
+        expected_targets = (
+            {f"{environment}-local"}
+            if environment != "prod"
+            else {"prod-sim", "prod-hosted"}
+        )
+        if target not in expected_targets:
+            raise ValueError(
+                "Provider target/environment mismatch: "
+                f"environment={environment} target={target}"
+            )
     service_roots = (
         _entry._service_roots()
         if source_root is None
@@ -67,13 +77,71 @@ def load_environment_bindings(
     for service_root in service_roots:
         config_path = service_root / "environments" / environment / "config.yaml"
         config = _load_yaml(config_path)
-        bindings = config.get("externalBindings") or {}
-        if not isinstance(bindings, Mapping):
+        raw_expected = config.get("externalBindings") or {}
+        if not isinstance(raw_expected, Mapping):
             raise ValueError(f"{config_path}: externalBindings must be a mapping")
-        scope[service_root.name] = {
-            str(capability_id): binding for capability_id, binding in bindings.items()
+        expected_bindings = {
+            str(capability_id): binding
+            for capability_id, binding in raw_expected.items()
         }
+        bindings = expected_bindings
+        if (environment, target) == ("prod", "prod-sim"):
+            profile_path = (
+                service_root
+                / "environments"
+                / environment
+                / "targets"
+                / target
+                / "external_bindings.yaml"
+            )
+            if expected_bindings:
+                if not profile_path.is_file():
+                    raise ValueError(
+                        f"{profile_path}: missing target external Provider Binding profile"
+                    )
+                profile = _load_yaml(profile_path)
+                if set(profile) != {"externalBindings"}:
+                    raise ValueError(
+                        f"{profile_path}: target profile must contain only externalBindings"
+                    )
+                raw_profile_bindings = profile.get("externalBindings")
+                if not isinstance(raw_profile_bindings, Mapping):
+                    raise ValueError(
+                        f"{profile_path}: externalBindings must be a mapping"
+                    )
+                bindings = {
+                    str(capability_id): binding
+                    for capability_id, binding in raw_profile_bindings.items()
+                }
+                missing = sorted(set(expected_bindings) - set(bindings))
+                extra = sorted(set(bindings) - set(expected_bindings))
+                if missing or extra:
+                    raise ValueError(
+                        f"{profile_path}: must declare exactly locally owned external "
+                        f"capabilities; missing={missing}, extra={extra}"
+                    )
+            elif profile_path.exists():
+                raise ValueError(
+                    f"{profile_path}: target profile is forbidden for a service "
+                    "without locally owned external capabilities"
+                )
+        scope[service_root.name] = bindings
     return scope
+
+
+@lru_cache(maxsize=32)
+def load_environment_bindings(
+    environment: str,
+    *,
+    target: str,
+    source_root: Path | None = None,
+) -> dict[str, dict[str, Any]]:
+    """读取 exact ``(environment, target)`` 的 service-local Binding scope。"""
+    return _load_environment_bindings(
+        environment,
+        target=target,
+        source_root=source_root,
+    )
 
 
 @lru_cache(maxsize=8)
@@ -85,7 +153,9 @@ def load_bindings(
     if path is not None:
         raise ValueError("global external provider binding files are forbidden")
     environments = {
-        env: load_environment_bindings(env, source_root=source_root)
+        env: _load_environment_bindings(
+            env, target=None, source_root=source_root
+        )
         for env in ENVIRONMENTS
     }
     return {

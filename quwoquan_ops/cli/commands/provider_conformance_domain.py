@@ -17,6 +17,7 @@ import contextlib
 import json
 import os
 import re
+import subprocess
 
 from pathlib import Path
 from typing import Any
@@ -186,12 +187,412 @@ def _provider_conformance_runtime_environment(
     return projected
 
 
+
+def _redact_rehearsal_detail(value: object) -> str:
+    """Keep target reports diagnostic without exposing endpoint or secret values."""
+    detail = str(value or "").strip()
+    detail = re.sub(r"https?://[^\s,;]+", "[redacted-endpoint]", detail)
+    detail = re.sub(
+        r"(?i)\b(?:token|secret|password|api[_-]?key)\b\s*=\s*[^\s,;]+",
+        "[redacted-secret]",
+        detail,
+    )
+    return detail or "unspecified Provider rehearsal failure"
+
+
+def _prod_sim_rehearsal_identity() -> tuple[dict[str, Any], Mapping[str, Any]]:
+    """Freeze prod-sim at one candidate/full-startup/runtime/config identity."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    environment = "prod"
+    target_name = "prod-sim"
+    runtime = _stackctl._active_provider_runtime(environment, target_name)
+    if not isinstance(runtime, Mapping):
+        raise ValueError("prod-sim active Provider runtime is unavailable")
+    baseline_id = str(runtime.get("baselineId") or "")
+    composition = runtime.get("composition")
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", baseline_id) is None or not isinstance(
+        composition, Mapping
+    ):
+        raise ValueError("prod-sim active Provider runtime identity is incomplete")
+    candidate = _stackctl.load_candidate_manifest(
+        environment,
+        target_name,
+        baseline_id,
+        require_full=True,
+    )
+    receipt = _stackctl.load_startup_attempt(target_name)
+    candidate_runtime = (
+        candidate.get("providerRuntime") if isinstance(candidate, Mapping) else None
+    )
+    candidate_composition = (
+        candidate_runtime.get("composition")
+        if isinstance(candidate_runtime, Mapping)
+        else None
+    )
+    candidate_config_digest = (
+        str(candidate.get("configurationDigest") or "")
+        if isinstance(candidate, Mapping)
+        else ""
+    )
+    if (
+        not isinstance(candidate, Mapping)
+        or not isinstance(candidate_runtime, Mapping)
+        or not isinstance(receipt, Mapping)
+        or candidate.get("environment") != environment
+        or candidate.get("target") != target_name
+        or candidate.get("baselineId") != baseline_id
+        or candidate_composition != composition
+        or candidate_runtime.get("rehearsal")
+        != {"kind": "local-provider-substitute", "nonPromotable": True}
+        or receipt.get("status") != "running"
+        or receipt.get("env") != environment
+        or receipt.get("target") != target_name
+        or receipt.get("workload") != "full"
+        or receipt.get("candidateDigest") != baseline_id
+        or receipt.get("providerRuntimeDigest")
+        != composition.get("runtimeCompositionDigest")
+        or receipt.get("configurationDigest") != candidate_config_digest
+        or receipt.get("failure") not in {None, ""}
+        or receipt.get("cleanupFailure") not in {None, ""}
+        or not str(receipt.get("attemptId") or "").strip()
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", candidate_config_digest) is None
+    ):
+        raise ValueError(
+            "prod-sim active candidate/startup/provider runtime/config identity mismatch"
+        )
+    identity = {
+        "candidateDigest": baseline_id,
+        "startupAttemptId": str(receipt["attemptId"]),
+        "providerRuntimeDigest": str(receipt["providerRuntimeDigest"]),
+        "configDigest": candidate_config_digest,
+    }
+    return identity, composition
+
+
+def _prod_sim_rehearsal_required_capabilities(
+    composition: Mapping[str, Any],
+) -> list[dict[str, str]]:
+    """Enumerate required capabilities from the sealed runtime composition only."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    bindings = composition.get("bindings")
+    if not isinstance(bindings, list) or not bindings:
+        raise ValueError("prod-sim Provider runtime composition has no bindings")
+    required: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for binding in bindings:
+        if not isinstance(binding, Mapping):
+            raise ValueError("prod-sim Provider runtime composition binding is invalid")
+        capability_id = str(binding.get("capabilityId") or "").strip()
+        adapter_id = str(binding.get("adapterId") or "").strip()
+        state = str(binding.get("state") or "").strip()
+        if not capability_id or capability_id in seen or not state:
+            raise ValueError("prod-sim Provider runtime composition binding identity is invalid")
+        seen.add(capability_id)
+        if not _stackctl._external_provider_governance().requires_provider_conformance(
+            {"state": state, "adapter_id": adapter_id}
+        ):
+            continue
+        if state != "enabled" or not adapter_id:
+            raise ValueError(
+                f"prod-sim required capability {capability_id} has no enabled Provider Binding"
+            )
+        required.append({"capabilityId": capability_id, "adapterId": adapter_id})
+    if not required:
+        raise ValueError("prod-sim runtime requires no Provider conformance capabilities")
+    return sorted(required, key=lambda item: item["capabilityId"])
+
+
+def _prod_sim_first_party_source(
+    source: Mapping[str, Any] | None,
+    *,
+    capability_id: str,
+) -> Mapping[str, Any]:
+    """Reject substitute-only sources before any rehearsal invocation begins."""
+    if not isinstance(source, Mapping):
+        raise ValueError(
+            f"GATE_BLOCK: prod-sim/{capability_id} has no source-declared first-party blackbox runner"
+        )
+    declaration = source.get("prodSimFirstParty")
+    command = source.get("command")
+    test_source = str(source.get("testSource") or "")
+    test_target = str(source.get("target") or "")
+    if (
+        not isinstance(declaration, Mapping)
+        or set(declaration) != {"service"}
+        or not re.fullmatch(r"[a-z][a-z0-9-]*", str(declaration.get("service") or ""))
+        or "/service_ops/" not in test_source
+        or not isinstance(command, list)
+        or not command
+        or any(
+            re.search(r"(?i)(?:substitute|fixture|--token|--secret|https?://)", value)
+            for value in (*[str(item) for item in command], test_target)
+        )
+    ):
+        raise ValueError(
+            f"GATE_BLOCK: prod-sim/{capability_id} lacks a first-party service/Integration blackbox source"
+        )
+    return source
+
+
+def _validate_prod_sim_first_party_case(
+    payload: object,
+    *,
+    capability: Mapping[str, str],
+    identity: Mapping[str, str],
+    source: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Validate invocation/effect/readback/cleanup/observability evidence."""
+    if not isinstance(payload, Mapping) or set(payload) != {
+        "schema",
+        "status",
+        "capabilityId",
+        "adapterId",
+        "candidateDigest",
+        "startupAttemptId",
+        "providerRuntimeDigest",
+        "configDigest",
+        "invocations",
+    }:
+        raise ValueError("first-party runner emitted an invalid prod-sim case result")
+    if (
+        payload.get("schema") != "provider-conformance-prod-sim-first-party-case-results"
+        or payload.get("status") != "passed"
+        or payload.get("capabilityId") != capability["capabilityId"]
+        or payload.get("adapterId") != capability["adapterId"]
+        or any(payload.get(key) != value for key, value in identity.items())
+    ):
+        raise ValueError("first-party runner case identity does not match prod-sim rehearsal")
+    invocations = payload.get("invocations")
+    declared_service = source["prodSimFirstParty"]["service"]
+    if not isinstance(invocations, list) or not invocations:
+        raise ValueError("first-party runner reported zero Provider invocations")
+    for invocation in invocations:
+        observability = invocation.get("observabilityRefs") if isinstance(invocation, Mapping) else None
+        if (
+            not isinstance(invocation, Mapping)
+            or set(invocation) != {
+                "firstPartyService",
+                "operation",
+                "invocationRef",
+                "effectReadbackRef",
+                "cleanupReceipt",
+                "observabilityRefs",
+            }
+            or invocation.get("firstPartyService") != declared_service
+            or not all(
+                isinstance(invocation.get(field), str) and invocation[field].strip()
+                for field in ("operation", "invocationRef", "effectReadbackRef", "cleanupReceipt")
+            )
+            or not isinstance(observability, Mapping)
+            or set(observability) != {"logs", "traces", "metrics"}
+            or any(
+                not isinstance(observability.get(kind), list)
+                or not observability[kind]
+                or not all(isinstance(ref, str) and ref.strip() for ref in observability[kind])
+                for kind in ("logs", "traces", "metrics")
+            )
+        ):
+            raise ValueError(
+                "first-party runner must prove invocation/effect/readback/cleanup/observability"
+            )
+    return dict(payload)
+
+
+def _command_prod_sim_provider_rehearsal(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    """Run only target-bound, permanently non-promotable prod-sim rehearsal."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    report_dir = _stackctl.resolve_report_dir(args, "prod", "prod-sim")
+    report_dir = _stackctl.validate_env_run_evidence_dir(
+        report_dir,
+        env_name="prod",
+    )
+    report_dir.mkdir(parents=True, exist_ok=True)
+    issues: list[str] = []
+    findings: list[dict[str, str]] = []
+    identity: dict[str, str] = {}
+    required: list[dict[str, str]] = []
+    completed: list[dict[str, Any]] = []
+    try:
+        if (
+            not bool(args.execute)
+            or bool(args.matrix)
+            or bool(args.environment_matrix)
+            or str(args.env or "").strip() not in {"", "prod"}
+            or str(args.target or "").strip() not in {"", "prod-sim"}
+            or any(
+                str(value or "").strip()
+                for value in (args.adapter_id, args.capability_id, args.layer, args.image_digest, args.data_digest)
+            )
+        ):
+            raise ValueError(
+                "--prod-sim-rehearsal requires --execute and only the prod-sim target; "
+                "matrix/cell/image/data inputs are forbidden"
+            )
+        identity, composition = _prod_sim_rehearsal_identity()
+        required = _prod_sim_rehearsal_required_capabilities(composition)
+        conformance = _stackctl._provider_conformance()
+        sources, source_issues = conformance.discover_test_sources()
+        if source_issues:
+            raise ValueError("; ".join(str(issue) for issue in source_issues))
+        selections = [
+            (
+                capability,
+                _prod_sim_first_party_source(
+                    conformance.source_for_cell(
+                        capability_id=capability["capabilityId"],
+                        adapter_id=capability["adapterId"],
+                        layer="prod-sim-rehearsal",
+                        sources=sources,
+                    ),
+                    capability_id=capability["capabilityId"],
+                ),
+            )
+            for capability in required
+        ]
+        runtime_environment = _stackctl._prod_sim_provider_rehearsal_environment(
+            composition=composition
+        )
+        for capability, source in selections:
+            case_path = report_dir / (
+                "prod-sim-first-party-"
+                + capability["capabilityId"].replace(".", "-")
+                + ".case-results.json"
+            )
+            if case_path.exists():
+                raise ValueError("prod-sim rehearsal case artifact already exists")
+            environment = {
+                **os.environ,
+                **runtime_environment,
+                "QWQ_PROVIDER_CONFORMANCE_PROD_SIM_RESULT_PATH": str(case_path),
+                "QWQ_PROVIDER_CONFORMANCE_PROD_SIM_IDENTITY": json.dumps(
+                    identity, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+                ),
+                "QWQ_PROVIDER_CONFORMANCE_CAPABILITY_ID": capability["capabilityId"],
+                "QWQ_PROVIDER_CONFORMANCE_ADAPTER_ID": capability["adapterId"],
+            }
+            result = subprocess.run(
+                list(source["command"]),
+                cwd=_stackctl.ROOT,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+            if result.returncode != 0 or not case_path.is_file():
+                runner_output = (result.stderr or result.stdout or "").strip()
+                runner_detail = _redact_rehearsal_detail(
+                    runner_output.splitlines()[-1] if runner_output else "no runner output"
+                )
+                raise ValueError(
+                    "GATE_BLOCK: prod-sim/"
+                    + capability["capabilityId"]
+                    + " first-party runner failed without accepted evidence: "
+                    + runner_detail
+                )
+            try:
+                case_payload = json.loads(case_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError(
+                    f"prod-sim/{capability['capabilityId']} first-party case result is unreadable"
+                ) from exc
+            case = _validate_prod_sim_first_party_case(
+                case_payload,
+                capability=capability,
+                identity=identity,
+                source=source,
+            )
+            completed.append(
+                {
+                    "capabilityId": capability["capabilityId"],
+                    "adapterId": capability["adapterId"],
+                    "firstPartyService": source["prodSimFirstParty"]["service"],
+                    "invocationCount": len(case["invocations"]),
+                    "testSource": source["testSource"],
+                    "testSourceDigest": source["testSourceDigest"],
+                }
+            )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        detail = _redact_rehearsal_detail(exc)
+        issues.append(detail)
+        findings.append({"code": "GATE_BLOCK", "detail": detail})
+    passed = not issues and len(completed) == len(required) and bool(required)
+    payload = {
+        "schema": "stackctl-provider-conformance-prod-sim-rehearsal",
+        "readinessScope": "local_rehearsal",
+        "releasePromotionClaimed": False,
+        "nonPromotable": True,
+        "status": "passed" if passed else "gate_block",
+        "environment": "prod",
+        "target": "prod-sim",
+        "identity": identity,
+        "requiredCapabilityCount": len(required),
+        "requiredCapabilities": required,
+        "completedCapabilities": completed,
+        "issues": issues,
+    }
+    _stackctl.write_json(report_dir / "report.json", payload)
+    _stackctl.write_json(
+        report_dir / "findings.json",
+        {
+            "schema": "stackctl-provider-conformance-prod-sim-rehearsal-findings",
+            "readinessScope": "local_rehearsal",
+            "nonPromotable": True,
+            "findings": findings,
+        },
+    )
+    return {
+        **payload,
+        "exitCode": 0 if passed else 2,
+        "summary": (
+            "stackctl prod-sim Provider rehearsal passed"
+            if passed
+            else "stackctl prod-sim Provider rehearsal is GATE_BLOCK"
+        ),
+        "details": issues or [
+            f"capabilities={len(required)}",
+            f"firstPartyInvocations={sum(item['invocationCount'] for item in completed)}",
+        ],
+        "reportDir": _stackctl.relpath(report_dir),
+    }
+
+
+def _prod_sim_provider_rehearsal_environment(
+    *,
+    composition: Mapping[str, Any],
+) -> dict[str, str]:
+    """Project target-scoped local credentials without returning their values."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    values = dict(os.environ)
+    auth = _stackctl.load_local_environment_auth("prod", "prod-sim")
+    values.update(auth.environment)
+    error = _stackctl._bind_local_external_provider_environment(
+        values,
+        environment_name="prod",
+        target_name="prod-sim",
+        storage_prefix="PROD_SIM",
+        runtime_composition=composition,
+    )
+    if error:
+        raise RuntimeError(error)
+    return {
+        key: value
+        for key, value in values.items()
+        if os.environ.get(key) != value
+    }
+
 def _command_provider_conformance_unlocked(
     args: argparse.Namespace,
 ) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
     environment_matrix = bool(getattr(args, "environment_matrix", False))
+    if bool(getattr(args, "prod_sim_rehearsal", False)):
+        return _stackctl._command_prod_sim_provider_rehearsal(args)
     if bool(args.matrix) and environment_matrix:
         return {
             "exitCode": 2,
@@ -438,7 +839,9 @@ def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
 
     if not bool(getattr(args, "execute", False)):
         return _stackctl._command_provider_conformance_unlocked(args)
-    if bool(getattr(args, "matrix", False)):
+    if bool(getattr(args, "prod_sim_rehearsal", False)):
+        target_names = ("prod-sim",)
+    elif bool(getattr(args, "matrix", False)):
         target_names = _stackctl.LOCAL_BUILD_CACHE_TARGETS
     else:
         environment = str(getattr(args, "env", "") or "").strip()
@@ -452,7 +855,11 @@ def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
             for target_name in target_names:
                 runtime_use_lock = _stackctl.acquire_local_runtime_use_lock(
                     target=target_name,
-                    purpose="provider-conformance-uat",
+                    purpose=(
+                        "provider-conformance-prod-sim-rehearsal"
+                        if bool(getattr(args, "prod_sim_rehearsal", False))
+                        else "provider-conformance-uat"
+                    ),
                 )
                 locks.callback(runtime_use_lock.close)
         except RuntimeError as exc:
@@ -486,6 +893,20 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         choices=("", *_stackctl.PROVIDER_CONFORMANCE_LAYERS),
     )
     provider_conformance_parser.add_argument("--matrix", action="store_true")
+    provider_conformance_parser.add_argument(
+        "--prod-sim-rehearsal",
+        action="store_true",
+        help=(
+            "对 active immutable prod-sim candidate 执行第一方黑盒 Provider 演练；"
+            "结果永久 non-promotable，绝不进入 hosted release readiness"
+        ),
+    )
+    provider_conformance_parser.add_argument(
+        "--target",
+        default="",
+        choices=("", "prod-sim", "prod-hosted"),
+        help="仅 --prod-sim-rehearsal 可指定，且只接受 prod-sim",
+    )
     provider_conformance_parser.add_argument(
         "--environment-matrix",
         action="store_true",

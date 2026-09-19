@@ -117,6 +117,14 @@ def _local_environment_auth(
         "SMS_SUBSTITUTE_CAPTURE_KEY_B64": values[
             "sms_substitute_capture_key_b64"
         ],
+        "USER_COLLECTION_QUERY_AUTHORITY_ACTIVE_KEY_ID": key_version,
+        "USER_COLLECTION_QUERY_AUTHORITY_KEYRING_SECRET_REF": (
+            "USER_COLLECTION_QUERY_AUTHORITY_KEYRING_JSON"
+        ),
+        "USER_COLLECTION_QUERY_AUTHORITY_KEYRING_JSON": json.dumps(
+            {key_version: values["collection_query_authority_key_b64"]},
+            separators=(",", ":"),
+        ),
     }
     return LocalEnvironmentAuth(
         environment=runtime_environment,
@@ -141,6 +149,7 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
             "sms_substitute_operator_token",
             "provider_substitute_operator_token",
             "sms_substitute_capture_key_b64",
+            "collection_query_authority_key_b64",
         }
         if missing and set(missing).issubset(generated_keys):
             with path.open("a", encoding="utf-8") as handle:
@@ -182,6 +191,9 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
         "sms_substitute_operator_token": secrets.token_urlsafe(32),
         "provider_substitute_operator_token": secrets.token_urlsafe(32),
         "sms_substitute_capture_key_b64": base64.b64encode(
+            secrets.token_bytes(32)
+        ).decode("ascii"),
+        "collection_query_authority_key_b64": base64.b64encode(
             secrets.token_bytes(32)
         ).decode("ascii"),
     }

@@ -47,7 +47,8 @@
 - CocoaPods 在线安装同样只能在本 attempt 的私有 `CP_HOME_DIR/CP_CACHE_DIR` 内对上述网络暂态做有界重试并保留已下载字节；Flutter config、确定性 Pod 解析失败与封存后的离线 Pod replay 均不得重试或联网，重试耗尽仍以首次失败为 canonical blocker。
 - `prod` 只能读取 `prod` 包；禁止 `prod-gray` 环境、目录或 artifact。
 - 同一环境存在多个部署 target 时，每个 target 必须写入独立 package 目录，并从环境 `urlRoles + target urlOverrides + portProfile` 的解析结果投影 App 运行时端点；禁止复制环境默认 target 的 URL 或跨 target 复用可变产物。
-- `prod-hosted` artifact 禁止包含 mock/seed/debug/local/test host 与跨环境 URL；`prod-sim` 仍属于 `prod` 环境，但全部公共入口必须使用 `*.sim.quwoquan.com`，不得命中生产 host、增加第五环境或放宽 `prod-hosted` 纯度门。
+- `prod-hosted` artifact 禁止包含 mock/seed/debug/local/test host 与跨环境 URL；`prod-sim` 仍属于 `prod` 环境的本机 package-bound Provider rehearsal target，但全部公共入口必须使用 `*.sim.quwoquan.com`，不得命中生产 host、增加第五环境或放宽 `prod-hosted` 纯度门。`prod-sim` 的 candidate/package 可封存 target-scoped、Port 对等 protocol substitute/local infrastructure Binding 并运行完整第一方服务；`prod-hosted` 只允许真实厂商 Provider、真实凭据与正式 hosted workload，拒绝 fixture/local workload。
+- `stackctl package --env prod --target prod-sim` 的本地部署验证允许 legal-static 主体字段仍为占位：必须以 `placeholderPolicy=mark` 把占位记入候选 `placeholderFields`，且该候选无论占位是否已经消除都固定 `nonPromotable=true`。此通道只证明本机 `prod-sim` 可打包/启动和执行 `local_rehearsal` / `local_functional`，不解耦、不满足、也不得冒充 [`four-environment-commercial-login-maturity` REQ-010](../../../user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#req-010) 的法务/登录商用/ICP 准出，亦不得提升 Prod Adapter/Capability readiness 或关闭真实厂商 hosted receipt 缺口；不得编造主体、地址、电话或备案号，也不得因真实主体申请未完成而阻断本验证。`prod-hosted` 正式包与登录商用证据仍拒绝未获批占位。
 - 南北向公开入口（URL role、gateway 数据流、公网 DNS、TLS profile、CDN、derived link）与东西向端口块模型由 [`system-topology-and-networking`](../../system-topology-and-networking/spec.md) 拥有；本 Story 只消费 topology resolver 投影完成打包、装配与验收，不复制组网规则。
 - local environment matrix 的 `emulator_only` rehearsal 运行模式只要求 iOS Simulator 与 Android Emulator，并保留原始 canonical `ReadinessCaseResult`。这些结果及其 Alpha/Beta/Gamma `EnvironmentAcceptanceFact` 必须保持 `nonPromotable=true`，不得进入最终签名包的物理接受、RC `QualificationFact`、正式 Green Matrix 或 Prod 激活 authority；不得把模拟器结果改标、复制或聚合为物理设备证据。最终签名包的 Android/iOS 物理接受由 RC qualification 独立绑定，不回写环境 rehearsal。
 - 四环境分别拥有配置与部署 composition，不从 Prod 继承，但引用同一 Web bundle 摘要；非生产 Web hosting 的 `noindex` 与 DNS/证书策略由 [`system-topology-and-networking`](../../system-topology-and-networking/spec.md) 拥有。
@@ -223,7 +224,7 @@
 ## 4. 契约引用
 
 - 父能力公开契约：[`L2 spec`](../spec.md)。
-- `GWT-001` 证据绑定：`local_contract` 覆盖 topology/package/capsule/依赖纯度与只读语义，`api_integration` 覆盖真实 package/up/health/verify、Provider/DNS/TLS/readback，`user_acceptance` 覆盖 production-behavior App artifact 的安装、启动与内容结果。
+- `GWT-001` 证据绑定：`local_contract` 覆盖 topology/package/capsule/依赖纯度与只读语义，以及 `prod-sim` legal-static 占位 `mark` 与 `nonPromotable` 不得提升为法务/登录商用证据；`api_integration` 覆盖真实 package/up/health/verify、Provider/DNS/TLS/readback，`user_acceptance` 覆盖 production-behavior App artifact 的安装、启动与内容结果。
 - `GWT-002` 证据绑定：`local_contract` 覆盖三层 ownership、direct 持安全使用租约但不获取 managed transport/readiness authority、不执行 `adb reverse`，未知设备 fail-closed、外层 managed receipt/lease 的 exact 绑定透传与 owned teardown、`app-dev`/`app-uat` 薄适配边界、managed 字面 `flutter run` dispatcher 的子命令分流/readiness fail-closed 顺序/非 alpha 选择器拒绝与 raw SDK 默认 Alpha 等价与非法在线 handoff 负例、hermetic dependency bundle stale 的单次有界同步恢复与非交互 fail-closed、`run.sh` 全局 wrapper 与设备选择、PATH 注入投影/回退、attach 键位桥、并发隔离、frozen CocoaPods binding、direct evidence 不可提升、父 report 无 verdict 与 typed blocker；`api_integration` 覆盖真实 stackctl 委托、attempt-1/retry 同 binding、runtime package、CAS/readback、Remote 服务与 lifecycle；`user_acceptance` 覆盖 Android/iOS 的 direct `run.sh` 开发行为，以及 managed/hermetic 受管终端字面 `flutter run`、UAT 启动、Hot Restart、并行双设备、内容 outcome 与恢复动作。
 - `GWT-003` 证据绑定：`local_contract` 覆盖有效路径闭集、行为指纹与渠道不可替代性，`api_integration` 覆盖下载对象、签名、包身份、release identity 与 telemetry readback，`user_acceptance` 覆盖各渠道下载、安装、冷启动与覆盖升级行为。
 - `GWT-004` 证据绑定：`local_contract` 覆盖二维矩阵、create-once raw slot、父投影只读无 verdict 与 `nonPromotable`，`api_integration` 覆盖 active CAS/readback、empty baseline、rollback/replay 与 previous release identity，`user_acceptance` 覆盖六个模拟器 raw `ReadinessCaseResult`。
@@ -243,7 +244,8 @@
 - GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“环境拓扑与打包”对应的公开行为。
 - THEN 各环境 `runtime.yaml` 均声明完整 `edge / media / service / data` 子网与结构化 `urlRoles`。
-- AND `stackctl package --env prod --target prod-sim|prod-hosted` 分别生成 target 隔离的 App 包，包内 URL 与 resolver 生成的 `publicBases` 一致，且 `prod-hosted` 仍拒绝本地或测试 host。
+- AND `stackctl package --env prod --target prod-sim|prod-hosted` 分别生成 target 隔离的 App 包，包内 URL 与 resolver 生成的 `publicBases` 一致；两者均回读 `environment=prod` 且不存在第五环境。`prod-sim` candidate/package 可封存 target-scoped、Port 对等 protocol substitute/local infrastructure Binding 并运行完整第一方服务，`prod-hosted` 则拒绝本地或测试 host、fixture/local workload，并只接受真实厂商 Provider 与真实凭据。
+- AND `stackctl package --env prod --target prod-sim` 在 legal-static 主体仍为仓内占位时不得因 `contains placeholder text` 阻断打包；候选必须记录 `placeholderFields`、`nonPromotable=true`，且占位全部消除后 `nonPromotable` 仍不得变为 false。该 target 只产出 `local_rehearsal` / `local_functional`，不得被提升为法务、登录商用、ICP 或 Prod Adapter/Capability 准出证据，也不得关闭真实厂商 hosted receipt 缺口；`prod-hosted` 正式包对同一占位继续拒绝。
 - AND immutable package 在开始时复制精确输入闭包到只读 capsule，所有 App/Service/GraphQL/OCI artifact 绑定同一 capsule identity；封存后 live Data/App/Service 修改不使当前构建失败，下一次 capture 才观察这些变化并生成新的 candidate identity。
 - AND Alpha/Beta/Gamma `dev-session` 从当前工作树与 topology 实时 render target 隔离的 test-live runtime，不创建 immutable candidate；工作区或配置变化进入告警，严格 health/verify 仍如实失败。
 - AND Prod `stackctl package / up / health / verify` 只读取 immutable active candidate，重复 package 只在完整 manifest 和全部 digest 相同的情况下返回原始 receipt，不隐式重建或覆盖候选。

@@ -138,8 +138,8 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"gamma": {
 		"assistant.finance.quote": {
 			State:       "enabled",
-			AdapterID:   "ext.finance.yahoo_chart",
-			EndpointRef: "environment_binding:assistant.finance",
+			AdapterID:   "ext.finance.protocol_fixture",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"chart": "ASSISTANT_FINANCE_CHART_URL",
 			},
@@ -149,21 +149,19 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		},
 		"assistant.model.generation": {
 			State:       "enabled",
-			AdapterID:   "ext.llm.xiaomi_mimo",
-			EndpointRef: "environment_binding:assistant.model",
+			AdapterID:   "ext.llm.protocol_fixture",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"completion": "ASSISTANT_MODEL_COMPLETION_URL",
 			},
-			SecretEnvironmentKeys: []string{
-				"ASSISTANT_MODEL_API_KEY",
-			},
-			TimeoutMilliseconds: 60000,
-			RequiredRedisScenes: []string{},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   60000,
+			RequiredRedisScenes:   []string{},
 		},
 		"assistant.public.search": {
 			State:       "enabled",
-			AdapterID:   "ext.search.duckduckgo_html",
-			EndpointRef: "environment_binding:assistant.search",
+			AdapterID:   "ext.search.protocol_fixture",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"search": "ASSISTANT_PUBLIC_SEARCH_URL",
 			},
@@ -173,8 +171,8 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		},
 		"assistant.weather.forecast": {
 			State:       "enabled",
-			AdapterID:   "ext.weather.open_meteo",
-			EndpointRef: "environment_binding:assistant.weather",
+			AdapterID:   "ext.weather.protocol_fixture",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"forecast":  "ASSISTANT_WEATHER_FORECAST_URL",
 				"geocoding": "ASSISTANT_WEATHER_GEOCODING_URL",

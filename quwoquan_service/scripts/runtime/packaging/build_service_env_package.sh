@@ -6,14 +6,18 @@ cd "$ROOT"
 
 service="${SERVICE:-}"
 env_name="${ENV:-}"
+target_name=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --service) service="${2:-}"; shift 2 ;;
     --env) env_name="${2:-}"; shift 2 ;;
+    --target) target_name="${2:-}"; shift 2 ;;
     *) echo "FAIL: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 case "$env_name" in alpha|beta|gamma|prod) ;; *) echo "FAIL: --env must be alpha|beta|gamma|prod" >&2; exit 2 ;; esac
+case "$target_name" in alpha-local|beta-local|gamma-local|prod-sim|prod-hosted) ;; *) echo "FAIL: --target must be alpha-local|beta-local|gamma-local|prod-sim|prod-hosted" >&2; exit 2 ;; esac
+case "$env_name/$target_name" in alpha/alpha-local|beta/beta-local|gamma/gamma-local|prod/prod-sim|prod/prod-hosted) ;; *) echo "FAIL: --target does not belong to --env" >&2; exit 2 ;; esac
 [[ -n "$service" ]] || { echo "FAIL: --service is required" >&2; exit 2; }
 
 if [[ "$service" == "platform-ops-service" ]]; then
@@ -30,10 +34,10 @@ environment="$owner/environments/$env_name"
 [[ -f "$environment/config.yaml" ]] || { echo "FAIL: missing environment config: $environment/config.yaml" >&2; exit 1; }
 [[ -f "$overlay/kustomization.yaml" ]] || { echo "FAIL: missing environment deploy entry: $overlay/kustomization.yaml" >&2; exit 1; }
 
-out_dir="$(PYTHONDONTWRITEBYTECODE=1 python3 - "$env_name" "$service" <<'PY'
+out_dir="$(PYTHONDONTWRITEBYTECODE=1 python3 - "$env_name" "$service" "$target_name" <<'PY'
 import sys
 from quwoquan_ops.cli.lib.output_paths import service_deployment_package_dir
-print(service_deployment_package_dir(sys.argv[1], sys.argv[2]))
+print(service_deployment_package_dir(sys.argv[1], sys.argv[2], target=sys.argv[3]))
 PY
 )"
 parent_dir="$(dirname "$out_dir")"
@@ -45,6 +49,7 @@ mkdir -p "$stage_dir/config" "$stage_dir/resources" "$stage_dir/manifests"
 
 PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/render_runtime_config.py \
   --env "$env_name" \
+  --target "$target_name" \
   --workload "$service" \
   --output "$stage_dir/config/config.yaml" >/dev/null
 
@@ -74,7 +79,7 @@ else
   exit 1
 fi
 
-PYTHONDONTWRITEBYTECODE=1 python3 - "$service" "$env_name" "$owner" "$stage_dir" <<'PY'
+PYTHONDONTWRITEBYTECODE=1 python3 - "$service" "$env_name" "$target_name" "$owner" "$stage_dir" <<'PY'
 import hashlib
 import base64
 import json
@@ -90,7 +95,7 @@ from quwoquan_service.scripts.runtime.packaging.lib.service_image_build_input im
     service_image_build_input_digest,
 )
 
-service, environment, owner_value, package_value = sys.argv[1:5]
+service, environment, package_target, owner_value, package_value = sys.argv[1:6]
 root = Path.cwd()
 owner = root / owner_value
 package = Path(package_value)
@@ -148,8 +153,10 @@ for category in ("releases", "artifacts"):
             raise SystemExit(
                 f"FAIL: {declaration}: digest {expected_digest!r} differs from {actual_digest}"
             )
-        target = safe_relative_path(payload.get("target"), field="target", manifest=declaration)
-        destination = package / "resources" / "materialized" / target
+        resource_target = safe_relative_path(
+            payload.get("target"), field="target", manifest=declaration
+        )
+        destination = package / "resources" / "materialized" / resource_target
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(source.read_bytes())
         environment_variable = str(payload.get("environmentVariable") or "").strip()
@@ -160,7 +167,7 @@ for category in ("releases", "artifacts"):
         materialized_resources.append(
             {
                 "source": source,
-                "target": target.as_posix(),
+                "target": resource_target.as_posix(),
                 "content": source.read_bytes(),
                 "environmentVariable": environment_variable,
             }
@@ -175,15 +182,15 @@ if service == "chat-service":
         source = shared_root / filename
         if not source.is_file():
             raise SystemExit(f"FAIL: missing reliable task runtime resource: {source}")
-        target = Path("reliabletask") / filename
-        destination = package / "resources" / "materialized" / target
+        resource_relative = Path("reliabletask") / filename
+        destination = package / "resources" / "materialized" / resource_relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         content = source.read_bytes()
         destination.write_bytes(content)
         materialized_resources.append(
             {
                 "source": source,
-                "target": target.as_posix(),
+                "target": resource_relative.as_posix(),
                 "content": content,
                 "environmentVariable": environment_variable,
             }
@@ -454,6 +461,7 @@ provenance = {
     "schema": "qwq.service_package",
     "service": service,
     "environment": environment,
+    "target": package_target,
     "gitRevision": revision,
     "createdAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "configVersion": config_version,

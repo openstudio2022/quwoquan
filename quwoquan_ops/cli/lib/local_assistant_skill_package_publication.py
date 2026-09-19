@@ -81,7 +81,7 @@ def derive_official_skill_package_release_identity(
     valid_target = (
         environment in {"alpha", "beta", "gamma"}
         and target == f"{environment}-local"
-    ) or (environment == "prod" and target == "prod-hosted")
+    ) or (environment == "prod" and target in {"prod-hosted", "prod-sim"})
     if not valid_target:
         raise RuntimeError("assistant Skill package release target identity is invalid")
     if not source_digest.startswith("sha256:") or len(source_digest) != 71:

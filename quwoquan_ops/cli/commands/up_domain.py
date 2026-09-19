@@ -628,10 +628,6 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     local_targets = {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
     if requested_target not in local_targets:
         return _stackctl._command_up_impl(args)
-    if requested_target == "prod-sim":
-        return {"exitCode": 2, "blockerKind": "unmanaged_runtime_authority",
-                "summary": "prod-sim executor has no generation authority",
-                "details": ["OPS.RUNTIME.unmanaged_target: explicit migration required"]}
     operation_scope = contextlib.ExitStack()
     try:
         operation_scope.enter_context(_stackctl._local_stack_operation_lock(requested_target, wait_seconds=30))

@@ -13,6 +13,7 @@ services:
         ALPINE_BASE_IMAGE: "${QWQ_COMPOSE_ALPINE_BASE_IMAGE:?QWQ_COMPOSE_ALPINE_BASE_IMAGE is required}"
     environment:
       APP_ENV: "${QWQ_COMPOSE_ENV:?QWQ_COMPOSE_ENV is required}"
+      QWQ_RUNTIME_TARGET: "${QWQ_RUNTIME_TARGET:?package-bound runtime target is required}"
       SMS_SUBSTITUTE_CONFIGURATION_DIGEST: "${QWQ_COMPOSE_CONFIG_VERSION:?runtime configuration digest is required}"
       SMS_SUBSTITUTE_ADDR: ":9443"
       SMS_SUBSTITUTE_PROVIDER_TOKEN: "${SMS_SUBSTITUTE_PROVIDER_TOKEN:?target SMS Provider token is required}"

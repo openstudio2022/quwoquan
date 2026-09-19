@@ -102,31 +102,68 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
         (package_root / "current").symlink_to(release_id, target_is_directory=True)
         return manifest_path, public
 
-    def test_environment_origins_are_exact_official_hosts(self) -> None:
-        self.assertEqual(
-            _trusted_web_origin("alpha", "https://alpha.quwoquan.com:17000"),
-            "https://alpha.quwoquan.com:17000",
-        )
-        self.assertEqual(
-            _trusted_web_origin("prod", "https://quwoquan.com/"),
-            "https://quwoquan.com",
-        )
-        self.assertEqual(
-            _trusted_web_origin("beta", "https://beta.quwoquan.com:18000"),
-            "https://beta.quwoquan.com:18000",
-        )
+    def test_target_origins_are_exact_official_hosts(self) -> None:
+        repo_root = Path(__file__).resolve().parents[4]
+        for environment, target, origin in (
+            ("alpha", "alpha-local", "https://alpha.quwoquan.com:17000"),
+            ("beta", "beta-local", "https://beta.quwoquan.com:18000"),
+            ("gamma", "gamma-local", "https://gamma.quwoquan.com:19000"),
+            ("prod", "prod-hosted", "https://quwoquan.com/"),
+            ("prod", "prod-sim", "https://sim.quwoquan.com:20000/"),
+        ):
+            with self.subTest(target=target):
+                self.assertEqual(
+                    _trusted_web_origin(
+                        repo_root=repo_root,
+                        environment=environment,
+                        target=target,
+                        raw=origin,
+                    ),
+                    origin.rstrip("/"),
+                )
+
         for rejected in (
             "https://alpha.quwoquan.com",
             "https://alpha.quwoquan.com:18000",
             "https://alpha.example.invalid",
             "https://attacker.example",
             "http://alpha.quwoquan.com",
-            "https://user@alpha.quwoquan.com:17000",
+            "https://user@example.com:17000",
             "https://alpha.quwoquan.com:17000/path",
             "https://alpha.quwoquan.com:17000?candidate=mutable",
         ):
-            with self.assertRaises(WebOfficialReleaseError):
-                _trusted_web_origin("alpha", rejected)
+            with self.subTest(rejected=rejected), self.assertRaises(WebOfficialReleaseError):
+                _trusted_web_origin(
+                    repo_root=repo_root,
+                    environment="alpha",
+                    target="alpha-local",
+                    raw=rejected,
+                )
+
+    def test_prod_web_origin_refuses_cross_target_and_target_mismatch(self) -> None:
+        repo_root = Path(__file__).resolve().parents[4]
+        for target, origin in (
+            ("prod-hosted", "https://sim.quwoquan.com:20000"),
+            ("prod-sim", "https://quwoquan.com"),
+            ("prod-sim", "https://other.sim.quwoquan.com:20000"),
+        ):
+            with self.subTest(target=target, origin=origin), self.assertRaises(
+                WebOfficialReleaseError
+            ):
+                _trusted_web_origin(
+                    repo_root=repo_root,
+                    environment="prod",
+                    target=target,
+                    raw=origin,
+                )
+
+        with self.assertRaisesRegex(WebOfficialReleaseError, "does not belong"):
+            _trusted_web_origin(
+                repo_root=repo_root,
+                environment="prod",
+                target="gamma-local",
+                raw="https://gamma.quwoquan.com:19000",
+            )
 
     def test_web_build_command_is_environment_agnostic(self) -> None:
         command = _web_build_command("/toolchain/flutter", Path("/output/public"))
@@ -222,7 +259,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             ):
                 releases = {
                     environment: package_web_official_release(
-                        repo_root=Path("/repo"),
+                        repo_root=Path(__file__).resolve().parents[4],
                         environment=environment,
                         target=f"{environment}-local"
                         if environment != "prod"
@@ -333,6 +370,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             manifest_path, public = self._write_package(package_root)
             receipt, resolved_public = _load_dev_session_public_web_package(
                 environment="alpha",
+                target="alpha-local",
                 package_root=package_root,
                 public_origin="https://alpha.quwoquan.com:17000",
             )
@@ -363,6 +401,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             ):
                 _load_dev_session_public_web_package(
                     environment="alpha",
+                    target="alpha-local",
                     package_root=package_root,
                     public_origin="https://alpha.quwoquan.com:17000",
                 )
@@ -397,6 +436,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
         )
         load_package.assert_called_once_with(
             environment="alpha",
+            target="alpha-local",
             package_root=package_root,
             public_origin="https://alpha.quwoquan.com:17000",
         )
@@ -411,6 +451,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             ):
                 _load_dev_session_public_web_package(
                     environment="alpha",
+                    target="alpha-local",
                     package_root=package_root,
                     public_origin="https://alpha.quwoquan.com:17000",
                 )
@@ -420,6 +461,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "content digest drifted"):
                 _load_dev_session_public_web_package(
                     environment="alpha",
+                    target="alpha-local",
                     package_root=package_root,
                     public_origin="https://alpha.quwoquan.com:17000",
                 )
@@ -648,6 +690,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             )
             receipt, resolved_public = _load_dev_session_public_web_package(
                 environment="alpha",
+                target="alpha-local",
                 package_root=package_root,
                 public_origin="https://alpha.quwoquan.com:17000",
             )
@@ -668,6 +711,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "contradicts the active release"):
                 _load_dev_session_public_web_package(
                     environment="alpha",
+                    target="alpha-local",
                     package_root=package_root,
                     public_origin="https://alpha.quwoquan.com:17000",
                 )
@@ -684,6 +728,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             ):
                 _load_dev_session_public_web_package(
                     environment="alpha",
+                    target="alpha-local",
                     package_root=package_root,
                     public_origin="https://alpha.quwoquan.com:17000",
                 )
@@ -705,6 +750,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "manifest digest drifted"):
                 _load_dev_session_public_web_package(
                     environment="alpha",
+                    target="alpha-local",
                     package_root=package_root,
                     public_origin="https://alpha.quwoquan.com:17000",
                 )
@@ -719,6 +765,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "pointer does not match"):
                 _load_dev_session_public_web_package(
                     environment="alpha",
+                    target="alpha-local",
                     package_root=package_root,
                     public_origin="https://alpha.quwoquan.com:17000",
                 )

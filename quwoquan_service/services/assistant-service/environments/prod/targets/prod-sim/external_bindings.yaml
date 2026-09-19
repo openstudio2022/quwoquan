@@ -1,0 +1,29 @@
+externalBindings:
+  integration.connector_grant.read:
+    state: enabled
+    adapter: ext.first_party.http_authority
+    endpointRef: service_topology:integration-service
+  chat.conversation.membership.read:
+    state: enabled
+    adapter: ext.first_party.http_authority
+    endpointRef: service_topology:chat-service
+  circle.membership.self.read:
+    state: enabled
+    adapter: ext.first_party.http_authority
+    endpointRef: service_topology:circle-service
+  assistant.model.generation:
+    state: enabled
+    adapter: ext.llm.protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute
+  assistant.public.search:
+    state: enabled
+    adapter: ext.search.protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute
+  assistant.weather.forecast:
+    state: enabled
+    adapter: ext.weather.protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute
+  assistant.finance.quote:
+    state: enabled
+    adapter: ext.finance.protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute

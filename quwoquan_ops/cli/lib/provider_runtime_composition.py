@@ -128,7 +128,7 @@ def compile_provider_runtime_composition(
         )
 
     bindings = _canonical_bindings(scope)
-    _validate_nonprod_isolation_policy(environment, bindings)
+    _validate_target_isolation_policy(environment, target, bindings)
     effective_contract_root = contract_root
     if effective_contract_root is None:
         effective_contract_root = (
@@ -151,7 +151,11 @@ def compile_provider_runtime_composition(
             continue
         adapter_id = binding["adapterId"]
         endpoint_ref = binding["endpointRef"]
-        if environment == "prod" and is_prod_forbidden_adapter(adapter_id):
+        if (
+            environment == "prod"
+            and target == "prod-hosted"
+            and is_prod_forbidden_adapter(adapter_id)
+        ):
             raise ValueError(
                 "Prod Provider runtime forbids non-production adapter "
                 f"{adapter_id} for {binding['capabilityId']}"
@@ -159,7 +163,11 @@ def compile_provider_runtime_composition(
 
         role = _local_topology_role(endpoint_ref)
         endpoint_contract = endpoint_contracts.get(role) if role else None
-        if environment == "prod" and endpoint_contract is not None:
+        if (
+            environment == "prod"
+            and target == "prod-hosted"
+            and endpoint_contract is not None
+        ):
             raise ValueError(
                 "Prod Provider runtime forbids non-production local workload "
                 f"{role} for {binding['capabilityId']}"
@@ -291,7 +299,7 @@ def validate_provider_runtime_composition(
         }
     if _canonical_bindings(raw_scope) != bindings:
         raise ValueError("Provider runtime composition bindings are not canonical")
-    _validate_nonprod_isolation_policy(expected_environment, bindings)
+    _validate_target_isolation_policy(expected_environment, expected_target, bindings)
     binding_digest = str(payload.get("bindingDigest") or "")
     if binding_digest != _digest(bindings):
         raise ValueError("Provider runtime composition bindingDigest mismatch")
@@ -446,7 +454,7 @@ def validate_provider_runtime_composition(
     if [str(workload["role"]) for workload in workloads] != sorted(workload_roles):
         raise ValueError("Provider runtime composition workloads are not canonical")
 
-    if expected_environment == "prod":
+    if expected_environment == "prod" and expected_target == "prod-hosted":
         if workloads:
             raise ValueError("Prod Provider runtime cannot contain local workloads")
         for binding in bindings:
@@ -481,19 +489,19 @@ def validate_provider_runtime_composition(
     return payload
 
 
-def _validate_nonprod_isolation_policy(
+def _validate_target_isolation_policy(
     environment: str,
+    target: str,
     bindings: list[dict[str, Any]],
 ) -> None:
-    """Keep non-production third-party capabilities behind local substitutes.
+    """Keep local targets behind local Provider substitutes.
 
-    This rule is intentionally independent from the currently selected
-    environment Binding.  Rehashing a package or changing the authority source
-    to a production vendor therefore cannot make an Alpha/Beta/Gamma runtime
-    composition acceptable.
+    This rule is intentionally independent from the currently selected Binding.
+    Rehashing a package or changing the authority source to a production vendor
+    therefore cannot make Alpha/Beta/Gamma-local or prod-sim acceptable.
     """
 
-    if environment not in NONPROD_ENVIRONMENTS:
+    if environment not in NONPROD_ENVIRONMENTS and target != "prod-sim":
         return
     for binding in bindings:
         if binding.get("state") != "enabled":

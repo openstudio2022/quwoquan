@@ -39,8 +39,8 @@ PY
   runtime_redis_override="${LOCAL_GAMMA_DEPLOY_RENDER_ROOT}/redis-runtime.compose.json"
   QWQ_RUNTIME_REDIS_PASSWORD="$(cat "$LOCAL_GAMMA_REDIS_RUNTIME_PASSWORD_FILE")"
   export QWQ_RUNTIME_REDIS_PASSWORD
-  PYTHONDONTWRITEBYTECODE=1 python3 - "$runtime_redis_override" "${compose_cmd[@]}" <<'PY'
-import json, subprocess, sys
+  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$runtime_redis_override" "${compose_cmd[@]}" <<'PY'
+import json, os, subprocess, sys
 from pathlib import Path
 out, *command = sys.argv[1:]
 result = subprocess.run([*command, "config", "--format", "json"], capture_output=True, text=True)
@@ -49,6 +49,22 @@ if result.returncode != 0:
     raise SystemExit(result.returncode)
 document = json.loads(result.stdout)
 services = {}
+target = os.environ.get("QWQ_LOCAL_RELEASE_TARGET", "")
+platform_ops_runtime = {}
+if target == "prod-sim":
+    from quwoquan_ops.cli.lib.prod_sim_rehearsal_authorities import (
+        ProdSimRehearsalAuthorityError,
+        bind_prod_sim_platform_ops_rehearsal_runtime,
+        ensure_prod_sim_public_loopback_resolution,
+    )
+    try:
+        ensure_prod_sim_public_loopback_resolution()
+        platform_ops_runtime = bind_prod_sim_platform_ops_rehearsal_runtime(
+            candidate_digest=os.environ["QWQ_RELEASE_CANDIDATE_DIGEST"],
+        )
+    except ProdSimRehearsalAuthorityError as error:
+        print(f"[local-gamma] GATE_BLOCK: {error}", file=sys.stderr)
+        raise SystemExit(2) from error
 for name, definition in document.get("services", {}).items():
     environment = definition.get("environment") or {}
     additions = {}
@@ -63,12 +79,50 @@ for name, definition in document.get("services", {}).items():
     if name == "api-edge" or name == "service-core":
         additions["API_EDGE_REDIS_USERNAME"] = "qwq_runtime"
         additions["API_EDGE_REDIS_PASSWORD"] = "${QWQ_RUNTIME_REDIS_PASSWORD:?managed Redis runtime password is required}"
+    if target == "prod-sim":
+        additions["PLATFORM_OPS_BASE_URL"] = "http://platform-ops-service:18088"
+        additions["OPS_OIDC_ISSUER"] = "https://provider-unavailable.invalid"
+        additions["OPS_OIDC_AUDIENCE"] = "quwoquan-prod-sim-rehearsal"
+        additions["OPS_OIDC_JWKS_URL"] = "https://provider-unavailable.invalid/jwks.json"
+        if name == "product-ops-service":
+            additions["PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY"] = (
+                "prod-sim-rehearsal-telemetry-key"
+            )
+            additions["PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY"] = (
+                "prod-sim-rehearsal-runtime-log-key"
+            )
+            additions["PROMETHEUS_URL"] = "http://prometheus:9090"
+        if name == "platform-ops-service":
+            additions["ALERT_INGEST_TOKEN"] = (
+                "prod-sim-rehearsal-not-release-evidence"
+            )
+            additions.update(platform_ops_runtime)
     if additions:
         services[name] = {"environment": additions}
 Path(out).write_text(json.dumps({"services": services}, sort_keys=True, separators=(",", ":")))
 Path(out).chmod(0o600)
 PY
   compose_cmd+=(-f "$runtime_redis_override")
+  if [[ "$QWQ_LOCAL_RELEASE_TARGET" == "prod-sim" ]]; then
+    local prod_sim_root_cert=""
+    if ! prod_sim_root_cert="$(
+      PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.public_domain_tls import root_certificate_path
+
+print(root_certificate_path("prod-sim"))
+PY
+    )"; then
+      echo "[local-gamma] GATE_BLOCK: prod-sim local-managed root certificate is unavailable" >&2
+      exit 2
+    fi
+    if [[ ! -f "$prod_sim_root_cert" ]]; then
+      echo "[local-gamma] GATE_BLOCK: prod-sim local-managed root certificate is missing" >&2
+      exit 2
+    fi
+    # 启动器 host 探针使用系统 curl；不把 CA 装进钥匙串，只让本进程信任 rehearsal CA。
+    export CURL_CA_BUNDLE="$prod_sim_root_cert"
+    export SSL_CERT_FILE="$prod_sim_root_cert"
+  fi
 }
 
 prepare_service_core_runtime_authorities() {
@@ -105,6 +159,8 @@ PY_RUNTIME_PG_OVERRIDE
   # Post safety 必须在 Mongo 与 init healthy 后、任何 service-core 进程前完成。
   # 外层 stackctl up 已持有 target operation lock；这里直接调用同一 canonical
   # library，不能再经会重复取锁的公开子命令，也不能先启动服务再补材料。
+  # prod-sim 由 packaged source-init 拥有 User schema，再签发不可提升 rehearsal
+  # Post safety；不得走 gamma allocator 或 prod-hosted writer。
   local post_safety_projection=""
   if [[ "$QWQ_LOCAL_RELEASE_TARGET" == "alpha-local" || "$QWQ_LOCAL_RELEASE_TARGET" == "beta-local" || "$QWQ_LOCAL_RELEASE_TARGET" == "gamma-local" ]]; then
     if ! post_safety_projection="$(
@@ -131,6 +187,56 @@ PY
       echo "[local-gamma] GATE_BLOCK: canonical Post safety startup material/current verification failed" >&2
       return 1
     fi
+  elif [[ "$QWQ_LOCAL_RELEASE_TARGET" == "prod-sim" ]]; then
+    if ! rollout_projection="$(
+    PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 "$QWQ_STACKCTL_PYTHON" -B - <<'PY_PROD_SIM_ROLLOUT'
+import os
+import shlex
+from pathlib import Path
+
+from quwoquan_ops.cli.lib.prod_sim_rehearsal_authorities import (
+    bind_prod_sim_api_edge_rehearsal_runtime,
+)
+
+projection = bind_prod_sim_api_edge_rehearsal_runtime(
+    config_root=Path(os.environ["LOCAL_GAMMA_CONFIG_ROOT"]),
+    candidate_digest=os.environ["QWQ_RELEASE_CANDIDATE_DIGEST"],
+)
+print(
+    "export API_EDGE_ROLLOUT_ALLOCATION_KEY="
+    + shlex.quote(projection["allocationKey"])
+)
+PY_PROD_SIM_ROLLOUT
+    )"; then
+      echo "[local-gamma] GATE_BLOCK: prod-sim rollout routing policy is unavailable" >&2
+      return 1
+    fi
+    eval "$rollout_projection"
+    if ! post_safety_projection="$(
+    PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 "$QWQ_STACKCTL_PYTHON" -B - <<'PY_PROD_SIM_AUTHORITY'
+import shlex
+
+from quwoquan_ops.cli.lib.prod_sim_rehearsal_authorities import (
+ensure_prod_sim_rehearsal_authorities_for_locked_up,
+)
+
+projection = ensure_prod_sim_rehearsal_authorities_for_locked_up()
+for key, source in (
+    ("CONTENT_POST_SAFETY_HMAC_SECRET_REF", "hmacSecretRef"),
+    ("CONTENT_POST_SAFETY_RECOVERY_EVIDENCE_REF", "recoveryEvidenceRef"),
+    ("CONTENT_POST_SAFETY_MATERIAL_ROOT", "containerMaterialRoot"),
+    ("CONTENT_POST_SAFETY_CURRENT_BINDING_REF", "currentBindingRef"),
+    ("QWQ_COMPOSE_POST_SAFETY_MATERIAL_ROOT", "hostMaterialRoot"),
+    ("CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET", "accountSubjectHmacSecret"),
+):
+    print(f"export {key}={shlex.quote(projection[source])}")
+PY_PROD_SIM_AUTHORITY
+    )"; then
+      echo "[local-gamma] GATE_BLOCK: prod-sim User schema/Post safety rehearsal material failed" >&2
+      return 1
+    fi
+  fi
+  if [[ -n "$post_safety_projection" ]]; then
     eval "$post_safety_projection"
     local post_safety_override="${LOCAL_GAMMA_DEPLOY_RENDER_ROOT}/post-safety.compose.json"
     PYTHONDONTWRITEBYTECODE=1 python3 - "$post_safety_override" <<'PY'
@@ -154,7 +260,9 @@ payload = {
                 "CONTENT_POST_SAFETY_MATERIAL_ROOT",
                 "CONTENT_POST_SAFETY_CURRENT_BINDING_REF",
                 "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET",
+                "API_EDGE_ROLLOUT_ALLOCATION_KEY",
             )
+            if key in os.environ
         },
         "volumes": [
             {

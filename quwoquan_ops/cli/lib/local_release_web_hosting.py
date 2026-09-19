@@ -1,12 +1,9 @@
 """local release composition 的公网 Web hosting 物化。
 
-immutable Web 包（`stackctl package --kind web`）按契约不携带
-`runtime-config-trust.json` / `runtime-config-package.json`（配置外置，
-见 `web_official_release._verify_runtime_config_is_external`），而 gamma-proxy
-的 Caddy 从 `/srv/web` 直接 serve 这两个文件。本模块在启动装配时把
-immutable 包复制到 target-scoped hosting 根并物化 runtime config——与
-dev-session 可变轨、prod-hosted render 走同一条 `materialize_web_runtime_config`
-单轨；nonprod 环境的 launch policy 与 dev-session 相同（test_live 单轨）。
+immutable Web 包由 `stackctl package --kind web` 写入其唯一 target-scoped
+standalone root。reader 通过同一个 `web_deployment_package_dir` 解析它，绝不
+通过 runtime candidate 或复制到第二个 package 位置。prod-sim 有唯一的 local
+rehearsal runtime config 分支；prod-hosted 不可由本地 release hosting 物化。
 
 角色：lib。由 `quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh` 消费。
 """
@@ -20,8 +17,12 @@ from pathlib import Path
 
 from quwoquan_ops.cli.lib.dev_session_web_runtime_config import (
     materialize_dev_session_web_runtime_config,
+    materialize_prod_sim_local_rehearsal_web_runtime_config,
 )
-from quwoquan_ops.cli.lib.output_paths import deployment_target_path
+from quwoquan_ops.cli.lib.output_paths import (
+    deployment_target_path,
+    web_deployment_package_dir,
+)
 
 
 def _run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -40,9 +41,10 @@ def materialize_local_release_web_hosting(
     releaseId 定位并每次重建，与 immutable 包本体分离；包缺失时抛 ValueError。
     """
 
-    package_root = deployment_target_path(
-        target, "standalone-packages", "web", "packages", "public-web"
-    )
+    if environment == "prod" and target != "prod-sim":
+        raise ValueError("local release Web hosting only supports prod/prod-sim")
+
+    package_root = web_deployment_package_dir(environment, target=target)
     release_root = package_root / "current"
     manifest_path = release_root / "manifest.json"
     if not manifest_path.is_file():
@@ -66,7 +68,12 @@ def materialize_local_release_web_hosting(
     )
     if hosting_root.exists():
         shutil.rmtree(hosting_root)
-    materialize_dev_session_web_runtime_config(
+    materializer = (
+        materialize_prod_sim_local_rehearsal_web_runtime_config
+        if (environment, target) == ("prod", "prod-sim")
+        else materialize_dev_session_web_runtime_config
+    )
+    materialized = materializer(
         repo_root=repo_root,
         environment=environment,
         target=target,
@@ -75,6 +82,11 @@ def materialize_local_release_web_hosting(
         source_revision=source_revision,
         run_command=_run,
     )
+    if (environment, target) == ("prod", "prod-sim") and (
+        materialized.get("nonPromotable") is not True
+        or materialized.get("runtimeScope") != "local_rehearsal"
+    ):
+        raise ValueError("prod-sim Web hosting materialization must be non-promotable")
     return hosting_root, "sha256:" + content_digest
 
 

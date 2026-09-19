@@ -122,13 +122,17 @@ def _expected_provider_log_sink_binding(
     capability_id: str,
     *,
     env_name: str,
+    target_name: str,
 ) -> dict[str, Any]:
     if capability_id not in _LOG_SINK_CAPABILITIES:
         raise ValueError(f"unsupported Product Ops log-sink capability: {capability_id}")
-    if env_name == "prod":
+    if (env_name, target_name) == ("prod", "prod-hosted"):
         endpoint_ref = _LOG_SINK_PROD_ENDPOINT_REFS[capability_id]
         secret_keys = [_LOG_SINK_PROD_SECRET_KEYS[capability_id]]
-    elif env_name in {"alpha", "beta", "gamma"}:
+    elif (env_name, target_name) == ("prod", "prod-sim") or (
+        env_name in {"alpha", "beta", "gamma"}
+        and target_name == f"{env_name}-local"
+    ):
         endpoint_ref = "local_topology:elasticsearch"
         secret_keys = []
     else:
@@ -156,7 +160,7 @@ def _package_log_sink_binding(
         _LOG_SINK_PROD_ENDPOINT_REFS[capability_id].replace(
             "environment_binding:", "environment-binding:", 1
         )
-        if env_name == "prod"
+        if (env_name, target_name) == ("prod", "prod-hosted")
         else f"target:{target_name}/product-ops/elasticsearch"
     )
     return {
@@ -183,6 +187,7 @@ def _expected_package_log_sink_bindings(
             _expected_provider_log_sink_binding(
                 capability_id,
                 env_name=env_name,
+                target_name=target_name,
             ),
             env_name=env_name,
             target_name=target_name,
@@ -220,6 +225,7 @@ def _canonical_observability_log_sink_bindings(
         expected = _expected_provider_log_sink_binding(
             capability_id,
             env_name=env_name,
+            target_name=target_name,
         )
         if selected[capability_id] != expected:
             raise ValueError(
@@ -387,7 +393,7 @@ def materialize_observability_log_sink_package(
         "bindingDigest": _sha256_json(bindings),
     }
     staged_files: dict[str, bytes] = {}
-    if env_name == "prod":
+    if (env_name, target_name) == ("prod", "prod-hosted"):
         payload = {
             **common,
             "deploymentMode": "managed-external",
@@ -539,13 +545,15 @@ def validate_observability_log_sink_package(
         raise ValueError(
             f"unsupported Product Ops log-sink environment: {expected_environment}"
         )
-    if (
-        expected_environment == "prod"
-        and expected_target != "prod-hosted"
-    ) or (
-        expected_environment != "prod"
-        and expected_target != f"{expected_environment}-local"
-    ):
+    local_generation = (
+        expected_environment in {"alpha", "beta", "gamma"}
+        and expected_target == f"{expected_environment}-local"
+    )
+    local_generation = local_generation or (expected_environment, expected_target) == (
+        "prod", "prod-sim"
+    )
+    hosted = (expected_environment, expected_target) == ("prod", "prod-hosted")
+    if not local_generation and not hosted:
         raise ValueError(
             "observability log-sink package target identity is invalid"
         )
@@ -577,10 +585,9 @@ def validate_observability_log_sink_package(
         raise ValueError(
             "observability log-sink package endpoint/secret roles overlap"
         )
-    if expected_environment == "prod":
+    if hosted:
         if (
-            expected_target != "prod-hosted"
-            or payload.get("deploymentMode") != "managed-external"
+            payload.get("deploymentMode") != "managed-external"
             or any(
                 payload.get(field) != ""
                 for field in (
@@ -615,15 +622,16 @@ def _validate_local_log_sink_artifact_identity(
     candidate_root: Path | None,
 ) -> None:
     identity_issues: list[str] = []
-    if expected_environment not in {"alpha", "beta", "gamma"}:
+    if expected_environment in {"alpha", "beta", "gamma"}:
+        if expected_target != f"{expected_environment}-local":
+            identity_issues.append(
+                f"expectedTarget={expected_target!r}, "
+                f"expected {expected_environment + '-local'!r}"
+            )
+    elif not (expected_environment == "prod" and expected_target == "prod-sim"):
         identity_issues.append(
             f"expectedEnvironment={expected_environment!r}, "
-            "expected one of ['alpha', 'beta', 'gamma']"
-        )
-    elif expected_target != f"{expected_environment}-local":
-        identity_issues.append(
-            f"expectedTarget={expected_target!r}, "
-            f"expected {expected_environment + '-local'!r}"
+            "expected one of ['alpha', 'beta', 'gamma'] or prod/prod-sim"
         )
     for field, expected in (
         ("deploymentMode", "package-bound-local"),

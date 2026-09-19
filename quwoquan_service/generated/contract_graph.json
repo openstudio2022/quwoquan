@@ -103990,7 +103990,7 @@
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_policy_rollout/policy_publication__local_contract_test.go",
-            "sha256": "9ab119e247dae18eb3bd8d6428e3a07fda6911c4072ce2b34bdabed1a38cea40"
+            "sha256": "4588090a12577b0fc53bd0d2da35ca1d17219cb1721612005cf9acb6afc00d1f"
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_policy_rollout/policy_rollout__local_contract_test.go",
@@ -115757,7 +115757,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/safety/runtime_fact.go",
-            "sha256": "556c1f760b5975abfd442ae8970c28732dce94f606635afe704c48d2f6c91279"
+            "sha256": "9eed24868e92306cbf876a38f14e48d5ba553f80012051f98988125df58fdecf"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/safety/runtime_files.go",
@@ -116544,7 +116544,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/safety/runtime_fact__local_contract_test.go",
-            "sha256": "9b3f98e08f2ef5efb4e5f6b0045d02183578c95927173c2d1810ee57568a6194"
+            "sha256": "16df98d73d62c9c0ad2535a9c1c05ebc4b8ed5f3c0de436c5b0538958e36b154"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/searchindex/projector__local_contract_test.go",
@@ -120886,11 +120886,11 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig/bindings.go",
-            "sha256": "91a8be4c82c5555d263d89a3f836e90e2d6ef3f748edef06fa920f2b23a06957"
+            "sha256": "6d78e84575f75c4d5993b769e000f5571c33306f9482364cc7fab4cafbed789b"
           },
           {
             "path": "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig/config.go",
-            "sha256": "cd7ac1b2c88fb36093be68823fa12eed3c1f0e46faa70c2de0c65d5686f4461b"
+            "sha256": "6624a9910d00714ed34171d8a52143c561ed5b93f0597a52978456c4c5bf163b"
           }
         ],
         "outbox": [
@@ -120997,7 +120997,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/runtime_config_validation__contract__local_contract_test.go",
-            "sha256": "59b33f8cd1e0ba7f5140f565b246003af9e4a9bc8154173bef1e81c944b2e546"
+            "sha256": "27e1b714d828e34339ae9aef9253ea1a091f57ff5c0546a9ac5ddbbb3967e5d1"
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/sms_otp_delivery_readiness__local_contract_test.go",
@@ -121474,7 +121474,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/push_delivery/push_config__security__local_contract_test.go",
-            "sha256": "e451fc0d2ad157b13c96e2348a58a5e5fe4523bf4bc214c9f1d7d29fbccb7bd0"
+            "sha256": "c079fa5a58ce91735d19a705bf05935f8863086e4e4c6402d63337c7390e2ef2"
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/push_delivery/push_delivery_dispatch__reliability__local_contract_test.go",
@@ -124847,7 +124847,7 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/runtime_contract.py",
-            "sha256": "0cadc6a77d11410cebe58abccc42759d2afdbeb2c3e6e28f03000f88ed03f624"
+            "sha256": "f165e6f9c5ad68aa407d9e5ebb0d6ab1570a6cfaff17ac85300add690e3979fb"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/activation_gate.py",
@@ -130288,7 +130288,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration/external_interaction_client.go",
-            "sha256": "8407725e8bee04dddbac61297c917da1cd0f105655107d02b6562faee1bd74c0"
+            "sha256": "fe306008b7eb5f42fb435c64e7c331a52b2fc6e195bb0c611882e6290904b043"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration/protocol_substitute_identity.go",
@@ -130726,7 +130726,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/external_interaction_client__local_contract_test.go",
-            "sha256": "8f12e348f20c169d804424c2bc9c692dae52b75ef313b1cbcd6073bdb338cc2a"
+            "sha256": "6d0711b3bca32d60cc44ba10dff22bb967b44121cada1e966647945280697c35"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/external_interaction_client_idempotency__local_contract_test.go",
@@ -134342,7 +134342,7 @@
     },
     {
       "path": "content/content/content_account_closure_workflow/fields.yaml",
-      "sha256": "226bec1ddfaf7c9b6c80c51ef2989049f9e1d7dfd6e854605d757b58e871d591"
+      "sha256": "b670523f0026285b2e47f38a1f63757ac995f2f851b8757dcfa888627474adc4"
     },
     {
       "path": "content/content/content_account_closure_workflow/object.yaml",
@@ -134518,7 +134518,7 @@
     },
     {
       "path": "content/content/post/fields.yaml",
-      "sha256": "39a49fad78fb63c5bae4ee86641c6e45a6542b064a7cd286fe8ae7baef2af6c1"
+      "sha256": "ea6c32476967e4e83397e2d0d3bf211d3020f815cf679ce9c3bc8e754fe507c5"
     },
     {
       "path": "content/content/post/markdown_block_sequence_cases.json",
@@ -258707,7 +258707,7 @@
     },
     {
       "path": "content/content/content_account_closure_workflow/fields.yaml",
-      "sha256": "226bec1ddfaf7c9b6c80c51ef2989049f9e1d7dfd6e854605d757b58e871d591",
+      "sha256": "b670523f0026285b2e47f38a1f63757ac995f2f851b8757dcfa888627474adc4",
       "mediaType": "application/yaml",
       "content": {
         "description": "Content 账户关闭事件的耐久消费、外部清理工作与永久防复活栅栏；Post 仅作为被清理对象，不拥有该工作流。",
@@ -259034,7 +259034,7 @@
             ]
           },
           "ContentAccountClosureRuntimeEvidence": {
-            "description": "ContentAccountClosureWorkflow唯一的本地owner空间创建/闭包内容格式，由受管创建producer在HTTP开放前写入，bootstrap经owner只读验证端口消费；不新增业务对象、HTTP operation或Mongo collection。全部字段显式存在、未知字段拒绝，适用alpha/beta/gamma当前target，Prod拒绝。九个集合必须本attempt独占创建并读回，已有/部分创建/未初始化不得补证。root recordCount为collections计数之和；canonicalDigest为collections的完整排序readback数组canonical JSON SHA256，包含每项UUID/count/digest。source绑定独立源空间和连续已应用位置，不以Mongo为空反推源为空。initializedAt仅审计时间；当前资源身份、权限、candidate来自受管输入，不从待验fact反填expected。",
+            "description": "ContentAccountClosureWorkflow唯一的本地owner空间创建/闭包内容格式，由受管创建producer在HTTP开放前写入，bootstrap经owner只读验证端口消费；不新增业务对象、HTTP operation或Mongo collection。全部字段显式存在、未知字段拒绝，适用alpha/beta/gamma当前target以及prod-sim不可提升local rehearsal；prod-hosted拒绝。九个集合必须本attempt独占创建并读回，已有/部分创建/未初始化不得补证。root recordCount为collections计数之和；canonicalDigest为collections的完整排序readback数组canonical JSON SHA256，包含每项UUID/count/digest。source绑定独立源空间和连续已应用位置，不以Mongo为空反推源为空。initializedAt仅审计时间；当前资源身份、权限、candidate来自受管输入，不从待验fact反填expected。",
             "fields": [
               {
                 "constraints": [
@@ -259045,7 +259045,8 @@
                 "values": [
                   "alpha",
                   "beta",
-                  "gamma"
+                  "gamma",
+                  "prod"
                 ]
               },
               {
@@ -259264,7 +259265,8 @@
                 "values": [
                   "alpha",
                   "beta",
-                  "gamma"
+                  "gamma",
+                  "prod"
                 ]
               },
               {
@@ -269641,7 +269643,7 @@
     },
     {
       "path": "content/content/post/fields.yaml",
-      "sha256": "39a49fad78fb63c5bae4ee86641c6e45a6542b064a7cd286fe8ae7baef2af6c1",
+      "sha256": "ea6c32476967e4e83397e2d0d3bf211d3020f815cf679ce9c3bc8e754fe507c5",
       "mediaType": "application/yaml",
       "content": {
         "description": "内容主体（聚合根）",
@@ -273136,7 +273138,8 @@
                 "values": [
                   "alpha",
                   "beta",
-                  "gamma"
+                  "gamma",
+                  "prod"
                 ]
               },
               {
@@ -273356,7 +273359,7 @@
             ]
           },
           "PostSafetyRuntimeAuthorization": {
-            "description": "环境authority对唯一初始化动作的强类型签名授权。Prod/prod-hosted签发始终是仓外正式前驱，本仓只验签，绝不自签或fallback；唯一例外是gamma-local target-owned冷启动producer可复用仓库现役local-managed Environment Ops Ed25519私钥 provisioning 与仓内keyring签发，且必须先以真实provider读回生成独立account-closure subject key、九集合闭包及现役source-allocation current，其他target不得使用该producer。签名覆盖除signature外全部字段的canonical JSON经固定DSSE PAE；environment/target/candidate/data-plane/startup attempt/runtime generation及evidencePredecessor逐项绑定，action只能initialize_post_safety_runtime，issuedAt仅审计且不得替代generation防重放。",
+            "description": "环境authority对唯一初始化动作的强类型签名授权。Prod/prod-hosted签发始终是仓外正式前驱，本仓只验签，绝不自签或fallback；仓内本地producer仅允许gamma-local target-owned冷启动与prod-sim不可提升local rehearsal。gamma-local必须先以真实provider读回生成独立account-closure subject key、九集合闭包及现役source-allocation current；prod-sim rehearsal signer只允许environment=prod且target=prod-sim，不得签发prod-hosted。其他target不得使用本地producer。签名覆盖除signature外全部字段的canonical JSON经固定DSSE PAE；environment/target/candidate/data-plane/startup attempt/runtime generation及evidencePredecessor逐项绑定，action只能initialize_post_safety_runtime，issuedAt仅审计且不得替代generation防重放。",
             "fields": [
               {
                 "constraints": [
@@ -273367,7 +273370,8 @@
                 "values": [
                   "alpha",
                   "beta",
-                  "gamma"
+                  "gamma",
+                  "prod"
                 ]
               },
               {

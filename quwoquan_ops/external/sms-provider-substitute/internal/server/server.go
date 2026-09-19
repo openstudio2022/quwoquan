@@ -33,6 +33,7 @@ var (
 
 type Config struct {
 	Environment         string
+	Target              string
 	ConfigurationDigest string
 	ProviderToken       string
 	OperatorToken       string
@@ -44,6 +45,7 @@ type Config struct {
 
 type Server struct {
 	environment         string
+	target              string
 	configurationDigest string
 	providerToken       string
 	operatorToken       string
@@ -92,10 +94,23 @@ type otpReadRequest struct {
 	RecipientDigest string `json:"recipientDigest"`
 }
 
+func localSubstituteIdentity(environment, target string) bool {
+	if environment == "prod" {
+		return target == "prod-sim"
+	}
+	switch environment {
+	case "alpha", "beta", "gamma":
+		return target == environment+"-local"
+	default:
+		return false
+	}
+}
+
 func New(cfg Config) (*Server, error) {
 	environment := strings.TrimSpace(cfg.Environment)
-	if environment != "alpha" && environment != "beta" && environment != "gamma" {
-		return nil, fmt.Errorf("debug SMS substitute requires alpha|beta|gamma, got %q", environment)
+	target := strings.TrimSpace(cfg.Target)
+	if !localSubstituteIdentity(environment, target) {
+		return nil, fmt.Errorf("debug SMS substitute forbids environment/target %q/%q", environment, target)
 	}
 	configurationDigest := strings.TrimSpace(cfg.ConfigurationDigest)
 	if !digestPattern.MatchString(configurationDigest) {
@@ -132,6 +147,7 @@ func New(cfg Config) (*Server, error) {
 	}
 	return &Server{
 		environment:         environment,
+		target:              target,
 		configurationDigest: configurationDigest,
 		providerToken:       cfg.ProviderToken,
 		operatorToken:       cfg.OperatorToken,
@@ -158,6 +174,7 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 		"status":              "ready",
 		"adapterId":           AdapterID,
 		"environment":         s.environment,
+		"target":              s.target,
 		"configurationDigest": s.configurationDigest,
 		"profile":             s.defaultScene,
 		"nonPromotable":       true,

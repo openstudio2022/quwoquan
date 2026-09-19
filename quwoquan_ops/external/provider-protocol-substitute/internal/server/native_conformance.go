@@ -134,6 +134,7 @@ func newNativeHarness() (*nativeHarness, error) {
 	operatorToken := hex.EncodeToString(operatorBytes)
 	instance, err := New(Config{
 		Environment:              environment,
+		Target:                   environment + "-local",
 		ConfigurationDigest:      configuration,
 		RuntimeCompositionDigest: runtime,
 		OperatorToken:            operatorToken,

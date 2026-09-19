@@ -1,4 +1,4 @@
-"""Prepare target-scoped GraphQL registry signing keys for local non-production."""
+"""Prepare target-scoped GraphQL registry signing keys for local package targets."""
 
 from __future__ import annotations
 
@@ -18,6 +18,14 @@ from .output_paths import deployment_target_path
 
 ROLE = "graphql-read-registry"
 DEFAULT_KEY_ID = "local-managed-ed25519"
+_LOCAL_SIGNING_TARGETS = frozenset(
+    {
+        ("alpha", "alpha-local"),
+        ("beta", "beta-local"),
+        ("gamma", "gamma-local"),
+        ("prod", "prod-sim"),
+    }
+)
 
 
 def prepare_local_graphql_read_registry_signing(
@@ -25,11 +33,7 @@ def prepare_local_graphql_read_registry_signing(
     environment: str,
     target: str,
 ) -> SigningMaterial:
-    if environment not in {"alpha", "beta", "gamma"}:
-        raise ValueError(
-            "GraphQL registry local signing bootstrap is limited to Alpha/Beta/Gamma"
-        )
-    if target != f"{environment}-local":
+    if (environment, target) not in _LOCAL_SIGNING_TARGETS:
         raise ValueError(
             "GraphQL registry local signing target/environment mismatch: "
             f"environment={environment} target={target}"

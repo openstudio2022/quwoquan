@@ -9,15 +9,17 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import secrets
 import subprocess
+import time
 
 import quwoquan_ops.cli.lib.local_environment_auth as _pkg
 
 from .guards import (
     _canonical_actor_role,
     _canonical_test_data_instance_id,
-    _require_nonprod_target,
+    _require_local_environment,
     _required_string,
 )
 from .models import LocalAcceptanceActor, LocalAcceptanceSession
@@ -39,10 +41,11 @@ def open_local_phone_acceptance_session(
     Phone numbers come from a target-scoped protected identity pool and the OTP
     is consumed once from the target-isolated capture control plane. Neither
     value is returned in receipts.
-    Prod is rejected by ``_require_nonprod_target``.
+    Hosted Prod is rejected by ``_require_local_environment``; prod-sim local
+    rehearsal is the only Prod pair accepted.
     """
 
-    _require_nonprod_target(environment, target_name)
+    _require_local_environment(environment, target_name)
     canonical_instance = _canonical_test_data_instance_id(test_data_instance_id)
     canonical_identity_set_id = _canonical_actor_role(identity_set_id)
     canonical_role = _canonical_actor_role(actor_role)
@@ -133,10 +136,10 @@ def open_local_phone_acceptance_session(
         refresh_token=_required_string(
             login, "refreshToken", "phone login response"
         ),
+        device_id=device_id,
     )
-    me = _pkg.request_local_environment_json(
+    me = _authenticated_me(
         base_url,
-        path="/me",
         session=session,
         timeout_seconds=timeout_seconds,
     )
@@ -150,6 +153,31 @@ def open_local_phone_acceptance_session(
         account_state=str(login.get("accountState") or "").strip(),
         identity_origin=str(login.get("identityOrigin") or "").strip(),
     )
+
+
+def _authenticated_me(
+    base_url: str,
+    *,
+    session: LocalAcceptanceSession,
+    timeout_seconds: float,
+) -> dict[str, object]:
+    """Read /me after login; retry transient rollout/redis unavailability."""
+
+    last_error: _pkg.LocalEnvironmentHTTPError | None = None
+    for attempt in range(3):
+        try:
+            return _pkg.request_local_environment_json(
+                base_url,
+                path="/me",
+                session=session,
+                timeout_seconds=timeout_seconds,
+            )
+        except _pkg.LocalEnvironmentHTTPError as exc:
+            last_error = exc
+            if exc.status != 503 or attempt == 2:
+                raise
+            time.sleep(0.4 * (attempt + 1))
+    raise last_error
 
 
 def open_test_data_acceptance_session(
@@ -259,20 +287,36 @@ def _clear_local_otp_send_throttle(*, target_name: str, phone: str) -> None:
         if not isinstance(redis_port, int) or redis_port <= 0:
             return
         phone_digest = hashlib.sha256(phone.strip().encode("utf-8")).hexdigest()
-        _pkg.subprocess.run(
+        command = ["redis-cli", "-p", str(redis_port)]
+        extra_env: dict[str, str] = {}
+        if target_name in _pkg._LOCAL_TARGETS.values():
+            from quwoquan_ops.cli.commands.source_allocation import (
+                prepare_gamma_local_redis_acl,
+            )
+
+            password = str(
+                prepare_gamma_local_redis_acl().get("runtimePassword") or ""
+            ).strip()
+            if not password:
+                return
+            command.extend(["--user", "qwq_runtime"])
+            extra_env["REDISCLI_AUTH"] = password
+        command.extend(
             [
-                "redis-cli",
-                "-p",
-                str(redis_port),
+                "--no-auth-warning",
                 "DEL",
                 f"otp:resend:{phone_digest}",
                 f"otp:quota:{phone_digest}",
                 f"otp:quota-deadline:{phone_digest}",
-            ],
+            ]
+        )
+        _pkg.subprocess.run(
+            command,
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=5,
+            env={**os.environ, **extra_env} if extra_env else None,
         )
     except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired):
         return

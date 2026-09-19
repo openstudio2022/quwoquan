@@ -161,6 +161,15 @@ class LocalAssistantSkillPackageKeysSecurityTest(unittest.TestCase):
             public_keys_json=alpha_keys,
         )
         self.assertTrue(prod["buildId"].startswith("prod-"))
+        sim = publication.derive_official_skill_package_release_identity(
+            environment="prod",
+            target="prod-sim",
+            source_digest=source_digest,
+            source_revision=source_revision,
+            public_keys_json=alpha_keys,
+        )
+        self.assertTrue(sim["buildId"].startswith("prod-"))
+        self.assertEqual(sim["signingKeyId"], KEY_ID)
         with self.assertRaisesRegex(RuntimeError, "target identity"):
             publication.derive_official_skill_package_release_identity(
                 environment="alpha",
@@ -168,6 +177,44 @@ class LocalAssistantSkillPackageKeysSecurityTest(unittest.TestCase):
                 source_digest=source_digest,
                 source_revision=source_revision,
                 public_keys_json=alpha_keys,
+            )
+
+    def test_prod_sim_package_uses_rehearsal_skill_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            deploy_root = Path(temporary) / "deploy"
+            with mock.patch.dict(
+                os.environ,
+                {"QWQ_DEPLOY_WORK_ROOT": str(deploy_root)},
+                clear=False,
+            ):
+                signing = assistant_skill_package_artifact._signing_material(
+                    "prod",
+                    "prod-sim",
+                    {},
+                )
+            self.assertEqual(signing.key_id, KEY_ID)
+            payload = json.loads(signing.public_keys_json)
+            self.assertIn(KEY_ID, payload)
+            self.assertEqual(
+                len(base64.b64decode(payload[KEY_ID], validate=True)),
+                32,
+            )
+            private_path = (
+                deploy_root
+                / "prod-sim"
+                / "secrets"
+                / "assistant-skill-package-rehearsal"
+                / "signing.pem"
+            )
+            self.assertTrue(private_path.is_file())
+            self.assertFalse(
+                (
+                    deploy_root
+                    / "prod-hosted"
+                    / "secrets"
+                    / "assistant-skill-package-rehearsal"
+                    / "signing.pem"
+                ).exists()
             )
 
     def test_prod_package_requires_external_signing_material(self) -> None:

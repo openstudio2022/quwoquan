@@ -83,7 +83,15 @@ LOCAL_TLS_PROFILE_BY_TARGET = {
     "prod-sim": "acme-dns01-sim",
 }
 PROD_TLS_PROFILE = "public-ca-prod"
-_FORMAL_LOCAL_TARGETS = frozenset({"alpha-local", "beta-local", "gamma-local"})
+_FORMAL_LOCAL_TARGETS = frozenset(
+    {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
+)
+_FORMAL_LOCAL_PROJECT_SEGMENT = {
+    "alpha-local": "alpha",
+    "beta-local": "beta",
+    "gamma-local": "gamma",
+    "prod-sim": "prod_sim",
+}
 _FORMAL_PROJECT_RUN_NUMBER = r"[1-9][0-9]*"
 
 
@@ -106,7 +114,7 @@ def formal_release_compose_project_name(
         raise ValueError("formal release Compose project run identity is invalid")
     else:
         suffix = f"_{normalized_run_id}_{normalized_attempt}"
-    environment = target_name.removesuffix("-local")
+    environment = _FORMAL_LOCAL_PROJECT_SEGMENT[target_name]
     return f"quwoquan_{environment}_release{suffix}"
 
 
@@ -525,7 +533,13 @@ def validate_data_plane_metrics_coverage(
     targets = manifest.get("targets")
     if not isinstance(targets, dict):
         return [*issues, "environment topology targets are unavailable for metrics coverage"]
-    for target_name in ("alpha-local", "beta-local", "gamma-local", "prod-hosted"):
+    for target_name in (
+        "alpha-local",
+        "beta-local",
+        "gamma-local",
+        "prod-sim",
+        "prod-hosted",
+    ):
         target = targets.get(target_name)
         data_plane = target.get("dataPlane") if isinstance(target, dict) else None
         resources = data_plane.get("resources") if isinstance(data_plane, dict) else None
@@ -812,8 +826,6 @@ def validate_environment_topology(
                 expected_port_role = None
                 if target_name != "prod-hosted":
                     expected_port_role = LOCAL_PUBLIC_PORT_ROLES[field]
-                    if target_name == "prod-sim" and field == "mediaUpload":
-                        expected_port_role = "media-edge"
                 if role.get("portRole") != expected_port_role:
                     issues.append(
                         f"{target_name}: resolvedUrlRoles.{field}.portRole must be "
@@ -856,8 +868,6 @@ def validate_environment_topology(
                 )
             if isinstance(public_bases, dict):
                 for field, role_name in LOCAL_PUBLIC_PORT_ROLES.items():
-                    if target_name == "prod-sim" and field == "mediaUpload":
-                        role_name = "media-edge"
                     value = str(public_bases.get(field, "")).strip()
                     actual_port = _url_port(value)
                     expected_port = role_ports.get(role_name)
@@ -962,7 +972,13 @@ def validate_environment_topology(
                 target,
                 target_name=target_name,
                 required=target_name
-                in {"alpha-local", "beta-local", "gamma-local", "prod-hosted"},
+                in {
+                    "alpha-local",
+                    "beta-local",
+                    "gamma-local",
+                    "prod-sim",
+                    "prod-hosted",
+                },
             )
         )
         if target_name == "prod-hosted" and env_name != "prod":

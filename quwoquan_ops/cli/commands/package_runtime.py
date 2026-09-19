@@ -103,6 +103,7 @@ def _command_package_unlocked(
     package_capsule_root: Path | None = None,
 ) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli import legal_static
     from quwoquan_ops.cli.lib.deployment_candidate_manifest import manifest
 
     if getattr(args, "kind", "runtime") == "app-artifact":
@@ -307,14 +308,22 @@ def _command_package_unlocked(
             **timing,
         }
     legal_static_placeholder = False
+    legal_placeholder_fields: list[str] = []
     if rehearsal_material:
         # Skill 包签名等 prod 期外部签名材料在 rehearsal 中改用独立随机 rehearsal key。
         package_environment["QWQ_PROD_HOSTED_MATERIAL_SOURCE"] = "local-build"
     if not args.service:
         print("[runtime-package-stage] legal-static", file=sys.stderr, flush=True)
         legal_environment = dict(package_environment)
-        if rehearsal_material:
-            # rehearsal 只做内部验证：法务占位字段记入候选，不阻断打包，也不构成证据。
+        if (
+            legal_static.placeholder_policy_for_package(
+                env_name=env_name,
+                target_name=target_name,
+                rehearsal_material=rehearsal_material,
+            )
+            == "mark"
+        ):
+            # prod-sim 本地验证与 hosted rehearsal 均 mark 占位，不构成法务准出。
             legal_environment["QWQ_LEGAL_STATIC_PLACEHOLDER_POLICY"] = "mark"
         legal_result, legal_payload = _stackctl._legal_static_command(
             "package",
@@ -323,7 +332,8 @@ def _command_package_unlocked(
             source_root=package_source_root,
             environment=legal_environment,
         )
-        legal_static_placeholder = bool(legal_payload.get("placeholderFields"))
+        legal_placeholder_fields = list(legal_payload.get("placeholderFields") or [])
+        legal_static_placeholder = bool(legal_placeholder_fields)
         reports.append(
             _receipt_safe_step({
                 "name": "legal-static-package",
@@ -411,6 +421,8 @@ def _command_package_unlocked(
                 service,
                 "--env",
                 env_name,
+                "--target",
+                target_name,
             ]
             svc_result = _stackctl.run(svc_cmd, cwd=package_source_root, env=package_environment)
             reports.append(
@@ -690,7 +702,7 @@ def _command_package_unlocked(
     if (
         bool(args.include_services)
         and not args.service
-        and target_name in {"alpha-local", "beta-local", "gamma-local"}
+        and target_name in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
     ):
         if (
             provider_runtime_package is None
@@ -736,7 +748,7 @@ def _command_package_unlocked(
                 candidate_digest=str(package_snapshot["baselineId"]),
                 source_root=package_source_root,
             )
-        except RuntimeError as exc:
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
             timing = _stackctl._finish_timing(started_monotonic, started_at)
             detail = _receipt_safe_text(str(exc))
             _stackctl.write_json(
@@ -878,10 +890,16 @@ def _command_package_unlocked(
                 "baselineId": package_snapshot["baselineId"],
                 **timing,
             }
-        details.append(
-            "prod-sim App launch bundle ready: "
-            + str(app_launch_bundle["artifactManifestDigest"])
-        )
+        if app_launch_bundle is None:
+            details.append(
+                "prod-sim App launch bundle omitted: no release artifact root; "
+                "skip-app verification only"
+            )
+        else:
+            details.append(
+                "prod-sim App launch bundle ready: "
+                + str(app_launch_bundle["artifactManifestDigest"])
+            )
 
     if package_snapshot is None or package_capsule_root is None:
         raise RuntimeError("runtime package requires an immutable input capsule")
@@ -1008,6 +1026,18 @@ def _command_package_unlocked(
     payload.update(materialized_release_evidence)
     if topology is not None:
         payload["topologyTarget"] = _stackctl.get_target(topology, target_name)
+    if env_name == "prod" and target_name == "prod-sim":
+        provider_rehearsal = provider_runtime_package.get("rehearsal") if provider_runtime_package else None
+        if provider_rehearsal != {
+            "kind": "local-provider-substitute",
+            "nonPromotable": True,
+        }:
+            raise RuntimeError("prod-sim Provider rehearsal marker is missing")
+        payload["placeholderFields"] = legal_placeholder_fields
+        # This is independent from legal placeholders: prod-sim substitutes can
+        # never produce a promotable candidate, even after legal completion.
+        payload["providerRehearsal"] = provider_rehearsal
+        payload["nonPromotable"] = True
     _stackctl.write_json(report_dir / "report.json", payload)
     try:
         package_identity = _stackctl._validate_runtime_package_identity_readback(

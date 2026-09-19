@@ -38,7 +38,7 @@
 - user_acceptance 验证真实用户或运营结果。
 - Alpha/Beta/Gamma Debug-local 开发验收选择受管 `protocol_fixture/local_*` Port 对等 Adapter；缺内部协议端点、LiveKit 材料或 health 直接阻断启动和证据生成。
 - 普通本地、dirty tree、未评审 commit 或 local attestation 结果必须标记 `nonPromotable=true`。
-- 同一环境本次命令新产生的 14×3 格若全部绑定该环境 active immutable candidate、由测试拥有的 CaseResult/cleanup/observability 可复核，则可满足该环境的 Debug-local functional readiness；该结论不要求 CI HMAC，也不得提升商业或发布 readiness。
+- 对任一 target `t`，required 集合 `R_t` 必须由执行器重新解析当前候选 generated target Binding 的 exact bytes，取 `required=true` Capability 后按 canonical identity 去重排序；预期 cell 集合由 `R_t × applicable layers` 动态派生，规格、聚合器与 gate 均不得固化 Capability 名单或数量。同一环境本次命令新产生的全部预期格若绑定该环境 active immutable candidate、由测试拥有的 CaseResult/cleanup/observability 可复核，则可满足该环境的 Debug-local functional readiness；该结论不要求 CI HMAC，也不得提升商业或发布 readiness。
 - 只有 canonical provider-release workflow 在 clean reviewed commit 上重执行、绑定 active immutable candidate 并由 CI attestation authority 签发的完整 matrix evidence 才可标记为 promotable 并参与正式 release matrix readiness，但仍不得替代 managed non-prod/Prod Remote receipt。
 - Gamma Debug-local 运行完整第一方拓扑、production Remote composition、独立协议 workload、真实本地 LiveKit 与黑盒 API/模拟器 Journey；禁止 UI Mock、Integration Service 内嵌 listener、运行时跨环境 fallback 和生产租户凭据。
 - Alpha/Beta/Gamma 商业 readiness 必须另有各自 managed non-prod Provider Remote receipt；Debug-local matrix 不得提升 managed non-prod 或 Prod 正式 Adapter readiness，Gamma nonprod receipt 不得替代 Prod hosted rollout receipt。
@@ -50,14 +50,16 @@
 - 每个实际 harness 直接声明其 `spec_ref`、Capability、Adapter、测试层、typed Port、契约来源、断言集合、命令目标和网络边界，并由执行进程写出可校验 CaseResult；不得由聚合器补写成功、断言、数据、清理或观测。
 - api_integration 与 user_acceptance 中只断言“应阻断”或 `GATE_BLOCK` 的静态测试不构成 Remote evidence，必须阻断而非降格为通过。
 - 同一 Capability 的九格保持同一 typed Port、契约与公共/能力专项断言集合；只有 Prod Remote `user_acceptance` 追加 health/switch/rollback 发布断言。每格绑定当前选中的环境 Adapter，而不是读取既有报告。
-- Debug-local functional readiness 只消费当前 `stackctl provider-conformance --environment-matrix` invocation 新生成的 42 格；聚合结果必须显式声明 `readinessScope=local_functional`、`releasePromotionClaimed=false` 和 `attemptEvidenceCount=executed=42`。历史输出、其它环境 evidence、重复 cell 或缺 active candidate receipt 任一出现均阻断当前环境，不得为了复用历史结果扫描聚合成通过。
-- Alpha/Beta/Gamma 各 42 格共 126 格若与 iOS Simulator + Android Emulator 的 `emulator_only` matrix 同轮绑定，只能支持 `ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN`；该回执必须 `nonPromotable=true`，不得补写 Android 真机覆盖、不得关闭正式 140-cell 或 Prod Remote blocker。
-- 正式 provider-release producer 必须从 generated Binding 动态推导 14 个 required Capability：Alpha/Beta/Gamma 各执行 14×3 层共 42 格，Prod 执行 14 个 native/operator `user_acceptance` 格，总计恰好 140 个唯一 cell。缺失、重复、额外、legacy evidence、local trust 或非 active receipt 任一出现即阻断；run-attempt 使用独立输出根，禁止迁移历史 evidence。
+- Debug-local functional readiness 只消费当前 `stackctl provider-conformance --environment-matrix` invocation 按 `R_t × {local_contract,api_integration,user_acceptance}` 新生成的全部预期格；聚合结果必须显式声明 `readinessScope=local_functional`、`releasePromotionClaimed=false`，且 `attemptEvidenceCount.executed` 精确等于本次动态 expected cell count。历史输出、其它环境 evidence、重复/额外 cell 或缺 active candidate receipt 任一出现均阻断当前环境，不得为了复用历史结果扫描聚合成通过。
+- Alpha/Beta/Gamma 全部动态预期格若与 iOS Simulator + Android Emulator 的 `emulator_only` matrix 同轮绑定，只能支持 `ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN`；该回执必须 `nonPromotable=true`，不得补写 Android 真机覆盖、不得关闭正式 provider-release 或 Prod Remote blocker。
+- `prod-sim` 必须从其 package-bound generated target Binding 动态派生 `R_prod-sim`，运行完整第一方服务拓扑和 target-scoped Port 对等 protocol substitute/local infrastructure；每个 required Capability 至少有一次经其 owner 第一方 Service/Integration 黑盒入口到 Provider 的非零调用，并同源产出 invocation、effect/readback、cleanup 与 logs/traces/metrics evidence。结果只能标记 `readinessScope=local_rehearsal|local_functional`、`releasePromotionClaimed=false`、`nonPromotable=true`，且不受 legal-static 占位是否消除影响。
+- 正式 provider-release producer 必须分别从 Alpha/Beta/Gamma 与 `prod-hosted` 的 generated target Binding 动态派生各自 `R_t`：非生产 target 对每个 required Capability 执行三层，`prod-hosted` 对每个 required Capability 执行 native/operator `user_acceptance`。正式 expected cell count 精确等于 `Σ(nonprod |R_t|×3) + |R_prod-hosted|`；缺失、重复、额外、legacy evidence、local trust 或非 active receipt 任一出现即阻断，run-attempt 使用独立输出根，禁止迁移历史 evidence。
+- `prod-hosted` cell 只接受真实厂商 Provider、真实凭据与正式 hosted rollout/health/switch/callback-drain/last-good/rollback receipt，必须拒绝 fixture/protocol substitute/local infrastructure；`prod-sim` evidence 永不提升 Prod Adapter/Capability readiness，也不能关闭该 receipt 缺口。
 
 <a id="req-003"></a>
 ### REQ-003 假报告、动态跳过、输出越界和敏感信息均 fail-closed
 
-- 所有负例有自动化测试且 gate_repo/CI 执行同一检查。
+- 所有负例有自动化测试且 gate_repo/CI 执行同一检查。每个 expected cell 必须包含至少一次实际 Provider invocation；零调用、required skip、旧 receipt、只探测 `/healthz`、缺 effect/readback、缺 cleanup 或缺 logs/traces/metrics 任一出现均判 FAIL。
 - 每份可用 evidence 同时绑定当前 commit/image/config/ContractGraph/Adapter 与测试源/CaseResult digest、命令、目标、网络边界、断言、logs/traces/metrics、cleanup receipt 及 source-tree/review/candidate/attestation authority 身份；nonprod active candidate 必须由 canonical running/full startup receipt + active deployment manifest + OCI composition 同源证明，Prod 必须由 native/operator readback 与 hosted release readiness 同源证明，validator 必须重新解析当前 receipt 而非信任 evidence 自报。dirty/unreviewed/local-authority/缺 active receipt evidence 必须 fail-closed 为 `nonPromotable=true`。dry-run、旧 digest、零断言、缺观测或缺清理均不能提升 readiness。
 - 只有 Prod Remote receipt 追加生产 Adapter health、可切换性和回滚可恢复性；Gamma nonprod receipt 不得替代 Prod hosted receipt。
 
@@ -92,18 +94,21 @@
 
 - GIVEN Alpha、Beta、Gamma 环境 artifact 已绑定对应 nonprod Provider Workload，Prod artifact 已绑定正式 Provider Workload，且测试数据与 cleanup 合同完整。
 - WHEN 对同一 Capability 执行 local_contract、api_integration 和 user_acceptance。
-- THEN 聚合报告恰含九个 required cell，且每格 Provider、网络边界、数据和环境语义匹配。
+- THEN 聚合器重新解析各 target 当前候选的 generated target Binding，并证明实际 cell key 集合与动态 expected 集合完全相等；不得以固定 Capability 数量、缺失、重复或额外 cell 通过，且每格 Provider、网络边界、数据和环境语义匹配。
 - AND 每格由该环境 artifact 封存的 Provider Workload 实际执行，并可从 CaseResult 追溯命令、目标、契约、断言、Workload image 与测试 artifact digest。
 - AND Alpha/Beta/Gamma Debug-local cell 均绑定各自目标的 Port 对等替代 Adapter；普通本地、dirty tree、未评审 commit 或 local key 生成的 cell 标记 `nonPromotable=true`。
-- AND 当前环境本次 invocation 的 42 格在 active immutable candidate、selected Binding、测试源、CaseResult、cleanup 和 observability 全部同源时，允许以 `local-sha256` 满足该环境 functional readiness，且无需 CI attestation key。
-- AND 三环境共 126 格与双模拟器 UAT 即使全部通过，也只能形成独立的 emulator-only non-promotable claim；正式准出仍等待 Android 真机、CI-attested 140 格与 Prod Remote receipt。
+- AND 当前环境本次 invocation 的全部动态预期格在 active immutable candidate、selected Binding、测试源、CaseResult、cleanup 和 observability 全部同源时，允许以 `local-sha256` 满足该环境 functional readiness，且无需 CI attestation key。
+- AND 三环境全部动态预期格与双模拟器 UAT 即使全部通过，也只能形成独立的 emulator-only non-promotable claim；正式准出仍等待 Android 真机、CI-attested provider-release 全量动态 expected set 与 Prod Remote receipt。
 - AND 历史 evidence 不得补格。
 - AND 只有 clean reviewed commit + active immutable candidate + CI attestation authority 的 provider-release 重执行结果可参与正式 release matrix readiness。Gamma cell 额外执行完整第一方拓扑的黑盒 API 与模拟器 Journey，缺 endpoint/health、观测或清理回执时 fail-closed。
+- WHEN 对 `prod-sim` 执行 package-bound Provider rehearsal。
+- THEN 从 `R_prod-sim` 动态派生的每项 required Capability 都必须经完整第一方 Service/Integration 黑盒入口实际调用 target-scoped Port 对等 Provider，并取得同一 attempt 的 invocation、effect/readback、cleanup 与 logs/traces/metrics；expected invocation count 为零、required skip、旧 receipt、重复补格或只探测 `/healthz` 均失败。
+- AND `prod-sim` 结果固定为 `local_rehearsal|local_functional`、`releasePromotionClaimed=false`、`nonPromotable=true`，不得生成或提升 Prod Adapter/Capability readiness。
 - WHEN 对 Alpha/Beta/Gamma 执行商业 Provider readiness。
 - THEN 每个环境另有绑定 managed non-prod selected Adapter、不可变候选和真实 Remote 结果的 receipt，且不接受 Debug-local matrix 作为替代。
 - WHEN 执行生产商用准出。
-- THEN 每个 required Capability 另有一个绑定 Prod Provider Workload、Prod environment artifact 与 hosted topology 的 Remote `user_acceptance` receipt，且不接受 Alpha/Beta/Gamma nonprod matrix 作为替代。
-- AND 正式 artifact 恰含 126 个 nonprod cell 与 14 个 Prod cell；`provider-conformance-readiness` 的 `issues/sourceCoverageIssues` 均为空、四环境同一 14 Capability 全部 `required=true/capability_ready=true`，140 个 raw evidence exact bytes 由 manifest/finalizer 收集并由 environment-stability final acceptance 重新推导验证。
+- THEN `R_prod-hosted` 的每个 required Capability 另有一个绑定真实厂商 Prod Provider Workload、真实凭据、Prod environment artifact 与 hosted topology 的 Remote `user_acceptance` receipt，且包含正式 rollout/health/switch/callback-drain/last-good/rollback readback；不接受 Alpha/Beta/Gamma nonprod matrix、`prod-sim`、fixture 或 local workload 作为替代。
+- AND 正式 artifact 的 actual cell key 集合与 `Σ(nonprod R_t×3) ∪ R_prod-hosted` 动态 expected 集合完全相等；`provider-conformance-readiness` 的 `issues/sourceCoverageIssues` 均为空，每个 target Binding 的 required Capability 均达到其对应 scope 的 readiness，全部 raw evidence exact bytes 由 manifest/finalizer 收集并由 environment-stability final acceptance 重新推导验证。
 
 <a id="gwt-003"></a>
 ### GWT-003 假报告、动态跳过、输出越界和敏感信息均 fail-closed
@@ -127,14 +132,14 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：由当前 generated Binding 动态派生的全部 executable source 必须被覆盖且 `sourceCoverageIssues=[]`，不得在规格中固化会随 Capability/Adapter 变更而漂移的 source 数量；当前覆盖 14 个 Capability 的 selected Binding × 三层。Prod `user_acceptance` 均有真实 harness，push/message/RTC 另含 Provider two-device native readback。当前真正缺口是 Alpha/Beta/Gamma 尚未在同一 active candidate 上分别执行出 42 格 Debug-local functional evidence，正式 provider-release 也尚未执行出 140 格 CI-attested evidence，且没有 Prod Remote receipt，因此 local Green 与 `gate-release` 均必须阻断。source/harness 存在不得冒充执行通过。
+- 影响或价值：由各 target 当前 generated Binding 动态派生的全部 executable source 必须被覆盖且 `sourceCoverageIssues=[]`，不得在规格或聚合器中固化会随 Capability/Adapter 变更而漂移的 source 名单或数量。Prod `user_acceptance` 均须有真实 harness，push/message/RTC 另含 Provider two-device native readback。当前真正缺口是 Alpha/Beta/Gamma 尚未在同一 active candidate 上执行出各自完整动态 expected set，`prod-sim` 尚未逐 required Capability 形成完整第一方黑盒 invocation/effect/cleanup/observability local rehearsal，正式 provider-release 也尚未执行出 CI-attested 全量动态 expected set，且没有真实厂商 Prod hosted Remote receipt，因此 local Green 与 `gate-release` 均必须阻断。source/harness 存在不得冒充执行通过。
 - PublicProvider 的本地 TLS conformance 只证明 Nominatim/OSRM compatible wire，不构成真实公网或 Prod probe。
 - Open-Meteo 继续复用 Assistant owner 的 canonical `assistant.weather.forecast` binding，不在 Integration 复制 Adapter。
 - `location.poi.search` 与 `location.route.read` 的**真实公网 Provider**（`ext.map.nominatim` / `ext.route.osrm`）在四环境保持未绑定。绑定真实 endpoint 前必须由人工确认自托管/商用 endpoint、Nominatim 使用政策与可识别 User-Agent/联系策略、OSRM 容量与限流政策，并生成绑定 active candidate/config digest 的 Remote receipt。
 - `location.poi.search` 四环境保持 `not_required`：nonprod 三环境必须与 Prod 共享同一 binding 档（[云侧信任域裁决 DEC-005](../../deliver-deploy-prod-pipeline/design.md#dec-005)），因此不允许只在 Alpha 单独启用替身。受管非生产协议替身 `ext.map.nominatim.protocol_substitute`（`local_topology:provider-protocol-substitute` 的 `/nominatim` 协议兼容面）与其三层自描述 conformance source 已就绪，UAT 层可复用发布选点页真实 journey（`SearchLocations` 公开路径经 `LocationPoiSearchPort`），待四环境同步声明后翻牌。替身启用不豁免上一条真实 Provider 政策。
 - `location.route.read` 四环境保持 `not_required`：App 当前无路线消费页面，`user_acceptance` 层无法提供真实 user journey，三层 source 无法闭环；替身 `/osrm` 协议兼容面与 `ext.route.osrm.protocol_substitute` adapter 契约已就绪，待 App 路线消费点落地后再启用并补齐三层 source。
 - Open-Meteo 的真实 Remote receipt 同样由其 owner 环境人工政策确认后生成，禁止把公共 demo endpoint 或本地 conformance 结果写成 `passed`。
-- 完成判定：`GWT-002` 对应行为满足；每个实际 Capability/Adapter/layer 都有自描述原生 harness，14 个 Capability 在同一候选版本完成 Alpha/Beta/Gamma 九格 evidence 与 Prod Remote receipt，并通过 `--require-ready gamma` 与 `--require-ready prod`。
+- 完成判定：`GWT-002` 对应行为满足；每个 target Binding 动态枚举出的 required Capability/Adapter/layer 都有自描述原生 harness，在同一候选版本完成 Alpha/Beta/Gamma 动态九格、`prod-sim` local rehearsal 与真实厂商 Prod hosted Remote receipt，并通过 `--require-ready gamma` 与 `--require-ready prod`。
 - 依赖：不可变候选镜像 digest、CI attestation key、Alpha/Beta/Gamma 受管非生产 Provider 材料、Prod 生产厂商材料、受控测试数据与 cleanup/observability 回执，以及 Prod health/switch/rollback 回执。
 
 <a id="open-003"></a>

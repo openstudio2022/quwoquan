@@ -73,8 +73,8 @@ class ContentAccountClosureRuntimeCollection(BaseModel):
 
 
 class ContentAccountClosureRuntimeEvidence(BaseModel):
-    """ContentAccountClosureWorkflow唯一的本地owner空间创建/闭包内容格式，由受管创建producer在HTTP开放前写入，bootstrap经owner只读验证端口消费；不新增业务对象、HTTP operation或Mongo collection。全部字段显式存在、未知字段拒绝，适用alpha/beta/gamma当前target，Prod拒绝。九个集合必须本attempt独占创建并读回，已有/部分创建/未初始化不得补证。root recordCount为collections计数之和；canonicalDigest为collections的完整排序readback数组canonical JSON SHA256，包含每项UUID/count/digest。source绑定独立源空间和连续已应用位置，不以Mongo为空反推源为空。initializedAt仅审计时间；当前资源身份、权限、candidate来自受管输入，不从待验fact反填expected。"""
-    environment: Literal["alpha", "beta", "gamma"]
+    """ContentAccountClosureWorkflow唯一的本地owner空间创建/闭包内容格式，由受管创建producer在HTTP开放前写入，bootstrap经owner只读验证端口消费；不新增业务对象、HTTP operation或Mongo collection。全部字段显式存在、未知字段拒绝，适用alpha/beta/gamma当前target以及prod-sim不可提升local rehearsal；prod-hosted拒绝。九个集合必须本attempt独占创建并读回，已有/部分创建/未初始化不得补证。root recordCount为collections计数之和；canonicalDigest为collections的完整排序readback数组canonical JSON SHA256，包含每项UUID/count/digest。source绑定独立源空间和连续已应用位置，不以Mongo为空反推源为空。initializedAt仅审计时间；当前资源身份、权限、candidate来自受管输入，不从待验fact反填expected。"""
+    environment: Literal["alpha", "beta", "gamma", "prod"]
     target: str = Field(pattern=r".*\S.*")
     candidateDigest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     dataPlaneBindingDigest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
@@ -94,7 +94,7 @@ class ContentAccountClosureRuntimeEvidence(BaseModel):
 
 class ContentAccountClosureRuntimeSourceCreation(BaseModel):
     """环境owner在现役target排他锁内独占创建的managed allocation binding，不宣称PG/Redis提供永久不可复用UUID。两个ManagedAllocationBindingId由create-once受保护配置pin，必须联合核对本次创建动作、PG数据库/角色实际权限、Redis ACL、独立credential identity、candidate中的producer到源绑定及旧凭据拒绝；随机标识或摘要本身不授信。PG system identifier/OID、容器/mount仅辅助定位。admin/root绕行及不可区分的管理员拷贝不在本地非生产信任模型，观察到drift拒绝；已有或部分资源不补发new。User schema仅由环境owner调用User现役初始化机制，Content服务不得跨库创建业务schema。"""
-    environment: Literal["alpha", "beta", "gamma"]
+    environment: Literal["alpha", "beta", "gamma", "prod"]
     target: str = Field(pattern=r".*\S.*")
     candidateDigest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     dataPlaneBindingDigest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")

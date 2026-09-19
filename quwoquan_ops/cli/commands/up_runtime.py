@@ -449,10 +449,38 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
 
     if result is not None:
         pass
-    elif requested_target in {"alpha-local", "beta-local", "gamma-local"}:
+    elif requested_target in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
         # Every supported local workload consumes the same packaged OCI
         # composition.  content-release only narrows runtime probes; it never
         # selects the retired Alpha/Beta build-from-worktree implementations.
+        if requested_target == "prod-sim":
+            try:
+                tls_evidence = _stackctl.ensure_local_compose_runtime_tls(
+                    requested_target
+                )
+            except (
+                _stackctl.PublicDomainTlsError,
+                OSError,
+                RuntimeError,
+                ValueError,
+            ) as exc:
+                timing = _stackctl._finish_timing(started_monotonic, started_at)
+                return {
+                    "exitCode": 2,
+                    "summary": f"stackctl up GATE_BLOCK for {requested_target}",
+                    "details": [str(exc)],
+                    "reportDir": str(report_dir.resolve()),
+                    **timing,
+                }
+            else:
+                steps.append(
+                    {
+                        "name": "prod-sim-local-compose-tls",
+                        "exitCode": 0,
+                        "stdout": json.dumps(tls_evidence, ensure_ascii=False),
+                        "stderr": "",
+                    }
+                )
         env = _stackctl._gamma_env_from_port_manifest(topology, requested_target)
         from quwoquan_ops.cli.commands.managed_python import (
             bind_managed_stackctl_python,
@@ -679,6 +707,40 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             steps.append(
                 {
                     "name": "package-bound-experiment-policy-activation",
+                    "exitCode": 2,
+                    "stdout": "",
+                    "stderr": str(exc),
+                }
+            )
+
+    if result.returncode == 0 and requested_target == "prod-sim":
+        try:
+            assistant_policy_receipt = _stackctl.publish_prod_sim_assistant_policy()
+            assistant_policy_path = report_dir / "assistant-policy-publication.json"
+            _stackctl.write_json(assistant_policy_path, assistant_policy_receipt)
+            steps.append(
+                {
+                    "name": "package-bound-assistant-policy-publication",
+                    "exitCode": 0,
+                    "stdout": _stackctl.relpath(assistant_policy_path),
+                    "stderr": "",
+                }
+            )
+        except (
+            _stackctl.ProdSimAssistantPolicyPublicationError,
+            OSError,
+            RuntimeError,
+            ValueError,
+        ) as exc:
+            result = subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout=str(result.stdout or ""),
+                stderr=str(exc),
+            )
+            steps.append(
+                {
+                    "name": "package-bound-assistant-policy-publication",
                     "exitCode": 2,
                     "stdout": "",
                     "stderr": str(exc),

@@ -55,10 +55,17 @@ def _sha256_tree(directory: Path) -> str:
     return f"sha256:{digest.hexdigest()}"
 
 
-def _packaged_service_source_image_ref(env_name: str, service: str) -> str:
+def _packaged_service_source_image_ref(
+    env_name: str,
+    service: str,
+    *,
+    target: str = "",
+) -> str:
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    return _stackctl.packaged_runtime_source_image_ref(env_name, service)
+    return _stackctl.packaged_runtime_source_image_ref(
+        env_name, service, target=target
+    )
 
 
 def candidate_service_config_versions(target: str = "gamma-local") -> dict[str, str]:
@@ -102,6 +109,7 @@ def packaged_service_build_image_ref(
     *,
     binding_manifest_digest: str,
     candidate_digest: str = "",
+    target: str = "",
 ) -> str:
     """Derive the one build tag a packaged first-party image carries.
 
@@ -123,7 +131,9 @@ def packaged_service_build_image_ref(
             + candidate_digest.removeprefix("sha256:")
         )
     else:
-        base_ref = _stackctl._packaged_service_source_image_ref(env_name, service)
+        base_ref = _stackctl._packaged_service_source_image_ref(
+            env_name, service, target=target
+        )
     repository, _, base_tag = base_ref.rpartition(":")
     build_tag = hashlib.sha256(
         (service + "\x00" + base_tag + "\x00" + binding_manifest_digest).encode("utf-8")
@@ -144,6 +154,7 @@ def _bind_gamma_build_service_image_refs(
     binding_manifest_digest = str(
         environment.get("QWQ_PROVIDER_BINDING_MANIFEST_DIGEST") or ""
     ).strip()
+    target_name = str(environment.get("QWQ_LOCAL_RELEASE_TARGET") or "").strip()
     refs: dict[str, str] = {}
     for service, local_key in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
         ref = packaged_service_build_image_ref(
@@ -151,6 +162,7 @@ def _bind_gamma_build_service_image_refs(
             service,
             binding_manifest_digest=binding_manifest_digest,
             candidate_digest=candidate_digest,
+            target=target_name,
         )
         refs[service] = ref
         environment[local_key] = ref
@@ -161,7 +173,9 @@ def _bind_gamma_build_service_image_refs(
     environment["QWQ_COMPOSE_IMAGE_TAG"] = composition_version.removeprefix("sha256:")
     # compose 模板对每个服务强制声明配置版本；唯一真相源是 active candidate 包
     # 内各服务 provenance.configVersion，缺席时保持不注入由 compose fail-closed。
-    for service, version in candidate_service_config_versions().items():
+    for service, version in candidate_service_config_versions(
+        target_name or "gamma-local"
+    ).items():
         environment[compose_config_version_environment_key(service)] = version
     composition: dict[str, Any] = {
         "imageVersion": composition_version,
@@ -592,6 +606,7 @@ def _load_package_bound_local_image_composition(
                 service,
                 binding_manifest_digest=binding_manifest_digest,
                 candidate_digest=baseline_id,
+                target=target_name,
             )
             if build_ref != expected_build_ref:
                 raise ValueError(f"package OCI build ref mismatch: {service}")
@@ -768,7 +783,10 @@ def _load_gamma_runtime_image_composition(
         return None
     if receipt.get("status") not in bindable_states:
         raise ValueError("runtime startup attempt has no resources to tear down")
-    expected_environment = target_name.removesuffix("-local")
+    if target_name == "prod-sim":
+        expected_environment = "prod"
+    else:
+        expected_environment = target_name.removesuffix("-local")
     if receipt.get("target") != target_name:
         raise ValueError("runtime image composition receipt target mismatch")
     receipt_environment = str(receipt.get("env") or "").strip()

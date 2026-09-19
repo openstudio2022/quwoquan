@@ -6,15 +6,31 @@
 
 from __future__ import annotations
 
+import http.client
 import json
+import socket
 import ssl
 from typing import Any
 from urllib import error, request
 from urllib.parse import urlparse
 
-from ..local_target_handoff import target_for_hostname
+from ..local_target_handoff import LOOPBACK_ADDRESS, target_for_hostname
 from ..public_domain_tls import root_certificate_path
 from .models import LocalAcceptanceSession, LocalEnvironmentHTTPError
+
+
+class _LoopbackHTTPSConnection(http.client.HTTPSConnection):
+    """Dial loopback while preserving the canonical hostname for SNI/Host."""
+
+    def connect(self) -> None:
+        sock = socket.create_connection(
+            (LOOPBACK_ADDRESS, self.port or 443),
+            self.timeout,
+        )
+        context = self._context
+        if context is None:
+            context = ssl.create_default_context()
+        self.sock = context.wrap_socket(sock, server_hostname=self.host)
 
 
 def request_local_environment_json(
@@ -111,9 +127,18 @@ def _trusted_json_request(
         raise RuntimeError("local environment request root certificate is unavailable")
     context = ssl.create_default_context(cafile=str(ca_file))
     req = request.Request(url, data=body, headers=headers, method=method)
+
+    class _LoopbackHTTPSHandler(request.HTTPSHandler):
+        def https_open(self, http_request: request.Request):  # noqa: ANN201
+            return self.do_open(
+                _LoopbackHTTPSConnection,
+                http_request,
+                context=self._context,
+            )
+
     opener = request.build_opener(
         request.ProxyHandler({}),
-        request.HTTPSHandler(context=context),
+        _LoopbackHTTPSHandler(context=context),
     )
     try:
         with opener.open(

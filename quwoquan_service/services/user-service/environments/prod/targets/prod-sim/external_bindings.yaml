@@ -1,0 +1,9 @@
+externalBindings:
+  identity.carrier.one_tap:
+    state: enabled
+    adapter: ext.auth.carrier_one_tap_protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute
+  identity.social.login:
+    state: enabled
+    adapter: ext.auth.federated_identity_protocol_fixture
+    endpointRef: local_topology:provider-protocol-substitute

@@ -87,7 +87,7 @@ class PostSafetyContentMongoAuthorityDescriptor(BaseModel):
 
 class PostSafetyAccountClosureAuthorityDescriptor(BaseModel):
     """deployment-control持有的单一accountClosureAuthority组合descriptor；全部成员绑定外层相同environment/target/candidateDigest/dataPlaneBindingDigest/startupAttemptId/runtimeGeneration。accountClosureEvidence及sourceCreation均为exact ref/digest，material root为canonical locator；所有credential只以relative secretRef交受管factory解析，原文不得进入plan、日志或evidence。若source writer尚未提供descriptor，本值只能由deployment owner显式输入且authorization.evidencePredecessor必须等于accountClosureEvidence，禁止猜测、扫描、CLI/env传evidence ref或从待验evidence反推expected。"""
-    environment: Literal["alpha", "beta", "gamma"]
+    environment: Literal["alpha", "beta", "gamma", "prod"]
     target: str = Field(pattern=r".*\S.*")
     candidateDigest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     dataPlaneBindingDigest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
@@ -122,8 +122,8 @@ class PostSafetyDeploymentStartupMaterial(BaseModel):
 
 
 class PostSafetyRuntimeAuthorization(BaseModel):
-    """环境authority对唯一初始化动作的强类型签名授权。Prod/prod-hosted签发始终是仓外正式前驱，本仓只验签，绝不自签或fallback；唯一例外是gamma-local target-owned冷启动producer可复用仓库现役local-managed Environment Ops Ed25519私钥 provisioning 与仓内keyring签发，且必须先以真实provider读回生成独立account-closure subject key、九集合闭包及现役source-allocation current，其他target不得使用该producer。签名覆盖除signature外全部字段的canonical JSON经固定DSSE PAE；environment/target/candidate/data-plane/startup attempt/runtime generation及evidencePredecessor逐项绑定，action只能initialize_post_safety_runtime，issuedAt仅审计且不得替代generation防重放。"""
-    environment: Literal["alpha", "beta", "gamma"]
+    """环境authority对唯一初始化动作的强类型签名授权。Prod/prod-hosted签发始终是仓外正式前驱，本仓只验签，绝不自签或fallback；仓内本地producer仅允许gamma-local target-owned冷启动与prod-sim不可提升local rehearsal。gamma-local必须先以真实provider读回生成独立account-closure subject key、九集合闭包及现役source-allocation current；prod-sim rehearsal signer只允许environment=prod且target=prod-sim，不得签发prod-hosted。其他target不得使用本地producer。签名覆盖除signature外全部字段的canonical JSON经固定DSSE PAE；environment/target/candidate/data-plane/startup attempt/runtime generation及evidencePredecessor逐项绑定，action只能initialize_post_safety_runtime，issuedAt仅审计且不得替代generation防重放。"""
+    environment: Literal["alpha", "beta", "gamma", "prod"]
     target: str = Field(pattern=r".*\S.*")
     candidateDigest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     dataPlaneBindingDigest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")

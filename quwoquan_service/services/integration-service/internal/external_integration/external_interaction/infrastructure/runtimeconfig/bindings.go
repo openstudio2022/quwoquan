@@ -18,6 +18,12 @@ func MaterializeReleaseExternalInteractionBindings(
 	smsBinding, err := providerbinding.ResolveSMSBinding(cfg.Environment, configProvider)
 	switch {
 	case err == nil:
+		if smsBinding.AdapterID == providerbinding.SMSAdapterLocalCapture {
+			target, _ := configProvider.GetString("QWQ_RUNTIME_TARGET")
+			if err := ValidateLocalSubstituteRuntimeIdentity(cfg.Environment, target); err != nil {
+				return Config{}, fmt.Errorf("SMS local_capture runtime identity invalid: %w", err)
+			}
+		}
 		smsEndpoint, ok := smsBinding.Endpoint("endpoint")
 		if !ok {
 			return Config{}, fmt.Errorf("SMS provider binding has no endpoint")
@@ -50,6 +56,10 @@ func MaterializeReleaseExternalInteractionBindings(
 		return Config{}, fmt.Errorf("Push provider binding invalid: %w", err)
 	}
 	if pushBinding.AdapterID == providerbinding.PushAdapterProtocolSubstitute {
+		target, _ := configProvider.GetString("QWQ_RUNTIME_TARGET")
+		if err := ValidateLocalSubstituteRuntimeIdentity(cfg.Environment, target); err != nil {
+			return Config{}, fmt.Errorf("Push protocol substitute runtime identity invalid: %w", err)
+		}
 		endpoint, ok := pushBinding.Endpoint("endpoint")
 		if !ok {
 			return Config{}, fmt.Errorf(

@@ -1,5 +1,5 @@
 // Code generated from the canonical chat operation owner. DO NOT EDIT.
-// ContractGraph SHA256: b555945658a3e49a7df2e2423d3e2bd872731f72d58b5a6bdd0d8ac025dae357
+// ContractGraph SHA256: 707a6fa16b79b37d5c82cfaa163e6366c6bb1dbe14a4ea9927c4bb10723a2c52
 
 library;
 

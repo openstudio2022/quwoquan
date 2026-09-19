@@ -87,6 +87,25 @@ class ProviderRuntimeCompositionContractTest(unittest.TestCase):
                     result["materialKeys"]["secret"],
                 )
 
+    def test_prod_sim_composition_uses_target_profile_substitutes(self) -> None:
+        result = compile_provider_runtime_composition(
+            environment="prod",
+            target="prod-sim",
+            source_root=subject.ROOT,
+        )
+        self.assertEqual(
+            {workload["role"] for workload in result["workloads"]},
+            {
+                "provider-protocol-substitute",
+                "sms-provider-substitute",
+            },
+        )
+        adapters = {binding["adapterId"] for binding in result["bindings"]}
+        self.assertIn("ext.llm.protocol_fixture", adapters)
+        self.assertIn("ext.sms.local_capture", adapters)
+        self.assertNotIn("ext.llm.xiaomi_mimo", adapters)
+        self.assertNotIn("ext.sms.aliyun", adapters)
+
     def test_prod_contains_no_nonprod_substitute_workload(self) -> None:
         result = compile_provider_runtime_composition(
             environment="prod",

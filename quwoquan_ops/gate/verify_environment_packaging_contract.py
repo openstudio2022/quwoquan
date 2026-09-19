@@ -178,8 +178,12 @@ def validate_runtime_shared_package(
         issues.append("runtime-shared package environment mismatch")
     if manifest.get("target") != target:
         issues.append("runtime-shared package target mismatch")
-    if environment in {"alpha", "beta", "gamma"} and target == environment + "-local":
-        from quwoquan_ops.cli.lib.source_initializer_package import load_source_initializer
+    from quwoquan_ops.cli.lib.source_initializer_package import (
+        load_source_initializer,
+        source_initializer_required,
+    )
+
+    if source_initializer_required(environment, target):
         try:
             load_source_initializer(package_dir.parent.parent, manifest.get("sourceInitializer"), environment, target)
         except (OSError, ValueError, TypeError, KeyError) as error:

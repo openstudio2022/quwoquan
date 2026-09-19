@@ -47,6 +47,7 @@ from quwoquan_ops.cli.lib.generated.app_launch_contract import (
 )
 from quwoquan_ops.cli.lib.local_app_runtime_config_keys import (
     prepare_local_app_runtime_config_signing,
+    prepare_local_prod_sim_rehearsal_runtime_config_signing,
 )
 from quwoquan_ops.cli.lib.output_paths import (
     app_deployment_package_dir,
@@ -493,6 +494,16 @@ def main() -> int:
         )
         if args.env in {"alpha", "beta", "gamma"} and not explicit_signing_material:
             signing = prepare_local_app_runtime_config_signing(ROOT)
+        elif (
+            args.env == "prod"
+            and target_name == "prod-sim"
+            and not explicit_signing_material
+        ):
+            signing = prepare_local_prod_sim_rehearsal_runtime_config_signing(
+                ROOT,
+                environment="prod",
+                target="prod-sim",
+            )
         else:
             signing = resolve_signing_material(ROOT)
         identity = dict(environment=args.env, target=target_name,

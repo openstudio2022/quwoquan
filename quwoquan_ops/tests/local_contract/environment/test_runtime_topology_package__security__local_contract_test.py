@@ -431,6 +431,31 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
             control_plane["services"]["platform-ops-service"]["environment"],
         )
 
+
+    def test_prod_sim_projects_user_postgres_namespace_before_service_core(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = Path(temporary) / "candidate"
+            shared = candidate / "packages/runtime-shared"
+            shared.mkdir(parents=True)
+            materialize_runtime_topology_package(
+                "prod",
+                "prod-sim",
+                shared,
+                repo_root=REPO_ROOT,
+            )
+            topology = load_runtime_topology_package(
+                candidate,
+                environment="prod",
+                target="prod-sim",
+                workload="full",
+            )
+            base = yaml.safe_load(topology["composeFiles"][0].read_text(encoding="utf-8"))
+            databases = str(
+                base["services"]["postgres-init"]["environment"]["QWQ_POSTGRES_DATABASES"]
+            ).split()
+            self.assertIn("quwoquan_user", databases)
+            self.assertEqual(databases, sorted(set(databases)))
+
     def test_candidate_projects_product_ops_elasticsearch_bootstrap(self) -> None:
         materialize_runtime_topology_package(
             "alpha",

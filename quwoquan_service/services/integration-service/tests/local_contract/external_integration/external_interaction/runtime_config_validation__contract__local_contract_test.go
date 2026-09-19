@@ -100,13 +100,13 @@ func TestValidateRejectsIncompleteEnabledSMSProviderMaterial(t *testing.T) {
 			wantErr: "cannot use mock provider",
 		},
 		{
-			name:        "local capture forbidden in prod",
+			name:        "local capture rejects prod hosted target",
 			environment: "prod",
 			provider: integrationconfig.ExternalProviderConfig{
 				Enabled:  true,
 				Provider: "ext.sms.local_capture",
 			},
-			wantErr: "SMS local_capture is forbidden in prod",
+			wantErr: "SMS local_capture runtime identity invalid",
 		},
 		{
 			name: "local capture requires pinned CA",
@@ -149,12 +149,43 @@ func TestValidateRejectsIncompleteEnabledSMSProviderMaterial(t *testing.T) {
 			if testCase.environment != "" {
 				cfg.Environment = testCase.environment
 			}
+			if testCase.provider.Provider == "ext.sms.local_capture" {
+				if cfg.Environment == "prod" {
+					t.Setenv("QWQ_RUNTIME_TARGET", "prod-hosted")
+				} else {
+					t.Setenv("QWQ_RUNTIME_TARGET", cfg.Environment+"-local")
+				}
+			}
 			cfg.Integration.ExternalInteraction.SMS = testCase.provider
 			err := integrationconfig.Validate(cfg)
 			if err == nil || !strings.Contains(err.Error(), testCase.wantErr) {
 				t.Fatalf("want %q, got %v", testCase.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestValidateAllowsSMSLocalCaptureOnlyForExactProdSimTarget(t *testing.T) {
+	base := validatableExternalInteractionConfig()
+	base.Environment = "prod"
+	base.Integration.ExternalInteraction.SMS = integrationconfig.ExternalProviderConfig{
+		Enabled: true, Provider: "ext.sms.local_capture",
+		Endpoint: "https://sms-provider-substitute:9443/v1/provider/sms/send",
+		Token:    "substitute-token", CAFile: "/run/secrets/substitute-ca.crt", TimeoutMs: 1000,
+	}
+	for _, target := range []string{"prod-sim", "prod-hosted", "", "gamma-local"} {
+		cfg := base
+		t.Setenv("QWQ_RUNTIME_TARGET", target)
+		err := integrationconfig.Validate(cfg)
+		if target == "prod-sim" {
+			if err != nil {
+				t.Fatalf("prod-sim local_capture must be accepted: %v", err)
+			}
+			continue
+		}
+		if err == nil || !strings.Contains(err.Error(), "runtime identity invalid") {
+			t.Fatalf("prod/%q local_capture must fail closed: %v", target, err)
+		}
 	}
 }
 
@@ -186,7 +217,7 @@ func TestValidateEnforcesPushDeliveryMaterialPerMode(t *testing.T) {
 	secretsDir := t.TempDir()
 	apnsKey := filepath.Join(secretsDir, "AuthKey.p8")
 	fcmAccount := filepath.Join(secretsDir, "fcm.json")
-	writeRuntimeConfigFile(t, apnsKey, "-----BEGIN PRIVATE KEY-----\n")
+	writeRuntimeConfigFile(t, apnsKey, "placeholder-apns-auth-key\n")
 	writeRuntimeConfigFile(t, fcmAccount, "{\"type\":\"service_account\"}\n")
 	emptyFCM := filepath.Join(secretsDir, "empty-fcm.json")
 	writeRuntimeConfigFile(t, emptyFCM, "")
@@ -279,6 +310,9 @@ func TestValidateEnforcesPushDeliveryMaterialPerMode(t *testing.T) {
 			if testCase.environment != "" {
 				cfg.Environment = testCase.environment
 			}
+			if testCase.push().Mode == "protocol_substitute" {
+				t.Setenv("QWQ_RUNTIME_TARGET", cfg.Environment+"-local")
+			}
 			cfg.Integration.ExternalInteraction.Push = testCase.push()
 			err := integrationconfig.Validate(cfg)
 			if err == nil || !strings.Contains(err.Error(), testCase.wantErr) {
@@ -294,6 +328,7 @@ func TestValidateEnforcesPushDeliveryMaterialPerMode(t *testing.T) {
 	}
 
 	substitute := validatableExternalInteractionConfig()
+	t.Setenv("QWQ_RUNTIME_TARGET", "gamma-local")
 	substitute.Integration.ExternalInteraction.Push = integrationconfig.PushDeliveryProviderConfig{
 		Enabled:   true,
 		Mode:      "protocol_substitute",

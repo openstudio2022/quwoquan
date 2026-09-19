@@ -87,8 +87,13 @@ def local_release_image_environment_key(service: str) -> str:
 def _load_package_provenance(
     environment: str,
     service: str,
+    *,
+    target: str = "",
 ) -> tuple[Path, dict[str, object]]:
-    path = service_deployment_package_dir(environment, service) / "provenance.json"
+    path = (
+        service_deployment_package_dir(environment, service, target=target)
+        / "provenance.json"
+    )
     if not path.is_file():
         raise FileNotFoundError(f"service package provenance missing: {path}")
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -99,8 +104,13 @@ def _load_package_provenance(
     return path, payload
 
 
-def packaged_service_source_digest(environment: str, service: str) -> str:
-    path, payload = _load_package_provenance(environment, service)
+def packaged_service_source_digest(
+    environment: str,
+    service: str,
+    *,
+    target: str = "",
+) -> str:
+    path, payload = _load_package_provenance(environment, service, target=target)
     digests = payload.get("digests")
     if not isinstance(digests, dict):
         raise ValueError(f"service source provenance missing: {path}")
@@ -110,11 +120,18 @@ def packaged_service_source_digest(environment: str, service: str) -> str:
     return source_digest
 
 
-def packaged_service_environment_build_digest(environment: str, service: str) -> str:
+def packaged_service_environment_build_digest(
+    environment: str,
+    service: str,
+    *,
+    target: str = "",
+) -> str:
     """Bind one local image identity to its packaged environment configuration."""
 
-    path, payload = _load_package_provenance(environment, service)
-    source_digest = packaged_service_source_digest(environment, service)
+    path, payload = _load_package_provenance(environment, service, target=target)
+    source_digest = packaged_service_source_digest(
+        environment, service, target=target
+    )
     config_version = str(payload.get("configVersion") or "").strip()
     if SHA256_PATTERN.fullmatch(config_version) is None:
         raise ValueError(f"invalid service config version: {path}")
@@ -132,10 +149,17 @@ def packaged_service_environment_build_digest(environment: str, service: str) ->
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
-def packaged_service_source_image_ref(environment: str, service: str) -> str:
+def packaged_service_source_image_ref(
+    environment: str,
+    service: str,
+    *,
+    target: str = "",
+) -> str:
     """Return an environment-bound local build tag, never a cross-env source tag."""
 
-    build_digest = packaged_service_environment_build_digest(environment, service)
+    build_digest = packaged_service_environment_build_digest(
+        environment, service, target=target
+    )
     repository = service.replace("-", "_")
     return f"localhost/quwoquan_service_{repository}:{build_digest[7:]}"
 
@@ -154,11 +178,20 @@ def runtime_image_owner_names(repo_root: Path = ROOT) -> tuple[str, ...]:
     )
 
 
-def packaged_runtime_source_image_ref(environment: str, service: str) -> str:
+def packaged_runtime_source_image_ref(
+    environment: str,
+    service: str,
+    *,
+    target: str = "",
+) -> str:
     if service != SERVICE_CORE_WORKLOAD:
-        return packaged_service_source_image_ref(environment, service)
+        return packaged_service_source_image_ref(
+            environment, service, target=target
+        )
     module_digests = {
-        module: packaged_service_environment_build_digest(environment, module)
+        module: packaged_service_environment_build_digest(
+            environment, module, target=target
+        )
         for module in SERVICE_CORE_MODULE_SET
     }
     digest = service_core_source_digest(module_digests)
@@ -222,8 +255,11 @@ def bind_packaged_image_composition(
     include_local_release_aliases: bool = False,
 ) -> dict[str, object]:
     owners = tuple(services or runtime_image_owner_names())
+    deployment_target = str(target.get("QWQ_LOCAL_RELEASE_TARGET") or "").strip()
     refs = {
-        service: packaged_runtime_source_image_ref(environment, service)
+        service: packaged_runtime_source_image_ref(
+            environment, service, target=deployment_target
+        )
         for service in owners
     }
     digest = immutable_image_digest(refs)

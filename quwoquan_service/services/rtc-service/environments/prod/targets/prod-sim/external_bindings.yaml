@@ -1,0 +1,5 @@
+externalBindings:
+  rtc.room.transport:
+    state: enabled
+    adapter: infra.livekit_sfu
+    endpointRef: environment_binding:rtc.livekit

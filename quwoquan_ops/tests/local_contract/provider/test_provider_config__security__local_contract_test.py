@@ -104,6 +104,55 @@ class ProviderConfigSecurityContractTest(unittest.TestCase):
                 self.assertEqual(diff["exitCode"], 0, diff)
                 self.assertFalse(diff["changed"])
 
+    def test_prod_sim_uses_local_endpoint_contracts_without_vendor_material(self) -> None:
+        prod_sim = compile_provider_runtime_composition(
+            environment="prod",
+            target="prod-sim",
+            source_root=stackctl.ROOT,
+        )
+        material = {
+            key: f"local-provider-material-{key.lower()}"
+            for kind in ("endpoint", "secret")
+            for key in prod_sim["materialKeys"][kind]
+        }
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(
+            os.environ,
+            {"QWQ_DEPLOY_WORK_ROOT": str(Path(temporary) / "deploy")},
+            clear=False,
+        ):
+            provider_config.project_provider_secret_bundles(
+                environment="prod",
+                target="prod-sim",
+                source=material,
+                runtime_composition=prod_sim,
+            )
+            result = provider_config.compile_provider_config(
+                action="validate",
+                environment="prod",
+                target="prod-sim",
+                runtime_composition=prod_sim,
+            )
+        self.assertEqual(result["exitCode"], 0, result)
+        self.assertEqual(
+            {workload["role"] for workload in result["runtimeWorkloads"]},
+            {"provider-protocol-substitute", "sms-provider-substitute"},
+        )
+        rendered = json.dumps(result, sort_keys=True)
+        for vendor_marker in (
+            "XIAOMI",
+            "ALIYUN",
+            "APNS",
+            "FCM",
+            "OPENAI",
+            "ELASTICSEARCH_API_KEY",
+        ):
+            self.assertNotIn(vendor_marker, rendered)
+        self.assertNotIn("ASSISTANT_MODEL_API_KEY", prod_sim["materialKeys"]["secret"])
+        self.assertNotIn(
+            "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY",
+            prod_sim["materialKeys"]["secret"],
+        )
+
     def test_validate_reports_only_qualified_missing_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             with mock.patch.dict(

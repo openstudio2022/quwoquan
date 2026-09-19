@@ -13,6 +13,7 @@ from .openssl3_resolver import OpenSSL3Executable, resolve_openssl3
 from .output_paths import deployment_target_path
 from .provider_endpoint_contract import load_provider_endpoint_environment
 from .public_domain_tls import PublicDomainTlsError, root_certificate_path
+from .runtime_topology_package import is_local_compose_runtime_topology
 
 
 @dataclass(frozen=True)
@@ -29,10 +30,8 @@ def prepare_local_sms_provider_substitute(
     *,
     port: int,
 ) -> LocalSMSProviderSubstitute:
-    if environment not in {"alpha", "beta", "gamma"}:
-        raise ValueError("SMS Debug Provider is limited to Alpha/Beta/Gamma")
-    if target_name != f"{environment}-local":
-        raise ValueError("SMS Debug Provider target/environment mismatch")
+    if not is_local_compose_runtime_topology(environment, target_name):
+        raise ValueError("SMS Debug Provider is limited to local compose targets")
     if not 1 <= int(port) <= 65535:
         raise ValueError("SMS Debug Provider port is invalid")
     openssl = resolve_openssl3()

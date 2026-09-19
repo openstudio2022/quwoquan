@@ -17,34 +17,84 @@ ROLE = "app-runtime-config"
 LOCAL_AUTHORITY_PROFILE = "nonprod"
 LOCAL_AUTHORITY_TARGET = "app-build-products"
 DEFAULT_KEY_ID = "local-managed-app-runtime-nonprod-ed25519"
+PROD_SIM_REHEARSAL_ENVIRONMENT = "prod"
+PROD_SIM_REHEARSAL_TARGET = "prod-sim"
+PROD_SIM_REHEARSAL_PROFILE = "prod-local-rehearsal"
+PROD_SIM_REHEARSAL_KEY_ID = "local-prod-sim-rehearsal-ed25519"
 
 
 def prepare_local_app_runtime_config_signing(repo_root: Path) -> SigningMaterial:
     """Return the create-once Alpha/Beta/Gamma signing authority.
 
-    Prod has no local issuance path; callers must resolve explicit external signing
-    material instead of selecting an environment or target through this API.
+    Prod has no local issuance path through this API. The only local prod exception
+    is the separately scoped prod-sim rehearsal authority below.
     """
 
-    openssl = resolve_openssl3()
-    key_dir = deployment_target_path(
-        LOCAL_AUTHORITY_TARGET,
-        "secrets",
-        ROLE,
-        LOCAL_AUTHORITY_PROFILE,
+    return _prepare_local_signing(
+        repo_root,
+        authority_target=LOCAL_AUTHORITY_TARGET,
+        profile=LOCAL_AUTHORITY_PROFILE,
+        key_id=DEFAULT_KEY_ID,
+        partial_label="App runtime local nonprod signing authority",
     )
+
+
+def prepare_local_prod_sim_rehearsal_runtime_config_signing(
+    repo_root: Path,
+    *,
+    environment: str,
+    target: str,
+) -> SigningMaterial:
+    """Issue only target-scoped, non-promotable prod-sim rehearsal material.
+
+    This is deliberately not the nonprod authority and never accepts prod-hosted.
+    Its key material remains under the prod-sim deployment target and must only be
+    used with the prod-sim local rehearsal runtime-config materializer.
+    """
+
+    if (environment, target) != (
+        PROD_SIM_REHEARSAL_ENVIRONMENT,
+        PROD_SIM_REHEARSAL_TARGET,
+    ):
+        raise ValueError(
+            "local prod-sim rehearsal signing requires environment=prod "
+            "and target=prod-sim"
+        )
+    return _prepare_local_signing(
+        repo_root,
+        authority_target=PROD_SIM_REHEARSAL_TARGET,
+        profile=PROD_SIM_REHEARSAL_PROFILE,
+        key_id=PROD_SIM_REHEARSAL_KEY_ID,
+        partial_label="App runtime local prod-sim rehearsal signing authority",
+    )
+
+
+def _prepare_local_signing(
+    repo_root: Path,
+    *,
+    authority_target: str,
+    profile: str,
+    key_id: str,
+    partial_label: str,
+) -> SigningMaterial:
+    openssl = resolve_openssl3()
+    key_dir = deployment_target_path(authority_target, "secrets", ROLE, profile)
     key_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(key_dir, 0o700)
     private_path = key_dir / "signing.pem"
     keyring_path = key_dir / "trusted_public_keys.json"
     exists = (private_path.exists(), keyring_path.exists())
     if exists == (False, False):
-        _issue_keypair(key_dir, private_path, keyring_path, openssl=openssl)
+        _issue_keypair(
+            key_dir,
+            private_path,
+            keyring_path,
+            key_id=key_id,
+            openssl=openssl,
+        )
         exists = (private_path.exists(), keyring_path.exists())
     if exists != (True, True):
-        raise ValueError(
-            "App runtime local nonprod signing authority is partial"
-        )
+        raise ValueError(f"{partial_label} is partial")
     if private_path.is_symlink() or keyring_path.is_symlink():
         raise ValueError("App runtime local signing material must not use symlinks")
     try:
@@ -53,9 +103,8 @@ def prepare_local_app_runtime_config_signing(repo_root: Path) -> SigningMaterial
         raise ValueError(
             f"App runtime local trusted keyring is unreadable: {exc}"
         ) from exc
-    if not isinstance(keyring, dict) or len(keyring) != 1:
-        raise ValueError("App runtime local trusted keyring must contain one key")
-    key_id = next(iter(keyring))
+    if not isinstance(keyring, dict) or set(keyring) != {key_id}:
+        raise ValueError("App runtime local trusted keyring must contain one expected key")
     signing = SigningMaterial(key_id, private_path, keyring_path)
     validate_signing_material(repo_root, signing, openssl=openssl)
     return signing
@@ -66,6 +115,7 @@ def _issue_keypair(
     private_path: Path,
     keyring_path: Path,
     *,
+    key_id: str = DEFAULT_KEY_ID,
     openssl: OpenSSL3Executable | None = None,
 ) -> None:
     selected = openssl or resolve_openssl3()
@@ -106,7 +156,7 @@ def _issue_keypair(
         next_keyring = staging / "trusted_public_keys.json"
         next_keyring.write_text(
             json.dumps(
-                {DEFAULT_KEY_ID: base64.b64encode(encoded[-32:]).decode("ascii")},
+                {key_id: base64.b64encode(encoded[-32:]).decode("ascii")},
                 ensure_ascii=True,
                 separators=(",", ":"),
             ),

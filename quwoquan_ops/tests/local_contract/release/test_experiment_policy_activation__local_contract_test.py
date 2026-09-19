@@ -909,7 +909,7 @@ class ExperimentPolicyActivationLocalContractTest(unittest.TestCase):
         ):
             activation.activate_search_experiment_policy_via_published_port(
                 environment="prod",
-                target="prod-sim",
+                target="prod-hosted",
             )
         mint.assert_not_called()
 
@@ -925,7 +925,7 @@ class ExperimentPolicyActivationLocalContractTest(unittest.TestCase):
         ):
             activation.activate_search_experiment_policy(
                 environment="prod",
-                target="prod-sim",
+                target="prod-hosted",
                 product_ops_base_url="https://ops.quwoquan.com",
             )
         mint.assert_not_called()

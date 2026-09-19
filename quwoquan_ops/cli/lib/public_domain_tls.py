@@ -108,6 +108,21 @@ def _required_names(target: str, profile: dict[str, Any]) -> list[str]:
     ]
 
 
+def ensure_local_compose_runtime_tls(target: str) -> dict[str, Any]:
+    """为本机 Compose 签发 local-managed 证书，不冒充公网 DNS-01。"""
+
+    if target != "prod-sim":
+        raise PublicDomainTlsError(
+            f"GATE_BLOCK: local compose runtime TLS helper is prod-sim only: {target}"
+        )
+    openssl = resolve_openssl3()
+    return _issue_local_managed_certificate(
+        target,
+        {"kind": "local-managed", "certificateDays": 90},
+        openssl=openssl,
+    )
+
+
 def certificate_dir(target: str) -> Path:
     return certificate_export_dir(target)
 
@@ -317,6 +332,14 @@ def _issue_local_managed_certificate(
 
     cert, key = certificate_paths(target, require_ready=False)
     names = _required_names(target, profile)
+    official_name, official_profile = _profile_for_target(target)
+    if _profile_kind(official_name, official_profile) != "local-managed":
+        names = sorted(
+            {
+                *names,
+                *_required_names(target, official_profile),
+            }
+        )
     with tempfile.TemporaryDirectory(dir=output_root) as temporary:
         temporary_root = Path(temporary)
         csr = temporary_root / "leaf.csr"

@@ -19,8 +19,11 @@ for schema in quwoquan_service/services/*/config/schema.yaml \
   fi
   for env_name in alpha beta gamma prod; do
     output="$tmp_dir/${service}-${env_name}.yaml"
+    target_name="${env_name}-local"
+    [[ "$env_name" == "prod" ]] && target_name="prod-hosted"
     PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/render_runtime_config.py \
-      --env "$env_name" --workload "$service" --output "$output" >/dev/null
+      --env "$env_name" --target "$target_name" \
+      --workload "$service" --output "$output" >/dev/null
     PYTHONDONTWRITEBYTECODE=1 python3 - "$output" <<'PY'
 import hashlib
 import re

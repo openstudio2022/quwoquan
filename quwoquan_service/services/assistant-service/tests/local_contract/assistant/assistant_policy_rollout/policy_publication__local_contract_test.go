@@ -68,6 +68,31 @@ func TestPolicyPublisherRejectsAlphaAndMissingResourceRoot(t *testing.T) {
 	}
 }
 
+func TestPolicyPublisherRejectsPartialArtifactOverrides(t *testing.T) {
+	serviceRoot := policyPublicationServiceRoot()
+	command := exec.Command(
+		"go",
+		"run",
+		"./cmd/policy-publish",
+		"--env",
+		"prod",
+		"--config-root",
+		"/etc/qwq/config",
+		"--resource-root",
+		filepath.Join(serviceRoot, "resources", "policies"),
+		"--release-ref",
+		"assistant/assistant-default/releases/6579402860644c0273747b33c23962cff013caec0839407afbe7dffdcc50f8e7.json",
+	)
+	command.Dir = serviceRoot
+	output, err := command.CombinedOutput()
+	if err == nil {
+		t.Fatalf("policy publisher unexpectedly accepted a one-sided artifact override: %s", output)
+	}
+	if !strings.Contains(string(output), "supplied together") {
+		t.Fatalf("policy publisher error=%q want override pairing failure", output)
+	}
+}
+
 func TestPolicyArtifactPathFailsClosedOutsideResourceRoot(t *testing.T) {
 	t.Parallel()
 	resourceRoot := t.TempDir()

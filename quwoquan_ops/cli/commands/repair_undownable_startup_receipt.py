@@ -457,7 +457,7 @@ def _reconcile_takeover(args: argparse.Namespace, *, report_dir: Path) -> dict[s
 def _current_fence_inputs(target: str, exact_ref: str) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as stackctl
 
-    if target not in _RECLAIMABLE_TARGETS or os.environ.get("QWQ_OUTPUT_ROOT"):
+    if target not in (*_RECLAIMABLE_TARGETS, "prod-sim") or os.environ.get("QWQ_OUTPUT_ROOT"):
         raise ValueError("current fence recovery requires canonical local runtime authority")
     text, digest = exact_ref.rsplit("=", 1)
     path = local_runtime_operation_lock_path(target).with_suffix(".executor.json")
@@ -494,9 +494,10 @@ def _current_fence_inputs(target: str, exact_ref: str) -> dict[str, Any]:
         _require_absent(process / relative)
     _require_absent(output_paths.deployment_target_path(target, "process", "environment-execution", "execution-slot.json"))
     resources = _runtime_readback(target, startup["composeProject"], check_execution=False)
-    mutable = stackctl.orphan_compose_teardown.mutable_test_live_project(target)
-    if stackctl._mutable_test_live_container_ids(mutable) or stackctl._mutable_test_live_resource_names("network", compose_project=mutable):
-        raise ValueError("test-live resources block current fence recovery")
+    if target != "prod-sim":
+        mutable = stackctl.orphan_compose_teardown.mutable_test_live_project(target)
+        if stackctl._mutable_test_live_container_ids(mutable) or stackctl._mutable_test_live_resource_names("network", compose_project=mutable):
+            raise ValueError("test-live resources block current fence recovery")
     return {"target": target, "fence": {"source": str(path), "digest": digest},
             "startup": originals, "resources": resources}
 

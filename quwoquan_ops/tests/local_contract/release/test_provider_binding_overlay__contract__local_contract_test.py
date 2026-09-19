@@ -118,6 +118,29 @@ class ProviderBindingOverlayContractTest(unittest.TestCase):
                 binding_manifest["manifestDigest"],
             )
 
+    def test_prod_sim_overlay_sources_embed_exact_target_profile(self) -> None:
+        staged, payload = provider_binding_overlay._compile_overlay_artifacts(
+            "prod",
+            "prod-sim",
+            source_root=stackctl.ROOT,
+        )
+        self.assertEqual(payload["environment"], "prod")
+        self.assertEqual(payload["target"], "prod-sim")
+        sources = [
+            content.decode("utf-8")
+            for relative, content in staged.items()
+            if relative.endswith(".g.go")
+        ]
+        self.assertTrue(sources)
+        self.assertTrue(
+            all(
+                'const ExternalProviderBindingTarget = "prod-sim"' in source
+                for source in sources
+            )
+        )
+        self.assertTrue(any('"ext.llm.protocol_fixture"' in source for source in sources))
+        self.assertFalse(any('"ext.llm.xiaomi_mimo"' in source for source in sources))
+
     def test_loader_uses_old_candidate_without_recompiling(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()

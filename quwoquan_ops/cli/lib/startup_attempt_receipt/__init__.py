@@ -70,6 +70,7 @@ from .receipt_fs import (  # noqa: F401
 from .receipt_contract import (  # noqa: F401
     _canonical_run_root,
     _environment_for_target,
+    _is_local_generation_identity,
     _read,
     _sha256_json,
     _utc_now,
