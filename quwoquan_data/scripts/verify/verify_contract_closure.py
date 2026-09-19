@@ -272,8 +272,16 @@ def build_report(repo_root: Path = REPO_ROOT) -> ClosureReport:
             continue
         issues.append(f"duplicate schema identity {identity!r}: " + ", ".join(n.relative for n in matches))
     by_relative = {n.relative: p for p, n in nodes.items()}; bindings = []; scanned = 0
-    for path in sorted((repo_root / "quwoquan_data/scripts").rglob("*.py")):
-        if any(part in SKIPPED_PARTS for part in path.parts): continue
+    scripts_root = (repo_root / "quwoquan_data/scripts").resolve()
+    for path in sorted(scripts_root.rglob("*.py")):
+        # 只按相对 repo_root 的 segment 跳过；capsule 物化在 `.qwq_output/**/worktree`
+        # 时绝对路径本身含 `.qwq_output`，不能把现役 scripts 全部扫成空集。
+        try:
+            relative_parts = path.resolve().relative_to(repo_root.resolve()).parts
+        except ValueError:
+            continue
+        if any(part in SKIPPED_PARTS for part in relative_parts):
+            continue
         scanned += 1; found, found_issues = _python_bindings(path, by_relative, repo_root); bindings.extend(found); issues.extend(found_issues)
     go_bindings, go_issues, go_scanned = _go_import_bindings(repo_root, by_relative); bindings.extend(go_bindings); issues.extend(go_issues); scanned += go_scanned
     roots = {b.schema for b in bindings if b.category in ROOT_CATEGORIES}; reachable = set(roots); pending = list(roots)

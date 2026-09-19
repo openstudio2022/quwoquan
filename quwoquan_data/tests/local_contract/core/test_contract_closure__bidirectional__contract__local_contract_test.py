@@ -46,6 +46,23 @@ def test_live_root_and_supporting_ref_close_bidirectionally(tmp_path: Path) -> N
     assert evaluate(tmp_path) == []
 
 
+def test_capsule_under_qwq_output_still_binds_production_scripts(tmp_path: Path) -> None:
+    capsule = tmp_path / ".qwq_output" / "capsule"
+    _schema(capsule, "content/support.schema.json", "quwoquan_data.support")
+    _schema(
+        capsule,
+        "content/live.schema.json",
+        "quwoquan_data.live",
+        properties={
+            "schema": {"const": "quwoquan_data.live"},
+            "support": {"$ref": "support.schema.json"},
+        },
+    )
+    _consumer(capsule, 'assert_valid({}, "content", "live")\n')
+
+    assert evaluate(capsule) == []
+
+
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-009.t2
 def test_unbound_schema_fails_instead_of_becoming_a_candidate(tmp_path: Path) -> None:
     _schema(tmp_path, "content/orphan.schema.json", "quwoquan_data.orphan")

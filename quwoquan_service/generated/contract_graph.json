@@ -120997,7 +120997,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/runtime_config_validation__contract__local_contract_test.go",
-            "sha256": "27e1b714d828e34339ae9aef9253ea1a091f57ff5c0546a9ac5ddbbb3967e5d1"
+            "sha256": "020d86e57cd16a4d7b4de6bb6fb77871f855dfb40c20958df79ee7e0141e3716"
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/sms_otp_delivery_readiness__local_contract_test.go",
