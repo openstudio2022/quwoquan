@@ -25,10 +25,16 @@ class ContentRequestPageIds {
     'DeletePostCollection': 'content.delete.post.collection',
     'DiscardMediaAsset': 'content.media.discard',
     'DismissReport': 'content.dismiss.report',
+    'FinalizeExpiredContentReactionCommand':
+        'content.finalize.expired.content.reaction.command',
     'GenerateArticleSummary': 'content.article.summary',
     'GetActiveFilterCatalog': 'content.get.active.filter.catalog',
     'GetAppConfig': 'content.get.app.config',
     'GetAuthorImpact': 'content.get.author.impact',
+    'GetContentReactionMutationBasis':
+        'content.get.content.reaction.mutation.basis',
+    'GetContentReactionPresentation':
+        'content.get.content.reaction.presentation',
     'GetContentReactionState': 'content.post.reactions',
     'GetCounters': 'content.post.counters',
     'GetCurrentPostModerationCase': 'content.get.current.post.moderation.case',
@@ -83,6 +89,7 @@ class ContentRequestPageIds {
     'RecordMediaProcessingResult': 'content.record.media.processing.result',
     'RecoverContentAccountClosureDeadLetter':
         'content.recover.content.account.closure.dead.letter',
+    'RecoverContentReactionCommand': 'content.recover.content.reaction.command',
     'ReportBehaviors': 'content.behaviors.report',
     'ReserveOriginalImageAccessGrant':
         'content.reserve.original.image.access.grant',
@@ -130,11 +137,17 @@ class ContentRequestPageIds {
   static const String deletePostCollection = 'content.delete.post.collection';
   static const String discardMediaAsset = 'content.media.discard';
   static const String dismissReport = 'content.dismiss.report';
+  static const String finalizeExpiredContentReactionCommand =
+      'content.finalize.expired.content.reaction.command';
   static const String generateArticleSummary = 'content.article.summary';
   static const String getActiveFilterCatalog =
       'content.get.active.filter.catalog';
   static const String getAppConfig = 'content.get.app.config';
   static const String getAuthorImpact = 'content.get.author.impact';
+  static const String getContentReactionMutationBasis =
+      'content.get.content.reaction.mutation.basis';
+  static const String getContentReactionPresentation =
+      'content.get.content.reaction.presentation';
   static const String getContentReactionState = 'content.post.reactions';
   static const String getCounters = 'content.post.counters';
   static const String getCurrentPostModerationCase =
@@ -210,6 +223,8 @@ class ContentRequestPageIds {
       'content.record.media.processing.result';
   static const String recoverContentAccountClosureDeadLetter =
       'content.recover.content.account.closure.dead.letter';
+  static const String recoverContentReactionCommand =
+      'content.recover.content.reaction.command';
   static const String reportBehaviors = 'content.behaviors.report';
   static const String reserveOriginalImageAccessGrant =
       'content.reserve.original.image.access.grant';

@@ -59,18 +59,72 @@ collections:
         aggregateId: 1
         aggregateVersion: 1
       unique: true
-    - name: idx_content_reaction_outbox_sequence
+    - name: idx_content_reaction_outbox_partition_sequence
       keys:
-        outboxSequence: 1
+        partitionId: 1
+        partitionSequence: 1
       unique: true
   content_reaction_outbox_sequences:
     publication_role: publication_accessory
     entity: ContentReaction
-    description: 为 reaction outbox transaction 分配全局单调 sequence
+    description: 为 reaction outbox transaction 按固定 partitionId 分配连续 sequence；不维护全站热点序列
   content_reaction_projection_checkpoints:
     publication_role: publication_accessory
     entity: ContentReaction
-    description: 每个外部投递或 projection consumer 的独立 durable checkpoint
+    description: 每个 consumer/partition 的独立连续 durable checkpoint，带 lease owner/epoch fencing
+  content_reaction_statistics_inbox:
+    publication_role: publication_accessory
+    entity: ContentReaction
+    description: 统计消费者按 eventId 与完整 payload digest 去重；同版本异摘要停止应用。
+  content_reaction_statistics_members:
+    publication_role: publication_accessory
+    entity: ContentReaction
+    description: reaction 对 target like/dislike 及 persona actor-like 的 lastAppliedVersion/currentContribution ledger。
+    indexes:
+    - name: uq_content_reaction_statistics_member
+      keys: {reactionId: 1, dimension: 1, contributionKind: 1}
+      unique: true
+  content_reaction_statistics_buckets:
+    publication_role: publication_accessory
+    entity: ContentReaction
+    description: 64 个稳定桶的代际贡献；正常投影只触达成员与所属桶，不 CountDocuments 全目标。
+    indexes:
+    - name: uq_content_reaction_statistics_bucket
+      keys: {generation: 1, ownerKind: 1, ownerId: 1, dimension: 1, contributionKind: 1, bucket: 1}
+      unique: true
+  content_reaction_statistics_rollups:
+    publication_role: publication_accessory
+    entity: ContentReaction
+    description: immutable generation 的 target/persona statsVersion、like/dislike、source checkpoint 与来源期限。
+  content_reaction_statistics_reader_generation:
+    publication_role: publication_accessory
+    entity: ContentReaction
+    description: 当前唯一统计 reader generation；repair shadow 对账并追齐前不得发布。
+  content_reaction_target_fence_buckets:
+    publication_role: publication_accessory
+    entity: ContentReaction
+    description: >-
+      每个 target 内固定数量的生命周期写栅栏桶，按 reaction identity 稳定路由。
+      新增活跃互动在自己的事务里真实更新所属桶并确认它仍 open；owner 撤权的
+      内部清理在一次事务里封闭全部桶（含尚未创建的桶），因此与晚到的互动写
+      产生真实冲突，而不是只在事务里读墓碑。
+    indexes:
+    - name: idx_content_reaction_fence_target
+      keys:
+        targetKind: 1
+        targetId: 1
+        bucket: 1
+      unique: true
+  content_reaction_cleanup_jobs:
+    publication_role: publication_accessory
+    entity: ContentReaction
+    description: 带 sourceVersion、deadline、cursor、checkpoint 与 leaseEpoch 的可恢复 lifecycle cleanup job；旧 worker 的 epoch 无法推进 checkpoint。
+    indexes:
+    - name: idx_content_reaction_cleanup_claim
+      keys: {completed: 1, leaseUntil: 1}
+    - name: idx_content_reaction_cleanup_source
+      keys: {targetKind: 1, targetId: 1, sourceVersion: 1}
+      unique: true
 streams:
   events.content.reaction_lifecycle:
     publication_role: publication_accessory
@@ -78,5 +132,5 @@ streams:
     role: append_only
     idempotency_key: eventId
     retention_seconds: 604800
-    description: ContentReaction outbox 的唯一 durable 生命周期 transport；消费者按 eventId 幂等。
+    description: ContentReaction outbox 的唯一 durable transport；eventId 稳定去重，reactionId 为 partitionKey，并携带 partitionId/partitionSequence；消费者按 eventId 幂等。
 role: authoritative

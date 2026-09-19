@@ -104,6 +104,8 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     final postInteractionState = ref.read(postInteractionStateProvider);
     final relationshipState = ref.read(userRelationshipStateProvider);
     return MediaViewerResult(
+      actorRef: widget.initialInteractionSnapshot.actorRef,
+      snapshotEpoch: widget.initialInteractionSnapshot.snapshotEpoch,
       scopePostIds: Set<String>.from(scopePostIds),
       scopeProfileIds: Set<String>.from(scopeProfileIds),
       followingUsers: {
@@ -517,9 +519,11 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     try {
       await ref
           .read(
-            personaRelationshipBlockWriterProvider(AppUiSurfaces.workBrowser),
+            personaRelationshipBlockCoordinatorProvider(
+              AppUiSurfaces.workBrowser,
+            ),
           )
-          .blockUser(BlockUserCommand(targetPersonaId: post.authorId));
+          .blockTarget(post.authorId);
       final attribution = _feedAttributionForPost(post);
       ref
           .read(contentBehaviorTrackerProvider)

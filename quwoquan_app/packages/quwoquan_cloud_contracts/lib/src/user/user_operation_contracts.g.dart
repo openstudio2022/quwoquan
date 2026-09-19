@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 8846a6c67847adc0a6817730793586f4730d65b8566b43d4936f871064110c7e
+// ContractGraph SHA256: b555945658a3e49a7df2e2423d3e2bd872731f72d58b5a6bdd0d8ac025dae357
 
 library;
 
@@ -419,6 +419,55 @@ enum PersonaLifecycleGuardReason {
       "blocked_retired_persona" =>
         PersonaLifecycleGuardReason.blockedRetiredPersona,
       "quota_reached" => PersonaLifecycleGuardReason.quotaReached,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum PersonaRelationshipMutationAction {
+  follow("follow"),
+  unfollow("unfollow"),
+  block("block"),
+  unblock("unblock");
+
+  const PersonaRelationshipMutationAction(this.wireName);
+
+  final String wireName;
+
+  static PersonaRelationshipMutationAction fromWire(
+    Object? value,
+    String path,
+  ) {
+    return switch (value) {
+      "follow" => PersonaRelationshipMutationAction.follow,
+      "unfollow" => PersonaRelationshipMutationAction.unfollow,
+      "block" => PersonaRelationshipMutationAction.block,
+      "unblock" => PersonaRelationshipMutationAction.unblock,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum PersonaRelationshipReceiptOutcome {
+  committed("committed"),
+  rejected("rejected"),
+  expired("expired"),
+  historyUnavailable("history_unavailable");
+
+  const PersonaRelationshipReceiptOutcome(this.wireName);
+
+  final String wireName;
+
+  static PersonaRelationshipReceiptOutcome fromWire(
+    Object? value,
+    String path,
+  ) {
+    return switch (value) {
+      "committed" => PersonaRelationshipReceiptOutcome.committed,
+      "rejected" => PersonaRelationshipReceiptOutcome.rejected,
+      "expired" => PersonaRelationshipReceiptOutcome.expired,
+      "history_unavailable" =>
+        PersonaRelationshipReceiptOutcome.historyUnavailable,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -3271,6 +3320,132 @@ final class PersonaProfileView {
   };
 }
 
+final class PersonaRelationshipCommandRecoverySlice {
+  const PersonaRelationshipCommandRecoverySlice({
+    required this.idempotencyKey,
+    required this.outcome,
+    required this.replayed,
+    this.committedVersion,
+    this.changed,
+    this.lastStateEventId,
+    this.lastStateEventVersion,
+  });
+
+  final String idempotencyKey;
+  final PersonaRelationshipReceiptOutcome outcome;
+  final bool replayed;
+  final int? committedVersion;
+  final bool? changed;
+  final String? lastStateEventId;
+  final int? lastStateEventVersion;
+
+  factory PersonaRelationshipCommandRecoverySlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "PersonaRelationshipCommandRecoverySlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "idempotencyKey",
+      "outcome",
+      "replayed",
+      "committedVersion",
+      "changed",
+      "lastStateEventId",
+      "lastStateEventVersion",
+    }, path);
+    _requireCoPresentFields(map, const <String>{
+      "changed",
+      "committedVersion",
+    }, path);
+    _requireCoPresentFields(map, const <String>{
+      "lastStateEventId",
+      "lastStateEventVersion",
+    }, path);
+    return PersonaRelationshipCommandRecoverySlice(
+      idempotencyKey: _requiredNonBlankString(
+        map["idempotencyKey"],
+        '$path.idempotencyKey',
+      ),
+      outcome: PersonaRelationshipReceiptOutcome.fromWire(
+        map["outcome"],
+        '$path.outcome',
+      ),
+      replayed: _requiredBool(map["replayed"], '$path.replayed'),
+      committedVersion: map["committedVersion"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["committedVersion"],
+              '$path.committedVersion',
+            ),
+      changed: map["changed"] == null
+          ? null
+          : _requiredBool(map["changed"], '$path.changed'),
+      lastStateEventId: map["lastStateEventId"] == null
+          ? null
+          : _requiredString(map["lastStateEventId"], '$path.lastStateEventId'),
+      lastStateEventVersion: map["lastStateEventVersion"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["lastStateEventVersion"],
+              '$path.lastStateEventVersion',
+            ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "idempotencyKey": idempotencyKey,
+    "outcome": outcome.wireName,
+    "replayed": replayed,
+    if (committedVersion != null) "committedVersion": committedVersion!,
+    if (changed != null) "changed": changed!,
+    if (lastStateEventId != null) "lastStateEventId": lastStateEventId!,
+    if (lastStateEventVersion != null)
+      "lastStateEventVersion": lastStateEventVersion!,
+  };
+}
+
+final class PersonaRelationshipMutationBasisSlice {
+  const PersonaRelationshipMutationBasisSlice({
+    required this.targetPersonaId,
+    required this.mutationBasis,
+    required this.expectedVersion,
+  });
+
+  final String targetPersonaId;
+  final String mutationBasis;
+  final int expectedVersion;
+
+  factory PersonaRelationshipMutationBasisSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "PersonaRelationshipMutationBasisSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "targetPersonaId",
+      "mutationBasis",
+      "expectedVersion",
+    }, path);
+    return PersonaRelationshipMutationBasisSlice(
+      targetPersonaId: _requiredNonBlankString(
+        map["targetPersonaId"],
+        '$path.targetPersonaId',
+      ),
+      mutationBasis: _requiredNonBlankString(
+        map["mutationBasis"],
+        '$path.mutationBasis',
+      ),
+      expectedVersion: _requiredInt(
+        map["expectedVersion"],
+        '$path.expectedVersion',
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "targetPersonaId": targetPersonaId,
+    "mutationBasis": mutationBasis,
+    "expectedVersion": expectedVersion,
+  };
+}
+
 final class PrivacySettingsView {
   const PrivacySettingsView({
     required this.userId,
@@ -4976,6 +5151,20 @@ PersonaProfileView decodePersonaProfileView(Object? response) =>
       "PersonaProfileView",
     );
 
+PersonaRelationshipCommandRecoverySlice
+decodePersonaRelationshipCommandRecoverySlice(Object? response) =>
+    PersonaRelationshipCommandRecoverySlice.fromWire(
+      _requiredObject(response, "PersonaRelationshipCommandRecoverySlice"),
+      "PersonaRelationshipCommandRecoverySlice",
+    );
+
+PersonaRelationshipMutationBasisSlice
+decodePersonaRelationshipMutationBasisSlice(Object? response) =>
+    PersonaRelationshipMutationBasisSlice.fromWire(
+      _requiredObject(response, "PersonaRelationshipMutationBasisSlice"),
+      "PersonaRelationshipMutationBasisSlice",
+    );
+
 PrivacySettingsView decodePrivacySettingsView(Object? response) =>
     PrivacySettingsView.fromWire(
       _requiredObject(response, "PrivacySettingsView"),
@@ -5126,6 +5315,14 @@ int _requiredInt(Object? value, String path) {
   return value;
 }
 
+int _requiredPositiveInt(Object? value, String path) {
+  final result = _requiredInt(value, path);
+  if (result < 1) {
+    throw FormatException('$path must be positive');
+  }
+  return result;
+}
+
 bool _requiredBool(Object? value, String path) {
   if (value is! bool) throw FormatException('$path must be a bool');
   return value;
@@ -5136,4 +5333,17 @@ List<Object?> _requiredList(Object? value, String path) {
     throw FormatException('$path must be a list');
   }
   return value;
+}
+
+void _requireCoPresentFields(
+  Map<String, Object?> value,
+  Set<String> fields,
+  String path,
+) {
+  final present = fields.where((field) => value[field] != null).length;
+  if (present != 0 && present != fields.length) {
+    throw FormatException(
+      '$path requires ${fields.join(', ')} to be present together',
+    );
+  }
 }

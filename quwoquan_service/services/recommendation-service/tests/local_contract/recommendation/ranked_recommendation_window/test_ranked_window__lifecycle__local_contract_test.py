@@ -61,6 +61,9 @@ class _Profiles:
         return self.profile
 
 
+_ExclusionProfiles = _Profiles
+
+
 def _ranking():
     return RankingResult(
         experiment_bucket="rule", model_bucket="rule", model_channel=None, model_release_id=None,
@@ -280,3 +283,40 @@ def test_request_context_is_canonical_frozen_and_replayed_across_clock_change() 
             viewport_profile="landscape",
             device_class="tablet",
         )
+
+class _Causality:
+    def __init__(self): self.value={"3":7}
+    def read_relationship_causal_watermark(self, subject_id): return dict(self.value)
+
+def test_new_window_freezes_following_causal_watermark_and_old_window_does_not_reorder():
+    store = _Store()
+    causal = _Causality()
+    facade = Facade(
+        store=store,
+        ranker=_Ranker(),
+        subject_closures=_Closures(),
+        exclusion_profiles=_ExclusionProfiles(),
+        relationship_causality=causal,
+        window_id_factory=lambda _: "causal-window",
+    )
+    kwargs = dict(
+        idempotency_key="causal-key",
+        subject_id="persona",
+        scenario="content_feed",
+        limit=2,
+        content_fence=FENCE,
+        client_presentation_contract=presentation_contract(),
+    )
+    first = facade.create_window(**kwargs)
+    assert first.user_feature_snapshot["followingCausalWatermark"] == {"3": 7}
+    ids = [
+        item.envelope.post.postId if item.envelope.post is not None else item.envelope.homepage.homepageId
+        for item in first.items
+    ]
+    causal.value = {"3": 8, "5": 1}
+    replay = facade.create_window(**kwargs)
+    assert replay.user_feature_snapshot["followingCausalWatermark"] == {"3": 7}
+    assert [
+        item.envelope.post.postId if item.envelope.post is not None else item.envelope.homepage.homepageId
+        for item in replay.items
+    ] == ids

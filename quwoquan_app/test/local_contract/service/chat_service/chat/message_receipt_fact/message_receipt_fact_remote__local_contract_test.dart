@@ -10,7 +10,7 @@ void main() {
     final executor = _ReceiptExecutor();
     final query = RemoteMessageReceiptFactQuery(
       client: GeneratedCloudOperationClient(executor),
-      invocationContext: (clientPageId) => CloudOperationInvocationContext(
+      invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
         surfaceId: AppUiSurfaces.chatDetail.id,
         routeId: AppUiSurfaces.chatDetail.routeId,
         clientPageId: clientPageId,

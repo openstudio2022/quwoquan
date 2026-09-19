@@ -40,17 +40,21 @@ void main() {
     );
 
     final expectedOperationIds = <String>[
+      AppCloudOperationIds.userPersonaRelationshipGetRelationshipMutationBasis,
       AppCloudOperationIds.userPersonaRelationshipFollowUser,
+      AppCloudOperationIds.userPersonaRelationshipGetRelationshipMutationBasis,
       AppCloudOperationIds.userPersonaRelationshipUnfollowUser,
       AppCloudOperationIds.userPersonaRelationshipListFollowing,
       AppCloudOperationIds.userPersonaRelationshipListFollowers,
     ];
     expect(executor.operationIds, expectedOperationIds);
     expect(contextOperationIds, expectedOperationIds);
-    expect(executor.payloads.first.body, <String, Object?>{
+    expect(executor.payloads[1].body, <String, Object?>{
       'source': 'userProfile',
+      'mutationBasis': 'test-basis',
+      'expectedVersion': 0,
     });
-    expect(executor.payloads.first.pathParameters, <String, String>{
+    expect(executor.payloads[1].pathParameters, <String, String>{
       'targetPersonaId': 'persona-2',
     });
     expect(following.items.single.personaId, 'persona-2');
@@ -78,6 +82,15 @@ final class _RecordingExecutor implements CloudOperationExecutor {
 }
 
 Object _responseFor(String operationId) {
+  if (operationId ==
+      AppCloudOperationIds
+          .userPersonaRelationshipGetRelationshipMutationBasis) {
+    return <String, Object?>{
+      'targetPersonaId': 'persona-2',
+      'mutationBasis': 'test-basis',
+      'expectedVersion': 0,
+    };
+  }
   if (operationId == AppCloudOperationIds.userPersonaRelationshipFollowUser ||
       operationId == AppCloudOperationIds.userPersonaRelationshipUnfollowUser) {
     return <String, Object?>{

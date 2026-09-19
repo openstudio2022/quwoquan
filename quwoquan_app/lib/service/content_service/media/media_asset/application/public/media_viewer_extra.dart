@@ -57,6 +57,8 @@ class MediaViewerPostWireRow {
 
 class MediaViewerInteractionSnapshot {
   const MediaViewerInteractionSnapshot({
+    this.actorRef = '',
+    this.snapshotEpoch = 0,
     this.scopePostIds = const <String>{},
     this.scopeProfileIds = const <String>{},
     this.followingUsers = const <String>{},
@@ -66,6 +68,8 @@ class MediaViewerInteractionSnapshot {
     this.postCommentCount = const <String, int>{},
   });
 
+  final String actorRef;
+  final int snapshotEpoch;
   final Set<String> scopePostIds;
   final Set<String> scopeProfileIds;
   final Set<String> followingUsers;
@@ -94,6 +98,8 @@ class MediaViewerInteractionSnapshot {
   }
 
   MediaViewerInteractionSnapshot copyWith({
+    String? actorRef,
+    int? snapshotEpoch,
     Set<String>? scopePostIds,
     Set<String>? scopeProfileIds,
     Set<String>? followingUsers,
@@ -103,6 +109,8 @@ class MediaViewerInteractionSnapshot {
     Map<String, int>? postCommentCount,
   }) {
     return MediaViewerInteractionSnapshot(
+      actorRef: actorRef ?? this.actorRef,
+      snapshotEpoch: snapshotEpoch ?? this.snapshotEpoch,
       scopePostIds: scopePostIds ?? this.scopePostIds,
       scopeProfileIds: scopeProfileIds ?? this.scopeProfileIds,
       followingUsers: followingUsers ?? this.followingUsers,
@@ -116,6 +124,8 @@ class MediaViewerInteractionSnapshot {
 
 class MediaViewerResult extends MediaViewerInteractionSnapshot {
   const MediaViewerResult({
+    super.actorRef = '',
+    super.snapshotEpoch = 0,
     super.scopePostIds = const <String>{},
     super.scopeProfileIds = const <String>{},
     super.followingUsers = const <String>{},
@@ -129,6 +139,8 @@ class MediaViewerResult extends MediaViewerInteractionSnapshot {
     MediaViewerInteractionSnapshot snapshot,
   ) {
     return MediaViewerResult(
+      actorRef: snapshot.actorRef,
+      snapshotEpoch: snapshot.snapshotEpoch,
       scopePostIds: Set<String>.from(snapshot.effectiveScopePostIds),
       scopeProfileIds: Set<String>.from(snapshot.effectiveScopeProfileIds),
       followingUsers: Set<String>.from(snapshot.followingUsers),

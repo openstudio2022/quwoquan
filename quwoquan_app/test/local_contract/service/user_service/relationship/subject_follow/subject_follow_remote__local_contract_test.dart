@@ -27,7 +27,7 @@ void main() {
       );
       final writer = RemoteSubjectFollowFacet(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: 'homepageDetail',
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(

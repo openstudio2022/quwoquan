@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -468,6 +469,14 @@ func (s *GreetingService) HasPendingBetween(ctx context.Context, personaA, perso
 	return s.greetings.HasPendingBetween(ctx, personaA, personaB)
 }
 
+func (s *GreetingService) HasPendingBetweenMany(ctx context.Context, viewerPersonaID string, targetPersonaIDs []string) (map[string]bool, error) {
+	reader, ok := s.greetings.(greetingrepo.GreetingBatchReader)
+	if !ok {
+		return nil, errors.New("greeting batch reader unavailable")
+	}
+	return reader.HasPendingBetweenMany(ctx, viewerPersonaID, targetPersonaIDs)
+}
+
 func (s *GreetingService) HasFormalConversation(ctx context.Context, personaA, personaB string) (bool, error) {
 	replied, err := s.greetings.HasRepliedBetween(ctx, personaA, personaB)
 	if err != nil {
@@ -477,6 +486,42 @@ func (s *GreetingService) HasFormalConversation(ctx context.Context, personaA, p
 		return true, nil
 	}
 	return s.conversations.HasDirectBetween(ctx, personaA, personaB)
+}
+
+func (s *GreetingService) HasFormalConversationMany(ctx context.Context, viewerPersonaID string, targetPersonaIDs []string) (map[string]bool, error) {
+	reader, ok := s.greetings.(greetingrepo.GreetingBatchReader)
+	if !ok {
+		return nil, errors.New("greeting batch reader unavailable")
+	}
+	replied, err := reader.HasRepliedBetweenMany(ctx, viewerPersonaID, targetPersonaIDs)
+	if err != nil {
+		return nil, err
+	}
+	missing := make([]string, 0, len(targetPersonaIDs))
+	for _, targetPersonaID := range targetPersonaIDs {
+		if !replied[targetPersonaID] {
+			missing = append(missing, targetPersonaID)
+		}
+	}
+	if len(missing) == 0 {
+		return replied, nil
+	}
+	conversationBatch, ok := s.conversations.(interface {
+		HasDirectBetweenMany(context.Context, string, []string) (map[string]bool, error)
+	})
+	if !ok {
+		return nil, errors.New("conversation batch gateway unavailable")
+	}
+	direct, err := conversationBatch.HasDirectBetweenMany(ctx, viewerPersonaID, missing)
+	if err != nil {
+		return nil, err
+	}
+	for targetPersonaID, exists := range direct {
+		if exists {
+			replied[targetPersonaID] = true
+		}
+	}
+	return replied, nil
 }
 
 func (s *GreetingService) loadAuthorizedGreeting(ctx context.Context, actorID, requestID string) (*usermodel.GreetingRequest, error) {

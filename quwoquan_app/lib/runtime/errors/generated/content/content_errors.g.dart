@@ -50,6 +50,18 @@ enum ContentErrorCode {
     0,
     404,
   ),
+  contentReactionBasisInvalid(
+    'CONTENT.USER.content_reaction_basis_invalid',
+    'surface',
+    0,
+    409,
+  ),
+  contentReactionBasisExpired(
+    'CONTENT.USER.content_reaction_basis_expired',
+    'surface',
+    0,
+    409,
+  ),
   contentReleaseQueryBarrierInvalid(
     'CONTENT.RELEASE.query_barrier_invalid',
     'surface',
@@ -408,6 +420,10 @@ enum ContentErrorCode {
         return ContentErrorCode.commentSortInvalid;
       case 'CONTENT.USER.content_reaction_target_not_found':
         return ContentErrorCode.contentReactionTargetNotFound;
+      case 'CONTENT.USER.content_reaction_basis_invalid':
+        return ContentErrorCode.contentReactionBasisInvalid;
+      case 'CONTENT.USER.content_reaction_basis_expired':
+        return ContentErrorCode.contentReactionBasisExpired;
       case 'CONTENT.RELEASE.query_barrier_invalid':
         return ContentErrorCode.contentReleaseQueryBarrierInvalid;
       case 'CONTENT.RELEASE.query_barrier_not_ready':
@@ -574,6 +590,8 @@ class ContentErrorMessages {
     ContentErrorCode.commentStatusTransitionInvalid: '评论状态已变更，无法执行该操作',
     ContentErrorCode.commentSortInvalid: '不支持的评论排序方式',
     ContentErrorCode.contentReactionTargetNotFound: '互动目标不存在或已失效',
+    ContentErrorCode.contentReactionBasisInvalid: '互动状态已更新，请刷新后重试',
+    ContentErrorCode.contentReactionBasisExpired: '互动请求已过期，请刷新后重试',
     ContentErrorCode.contentReleaseQueryBarrierInvalid: '内容候选查询证明身份或摘要无效',
     ContentErrorCode.contentReleaseQueryBarrierNotReady: '内容候选尚未完成全部必要查询准备',
     ContentErrorCode.contentReleaseQueryBarrierUnavailable: '内容查询准备依赖暂时不可用',
@@ -672,6 +690,10 @@ class ContentErrorMessages {
     ContentErrorCode.commentSortInvalid: 'Unsupported comment sort',
     ContentErrorCode.contentReactionTargetNotFound:
         'The reaction target is missing or unavailable',
+    ContentErrorCode.contentReactionBasisInvalid:
+        'The reaction state changed; refresh and try again',
+    ContentErrorCode.contentReactionBasisExpired:
+        'The reaction request expired; refresh and try again',
     ContentErrorCode.contentReleaseQueryBarrierInvalid:
         'Content candidate query proof identity or digest is invalid',
     ContentErrorCode.contentReleaseQueryBarrierNotReady:

@@ -173,6 +173,10 @@ type MemberStore interface {
 	ListSharedConversationIDs(ctx context.Context, memberA, memberB string) ([]string, error)
 }
 
+type DirectConversationBatchReader interface {
+	ListSharedConversationIDsMany(ctx context.Context, viewerID string, peerIDs []string) (map[string][]string, error)
+}
+
 type ConversationRosterProjector interface {
 	BumpMembersRosterRevision(ctx context.Context, conversationID string, memberCount *int) error
 }

@@ -159,7 +159,7 @@ final class _CredentialProviderHarness {
       return _CredentialProviderHarness(
         reader: RemoteCredentialBindingQuery(
           client: client,
-          invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
             surfaceId: AppUiSurfaces.settingsAccountSecurity.id,
             routeId: AppUiSurfaces.settingsAccountSecurity.routeId,
             clientPageId: clientPageId,

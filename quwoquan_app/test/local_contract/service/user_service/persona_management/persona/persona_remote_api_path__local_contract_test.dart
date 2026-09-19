@@ -189,7 +189,7 @@ void main() {
       );
       personaWriter = RemotePersonaCommandWriter(
         client: generatedClient,
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.profilePersonas.id,
           routeId: AppUiSurfaces.profilePersonas.routeId,
           clientPageId: clientPageId,

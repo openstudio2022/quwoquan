@@ -62,7 +62,7 @@ void main() {
         }
 
         final blockResult = await viewerHarness.personaRelationships.blockUser(
-          BlockUserCommand(targetPersonaId: targetPersonaId),
+          BlockUserCommand(targetPersonaId: targetPersonaId, mutationBasis: 'test-basis', expectedVersion: 0),
         );
         if (!blockResult.blocked ||
             blockResult.targetPersonaId != targetPersonaId) {

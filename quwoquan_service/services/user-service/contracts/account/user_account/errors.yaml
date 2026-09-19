@@ -76,6 +76,9 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - user.persona_relationship.GetRelationshipMutationBasis
+    - user.persona_relationship.RecoverRelationshipCommand
+    - user.persona_relationship.FinalizeExpiredRelationshipCommand
     - CheckAccountSecurityAuthority
     - CloseAccount
     - GetActivePersonaContext
@@ -277,6 +280,9 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - user.persona_relationship.GetRelationshipMutationBasis
+    - user.persona_relationship.RecoverRelationshipCommand
+    - user.persona_relationship.FinalizeExpiredRelationshipCommand
     - CheckAccountSecurityAuthority
     - CloseAccount
     - GetActivePersonaContext

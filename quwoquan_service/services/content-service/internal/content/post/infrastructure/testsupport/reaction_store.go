@@ -3,9 +3,9 @@ package testsupport
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,25 +19,64 @@ import (
 type reactionReceipt struct {
 	commandName   string
 	commandDigest string
+	basisDigest   string
+	actor         reactiondomain.Actor
+	outcome       reactionports.ReceiptOutcome
 	snapshot      reactiondomain.Snapshot
 	changed       bool
 	expiresAt     time.Time
 }
 
 type ReactionStore struct {
-	mu          sync.RWMutex
-	records     map[string]reactiondomain.Snapshot
-	receipts    map[string]reactionReceipt
-	outbox      []reactionports.OutboxFact
-	checkpoints map[string]string
+	mu           sync.RWMutex
+	records      map[string]reactiondomain.Snapshot
+	receipts     map[string]reactionReceipt
+	outbox       []reactionports.OutboxFact
+	nextSequence [reactionports.ContentReactionOutboxPartitionCount]int64
+	checkpoints  map[string]reactionports.OutboxPartitionLease
+	cleanupJobs  map[string]reactionapp.LifecycleCleanupJob
 }
 
 func NewReactionStore() *ReactionStore {
 	return &ReactionStore{
 		records:     map[string]reactiondomain.Snapshot{},
 		receipts:    map[string]reactionReceipt{},
-		checkpoints: map[string]string{},
+		checkpoints: map[string]reactionports.OutboxPartitionLease{}, cleanupJobs: map[string]reactionapp.LifecycleCleanupJob{},
 	}
+}
+
+func (s *ReactionStore) Ensure(_ context.Context, j reactionapp.LifecycleCleanupJob) (reactionapp.LifecycleCleanupJob, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if x, ok := s.cleanupJobs[j.ID]; ok {
+		return x, nil
+	}
+	s.cleanupJobs[j.ID] = j
+	return j, nil
+}
+func (s *ReactionStore) Claim(_ context.Context, id string, _ time.Time, _ time.Duration) (reactionapp.LifecycleCleanupJob, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	j, ok := s.cleanupJobs[id]
+	if !ok || j.Completed {
+		return reactionapp.LifecycleCleanupJob{}, false, nil
+	}
+	j.LeaseEpoch++
+	s.cleanupJobs[id] = j
+	return j, true, nil
+}
+func (s *ReactionStore) Advance(_ context.Context, id string, epoch int64, cursor string, checkpoint int64, done bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	j := s.cleanupJobs[id]
+	if j.LeaseEpoch != epoch {
+		return errors.New("stale cleanup lease")
+	}
+	j.Cursor = cursor
+	j.Checkpoint = checkpoint
+	j.Completed = done
+	s.cleanupJobs[id] = j
+	return nil
 }
 
 func (s *ReactionStore) Load(
@@ -59,21 +98,23 @@ func (s *ReactionStore) Load(
 
 func (s *ReactionStore) FindReceipt(
 	_ context.Context,
+	identity reactiondomain.Identity,
 	idempotencyKey string,
 	commandName string,
 	commandDigest string,
+	basisDigest string,
 ) (reactionports.CommitResult, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	receipt, found := s.receipts[idempotencyKey]
+	receipt, found := s.receipts[testReceiptKey(identity.Actor, idempotencyKey)]
 	if !found {
 		return reactionports.CommitResult{}, false, nil
 	}
 	if !receipt.expiresAt.After(time.Now().UTC()) {
-		delete(s.receipts, idempotencyKey)
+		delete(s.receipts, testReceiptKey(identity.Actor, idempotencyKey))
 		return reactionports.CommitResult{}, false, nil
 	}
-	if receipt.commandName != commandName || receipt.commandDigest != commandDigest {
+	if receipt.commandName != commandName || receipt.commandDigest != commandDigest || receipt.basisDigest != basisDigest {
 		return reactionports.CommitResult{},
 			false,
 			contentgenerated.AppErrorFromIdempotencyConflict("reaction test receipt digest mismatch")
@@ -85,8 +126,36 @@ func (s *ReactionStore) FindReceipt(
 	return reactionports.CommitResult{
 		Aggregate: aggregate,
 		Changed:   receipt.changed,
-		Replayed:  true,
+		Replayed:  true, Outcome: receipt.outcome,
 	}, true, nil
+}
+
+func testReceiptKey(actor reactiondomain.Actor, key string) string {
+	return string(actor.Dimension) + "\x1f" + actor.ID + "\x1f" + key
+}
+func (s *ReactionStore) RecoverReceipt(_ context.Context, actor reactiondomain.Actor, key, command string) (reactionports.CommitResult, bool, error) {
+	s.mu.RLock()
+	r, ok := s.receipts[testReceiptKey(actor, key)]
+	s.mu.RUnlock()
+	if !ok {
+		return reactionports.CommitResult{}, false, nil
+	}
+	if r.commandName != command {
+		return reactionports.CommitResult{}, false, contentgenerated.AppErrorFromIdempotencyConflict("receipt mismatch")
+	}
+	a, e := reactiondomain.Restore(r.snapshot)
+	return reactionports.CommitResult{Aggregate: a, Changed: r.changed, Replayed: true, Outcome: r.outcome}, true, e
+}
+func (s *ReactionStore) FinalizeExpired(_ context.Context, identity reactiondomain.Identity, key, command, digest, basis string, until time.Time) (reactionports.CommitResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := testReceiptKey(identity.Actor, key)
+	if r, ok := s.receipts[k]; ok {
+		a, e := reactiondomain.Restore(r.snapshot)
+		return reactionports.CommitResult{Aggregate: a, Changed: r.changed, Replayed: true, Outcome: r.outcome}, e
+	}
+	s.receipts[k] = reactionReceipt{commandName: command, commandDigest: digest, basisDigest: basis, actor: identity.Actor, outcome: reactionports.ReceiptOutcomeExpired, expiresAt: until.Add(24 * time.Hour)}
+	return reactionports.CommitResult{Outcome: reactionports.ReceiptOutcomeExpired}, nil
 }
 
 func (s *ReactionStore) Commit(
@@ -95,10 +164,11 @@ func (s *ReactionStore) Commit(
 ) (reactionports.CommitResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if receipt, found := s.receipts[commit.IdempotencyKey]; found {
+	key := testReceiptKey(commit.Aggregate.Identity().Actor, commit.IdempotencyKey)
+	if receipt, found := s.receipts[key]; found {
 		if receipt.expiresAt.After(time.Now().UTC()) {
 			if receipt.commandName != commit.CommandName ||
-				receipt.commandDigest != commit.CommandDigest {
+				receipt.commandDigest != commit.CommandDigest || receipt.basisDigest != commit.BasisDigest {
 				return reactionports.CommitResult{},
 					contentgenerated.AppErrorFromIdempotencyConflict("reaction test receipt digest mismatch")
 			}
@@ -109,10 +179,10 @@ func (s *ReactionStore) Commit(
 			return reactionports.CommitResult{
 				Aggregate: aggregate,
 				Changed:   receipt.changed,
-				Replayed:  true,
+				Replayed:  true, Outcome: receipt.outcome,
 			}, nil
 		}
-		delete(s.receipts, commit.IdempotencyKey)
+		delete(s.receipts, key)
 	}
 	if commit.Aggregate == nil || commit.IdempotencyKey == "" {
 		return reactionports.CommitResult{},
@@ -160,16 +230,22 @@ func (s *ReactionStore) Commit(
 	if expiresAt.IsZero() {
 		expiresAt = time.Now().UTC().Add(24 * time.Hour)
 	}
-	s.receipts[commit.IdempotencyKey] = reactionReceipt{
+	s.receipts[key] = reactionReceipt{
 		commandName:   commit.CommandName,
-		commandDigest: commit.CommandDigest,
-		snapshot:      snapshot,
-		changed:       commit.Changed,
-		expiresAt:     expiresAt,
+		commandDigest: commit.CommandDigest, basisDigest: commit.BasisDigest,
+		actor: snapshot.Identity.Actor, outcome: reactionports.ReceiptOutcomeCommitted,
+		snapshot:  snapshot,
+		changed:   commit.Changed,
+		expiresAt: expiresAt,
 	}
 	facts := cloneReactionOutboxFacts(commit.Events)
 	for index := range facts {
-		facts[index].Checkpoint = strconv.Itoa(len(s.outbox) + index + 1)
+		partitionKey := strings.TrimSpace(facts[index].AggregateID)
+		partitionID := reactionports.OutboxPartitionForKey(partitionKey)
+		s.nextSequence[partitionID]++
+		facts[index].PartitionKey = partitionKey
+		facts[index].PartitionID = partitionID
+		facts[index].PartitionSequence = s.nextSequence[partitionID]
 	}
 	s.outbox = append(s.outbox, facts...)
 	aggregate, err := reactiondomain.Restore(snapshot)
@@ -178,7 +254,7 @@ func (s *ReactionStore) Commit(
 	}
 	return reactionports.CommitResult{
 		Aggregate: aggregate,
-		Changed:   commit.Changed,
+		Changed:   commit.Changed, Outcome: reactionports.ReceiptOutcomeCommitted,
 	}, nil
 }
 
@@ -434,51 +510,96 @@ func (s *ReactionStore) ListActiveReactionsForPost(
 	return identities, nil
 }
 
-func (s *ReactionStore) ReadAfter(
+func (s *ReactionStore) ClaimOutboxPartitions(
 	_ context.Context,
-	checkpoint string,
+	consumer string,
+	owner string,
+	leaseDuration time.Duration,
+	maxPartitions int,
+) ([]reactionports.OutboxPartitionLease, error) {
+	consumer = strings.TrimSpace(consumer)
+	owner = strings.TrimSpace(owner)
+	if consumer == "" || owner == "" {
+		return nil, fmt.Errorf("reaction checkpoint identity is required")
+	}
+	if maxPartitions <= 0 || maxPartitions > reactionports.ContentReactionOutboxPartitionCount {
+		maxPartitions = reactionports.ContentReactionOutboxPartitionCount
+	}
+	now := time.Now().UTC()
+	if leaseDuration <= 0 {
+		leaseDuration = time.Minute
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	leases := make([]reactionports.OutboxPartitionLease, 0, maxPartitions)
+	for partitionID := 0; partitionID < reactionports.ContentReactionOutboxPartitionCount && len(leases) < maxPartitions; partitionID++ {
+		key := fmt.Sprintf("%s:%02d", consumer, partitionID)
+		current := s.checkpoints[key]
+		if current.Owner != "" && current.Owner != owner && current.LeaseUntil.After(now) {
+			continue
+		}
+		current.Consumer = consumer
+		current.Owner = owner
+		current.PartitionID = partitionID
+		current.LeaseEpoch++
+		current.LeaseUntil = now.Add(leaseDuration)
+		s.checkpoints[key] = current
+		leases = append(leases, current)
+	}
+	return leases, nil
+}
+
+func (s *ReactionStore) ReadOutboxPartition(
+	_ context.Context,
+	lease reactionports.OutboxPartitionLease,
 	limit int,
 ) ([]reactionports.OutboxFact, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	start := 0
-	if strings.TrimSpace(checkpoint) != "" {
-		parsed, err := strconv.Atoi(checkpoint)
-		if err != nil || parsed < 0 {
-			return nil, fmt.Errorf("invalid reaction checkpoint")
+	if limit <= 0 {
+		limit = 100
+	}
+	facts := make([]reactionports.OutboxFact, 0, limit)
+	expected := lease.Sequence + 1
+	for _, fact := range s.outbox {
+		if fact.PartitionID != lease.PartitionID || fact.PartitionSequence <= lease.Sequence {
+			continue
 		}
-		start = parsed
+		if fact.PartitionSequence != expected {
+			return nil, fmt.Errorf("reaction partition gap")
+		}
+		facts = append(facts, fact)
+		expected++
+		if len(facts) == limit {
+			break
+		}
 	}
-	if start > len(s.outbox) {
-		return nil, fmt.Errorf("reaction checkpoint exceeds outbox")
-	}
-	if limit <= 0 || start+limit > len(s.outbox) {
-		limit = len(s.outbox) - start
-	}
-	return cloneReactionOutboxFacts(s.outbox[start : start+limit]), nil
+	return cloneReactionOutboxFacts(facts), nil
 }
 
-func (s *ReactionStore) LoadCheckpoint(
+func (s *ReactionStore) AdvanceOutboxCheckpoint(
 	_ context.Context,
-	consumer string,
-) (string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.checkpoints[consumer], nil
-}
-
-func (s *ReactionStore) SaveCheckpoint(
-	_ context.Context,
-	consumer string,
-	checkpoint string,
+	lease reactionports.OutboxPartitionLease,
+	fact reactionports.OutboxFact,
 ) error {
-	if strings.TrimSpace(consumer) == "" || strings.TrimSpace(checkpoint) == "" {
-		return fmt.Errorf("reaction checkpoint identity is required")
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.checkpoints[consumer] = checkpoint
+	key := fmt.Sprintf("%s:%02d", lease.Consumer, lease.PartitionID)
+	current := s.checkpoints[key]
+	if current.Owner != lease.Owner || current.LeaseEpoch != lease.LeaseEpoch ||
+		current.Sequence != lease.Sequence || current.LeaseUntil.Before(time.Now().UTC()) ||
+		fact.PartitionID != lease.PartitionID || fact.PartitionSequence != lease.Sequence+1 {
+		return reactionports.ErrOutboxLeaseLost
+	}
+	current.Sequence = fact.PartitionSequence
+	s.checkpoints[key] = current
 	return nil
+}
+
+func (s *ReactionStore) CheckpointSequence(consumer string, partitionID int) int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.checkpoints[fmt.Sprintf("%s:%02d", consumer, partitionID)].Sequence
 }
 
 func (s *ReactionStore) OutboxFacts() []reactionports.OutboxFact {

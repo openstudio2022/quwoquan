@@ -35,7 +35,7 @@ void main() {
       executor = _AuthorImpactExecutor(pages);
       return RemoteAuthorImpactQuery(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.userProfile.id,
           routeId: AppUiSurfaces.userProfile.routeId,
           clientPageId: clientPageId,

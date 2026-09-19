@@ -331,39 +331,33 @@ func (s *MongoCommentDataAdapter) FindReplyTarget(
 		return commentmodel.ReplyTarget{}, false, err
 	}
 	return commentmodel.ReplyTarget{
-		ID:              document.ID,
-		PostID:          document.PostID,
-		AuthorID:        document.AuthorID,
-		ParentCommentID: document.ParentCommentID,
-		Status:          commentmodel.Status(document.Status),
+		ID:                document.ID,
+		PostID:            document.PostID,
+		AuthorID:          document.AuthorID,
+		ParentCommentID:   document.ParentCommentID,
+		Status:            commentmodel.Status(document.Status),
+		AccountRestricted: document.AccountRestricted,
 	}, true, nil
 }
 
-func (s *MongoCommentDataAdapter) FindPostOwnership(
-	ctx context.Context,
-	postID string,
-) (commentmodel.PostOwnership, bool, error) {
+func (s *MongoCommentDataAdapter) FindPostOwnership(ctx context.Context, postID string) (commentmodel.PostOwnership, bool, error) {
 	var document postOwnershipDocument
-	err := s.posts.FindOne(
-		ctx,
-		bson.M{"_id": strings.TrimSpace(postID)},
-		options.FindOne().SetProjection(bson.D{
-			{Key: "_id", Value: 1},
-			{Key: "authorId", Value: 1},
-			{Key: "status", Value: 1},
-		}),
-	).Decode(&document)
+	err := s.posts.FindOne(ctx, bson.M{"_id": strings.TrimSpace(postID)}, options.FindOne().SetProjection(bson.D{{Key: "_id", Value: 1}, {Key: "authorId", Value: 1}, {Key: "status", Value: 1}, {Key: "visibility", Value: 1}, {Key: "moderationStatus", Value: 1}, {Key: "accountRestricted", Value: 1}, {Key: "releaseId", Value: 1}, {Key: "manifestDigest", Value: 1}, {Key: "sourceOwner", Value: 1}, {Key: "environment", Value: 1}})).Decode(&document)
 	if err == mongo.ErrNoDocuments {
 		return commentmodel.PostOwnership{}, false, nil
 	}
 	if err != nil {
 		return commentmodel.PostOwnership{}, false, err
 	}
-	return commentmodel.PostOwnership{
-		PostID:   document.ID,
-		AuthorID: document.AuthorID,
-		Active:   strings.TrimSpace(document.Status) != "deleted",
-	}, true, nil
+	releaseActive := true
+	if strings.TrimSpace(document.ReleaseID) != "" {
+		count, countErr := s.posts.Database().Collection("data_release_state").CountDocuments(ctx, bson.M{"kind": "active_pointer", "environment": document.Environment, "sourceOwner": document.SourceOwner, "activeReleaseId": document.ReleaseID, "manifestDigest": document.ManifestDigest}, options.Count().SetLimit(1))
+		if countErr != nil {
+			return commentmodel.PostOwnership{}, false, countErr
+		}
+		releaseActive = count == 1
+	}
+	return commentmodel.PostOwnership{PostID: document.ID, AuthorID: document.AuthorID, Active: strings.TrimSpace(document.Status) != "deleted", Status: strings.TrimSpace(document.Status), Visibility: strings.TrimSpace(document.Visibility), ModerationStatus: strings.TrimSpace(document.ModerationStatus), AccountRestricted: document.AccountRestricted, ReleaseID: strings.TrimSpace(document.ReleaseID), ManifestDigest: strings.TrimSpace(document.ManifestDigest), SourceOwner: strings.TrimSpace(document.SourceOwner), Environment: strings.TrimSpace(document.Environment), ReleaseActive: releaseActive}, true, nil
 }
 
 func (s *MongoCommentDataAdapter) ListOwnedPostIDs(
@@ -516,5 +510,6 @@ func CommentRelationProjection() bson.D {
 		{Key: "authorId", Value: 1},
 		{Key: "parentCommentId", Value: 1},
 		{Key: "status", Value: 1},
+		{Key: "accountRestricted", Value: 1},
 	}
 }

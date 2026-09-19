@@ -4,8 +4,8 @@ package persistence
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,19 +13,86 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	reactionports "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction/ports"
 )
 
 type contentReactionCheckpointDocument struct {
-	ID        string    `bson:"_id"`
-	Sequence  int64     `bson:"sequence"`
-	UpdatedAt time.Time `bson:"updatedAt"`
+	ID          string    `bson:"_id"`
+	Consumer    string    `bson:"consumer"`
+	PartitionID int       `bson:"partitionId"`
+	Sequence    int64     `bson:"sequence"`
+	LeaseEpoch  int64     `bson:"leaseEpoch"`
+	LeaseOwner  string    `bson:"leaseOwner,omitempty"`
+	LeaseUntil  time.Time `bson:"leaseUntil,omitempty"`
+	UpdatedAt   time.Time `bson:"updatedAt"`
 }
 
-func (s *MongoContentReactionStore) ReadAfter(
+func reactionCheckpointID(consumer string, partitionID int) string {
+	return fmt.Sprintf("%s:%02d", strings.TrimSpace(consumer), partitionID)
+}
+
+func (s *MongoContentReactionStore) ClaimOutboxPartitions(
 	ctx context.Context,
-	checkpoint string,
+	consumer string,
+	owner string,
+	lease time.Duration,
+	maxPartitions int,
+) ([]reactionports.OutboxPartitionLease, error) {
+	consumer = strings.TrimSpace(consumer)
+	owner = strings.TrimSpace(owner)
+	if consumer == "" || owner == "" {
+		return nil, errors.New("ContentReaction outbox consumer and owner are required")
+	}
+	if lease <= 0 {
+		lease = time.Minute
+	}
+	if maxPartitions <= 0 || maxPartitions > reactionports.ContentReactionOutboxPartitionCount {
+		maxPartitions = reactionports.ContentReactionOutboxPartitionCount
+	}
+	now := s.now().UTC()
+	leases := make([]reactionports.OutboxPartitionLease, 0, maxPartitions)
+	for partitionID := 0; partitionID < reactionports.ContentReactionOutboxPartitionCount && len(leases) < maxPartitions; partitionID++ {
+		id := reactionCheckpointID(consumer, partitionID)
+		_, err := s.checkpoints.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
+			"$setOnInsert": bson.M{
+				"consumer": consumer, "partitionId": partitionID,
+				"sequence": int64(0), "leaseEpoch": int64(0), "updatedAt": now,
+			},
+		}, options.UpdateOne().SetUpsert(true))
+		if err != nil {
+			return nil, fmt.Errorf("ensure ContentReaction checkpoint: %w", err)
+		}
+		var document contentReactionCheckpointDocument
+		err = s.checkpoints.FindOneAndUpdate(
+			ctx,
+			bson.M{"_id": id, "$or": []bson.M{
+				{"leaseUntil": bson.M{"$lte": now}},
+				{"leaseUntil": bson.M{"$exists": false}},
+				{"leaseOwner": owner},
+			}},
+			bson.M{"$inc": bson.M{"leaseEpoch": int64(1)}, "$set": bson.M{
+				"leaseOwner": owner, "leaseUntil": now.Add(lease), "updatedAt": now,
+			}},
+			options.FindOneAndUpdate().SetReturnDocument(options.After),
+		).Decode(&document)
+		if err == mongo.ErrNoDocuments {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("claim ContentReaction checkpoint partition: %w", err)
+		}
+		leases = append(leases, reactionports.OutboxPartitionLease{
+			Consumer: consumer, Owner: owner, PartitionID: partitionID,
+			Sequence: document.Sequence, LeaseEpoch: document.LeaseEpoch,
+			LeaseUntil: document.LeaseUntil.UTC(),
+		})
+	}
+	return leases, nil
+}
+
+func (s *MongoContentReactionStore) ReadOutboxPartition(
+	ctx context.Context,
+	lease reactionports.OutboxPartitionLease,
 	limit int,
 ) ([]reactionports.OutboxFact, error) {
 	if limit <= 0 {
@@ -34,137 +101,81 @@ func (s *MongoContentReactionStore) ReadAfter(
 	if limit > 1000 {
 		limit = 1000
 	}
-	filter := bson.M{}
-	if strings.TrimSpace(checkpoint) != "" {
-		sequence, err := parseReactionOutboxCheckpoint(checkpoint)
-		if err != nil {
-			return nil, err
-		}
-		filter["outboxSequence"] = bson.M{"$gt": sequence}
+	var checkpoint contentReactionCheckpointDocument
+	err := s.checkpoints.FindOne(ctx, bson.M{
+		"_id":      reactionCheckpointID(lease.Consumer, lease.PartitionID),
+		"sequence": lease.Sequence, "leaseOwner": lease.Owner,
+		"leaseEpoch": lease.LeaseEpoch, "leaseUntil": bson.M{"$gt": s.now().UTC()},
+	}).Decode(&checkpoint)
+	if err == mongo.ErrNoDocuments {
+		return nil, fmt.Errorf("%w: partition %d epoch %d", reactionports.ErrOutboxLeaseLost, lease.PartitionID, lease.LeaseEpoch)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("validate ContentReaction outbox lease: %w", err)
 	}
 	cursor, err := s.outbox.Find(
 		ctx,
-		filter,
-		options.Find().
-			SetSort(bson.D{{Key: "outboxSequence", Value: 1}}).
-			SetLimit(int64(limit)),
+		bson.M{"partitionId": lease.PartitionID, "partitionSequence": bson.M{"$gt": lease.Sequence}},
+		options.Find().SetSort(bson.D{{Key: "partitionSequence", Value: 1}}).SetLimit(int64(limit)),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("read ContentReaction outbox: %w", err)
+		return nil, fmt.Errorf("read ContentReaction outbox partition: %w", err)
 	}
 	defer cursor.Close(ctx)
 	facts := make([]reactionports.OutboxFact, 0, limit)
+	expected := lease.Sequence + 1
 	for cursor.Next(ctx) {
 		var document contentReactionOutboxDocument
 		if err := cursor.Decode(&document); err != nil {
-			return nil, fmt.Errorf("decode ContentReaction outbox: %w", err)
+			return nil, fmt.Errorf("decode ContentReaction outbox partition: %w", err)
+		}
+		if document.PartitionSequence != expected {
+			return nil, fmt.Errorf(
+				"ContentReaction partition %d has gap: got %d want %d",
+				lease.PartitionID, document.PartitionSequence, expected,
+			)
+		}
+		if document.PartitionKey != document.AggregateID ||
+			document.PartitionID != reactionports.OutboxPartitionForKey(document.PartitionKey) {
+			return nil, errors.New("ContentReaction outbox partition identity mismatch")
 		}
 		facts = append(facts, reactionports.OutboxFact{
-			EventID:          document.ID,
-			EventType:        document.EventType,
-			AggregateID:      document.AggregateID,
-			AggregateVersion: document.AggregateVersion,
-			Payload:          append([]byte(nil), document.PayloadJSON...),
-			OccurredAt:       document.OccurredAt.UTC(),
-			Checkpoint:       reactionOutboxCheckpoint(document.OutboxSequence),
+			EventID: document.ID, EventType: document.EventType,
+			AggregateID: document.AggregateID, AggregateVersion: document.AggregateVersion,
+			Payload: append([]byte(nil), document.PayloadJSON...), OccurredAt: document.OccurredAt.UTC(),
+			PartitionKey: document.PartitionKey, PartitionID: document.PartitionID,
+			PartitionSequence: document.PartitionSequence,
 		})
+		expected++
 	}
 	if err := cursor.Err(); err != nil {
-		return nil, fmt.Errorf("iterate ContentReaction outbox: %w", err)
+		return nil, fmt.Errorf("iterate ContentReaction outbox partition: %w", err)
 	}
 	return facts, nil
 }
 
-func (s *MongoContentReactionStore) LoadCheckpoint(
+func (s *MongoContentReactionStore) AdvanceOutboxCheckpoint(
 	ctx context.Context,
-	consumer string,
-) (string, error) {
-	consumer = strings.TrimSpace(consumer)
-	if consumer == "" {
-		return "", fmt.Errorf("ContentReaction projection consumer is required")
-	}
-	var document contentReactionCheckpointDocument
-	err := s.checkpoints.FindOne(ctx, bson.M{"_id": consumer}).Decode(&document)
-	if err == mongo.ErrNoDocuments {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("load ContentReaction checkpoint: %w", err)
-	}
-	if document.Sequence <= 0 {
-		return "", nil
-	}
-	return reactionOutboxCheckpoint(document.Sequence), nil
-}
-
-func (s *MongoContentReactionStore) SaveCheckpoint(
-	ctx context.Context,
-	consumer string,
-	checkpoint string,
+	lease reactionports.OutboxPartitionLease,
+	fact reactionports.OutboxFact,
 ) error {
-	consumer = strings.TrimSpace(consumer)
-	if consumer == "" {
-		return fmt.Errorf("ContentReaction projection consumer is required")
+	if fact.PartitionID != lease.PartitionID || fact.PartitionSequence != lease.Sequence+1 {
+		return fmt.Errorf("%w: non-contiguous sequence", reactionports.ErrOutboxLeaseLost)
 	}
-	sequence, err := parseReactionOutboxCheckpoint(checkpoint)
+	result, err := s.checkpoints.UpdateOne(ctx, bson.M{
+		"_id":      reactionCheckpointID(lease.Consumer, lease.PartitionID),
+		"sequence": lease.Sequence, "leaseOwner": lease.Owner,
+		"leaseEpoch": lease.LeaseEpoch, "leaseUntil": bson.M{"$gt": s.now().UTC()},
+	}, bson.M{"$set": bson.M{
+		"sequence": fact.PartitionSequence, "updatedAt": s.now().UTC(),
+	}})
 	if err != nil {
-		return err
+		return fmt.Errorf("advance ContentReaction checkpoint: %w", err)
 	}
-	_, err = s.checkpoints.UpdateOne(
-		ctx,
-		bson.M{"_id": consumer},
-		bson.M{
-			"$max": bson.M{"sequence": sequence},
-			"$set": bson.M{"updatedAt": time.Now().UTC()},
-		},
-		options.UpdateOne().SetUpsert(true),
-	)
-	if err != nil {
-		return fmt.Errorf("save ContentReaction checkpoint: %w", err)
+	if result.MatchedCount != 1 {
+		return fmt.Errorf("%w: partition %d epoch %d", reactionports.ErrOutboxLeaseLost, lease.PartitionID, lease.LeaseEpoch)
 	}
 	return nil
-}
-
-func (s *MongoContentReactionStore) CountActiveReactions(
-	ctx context.Context,
-	postID string,
-) (int64, error) {
-	postID = strings.TrimSpace(postID)
-	if postID == "" {
-		return 0, fmt.Errorf("Post id is required")
-	}
-	return s.aggregates.CountDocuments(ctx, bson.M{
-		"targetKind": string(reactiondomain.TargetKindPost),
-		"targetId":   postID,
-		"reaction":   string(reactiondomain.ValueLike),
-	})
-}
-
-func (s *MongoContentReactionStore) CountActiveReactionsForActor(
-	ctx context.Context,
-	actor reactiondomain.Actor,
-) (int64, error) {
-	if err := actor.Validate(); err != nil {
-		return 0, fmt.Errorf("invalid ContentReaction actor: %w", err)
-	}
-	return s.aggregates.CountDocuments(ctx, bson.M{
-		"actorDimension": string(actor.Dimension),
-		"actorId":        actor.ID,
-		"targetKind":     string(reactiondomain.TargetKindPost),
-		"reaction":       string(reactiondomain.ValueLike),
-	})
-}
-
-func reactionOutboxCheckpoint(sequence int64) string {
-	return strconv.FormatInt(sequence, 10)
-}
-
-func parseReactionOutboxCheckpoint(checkpoint string) (int64, error) {
-	sequence, err := strconv.ParseInt(strings.TrimSpace(checkpoint), 10, 64)
-	if err != nil || sequence <= 0 {
-		return 0, fmt.Errorf("invalid ContentReaction outbox checkpoint")
-	}
-	return sequence, nil
 }
 
 var (

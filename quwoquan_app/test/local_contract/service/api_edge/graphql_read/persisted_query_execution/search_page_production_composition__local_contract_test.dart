@@ -70,7 +70,7 @@ void main() {
       );
       final repository = SearchProductionComposition.searchRepository(
         searchPageClient: GeneratedSearchPageGraphQLClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
           routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
           clientPageId: clientPageId,

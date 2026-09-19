@@ -776,7 +776,7 @@ void main() {
   group('ContentPostReactionFacet', () {
     test('like/unlike command 与 query 使用同一 typed Facet', () async {
       final reactions = InMemoryContentPostReactionPort();
-      await reactions.likePost(LikeContentPostCommand(postId: 'p1'));
+      await reactions.likePost(LikeContentPostCommand(postId: 'p1', mutationBasis: 'test-basis', expectedVersion: 0));
       expect(reactions.commandCallCount, equals(1));
       expect(
         (await reactions.getReactionState(
@@ -784,7 +784,7 @@ void main() {
         )).liked,
         isTrue,
       );
-      await reactions.unlikePost(UnlikeContentPostCommand(postId: 'p1'));
+      await reactions.unlikePost(UnlikeContentPostCommand(postId: 'p1', mutationBasis: 'test-basis', expectedVersion: 0));
       expect(reactions.commandCallCount, equals(2));
     });
 
@@ -792,7 +792,7 @@ void main() {
       final reactions = InMemoryContentPostReactionPort()
         ..throwOnCommand = Exception('rate_limited');
       expect(
-        () => reactions.likePost(LikeContentPostCommand(postId: 'p1')),
+        () => reactions.likePost(LikeContentPostCommand(postId: 'p1', mutationBasis: 'test-basis', expectedVersion: 0)),
         throwsException,
       );
       expect(reactions.commandCallCount, 1);

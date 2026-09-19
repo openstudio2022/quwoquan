@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -201,14 +202,12 @@ class _ContactSearchResultPageState
         return;
       }
       await ref
-          .read(
-            personaRelationshipCommandWriterProvider(
-              AppUiSurfaces.addContactSearch,
-            ),
-          )
-          .follow(
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowingWithSync(
             targetPersonaId,
-            sourceSurfaceId: AppUiSurfaces.addContactSearch.id,
+            currentFollowing: preflight.viewerFollowsTarget,
+            shouldFollow: true,
+            sourceSurface: AppUiSurfaces.addContactSearch,
           );
       if (!_isCurrentFollowAttempt(
         targetPersonaId,

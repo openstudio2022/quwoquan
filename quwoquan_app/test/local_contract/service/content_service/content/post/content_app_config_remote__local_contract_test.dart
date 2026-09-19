@@ -16,7 +16,7 @@ void main() {
       final executor = _RecordingExecutor();
       final query = RemoteContentAppConfigQuery(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: 'homeFeed',
           routeId: 'home',
           clientPageId: clientPageId,

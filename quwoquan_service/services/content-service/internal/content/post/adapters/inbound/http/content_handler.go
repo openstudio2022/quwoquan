@@ -228,6 +228,10 @@ type contentReactionHTTPHandler interface {
 	UnlikePost(http.ResponseWriter, *http.Request, string)
 	GetContentReactionState(http.ResponseWriter, *http.Request, string)
 	ReactToComment(http.ResponseWriter, *http.Request, string)
+	GetPresentation(http.ResponseWriter, *http.Request, string, string)
+	GetMutationBasis(http.ResponseWriter, *http.Request, string, string)
+	RecoverCommand(http.ResponseWriter, *http.Request, string, string, string)
+	FinalizeExpiredCommand(http.ResponseWriter, *http.Request, string, string, string)
 }
 
 // ReportHTTPHandler is implemented only by Report's object-local inbound

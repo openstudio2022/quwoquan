@@ -15,6 +15,12 @@ type UserProfileStore interface {
 	PromoteRegistration(ctx context.Context, command RegistrationPromotion) error
 }
 
+// UserProfileBatchReader 批量返回 Persona owner 的公开投影来源。它与
+// PersonaBatchReader 配合，把一页公开资料固定为两次 PostgreSQL 往返。
+type UserProfileBatchReader interface {
+	FindManyByID(ctx context.Context, userIDs []string) (map[string]model.UserProfile, error)
+}
+
 // UserAccountCreate deliberately excludes every public-profile field. Public
 // presentation is authored by Persona and only materialized into user_profiles
 // by PersonaProfileProjector.

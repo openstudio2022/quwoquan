@@ -36,6 +36,8 @@ class PersonaRelationshipEvent:
     version: int
     occurred_at: datetime
     event_digest: str
+    partition_id: int
+    partition_sequence: int
 
 
 def _text(value: Any) -> str:
@@ -82,12 +84,14 @@ def decode_persona_relationship(
     except ValueError as error:
         raise ValueError("persona relationship version is invalid") from error
     occurred_at = _parse_time(values.get("occurredAt", ""))
+    try: partition_id=int(values.get("partitionId", "")); partition_sequence=int(values.get("partitionSequence", ""))
+    except ValueError as error: raise ValueError("persona relationship partition coordinate is invalid") from error
     if (
         not event_id
         or not source_persona_id
         or not target_persona_id
         or source_persona_id == target_persona_id
-        or version <= 0
+        or version <= 0 or partition_id < 0 or partition_sequence <= 0
     ):
         raise ValueError("persona relationship identity is invalid")
     if event_name in {"PersonaBlocked", "PersonaUnblocked"} and following:
@@ -117,8 +121,45 @@ def decode_persona_relationship(
         following=following,
         version=version,
         occurred_at=occurred_at,
-        event_digest=event_digest,
+        event_digest=event_digest, partition_id=partition_id, partition_sequence=partition_sequence,
     )
+
+
+class RelationshipCausalFenceReader:
+    """Fail-closed source fence for new recommendation windows."""
+
+    def __init__(self, *, redis_client: Any, projection: Any) -> None:
+        self._redis = redis_client
+        self._projection = projection
+
+    @staticmethod
+    def _field(document: dict, name: str, default=None):
+        return document.get(name, document.get(name.encode(), default))
+
+    def read_relationship_causal_watermark(self, subject_id: str) -> dict[str, int]:
+        try:
+            info = self._redis.xinfo_stream(PERSONA_RELATIONSHIP_STREAM)
+            groups = self._redis.xinfo_groups(PERSONA_RELATIONSHIP_STREAM)
+        except Exception as error:
+            raise RuntimeError("relationship source watermark is unavailable") from error
+        group = next(
+            (
+                row for row in groups
+                if _text(self._field(row, "name", "")) == CONSUMER_GROUP
+            ),
+            None,
+        )
+        if group is None:
+            raise RuntimeError("relationship projection consumer group is unavailable")
+        last_generated = _text(self._field(info, "last-generated-id", "0-0"))
+        last_delivered = _text(self._field(group, "last-delivered-id", "0-0"))
+        pending = int(self._field(group, "pending", 0) or 0)
+        lag = self._field(group, "lag", None)
+        if pending != 0 or last_delivered != last_generated or (
+            lag is not None and int(lag) != 0
+        ):
+            raise RuntimeError("relationship projection has not reached source watermark")
+        return self._projection.read_relationship_causal_watermark(subject_id)
 
 
 class PersonaRelationshipConsumer:
@@ -215,6 +256,7 @@ class PersonaRelationshipConsumer:
                     following=event.following,
                     version=event.version,
                     occurred_at=event.occurred_at,
+                    partition_id=event.partition_id, partition_sequence=event.partition_sequence,
                 )
         except Exception as error:
             attempts = self._projection.record_source_failure(
@@ -230,9 +272,9 @@ class PersonaRelationshipConsumer:
                 attempts=attempts,
                 error=error,
             )
-            self._redis.xack(PERSONA_RELATIONSHIP_STREAM, CONSUMER_GROUP, stream_id)
-            self._projection.clear_source_failure(failure_id)
-            return
+            # Keep the poison event pending: the continuous partition checkpoint
+            # must not jump over it. Other partitions continue in process_once.
+            raise
         self._redis.xack(PERSONA_RELATIONSHIP_STREAM, CONSUMER_GROUP, stream_id)
         self._projection.clear_source_failure(failure_id)
 

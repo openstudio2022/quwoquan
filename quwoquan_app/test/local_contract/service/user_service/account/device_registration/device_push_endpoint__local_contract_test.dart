@@ -17,7 +17,7 @@ void main() {
       final executor = _DeviceRegistrationExecutor();
       final writer = RemoteDevicePushEndpointWriter(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: 'runtime.push-endpoint',
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(
@@ -65,7 +65,7 @@ void main() {
     final executor = _DeviceRegistrationExecutor();
     final writer = RemoteDevicePushEndpointWriter(
       client: GeneratedCloudOperationClient(executor),
-      invocationContext: (clientPageId) => CloudOperationInvocationContext(
+      invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
         surfaceId: 'runtime.push-endpoint',
         clientPageId: clientPageId,
         actor: const CloudOperationActorContext(accountId: 'account-1'),

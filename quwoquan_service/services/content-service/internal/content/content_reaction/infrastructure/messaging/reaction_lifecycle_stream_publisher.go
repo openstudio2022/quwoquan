@@ -34,20 +34,26 @@ func (publisher *ReactionLifecycleStreamPublisher) Publish(ctx context.Context, 
 		return fmt.Errorf("reaction lifecycle stream publisher is not configured")
 	}
 	if strings.TrimSpace(fact.EventID) == "" || strings.TrimSpace(fact.EventType) == "" ||
-		strings.TrimSpace(fact.AggregateID) == "" || fact.AggregateVersion <= 0 || fact.OccurredAt.IsZero() {
+		strings.TrimSpace(fact.AggregateID) == "" || fact.AggregateVersion <= 0 || fact.OccurredAt.IsZero() ||
+		fact.PartitionKey != fact.AggregateID ||
+		fact.PartitionID != reactionports.OutboxPartitionForKey(fact.PartitionKey) ||
+		fact.PartitionSequence <= 0 {
 		return fmt.Errorf("reaction lifecycle fact identity is incomplete")
 	}
 	if !json.Valid(fact.Payload) {
 		return fmt.Errorf("reaction lifecycle fact payload is not valid JSON")
 	}
 	_, err := publisher.redis.XAdd(ctx, ReactionLifecycleStream, map[string]string{
-		"eventId":          fact.EventID,
-		"eventType":        fact.EventType,
-		"aggregateType":    "ContentReaction",
-		"aggregateId":      fact.AggregateID,
-		"aggregateVersion": strconv.FormatInt(fact.AggregateVersion, 10),
-		"payload":          string(fact.Payload),
-		"occurredAt":       fact.OccurredAt.UTC().Format(time.RFC3339Nano),
+		"eventId":           fact.EventID,
+		"eventType":         fact.EventType,
+		"partitionKey":      fact.PartitionKey,
+		"partitionId":       strconv.Itoa(fact.PartitionID),
+		"partitionSequence": strconv.FormatInt(fact.PartitionSequence, 10),
+		"aggregateType":     "ContentReaction",
+		"aggregateId":       fact.AggregateID,
+		"aggregateVersion":  strconv.FormatInt(fact.AggregateVersion, 10),
+		"payload":           string(fact.Payload),
+		"occurredAt":        fact.OccurredAt.UTC().Format(time.RFC3339Nano),
 	})
 	if err != nil {
 		return fmt.Errorf("append reaction lifecycle stream: %w", err)

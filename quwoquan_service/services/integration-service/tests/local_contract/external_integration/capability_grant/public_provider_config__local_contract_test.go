@@ -77,6 +77,10 @@ func TestPublicProviderEnvironmentConfigsOnlyOverrideRealDifferences(t *testing.
 				t.Fatalf("%s config must remain autonomous", environment)
 			}
 			for key, value := range config.Overrides {
+				if strings.HasSuffix(key, "timeout_ms") {
+					// 超时键必须四环境显式写出，即使取值等于 schema default。
+					continue
+				}
 				if defaultValue, exists := defaults[key]; exists &&
 					reflect.DeepEqual(value, defaultValue) {
 					t.Fatalf(

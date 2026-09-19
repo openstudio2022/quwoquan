@@ -19,7 +19,7 @@ import (
 func TestPostDeletionConsumerTransitionsEachReactionAndIsReplaySafe(t *testing.T) {
 	t.Parallel()
 	store := testsupport.NewReactionStore()
-	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store))
+	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store), testBasis{})
 	for index, actor := range []reactiondomain.Actor{
 		mustReactionActor(t, reactiondomain.ActorDimensionPersona, "persona-delete"),
 		mustReactionActor(t, reactiondomain.ActorDimensionDevice, "device-delete"),
@@ -71,7 +71,7 @@ func TestPostDeletionConsumerTransitionsEachReactionAndIsReplaySafe(t *testing.T
 func TestPostDeletionConsumerRejectsMixedPayloadWithoutMutation(t *testing.T) {
 	t.Parallel()
 	store := testsupport.NewReactionStore()
-	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store))
+	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store), testBasis{})
 	actor := mustReactionActor(t, reactiondomain.ActorDimensionPersona, "persona-invalid-delete")
 	if _, err := service.LikePost(
 		commandmeta.WithIdempotencyKey(context.Background(), "invalid-delete-like"),
@@ -108,7 +108,7 @@ func TestReleaseImportPostDeletionFactPassesStrictConsumerAndAdvancesIndependent
 ) {
 	t.Parallel()
 	store := testsupport.NewReactionStore()
-	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store))
+	service := reactionapp.NewService(reactionapp.BindDataPorts(store, store), testBasis{})
 	snapshots := make([]releaseimport.ImportedPostDeletionSnapshot, 0, 4)
 	for index := range 4 {
 		postID := "data_post_tombstone_" + string(rune('a'+index))

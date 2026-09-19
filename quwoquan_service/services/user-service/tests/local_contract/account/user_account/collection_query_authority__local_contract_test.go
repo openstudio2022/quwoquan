@@ -131,10 +131,25 @@ func TestCollectionAuthorityRejectsForgedBindingsAndIdentity(t *testing.T) {
 		t.Fatal("cross account persona")
 	}
 }
-func TestCollectionAuthorityRejectsTamperingUnknownKeyAndCancelledRequest(t *testing.T){
- a,token,_,_,_:=setupAuthority(t);ctx:=context.Background();b:=binding();caller:=service("content-service","user.collection_query.verify");g,err:=a.Issue(ctx,service("api-edge","user.collection_query.issue"),token,b);if err!=nil{t.Fatal(err)}
- for _,bad:=range []string{"unknown"+g.Grant[strings.Index(g.Grant,"."):],g.Grant+"x","",strings.Repeat("a",17000)}{if _,err=a.Verify(ctx,caller,bad,b);err==nil{t.Fatal("invalid signature/key admitted")}}
- cancelled,cancel:=context.WithCancel(ctx);cancel();if _,err=a.Verify(cancelled,caller,g.Grant,b);err==nil{t.Fatal("cancelled request admitted")}
+func TestCollectionAuthorityRejectsTamperingUnknownKeyAndCancelledRequest(t *testing.T) {
+	a, token, _, _, _ := setupAuthority(t)
+	ctx := context.Background()
+	b := binding()
+	caller := service("content-service", "user.collection_query.verify")
+	g, err := a.Issue(ctx, service("api-edge", "user.collection_query.issue"), token, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"unknown" + g.Grant[strings.Index(g.Grant, "."):], g.Grant + "x", "", strings.Repeat("a", 17000)} {
+		if _, err = a.Verify(ctx, caller, bad, b); err == nil {
+			t.Fatal("invalid signature/key admitted")
+		}
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err = a.Verify(cancelled, caller, g.Grant, b); err == nil {
+		t.Fatal("cancelled request admitted")
+	}
 }
 
 func TestCollectionAuthorityRechecksRevocationAndDependency(t *testing.T) {

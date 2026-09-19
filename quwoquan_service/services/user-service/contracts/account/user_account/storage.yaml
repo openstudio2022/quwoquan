@@ -632,6 +632,37 @@ tables:
       columns:
       - account_id
       - occurred_at
+  user_account_creation_flows:
+    publication_role: not_published
+    entity: UserAccount
+    description: >-
+      UserAccount 注册多步骤恢复坐标；只保存稳定 flow、已选择的 Account/Persona
+      identity 与单向步骤结果，不复制 profile 或 credential 业务状态。
+    pk:
+    - flow_id
+    columns:
+    - {name: flow_id, type: VARCHAR(96), constraints: [PK]}
+    - {name: intent_digest, type: VARCHAR(64), constraints: [NOT_NULL]}
+    - {name: owner_id, type: VARCHAR(96), constraints: [NOT_NULL]}
+    - {name: persona_id, type: VARCHAR(96), constraints: [NOT_NULL]}
+    - {name: default_nickname, type: VARCHAR(96), constraints: [NOT_NULL]}
+    - {name: identity_origin, type: VARCHAR(32), constraints: [NOT_NULL]}
+    - {name: account_committed, type: BOOLEAN, constraints: [NOT_NULL], default: false}
+    - {name: persona_committed, type: BOOLEAN, constraints: [NOT_NULL], default: false}
+    - {name: profile_projected, type: BOOLEAN, constraints: [NOT_NULL], default: false}
+    - {name: credential_bound, type: BOOLEAN, constraints: [NOT_NULL], default: false}
+    - {name: completed, type: BOOLEAN, constraints: [NOT_NULL], default: false}
+    - {name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    - {name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    indexes:
+    - name: uq_user_account_creation_owner
+      columns: [owner_id]
+      unique: true
+    - name: uq_user_account_creation_persona
+      columns: [persona_id]
+      unique: true
+    - name: idx_user_account_creation_incomplete
+      columns: [updated_at]
 collections:
   rm_user_profile_view:
     publication_role: not_published
@@ -655,9 +686,10 @@ streams:
     retention_seconds: 604800
     description: UserAccount closed/suspended/restored 的唯一 durable 生命周期 transport。
 redis_cache:
-- key: cache:user_profile:{userId}
+- key: cache:{userId}:user_profile
   ttl_seconds: 600
   entity: UserAccount
+  description: 同一userId hash slot内的generation/profileVersion/sourceExpiresAt envelope；写入必须CAS，过期不得续鲜，安全minVersion读绕过旧代。
   invalidate_on:
   - UserProfileUpdated
 - key: device_tokens:{userId}
@@ -710,5 +742,5 @@ codegen:
     UserAccount:
       identityTags: string
   cache_overrides:
-    "cache:user_profile:{userId}":
+    "cache:{userId}:user_profile":
       skip: true

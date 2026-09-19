@@ -177,6 +177,9 @@ func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /user/personas/{personaId}/followers", h.handleListFollowers)
 	mux.HandleFunc("GET /user/personas/{personaId}/relationship", h.handleGetRelationship)
 	mux.HandleFunc("GET /user/personas/{personaId}/relationship/capability", h.handleGetRelationshipCapability)
+	mux.HandleFunc("GET /user/personas/{targetPersonaId}/relationship/mutation-basis", h.handleGetRelationshipMutationBasis)
+	mux.HandleFunc("GET /user/personas/{targetPersonaId}/relationship/commands/{operation}/receipt", h.handleRecoverRelationshipCommand)
+	mux.HandleFunc("POST /user/personas/{targetPersonaId}/relationship/commands/{operation}/finalize-expired", h.handleFinalizeExpiredRelationshipCommand)
 
 	mux.HandleFunc("POST /user/personas/{targetPersonaId}/block", h.handleBlock)
 	mux.HandleFunc("DELETE /user/personas/{targetPersonaId}/block", h.handleUnblock)

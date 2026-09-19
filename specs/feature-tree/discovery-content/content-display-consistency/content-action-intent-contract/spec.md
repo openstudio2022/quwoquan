@@ -4,7 +4,7 @@
 
 > Journey / Scenario：[`JNY-003 / SCN-007`](../../../spec.md#scn-007)
 
-> 设计引用：[L2 DEC-001](../design.md#dec-001)
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -35,9 +35,9 @@
 - 更多操作面板只展示已具备真实结果或安全终态的能力；禁止“功能开发中”假入口。
 
 <a id="req-002"></a>
-### REQ-002 Discovery 侧反馈入口统一消费公开动作契约（统一内容流与聚焦面）
+### REQ-002 Discovery 侧反馈入口统一接入 typed 领域 coordinator（Works + Moment）
 
-- Discovery 侧反馈入口统一消费公开动作契约（统一内容流与聚焦面），接入各自 owner 的 typed 领域 coordinator，再经公开 writer/query；页面不得直调 writer、局部 setFollowing 或复制队列作为成功旁路。
+- Discovery 侧反馈入口统一接入各自 owner 的 typed 领域 coordinator，再经公开 writer/query；页面不得直调 writer、局部 setFollowing 或复制队列作为成功旁路。
 - 更多操作面板只展示已具备真实结果或安全终态的能力；禁止“功能开发中”假入口。
 - 打赏、会员、虚拟币等交易能力；交易合规、计费与退款契约不完整时不得展示入口。
 - `like/comment/report` 走各对象专用命令，禁止混入 batch tracker；人物关注仍由 User 关系 coordinator 拥有，SubjectFollow 保持独立目标与 writer。
@@ -114,8 +114,8 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：`REQ-002`、`REQ-003`、`GWT-002` 尚待现役入口逐个接线与直接测试；手工 Remote 用例不能证明 production provider，Creator 资格缺失也不能通过隐藏全部作者关注入口关闭。
-- 完成判定：`GWT-002` 所列每入口均有当前 surface/operation 对应的真实断言与适用 API/双真机证据；scope/身份错误不重试，不维护页面成功旁路或人工中央 registry。
+- 影响或价值：`REQ-002`、`REQ-003`、`GWT-002` 尚缺现役入口逐个接线与直接验收证据；手工 Remote 用例不能证明 production provider，Creator 资格缺失也不能通过隐藏全部作者关注入口关闭。工程引用包括 `quwoquan_app/test/local_contract/journeys/cross_page_interaction_consistency/cross_page_interaction_consistency__local_contract_test.dart`、`quwoquan_app/test/local_contract/service/content_service/content/post/content_interaction_contract__local_contract_test.dart`、`quwoquan_app/test/local_contract/service/content_service/content/content_reaction/content_post_reaction_remote__local_contract_test.dart`、`quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart`、`quwoquan_app/test/user_acceptance/service/content_service/content/content_reaction/like_post__user_acceptance_test.dart`、`quwoquan_app/test/user_acceptance/service/content_service/content/comment/comment_post__user_acceptance_test.dart` 与 `quwoquan_app/test/user_acceptance/journeys/profile/profile_journey__user_acceptance_test.dart`；人物与 `circleStats` 入口仍缺对应 owner 目录下的 production descriptor 场景。
+- 完成判定：按当前页面源码、generated surface/operation 重建全入口清单，`GWT-002` 所列每入口均在直接断言处绑定 `spec_ref`，并取得当前 surface/operation 对应的适用 API 与双真机结果；scope/身份错误不重试，不维护页面成功旁路或人工中央 registry。canonical surface 与命令/恢复分别引用 `quwoquan_service/contracts/metadata/_shared/ui_surfaces.yaml`、`quwoquan_service/services/content-service/contracts/content/content_reaction/operations.yaml` 及现役 User owning operations。
 
 <a id="open-003"></a>
 ### OPEN-003 Post 收藏退场的入口回归证据
@@ -123,13 +123,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：`REQ-002` 与 `GWT-003` 尚缺覆盖 Feed/viewer/直达详情及恢复入口的当前直接证据；本次文案修正不意味着客户端与生成物已验证。
-- 完成判定：无 Post 收藏写轨/入口，实体「想去」现役边界不扩张，真实测试直接绑定 `GWT-003`。
-
-### 待实现验收的测试绑定
-
-- 全入口清单由当前页面源码、generated surface/operation 和运行断言重建，本段不记录完成状态。后续测试必须在直接断言旁绑定本 Story `GWT-002` 或 `GWT-003`，operations 的 required readiness 仍由各 owner 登记。
-- App local_contract 优先扩展 `quwoquan_app/test/local_contract/journeys/cross_page_interaction_consistency/cross_page_interaction_consistency__local_contract_test.dart`、`quwoquan_app/test/local_contract/service/content_service/content/post/content_interaction_contract__local_contract_test.dart` 与 `quwoquan_app/test/local_contract/service/content_service/content/content_reaction/content_post_reaction_remote__local_contract_test.dart`；这些现有入口尚未被本次证明覆盖新矩阵。
-- api_integration 扩展 `quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart`；人物与 circleStats 入口在对应 owner 测试目录补 production descriptor 场景，不能把人工正确 header 的 200 当页面证据。
-- user_acceptance 扩展 `quwoquan_app/test/user_acceptance/service/content_service/content/content_reaction/like_post__user_acceptance_test.dart`、`quwoquan_app/test/user_acceptance/service/content_service/content/comment/comment_post__user_acceptance_test.dart`、`quwoquan_app/test/user_acceptance/journeys/profile/profile_journey__user_acceptance_test.dart`；每个列举入口单独覆盖，未覆盖者继续阻断 `OPEN-002`。
-- canonical surface：`quwoquan_service/contracts/metadata/_shared/ui_surfaces.yaml`；Reaction 与人物关系命令/恢复分别引用 `quwoquan_service/services/content-service/contracts/content/content_reaction/operations.yaml` 与既有 User owning operations。
+- 影响或价值：`REQ-002` 与 `GWT-003` 尚缺覆盖 Feed/viewer/直达详情及恢复入口的当前直接证据；规格文字不能代替客户端与生成物验证。工程引用包括上述 cross-page/post interaction local_contract、Reaction api_integration 与 like/comment/profile user_acceptance 入口，现有结果尚未证明 Post 收藏退场矩阵。
+- 完成判定：无 Post 收藏写轨/入口，实体「想去」现役边界不扩张；Feed、viewer、直达详情与恢复入口的直接断言分别绑定 `GWT-003`，operations required readiness 仍由各 owner 登记。

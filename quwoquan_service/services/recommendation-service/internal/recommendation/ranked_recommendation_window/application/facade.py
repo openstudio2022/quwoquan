@@ -62,6 +62,10 @@ class ExclusionProfileReader(Protocol):
     def read_for_scoring(self, subject_id: str) -> dict: ...
 
 
+class RelationshipCausalWatermarkReader(Protocol):
+    def read_relationship_causal_watermark(self, subject_id: str) -> dict[str, int]: ...
+
+
 class IdempotencyConflictError(RuntimeError):
     pass
 
@@ -101,8 +105,10 @@ class Facade:
         window_id_factory: Callable[[str], str] | None = None,
         now: Callable[[], datetime] | None = None,
         release_readiness=None,
+        relationship_causality: RelationshipCausalWatermarkReader | None = None,
     ) -> None:
         self._release_readiness = release_readiness
+        self._relationship_causality = relationship_causality
         self._store = store
         self._ranker = ranker
         self._subject_closures = subject_closures
@@ -206,6 +212,17 @@ class Facade:
             limit=limit,
             context_digest=context_digest,
         )
+        causal = self._relationship_causality.read_relationship_causal_watermark(normalized_subject) if self._relationship_causality is not None else {}
+        if any(not str(key).isdigit() or int(value) < 0 for key, value in causal.items()):
+            raise RuntimeError("following causal watermark is invalid")
+        ranking = RankingResult(
+            experiment_bucket=ranking.experiment_bucket, model_bucket=ranking.model_bucket,
+            model_channel=ranking.model_channel, model_release_id=ranking.model_release_id,
+            policy_digest=ranking.policy_digest, feature_snapshot_at=ranking.feature_snapshot_at,
+            ranking_snapshot_digest=ranking.ranking_snapshot_digest,
+            user_feature_snapshot={**dict(ranking.user_feature_snapshot), "followingCausalWatermark": dict(sorted(causal.items()))},
+            candidates=ranking.candidates, profile_revision=ranking.profile_revision,
+        )
         ranking = self._bind_ranking_context(ranking, context_digest)
         window = RankedRecommendationWindow.create(
             window_id=window_id,
@@ -277,6 +294,7 @@ class Facade:
             "modelReleaseId": ranking.model_release_id,
             "policyDigest": ranking.policy_digest,
             "rankerSnapshotDigest": ranking.ranking_snapshot_digest,
+            "userFeatureSnapshot": ranking.user_feature_snapshot,
             "ranked": [
                 {
                     "envelope": item.envelope.model_dump(mode="json"),

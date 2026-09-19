@@ -73,7 +73,7 @@ final class EntityApiContractHarness {
       // 带 session 断言的共享 context 只服务登录后的对象操作。
       final accountSessions = RemoteAccountSessionCommandWriter(
         client: client,
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.appShell.id,
           routeId: AppUiSurfaces.appShell.routeId,
           clientPageId: clientPageId,
@@ -324,7 +324,7 @@ final class EntityHomepageReviewApiActor {
     homepage = homepageFacets.query;
     reviews = EntityProductionComposition.homepageReviewFacets(
       client: _client,
-      invocationContext: (clientPageId, {required command}) =>
+      invocationContext: (clientPageId, {required command, idempotencyKey}) =>
           _invocationContext(
             surface: AppUiSurfaces.homepageDetail,
             clientPageId: clientPageId,
@@ -383,7 +383,7 @@ final class EntityHomepageReviewApiActor {
       );
       final sessions = RemoteAccountSessionCommandWriter(
         client: client,
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.appShell.id,
           routeId: AppUiSurfaces.appShell.routeId,
           clientPageId: clientPageId,

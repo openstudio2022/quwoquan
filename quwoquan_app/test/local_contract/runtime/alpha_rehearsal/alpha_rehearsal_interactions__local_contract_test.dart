@@ -147,7 +147,7 @@ void main() {
       );
 
       await client.userPersonaRelationshipFollowUser(
-        FollowUserCommand(targetPersonaId: target, source: 'homeFeed'),
+        FollowUserCommand(targetPersonaId: target, source: 'homeFeed', mutationBasis: 'test-basis', expectedVersion: 0),
         context: context,
       );
       final capability = await client

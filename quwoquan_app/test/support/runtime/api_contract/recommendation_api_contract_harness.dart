@@ -54,7 +54,7 @@ final class RecommendationApiContractHarness {
 
       final accountSessions = RemoteAccountSessionCommandWriter(
         client: client,
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.appShell.id,
           routeId: AppUiSurfaces.appShell.routeId,
           clientPageId: clientPageId,
@@ -85,7 +85,7 @@ final class RecommendationApiContractHarness {
         httpClient: httpClient,
         accountLifecycle: RemoteAccountLifecycleCommandWriter(
           client: client,
-          invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
             surfaceId: AppUiSurfaces.settingsAccountSecurity.id,
             routeId: AppUiSurfaces.settingsAccountSecurity.routeId,
             clientPageId: clientPageId,

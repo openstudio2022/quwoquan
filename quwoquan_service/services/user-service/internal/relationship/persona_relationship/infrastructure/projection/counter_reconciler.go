@@ -2,243 +2,171 @@ package projection
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	reltelemetry "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/telemetry"
 )
 
 type ReconcileBatchResult struct {
-	NextOwnerID string
-	Scanned     int
-	Repaired    int
+	NextPersonaID string
+	Scanned       int
+	Repaired      int
+	Generation    string
 }
 
-// CounterReconciler is the low-frequency repair path. It is intentionally
-// detached from Follow/Unfollow/Block command latency and compares one bounded
-// owner page against the authoritative relationship directions.
+// CounterReconciler rebuilds a shadow contribution generation from a fixed
+// authority snapshot, verifies it against the live member ledger, and only
+// then publishes the repaired live buckets. It is never used by commands or
+// normal event projection and performs no edge COUNT query.
 type CounterReconciler struct {
-	pool  *pgxpool.Pool
-	cache ProfileCacheInvalidator
+	pool        *pgxpool.Pool
+	bucketCount int
 }
 
-func NewCounterReconciler(
-	pool *pgxpool.Pool,
-	cache ProfileCacheInvalidator,
-) *CounterReconciler {
+func NewCounterReconciler(pool *pgxpool.Pool, _ ProfileCacheInvalidator) *CounterReconciler {
 	if pool == nil {
 		panic("persona relationship counter reconciler pool is required")
 	}
-	return &CounterReconciler{pool: pool, cache: cache}
+	return &CounterReconciler{pool: pool, bucketCount: DefaultRelationshipStatisticsBuckets}
 }
 
-func (r *CounterReconciler) ReconcileBatch(
-	ctx context.Context,
-	afterOwnerID string,
-	limit int,
-) (ReconcileBatchResult, error) {
+func (r *CounterReconciler) ReconcileBatch(ctx context.Context, afterPersonaID string, limit int) (ReconcileBatchResult, error) {
 	if r == nil || r.pool == nil {
-		return ReconcileBatchResult{}, fmt.Errorf(
-			"persona relationship counter reconciler is unavailable",
-		)
+		return ReconcileBatchResult{}, errors.New("persona relationship counter reconciler is unavailable")
 	}
-	if limit <= 0 || limit > 1000 {
-		limit = 200
-	}
-	rows, err := r.pool.Query(ctx, `
-		SELECT user_id
-		FROM user_profiles
-		WHERE user_id > $1
-		ORDER BY user_id
-		LIMIT $2`,
-		strings.TrimSpace(afterOwnerID),
-		limit,
-	)
+	limit = normalizedBatchSize(limit)
+	generation := uuid.NewString()
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
-		return ReconcileBatchResult{}, fmt.Errorf(
-			"list relationship counter owners: %w",
-			err,
-		)
+		return ReconcileBatchResult{}, fmt.Errorf("begin relationship statistics repair: %w", err)
 	}
-	ownerIDs := make([]string, 0, limit)
-	for rows.Next() {
-		var ownerID string
-		if err := rows.Scan(&ownerID); err != nil {
-			rows.Close()
-			return ReconcileBatchResult{}, fmt.Errorf(
-				"scan relationship counter owner: %w",
-				err,
-			)
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
 		}
-		ownerIDs = append(ownerIDs, ownerID)
+	}()
+	rows, err := tx.Query(ctx, `
+		SELECT DISTINCT persona_id
+		FROM persona_relationship_statistics_members
+		WHERE persona_id > $1
+		ORDER BY persona_id
+		LIMIT $2`, strings.TrimSpace(afterPersonaID), limit)
+	if err != nil {
+		return ReconcileBatchResult{}, fmt.Errorf("list relationship repair personas: %w", err)
+	}
+	personaIDs := make([]string, 0, limit)
+	for rows.Next() {
+		var personaID string
+		if err := rows.Scan(&personaID); err != nil {
+			rows.Close()
+			return ReconcileBatchResult{}, err
+		}
+		personaIDs = append(personaIDs, personaID)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return ReconcileBatchResult{}, fmt.Errorf(
-			"iterate relationship counter owners: %w",
-			err,
-		)
+		return ReconcileBatchResult{}, err
 	}
-	result := ReconcileBatchResult{Scanned: len(ownerIDs)}
-	if len(ownerIDs) == 0 {
+	result := ReconcileBatchResult{Scanned: len(personaIDs), Generation: generation}
+	if len(personaIDs) == 0 {
+		if err := tx.Commit(ctx); err != nil {
+			return result, err
+		}
+		committed = true
 		return result, nil
 	}
-	result.NextOwnerID = ownerIDs[len(ownerIDs)-1]
-
-	repairedRows, err := r.pool.Query(ctx, `
-		WITH selected_owners AS (
-			SELECT unnest($1::text[]) AS owner_id
-		),
-		active_personas AS (
-			SELECT selected.owner_id, personas.persona_id AS persona_id
-			FROM selected_owners AS selected
-			JOIN personas ON personas.user_id = selected.owner_id
-				AND personas.status <> 'retired'
-		),
-		fallback_personas AS (
-			SELECT selected.owner_id, selected.owner_id AS persona_id
-			FROM selected_owners AS selected
-			WHERE NOT EXISTS (
-				SELECT 1
-				FROM active_personas
-				WHERE active_personas.owner_id = selected.owner_id
-			)
-		),
-		owner_personas AS (
-			SELECT owner_id, persona_id FROM active_personas
-			UNION ALL
-			SELECT owner_id, persona_id FROM fallback_personas
-		),
-		follower_counts AS (
-			SELECT owner_personas.owner_id, COUNT(direction.pair_id)::BIGINT AS value
-			FROM owner_personas
-			LEFT JOIN persona_relationship_directions AS direction
-				ON direction.target_persona_id = owner_personas.persona_id
-				AND direction.following = TRUE
-			GROUP BY owner_personas.owner_id
-		),
-		following_counts AS (
-			SELECT owner_personas.owner_id, COUNT(direction.pair_id)::BIGINT AS value
-			FROM owner_personas
-			LEFT JOIN persona_relationship_directions AS direction
-				ON direction.source_persona_id = owner_personas.persona_id
-				AND direction.following = TRUE
-			GROUP BY owner_personas.owner_id
-		),
-		expected AS (
-			SELECT selected.owner_id,
-				COALESCE(follower_counts.value, 0) AS follower_count,
-				COALESCE(following_counts.value, 0) AS following_count
-			FROM selected_owners AS selected
-			LEFT JOIN follower_counts USING (owner_id)
-			LEFT JOIN following_counts USING (owner_id)
+	result.NextPersonaID = personaIDs[len(personaIDs)-1]
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO persona_relationship_statistics_buckets (
+			generation, persona_id, contribution_kind, bucket, value,
+			max_source_version, updated_at
 		)
-		UPDATE user_profiles AS profile
-		SET follower_count = expected.follower_count,
-			following_count = expected.following_count,
-			updated_at = NOW()
-		FROM expected
-		WHERE profile.user_id = expected.owner_id
-			AND (
-				profile.follower_count <> expected.follower_count
-				OR profile.following_count <> expected.following_count
-			)
-		RETURNING profile.user_id`,
-		ownerIDs,
-	)
+		SELECT $1, persona_id, contribution_kind, bucket,
+			SUM(current_contribution), MAX(last_applied_version), NOW()
+		FROM persona_relationship_statistics_members
+		WHERE persona_id = ANY($2::text[])
+		GROUP BY persona_id, contribution_kind, bucket`, generation, personaIDs); err != nil {
+		return result, fmt.Errorf("build relationship repair generation: %w", err)
+	}
+	mismatchRows, err := tx.Query(ctx, `
+		WITH expected AS (
+			SELECT persona_id, contribution_kind, bucket, value
+			FROM persona_relationship_statistics_buckets
+			WHERE generation=$1
+		), live AS (
+			SELECT persona_id, contribution_kind, bucket, value
+			FROM persona_relationship_statistics_buckets
+			WHERE generation='live' AND persona_id = ANY($2::text[])
+		)
+		SELECT COALESCE(expected.persona_id, live.persona_id)
+		FROM expected FULL OUTER JOIN live USING (persona_id, contribution_kind, bucket)
+		WHERE COALESCE(expected.value, 0) <> COALESCE(live.value, 0)`, generation, personaIDs)
 	if err != nil {
-		return ReconcileBatchResult{}, fmt.Errorf(
-			"reconcile relationship counters: %w",
-			err,
-		)
+		return result, fmt.Errorf("verify relationship repair generation: %w", err)
 	}
-	repairedOwnerIDs := make([]string, 0)
-	for repairedRows.Next() {
-		var ownerID string
-		if err := repairedRows.Scan(&ownerID); err != nil {
-			repairedRows.Close()
-			return ReconcileBatchResult{}, fmt.Errorf(
-				"scan repaired relationship counter: %w",
-				err,
+	mismatches := 0
+	for mismatchRows.Next() {
+		var personaID string
+		if err := mismatchRows.Scan(&personaID); err != nil {
+			mismatchRows.Close()
+			return result, err
+		}
+		mismatches++
+	}
+	mismatchRows.Close()
+	if err := mismatchRows.Err(); err != nil {
+		return result, err
+	}
+	if mismatches > 0 {
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM persona_relationship_statistics_buckets
+			WHERE generation='live' AND persona_id = ANY($1::text[])`, personaIDs); err != nil {
+			return result, err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO persona_relationship_statistics_buckets (
+				generation, persona_id, contribution_kind, bucket, value,
+				max_source_version, updated_at
 			)
+			SELECT 'live', persona_id, contribution_kind, bucket, value,
+				max_source_version, NOW()
+			FROM persona_relationship_statistics_buckets
+			WHERE generation=$1`, generation); err != nil {
+			return result, err
 		}
-		repairedOwnerIDs = append(repairedOwnerIDs, ownerID)
+		result.Repaired = mismatches
 	}
-	repairedRows.Close()
-	if err := repairedRows.Err(); err != nil {
-		return ReconcileBatchResult{}, fmt.Errorf(
-			"iterate repaired relationship counters: %w",
-			err,
-		)
+	if _, err := tx.Exec(ctx, `DELETE FROM persona_relationship_statistics_buckets WHERE generation=$1`, generation); err != nil {
+		return result, err
 	}
-	result.Repaired = len(repairedOwnerIDs)
-	for _, ownerID := range repairedOwnerIDs {
-		reltelemetry.Collector().RecordCounterMismatch()
-		if r.cache != nil {
-			if err := r.cache.Del(ctx, ownerID); err != nil {
-				return result, fmt.Errorf(
-					"invalidate reconciled relationship counter cache for %s: %w",
-					ownerID,
-					err,
-				)
-			}
-		}
+	if err := tx.Commit(ctx); err != nil {
+		return result, fmt.Errorf("commit relationship statistics repair: %w", err)
 	}
+	committed = true
 	return result, nil
 }
 
-func (r *CounterReconciler) ReconcileAll(
-	ctx context.Context,
-	batchSize int,
-) (int, error) {
-	cursor := ""
-	repaired := 0
-	for {
-		result, err := r.ReconcileBatch(ctx, cursor, batchSize)
-		if err != nil {
-			return repaired, err
-		}
-		repaired += result.Repaired
-		if result.Scanned == 0 || result.Scanned < normalizedBatchSize(batchSize) {
-			return repaired, nil
-		}
-		if result.NextOwnerID == "" || result.NextOwnerID == cursor {
-			return repaired, fmt.Errorf(
-				"relationship counter reconciler cursor did not advance",
-			)
-		}
-		cursor = result.NextOwnerID
-	}
-}
-
-func (r *CounterReconciler) Run(
-	ctx context.Context,
-	interval time.Duration,
-	batchSize int,
-) error {
+func (r *CounterReconciler) Run(ctx context.Context, interval time.Duration, batchSize int) error {
 	if interval <= 0 {
 		interval = 10 * time.Minute
 	}
-	batchSize = normalizedBatchSize(batchSize)
 	cursor := ""
 	for {
 		result, err := r.ReconcileBatch(ctx, cursor, batchSize)
 		if err != nil && ctx.Err() == nil {
-			slog.ErrorContext(
-				ctx,
-				"persona relationship counter reconciliation failed",
-				"err",
-				err,
-			)
+			slog.ErrorContext(ctx, "persona relationship statistics repair failed", "err", err)
 		} else if err == nil {
-			if result.Scanned < batchSize {
+			if result.Scanned < normalizedBatchSize(batchSize) {
 				cursor = ""
 			} else {
-				cursor = result.NextOwnerID
+				cursor = result.NextPersonaID
 			}
 		}
 		timer := time.NewTimer(interval)

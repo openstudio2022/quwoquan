@@ -341,8 +341,9 @@ final class _RecordingRelationshipCommands
   }
 }
 
-typedef _SearchStep =
-    Future<List<SocialRelationSearchItemViewData>> Function(String query);
+typedef _SearchStep = Future<List<SocialRelationSearchItemViewData>> Function(
+  String query,
+);
 
 final class _SearchSequence implements ProfileQuery {
   _SearchSequence(this._steps);

@@ -246,7 +246,7 @@ Future<void> _expectClosedCredentialsRejected({
     );
     final settings = RemoteUserSettingsQueryReader(
       client: client,
-      invocationContext: (clientPageId) => CloudOperationInvocationContext(
+      invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
         surfaceId: AppUiSurfaces.settingsNotifications.id,
         routeId: AppUiSurfaces.settingsNotifications.routeId,
         clientPageId: clientPageId,

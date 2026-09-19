@@ -423,6 +423,9 @@ surfaces:
       - ListUserPosts
       - GetRelationshipCapability
       - FollowUser
+      - GetRelationshipMutationBasis
+      - RecoverRelationshipCommand
+      - FinalizeExpiredRelationshipCommand
       - UnfollowUser
       - SendGreetingRequest
       - CreateReport
@@ -472,6 +475,9 @@ surfaces:
       - SearchSocialRelations
       - GetRelationshipCapability
       - FollowUser
+      - GetRelationshipMutationBasis
+      - RecoverRelationshipCommand
+      - FinalizeExpiredRelationshipCommand
 
 
   - id: addContactPhone
@@ -554,6 +560,10 @@ surfaces:
       - GetAppConfig
       - CreateReport
       - LikePost
+      - GetContentReactionPresentation
+      - GetContentReactionMutationBasis
+      - RecoverContentReactionCommand
+      - FinalizeExpiredContentReactionCommand
       - UnlikePost
       - GetContentReactionState
       - ListComments
@@ -574,6 +584,9 @@ surfaces:
       - MarkFollowedSubjectVisited
       - ListFollowing
       - FollowUser
+      - GetRelationshipMutationBasis
+      - RecoverRelationshipCommand
+      - FinalizeExpiredRelationshipCommand
       - UnfollowUser
 
   - id: welcome
@@ -614,6 +627,9 @@ surfaces:
       - ListCommentsForPostAuthor
       - DeleteComment
       - ReactToComment
+      - GetContentReactionMutationBasis
+      - RecoverContentReactionCommand
+      - FinalizeExpiredContentReactionCommand
       - GetAuthorImpact
       - ListAuthorImpactEvidence
 
@@ -707,6 +723,10 @@ surfaces:
       - GetPost
       - DeletePost
       - LikePost
+      - GetContentReactionPresentation
+      - GetContentReactionMutationBasis
+      - RecoverContentReactionCommand
+      - FinalizeExpiredContentReactionCommand
       - UnlikePost
       - GetContentReactionState
       - GetEntityWishlistState
@@ -727,6 +747,9 @@ surfaces:
       - AppendOutboundShareFact
       - ListFollowing
       - FollowUser
+      - GetRelationshipMutationBasis
+      - RecoverRelationshipCommand
+      - FinalizeExpiredRelationshipCommand
       - UnfollowUser
 
   - id: circleStats
@@ -916,6 +939,9 @@ surfaces:
     description: 拉黑用户管理页
     operation_ids:
       - BlockUser
+      - GetRelationshipMutationBasis
+      - RecoverRelationshipCommand
+      - FinalizeExpiredRelationshipCommand
       - UnblockUser
       - ListBlockedUsers
 
@@ -997,6 +1023,9 @@ surfaces:
       - ListFollowers
       - ListFollowing
       - FollowUser
+      - GetRelationshipMutationBasis
+      - RecoverRelationshipCommand
+      - FinalizeExpiredRelationshipCommand
       - UnfollowUser
 
   - id: myIntersections

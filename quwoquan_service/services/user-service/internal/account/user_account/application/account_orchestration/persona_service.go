@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	runtimeid "quwoquan_service/runtime/id"
 	"quwoquan_service/services/user-service/generated/account/user_account"
 	personagenerated "quwoquan_service/services/user-service/generated/persona_management/persona"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
@@ -19,13 +20,14 @@ import (
 // 所有写命令经 PersonaCommandStore 以「服务端内部 CAS + receipt + outbox
 // 同事务」提交；本服务只承载业务校验与字段合成。
 type PersonaService struct {
-	personas        PersonaStore
-	commands        personaports.PersonaCommandStore
-	projector       userrepo.PersonaProfileProjector
-	profiles        userrepo.UserProfileStore
-	pcache          ProfileCacheInvalidator
-	creatorProfiles userrepo.CreatorRuntimeProfileReader
-	contentFence    userrepo.ContentReleaseFenceReader
+	personas                PersonaStore
+	commands                personaports.PersonaCommandStore
+	projector               userrepo.PersonaProfileProjector
+	profiles                userrepo.UserProfileStore
+	pcache                  ProfileCacheInvalidator
+	creatorProfiles         userrepo.CreatorRuntimeProfileReader
+	contentFence            userrepo.ContentReleaseFenceReader
+	generatePersonaIdentity func(string) (string, error)
 }
 
 type PersonaServiceOption func(*PersonaService)
@@ -39,6 +41,16 @@ func WithCreatorRuntimeProfiles(repository userrepo.CreatorRuntimeProfileReader,
 	}
 }
 
+// WithPersonaIdentityGenerator provides a deterministic candidate sequence for
+// identity collision tests. Production uses the secure runtime generator.
+func WithPersonaIdentityGenerator(generate func(rootPrefix string) (string, error)) PersonaServiceOption {
+	return func(service *PersonaService) {
+		if generate != nil {
+			service.generatePersonaIdentity = generate
+		}
+	}
+}
+
 func NewPersonaService(
 	personas PersonaStore,
 	commands personaports.PersonaCommandStore,
@@ -48,11 +60,12 @@ func NewPersonaService(
 	options ...PersonaServiceOption,
 ) *PersonaService {
 	service := &PersonaService{
-		personas:  personas,
-		commands:  commands,
-		projector: projector,
-		profiles:  profiles,
-		pcache:    pcache,
+		personas:                personas,
+		commands:                commands,
+		projector:               projector,
+		profiles:                profiles,
+		pcache:                  pcache,
+		generatePersonaIdentity: buildPersonaIdentity,
 	}
 	for _, option := range options {
 		if option != nil {
@@ -78,46 +91,58 @@ func (s *PersonaService) CreatePersona(
 	if err != nil {
 		return nil, err
 	}
-	newPersonaID, err := buildPersonaIdentity(rootPrefix)
-	if err != nil {
-		return nil, err
-	}
-	p := &model.Persona{
-		UserID:                   ownerID,
-		PersonaID:                newPersonaID,
-		UserHandle:               systemUserHandleForPersona(newPersonaID),
-		DisplayName:              strings.TrimSpace(command.DisplayName),
-		NicknameCustomized:       true,
-		AvatarURL:                strings.TrimSpace(command.AvatarURL),
-		IsolationLevel:           defaultIsolationLevel,
-		PurposeHint:              strings.TrimSpace(command.PurposeHint),
-		InheritsProfileFromOwner: true,
-		OverriddenProfileFields:  encodeProfileFieldList(nil),
-		LastProfileSyncSource:    "initial_inherit",
-	}
-	if isolationLevel := strings.TrimSpace(command.IsolationLevel); isolationLevel != "" {
-		p.IsolationLevel = isolationLevel
-	}
-	now := time.Now().UTC()
-	p.LastProfileSyncAt = &now
-	normalizePersonaPersistence(p)
-	result, err := s.commands.CommitCreate(ctx, p, meta)
-	if err != nil {
-		if errors.Is(err, personaports.ErrPersonaQuotaReached) {
-			return nil, personagenerated.AppErrorFromPersonaQuotaReached(
-				"owner reached the Persona quota limit",
-			)
+	var lastIdentityConflict error
+	for attempt := 0; attempt < runtimeid.AllocationAttempts; attempt++ {
+		newPersonaID, generateErr := s.generatePersonaIdentity(rootPrefix)
+		if generateErr != nil {
+			return nil, generateErr
 		}
-		if isPersonaHandleConflict(err) {
-			return nil, ErrPersonaHandleTaken
+		p := &model.Persona{
+			UserID: ownerID, PersonaID: newPersonaID,
+			UserHandle:  systemUserHandleForPersona(newPersonaID),
+			DisplayName: strings.TrimSpace(command.DisplayName), NicknameCustomized: true,
+			AvatarURL: strings.TrimSpace(command.AvatarURL), IsolationLevel: defaultIsolationLevel,
+			PurposeHint: strings.TrimSpace(command.PurposeHint), InheritsProfileFromOwner: true,
+			OverriddenProfileFields: encodeProfileFieldList(nil), LastProfileSyncSource: "initial_inherit",
 		}
-		return nil, err
+		if isolationLevel := strings.TrimSpace(command.IsolationLevel); isolationLevel != "" {
+			p.IsolationLevel = isolationLevel
+		}
+		now := time.Now().UTC()
+		p.LastProfileSyncAt = &now
+		normalizePersonaPersistence(p)
+		result, commitErr := s.commands.CommitCreate(ctx, p, meta)
+		if errors.Is(commitErr, personaports.ErrPersonaIdentityConflict) {
+			lastIdentityConflict = commitErr
+			continue
+		}
+		if commitErr != nil {
+			if errors.Is(commitErr, personaports.ErrPersonaQuotaReached) {
+				return nil, personagenerated.AppErrorFromPersonaQuotaReached("owner reached the Persona quota limit")
+			}
+			if isPersonaHandleConflict(commitErr) {
+				return nil, ErrPersonaHandleTaken
+			}
+			return nil, commitErr
+		}
+		if _, err := s.projector.Project(ctx, result.PersonaID, result.Version); err != nil {
+			return nil, err
+		}
+		_ = s.pcache.Del(ctx, ownerID)
+		if result.PersonaID != p.PersonaID {
+			committed, err := s.personas.FindByPersonaID(ctx, result.PersonaID)
+			if err != nil {
+				return nil, err
+			}
+			if committed == nil || committed.UserID != ownerID {
+				return nil, generated.AppErrorFromInternalError("persona create receipt does not resolve to an owned Persona")
+			}
+			return committed, nil
+		}
+		return p, nil
 	}
-	if _, err := s.projector.Project(ctx, result.PersonaID, result.Version); err != nil {
-		return nil, err
-	}
-	_ = s.pcache.Del(ctx, ownerID)
-	return p, nil
+	return nil, fmt.Errorf("create Persona: %w after %d attempts: %v",
+		runtimeid.ErrAllocationBudgetExhausted, runtimeid.AllocationAttempts, lastIdentityConflict)
 }
 
 func (s *PersonaService) UpdatePersona(

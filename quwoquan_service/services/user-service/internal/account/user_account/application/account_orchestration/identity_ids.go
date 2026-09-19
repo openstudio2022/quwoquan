@@ -69,15 +69,41 @@ func buildOwnerIdentityForOrigin(
 }
 
 func buildPersonaIdentity(rootPrefix string) (string, error) {
-	entropyBody, err := generateIdentityEntropyBody()
-	if err != nil {
-		return "", err
+	return buildPersonaIdentityWithProbe(rootPrefix, nil)
+}
+
+// buildPersonaIdentityWithProbe 在受限预算内分配一个尚未被占用的 Persona ID。
+// probe 只回答「该未提交候选是否已被既有身份占用」；只有该唯一性冲突才换用新的
+// 安全熵，凭据、配额与幂等冲突保持各自 canonical 失败，预算耗尽即安全失败。
+func buildPersonaIdentityWithProbe(
+	rootPrefix string,
+	probe runtimeid.CandidateProbe,
+) (string, error) {
+	for attempt := 0; attempt < runtimeid.AllocationAttempts; attempt++ {
+		entropyBody, err := generateIdentityEntropyBody()
+		if err != nil {
+			return "", err
+		}
+		personaID, err := useridentity.NewPersonaID(rootPrefix, entropyBody)
+		if err != nil {
+			return "", fmt.Errorf("build persona identity: %w", err)
+		}
+		if probe == nil {
+			return personaID.String(), nil
+		}
+		taken, err := probe(personaID.String())
+		if err != nil {
+			return "", err
+		}
+		if !taken {
+			return personaID.String(), nil
+		}
 	}
-	personaID, err := useridentity.NewPersonaID(rootPrefix, entropyBody)
-	if err != nil {
-		return "", fmt.Errorf("build persona identity: %w", err)
-	}
-	return personaID.String(), nil
+	return "", fmt.Errorf(
+		"build persona identity: %w after %d attempts",
+		runtimeid.ErrAllocationBudgetExhausted,
+		runtimeid.AllocationAttempts,
+	)
 }
 
 func generateIdentityEntropyBody() (string, error) {

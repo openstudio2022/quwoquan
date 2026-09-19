@@ -35,6 +35,11 @@ type config struct {
 		MaterialRoot        string `yaml:"material_root" env:"POST_SAFETY_MATERIAL_ROOT"`
 		CurrentBindingRef   string `yaml:"current_binding_ref" env:"POST_SAFETY_CURRENT_BINDING_REF"`
 	} `yaml:"post_safety"`
+	ReactionMutationBasis struct {
+		ActiveKeyID      string `yaml:"active_key_id" env:"REACTION_MUTATION_BASIS_ACTIVE_KEY_ID"`
+		KeyringSecretRef string `yaml:"keyring_secret_ref" env:"REACTION_MUTATION_BASIS_KEYRING_SECRET_REF"`
+	} `yaml:"reaction_mutation_basis"`
+
 	CreatorSearch struct {
 		BindingDigest     string `yaml:"binding_digest" envAbsolute:"CREATOR_SEARCH_BINDING_DIGEST" required:"true"`
 		PhysicalNamespace string `yaml:"physical_namespace" envAbsolute:"CREATOR_SEARCH_PHYSICAL_NAMESPACE" required:"true"`

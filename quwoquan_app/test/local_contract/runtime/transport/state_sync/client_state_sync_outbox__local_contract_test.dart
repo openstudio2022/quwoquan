@@ -1,12 +1,14 @@
-// spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001
+// spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-003
+// spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-004
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync.dart';
 import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync_outbox_engine.dart';
 
 void main() {
-  group('client state sync outbox', () {
-    test('远程同步配置拒绝字符串化数值与布尔值', () {
+  group('durable client state sync outbox', () {
+    test('strict config rejects stringified values', () {
       expect(
         () => ClientStateSyncConfig.fromMap(<String, dynamic>{
           'max_batch_size': '20',
@@ -16,195 +18,325 @@ void main() {
       );
     });
 
-    // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t2
-    test('follow 在 flush 窗口内回到已确认状态时会移除 pending entry', () {
-      final harness = _ClientStateSyncHarness();
-      addTearDown(harness.dispose);
-      final notifier = harness.engine;
+    test(
+      'durable acceptance persists stable command identity before returning',
+      () async {
+        final h = _Harness();
+        addTearDown(h.dispose);
+        await h.engine.enqueueFollow(
+          personaId: 'p1',
+          currentFollowing: false,
+          shouldFollow: true,
+          sourceSurfaceId: 'userProfile',
+          idempotencyKey: 'key-1',
+          mutationBasis: 'basis-1',
+          expectedVersion: 7,
+          actorRef: 'actor-a',
+        );
+        final e = h.engine.state.entries.single;
+        expect(e.idempotencyKey, 'key-1');
+        expect(e.mutationBasis, 'basis-1');
+        expect(e.expectedVersion, 7);
+        expect(e.intentRevision, 1);
+        expect(e.actorRef, 'actor-a');
+        expect(h.store.value, isNotNull);
+        final restored = ClientStateSyncOutboxState.fromMap(h.store.value!)
+            .entries
+            .single;
+        expect(restored.idempotencyKey, 'key-1');
+        expect(restored.expectedVersion, 7);
+      },
+    );
 
-      notifier.enqueueFollow(
-        personaId: 'profile-1',
+    test('storage failure rejects durable acceptance', () async {
+      final store = _Store()..writeFailure = StateError('disk full');
+      final h = _Harness(store: store);
+      addTearDown(h.dispose);
+      await expectLater(
+        h.engine.enqueueFollow(
+          personaId: 'p',
+          currentFollowing: false,
+          shouldFollow: true,
+          sourceSurfaceId: 'userProfile',
+          idempotencyKey: 'k',
+          mutationBasis: 'b',
+          expectedVersion: 0,
+          actorRef: 'a',
+        ),
+        throwsStateError,
+      );
+      expect(
+        h.engine.state.entries,
+        isEmpty,
+        reason: 'failed persistence must not publish pending state',
+      );
+      store.writeFailure = null;
+      await h.engine.enqueueFollow(
+        personaId: 'p2',
         currentFollowing: false,
         shouldFollow: true,
         sourceSurfaceId: 'userProfile',
+        idempotencyKey: 'k2',
+        mutationBasis: 'b2',
+        expectedVersion: 0,
+        actorRef: 'a',
       );
+      expect(
+        h.engine.state.entries.single.objectId,
+        'p2',
+        reason: 'a failed write must not poison the serial writer chain',
+      );
+    });
 
-      var state = notifier.state;
-      expect(state.entries.length, 1);
-      expect(state.entries.single.confirmedBoolValue, isFalse);
-      expect(state.entries.single.desiredBoolValue, isTrue);
-      expect(state.entries.single.sourceSurfaceId, 'userProfile');
+    test('hydrate merges untouched disk object but never overwrites newer local object', () async {
+      final gate = Completer<void>();
+      final store = _Store(readGate: gate);
+      store.value = <String, dynamic>{
+        'entries': <Object?>[
+          _entryMap('profile:follow:changed', 'profile', 'changed', 1),
+          _entryMap('profile:follow:untouched', 'profile', 'untouched', 2),
+        ],
+      };
+      final h = _Harness(store: store);
+      addTearDown(h.dispose);
+      final hydration = h.engine.hydrate();
+      await Future<void>.delayed(Duration.zero);
+      await h.engine.enqueueFollow(
+        personaId: 'changed',
+        currentFollowing: false,
+        shouldFollow: true,
+        sourceSurfaceId: 'userProfile',
+        idempotencyKey: 'local-key',
+        mutationBasis: 'local-basis',
+        expectedVersion: 3,
+        actorRef: 'actor',
+      );
+      gate.complete();
+      await hydration;
+      final byId = {for (final e in h.engine.state.entries) e.objectId: e};
+      expect(byId['changed']!.idempotencyKey, 'local-key');
+      expect(byId['untouched']!.idempotencyKey, 'disk-key-untouched');
+    });
 
-      notifier.enqueueFollow(
-        personaId: 'profile-1',
+    test('hydrate never resurrects a locally deleted object even when disk revision is larger', () async {
+      final gate = Completer<void>();
+      final store = _Store(readGate: gate)
+        ..value = <String, dynamic>{
+          'entries': <Object?>[
+            _entryMap('profile:follow:deleted', 'profile', 'deleted', 99),
+          ],
+        };
+      final h = _Harness(store: store);
+      addTearDown(h.dispose);
+      final hydration = h.engine.hydrate();
+      await Future<void>.delayed(Duration.zero);
+      await h.engine.enqueueFollow(
+        personaId: 'deleted',
+        currentFollowing: false,
+        shouldFollow: true,
+        sourceSurfaceId: 'userProfile',
+        idempotencyKey: 'new',
+        mutationBasis: 'basis',
+        expectedVersion: 0,
+        actorRef: 'actor',
+      );
+      await h.engine.enqueueFollow(
+        personaId: 'deleted',
         currentFollowing: true,
         shouldFollow: false,
         sourceSurfaceId: 'userProfile',
+        idempotencyKey: 'remove',
+        mutationBasis: 'basis2',
+        expectedVersion: 1,
+        actorRef: 'actor',
       );
-
-      state = notifier.state;
-      expect(state.entries, isEmpty);
+      expect(h.engine.state.entries, isEmpty);
+      gate.complete();
+      await hydration;
+      expect(h.engine.state.entries, isEmpty);
     });
 
-    test('like 在 flush 窗口内回到已确认状态时会移除 pending entry', () {
-      final harness = _ClientStateSyncHarness();
-      addTearDown(harness.dispose);
-      final notifier = harness.engine;
+    test(
+      'same target has at most one flight and committed receipt removes entry',
+      () async {
+        final h = _Harness(config: _immediate);
+        addTearDown(h.dispose);
+        await h.engine.enqueueFollow(
+          personaId: 'p',
+          currentFollowing: false,
+          shouldFollow: true,
+          sourceSurfaceId: 'userProfile',
+          idempotencyKey: 'key',
+          mutationBasis: 'basis',
+          expectedVersion: 0,
+          actorRef: 'actor',
+        );
+        h.executor.gate = Completer<void>();
+        final first = h.engine.flushNow();
+        await Future<void>.delayed(Duration.zero);
+        final second = h.engine.flushNow();
+        expect(h.executor.entries.length, 1);
+        h.executor.gate!.complete();
+        await Future.wait([first, second]);
+        expect(h.engine.state.entries, isEmpty);
+      },
+    );
 
-      notifier.enqueuePostLike(
-        postId: 'post-1',
-        currentLiked: false,
-        isLiked: true,
-      );
+    test(
+      'age only pauses sends; authority recovery decides expired terminal',
+      () async {
+        final store = _Store()
+          ..value = <String, dynamic>{
+            'entries': <Object?>[
+              _entryMap(
+                'profile:follow:expired',
+                'profile',
+                'expired',
+                1,
+                firstQueuedAt: DateTime.now().toUtc().subtract(
+                  const Duration(hours: 73),
+                ),
+              ),
+            ],
+          };
+        final h = _Harness(store: store, config: _immediate);
+        addTearDown(h.dispose);
+        h.recoverer.receipt = const ClientStateSyncReceipt(
+          outcome: ClientStateSyncReceiptOutcome.expired,
+          replayed: false,
+        );
+        await h.engine.hydrate();
+        await h.engine.flushNow();
+        expect(h.executor.entries, isEmpty);
+        expect(h.recoverer.entries.length, 1);
+        expect(h.terminalFailures.length, 1);
+        expect(h.engine.state.entries, isEmpty);
+      },
+    );
 
-      var state = notifier.state;
-      expect(state.entries.length, 1);
-      expect(state.entries.single.confirmedBoolValue, isFalse);
-      expect(state.entries.single.desiredBoolValue, isTrue);
+    test(
+      'history unavailable keeps unknown paused instead of rolling back',
+      () async {
+        final store = _Store()
+          ..value = <String, dynamic>{
+            'entries': <Object?>[
+              _entryMap(
+                'profile:follow:unknown',
+                'profile',
+                'unknown',
+                1,
+                firstQueuedAt: DateTime.now().toUtc().subtract(
+                  const Duration(hours: 73),
+                ),
+              ),
+            ],
+          };
+        final h = _Harness(store: store, config: _immediate);
+        addTearDown(h.dispose);
+        h.recoverer.receipt = const ClientStateSyncReceipt(
+          outcome: ClientStateSyncReceiptOutcome.historyUnavailable,
+          replayed: false,
+        );
+        await h.engine.hydrate();
+        await h.engine.flushNow();
+        expect(h.terminalFailures, isEmpty);
+        expect(h.engine.state.entries.single.pausedUnknown, isTrue);
+      },
+    );
 
-      notifier.enqueuePostLike(
-        postId: 'post-1',
-        currentLiked: true,
-        isLiked: false,
-      );
+    test(
+      'legacy record without stable command identity is deleted, never resent',
+      () async {
+        final store = _Store()
+          ..value = <String, dynamic>{
+            'entries': <Object?>[
+              <String, Object?>{
+                'coalesceKey': 'profile:follow:legacy',
+                'objectType': 'profile',
+                'objectId': 'legacy',
+                'intentType': 'follow',
+                'desiredBoolValue': true,
+                'nextFlushAt': DateTime.now().toUtc().toIso8601String(),
+                'firstQueuedAt': DateTime.now().toUtc().toIso8601String(),
+                'retryCount': 0,
+              },
+            ],
+          };
+        final h = _Harness(store: store);
+        addTearDown(h.dispose);
+        await h.engine.hydrate();
+        expect(h.engine.state.entries, isEmpty);
+        expect(h.executor.entries, isEmpty);
+      },
+    );
 
-      state = notifier.state;
-      expect(state.entries, isEmpty);
-    });
-
-    // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t4
-    test('重试期内失败保持静默：entry 保留、递增 retryCount、无终态回调', () async {
-      final harness = _ClientStateSyncHarness(
+    test('entry and byte limits fail before durable acceptance', () async {
+      final h = _Harness(
         config: const ClientStateSyncConfig(
-          flushDelay: Duration.zero,
+          flushDelay: Duration(hours: 1),
           retryDelay: Duration(minutes: 5),
           maxBatchSize: 20,
           maxPendingAge: Duration(hours: 72),
           flushOnForegroundResume: true,
           flushOnNetworkRecovered: true,
+          maxEntries: 1,
+          maxPersistedBytes: 1024,
         ),
       );
-      addTearDown(harness.dispose);
-      harness.executor.failure = StateError('remote unavailable');
-
-      harness.engine.enqueuePostLike(
-        postId: 'post-retry',
-        currentLiked: false,
-        isLiked: true,
+      addTearDown(h.dispose);
+      await h.engine.enqueueFollow(
+        personaId: 'a',
+        currentFollowing: false,
+        shouldFollow: true,
+        sourceSurfaceId: 'userProfile',
+        idempotencyKey: 'k1',
+        mutationBasis: 'b1',
+        expectedVersion: 0,
+        actorRef: 'actor',
       );
-      await harness.engine.flushNow();
-
-      final state = harness.engine.state;
-      expect(state.entries.length, 1);
-      expect(state.entries.single.retryCount, 1);
-      expect(harness.terminalFailures, isEmpty);
-    });
-
-    // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t4
-    // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t6
-    test('超过 maxPendingAge 进入终态：放弃重试、移除 entry 并回调上层', () async {
-      final store = _InMemoryClientStateSyncStore()
-        ..value = <String, dynamic>{
-          'entries': <Object?>[
-            <String, Object?>{
-              'coalesceKey': 'post:like:post-expired',
-              'objectType': 'post',
-              'objectId': 'post-expired',
-              'intentType': 'like',
-              'desiredBoolValue': true,
-              'confirmedBoolValue': false,
-              'nextFlushAt': DateTime.now().toUtc().toIso8601String(),
-              'firstQueuedAt': DateTime.now()
-                  .toUtc()
-                  .subtract(const Duration(hours: 73))
-                  .toIso8601String(),
-              'retryCount': 12,
-            },
-          ],
-        };
-      final harness = _ClientStateSyncHarness(store: store);
-      addTearDown(harness.dispose);
-      harness.executor.failure = StateError('remote unavailable');
-
-      await harness.engine.hydrate();
-      await harness.engine.flushNow();
-
-      expect(harness.engine.state.entries, isEmpty);
-      expect(harness.terminalFailures.length, 1);
-      final failed = harness.terminalFailures.single;
-      expect(failed.objectId, 'post-expired');
-      expect(failed.confirmedBoolValue, isFalse);
-      expect(failed.desiredBoolValue, isTrue);
-      // 终态不再发出远程写入。
-      expect(harness.executor.entries, isEmpty);
-      // 持久化中的 entry 同步清除。
-      expect(store.value, <String, Object?>{'entries': <Object?>[]});
-    });
-
-    test('旧格式持久化缺 firstQueuedAt 时以 nextFlushAt 一次性初始化', () async {
-      final queuedAt = DateTime.now().toUtc().subtract(
-        const Duration(hours: 1),
+      await expectLater(
+        h.engine.enqueueFollow(
+          personaId: 'b',
+          currentFollowing: false,
+          shouldFollow: true,
+          sourceSurfaceId: 'userProfile',
+          idempotencyKey: 'k2',
+          mutationBasis: 'b2',
+          expectedVersion: 0,
+          actorRef: 'actor',
+        ),
+        throwsStateError,
       );
-      final store = _InMemoryClientStateSyncStore()
-        ..value = <String, dynamic>{
-          'entries': <Object?>[
-            <String, Object?>{
-              'coalesceKey': 'profile:follow:profile-legacy',
-              'objectType': 'profile',
-              'objectId': 'profile-legacy',
-              'intentType': 'follow',
-              'desiredBoolValue': true,
-              'confirmedBoolValue': false,
-              'nextFlushAt': queuedAt.toIso8601String(),
-              'retryCount': 1,
-            },
-          ],
-        };
-      final harness = _ClientStateSyncHarness(store: store);
-      addTearDown(harness.dispose);
-
-      await harness.engine.hydrate();
-
-      final entry = harness.engine.state.entries.single;
-      expect(entry.firstQueuedAt, queuedAt);
-      // 未超期：不触发终态。
-      expect(harness.terminalFailures, isEmpty);
-    });
-
-    // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t3
-    test('旧 needsRemoteSync 持久化形态失效清除且不迁移', () async {
-      final store = _InMemoryClientStateSyncStore()
-        ..value = <String, dynamic>{
-          'entries': <Object?>[
-            <String, Object?>{
-              'coalesceKey': 'profile:follow:profile-1',
-              'objectType': 'profile',
-              'objectId': 'profile-1',
-              'intentType': 'follow',
-              'desiredBoolValue': true,
-              'nextFlushAt': DateTime.now().toUtc().toIso8601String(),
-              'guardUntil': DateTime.now()
-                  .toUtc()
-                  .add(const Duration(seconds: 8))
-                  .toIso8601String(),
-              'needsRemoteSync': false,
-              'retryCount': 0,
-            },
-          ],
-        };
-      final harness = _ClientStateSyncHarness(store: store);
-      addTearDown(harness.dispose);
-
-      await harness.engine.hydrate();
-
-      final state = harness.engine.state;
-      expect(state.entries, isEmpty);
-      expect(store.value, <String, Object?>{'entries': <Object?>[]});
     });
   });
 }
 
-const _fixedConfig = ClientStateSyncConfig(
+Map<String, Object?> _entryMap(
+  String key,
+  String objectType,
+  String objectId,
+  int revision, {
+  DateTime? firstQueuedAt,
+}) => <String, Object?>{
+  'coalesceKey': key,
+  'objectType': objectType,
+  'objectId': objectId,
+  'intentType': 'follow',
+  'desiredBoolValue': true,
+  'confirmedBoolValue': false,
+  'sourceSurfaceId': 'userProfile',
+  'nextFlushAt': DateTime.now().toUtc().toIso8601String(),
+  'firstQueuedAt': (firstQueuedAt ?? DateTime.now().toUtc()).toIso8601String(),
+  'retryCount': 0,
+  'idempotencyKey': 'disk-key-$objectId',
+  'mutationBasis': 'disk-basis-$objectId',
+  'expectedVersion': 0,
+  'intentRevision': revision,
+  'actorRef': 'actor',
+  'pausedUnknown': false,
+};
+
+const _config = ClientStateSyncConfig(
   flushDelay: Duration(hours: 1),
   retryDelay: Duration(minutes: 5),
   maxBatchSize: 20,
@@ -212,52 +344,79 @@ const _fixedConfig = ClientStateSyncConfig(
   flushOnForegroundResume: true,
   flushOnNetworkRecovered: true,
 );
+const _immediate = ClientStateSyncConfig(
+  flushDelay: Duration.zero,
+  retryDelay: Duration(minutes: 5),
+  maxBatchSize: 20,
+  maxPendingAge: Duration(hours: 72),
+  flushOnForegroundResume: true,
+  flushOnNetworkRecovered: true,
+);
 
-final class _ClientStateSyncHarness {
-  _ClientStateSyncHarness({
-    _InMemoryClientStateSyncStore? store,
-    ClientStateSyncConfig? config,
-  }) : store = store ?? _InMemoryClientStateSyncStore() {
+final class _Harness {
+  _Harness({_Store? store, ClientStateSyncConfig? config})
+    : store = store ?? _Store() {
     engine = ClientStateSyncOutboxEngine(
-      readConfig: () => config ?? _fixedConfig,
+      readConfig: () => config ?? _config,
       readPersistedState: this.store.read,
       writePersistedState: this.store.write,
       executeEntry: executor.call,
+      recoverEntry: recoverer.call,
       onStateChanged: (_) {},
       onTerminalFailure: terminalFailures.add,
     );
   }
-
-  final _InMemoryClientStateSyncStore store;
-  final _RecordingClientStateSyncExecutor executor =
-      _RecordingClientStateSyncExecutor();
-  final List<ClientStateSyncOutboxEntry> terminalFailures =
-      <ClientStateSyncOutboxEntry>[];
+  final _Store store;
+  final _Executor executor = _Executor();
+  final _Recoverer recoverer = _Recoverer();
+  final List<ClientStateSyncOutboxEntry> terminalFailures = [];
   late final ClientStateSyncOutboxEngine engine;
-
   void dispose() => engine.dispose();
 }
 
-final class _InMemoryClientStateSyncStore {
+final class _Store {
+  _Store({this.readGate});
   Map<String, dynamic>? value;
-
-  Future<Map<String, dynamic>?> read() async => value;
+  final Completer<void>? readGate;
+  Object? writeFailure;
+  Future<Map<String, dynamic>?> read() async {
+    final snapshot = value == null ? null : Map<String, dynamic>.from(value!);
+    if (readGate != null) {
+      await readGate!.future;
+    }
+    return snapshot;
+  }
 
   Future<void> write(Map<String, dynamic> next) async {
+    if (writeFailure != null) throw writeFailure!;
     value = next;
   }
 }
 
-final class _RecordingClientStateSyncExecutor {
-  final List<ClientStateSyncOutboxEntry> entries =
-      <ClientStateSyncOutboxEntry>[];
-  Object? failure;
+final class _Executor {
+  final List<ClientStateSyncOutboxEntry> entries = [];
+  Completer<void>? gate;
+  ClientStateSyncReceipt receipt = const ClientStateSyncReceipt(
+    outcome: ClientStateSyncReceiptOutcome.committed,
+    replayed: false,
+    committedVersion: 1,
+    changed: true,
+  );
+  Future<ClientStateSyncReceipt> call(ClientStateSyncOutboxEntry e) async {
+    entries.add(e);
+    if (gate != null) await gate!.future;
+    return receipt;
+  }
+}
 
-  Future<void> call(ClientStateSyncOutboxEntry entry) async {
-    final configured = failure;
-    if (configured != null) {
-      throw configured;
-    }
-    entries.add(entry);
+final class _Recoverer {
+  final List<ClientStateSyncOutboxEntry> entries = [];
+  ClientStateSyncReceipt receipt = const ClientStateSyncReceipt(
+    outcome: ClientStateSyncReceiptOutcome.historyUnavailable,
+    replayed: false,
+  );
+  Future<ClientStateSyncReceipt> call(ClientStateSyncOutboxEntry e) async {
+    entries.add(e);
+    return receipt;
   }
 }

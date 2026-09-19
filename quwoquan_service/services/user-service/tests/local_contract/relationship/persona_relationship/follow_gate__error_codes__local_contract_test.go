@@ -24,7 +24,7 @@ func (store *blockedRelationshipStore) Apply(
 
 func TestFollowSurfacesFollowBlockedWhenBlockDirectionExists(t *testing.T) {
 	service := relationshipapp.NewPersonaRelationshipService(
-		&blockedRelationshipStore{}, nil, nil, nil,
+		&blockedRelationshipStore{}, nil, nil, nil, localRelationshipOptions()...,
 	)
 
 	_, err := service.Follow(
@@ -32,7 +32,7 @@ func TestFollowSurfacesFollowBlockedWhenBlockDirectionExists(t *testing.T) {
 		"viewer-persona",
 		"blocked-target-persona",
 		"homepage",
-		"follow-blocked-key",
+		localEvidence("follow-blocked-key"),
 	)
 	var appErr *runtimeerrors.AppError
 	if !errors.As(err, &appErr) ||

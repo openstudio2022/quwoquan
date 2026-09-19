@@ -81,7 +81,7 @@ void main() {
       );
       final remote = RemoteCanonicalSearchQuery(
         client: client,
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
           routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
           clientPageId: clientPageId,
@@ -128,7 +128,7 @@ void main() {
       );
       final feedback = RemoteSearchFeedbackAdapter(
         client: client,
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
           routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
           clientPageId: clientPageId,

@@ -158,6 +158,7 @@ func TestCommentMongoReaderProjectionIsWhitelisted(t *testing.T) {
 		"authorId",
 		"parentCommentId",
 		"status",
+		"accountRestricted",
 	)
 }
 

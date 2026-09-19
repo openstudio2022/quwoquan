@@ -4,7 +4,7 @@
 
 > Journey / Scenario：[`JNY-011 / SCN-026`](../../../spec.md#scn-026)
 
-> 设计引用：[L2 DEC-001](../design.md#dec-001)
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -123,6 +123,7 @@
 - WHEN 一方取赞、取关或失去可披露资格，并重放旧事实及带合法跳号的新完整后态。
 - THEN 对应当前共同贡献与事实句消失或受限，旧事件不复活，不新增 dislike；合法历史按合同保留，device 不替代 Persona。
 - AND 来源分别可核验，资料或统计版本不覆盖关系/Reaction，no-op 不让消费者等待不存在事件，Explain 与评分引用同源有效证据。
+- AND 当前贡献撤销、历史保留、自动收敛与用户可见受限结果必须分别可观察，前台不展示不能单独证明后台贡献已清理。
 
 <a id="gwt-005"></a>
 ### GWT-005 大度数交集不以全图扫描或无界 fanout 换取成功
@@ -131,6 +132,7 @@
 - WHEN 查询共同关注、共同粉丝或共同点赞，并执行贡献变化与恢复重算。
 - THEN 单次查询/物化的实际扫描、内存、批次和 deadline 均在声明预算内，或返回明确预算失败且可恢复；没有全入边装载、同步全用户 fanout 或无限补页。
 - AND 精确人数与 top-K/抽样不混淆，返回理由来自当前可披露证据；隔离 storage benchmark 与环境公开 command/event 证据分开，后者不足时不得准出。
+- AND 预算退出、可恢复续跑、实际读取与物化成本均可观察；少量用户界面展示不能代替目标基数下的容量结果。
 
 ## 6. 依赖
 
@@ -174,5 +176,5 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：[REQ-006](./spec.md#req-006)、[REQ-007](./spec.md#req-007) 所需原事实去重、独立来源版本、当前贡献撤销和有界查询尚无同候选全链运行证据；现有解释模板与历史行为投影不证明取赞后共同贡献消失或千万入边成本成立。
-- 完成判定：[GWT-004](./spec.md#gwt-004)、[GWT-005](./spec.md#gwt-005) 的真实测试直接绑定完整 `spec_ref`：`local_contract` 固定衰减时钟、重复/乱序与来源交错并验证预算退出与续跑；`api_integration` 通过真实 User/Content command、自动 worker 和交集 reader 读回，并以容量证据证明实际 reader 和物化成本；`user_acceptance` 在主页/Feed 证明当前受限事实不再展示，不以 UI 单独证明后台贡献已清理，真机少量展示不代替容量。来源 wire、预算终态及恢复先由 owning contract 冻结。证据缺席、skip 或只有小数据/替身时保持阻断，storage benchmark 不替代环境与真机证据。
+- 完成判定：[GWT-004](./spec.md#gwt-004)、[GWT-005](./spec.md#gwt-005) 的真实测试直接绑定完整 `spec_ref`，分别提供贡献/历史/权限 oracle、自动消费链与实际成本证据；来源 wire、预算终态及恢复先由 owning contract 冻结。证据缺席、skip 或只有小数据/替身时保持阻断，storage benchmark 不替代环境与真机证据。
 - 依赖：[runtime-recommendation OPEN-002](../../../runtime/runtime-recommendation/spec.md#open-002) 的单轨事实消费；原 travel 供给及坍缩事项保持各自归属，不用本增量抵消。

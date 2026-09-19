@@ -1269,7 +1269,7 @@ api_routes:
         - user.account.security.read
       ownership_policy: trusted_resource_security_authority_only
     reliability:
-      timeout_ms: 300
+      timeout_ms: 10000
       cancellation: supported
       retry_mode: none
       max_attempts: 1
@@ -1325,7 +1325,7 @@ api_routes:
         - user.account.security.read
       ownership_policy: trusted_resource_security_authority_only
     reliability:
-      timeout_ms: 300
+      timeout_ms: 10000
       cancellation: supported
       retry_mode: none
       max_attempts: 1

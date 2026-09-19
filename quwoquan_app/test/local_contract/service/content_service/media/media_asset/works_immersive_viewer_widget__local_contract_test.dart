@@ -22,6 +22,7 @@
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t4
 
 import 'package:quwoquan_app/runtime/config/offline_content_bundle.dart';
+import 'package:quwoquan_app/runtime/di/actor_interaction_partition.dart';
 import 'package:quwoquan_app/runtime/config/offline_content_failure.dart';
 import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
 
@@ -2216,6 +2217,10 @@ void main() {
                   },
                 }),
                 interactionSnapshot: MediaViewerInteractionSnapshot(
+                  actorRef: container
+                      .read(actorInteractionPartitionProvider)
+                      .key,
+                  snapshotEpoch: 1,
                   scopePostIds: <String>{post.id},
                   scopeProfileIds: <String>{post.personaId},
                   followingUsers: <String>{post.personaId},

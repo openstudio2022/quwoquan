@@ -205,6 +205,7 @@ class ContentQuerySnapshot {
     required this.key,
     required this.items,
     required this.fetchedAt,
+    required this.sourceExpiresAt,
     this.nextCursor,
     this.previousCursor,
     this.paginationExpiresAt,
@@ -245,6 +246,7 @@ class ContentQuerySnapshot {
   final DateTime? paginationExpiresAt;
   final String? paginationSessionId;
   final DateTime fetchedAt;
+  final DateTime sourceExpiresAt;
 
   /// 服务端权威下发的归因上下文（随 feed envelope 缓存，命中缓存时一并回放）。
   final String? feedRequestId;
@@ -299,6 +301,7 @@ class ContentQuerySnapshot {
       'paginationExpiresAt': paginationExpiresAt?.toUtc().toIso8601String(),
       'paginationSessionId': paginationSessionId,
       'fetchedAt': fetchedAt.toUtc().toIso8601String(),
+      'sourceExpiresAt': sourceExpiresAt.toUtc().toIso8601String(),
       'feedRequestId': feedRequestId,
       'policyDigest': policyDigest,
       'outcome': outcome.name,
@@ -313,6 +316,7 @@ class ContentQuerySnapshot {
       final key = map['key']?.toString().trim() ?? '';
       final rawItems = map['items'];
       final rawFetchedAt = map['fetchedAt']?.toString() ?? '';
+      final rawSourceExpiresAt = map['sourceExpiresAt']?.toString() ?? '';
       if (key.isEmpty || rawItems is! List || rawFetchedAt.isEmpty) {
         return null;
       }
@@ -354,6 +358,9 @@ class ContentQuerySnapshot {
         items: List<ContentPostViewData>.unmodifiable(items),
         objectCards: List<ContentFeedObjectCard>.unmodifiable(cards),
         fetchedAt: DateTime.parse(rawFetchedAt).toLocal(),
+        sourceExpiresAt: rawSourceExpiresAt.isEmpty
+            ? DateTime.parse(rawFetchedAt).toUtc().add(const Duration(hours: 24))
+            : DateTime.parse(rawSourceExpiresAt).toUtc(),
         nextCursor: map['nextCursor']?.toString(),
         previousCursor: map['previousCursor']?.toString(),
         paginationExpiresAt: _optionalSnapshotDateTime(
@@ -714,6 +721,7 @@ class ContentQuerySnapshotStore {
       _isolationIdentity != null &&
       _isReplayable(snapshot) &&
       _snapshotAge(snapshot) < maximumAge &&
+      snapshot.sourceExpiresAt.isAfter(_now().toUtc()) &&
       !_containsExpiredOrRevokedIntersection(snapshot) &&
       (replayPolicy?.call(snapshot) ?? false);
 
@@ -815,7 +823,8 @@ class ContentQuerySnapshotStore {
       return null;
     }
     final age = _snapshotAge(snapshot);
-    if (age >= maximumAge) {
+    if (age >= maximumAge ||
+        !snapshot.sourceExpiresAt.isAfter(_now().toUtc())) {
       _diskBackedKeys.remove(normalized);
       _schedulePersist();
       _telemetrySink.record('query_snapshot.expire', <String, Object?>{
@@ -860,6 +869,7 @@ class ContentQuerySnapshotStore {
     ContentFeedOutcome outcome = ContentFeedOutcome.content,
     ContentFeedEmptyReason? emptyReason,
     ContentActivationIdentity? activationIdentity,
+    DateTime? sourceExpiresAt,
   }) {
     final normalized = key.trim();
     if (normalized.isEmpty) {
@@ -875,6 +885,15 @@ class ContentQuerySnapshotStore {
         );
       }
     }
+    final fetchedAt = _now();
+    final maximumSourceExpiry = fetchedAt.add(maximumAge);
+    final requestedExpiry = sourceExpiresAt?.toUtc() ?? maximumSourceExpiry;
+    final absoluteExpiry = requestedExpiry.isBefore(maximumSourceExpiry)
+        ? requestedExpiry
+        : maximumSourceExpiry;
+    if (!absoluteExpiry.isAfter(fetchedAt.toUtc())) {
+      return;
+    }
     _snapshots.remove(normalized);
     _snapshots[normalized] = ContentQuerySnapshot(
       key: normalized,
@@ -889,7 +908,8 @@ class ContentQuerySnapshotStore {
       outcome: outcome,
       emptyReason: emptyReason,
       activationIdentity: activationIdentity,
-      fetchedAt: _now(),
+      fetchedAt: fetchedAt,
+      sourceExpiresAt: absoluteExpiry,
     );
     _diskBackedKeys.remove(normalized);
     while (_snapshots.length > maxEntries) {

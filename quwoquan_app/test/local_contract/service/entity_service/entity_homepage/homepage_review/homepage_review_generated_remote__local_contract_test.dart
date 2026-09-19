@@ -189,7 +189,7 @@ AppProductionHomepageReviewFacets _facets(
       requests,
       responseFor: responseFor,
     ),
-    invocationContext: (clientPageId, {required command}) =>
+    invocationContext: (clientPageId, {required command, idempotencyKey}) =>
         CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.homepageDetail.id,
           routeId: AppUiSurfaces.homepageDetail.routeId,

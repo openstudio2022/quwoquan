@@ -148,6 +148,8 @@ members:
 # 对应 follow-relationship 的未闭合验收仍阻断上线；接线时必须单轨升级，
 # 不得把这些类型在场当作 mutation basis、恢复仲裁或 policy activation 已实现。
 enums:
+  PersonaRelationshipStatisticsState:
+    values: [available, stale, unavailable]
   PersonaRelationshipTargetKind:
     values: [persona, creator]
   PersonaRelationshipReceiptOutcome:
@@ -155,6 +157,22 @@ enums:
   PersonaRelationshipMutationAction:
     values: [follow, unfollow, block, unblock]
 types:
+  PersonaRelationshipStatisticsSnapshot:
+    description: generation 内 statsVersion 单调；follower/following 可因撤销下降，sourceCheckpoint 与 asOf/expiresAt 不得由缓存续期。
+    fields:
+      - {name: generation, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: statsVersion, type: int64, constraints: [NOT_NULL, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: followerCount, type: int64, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: followingCount, type: int64, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: sourceCheckpoint, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: asOf, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  PersonaRelationshipStatisticsSlice:
+    description: available/stale 必须有 snapshot，unavailable 必须无 snapshot；合法零与无可信值分开。
+    fields:
+      - {name: personaId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: state, type: enum, enum_ref: PersonaRelationshipStatisticsState, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: snapshot, type: PersonaRelationshipStatisticsSnapshot, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
   PersonaRelationshipMutationBasisClaims:
     description: >-
       User 签名依据的内部精确载荷；issuedAt 至 acceptUntil 最长72小时。
@@ -179,6 +197,12 @@ types:
       - {name: idempotencyKey, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 128, classification: INTERNAL, log_policy: hash, api_exposure: read_write, ops_exposure: drop}
       - {name: mutationBasis, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 4096, classification: SECRET, log_policy: drop, api_exposure: read_write, ops_exposure: drop}
       - {name: expectedVersion, type: int64, constraints: [NOT_NULL, MIN_0], semantic_type: aggregate_version, classification: INTERNAL, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+  PersonaRelationshipMutationBasisSlice:
+    description: 已认证 Persona 对单一 canonical target 的私有写依据；不得进入公共 capability 或共享缓存。
+    fields:
+      - {name: targetPersonaId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: drop}
+      - {name: mutationBasis, type: string, constraints: [NOT_NULL, NOT_BLANK], max_utf8_bytes: 4096, classification: SECRET, log_policy: drop, api_exposure: read, ops_exposure: drop}
+      - {name: expectedVersion, type: int64, constraints: [NOT_NULL, MIN_0], semantic_type: aggregate_version, classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
   PersonaRelationshipCommandRecoverySlice:
     description: >-
       同 actor 命令的恢复结果。committed 才携带 committedVersion/changed；
@@ -992,7 +1016,7 @@ types:
         type: string
         constraints:
           - NULLABLE
-        client_dart_type: String?
+        client_dart_type: 'String?'
         client_omit_empty: true
       - name: limit
         type: int
@@ -1000,84 +1024,41 @@ types:
         client_default: "20"
   BlockUserCommand:
     fields:
-      - name: targetPersonaId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_type: String
-        client_normalization: trim
+      - {name: targetPersonaId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: mutationBasis, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: expectedVersion, type: int64, constraints: [MIN_0], client_dart_type: int}
   UnblockUserCommand:
     fields:
-      - name: targetPersonaId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_type: String
-        client_normalization: trim
+      - {name: targetPersonaId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: mutationBasis, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: expectedVersion, type: int64, constraints: [MIN_0], client_dart_type: int}
   GetRelationshipCapabilityQuery:
     fields:
-      - name: personaId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_name: targetPersonaId
-        client_dart_type: String
-        client_normalization: trim
+      - {name: personaId, type: string, constraints: [NOT_BLANK], client_dart_name: targetPersonaId, client_dart_type: String, client_normalization: trim}
   PersonaRelationshipListQuery:
     fields:
-      - name: personaId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_type: String
-        client_normalization: trim
-      - name: query
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
-        client_omit_empty: true
-      - name: cursor
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
-        client_omit_empty: true
-      - name: limit
-        type: int
-        client_dart_type: int
-        client_default: "20"
+      - {name: personaId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: query, type: string, constraints: [NULLABLE], client_dart_type: 'String?', client_omit_empty: true}
+      - {name: cursor, type: string, constraints: [NULLABLE], client_dart_type: 'String?', client_omit_empty: true}
+      - {name: limit, type: int, client_dart_type: int, client_default: "20"}
   FollowUserCommand:
     fields:
-      - name: targetPersonaId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_type: String
-        client_normalization: trim
-      - name: source
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
-        client_omit_empty: true
-      - name: clientRequestId
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
-        client_omit_empty: true
+      - {name: targetPersonaId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: source, type: string, constraints: [NULLABLE], client_dart_type: 'String?', client_omit_empty: true}
+      - {name: mutationBasis, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: expectedVersion, type: int64, constraints: [MIN_0], client_dart_type: int}
   UnfollowUserCommand:
     fields:
-      - name: targetPersonaId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_type: String
-        client_normalization: trim
-      - name: clientRequestId
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
-        client_omit_empty: true
+      - {name: targetPersonaId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: mutationBasis, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: expectedVersion, type: int64, constraints: [MIN_0], client_dart_type: int}
+  RecoverRelationshipCommandQuery:
+    fields:
+      - {name: targetPersonaId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: operation, type: enum, enum_ref: PersonaRelationshipMutationAction, constraints: [NOT_NULL], client_dart_type: PersonaRelationshipMutationAction}
+  FinalizeExpiredRelationshipCommand:
+    fields:
+      - {name: targetPersonaId, type: string, constraints: [NOT_BLANK], client_dart_type: String, client_normalization: trim}
+      - {name: operation, type: enum, enum_ref: PersonaRelationshipMutationAction, constraints: [NOT_NULL], client_dart_type: PersonaRelationshipMutationAction}
+      - {name: mutationBasis, type: string, constraints: [NOT_BLANK], max_utf8_bytes: 4096, classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: drop, client_dart_type: String}
+      - {name: expectedVersion, type: int64, constraints: [MIN_0], client_dart_type: int}

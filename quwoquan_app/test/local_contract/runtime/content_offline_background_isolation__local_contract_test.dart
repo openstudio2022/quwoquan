@@ -64,7 +64,6 @@ void main() {
                         postId: 'post',
                         previousLiked: false,
                         isLiked: true,
-                        likeCount: 1,
                       );
                     }),
               );

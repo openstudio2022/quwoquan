@@ -425,9 +425,9 @@ class CommentNotifier extends Notifier<CommentState>
       comments: _replaceCommentInTree(state.comments, updated),
     );
     try {
-      final confirmed = await _repo.reactToComment(
-        ReactToContentCommentCommand(commentId: commentId, reaction: reaction),
-      );
+      final confirmed = await ref
+          .read(workBrowserCommentReactionCoordinatorProvider)
+          .react(commentId, reaction);
       if (!ref.mounted) {
         return;
       }

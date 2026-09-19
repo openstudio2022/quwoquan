@@ -34,6 +34,7 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/design_system/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/presentation/profile_stats_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
@@ -1321,16 +1322,17 @@ void main() {
         ),
         following: <ProfileSocialRelationRowViewData>[target],
       );
-      final capabilityRepository =
-          _SequenceCapabilityRepository(<RelationshipCapabilityViewData>[
-            _capability(targetId: target.personaId, relationState: 'following'),
-            _capability(targetId: target.personaId, relationState: 'following'),
-            _capability(targetId: target.personaId, relationState: 'following'),
-            _capability(
-              targetId: target.personaId,
-              relationState: 'not_following',
-            ),
-          ]);
+      final capabilityRepository = _SequenceCapabilityRepository(
+        <RelationshipCapabilityViewData>[
+          _capability(targetId: target.personaId, relationState: 'following'),
+          _capability(targetId: target.personaId, relationState: 'following'),
+          _capability(targetId: target.personaId, relationState: 'following'),
+          _capability(
+            targetId: target.personaId,
+            relationState: 'not_following',
+          ),
+        ],
+      );
       final writer = _RecordingRelationshipCommandWriter();
 
       await tester.pumpWidget(

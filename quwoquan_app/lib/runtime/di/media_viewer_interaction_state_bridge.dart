@@ -8,6 +8,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/applicati
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/alpha_rehearsal/alpha_rehearsal_observation.dart';
 import 'package:quwoquan_app/runtime/di/client_state_sync_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/actor_interaction_partition.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/user_relationship_state.dart';
 import 'package:quwoquan_app/runtime/di/user_relationship_state_dependencies.dart';
 
@@ -36,6 +37,8 @@ MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
   required Iterable<ContentPostViewData> posts,
   required UserRelationshipState relationshipState,
   required PostInteractionState postInteractionState,
+  String actorRef = '',
+  int snapshotEpoch = 0,
 }) {
   final scopedPosts = posts.toList(growable: false);
   final scopePostIds = scopedPosts
@@ -76,6 +79,8 @@ MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
   }
 
   return MediaViewerInteractionSnapshot(
+    actorRef: actorRef,
+    snapshotEpoch: snapshotEpoch,
     scopePostIds: scopePostIds,
     scopeProfileIds: scopeProfileIds,
     followingUsers: followingUsers,
@@ -90,6 +95,10 @@ void primeMediaViewerInteractionSnapshot(
   WidgetRef ref,
   MediaViewerInteractionSnapshot snapshot,
 ) {
+  final currentActorRef = ref.read(actorInteractionPartitionProvider).key;
+  if (snapshot.actorRef.isEmpty || snapshot.actorRef != currentActorRef) {
+    return;
+  }
   ref
       .read(userRelationshipStateProvider.notifier)
       .mergeInteractionState(_userRelationshipInput(snapshot));
@@ -175,27 +184,24 @@ int effectivePostCommentCount(
   return postInteraction.commentCountFor(postId, fallback: fallback);
 }
 
-void syncPostLikeIntent(
+Future<void> syncPostLikeIntent(
   WidgetRef ref, {
   required String postId,
   required bool previousLiked,
   required bool isLiked,
-  required int likeCount,
-}) {
+}) async {
   // 点赞为「游客设备态可写」：游客与登录用户均可写本地乐观态 + outbox。
   // 云侧按 deviceActorId（游客）/ userId（登录）独立计数、不并账；设备头由
   // CloudRequestHeaders 统一注入，故此处无需区分登录态。
   // 先取得实际写入能力，再发布乐观态；拒绝时不能留下虚假的已点赞。
-  ref
+  await ref
       .read(clientStateSyncOutboxProvider.notifier)
       .enqueuePostLike(
         postId: postId,
         currentLiked: previousLiked,
         isLiked: isLiked,
       );
-  ref
-      .read(postInteractionStateProvider.notifier)
-      .setLiked(postId, isLiked, likeCount: likeCount);
+  ref.read(postInteractionStateProvider.notifier).setLiked(postId, isLiked);
   final observation = AlphaRehearsalObservation.current;
   if (observation != null &&
       (observation.caseId == 'local-write' ||

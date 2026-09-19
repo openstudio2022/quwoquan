@@ -141,6 +141,7 @@ void main() {
       key: identity.isolateQueryKey('surface=userPosts'),
       items: [_postDto('private-or-unknown')],
       fetchedAt: DateTime.now(),
+      sourceExpiresAt: DateTime.now().add(const Duration(hours: 1)),
       activationIdentity: identity.activationIdentity,
     );
     expect(store.canReplay(snapshot), isFalse);
@@ -282,6 +283,7 @@ void main() {
       key: 'surface=userPosts',
       items: [_postDto('post')],
       fetchedAt: DateTime.now(),
+      sourceExpiresAt: DateTime.now().add(const Duration(hours: 1)),
     ).toMap();
     map['objectCards'] = [
       buildContentFeedObjectCard(
@@ -1082,6 +1084,7 @@ void main() {
         key: 'surface=discoveryFeed&cursor=',
         items: <ContentPostViewData>[_postDto('post_1')],
         fetchedAt: DateTime.utc(2026, 7, 29, 11),
+        sourceExpiresAt: expiresAt,
         nextCursor: 'fc.next',
         previousCursor: 'fc.previous',
         paginationExpiresAt: expiresAt,
@@ -1162,6 +1165,7 @@ void main() {
               ),
             ],
             fetchedAt: now,
+            sourceExpiresAt: now.add(const Duration(hours: 1)),
             activationIdentity: identity.activationIdentity,
           );
 
@@ -1659,6 +1663,27 @@ void main() {
       await afterClear.ensureHydrated();
       expect(afterClear.get(queryKey), isNull);
     });
+  });
+  // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-007
+  test('query snapshot source absolute expiry cannot be extended by a later cache layer', () {
+    var now = DateTime.utc(2026, 9, 19);
+    final store = ContentQuerySnapshotStore(
+      now: () => now,
+      maximumAge: const Duration(hours: 24),
+    );
+    final identity = _defaultCacheIdentity();
+    store.adoptContentCacheIsolationIdentity(identity);
+    store.replayPolicy = (_) => true;
+    final key = identity.isolateQueryKey('surface=userPosts');
+    store.put(
+      key: key,
+      items: <ContentPostViewData>[_postDto('p')],
+      activationIdentity: identity.activationIdentity,
+      sourceExpiresAt: now.add(const Duration(minutes: 5)),
+    );
+    expect(store.get(key), isNotNull);
+    now = now.add(const Duration(minutes: 6));
+    expect(store.get(key), isNull);
   });
 }
 

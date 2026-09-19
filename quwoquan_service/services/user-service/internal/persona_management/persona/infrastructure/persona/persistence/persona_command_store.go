@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	usermodel "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
+	userrepo "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 	personaports "quwoquan_service/services/user-service/internal/persona_management/persona/domain/persona/ports"
 )
 
@@ -42,7 +43,7 @@ func (s *PersonaCommandPostgresStore) CommitCreate(
 		return personaports.PersonaCommandResult{},
 			errors.New("persona create requires aggregate identity")
 	}
-	return s.commit(ctx, meta, func(tx pgx.Tx) (personaports.PersonaCommandResult, error) {
+	return s.commit(ctx, persona.UserID, meta, func(tx pgx.Tx) (personaports.PersonaCommandResult, error) {
 		if _, err := tx.Exec(
 			ctx,
 			`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
@@ -95,6 +96,15 @@ $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36
 			persona.LastProfileSyncSource, persona.LastActivatedAt, persona.Version,
 			persona.CreatedAt, persona.UpdatedAt,
 		); err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				switch pgErr.ConstraintName {
+				case "personas_pkey", "uq_personas_persona_id":
+					return personaports.PersonaCommandResult{}, personaports.ErrPersonaIdentityConflict
+				case "uq_personas_user_handle":
+					return personaports.PersonaCommandResult{}, userrepo.ErrPersonaHandleConflict
+				}
+			}
 			return personaports.PersonaCommandResult{}, err
 		}
 		return personaports.PersonaCommandResult{
@@ -119,7 +129,7 @@ func (s *PersonaCommandPostgresStore) CommitMutation(
 		return personaports.PersonaCommandResult{},
 			errors.New("persona mutation requires event type")
 	}
-	return s.commit(ctx, meta, func(tx pgx.Tx) (personaports.PersonaCommandResult, error) {
+	return s.commit(ctx, persona.UserID, meta, func(tx pgx.Tx) (personaports.PersonaCommandResult, error) {
 		var currentVersion int64
 		err := tx.QueryRow(ctx,
 			`SELECT version FROM personas WHERE persona_id=$1 FOR UPDATE`,
@@ -188,7 +198,7 @@ func (s *PersonaCommandPostgresStore) CommitActivation(
 		return personaports.PersonaCommandResult{},
 			errors.New("persona activation requires owner and persona identity")
 	}
-	return s.commit(ctx, meta, func(tx pgx.Tx) (personaports.PersonaCommandResult, error) {
+	return s.commit(ctx, ownerID, meta, func(tx pgx.Tx) (personaports.PersonaCommandResult, error) {
 		var currentVersion int64
 		err := tx.QueryRow(ctx,
 			`SELECT version FROM personas
@@ -232,12 +242,16 @@ func (s *PersonaCommandPostgresStore) CommitActivation(
 }
 
 // commit 统一承载 replay 检查、事务边界与 receipt 冲突映射。
+// ownerID 是 receipt 的隔离维度：同一幂等键只在同一 owner 内回放。
 func (s *PersonaCommandPostgresStore) commit(
 	ctx context.Context,
+	ownerID string,
 	meta personaports.PersonaCommandMeta,
 	apply func(tx pgx.Tx) (personaports.PersonaCommandResult, error),
 ) (personaports.PersonaCommandResult, error) {
-	if strings.TrimSpace(meta.IdempotencyKey) == "" ||
+	ownerID = strings.TrimSpace(ownerID)
+	if ownerID == "" ||
+		strings.TrimSpace(meta.IdempotencyKey) == "" ||
 		strings.TrimSpace(meta.CommandDigest) == "" {
 		return personaports.PersonaCommandResult{}, personaports.ErrPersonaCommandMetaRequired
 	}
@@ -247,10 +261,10 @@ func (s *PersonaCommandPostgresStore) commit(
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := lockPersonaCommandKey(ctx, tx, meta.IdempotencyKey); err != nil {
+	if err := lockPersonaCommandKey(ctx, tx, ownerID, meta.IdempotencyKey); err != nil {
 		return personaports.PersonaCommandResult{}, err
 	}
-	if result, replayed, err := s.replay(ctx, tx, meta); err != nil || replayed {
+	if result, replayed, err := s.replay(ctx, tx, ownerID, meta); err != nil || replayed {
 		if err != nil {
 			return personaports.PersonaCommandResult{}, err
 		}
@@ -272,6 +286,7 @@ func (s *PersonaCommandPostgresStore) commit(
 func (s *PersonaCommandPostgresStore) replay(
 	ctx context.Context,
 	tx pgx.Tx,
+	ownerID string,
 	meta personaports.PersonaCommandMeta,
 ) (personaports.PersonaCommandResult, bool, error) {
 	var (
@@ -281,8 +296,8 @@ func (s *PersonaCommandPostgresStore) replay(
 	err := tx.QueryRow(ctx, `
 SELECT command_digest, result_json
 FROM personas_command_receipts
-WHERE idempotency_key=$1
-FOR SHARE`, meta.IdempotencyKey).Scan(&storedDigest, &resultJSON)
+WHERE owner_id=$1 AND idempotency_key=$2
+FOR SHARE`, ownerID, meta.IdempotencyKey).Scan(&storedDigest, &resultJSON)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return personaports.PersonaCommandResult{}, false, nil
 	}
@@ -304,17 +319,25 @@ FOR SHARE`, meta.IdempotencyKey).Scan(&storedDigest, &resultJSON)
 func lockPersonaCommandKey(
 	ctx context.Context,
 	tx pgx.Tx,
+	ownerID string,
 	idempotencyKey string,
 ) error {
 	// The event identity is the cross-transaction serialization coordinate for
 	// replay, orphan repair, outbox insert and receipt insert. The lock is taken
 	// once in commit before replay; appendPacket must never acquire it again.
+	// Owner scoping keeps two owners reusing one key from serializing on each
+	// other and from colliding on the same event identity.
 	_, err := tx.Exec(
 		ctx,
 		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
-		stablePersonaPacketID("event", idempotencyKey),
+		stablePersonaPacketID("event", personaCommandIdentity(ownerID, idempotencyKey)),
 	)
 	return err
+}
+
+// personaCommandIdentity 是 owner 隔离后的命令身份，用于派生 event/receipt ID。
+func personaCommandIdentity(ownerID, idempotencyKey string) string {
+	return strings.TrimSpace(ownerID) + "\x00" + strings.TrimSpace(idempotencyKey)
 }
 
 func (s *PersonaCommandPostgresStore) appendPacket(
@@ -333,7 +356,8 @@ func (s *PersonaCommandPostgresStore) appendPacket(
 	if err != nil {
 		return err
 	}
-	eventID := stablePersonaPacketID("event", meta.IdempotencyKey)
+	commandIdentity := personaCommandIdentity(ownerID, meta.IdempotencyKey)
+	eventID := stablePersonaPacketID("event", commandIdentity)
 	// commit 已按 event identity 持有 transaction-local advisory lock，并在
 	// 锁内以 FOR SHARE 查过 canonical receipt。此时才能把同 identity 下
 	// “有 outbox、无 receipt”的记录判定为旧注销遗留 orphan。
@@ -343,9 +367,10 @@ WHERE event_id=$1
   AND NOT EXISTS (
     SELECT 1
     FROM personas_command_receipts
-    WHERE idempotency_key=$2
+    WHERE owner_id=$2 AND idempotency_key=$3
   )`,
 		eventID,
+		ownerID,
 		meta.IdempotencyKey,
 	); err != nil {
 		return err
@@ -372,10 +397,11 @@ INSERT INTO personas_outbox(
 	}
 	if _, err := tx.Exec(ctx, `
 INSERT INTO personas_command_receipts(
-  receipt_id, aggregate_id, idempotency_key, command_digest, aggregate_version, result_json
-) VALUES ($1,$2,$3,$4,$5,$6)`,
-		stablePersonaPacketID("receipt", meta.IdempotencyKey),
+  receipt_id, aggregate_id, owner_id, idempotency_key, command_digest, aggregate_version, result_json
+) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+		stablePersonaPacketID("receipt", commandIdentity),
 		personaID,
+		ownerID,
 		meta.IdempotencyKey,
 		meta.CommandDigest,
 		version,

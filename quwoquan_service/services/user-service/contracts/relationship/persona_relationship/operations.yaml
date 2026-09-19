@@ -46,6 +46,9 @@ api_routes:
       - USER.AUTH.account_suspended
       - USER.AUTH.token_stale
       - USER.RELATIONSHIP.invalid_pair
+      - USER.RELATIONSHIP.command_key_required
+      - USER.RELATIONSHIP.command_conflict
+      - USER.RELATIONSHIP.following_limit_exceeded
     privacy:
       request_classification: INTERNAL
       response_classification: INTERNAL
@@ -114,6 +117,8 @@ api_routes:
       - USER.AUTH.account_suspended
       - USER.AUTH.token_stale
       - USER.RELATIONSHIP.invalid_pair
+      - USER.RELATIONSHIP.command_key_required
+      - USER.RELATIONSHIP.command_conflict
     privacy:
       request_classification: INTERNAL
       response_classification: INTERNAL
@@ -477,6 +482,8 @@ api_routes:
       - USER.AUTH.account_suspended
       - USER.AUTH.token_stale
       - USER.RELATIONSHIP.invalid_pair
+      - USER.RELATIONSHIP.command_key_required
+      - USER.RELATIONSHIP.command_conflict
     privacy:
       request_classification: SENSITIVE
       response_classification: INTERNAL
@@ -495,7 +502,7 @@ api_routes:
     security:
       auth_mode: required
     request_entity: BlockUserCommand
-    request_body_kind: none
+    request_body_kind: object
   - method: DELETE
     path: /user/personas/{targetPersonaId}/block
     operation: UnblockUser
@@ -541,6 +548,8 @@ api_routes:
       - USER.AUTH.account_suspended
       - USER.AUTH.token_stale
       - USER.RELATIONSHIP.invalid_pair
+      - USER.RELATIONSHIP.command_key_required
+      - USER.RELATIONSHIP.command_conflict
     privacy:
       request_classification: SENSITIVE
       response_classification: INTERNAL
@@ -559,7 +568,7 @@ api_routes:
     security:
       auth_mode: required
     request_entity: UnblockUserCommand
-    request_body_kind: none
+    request_body_kind: object
   - method: GET
     path: /user/blocked
     operation: ListBlockedUsers
@@ -624,6 +633,110 @@ api_routes:
       auth_mode: required
     request_entity: ListBlockedUsersQuery
     request_body_kind: none
+  - method: GET
+    path: /user/personas/{targetPersonaId}/relationship/mutation-basis
+    operation: GetRelationshipMutationBasis
+    transport_role: recovery
+    actor: persona
+    application:
+      kind: query
+      facet: PersonaRelationshipCommandFacade
+      method: getRelationshipMutationBasis
+      reader: GetRelationshipReader
+      slice: PersonaRelationshipMutationBasisSlice
+    request_entity: GetRelationshipCapabilityQuery
+    request_body_kind: none
+    request_bindings:
+      path:
+        - {name: targetPersonaId, field: personaId}
+    response_entity: PersonaRelationshipMutationBasisSlice
+    response_body: PersonaRelationshipMutationBasisSlice
+    response_body_kind: object
+    authorization: {principal: persona, ownership_policy: actor_self}
+    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    error_codes: [USER.USER.unauthorized, USER.RELATIONSHIP.target_not_found, USER.RELATIONSHIP.actor_forbidden, USER.SYSTEM.internal_error]
+    privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+    telemetry: {metric: user_persona_relationship_query, trace: true, attributes: [operation, outcome, error_code]}
+    slo: {latency_p95_ms: 500, availability_percent: 99.9}
+    commercial: {status: ready}
+    security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
+  - method: GET
+    path: /user/personas/{targetPersonaId}/relationship/commands/{operation}/receipt
+    operation: RecoverRelationshipCommand
+    transport_role: recovery
+    actor: persona
+    application:
+      kind: query
+      facet: PersonaRelationshipCommandFacade
+      method: recoverRelationshipCommand
+      reader: RelationshipCommandReceiptReader
+      slice: PersonaRelationshipCommandRecoverySlice
+    request_entity: RecoverRelationshipCommandQuery
+    request_body_kind: none
+    request_bindings:
+      path:
+        - {name: targetPersonaId, field: targetPersonaId}
+        - {name: operation, field: operation}
+    response_entity: PersonaRelationshipCommandRecoverySlice
+    response_body: PersonaRelationshipCommandRecoverySlice
+    response_body_kind: object
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.RELATIONSHIP.actor_forbidden
+      - USER.SYSTEM.internal_error
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: user_persona_relationship_command, trace: true, attributes: [operation, outcome, error_code]}
+    slo: {latency_p95_ms: 500, availability_percent: 99.9}
+    commercial: {status: ready}
+    authorization:
+      principal: persona
+      ownership_policy: actor_self
+    security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
+  - method: POST
+    path: /user/personas/{targetPersonaId}/relationship/commands/{operation}/finalize-expired
+    operation: FinalizeExpiredRelationshipCommand
+    actor: persona
+    application:
+      kind: command
+      facet: PersonaRelationshipCommandFacade
+      method: finalizeExpiredRelationshipCommand
+      aggregate_owner: PersonaRelationship
+      mutation_target: PersonaRelationship
+      invariant_target: PersonaRelationship
+    request_entity: FinalizeExpiredRelationshipCommand
+    request_body_kind: object
+    request_bindings:
+      path:
+        - {name: targetPersonaId, field: targetPersonaId}
+        - {name: operation, field: operation}
+    response_entity: PersonaRelationshipCommandRecoverySlice
+    response_body: PersonaRelationshipCommandRecoverySlice
+    response_body_kind: object
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.RELATIONSHIP.actor_forbidden
+      - USER.RELATIONSHIP.command_conflict
+      - USER.SYSTEM.internal_error
+    privacy: {request_classification: SENSITIVE, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: user_persona_relationship_command, trace: true, attributes: [operation, outcome, error_code]}
+    slo: {latency_p95_ms: 500, availability_percent: 99.9}
+    commercial: {status: ready}
+    authorization:
+      principal: persona
+      ownership_policy: actor_self
+    security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
 consumers:
   - name: app
     capabilities:
@@ -679,6 +792,7 @@ contract_test:
     - idempotency tested
     - counter projection replay and periodic reconciliation verified
     - mutual follow scenario covered
+
 readiness_cases:
   - case_id: follow-user-local
     spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-001

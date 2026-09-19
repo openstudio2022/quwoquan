@@ -8,6 +8,7 @@ package content_reaction_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -49,11 +50,21 @@ func TestLikePostHTTPCommitsAggregateReceiptAndOutboxInRealMongoTransaction(t *t
 	if err := store.EnsureIndexes(context.Background()); err != nil {
 		t.Fatalf("ensure ContentReaction indexes: %v", err)
 	}
-	handler := reactionhttp.NewHandler(reactionapp.BindFacades(reactionapp.NewService(
-		reactionapp.BindDataPorts(store, liveTargetReader{}),
-	)))
+	signer, err := reactionpersistence.NewReactionMutationBasisSigner("content-service.test", "test", []reactionpersistence.ReactionMutationBasisKey{{ID: "test", Material: []byte(strings.Repeat("k", 32))}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := reactionapp.NewService(reactionapp.BindDataPorts(store, liveTargetReader{}), signer)
+	handler := reactionhttp.NewHandler(reactionapp.BindFacades(service))
 
-	request := httptest.NewRequest(http.MethodPost, "/content/posts/post-reaction/like", nil)
+	actor, _ := reactiondomain.NewActor(reactiondomain.ActorDimensionPersona, "persona-reactor")
+	postIdentity, _ := reactiondomain.NewPostIdentity("post-reaction", actor)
+	postBasis, err := service.GetContentReactionMutationBasis(context.Background(), reactionapp.GetContentReactionMutationBasisQuery{Identity: postIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	likeBody := fmt.Sprintf(`{"mutationBasis":%q,"expectedVersion":%d}`, postBasis.MutationBasis, postBasis.ExpectedVersion)
+	request := httptest.NewRequest(http.MethodPost, "/content/posts/post-reaction/like", strings.NewReader(likeBody))
 	request = request.WithContext(operation.WithContext(request.Context(), operation.Context{
 		OperationID:    "content.content_reaction.LikePost",
 		RequestID:      "request-reaction-like",
@@ -97,8 +108,9 @@ func TestLikePostHTTPCommitsAggregateReceiptAndOutboxInRealMongoTransaction(t *t
 		}
 	}
 
+	replayRequest := httptest.NewRequest(http.MethodPost, "/content/posts/post-reaction/like", strings.NewReader(likeBody)).WithContext(request.Context())
 	replay := httptest.NewRecorder()
-	handler.LikePost(replay, request, "post-reaction")
+	handler.LikePost(replay, replayRequest, "post-reaction")
 	if replay.Code != http.StatusOK {
 		t.Fatalf("LikePost replay status=%d body=%s", replay.Code, replay.Body.String())
 	}
@@ -145,10 +157,15 @@ func TestLikePostHTTPCommitsAggregateReceiptAndOutboxInRealMongoTransaction(t *t
 		t.Fatalf("GetContentReactionState liked status=%d body=%s", stateRecorder.Code, stateRecorder.Body.String())
 	}
 
+	postBasis, err = service.GetContentReactionMutationBasis(context.Background(), reactionapp.GetContentReactionMutationBasisQuery{Identity: postIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlikeBody := fmt.Sprintf(`{"mutationBasis":%q,"expectedVersion":%d}`, postBasis.MutationBasis, postBasis.ExpectedVersion)
 	unlikeRecorder := httptest.NewRecorder()
 	handler.UnlikePost(
 		unlikeRecorder,
-		requestFor(http.MethodDelete, "/content/posts/post-reaction/like", "reaction-unlike-once", ""),
+		requestFor(http.MethodDelete, "/content/posts/post-reaction/like", "reaction-unlike-once", unlikeBody),
 		"post-reaction",
 	)
 	if unlikeRecorder.Code != http.StatusOK ||
@@ -167,6 +184,13 @@ func TestLikePostHTTPCommitsAggregateReceiptAndOutboxInRealMongoTransaction(t *t
 		t.Fatalf("GetContentReactionState cleared status=%d body=%s", clearedStateRecorder.Code, clearedStateRecorder.Body.String())
 	}
 
+	commentActor, _ := reactiondomain.NewActor(reactiondomain.ActorDimensionPersona, "persona-reactor")
+	commentIdentity, _ := reactiondomain.NewCommentIdentity("comment-reaction", commentActor)
+	commentBasis, err := service.GetContentReactionMutationBasis(context.Background(), reactionapp.GetContentReactionMutationBasisQuery{Identity: commentIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commentBody := fmt.Sprintf(`{"reaction":"like","mutationBasis":%q,"expectedVersion":%d}`, commentBasis.MutationBasis, commentBasis.ExpectedVersion)
 	commentRecorder := httptest.NewRecorder()
 	handler.ReactToComment(
 		commentRecorder,
@@ -174,7 +198,7 @@ func TestLikePostHTTPCommitsAggregateReceiptAndOutboxInRealMongoTransaction(t *t
 			http.MethodPost,
 			"/content/comments/comment-reaction/reaction",
 			"comment-reaction-like-once",
-			`{"reaction":"like"}`,
+			commentBody,
 		),
 		"comment-reaction",
 	)

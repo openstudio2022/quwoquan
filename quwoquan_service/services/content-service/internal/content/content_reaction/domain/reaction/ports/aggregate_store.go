@@ -3,6 +3,10 @@ package ports
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"errors"
+	"strings"
 	"time"
 
 	reaction "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
@@ -36,6 +40,12 @@ type CommentReactionValueReader interface {
 }
 
 // OutboxFact 必须与 ContentReaction 的同一版本原子提交。
+const ContentReactionOutboxPartitionCount = 32
+
+var ErrOutboxLeaseLost = errors.New("ContentReaction outbox partition lease lost")
+
+// OutboxFact separates stable aggregate/event identity from transport order.
+// PartitionSequence is contiguous only within PartitionID.
 type OutboxFact struct {
 	EventID          string
 	EventType        string
@@ -43,8 +53,26 @@ type OutboxFact struct {
 	AggregateVersion int64
 	Payload          []byte
 	OccurredAt       time.Time
-	// Checkpoint 仅由 OutboxReader 填充，consumer 必须原样持久化。
-	Checkpoint string
+	// Checkpoint is retained only as a source-compatible diagnostic field for
+	// lifecycle tests; relay progress is exclusively partitionSequence + fenced checkpoint.
+	Checkpoint        string
+	PartitionKey      string
+	PartitionID       int
+	PartitionSequence int64
+}
+
+type OutboxPartitionLease struct {
+	Consumer    string
+	Owner       string
+	PartitionID int
+	Sequence    int64
+	LeaseEpoch  int64
+	LeaseUntil  time.Time
+}
+
+func OutboxPartitionForKey(key string) int {
+	digest := sha256.Sum256([]byte(strings.TrimSpace(key)))
+	return int(binary.BigEndian.Uint32(digest[:4]) % ContentReactionOutboxPartitionCount)
 }
 
 // Commit 保留一次命令提交的并发、幂等和事实边界。
@@ -55,37 +83,47 @@ type Commit struct {
 	IdempotencyKey   string
 	CommandName      string
 	CommandDigest    string
+	BasisDigest      string
+	AcceptUntil      time.Time
 	ReceiptExpiresAt time.Time
 	Changed          bool
 	Events           []OutboxFact
 }
 
+type ReceiptOutcome string
+
+const (
+	ReceiptOutcomeCommitted          ReceiptOutcome = "committed"
+	ReceiptOutcomeRejected           ReceiptOutcome = "rejected"
+	ReceiptOutcomeExpired            ReceiptOutcome = "expired"
+	ReceiptOutcomeHistoryUnavailable ReceiptOutcome = "history_unavailable"
+)
+
 type CommitResult struct {
 	Aggregate *reaction.ContentReaction
 	Changed   bool
 	Replayed  bool
+	Outcome   ReceiptOutcome
 }
 
 type AggregateStore interface {
 	Load(ctx context.Context, aggregateID string) (*reaction.ContentReaction, bool, error)
-	FindReceipt(
-		ctx context.Context,
-		idempotencyKey string,
-		commandName string,
-		commandDigest string,
-	) (CommitResult, bool, error)
+	FindReceipt(ctx context.Context, identity reaction.Identity, idempotencyKey, commandName, commandDigest, basisDigest string) (CommitResult, bool, error)
+	RecoverReceipt(ctx context.Context, actor reaction.Actor, idempotencyKey, commandName string) (CommitResult, bool, error)
+	FinalizeExpired(ctx context.Context, identity reaction.Identity, idempotencyKey, commandName, commandDigest, basisDigest string, acceptUntil time.Time) (CommitResult, error)
 	Commit(ctx context.Context, commit Commit) (CommitResult, error)
 }
 
-// OutboxReader 按全局单调 sequence 返回已经提交的 ContentReaction 事实。
+// OutboxReader leases and reads fixed partitions. A gap is an error; callers
+// must not jump to a later sequence.
 type OutboxReader interface {
-	ReadAfter(ctx context.Context, checkpoint string, limit int) ([]OutboxFact, error)
+	ClaimOutboxPartitions(ctx context.Context, consumer, owner string, lease time.Duration, maxPartitions int) ([]OutboxPartitionLease, error)
+	ReadOutboxPartition(ctx context.Context, lease OutboxPartitionLease, limit int) ([]OutboxFact, error)
 }
 
-// ProjectionCheckpointStore 为每个 reaction consumer 保存独立重放水位。
+// ProjectionCheckpointStore fences the exact next checkpoint with leaseEpoch.
 type ProjectionCheckpointStore interface {
-	LoadCheckpoint(ctx context.Context, consumer string) (string, error)
-	SaveCheckpoint(ctx context.Context, consumer, checkpoint string) error
+	AdvanceOutboxCheckpoint(ctx context.Context, lease OutboxPartitionLease, fact OutboxFact) error
 }
 
 // OutboxPublisher 是 relay 在 aggregate transaction 提交后的唯一投递边界。

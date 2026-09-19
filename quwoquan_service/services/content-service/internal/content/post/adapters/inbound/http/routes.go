@@ -126,6 +126,22 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGetAppConfig(w, r)
 	case "GetAuthorImpact":
 		h.handleGetAuthorImpact(w, r)
+	case "GetContentReactionPresentation":
+		h.dispatchContentReaction(w, r, func(handler contentReactionHTTPHandler) {
+			handler.GetPresentation(w, r, strings.TrimSpace(r.PathValue("targetKind")), strings.TrimSpace(r.PathValue("targetId")))
+		})
+	case "GetContentReactionMutationBasis":
+		h.dispatchContentReaction(w, r, func(handler contentReactionHTTPHandler) {
+			handler.GetMutationBasis(w, r, strings.TrimSpace(r.PathValue("targetKind")), strings.TrimSpace(r.PathValue("targetId")))
+		})
+	case "RecoverContentReactionCommand":
+		h.dispatchContentReaction(w, r, func(handler contentReactionHTTPHandler) {
+			handler.RecoverCommand(w, r, strings.TrimSpace(r.PathValue("targetKind")), strings.TrimSpace(r.PathValue("targetId")), strings.TrimSpace(r.PathValue("operation")))
+		})
+	case "FinalizeExpiredContentReactionCommand":
+		h.dispatchContentReaction(w, r, func(handler contentReactionHTTPHandler) {
+			handler.FinalizeExpiredCommand(w, r, strings.TrimSpace(r.PathValue("targetKind")), strings.TrimSpace(r.PathValue("targetId")), strings.TrimSpace(r.PathValue("operation")))
+		})
 	case "GetContentReactionState":
 		h.dispatchContentReaction(w, r, func(handler contentReactionHTTPHandler) {
 			handler.GetContentReactionState(w, r, strings.TrimSpace(r.PathValue("postId")))

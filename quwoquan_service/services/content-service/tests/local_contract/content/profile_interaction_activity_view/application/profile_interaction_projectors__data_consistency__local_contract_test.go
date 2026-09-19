@@ -80,7 +80,7 @@ func TestProfileInteractionProjectionFailureDoesNotAdvanceCheckpoint(t *testing.
 	if _, err := relay.Drain(context.Background(), 10); err == nil {
 		t.Fatal("projection failure must be returned")
 	}
-	if outbox.checkpoint != "" {
+	if outbox.checkpoint != 0 {
 		t.Fatalf("failed projection advanced checkpoint to %q", outbox.checkpoint)
 	}
 	if len(writer.rows) != 0 {
@@ -91,7 +91,7 @@ func TestProfileInteractionProjectionFailureDoesNotAdvanceCheckpoint(t *testing.
 	if count, err := relay.Drain(context.Background(), 10); err != nil || count != 1 {
 		t.Fatalf("projection retry count=%d err=%v", count, err)
 	}
-	if outbox.checkpoint != "1" {
+	if outbox.checkpoint != 1 {
 		t.Fatalf("successful projection checkpoint=%q", outbox.checkpoint)
 	}
 	if len(writer.rows) != 2 {
@@ -384,30 +384,48 @@ func (w *memoryActivityWriter) ApplyReadState(
 
 type reactionRelayStore struct {
 	events     []reactionports.OutboxFact
-	checkpoint string
+	checkpoint int64
 }
 
-func (s *reactionRelayStore) ReadAfter(
+func (s *reactionRelayStore) ClaimOutboxPartitions(
 	_ context.Context,
-	checkpoint string,
+	consumer string,
+	owner string,
+	lease time.Duration,
+	_ int,
+) ([]reactionports.OutboxPartitionLease, error) {
+	return []reactionports.OutboxPartitionLease{{
+		Consumer: consumer, Owner: owner, PartitionID: 0,
+		Sequence: s.checkpoint, LeaseEpoch: 1, LeaseUntil: time.Now().Add(lease),
+	}}, nil
+}
+
+func (s *reactionRelayStore) ReadOutboxPartition(
+	_ context.Context,
+	lease reactionports.OutboxPartitionLease,
 	_ int,
 ) ([]reactionports.OutboxFact, error) {
-	if checkpoint == "1" {
+	if lease.Sequence >= int64(len(s.events)) {
 		return nil, nil
 	}
-	return append([]reactionports.OutboxFact(nil), s.events...), nil
+	facts := append([]reactionports.OutboxFact(nil), s.events[lease.Sequence:]...)
+	for index := range facts {
+		facts[index].PartitionKey = facts[index].AggregateID
+		facts[index].PartitionID = 0
+		facts[index].PartitionSequence = lease.Sequence + int64(index) + 1
+	}
+	return facts, nil
 }
 
-func (s *reactionRelayStore) LoadCheckpoint(context.Context, string) (string, error) {
-	return s.checkpoint, nil
-}
-
-func (s *reactionRelayStore) SaveCheckpoint(
+func (s *reactionRelayStore) AdvanceOutboxCheckpoint(
 	_ context.Context,
-	_ string,
-	checkpoint string,
+	lease reactionports.OutboxPartitionLease,
+	fact reactionports.OutboxFact,
 ) error {
-	s.checkpoint = checkpoint
+	if s.checkpoint != lease.Sequence || fact.PartitionSequence != lease.Sequence+1 {
+		return reactionports.ErrOutboxLeaseLost
+	}
+	s.checkpoint = fact.PartitionSequence
 	return nil
 }
 

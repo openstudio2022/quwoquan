@@ -1952,6 +1952,12 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LikeContentPostCommand'
             responses:
                 "200":
                     description: OK
@@ -1990,6 +1996,12 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UnlikeContentPostCommand'
             responses:
                 "200":
                     description: OK
@@ -2168,6 +2180,183 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /content/reactions/{targetKind}/{targetId}/commands/{operation}/finalize-expired:
+        post:
+            operationId: FinalizeExpiredContentReactionCommand
+            x-contract-operation-id: content.content_reaction.FinalizeExpiredContentReactionCommand
+            x-object-id: content.content_reaction
+            x-actor: persona_or_device
+            x-application:
+                kind: command
+                facet: ContentReactionCommandFacet
+                method: finalizeExpired
+                aggregateOwner: ContentReaction
+            parameters:
+                - name: targetKind
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: targetId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: operation
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/FinalizeExpiredContentReactionCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentReactionCommandRecoverySlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
+    /content/reactions/{targetKind}/{targetId}/commands/{operation}/receipt:
+        get:
+            operationId: RecoverContentReactionCommand
+            x-contract-operation-id: content.content_reaction.RecoverContentReactionCommand
+            x-object-id: content.content_reaction
+            x-actor: persona_or_device
+            x-application:
+                kind: query
+                facet: ContentReactionCommandFacet
+                method: recover
+                reader: ContentReactionReceiptReader
+                slice: ContentReactionCommandRecoverySlice
+            parameters:
+                - name: targetKind
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: targetId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: operation
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentReactionCommandRecoverySlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
+    /content/reactions/{targetKind}/{targetId}/mutation-basis:
+        get:
+            operationId: GetContentReactionMutationBasis
+            x-contract-operation-id: content.content_reaction.GetContentReactionMutationBasis
+            x-object-id: content.content_reaction
+            x-actor: persona_or_device
+            x-application:
+                kind: query
+                facet: ContentReactionQueryFacet
+                method: getMutationBasis
+                reader: ContentReactionStateReader
+                slice: ContentReactionMutationBasisSlice
+            parameters:
+                - name: targetKind
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: targetId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentReactionMutationBasisSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
+    /content/reactions/{targetKind}/{targetId}/presentation:
+        get:
+            operationId: GetContentReactionPresentation
+            x-contract-operation-id: content.content_reaction.GetContentReactionPresentation
+            x-object-id: content.content_reaction
+            x-actor: persona_or_device
+            x-application:
+                kind: query
+                facet: ContentReactionQueryFacet
+                method: getPresentation
+                reader: ContentReactionStatisticsReader
+                slice: ContentReactionPresentationSlice
+            parameters:
+                - name: targetKind
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: targetId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentReactionPresentationSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /content/reports:
         get:
             operationId: ListReports
@@ -3925,10 +4114,25 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContentPostProjection
             x-contract-placeholder: true
+        ContentReactionCommandRecoverySlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContentReactionCommandRecoverySlice
+            x-contract-placeholder: true
         ContentReactionCommandResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContentReactionCommandResult
+            x-contract-placeholder: true
+        ContentReactionMutationBasisSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContentReactionMutationBasisSlice
+            x-contract-placeholder: true
+        ContentReactionPresentationSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContentReactionPresentationSlice
             x-contract-placeholder: true
         ContentReactionStateSlice:
             type: object
@@ -3984,6 +4188,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: FilterCatalogSlice
+            x-contract-placeholder: true
+        FinalizeExpiredContentReactionCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: FinalizeExpiredContentReactionCommand
             x-contract-placeholder: true
         GatheringPostPageSlice:
             type: object
@@ -4054,6 +4263,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: IntersectionReasonPageSlice
+            x-contract-placeholder: true
+        LikeContentPostCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: LikeContentPostCommand
             x-contract-placeholder: true
         MarkIntersectionsVisitedRequest:
             type: object
@@ -4319,6 +4533,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SupersedePostModerationCaseRequest
+            x-contract-placeholder: true
+        UnlikeContentPostCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: UnlikeContentPostCommand
             x-contract-placeholder: true
         UpdateMediaAssetAccessPolicyRequest:
             type: object

@@ -24,7 +24,7 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
     show journeyEventTrackerProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart'
-    show blockedListQueryProvider, personaRelationshipBlockWriterProvider;
+    show blockedListQueryProvider, personaRelationshipBlockCoordinatorProvider;
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -164,9 +164,11 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
     try {
       final result = await ref
           .read(
-            personaRelationshipBlockWriterProvider(AppUiSurfaces.blockedUsers),
+            personaRelationshipBlockCoordinatorProvider(
+              AppUiSurfaces.blockedUsers,
+            ),
           )
-          .unblockUser(UnblockUserCommand(targetPersonaId: targetPersonaId));
+          .unblockTarget(targetPersonaId);
       if (!mounted || _unblockAttemptByTarget[targetPersonaId] != attempt) {
         return;
       }

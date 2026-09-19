@@ -225,6 +225,16 @@ func Restore(snapshot Snapshot) (*ContentReaction, error) {
 	return aggregate, nil
 }
 
+// AdvanceFence 在状态不变时仍推进一次聚合版本。
+// 版本是写栅栏：新接纳的「保持不变」决定必须占住一个版本，否则旧离线请求
+// 能覆盖它。它不改变 reaction 值，因此不产生业务事件与计数贡献。
+func (r *ContentReaction) AdvanceFence(now time.Time) error {
+	if r == nil {
+		return fmt.Errorf("%w: aggregate is required", ErrInvalidState)
+	}
+	return r.advance(now)
+}
+
 func (r *ContentReaction) Set(value Value, now time.Time) (bool, error) {
 	if r == nil {
 		return false, fmt.Errorf("%w: aggregate is required", ErrInvalidState)

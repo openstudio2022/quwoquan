@@ -477,13 +477,10 @@ func TestListFollowing_Pagination(t *testing.T) {
 		createTestProfile(t, uid, "target_"+string(rune('a'+i)))
 		personaID := "ps_" + uid
 		createTestPersonaFull(t, uid+"_persona", uid, personaID, uid, "default", true)
-		doRequest(
-			t,
-			http.MethodPost,
-			"/user/personas/"+personaID+"/follow",
-			"",
-			authHeadersForPersona("paginator", "ps_paginator"),
-		)
+		seed := followPersonaForTest(t, "paginator", "ps_paginator", personaID)
+		if seed.Code != http.StatusOK {
+			t.Fatalf("seed follow %s: %d %s", personaID, seed.Code, seed.Body.String())
+		}
 	}
 
 	rec := doRequest(
@@ -781,13 +778,7 @@ func TestListFollowing_QueryFiltersWithinSubject(t *testing.T) {
 		); err != nil {
 			t.Fatalf("seed query userHandle: %v", err)
 		}
-		rec := doRequest(
-			t,
-			http.MethodPost,
-			"/user/personas/ps_"+uid+"/follow",
-			"",
-			authHeadersForPersona("query_owner", "ps_query_owner"),
-		)
+		rec := followPersonaForTest(t, "query_owner", "ps_query_owner", "ps_"+uid)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("seed follow %s: %d %s", uid, rec.Code, rec.Body.String())
 		}
@@ -857,13 +848,7 @@ func TestListFollowers_QueryFiltersWithinSubject(t *testing.T) {
 			"default",
 			true,
 		)
-		rec := doRequest(
-			t,
-			http.MethodPost,
-			"/user/personas/ps_fanned_owner/follow",
-			"",
-			authHeadersForPersona(uid, "ps_"+uid),
-		)
+		rec := followPersonaForTest(t, uid, "ps_"+uid, "ps_fanned_owner")
 		if rec.Code != http.StatusOK {
 			t.Fatalf("seed fan %s: %d %s", uid, rec.Code, rec.Body.String())
 		}

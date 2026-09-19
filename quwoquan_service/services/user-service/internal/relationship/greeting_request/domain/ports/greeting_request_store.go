@@ -21,6 +21,11 @@ type GreetingRequestStore interface {
 }
 
 // GreetingCommit 是 greeting state、幂等 receipt 与 outbox 事件的单事务提交单元。
+type GreetingBatchReader interface {
+	HasPendingBetweenMany(ctx context.Context, viewerPersonaID string, targetPersonaIDs []string) (map[string]bool, error)
+	HasRepliedBetweenMany(ctx context.Context, viewerPersonaID string, targetPersonaIDs []string) (map[string]bool, error)
+}
+
 type GreetingCommit struct {
 	Greeting       *model.GreetingRequest
 	Insert         bool

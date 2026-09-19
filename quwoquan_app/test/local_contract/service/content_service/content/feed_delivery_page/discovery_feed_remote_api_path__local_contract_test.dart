@@ -19,7 +19,7 @@ RemoteContentDiscoveryFeedQuery _contentFeedQuery(
   );
   return RemoteContentDiscoveryFeedQuery(
     client: client,
-    invocationContext: (clientPageId) => CloudOperationInvocationContext(
+    invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
       surfaceId: AppUiSurfaces.homeFeed.id,
       routeId: AppUiSurfaces.homeFeed.routeId,
       clientPageId: clientPageId,

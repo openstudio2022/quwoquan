@@ -28,13 +28,20 @@ func (p *ContentReactionOutboxPublisher) Publish(
 	if p == nil || p.publisher == nil {
 		return fmt.Errorf("ContentReaction outbox publisher is not configured")
 	}
-	if fact.EventID == "" || fact.EventType == "" {
+	if fact.EventID == "" || fact.EventType == "" || fact.PartitionKey == "" ||
+		fact.PartitionKey != fact.AggregateID ||
+		fact.PartitionID != reactionports.OutboxPartitionForKey(fact.PartitionKey) ||
+		fact.PartitionSequence <= 0 {
 		return fmt.Errorf("ContentReaction outbox fact identity is incomplete")
 	}
 	var payload map[string]any
 	if err := json.Unmarshal(fact.Payload, &payload); err != nil {
 		return fmt.Errorf("decode ContentReaction outbox payload: %w", err)
 	}
+	payload["eventId"] = fact.EventID
+	payload["partitionKey"] = fact.PartitionKey
+	payload["partitionId"] = fact.PartitionID
+	payload["partitionSequence"] = fact.PartitionSequence
 	return p.publisher.Publish(ctx, runtimemessaging.DomainEvent{
 		EventID:       fact.EventID,
 		Type:          fact.EventType,

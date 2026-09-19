@@ -30,8 +30,6 @@ type cleanupInventory struct {
 	commentRows       []commentClosureRow
 	commentIDs        []string
 	commentRefIDs     []string
-	reactionRows      []reactionClosureRow
-	reactionIDs       []string
 	activityRows      []activityClosureRow
 	activityDocIDs    []string
 	activityIDs       []string
@@ -124,15 +122,6 @@ func (store *MongoStore) collectCleanupInventory(
 		)
 	}
 	commentReferenceIDs := rowIDs(commentReferenceRows)
-	reactionRows, err := collectReactionClosureRows(
-		ctx,
-		store.db.Collection("content_reaction_aggregates"),
-		subjectIDs,
-		uniqueStrings(postIDs, commentIDs),
-	)
-	if err != nil {
-		return cleanupInventory{}, fmt.Errorf("collect closed-account ContentReactions: %w", err)
-	}
 	activityRows, err := collectActivityClosureRows(
 		ctx,
 		store.db.Collection("profile_interaction_activity_views"),
@@ -206,11 +195,6 @@ func (store *MongoStore) collectCleanupInventory(
 	for _, row := range commentRows {
 		affectedPostIDs = append(affectedPostIDs, row.PostID)
 	}
-	for _, row := range reactionRows {
-		if row.TargetKind == "post" {
-			affectedPostIDs = append(affectedPostIDs, row.TargetID)
-		}
-	}
 	for _, row := range shareRows {
 		affectedPostIDs = append(affectedPostIDs, row.PostID)
 	}
@@ -220,8 +204,6 @@ func (store *MongoStore) collectCleanupInventory(
 		commentRows:       commentRows,
 		commentIDs:        commentIDs,
 		commentRefIDs:     commentReferenceIDs,
-		reactionRows:      reactionRows,
-		reactionIDs:       rowIDs(reactionRows),
 		activityRows:      activityRows,
 		activityDocIDs:    rowIDs(activityRows),
 		activityIDs:       uniqueStrings(activityIDs),
@@ -390,9 +372,6 @@ func (store *MongoStore) deleteAggregateData(
 		{"comment outbox", "comment_outbox", bson.M{"aggregateId": bson.M{"$in": commentWorkIDs}}},
 		{"comment rate locks", "comment_author_rate_limit_locks", bson.M{"_id": bson.M{"$in": subjectIDs}}},
 		{"Comments", "comments", bson.M{"_id": bson.M{"$in": inventory.commentIDs}}},
-		{"ContentReaction receipts", "content_reaction_command_receipts", bson.M{"aggregateId": bson.M{"$in": inventory.reactionIDs}}},
-		{"ContentReaction outbox", "content_reaction_outbox", bson.M{"aggregateId": bson.M{"$in": inventory.reactionIDs}}},
-		{"ContentReactions", "content_reaction_aggregates", bson.M{"_id": bson.M{"$in": inventory.reactionIDs}}},
 		{"interaction read-fact outbox", "profile_interaction_read_fact_outbox", bson.M{"eventId": bson.M{"$in": inventory.readFactIDs}}},
 		{"interaction read facts", "profile_interaction_read_facts", bson.M{"_id": bson.M{"$in": inventory.readFactIDs}}},
 		{"outbound-share receipts", "outbound_share_receipts", bson.M{"fact._id": bson.M{"$in": inventory.shareFactIDs}}},

@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
+
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -275,14 +276,12 @@ class ProfileNotifier extends Notifier<ProfileState> {
       },
     );
     unawaited(
-      _loadIdentity(
-        identityGeneration,
-      ).whenComplete(() => _finishIdentityGeneration(identityDone)),
+      _loadIdentity(identityGeneration)
+          .whenComplete(() => _finishIdentityGeneration(identityDone)),
     );
     unawaited(
-      _loadWorks(
-        worksGeneration,
-      ).whenComplete(() => _finishWorksGeneration(worksDone)),
+      _loadWorks(worksGeneration)
+          .whenComplete(() => _finishWorksGeneration(worksDone)),
     );
     await Future.wait<void>(<Future<void>>[
       identityDone.future,
@@ -322,9 +321,8 @@ class ProfileNotifier extends Notifier<ProfileState> {
       },
     );
     unawaited(
-      _loadIdentity(
-        generation,
-      ).whenComplete(() => _finishIdentityGeneration(done)),
+      _loadIdentity(generation)
+          .whenComplete(() => _finishIdentityGeneration(done)),
     );
     await done.future;
   }
@@ -402,18 +400,18 @@ class ProfileNotifier extends Notifier<ProfileState> {
           ? profile.personaId
           : _userId;
       final bundleCapability = bundle.relationshipCapability;
-      final reconcileCap = ref
-          .read(relationshipCapabilityRepositoryProvider)
-          .reconcilesCapabilityWithSharedRelationshipState;
-      final sharedFollowing = ref
-          .read(userRelationshipStateProvider)
-          .isFollowing(personaId);
+      final relationshipState = ref.read(userRelationshipStateProvider);
+      final sharedKnown = relationshipState.hasRelationshipStateFor(personaId);
+      final sharedFollowing = relationshipState.isFollowing(personaId);
       final pendingFollowIntent = _pendingFollowIntent(personaId);
-      final seededFollowing = reconcileCap
-          ? pendingFollowIntent ?? sharedFollowing
-          : pendingFollowIntent ??
-                bundleCapability?.viewerFollowsTarget ??
-                sharedFollowing;
+      // A bundle is a page snapshot, not a writer. Once the shared relation is
+      // known (including a receipt-confirmed update), a late bundle must not
+      // overwrite it. Pending intent is only a display overlay.
+      final seededFollowing =
+          pendingFollowIntent ??
+          (sharedKnown
+              ? sharedFollowing
+              : bundleCapability?.viewerFollowsTarget ?? false);
       state = state.copyWith(
         profile: profile,
         isIdentityLoading: false,

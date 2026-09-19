@@ -103,7 +103,7 @@ RemoteAccountLifecycleCommandWriter _buildWriter(
 }) {
   return RemoteAccountLifecycleCommandWriter(
     client: buildRemoteApiPathOperationClient(log, responseFor: responseFor),
-    invocationContext: (clientPageId) => CloudOperationInvocationContext(
+    invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
       surfaceId: _closeAccountSurface.id,
       routeId: _closeAccountSurface.routeId,
       clientPageId: clientPageId,

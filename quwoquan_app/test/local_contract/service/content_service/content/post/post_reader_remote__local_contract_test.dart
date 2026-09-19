@@ -203,7 +203,7 @@ void main() {
       final post = result.post;
 
       expect(post.id, 'fixture_video_001');
-      expect(post.type, 'video');
+      expect(post.type, ContentType.video);
       expect(post.displayName, '契约旅行家');
       expect(post.avatarUrl, isNotEmpty);
       expect(post.videoUrl, isNotEmpty);
@@ -275,13 +275,22 @@ void main() {
           return <String, Object?>{
             'items': <Object?>[
               <String, Object?>{
-                'postId': 'post-1',
-                'contentType': 'image',
-                'authorId': 'author-1',
-                'mediaUrls': <String>['https://example.test/p.jpg'],
-                'likeCount': 0,
-                'commentCount': 0,
-                'shareCount': 0,
+                'envelope': <String, Object?>{
+                  'objectKind': 'post',
+                  'contentType': 'image',
+                  'presentationRecipe': 'cover_media_card',
+                  'openSurface': 'profile_works',
+                  'post': <String, Object?>{'postId': 'post-1'},
+                },
+                'post': <String, Object?>{
+                  'postId': 'post-1',
+                  'contentType': 'image',
+                  'authorId': 'author-1',
+                  'mediaUrls': <String>['https://example.test/p.jpg'],
+                  'likeCount': 0,
+                  'commentCount': 0,
+                  'shareCount': 0,
+                },
               },
             ],
             'nextCursor': 'cursor-2',
@@ -301,13 +310,11 @@ void main() {
 
       expect(captured.method, 'GET');
       expect(captured.url.path, '/content/personas/author-1/posts');
-      expect(captured.url.queryParameters, <String, String>{
-        'identity': 'work',
-        'type': 'image',
-        'visibility': 'public',
-        'cursor': 'cursor-1',
-        'limit': '10',
-      });
+      expect(captured.url.queryParameters.containsKey('identity'), isFalse);
+      expect(captured.url.queryParameters['type'], 'image');
+      expect(captured.url.queryParameters['visibility'], 'public');
+      expect(captured.url.queryParameters['cursor'], 'cursor-1');
+      expect(captured.url.queryParameters['limit'], '10');
       expect(captured.headers['X-Client-Page-Id'], 'content.user.posts');
       expect(
         captured.headers['X-Client-Operation-Id'],
@@ -363,7 +370,7 @@ GeneratedCloudOperationClient _client(
 }
 
 ContentPostReaderInvocationContextFactory _contextFor(AppUiSurface surface) {
-  return (clientPageId) => CloudOperationInvocationContext(
+  return (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
     surfaceId: surface.id,
     routeId: surface.routeId,
     clientPageId: clientPageId,

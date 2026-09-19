@@ -2,9 +2,13 @@ package reaction
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	reactionports "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction/ports"
 	"quwoquan_service/services/content-service/internal/content/post/application/outboxrelay"
@@ -12,12 +16,15 @@ import (
 
 const defaultReactionOutboxConsumer = "content-reaction-runtime-events"
 
-// OutboxRelay 是 ContentReaction transaction 之后唯一的事实投递路径。
+// OutboxRelay drains every claimed partition independently. A poison event or
+// gap stops only that partition and never advances its continuous checkpoint.
 type OutboxRelay struct {
 	reader      reactionports.OutboxReader
 	checkpoints reactionports.ProjectionCheckpointStore
 	publisher   reactionports.OutboxPublisher
 	consumer    string
+	ownerID     string
+	drainMu     sync.Mutex
 	supervisor  *outboxrelay.Supervisor
 }
 
@@ -32,38 +39,86 @@ func NewOutboxRelay(
 		consumer = defaultReactionOutboxConsumer
 	}
 	return &OutboxRelay{
-		reader:      reader,
-		checkpoints: checkpoints,
-		publisher:   publisher,
-		consumer:    consumer,
-		supervisor:  outboxrelay.NewSupervisor(consumer),
+		reader: reader, checkpoints: checkpoints, publisher: publisher,
+		consumer: consumer, ownerID: uuid.NewString(),
+		supervisor: outboxrelay.NewSupervisor(consumer),
 	}
 }
 
 func (r *OutboxRelay) Drain(ctx context.Context, limit int) (int, error) {
+	r.drainMu.Lock()
+	defer r.drainMu.Unlock()
 	if r == nil || r.reader == nil || r.checkpoints == nil || r.publisher == nil {
 		return 0, fmt.Errorf("content reaction outbox relay is not fully configured")
 	}
-	checkpoint, err := r.checkpoints.LoadCheckpoint(ctx, r.consumer)
+	leases, err := r.reader.ClaimOutboxPartitions(
+		ctx, r.consumer, r.ownerID, time.Minute,
+		reactionports.ContentReactionOutboxPartitionCount,
+	)
 	if err != nil {
-		return 0, fmt.Errorf("load content reaction checkpoint: %w", err)
+		return 0, fmt.Errorf("claim ContentReaction outbox partitions: %w", err)
 	}
-	facts, err := r.reader.ReadAfter(ctx, checkpoint, limit)
-	if err != nil {
-		return 0, fmt.Errorf("read content reaction outbox: %w", err)
+	if limit <= 0 || limit > 1000 {
+		limit = 100
 	}
-	for index, fact := range facts {
-		if strings.TrimSpace(fact.Checkpoint) == "" {
-			return index, fmt.Errorf("content reaction fact %q has no checkpoint", fact.EventID)
-		}
-		if err := r.publisher.Publish(ctx, fact); err != nil {
-			return index, fmt.Errorf("publish content reaction fact %q: %w", fact.EventID, err)
-		}
-		if err := r.checkpoints.SaveCheckpoint(ctx, r.consumer, fact.Checkpoint); err != nil {
-			return index, fmt.Errorf("save content reaction checkpoint for %q: %w", fact.EventID, err)
+	type partitionResult struct {
+		processed int
+		err       error
+	}
+	results := make(chan partitionResult, len(leases))
+	var workers sync.WaitGroup
+	for _, claimedLease := range leases {
+		lease := claimedLease
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			facts, readErr := r.reader.ReadOutboxPartition(ctx, lease, limit)
+			if readErr != nil {
+				results <- partitionResult{err: readErr}
+				return
+			}
+			processed := 0
+			for _, fact := range facts {
+				if fact.PartitionKey == "" || fact.PartitionID != lease.PartitionID ||
+					fact.PartitionSequence != lease.Sequence+1 {
+					results <- partitionResult{processed: processed, err: fmt.Errorf(
+						"ContentReaction partition %d has non-contiguous fact %q",
+						lease.PartitionID, fact.EventID,
+					)}
+					return
+				}
+				if publishErr := r.publisher.Publish(ctx, fact); publishErr != nil {
+					results <- partitionResult{processed: processed, err: fmt.Errorf(
+						"publish ContentReaction partition %d sequence %d fact %q: %w",
+						fact.PartitionID, fact.PartitionSequence, fact.EventID, publishErr,
+					)}
+					return
+				}
+				if advanceErr := r.checkpoints.AdvanceOutboxCheckpoint(ctx, lease, fact); advanceErr != nil {
+					if errors.Is(advanceErr, reactionports.ErrOutboxLeaseLost) {
+						results <- partitionResult{processed: processed}
+					} else {
+						results <- partitionResult{processed: processed, err: advanceErr}
+					}
+					return
+				}
+				lease.Sequence = fact.PartitionSequence
+				processed++
+			}
+			results <- partitionResult{processed: processed}
+		}()
+	}
+	workers.Wait()
+	close(results)
+	processed := 0
+	var firstErr error
+	for result := range results {
+		processed += result.processed
+		if firstErr == nil && result.err != nil {
+			firstErr = result.err
 		}
 	}
-	return len(facts), nil
+	return processed, firstErr
 }
 
 func (r *OutboxRelay) Run(ctx context.Context, interval time.Duration) error {

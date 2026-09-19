@@ -443,18 +443,53 @@ func assembleContentDomain(
 	if err := reactionStore.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ContentReaction indexes init failed: %w", err)
 	}
+	reactionStatisticsStore := reactionpersistence.NewMongoReactionStatisticsStore(db)
+	if err := reactionStatisticsStore.EnsureIndexes(ctx); err != nil {
+		return fmt.Errorf("ContentReaction statistics indexes init failed: %w", err)
+	}
+	reactionLifecycleAdapter := reactionpersistence.NewMongoLifecycleCleanupAdapter(reactionStore)
+	if err := reactionLifecycleAdapter.EnsureIndexes(ctx); err != nil {
+		return fmt.Errorf("ContentReaction lifecycle cleanup indexes init failed: %w", err)
+	}
+	reactionBasisSigner, err := loadReactionMutationBasisSigner(cfg, "content-service."+appEnv)
+	if err != nil {
+		return fmt.Errorf("ContentReaction mutation basis signer init failed: %w", err)
+	}
 	reactionServiceCore = reactionapp.NewService(
 		reactionapp.BindDataPorts(
 			reactionStore,
 			reactionpersistence.NewReactionTargetReader(commentDataAdapter, commentDataAdapter),
+			reactionStatisticsStore,
 		),
+		reactionBasisSigner,
+	).WithActorLifecycleWriteFence(reactionLifecycleAdapter)
+	reactionLifecycleCleanup := reactionapp.NewLifecycleCleanupService(
+		reactionServiceCore, reactionLifecycleAdapter, reactionLifecycleAdapter,
+		reactionLifecycleAdapter, reactionLifecycleAdapter,
 	)
+	startCommentOutboxRelay(
+		ctx, workers, commentDataAdapter, commentDataAdapter,
+		reactionapp.NewCommentDeletionConsumer(reactionLifecycleCleanup),
+		"content-comment-reaction-lifecycle", "content_comment_reaction_lifecycle",
+		healthChecker, logger,
+	)
+	personaRetiredConsumer, err := reactionapp.NewPersonaRetiredConsumer(
+		router.Scene("general"), reactionLifecycleCleanup,
+		"content-service-"+instanceID, logger,
+	)
+	if err != nil {
+		return fmt.Errorf("PersonaRetired ContentReaction consumer init failed: %w", err)
+	}
+	if err := personaRetiredConsumer.EnsureGroup(ctx); err != nil {
+		return fmt.Errorf("PersonaRetired ContentReaction consumer group init failed: %w", err)
+	}
+	workers.Add(personaRetiredConsumer.Run)
 	startPostOutboxRelay(
 		ctx,
 		workers,
 		store,
 		store,
-		reactionapp.NewPostDeletionConsumer(reactionServiceCore, reactionStore),
+		reactionapp.NewPostDeletionConsumer(reactionServiceCore, reactionStore, reactionStore),
 		"content-post-deletion-reaction-lifecycle",
 		"content_post_deletion_reaction_lifecycle",
 		healthChecker,
@@ -498,12 +533,20 @@ func assembleContentDomain(
 		workers,
 		reactionStore,
 		reactionStore,
-		reactionapp.NewActiveReactionCountProjector(reactionStore, mongoStore),
-		"content-reaction-post-like-count",
-		"content_reaction_post_like_count",
+		reactionStatisticsStore,
+		"content-reaction-statistics-ledger",
+		"content_reaction_statistics_ledger",
 		healthChecker,
 		logger,
 	)
+	reactionStatisticsWorker := reactionapp.NewStatisticsRollupWorker(
+		reactionStatisticsStore, time.Second, 5*time.Second,
+	)
+	workers.Add(func(workerCtx context.Context) {
+		if err := reactionStatisticsWorker.Run(workerCtx); err != nil && workerCtx.Err() == nil {
+			logger.Error("ContentReaction statistics rollup stopped", "error", err)
+		}
+	})
 	// hotScore 投影：评论赞踩与回复事实驱动的确定性排序分（sort=hot 真相源）。
 	commentHotScoreProjector := commentapp.NewCommentHotScoreProjectionHandler(
 		commentDataAdapter,
@@ -640,6 +683,7 @@ func assembleContentDomain(
 	if err := subjectClosureGuard.Bind(guard); err != nil {
 		return fmt.Errorf("subject-closure guard binding failed: %w", err)
 	}
+	accountReactionCleanup := accountclosure.NewContentReactionLifecycleCleanup(reactionLifecycleCleanup)
 	// Each derived read model and the external event bus owns an independent
 	// durable checkpoint. A late sink outage therefore cannot replay sinks
 	// that already converged, and a failed sink never gets acknowledged by a
@@ -807,6 +851,7 @@ func assembleContentDomain(
 		accountClosureSearch,
 		mediaRuntime.mediaObjectGateway,
 		accountRestrictionProjection,
+		accountReactionCleanup,
 	)
 	if err != nil {
 		return fmt.Errorf("UserAccountClosed runtime assembly failed: %w", err)

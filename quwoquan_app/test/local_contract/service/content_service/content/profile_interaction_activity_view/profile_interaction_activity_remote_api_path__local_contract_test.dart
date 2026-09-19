@@ -52,7 +52,7 @@ void main() {
       );
       activityQuery = RemoteProfileInteractionActivityQuery(
         client: client,
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.profileHome.id,
           routeId: AppUiSurfaces.profileHome.routeId,
           clientPageId: clientPageId,

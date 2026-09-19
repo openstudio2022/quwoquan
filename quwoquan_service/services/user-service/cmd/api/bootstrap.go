@@ -189,6 +189,10 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 
 	// 5. Stores
 	profileStore := persistence.NewPgProfileStore(pgPool)
+	accountCreationRecoveryStore, err := useraccountpersistence.NewAccountCreationRecoveryPostgresStore(pgPool)
+	if err != nil {
+		return fmt.Errorf("Account creation recovery store init failed: %v", err)
+	}
 	personaStore := userpersistence.NewPgPersonaStore(pgPool)
 	invitationStore, err := invitationpersistence.NewPostgresStore(pgPool)
 	if err != nil {
@@ -210,6 +214,9 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 		return fmt.Errorf("user-service UserSettings store init failed: %v", err)
 	}
 	relationshipStore := relationshippersistence.NewPgPersonaRelationshipStore(pgPool)
+	if err := relationshipStore.ActivateFollowPolicy(ctx, relationshippersistence.FollowPolicyActivation{Revision: cfg.RelationshipPolicy.Revision, MaxFollowingPerPersona: cfg.RelationshipPolicy.MaxFollowingPerPersona, ConfigDigest: cfg.RelationshipPolicy.ConfigDigest}); err != nil {
+		return fmt.Errorf("PersonaRelationship policy activation failed: %w", err)
+	}
 	greetingStore := greetingpersistence.NewPgGreetingStore(pgPool)
 	credentialStore, err := credentialpersistence.NewPostgresStore(pgPool)
 	if err != nil {
@@ -288,7 +295,7 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 	}
 
 	// 6. Caches
-	profileCache := usercache.NewProfileCache(redisClient)
+	profileCache := usercache.NewProfileCache(redisClient).WithTTL(time.Duration(cfg.ProfileCache.TTLSeconds) * time.Second)
 	// The domain MQ publisher remains the immediate profile-event path. Ordinary
 	// profile search projection is relayed from its own durable PostgreSQL
 	// checkpoint below; it must never run in this write-path fan-out.
@@ -401,6 +408,12 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 		pgPool,
 		profileCache,
 	)
+	relationshipStatisticsRollup := relationshipprojection.NewStatisticsRollup(pgPool)
+	asm.Workers.Add(func(workerCtx context.Context) {
+		if err := relationshipStatisticsRollup.Run(workerCtx, time.Second); err != nil && workerCtx.Err() == nil {
+			log.Printf("ERROR: persona relationship statistics rollup stopped: %v", err)
+		}
+	})
 	asm.Workers.Add(func(workerCtx context.Context) {
 		if err := relationshipCounterReconciler.Run(
 			workerCtx,
@@ -413,11 +426,47 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 			)
 		}
 	})
+	// Creator 公开身份与 Content active fence 必须在关系服务之前装配：关注目标
+	// 解析与资料页读取共用同一身份来源，不各自维护一份 Creator 判定。
+	var creatorCandidateStore *creatorpersistence.CreatorReleaseCandidateStore
+	var creatorRuntimeStore *creatorpersistence.CreatorRuntimeProfileReader
+	var creatorPublicIdentityReader userrepo.CreatorRuntimeProfileReader
+	// Creator release candidate 只按 Content active tuple exact fence 可见。未注入
+	// Content 库地址时保持 fail-closed（读不到 fence 即无 release Creator 可读），
+	// 而不是回退到 User 自己的 pointer 或旧 Persona。
+	var contentFenceReader userrepo.ContentReleaseFenceReader = userrepo.UnavailableContentReleaseFenceReader{}
+	if mongoDB != nil {
+		creatorCandidateStore = creatorpersistence.NewCreatorReleaseCandidateStore(mongoDB)
+		creatorRuntimeStore = creatorpersistence.NewCreatorRuntimeProfileReader(mongoDB)
+		creatorPublicIdentityReader = usercomposition.NewCreatorRuntimeProfileAdapter(creatorCandidateStore)
+		if strings.TrimSpace(cfg.ContentService.MongoURI) != "" {
+			// 第二条 Mongo 连接不得复用 "mongodb" 检查名：health registry 对重名登记
+			// 记永久失败，会让 user-service 永远不 ready（alpha 冷启动实测）。
+			contentDatabase, databaseErr := asm.MongoNamed("content_release_fence_mongodb", servicekit.MongoConfig{
+				URI:      cfg.ContentService.MongoURI,
+				Database: nonEmptyContentDatabase(cfg.ContentService.MongoDatabase),
+			})
+			if databaseErr != nil {
+				return fmt.Errorf("Content active release database failed: %w", databaseErr)
+			}
+			contentFenceReader = creatorpersistence.NewContentReleaseFenceReader(contentDatabase, appEnv, "qwq_data")
+		}
+	}
+	relationshipBasisSigner, err := loadRelationshipMutationBasisSigner(cfg, "user-service."+appEnv)
+	if err != nil {
+		return fmt.Errorf("PersonaRelationship mutation basis signer init failed: %w", err)
+	}
 	relationshipService := relationshipapp.NewPersonaRelationshipService(
 		relationshipStore,
 		personaStore,
 		profileCache,
 		greetingStore,
+		relationshipapp.WithTargetResolver(relationshipapp.NewRelationshipTargetResolver(
+			personaStore,
+			creatorPublicIdentityReader,
+			contentFenceReader,
+		)),
+		relationshipapp.WithMutationBasis(relationshipBasisSigner, relationshipStore),
 	)
 	chatServiceBaseURL := asm.Identity.ServiceBaseURL("chat-service")
 	if chatServiceBaseURL == "" {
@@ -482,34 +531,12 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 			log.Printf("ERROR: greeting outbox relay stopped: %v", err)
 		}
 	})
-	var creatorCandidateStore *creatorpersistence.CreatorReleaseCandidateStore
-	var creatorRuntimeStore *creatorpersistence.CreatorRuntimeProfileReader
-	if mongoDB != nil {
-		creatorCandidateStore = creatorpersistence.NewCreatorReleaseCandidateStore(mongoDB)
-		creatorRuntimeStore = creatorpersistence.NewCreatorRuntimeProfileReader(mongoDB)
-	}
 	personaOptions := make([]application.PersonaServiceOption, 0, 1)
 	if creatorCandidateStore != nil {
-		// Creator release candidate 只按 Content active tuple exact fence 可见。未注入
-		// Content 库地址时保持 fail-closed（读不到 fence 即无 release Creator 可读），
-		// 而不是回退到 User 自己的 pointer 或旧 Persona。
-		var contentFenceReader userrepo.ContentReleaseFenceReader = userrepo.UnavailableContentReleaseFenceReader{}
-		if strings.TrimSpace(cfg.ContentService.MongoURI) != "" {
-			// 第二条 Mongo 连接不得复用 "mongodb" 检查名：health registry 对重名登记
-			// 记永久失败，会让 user-service 永远不 ready（alpha 冷启动实测）。
-			contentDatabase, databaseErr := asm.MongoNamed("content_release_fence_mongodb", servicekit.MongoConfig{
-				URI:      cfg.ContentService.MongoURI,
-				Database: nonEmptyContentDatabase(cfg.ContentService.MongoDatabase),
-			})
-			if databaseErr != nil {
-				return fmt.Errorf("Content active release database failed: %w", databaseErr)
-			}
-			contentFenceReader = creatorpersistence.NewContentReleaseFenceReader(contentDatabase, appEnv, "qwq_data")
-		}
 		personaOptions = append(
 			personaOptions,
 			application.WithCreatorRuntimeProfiles(
-				usercomposition.NewCreatorRuntimeProfileAdapter(creatorCandidateStore),
+				creatorPublicIdentityReader,
 				contentFenceReader,
 			),
 		)
@@ -681,6 +708,7 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 			personaCommandStore,
 			personaProfileProjector,
 		),
+		application.WithAccountCreationRecoveryStore(accountCreationRecoveryStore),
 		application.WithDeviceRegistration(deviceRegistrationCommands),
 		application.WithConsentRecordStore(consentRecordStore),
 		application.WithFederatedPhoneBindingTickets(credentialStore),

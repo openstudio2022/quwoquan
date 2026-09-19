@@ -10,10 +10,13 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrRelationshipFollowBlocked  = errors.New("USER.RELATIONSHIP.follow_blocked")
-	ErrRelationshipInvalidPair    = errors.New("USER.RELATIONSHIP.invalid_pair")
-	ErrRelationshipTargetNotFound = errors.New("USER.RELATIONSHIP.target_not_found")
-	ErrRelationshipActorForbidden = errors.New("USER.RELATIONSHIP.actor_forbidden")
+	ErrRelationshipFollowBlocked          = errors.New("USER.RELATIONSHIP.follow_blocked")
+	ErrRelationshipInvalidPair            = errors.New("USER.RELATIONSHIP.invalid_pair")
+	ErrRelationshipTargetNotFound         = errors.New("USER.RELATIONSHIP.target_not_found")
+	ErrRelationshipActorForbidden         = errors.New("USER.RELATIONSHIP.actor_forbidden")
+	ErrRelationshipCommandKeyRequired     = errors.New("USER.RELATIONSHIP.command_key_required")
+	ErrRelationshipFollowingLimitExceeded = errors.New("USER.RELATIONSHIP.following_limit_exceeded")
+	ErrRelationshipCommandConflict        = errors.New("USER.RELATIONSHIP.command_conflict")
 )
 
 // AppErrorFromRelationshipFollowBlocked returns *AppError for USER.RELATIONSHIP.follow_blocked (user_message from errors.yaml).
@@ -38,4 +41,22 @@ func AppErrorFromRelationshipTargetNotFound(debugMessage string) *rerrors.AppErr
 func AppErrorFromRelationshipActorForbidden(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRelationshipActorForbidden.Error()))
 	return rerrors.NewAppError(code, "当前身份无法执行该操作", debugMessage).WithMetadata("actor_forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromRelationshipCommandKeyRequired returns *AppError for USER.RELATIONSHIP.command_key_required (user_message from errors.yaml).
+func AppErrorFromRelationshipCommandKeyRequired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrRelationshipCommandKeyRequired.Error()))
+	return rerrors.NewAppError(code, "请求缺少幂等标识，请重试", debugMessage).WithMetadata("command_key_required", 400).WithRecoveryDirective("retry", "inlineCard", 0)
+}
+
+// AppErrorFromRelationshipFollowingLimitExceeded returns *AppError for USER.RELATIONSHIP.following_limit_exceeded (user_message from errors.yaml).
+func AppErrorFromRelationshipFollowingLimitExceeded(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrRelationshipFollowingLimitExceeded.Error()))
+	return rerrors.NewAppError(code, "关注数量已达上限，请先取消部分关注", debugMessage).WithMetadata("following_limit_exceeded", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromRelationshipCommandConflict returns *AppError for USER.RELATIONSHIP.command_conflict (user_message from errors.yaml).
+func AppErrorFromRelationshipCommandConflict(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrRelationshipCommandConflict.Error()))
+	return rerrors.NewAppError(code, "关系已被其他操作更新，请刷新后重试", debugMessage).WithMetadata("command_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }

@@ -134,7 +134,14 @@ void main() {
                 child: HomeMultiFormFeed(
                   isDark: false,
                   channelId: 'recommend',
-                  onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
+                  onUserTap: (
+                    _, {
+                    avatarAccessMode,
+                    avatarAssetId,
+                    avatarUrl,
+                    backgroundUrl,
+                    displayName,
+                  }) {},
                 ),
               ),
             ),

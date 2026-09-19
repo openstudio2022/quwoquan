@@ -16,6 +16,50 @@ configs:
   sensitive: true
   default: ''
   description: 仓外环境变量名引用，内容为 keyId 到 base64 密钥材料映射；值不进入配置快照/日志。旧验证材料保留至少60秒且无clock skew宽限，紧急撤销移除对应key，重启生效；未配置或解码失败拒绝装配。
+- key: sys.user-service.relationshipMutationBasis.activeKeyId
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: relationship-v1
+  description: PersonaRelationship mutation basis 独立用途签名 key identity。
+- key: sys.user-service.relationshipMutationBasis.keyringSecretRef
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
+  default: ''
+  description: 仓外环境变量名引用，内容为 keyId 到 base64 HMAC 密钥映射；不得复用 access-token 或 collection authority 密钥。
+- key: sys.user-service.profileCache.ttlSeconds
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 600
+- key: sys.user-service.relationshipPolicy.revision
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 1
+- key: sys.user-service.relationshipPolicy.maxFollowingPerPersona
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 1000
+- key: sys.user-service.relationshipPolicy.configDigest
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 34110222c83503206466e095146a07aeaf59fb65ec73765ade97fddf15575118
 - key: sys.user-service.es.embeddingDims
   type: int
   scope: workload

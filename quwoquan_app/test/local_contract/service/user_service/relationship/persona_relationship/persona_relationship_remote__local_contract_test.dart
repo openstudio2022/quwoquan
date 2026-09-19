@@ -23,122 +23,120 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('RemotePersonaRelationshipFacet generated HTTP contract', () {
-    test(
-      'block/list/capability/unblock keep exact wire and stable command intents',
-      () async {
-        final captured = <http.Request>[];
-        var blockResponses = 0;
-        var unblockResponses = 0;
-        var generatedKeys = 0;
-        final facet = RemotePersonaRelationshipFacet(
-          client: _client((request) {
-            captured.add(request);
-            final operationId = request.headers['X-Client-Operation-Id'];
-            return switch (operationId) {
-              AppCloudOperationIds.userPersonaRelationshipBlockUser =>
-                _blockResult(
-                  targetPersonaId: ++blockResponses == 1
-                      ? 'persona-mismatch'
-                      : 'persona-target',
-                  blocked: true,
-                  replay: blockResponses > 1,
-                ),
-              AppCloudOperationIds.userPersonaRelationshipListBlockedUsers =>
-                _blockedPage(),
-              AppCloudOperationIds
-                  .userPersonaRelationshipGetRelationshipCapability =>
-                _capability(),
-              AppCloudOperationIds.userPersonaRelationshipUnblockUser =>
-                _blockResult(
-                  targetPersonaId: 'persona-target',
-                  blocked: ++unblockResponses == 1,
-                  replay: unblockResponses > 1,
-                ),
-              _ => throw StateError('unexpected operation: $operationId'),
-            };
-          }),
-          invocationContext: _context,
-          idempotencyKeyFactory: () {
-            generatedKeys += 1;
-            return generatedKeys == 1
-                ? 'block-intent-contract'
-                : 'unblock-intent-contract';
-          },
-        );
+    test('block/list/capability/unblock keep exact wire and stable command intents', () async {
+      final captured = <http.Request>[];
+      var blockResponses = 0;
+      var unblockResponses = 0;
+      var generatedKeys = 0;
+      final facet = RemotePersonaRelationshipFacet(
+        client: _client((request) {
+          captured.add(request);
+          final operationId = request.headers['X-Client-Operation-Id'];
+          return switch (operationId) {
+            AppCloudOperationIds.userPersonaRelationshipBlockUser =>
+              _blockResult(
+                targetPersonaId: ++blockResponses == 1
+                    ? 'persona-mismatch'
+                    : 'persona-target',
+                blocked: true,
+                replay: blockResponses > 1,
+              ),
+            AppCloudOperationIds.userPersonaRelationshipListBlockedUsers =>
+              _blockedPage(),
+            AppCloudOperationIds
+                .userPersonaRelationshipGetRelationshipCapability =>
+              _capability(),
+            AppCloudOperationIds.userPersonaRelationshipUnblockUser =>
+              _blockResult(
+                targetPersonaId: 'persona-target',
+                blocked: ++unblockResponses == 1,
+                replay: unblockResponses > 1,
+              ),
+            _ => throw StateError('unexpected operation: $operationId'),
+          };
+        }),
+        invocationContext: _context,
+        idempotencyKeyFactory: () {
+          generatedKeys += 1;
+          return generatedKeys == 1
+              ? 'block-intent-contract'
+              : 'unblock-intent-contract';
+        },
+      );
 
-        final blockCommand = BlockUserCommand(
-          targetPersonaId: ' persona-target ',
-        );
-        await expectLater(facet.blockUser(blockCommand), _invalidResponse());
-        final blocked = await facet.blockUser(blockCommand);
-        final page = await facet.listBlockedUsers(
-          ListBlockedUsersQuery(cursor: 'cursor-1', limit: 2),
-        );
-        final capability = await facet.getRelationshipCapability(
-          GetRelationshipCapabilityQuery(targetPersonaId: ' persona-target '),
-        );
-        final unblockCommand = UnblockUserCommand(
-          targetPersonaId: ' persona-target ',
-        );
-        await expectLater(
-          facet.unblockUser(unblockCommand),
-          _invalidResponse(),
-        );
-        final unblocked = await facet.unblockUser(unblockCommand);
+      final blockCommand = BlockUserCommand(
+        targetPersonaId: ' persona-target ',
+        mutationBasis: 'test-basis',
+        expectedVersion: 0,
+      );
+      await expectLater(facet.blockUser(blockCommand), _invalidResponse());
+      final blocked = await facet.blockUser(blockCommand);
+      final page = await facet.listBlockedUsers(
+        ListBlockedUsersQuery(cursor: 'cursor-1', limit: 2),
+      );
+      final capability = await facet.getRelationshipCapability(
+        GetRelationshipCapabilityQuery(targetPersonaId: ' persona-target '),
+      );
+      final unblockCommand = UnblockUserCommand(
+        targetPersonaId: ' persona-target ',
+        mutationBasis: 'test-basis',
+        expectedVersion: 0,
+      );
+      await expectLater(facet.unblockUser(unblockCommand), _invalidResponse());
+      final unblocked = await facet.unblockUser(unblockCommand);
 
-        expect(blocked.targetPersonaId, 'persona-target');
-        expect(blocked.blocked, isTrue);
-        expect(blocked.idempotentReplay, isTrue);
-        expect(page.items.single.targetPersonaId, 'persona-target');
-        expect(page.items.single.displayName, 'Target Persona');
-        expect(page.nextCursor, 'cursor-2');
-        expect(capability.viewerPersonaId, 'persona-viewer');
-        expect(capability.targetPersonaId, 'persona-target');
-        expect(capability.isBlocked, isTrue);
-        expect(unblocked.targetPersonaId, 'persona-target');
-        expect(unblocked.blocked, isFalse);
-        expect(unblocked.idempotentReplay, isTrue);
-        expect(generatedKeys, 2);
+      expect(blocked.targetPersonaId, 'persona-target');
+      expect(blocked.blocked, isTrue);
+      expect(blocked.idempotentReplay, isTrue);
+      expect(page.items.single.targetPersonaId, 'persona-target');
+      expect(page.items.single.displayName, 'Target Persona');
+      expect(page.nextCursor, 'cursor-2');
+      expect(capability.viewerPersonaId, 'persona-viewer');
+      expect(capability.targetPersonaId, 'persona-target');
+      expect(capability.isBlocked, isTrue);
+      expect(unblocked.targetPersonaId, 'persona-target');
+      expect(unblocked.blocked, isFalse);
+      expect(unblocked.idempotentReplay, isTrue);
+      expect(generatedKeys, 2);
 
-        _expectCommand(
-          captured[0],
-          method: 'POST',
-          operationId: AppCloudOperationIds.userPersonaRelationshipBlockUser,
-          idempotencyKey: 'block-intent-contract',
-        );
-        _expectCommand(
-          captured[1],
-          method: 'POST',
-          operationId: AppCloudOperationIds.userPersonaRelationshipBlockUser,
-          idempotencyKey: 'block-intent-contract',
-        );
-        _expectQuery(
-          captured[2],
-          path: '/user/blocked',
-          operationId:
-              AppCloudOperationIds.userPersonaRelationshipListBlockedUsers,
-          query: const <String, String>{'cursor': 'cursor-1', 'limit': '2'},
-        );
-        _expectQuery(
-          captured[3],
-          path: '/user/personas/persona-target/relationship/capability',
-          operationId: AppCloudOperationIds
-              .userPersonaRelationshipGetRelationshipCapability,
-        );
-        _expectCommand(
-          captured[4],
-          method: 'DELETE',
-          operationId: AppCloudOperationIds.userPersonaRelationshipUnblockUser,
-          idempotencyKey: 'unblock-intent-contract',
-        );
-        _expectCommand(
-          captured[5],
-          method: 'DELETE',
-          operationId: AppCloudOperationIds.userPersonaRelationshipUnblockUser,
-          idempotencyKey: 'unblock-intent-contract',
-        );
-      },
-    );
+      _expectCommand(
+        captured[0],
+        method: 'POST',
+        operationId: AppCloudOperationIds.userPersonaRelationshipBlockUser,
+        idempotencyKey: 'block-intent-contract',
+      );
+      _expectCommand(
+        captured[1],
+        method: 'POST',
+        operationId: AppCloudOperationIds.userPersonaRelationshipBlockUser,
+        idempotencyKey: 'block-intent-contract',
+      );
+      _expectQuery(
+        captured[2],
+        path: '/user/blocked',
+        operationId:
+            AppCloudOperationIds.userPersonaRelationshipListBlockedUsers,
+        query: const <String, String>{'cursor': 'cursor-1', 'limit': '2'},
+      );
+      _expectQuery(
+        captured[3],
+        path: '/user/personas/persona-target/relationship/capability',
+        operationId: AppCloudOperationIds
+            .userPersonaRelationshipGetRelationshipCapability,
+      );
+      _expectCommand(
+        captured[4],
+        method: 'DELETE',
+        operationId: AppCloudOperationIds.userPersonaRelationshipUnblockUser,
+        idempotencyKey: 'unblock-intent-contract',
+      );
+      _expectCommand(
+        captured[5],
+        method: 'DELETE',
+        operationId: AppCloudOperationIds.userPersonaRelationshipUnblockUser,
+        idempotencyKey: 'unblock-intent-contract',
+      );
+    });
 
     test(
       'blank command metadata and missing persona fail before transport',
@@ -156,12 +154,20 @@ void main() {
         );
 
         expect(
-          () => BlockUserCommand(targetPersonaId: '  '),
+          () => BlockUserCommand(
+            targetPersonaId: '  ',
+            mutationBasis: 'test-basis',
+            expectedVersion: 0,
+          ),
           throwsArgumentError,
         );
         await expectLater(
           explicitFacet.blockUserWithIntent(
-            BlockUserCommand(targetPersonaId: 'persona-target'),
+            BlockUserCommand(
+              targetPersonaId: 'persona-target',
+              mutationBasis: 'test-basis',
+              expectedVersion: 0,
+            ),
             idempotencyKey: '  ',
           ),
           _invalidResponse(),
@@ -175,15 +181,20 @@ void main() {
               blocked: true,
             );
           }),
-          invocationContext: (clientPageId) => CloudOperationInvocationContext(
-            surfaceId: 'blockedUsers',
-            clientPageId: clientPageId,
-            actor: const CloudOperationActorContext(accountId: 'account-1'),
-          ),
+          invocationContext: (clientPageId, {idempotencyKey}) =>
+              CloudOperationInvocationContext(
+                surfaceId: 'blockedUsers',
+                clientPageId: clientPageId,
+                actor: const CloudOperationActorContext(accountId: 'account-1'),
+              ),
         );
         await expectLater(
           missingActorFacet.blockUser(
-            BlockUserCommand(targetPersonaId: 'persona-target'),
+            BlockUserCommand(
+              targetPersonaId: 'persona-target',
+              mutationBasis: 'test-basis',
+              expectedVersion: 0,
+            ),
           ),
           _invalidResponse(),
         );

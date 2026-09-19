@@ -25,6 +25,8 @@ class UserRequestPageIds {
     'DismissContactDiscovery': 'user.dismiss.contact.discovery',
     'EvaluatePersonaGatheringHostAuthority':
         'user.evaluate.persona.gathering.host.authority',
+    'FinalizeExpiredRelationshipCommand':
+        'user.finalize.expired.relationship.command',
     'FollowSubject': 'user.follow.subject',
     'FollowUser': 'user.follow',
     'GenerateInvitation': 'user.generate.invitation',
@@ -45,6 +47,7 @@ class UserRequestPageIds {
     'GetProfileUpdateProposal': 'user.get.profile.update.proposal',
     'GetRelationship': 'user.relationship',
     'GetRelationshipCapability': 'user.get.relationship.capability',
+    'GetRelationshipMutationBasis': 'user.get.relationship.mutation.basis',
     'GetUserHomepageBundle': 'user.get.user.homepage.bundle',
     'GetUserInterestProfile': 'user.get.user.interest.profile',
     'GetUserProfile': 'user.profile',
@@ -74,6 +77,7 @@ class UserRequestPageIds {
     'PullUserSync': 'user.pull.user.sync',
     'ReadAccountSecurity': 'user.read.account.security',
     'ReadCreatorSearchCandidate': 'user.read.creator.search.candidate',
+    'RecoverRelationshipCommand': 'user.recover.relationship.command',
     'RefreshToken': 'user.refresh.token',
     'RejectProposal': 'user.reject.proposal',
     'RemoveDevicePushEndpoint': 'user.remove.device.push.endpoint',
@@ -132,6 +136,8 @@ class UserRequestPageIds {
       'user.dismiss.contact.discovery';
   static const String evaluatePersonaGatheringHostAuthority =
       'user.evaluate.persona.gathering.host.authority';
+  static const String finalizeExpiredRelationshipCommand =
+      'user.finalize.expired.relationship.command';
   static const String followSubject = 'user.follow.subject';
   static const String followUser = 'user.follow';
   static const String generateInvitation = 'user.generate.invitation';
@@ -158,6 +164,8 @@ class UserRequestPageIds {
   static const String getRelationship = 'user.relationship';
   static const String getRelationshipCapability =
       'user.get.relationship.capability';
+  static const String getRelationshipMutationBasis =
+      'user.get.relationship.mutation.basis';
   static const String getUserHomepageBundle = 'user.get.user.homepage.bundle';
   static const String getUserInterestProfile = 'user.get.user.interest.profile';
   static const String getUserProfile = 'user.profile';
@@ -194,6 +202,8 @@ class UserRequestPageIds {
   static const String readAccountSecurity = 'user.read.account.security';
   static const String readCreatorSearchCandidate =
       'user.read.creator.search.candidate';
+  static const String recoverRelationshipCommand =
+      'user.recover.relationship.command';
   static const String refreshToken = 'user.refresh.token';
   static const String rejectProposal = 'user.reject.proposal';
   static const String removeDevicePushEndpoint =

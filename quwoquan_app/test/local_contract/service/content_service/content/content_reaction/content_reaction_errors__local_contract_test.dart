@@ -43,10 +43,7 @@ void main() {
         requestPath: '/content/reactions',
       );
 
-      expect(
-        exception.code,
-        'CONTENT.USER.content_reaction_target_not_found',
-      );
+      expect(exception.code, 'CONTENT.USER.content_reaction_target_not_found');
       expect(exception.domainErrorCode?.domain, 'content');
       expect(
         exception.domainErrorCode?.value,

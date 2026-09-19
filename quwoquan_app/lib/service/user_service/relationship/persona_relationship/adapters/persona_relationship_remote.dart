@@ -14,7 +14,8 @@ final class RemotePersonaRelationshipFacet
         BlockCommandWriter,
         BlockedListQuery,
         RelationshipCapabilityQuery,
-        PersonaRelationshipBlockIntentCommandWriter {
+        PersonaRelationshipBlockIntentCommandWriter,
+        PersonaRelationshipBlockCoordinator {
   RemotePersonaRelationshipFacet({
     required this.client,
     required this.invocationContext,
@@ -27,6 +28,37 @@ final class RemotePersonaRelationshipFacet
   final Map<String, String> _pendingCommandIntentKeys = <String, String>{};
 
   static const int _maxRetainedCommandIntents = 8;
+
+  Future<PersonaRelationshipMutationBasisSlice> getMutationBasis(
+    String targetPersonaId,
+  ) => client.userPersonaRelationshipGetRelationshipMutationBasis(
+    GetRelationshipCapabilityQuery(targetPersonaId: targetPersonaId),
+    context: invocationContext(UserRequestPageIds.getRelationshipMutationBasis),
+  );
+
+  @override
+  Future<BlockCommandResult> blockTarget(String targetPersonaId) async {
+    final basis = await getMutationBasis(targetPersonaId);
+    return blockUser(
+      BlockUserCommand(
+        targetPersonaId: basis.targetPersonaId,
+        mutationBasis: basis.mutationBasis,
+        expectedVersion: basis.expectedVersion,
+      ),
+    );
+  }
+
+  @override
+  Future<BlockCommandResult> unblockTarget(String targetPersonaId) async {
+    final basis = await getMutationBasis(targetPersonaId);
+    return unblockUser(
+      UnblockUserCommand(
+        targetPersonaId: basis.targetPersonaId,
+        mutationBasis: basis.mutationBasis,
+        expectedVersion: basis.expectedVersion,
+      ),
+    );
+  }
 
   @override
   Future<BlockCommandResult> blockUser(BlockUserCommand command) {

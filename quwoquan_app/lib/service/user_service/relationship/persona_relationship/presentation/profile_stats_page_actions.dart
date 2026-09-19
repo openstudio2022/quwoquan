@@ -123,17 +123,14 @@ extension _ProfileStatsPageActions on _ProfileStatsPageState {
         if (!shouldFollow && !before.canUnfollow) {
           throw StateError('UnfollowUser is not allowed');
         }
-        final writer = ref.read(
-          personaRelationshipCommandWriterProvider(AppUiSurfaces.profileStats),
-        );
-        if (shouldFollow) {
-          await writer.follow(
-            targetPersonaId,
-            sourceSurfaceId: AppUiSurfaces.profileStats.id,
-          );
-        } else {
-          await writer.unfollow(targetPersonaId);
-        }
+        await ref
+            .read(userRelationshipStateProvider.notifier)
+            .setFollowingWithSync(
+              targetPersonaId,
+              currentFollowing: before.viewerFollowsTarget,
+              shouldFollow: shouldFollow,
+              sourceSurface: AppUiSurfaces.profileStats,
+            );
       }
       final confirmed = await capabilityRepository
           .getCapability(targetPersonaId)

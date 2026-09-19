@@ -4,7 +4,7 @@
 
 > Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-> 设计引用：[L2 DEC-001](../design.md#dec-001)
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -172,6 +172,6 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：图内远端搜索与现役仅本地检索声明存在冲突，批量 reader/cursor、Persona 统计归属、统计可用性、源绝对期限及 Redis 同任期原子失效尚缺 User owning contracts 和真实链路证明；不能以接口成功、静态索引或短 TTL 代替性能与一致性。
+- 影响或价值：尚缺的实现与验收证据包括图内远端搜索与现役仅本地检索冲突的单轨裁决、批量 reader/cursor、Persona 统计归属、统计可用性、源绝对期限及 Redis 同任期原子失效；这些能力仍需 User owning contracts 和真实链路证明，不能以接口成功、静态索引或短 TTL 代替性能与一致性。
 - 完成判定：`GWT-003`、`GWT-004`、`GWT-005` 全部结果取得逐子句有效 `spec_ref`；真实 PG 证明 seek/搜索权限、批量成本和千级/万级/千万基数预算，真实 worker 证明 Persona 贡献及重算，真实 Redis 证明同任期 CAS 与落后副本提升仍受原硬期限约束，同候选双物理设备证明前台可见状态与统计恢复。缺少容量画像、设备或故障资源时保持未关闭，不拿本地 double、清空缓存或分项 P99 相加替代。
 - 依赖：User 关系搜索授权与 batch、Persona 社交统计、缓存 keyspace/期限和配置合同唯一归属；公开发布身份与受管隔离测试资源；关注命令终结的权威依据。

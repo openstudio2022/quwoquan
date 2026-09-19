@@ -8,19 +8,30 @@ import (
 )
 
 type LikePostCommand struct {
-	PostID string
-	Actor  reactiondomain.Actor
+	PostID   string
+	Actor    reactiondomain.Actor
+	Evidence MutationEvidence
 }
 
 type UnlikePostCommand struct {
-	PostID string
-	Actor  reactiondomain.Actor
+	PostID   string
+	Actor    reactiondomain.Actor
+	Evidence MutationEvidence
 }
 
 type ReactToCommentCommand struct {
 	CommentID string
 	Actor     reactiondomain.Actor
 	Reaction  reactiondomain.Value
+	Evidence  MutationEvidence
+}
+
+type GetContentReactionMutationBasisQuery struct{ Identity reactiondomain.Identity }
+type ContentReactionMutationBasisSlice struct {
+	TargetKind      string
+	TargetID        string
+	MutationBasis   string
+	ExpectedVersion int64
 }
 
 type GetContentReactionStateQuery struct {
@@ -49,11 +60,32 @@ type CommentReactionCommandResult struct {
 
 // ContentReactionStateSlice 是读取模型，不包含可变聚合、actorId 或 receipt。
 type ContentReactionStateSlice struct {
-	Found     bool
-	PostID    string
-	Liked     bool
-	Version   int64
-	UpdatedAt time.Time
+	Found         bool
+	PostID        string
+	Liked         bool
+	Version       int64
+	UpdatedAt     time.Time
+	MutationBasis string
+}
+
+type ContentReactionCommandRecoveryResult struct {
+	IdempotencyKey   string
+	Outcome          string
+	Replayed         bool
+	CommittedVersion *int64
+	Changed          *bool
+}
+type RecoverContentReactionCommand struct {
+	Identity       reactiondomain.Identity
+	CommandName    string
+	IdempotencyKey string
+}
+type FinalizeExpiredContentReactionCommand struct {
+	Identity       reactiondomain.Identity
+	CommandName    string
+	Desired        reactiondomain.Value
+	IdempotencyKey string
+	Evidence       MutationEvidence
 }
 
 // ContentReactionStateReader 的返回值只能是 Slice。
@@ -92,34 +124,4 @@ type ActivePostReactionReader interface {
 		postID string,
 		limit int,
 	) ([]reactiondomain.Identity, error)
-}
-
-// ActiveReactionCounter 从 ContentReaction 权威集合重建 Post.likeCount projection。
-type ActiveReactionCounter interface {
-	CountActiveReactions(ctx context.Context, postID string) (int64, error)
-}
-
-// LikeCountProjectionWriter 仅写按 Post 维度可重建的计数投影，
-// 可分别由 Post 与 DiscoveryFeed adapter 实现。
-type LikeCountProjectionWriter interface {
-	SetLikeCount(ctx context.Context, postID string, count int64) (bool, error)
-}
-
-// ActiveActorReactionCounter 按强类型 actor 从 ContentReaction 权威集合重算关系数。
-type ActiveActorReactionCounter interface {
-	CountActiveReactionsForActor(
-		ctx context.Context,
-		actor reactiondomain.Actor,
-	) (int64, error)
-}
-
-// PersonaLikeCountProjectionWriter 仅写 persona 维度的可重建推荐特征。
-// device actor 不得进入公开用户特征。
-type PersonaLikeCountProjectionWriter interface {
-	SetPersonaLikeCount(
-		ctx context.Context,
-		personaID string,
-		count int64,
-		occurredAt time.Time,
-	) error
 }

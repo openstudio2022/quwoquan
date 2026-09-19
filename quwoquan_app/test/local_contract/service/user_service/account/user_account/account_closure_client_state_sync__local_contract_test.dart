@@ -52,6 +52,24 @@ void main() {
             writePersistedState: (value) =>
                 writePersistedInteractionMap('client_state_sync_outbox', value),
             executeEntry: executor.call,
+            prepareFollowEvidence: (_, _) async =>
+                const ClientStateSyncPreparedEvidence(
+                  idempotencyKey: 'test-key',
+                  mutationBasis: 'test-basis',
+                  expectedVersion: 0,
+                  actorRef: 'test-actor',
+                ),
+            preparePostEvidence: (_) async =>
+                const ClientStateSyncPreparedEvidence(
+                  idempotencyKey: 'test-key',
+                  mutationBasis: 'test-basis',
+                  expectedVersion: 0,
+                  actorRef: 'test-actor',
+                ),
+            recoverEntry: (_) async => const ClientStateSyncReceipt(
+              outcome: ClientStateSyncReceiptOutcome.historyUnavailable,
+              replayed: false,
+            ),
           ),
         ),
       ],
@@ -63,7 +81,7 @@ void main() {
     );
     container
         .read(postInteractionStateProvider.notifier)
-        .setLiked('post-closed', true, likeCount: 1);
+        .setLiked('post-closed', true);
     outbox.enqueuePostLike(
       postId: 'post-pending',
       currentLiked: false,
@@ -107,7 +125,13 @@ final class _RecordingClientStateSyncExecutor {
   final List<ClientStateSyncOutboxEntry> entries =
       <ClientStateSyncOutboxEntry>[];
 
-  Future<void> call(ClientStateSyncOutboxEntry entry) async {
+  Future<ClientStateSyncReceipt> call(ClientStateSyncOutboxEntry entry) async {
     entries.add(entry);
+    return const ClientStateSyncReceipt(
+      outcome: ClientStateSyncReceiptOutcome.committed,
+      replayed: false,
+      committedVersion: 1,
+      changed: true,
+    );
   }
 }

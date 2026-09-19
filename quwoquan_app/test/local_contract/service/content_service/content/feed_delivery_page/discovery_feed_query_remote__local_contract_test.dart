@@ -98,7 +98,7 @@ void main() {
       final baseDeadline = DateTime.now().add(const Duration(minutes: 1));
       final query = RemoteContentDiscoveryFeedQuery(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.homeFeed.id,
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(),
@@ -130,7 +130,7 @@ void main() {
         final executor = _RecordingExecutor();
         final query = RemoteContentDiscoveryFeedQuery(
           client: GeneratedCloudOperationClient(executor),
-          invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
             surfaceId: AppUiSurfaces.homeFeed.id,
             clientPageId: clientPageId,
             actor: const CloudOperationActorContext(),
@@ -159,7 +159,7 @@ void main() {
       final keywords = Completer<List<String>>();
       final query = RemoteContentDiscoveryFeedQuery(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.homeFeed.id,
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(),
@@ -189,7 +189,7 @@ void main() {
       final keywords = Completer<List<String>>();
       final query = RemoteContentDiscoveryFeedQuery(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.homeFeed.id,
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(),
@@ -215,7 +215,7 @@ void main() {
       var loaderCallCount = 0;
       final query = RemoteContentDiscoveryFeedQuery(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.homeFeed.id,
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(),

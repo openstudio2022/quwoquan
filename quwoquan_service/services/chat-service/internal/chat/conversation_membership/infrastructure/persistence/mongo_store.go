@@ -294,6 +294,61 @@ func (store *MongoStore) ListSharedConversationIDs(
 	return ids, nil
 }
 
+func (store *MongoStore) ListSharedConversationIDsMany(
+	ctx context.Context,
+	viewerID string,
+	peerIDs []string,
+) (map[string][]string, error) {
+	viewerID = strings.TrimSpace(viewerID)
+	result := make(map[string][]string, len(peerIDs))
+	if viewerID == "" || len(peerIDs) == 0 {
+		return result, nil
+	}
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{
+			"userId":     bson.M{"$in": append([]string{viewerID}, peerIDs...)},
+			"memberType": "user",
+		}}},
+		{{Key: "$group", Value: bson.M{
+			"_id":       "$conversationId",
+			"memberIds": bson.M{"$addToSet": "$userId"},
+			"count":     bson.M{"$sum": 1},
+		}}},
+		{{Key: "$match", Value: bson.M{
+			"count":     2,
+			"memberIds": viewerID,
+		}}},
+		{{Key: "$unwind", Value: "$memberIds"}},
+		{{Key: "$match", Value: bson.M{
+			"memberIds": bson.M{"$ne": viewerID, "$in": peerIDs},
+		}}},
+		{{Key: "$project", Value: bson.M{
+			"conversationId": "$_id",
+			"peerId":         "$memberIds",
+		}}},
+	}
+	cursor, err := store.members.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var rows []struct {
+		ConversationID string `bson:"conversationId"`
+		PeerID         string `bson:"peerId"`
+	}
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		peerID := strings.TrimSpace(row.PeerID)
+		conversationID := strings.TrimSpace(row.ConversationID)
+		if peerID != "" && conversationID != "" {
+			result[peerID] = append(result[peerID], conversationID)
+		}
+	}
+	return result, nil
+}
+
 func listCursorFilter(sortMode membershipmodel.ListSort, encoded string) (bson.M, error) {
 	if encoded == "" {
 		return nil, nil

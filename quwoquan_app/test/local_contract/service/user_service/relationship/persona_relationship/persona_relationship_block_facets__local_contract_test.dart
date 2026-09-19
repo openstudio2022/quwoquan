@@ -1,6 +1,7 @@
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-002
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/service/user_service/relationship/persona_relationship/persona_relationship_typed_double.dart';
 
 void main() {
@@ -56,20 +57,26 @@ void main() {
   group('InMemoryPersonaRelationshipFacet', () {
     test('block/list/unblock 共用同一状态且重复命令幂等', () async {
       final facet = InMemoryPersonaRelationshipFacet();
-      final command = BlockUserCommand(targetPersonaId: 'ps_target');
+      final command = BlockUserCommand(
+        targetPersonaId: 'ps_target',
+        mutationBasis: 'test-basis',
+        expectedVersion: 0,
+      );
 
       final first = await facet.blockUser(command);
       final replay = await facet.blockUser(command);
-      final blocked = await facet.listBlockedUsers(
-        ListBlockedUsersQuery(),
-      );
+      final blocked = await facet.listBlockedUsers(ListBlockedUsersQuery());
 
       expect(first.idempotentReplay, isFalse);
       expect(replay.idempotentReplay, isTrue);
       expect(blocked.items.single.targetPersonaId, 'ps_target');
 
       final unblocked = await facet.unblockUser(
-        UnblockUserCommand(targetPersonaId: 'ps_target'),
+        UnblockUserCommand(
+          targetPersonaId: 'ps_target',
+          mutationBasis: 'test-basis',
+          expectedVersion: 0,
+        ),
       );
       final empty = await facet.listBlockedUsers(ListBlockedUsersQuery());
 

@@ -2,7 +2,7 @@
 
 > 所属领域：[`discovery-content`](../spec.md)
 >
-> 设计引用：[本层 design.md](./design.md)
+> 设计归属：[本层 design.md](./design.md)
 
 ## 1. 能力目标
 
@@ -65,9 +65,9 @@
 - 推荐 SLO/KPI 有真相源，至少覆盖 feed 延迟、空结果率、fallback 率、重复曝光率、CTR、停留、完成率与负反馈率。
 
 <a id="req-002"></a>
-### REQ-002 内容：三类 Post（article/image/video）、实体主页与数据工程冷启动内容进入同一 feed 列表信封契约，禁止 UI 或 mock 复制第二套业务列表
+### REQ-002 内容：四类内容（article/moment/photo/video）与数据工程冷启动内容进入同一 feed 契约，禁止 UI 或 mock 复制第二套业务列表
 
-- 内容：三类 Post（article/image/video）、实体主页与数据工程冷启动内容进入同一 feed 列表信封契约，禁止 UI 或 mock 复制第二套业务列表。
+- 内容：四类内容（article/moment/photo/video）与数据工程冷启动内容进入同一 feed 契约，禁止 UI 或 mock 复制第二套业务列表。
 - 时间：首屏、翻页、刷新、续接、曝光窗口、疲劳窗口与内容新鲜度按统一 cursor/session 语义解释。
 - 交集：feed 卡片、交集 spotlight、对象主页和我的交集收件箱都只消费服务端 `IntersectionReason.primaryText` 与同源交集字段，禁止本地拼装第二套交集理由。
 - 旅行垂类：`subCategory=travel` 归一为 `vertical=travel_photography`，召回和 fallback 都不得混入非旅行内容。
@@ -136,6 +136,7 @@
 - THEN 批量行为上报不另造关注/点赞成功，按钮按确认事实收敛，统计未追齐不重发命令；Post 收藏入口与 favorite 贡献保持退役。
 - AND 普通流只在新窗口消费软特征，following 只下发当前合格对象；旧窗口相对顺序不变，只移除失权条目或显式失效，cursor 不偷换排序。
 - AND 因果新首刷只等待可信实际事件，无事件 no-op 和权威空态可终结；未追齐/依赖失败不伪装为没有关注，当前权限失败不得被旧窗口放行。
+- AND 交付结果可区分命令回执、窗口事实与安全裁决；UI 改变或传输成功不能代替已确认业务事实。
 
 ## 8. 开放事项
 
@@ -153,25 +154,11 @@
 - 完成判定：`SIT-001` 在 content-service 不再写 `rm_discovery_feed` 的前提下仍然成立。投影契约声明与 importer 写入同步删除，release readback/readiness 不再引用退役的 `discoveryPosts/feedUpserted`，而以 canonical Post/recommendation identity 判定 bound。Alpha/Beta/Gamma 对同一 `releaseId + manifestDigest` 的 import、activation、readback 均进入 `contentBindingState=bound`，首页 Remote UAT 读到同一 identity。无合格 release 时保持 typed blocker 或 `no_active_release`，不得以普通空列表通过。
 
 <a id="open-002"></a>
-### OPEN-002 列表信封未跨过 App 可见边界，objectCards 仍在端侧生成物与读路径
-
-- 类型：`capability_gap`
-- 优先级：`P0`
-- 准出影响：`block`
-- 影响或价值：`ListItemPresentationEnvelope` 已在 `_shared/types.yaml` 定义，并被 `feed_delivery_page` 与 `ranked_recommendation_window` 两侧共用，契约层的 `objectCards` sidecar 也已删除。但信封的所有承载字段都是 `api_exposure: none`，只存在于内部交付事实；App 真正消费的公开读模型 `content_discovery_feed_page_slice.yaml` 的 `items` 仍是 `[]ContentPostProjection`。结果是实体主页无法进入统一 items 序位，`objectKind` / `presentationRecipe` / `openSurface` 四个单字段登记轴在端侧全部不可见，端仍靠本地编织第三套 feed 模型。DEC-006〜DEC-009 在运行路径上均未生效，`SIT-001` 的混排序位与自描述信封部分没有可绑定的真实测试证据。
-- 尚缺实现：App 可见读模型仍未切换到信封，端侧缺少 `objectKind` 选投影、`openSurface` 导航与未知项 skip 的单字段登记表实现。
-- 尚缺验收证据：没有任何 `local_contract` 覆盖「未知信封项 skip 不炸页」与「实体主页以 `objectKind=entity_homepage` 进入统一 items 序位」，也没有 `api_integration` 覆盖过滤后 page size 仍满。
-- 识别现场：App 生成契约包 `quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart` 对 `ListItemPresentationEnvelope`、`ListObjectKind`、`ContentUiSurface`、`FeedPresentationRecipe`、`openSurface` 的命中数均为 0，但仍保留 `FeedObjectCard` 类型与 `objectCards` 字段——说明 App 侧 codegen 尚未与新契约对齐，生成物相对 authoring source 存在漂移。
-- 识别现场：`objectCards` 双读在 App 读路径完整存活：`discovery_feed_query_remote.dart:116` 仍从响应取 `objectCards`，`discovery_feed_page.dart`（domain 与 application/public 各一份）仍声明该字段，`discovery_feed_resident_page_window.dart` 仍维护 `objectCardAnchorIndices` 的插卡重定位，`home_multi_form_feed.dart:539` 仍消费该 sidecar。
-- 识别现场：该漂移与 `make -C quwoquan_service verify-metadata` 的 `verify-contract-graph-single-track` 失败同源（App handoff lock、breaking report、generated manifest 三者均未绑定到唯一 ContractGraph hash），需先闭合契约图单轨门再谈端侧切换。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效；App 可见读模型的 `items` 切换为同一 `ListItemPresentationEnvelope`，实体主页以 `objectKind=entity_homepage` 直接进入该序列，`objectCards` / `anchorIndex` 从契约、App 生成物与读路径同变更闭包删除（不保留双读），且存在未知信封项 skip 不炸页的 `local_contract` 证据。
-
-<a id="open-003"></a>
-### OPEN-003 confirmed 互动与窗口交付尚缺端云同候选证据
+### OPEN-002 confirmed 互动与窗口交付尚缺端云同候选证据
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：[REQ-004](./spec.md#req-004) 与修订的 [SIT-001](./spec.md#sit-001) 不再接受 tracker 上报点赞/关注成功或旧 favorite 行为；独立统计、因果追齐、no-op 空态与当前安全过滤尚无当前候选的完整端云证据。现有稳定窗口或局部行为测试不能代替。
-- 完成判定：[SIT-003](./spec.md#sit-003) 以及 [SIT-001](./spec.md#sit-001) 的行为回流修订有同候选真实测试与完整 `spec_ref`，分别提供本地、真实 Remote/自动 worker 与双物理设备的读回证据：`local_contract` 验证 tracker/状态/续页时序；`api_integration` 关联真实 command receipt、自动 worker、窗口及安全 reader；`user_acceptance` 以 Android/iPhone 真实 App 操作与同事实读回证明交付，不以 UI 改变或 HTTP 成功代替。新增 source/因果/统计 wire 完成 owning authoring 和生成后才允许对应实现准入；未运行、skip、无设备或依赖不可用时保持阻断。
+- 完成判定：[SIT-003](./spec.md#sit-003) 以及 [SIT-001](./spec.md#sit-001) 的行为回流修订有同候选真实测试与完整 `spec_ref`，分别提供本地、真实 Remote/自动 worker 与双物理设备的读回证据。新增 source/因果/统计 wire 完成 owning authoring 和生成后才允许对应实现准入；未运行、skip、无设备或依赖不可用时保持阻断。
 - 依赖：[runtime-recommendation OPEN-002](../../runtime/runtime-recommendation/spec.md#open-002)、User 人物关系和 SubjectFollow 资格、Content Reaction 与 Post 当前安全读面；不扩成本层私有画像或第二命令通道。

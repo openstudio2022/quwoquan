@@ -96,7 +96,7 @@ func TestFollowWithForeignActorPersonaReturnsActorForbidden(t *testing.T) {
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/user/personas/target-persona/follow",
-		strings.NewReader(`{"actorPersonaId":"foreign-persona"}`),
+		strings.NewReader(`{"mutationBasis":"test-basis","expectedVersion":0}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	request = request.WithContext(operation.WithContext(
@@ -107,7 +107,7 @@ func TestFollowWithForeignActorPersonaReturnsActorForbidden(t *testing.T) {
 			TraceID:     "trace-actor-guard",
 			Actor: operation.ActorContext{
 				AccountID: "owner-1",
-				PersonaID: "persona-1",
+				PersonaID: "foreign-persona",
 			},
 		},
 	))

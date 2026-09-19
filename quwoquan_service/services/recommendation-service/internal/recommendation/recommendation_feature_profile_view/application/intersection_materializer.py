@@ -56,6 +56,8 @@ class IntersectionEvidenceStore(Protocol):
 
     def list_followers(self, persona_id: str, limit: int) -> tuple[str, ...]: ...
 
+    def list_liked_content_ids(self, persona_id: str, limit: int) -> tuple[str, ...]: ...
+
     def list_circle_ids(self, persona_id: str, limit: int) -> tuple[str, ...]: ...
 
     def list_behaviors(self, persona_id: str, limit: int) -> tuple[BehaviorSnapshot, ...]: ...
@@ -243,6 +245,11 @@ class Materializer:
                     )
                 )
             )
+            shared_liked = sorted(set(self._evidence.list_liked_content_ids(normalized_subject, MAX_INTERSECTION_ACTORS)).intersection(self._evidence.list_liked_content_ids(normalized_object, MAX_INTERSECTION_ACTORS))) if hasattr(self._evidence, "list_liked_content_ids") else []
+            if shared_liked:
+                peer=self._evidence.read_persona_profile(normalized_object)
+                reason=_co_liked_reason(subject_id=normalized_subject,object_id=normalized_object,peer_profile=peer,content_ids=tuple(shared_liked),generated_at=generated_at)
+                if reason is not None: reasons.append(reason)
             if shared_following:
                 reason = _actor_set_reason(
                     subject_id=normalized_subject,
@@ -770,6 +777,14 @@ def _co_experienced_gathering_reason(
     )
     return reason
 
+
+def _co_liked_reason(*,subject_id:str,object_id:str,peer_profile:PersonaProfileSnapshot|None,content_ids:tuple[str,...],generated_at:datetime)->dict[str,object]|None:
+    if peer_profile is None or not peer_profile.display_name.strip() or not content_ids:return None
+    statement=_render_statement(kind="coLiked",counted=True,slots={"subject":_representative_subject_spans(peer_profile,1),"count":({"text":str(len(content_ids)),"role":"count","target":None,"visual":None},)})
+    if statement is None:return None
+    text,spans,l10n=statement;reason=_base_reason(subject_id=subject_id,intersection_id=f"{subject_id}:user:{object_id}:coLiked",intersection_class="fact",kind="coLiked",dimension="behavior",source="content_reaction_current_contribution",object_kind="user",relation_object_id=object_id,action_target_id=content_ids[0],primary_text=text,generated_at=generated_at,ttl=timedelta(days=30))
+    reason.update({"primaryTextL10nKey":l10n,"primarySpans":list(spans),"mutualCount":len(content_ids),"subjectContext":f"post:{content_ids[0]}","factPointCount":1,"totalPointCount":1,"intersectionPoints":[_point(point_id=f"{object_id}:coLiked",point_class="fact",dimension="behavior",label="共同点赞",source_ref="coLiked",count=len(content_ids),sample_text="",visuals=[])],"actionHints":_action_hints("coLiked",_target(object_type="post",object_id=content_ids[0]))})
+    return reason
 
 def _object_set_reason(
     *,

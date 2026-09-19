@@ -4,7 +4,7 @@
 
 > Journey / Scenario：[`JNY-003 / SCN-008`](../../../spec.md#scn-008)
 
-> 设计引用：[L2 DEC-001](../design.md#dec-001)、[DEC-005](../design.md#dec-005)、[DEC-006](../design.md#dec-006)、[DEC-007](../design.md#dec-007)、[DEC-008](../design.md#dec-008)
+> 设计归属：[L2 DEC-001](../design.md#dec-001)、[DEC-005](../design.md#dec-005)、[DEC-006](../design.md#dec-006)、[DEC-007](../design.md#dec-007)、[DEC-008](../design.md#dec-008)
 
 ## 1. 用户价值
 
@@ -182,8 +182,8 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：`REQ-001`、`REQ-007` 的统计分型尚待 contract 与 App 单轨实现；`GWT-002`、`GWT-003` 尚缺对应反例及真实服务/双真机证据。
-- 完成判定：`GWT-002`、`GWT-003` 的严格 decoder、10→10→11、无命令读失败与合法零全部直接绑定当前 `spec_ref`；不得以旧 UAT 的本地 +1 或文本出现当作 server confirmed。
+- 影响或价值：`REQ-001`、`REQ-007` 的统计分型尚缺 contract、App 单轨实现以及 `GWT-002`、`GWT-003` 对应反例和真实服务/双真机验收证据。工程引用包括 `content_reaction_and_counters__local_contract_test.dart`、`post_interaction_state__local_contract_test.dart`、Reaction Remote api_integration 与 `like_post__user_acceptance_test.dart`；现有结果尚未证明新分型。
+- 完成判定：`GWT-002`、`GWT-003` 的严格 decoder、10→10→11、无命令读失败与合法零全部在直接断言处绑定当前 `spec_ref`；不得以旧 UAT 的本地 +1 或文本出现当作 server confirmed。
 
 <a id="open-003"></a>
 ### OPEN-003 actor 资格与命令仲裁尚缺真实权威证明
@@ -191,8 +191,8 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：`REQ-003`、`REQ-004` 的 signed basis、no-op 写栅栏与同键恢复尚缺 owner 合同和真实引擎反例，不能启动未经证明的新协议发送侧。
-- 完成判定：`GWT-004`、`GWT-005`、`GWT-006` 的身份/权限、真实并发及 receipt 清理反例通过；命令业务结果与当前态不混淆。
+- 影响或价值：`REQ-003`、`REQ-004` 的 signed basis、no-op 写栅栏与同键恢复尚缺 owner 合同、实现和真实引擎反例证据，不能启动未经证明的新协议发送侧。工程引用包括 App 的 `guest_device_interaction__local_contract_test.dart` 与 Reaction Remote api_integration、Service Reaction local_contract 和 `http_mongo_transaction__api_integration_test.go`；真实 owner 资格场景尚缺实现。
+- 完成判定：`GWT-004`、`GWT-005`、`GWT-006` 的身份/权限、真实并发及 receipt 清理反例在职责匹配的直接断言处绑定当前 `spec_ref`；命令业务结果与当前态不混淆。
 
 <a id="open-004"></a>
 ### OPEN-004 生命周期封闭与有界清理尚缺竞争证明
@@ -200,8 +200,8 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：`REQ-005` 与 `GWT-007` 未证明全部固定写栅栏封闭、迟到 Like 真冲突、内部授权与有界恢复；不能据目标前置检查宣称无复活。
-- 完成判定：`GWT-007` 的真实引擎三个屏障反例、500 成员/时间预算、重启/旧 worker 及不可伪造补偿全部绑定当前 `spec_ref`。
+- 影响或价值：`REQ-005` 与 `GWT-007` 尚缺全部固定写栅栏封闭、迟到 Like 真冲突、内部授权与有界恢复的实现和验收证据；不能据目标前置检查宣称无复活。工程引用为 Service Reaction local_contract 中的 post deletion consumer/outbox relay 与同对象 API 目录尚缺的真实删除竞争专项。
+- 完成判定：`GWT-007` 的真实引擎三个屏障反例、500 成员/时间预算、重启/旧 worker 及不可伪造补偿全部在职责匹配的直接断言处绑定当前 `spec_ref`。
 
 <a id="open-005"></a>
 ### OPEN-005 统计重建、缓存期限与容量证据缺失
@@ -209,15 +209,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：`REQ-006`、`REQ-007` 与 `GWT-008`、`GWT-009` 尚缺真实 worker、修复代际、缓存失效/故障切换及前台端到端新鲜度证据；批准峰值、热点基数与故障资源由容量/运行 owner 补齐，不推断已达标。
-- 完成判定：`GWT-008`、`GWT-009` 的当前 source/contract/candidate 贡献 oracle、来源期限、热点有界成本与实测收敛通过；无资源、skip、替身或旧指纹不关闭本项。
-
-### 待实现验收的测试绑定
-
-以下仅是新增/扩展测试的落点与所需 `spec_ref`，不是已实现或通过台账；每项锚点须在对应真实断言旁绑定，required readiness 仍由 owning operation 登记。
-
-- App local_contract：`quwoquan_app/test/local_contract/service/content_service/content/content_reaction/content_reaction_and_counters__local_contract_test.dart` 和 `quwoquan_app/test/local_contract/service/content_service/content/post/post_interaction_state__local_contract_test.dart` 扩展绑定 `GWT-001`～`GWT-003`；`guest_device_interaction__local_contract_test.dart`（同 Post 目录）扩展绑定 `GWT-004`。
-- Service local_contract：`quwoquan_service/services/content-service/tests/local_contract/content/content_reaction/` 的 domain、service、post_deletion_consumer 与 outbox_relay 现有测试扩展绑定 `GWT-004`～`GWT-008` 的可控逻辑；不得以替身证明存储原子性。
-- Service api_integration：`quwoquan_service/services/content-service/tests/api_integration/content/content_reaction/http_mongo_transaction__api_integration_test.go` 扩展绑定 `GWT-005`、`GWT-006`；同对象目录新增真实 owner 资格/删除竞争、统计修复及缓存故障专项分别绑定 `GWT-004`、`GWT-007`～`GWT-009`，新增专项尚未实现。
-- App api_integration：`quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart` 扩展绑定 `GWT-001`～`GWT-006`，以真实 Remote、receipt 与同 actor reader 断言，不只看 200。
-- user_acceptance：`quwoquan_app/test/user_acceptance/service/content_service/content/content_reaction/like_post__user_acceptance_test.dart` 需替换旧 +1/伪确认前提并绑定 `GWT-001`～`GWT-004`、`GWT-006`、`GWT-009` 的设备可观察子句；Android/iPhone、合法前置、脱敏回执和 consumer 水位来自同候选受管环境。存储 race 与容量不由设备 happy path 代证。
+- 影响或价值：`REQ-006`、`REQ-007` 与 `GWT-008`、`GWT-009` 尚缺真实 worker、修复代际、缓存失效/故障切换及前台端到端新鲜度证据；批准峰值、热点基数与故障资源由容量/运行 owner 补齐，不推断已达标。工程引用包括 Service Reaction local_contract、同对象 API 目录尚缺的统计修复与缓存故障专项，以及 `like_post__user_acceptance_test.dart`；存储 race 与容量不由设备 happy path 代证。
+- 完成判定：`GWT-008`、`GWT-009` 的当前 source/contract/candidate 贡献 oracle、来源期限、热点有界成本与实测收敛均在职责匹配的直接断言处绑定当前 `spec_ref`；required readiness 仍由 owning operation 登记，无资源、skip、替身或旧指纹不关闭本项。

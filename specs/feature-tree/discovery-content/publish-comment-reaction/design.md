@@ -16,7 +16,7 @@
 - [`image-editing`](./image-editing/spec.md)：全仓无占位符号；工具确认路径全部经 ImageEditorExportEngine 烘焙。
 - [`post-create-update`](./post-create-update/spec.md)：从拍摄得到的图片可进入图片选择器底部缩略条或创作编辑器图片列表，并参与排序、编辑和发布。
 - [`reaction-state-counter`](./reaction-state-counter/spec.md)：定义“互动状态状态计数”的可观察主路径、失败语义及父能力交接。
-- [`text-post-commercial-publication`](./text-post-commercial-publication/spec.md)：纯文字与富文图文混排共用文章写入，保留安全准入、发布意图幂等恢复与真实结果回流；不再设置形态确认或退役身份提升分支。
+- [`text-post-commercial-publication`](./text-post-commercial-publication/spec.md)：micro 与 article 两种确认结果均有 widget 与 payload 合同证据。
 
 ## 3. 端云与数据流
 
@@ -123,7 +123,7 @@
 - 决策：repair 固定权威 snapshot、贡献 generation 与每分区 source checkpoint，重建后追平未包含增量，校验 oracle 后发布一个 reader generation；旧汇总/缓存不能覆盖新代际。shadow 仅旁路对账不服务业务，不在线 dual-read。retention 基于 required consumer 安全水位、离线恢复窗口和权威快照/归档来源，不能用 stream TTL 替代 outbox/receipt 恢复保证。
 - 理由：纯 delta 重复或重建已含新边后再次应用 delta 都会漂移；成员完整后态允许乱序和版本跳跃，惰性桶/定频汇总限制热点写放大。
 - 被否决方案：全量 Count 热路径、每事件更新单个总数热点、GREATEST(0) 掩错、以 aggregateVersion 当连续运输序列、取 MAX checkpoint 跳毒事件、重建覆盖并发新增量、未接 production composition 的孤立 projector，以及匿名 device 冒充 Persona 兴趣。
-- 恢复与回滚：毒事件修复后从受阻分区原事件重放，若允许跨 gap 继续需另有 durable gap 设计，当前合同不默默跨越。来源已超 retention 时从可验证 snapshot/authority 重建，无恢复来源或未对账保持 not-ready；quota/计数维护预算独立，不能删除未消费记录解压。回滚保留新 authority 与 lifecycle 抑制，重建追平后单 reader 切换，不能回到旧快照丢写。
+- 恢复与回滚：毒事件修复后从受阻分区原事件重放，若允许跨 gap 继续需另有 durable gap 设计，默认不默默跨越。来源已超 retention 时从可验证 snapshot/authority 重建，无恢复来源或未对账保持 not-ready；quota/计数维护预算独立，不能删除未消费记录解压。回滚保留新 authority 与 lifecycle 抑制，重建追平后单 reader 切换，不能回到旧快照丢写。
 - 观测与 SLO：记录分区 backlog age/连续 applied 水位、租约拒绝/毒事件、重复/异摘要、贡献 oracle 差异、桶与 rollup 延迟、代际切换、磁盘和恢复来源余量；projection 正常 2 秒只是 5 秒端到端预算，不由无新事件的旧 occurredAt 推断积压，使用处理水位/健康进度。负数、异摘要或复活为硬告警，消费者落后不撤销命令成功。
 - 测试 seam：local 可控版本/事件序列和 fixed snapshot 验证贡献函数、同版本异摘要和预算；真实 storage transaction 验证 inbox/member/bucket 原子性，多 worker/毒事件隔离、rollup 与 repair 并发、旧 generation 迟到。至少一条真实 Remote→自动 production worker→stats reader 链，不全用手动 drain。
 - 关联要求：`reaction-state-counter REQ-006`、`REQ-007`；影响 Story：`reaction-state-counter`、`comment-thread`。
@@ -134,7 +134,7 @@
 
 - 决策：统计提交之后由 durable consumer 失效或版本化更新该统计 cache；Reaction 已提交但统计尚未提交时不能先删 cache 然后重缓存旧总数。Redis 仅为短 TTL 公开统计/正文加速，actor 私有态不混入公共 value，安全、receipt 恢复与带最小版本的 RYW 走 authority。
 - 决策：miss 先取非复用 generation，再读 source；generation 校验、版本约束与 SET/失效在同 hash slot 以 Lua 或等价原子操作完成，缺失/eviction 创建新 token 不重用固定零。值和填充凭据带保守 source readStartedAt、asOf、checkpoint/generation 及不可续期 absoluteExpiresAt；读/填充/L1 接收均复核期限，源副本 lag 与时钟偏差纳入预算。
-- 决策：同任期已生效失效可拒绝迟到填充，但 DB→Redis 异步窗口或 Redis 异步复制 failover 可能回退到 g1+旧值；本决策明确允许原 source 期限内陈旧，随机 token/Lua 不承诺跨切主 fencing。统计服务 TTL 目标 1 秒，抖动计入硬期限；App 继承来源，不能从落后投影新 SET 就重置鲜度。更强 failover 语义需 Redis 外 durable epoch，本决策不新增。
+- 决策：同任期已生效失效可拒绝迟到填充，但 DB→Redis 异步窗口或 Redis 异步复制 failover 可能回退到 g1+旧值；普通统计缓存只允许原 source 期限内陈旧，随机 token/Lua 不承诺跨切主 fencing。统计服务 TTL 目标 1 秒，抖动计入硬期限；App 继承来源，不能从落后投影新 SET 就重置鲜度。更强 failover 语义需 Redis 外 durable epoch，本设计不引入。
 - 理由：GET generation 后独立 SET 仍有 TOCTOU；只做 DEL 或给缓存续租会把短暂投影落后扩成长期陈旧。源绝对期限在失效遗漏/旧副本提升时仍给出可验证上限，同时不引入普通计数不需要的全局协调。
 - 被否决方案：Redis/DB 原子双写承诺、Lua 等于跨主从线性一致、重新 SET 续鲜、TTL 从每层接收时起算、读失败负缓存成零/false、viewer 字段共用公开缓存，以及逐卡 timer 或全站推送重建。
 - 恢复与回滚：metadata/连接故障或已知切换期有界 bypass，配 singleflight、bulkhead/回源令牌与 deadline，不能耗尽 authority pool；超过 source 硬期限或最小版本不满足返回 typed unavailable。回滚可 bypass cache，不换旧统计真相、不解禁失权内容，generation 迁移保持一个在线 reader。

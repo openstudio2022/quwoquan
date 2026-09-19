@@ -76,6 +76,7 @@ class MongoFeatureProfileStore(
         self._intersection_facilitations = database[
             "recommendation_intersection_facilitations"
         ]
+        self._current_reactions = database["recommendation_candidate_content_reaction_members"]
         self._checkpoints = database["recommendation_feature_projection_checkpoints"]
         self._failures = database["recommendation_feature_projection_failures"]
 

@@ -52,8 +52,25 @@ void main() {
                 readPersistedInteractionMap('client_state_sync_outbox'),
             writePersistedState: (value) =>
                 writePersistedInteractionMap('client_state_sync_outbox', value),
-            executeEntry: (_) async =>
-                throw StateError('remote unavailable'),
+            executeEntry: (_) async => throw StateError('remote unavailable'),
+            prepareFollowEvidence: (_, _) async =>
+                const ClientStateSyncPreparedEvidence(
+                  idempotencyKey: 'test-key',
+                  mutationBasis: 'test-basis',
+                  expectedVersion: 0,
+                  actorRef: 'test-actor',
+                ),
+            preparePostEvidence: (_) async =>
+                const ClientStateSyncPreparedEvidence(
+                  idempotencyKey: 'test-key',
+                  mutationBasis: 'test-basis',
+                  expectedVersion: 0,
+                  actorRef: 'test-actor',
+                ),
+            recoverEntry: (_) async => const ClientStateSyncReceipt(
+              outcome: ClientStateSyncReceiptOutcome.expired,
+              replayed: false,
+            ),
           ),
         ),
       ],
@@ -139,10 +156,7 @@ void main() {
       container.read(postInteractionStateProvider).likedPostIds,
       contains('post-retrying'),
     );
-    expect(
-      container.read(clientStateSyncOutboxProvider).entries.length,
-      1,
-    );
+    expect(container.read(clientStateSyncOutboxProvider).entries.length, 1);
     expect(container.read(clientStateSyncTerminalFailureProvider), isNull);
   });
 }

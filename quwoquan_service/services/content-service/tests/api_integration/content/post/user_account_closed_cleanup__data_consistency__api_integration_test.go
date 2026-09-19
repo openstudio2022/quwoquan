@@ -18,6 +18,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/infrastructure/accountclosure"
+	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
+	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
+	reactionpersistence "quwoquan_service/services/content-service/internal/content/content_reaction/infrastructure/persistence"
 	"quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/mediaobjectfence"
 )
 
@@ -31,9 +34,14 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 	ownedCommentID := "acct-close-owned-comment"
 	replyCommentID := "acct-close-reply-comment"
 	keptCommentID := "acct-close-kept-comment"
-	ownedReactionID := "acct-close-owned-reaction"
-	ownedTargetReactionID := "acct-close-owned-target-reaction"
-	keptReactionID := "acct-close-kept-reaction"
+	closedActor, _ := reactiondomain.NewActor(reactiondomain.ActorDimensionPersona, event.Payload.PersonaIDs[0])
+	otherActor, _ := reactiondomain.NewActor(reactiondomain.ActorDimensionPersona, "acct-close-other-persona")
+	ownedReactionIdentity, _ := reactiondomain.NewPostIdentity(keptPostID, closedActor)
+	ownedTargetReactionIdentity, _ := reactiondomain.NewPostIdentity(ownedPostID, otherActor)
+	keptReactionIdentity, _ := reactiondomain.NewPostIdentity(keptPostID, otherActor)
+	ownedReactionID := ownedReactionIdentity.AggregateID()
+	ownedTargetReactionID := ownedTargetReactionIdentity.AggregateID()
+	keptReactionID := keptReactionIdentity.AggregateID()
 	activityDocumentID := "acct-close-activity-document"
 	readFactID := "acct-close-read-fact"
 	shareFactID := "acct-close-share-fact"
@@ -67,11 +75,11 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 	})
 	mustInsertAccountClosureDocuments(t, db.Collection("comments"), []any{
 		bson.M{
-			"_id": ownedCommentID, "postId": keptPostID,
+			"_id": ownedCommentID, "postId": keptPostID, "version": int64(2),
 			"authorId": event.Payload.PersonaIDs[0], "status": "active",
 		},
 		bson.M{
-			"_id": replyCommentID, "postId": keptPostID,
+			"_id": replyCommentID, "postId": keptPostID, "version": int64(1),
 			"authorId": "acct-close-other-persona", "status": "active",
 			"parentCommentId":  ownedCommentID,
 			"replyToCommentId": ownedCommentID,
@@ -90,23 +98,14 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 			},
 		},
 		bson.M{
-			"_id": keptCommentID, "postId": keptPostID,
+			"_id": keptCommentID, "postId": keptPostID, "version": int64(1),
 			"authorId": "acct-close-other-persona", "status": "active",
 		},
 	})
 	mustInsertAccountClosureDocuments(t, db.Collection("content_reaction_aggregates"), []any{
-		bson.M{
-			"_id": ownedReactionID, "targetKind": "post", "targetId": keptPostID,
-			"actorId": event.Payload.PersonaIDs[0], "reaction": "like",
-		},
-		bson.M{
-			"_id": ownedTargetReactionID, "targetKind": "post", "targetId": ownedPostID,
-			"actorId": "acct-close-other-persona", "reaction": "like",
-		},
-		bson.M{
-			"_id": keptReactionID, "targetKind": "post", "targetId": keptPostID,
-			"actorId": "acct-close-other-persona", "reaction": "like",
-		},
+		accountClosureReactionDocument(ownedReactionIdentity, now),
+		accountClosureReactionDocument(ownedTargetReactionIdentity, now),
+		accountClosureReactionDocument(keptReactionIdentity, now),
 	})
 	mustInsertAccountClosureDocuments(t, db.Collection("rm_discovery_feed"), []any{
 		bson.M{
@@ -295,6 +294,20 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	reactionStore := reactionpersistence.NewMongoContentReactionStore(db)
+	if err := reactionStore.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	reactionAdapter := reactionpersistence.NewMongoLifecycleCleanupAdapter(reactionStore)
+	if err := reactionAdapter.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	reactionService := reactionapp.NewService(reactionapp.DataPorts{
+		Aggregate: reactionStore, State: reactionStore,
+		Target: accountClosureReactionTargetReader{}, CommentCounts: reactionStore,
+	}).WithActorLifecycleWriteFence(reactionAdapter)
+	reactionCleanup := reactionapp.NewLifecycleCleanupService(reactionService, reactionAdapter, reactionAdapter, reactionAdapter, reactionAdapter)
+	processor.WithReactionLifecycleCleanup(accountclosure.NewContentReactionLifecycleCleanup(reactionCleanup))
 
 	result, err := processor.Apply(ctx, event)
 	if err != nil {
@@ -412,8 +425,16 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 		"_id": bson.M{"$in": []string{replyCommentID, keptCommentID}},
 	}, 2)
 	assertAccountClosureCount(t, db, "content_reaction_aggregates", bson.M{
-		"_id": bson.M{"$in": []string{ownedReactionID, ownedTargetReactionID}},
+		"_id":      bson.M{"$in": []string{ownedReactionID, ownedTargetReactionID}},
+		"reaction": bson.M{"$ne": "none"},
 	}, 0)
+	assertAccountClosureCount(t, db, "content_reaction_aggregates", bson.M{
+		"_id":      bson.M{"$in": []string{ownedReactionID, ownedTargetReactionID}},
+		"reaction": "none",
+	}, 2)
+	assertAccountClosureCount(t, db, "content_reaction_command_receipts", bson.M{
+		"aggregateId": bson.M{"$in": []string{ownedReactionID, ownedTargetReactionID}},
+	}, 2)
 	assertAccountClosureCount(t, db, "content_reaction_aggregates", bson.M{"_id": keptReactionID}, 1)
 	assertAccountClosureCount(t, db, "outbound_share_facts", bson.M{"_id": keptShareFactID}, 1)
 	for _, assertion := range []struct {
@@ -1104,6 +1125,21 @@ func assertAccountClosureCount(
 	}
 	if count != want {
 		t.Fatalf("%s count=%d, want %d filter=%v", collection, count, want, filter)
+	}
+}
+
+type accountClosureReactionTargetReader struct{}
+
+func (accountClosureReactionTargetReader) FindReactionTarget(context.Context, reactiondomain.Target) (reactionapp.ReactionTargetSlice, error) {
+	return reactionapp.ReactionTargetSlice{Exists: true}, nil
+}
+
+func accountClosureReactionDocument(identity reactiondomain.Identity, now time.Time) bson.M {
+	return bson.M{
+		"_id": identity.AggregateID(), "version": int64(1),
+		"targetKind": string(identity.Target.Kind), "targetId": identity.Target.ID,
+		"actorDimension": string(identity.Actor.Dimension), "actorId": identity.Actor.ID,
+		"reaction": "like", "reactedAt": now, "createdAt": now, "updatedAt": now,
 	}
 }
 

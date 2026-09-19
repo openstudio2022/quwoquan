@@ -111,6 +111,7 @@ func startAccountClosureRuntime(
 	search *accountclosure.SearchIndexerDeleter,
 	media *mediainfra.ObjectGateway,
 	restrictions accountclosure.AccountRestrictionProjection,
+	reactions accountclosure.ReactionLifecycleCleanup,
 ) (*accountclosure.Consumer, error) {
 	if restrictions == nil {
 		return nil, errors.New(
@@ -118,6 +119,9 @@ func startAccountClosureRuntime(
 		)
 	}
 	processor, err := accountclosure.NewProcessor(store, cache, search, media)
+	if reactions != nil {
+		processor.WithReactionLifecycleCleanup(reactions)
+	}
 	if err != nil {
 		return nil, err
 	}

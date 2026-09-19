@@ -90,6 +90,7 @@ func NewProfileService(
 		)
 	}
 	events = requireUserEventPublisher(events)
+	hmacKey := defaultProfileQRTokenSecret()
 	service := &ProfileService{
 		profiles:      profiles,
 		personas:      personas,
@@ -100,7 +101,7 @@ func NewProfileService(
 		sync:          sync,
 		regionTags:    PathRegionTagResolver{},
 		profileTags:   PathProfileTagValidator{},
-		qrTokenSecret: defaultProfileQRTokenSecret(),
+		qrTokenSecret: hmacKey,
 		qrTokenTTL:    365 * 24 * time.Hour,
 	}
 	for _, option := range options {
@@ -116,7 +117,15 @@ func (s *ProfileService) GetProfile(ctx context.Context, userID string) (snap *m
 		attribute.String("user.id", userID))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	cached, cacheErr := s.pcache.Get(ctx, userID)
+	var cached *model.FullSnapshot
+	var cacheErr error
+	if versioned, ok := s.pcache.(interface {
+		GetAtLeast(context.Context, string, int64) (*model.FullSnapshot, error)
+	}); ok {
+		cached, cacheErr = versioned.GetAtLeast(ctx, userID, 0)
+	} else {
+		cached, cacheErr = s.pcache.Get(ctx, userID)
+	}
 	if cacheErr == nil && cached != nil {
 		return cached, nil
 	}

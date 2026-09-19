@@ -94,7 +94,7 @@ void main() {
       );
       lifecycle = RemoteCircleLifecycleFacet(
         client: client,
-        invocationContext: (clientPageId, {required command}) =>
+        invocationContext: (clientPageId, {required command, idempotencyKey}) =>
             CloudOperationInvocationContext(
               surfaceId: clientPageId == CircleRequestPageIds.createCircle
                   ? AppUiSurfaces.circlesList.id
@@ -218,13 +218,13 @@ void main() {
       );
     });
 
-    test('getCircleFeed 透传 identity/type query', () async {
+    test('getCircleFeed 透传 type query，且不携带 identity', () async {
       try {
         await repo.feed(
-          CircleFeedQuery(circleId: 'c1', identity: 'work', type: 'article'),
+          CircleFeedQuery(circleId: 'c1', type: 'article'),
         );
       } catch (_) {}
-      expect(log.last.query['identity'], 'work');
+      expect(log.last.query.containsKey('identity'), isFalse);
       expect(log.last.query['type'], 'article');
     });
 

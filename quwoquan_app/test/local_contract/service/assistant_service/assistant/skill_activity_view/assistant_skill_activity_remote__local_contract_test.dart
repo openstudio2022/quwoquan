@@ -50,7 +50,7 @@ void main() {
     );
     final adapter = RemoteAssistantSkillActivityAdapter(
       client: buildAssistantRemoteTestOperationClient(httpClient),
-      invocationContext: (clientPageId) => CloudOperationInvocationContext(
+      invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
         surfaceId: AppUiSurfaces.assistantSkills.id,
         routeId: AppUiSurfaces.assistantSkills.routeId,
         clientPageId: clientPageId,

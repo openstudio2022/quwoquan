@@ -12,7 +12,10 @@ class UserProfileCacheService implements UserProfileAuthorSnapshotCache {
   UserProfileCacheService({
     int maxMemoryEntries = 200,
     this._persistToPreferences = false,
-  }) : _maxMemory = maxMemoryEntries {
+    this.maximumAge = const Duration(hours: 24),
+    DateTime Function()? now,
+  }) : _maxMemory = maxMemoryEntries,
+       _now = now ?? DateTime.now {
     if (_persistToPreferences) {
       _hydrationFuture = _hydrateFromPreferences();
     }
@@ -22,12 +25,24 @@ class UserProfileCacheService implements UserProfileAuthorSnapshotCache {
 
   final int _maxMemory;
   final bool _persistToPreferences;
+  final Duration maximumAge;
+  final DateTime Function() _now;
   final LinkedHashMap<String, _ProfileEntry> _memory = LinkedHashMap();
   final Map<String, _ProfileEntry> _entries = {};
   Future<void> _hydrationFuture = Future<void>.value();
   Future<void> _persistenceTail = Future<void>.value();
 
-  Map<String, dynamic>? get(String userId) {
+  Map<String, dynamic>? get(String userId, {DateTime? minUpdatedAt}) {
+    final candidate = _memory[userId] ?? _entries[userId];
+    if (candidate != null &&
+        (!candidate.sourceExpiresAt.isAfter(_now().toUtc()) ||
+            (minUpdatedAt != null &&
+                candidate.updatedInstant != null &&
+                candidate.updatedInstant!.isBefore(minUpdatedAt.toUtc())))) {
+      _memory.remove(userId);
+      _entries.remove(userId);
+      return null;
+    }
     if (_memory.containsKey(userId)) {
       final entry = _memory.remove(userId)!;
       _memory[userId] = entry;
@@ -45,10 +60,32 @@ class UserProfileCacheService implements UserProfileAuthorSnapshotCache {
     return (_memory[userId] ?? _entries[userId])?.updatedAt;
   }
 
-  void put(String userId, Map<String, dynamic> data, {String? updatedAt}) {
+  void put(
+    String userId,
+    Map<String, dynamic> data, {
+    String? updatedAt,
+    DateTime? sourceExpiresAt,
+  }) {
+    final nextUpdated = (updatedAt ?? data['updatedAt'] as String? ?? '')
+        .trim();
+    final nextInstant = DateTime.tryParse(nextUpdated)?.toUtc();
+    final prior = _entries[userId];
+    if (prior?.updatedInstant != null &&
+        nextInstant != null &&
+        prior!.updatedInstant!.isAfter(nextInstant)) {
+      return;
+    }
+    final now = _now().toUtc();
+    final absoluteExpiry = sourceExpiresAt?.toUtc() ?? now.add(maximumAge);
+    if (!absoluteExpiry.isAfter(now)) {
+      return;
+    }
     final entry = _ProfileEntry(
       data: data,
-      updatedAt: updatedAt ?? data['updatedAt'] as String? ?? '',
+      updatedAt: nextUpdated,
+      updatedInstant: nextInstant,
+      sourceExpiresAt: absoluteExpiry,
+      generation: (prior?.generation ?? 0) + 1,
     );
     _putMemory(userId, entry);
     _entries[userId] = entry;
@@ -153,6 +190,16 @@ class UserProfileCacheService implements UserProfileAuthorSnapshotCache {
         final profileEntry = _ProfileEntry(
           data: Map<String, dynamic>.from(data),
           updatedAt: value['updatedAt']?.toString() ?? '',
+          updatedInstant: DateTime.tryParse(
+            value['updatedAt']?.toString() ?? '',
+          )?.toUtc(),
+          sourceExpiresAt:
+              DateTime.tryParse(value['sourceExpiresAt']?.toString() ?? '')
+                  ?.toUtc() ??
+              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+          generation: value['generation'] is int
+              ? value['generation'] as int
+              : 0,
         );
         _entries[entry.key] = profileEntry;
         _putMemory(entry.key, profileEntry);
@@ -188,6 +235,8 @@ class UserProfileCacheService implements UserProfileAuthorSnapshotCache {
         (id, entry) => MapEntry(id, <String, dynamic>{
           'data': entry.data,
           'updatedAt': entry.updatedAt,
+          'sourceExpiresAt': entry.sourceExpiresAt.toUtc().toIso8601String(),
+          'generation': entry.generation,
         }),
       );
       await prefs.setString(_prefsKey, jsonEncode(payload));
@@ -198,7 +247,16 @@ class UserProfileCacheService implements UserProfileAuthorSnapshotCache {
 }
 
 class _ProfileEntry {
-  _ProfileEntry({required this.data, required this.updatedAt});
+  _ProfileEntry({
+    required this.data,
+    required this.updatedAt,
+    required this.updatedInstant,
+    required this.sourceExpiresAt,
+    required this.generation,
+  });
   final Map<String, dynamic> data;
   final String updatedAt;
+  final DateTime? updatedInstant;
+  final DateTime sourceExpiresAt;
+  final int generation;
 }

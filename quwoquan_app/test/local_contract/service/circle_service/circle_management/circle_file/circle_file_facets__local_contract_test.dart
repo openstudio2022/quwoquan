@@ -59,7 +59,7 @@ void main() {
     );
     final remote = RemoteCircleFileFacet(
       client: GeneratedCloudOperationClient(executor),
-      invocationContext: (clientPageId, {required command}) =>
+      invocationContext: (clientPageId, {required command, idempotencyKey}) =>
           CloudOperationInvocationContext(
             surfaceId: 'circleDetail',
             clientPageId: clientPageId,

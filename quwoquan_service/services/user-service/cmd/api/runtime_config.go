@@ -69,6 +69,20 @@ type config struct {
 		ActiveKeyID      string `yaml:"active_key_id" env:"COLLECTION_QUERY_AUTHORITY_ACTIVE_KEY_ID"`
 		KeyringSecretRef string `yaml:"keyring_secret_ref" env:"COLLECTION_QUERY_AUTHORITY_KEYRING_SECRET_REF"`
 	} `yaml:"collection_query_authority"`
+	ProfileCache struct {
+		TTLSeconds int `yaml:"ttl_seconds" env:"PROFILE_CACHE_TTL_SECONDS"`
+	} `yaml:"profile_cache"`
+
+	RelationshipPolicy struct {
+		Revision               int64  `yaml:"revision" env:"RELATIONSHIP_POLICY_REVISION"`
+		MaxFollowingPerPersona int    `yaml:"max_following_per_persona" env:"RELATIONSHIP_POLICY_MAX_FOLLOWING_PER_PERSONA"`
+		ConfigDigest           string `yaml:"config_digest" env:"RELATIONSHIP_POLICY_CONFIG_DIGEST"`
+	} `yaml:"relationship_policy"`
+
+	RelationshipMutationBasis struct {
+		ActiveKeyID      string `yaml:"active_key_id" env:"RELATIONSHIP_MUTATION_BASIS_ACTIVE_KEY_ID"`
+		KeyringSecretRef string `yaml:"keyring_secret_ref" env:"RELATIONSHIP_MUTATION_BASIS_KEYRING_SECRET_REF"`
+	} `yaml:"relationship_mutation_basis"`
 
 	// MongoDB 不用 servicekit.MongoConfig：那份声明把 uri/database 标为
 	// required，会把 user-service 现有的「未注入 uri 即 8 处功能降级」变成

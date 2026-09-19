@@ -31,6 +31,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         AssistantUsePolicy,
         ContentPostProjection,
+        ContentType,
         MediaDeliveryAccessMode,
         MediaOriginalAccessGrant,
         PostMediaItem,
@@ -92,7 +93,7 @@ final class _NoopPostInteractionStateNotifier
 }
 
 ContentPostViewData _post({
-  String contentType = 'article',
+  ContentType contentType = ContentType.article,
   String? videoUrl,
   String? mediaAssetId,
   int? mediaAssetVersion,
@@ -178,8 +179,14 @@ Future<void> _pumpFeed(
             child: HomeMultiFormFeed(
               isDark: false,
               channelId: 'recommend',
-              onUserTap: (id, {avatarUrl, backgroundUrl, displayName}) =>
-                  onUserTap?.call(id),
+              onUserTap: (
+                id, {
+                avatarAccessMode,
+                avatarAssetId,
+                avatarUrl,
+                backgroundUrl,
+                displayName,
+              }) => onUserTap?.call(id),
             ),
           ),
         ),
@@ -226,7 +233,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text(SearchText.recoveryContentUnavailableTitle),
+        find.text(SearchText.recoveryCapabilityUnavailableTitle),
         findsOneWidget,
       );
       await tester.tap(find.text(SearchText.recoveryReturnAction));
@@ -248,6 +255,7 @@ void main() {
     const url = 'https://media.example.test/private/one.jpg';
     _feedItems = <ContentPostViewData>[
       _post(
+        contentType: ContentType.image,
         mediaUrls: const <String>[url],
         mediaItems: const <PostMediaItem>[
           PostMediaItem(
@@ -275,6 +283,7 @@ void main() {
     const url = 'https://cdn.example.test/public/one.jpg';
     _feedItems = <ContentPostViewData>[
       _post(
+        contentType: ContentType.image,
         mediaUrls: const <String>[url],
         mediaItems: const <PostMediaItem>[
           PostMediaItem(
@@ -305,6 +314,7 @@ void main() {
     const url = 'https://cdn.example.test/implicit-public.jpg';
     _feedItems = <ContentPostViewData>[
       _post(
+        contentType: ContentType.image,
         mediaUrls: const <String>[url],
         mediaItems: const <PostMediaItem>[
           PostMediaItem(kind: 'image', url: url),
@@ -326,7 +336,7 @@ void main() {
     const manifest = 'media/objects/private/master.m3u8';
     _feedItems = <ContentPostViewData>[
       _post(
-        contentType: 'video',
+        contentType: ContentType.video,
         videoUrl: manifest,
         mediaAssetId: 'asset-private-hls',
         mediaAssetVersion: 1,

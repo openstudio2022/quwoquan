@@ -10,7 +10,7 @@ void main() {
       final executor = _RecordingExecutor();
       final writer = RemoteContentBehaviorCommandAdapter(
         client: GeneratedCloudOperationClient(executor),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: 'workBrowser',
           clientPageId: clientPageId,
           actor: const CloudOperationActorContext(personaId: 'persona-1'),

@@ -31,7 +31,9 @@ import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
         chatConversationRepositoryProvider,
         chatMessageCommandWriterProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_facets.dart'
-    show profileCommentsContentCommentFacetProvider;
+    show
+        profileCommentReactionCoordinatorProvider,
+        profileCommentsContentCommentFacetProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart'
     show profileInteractionQueryFacetProvider;
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';

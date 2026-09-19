@@ -131,6 +131,10 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - content.content_reaction.GetContentReactionPresentation
+    - content.content_reaction.GetContentReactionMutationBasis
+    - content.content_reaction.RecoverContentReactionCommand
+    - content.content_reaction.FinalizeExpiredContentReactionCommand
     - GetFeed
     - SubmitPostPublication
     - DeletePost
@@ -206,6 +210,10 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - content.content_reaction.GetContentReactionPresentation
+    - content.content_reaction.GetContentReactionMutationBasis
+    - content.content_reaction.RecoverContentReactionCommand
+    - content.content_reaction.FinalizeExpiredContentReactionCommand
     - ReadActiveReleaseFence
     - GetFeed
     - SubmitPostPublication
@@ -395,6 +403,7 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - content.content_reaction.FinalizeExpiredContentReactionCommand
     - SubmitPostPublication
     - DeletePost
     - UpdatePostSettings
@@ -440,6 +449,7 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - content.content_reaction.FinalizeExpiredContentReactionCommand
     - SubmitPostPublication
     - DeletePost
     - UpdatePostSettings
@@ -487,6 +497,9 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - content.content_reaction.GetContentReactionPresentation
+    - content.content_reaction.GetContentReactionMutationBasis
+    - content.content_reaction.RecoverContentReactionCommand
     - ReadActiveReleaseFence
     - GetFeed
     - ListUserPosts

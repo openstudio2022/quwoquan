@@ -172,7 +172,30 @@ Widget _routedApp({
           readConfig: () => _statsSyncConfig,
           readPersistedState: () async => persisted,
           writePersistedState: (next) async => persisted = next,
-          executeEntry: (_) async {},
+          executeEntry: (_) async => const ClientStateSyncReceipt(
+            outcome: ClientStateSyncReceiptOutcome.committed,
+            replayed: false,
+            committedVersion: 1,
+            changed: true,
+          ),
+          prepareFollowEvidence: (_, _) async =>
+              const ClientStateSyncPreparedEvidence(
+                idempotencyKey: 'test-key',
+                mutationBasis: 'test-basis',
+                expectedVersion: 0,
+                actorRef: 'test-actor',
+              ),
+          preparePostEvidence: (_) async =>
+              const ClientStateSyncPreparedEvidence(
+                idempotencyKey: 'test-key',
+                mutationBasis: 'test-basis',
+                expectedVersion: 0,
+                actorRef: 'test-actor',
+              ),
+          recoverEntry: (_) async => const ClientStateSyncReceipt(
+            outcome: ClientStateSyncReceiptOutcome.historyUnavailable,
+            replayed: false,
+          ),
         ),
       ),
     ],

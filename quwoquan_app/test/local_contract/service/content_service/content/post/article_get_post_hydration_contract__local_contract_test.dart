@@ -97,7 +97,7 @@ void main() {
             gatewayBaseUri: Uri.parse('https://example.com'),
           ),
         ),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        invocationContext: (clientPageId, {idempotencyKey}) => CloudOperationInvocationContext(
           surfaceId: AppUiSurfaces.workBrowser.id,
           routeId: AppUiSurfaces.workBrowser.routeId,
           clientPageId: clientPageId,

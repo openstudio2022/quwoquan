@@ -52,6 +52,11 @@ class MongoCandidateIndexStore(
         self._persona_relationship_inbox = database[
             "recommendation_candidate_persona_relationship_inbox"
         ]
+        self._persona_relationship_checkpoints = database["recommendation_candidate_persona_relationship_checkpoints"]
+        self._content_reaction_members = database["recommendation_candidate_content_reaction_members"]
+        self._content_reaction_stats = database["recommendation_candidate_content_reaction_stats"]
+        self._content_reaction_inbox = database["recommendation_candidate_content_reaction_inbox"]
+        self._content_reaction_checkpoints = database["recommendation_candidate_content_reaction_checkpoints"]
 
     def ensure_indexes(self) -> None:
         self.ensure_release_indexes()
@@ -105,6 +110,10 @@ class MongoCandidateIndexStore(
             unique=True,
             name="uq_recommendation_candidate_persona_relationship_direction",
         )
+        self._persona_relationship_checkpoints.create_index([("partitionId",ASCENDING)],unique=True,name="uq_recommendation_candidate_relationship_partition_checkpoint")
+        self._content_reaction_members.create_index([("actorId",ASCENDING),("targetId",ASCENDING)],name="idx_recommendation_current_reaction_actor_target")
+        self._content_reaction_stats.create_index([("targetId",ASCENDING)],unique=True,name="uq_recommendation_reaction_target_stats")
+        self._content_reaction_checkpoints.create_index([("partitionId",ASCENDING)],unique=True,name="uq_recommendation_reaction_partition_checkpoint")
         self._persona_relationships.create_index(
             [
                 ("sourcePersonaId", ASCENDING),

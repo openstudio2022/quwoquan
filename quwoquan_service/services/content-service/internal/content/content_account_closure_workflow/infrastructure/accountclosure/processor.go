@@ -139,11 +139,26 @@ type MediaArtifactReclaimer interface {
 	) error
 }
 
+type ReactionLifecycleCleanup interface {
+	CleanupClosedAccountReactions(context.Context, UserAccountClosedEvent, []ReactionCleanupTarget) error
+}
+
+type ReactionCleanupTarget struct {
+	Kind          string
+	ID            string
+	SourceVersion int64
+}
+
+type ReactionCleanupTargetReader interface {
+	ReactionCleanupTargets(context.Context, UserAccountClosedEvent) ([]ReactionCleanupTarget, error)
+}
+
 type Processor struct {
 	store     CleanupStore
 	cache     PersonalDataCacheCleaner
 	search    SearchDocumentDeleter
 	media     MediaArtifactReclaimer
+	reactions ReactionLifecycleCleanup
 	batchSize int64
 }
 
@@ -165,6 +180,13 @@ func NewProcessor(
 		media:     media,
 		batchSize: 200,
 	}, nil
+}
+
+func (processor *Processor) WithReactionLifecycleCleanup(cleanup ReactionLifecycleCleanup) *Processor {
+	if processor != nil {
+		processor.reactions = cleanup
+	}
+	return processor
 }
 
 func (processor *Processor) Apply(
@@ -212,6 +234,19 @@ func (processor *Processor) Apply(
 		cacheKeys,
 	); err != nil {
 		return ApplyResult{}, err
+	}
+	if processor.reactions != nil {
+		targetReader, ok := processor.store.(ReactionCleanupTargetReader)
+		if !ok {
+			return ApplyResult{}, errors.New("UserAccountClosed reaction target reader is not configured")
+		}
+		targets, err := targetReader.ReactionCleanupTargets(ctx, event)
+		if err != nil {
+			return ApplyResult{}, err
+		}
+		if err := processor.reactions.CleanupClosedAccountReactions(ctx, event, targets); err != nil {
+			return ApplyResult{}, err
+		}
 	}
 	state, err := processor.store.PrepareCleanup(ctx, event)
 	if err != nil {

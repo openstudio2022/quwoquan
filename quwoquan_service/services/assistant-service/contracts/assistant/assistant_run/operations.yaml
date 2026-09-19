@@ -13,7 +13,7 @@ externalDependencies:
     ext.first_party.http_authority:
       endpointEnvs: {base: ASSISTANT_INTEGRATION_BASE_URL}
       secretRefs: []
-      defaultTimeoutMs: 1200
+      defaultTimeoutMs: 10000
 api_routes:
 
 - method: POST

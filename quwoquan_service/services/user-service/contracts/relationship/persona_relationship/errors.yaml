@@ -37,6 +37,7 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - GetRelationshipMutationBasis
     - BlockUser
     - FollowUser
   http_status: 404
@@ -53,6 +54,9 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - GetRelationshipMutationBasis
+    - RecoverRelationshipCommand
+    - FinalizeExpiredRelationshipCommand
     - BlockUser
     - FollowUser
     - UnblockUser
@@ -66,3 +70,55 @@ errors:
     zh: 当前身份无法执行该操作
     en: This identity cannot perform the action
   description: explicit actorPersonaId does not belong to the authenticated account or is retired
+- code: USER.RELATIONSHIP.command_key_required
+  reason: command_key_required
+  emitted_by:
+  - surface: http
+    operations:
+    - BlockUser
+    - FollowUser
+    - UnblockUser
+    - UnfollowUser
+  http_status: 400
+  recovery_action: retry
+  disruption_level: inlineCard
+  go_const: ErrRelationshipCommandKeyRequired
+  dart_const: relationshipCommandKeyRequired
+  user_message:
+    zh: 请求缺少幂等标识，请重试
+    en: The request is missing its idempotency key
+  description: command arrived without a canonical Idempotency-Key so no receipt could arbitrate it
+- code: USER.RELATIONSHIP.following_limit_exceeded
+  reason: following_limit_exceeded
+  emitted_by:
+  - surface: http
+    operations:
+    - FollowUser
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  go_const: ErrRelationshipFollowingLimitExceeded
+  dart_const: relationshipFollowingLimitExceeded
+  user_message:
+    zh: 关注数量已达上限，请先取消部分关注
+    en: You have reached the following limit; unfollow someone first
+  description: source persona already holds every following slot granted by the activated system limit
+- code: USER.RELATIONSHIP.command_conflict
+  reason: command_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - FinalizeExpiredRelationshipCommand
+    - BlockUser
+    - FollowUser
+    - UnblockUser
+    - UnfollowUser
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  go_const: ErrRelationshipCommandConflict
+  dart_const: relationshipCommandConflict
+  user_message:
+    zh: 关系已被其他操作更新，请刷新后重试
+    en: This relationship changed elsewhere; refresh and try again
+  description: idempotency key reused for a different command, expectedVersion stale, or the command was already finalized as not executed

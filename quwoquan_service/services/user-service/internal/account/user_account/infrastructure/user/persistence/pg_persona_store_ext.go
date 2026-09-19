@@ -108,6 +108,38 @@ func (s *PgPersonaStore) FindByPersonaID(
 	return persona, mapPersonaPersistenceError(err)
 }
 
+func (s *PgPersonaStore) FindManyByPersonaID(
+	ctx context.Context,
+	personaIDs []string,
+) (map[string]model.Persona, error) {
+	result := make(map[string]model.Persona, len(personaIDs))
+	if len(personaIDs) == 0 {
+		return result, nil
+	}
+	rows, err := s.pool.Query(
+		ctx,
+		`SELECT `+personaNullableSafeCols+` FROM personas WHERE persona_id = ANY($1)`,
+		personaIDs,
+	)
+	if err != nil {
+		return nil, mapPersonaPersistenceError(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		persona, scanErr := generated.ScanPersona(rows)
+		if scanErr != nil {
+			return nil, mapPersonaPersistenceError(scanErr)
+		}
+		if persona != nil {
+			result[persona.PersonaID] = *persona
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapPersonaPersistenceError(err)
+	}
+	return result, nil
+}
+
 func (s *PgPersonaStore) ResolveOwnerAccountID(
 	ctx context.Context,
 	personaID string,

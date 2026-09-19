@@ -1,5 +1,7 @@
 import 'package:quwoquan_app/runtime/transport/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/service/content_service/content/comment/application/content_comment_reaction_coordinator.dart';
+import 'package:uuid/uuid.dart';
 
 typedef ContentCommentInvocationContextFactory =
     CloudOperationInvocationContext Function(
@@ -9,7 +11,8 @@ typedef ContentCommentInvocationContextFactory =
 
 /// Comment / ContentReaction 的 production Remote。只做 generated client 的
 /// 强类型薄映射，不持有 path、operation id、HTTP client 或 decoder。
-final class RemoteContentCommentFacet implements ContentCommentFacet {
+final class RemoteContentCommentFacet
+    implements ContentCommentFacet, ContentCommentReactionCoordinator {
   const RemoteContentCommentFacet({
     required this.client,
     required this.invocationContext,
@@ -133,6 +136,36 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
   );
 
   @override
+  Future<ContentCommentReactionCommandResult> react(
+    String commentId,
+    CommentReactionType reaction,
+  ) async {
+    final basis = await client
+        .contentContentReactionGetContentReactionMutationBasis(
+          GetContentReactionMutationBasisQuery(
+            targetKind: ContentReactionTargetKind.comment,
+            targetId: commentId,
+          ),
+          context: invocationContext(
+            ContentRequestPageIds.getContentReactionMutationBasis,
+            command: false,
+          ),
+        );
+    return client.contentContentReactionReactToComment(
+      ReactToContentCommentCommand(
+        commentId: commentId,
+        reaction: reaction,
+        mutationBasis: basis.mutationBasis,
+        expectedVersion: basis.expectedVersion,
+      ),
+      context: _withIdempotency(
+        invocationContext(ContentRequestPageIds.reactToComment, command: true),
+        const Uuid().v4(),
+      ),
+    );
+  }
+
+  @override
   Future<ContentCommentReactionCommandResult> reactToComment(
     ReactToContentCommentCommand command,
   ) => client.contentContentReactionReactToComment(
@@ -141,5 +174,22 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
       ContentRequestPageIds.reactToComment,
       command: true,
     ),
+  );
+  CloudOperationInvocationContext _withIdempotency(
+    CloudOperationInvocationContext base,
+    String key,
+  ) => CloudOperationInvocationContext(
+    surfaceId: base.surfaceId,
+    clientPageId: base.clientPageId,
+    routeId: base.routeId,
+    actor: base.actor,
+    referralSource: base.referralSource,
+    feedRequestId: base.feedRequestId,
+    shareId: base.shareId,
+    modelId: base.modelId,
+    experimentBucket: base.experimentBucket,
+    idempotencyKey: key,
+    deadlineAt: base.deadlineAt,
+    cancellation: base.cancellation,
   );
 }
